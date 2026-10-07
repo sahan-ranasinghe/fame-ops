@@ -386,6 +386,12 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# The office connector. It has no Supabase login in front of it: the long key
+# in its URL path (OFFICE_MCP_KEY) is the protection, checked inside the function.
+[functions.office-mcp]
+enabled = true
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

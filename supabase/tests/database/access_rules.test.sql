@@ -6,6 +6,15 @@
 
 begin;
 
+-- The checks below count rows, so they need a database with no fleet data in it.
+do $$
+begin
+  if exists (select 1 from public.employees) or exists (select 1 from public.vehicles) then
+    raise exception 'These tests need an empty local database. Run first: npx supabase db reset --local';
+  end if;
+end;
+$$;
+
 create extension if not exists pgtap with schema extensions;
 
 select * from no_plan();
@@ -729,6 +738,87 @@ select lives_ok(
 select throws_ok(
   $$ delete from public.tasks where id = '50000000-0000-0000-0000-000000000003' $$,
   '42501', 'permission denied for table tasks', 'the office connector cannot delete');
+
+reset role;
+
+-- ---------------------------------------------------------------------------
+-- 11. office_create_task: task + stops + project split (+ request) in one go
+-- ---------------------------------------------------------------------------
+
+insert into public.vehicle_requests (id, requested_by_name, project_label, needed_at, route_from, route_to, need_type, pax) values
+  ('90000000-0000-0000-0000-000000000001', 'Test Dilini', 'Mobitel MS', now() + interval '1 day', 'Colombo', 'Matara sites', 'van', 6);
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+
+select throws_ok(
+  $$ select public.office_create_task('{}'::jsonb, '[]'::jsonb) $$,
+  '42501', 'permission denied for function office_create_task', 'a driver cannot call office_create_task');
+
+reset role;
+set local role service_role;
+
+select lives_ok(
+  $$ select public.office_create_task(
+       '{"title":"RPC task one","label":"Mobitel MS","employee_id":"10000000-0000-0000-0000-0000000000b1",
+         "vehicle_id":"20000000-0000-0000-0000-000000000002","start_at":"2026-10-08T06:30:00+05:30",
+         "end_by":"2026-10-08T18:00:00+05:30","passengers":6,"created_by":"test"}'::jsonb,
+       '[{"seq":1,"type":"pickup","place_id":"30000000-0000-0000-0000-000000000001","place_name":"Test head office"},
+         {"seq":2,"type":"drop","place_name":"Matara town site"}]'::jsonb,
+       '[{"project_id":"40000000-0000-0000-0000-000000000001","percent":60},
+         {"project_id":"40000000-0000-0000-0000-000000000002","percent":40}]'::jsonb) $$,
+  'the office connector can create a task with stops and a project split');
+
+select is(
+  (select (t.status, t.passengers, (select count(*) from public.task_stops s where s.task_id = t.id),
+           (select sum(p.percent) from public.task_projects p where p.task_id = t.id))::text
+     from public.tasks t where t.title = 'RPC task one'),
+  '(assigned,6,2,100.00)', 'the task, its 2 stops and its 100 % split were all saved');
+
+select throws_ok(
+  $$ select public.office_create_task(
+       '{"title":"RPC task bad split","employee_id":"10000000-0000-0000-0000-0000000000b1",
+         "vehicle_id":"20000000-0000-0000-0000-000000000002","start_at":"2026-10-09T06:30:00+05:30"}'::jsonb,
+       '[{"seq":1,"type":"pickup","place_name":"A"},{"seq":2,"type":"drop","place_name":"B"}]'::jsonb,
+       '[{"project_id":"40000000-0000-0000-0000-000000000001","percent":90}]'::jsonb) $$,
+  '23514', null, 'a split that does not total 100 is refused');
+
+select is((select count(*) from public.tasks where title = 'RPC task bad split'), 0::bigint,
+  'and nothing of that task was saved');
+
+select throws_ok(
+  $$ select public.office_create_task(
+       '{"title":"RPC task no stops","employee_id":"10000000-0000-0000-0000-0000000000b1",
+         "vehicle_id":"20000000-0000-0000-0000-000000000002","start_at":"2026-10-09T06:30:00+05:30"}'::jsonb,
+       '[]'::jsonb) $$,
+  'P0001', 'A task needs at least one stop', 'a task without stops is refused');
+
+select lives_ok(
+  $$ select public.office_create_task(
+       '{"title":"RPC task from request","label":"Mobitel MS","employee_id":"10000000-0000-0000-0000-0000000000b1",
+         "vehicle_id":"20000000-0000-0000-0000-000000000002","start_at":"2026-10-10T06:30:00+05:30","passengers":6}'::jsonb,
+       '[{"seq":1,"type":"pickup","place_name":"Colombo"},{"seq":2,"type":"drop","place_name":"Matara sites"}]'::jsonb,
+       '[]'::jsonb, '90000000-0000-0000-0000-000000000001', 'Test admin') $$,
+  'approving a request creates its task');
+
+select is(
+  (select (r.status, r.decided_by, r.decided_at is not null,
+           (select t.title from public.tasks t where t.id = r.task_id),
+           (select t.request_id = r.id from public.tasks t where t.id = r.task_id))::text
+     from public.vehicle_requests r where r.id = '90000000-0000-0000-0000-000000000001'),
+  '(approved,"Test admin",t,"RPC task from request",t)',
+  'the request is approved and linked to the new task, both ways');
+
+select throws_ok(
+  $$ select public.office_create_task(
+       '{"title":"RPC task second approval","employee_id":"10000000-0000-0000-0000-0000000000b1",
+         "vehicle_id":"20000000-0000-0000-0000-000000000002","start_at":"2026-10-10T06:30:00+05:30"}'::jsonb,
+       '[{"seq":1,"type":"pickup","place_name":"Colombo"}]'::jsonb,
+       '[]'::jsonb, '90000000-0000-0000-0000-000000000001', 'Someone else') $$,
+  'P0001', 'This vehicle request is already approved', 'a request cannot be approved twice');
+
+select is((select count(*) from public.tasks where title = 'RPC task second approval'), 0::bigint,
+  'and the second approval created no task');
 
 reset role;
 

@@ -1,0 +1,199 @@
+// fleet_overview: the numbers and lists of the Overview / Fleet today screens.
+
+import { z } from "zod";
+import { unwrap } from "../db.ts";
+import { loadLatest, loadRefs, monthKm, nearestTown, service, sharing, VEHICLE_DOCS, vehicleLabel } from "../fleet.ts";
+import { contactLinks, mapsPoint, thousands } from "../format.ts";
+import { ago, colomboDate, colomboDateTime, dayRange, daysBetween, shortDate } from "../time.ts";
+import { realDate, tool, zDate } from "../tool.ts";
+
+const REMINDER_DAYS = 14;
+
+interface Attention {
+  what: string;
+  subject: string;
+  due: string;
+  level: "red" | "amber";
+  /** Days until due; negative = overdue. Used for sorting only. */
+  days: number;
+}
+
+function dueText(days: number, date: string): string {
+  if (days < 0) return `${-days} d overdue`;
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  return days <= 7 ? `in ${days} days` : shortDate(date);
+}
+
+export const fleetOverview = tool({
+  name: "fleet_overview",
+  title: "Fleet overview",
+  description: "The fleet at a glance: vehicles on the road / total / parked, tasks of the day (in progress, done), requests waiting " +
+    "(and the oldest), reminders due in the next 14 days, who is on the road now, and what needs attention " +
+    "(documents, service, km allowance, rental end, driver licences, open vehicle problems). " +
+    "The task counts follow `date`; everything else describes now.",
+  readOnly: true,
+  input: z.object({ date: zDate.optional().describe("Day for the task counts. Default: today") }),
+  async run({ date }, { db, now }) {
+    const today = colomboDate(now);
+    const day = realDate(date ?? today);
+    const { from, to } = dayRange(day);
+
+    const [refs, latest, dayTasks, runningRes, waitingRes, reportsRes] = await Promise.all([
+      loadRefs(db),
+      loadLatest(db),
+      db.from("tasks").select("id, status").gte("start_at", from).lt("start_at", to),
+      db.from("tasks").select("id, title, employee_id, vehicle_id, started_at").eq("status", "in_progress").order("started_at"),
+      db.from("vehicle_requests").select("id, created_at").eq("status", "waiting").order("created_at"),
+      db.from("vehicle_reports").select("id, vehicle_id, employee_id, category, created_at, status").neq("status", "closed").order(
+        "created_at",
+      ),
+    ]);
+    const tasks = unwrap(dayTasks, "tasks");
+    const running = unwrap(runningRes, "tasks");
+    const waiting = unwrap(waitingRes, "vehicle requests");
+    const reports = unwrap(reportsRes, "vehicle reports");
+    const vehicles = refs.vehicles.filter((v) => v.active);
+
+    const [km, stops] = await Promise.all([
+      monthKm(db, vehicles.map((v) => v.id), today.slice(0, 7)),
+      running.length > 0
+        ? db.from("task_stops").select("task_id, seq, place_name").in("task_id", running.map((t) => t.id)).order("seq")
+        : { data: [], error: null },
+    ]);
+    const stopRows = unwrap(stops, "stops");
+
+    const onTheRoad = await Promise.all(running.map(async (t) => {
+      const driver = refs.emp.get(t.employee_id);
+      const pos = latest.get(t.employee_id);
+      const hasPosition = pos?.lat != null && pos?.lng != null;
+      return {
+        driver: driver?.name,
+        vehicle: refs.veh.get(t.vehicle_id)?.reg_no,
+        task: t.title,
+        going_to: stopRows.filter((s) => s.task_id === t.id).at(-1)?.place_name,
+        location: sharing(pos, now).text,
+        near: hasPosition ? await nearestTown(db, pos.lat!, pos.lng!) : undefined,
+        links: { maps: hasPosition ? mapsPoint(pos.lat!, pos.lng!) : undefined, ...contactLinks(driver?.phone) },
+      };
+    }));
+
+    // --- Needs attention ---------------------------------------------------
+    const attention: Attention[] = [];
+    const soon = (dateText: string | null) => {
+      if (!dateText) return null;
+      const days = daysBetween(today, dateText);
+      return days <= REMINDER_DAYS ? days : null;
+    };
+
+    for (const v of vehicles) {
+      const label = vehicleLabel(v) ?? v.reg_no;
+      for (const doc of VEHICLE_DOCS) {
+        const expiry = v[doc.column];
+        const days = soon(expiry);
+        if (days !== null && expiry) {
+          attention.push({
+            what: `${doc.name} ${days < 0 ? "expired" : "expires"}`,
+            subject: label,
+            due: dueText(days, expiry),
+            level: days <= 7 ? "red" : "amber",
+            days,
+          });
+        }
+      }
+      const svc = service(v, today);
+      if (svc.state === "overdue" || svc.state === "due soon") {
+        const days = svc.date ? daysBetween(today, svc.date) : 0;
+        attention.push({
+          what: svc.state === "overdue" ? "Service overdue" : "Service due",
+          subject: `${v.reg_no} · ${svc.km_to_go !== null && svc.km_to_go > 0 ? `${thousands(svc.km_to_go)} km to go` : svc.text}`,
+          due: svc.state === "overdue" ? "now" : svc.date ? dueText(days, svc.date) : "soon",
+          level: svc.state === "overdue" ? "red" : "amber",
+          days: svc.state === "overdue" ? -1 : days,
+        });
+      }
+      const used = km.get(v.id) ?? 0;
+      if (v.monthly_km_allowance != null && used > v.monthly_km_allowance) {
+        attention.push({
+          what: "Over monthly km allowance",
+          subject: `${v.reg_no} · ${thousands(used)} of ${thousands(v.monthly_km_allowance)} km`,
+          due: "now",
+          level: "red",
+          days: -1,
+        });
+      }
+      const rentDays = soon(v.rent_until);
+      if (rentDays !== null && v.rent_until) {
+        const company = v.rental_company_id ? refs.company.get(v.rental_company_id)?.name : undefined;
+        attention.push({
+          what: rentDays < 0 ? "Rental agreement ended" : "Rental agreement ends",
+          subject: [v.reg_no, company].filter(Boolean).join(" · "),
+          due: dueText(rentDays, v.rent_until),
+          level: rentDays <= 7 ? "red" : "amber",
+          days: rentDays,
+        });
+      }
+      const garageDays = soon(v.garage_booked_date);
+      if (garageDays !== null && garageDays >= 0 && v.garage_booked_date) {
+        attention.push({
+          what: "Garage booked",
+          subject: label,
+          due: dueText(garageDays, v.garage_booked_date),
+          level: "amber",
+          days: garageDays,
+        });
+      }
+    }
+    for (const e of refs.employees) {
+      const days = e.role === "driver" && e.active ? soon(e.licence_expiry) : null;
+      if (days !== null && e.licence_expiry) {
+        attention.push({
+          what: `Driver licence ${days < 0 ? "expired" : "expires"}`,
+          subject: e.name,
+          due: dueText(days, e.licence_expiry),
+          level: days <= 7 ? "red" : "amber",
+          days,
+        });
+      }
+    }
+    for (const r of reports) {
+      attention.push({
+        what: `Vehicle problem: ${r.category.replace("_", " ")}${r.status === "in_garage" ? " (in garage)" : ""}`,
+        subject: [refs.veh.get(r.vehicle_id)?.reg_no, refs.emp.get(r.employee_id)?.name].filter(Boolean).join(" · "),
+        due: `reported ${ago(r.created_at, now)} ago`,
+        level: "red",
+        days: -2,
+      });
+    }
+    attention.sort((a, b) => a.days - b.days);
+
+    const onRoadVehicles = new Set(running.map((t) => t.vehicle_id)).size;
+    const count = (status: string) => tasks.filter((t) => t.status === status).length;
+    const result = {
+      date: day,
+      as_of: colomboDateTime(now),
+      vehicles: {
+        on_the_road: onRoadVehicles,
+        total: vehicles.length,
+        parked: vehicles.length - onRoadVehicles,
+        in_garage: vehicles.filter((v) => v.in_garage).length,
+      },
+      tasks: {
+        total: tasks.length - count("cancelled"),
+        assigned: count("assigned"),
+        in_progress: count("in_progress"),
+        done: count("completed"),
+        cancelled: count("cancelled"),
+      },
+      requests: { waiting: waiting.length, oldest_waiting: waiting[0] ? ago(waiting[0].created_at, now) : undefined },
+      reminders: { count: attention.length, window_days: REMINDER_DAYS, red: attention.filter((a) => a.level === "red").length },
+      on_the_road: onTheRoad,
+      needs_attention: attention.map(({ days: _days, ...item }) => item),
+    };
+    return {
+      result,
+      summary:
+        `${onRoadVehicles}/${vehicles.length} on the road, ${result.tasks.total} tasks, ${waiting.length} requests waiting, ${attention.length} reminders`,
+    };
+  },
+});
