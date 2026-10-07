@@ -1,0 +1,10 @@
+{
+  "shell": {
+    "ready": "The app is installed.",
+    "next": "The screens come in the next step.",
+    "version": "Version",
+    "server": "Server",
+    "serverConfigured": "configured",
+    "serverMissing": "not configured"
+  }
+}

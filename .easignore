@@ -1,0 +1,37 @@
+# What is uploaded to Expo when the driver app is built with EAS.
+#
+# EAS uploads the whole git repository, not only apps/driver. Only the app is
+# needed for a build, so everything else stays here: above all docs/, which
+# holds internal company IDs.
+#
+# When this file exists, EAS does not read the .gitignore files, so their rules
+# are repeated below. Folder names are written without a trailing slash because
+# EAS tests them that way.
+
+# Top level: nothing except apps
+/*
+!/apps
+
+# The git history. EAS uploads the .git folder of its clone (with the latest
+# version of every file in the repository) unless it is listed here.
+.git
+
+# Never upload (same as the .gitignore files)
+node_modules
+.env*
+!.env.example
+.expo
+dist
+web-build
+*.apk
+*.aab
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+*.tsbuildinfo
+.kotlin
+/apps/driver/android
+/apps/driver/ios

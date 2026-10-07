@@ -11,6 +11,45 @@ This repository is private: `docs/` contains internal company IDs.
 - `supabase/tests/`: database tests for the access rules.
 - `supabase/functions/office-mcp/`: the office connector (Edge Function).
 - `scripts/`: connector tests.
+- `apps/driver/`: the Fame Driver Android app (Expo).
+
+## Driver app (`apps/driver`)
+
+Expo SDK 57, Android only, package `com.fameglobal.driver`, Expo project
+`@fame-global/fame-driver`. It is a development build, not Expo Go: background
+location, the map and the other native modules need it.
+
+- Every native module the app will use is already installed, so one cloud build
+  is enough; after that, changes to screens and logic reload live.
+- `app.json` holds the name, package, permissions and config plugins.
+  The `android/` folder is generated and is not committed.
+- `eas.json` has two build profiles, both producing an APK for internal
+  installs: `development` (with the developer menu, loads code from the laptop)
+  and `preview` (standalone, for trying on a driver's phone).
+- The Supabase URL and the publishable key are public values. They are in
+  `eas.json` for builds and in `apps/driver/.env` (not committed; see
+  `.env.example`) for the dev server.
+- `.easignore` (at the top of the repository) limits what a build uploads to
+  Expo to `apps/`. Without it the whole repository would be uploaded,
+  including `docs/` and the git history.
+
+```bash
+cd apps/driver
+source ~/.nvm/nvm.sh && nvm use
+
+npx expo-doctor                                       # 21/21 checks
+npx tsc --noEmit                                      # type check
+npx expo prebuild --platform android --no-install     # config check; then: rm -rf android
+
+eas build --profile development --platform android    # cloud build (Sahan starts builds himself)
+npx expo start --dev-client                           # then open the app on the phone
+```
+
+Known risk: `@react-native-ml-kit/text-recognition` (reads the odometer from a
+photo) is listed as "untested on the New Architecture" and is excluded from
+that one `expo-doctor` check in `package.json`. If a build fails in that
+library, or reading a photo does not work, remove it: the odometer is always
+typed or confirmed by hand anyway.
 
 ## Office connector (`office-mcp`)
 

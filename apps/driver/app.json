@@ -1,0 +1,79 @@
+{
+  "expo": {
+    "name": "Fame Driver",
+    "slug": "fame-driver",
+    "owner": "fame-global",
+    "version": "1.0.0",
+    "scheme": "famedriver",
+    "platforms": ["android"],
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#f3f2ee",
+    "android": {
+      "package": "com.fameglobal.driver",
+      "adaptiveIcon": {
+        "backgroundColor": "#f2a900",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION",
+        "CAMERA",
+        "POST_NOTIFICATIONS",
+        "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-dev-client",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#15181c",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "androidForegroundServiceIcon": "./assets/notification-icon.png"
+        }
+      ],
+      "expo-task-manager",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#f2a900"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "microphonePermission": false
+        }
+      ],
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-localization",
+        {
+          "supportedLocales": ["en", "si"]
+        }
+      ],
+      "expo-font",
+      "expo-sqlite",
+      "expo-secure-store",
+      "expo-file-system",
+      "expo-system-ui"
+    ]
+  }
+}
