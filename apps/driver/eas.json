@@ -13,7 +13,7 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://hinurfsaxvplbyqgtozj.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "PASTE_PUBLISHABLE_KEY_HERE"
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_bjJPWylzmSo5OUOiy_IXpQ_p0IzJBIh"
       }
     },
     "preview": {
@@ -24,7 +24,7 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://hinurfsaxvplbyqgtozj.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "PASTE_PUBLISHABLE_KEY_HERE"
+        "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_bjJPWylzmSo5OUOiy_IXpQ_p0IzJBIh"
       }
     }
   }
