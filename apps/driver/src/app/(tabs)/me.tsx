@@ -10,7 +10,10 @@ import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
+import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
+import { colomboTime } from '@/lib/time';
+import { checkAndApplyUpdate, runningUpdate } from '@/lib/updates';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -21,6 +24,18 @@ export default function MeScreen() {
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const [updateNote, setUpdateNote] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const dateLabel = useDateLabel();
+  const update = runningUpdate();
+
+  async function checkUpdate() {
+    setChecking(true);
+    setUpdateNote(null);
+    const outcome = await checkAndApplyUpdate();
+    setChecking(false);
+    setUpdateNote(t(outcome === 'failed' ? 'me.updateFailed' : 'me.upToDate'));
+  }
 
   const waiting = queue.ops + queue.points;
 
@@ -88,6 +103,17 @@ export default function MeScreen() {
 
         <Card style={{ gap: 14 }}>
           <Line label={t('me.version')}><Mono size={17}>{Constants.expoConfig?.version}</Mono></Line>
+          {update && (
+            <>
+              {update.publishedAt && (
+                <Line label={t('me.update')}>
+                  <Mono size={15}>{`${dateLabel(update.publishedAt)} ${colomboTime(update.publishedAt)}`}</Mono>
+                </Line>
+              )}
+              <Button kind="outline" label={t('me.checkUpdate')} busy={checking} onPress={checkUpdate} />
+              {updateNote && <Txt variant="muted">{updateNote}</Txt>}
+            </>
+          )}
         </Card>
 
         {problem && <Notice tone="danger" text={problem} />}

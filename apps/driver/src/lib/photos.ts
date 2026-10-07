@@ -3,6 +3,7 @@
 // number from a photo is only ever a suggestion.
 
 import TextRecognition from '@react-native-ml-kit/text-recognition';
+import { Asset } from 'expo-asset';
 import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
@@ -86,5 +87,21 @@ export async function readOdometer(uri: string, lastKnownKm: number | null): Pro
     return odometerFromText(result.text, lastKnownKm);
   } catch {
     return null;
+  }
+}
+
+/**
+ * Runs the reader once on a small picture that ships with the app. In builds
+ * that use Google Play services for reading (the preview build), this makes
+ * Play services fetch its model now, so it is ready before the first odometer
+ * photo. Any failure is ignored.
+ */
+export async function prepareOdometerReader(): Promise<void> {
+  try {
+    const sample = Asset.fromModule(require('../../assets/notification-icon.png'));
+    await sample.downloadAsync();
+    if (sample.localUri) await TextRecognition.recognize(sample.localUri);
+  } catch {
+    // Not ready yet, or no connection: the driver types the number.
   }
 }

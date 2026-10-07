@@ -81,13 +81,33 @@
       "expo-sqlite",
       "expo-secure-store",
       "expo-file-system",
-      "expo-system-ui"
+      "expo-system-ui",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "-keep class com.rnmlkit.** { *; }"
+          }
+        }
+      ],
+      "./plugins/withMlKitFromPlayServices",
+      "expo-asset"
     ],
     "extra": {
+      "supabaseUrl": "https://hinurfsaxvplbyqgtozj.supabase.co",
+      "supabasePublishableKey": "sb_publishable_bjJPWylzmSo5OUOiy_IXpQ_p0IzJBIh",
       "router": {},
       "eas": {
         "projectId": "9a4bca33-b483-4f2e-a560-4e818d5ed545"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9a4bca33-b483-4f2e-a560-4e818d5ed545",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 5000
     }
   }
 }

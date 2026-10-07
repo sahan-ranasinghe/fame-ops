@@ -16,7 +16,7 @@ import * as api from '@/lib/api';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
 import { getSharing, restoreSharing, startSharing, stopSharing } from '@/lib/location';
 import { notifyNewTask } from '@/lib/notifications';
-import { type LocalPhoto, queuePhoto } from '@/lib/photos';
+import { type LocalPhoto, prepareOdometerReader, queuePhoto } from '@/lib/photos';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import type { Employee, Language, ReportCategory, TaskStop, TaskWithStops, Vehicle, VehicleReport } from '@/lib/types';
@@ -185,6 +185,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     // Runs once: later sign-ins go through signIn().
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Once signed in, get the odometer reader ready in the background.
+  const signedIn = me !== null;
+  useEffect(() => {
+    if (signedIn) void prepareOdometerReader();
+  }, [signedIn]);
 
   // Keep the queue numbers on screen up to date.
   useEffect(

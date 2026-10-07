@@ -45,6 +45,47 @@ eas build --profile development --platform android    # cloud build (Sahan start
 npx expo start --dev-client                           # then open the app on the phone
 ```
 
+### Preview build and code updates
+
+The `preview` profile makes a standalone APK for drivers' phones. It is kept
+small by switches that only this profile passes to Gradle (see
+`gradleCommand` in `eas.json`); the `development` profile is not affected:
+
+- only the two ARM CPU types real phones use (`arm64-v8a`, `armeabi-v7a`),
+- R8 minify and resource shrinking,
+- ML Kit text recognition from Google Play services instead of five models
+  bundled in the app (`plugins/withMlKitFromPlayServices.js`). The model is
+  fetched once by Play services, so the very first odometer photo on a phone
+  may not get a suggested number.
+
+Measured on 7 October 2026 with a local build using the same switches: 72 MB,
+against more than 360 MB for the development build.
+
+```bash
+cd apps/driver
+eas build --profile preview --platform android        # Sahan starts builds himself
+```
+
+The preview build takes code updates over the air (EAS Update, channel
+`preview`). Each time the app starts it looks for an update; one that arrives
+within 5 seconds is used straight away, otherwise from the next start. Me →
+"Check for update" does the same on demand, and Me shows when the running code
+was published.
+
+```bash
+cd apps/driver
+eas update --channel preview --environment preview --message "What changed"
+```
+
+- An update can change screens, text and logic (everything under `src/`). It
+  cannot add a native module or change `app.json` settings such as
+  permissions: that needs a new build.
+- Updates only reach builds with the same app version (`version` in
+  `app.json`, now 1.0.0). When a new build is needed for a native change, raise
+  the version first, so older builds do not receive code they cannot run.
+- `eas update` does not read `apps/driver/.env`. The app therefore also takes
+  the Supabase URL and publishable key from `extra` in `app.json`.
+
 How the app is put together (`apps/driver/src`):
 
 - `app/`: the screens. `login`, `permissions`, the four tabs in `(tabs)/`
