@@ -1,0 +1,29 @@
+import type { Database } from './database.types';
+
+type Tables = Database['public']['Tables'];
+
+export type Employee = Tables['employees']['Row'];
+export type Task = Tables['tasks']['Row'];
+export type TaskStop = Tables['task_stops']['Row'];
+export type TaskWithStops = Task & { task_stops: TaskStop[] };
+export type VehicleReport = Tables['vehicle_reports']['Row'];
+export type OdometerLog = Tables['odometer_logs']['Row'];
+export type FuelLog = Tables['fuel_logs']['Row'];
+
+/** The only vehicle columns a driver may read (see VEHICLE_COLUMNS in api.ts). */
+export type Vehicle = Pick<
+  Tables['vehicles']['Row'],
+  | 'id'
+  | 'reg_no'
+  | 'make_model'
+  | 'vehicle_type'
+  | 'seats'
+  | 'current_odometer_km'
+  | 'monthly_km_allowance'
+  | 'in_garage'
+  | 'active'
+>;
+
+export type Language = 'en' | 'si';
+export type ReportCategory = 'breakdown' | 'accident' | 'tyre' | 'warning_light' | 'other';
+export type PhotoKind = 'odometer' | 'fuel_receipt' | 'vehicle_report';

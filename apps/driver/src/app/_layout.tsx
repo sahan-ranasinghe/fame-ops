@@ -13,13 +13,26 @@ import { Yaldevi_600SemiBold } from '@expo-google-fonts/yaldevi/600SemiBold';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import '@/lib/notifications';
+import { AppProvider, useApp } from '@/state/app';
 import { colors } from '@/theme';
 
-// Keep the splash screen up until the fonts are ready.
+// Keep the splash screen up until the fonts and the saved sign-in are ready.
 SplashScreen.preventAutoHideAsync();
+
+function Screens({ fontsReady }: { fontsReady: boolean }) {
+  const { booted } = useApp();
+  const ready = fontsReady && booted;
+
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
+
+  if (!ready) return null;
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }} />;
+}
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -37,16 +50,9 @@ export default function RootLayout() {
     NotoSansSinhala_400Regular,
   });
 
-  useEffect(() => {
-    if (loaded || error) SplashScreen.hideAsync();
-  }, [loaded, error]);
-
-  if (!loaded && !error) return null;
-
   return (
-    <>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }} />
-    </>
+    <AppProvider>
+      <Screens fontsReady={loaded || error !== null} />
+    </AppProvider>
   );
 }

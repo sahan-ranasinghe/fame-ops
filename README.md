@@ -38,12 +38,40 @@ cd apps/driver
 source ~/.nvm/nvm.sh && nvm use
 
 npx expo-doctor                                       # 21/21 checks
-npx tsc --noEmit                                      # type check
+npm run typecheck                                     # type check (app and test script)
 npx expo prebuild --platform android --no-install     # config check; then: rm -rf android
 
 eas build --profile development --platform android    # cloud build (Sahan starts builds himself)
 npx expo start --dev-client                           # then open the app on the phone
 ```
+
+How the app is put together (`apps/driver/src`):
+
+- `app/`: the screens. `login`, `permissions`, the four tabs in `(tabs)/`
+  (Today, Mileage, Report, Me), `task/[id]` (a task, with the map while it is
+  in progress), `log-mileage` (odometer and fuel), `vehicle` (choose vehicle).
+- `state/app.tsx`: who is signed in, the language, tasks, and every action a
+  screen can trigger.
+- `lib/api.ts`: every call to Supabase. `sync/engine.ts`: the offline queue.
+  What the driver does is written to the phone first and sent in order when
+  there is a connection; sending the same thing twice is harmless.
+- `lib/location.ts` and `lib/locationTask.ts`: "Sharing my location". Points
+  are recorded only while a sharing period is open.
+- `i18n/en.json` and `i18n/si.json`: all text. Screens contain no text.
+- `lib/database.types.ts` is a copy of the connector's generated types; copy it
+  again after a schema change.
+
+Test of the app's server code and offline queue against the local stack
+(sign-in, reading, a whole working day queued offline and then sent, repeated
+sends, refused changes, a second driver who must see nothing):
+
+```bash
+npx supabase start            # from the repository root
+cd apps/driver && npm run test:data
+```
+
+The parts that only exist on a phone (location service, camera, map) have no
+automated test; they are checked by hand on the development build.
 
 Known risk: `@react-native-ml-kit/text-recognition` (reads the odometer from a
 photo) is listed as "untested on the New Architecture" and is excluded from

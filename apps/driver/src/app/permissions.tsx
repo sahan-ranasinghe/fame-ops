@@ -1,0 +1,169 @@
+// Permissions, asked once after sign-in and reachable later from Me:
+// location ("Allow all the time"), notifications, and no battery saving for
+// this app (otherwise Android stops location sharing after a while).
+
+import * as Application from 'expo-application';
+import * as Battery from 'expo-battery';
+import * as IntentLauncher from 'expo-intent-launcher';
+import { Redirect, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { BatteryCharging, Bell, Check, type LucideIcon, MapPin } from '@/components/icons';
+import { useCallback, useEffect, useState } from 'react';
+import { AppState, Linking, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { Button, Card, Txt } from '@/components/ui';
+import { KEYS, setJson } from '@/lib/kv';
+import { locationPermissions, requestLocationPermissions } from '@/lib/location';
+import { notificationsAllowed, requestNotifications } from '@/lib/notifications';
+import { useApp } from '@/state/app';
+import { colors } from '@/theme';
+
+interface Status {
+  location: boolean;
+  background: boolean;
+  notifications: boolean;
+  battery: boolean;
+}
+
+async function readStatus(): Promise<Status> {
+  const [location, notifications, batterySaving] = await Promise.all([
+    locationPermissions(),
+    notificationsAllowed(),
+    Battery.isBatteryOptimizationEnabledAsync().catch(() => false),
+  ]);
+  return { ...location, notifications, battery: !batterySaving };
+}
+
+/** Android's own one-tap question: "Let the app always run in the background?" */
+async function askBattery(): Promise<void> {
+  try {
+    await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, {
+      data: `package:${Application.applicationId}`,
+    });
+  } catch {
+    // Some phones do not offer the question; show the list of apps instead.
+    await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS).catch(() => undefined);
+  }
+}
+
+function Row({ icon: Icon, title, why, hint, done, action, onPress }: {
+  icon: LucideIcon;
+  title: string;
+  why: string;
+  hint?: string;
+  done: boolean;
+  action: string;
+  onPress: () => void;
+}) {
+  const { t } = useApp();
+  return (
+    <Card style={{ gap: 12 }}>
+      <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
+        <View style={[styles.icon, done && { backgroundColor: colors.blueChip }]}>
+          {done ? <Check size={24} color={colors.blue} strokeWidth={3} /> : <Icon size={24} color={colors.amber} />}
+        </View>
+        <View style={{ flex: 1, gap: 2 }}>
+          <Txt variant="big">{title}</Txt>
+          <Txt variant="muted">{why}</Txt>
+          {!done && hint && <Txt variant="strong" size={15} color={colors.amberText} style={{ marginTop: 4 }}>{hint}</Txt>}
+        </View>
+      </View>
+      {done
+        ? <Txt variant="strong" color={colors.blue}>{t('permissions.allowed')}</Txt>
+        : <Button kind="dark" label={action} onPress={onPress} />}
+    </Card>
+  );
+}
+
+export default function PermissionsScreen() {
+  const { me, t } = useApp();
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const [status, setStatus] = useState<Status | null>(null);
+  const [askedLocation, setAskedLocation] = useState(false);
+
+  const check = useCallback(() => {
+    readStatus().then(setStatus).catch(() => undefined);
+  }, []);
+
+  // The answers are given on Android's own screens, so look again whenever the app comes back.
+  useEffect(() => {
+    check();
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state === 'active') check();
+    });
+    return () => listener.remove();
+  }, [check]);
+
+  if (!me) return <Redirect href="/login" />;
+
+  async function askLocation() {
+    // After one refusal Android no longer shows its question: go to the app's settings instead.
+    if (askedLocation && status && !status.location) {
+      await Linking.openSettings();
+      return;
+    }
+    setAskedLocation(true);
+    await requestLocationPermissions();
+    check();
+  }
+
+  function finish() {
+    setJson(KEYS.permissionsSeen, true);
+    if (router.canGoBack()) router.back();
+    else router.replace('/');
+  }
+
+  const locationDone = status?.location === true && status.background;
+
+  return (
+    <View style={styles.page}>
+      <StatusBar style="dark" />
+      <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 24, paddingBottom: 24, gap: 14 }}>
+        <Txt variant="title" style={{ marginBottom: 6 }}>{t('permissions.title')}</Txt>
+        <Row
+          icon={MapPin}
+          title={t('permissions.location')}
+          why={t('permissions.locationWhy')}
+          hint={t('permissions.locationAlways')}
+          done={locationDone}
+          action={askedLocation && status?.location === false ? t('permissions.openSettings') : t('permissions.allow')}
+          onPress={askLocation}
+        />
+        <Row
+          icon={Bell}
+          title={t('permissions.notifications')}
+          why={t('permissions.notificationsWhy')}
+          done={status?.notifications === true}
+          action={t('permissions.allow')}
+          onPress={() => requestNotifications().then(check)}
+        />
+        <Row
+          icon={BatteryCharging}
+          title={t('permissions.battery')}
+          why={t('permissions.batteryWhy')}
+          done={status?.battery === true}
+          action={t('permissions.allow')}
+          onPress={() => askBattery().then(check)}
+        />
+      </ScrollView>
+      <View style={{ padding: 16, paddingBottom: insets.bottom + 16, gap: 10 }}>
+        <Button label={t('permissions.continue')} onPress={finish} />
+        <Txt variant="small" style={{ textAlign: 'center' }}>{t('permissions.later')}</Txt>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  page: { flex: 1, backgroundColor: colors.page },
+  icon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});

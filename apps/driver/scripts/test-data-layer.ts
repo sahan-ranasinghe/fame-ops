@@ -1,0 +1,334 @@
+// Runs the app's own server code (src/lib/api.ts and the offline queue in
+// src/sync/engine.ts) against the LOCAL Supabase stack, as a signed-in driver.
+// The phone-only parts (SQLite, files) are replaced by small in-memory ones.
+//
+//   npx supabase start        (from the repository root)
+//   npm run test:data         (from apps/driver)
+//
+// It never runs against the real project, and uses fresh random names each
+// time, so it does not need an empty database.
+
+import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { createClient } from '@supabase/supabase-js';
+
+import * as api from '../src/lib/api';
+import { ApiError, VEHICLE_COLUMNS } from '../src/lib/api';
+import type { Database } from '../src/lib/database.types';
+import { createSync, type Op, type QueueStore, type StoredOp, type StoredPoint } from '../src/sync/engine';
+
+// --- local stack ------------------------------------------------------------
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const status = execFileSync('npx', ['supabase', 'status', '-o', 'env'], { cwd: repoRoot, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+const setting = (name: string) => status.match(new RegExp(`^${name}="?([^"\\n]*)"?$`, 'm'))?.[1] ?? '';
+const API_URL = setting('API_URL');
+const ANON_KEY = setting('ANON_KEY');
+const SERVICE_KEY = setting('SERVICE_ROLE_KEY');
+if (!/^http:\/\/(127\.0\.0\.1|localhost)/.test(API_URL) || !ANON_KEY || !SERVICE_KEY) {
+  console.error('The local Supabase stack is not running. Start it with: npx supabase start');
+  process.exit(2);
+}
+
+let failures = 0;
+function check(ok: boolean, label: string, detail?: unknown): void {
+  console.log(`${ok ? '  PASS  ' : '  FAIL  '}${label}${!ok && detail !== undefined ? `   [${JSON.stringify(detail)}]` : ''}`);
+  if (!ok) failures += 1;
+}
+
+/** Stands in for the phone's secure store: keeps the sign-in session in memory. */
+function memoryStorage() {
+  const items = new Map<string, string>();
+  return {
+    getItem: async (key: string) => items.get(key) ?? null,
+    setItem: async (key: string, value: string) => void items.set(key, value),
+    removeItem: async (key: string) => void items.delete(key),
+  };
+}
+const admin = createClient<Database>(API_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+
+/** A client like the app's. `online.value = false` makes every request fail like a dead connection. */
+function driverClient(online: { value: boolean }) {
+  return createClient<Database>(API_URL, ANON_KEY, {
+    auth: { storage: memoryStorage(), persistSession: true, autoRefreshToken: false, detectSessionInUrl: false },
+    global: {
+      fetch: (input, init) => (online.value ? fetch(input, init) : Promise.reject(new TypeError('Network request failed'))),
+    },
+  });
+}
+
+/** The queue kept in memory instead of SQLite. */
+function memoryStore() {
+  let seq = 0;
+  const ops: (StoredOp & { failed?: string })[] = [];
+  const points: StoredPoint[] = [];
+  const store: QueueStore = {
+    nextOps: (limit) => ops.filter((item) => item.failed === undefined).slice(0, limit),
+    removeOp: (id) => void ops.splice(ops.findIndex((item) => item.seq === id), 1),
+    failOp: (id, error) => {
+      const found = ops.find((item) => item.seq === id);
+      if (found) found.failed = error;
+    },
+    nextPoints: (limit) => points.slice(0, limit),
+    removePoints: (seqs) => {
+      for (const id of seqs) points.splice(points.findIndex((p) => p.seq === id), 1);
+    },
+  };
+  return {
+    store,
+    add: (...list: Op[]) => list.forEach((op) => ops.push({ seq: ++seq, op })),
+    addPoints: (list: Omit<StoredPoint, 'seq'>[]) => list.forEach((p) => points.push({ ...p, seq: ++seq })),
+    waiting: () => ops.filter((item) => item.failed === undefined).length,
+    failed: () => ops.filter((item) => item.failed !== undefined).map((item) => `${item.op.kind}: ${item.failed}`),
+    points: () => points.length,
+  };
+}
+
+const TINY_JPEG = Buffer.from(
+  'ffd8ffe000104a46494600010100000100010000ffdb004300080606070605080707070909080a0c140d0c0b0b0c1912130f141d1a1f1e1d1a1c1c20242e2720222c231c1c2837292c30313434341f27393d38323c2e333432' +
+    'ffc0000b080001000101011100ffc4001f0000010501010101010100000000000000000102030405060708090a0bffc400b5100002010303020403050504040000017d01020300041105122131410613516107227114' +
+    '328191a1082342b1c11552d1f02433627282090a161718191a25262728292a3435363738393a434445464748494a535455565758595a636465666768696a737475767778797a838485868788898a92939495969798999a' +
+    'a2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9faffda0008010100003f00fbfcffd9',
+  'hex',
+);
+
+async function main() {
+  const run = randomUUID().slice(0, 6);
+  const tmp = mkdtempSync(join(tmpdir(), 'fame-driver-test-'));
+  const must = <R extends { data: unknown; error: { message: string } | null }>(res: R, what: string): NonNullable<R['data']> => {
+    if (res.error || res.data === null || res.data === undefined) throw new Error(`${what}: ${res.error?.message ?? 'no data'}`);
+    return res.data as NonNullable<R['data']>;
+  };
+
+  // --- fixtures, created the way the office connector does -------------------
+  async function makeDriver(n: number) {
+    const username = `t${n}.${run}`;
+    const pin = String(100000 + Math.floor(Math.random() * 899999));
+    const user = await admin.auth.admin.createUser({ email: `${username}@${api.DRIVER_EMAIL_DOMAIN}`, password: pin, email_confirm: true });
+    if (user.error || !user.data.user) throw new Error(`auth: ${user.error?.message}`);
+    const row = must(
+      await admin.from('employees').insert({ code: `T${n}-${run}`, name: `Test Driver ${n}`, username, auth_user_id: user.data.user.id }).select('*').single(),
+      'employee',
+    );
+    return { username, pin, row, authId: user.data.user.id };
+  }
+  const a = await makeDriver(1);
+  const b = await makeDriver(2);
+  const van = must(await admin.from('vehicles').insert({ reg_no: `TEST ${run.toUpperCase()}-1`, make_model: 'Toyota HiAce', vehicle_type: 'van', seats: 14, monthly_km_allowance: 3000, current_odometer_km: 84500, monthly_rent_cents: 18000000 }).select('*').single(), 'vehicle');
+  const car = must(await admin.from('vehicles').insert({ reg_no: `TEST ${run.toUpperCase()}-2`, make_model: 'Toyota Axio', vehicle_type: 'car', seats: 4 }).select('*').single(), 'vehicle');
+  const gone = must(await admin.from('vehicles').insert({ reg_no: `TEST ${run.toUpperCase()}-3`, active: false }).select('*').single(), 'vehicle');
+
+  async function makeTask(title: string, driverId: string, vehicleId: string, minutesFromNow: number) {
+    return must(
+      await admin.rpc('office_create_task', {
+        p_task: { title, employee_id: driverId, vehicle_id: vehicleId, start_at: new Date(Date.now() + minutesFromNow * 60000).toISOString(), passengers: 5, contact_name: 'Ashan W.', contact_phone: '0779998877', created_by: 'test' },
+        p_stops: [{ seq: 2, type: 'drop', place_name: 'Kurunegala tower site', lat: 7.4839, lng: 80.3683 }, { seq: 1, type: 'pickup', place_name: 'Head office, Colombo 05', lat: 6.8868, lng: 79.8612 }],
+        p_projects: [],
+      }),
+      'task',
+    );
+  }
+  const task1 = await makeTask(`Team drop ${run}`, a.row.id, van.id, 10);
+  const task2 = await makeTask(`Return team ${run}`, a.row.id, van.id, 300);
+  const taskOfB = await makeTask(`Other driver ${run}`, b.row.id, car.id, 10);
+  // A sharing period left open by an earlier install of the app.
+  const stale = must(await admin.from('duty_sessions').insert({ employee_id: a.row.id, started_at: new Date(Date.now() - 86400000).toISOString() }).select('id').single(), 'stale session');
+
+  // --- sign in ---------------------------------------------------------------
+  console.log('\n== Sign in and read ==');
+  const online = { value: true };
+  const client = driverClient(online);
+  check((await api.signIn(client, a.username, '000000')) === 'wrong', 'a wrong PIN gives "wrong"');
+  online.value = false;
+  check((await api.signIn(client, a.username, a.pin)) === 'network', 'no connection gives "network"');
+  online.value = true;
+  check((await api.signIn(client, ` ${a.username.toUpperCase()} `, a.pin)) === 'ok', 'signs in with username + PIN (spaces and capitals forgiven)');
+
+  const me = await api.fetchMe(client);
+  check(me?.id === a.row.id && me.username === a.username, 'fetchMe returns my own employee row', me);
+
+  const vehicles = await api.fetchVehicles(client);
+  const mine = vehicles.filter((v) => v.reg_no.includes(run.toUpperCase()));
+  check(mine.length === 2 && !mine.some((v) => v.id === gone.id), 'fetchVehicles returns the active vehicles only', mine.map((v) => v.reg_no));
+  check(Object.keys(mine[0] ?? {}).sort().join(',') === VEHICLE_COLUMNS.split(', ').sort().join(','), 'vehicles carry exactly the nine allowed columns', Object.keys(mine[0] ?? {}));
+  const star = await client.from('vehicles').select('*').limit(1);
+  check(star.error?.code === '42501', 'select * on vehicles is refused, as the database promises', star.error);
+
+  const since = new Date(Date.now() - 3600000);
+  let tasks = await api.fetchTasks(client, since);
+  check(tasks.length === 2 && tasks.every((t) => t.employee_id === a.row.id) && !tasks.some((t) => t.id === taskOfB), 'fetchTasks returns my 2 tasks and not the other driver\'s', tasks.map((t) => t.title));
+  check(tasks[0]?.id === task1 && tasks[0].task_stops.map((s) => s.type).join('>') === 'pickup>drop', 'tasks come soonest first, stops in order (pickup, then drop)', tasks[0]?.task_stops.map((s) => s.seq));
+
+  // --- the queue ---------------------------------------------------------------
+  console.log('\n== Offline queue: a whole working day, first with no connection ==');
+  const queue = memoryStore();
+  const uploads: string[] = [];
+  const sync = createSync({
+    client,
+    store: queue.store,
+    employeeId: () => a.row.id,
+    // Same request the phone makes: the file is POSTed straight to storage with the driver's token.
+    uploadFile: async (localUri, storagePath) => {
+      const { data } = await client.auth.getSession();
+      let res: Response;
+      try {
+        if (!online.value) throw new TypeError('Network request failed');
+        res = await fetch(`${API_URL}/storage/v1/object/driver-photos/${storagePath}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${data.session?.access_token}`, apikey: ANON_KEY, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
+          body: readFileSync(localUri),
+        });
+      } catch (error) {
+        throw new ApiError(`photo: ${(error as Error).message}`, false);
+      }
+      const body = await res.text();
+      uploads.push(`${res.status} ${body.slice(0, 60)}`);
+      if (res.ok) return;
+      if (res.status === 409 || /duplicate|already exists/i.test(body)) return;
+      throw new ApiError(`photo: upload refused (${res.status})`, res.status >= 400 && res.status < 500 && res.status !== 401);
+    },
+    removeFile: () => undefined,
+  });
+
+  const now = Date.now();
+  const at = (minutesAgo: number) => new Date(now - minutesAgo * 60000).toISOString();
+  const day = new Date(now + 5.5 * 3600000).toISOString().slice(0, 10);
+  const photoFile = (id: string) => {
+    const path = join(tmp, `${id}.jpg`);
+    writeFileSync(path, TINY_JPEG);
+    return path;
+  };
+  const photoOp = (id: string, kind: 'odometer' | 'fuel_receipt' | 'vehicle_report', reportId: string | null = null): Op => ({
+    kind: 'photo', id, employee_id: a.row.id, photo_kind: kind, storage_path: `${a.row.id}/${day}/${id}.jpg`, local_uri: photoFile(id), taken_at: at(1), lat: 7.3381, lng: 80.3003, vehicle_report_id: reportId,
+  });
+
+  const session = randomUUID();
+  const [pStart, pEnd, pFuel, pReport, report] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  const logStart = randomUUID();
+  const stops = tasks[0]!.task_stops;
+  const day1: Op[] = [
+    { kind: 'task_patch', id: task1, patch: { seen_at: at(50) } },
+    { kind: 'employee_patch', id: a.row.id, patch: { current_vehicle_id: van.id, language: 'si' } },
+    { kind: 'session_start', id: session, employee_id: a.row.id, vehicle_id: van.id, started_at: at(45), device_info: { model: 'test phone' } },
+    photoOp(pStart, 'odometer'),
+    { kind: 'odometer_log', row: { id: logStart, vehicle_id: van.id, employee_id: a.row.id, task_id: task1, reading_km: 84512, ocr_value: 84512, photo_id: pStart, kind: 'task_start', logged_at: at(44) } },
+    { kind: 'task_patch', id: task1, patch: { status: 'in_progress', start_odometer_km: 84512, started_at: at(44) } },
+    { kind: 'stop_patch', id: stops[0]!.id, patch: { status: 'done', done_at: at(40) } },
+    { kind: 'report', row: { id: report, vehicle_id: van.id, employee_id: a.row.id, task_id: task1, category: 'tyre', note: 'Front left tyre is worn', created_at: at(20) } },
+    photoOp(pReport, 'vehicle_report', report),
+    photoOp(pEnd, 'odometer'),
+    { kind: 'odometer_log', row: { id: randomUUID(), vehicle_id: van.id, employee_id: a.row.id, task_id: task1, reading_km: 84563, ocr_value: 84568, photo_id: pEnd, kind: 'task_end', logged_at: at(3) } },
+    photoOp(pFuel, 'fuel_receipt'),
+    { kind: 'fuel_log', row: { id: randomUUID(), vehicle_id: van.id, employee_id: a.row.id, task_id: task1, litres: 32, amount_cents: 1184000, receipt_photo_id: pFuel, odometer_km: 84563, logged_at: at(3) } },
+    { kind: 'stop_patch', id: stops[1]!.id, patch: { status: 'done', done_at: at(3) } },
+    { kind: 'task_patch', id: task1, patch: { status: 'completed', end_odometer_km: 84563, completed_at: at(3) } },
+    { kind: 'session_end', id: session, ended_at: at(1), end_reason: 'driver' },
+  ];
+  queue.add(...day1);
+  queue.addPoints(Array.from({ length: 45 }, (_, i) => ({
+    session_id: session, recorded_at: at(44 - i), lat: 6.8868 + i * 0.01, lng: 79.8612 + i * 0.01, accuracy_m: 8, speed_mps: 15, heading: 45, battery_pct: 80, is_mock: false,
+  })));
+
+  online.value = false;
+  let result = await sync.flush();
+  check(result.offline && result.sent === 0 && queue.waiting() === day1.length && queue.points() === 45, 'with no connection nothing is lost and nothing is marked failed', { result, waiting: queue.waiting() });
+
+  console.log('\n== Connection returns ==');
+  online.value = true;
+  result = await sync.flush();
+  check(!result.offline && result.failed === 0 && queue.waiting() === 0 && queue.points() === 0, `everything is sent in order (${result.sent} items)`, { result, failed: queue.failed() });
+
+  const row = must(await admin.from('tasks').select('*').eq('id', task1).single(), 'task');
+  check(row.status === 'completed' && row.km === 51 && row.start_odometer_km === 84512 && row.seen_at !== null, 'the task is completed on the server with 51 km', { status: row.status, km: row.km });
+  check(row.started_at !== null && row.completed_at !== null && Math.abs(new Date(row.started_at).getTime() - (now - 44 * 60000)) < 2000, 'start and finish keep the times from the phone, not the time of sending', { started: row.started_at });
+  const stopRows = must(await admin.from('task_stops').select('status').eq('task_id', task1), 'stops');
+  check(stopRows.every((s) => s.status === 'done'), 'both stops are marked done');
+  const photos = must(await admin.from('photos').select('id, kind, odometer_log_id, fuel_log_id, vehicle_report_id, storage_path').eq('employee_id', a.row.id), 'photos');
+  check(photos.length === 4 && photos.find((p) => p.id === pStart)?.odometer_log_id === logStart && photos.find((p) => p.id === pFuel)?.fuel_log_id !== null && photos.find((p) => p.id === pReport)?.vehicle_report_id === report, '4 photo records, each linked to its reading, fuel entry or report', photos);
+  const files = must(await admin.storage.from('driver-photos').list(`${a.row.id}/${day}`), 'files');
+  check(files.length === 4 && uploads.every((u) => u.startsWith('200')), '4 photo files are in the driver\'s own folder', uploads);
+  const vanNow = must(await admin.from('vehicles').select('current_odometer_km').eq('id', van.id).single(), 'vehicle');
+  check(vanNow.current_odometer_km === 84563, 'the vehicle odometer follows the last reading (84,563)', vanNow);
+  const sessions = must(await admin.from('duty_sessions').select('id, ended_at, end_reason').eq('employee_id', a.row.id), 'sessions');
+  check(sessions.find((s) => s.id === stale.id)?.end_reason === 'auto' && sessions.find((s) => s.id === session)?.end_reason === 'driver', 'the stale sharing period was closed (auto) and the new one opened and ended (driver)', sessions);
+  const pointCount = (await admin.from('location_points').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id)).count;
+  const latest = must(await admin.from('driver_latest').select('*').eq('employee_id', a.row.id).single(), 'driver_latest');
+  check(pointCount === 45 && latest.sharing === false && Math.abs((latest.lat ?? 0) - (6.8868 + 44 * 0.01)) < 1e-6, '45 location points stored; the office sees the newest one and "not sharing"', { pointCount, lat: latest.lat });
+  const meNow = await api.fetchMe(client);
+  check(meNow?.language === 'si' && meNow.current_vehicle_id === van.id, 'language and current vehicle were saved');
+  const reports = await api.fetchReports(client);
+  check(reports.length === 1 && reports[0]?.status === 'open' && reports[0].category === 'tyre', 'fetchReports shows my report as open');
+  const mileage = await api.fetchMileage(client, van.id, new Date(now - 30 * 86400000));
+  check(mileage.odometer.map((l) => l.reading_km).join(',') === '84512,84563' && mileage.fuel.length === 1 && Number(mileage.fuel[0]?.litres) === 32, 'fetchMileage returns my 2 readings and 1 fuel entry');
+  tasks = await api.fetchTasks(client, since);
+  check(tasks.find((t) => t.id === task1)?.status === 'completed' && tasks.find((t) => t.id === task2)?.status === 'assigned', 'fetchTasks now shows task 1 completed and task 2 still assigned');
+
+  console.log('\n== Sending the same things again (answers lost on a bad connection) ==');
+  uploads.length = 0;
+  queue.add(...day1);
+  queue.addPoints(Array.from({ length: 5 }, (_, i) => ({ session_id: session, recorded_at: at(44 - i), lat: 1, lng: 1, accuracy_m: null, speed_mps: null, heading: null, battery_pct: null, is_mock: false })));
+  result = await sync.flush();
+  check(!result.offline && result.failed === 0 && queue.waiting() === 0, 'a second send of everything is accepted without errors', { result, failed: queue.failed() });
+  const again = must(await admin.from('tasks').select('status, km, started_at').eq('id', task1).single(), 'task');
+  const counts = await Promise.all([
+    admin.from('odometer_logs').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
+    admin.from('fuel_logs').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
+    admin.from('photos').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
+    admin.from('vehicle_reports').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
+    admin.from('location_points').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
+  ]);
+  check(counts.map((c) => c.count).join(',') === '2,1,4,1,45' && again.km === 51 && again.started_at === row.started_at, 'and nothing was duplicated or changed (2 readings, 1 fuel, 4 photos, 1 report, 45 points)', counts.map((c) => c.count));
+  check(uploads.length === 4 && uploads.every((u) => /duplicate|already exists/i.test(u)), 'photo files already uploaded are recognised as "already there"', uploads);
+
+  console.log('\n== When the server says no ==');
+  const logNoPhoto = randomUUID();
+  queue.add(
+    { kind: 'task_patch', id: taskOfB, patch: { status: 'in_progress', start_odometer_km: 1, started_at: at(1) } },
+    { kind: 'task_patch', id: taskOfB, patch: { seen_at: at(1) } },
+    { kind: 'task_patch', id: task2, patch: { status: 'completed', end_odometer_km: 90000, completed_at: at(0) } },
+    { kind: 'odometer_log', row: { id: logNoPhoto, vehicle_id: van.id, employee_id: a.row.id, task_id: null, reading_km: 84570, ocr_value: null, photo_id: randomUUID(), kind: 'manual', logged_at: at(0) } },
+  );
+  result = await sync.flush();
+  check(result.failed === 2 && result.sent === 2 && queue.waiting() === 0, 'refused changes are set aside (2) and the rest still goes through (2)', { result, failed: queue.failed() });
+  check(queue.failed().some((f) => f.includes('no longer assigned')) && queue.failed().some((f) => f.includes('Drivers cannot change a task from assigned to completed')), 'the reasons are kept: not my task; cannot skip straight to completed', queue.failed());
+  const other = must(await admin.from('tasks').select('status, seen_at').eq('id', taskOfB).single(), 'task');
+  check(other.status === 'assigned' && other.seen_at === null, 'the other driver\'s task was not touched');
+  const saved = must(await admin.from('odometer_logs').select('reading_km, photo_id').eq('id', logNoPhoto).single(), 'log');
+  check(saved.reading_km === 84570 && saved.photo_id === null, 'a reading whose photo never arrived is saved without the photo');
+
+  console.log('\n== Points whose sharing period never reached the server ==');
+  const lost = randomUUID();
+  queue.addPoints(Array.from({ length: 3 }, (_, i) => ({ session_id: lost, recorded_at: new Date(now + (i + 1) * 1000).toISOString(), lat: 7.3381, lng: 80.3003, accuracy_m: 5, speed_mps: 0, heading: null, battery_pct: 70, is_mock: false })));
+  result = await sync.flush();
+  const rescued = must(await admin.from('duty_sessions').select('ended_at, end_reason').eq('id', lost).single(), 'session');
+  const after = (await admin.from('location_points').select('id', { count: 'exact', head: true }).eq('session_id', lost)).count;
+  check(result.failed === 0 && after === 3 && rescued.end_reason === 'auto' && rescued.ended_at !== null, 'the period is registered after the fact and its 3 points are stored', { result, after, rescued });
+
+  console.log('\n== The other driver ==');
+  const clientB = driverClient({ value: true });
+  await api.signIn(clientB, b.username, b.pin);
+  const tasksB = await api.fetchTasks(clientB, since);
+  const seenByB = await Promise.all([
+    clientB.from('location_points').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
+    clientB.from('photos').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
+    clientB.from('odometer_logs').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
+    clientB.storage.from('driver-photos').list(`${a.row.id}/${day}`),
+  ]);
+  check(tasksB.length === 1 && tasksB[0]?.id === taskOfB, 'driver B sees only their own task');
+  check(seenByB[0].count === 0 && seenByB[1].count === 0 && seenByB[2].count === 0 && (seenByB[3].data ?? []).length === 0, 'driver B sees none of driver A\'s points, photos, readings or files');
+
+  await admin.from('employees').update({ active: false }).eq('id', a.row.id);
+  check((await api.fetchMe(client)) === null && (await api.fetchTasks(client, since)).length === 0, 'once the office switches driver A off, the app gets nothing (it then signs out)');
+
+  console.log(failures === 0 ? '\nALL CHECKS PASSED' : `\n${failures} CHECK(S) FAILED`);
+  process.exit(failures === 0 ? 0 : 1);
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});
