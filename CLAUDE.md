@@ -181,6 +181,11 @@ The office sees photos only through 1-hour signed URLs returned by connector too
   duty_sessions, location_points, odometer_logs, fuel_logs, vehicle_reports, photos.
   Update employees.current_vehicle_id and language for themselves only.
   No access to office_audit, vehicle_requests or other drivers' rows. No anon access.
+- Vehicles for drivers: only the columns id, reg_no, make_model, vehicle_type, seats,
+  current_odometer_km, monthly_km_allowance, in_garage, active (column privileges). No
+  rent, contract, regular driver, service or document columns. `select *` on vehicles
+  (and `vehicles(*)` inside another query) fails for a driver, so the app keeps this
+  list in one constant and uses it in every vehicles query.
 - Storage policies: drivers upload/read only inside their own `<employee_id>/` folder.
 
 ## Driver app (Fame Driver), Phase A
