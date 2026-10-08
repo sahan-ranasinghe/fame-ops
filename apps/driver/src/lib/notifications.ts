@@ -143,6 +143,20 @@ export async function armWatchdog(title: string, body: string): Promise<void> {
   }
 }
 
+/** Shows "sharing stopped, tap to turn it back on" now (the background job found the service dead and could not restart it). */
+export async function notifyTrackingStopped(title: string, body: string, kind: 'restart' | 'watchdog'): Promise<void> {
+  try {
+    await ensureChannels();
+    await Notifications.scheduleNotificationAsync({
+      identifier: WATCHDOG_ID,
+      content: { title, body, data: { kind } },
+      trigger: { channelId: CHANNELS.tracking },
+    });
+  } catch {
+    // Notifications not allowed: the in-app check restarts sharing when the app is opened.
+  }
+}
+
 /** Cancels the watchdog (sharing was switched off on purpose). */
 export async function disarmWatchdog(): Promise<void> {
   remove(KEYS.watchdogAt);

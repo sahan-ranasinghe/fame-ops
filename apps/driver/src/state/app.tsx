@@ -16,6 +16,7 @@ import * as api from '@/lib/api';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
 import { checkTracking, getSharing, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
 import { notifyNewTask, onNotificationTap } from '@/lib/notifications';
+import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
 import { type LocalPhoto, prepareOdometerReader, queuePhoto } from '@/lib/photos';
@@ -239,6 +240,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await checkTrackingNow();
         void refresh();
         void registerPush();
+        void registerTrackingCheck();
       }
       setBooted(true);
     })();
@@ -302,7 +304,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // The driver tapped the "sharing stopped" notification: look again right away.
   useEffect(() => onNotificationTap((data) => {
-    if (data.kind === 'watchdog') void checkTrackingNow();
+    if (data.kind === 'watchdog' || data.kind === 'restart') void checkTrackingNow();
   }), [checkTrackingNow]);
 
   // Live updates: the office assigns, changes or cancels one of my tasks.
@@ -372,6 +374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       saveMe(row);
       void refresh();
       void registerPush();
+      void registerTrackingCheck();
       return 'ok';
     } catch {
       await supabase.auth.signOut({ scope: 'local' });
@@ -388,6 +391,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const left = queueCounts();
     if (left.ops > 0 || left.points > 0) return 'queue';
     await unregisterPush();
+    await unregisterTrackingCheck();
     await supabase.auth.signOut({ scope: 'local' });
     forgetEverything();
     return 'ok';

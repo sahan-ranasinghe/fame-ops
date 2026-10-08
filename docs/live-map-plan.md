@@ -1,6 +1,7 @@
 # Live map web app (`apps/web`): plan
 
-Status: plan only, written 8 October 2026. Nothing is built. This is the one
+Status: plan only, written 8 October 2026, approved the same day with the account
+change in section 2. Nothing is built. This is the one
 allowed exception to "no hosted office web app" (CLAUDE.md): Claude artifacts
 cannot load map tiles, so the live map needs a small page outside Claude.
 Everything else the office does stays in Claude through the connector.
@@ -27,15 +28,23 @@ No polling anywhere: positions arrive through Supabase Realtime.
 - Supabase Auth email + password, the same project as the driver app. Public
   sign-up stays off. An office user is an `employees` row with
   `role = 'office'` and an `auth_user_id`, like a driver with a different role.
-- **Creating accounts (recommendation: one new connector tool).** The office
-  already works in Claude, and the connector already creates driver accounts
-  (`create_driver`). A tool `create_office_user(name, email, password,
-  role = 'office' | 'staff')` and `set_office_user_active(email, active)` is
-  the simplest: no service key on any laptop, every creation audited in
-  `office_audit`, and Sahan creates the five users from chat in a minute. A
-  one-off script would need the service key locally, which the hard rules
-  forbid. Password resets: Supabase's own "forgot password" e-mail, with the
-  Pages domain in the Auth redirect list.
+- **Creating accounts (decided: one new connector tool, no password in
+  chat).** `create_office_user(name, email, role = 'office' | 'staff')`
+  creates the Auth user with no password (`auth.admin.createUser`, e-mail
+  marked confirmed) and the `employees` row, then returns a one-time
+  set-password link from `auth.admin.generateLink({ type: 'recovery' })`.
+  Sahan sends the link by WhatsApp; the person opens it, lands on the web
+  app's `/set-password` page (the link carries a recovery session) and
+  chooses their own password (`supabase.auth.updateUser({ password })`).
+  `reset_office_password(email)` returns a fresh link the same way, and
+  `set_office_user_active(email, active)` switches a person off. No password
+  ever appears in Claude's chat history, and Supabase's built-in e-mail is
+  not used at all: it only delivers to project team members, two an hour, so
+  a "forgot password" e-mail would never reach office staff. The link is
+  valid for one hour (Auth setting `otp_expiry`); an expired link is simply
+  replaced by asking for another. The tools run with service_role inside the
+  connector, so no laptop needs the service key, and every creation is in
+  `office_audit`.
 - **Second step (TOTP): worth adding, in two stages.** The page shows every
   driver's position; a leaked password should not be enough. Supabase MFA
   (TOTP, Google Authenticator or similar) is free and takes a user two
@@ -167,8 +176,9 @@ from the page cannot be used elsewhere because of the referrer restriction.
 - **Domain**: optional. `fame-fleet.pages.dev` works from day one. A custom
   name (for example `fleet.fameglobal.lk`) needs the DNS of that domain on
   Cloudflare (free) or a CNAME to the Pages host.
-- **Supabase Auth**: add the Pages URL to Site URL / Redirect URLs (for the
-  password-reset e-mail); enable MFA (TOTP) in Auth settings.
+- **Supabase Auth**: add the Pages URL to Site URL / Redirect URLs (the
+  set-password link redirects there); enable MFA (TOTP) in Auth settings.
+  No e-mail provider is needed.
 - **Supabase usage** for 12 vehicles and about 5 office users: Realtime
   messages are the only new load. A vehicle sends up to 720 positions an
   hour while driving and 60 while parked; each position becomes one message
@@ -182,7 +192,9 @@ from the page cannot be used elsewhere because of the referrer restriction.
 ## 9. Order of work (about 4 working days)
 
 1. Migration + tests (office read access, Realtime on `driver_latest`).
-2. Connector tools `create_office_user` / `set_office_user_active`.
+2. Connector tools `create_office_user` (returns the set-password link),
+   `reset_office_password` and `set_office_user_active`; the web app's
+   `/set-password` page.
 3. `apps/web`: Vite + React + TypeScript, Supabase client, sign-in,
    MapLibre provider, live map with markers and cards.
 4. Today's route with the shared filter.

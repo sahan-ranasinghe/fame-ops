@@ -97,7 +97,21 @@
       ],
       "./plugins/withMlKitFromPlayServices",
       "expo-asset",
-      "expo-audio"
+      [
+        "expo-audio",
+        {
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      "expo-background-task",
+      [
+        "expo-camera",
+        {
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
+        }
+      ]
     ],
     "extra": {
       "supabaseUrl": "https://hinurfsaxvplbyqgtozj.supabase.co",

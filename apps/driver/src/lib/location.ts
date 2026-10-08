@@ -16,10 +16,11 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import * as Location from 'expo-location';
 import { Linking } from 'react-native';
 
+import { translate } from '../i18n';
 import { enqueue, flushNow } from '../sync';
 import { getJson, KEYS, remove, setJson } from './kv';
 import { armWatchdog, disarmWatchdog } from './notifications';
-import type { Employee } from './types';
+import type { Employee, Language } from './types';
 import { colors } from '../theme';
 
 export const LOCATION_TASK = 'fame-driver-location';
@@ -46,6 +47,21 @@ export interface ServiceTexts {
   body: string;
   stoppedTitle: string;
   stoppedBody: string;
+}
+
+/** The notification texts in a language, for code that runs without the screens (the background job). */
+export function serviceTextsFor(language: Language): ServiceTexts {
+  return {
+    title: translate(language, 'service.title'),
+    body: translate(language, 'service.body'),
+    stoppedTitle: translate(language, 'tracking.stoppedTitle'),
+    stoppedBody: translate(language, 'tracking.stoppedBody'),
+  };
+}
+
+/** Starts the location service (Android: with its foreground notification). Throws when Android refuses. */
+export async function startLocationUpdates(texts: ServiceTexts): Promise<void> {
+  await beginUpdates(texts);
 }
 
 async function beginUpdates(texts: ServiceTexts): Promise<void> {

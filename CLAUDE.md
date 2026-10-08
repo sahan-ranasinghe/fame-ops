@@ -93,7 +93,10 @@
   expo-file-system, expo-sqlite (offline queue), expo-secure-store (session),
   expo-localization, expo-notifications (push from the server; a local notification for a
   new task only on a phone with no push token), expo-audio (short sounds on Start task and
-  Save & finish task), @supabase/supabase-js, @expo-google-fonts.
+  Save & finish task), expo-background-task (a WorkManager job about every 15 min that
+  restarts a dead location service on Android ≤ 11 and, on Android 12+, shows "Location
+  sharing stopped. Tap to turn it back on"), expo-camera (installed for a later guided
+  odometer camera; no screen yet), @supabase/supabase-js, @expo-google-fonts.
 - `apps/driver/google-services.json` (Firebase, package com.fameglobal.driver) is NOT
   committed; builds get it from the EAS file variable GOOGLE_SERVICES_JSON through
   `app.config.ts`. Sounds are made by `scripts/make-sounds.sh` (ffmpeg tones), never

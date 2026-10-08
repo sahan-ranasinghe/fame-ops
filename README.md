@@ -114,6 +114,12 @@ How the app is put together (`apps/driver/src`):
   the app opens, comes to the front, and every minute while on screen) and
   reports what the driver must fix; the background task keeps a watchdog
   notification armed that fires 12 minutes after the last position.
+- `lib/backgroundTask.ts`: the tracking check without the app (expo-background-task,
+  a WorkManager job Android runs about every 15 minutes). With sharing on and no
+  position for 3 minutes it restarts the location service (Android 11 and
+  older) or, on Android 12 and newer where a job may not start one, shows
+  "Location sharing stopped. Tap to turn it back on". A force-stopped app
+  runs no jobs until it is opened again.
 - `lib/odometerAi.ts`: reads the odometer from the photo. The photo is
   uploaded at once and the Edge Function `read-odometer` asks Gemini; with no
   connection the phone's own text reader (ML Kit) is used instead. Either

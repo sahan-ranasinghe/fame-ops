@@ -267,7 +267,7 @@
     "taskNotSharing": "A task is in progress but you are not sharing your location.",
     "shareNow": "Share location",
     "stoppedTitle": "Location sharing stopped",
-    "stoppedBody": "Open Fame Driver to keep sharing your location.",
+    "stoppedBody": "Tap to turn it back on.",
     "lastFix": "Last position {time}",
     "gpsKm": "Driven (GPS)",
     "approx": "approximate"
