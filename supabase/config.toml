@@ -398,6 +398,11 @@ verify_jwt = false
 enabled = true
 verify_jwt = false
 
+# push-task is called by the database (pg_net) with the shared server key.
+[functions.push-task]
+enabled = true
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

@@ -11,11 +11,12 @@ import { NotoSansSinhala_400Regular } from '@expo-google-fonts/noto-sans-sinhala
 import { Yaldevi_400Regular } from '@expo-google-fonts/yaldevi/400Regular';
 import { Yaldevi_600SemiBold } from '@expo-google-fonts/yaldevi/600SemiBold';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
-import '@/lib/notifications';
+import { tapData } from '@/lib/notifications';
 import { AppProvider, useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -23,12 +24,25 @@ import { colors } from '@/theme';
 SplashScreen.preventAutoHideAsync();
 
 function Screens({ fontsReady }: { fontsReady: boolean }) {
-  const { booted } = useApp();
+  const { booted, me } = useApp();
   const ready = fontsReady && booted;
+  const router = useRouter();
+  // The notification the app was opened with (or tapped while running): a task notification opens that task.
+  const response = Notifications.useLastNotificationResponse();
+  const handled = useRef<string | null>(null);
 
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
+
+  useEffect(() => {
+    if (!ready || !me || !response) return;
+    const id = response.notification.request.identifier;
+    if (handled.current === id) return;
+    handled.current = id;
+    const { taskId } = tapData(response);
+    if (taskId) router.push({ pathname: '/task/[id]', params: { id: taskId } });
+  }, [ready, me, response, router]);
 
   if (!ready) return null;
   return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }} />;

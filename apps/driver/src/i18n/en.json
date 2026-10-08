@@ -272,6 +272,11 @@
     "gpsKm": "Driven (GPS)",
     "approx": "approximate"
   },
+  "push": {
+    "testSound": "Test the new-task sound",
+    "testTitle": "New task (test)",
+    "testBody": "This is how a new task sounds. Tap to close."
+  },
   "service": {
     "title": "Sharing my location",
     "body": "The office can see where you are."

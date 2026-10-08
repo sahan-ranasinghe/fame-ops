@@ -20,7 +20,7 @@ import {
   phoneBrand,
   requestLocationPermissions,
 } from '@/lib/location';
-import { notificationsAllowed, requestNotifications } from '@/lib/notifications';
+import { notificationsAllowed, requestNotifications, showTestNotification } from '@/lib/notifications';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -71,7 +71,7 @@ function Row({ icon: Icon, title, why, hint, done, action, onPress }: {
 }
 
 export default function PermissionsScreen() {
-  const { me, t, checkTrackingNow } = useApp();
+  const { me, t, checkTrackingNow, registerPush } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [status, setStatus] = useState<Status | null>(null);
@@ -133,8 +133,11 @@ export default function PermissionsScreen() {
           why={t('permissions.notificationsWhy')}
           done={status?.notifications === true}
           action={t('permissions.allow')}
-          onPress={() => requestNotifications().then(check)}
+          onPress={() => requestNotifications().then(() => { check(); void registerPush(); })}
         />
+        {status?.notifications === true && (
+          <Button kind="outline" label={t('push.testSound')} onPress={() => void showTestNotification(t('push.testTitle'), t('push.testBody'))} />
+        )}
         <Row
           icon={BatteryCharging}
           title={t('permissions.battery')}

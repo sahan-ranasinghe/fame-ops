@@ -41,4 +41,6 @@ export const KEYS = {
   lastUpdateCheck: 'updates.lastCheck',
   /** An update was downloaded but not started yet (a task was running or something was waiting to upload). */
   updateDownloaded: 'updates.downloaded',
+  /** The Expo push token this phone registered with the office. */
+  pushToken: 'push.token',
 } as const;

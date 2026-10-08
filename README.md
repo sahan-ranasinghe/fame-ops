@@ -32,6 +32,10 @@ location, the map and the other native modules need it.
 - `.easignore` (at the top of the repository) limits what a build uploads to
   Expo to `apps/`. Without it the whole repository would be uploaded,
   including `docs/` and the git history.
+- `app.config.ts` adds to `app.json` the one thing that depends on the
+  machine: the Firebase file for push notifications. On an EAS build it comes
+  from the file environment variable `GOOGLE_SERVICES_JSON`; on the laptop
+  from `apps/driver/google-services.json`, which is not committed.
 
 ```bash
 cd apps/driver
@@ -167,7 +171,42 @@ source ~/.nvm/nvm.sh && nvm use
 npx supabase db push                                         # only when there is a new migration
 npx supabase functions deploy office-mcp --no-verify-jwt     # the key in the URL replaces the JWT check
 npx supabase functions deploy read-odometer --no-verify-jwt  # checks the driver's token itself
+npx supabase functions deploy push-task --no-verify-jwt      # called by the database with the server key
 ```
+
+## Push notifications and sounds
+
+New, changed, reassigned and cancelled tasks reach the phone even when the
+app is closed:
+
+1. After sign-in the app asks Expo for its push token
+   (`Notifications.getExpoPushTokenAsync`, which needs the Firebase file in
+   the build) and registers it with `register_device_token()`; sign-out
+   removes it with `remove_device_token()`. One row per phone in
+   `device_tokens`; a phone used by another driver moves to that driver.
+2. The trigger `tasks_notify_push` on `tasks` hands each office change (new
+   task, time or vehicle changed, cancelled, given to another driver) to the
+   Edge Function `push-task` through pg_net, with the URL and key from Vault
+   (`functions_url`, `server_key`). Changes made by the driver's own app are
+   not pushed.
+3. `push-task` writes the text in the driver's language, sends it through
+   Expo's push API (which talks to FCM with the service-account key uploaded
+   to EAS), deletes tokens Expo reports as gone, and logs to `push_log`.
+4. On the phone, Android plays the channel's sound: `tasks-new` (loud ring),
+   `tasks-changed`, `general`. Tapping the notification opens the task. The
+   app plays its own short sounds on Start task and Save & finish task
+   (expo-audio). All sounds are made by `apps/driver/scripts/make-sounds.sh`
+   (pure tones with ffmpeg, nothing downloaded).
+
+A phone with no push token (older build, notifications refused) still gets a
+local notification for a new task while the app is open, from Realtime.
+
+What Sahan sets up once: a Firebase project with the Android app
+`com.fameglobal.driver` (`google-services.json` in `apps/driver/`, ignored by
+git, uploaded to EAS as the file variable `GOOGLE_SERVICES_JSON`), the FCM V1
+service-account key uploaded with `eas credentials`, the Edge Function secret
+`SERVER_KEY`, and the two Vault secrets. A new build is needed once (native
+modules and bundled sounds); after that, updates go over the air again.
 
 ## Odometer photos prove the reading (`read-odometer`)
 
@@ -265,7 +304,8 @@ on the laptop, so it runs in Docker):
 docker run --rm --cpus 2 --memory 2g -v deno-cache:/deno-dir -v "$PWD/supabase/functions:/fn:ro" \
   -w /fn/office-mcp denoland/deno:alpine \
   sh -c 'deno check index.ts && deno lint && deno fmt --check && deno test geo_test.ts \
-         && cd /fn/read-odometer && deno check index.ts && deno lint && deno fmt --check'
+         && cd /fn/read-odometer && deno check index.ts && deno lint && deno fmt --check \
+         && cd /fn/push-task && deno check index.ts && deno lint && deno fmt --check'
 ```
 
 ## Data credits

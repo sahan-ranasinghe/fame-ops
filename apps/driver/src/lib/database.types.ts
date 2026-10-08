@@ -91,6 +91,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"device_tokens": {
+                  Row: {
+                    "app_version": string | null,"created_at": string,"device_model": string | null,"employee_id": string,"id": string,"language": string | null,"platform": string,"token": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "app_version"?: string | null,"created_at"?: string,"device_model"?: string | null,"employee_id": string,"id"?: string,"language"?: string | null,"platform"?: string,"token": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "app_version"?: string | null,"created_at"?: string,"device_model"?: string | null,"employee_id"?: string,"id"?: string,"language"?: string | null,"platform"?: string,"token"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "device_tokens_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"driver_latest": {
                   Row: {
                     "accuracy_m": number | null,"battery_pct": number | null,"employee_id": string,"lat": number | null,"lng": number | null,"recorded_at": string | null,"session_id": string | null,"sharing": boolean,"speed_mps": number | null
@@ -383,6 +403,32 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"push_log": {
+                  Row: {
+                    "created_at": string,"employee_id": string | null,"errors": Json | null,"failed": number,"id": number,"kind": string,"sent": number,"task_id": string | null,"tokens": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"employee_id"?: string | null,"errors"?: Json | null,"failed"?: number,"id"?: never,"kind": string,"sent"?: number,"task_id"?: string | null,"tokens"?: number
+                  }
+                  Update: {
+                    "created_at"?: string,"employee_id"?: string | null,"errors"?: Json | null,"failed"?: number,"id"?: never,"kind"?: string,"sent"?: number,"task_id"?: string | null,"tokens"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "push_log_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "push_log_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"rental_companies": {
                   Row: {
                     "created_at": string,"id": string,"name": string,"phone": string | null
@@ -605,6 +651,15 @@ isOneToOne: false
                            },
 "queue_odometer_checks":
 { Args: Record<PropertyKey, never>; Returns: number
+                           },
+"register_device_token":
+{ Args: { "p_app_version"?: string,"p_device_model"?: string,"p_language"?: string,"p_platform"?: string,"p_token": string }; Returns: undefined
+                           },
+"remove_device_token":
+{ Args: { "p_token": string }; Returns: undefined
+                           },
+"send_push":
+{ Args: { "p_employee_id": string,"p_kind": string,"p_task_id": string }; Returns: undefined
                            },
 "set_odometer_ai":
 { Args: { "p_ai_status": string,"p_ai_value": number,"p_log_id": string }; Returns: undefined

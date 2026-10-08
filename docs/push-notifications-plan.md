@@ -1,10 +1,9 @@
 # Push notifications and sounds for Fame Driver (plan, needs a new build)
 
-Status: plan only, written 8 October 2026. Nothing here is built yet. Both
-parts need a new Android build, because they add native pieces (Firebase
-Messaging, a bundled sound file, a notification channel with a custom sound).
-Raise `version` in `apps/driver/app.json` first so that the current preview
-build (1.0.0) does not receive code it cannot run.
+Status: built on 8 October 2026 (branch `push-notifications`), waiting for
+the setup steps marked *Sahan* below and one new build (app version 1.1.0).
+What was built follows the plan except where noted in "As built" at the end.
+The sections below are the original plan.
 
 ## 1. Push when the app is closed: new, changed and cancelled tasks
 
@@ -133,3 +132,26 @@ the key from step 6.
 3. Sounds (half a day, mostly choosing the files).
 4. One preview build; test on the OPPO phone with the app closed and the
    phone locked for 30 minutes.
+
+## As built (8 October 2026)
+
+- Tables `device_tokens` and `push_log`; functions `register_device_token()`,
+  `remove_device_token()`, `send_push()`; trigger `tasks_notify_push` (new,
+  changed time/vehicle/title, cancelled, reassigned = "removed" to the old
+  driver and "new" to the new one). Driver-side updates never push.
+- Edge Function `push-task` (header `x-server-key`), texts in en/si, channels
+  `tasks-new`, `tasks-changed`, `general`; `DeviceNotRegistered` tokens deleted.
+- App: `lib/push.ts` registers after sign-in and when notifications are
+  allowed, removes on sign-out; `lib/notifications.ts` creates the channels
+  with the bundled sounds; a tapped notification opens the task
+  (`app/_layout.tsx`); `lib/sounds.ts` plays `task_start.wav` /
+  `task_done.wav` with expo-audio; Permissions has "Test the new-task sound".
+- Sounds: `apps/driver/scripts/make-sounds.sh` (ffmpeg pure tones, no
+  downloads). File names use underscores (Android resource names).
+- `app.config.ts` + `.gitignore`: `google-services.json` stays out of git and
+  comes from the EAS file variable `GOOGLE_SERVICES_JSON`.
+- Secrets: one `SERVER_KEY` shared by `read-odometer` and `push-task`, with the
+  same value in Vault as `server_key` next to `functions_url`. No
+  `PUSH_SHARED_SECRET` as first planned.
+- Not built: a URL-scheme deep link (the notification data carries `taskId`
+  instead) and Do Not Disturb bypass.

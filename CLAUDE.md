@@ -38,8 +38,11 @@
   office can run everything from Claude chat.
 - **B (next)**: office artifact "Fame Fleet" from the office designs (Overview, Live
   locations, Tasks + Assign a task, Requests, Vehicles), desktop and mobile layouts.
-- **C (later)**: Project costs, Maintenance, Mileage and Drivers office pages; FCM push
-  notifications and task sounds (plan: `docs/push-notifications-plan.md`); road distance /
+- **A2 (now)**: push notifications for new, changed, reassigned and cancelled tasks
+  (Expo push + FCM, `device_tokens`, trigger `tasks_notify_push` → pg_net → Edge Function
+  `push-task`) and task sounds (channels with bundled sounds, expo-audio in the app).
+  Details: `docs/push-notifications-plan.md`.
+- **C (later)**: Project costs, Maintenance, Mileage and Drivers office pages; road distance /
   ETA (routing API); WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet).
@@ -86,8 +89,13 @@
   it and keep manual entry.
 - expo-image-picker (camera), expo-image-manipulator (resize to max 1600 px, JPEG ~0.7),
   expo-file-system, expo-sqlite (offline queue), expo-secure-store (session),
-  expo-localization, expo-notifications (local notification when a new task arrives while
-  the app is running), @supabase/supabase-js, @expo-google-fonts.
+  expo-localization, expo-notifications (push from the server; a local notification for a
+  new task only on a phone with no push token), expo-audio (short sounds on Start task and
+  Save & finish task), @supabase/supabase-js, @expo-google-fonts.
+- `apps/driver/google-services.json` (Firebase, package com.fameglobal.driver) is NOT
+  committed; builds get it from the EAS file variable GOOGLE_SERVICES_JSON through
+  `app.config.ts`. Sounds are made by `scripts/make-sounds.sh` (ffmpeg tones), never
+  downloaded. App version 1.1.0 = the first build with push; updates target that runtime.
 - ALL native modules are installed before the first development build, so the rest of the
   day is live reload (`npx expo start --dev-client`) without new builds.
 - Background location does not work properly in Expo Go: always use the dev build.
@@ -151,6 +159,11 @@
 - `driver_latest`: employee_id PK, session_id, lat, lng, accuracy_m, speed_mps,
   battery_pct, recorded_at, sharing (bool). Kept current by trigger (only newer points win).
 - `office_audit`: id, at, tool, args_summary, result_summary.
+- `device_tokens`: id, employee_id, token (unique, Expo push token), platform, device_model,
+  app_version, language, created_at, updated_at. Drivers read their own; they write through
+  `register_device_token()` / `remove_device_token()`.
+- `push_log`: one row per push-task call (task_id, employee_id, kind, tokens, sent, failed,
+  errors). Service role only.
 - `odometer_reads`: one row per `read-odometer` model call (employee_id, vehicle_id,
   photo_path, last_km, gps_km, reading_km, confidence, status, mode ('driver'|'server'),
   log_id, model, ok, error, ms, created_at). Service role only.

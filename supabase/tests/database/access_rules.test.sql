@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  23::bigint, 'there are 23 tables in public');
+  25::bigint, 'there are 25 tables in public');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -115,7 +115,7 @@ select is(
 
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  24::bigint, 'there are 24 policies on public tables');
+  25::bigint, 'there are 25 policies on public tables');
 
 select is(
   (select count(*) from pg_policies
@@ -965,6 +965,86 @@ select is(
 select is((select ai_attempts from public.odometer_logs where id = '80000000-0000-0000-0000-000000000009'), 1::smallint,
   'and the try is counted');
 select is((select count(*) from cron.job where jobname = 'check-odometer-photos'), 1::bigint, 'the 5-minute job is scheduled');
+
+-- ---------------------------------------------------------------------------
+-- Push: device tokens, and the trigger that hands task changes to push-task
+-- (the Vault secrets created in the odometer section above are still there)
+-- ---------------------------------------------------------------------------
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+
+select lives_ok(
+  $$ select public.register_device_token('ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]', 'android', 'CPH2119', '1.1.0', 'en') $$,
+  'driver A registers the phone''s push token');
+select throws_ok(
+  $$ insert into public.device_tokens (employee_id, token) values ('10000000-0000-0000-0000-0000000000a1', 'ExponentPushToken[bbbbbbbbbbbbbbbbbbbbbb]') $$,
+  '42501', 'permission denied for table device_tokens', 'a driver cannot write device_tokens directly');
+select results_eq('select employee_id::text from public.device_tokens', array['10000000-0000-0000-0000-0000000000a1'],
+  'driver A sees their own token');
+select throws_ok('select count(*) from public.push_log', '42501', 'permission denied for table push_log',
+  'drivers cannot read push_log');
+
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+select results_eq('select count(*) from public.device_tokens', array[0::bigint], 'driver B does not see driver A''s token');
+select lives_ok(
+  $$ select public.register_device_token('ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]', 'android', 'CPH2119', '1.1.0', 'si') $$,
+  'the same phone signs in as driver B: the token moves');
+reset role;
+select is((select count(*) from public.device_tokens where token = 'ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]'), 1::bigint,
+  'one row per token');
+select is((select (employee_id::text, language)::text from public.device_tokens where token = 'ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]'),
+  '(10000000-0000-0000-0000-0000000000b1,si)', 'and it now belongs to driver B, in Sinhala');
+set local role authenticated;
+select lives_ok($$ select public.remove_device_token('ExponentPushToken[aaaaaaaaaaaaaaaaaaaaaa]') $$, 'driver B signs out: the token is removed');
+reset role;
+select is((select count(*) from public.device_tokens), 0::bigint, 'no tokens left');
+
+-- The office (service_role) creates and changes tasks: each change is queued for push-task.
+set local request.jwt.claims to '{"role":"service_role"}';
+select is((select count(*) from net.http_request_queue where url like '%/push-task'), 0::bigint, 'nothing queued for push yet');
+
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, created_by) values
+  ('50000000-0000-0000-0000-000000000009', 'Push test', '10000000-0000-0000-0000-0000000000a1',
+   '20000000-0000-0000-0000-000000000001', now() + interval '1 day', 'test');
+select is(
+  (select count(*) from net.http_request_queue where url like '%/push-task'
+     and convert_from(body, 'utf8')::jsonb ->> 'kind' = 'new'
+     and convert_from(body, 'utf8')::jsonb ->> 'employee_id' = '10000000-0000-0000-0000-0000000000a1'
+     and convert_from(body, 'utf8')::jsonb ->> 'task_id' = '50000000-0000-0000-0000-000000000009'),
+  1::bigint, 'a new task is pushed to its driver');
+select is((select headers ->> 'x-server-key' from net.http_request_queue where url like '%/push-task' limit 1),
+  'local-test-server-key-0123456789', 'with the server key from Vault');
+
+update public.tasks set start_at = start_at + interval '1 hour' where id = '50000000-0000-0000-0000-000000000009';
+select is(
+  (select count(*) from net.http_request_queue where url like '%/push-task' and convert_from(body, 'utf8')::jsonb ->> 'kind' = 'changed'),
+  1::bigint, 'a changed time is pushed as "changed"');
+
+update public.tasks set employee_id = '10000000-0000-0000-0000-0000000000b1' where id = '50000000-0000-0000-0000-000000000009';
+select is(
+  (select count(*) from net.http_request_queue where url like '%/push-task'
+     and convert_from(body, 'utf8')::jsonb ->> 'kind' = 'removed'
+     and convert_from(body, 'utf8')::jsonb ->> 'employee_id' = '10000000-0000-0000-0000-0000000000a1'),
+  1::bigint, 'a reassigned task is pushed as "removed" to the old driver');
+select is(
+  (select count(*) from net.http_request_queue where url like '%/push-task'
+     and convert_from(body, 'utf8')::jsonb ->> 'kind' = 'new'
+     and convert_from(body, 'utf8')::jsonb ->> 'employee_id' = '10000000-0000-0000-0000-0000000000b1'),
+  1::bigint, 'and as "new" to the new driver');
+
+update public.tasks set status = 'cancelled', cancelled_reason = 'test' where id = '50000000-0000-0000-0000-000000000009';
+select is(
+  (select count(*) from net.http_request_queue where url like '%/push-task' and convert_from(body, 'utf8')::jsonb ->> 'kind' = 'cancelled'),
+  1::bigint, 'a cancelled task is pushed as "cancelled"');
+
+-- The driver's own app changing a task never pushes.
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000b1","role":"authenticated"}';
+set local role authenticated;
+update public.tasks set seen_at = now() where id = '50000000-0000-0000-0000-000000000003';
+reset role;
+select is((select count(*) from net.http_request_queue where url like '%/push-task'), 5::bigint,
+  'a driver marking a task as seen queues nothing (still 5 requests)');
 
 select * from finish();
 

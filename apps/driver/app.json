@@ -3,7 +3,7 @@
     "name": "Fame Driver",
     "slug": "fame-driver",
     "owner": "fame-global",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "scheme": "famedriver",
     "platforms": [
       "android"
@@ -58,7 +58,12 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#f2a900"
+          "color": "#f2a900",
+          "sounds": [
+            "./assets/sounds/new_task.wav",
+            "./assets/sounds/task_changed.wav",
+            "./assets/sounds/general.wav"
+          ]
         }
       ],
       [
@@ -91,7 +96,8 @@
         }
       ],
       "./plugins/withMlKitFromPlayServices",
-      "expo-asset"
+      "expo-asset",
+      "expo-audio"
     ],
     "extra": {
       "supabaseUrl": "https://hinurfsaxvplbyqgtozj.supabase.co",

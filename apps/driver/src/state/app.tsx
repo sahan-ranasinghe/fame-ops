@@ -16,6 +16,8 @@ import * as api from '@/lib/api';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
 import { checkTracking, getSharing, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
 import { notifyNewTask, onNotificationTap } from '@/lib/notifications';
+import { pushToken, registerPush, unregisterPush } from '@/lib/push';
+import { playSound } from '@/lib/sounds';
 import { type LocalPhoto, prepareOdometerReader, queuePhoto } from '@/lib/photos';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
@@ -83,6 +85,8 @@ interface AppValue {
   setSharing: (on: boolean) => Promise<'on' | 'off' | 'no_permission'>;
   checkTrackingNow: () => Promise<void>;
   checkUpdate: () => Promise<UpdateOutcome>;
+  /** Registers this phone for push notifications (after sign-in, and when notifications are allowed). */
+  registerPush: () => Promise<boolean>;
   chooseVehicle: (vehicleId: string) => void;
   markSeen: (taskIds: string[]) => void;
   markStopDone: (stop: TaskStop) => void;
@@ -234,6 +238,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (meRef.current) {
         await checkTrackingNow();
         void refresh();
+        void registerPush();
       }
       setBooted(true);
     })();
@@ -296,7 +301,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [signedIn, checkTrackingNow]);
 
   // The driver tapped the "sharing stopped" notification: look again right away.
-  useEffect(() => onNotificationTap(() => void checkTrackingNow()), [checkTrackingNow]);
+  useEffect(() => onNotificationTap((data) => {
+    if (data.kind === 'watchdog') void checkTrackingNow();
+  }), [checkTrackingNow]);
 
   // Live updates: the office assigns, changes or cancels one of my tasks.
   const myId = me?.id;
@@ -311,9 +318,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const channel = supabase
       .channel(`my-tasks-${myId}-${liveGeneration}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `employee_id=eq.${myId}` }, (change) => {
-        if (change.eventType === 'INSERT') {
-          const task = change.new as { title?: string; start_at?: string };
-          void notifyNewTask(t('today.newTask'), [task.start_at ? colomboTime(task.start_at) : '', task.title ?? ''].join(' ').trim());
+        // A phone with a push token hears about the task from the server; the others from here.
+        if (change.eventType === 'INSERT' && !pushToken()) {
+          const task = change.new as { id?: string; title?: string; start_at?: string };
+          void notifyNewTask(t('today.newTask'), [task.start_at ? colomboTime(task.start_at) : '', task.title ?? ''].join(' ').trim(), task.id ?? '');
         }
         void refresh();
       })
@@ -363,6 +371,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       saveMe(row);
       void refresh();
+      void registerPush();
       return 'ok';
     } catch {
       await supabase.auth.signOut({ scope: 'local' });
@@ -378,6 +387,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await flushNow();
     const left = queueCounts();
     if (left.ops > 0 || left.points > 0) return 'queue';
+    await unregisterPush();
     await supabase.auth.signOut({ scope: 'local' });
     forgetEverything();
     return 'ok';
@@ -477,6 +487,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       patchLocalTask(task.id, (item) => ({ ...item, status: 'in_progress', start_odometer_km: odometerKm, started_at: now }));
       bumpOdometer(task.vehicle_id, odometerKm);
+      void playSound('start');
       beginTaskKm(task.id);
       setGpsKm(kmCounters());
       // The task's vehicle is now the one being driven.
@@ -552,6 +563,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         task_stops: item.task_stops.map((stop) => (open.includes(stop) ? { ...stop, status: 'done', done_at: now } : stop)),
       }));
       bumpOdometer(task.vehicle_id, odometerKm);
+      void playSound('done');
       endTaskKm();
       setGpsKm(kmCounters());
       void flushNow();
@@ -625,7 +637,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppValue = {
     booted, me, language, t, tList, setLanguage,
     vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, waitingTasks, refreshing, offline,
-    signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, chooseVehicle, markSeen, markStopDone,
+    signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopDone,
     startTask, completeTask, logOdometer, logFuel, sendReport,
   };
 
