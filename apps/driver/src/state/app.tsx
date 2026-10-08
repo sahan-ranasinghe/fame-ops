@@ -15,7 +15,7 @@ import { deviceLanguage, translate, translateList, type Vars } from '@/i18n';
 import * as api from '@/lib/api';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
 import { checkTracking, getSharing, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
-import { notifyNewTask, onNotificationTap } from '@/lib/notifications';
+import { ensureChannels, notifyNewTask, onNotificationTap } from '@/lib/notifications';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
@@ -239,7 +239,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       } else if (meRef.current) {
         await checkTrackingNow();
         void refresh();
-        void registerPush();
+        // The channels (with their sounds) must exist before the first push arrives.
+        void ensureChannels().then(registerPush);
         void registerTrackingCheck();
       }
       setBooted(true);
@@ -373,7 +374,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       saveMe(row);
       void refresh();
-      void registerPush();
+      void ensureChannels().then(registerPush);
       void registerTrackingCheck();
       return 'ok';
     } catch {
