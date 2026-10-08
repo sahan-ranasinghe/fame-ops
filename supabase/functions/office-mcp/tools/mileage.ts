@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
-import { findDriver, findVehicle, loadRefs, odometerCheck } from "../fleet.ts";
+import { describeGap, findDriver, findVehicle, gapPlaces, loadGaps, loadRefs, odometerCheck } from "../fleet.ts";
 import { centsToLkr, contactLinks } from "../format.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
@@ -18,6 +18,9 @@ export const mileageSummary = tool({
     '"unlogged km" flags (a task started with an odometer more than 2 km away from the last logged reading), and check_odometer: ' +
     "readings the office should look at (number changed after the photo was read, typed because the photo could not be read, " +
     "typed with no connection and the photo disagrees or is not checked yet), with photo links. " +
+    "Km outside tasks per vehicle: between_tasks_km (one reading to the next on the same day) and overnight_km (last reading " +
+    "of a day to the first of the next), with the biggest gaps (time window, the driver who had the vehicle, where it was at " +
+    "both readings from the photos' GPS). With a driver, the gaps that start with that driver's reading. " +
     "Can be narrowed to one vehicle and/or one driver.",
   readOnly: true,
   input: z.object({
@@ -94,6 +97,15 @@ export const mileageSummary = tool({
     }
     const baseline = new Map(before);
 
+    // Km nobody drove inside a task: between one reading and the next.
+    const allGaps = await loadGaps(db, vehicleIds, from, to);
+    const gaps = onlyDriver ? allGaps.filter((g) => g.from.employee_id === onlyDriver.id) : allGaps;
+    const gapKm = (vehicleId: string, type: "between_tasks" | "overnight") =>
+      gaps.filter((g) => g.vehicle_id === vehicleId && g.type === type).reduce((sum, g) => sum + g.km, 0);
+    const biggest = [...gaps].filter((g) => g.km > 0).sort((a, b) => b.km - a.km).slice(0, 10);
+    const places = await gapPlaces(db, biggest);
+    const biggestGaps = biggest.map((g) => describeGap(g, refs, places, (id) => id ? taskTitle.get(id) : undefined));
+
     // Readings the office should look at, with their photos.
     const checks = logs.filter((l) => (!onlyDriver || l.employee_id === onlyDriver.id) && odometerCheck(l) !== null);
     const checkLinks = await photoLinks(db, { ids: checks.flatMap((l) => l.photo_id ? [l.photo_id] : []) });
@@ -129,11 +141,15 @@ export const mileageSummary = tool({
         km_allowance: onlyDriver ? undefined : v.monthly_km_allowance,
         over_allowance: !onlyDriver && v.monthly_km_allowance != null && odometerKm > v.monthly_km_allowance ? true : undefined,
         km_outside_tasks: !onlyDriver && odometerKm - taskKm > UNLOGGED_KM ? odometerKm - taskKm : undefined,
+        between_tasks_km: gapKm(id, "between_tasks"),
+        overnight_km: gapKm(id, "overnight"),
         fuel_litres: Math.round(myFuel.reduce((sum, f) => sum + Number(f.litres ?? 0), 0) * 100) / 100,
         fuel_lkr: centsToLkr(myFuel.reduce((sum, f) => sum + (f.amount_cents ?? 0), 0)),
         fuel_entries: myFuel.length,
       };
-    }).filter((row) => onlyVehicle || row.tasks > 0 || row.fuel_entries > 0 || (row.odometer_km ?? 0) > 0);
+    }).filter((row) =>
+      onlyVehicle || row.tasks > 0 || row.fuel_entries > 0 || (row.odometer_km ?? 0) > 0 || row.between_tasks_km > 0 || row.overnight_km > 0
+    );
 
     const total = (pick: (row: (typeof rows)[number]) => number) => rows.reduce((sum, row) => sum + pick(row), 0);
     return {
@@ -148,14 +164,18 @@ export const mileageSummary = tool({
           fuel_lkr: total((r) => r.fuel_lkr ?? 0),
           unlogged_km_flags: flags.length,
           check_odometer: checkOdometer.length,
+          between_tasks_km: total((r) => r.between_tasks_km),
+          overnight_km: total((r) => r.overnight_km),
         },
         vehicles: rows,
+        biggest_gaps: biggestGaps,
         unlogged_km: flags,
         check_odometer: checkOdometer,
         photo_links: checkOdometer.length > 0 ? PHOTO_LINK_NOTE : undefined,
       },
-      summary: `mileage ${which}: ${rows.length} vehicles, ${total((r) => r.task_km)} task km, ${flags.length} unlogged flags, ` +
-        `${checkOdometer.length} odometer checks`,
+      summary: `mileage ${which}: ${rows.length} vehicles, ${total((r) => r.task_km)} task km, ` +
+        `${total((r) => r.between_tasks_km)} km between tasks, ${total((r) => r.overnight_km)} km overnight, ` +
+        `${flags.length} unlogged flags, ${checkOdometer.length} odometer checks`,
     };
   },
 });

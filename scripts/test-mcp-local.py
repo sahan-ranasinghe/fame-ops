@@ -410,6 +410,10 @@ check(cab["next_service"].startswith("In 1,039 km or ") and lv["counts"] == {"al
 check(tool("list_vehicles", {"filter": "in_garage"})["vehicles"][0]["reg_no"] == "WP CAR-1182" and len(tool("list_vehicles", {"filter": "documents_expiring"})["vehicles"]) == 1,
       "list_vehicles filters: in_garage and documents_expiring")
 ms = tool("mileage_summary")
+gap_km = sum(v.get("between_tasks_km", 0) + v.get("overnight_km", 0) for v in ms["vehicles"])
+check(gap_km == 18 and ms["biggest_gaps"][0]["km"] == 18 and ms["biggest_gaps"][0]["driver"] == "Nuwan Perera"
+      and ms["biggest_gaps"][0]["to_task"] == "Team drop · Kurunegala site",
+      "mileage_summary: 18 km outside tasks (84,512 -> 84,530) is the biggest gap, with the driver and the task it led to", json.dumps(ms.get("biggest_gaps"))[:300])
 row = next(v for v in ms["vehicles"] if v["vehicle"] == "WP CAB-4521")
 check(row["task_km"] == 51 and row["odometer_km"] == 69 and row["km_outside_tasks"] == 18 and row["fuel_litres"] == 32 and row["fuel_lkr"] == 11840
       and ms["totals"]["unlogged_km_flags"] == 1 and ms["unlogged_km"][0]["unlogged_km"] == 18 and ms["unlogged_km"][0]["driver"] == "Nuwan Perera",

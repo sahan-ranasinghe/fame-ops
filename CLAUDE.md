@@ -187,6 +187,12 @@ The office sees photos only through 1-hour signed URLs returned by connector too
   allowance; the vehicle is in garage; a document has expired.
 - Document chips: orange when expiring within 30 days, red within 7 days or expired.
 - Service due: next by km (last_service_odometer_km + service_interval_km) or by date.
+- Km outside tasks: consecutive odometer readings of a vehicle are paired; a task's own
+  start→end pair is task km, every other pair is a gap: between_tasks (same Colombo day) or
+  overnight (next reading on a later day). A gap shows its window, the driver of the reading
+  before it, and where the vehicle was at both readings (the photos' GPS). Monthly km vs the
+  rental allowance always comes from odometer readings (everything the vehicle drove). Gaps
+  over GAP_ATTENTION_KM (30, in fleet.ts) go to fleet_overview needs-attention for 7 days.
 - Cost model (Phase C): fuel from fuel_logs; rent share = vehicle monthly rent split across
   jobs by km; split by task_projects percent; tasks with no project go to "Fame internal".
 
@@ -285,9 +291,10 @@ office_audit.
 - Requests: `create_request(...)`, `list_requests(status?)`, `suggest_vehicles(request_id)`
   (free all day / over km allowance / booked), `decide_request(request_id, decision,
   vehicle?, driver?, reason?)` (approve creates the task).
-- Mileage and reports: `mileage_summary(month, vehicle?, driver?)` (task km, unlogged km
-  flags, fuel litres/LKR), `list_vehicle_reports(status?)`, `update_vehicle_report(id,
-  status, office_note?)`.
+- Mileage and reports: `mileage_summary(month, vehicle?, driver?)` (task km, odometer km vs
+  allowance, between_tasks_km and overnight_km per vehicle with the biggest gaps, unlogged
+  km flags, check_odometer, fuel litres/LKR), `list_vehicle_reports(status?)`,
+  `update_vehicle_report(id, status, office_note?)`.
 - Projects: `import_projects(projects[])` (upsert; the office's Claude reads Zoho and sends
   them), `find_project(text)`.
 

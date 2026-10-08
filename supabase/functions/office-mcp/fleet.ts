@@ -6,7 +6,7 @@ import type { Db, Row } from "./db.ts";
 import { fetchAll, ToolError, unwrap } from "./db.ts";
 import { closest } from "./geo.ts";
 import { plain, thousands } from "./format.ts";
-import { ago, colomboDate, colomboTime, dayRange, daysBetween, minutesSince, monthRange, shortDate } from "./time.ts";
+import { ago, colomboDate, colomboDayTime, colomboTime, dayRange, daysBetween, minutesSince, monthRange, shortDate } from "./time.ts";
 
 export type Employee = Row<"employees">;
 export type Vehicle = Row<"vehicles">;
@@ -233,6 +233,114 @@ export async function monthKm(db: Db, vehicleIds: string[], month: string): Prom
     if (end != null && start != null) km.set(id, Math.max(0, end - start));
   }
   return km;
+}
+
+// ---------------------------------------------------------------------------
+// Km outside tasks: the gap between one odometer reading and the next
+// ---------------------------------------------------------------------------
+
+/** A gap over this many km goes to "needs attention" (fleet_overview). */
+export const GAP_ATTENTION_KM = 30;
+
+export type Reading = Pick<
+  Row<"odometer_logs">,
+  "id" | "vehicle_id" | "employee_id" | "task_id" | "kind" | "reading_km" | "logged_at" | "photo_id"
+>;
+
+export interface Gap {
+  vehicle_id: string;
+  /** between_tasks = both readings on the same Colombo day; overnight = the next reading is on a later day. */
+  type: "between_tasks" | "overnight";
+  km: number;
+  /** The reading before the gap (its driver is the one who had the vehicle) and the one after. */
+  from: Reading;
+  to: Reading;
+}
+
+/**
+ * Pairs consecutive readings of each vehicle. A pair that belongs to one task
+ * (its start and end) is the task's own km; every other pair is a gap: km
+ * driven between tasks or overnight, which only the odometer sees. A reading
+ * lower than the one before (a correction) is not a gap.
+ */
+export function pairGaps(readings: Reading[]): Gap[] {
+  const byVehicle = new Map<string, Reading[]>();
+  for (const r of readings) byVehicle.set(r.vehicle_id, [...(byVehicle.get(r.vehicle_id) ?? []), r]);
+  const gaps: Gap[] = [];
+  for (const list of byVehicle.values()) {
+    list.sort((a, b) => a.logged_at.localeCompare(b.logged_at) || a.id.localeCompare(b.id));
+    for (let i = 1; i < list.length; i++) {
+      const from = list[i - 1];
+      const to = list[i];
+      if (from.task_id !== null && from.task_id === to.task_id) continue;
+      const km = to.reading_km - from.reading_km;
+      if (km < 0) continue;
+      gaps.push({
+        vehicle_id: from.vehicle_id,
+        type: colomboDate(from.logged_at) === colomboDate(to.logged_at) ? "between_tasks" : "overnight",
+        km,
+        from,
+        to,
+      });
+    }
+  }
+  return gaps;
+}
+
+/** The gaps whose closing reading falls in [from, to). Readings from the week before are read too, to close the first gap. */
+export async function loadGaps(db: Db, vehicleIds: string[], from: string, to: string): Promise<Gap[]> {
+  if (vehicleIds.length === 0) return [];
+  const since = new Date(new Date(from).getTime() - 7 * 86400000).toISOString();
+  const rows = await fetchAll(
+    (a, b) =>
+      db.from("odometer_logs").select("id, vehicle_id, employee_id, task_id, kind, reading_km, logged_at, photo_id")
+        .in("vehicle_id", vehicleIds).gte("logged_at", since).lt("logged_at", to)
+        .order("vehicle_id").order("logged_at").order("id").range(a, b),
+    "odometer logs",
+  );
+  return pairGaps(rows).filter((g) => g.to.logged_at >= from && g.to.logged_at < to);
+}
+
+export interface GapPlace {
+  near: string | null;
+  maps: string;
+}
+
+/** Where the vehicle was at a reading: the GPS position of the reading's photo, as the nearest town and a map link. */
+export async function gapPlaces(db: Db, gaps: Gap[]): Promise<Map<string, GapPlace>> {
+  const ids = [...new Set(gaps.flatMap((g) => [g.from.photo_id, g.to.photo_id]).flatMap((id) => id ? [id] : []))];
+  const places = new Map<string, GapPlace>();
+  if (ids.length === 0) return places;
+  const photos = unwrap(await db.from("photos").select("id, lat, lng").in("id", ids), "photos");
+  for (const p of photos) {
+    if (p.lat === null || p.lng === null) continue;
+    places.set(p.id, {
+      near: await nearestTown(db, p.lat, p.lng),
+      maps: `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`,
+    });
+  }
+  return places;
+}
+
+/** One gap, written out for the office. */
+export function describeGap(gap: Gap, refs: Refs, places: Map<string, GapPlace>, taskTitle: (id: string | null) => string | undefined) {
+  const where = (r: Reading) => (r.photo_id ? places.get(r.photo_id) : undefined);
+  return {
+    vehicle: refs.veh.get(gap.vehicle_id)?.reg_no,
+    type: gap.type,
+    km: gap.km,
+    from: colomboDayTime(gap.from.logged_at),
+    to: colomboDayTime(gap.to.logged_at),
+    driver: refs.emp.get(gap.from.employee_id)?.name,
+    from_reading_km: gap.from.reading_km,
+    to_reading_km: gap.to.reading_km,
+    from_task: taskTitle(gap.from.task_id),
+    to_task: taskTitle(gap.to.task_id),
+    from_near: where(gap.from)?.near,
+    from_maps: where(gap.from)?.maps,
+    to_near: where(gap.to)?.near,
+    to_maps: where(gap.to)?.maps,
+  };
 }
 
 // ---------------------------------------------------------------------------

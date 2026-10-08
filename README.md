@@ -208,6 +208,19 @@ service-account key uploaded with `eas credentials`, the Edge Function secret
 `SERVER_KEY`, and the two Vault secrets. A new build is needed once (native
 modules and bundled sounds); after that, updates go over the air again.
 
+## Km outside tasks
+
+Consecutive odometer readings of a vehicle are paired (`pairGaps` in
+`fleet.ts`): a task's own start and end are the task's km; every other pair
+is a gap, "between tasks" when both readings are on the same Colombo day,
+"overnight" otherwise. `mileage_summary` shows both per vehicle (and for one
+driver: the gaps that start with that driver's reading) with the biggest
+gaps, their time window, the driver who had the vehicle and where it was at
+both readings (the odometer photos' GPS). `fleet_overview` lists gaps over
+30 km (`GAP_ATTENTION_KM`) from the last 7 days. The monthly km against the
+rental allowance (`list_vehicles`, `mileage_summary`, `fleet_overview`) comes
+from odometer readings, so it already includes these km.
+
 ## Odometer photos prove the reading (`read-odometer`)
 
 The driver app photographs the odometer (camera only, never the gallery),
@@ -303,7 +316,7 @@ on the laptop, so it runs in Docker):
 ```bash
 docker run --rm --cpus 2 --memory 2g -v deno-cache:/deno-dir -v "$PWD/supabase/functions:/fn:ro" \
   -w /fn/office-mcp denoland/deno:alpine \
-  sh -c 'deno check index.ts && deno lint && deno fmt --check && deno test geo_test.ts \
+  sh -c 'deno check index.ts && deno lint && deno fmt --check && deno test geo_test.ts gaps_test.ts \
          && cd /fn/read-odometer && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/push-task && deno check index.ts && deno lint && deno fmt --check'
 ```

@@ -2,13 +2,25 @@
 
 import { z } from "zod";
 import { unwrap } from "../db.ts";
-import { loadLatest, loadRefs, monthKm, nearestTown, odometerCheck, service, sharing, VEHICLE_DOCS, vehicleLabel } from "../fleet.ts";
+import {
+  GAP_ATTENTION_KM,
+  loadGaps,
+  loadLatest,
+  loadRefs,
+  monthKm,
+  nearestTown,
+  odometerCheck,
+  service,
+  sharing,
+  VEHICLE_DOCS,
+  vehicleLabel,
+} from "../fleet.ts";
 import { contactLinks, mapsPoint, thousands } from "../format.ts";
-import { ago, colomboDate, colomboDateTime, dayRange, daysBetween, shortDate } from "../time.ts";
+import { ago, colomboDate, colomboDateTime, colomboDayTime, dayRange, daysBetween, shortDate } from "../time.ts";
 import { realDate, tool, zDate } from "../tool.ts";
 
 const REMINDER_DAYS = 14;
-/** Flagged odometer readings stay in "needs attention" this long. */
+/** Flagged odometer readings and big km gaps stay in "needs attention" this long. */
 const ODOMETER_FLAG_DAYS = 7;
 
 interface Attention {
@@ -32,7 +44,8 @@ export const fleetOverview = tool({
   title: "Fleet overview",
   description: "The fleet at a glance: vehicles on the road / total / parked, tasks of the day (in progress, done), requests waiting " +
     "(and the oldest), reminders due in the next 14 days, who is on the road now, and what needs attention " +
-    "(documents, service, km allowance, rental end, driver licences, open vehicle problems, odometer readings flagged in the last 7 days). " +
+    "(documents, service, km allowance, rental end, driver licences, open vehicle problems, odometer readings flagged in the last 7 days, " +
+    `km outside tasks over ${GAP_ATTENTION_KM} km in the last 7 days). ` +
     "The task counts follow `date`; everything else describes now.",
   readOnly: true,
   input: z.object({ date: zDate.optional().describe("Day for the task counts. Default: today") }),
@@ -61,8 +74,10 @@ export const fleetOverview = tool({
     const reports = unwrap(reportsRes, "vehicle reports");
     const vehicles = refs.vehicles.filter((v) => v.active);
 
-    const [km, stops] = await Promise.all([
+    const weekAgo = new Date(now.getTime() - ODOMETER_FLAG_DAYS * 86400000).toISOString();
+    const [km, gaps, stops] = await Promise.all([
       monthKm(db, vehicles.map((v) => v.id), today.slice(0, 7)),
+      loadGaps(db, vehicles.map((v) => v.id), weekAgo, now.toISOString()),
       running.length > 0
         ? db.from("task_stops").select("task_id, seq, place_name").in("task_id", running.map((t) => t.id)).order("seq")
         : { data: [], error: null },
@@ -181,6 +196,20 @@ export const fleetOverview = tool({
           (l.ai_value !== null ? ` (photo ${thousands(l.ai_value)})` : ""),
         ].filter(Boolean).join(" · "),
         due: `logged ${ago(l.logged_at, now)} ago`,
+        level: "amber",
+        days: -1,
+      });
+    }
+    for (const g of gaps) {
+      if (g.km <= GAP_ATTENTION_KM) continue;
+      attention.push({
+        what: `Km outside tasks: ${thousands(g.km)} km ${g.type === "overnight" ? "overnight" : "between tasks"}`,
+        subject: [
+          refs.veh.get(g.vehicle_id)?.reg_no,
+          refs.emp.get(g.from.employee_id)?.name,
+          `${colomboDayTime(g.from.logged_at)} → ${colomboDayTime(g.to.logged_at)}`,
+        ].filter(Boolean).join(" · "),
+        due: `ended ${ago(g.to.logged_at, now)} ago`,
         level: "amber",
         days: -1,
       });
