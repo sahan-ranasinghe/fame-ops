@@ -13,7 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/ui';
 import { parseDecimal, parseWhole, thousands } from '@/lib/format';
-import { discardPhoto, type LocalPhoto, readOdometer, takePhoto } from '@/lib/photos';
+import { readOdometerPhoto } from '@/lib/odometerAi';
+import { discardPhoto, type LocalPhoto, takePhoto } from '@/lib/photos';
 import { type FuelEntry, useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -25,7 +26,7 @@ const SAVE: Record<Mode, string> = { finish: 'log.saveFinish', start: 'log.start
 
 export default function LogMileageScreen() {
   const app = useApp();
-  const { t, tasks, vehicles } = app;
+  const { t, tasks, vehicles, gpsKm } = app;
   const params = useLocalSearchParams<{ mode?: string; taskId?: string }>();
   const mode: Mode = params.mode === 'start' || params.mode === 'manual' || params.mode === 'fuel' ? params.mode : 'finish';
   const router = useRouter();
@@ -35,6 +36,8 @@ export default function LogMileageScreen() {
   const vehicle = task ? vehicles.find((item) => item.id === task.vehicle_id) ?? null : app.vehicle;
   const lastKm = vehicle?.current_odometer_km ?? null;
   const startKm = task?.start_odometer_km ?? null;
+  // Km by GPS since the last reading (this task's km when finishing a task), for the reader's expected range and a hint.
+  const gpsSinceLast = mode === 'finish' && task && gpsKm.taskId === task.id ? gpsKm.taskKm : gpsKm.odometerKm;
 
   // Starting a task: the last known reading is filled in for the driver to confirm or correct.
   const [odometer, setOdometer] = useState(mode === 'start' && lastKm !== null ? thousands(lastKm) : '');
@@ -64,12 +67,29 @@ export default function LogMileageScreen() {
     setPhoto(shot);
     setProblem(null);
     setReading(true);
-    const found = await readOdometer(shot.uri, startKm ?? lastKm);
+    const read = await readOdometerPhoto(shot, {
+      employeeId: app.me?.id ?? '',
+      vehicleId: vehicle?.id ?? null,
+      lastKm: startKm ?? lastKm,
+      gpsKm: Math.round(gpsSinceLast),
+    });
     setReading(false);
-    setOcrKm(found);
-    if (found !== null) {
-      setOdometer(thousands(found));
-      setPhotoNote({ text: t('log.readFromPhoto', { km: thousands(found) }), tone: 'info' });
+    setOcrKm(read.rawKm);
+    if (read.rejected && read.rawKm !== null) {
+      const expected = (startKm ?? lastKm ?? 0) + Math.round(gpsSinceLast);
+      setPhotoNote({
+        text: read.rejected === 'below_last'
+          ? t('log.readBelowLast', { km: thousands(read.rawKm), last: thousands(startKm ?? lastKm ?? 0) })
+          : t('log.readFarAbove', { km: thousands(read.rawKm), expected: thousands(expected) }),
+        tone: 'warn',
+      });
+    } else if (read.km !== null) {
+      setOdometer(thousands(read.km));
+      const unsure = read.source === 'ai' && read.confidence !== null && read.confidence < 0.6;
+      setPhotoNote({
+        text: t(unsure ? 'log.readUnsure' : read.source === 'phone' ? 'log.readOnPhone' : 'log.readFromPhoto', { km: thousands(read.km) }),
+        tone: unsure ? 'warn' : 'info',
+      });
     } else {
       setPhotoNote({ text: t('log.couldNotRead'), tone: 'warn' });
     }
@@ -178,6 +198,9 @@ export default function LogMileageScreen() {
               <Txt variant="strong" color={colors.blue}>{t('log.thisTask', { km: thousands(km - startKm) })}</Txt>
             )}
           </View>
+          {mode !== 'start' && gpsSinceLast >= 0.5 && (
+            <Txt variant="small">{t(mode === 'finish' ? 'log.gpsThisTask' : 'log.gpsSinceLast', { km: thousands(gpsSinceLast) })}</Txt>
+          )}
           {gap > 2 && <Notice tone="warn" text={t('log.moreThanLast', { km: thousands(gap) })} />}
           {gap < -2 && lastKm !== null && <Notice tone="warn" text={t('log.lowerThanLast', { km: thousands(lastKm) })} />}
         </Card>

@@ -85,6 +85,10 @@ eas update --channel preview --environment preview --message "What changed"
   the version first, so older builds do not receive code they cannot run.
 - `eas update` does not read `apps/driver/.env`. The app therefore also takes
   the Supabase URL and publishable key from `extra` in `app.json`.
+- The app also looks for an update each time it comes back to the front, at
+  most every 30 minutes. New code is started only when no task is in progress
+  and nothing is waiting to be uploaded; otherwise it waits for that moment
+  or for the next start. Me → "Check for update" follows the same rule.
 
 How the app is put together (`apps/driver/src`):
 
@@ -96,8 +100,21 @@ How the app is put together (`apps/driver/src`):
 - `lib/api.ts`: every call to Supabase. `sync/engine.ts`: the offline queue.
   What the driver does is written to the phone first and sent in order when
   there is a connection; sending the same thing twice is harmless.
-- `lib/location.ts` and `lib/locationTask.ts`: "Sharing my location". Points
-  are recorded only while a sharing period is open.
+- `lib/location.ts`, `lib/locationTask.ts`, `lib/tracking.ts`, `lib/track.ts`:
+  "Sharing my location". A position every 5 s (handed over in batches of up
+  to 15 s), one recorded point every 5 s while moving and one a minute while
+  parked, uploads every 30 s. `track.ts` is the GPS drift filter (fixes worse
+  than 50 m, jumps over 150 km/h and drift while standing still count for
+  nothing; a move needs a second fix that agrees); the connector has the
+  same file. `checkTracking()` starts a dead location service again (when
+  the app opens, comes to the front, and every minute while on screen) and
+  reports what the driver must fix; the background task keeps a watchdog
+  notification armed that fires 12 minutes after the last position.
+- `lib/odometerAi.ts`: reads the odometer from the photo. The photo is
+  uploaded at once and the Edge Function `read-odometer` asks Gemini; with no
+  connection the phone's own text reader (ML Kit) is used instead. Either
+  way the driver checks the number.
+- `lib/updates.ts`: code updates (see above).
 - `i18n/en.json` and `i18n/si.json`: all text. Screens contain no text.
 - `lib/database.types.ts` is a copy of the connector's generated types; copy it
   again after a schema change.
@@ -109,6 +126,14 @@ sends, refused changes, a second driver who must see nothing):
 ```bash
 npx supabase start            # from the repository root
 cd apps/driver && npm run test:data
+```
+
+The GPS drift filter has its own test, with the real recording of a phone
+that stood still indoors for 47 minutes (`scripts/fixtures/`) and some
+made-up drives. It needs no stack:
+
+```bash
+cd apps/driver && npm run test:track
 ```
 
 The parts that only exist on a phone (location service, camera, map) have no
@@ -141,7 +166,32 @@ Deploying (needs Sahan's go-ahead each time):
 source ~/.nvm/nvm.sh && nvm use
 npx supabase db push                                         # only when there is a new migration
 npx supabase functions deploy office-mcp --no-verify-jwt     # the key in the URL replaces the JWT check
+npx supabase functions deploy read-odometer --no-verify-jwt  # checks the driver's token itself
 ```
+
+## Odometer reader (`read-odometer`)
+
+The driver app photographs the odometer, uploads the photo to the private
+bucket at once, and calls this Edge Function with the photo's path, the
+vehicle's last reading and the km driven since (GPS). The function downloads
+the photo (service role), asks Gemini for the main odometer total only (not
+the trip meter, speed, fuel, clock or RPM) and answers `{reading_km,
+confidence, rejected}`. A number below the last reading, or more than 500 km
+above the last reading plus the GPS km, is rejected and the driver types it.
+
+- Signed-in drivers only: the function checks the session token with
+  Supabase Auth and only reads photos inside the caller's own folder.
+  `verify_jwt` is off in `config.toml` for that reason.
+- Every call is written to `odometer_reads` (service role only); 60 calls per
+  driver per day, then the app falls back to the phone's reader.
+- Secrets: `GEMINI_API_KEY` (set), `GEMINI_MODEL` (optional, default
+  `gemini-3.5-flash-lite`).
+
+## Data retention
+
+Location points are kept for 90 days. A pg_cron job (`prune-location-points`,
+03:00 Colombo every night) deletes older ones in batches; sharing periods and
+the latest position per driver stay.
 
 `OFFICE_MCP_KEY` is an Edge Function secret (at least 32 characters). Sahan
 sets it himself with `npx supabase secrets set`; it is never committed.
@@ -175,12 +225,14 @@ scripts/test-mcp-local.sh /tmp/office-mcp.env                                 # 
 npx supabase stop                    # when finished
 ```
 
-Type check and lint of the connector (Deno is not installed on the laptop, so
-it runs in Docker):
+Type check, lint and tests of the two Edge Functions (Deno is not installed
+on the laptop, so it runs in Docker):
 
 ```bash
-docker run --rm -v "$PWD/supabase/functions/office-mcp:/app:ro" -w /app denoland/deno:alpine \
-  sh -c 'deno check index.ts && deno lint && deno fmt --check'
+docker run --rm --cpus 2 --memory 2g -v deno-cache:/deno-dir -v "$PWD/supabase/functions:/fn:ro" \
+  -w /fn/office-mcp denoland/deno:alpine \
+  sh -c 'deno check index.ts && deno lint && deno fmt --check && deno test geo_test.ts \
+         && cd /fn/read-odometer && deno check index.ts && deno lint && deno fmt --check'
 ```
 
 ## Data credits

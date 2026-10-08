@@ -18,6 +18,7 @@ export { default as Navigation } from 'lucide-react-native/icons/navigation';
 export { default as Phone } from 'lucide-react-native/icons/phone';
 export { default as Play } from 'lucide-react-native/icons/play';
 export { default as RefreshCw } from 'lucide-react-native/icons/refresh-cw';
+export { default as ShieldCheck } from 'lucide-react-native/icons/shield-check';
 export { default as TriangleAlert } from 'lucide-react-native/icons/triangle-alert';
 export { default as User } from 'lucide-react-native/icons/user';
 export { default as Van } from 'lucide-react-native/icons/van';

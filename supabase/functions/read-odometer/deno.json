@@ -1,0 +1,10 @@
+{
+  "lock": false,
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.117.2",
+    "@std/encoding": "jsr:@std/encoding@1"
+  },
+  "fmt": {
+    "lineWidth": 140
+  }
+}

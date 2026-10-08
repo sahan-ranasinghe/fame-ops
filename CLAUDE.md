@@ -39,7 +39,8 @@
 - **B (next)**: office artifact "Fame Fleet" from the office designs (Overview, Live
   locations, Tasks + Assign a task, Requests, Vehicles), desktop and mobile layouts.
 - **C (later)**: Project costs, Maintenance, Mileage and Drivers office pages; FCM push
-  notifications; road distance / ETA (routing API); WhatsApp automation; pushing costs to
+  notifications and task sounds (plan: `docs/push-notifications-plan.md`); road distance /
+  ETA (routing API); WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet).
 
@@ -148,6 +149,9 @@
 - `driver_latest`: employee_id PK, session_id, lat, lng, accuracy_m, speed_mps,
   battery_pct, recorded_at, sharing (bool). Kept current by trigger (only newer points win).
 - `office_audit`: id, at, tool, args_summary, result_summary.
+- `odometer_reads`: one row per `read-odometer` call (employee_id, vehicle_id, photo_path,
+  last_km, gps_km, reading_km, confidence, rejected, model, ok, error, ms, created_at).
+  Service role only.
 - Claims tables (`allowance_types`, `claims`, `claim_lines`, `claim_sites`) may exist from an
   earlier migration. Keep them; no UI or tools until Phase C.
 
@@ -213,8 +217,19 @@ Tabs: Today, Mileage, Report, Me.
 8. Me tab (not designed): name, code, phone, language, current vehicle, app version,
    sign out (disabled while a task is in progress).
 Offline: location points, odometer/fuel logs, reports and photos are queued on the phone
-and retried. Location: timeInterval ~20 s, distanceInterval 0, High accuracy; upload every
-~60 s or 10+ queued points.
+and retried. Location: a fix every ~5 s (High accuracy, handed over in batches of up to
+15 s); the GPS drift filter `src/lib/track.ts` (same file in the connector) ignores fixes
+worse than 50 m, jumps over 150 km/h and drift while standing still, and a move only
+counts once a second fix agrees; one point recorded every 5 s while moving, one a minute
+while parked; upload every ~30 s or 10+ queued points. A dead location service is
+restarted when the app opens, comes to the front, or every minute while on screen; a
+watchdog notification fires 12 min after the last position. Location points are kept 90
+days (pg_cron job `prune-location-points`).
+Odometer photo: uploaded at once, read by the Edge Function `read-odometer` (Gemini,
+`GEMINI_API_KEY`), expected range = last reading + GPS km since; below the last reading or
+more than 500 km above expected is rejected; ML Kit on the phone is the offline fallback.
+The driver always confirms. 60 reads per driver per day (`odometer_reads`, service role
+only).
 
 ## Office connector (Edge Function `office-mcp`), Phase A tools
 MCP over Streamable HTTP, deployed with `--no-verify-jwt`, path `/office-mcp/<KEY>/mcp`,
@@ -226,8 +241,8 @@ office_audit.
   (in progress, done), requests waiting (+ oldest), reminders due in 14 days, on-the-road
   list, needs-attention list. (Powers Desktop · Overview and Office · Home later.)
 - Locations: `live_drivers(filter?)` (sharing / stale / not sharing, near town, speed,
-  vehicle, current task, links), `driver_route(driver, date)` (thinned to ~300 points, km,
-  stops > 10 min).
+  vehicle, current task, links), `driver_route(driver, date)` (thinned to ~300 points,
+  drift-filtered km, stops > 10 min).
 - Drivers: `list_drivers`, `create_driver(name, code, username, pin, phone?)`,
   `reset_pin(username, pin)`, `set_driver_active(username, active)`,
   `update_driver(username, phone?, licence_expiry?)`.
@@ -238,7 +253,7 @@ office_audit.
 - Tasks: `create_task(title, date, start_time, driver, vehicle, pickup, dropoff,
   passengers?, contact_name?, contact_phone?, notes?, projects[{project, percent}])`
   returning warnings; `task_board(date)` (assigned / in progress / completed with status
-  lines); `task_detail(task_id)` (odometer/fuel photo links); `cancel_task(task_id, reason)`;
+  lines); `task_detail(task_id)` (odometer/fuel photo links, GPS km); `cancel_task(task_id, reason)`;
   `reassign_task(task_id, driver?, vehicle?, start_time?)`.
 - Requests: `create_request(...)`, `list_requests(status?)`, `suggest_vehicles(request_id)`
   (free all day / over km allowance / booked), `decide_request(request_id, decision,

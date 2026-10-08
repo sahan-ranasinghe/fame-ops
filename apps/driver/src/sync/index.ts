@@ -13,8 +13,12 @@ import { addOp, queueStore } from './store';
 
 const PHOTO_BUCKET = 'driver-photos';
 
-/** Sends a photo straight from disk. A file that is already there counts as sent. */
-async function uploadFile(localUri: string, storagePath: string): Promise<void> {
+/**
+ * Sends a photo straight from disk. A file that is already there counts as
+ * sent, so the same photo can be uploaded early (for the odometer reader) and
+ * again by the queue.
+ */
+export async function uploadPhotoFile(localUri: string, storagePath: string): Promise<void> {
   const file = new File(localUri);
   if (!file.exists) throw new ApiError('photo: the file is no longer on the phone', true);
   const { data } = await supabase.auth.getSession();
@@ -59,7 +63,7 @@ const sync = createSync({
   client: supabase,
   store: queueStore,
   employeeId: () => getJson<Employee>(KEYS.me)?.id ?? null,
-  uploadFile,
+  uploadFile: uploadPhotoFile,
   removeFile,
 });
 

@@ -1,20 +1,25 @@
 // Permissions, asked once after sign-in and reachable later from Me:
-// location ("Allow all the time"), notifications, and no battery saving for
-// this app (otherwise Android stops location sharing after a while).
+// location ("Allow all the time"), notifications, no battery saving for this
+// app, and the phone-brand-specific settings that keep the app alive in the
+// background (OPPO, Xiaomi, Vivo, Huawei and Samsung all have their own).
 
-import * as Application from 'expo-application';
 import * as Battery from 'expo-battery';
-import * as IntentLauncher from 'expo-intent-launcher';
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { BatteryCharging, Bell, Check, type LucideIcon, MapPin } from '@/components/icons';
+import { BatteryCharging, Bell, Check, type LucideIcon, MapPin, ShieldCheck } from '@/components/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, Txt } from '@/components/ui';
 import { KEYS, setJson } from '@/lib/kv';
-import { locationPermissions, requestLocationPermissions } from '@/lib/location';
+import {
+  askIgnoreBatteryOptimisation,
+  locationPermissions,
+  openAppSettings,
+  phoneBrand,
+  requestLocationPermissions,
+} from '@/lib/location';
 import { notificationsAllowed, requestNotifications } from '@/lib/notifications';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -35,24 +40,13 @@ async function readStatus(): Promise<Status> {
   return { ...location, notifications, battery: !batterySaving };
 }
 
-/** Android's own one-tap question: "Let the app always run in the background?" */
-async function askBattery(): Promise<void> {
-  try {
-    await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, {
-      data: `package:${Application.applicationId}`,
-    });
-  } catch {
-    // Some phones do not offer the question; show the list of apps instead.
-    await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS).catch(() => undefined);
-  }
-}
-
 function Row({ icon: Icon, title, why, hint, done, action, onPress }: {
   icon: LucideIcon;
   title: string;
   why: string;
   hint?: string;
-  done: boolean;
+  /** undefined = the app cannot tell; the button is always shown. */
+  done: boolean | undefined;
   action: string;
   onPress: () => void;
 }) {
@@ -71,21 +65,23 @@ function Row({ icon: Icon, title, why, hint, done, action, onPress }: {
       </View>
       {done
         ? <Txt variant="strong" color={colors.blue}>{t('permissions.allowed')}</Txt>
-        : <Button kind="dark" label={action} onPress={onPress} />}
+        : <Button kind={done === undefined ? 'outline' : 'dark'} label={action} onPress={onPress} />}
     </Card>
   );
 }
 
 export default function PermissionsScreen() {
-  const { me, t } = useApp();
+  const { me, t, checkTrackingNow } = useApp();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [status, setStatus] = useState<Status | null>(null);
   const [askedLocation, setAskedLocation] = useState(false);
+  const brand = phoneBrand();
 
   const check = useCallback(() => {
     readStatus().then(setStatus).catch(() => undefined);
-  }, []);
+    void checkTrackingNow();
+  }, [checkTrackingNow]);
 
   // The answers are given on Android's own screens, so look again whenever the app comes back.
   useEffect(() => {
@@ -145,7 +141,16 @@ export default function PermissionsScreen() {
           why={t('permissions.batteryWhy')}
           done={status?.battery === true}
           action={t('permissions.allow')}
-          onPress={() => askBattery().then(check)}
+          onPress={() => askIgnoreBatteryOptimisation().then(check)}
+        />
+        <Row
+          icon={ShieldCheck}
+          title={t('permissions.background')}
+          why={t('permissions.backgroundWhy')}
+          hint={t(`permissions.background_${brand}`)}
+          done={undefined}
+          action={t('permissions.openAppSettings')}
+          onPress={() => void openAppSettings()}
         />
       </ScrollView>
       <View style={{ padding: 16, paddingBottom: insets.bottom + 16, gap: 10 }}>

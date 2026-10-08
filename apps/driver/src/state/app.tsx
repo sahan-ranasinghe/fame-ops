@@ -14,17 +14,20 @@ import { isSupabaseConfigured } from '@/config';
 import { deviceLanguage, translate, translateList, type Vars } from '@/i18n';
 import * as api from '@/lib/api';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
-import { getSharing, restoreSharing, startSharing, stopSharing } from '@/lib/location';
-import { notifyNewTask } from '@/lib/notifications';
+import { checkTracking, getSharing, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
+import { notifyNewTask, onNotificationTap } from '@/lib/notifications';
 import { type LocalPhoto, prepareOdometerReader, queuePhoto } from '@/lib/photos';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
+import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
 import type { Employee, Language, ReportCategory, TaskStop, TaskWithStops, Vehicle, VehicleReport } from '@/lib/types';
+import { applyDownloadedUpdate, checkForUpdate, forgetDownloadedUpdate, type UpdateOutcome } from '@/lib/updates';
 import { enqueue, flushNow, onQueueChange } from '@/sync';
 import { clearQueue, queueCounts, type QueueCounts, retryFailed, tasksWaiting } from '@/sync/store';
 
 export type SignInOutcome = 'ok' | 'wrong' | 'network' | 'switched_off' | 'not_configured';
 export type SignOutOutcome = 'ok' | 'task' | 'queue';
+export type LiveStatus = 'connected' | 'connecting' | 'off';
 
 export interface FuelEntry {
   litres: number | null;
@@ -47,6 +50,12 @@ interface AppValue {
   tasks: TaskWithStops[];
   reports: VehicleReport[];
   sharing: boolean;
+  /** What the last check of the location service found. */
+  tracking: TrackingStatus;
+  /** Km by GPS for the task in progress and since the last odometer reading. */
+  gpsKm: KmCounters;
+  /** Whether the live connection for new and changed tasks is up. */
+  live: LiveStatus;
   queue: QueueCounts;
   /** Tasks with a start or finish that has not reached the office yet. */
   waitingTasks: Set<string>;
@@ -58,6 +67,8 @@ interface AppValue {
   refresh: () => Promise<void>;
   sendNow: (includeFailed?: boolean) => Promise<void>;
   setSharing: (on: boolean) => Promise<'on' | 'off' | 'no_permission'>;
+  checkTrackingNow: () => Promise<void>;
+  checkUpdate: () => Promise<UpdateOutcome>;
   chooseVehicle: (vehicleId: string) => void;
   markSeen: (taskIds: string[]) => void;
   markStopDone: (stop: TaskStop) => void;
@@ -82,6 +93,11 @@ export function useApp(): AppValue {
   return value;
 }
 
+const TRACKING_OFF: TrackingStatus = { sharing: false, problem: null, restarted: false, lastFixAt: null };
+/** While the app is on screen: km counters every 15 s, the location service every minute. */
+const TICK_MS = 15_000;
+const TRACKING_EVERY_TICKS = 4;
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [booted, setBooted] = useState(false);
   const [me, setMe] = useState<Employee | null>(() => getJson<Employee>(KEYS.me));
@@ -90,6 +106,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<TaskWithStops[]>(() => getJson<TaskWithStops[]>(KEYS.tasks) ?? []);
   const [reports, setReports] = useState<VehicleReport[]>(() => getJson<VehicleReport[]>(KEYS.reports) ?? []);
   const [sharing, setSharingState] = useState(() => getSharing() !== null);
+  const [tracking, setTracking] = useState<TrackingStatus>(TRACKING_OFF);
+  const [gpsKm, setGpsKm] = useState<KmCounters>(() => kmCounters());
+  const [live, setLive] = useState<LiveStatus>('off');
+  const [liveGeneration, setLiveGeneration] = useState(0);
   const [queue, setQueue] = useState<QueueCounts>(() => queueCounts());
   const [waitingTasks, setWaitingTasks] = useState<Set<string>>(() => tasksWaiting());
   const [refreshing, setRefreshing] = useState(false);
@@ -101,10 +121,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
   const seenQueued = useRef(new Set<string>());
+  const liveRef = useRef<LiveStatus>('off');
 
   const t = useCallback((key: string, vars?: Vars) => translate(language, key, vars), [language]);
   const tList = useCallback((key: string) => translateList(language, key), [language]);
-  const serviceTexts = useMemo(() => ({ title: t('service.title'), body: t('service.body') }), [t]);
+  const serviceTexts = useMemo(
+    () => ({
+      title: t('service.title'),
+      body: t('service.body'),
+      stoppedTitle: t('tracking.stoppedTitle'),
+      stoppedBody: t('tracking.stoppedBody'),
+    }),
+    [t],
+  );
 
   const saveTasks = useCallback((next: TaskWithStops[]) => {
     tasksRef.current = next;
@@ -127,9 +156,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     remove(KEYS.vehicles);
     remove(KEYS.reports);
     remove(KEYS.permissionsSeen);
+    remove(KEYS.track);
     clearQueue();
     seenQueued.current.clear();
   }, [saveMe, saveTasks]);
+
+  /** New code may start only when no task is in progress and nothing is waiting to be sent. */
+  const safeToApplyUpdate = useCallback(() => {
+    const counts = queueCounts();
+    return !tasksRef.current.some((task) => task.status === 'in_progress') && counts.ops === 0 && counts.points === 0;
+  }, []);
 
   const refresh = useCallback(async () => {
     if (!meRef.current) return;
@@ -165,16 +201,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [forgetEverything, saveMe, saveTasks]);
 
+  /** Looks at the location service and tells the screens what it found. */
+  const checkTrackingNow = useCallback(async () => {
+    if (!meRef.current) return;
+    try {
+      const status = await checkTracking(serviceTexts);
+      setTracking(status);
+      setSharingState(status.sharing);
+    } catch {
+      // The screens keep the last status.
+    }
+    setGpsKm(kmCounters());
+  }, [serviceTexts]);
+
   // --- start-up -------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      forgetDownloadedUpdate();
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (!data.session) {
         if (meRef.current) forgetEverything();
       } else if (meRef.current) {
-        setSharingState(await restoreSharing(serviceTexts));
+        await checkTrackingNow();
         void refresh();
       }
       setBooted(true);
@@ -192,20 +242,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (signedIn) void prepareOdometerReader();
   }, [signedIn]);
 
-  // Keep the queue numbers on screen up to date.
+  // Keep the queue numbers on screen up to date, and start a downloaded update once everything is sent.
   useEffect(
     () =>
       onQueueChange(() => {
         setQueue(queueCounts());
         setWaitingTasks(tasksWaiting());
+        setGpsKm(kmCounters());
+        void applyDownloadedUpdate(safeToApplyUpdate);
       }),
-    [],
+    [safeToApplyUpdate],
   );
 
-  // Refresh when the app comes back to the front and when the connection returns.
+  // Coming back to the front: check the location service, reconnect live updates
+  // if they dropped, refresh, and look for a code update (at most every 30 min).
+  // Also refresh when the connection returns.
   useEffect(() => {
     const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void refresh();
+      if (state !== 'active') return;
+      void checkTrackingNow();
+      if (liveRef.current !== 'connected') setLiveGeneration((n) => n + 1);
+      void refresh();
+      void checkForUpdate(safeToApplyUpdate);
     });
     const network = Network.addNetworkStateListener((state) => {
       if (state.isInternetReachable) void refresh();
@@ -214,14 +272,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
       appState.remove();
       network.remove();
     };
-  }, [refresh]);
+  }, [checkTrackingNow, refresh, safeToApplyUpdate]);
+
+  // While on screen: km counters every 15 s, the location service every minute (only while sharing).
+  useEffect(() => {
+    if (!signedIn) return;
+    let ticks = 0;
+    const timer = setInterval(() => {
+      if (AppState.currentState !== 'active') return;
+      ticks += 1;
+      setGpsKm(kmCounters());
+      if (ticks % TRACKING_EVERY_TICKS === 0 && getSharing()) void checkTrackingNow();
+    }, TICK_MS);
+    return () => clearInterval(timer);
+  }, [signedIn, checkTrackingNow]);
+
+  // The driver tapped the "sharing stopped" notification: look again right away.
+  useEffect(() => onNotificationTap(() => void checkTrackingNow()), [checkTrackingNow]);
 
   // Live updates: the office assigns, changes or cancels one of my tasks.
   const myId = me?.id;
   useEffect(() => {
-    if (!myId) return;
+    if (!myId) {
+      liveRef.current = 'off';
+      setLive('off');
+      return;
+    }
+    liveRef.current = 'connecting';
+    setLive('connecting');
     const channel = supabase
-      .channel(`my-tasks-${myId}`)
+      .channel(`my-tasks-${myId}-${liveGeneration}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `employee_id=eq.${myId}` }, (change) => {
         if (change.eventType === 'INSERT') {
           const task = change.new as { title?: string; start_at?: string };
@@ -229,11 +309,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
         void refresh();
       })
-      .subscribe();
+      .subscribe((status) => {
+        const next: LiveStatus = status === 'SUBSCRIBED' ? 'connected' : status === 'CLOSED' ? 'off' : 'connecting';
+        liveRef.current = next;
+        setLive(next);
+        // Anything that happened while the connection was down is picked up now.
+        if (next === 'connected') void refresh();
+      });
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [myId, refresh, t]);
+  }, [myId, liveGeneration, refresh, t]);
 
   // --- language -------------------------------------------------------------
   const setLanguage = useCallback((next: Language) => {
@@ -280,6 +366,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (tasksRef.current.some((task) => task.status === 'in_progress')) return 'task';
     await stopSharing('driver');
     setSharingState(false);
+    setTracking(TRACKING_OFF);
     await flushNow();
     const left = queueCounts();
     if (left.ops > 0 || left.points > 0) return 'queue';
@@ -293,17 +380,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
     await refresh();
   }, [refresh]);
 
+  const checkUpdate = useCallback(() => checkForUpdate(safeToApplyUpdate, true), [safeToApplyUpdate]);
+
   // --- sharing and vehicle ----------------------------------------------------
   const setSharing = useCallback(async (on: boolean) => {
     if (!on) {
       await stopSharing('driver');
       setSharingState(false);
+      setTracking(TRACKING_OFF);
       return 'off' as const;
     }
     const result = await startSharing(serviceTexts);
     setSharingState(result === 'on');
+    if (result === 'on') void checkTrackingNow();
     return result;
-  }, [serviceTexts]);
+  }, [serviceTexts, checkTrackingNow]);
 
   const chooseVehicle = useCallback((vehicleId: string) => {
     const current = meRef.current;
@@ -319,6 +410,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setJson(KEYS.vehicles, next);
       return next;
     });
+    resetOdometerKm();
+    setGpsKm(kmCounters());
   }, []);
 
   // --- tasks ------------------------------------------------------------------
@@ -373,6 +466,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       );
       patchLocalTask(task.id, (item) => ({ ...item, status: 'in_progress', start_odometer_km: odometerKm, started_at: now }));
       bumpOdometer(task.vehicle_id, odometerKm);
+      beginTaskKm(task.id);
+      setGpsKm(kmCounters());
       // The task's vehicle is now the one being driven.
       if (current.current_vehicle_id !== task.vehicle_id) {
         saveMe({ ...current, current_vehicle_id: task.vehicle_id });
@@ -381,9 +476,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Starting a task turns location sharing on.
       const result = await startSharing(serviceTexts);
       setSharingState(result === 'on');
+      void checkTrackingNow();
       void flushNow();
     },
-    [bumpOdometer, patchLocalTask, saveMe, serviceTexts],
+    [bumpOdometer, patchLocalTask, saveMe, serviceTexts, checkTrackingNow],
   );
 
   const queueFuel = useCallback((fuel: FuelEntry, vehicleId: string, taskId: string | null, odometerKm: number | null, at: string) => {
@@ -442,6 +538,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         task_stops: item.task_stops.map((stop) => (open.includes(stop) ? { ...stop, status: 'done', done_at: now } : stop)),
       }));
       bumpOdometer(task.vehicle_id, odometerKm);
+      endTaskKm();
+      setGpsKm(kmCounters());
       void flushNow();
     },
     [bumpOdometer, patchLocalTask, queueFuel],
@@ -510,8 +608,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppValue = {
     booted, me, language, t, tList, setLanguage,
-    vehicles, vehicle, tasks, reports, sharing, queue, waitingTasks, refreshing, offline,
-    signIn, signOut, refresh, sendNow, setSharing, chooseVehicle, markSeen, markStopDone,
+    vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, waitingTasks, refreshing, offline,
+    signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, chooseVehicle, markSeen, markStopDone,
     startTask, completeTask, logOdometer, logFuel, sendReport,
   };
 

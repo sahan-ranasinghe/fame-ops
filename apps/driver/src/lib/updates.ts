@@ -1,12 +1,22 @@
 // Code updates over the air (EAS Update), for builds that include them (the
-// preview build). Android checks for an update each time the app starts and
-// opens it straight away when it arrives within a few seconds; otherwise it is
-// used from the next start. This file adds the manual check on the Me tab.
+// preview build).
+//
+// - Each start: Android itself looks for an update (app.json: ON_LOAD) and
+//   opens it straight away when it arrives within a few seconds.
+// - Each return to the front, at most every 30 minutes: the app looks again
+//   and downloads what it finds. The new code is started only when no task is
+//   in progress and nothing is waiting to be uploaded; otherwise it waits for
+//   that moment, or for the next start.
+// - Me -> "Check for update": the same, on demand and without the 30 minutes.
 //
 // expo-updates is loaded only when asked for: a build made before it was added
 // simply has no updates, instead of failing to start.
 
+import { getJson, KEYS, remove, setJson } from './kv';
+
 type UpdatesModule = typeof import('expo-updates');
+
+const CHECK_EVERY_MS = 30 * 60_000;
 
 let loaded: UpdatesModule | null | undefined;
 
@@ -28,18 +38,55 @@ export function runningUpdate(): { publishedAt: Date | null; channel: string | n
   return { publishedAt: module.createdAt, channel: module.channel };
 }
 
-export type UpdateCheck = 'not-available' | 'up-to-date' | 'failed';
+/** Called once at start: whatever was downloaded before is either running now or will run at the next start. */
+export function forgetDownloadedUpdate(): void {
+  remove(KEYS.updateDownloaded);
+}
 
-/** Looks for a newer update. If there is one, it is downloaded and the app restarts into it (this call then never returns). */
-export async function checkAndApplyUpdate(): Promise<UpdateCheck> {
+export type UpdateOutcome = 'not-available' | 'skipped' | 'up-to-date' | 'downloaded' | 'applied' | 'failed';
+
+/** It is safe to restart into new code: no task in progress and nothing waiting to be sent. */
+export type SafeToApply = () => boolean;
+
+/** Starts an update downloaded earlier, if there is one and it is safe now. */
+export async function applyDownloadedUpdate(safe: SafeToApply): Promise<boolean> {
+  const module = updates();
+  if (!module?.isEnabled || !getJson<boolean>(KEYS.updateDownloaded) || !safe()) return false;
+  try {
+    remove(KEYS.updateDownloaded);
+    await module.reloadAsync();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Looks for a newer update and downloads it. Restarts into it when safe (this
+ * call then never returns); otherwise remembers it for later. `force` skips
+ * the 30-minute spacing (the button on Me).
+ */
+export async function checkForUpdate(safe: SafeToApply, force = false): Promise<UpdateOutcome> {
   const module = updates();
   if (!module?.isEnabled) return 'not-available';
+  if (await applyDownloadedUpdate(safe)) return 'applied';
+  if (getJson<boolean>(KEYS.updateDownloaded)) return 'downloaded';
+
+  const last = getJson<number>(KEYS.lastUpdateCheck) ?? 0;
+  if (!force && Date.now() - last < CHECK_EVERY_MS) return 'skipped';
+  setJson(KEYS.lastUpdateCheck, Date.now());
+
   try {
     const check = await module.checkForUpdateAsync();
     if (!check.isAvailable) return 'up-to-date';
-    await module.fetchUpdateAsync();
-    await module.reloadAsync();
-    return 'up-to-date';
+    const fetched = await module.fetchUpdateAsync();
+    if (!fetched.isNew) return 'up-to-date';
+    if (safe()) {
+      await module.reloadAsync();
+      return 'applied';
+    }
+    setJson(KEYS.updateDownloaded, true);
+    return 'downloaded';
   } catch {
     return 'failed';
   }

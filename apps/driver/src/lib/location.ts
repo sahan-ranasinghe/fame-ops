@@ -1,17 +1,34 @@
 // "Sharing my location": on = a sharing period (duty session) is open and the
 // phone records points in the background; off = nothing is recorded at all.
+//
+// Android (some brands much more than others: OPPO, Realme, Xiaomi, Vivo,
+// Huawei) kills apps that work in the background. checkTracking() notices a
+// dead location service while sharing is on, starts it again, and reports what
+// the driver has to fix: location switched off, permission taken away, battery
+// saving. The background task also keeps a notification armed that fires if
+// positions stop arriving (lib/notifications.ts).
 
 import * as Application from 'expo-application';
+import * as Battery from 'expo-battery';
 import * as Crypto from 'expo-crypto';
 import * as Device from 'expo-device';
+import * as IntentLauncher from 'expo-intent-launcher';
 import * as Location from 'expo-location';
+import { Linking } from 'react-native';
 
 import { enqueue, flushNow } from '../sync';
 import { getJson, KEYS, remove, setJson } from './kv';
+import { armWatchdog, disarmWatchdog } from './notifications';
 import type { Employee } from './types';
 import { colors } from '../theme';
 
 export const LOCATION_TASK = 'fame-driver-location';
+
+/** A position every 5 s; the phone hands them to the app in batches of up to 15 s to save battery. */
+const FIX_INTERVAL_MS = 5_000;
+const DELIVER_EVERY_MS = 15_000;
+/** No position for this long while sharing is on means the service has died (or location is off). */
+export const DEAD_AFTER_MS = 3 * 60_000;
 
 export interface SharingState {
   sessionId: string;
@@ -23,24 +40,31 @@ export function getSharing(): SharingState | null {
   return getJson<SharingState>(KEYS.sharing);
 }
 
-/** The texts of the notification Android shows while the location service runs. */
+/** The texts of the notification Android shows while the location service runs, and of the watchdog. */
 export interface ServiceTexts {
   title: string;
   body: string;
+  stoppedTitle: string;
+  stoppedBody: string;
 }
 
 async function beginUpdates(texts: ServiceTexts): Promise<void> {
   await Location.startLocationUpdatesAsync(LOCATION_TASK, {
     accuracy: Location.Accuracy.High,
-    timeInterval: 20_000,
+    timeInterval: FIX_INTERVAL_MS,
     distanceInterval: 0,
+    deferredUpdatesInterval: DELIVER_EVERY_MS,
+    deferredUpdatesDistance: 0,
     pausesUpdatesAutomatically: false,
     foregroundService: {
       notificationTitle: texts.title,
       notificationBody: texts.body,
       notificationColor: colors.amber,
+      killServiceOnDestroy: false,
     },
   });
+  setJson(KEYS.lastFix, Date.now());
+  await armWatchdog(texts.stoppedTitle, texts.stoppedBody);
 }
 
 async function isRunning(): Promise<boolean> {
@@ -75,6 +99,7 @@ export async function startSharing(texts: ServiceTexts): Promise<StartResult> {
       started_at: state.startedAt,
       device_info: {
         model: Device.modelName,
+        brand: Device.brand,
         os: `${Device.osName ?? 'Android'} ${Device.osVersion ?? ''}`.trim(),
         app: Application.nativeApplicationVersion,
       },
@@ -98,6 +123,8 @@ export async function stopSharing(reason: 'driver' | 'auto'): Promise<void> {
   } catch {
     // Already stopped.
   }
+  await disarmWatchdog();
+  remove(KEYS.lastFix);
   const state = getSharing();
   if (state) {
     remove(KEYS.sharing);
@@ -106,23 +133,61 @@ export async function stopSharing(reason: 'driver' | 'auto'): Promise<void> {
   void flushNow();
 }
 
+export type TrackingProblem = 'location_off' | 'no_permission' | 'no_background' | 'battery' | null;
+
+export interface TrackingStatus {
+  sharing: boolean;
+  problem: TrackingProblem;
+  /** The service was found dead and started again in this check. */
+  restarted: boolean;
+  /** When the last position arrived, if sharing. */
+  lastFixAt: number | null;
+}
+
+const OFF: TrackingStatus = { sharing: false, problem: null, restarted: false, lastFixAt: null };
+
 /**
- * Called when the app opens: if sharing was on but Android has stopped the
- * location service (phone restarted, app force-stopped), start it again, or
- * close the sharing period when that is not possible.
+ * Called when the app opens or returns to the front, and every minute while
+ * it is on screen. If sharing is on but no position has arrived for 3 minutes
+ * (or the service is not running at all), the service is started again.
+ * Returns what else is wrong so the driver can be told.
  */
-export async function restoreSharing(texts: ServiceTexts): Promise<boolean> {
-  if (!getSharing()) return false;
-  if (await isRunning()) return true;
-  try {
-    const permission = await Location.getForegroundPermissionsAsync();
-    if (!permission.granted) throw new Error('no permission');
-    await beginUpdates(texts);
-    return true;
-  } catch {
-    await stopSharing('auto');
-    return false;
+export async function checkTracking(texts: ServiceTexts): Promise<TrackingStatus> {
+  const state = getSharing();
+  if (!state) {
+    // Sharing is off: make sure no service is left running from before.
+    if (await isRunning()) await Location.stopLocationUpdatesAsync(LOCATION_TASK).catch(() => undefined);
+    return OFF;
   }
+
+  const [services, permissions, running, batterySaving] = await Promise.all([
+    Location.hasServicesEnabledAsync().catch(() => true),
+    locationPermissions(),
+    isRunning(),
+    Battery.isBatteryOptimizationEnabledAsync().catch(() => false),
+  ]);
+  if (!permissions.location) {
+    await stopSharing('auto');
+    return { ...OFF, problem: 'no_permission' };
+  }
+
+  const lastFix = getJson<number>(KEYS.lastFix);
+  const since = lastFix ?? Date.parse(state.startedAt);
+  const dead = !running || Date.now() - since > DEAD_AFTER_MS;
+  let restarted = false;
+  if (dead) {
+    try {
+      if (running) await Location.stopLocationUpdatesAsync(LOCATION_TASK);
+      await beginUpdates(texts); // also resets lastFix, so a restart is tried at most every 3 minutes
+      restarted = true;
+    } catch {
+      await stopSharing('auto');
+      return { ...OFF, problem: 'no_permission' };
+    }
+  }
+
+  const problem: TrackingProblem = !services ? 'location_off' : !permissions.background ? 'no_background' : batterySaving ? 'battery' : null;
+  return { sharing: true, problem, restarted, lastFixAt: lastFix };
 }
 
 export interface PermissionStatus {
@@ -144,6 +209,41 @@ export async function requestLocationPermissions(): Promise<PermissionStatus> {
   if (!foreground.granted) return { location: false, background: false };
   const background = await Location.requestBackgroundPermissionsAsync();
   return { location: true, background: background.granted };
+}
+
+/** Android's location settings (to switch location on). */
+export async function openLocationSettings(): Promise<void> {
+  await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.LOCATION_SOURCE_SETTINGS).catch(() => Linking.openSettings());
+}
+
+/** This app's own settings page (permissions, battery). */
+export async function openAppSettings(): Promise<void> {
+  await Linking.openSettings();
+}
+
+/** Android's own one-tap question: "Let the app always run in the background?" */
+export async function askIgnoreBatteryOptimisation(): Promise<void> {
+  try {
+    await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, {
+      data: `package:${Application.applicationId}`,
+    });
+  } catch {
+    // Some phones do not offer the question; show the list of apps instead.
+    await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.IGNORE_BATTERY_OPTIMIZATION_SETTINGS).catch(() => undefined);
+  }
+}
+
+export type PhoneBrand = 'oppo' | 'xiaomi' | 'vivo' | 'huawei' | 'samsung' | 'other';
+
+/** The phone brand, for the brand-specific "keep running in the background" help. OPPO, Realme and OnePlus share ColorOS. */
+export function phoneBrand(): PhoneBrand {
+  const name = `${Device.brand ?? ''} ${Device.manufacturer ?? ''}`.toLowerCase();
+  if (/oppo|realme|oneplus/.test(name)) return 'oppo';
+  if (/xiaomi|redmi|poco/.test(name)) return 'xiaomi';
+  if (/vivo|iqoo/.test(name)) return 'vivo';
+  if (/huawei|honor/.test(name)) return 'huawei';
+  if (/samsung/.test(name)) return 'samsung';
+  return 'other';
 }
 
 /** The phone's last known position, when location is allowed. */

@@ -12,6 +12,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View }
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
+import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { colomboTime } from '@/lib/time';
@@ -109,7 +110,7 @@ function TaskMap({ me, destination, label }: { me: LngLat | null; destination: L
 
 export default function TaskScreen() {
   const app = useApp();
-  const { t, tasks, sharing } = app;
+  const { t, tasks, sharing, gpsKm } = app;
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -190,6 +191,7 @@ export default function TaskScreen() {
 
         {running ? (
           <>
+            <TrackingNotice />
             <View style={styles.stats}>
               <View style={{ flex: 1 }}>
                 <Txt variant="muted" size={15}>{t('task.distanceLeft')}</Txt>
@@ -201,6 +203,13 @@ export default function TaskScreen() {
                 <Mono size={23} bold>{task.start_odometer_km === null ? '–' : thousands(task.start_odometer_km)}</Mono>
               </View>
             </View>
+            {gpsKm.taskId === task.id && (
+              <View style={styles.gpsLine}>
+                <Txt variant="muted" size={15}>{t('tracking.gpsKm')}</Txt>
+                <Txt variant="strong">{`≈ ${gpsKm.taskKm < 10 ? gpsKm.taskKm.toFixed(1) : Math.round(gpsKm.taskKm)} ${t('common.km')}`}</Txt>
+                <Txt variant="small">{t('tracking.approx')}</Txt>
+              </View>
+            )}
 
             <View style={{ gap: 8 }}>
               {task.task_stops.map((item) => {
@@ -301,6 +310,7 @@ const styles = StyleSheet.create({
   grabber: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: '#dcd9d0', marginTop: -6 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   stats: { backgroundColor: colors.page, borderRadius: 14, padding: 16, flexDirection: 'row', gap: 12 },
+  gpsLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingHorizontal: 4, marginTop: -6 },
   stopRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 12 },
   doneButton: { minHeight: 44, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   doneBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.blueChip, alignItems: 'center', justifyContent: 'center' },

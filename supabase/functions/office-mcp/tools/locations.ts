@@ -4,7 +4,7 @@ import { z } from "zod";
 import { fetchAll, unwrap } from "../db.ts";
 import { findDriver, loadLatest, loadRefs, nearestTown, sharing, vehicleLabel } from "../fleet.ts";
 import { contactLinks, kmh, mapsPoint } from "../format.ts";
-import { findStops, type Point, routeKm, thin } from "../geo.ts";
+import { GPS_KM_NOTE, type Point, summariseRoute, thin } from "../geo.ts";
 import { colomboDate, colomboDateTime, colomboTime, dayRange } from "../time.ts";
 import { realDate, tool, zDate, zText } from "../tool.ts";
 
@@ -77,8 +77,8 @@ export const liveDrivers = tool({
 export const driverRoute = tool({
   name: "driver_route",
   title: "Driver's route for a day",
-  description: "Where a driver went on one day, from the points their phone shared: km travelled, stops longer than 10 minutes, " +
-    "and the route thinned to about 300 points. Only covers the time location sharing was on.",
+  description: "Where a driver went on one day, from the points their phone shared: km travelled (GPS, drift filtered; the odometer is " +
+    "the true figure), stops longer than 10 minutes, and the route thinned to about 300 points. Only covers the time location sharing was on.",
   readOnly: true,
   input: z.object({
     driver: zText(80).describe("Username, code or name"),
@@ -110,8 +110,9 @@ export const driverRoute = tool({
       };
     }
 
+    const route = summariseRoute(points);
     const stops = await Promise.all(
-      findStops(points).slice(0, 30).map(async (stop) => ({
+      route.stops.slice(0, 30).map(async (stop) => ({
         from: colomboTime(stop.from),
         to: colomboTime(stop.to),
         minutes: stop.minutes,
@@ -119,7 +120,7 @@ export const driverRoute = tool({
         maps: mapsPoint(stop.lat, stop.lng),
       })),
     );
-    const km = Math.round(routeKm(points) * 10) / 10;
+    const km = route.km;
     const last = points[points.length - 1];
 
     return {
@@ -127,10 +128,12 @@ export const driverRoute = tool({
         driver: who.name,
         date: day,
         recorded_points: points.length,
+        usable_points: route.usable,
         first_point: colomboTime(points[0].at),
         last_point: colomboTime(last.at),
         last_position: mapsPoint(last.lat, last.lng),
         km,
+        km_note: GPS_KM_NOTE,
         stops_over_10_min: stops,
         route: {
           columns: ["time", "lat", "lng", "km/h"],

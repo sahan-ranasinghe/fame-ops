@@ -31,4 +31,14 @@ export const KEYS = {
   vehicles: 'cache.vehicles',
   reports: 'cache.reports',
   permissionsSeen: 'permissionsSeen',
+  /** When the location service last delivered a position (ms). */
+  lastFix: 'tracking.lastFix',
+  /** The GPS filter's state and the km counters (see lib/tracking.ts). */
+  track: 'tracking.track',
+  /** When the "sharing has stopped" notification is due to fire (ms). */
+  watchdogAt: 'tracking.watchdogAt',
+  /** When the app last looked for a code update (ms). */
+  lastUpdateCheck: 'updates.lastCheck',
+  /** An update was downloaded but not started yet (a task was running or something was waiting to upload). */
+  updateDownloaded: 'updates.downloaded',
 } as const;

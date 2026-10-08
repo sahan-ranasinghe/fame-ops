@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  22::bigint, 'there are 22 tables in public');
+  23::bigint, 'there are 23 tables in public');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -821,6 +821,43 @@ select is((select count(*) from public.tasks where title = 'RPC task second appr
   'and the second approval created no task');
 
 reset role;
+
+-- ---------------------------------------------------------------------------
+-- odometer_reads (the AI odometer reader's log) is for the Edge Function only
+-- ---------------------------------------------------------------------------
+
+select ok(not has_table_privilege('authenticated', 'public.odometer_reads', 'SELECT'),
+  'drivers cannot read odometer_reads');
+select ok(not has_table_privilege('authenticated', 'public.odometer_reads', 'INSERT'),
+  'drivers cannot write odometer_reads');
+select ok(not has_table_privilege('anon', 'public.odometer_reads', 'SELECT'),
+  'anon cannot read odometer_reads');
+select ok((select relrowsecurity from pg_class where oid = 'public.odometer_reads'::regclass),
+  'odometer_reads has row level security on');
+
+-- ---------------------------------------------------------------------------
+-- Retention of location points: nightly job, 90 days
+-- ---------------------------------------------------------------------------
+
+select ok(not has_function_privilege('authenticated', 'public.prune_location_points(integer, integer)', 'EXECUTE'),
+  'drivers cannot run prune_location_points');
+select is((select count(*) from cron.job where jobname = 'prune-location-points'), 1::bigint,
+  'the nightly prune job is scheduled');
+select is((select schedule from cron.job where jobname = 'prune-location-points'), '30 21 * * *',
+  'it runs at 21:30 UTC (03:00 Colombo)');
+
+insert into public.duty_sessions (id, employee_id, started_at, ended_at, end_reason) values
+  ('60000000-0000-0000-0000-00000000000a', '10000000-0000-0000-0000-0000000000a1', now() - interval '100 days', now() - interval '100 days' + interval '1 hour', 'driver');
+insert into public.location_points (employee_id, session_id, recorded_at, lat, lng) values
+  ('10000000-0000-0000-0000-0000000000a1', '60000000-0000-0000-0000-00000000000a', now() - interval '100 days', 6.9, 79.9),
+  ('10000000-0000-0000-0000-0000000000a1', '60000000-0000-0000-0000-00000000000a', now() - interval '91 days', 6.9, 79.9),
+  ('10000000-0000-0000-0000-0000000000a1', '60000000-0000-0000-0000-00000000000a', now() - interval '89 days', 6.9, 79.9);
+
+select is(public.prune_location_points(), 2, 'prune_location_points removes the two points older than 90 days');
+select is((select count(*) from public.location_points where session_id = '60000000-0000-0000-0000-00000000000a'), 1::bigint,
+  'and keeps the newer one');
+select is((select count(*) from public.duty_sessions where id = '60000000-0000-0000-0000-00000000000a'), 1::bigint,
+  'the sharing period itself stays');
 
 select * from finish();
 

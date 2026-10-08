@@ -265,6 +265,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"odometer_reads": {
+                  Row: {
+                    "confidence": number | null,"created_at": string,"employee_id": string,"error": string | null,"gps_km": number | null,"id": number,"last_km": number | null,"model": string,"ms": number | null,"ok": boolean,"photo_path": string,"raw": string | null,"reading_km": number | null,"rejected": string | null,"vehicle_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "confidence"?: number | null,"created_at"?: string,"employee_id": string,"error"?: string | null,"gps_km"?: number | null,"id"?: never,"last_km"?: number | null,"model": string,"ms"?: number | null,"ok"?: boolean,"photo_path": string,"raw"?: string | null,"reading_km"?: number | null,"rejected"?: string | null,"vehicle_id"?: string | null
+                  }
+                  Update: {
+                    "confidence"?: number | null,"created_at"?: string,"employee_id"?: string,"error"?: string | null,"gps_km"?: number | null,"id"?: never,"last_km"?: number | null,"model"?: string,"ms"?: number | null,"ok"?: boolean,"photo_path"?: string,"raw"?: string | null,"reading_km"?: number | null,"rejected"?: string | null,"vehicle_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "odometer_reads_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "odometer_reads_vehicle_id_fkey"
+      columns: ["vehicle_id"]
+isOneToOne: false
+      referencedRelation: "vehicles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"office_audit": {
                   Row: {
                     "args_summary": string | null,"at": string,"id": number,"result_summary": string | null,"tool": string
@@ -564,6 +590,9 @@ isOneToOne: false
                            },
 "office_create_task":
 { Args: { "p_decided_by"?: string,"p_projects"?: Json,"p_request_id"?: string,"p_stops": Json,"p_task": Json }; Returns: string
+                           },
+"prune_location_points":
+{ Args: { "p_batch"?: number,"p_keep_days"?: number }; Returns: number
                            }
           }
           Enums: {

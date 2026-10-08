@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import type { Db, Row } from "../db.ts";
-import { ToolError, unwrap, unwrapMaybe } from "../db.ts";
+import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import {
   assignWarnings,
   type Employee,
@@ -17,6 +17,7 @@ import {
   type Vehicle,
 } from "../fleet.ts";
 import { centsToLkr, contactLinks, mapsDirections, telLink, waLink } from "../format.ts";
+import { GPS_KM_NOTE, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
@@ -330,7 +331,7 @@ export const taskDetail = tool({
     const reports = unwrap(reportsRes, "vehicle reports");
 
     const projectIds = split.flatMap((row) => row.project_id ? [row.project_id] : []);
-    const [projectsRes, links, request, unlogged] = await Promise.all([
+    const [projectsRes, links, request, unlogged, gps] = await Promise.all([
       projectIds.length > 0
         ? db.from("projects").select("id, job_no, short_name, name, customer_name").in("id", projectIds)
         : { data: [], error: null },
@@ -342,6 +343,7 @@ export const taskDetail = tool({
         ? db.from("vehicle_requests").select("id, requested_by_name, project_label, created_at").eq("id", task.request_id).maybeSingle()
         : { data: null, error: null },
       unloggedBeforeStart(db, odometer.find((o) => o.kind === "task_start")),
+      taskGpsKm(db, task, now),
     ]);
     const projects = new Map(unwrap(projectsRes, "projects").map((p) => [p.id, p]));
     const requestRow = unwrapMaybe(request, "vehicle request");
@@ -375,6 +377,8 @@ export const taskDetail = tool({
           start_odometer_km: task.start_odometer_km,
           end_odometer_km: task.end_odometer_km,
           km: task.km,
+          gps_km: gps?.km,
+          gps_km_note: gps ? GPS_KM_NOTE : undefined,
         },
         stops: stops.map((s) => ({
           seq: s.seq,
@@ -433,6 +437,26 @@ export const taskDetail = tool({
     };
   },
 });
+
+/**
+ * Km by GPS while the task was running: the driver's points from the start to
+ * the finish (or now), through the drift filter. Nothing when the task has
+ * not started or no point was shared.
+ */
+async function taskGpsKm(db: Db, task: Task, now: Date): Promise<{ km: number } | null> {
+  if (!task.started_at) return null;
+  const until = task.completed_at ?? now.toISOString();
+  const rows = await fetchAll(
+    (a, b) =>
+      db.from("location_points").select("id, recorded_at, lat, lng, speed_mps, accuracy_m")
+        .eq("employee_id", task.employee_id).gte("recorded_at", task.started_at!).lte("recorded_at", until)
+        .order("recorded_at").order("id").range(a, b),
+    "location points",
+  );
+  if (rows.length === 0) return null;
+  const points: Point[] = rows.map((r) => ({ at: r.recorded_at, lat: r.lat, lng: r.lng, speedMps: r.speed_mps, accuracyM: r.accuracy_m }));
+  return { km: summariseRoute(points).km };
+}
 
 /**
  * Km the vehicle moved between its last logged reading and the start of this

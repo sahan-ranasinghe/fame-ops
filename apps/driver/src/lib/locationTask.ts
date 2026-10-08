@@ -3,19 +3,27 @@
 // It is imported from the app's entry file (index.ts) so that it is always
 // defined before Android delivers the first position.
 //
-// Each point goes into the phone's queue first; uploads happen about once a
-// minute, or sooner when 10 or more points are waiting.
+// Positions arrive every 5 s (in batches of up to 15 s). Each one goes
+// through the GPS filter; what is worth keeping (lib/tracking.ts) goes into
+// the phone's queue, and uploads happen about every 30 s, or sooner when 10
+// or more points are waiting. Every delivery also notes the time (so the app
+// can tell a dead service from a live one) and pushes back the watchdog
+// notification that fires when deliveries stop.
 
 import * as Battery from 'expo-battery';
 import type * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
+import { translate } from '../i18n';
 import { flushNow } from '../sync';
 import { addPoints, queueCounts } from '../sync/store';
-import { getJson, KEYS } from './kv';
+import { getJson, KEYS, setJson } from './kv';
 import { getSharing, LOCATION_TASK } from './location';
+import { armWatchdog } from './notifications';
+import { loadTrack, recordable, saveTrack, toPhoneFix } from './tracking';
+import type { Language } from './types';
 
-const UPLOAD_EVERY_MS = 60_000;
+const UPLOAD_EVERY_MS = 30_000;
 const UPLOAD_WHEN_QUEUED = 10;
 const RETRY_NO_SOONER_MS = 15_000;
 
@@ -35,24 +43,35 @@ TaskManager.defineTask<{ locations?: Location.LocationObject[] }>(LOCATION_TASK,
   const locations = data?.locations ?? [];
   if (!sharing || locations.length === 0) return;
 
-  const battery = await batteryPercent();
-  addPoints(
-    locations.map((location) => ({
-      session_id: sharing.sessionId,
-      recorded_at: new Date(location.timestamp).toISOString(),
-      lat: location.coords.latitude,
-      lng: location.coords.longitude,
-      accuracy_m: location.coords.accuracy,
-      speed_mps: location.coords.speed !== null && location.coords.speed >= 0 ? location.coords.speed : null,
-      heading: location.coords.heading !== null && location.coords.heading >= 0 ? location.coords.heading : null,
-      battery_pct: battery,
-      is_mock: location.mocked === true,
-    })),
-  );
+  setJson(KEYS.lastFix, Date.now());
+
+  const track = loadTrack(sharing.sessionId);
+  const keep = recordable(track, locations.map(toPhoneFix));
+  saveTrack(track);
+
+  if (keep.length > 0) {
+    const battery = await batteryPercent();
+    addPoints(
+      keep.map((fix) => ({
+        session_id: sharing.sessionId,
+        recorded_at: new Date(fix.at).toISOString(),
+        lat: fix.lat,
+        lng: fix.lng,
+        accuracy_m: fix.accuracyM,
+        speed_mps: fix.speedMps,
+        heading: fix.heading,
+        battery_pct: battery,
+        is_mock: fix.mocked,
+      })),
+    );
+  }
+
+  const language = getJson<Language>(KEYS.language) ?? 'en';
+  await armWatchdog(translate(language, 'tracking.stoppedTitle'), translate(language, 'tracking.stoppedBody'));
 
   const sinceLast = Date.now() - (getJson<number>(KEYS.lastFlush) ?? 0);
   const waiting = queueCounts().points;
-  if (sinceLast >= UPLOAD_EVERY_MS || (waiting >= UPLOAD_WHEN_QUEUED && sinceLast >= RETRY_NO_SOONER_MS)) {
+  if (waiting > 0 && (sinceLast >= UPLOAD_EVERY_MS || (waiting >= UPLOAD_WHEN_QUEUED && sinceLast >= RETRY_NO_SOONER_MS))) {
     await flushNow();
   }
 });

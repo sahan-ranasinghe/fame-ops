@@ -392,6 +392,12 @@ deno_version = 2
 enabled = true
 verify_jwt = false
 
+# read-odometer checks the driver's session token itself (with Supabase Auth)
+# and only reads photos inside the caller's own folder.
+[functions.read-odometer]
+enabled = true
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

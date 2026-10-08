@@ -364,8 +364,9 @@ check(ov["requests"]["waiting"] == 0 and {"Revenue licence expires", "Rental agr
       json.dumps(ov["needs_attention"])[:600])
 check(ov["on_the_road"][0]["driver"] == "Nuwan Perera" and ov["on_the_road"][0]["near"] == "Polgahawela", "fleet_overview on-the-road list names the driver and the nearest town")
 rt = tool("driver_route", {"driver": "nuwan.p"})
-check(rt["recorded_points"] == len(points) and 60 <= rt["km"] <= 80 and len(rt["stops_over_10_min"]) == 1 and rt["stops_over_10_min"][0]["minutes"] == 15
-      and len(rt["route"]["points"]) == len(points), "driver_route: about 70 km, one 15-minute stop", json.dumps({k: rt[k] for k in ("recorded_points", "km", "stops_over_10_min")}))
+# The points are 41 s apart (real phones record every 5 s), so the drift filter drops the last step of each leg: a little under 68 km, a stop of 13-15 min.
+check(rt["recorded_points"] == len(points) and 60 <= rt["km"] <= 80 and len(rt["stops_over_10_min"]) == 1 and 12 <= rt["stops_over_10_min"][0]["minutes"] <= 16
+      and len(rt["route"]["points"]) == len(points), "driver_route: about 65 km, one stop of about 14 minutes", json.dumps({k: rt[k] for k in ("recorded_points", "km", "stops_over_10_min")}))
 
 rep_id = str(uuid.uuid4())
 code, _ = app.post("vehicle_reports", {"id": rep_id, "vehicle_id": V1, "employee_id": ME, "task_id": T1, "category": "tyre", "note": "Front left tyre is worn"})

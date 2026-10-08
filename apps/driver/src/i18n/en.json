@@ -11,8 +11,29 @@
     "savedOffline": "No connection. Saved on the phone; it is sent when the connection is back.",
     "cameraDenied": "Allow the camera for Fame Driver in the phone's settings."
   },
-  "days": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-  "months": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  "days": [
+    "Sun",
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri",
+    "Sat"
+  ],
+  "months": [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec"
+  ],
   "login": {
     "title": "Sign in",
     "username": "Username",
@@ -37,7 +58,16 @@
     "allowed": "Allowed",
     "openSettings": "Open settings",
     "continue": "Continue",
-    "later": "You can change these later under Me."
+    "later": "You can change these later under Me.",
+    "background": "Keep running in the background",
+    "backgroundWhy": "Some phones stop apps that work in the background. Without this, location sharing stops when the screen is off.",
+    "background_oppo": "Open app settings → Battery usage → allow background activity. In Phone Manager → Startup manager, allow Fame Driver.",
+    "background_xiaomi": "Settings → Apps → Fame Driver: Autostart on; Battery saver: No restrictions.",
+    "background_vivo": "i Manager → App manager → Autostart: allow Fame Driver. Battery → Background power consumption: allow.",
+    "background_huawei": "Settings → Battery → App launch → Fame Driver: Manage manually, all three switches on.",
+    "background_samsung": "App info → Battery → Unrestricted. Do not put Fame Driver in \"Sleeping apps\".",
+    "background_other": "In the app's settings, allow it to run in the background without battery restrictions.",
+    "openAppSettings": "Open app settings"
   },
   "tabs": {
     "today": "Today",
@@ -125,7 +155,13 @@
     "needFuel": "Enter the litres or the amount.",
     "moreThanLast": "This is {km} km more than the last reading. The office will see that.",
     "needVehicle": "Choose your vehicle first.",
-    "saved": "Saved"
+    "saved": "Saved",
+    "readUnsure": "The photo seems to show {km}, but not clearly. Check it.",
+    "readOnPhone": "Read on the phone: {km}. Check it.",
+    "readBelowLast": "The photo reads {km}, which is below the last reading ({last}). Type the number.",
+    "readFarAbove": "The photo reads {km}, far above the expected reading (about {expected}). Type the number.",
+    "gpsThisTask": "GPS ≈ {km} km this task",
+    "gpsSinceLast": "GPS ≈ {km} km since the last reading"
   },
   "mileage": {
     "thisMonth": "This month",
@@ -188,12 +224,33 @@
     "signOut": "Sign out",
     "signOutTask": "Finish the task in progress before signing out.",
     "signOutQueue": "Some things are not sent yet. Connect to the internet, tap \"Send now\", then sign out.",
-    "signOutConfirm": "Sign out of Fame Driver?"
+    "signOutConfirm": "Sign out of Fame Driver?",
+    "live": "Live updates",
+    "liveOn": "Connected",
+    "liveConnecting": "Connecting…",
+    "liveOff": "Off",
+    "updateDownloaded": "Update downloaded. It starts when the task is finished and everything is sent."
   },
   "vehicle": {
     "title": "Choose your vehicle",
     "inGarage": "In garage",
     "none": "The office has not added any vehicles yet."
+  },
+  "tracking": {
+    "locationOff": "Location is switched off on this phone. The office cannot see you.",
+    "turnOnLocation": "Turn on location",
+    "noPermission": "Fame Driver is not allowed to use your location.",
+    "noBackground": "Location is allowed only while the app is open. Choose \"Allow all the time\".",
+    "battery": "Battery saving may stop location sharing when the screen is off.",
+    "fix": "Fix",
+    "restarted": "Location sharing had stopped. It is running again.",
+    "taskNotSharing": "A task is in progress but you are not sharing your location.",
+    "shareNow": "Share location",
+    "stoppedTitle": "Location sharing stopped",
+    "stoppedBody": "Open Fame Driver to keep sharing your location.",
+    "lastFix": "Last position {time}",
+    "gpsKm": "Driven (GPS)",
+    "approx": "approximate"
   },
   "service": {
     "title": "Sharing my location",

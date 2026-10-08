@@ -3,13 +3,19 @@
   "imports": {
     "@modelcontextprotocol/server": "npm:@modelcontextprotocol/server@2.3.1",
     "@supabase/supabase-js": "npm:@supabase/supabase-js@2.117.2",
-    "zod": "npm:zod@4.6.5"
+    "zod": "npm:zod@4.6.5",
+    "@std/assert": "jsr:@std/assert@1"
   },
   "fmt": {
     "lineWidth": 140,
-    "exclude": ["database.types.ts"]
+    "exclude": [
+      "database.types.ts",
+      "track.ts"
+    ]
   },
   "lint": {
-    "exclude": ["database.types.ts"]
+    "exclude": [
+      "database.types.ts"
+    ]
   }
 }

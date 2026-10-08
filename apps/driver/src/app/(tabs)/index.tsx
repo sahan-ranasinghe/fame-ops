@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
+import { TrackingNotice } from '@/components/tracking';
 import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
 import { colomboDate, colomboHour, colomboTime } from '@/lib/time';
@@ -119,6 +120,7 @@ export default function TodayScreen() {
             </Card>
           </Pressable>
           {needLocation && <Notice tone="warn" text={t('today.needLocation')} />}
+          <TrackingNotice />
 
           {next ? (
             <View style={styles.nextCard}>

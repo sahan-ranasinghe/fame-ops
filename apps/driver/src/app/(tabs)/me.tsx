@@ -13,13 +13,13 @@ import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { colomboTime } from '@/lib/time';
-import { checkAndApplyUpdate, runningUpdate } from '@/lib/updates';
+import { runningUpdate } from '@/lib/updates';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
 export default function MeScreen() {
   const app = useApp();
-  const { t, me, vehicle, queue } = app;
+  const { t, me, vehicle, queue, live } = app;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
@@ -32,9 +32,9 @@ export default function MeScreen() {
   async function checkUpdate() {
     setChecking(true);
     setUpdateNote(null);
-    const outcome = await checkAndApplyUpdate();
+    const outcome = await app.checkUpdate();
     setChecking(false);
-    setUpdateNote(t(outcome === 'failed' ? 'me.updateFailed' : 'me.upToDate'));
+    setUpdateNote(t(outcome === 'failed' ? 'me.updateFailed' : outcome === 'downloaded' ? 'me.updateDownloaded' : 'me.upToDate'));
   }
 
   const waiting = queue.ops + queue.points;
@@ -103,6 +103,11 @@ export default function MeScreen() {
 
         <Card style={{ gap: 14 }}>
           <Line label={t('me.version')}><Mono size={17}>{Constants.expoConfig?.version}</Mono></Line>
+          <Line label={t('me.live')}>
+            <Txt variant="strong" color={live === 'connected' ? colors.blue : live === 'connecting' ? colors.amberText : colors.red}>
+              {t(live === 'connected' ? 'me.liveOn' : live === 'connecting' ? 'me.liveConnecting' : 'me.liveOff')}
+            </Txt>
+          </Line>
           {update && (
             <>
               {update.publishedAt && (
