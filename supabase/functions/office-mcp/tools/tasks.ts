@@ -11,6 +11,7 @@ import {
   type Latest,
   loadLatest,
   loadRefs,
+  odometerCheck,
   type Refs,
   sharing,
   type Task,
@@ -309,8 +310,9 @@ export const taskBoard = tool({
 export const taskDetail = tool({
   name: "task_detail",
   title: "Task detail",
-  description: "Everything about one task: times, stops, project split, odometer readings and fuel with photo links (valid 1 hour), " +
-    "vehicle problems reported during it, and whether km were driven that nobody logged before it started.",
+  description: "Everything about one task: times, stops, project split, odometer readings (how each was entered, what the photo shows, " +
+    "flags) and fuel with photo links (valid 1 hour), vehicle problems reported during it, and whether km were driven that nobody " +
+    "logged before it started.",
   readOnly: true,
   input: z.object({ task_id: zId }),
   async run({ task_id }, { db, now }) {
@@ -402,7 +404,13 @@ export const taskDetail = tool({
         odometer: odometer.map((o) => ({
           kind: o.kind,
           reading_km: o.reading_km,
+          entry: o.entry,
+          photo_reading: o.ai_value,
+          photo_status: o.ai_status,
+          photo_attempts: o.photo_attempts,
           camera_read: o.ocr_value,
+          flag: o.flag,
+          check: odometerCheck(o),
           at: colomboDateTime(o.logged_at),
           photo: photoOrNote(links, o.photo_id),
         })),

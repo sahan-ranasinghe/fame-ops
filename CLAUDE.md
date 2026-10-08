@@ -125,7 +125,9 @@
   arrived_at, done_at. The design shows one pickup and one drop-off; more stops allowed.
 - `task_projects`: task_id, project_id (null = Fame internal), percent. Sum = 100 per task.
 - `odometer_logs`: id, vehicle_id, employee_id, task_id (nullable), reading_km,
-  ocr_value (nullable), photo_id, kind ('task_start'|'task_end'|'manual'), logged_at.
+  ocr_value (nullable), photo_id, kind ('task_start'|'task_end'|'manual'), logged_at,
+  entry ('photo'|'photo_changed'|'typed_unreadable'|'typed_offline'), photo_attempts,
+  and server-only ai_value, ai_status, ai_checked_at, ai_attempts, flag.
   Every log updates vehicles.current_odometer_km.
 - `fuel_logs`: id, vehicle_id, employee_id, task_id (nullable), litres, amount_cents,
   receipt_photo_id, odometer_km (nullable), logged_at.
@@ -149,9 +151,9 @@
 - `driver_latest`: employee_id PK, session_id, lat, lng, accuracy_m, speed_mps,
   battery_pct, recorded_at, sharing (bool). Kept current by trigger (only newer points win).
 - `office_audit`: id, at, tool, args_summary, result_summary.
-- `odometer_reads`: one row per `read-odometer` call (employee_id, vehicle_id, photo_path,
-  last_km, gps_km, reading_km, confidence, rejected, model, ok, error, ms, created_at).
-  Service role only.
+- `odometer_reads`: one row per `read-odometer` model call (employee_id, vehicle_id,
+  photo_path, last_km, gps_km, reading_km, confidence, status, mode ('driver'|'server'),
+  log_id, model, ok, error, ms, created_at). Service role only.
 - Claims tables (`allowance_types`, `claims`, `claim_lines`, `claim_sites`) may exist from an
   earlier migration. Keep them; no UI or tools until Phase C.
 
@@ -225,11 +227,21 @@ while parked; upload every ~30 s or 10+ queued points. A dead location service i
 restarted when the app opens, comes to the front, or every minute while on screen; a
 watchdog notification fires 12 min after the last position. Location points are kept 90
 days (pg_cron job `prune-location-points`).
-Odometer photo: uploaded at once, read by the Edge Function `read-odometer` (Gemini,
-`GEMINI_API_KEY`), expected range = last reading + GPS km since; below the last reading or
-more than 500 km above expected is rejected; ML Kit on the phone is the offline fallback.
-The driver always confirms. 60 reads per driver per day (`odometer_reads`, service role
-only).
+Odometer rules: the photo proves the reading. Camera only. The photo is uploaded at once and
+the Edge Function `read-odometer` (Gemini, `GEMINI_API_KEY`) answers a status: ok |
+no_odometer | trip_meter_only | blurry | covered_or_dark | not_dashboard | unsure |
+out_of_range (under the last reading, or over last + GPS km + 500). Only `ok` gives a number,
+shown big with "Correct" and a small "Change" (Change warns that the office sees both numbers
+and flags the log). Any other status: no number field, a message, "Retake photo". Typing only
+after 3 failed photos in a row ("Still can't read it? Type the reading" + "Odometer display
+broken? Report a problem", log flagged typed_unreadable, last photo kept) or with no
+connection (ML Kit suggestion, entry typed_offline, checked by the server later through the
+pg_cron job `check-odometer-photos` + pg_net, Vault secrets `functions_url` / `server_key`).
+ML Kit text with no digits = "no odometer" without calling the server. `odometer_logs`:
+entry, photo_attempts (phone) and ai_value, ai_status, ai_checked_at, flag (server only;
+drivers have no privilege on them; trigger fills them from the photo's own read). Flags:
+photo_changed, typed_unreadable, ai_differs, ai_failed (+ the computed "unlogged km"). 60
+driver reads per driver per day (`odometer_reads`, service role only).
 
 ## Office connector (Edge Function `office-mcp`), Phase A tools
 MCP over Streamable HTTP, deployed with `--no-verify-jwt`, path `/office-mcp/<KEY>/mcp`,

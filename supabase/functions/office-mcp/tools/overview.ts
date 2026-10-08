@@ -2,12 +2,14 @@
 
 import { z } from "zod";
 import { unwrap } from "../db.ts";
-import { loadLatest, loadRefs, monthKm, nearestTown, service, sharing, VEHICLE_DOCS, vehicleLabel } from "../fleet.ts";
+import { loadLatest, loadRefs, monthKm, nearestTown, odometerCheck, service, sharing, VEHICLE_DOCS, vehicleLabel } from "../fleet.ts";
 import { contactLinks, mapsPoint, thousands } from "../format.ts";
 import { ago, colomboDate, colomboDateTime, dayRange, daysBetween, shortDate } from "../time.ts";
 import { realDate, tool, zDate } from "../tool.ts";
 
 const REMINDER_DAYS = 14;
+/** Flagged odometer readings stay in "needs attention" this long. */
+const ODOMETER_FLAG_DAYS = 7;
 
 interface Attention {
   what: string;
@@ -30,7 +32,7 @@ export const fleetOverview = tool({
   title: "Fleet overview",
   description: "The fleet at a glance: vehicles on the road / total / parked, tasks of the day (in progress, done), requests waiting " +
     "(and the oldest), reminders due in the next 14 days, who is on the road now, and what needs attention " +
-    "(documents, service, km allowance, rental end, driver licences, open vehicle problems). " +
+    "(documents, service, km allowance, rental end, driver licences, open vehicle problems, odometer readings flagged in the last 7 days). " +
     "The task counts follow `date`; everything else describes now.",
   readOnly: true,
   input: z.object({ date: zDate.optional().describe("Day for the task counts. Default: today") }),
@@ -39,7 +41,7 @@ export const fleetOverview = tool({
     const day = realDate(date ?? today);
     const { from, to } = dayRange(day);
 
-    const [refs, latest, dayTasks, runningRes, waitingRes, reportsRes] = await Promise.all([
+    const [refs, latest, dayTasks, runningRes, waitingRes, reportsRes, flaggedRes] = await Promise.all([
       loadRefs(db),
       loadLatest(db),
       db.from("tasks").select("id, status").gte("start_at", from).lt("start_at", to),
@@ -48,7 +50,11 @@ export const fleetOverview = tool({
       db.from("vehicle_reports").select("id, vehicle_id, employee_id, category, created_at, status").neq("status", "closed").order(
         "created_at",
       ),
+      db.from("odometer_logs").select("id, vehicle_id, employee_id, reading_km, ai_value, entry, flag, ai_checked_at, logged_at")
+        .not("flag", "is", null).gte("logged_at", new Date(now.getTime() - ODOMETER_FLAG_DAYS * 86400000).toISOString())
+        .order("logged_at", { ascending: false }),
     ]);
+    const flagged = unwrap(flaggedRes, "odometer logs");
     const tasks = unwrap(dayTasks, "tasks");
     const running = unwrap(runningRes, "tasks");
     const waiting = unwrap(waitingRes, "vehicle requests");
@@ -163,6 +169,20 @@ export const fleetOverview = tool({
         due: `reported ${ago(r.created_at, now)} ago`,
         level: "red",
         days: -2,
+      });
+    }
+    for (const l of flagged) {
+      attention.push({
+        what: `Odometer check: ${odometerCheck(l) ?? l.flag}`,
+        subject: [
+          refs.veh.get(l.vehicle_id)?.reg_no,
+          refs.emp.get(l.employee_id)?.name,
+          `${thousands(l.reading_km)} km` +
+          (l.ai_value !== null ? ` (photo ${thousands(l.ai_value)})` : ""),
+        ].filter(Boolean).join(" · "),
+        due: `logged ${ago(l.logged_at, now)} ago`,
+        level: "amber",
+        days: -1,
       });
     }
     attention.sort((a, b) => a.days - b.days);

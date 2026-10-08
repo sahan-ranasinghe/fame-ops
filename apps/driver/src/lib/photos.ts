@@ -1,7 +1,7 @@
-// Taking photos: camera -> shrink to at most 1600 px, JPEG ~0.7 -> keep a copy
-// in the app's own folder until it has been uploaded. Reading the odometer
-// number from a photo (here on the phone, or by the AI in lib/odometerAi.ts)
-// is only ever a suggestion.
+// Taking photos: always the camera (never the gallery) -> shrink to at most
+// 1600 px, JPEG ~0.7 -> keep a copy in the app's own folder until it has been
+// uploaded. The odometer number comes from the server (lib/odometerAi.ts);
+// the phone's own reader here is only the pre-check and the offline fallback.
 
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 import { Asset } from 'expo-asset';
@@ -82,19 +82,26 @@ export function queuePhoto(photo: LocalPhoto, kind: PhotoKind, employeeId: strin
   });
 }
 
+export interface PhotoScan {
+  /** All text the phone's reader found; null when the reader could not run (not ready, no model yet). */
+  text: string | null;
+  /** The number that looks most like an odometer reading, if any. */
+  candidate: number | null;
+}
+
 /**
- * The odometer number the phone can read in a photo, or null. Runs on the
- * phone (Google ML Kit) and is the fallback when the AI reader cannot be
- * reached (lib/odometerAi.ts); with an expected reading, the number closest
- * to it wins. If the reader is not available in this build, it simply finds
- * nothing and the driver types the number.
+ * What the phone's own text reader (Google ML Kit) sees in a photo. It is the
+ * pre-check before the server is asked (a photo with text but no digits
+ * cannot show an odometer) and the fallback when the server cannot be reached
+ * (lib/odometerAi.ts); with an expected reading, the number closest to it
+ * wins. If the reader is not available in this build, it simply finds nothing.
  */
-export async function readOdometerOnPhone(uri: string, expectedKm: number | null): Promise<number | null> {
+export async function scanPhotoDigits(uri: string, expectedKm: number | null): Promise<PhotoScan> {
   try {
     const result = await TextRecognition.recognize(uri);
-    return odometerFromText(result.text, expectedKm);
+    return { text: result.text ?? '', candidate: odometerFromText(result.text ?? '', expectedKm) };
   } catch {
-    return null;
+    return { text: null, candidate: null };
   }
 }
 

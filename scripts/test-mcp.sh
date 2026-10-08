@@ -4,6 +4,7 @@
 #   1. a wrong key (and a missing key) must answer 404
 #   2. list the tools
 #   3. call fleet_overview, live_drivers and list_vehicles
+#   4. read-odometer refuses calls without a sign-in; mileage_summary lists odometer checks
 #
 # Usage:
 #   export OFFICE_MCP_KEY='...'      # the same value that was set with: supabase secrets set
@@ -116,6 +117,21 @@ if out=$(call_tool list_vehicles '{}'); then
   jq -r '.vehicles[] | "        \(.reg_no)  \(.status)  \(.km_this_month) km this month"' <<<"$out"
 else
   fail "list_vehicles"
+fi
+echo
+
+echo "4. Odometer"
+FN_BASE="${BASE%/office-mcp}"
+code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -X POST "$FN_BASE/read-odometer" \
+  -H 'Content-Type: application/json' --data '{"path":"x"}')
+[ "$code" = "401" ] && pass "read-odometer without a sign-in answers 401" || fail "read-odometer without a sign-in answered $code, expected 401"
+code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -X POST "$FN_BASE/read-odometer" \
+  -H 'Content-Type: application/json' -H 'x-server-key: not-the-key' --data '{"log_id":"x"}')
+[ "$code" = "401" ] && pass "read-odometer with a wrong server key answers 401" || fail "read-odometer with a wrong server key answered $code, expected 401"
+if out=$(call_tool mileage_summary '{}'); then
+  pass "mileage_summary: $(jq -r '"\(.month): \(.totals.tasks) tasks, \(.totals.task_km) task km, \(.totals.unlogged_km_flags) unlogged flags, \(.totals.check_odometer) odometer checks"' <<<"$out")"
+else
+  fail "mileage_summary"
 fi
 echo
 

@@ -859,6 +859,113 @@ select is((select count(*) from public.location_points where session_id = '60000
 select is((select count(*) from public.duty_sessions where id = '60000000-0000-0000-0000-00000000000a'), 1::bigint,
   'the sharing period itself stays');
 
+-- ---------------------------------------------------------------------------
+-- Odometer proof: the server's reading belongs to the photo; drivers cannot set it
+-- ---------------------------------------------------------------------------
+
+reset role;
+-- Reads the server made of driver A's photos (as the Edge Function would, with service_role).
+insert into public.photos (id, employee_id, kind, storage_path) values
+  ('70000000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-0000000000a1', 'odometer',
+   '10000000-0000-0000-0000-0000000000a1/2026-10-08/70000000-0000-0000-0000-000000000005.jpg'),
+  ('70000000-0000-0000-0000-000000000006', '10000000-0000-0000-0000-0000000000a1', 'odometer',
+   '10000000-0000-0000-0000-0000000000a1/2026-10-08/70000000-0000-0000-0000-000000000006.jpg'),
+  ('70000000-0000-0000-0000-000000000007', '10000000-0000-0000-0000-0000000000a1', 'odometer',
+   '10000000-0000-0000-0000-0000000000a1/2026-10-08/70000000-0000-0000-0000-000000000007.jpg'),
+  ('70000000-0000-0000-0000-000000000008', '10000000-0000-0000-0000-0000000000a1', 'odometer',
+   '10000000-0000-0000-0000-0000000000a1/2026-10-08/70000000-0000-0000-0000-000000000008.jpg'),
+  ('70000000-0000-0000-0000-000000000009', '10000000-0000-0000-0000-0000000000a1', 'odometer',
+   '10000000-0000-0000-0000-0000000000a1/2026-10-08/70000000-0000-0000-0000-000000000009.jpg');
+insert into public.odometer_reads (employee_id, photo_path, reading_km, confidence, status, model) values
+  ('10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-0000000000a1/2026-10-08/70000000-0000-0000-0000-000000000005.jpg', 84610, 0.98, 'ok', 'test'),
+  ('10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-0000000000a1/2026-10-08/70000000-0000-0000-0000-000000000006.jpg', 84620, 0.97, 'ok', 'test'),
+  ('10000000-0000-0000-0000-0000000000a1', '10000000-0000-0000-0000-0000000000a1/2026-10-08/70000000-0000-0000-0000-000000000007.jpg', null, 0.2, 'blurry', 'test');
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+
+select throws_ok(
+  $$ insert into public.odometer_logs (vehicle_id, employee_id, reading_km, kind, ai_value) values
+       ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000a1', 84610, 'manual', 84610) $$,
+  '42501', 'permission denied for table odometer_logs', 'a driver cannot set ai_value');
+select throws_ok(
+  $$ insert into public.odometer_logs (vehicle_id, employee_id, reading_km, kind, ai_status) values
+       ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000a1', 84610, 'manual', 'ok') $$,
+  '42501', 'permission denied for table odometer_logs', 'a driver cannot set ai_status');
+select throws_ok(
+  $$ insert into public.odometer_logs (vehicle_id, employee_id, reading_km, kind, flag) values
+       ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000a1', 84610, 'manual', 'photo_changed') $$,
+  '42501', 'permission denied for table odometer_logs', 'a driver cannot set flag');
+select throws_ok('select public.set_odometer_ai(''80000000-0000-0000-0000-000000000001'', 1, ''ok'')', '42501',
+  'permission denied for function set_odometer_ai', 'a driver cannot call set_odometer_ai()');
+select throws_ok('select count(*) from public.odometer_reads', '42501',
+  'permission denied for table odometer_reads', 'a driver cannot read odometer_reads');
+
+select lives_ok(
+  $$ insert into public.odometer_logs (id, vehicle_id, employee_id, reading_km, kind, photo_id, entry, photo_attempts) values
+       ('80000000-0000-0000-0000-000000000005', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000a1',
+        84610, 'manual', '70000000-0000-0000-0000-000000000005', 'photo', 1) $$,
+  'a reading confirmed from the photo is stored');
+select is(
+  (select (ai_value, ai_status, flag, ai_checked_at is not null)::text from public.odometer_logs where id = '80000000-0000-0000-0000-000000000005'),
+  '(84610,ok,,t)', 'the server''s reading of that very photo is attached, with no flag');
+
+select lives_ok(
+  $$ insert into public.odometer_logs (id, vehicle_id, employee_id, reading_km, kind, photo_id, entry, photo_attempts) values
+       ('80000000-0000-0000-0000-000000000006', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000a1',
+        84700, 'manual', '70000000-0000-0000-0000-000000000006', 'photo_changed', 1) $$,
+  'a reading the driver changed is stored');
+select is(
+  (select (ai_value, ai_status, flag)::text from public.odometer_logs where id = '80000000-0000-0000-0000-000000000006'),
+  '(84620,ok,photo_changed)', 'it keeps the photo''s reading and is flagged photo_changed');
+
+select lives_ok(
+  $$ insert into public.odometer_logs (id, vehicle_id, employee_id, reading_km, kind, photo_id, entry, photo_attempts) values
+       ('80000000-0000-0000-0000-000000000007', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000a1',
+        84710, 'manual', '70000000-0000-0000-0000-000000000007', 'typed_unreadable', 3) $$,
+  'a reading typed after three unreadable photos is stored');
+select is(
+  (select (ai_value, ai_status, flag, photo_attempts)::text from public.odometer_logs where id = '80000000-0000-0000-0000-000000000007'),
+  '(,blurry,typed_unreadable,3)', 'it carries the photo''s status and is flagged typed_unreadable');
+
+select lives_ok(
+  $$ insert into public.odometer_logs (id, vehicle_id, employee_id, reading_km, kind, photo_id, entry, photo_attempts) values
+       ('80000000-0000-0000-0000-000000000008', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000a1',
+        84720, 'manual', '70000000-0000-0000-0000-000000000008', 'typed_offline', 1) $$,
+  'a reading typed with no connection is stored');
+select is(
+  (select (ai_value, ai_status, flag, ai_checked_at)::text from public.odometer_logs where id = '80000000-0000-0000-0000-000000000008'),
+  '(,,,)', 'nothing is known about its photo yet: no flag, not checked');
+
+reset role;
+
+select lives_ok('select public.set_odometer_ai(''80000000-0000-0000-0000-000000000008'', 84800, ''ok'')',
+  'the server checks the photo later');
+select is((select flag from public.odometer_logs where id = '80000000-0000-0000-0000-000000000008'), 'ai_differs',
+  'a photo that shows another number flags the typed reading (ai_differs)');
+select lives_ok('select public.set_odometer_ai(''80000000-0000-0000-0000-000000000008'', 84720, ''ok'')', 'checked again');
+select is((select flag from public.odometer_logs where id = '80000000-0000-0000-0000-000000000008'), null,
+  'a photo that shows the same number clears the flag');
+select lives_ok('select public.set_odometer_ai(''80000000-0000-0000-0000-000000000008'', null, ''covered_or_dark'')', 'checked once more');
+select is((select flag from public.odometer_logs where id = '80000000-0000-0000-0000-000000000008'), 'ai_failed',
+  'a photo that cannot be read flags the typed reading (ai_failed)');
+
+-- The 5-minute job hands unchecked photos to read-odometer through pg_net (the URL and key come from Vault).
+insert into public.odometer_logs (id, vehicle_id, employee_id, reading_km, kind, photo_id, entry, photo_attempts, logged_at) values
+  ('80000000-0000-0000-0000-000000000009', '20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000a1',
+   84730, 'manual', '70000000-0000-0000-0000-000000000009', 'typed_offline', 1, now() - interval '2 minutes');
+select is(public.queue_odometer_checks(), 0, 'without the Vault secrets the job does nothing');
+select vault.create_secret('http://127.0.0.1:54321/functions/v1', 'functions_url');
+select vault.create_secret('local-test-server-key-0123456789', 'server_key');
+select is(public.queue_odometer_checks(), 1, 'with the secrets, the one unchecked reading older than a minute is queued');
+select is(
+  (select count(*) from net.http_request_queue where url = 'http://127.0.0.1:54321/functions/v1/read-odometer'
+     and convert_from(body, 'utf8') like '%80000000-0000-0000-0000-000000000009%'),
+  1::bigint, 'one request to read-odometer with the log id is waiting in pg_net');
+select is((select ai_attempts from public.odometer_logs where id = '80000000-0000-0000-0000-000000000009'), 1::smallint,
+  'and the try is counted');
+select is((select count(*) from cron.job where jobname = 'check-odometer-photos'), 1::bigint, 'the 5-minute job is scheduled');
+
 select * from finish();
 
 rollback;

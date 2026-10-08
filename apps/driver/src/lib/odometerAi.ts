@@ -1,47 +1,67 @@
 // Reading the odometer from a photo.
 //
-// First choice: the Edge Function read-odometer. The photo is uploaded right
-// away (to the same place the queue would put it later) and the function asks
-// Gemini for the main odometer total, checked against the expected range
-// (last reading + km driven since, by GPS). Second choice, when there is no
-// connection or the function fails: the text reader on the phone (ML Kit),
-// taking the number closest to the expected one. The driver always checks.
+// 1. The phone's own text reader (ML Kit) looks first. If it finds text with
+//    no digits at all, the photo cannot show an odometer: the app says so at
+//    once, without the server.
+// 2. Otherwise the photo is uploaded right away (to the same place the queue
+//    puts it later) and the Edge Function read-odometer asks Gemini for the
+//    total odometer only, checked against the expected range (last reading +
+//    km driven since, by GPS). The server's answer is a status; only "ok"
+//    carries a number, and that number is what the driver confirms.
+// 3. With no connection (or the daily limit reached) the phone's own reading
+//    is offered for typing, and the server checks the photo later.
 
 import { uploadPhotoFile } from '../sync';
 import { supabase } from './supabase';
-import { type LocalPhoto, photoStoragePath, readOdometerOnPhone } from './photos';
+import { type LocalPhoto, photoStoragePath, scanPhotoDigits } from './photos';
 
 const AI_TIMEOUT_MS = 25_000;
 
-export type OdometerSource = 'ai' | 'phone' | 'none';
-export type OdometerRejection = 'below_last' | 'far_above' | 'unreadable';
+export type ReadStatus =
+  | 'ok'
+  | 'no_odometer'
+  | 'trip_meter_only'
+  | 'blurry'
+  | 'covered_or_dark'
+  | 'not_dashboard'
+  | 'unsure'
+  | 'out_of_range';
 
-export interface OdometerReading {
-  /** The number to put in the field, or null when nothing usable was read. */
-  km: number | null;
-  /** 0..1 from the AI; null from the phone reader. */
-  confidence: number | null;
-  source: OdometerSource;
-  /** Set when the AI read a number that does not fit the vehicle's last reading. */
-  rejected: OdometerRejection | null;
-  /** What the AI read before the range check, for the message to the driver. */
-  rawKm: number | null;
-}
+export type OdometerRead =
+  | {
+    kind: 'read';
+    status: ReadStatus;
+    /** The number to confirm (ok only). */
+    km: number | null;
+    /** What the server read before the range check, if anything. */
+    rawKm: number | null;
+    confidence: number | null;
+    lastKm: number | null;
+    /** What the phone's own reader found, for the record (ocr_value). */
+    ocrKm: number | null;
+  }
+  | {
+    /** The server could not be reached: the phone's own reading, to be typed and checked later. */
+    kind: 'offline';
+    km: number | null;
+    ocrKm: number | null;
+  };
 
 export interface OdometerContext {
   employeeId: string;
   vehicleId: string | null;
-  /** The vehicle's last known reading. */
+  /** The reading the new one follows (the vehicle's last, or the task's start reading). */
   lastKm: number | null;
   /** Km driven since that reading, by GPS. */
   gpsKm: number | null;
 }
 
 interface AiReply {
+  status: ReadStatus;
   reading_km: number | null;
   raw_reading_km: number | null;
   confidence: number | null;
-  rejected: OdometerRejection | null;
+  last_km: number | null;
 }
 
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
@@ -60,28 +80,35 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-async function readWithAi(photo: LocalPhoto, ctx: OdometerContext): Promise<OdometerReading | null> {
+async function askServer(photo: LocalPhoto, ctx: OdometerContext): Promise<AiReply | null> {
   const path = photoStoragePath(photo, ctx.employeeId);
   await uploadPhotoFile(photo.uri, path);
   const { data, error } = await supabase.functions.invoke<AiReply>('read-odometer', {
     body: { path, vehicle_id: ctx.vehicleId, last_km: ctx.lastKm, gps_km: ctx.gpsKm },
   });
-  if (error || !data) return null;
-  return {
-    km: data.reading_km,
-    confidence: data.confidence,
-    source: 'ai',
-    rejected: data.rejected ?? null,
-    rawKm: data.raw_reading_km,
-  };
+  if (error || !data || typeof data.status !== 'string') return null;
+  return data;
 }
 
-/** The odometer number in a photo: from the AI when possible, otherwise read on the phone. */
-export async function readOdometerPhoto(photo: LocalPhoto, ctx: OdometerContext): Promise<OdometerReading> {
-  const ai = await withTimeout(readWithAi(photo, ctx), AI_TIMEOUT_MS).catch(() => null);
-  if (ai) return ai;
-
+/** What a photo shows, from the server when it can be reached. */
+export async function readOdometerPhoto(photo: LocalPhoto, ctx: OdometerContext): Promise<OdometerRead> {
   const expected = ctx.lastKm !== null ? ctx.lastKm + Math.round(ctx.gpsKm ?? 0) : null;
-  const km = await readOdometerOnPhone(photo.uri, expected);
-  return { km, confidence: null, source: km === null ? 'none' : 'phone', rejected: null, rawKm: km };
+  const scan = await scanPhotoDigits(photo.uri, expected);
+
+  // Text was read and holds no digit at all: not an odometer. No need to ask the server.
+  if (scan.text !== null && scan.text.trim() !== '' && !/\d/.test(scan.text)) {
+    return { kind: 'read', status: 'no_odometer', km: null, rawKm: null, confidence: null, lastKm: ctx.lastKm, ocrKm: null };
+  }
+
+  const reply = await withTimeout(askServer(photo, ctx), AI_TIMEOUT_MS).catch(() => null);
+  if (!reply) return { kind: 'offline', km: scan.candidate, ocrKm: scan.candidate };
+  return {
+    kind: 'read',
+    status: reply.status,
+    km: reply.status === 'ok' ? reply.reading_km : null,
+    rawKm: reply.raw_reading_km,
+    confidence: reply.confidence,
+    lastKm: reply.last_km ?? ctx.lastKm,
+    ocrKm: scan.candidate,
+  };
 }

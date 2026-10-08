@@ -169,23 +169,56 @@ npx supabase functions deploy office-mcp --no-verify-jwt     # the key in the UR
 npx supabase functions deploy read-odometer --no-verify-jwt  # checks the driver's token itself
 ```
 
-## Odometer reader (`read-odometer`)
+## Odometer photos prove the reading (`read-odometer`)
 
-The driver app photographs the odometer, uploads the photo to the private
-bucket at once, and calls this Edge Function with the photo's path, the
-vehicle's last reading and the km driven since (GPS). The function downloads
-the photo (service role), asks Gemini for the main odometer total only (not
-the trip meter, speed, fuel, clock or RPM) and answers `{reading_km,
-confidence, rejected}`. A number below the last reading, or more than 500 km
-above the last reading plus the GPS km, is rejected and the driver types it.
+The driver app photographs the odometer (camera only, never the gallery),
+uploads the photo to the private bucket at once, and calls this Edge Function
+with the photo's path, the reading this one follows and the km driven since
+(GPS). The function downloads the photo (service role) and asks Gemini what
+it shows, reading only the total odometer (never speed, RPM, trip A/B, range,
+clock or temperature). It answers a status:
 
-- Signed-in drivers only: the function checks the session token with
-  Supabase Auth and only reads photos inside the caller's own folder.
-  `verify_jwt` is off in `config.toml` for that reason.
-- Every call is written to `odometer_reads` (service role only); 60 calls per
-  driver per day, then the app falls back to the phone's reader.
-- Secrets: `GEMINI_API_KEY` (set), `GEMINI_MODEL` (optional, default
-  `gemini-3.5-flash-lite`).
+| status | the app shows |
+|---|---|
+| `ok` | the number, big, with **Correct** and a small **Change** |
+| `no_odometer`, `trip_meter_only`, `blurry`, `covered_or_dark`, `not_dashboard`, `unsure` | the photo, a message saying what to do, and **Retake photo** |
+| `out_of_range` | the same, with the last reading (under it, or more than 500 km above last + GPS km) |
+
+Typing a number is possible only after three failed photos in a row ("Still
+can't read it? Type the reading", with a link to report a broken display), after
+the **Change** warning, or with no connection. The phone's own text reader (ML
+Kit) runs first: text with no digits means "no odometer" without asking the
+server; its number is the suggestion when the server cannot be reached.
+
+What the driver did is sent with the reading (`entry`: photo, photo_changed,
+typed_unreadable, typed_offline; `photo_attempts`). What the server read is
+written by the server alone (`ai_value`, `ai_status`, `ai_checked_at`, `flag`):
+drivers have no privilege on those columns, and a trigger fills them from the
+read of the very photo the log points at. A reading typed with no connection
+is checked within minutes of its photo arriving: the pg_cron job
+`check-odometer-photos` (every 5 minutes) sends unchecked logs to the function
+through pg_net, in server mode (header `x-server-key`), which writes the
+result back with `set_odometer_ai()`. Flags: `photo_changed`,
+`typed_unreadable`, `ai_differs`, `ai_failed`; the connector shows them in
+`task_detail`, `mileage_summary` (`check_odometer`) and `fleet_overview`.
+
+- Signed-in drivers only in driver mode: the function checks the session
+  token with Supabase Auth and only reads photos inside the caller's own
+  folder. `verify_jwt` is off in `config.toml` for that reason.
+- Every model call is written to `odometer_reads` (service role only); 60
+  driver-mode calls per driver per day.
+- Secrets: `GEMINI_API_KEY` (set), `SERVER_KEY` (shared with the database:
+  the same value goes into Vault as `server_key`, next to `functions_url`),
+  `GEMINI_MODEL` (optional, default `gemini-3.5-flash-lite`).
+
+Trying the function on real photos, locally (the photos stay in their folder):
+
+```bash
+npx supabase start
+printf 'GEMINI_API_KEY=%s\nSERVER_KEY=%s\n' '<key>' "$(openssl rand -hex 24)" > ~/odo-test/.env   # outside the repo
+npx supabase functions serve read-odometer --env-file ~/odo-test/.env                              # leave running
+scripts/test-read-odometer-local.sh ~/odo-test --last-km 195049
+```
 
 ## Data retention
 

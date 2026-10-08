@@ -2,9 +2,9 @@
 
 import { z } from "zod";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
-import { findDriver, findVehicle, loadRefs } from "../fleet.ts";
+import { findDriver, findVehicle, loadRefs, odometerCheck } from "../fleet.ts";
 import { centsToLkr, contactLinks } from "../format.ts";
-import { PHOTO_LINK_NOTE, photoLinks } from "../photos.ts";
+import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
 import { tool, zId, zMonth, zText } from "../tool.ts";
 
@@ -14,9 +14,10 @@ const UNLOGGED_KM = 2;
 export const mileageSummary = tool({
   name: "mileage_summary",
   title: "Mileage and fuel for a month",
-  description:
-    "Per vehicle for one month: completed tasks and their km, km by odometer against the allowance, fuel in litres and LKR, and " +
-    '"unlogged km" flags (a task started with an odometer more than 2 km away from the last logged reading). ' +
+  description: "Per vehicle for one month: completed tasks and their km, km by odometer against the allowance, fuel in litres and LKR, " +
+    '"unlogged km" flags (a task started with an odometer more than 2 km away from the last logged reading), and check_odometer: ' +
+    "readings the office should look at (number changed after the photo was read, typed because the photo could not be read, " +
+    "typed with no connection and the photo disagrees or is not checked yet), with photo links. " +
     "Can be narrowed to one vehicle and/or one driver.",
   readOnly: true,
   input: z.object({
@@ -51,7 +52,9 @@ export const mileageSummary = tool({
       // reading before a task start may have come from another driver.
       vehicleIds.length > 0
         ? fetchAll((a, b) =>
-          db.from("odometer_logs").select("id, vehicle_id, employee_id, task_id, kind, reading_km, logged_at")
+          db.from("odometer_logs").select(
+            "id, vehicle_id, employee_id, task_id, kind, reading_km, logged_at, entry, ai_value, ai_status, ai_checked_at, flag, photo_id",
+          )
             .in("vehicle_id", vehicleIds).gte("logged_at", from).lt("logged_at", to)
             .order("logged_at").order("id").range(a, b), "odometer logs")
         : [],
@@ -91,6 +94,24 @@ export const mileageSummary = tool({
     }
     const baseline = new Map(before);
 
+    // Readings the office should look at, with their photos.
+    const checks = logs.filter((l) => (!onlyDriver || l.employee_id === onlyDriver.id) && odometerCheck(l) !== null);
+    const checkLinks = await photoLinks(db, { ids: checks.flatMap((l) => l.photo_id ? [l.photo_id] : []) });
+    const checkOdometer = checks.map((l) => ({
+      at: colomboDateTime(l.logged_at),
+      vehicle: refs.veh.get(l.vehicle_id)?.reg_no,
+      driver: refs.emp.get(l.employee_id)?.name,
+      task: l.task_id ? taskTitle.get(l.task_id) : undefined,
+      task_id: l.task_id,
+      kind: l.kind,
+      reading_km: l.reading_km,
+      photo_reading: l.ai_value,
+      photo_status: l.ai_status,
+      entry: l.entry,
+      reason: odometerCheck(l),
+      photo: photoOrNote(checkLinks, l.photo_id),
+    }));
+
     const rows = vehicleIds.map((id) => {
       const v = refs.veh.get(id)!;
       const mine = tasks.filter((t) => t.vehicle_id === id);
@@ -126,11 +147,15 @@ export const mileageSummary = tool({
           fuel_litres: Math.round(total((r) => r.fuel_litres) * 100) / 100,
           fuel_lkr: total((r) => r.fuel_lkr ?? 0),
           unlogged_km_flags: flags.length,
+          check_odometer: checkOdometer.length,
         },
         vehicles: rows,
         unlogged_km: flags,
+        check_odometer: checkOdometer,
+        photo_links: checkOdometer.length > 0 ? PHOTO_LINK_NOTE : undefined,
       },
-      summary: `mileage ${which}: ${rows.length} vehicles, ${total((r) => r.task_km)} task km, ${flags.length} unlogged flags`,
+      summary: `mileage ${which}: ${rows.length} vehicles, ${total((r) => r.task_km)} task km, ${flags.length} unlogged flags, ` +
+        `${checkOdometer.length} odometer checks`,
     };
   },
 });

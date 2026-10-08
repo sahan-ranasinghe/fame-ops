@@ -35,6 +35,20 @@ export interface FuelEntry {
   receipt: LocalPhoto | null;
 }
 
+/** How an odometer reading was arrived at (see app/log-mileage.tsx). The server adds what it read. */
+export type OdometerEntryKind = 'photo' | 'photo_changed' | 'typed_unreadable' | 'typed_offline';
+
+export interface OdometerEntry {
+  km: number;
+  entry: OdometerEntryKind;
+  /** The photo the reading belongs to. */
+  photo: LocalPhoto;
+  /** What the phone's own reader found, for the record. */
+  ocrKm: number | null;
+  /** How many photos the driver took for this reading. */
+  attempts: number;
+}
+
 interface AppValue {
   /** false until the saved sign-in has been checked. */
   booted: boolean;
@@ -72,15 +86,9 @@ interface AppValue {
   chooseVehicle: (vehicleId: string) => void;
   markSeen: (taskIds: string[]) => void;
   markStopDone: (stop: TaskStop) => void;
-  startTask: (task: TaskWithStops, odometerKm: number, ocrKm: number | null, photo: LocalPhoto | null) => Promise<void>;
-  completeTask: (
-    task: TaskWithStops,
-    odometerKm: number,
-    ocrKm: number | null,
-    photo: LocalPhoto | null,
-    fuel: FuelEntry | null,
-  ) => void;
-  logOdometer: (odometerKm: number, ocrKm: number | null, photo: LocalPhoto | null) => void;
+  startTask: (task: TaskWithStops, reading: OdometerEntry) => Promise<void>;
+  completeTask: (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => void;
+  logOdometer: (reading: OdometerEntry) => void;
   logFuel: (fuel: FuelEntry, odometerKm: number | null) => void;
   sendReport: (category: ReportCategory, note: string, photos: LocalPhoto[], taskId: string | null) => void;
 }
@@ -442,11 +450,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [patchLocalTask]);
 
   const startTask = useCallback(
-    async (task: TaskWithStops, odometerKm: number, ocrKm: number | null, photo: LocalPhoto | null) => {
+    async (task: TaskWithStops, reading: OdometerEntry) => {
       const current = meRef.current;
       if (!current) return;
       const now = new Date().toISOString();
-      if (photo) queuePhoto(photo, 'odometer', current.id);
+      const odometerKm = reading.km;
+      queuePhoto(reading.photo, 'odometer', current.id);
       enqueue(
         {
           kind: 'odometer_log',
@@ -456,10 +465,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
             employee_id: current.id,
             task_id: task.id,
             reading_km: odometerKm,
-            ocr_value: ocrKm,
-            photo_id: photo?.id ?? null,
+            ocr_value: reading.ocrKm,
+            photo_id: reading.photo.id,
             kind: 'task_start',
             logged_at: now,
+            entry: reading.entry,
+            photo_attempts: reading.attempts,
           },
         },
         { kind: 'task_patch', id: task.id, patch: { status: 'in_progress', start_odometer_km: odometerKm, started_at: now } },
@@ -503,11 +514,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const completeTask = useCallback(
-    (task: TaskWithStops, odometerKm: number, ocrKm: number | null, photo: LocalPhoto | null, fuel: FuelEntry | null) => {
+    (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => {
       const current = meRef.current;
       if (!current) return;
       const now = new Date().toISOString();
-      if (photo) queuePhoto(photo, 'odometer', current.id);
+      const odometerKm = reading.km;
+      queuePhoto(reading.photo, 'odometer', current.id);
       enqueue({
         kind: 'odometer_log',
         row: {
@@ -516,10 +528,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           employee_id: current.id,
           task_id: task.id,
           reading_km: odometerKm,
-          ocr_value: ocrKm,
-          photo_id: photo?.id ?? null,
+          ocr_value: reading.ocrKm,
+          photo_id: reading.photo.id,
           kind: 'task_end',
           logged_at: now,
+          entry: reading.entry,
+          photo_attempts: reading.attempts,
         },
       });
       if (fuel) queueFuel(fuel, task.vehicle_id, task.id, odometerKm, now);
@@ -546,10 +560,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   // --- logs and reports outside a task ---------------------------------------
-  const logOdometer = useCallback((odometerKm: number, ocrKm: number | null, photo: LocalPhoto | null) => {
+  const logOdometer = useCallback((reading: OdometerEntry) => {
     const current = meRef.current;
     if (!current?.current_vehicle_id) return;
-    if (photo) queuePhoto(photo, 'odometer', current.id);
+    queuePhoto(reading.photo, 'odometer', current.id);
     enqueue({
       kind: 'odometer_log',
       row: {
@@ -557,14 +571,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         vehicle_id: current.current_vehicle_id,
         employee_id: current.id,
         task_id: null,
-        reading_km: odometerKm,
-        ocr_value: ocrKm,
-        photo_id: photo?.id ?? null,
+        reading_km: reading.km,
+        ocr_value: reading.ocrKm,
+        photo_id: reading.photo.id,
         kind: 'manual',
         logged_at: new Date().toISOString(),
+        entry: reading.entry,
+        photo_attempts: reading.attempts,
       },
     });
-    bumpOdometer(current.current_vehicle_id, odometerKm);
+    bumpOdometer(current.current_vehicle_id, reading.km);
     void flushNow();
   }, [bumpOdometer]);
 

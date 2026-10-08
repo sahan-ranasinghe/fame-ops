@@ -1,28 +1,61 @@
 // Log mileage (designed: design/png/Driver · Log mileage.png). One screen, four uses:
-//   finish  end of a task: odometer photo + number, fuel yes/no, "Save & finish task"
-//   start   start of a task: confirm or correct the start odometer, "Start task"
+//   finish  end of a task: odometer photo, fuel yes/no, "Save & finish task"
+//   start   start of a task: odometer photo, "Start task"
 //   manual  a reading outside a task (from the Mileage tab)
 //   fuel    fuel outside the end-of-task flow (from the Mileage tab)
+//
+// The odometer number comes from the photo, read by the server
+// (lib/odometerAi.ts). The driver confirms it ("Correct") or, after a
+// warning, changes it. A photo that does not show the total odometer gets a
+// clear message and "Retake photo"; typing is offered only after three
+// failed photos in a row, or when there is no connection (the server checks
+// the photo later). What the driver did goes with the log (entry, number of
+// photos) so the office sees what was checked.
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Camera, ChevronLeft } from '@/components/icons';
 import { useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/ui';
 import { parseDecimal, parseWhole, thousands } from '@/lib/format';
-import { readOdometerPhoto } from '@/lib/odometerAi';
+import { readOdometerPhoto, type ReadStatus } from '@/lib/odometerAi';
 import { discardPhoto, type LocalPhoto, takePhoto } from '@/lib/photos';
-import { type FuelEntry, useApp } from '@/state/app';
+import { type FuelEntry, type OdometerEntry, type OdometerEntryKind, useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
 type Mode = 'finish' | 'start' | 'manual' | 'fuel';
 
+type Step =
+  | { kind: 'none' }
+  | { kind: 'checking'; photo: LocalPhoto }
+  | { kind: 'ok'; photo: LocalPhoto; km: number; ocrKm: number | null }
+  | { kind: 'failed'; photo: LocalPhoto; status: ReadStatus; lastKm: number | null; ocrKm: number | null }
+  | { kind: 'typing'; photo: LocalPhoto; entry: Exclude<OdometerEntryKind, 'photo'>; aiKm: number | null; ocrKm: number | null };
+
+const MAX_FAILED_PHOTOS = 3;
+
 const TITLE: Record<Mode, string> = { finish: 'log.title', start: 'log.titleStart', manual: 'log.title', fuel: 'log.titleFuel' };
 const SUBTITLE: Record<Mode, string> = { finish: 'log.endOfTask', start: 'log.startOfTask', manual: 'log.reading', fuel: 'log.fuelEntry' };
 const SAVE: Record<Mode, string> = { finish: 'log.saveFinish', start: 'log.startTask', manual: 'log.saveReading', fuel: 'log.saveFuel' };
+const CORRECT: Record<Mode, string> = { finish: 'log.correctFinish', start: 'log.correctStart', manual: 'log.correctSave', fuel: 'log.saveFuel' };
+const FAILED: Record<ReadStatus, string> = {
+  ok: 'log.couldNotRead',
+  no_odometer: 'log.photo.noOdometer',
+  trip_meter_only: 'log.photo.tripMeter',
+  blurry: 'log.photo.blurry',
+  covered_or_dark: 'log.photo.covered',
+  not_dashboard: 'log.photo.notDashboard',
+  unsure: 'log.photo.unsure',
+  out_of_range: 'log.photo.outOfRange',
+};
+const WHY_TYPING: Record<Exclude<OdometerEntryKind, 'photo'>, string> = {
+  photo_changed: 'log.typing.changed',
+  typed_unreadable: 'log.typing.unreadable',
+  typed_offline: 'log.typing.offline',
+};
 
 export default function LogMileageScreen() {
   const app = useApp();
@@ -36,15 +69,15 @@ export default function LogMileageScreen() {
   const vehicle = task ? vehicles.find((item) => item.id === task.vehicle_id) ?? null : app.vehicle;
   const lastKm = vehicle?.current_odometer_km ?? null;
   const startKm = task?.start_odometer_km ?? null;
-  // Km by GPS since the last reading (this task's km when finishing a task), for the reader's expected range and a hint.
+  // Km by GPS since the reading this one follows (the task's start when finishing a task).
   const gpsSinceLast = mode === 'finish' && task && gpsKm.taskId === task.id ? gpsKm.taskKm : gpsKm.odometerKm;
+  const baseKm = mode === 'finish' ? startKm ?? lastKm : lastKm;
 
-  // Starting a task: the last known reading is filled in for the driver to confirm or correct.
-  const [odometer, setOdometer] = useState(mode === 'start' && lastKm !== null ? thousands(lastKm) : '');
-  const [photo, setPhoto] = useState<LocalPhoto | null>(null);
-  const [ocrKm, setOcrKm] = useState<number | null>(null);
-  const [reading, setReading] = useState(false);
-  const [photoNote, setPhotoNote] = useState<{ text: string; tone: 'info' | 'warn' } | null>(null);
+  const [step, setStep] = useState<Step>({ kind: 'none' });
+  const [attempts, setAttempts] = useState(0);
+  const [failures, setFailures] = useState(0);
+  const [odometer, setOdometer] = useState('');
+  const [typedFuelKm, setTypedFuelKm] = useState('');
   const [addedFuel, setAddedFuel] = useState<'yes' | 'no'>(mode === 'fuel' ? 'yes' : 'no');
   const [litres, setLitres] = useState('');
   const [amount, setAmount] = useState('');
@@ -55,44 +88,51 @@ export default function LogMileageScreen() {
   if (!app.me) return <Redirect href="/login" />;
   if ((mode === 'finish' || mode === 'start') && !task) return <Redirect href="/" />;
 
-  const km = parseWhole(odometer);
-  const showFuel = mode === 'finish' || mode === 'fuel';
   const needsOdometer = mode !== 'fuel';
+  const showFuel = mode === 'finish' || mode === 'fuel';
+  const typedKm = parseWhole(odometer);
+  const stepPhoto = step.kind === 'none' ? null : step.photo;
 
   async function photographOdometer() {
     const shot = await takePhoto();
     if (shot === 'denied') return setProblem(t('common.cameraDenied'));
     if (!shot) return;
-    if (photo) discardPhoto(photo);
-    setPhoto(shot);
+    if (stepPhoto) discardPhoto(stepPhoto);
     setProblem(null);
-    setReading(true);
+    setStep({ kind: 'checking', photo: shot });
+    setAttempts((n) => n + 1);
+
     const read = await readOdometerPhoto(shot, {
       employeeId: app.me?.id ?? '',
       vehicleId: vehicle?.id ?? null,
-      lastKm: startKm ?? lastKm,
+      lastKm: baseKm,
       gpsKm: Math.round(gpsSinceLast),
     });
-    setReading(false);
-    setOcrKm(read.rawKm);
-    if (read.rejected && read.rawKm !== null) {
-      const expected = (startKm ?? lastKm ?? 0) + Math.round(gpsSinceLast);
-      setPhotoNote({
-        text: read.rejected === 'below_last'
-          ? t('log.readBelowLast', { km: thousands(read.rawKm), last: thousands(startKm ?? lastKm ?? 0) })
-          : t('log.readFarAbove', { km: thousands(read.rawKm), expected: thousands(expected) }),
-        tone: 'warn',
-      });
-    } else if (read.km !== null) {
-      setOdometer(thousands(read.km));
-      const unsure = read.source === 'ai' && read.confidence !== null && read.confidence < 0.6;
-      setPhotoNote({
-        text: t(unsure ? 'log.readUnsure' : read.source === 'phone' ? 'log.readOnPhone' : 'log.readFromPhoto', { km: thousands(read.km) }),
-        tone: unsure ? 'warn' : 'info',
-      });
-    } else {
-      setPhotoNote({ text: t('log.couldNotRead'), tone: 'warn' });
+    if (read.kind === 'offline') {
+      setFailures(0);
+      setOdometer(read.km !== null ? thousands(read.km) : '');
+      setStep({ kind: 'typing', photo: shot, entry: 'typed_offline', aiKm: null, ocrKm: read.ocrKm });
+      return;
     }
+    if (read.status === 'ok' && read.km !== null) {
+      setFailures(0);
+      setStep({ kind: 'ok', photo: shot, km: read.km, ocrKm: read.ocrKm });
+      return;
+    }
+    setFailures((n) => n + 1);
+    setStep({ kind: 'failed', photo: shot, status: read.status, lastKm: read.lastKm, ocrKm: read.ocrKm });
+  }
+
+  function change() {
+    if (step.kind !== 'ok') return;
+    setOdometer(thousands(step.km));
+    setStep({ kind: 'typing', photo: step.photo, entry: 'photo_changed', aiKm: step.km, ocrKm: step.ocrKm });
+  }
+
+  function typeInstead() {
+    if (step.kind !== 'failed') return;
+    setOdometer('');
+    setStep({ kind: 'typing', photo: step.photo, entry: 'typed_unreadable', aiKm: null, ocrKm: step.ocrKm });
   }
 
   async function photographReceipt() {
@@ -112,34 +152,56 @@ export default function LogMileageScreen() {
     return { litres: litresValue, amountCents: amountValue === null ? null : Math.round(amountValue * 100), receipt };
   }
 
+  /** The driver changed the number the photo shows: say so, and ask once. */
+  function confirmChange(aiKm: number | null): Promise<boolean> {
+    return new Promise((resolve) => {
+      Alert.alert(t('log.changeTitle'), t('log.changeWarning', { km: thousands(aiKm ?? 0) }), [
+        { text: t('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+        { text: t('log.saveAnyway'), style: 'destructive', onPress: () => resolve(true) },
+      ]);
+    });
+  }
+
   async function save() {
     if (saving) return;
-    if (needsOdometer && km === null) return setProblem(t('log.needOdometer'));
-    if (mode === 'finish' && km !== null && startKm !== null && km < startKm) {
-      return setProblem(t('log.lowerThanStart', { km: thousands(startKm) }));
-    }
     if ((mode === 'manual' || mode === 'fuel') && !vehicle) return setProblem(t('log.needVehicle'));
     const fuel = fuelEntry();
     if (fuel === 'invalid') return setProblem(t('log.needFuel'));
 
-    setSaving(true);
-    if (mode === 'start' && task && km !== null) {
-      await app.startTask(task, km, ocrKm, photo);
-      router.replace({ pathname: '/task/[id]', params: { id: task.id } });
-    } else if (mode === 'finish' && task && km !== null) {
-      app.completeTask(task, km, ocrKm, photo, fuel);
-      router.dismissAll();
-    } else if (mode === 'manual' && km !== null) {
-      app.logOdometer(km, ocrKm, photo);
+    if (mode === 'fuel') {
+      if (!fuel) return setProblem(t('log.needFuel'));
+      setSaving(true);
+      app.logFuel(fuel, parseWhole(typedFuelKm));
       router.back();
-    } else if (mode === 'fuel' && fuel) {
-      app.logFuel(fuel, km);
+      return;
+    }
+
+    const reading: OdometerEntry | null = step.kind === 'ok'
+      ? { km: step.km, entry: 'photo', photo: step.photo, ocrKm: step.ocrKm, attempts }
+      : step.kind === 'typing' && typedKm !== null
+      ? { km: typedKm, entry: step.entry, photo: step.photo, ocrKm: step.ocrKm, attempts }
+      : null;
+    if (step.kind === 'typing' && typedKm === null) return setProblem(t('log.needOdometer'));
+    if (!reading) return setProblem(t('log.needPhoto'));
+    if (mode === 'finish' && startKm !== null && reading.km < startKm) return setProblem(t('log.lowerThanStart', { km: thousands(startKm) }));
+    if (step.kind === 'typing' && step.entry === 'photo_changed' && !(await confirmChange(step.aiKm))) return;
+
+    setSaving(true);
+    if (mode === 'start' && task) {
+      await app.startTask(task, reading);
+      router.replace({ pathname: '/task/[id]', params: { id: task.id } });
+    } else if (mode === 'finish' && task) {
+      app.completeTask(task, reading, fuel);
+      router.dismissAll();
+    } else {
+      app.logOdometer(reading);
       router.back();
     }
   }
 
-  // A start reading that does not match the last one is allowed, but the driver is told the office will see it.
-  const gap = mode === 'start' && km !== null && lastKm !== null ? km - lastKm : 0;
+  // A typed reading that does not match the last one is allowed, but the driver is told the office will see it.
+  const gap = step.kind === 'typing' && mode !== 'finish' && typedKm !== null && lastKm !== null ? typedKm - lastKm : 0;
+  const bottomButton = mode === 'fuel' || step.kind === 'ok' || step.kind === 'typing';
 
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.page}>
@@ -158,52 +220,116 @@ export default function LogMileageScreen() {
           </View>
         </View>
 
-        {needsOdometer && (
+        {needsOdometer && step.kind === 'none' && (
           <Pressable accessibilityRole="button" onPress={photographOdometer} style={styles.photoCard}>
-            {photo ? (
-              <Image source={{ uri: photo.uri }} style={styles.thumb} />
-            ) : (
-              <View style={styles.cameraTile}>
-                <Camera size={30} color={colors.amber} />
-              </View>
-            )}
+            <View style={styles.cameraTile}>
+              <Camera size={30} color={colors.amber} />
+            </View>
             <View style={{ flex: 1 }}>
               <Txt variant="big">{t('log.photoTitle')}</Txt>
-              <Txt variant="muted">{t(reading ? 'log.reading_' : photo ? 'log.photoAdded' : 'log.photoHint')}</Txt>
+              <Txt variant="muted">{t('log.photoHint')}</Txt>
             </View>
-            {reading && <ActivityIndicator color={colors.ink} />}
           </Pressable>
         )}
-        {needsOdometer && photoNote && !reading && <Notice tone={photoNote.tone} text={photoNote.text} />}
 
-        <Card style={{ gap: 12 }}>
-          <Txt variant="big">{t(needsOdometer ? 'log.odometerNow' : 'log.odometerOptional')}</Txt>
-          <TextInput
-            value={odometer}
-            onChangeText={(text) => {
-              const value = parseWhole(text);
-              setOdometer(value === null ? '' : thousands(value));
-              setProblem(null);
-            }}
-            keyboardType="number-pad"
-            maxLength={9}
-            placeholder="0"
-            placeholderTextColor="#c4c0b8"
-            style={styles.odometer}
-          />
-          <View style={styles.underOdometer}>
-            {mode === 'finish' && startKm !== null && <Txt variant="muted">{t('log.start', { km: thousands(startKm) })}</Txt>}
-            {mode !== 'finish' && lastKm !== null && <Txt variant="muted">{t('log.lastReading', { km: thousands(lastKm) })}</Txt>}
-            {mode === 'finish' && km !== null && startKm !== null && km >= startKm && (
-              <Txt variant="strong" color={colors.blue}>{t('log.thisTask', { km: thousands(km - startKm) })}</Txt>
-            )}
+        {needsOdometer && step.kind === 'checking' && (
+          <View style={styles.photoCard}>
+            <Image source={{ uri: step.photo.uri }} style={styles.thumb} />
+            <View style={{ flex: 1 }}>
+              <Txt variant="big">{t('log.photoTitle')}</Txt>
+              <Txt variant="muted">{t('log.reading_')}</Txt>
+            </View>
+            <ActivityIndicator color={colors.ink} />
           </View>
-          {mode !== 'start' && gpsSinceLast >= 0.5 && (
-            <Txt variant="small">{t(mode === 'finish' ? 'log.gpsThisTask' : 'log.gpsSinceLast', { km: thousands(gpsSinceLast) })}</Txt>
-          )}
-          {gap > 2 && <Notice tone="warn" text={t('log.moreThanLast', { km: thousands(gap) })} />}
-          {gap < -2 && lastKm !== null && <Notice tone="warn" text={t('log.lowerThanLast', { km: thousands(lastKm) })} />}
-        </Card>
+        )}
+
+        {needsOdometer && step.kind === 'ok' && (
+          <Card style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t('log.retake')} onPress={photographOdometer}>
+                <Image source={{ uri: step.photo.uri }} style={styles.thumb} />
+              </Pressable>
+              <View style={{ flex: 1 }}>
+                <Txt variant="muted">{t('log.photoReading')}</Txt>
+                <Mono size={40} bold>{thousands(step.km)}</Mono>
+              </View>
+            </View>
+            <UnderReading mode={mode} km={step.km} startKm={startKm} lastKm={lastKm} />
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Button kind="outline" label={t('log.change')} onPress={change} style={{ flex: 1 }} />
+              <Button kind="outline" label={t('log.retake')} onPress={photographOdometer} style={{ flex: 1 }} />
+            </View>
+          </Card>
+        )}
+
+        {needsOdometer && step.kind === 'failed' && (
+          <Card style={{ gap: 14 }}>
+            <Image source={{ uri: step.photo.uri }} style={styles.preview} />
+            <Notice tone="danger" text={t(FAILED[step.status], { km: thousands(step.lastKm ?? 0) })} />
+            <Button icon={Camera} label={t('log.retake')} onPress={photographOdometer} />
+            {failures >= MAX_FAILED_PHOTOS && (
+              <>
+                <Button kind="outline" label={t('log.typeInstead')} onPress={typeInstead} />
+                <Button
+                  kind="danger-text"
+                  label={t('log.displayBroken')}
+                  onPress={() => router.push({ pathname: '/report', params: task ? { taskId: task.id } : {} })}
+                />
+              </>
+            )}
+          </Card>
+        )}
+
+        {needsOdometer && step.kind === 'typing' && (
+          <Card style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t('log.retake')} onPress={photographOdometer}>
+                <Image source={{ uri: step.photo.uri }} style={styles.thumb} />
+              </Pressable>
+              <Txt variant="muted" style={{ flex: 1 }}>{t(WHY_TYPING[step.entry], { km: thousands(step.aiKm ?? 0) })}</Txt>
+            </View>
+            <Txt variant="big">{t('log.odometerNow')}</Txt>
+            <TextInput
+              value={odometer}
+              onChangeText={(text) => {
+                const value = parseWhole(text);
+                setOdometer(value === null ? '' : thousands(value));
+                setProblem(null);
+              }}
+              keyboardType="number-pad"
+              maxLength={9}
+              placeholder="0"
+              placeholderTextColor="#c4c0b8"
+              style={styles.odometer}
+            />
+            <UnderReading mode={mode} km={typedKm} startKm={startKm} lastKm={lastKm} />
+            {gap > 2 && <Notice tone="warn" text={t('log.moreThanLast', { km: thousands(gap) })} />}
+            {gap < -2 && lastKm !== null && <Notice tone="warn" text={t('log.lowerThanLast', { km: thousands(lastKm) })} />}
+          </Card>
+        )}
+
+        {needsOdometer && (step.kind === 'ok' || step.kind === 'typing') && gpsSinceLast >= 0.5 && (
+          <Txt variant="small">{t(mode === 'finish' ? 'log.gpsThisTask' : 'log.gpsSinceLast', { km: thousands(gpsSinceLast) })}</Txt>
+        )}
+
+        {mode === 'fuel' && (
+          <Card style={{ gap: 12 }}>
+            <Txt variant="big">{t('log.odometerOptional')}</Txt>
+            <TextInput
+              value={typedFuelKm}
+              onChangeText={(text) => {
+                const value = parseWhole(text);
+                setTypedFuelKm(value === null ? '' : thousands(value));
+              }}
+              keyboardType="number-pad"
+              maxLength={9}
+              placeholder="0"
+              placeholderTextColor="#c4c0b8"
+              style={styles.odometer}
+            />
+            {lastKm !== null && <Txt variant="muted">{t('log.lastReading', { km: thousands(lastKm) })}</Txt>}
+          </Card>
+        )}
 
         {showFuel && (
           <Card style={{ gap: 14 }}>
@@ -232,10 +358,26 @@ export default function LogMileageScreen() {
         {problem && <Notice tone="danger" text={problem} />}
       </ScrollView>
 
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 16 }}>
-        <Button label={t(SAVE[mode])} onPress={save} busy={saving} disabled={reading} />
-      </View>
+      {bottomButton && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 16 }}>
+          <Button label={t(step.kind === 'ok' ? CORRECT[mode] : SAVE[mode])} onPress={save} busy={saving} />
+        </View>
+      )}
     </KeyboardAvoidingView>
+  );
+}
+
+/** "Start: 195,049 · 51 km this task" or "Last reading: 195,049". */
+function UnderReading({ mode, km, startKm, lastKm }: { mode: Mode; km: number | null; startKm: number | null; lastKm: number | null }) {
+  const { t } = useApp();
+  return (
+    <View style={styles.underOdometer}>
+      {mode === 'finish' && startKm !== null && <Txt variant="muted">{t('log.start', { km: thousands(startKm) })}</Txt>}
+      {mode !== 'finish' && lastKm !== null && <Txt variant="muted">{t('log.lastReading', { km: thousands(lastKm) })}</Txt>}
+      {mode === 'finish' && km !== null && startKm !== null && km >= startKm && (
+        <Txt variant="strong" color={colors.blue}>{t('log.thisTask', { km: thousands(km - startKm) })}</Txt>
+      )}
+    </View>
   );
 }
 
@@ -254,7 +396,8 @@ const styles = StyleSheet.create({
     borderColor: '#b8b2a6',
   },
   cameraTile: { width: 56, height: 56, borderRadius: 14, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  thumb: { width: 56, height: 56, borderRadius: 14, backgroundColor: colors.line },
+  thumb: { width: 72, height: 72, borderRadius: 14, backgroundColor: colors.line },
+  preview: { width: '100%', height: 180, borderRadius: 14, backgroundColor: colors.line },
   odometer: {
     minHeight: 68,
     borderWidth: 2.5,

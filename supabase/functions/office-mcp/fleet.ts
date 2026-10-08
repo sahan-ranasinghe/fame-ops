@@ -236,6 +236,28 @@ export async function monthKm(db: Db, vehicleIds: string[], month: string): Prom
 }
 
 // ---------------------------------------------------------------------------
+// Odometer logs: what the server read from the photo, and what to tell the office
+// ---------------------------------------------------------------------------
+
+export type OdometerLog = Row<"odometer_logs">;
+
+const ODOMETER_FLAG_TEXT: Record<string, string> = {
+  photo_changed: "Driver changed the number the photo shows",
+  typed_unreadable: "Typed by the driver: the photo could not be read",
+  ai_differs: "Typed with no connection: the photo shows a different number",
+  ai_failed: "Typed with no connection: the photo could not be read",
+};
+
+export const NOT_CHECKED_YET = "Not checked yet (typed with no connection; the photo is checked within minutes of arriving)";
+
+/** Why an odometer reading needs a look, or null when it checked out. */
+export function odometerCheck(log: Pick<OdometerLog, "entry" | "flag" | "ai_checked_at">): string | null {
+  if (log.flag) return ODOMETER_FLAG_TEXT[log.flag] ?? log.flag;
+  if (log.entry === "typed_offline" && !log.ai_checked_at) return NOT_CHECKED_YET;
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Tasks: who is busy, and the warnings shown when assigning
 // ---------------------------------------------------------------------------
 

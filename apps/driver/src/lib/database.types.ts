@@ -229,14 +229,14 @@ isOneToOne: false
                   ]
                 },"odometer_logs": {
                   Row: {
-                    "employee_id": string,"id": string,"kind": string,"logged_at": string,"ocr_value": number | null,"photo_id": string | null,"reading_km": number,"task_id": string | null,"vehicle_id": string
+                    "ai_attempts": number,"ai_checked_at": string | null,"ai_status": string | null,"ai_value": number | null,"employee_id": string,"entry": string,"flag": string | null,"id": string,"kind": string,"logged_at": string,"ocr_value": number | null,"photo_attempts": number,"photo_id": string | null,"reading_km": number,"task_id": string | null,"vehicle_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "employee_id": string,"id"?: string,"kind"?: string,"logged_at"?: string,"ocr_value"?: number | null,"photo_id"?: string | null,"reading_km": number,"task_id"?: string | null,"vehicle_id": string
+                    "ai_attempts"?: number,"ai_checked_at"?: string | null,"ai_status"?: string | null,"ai_value"?: number | null,"employee_id": string,"entry"?: string,"flag"?: string | null,"id"?: string,"kind"?: string,"logged_at"?: string,"ocr_value"?: number | null,"photo_attempts"?: number,"photo_id"?: string | null,"reading_km": number,"task_id"?: string | null,"vehicle_id": string
                   }
                   Update: {
-                    "employee_id"?: string,"id"?: string,"kind"?: string,"logged_at"?: string,"ocr_value"?: number | null,"photo_id"?: string | null,"reading_km"?: number,"task_id"?: string | null,"vehicle_id"?: string
+                    "ai_attempts"?: number,"ai_checked_at"?: string | null,"ai_status"?: string | null,"ai_value"?: number | null,"employee_id"?: string,"entry"?: string,"flag"?: string | null,"id"?: string,"kind"?: string,"logged_at"?: string,"ocr_value"?: number | null,"photo_attempts"?: number,"photo_id"?: string | null,"reading_km"?: number,"task_id"?: string | null,"vehicle_id"?: string
                   }
                   Relationships: [
                     {
@@ -267,14 +267,14 @@ isOneToOne: false
                   ]
                 },"odometer_reads": {
                   Row: {
-                    "confidence": number | null,"created_at": string,"employee_id": string,"error": string | null,"gps_km": number | null,"id": number,"last_km": number | null,"model": string,"ms": number | null,"ok": boolean,"photo_path": string,"raw": string | null,"reading_km": number | null,"rejected": string | null,"vehicle_id": string | null
+                    "confidence": number | null,"created_at": string,"employee_id": string,"error": string | null,"gps_km": number | null,"id": number,"last_km": number | null,"log_id": string | null,"mode": string,"model": string,"ms": number | null,"ok": boolean,"photo_path": string,"raw": string | null,"reading_km": number | null,"status": string,"vehicle_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "confidence"?: number | null,"created_at"?: string,"employee_id": string,"error"?: string | null,"gps_km"?: number | null,"id"?: never,"last_km"?: number | null,"model": string,"ms"?: number | null,"ok"?: boolean,"photo_path": string,"raw"?: string | null,"reading_km"?: number | null,"rejected"?: string | null,"vehicle_id"?: string | null
+                    "confidence"?: number | null,"created_at"?: string,"employee_id": string,"error"?: string | null,"gps_km"?: number | null,"id"?: never,"last_km"?: number | null,"log_id"?: string | null,"mode"?: string,"model": string,"ms"?: number | null,"ok"?: boolean,"photo_path": string,"raw"?: string | null,"reading_km"?: number | null,"status"?: string,"vehicle_id"?: string | null
                   }
                   Update: {
-                    "confidence"?: number | null,"created_at"?: string,"employee_id"?: string,"error"?: string | null,"gps_km"?: number | null,"id"?: never,"last_km"?: number | null,"model"?: string,"ms"?: number | null,"ok"?: boolean,"photo_path"?: string,"raw"?: string | null,"reading_km"?: number | null,"rejected"?: string | null,"vehicle_id"?: string | null
+                    "confidence"?: number | null,"created_at"?: string,"employee_id"?: string,"error"?: string | null,"gps_km"?: number | null,"id"?: never,"last_km"?: number | null,"log_id"?: string | null,"mode"?: string,"model"?: string,"ms"?: number | null,"ok"?: boolean,"photo_path"?: string,"raw"?: string | null,"reading_km"?: number | null,"status"?: string,"vehicle_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -282,6 +282,12 @@ isOneToOne: false
       columns: ["employee_id"]
 isOneToOne: false
       referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "odometer_reads_log_id_fkey"
+      columns: ["log_id"]
+isOneToOne: false
+      referencedRelation: "odometer_logs"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "odometer_reads_vehicle_id_fkey"
@@ -588,11 +594,20 @@ isOneToOne: false
             "current_employee_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"odometer_log_flag":
+{ Args: { "p_ai_status": string,"p_ai_value": number,"p_entry": string,"p_reading": number }; Returns: string
+                           },
 "office_create_task":
 { Args: { "p_decided_by"?: string,"p_projects"?: Json,"p_request_id"?: string,"p_stops": Json,"p_task": Json }; Returns: string
                            },
 "prune_location_points":
 { Args: { "p_batch"?: number,"p_keep_days"?: number }; Returns: number
+                           },
+"queue_odometer_checks":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
+"set_odometer_ai":
+{ Args: { "p_ai_status": string,"p_ai_value": number,"p_log_id": string }; Returns: undefined
                            }
           }
           Enums: {

@@ -157,6 +157,8 @@ async function main() {
   check(Object.keys(mine[0] ?? {}).sort().join(',') === VEHICLE_COLUMNS.split(', ').sort().join(','), 'vehicles carry exactly the nine allowed columns', Object.keys(mine[0] ?? {}));
   const star = await client.from('vehicles').select('*').limit(1);
   check(star.error?.code === '42501', 'select * on vehicles is refused, as the database promises', star.error);
+  const aiFromPhone = await client.from('odometer_logs').insert({ vehicle_id: van.id, employee_id: a.row.id, reading_km: 84500, kind: 'manual', ai_value: 84500 });
+  check(aiFromPhone.error?.code === '42501', 'the phone cannot set what the server read from an odometer photo (ai_value)', aiFromPhone.error);
 
   const since = new Date(Date.now() - 3600000);
   let tasks = await api.fetchTasks(client, since);
