@@ -242,6 +242,33 @@ Tabs: Today, Mileage, Report, Me.
    my reports with status.
 8. Me tab (not designed): name, code, phone, language, current vehicle, app version,
    sign out (disabled while a task is in progress).
+Back navigation rules (Android back button, our back arrow and the back gesture always do
+the same thing):
+- A screen opened from another screen is pushed on top of it. Back returns to that screen
+  with its state kept (photos taken, failed photo count, numbers typed, fuel fields,
+  selected category). Never jump to a tab route from inside a flow.
+- "Report a problem" (from Log mileage and from Task in progress) opens the report form as
+  a stack screen (`report-problem`) on top, with the vehicle and task filled in. Back
+  returns to where it was opened. After Send it shows "Report sent" and returns there too;
+  on Log mileage the "Type the reading" option is still available.
+- After saving a flow (Start task, Save & finish task, manual odometer, fuel, report),
+  return to where the flow started, not always to Today. After Save & finish the task
+  screen (completed) shows a big "Back to Today" button, and back goes to Today.
+- A form with unsaved input asks "Discard changes?" on the driver's own back (en + si).
+  Nothing typed: no question. Never after a successful save, on a notification tap, or
+  when the session ends and the app moves to Login. While Save is running, back does
+  nothing. (`components/navigation.ts`, `useLeaveGuard`.)
+- A sheet, dialog, picker or the camera closes first; the next back leaves the screen.
+- Login and Permissions (first run) are replaced, not pushed: after signing in, back
+  cannot return to Login; after sign-out, back cannot return into the app.
+- A notification tap that opens a task puts Today underneath, so back from that task goes
+  to Today, not out of the app. If a form with unsaved input is open, the task is pushed
+  on top of it instead, so back returns to the form with its data.
+- Back on Today puts the app in the background. It never signs out and never stops
+  "Sharing my location". Back from Mileage, Report or Me goes to Today, then the app goes
+  to the background. A list that opens a screen (Today's lists, today's tasks on Mileage)
+  gets it back on back.
+
 Offline: location points, odometer/fuel logs, reports and photos are queued on the phone
 and retried. Location: a fix every ~5 s (High accuracy, handed over in batches of up to
 15 s); the GPS drift filter `src/lib/track.ts` (same file in the connector) ignores fixes

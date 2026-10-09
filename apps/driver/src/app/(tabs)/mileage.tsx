@@ -3,9 +3,9 @@
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Fuel, Gauge } from '@/components/icons';
+import { ChevronRight, Fuel, Gauge } from '@/components/icons';
 import { useCallback, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useDateLabel } from '@/components/task';
@@ -109,13 +109,19 @@ export default function MileageScreen() {
           <Card style={{ padding: 0 }}>
             {todayTasks.length === 0 && <Txt variant="muted" style={{ padding: 18 }}>{t('mileage.noTasksToday')}</Txt>}
             {todayTasks.map((task, index) => (
-              <View key={task.id} style={[styles.row, index > 0 && styles.divider]}>
+              <Pressable
+                key={task.id}
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/task/[id]', params: { id: task.id } })}
+                style={[styles.row, index > 0 && styles.divider]}
+              >
                 <Mono size={17} bold style={{ width: 58 }}>{colomboTime(task.start_at)}</Mono>
                 <Txt variant="strong" style={{ flex: 1 }} numberOfLines={2}>{task.title}</Txt>
                 {task.status === 'completed' && task.km !== null
                   ? <Mono size={17} bold color={colors.blue}>{`${thousands(task.km)} ${t('common.km')}`}</Mono>
                   : <Txt variant="muted" size={15}>{t(task.status === 'in_progress' ? 'mileage.inProgress' : task.status === 'cancelled' ? 'mileage.cancelled' : 'mileage.notStarted')}</Txt>}
-              </View>
+                <ChevronRight size={20} color={colors.muted} />
+              </Pressable>
             ))}
           </Card>
         </View>

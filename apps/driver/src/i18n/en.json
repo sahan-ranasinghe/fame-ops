@@ -9,7 +9,10 @@
     "onePassenger": "1 passenger",
     "seats": "{n} seats",
     "savedOffline": "No connection. Saved on the phone; it is sent when the connection is back.",
-    "cameraDenied": "Allow the camera for Fame Driver in the phone's settings."
+    "cameraDenied": "Allow the camera for Fame Driver in the phone's settings.",
+    "discardTitle": "Discard changes?",
+    "discardBody": "What you entered on this screen will be lost.",
+    "discard": "Discard"
   },
   "days": [
     "Sun",
@@ -223,7 +226,9 @@
     "open": "Open",
     "in_garage": "In garage",
     "closed": "Closed",
-    "office": "Office: {note}"
+    "office": "Office: {note}",
+    "sentTitle": "Report sent",
+    "sentBody": "The office will see it."
   },
   "me": {
     "code": "Employee no.",

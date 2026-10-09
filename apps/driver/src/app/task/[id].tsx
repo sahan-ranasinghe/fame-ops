@@ -124,14 +124,19 @@ export default function TaskScreen() {
 
   if (!app.me) return <Redirect href="/login" />;
 
-  const goToday = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  // The arrow and the system back return to where the task was opened; "Back to Today" always lands on Today.
+  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  const goHome = () => {
+    if (router.canGoBack()) router.dismissAll();
+    router.navigate('/');
+  };
 
   if (!task) {
     return (
       <View style={[styles.page, { padding: 20, paddingTop: insets.top + 40, gap: 16 }]}>
         <StatusBar style="dark" />
         <Notice tone="warn" text={t('task.gone')} />
-        <Button kind="outline" label={t('task.backToToday')} onPress={goToday} />
+        <Button kind="outline" label={t('task.backToToday')} onPress={goHome} />
       </View>
     );
   }
@@ -148,7 +153,7 @@ export default function TaskScreen() {
 
   const overlay = (
     <>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('task.backToToday')} onPress={goToday} style={[styles.back, { top: insets.top + 12 }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={t('common.cancel')} onPress={goBack} style={[styles.back, { top: insets.top + 12 }]}>
         <ChevronLeft size={26} color={colors.ink} strokeWidth={2.6} />
       </Pressable>
       {running && (
@@ -245,7 +250,7 @@ export default function TaskScreen() {
             <Button
               kind="danger-text"
               label={t('task.reportProblem')}
-              onPress={() => router.push({ pathname: '/report', params: { taskId: task.id } })}
+              onPress={() => router.push({ pathname: '/report-problem', params: { taskId: task.id, vehicleId: task.vehicle_id } })}
             />
           </>
         ) : (
@@ -257,6 +262,9 @@ export default function TaskScreen() {
               <Mono size={20} bold>{`${thousands(task.km)} ${t('common.km')}`}</Mono>
             )}
             {task.status === 'cancelled' && task.cancelled_reason && <Notice tone="warn" text={task.cancelled_reason} />}
+            {(task.status === 'completed' || task.status === 'cancelled') && (
+              <Button label={t('task.backToToday')} onPress={goHome} style={{ marginTop: 8 }} />
+            )}
             {task.status === 'assigned' && (
               <>
                 {otherRunning && <Notice tone="warn" text={t('today.finishFirst')} />}
@@ -264,7 +272,7 @@ export default function TaskScreen() {
                   icon={Play}
                   label={t('today.startTask')}
                   disabled={otherRunning}
-                  onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: task.id } })}
+                  onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: task.id, from: 'task' } })}
                 />
                 {call && <Button kind="outline" icon={Phone} label={t('task.callContact')} onPress={() => Linking.openURL(call)} />}
               </>

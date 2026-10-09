@@ -57,7 +57,7 @@ export default function TabsLayout() {
   if (!getJson<boolean>(KEYS.permissionsSeen)) return <Redirect href="/permissions" />;
 
   return (
-    <Tabs screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
+    <Tabs initialRouteName="index" backBehavior="initialRoute" screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="mileage" />
       <Tabs.Screen name="report" />

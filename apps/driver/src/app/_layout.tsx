@@ -16,6 +16,7 @@ import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef } from 'react';
 
+import { anyFormDirty } from '@/components/navigation';
 import { tapData } from '@/lib/notifications';
 import { AppProvider, useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -41,7 +42,13 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
     if (handled.current === id) return;
     handled.current = id;
     const { taskId } = tapData(response);
-    if (taskId) router.push({ pathname: '/task/[id]', params: { id: taskId } });
+    if (!taskId) return;
+    // A form with unsaved input stays underneath (back returns to it); otherwise Today does.
+    if (!anyFormDirty()) {
+      if (router.canGoBack()) router.dismissAll();
+      router.navigate('/');
+    }
+    router.push({ pathname: '/task/[id]', params: { id: taskId } });
   }, [ready, me, response, router]);
 
   if (!ready) return null;

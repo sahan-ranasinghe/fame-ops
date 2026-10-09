@@ -95,7 +95,7 @@ interface AppValue {
   completeTask: (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => void;
   logOdometer: (reading: OdometerEntry) => void;
   logFuel: (fuel: FuelEntry, odometerKm: number | null) => void;
-  sendReport: (category: ReportCategory, note: string, photos: LocalPhoto[], taskId: string | null) => void;
+  sendReport: (category: ReportCategory, note: string, photos: LocalPhoto[], taskId: string | null, vehicleId?: string) => void;
 }
 
 const AppContext = createContext<AppValue | null>(null);
@@ -609,14 +609,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void flushNow();
   }, [queueFuel]);
 
-  const sendReport = useCallback((category: ReportCategory, note: string, photos: LocalPhoto[], taskId: string | null) => {
+  const sendReport = useCallback((category: ReportCategory, note: string, photos: LocalPhoto[], taskId: string | null, vehicleId?: string) => {
     const current = meRef.current;
-    if (!current?.current_vehicle_id) return;
+    const vehicle = vehicleId ?? current?.current_vehicle_id;
+    if (!current || !vehicle) return;
     const id = Crypto.randomUUID();
     const now = new Date().toISOString();
     const row = {
       id,
-      vehicle_id: current.current_vehicle_id,
+      vehicle_id: vehicle,
       employee_id: current.id,
       task_id: taskId,
       category,

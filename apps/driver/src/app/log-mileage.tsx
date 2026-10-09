@@ -19,6 +19,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useLeaveGuard } from '@/components/navigation';
 import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/ui';
 import { parseDecimal, parseWhole, thousands } from '@/lib/format';
 import { readOdometerPhoto, type ReadStatus } from '@/lib/odometerAi';
@@ -60,7 +61,7 @@ const WHY_TYPING: Record<Exclude<OdometerEntryKind, 'photo'>, string> = {
 export default function LogMileageScreen() {
   const app = useApp();
   const { t, tasks, vehicles, gpsKm } = app;
-  const params = useLocalSearchParams<{ mode?: string; taskId?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; taskId?: string; from?: string }>();
   const mode: Mode = params.mode === 'start' || params.mode === 'manual' || params.mode === 'fuel' ? params.mode : 'finish';
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -84,6 +85,9 @@ export default function LogMileageScreen() {
   const [receipt, setReceipt] = useState<LocalPhoto | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // Unsaved input asks "Discard changes?" on back; nothing is asked after a save or while one runs.
+  const dirty = step.kind !== 'none' || typedFuelKm !== '' || litres.trim() !== '' || amount.trim() !== '' || receipt !== null;
+  const { allowLeave } = useLeaveGuard(dirty, saving);
 
   if (!app.me) return <Redirect href="/login" />;
   if ((mode === 'finish' || mode === 'start') && !task) return <Redirect href="/" />;
@@ -171,6 +175,7 @@ export default function LogMileageScreen() {
     if (mode === 'fuel') {
       if (!fuel) return setProblem(t('log.needFuel'));
       setSaving(true);
+      allowLeave();
       app.logFuel(fuel, parseWhole(typedFuelKm));
       router.back();
       return;
@@ -187,12 +192,15 @@ export default function LogMileageScreen() {
     if (step.kind === 'typing' && step.entry === 'photo_changed' && !(await confirmChange(step.aiKm))) return;
 
     setSaving(true);
+    allowLeave();
     if (mode === 'start' && task) {
       await app.startTask(task, reading);
-      router.replace({ pathname: '/task/[id]', params: { id: task.id } });
+      // Opened from the task screen: back to it, now in progress. Opened from Today: the task takes this screen's place.
+      if (params.from === 'task') router.back();
+      else router.replace({ pathname: '/task/[id]', params: { id: task.id } });
     } else if (mode === 'finish' && task) {
       app.completeTask(task, reading, fuel);
-      router.dismissAll();
+      router.back();
     } else {
       app.logOdometer(reading);
       router.back();
@@ -273,7 +281,7 @@ export default function LogMileageScreen() {
                 <Button
                   kind="danger-text"
                   label={t('log.displayBroken')}
-                  onPress={() => router.push({ pathname: '/report', params: task ? { taskId: task.id } : {} })}
+                  onPress={() => router.push({ pathname: '/report-problem', params: { ...(task ? { taskId: task.id } : {}), ...(vehicle ? { vehicleId: vehicle.id } : {}) } })}
                 />
               </>
             )}

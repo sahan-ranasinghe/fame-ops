@@ -63,7 +63,7 @@ export default function TodayScreen() {
   function openNext() {
     if (!next) return;
     if (next.status === 'in_progress') router.push({ pathname: '/task/[id]', params: { id: next.id } });
-    else router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: next.id } });
+    else router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: next.id, from: 'today' } });
   }
 
   const people = next ? peopleLine(next) : null;

@@ -101,6 +101,10 @@ How the app is put together (`apps/driver/src`):
   in progress), `log-mileage` (odometer and fuel), `vehicle` (choose vehicle).
 - `state/app.tsx`: who is signed in, the language, tasks, and every action a
   screen can trigger.
+- `components/navigation.ts`: the back rules of the forms ("Discard changes?"
+  on the driver's own back, never after a save), and the "is a form open with
+  unsaved input" question the root layout asks when a notification is tapped.
+  The rules themselves are in `CLAUDE.md` (Back navigation rules).
 - `lib/api.ts`: every call to Supabase. `sync/engine.ts`: the offline queue.
   What the driver does is written to the phone first and sent in order when
   there is a connection; sending the same thing twice is harmless.
