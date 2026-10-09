@@ -3,11 +3,14 @@
 import { z } from "zod";
 import type { Db } from "./db.ts";
 import { ToolError } from "./db.ts";
+import type { Actor } from "./roles.ts";
 import { isRealDate } from "./time.ts";
 
 export interface Ctx {
   db: Db;
   now: Date;
+  /** The person the tool runs for (role already checked), and the channel they came through. */
+  actor: Actor;
 }
 
 export interface Out {

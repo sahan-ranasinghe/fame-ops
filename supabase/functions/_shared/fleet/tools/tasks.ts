@@ -315,8 +315,18 @@ export const taskDetail = tool({
     "logged before it started.",
   readOnly: true,
   input: z.object({ task_id: zId }),
-  async run({ task_id }, { db, now }) {
+  async run({ task_id }, { db, now, actor }) {
     const task = await getTask(db, task_id);
+    if (actor.role === "staff") {
+      const own = task.request_id
+        ? unwrapMaybe(
+          await db.from("vehicle_requests").select("id").eq("id", task.request_id).eq("requested_by_employee_id", actor.employeeId ?? "")
+            .maybeSingle(),
+          "vehicle request",
+        )
+        : null;
+      if (!own) throw new ToolError("This task did not come from one of your requests.");
+    }
     const [refs, latest, stopsRes, splitRes, odoRes, fuelRes, reportsRes] = await Promise.all([
       loadRefs(db),
       loadLatest(db),

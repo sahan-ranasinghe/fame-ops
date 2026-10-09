@@ -9,6 +9,11 @@ async function sha256(text: string): Promise<Uint8Array> {
   return new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(text)));
 }
 
+/** The hash stored for a personal key (office_keys.key_hash). */
+export async function sha256Hex(text: string): Promise<string> {
+  return [...(await sha256(text))].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * Constant-time comparison. Both sides are hashed first, so the loop always
  * runs over 32 bytes: its timing shows neither where the keys differ nor how

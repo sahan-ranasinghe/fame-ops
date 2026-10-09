@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  25::bigint, 'there are 25 tables in public');
+  26::bigint, 'there are 26 tables in public');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -1045,6 +1045,69 @@ update public.tasks set seen_at = now() where id = '50000000-0000-0000-0000-0000
 reset role;
 select is((select count(*) from net.http_request_queue where url like '%/push-task'), 5::bigint,
   'a driver marking a task as seen queues nothing (still 5 requests)');
+
+-- ---------------------------------------------------------------------------
+-- Office roles, personal connector keys, and the audit log with names
+-- ---------------------------------------------------------------------------
+
+reset role;
+set local request.jwt.claims to '{"role":"service_role"}';
+
+select lives_ok($$ update public.employees set role = 'fleet_admin' where id = '10000000-0000-0000-0000-0000000000c1' $$,
+  'the new roles are accepted (fleet_admin)');
+select lives_ok($$ update public.employees set role = 'staff' where id = '10000000-0000-0000-0000-0000000000c1' $$, 'staff');
+select lives_ok($$ update public.employees set role = 'viewer' where id = '10000000-0000-0000-0000-0000000000c1' $$, 'viewer');
+select throws_ok($$ update public.employees set role = 'boss' where id = '10000000-0000-0000-0000-0000000000c1' $$,
+  '23514', 'new row for relation "employees" violates check constraint "employees_role_check"', 'an unknown role is refused');
+select lives_ok($$ update public.employees set email = 'Left@Fame.test' where id = '10000000-0000-0000-0000-0000000000c1' $$,
+  'an office e-mail can be stored');
+select throws_ok($$ update public.employees set email = 'left@fame.test' where id = '10000000-0000-0000-0000-0000000000b1' $$,
+  '23505', null, 'the same e-mail (any case) cannot be used twice');
+
+insert into public.office_keys (employee_id, key_hash, label) values
+  ('10000000-0000-0000-0000-0000000000a1', repeat('a', 64), 'test key');
+select is((select channel from public.office_audit where id = (select max(id) from public.office_audit)), 'claude',
+  'audit rows made so far carry the default channel (claude)') ;
+select throws_ok($$ insert into public.office_audit (tool, channel) values ('x', 'fax') $$, '23514', null,
+  'the audit channel must be claude, web or driver');
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select throws_ok('select count(*) from public.office_keys', '42501', 'permission denied for table office_keys',
+  'drivers cannot read connector keys');
+select throws_ok('select count(*) from public.office_audit', '42501', 'permission denied for table office_audit',
+  'drivers cannot read the audit log');
+reset role;
+
+-- The driver app's own changes land in the audit log with the driver's name.
+-- (Earlier sections already made driver rows; only rows after this mark count.)
+create temporary table audit_mark as select coalesce(max(id), 0) as id from public.office_audit;
+set local request.jwt.claims to '{"role":"service_role"}';
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, created_by) values
+  ('50000000-0000-0000-0000-00000000000a', 'Audit test', '10000000-0000-0000-0000-0000000000a1',
+   '20000000-0000-0000-0000-000000000001', now(), 'test');
+select is((select count(*) from public.office_audit where channel = 'driver' and id > (select id from audit_mark)), 0::bigint,
+  'creating a task as the office logs nothing as the driver');
+update public.tasks set start_at = start_at + interval '1 minute' where id = '50000000-0000-0000-0000-00000000000a';
+select is((select count(*) from public.office_audit where channel = 'driver' and id > (select id from audit_mark)), 0::bigint,
+  'an office change of a task is not logged as the driver');
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+update public.tasks set status = 'in_progress', started_at = now(), start_odometer_km = 84600
+  where id = '50000000-0000-0000-0000-00000000000a';
+update public.tasks set status = 'completed', completed_at = now(), end_odometer_km = 84610
+  where id = '50000000-0000-0000-0000-00000000000a';
+insert into public.vehicle_reports (vehicle_id, employee_id, category, note) values
+  ('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-0000000000a1', 'tyre', 'audit test');
+reset role;
+select results_eq(
+  $$ select tool || '|' || actor_name || '|' || channel from public.office_audit
+     where channel = 'driver' and id > (select id from audit_mark) order by id $$,
+  array['driver_task_in_progress|Test Nuwan|driver', 'driver_task_completed|Test Nuwan|driver', 'driver_report|Test Nuwan|driver'],
+  'start, finish and a problem report by the driver are logged with the driver''s name and channel driver');
+select is((select actor_employee_id from public.office_audit where channel = 'driver' and id > (select id from audit_mark) limit 1),
+  '10000000-0000-0000-0000-0000000000a1'::uuid, 'and linked to the driver''s employee row');
 
 select * from finish();
 

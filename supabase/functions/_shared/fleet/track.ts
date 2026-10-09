@@ -2,7 +2,7 @@
 // vehicle went, and where it stood still.
 //
 // This file is shared word for word by the driver app (apps/driver/src/lib/
-// track.ts) and the office connector (supabase/functions/office-mcp/track.ts).
+// track.ts) and the office connector (supabase/functions/_shared/fleet/track.ts).
 // It has no imports so that both copies stay identical; scripts/test-track.ts
 // checks that they are.
 //

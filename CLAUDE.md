@@ -49,19 +49,24 @@
 
 ## Hard rules
 1. Drivers never need a Claude account.
-2. No hosted office web app. Office access = the connector (+ a Claude artifact in the
-   boss's account in Phase B). A proposal to replace this rule with an office web app for
-   staff (one backend, several clients, roles, shared business rules, the live map as one
-   part) is in `docs/office-web-plan.md`; it waits for the boss's decision. Nothing of it
-   is built.
+2. Office access = Claude (the connector `office-mcp` + the Fame Fleet artifact, source
+   `apps/office/fame-fleet.html`) for the boss, and the office web app `apps/office`
+   (Cloudflare Pages, `*.pages.dev` for the pilot) for everyone else; approved by the boss on
+   9 October 2026, plan in `docs/office-web-plan.md`. Both call the same rules in
+   `supabase/functions/_shared/fleet` through `office-mcp` and `office-api`. No other hosted
+   app. Every person has their own account and role; writes are checked by the server and
+   audited with the person's name. The artifact's tool names, inputs and JSON answers are a
+   contract (`scripts/tool-shapes.json`): never change them in a way that breaks it.
 3. Do NOT use the official Supabase MCP connector for the office (it gets full write access
    to the whole org). Our connector exposes only the tools listed below.
 4. Do NOT modify the existing "Fame Group Allowance Desk" artifact. Its business rules are
    in `docs/Allowance_Desk_How_It_Works.md`. That file contains internal company IDs:
    keep this repo private.
-5. Secrets never go in the app or in git. The app only gets the Supabase URL and the
-   publishable (anon) key and is protected by Row Level Security. The service_role key and
-   OFFICE_MCP_KEY live only in Edge Function secrets. `.env*` files are gitignored.
+5. Secrets never go in the app, in the browser or in git. The driver app and the web app
+   only get the Supabase URL and the publishable (anon) key and are protected by Row Level
+   Security; office writes go through `office-api`, which alone runs as service role. The
+   service_role key, OFFICE_MCP_KEY and SERVER_KEY live only in Edge Function secrets.
+   `.env*` files are gitignored.
 6. Times stored as timestamptz (UTC), shown in Asia/Colombo.
 7. Money: LKR stored as integer cents (bigint).
 8. No Zoho calls from our code. The office's existing Zoho connector in Claude reads Zoho
@@ -110,9 +115,13 @@
   call = `tel:`, WhatsApp = `https://wa.me/<number>`.
 
 ## Data model
-- `employees`: id uuid, code (unique), name, phone, role ('driver'|'office'|'admin'),
-  active, language ('en'|'si'), licence_expiry (date, nullable),
-  current_vehicle_id (nullable), auth_user_id (unique, nullable), created_at, updated_at.
+- `employees`: id uuid, code (unique), name, phone, email (office people, unique),
+  role ('driver'|'staff'|'viewer'|'office'|'fleet_admin'|'admin'), active, language
+  ('en'|'si'), licence_expiry (date, nullable), current_vehicle_id (nullable),
+  auth_user_id (unique, nullable), created_at, updated_at. Which tool each role may call:
+  `supabase/functions/_shared/fleet/roles.ts` (the permission table of the plan).
+- `office_keys`: personal connector keys for Claude (employee_id, key_hash sha256, label,
+  created_at, last_used_at, revoked_at). Service role only.
 - `rental_companies`: id, name, phone.
 - `vehicles`: id, reg_no (unique, e.g. "WP CAB-4521"), make_model ("Toyota HiAce"),
   vehicle_type ('car'|'van'|'double_cab'|'lorry'|'other'), seats, rental_company_id,
@@ -164,7 +173,9 @@
   Unique (employee_id, recorded_at); uploads use on conflict do nothing.
 - `driver_latest`: employee_id PK, session_id, lat, lng, accuracy_m, speed_mps,
   battery_pct, recorded_at, sharing (bool). Kept current by trigger (only newer points win).
-- `office_audit`: id, at, tool, args_summary, result_summary.
+- `office_audit`: id, at, tool, args_summary, result_summary, actor_employee_id,
+  actor_name, channel ('claude'|'web'|'driver'). Office tools write it through both
+  channels; triggers add the driver app's task starts/finishes and problem reports.
 - `device_tokens`: id, employee_id, token (unique, Expo push token), platform, device_model,
   app_version, language, created_at, updated_at. Drivers read their own; they write through
   `register_device_token()` / `remove_device_token()`.
@@ -295,12 +306,27 @@ drivers have no privilege on them; trigger fills them from the photo's own read)
 photo_changed, typed_unreadable, ai_differs, ai_failed (+ the computed "unlogged km"). 60
 driver reads per driver per day (`odometer_reads`, service role only).
 
-## Office connector (Edge Function `office-mcp`), Phase A tools
-MCP over Streamable HTTP, deployed with `--no-verify-jwt`, path `/office-mcp/<KEY>/mcp`,
-key compared in constant time with OFFICE_MCP_KEY (wrong/missing → 404). Uses
-service_role internally but only through these tools. No raw SQL, no deletes. Compact
+## Office rules: `supabase/functions/_shared/fleet` (used by `office-mcp` and `office-api`)
+All tools, the role table (`roles.ts`), the runner (`run.ts`: role check, audit row with the
+person's name and channel, the tool, the outcome) and the helpers live here. Two wrappers:
+- `office-mcp`: MCP over Streamable HTTP, deployed with `--no-verify-jwt`, path
+  `/office-mcp/<KEY>/mcp`. A personal key (`office_keys`, made with `create_office_key`)
+  runs the tools as that person with their role; the shared OFFICE_MCP_KEY still works as an
+  admin key (constant-time compare; wrong/missing → 404). Only the tools the role may call
+  are listed.
+- `office-api`: HTTP for the web app, deployed with `--no-verify-jwt`: `GET /me`,
+  `GET /tools` (with JSON schemas), `POST /tools/<name>` (same inputs and the same JSON
+  answer as the connector; 400 bad_input, 403 role or mfa_required, 409 the tool said no).
+  The session token is checked with Supabase Auth; admin, fleet_admin and office need aal2
+  (TOTP); 120 calls a minute per person; CORS from OFFICE_WEB_URL.
+Uses service_role internally but only through these tools. No raw SQL, no deletes. Compact
 JSON, times in Asia/Colombo, Google Maps / tel: / wa.me links. Every call logged to
 office_audit.
+- Accounts (admin): `list_office_users`, `create_office_user(name, email, role)` (returns a
+  one-time set-password link; no passwords in chat), `reset_office_password(email)`,
+  `set_office_user_active(email, active)` (off = banned sign-in, keys revoked),
+  `create_office_key(email, label?)` (personal connector URL, shown once),
+  `revoke_office_key(key_id)`.
 - Overview: `fleet_overview(date?)`: vehicles on the road / total / parked, tasks today
   (in progress, done), requests waiting (+ oldest), reminders due in 14 days, on-the-road
   list, needs-attention list. (Powers Desktop · Overview and Office · Home later.)

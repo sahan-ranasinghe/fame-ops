@@ -128,6 +128,8 @@ code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -X POST "$FN_BASE/r
 code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 -X POST "$FN_BASE/read-odometer" \
   -H 'Content-Type: application/json' -H 'x-server-key: not-the-key' --data '{"log_id":"x"}')
 [ "$code" = "401" ] && pass "read-odometer with a wrong server key answers 401" || fail "read-odometer with a wrong server key answered $code, expected 401"
+code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$FN_BASE/office-api/me")
+[ "$code" = "401" ] && pass "office-api without a sign-in answers 401" || fail "office-api without a sign-in answered $code, expected 401"
 if out=$(call_tool mileage_summary '{}'); then
   pass "mileage_summary: $(jq -r '"\(.month): \(.totals.tasks) tasks, \(.totals.task_km) task km, \(.totals.unlogged_km_flags) unlogged flags, \(.totals.check_odometer) odometer checks"' <<<"$out")"
 else

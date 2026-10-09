@@ -9,7 +9,12 @@ This repository is private: `docs/` contains internal company IDs.
 - `supabase/migrations/`: the database (tables, Row Level Security, the private
   `driver-photos` bucket, towns).
 - `supabase/tests/`: database tests for the access rules.
+- `supabase/functions/_shared/fleet/`: the office rules and tools, shared by
+  `office-mcp` (Claude) and `office-api` (the web app).
 - `supabase/functions/office-mcp/`: the office connector (Edge Function).
+- `supabase/functions/office-api/`: the same tools over HTTP for the web app.
+- `apps/office/fame-fleet.html`: the Fame Fleet artifact's source, as published
+  in Claude; `scripts/tool-shapes.json` is the contract its calls rely on.
 - `scripts/`: connector tests.
 - `apps/driver/`: the Fame Driver Android app (Expo).
 
@@ -159,20 +164,39 @@ that one `expo-doctor` check in `package.json`. If a build fails in that
 library, or reading a photo does not work, remove it: the odometer is always
 typed or confirmed by hand anyway.
 
-## Office connector (`office-mcp`)
+## Office rules, connector and API
 
-The office (the boss and the fleet admin) works in Claude. Claude reaches the
-fleet through this connector: an MCP server over Streamable HTTP with 28 tools
-and nothing else (no raw SQL, no deletes). Every tool call is written to the
-`office_audit` table.
+Everything the office can do is a tool in `supabase/functions/_shared/fleet`
+(34 tools, no raw SQL, no deletes). `roles.ts` says which role may call
+which tool; `run.ts` runs a call for a person: the role check, the audit row
+(with the person's name and the channel), the tool, the outcome. Two thin
+wrappers use it:
 
-- URL: `https://hinurfsaxvplbyqgtozj.supabase.co/functions/v1/office-mcp/<OFFICE_MCP_KEY>/mcp`
-- The key in the URL is the only protection. A wrong or missing key answers 404.
-  Treat the whole URL as a password: anyone who has it can use every tool.
-- `index.ts` checks the key, `server.ts` lists the tools and writes the audit
-  log, `tools/` holds the tools by area, the other files are shared helpers.
+- `office-mcp`, the connector Claude uses: an MCP server over Streamable
+  HTTP at `https://hinurfsaxvplbyqgtozj.supabase.co/functions/v1/office-mcp/<KEY>/mcp`.
+  A personal key made with `create_office_key` runs the tools as that person
+  (name in the audit log, their role applied, only their tools listed); the
+  shared `OFFICE_MCP_KEY` still works as an admin key. A wrong or missing key
+  answers 404. Treat a key URL as a password.
+- `office-api`, for the web app: `GET /office-api/me`, `GET /office-api/tools`
+  (with JSON schemas for the forms) and `POST /office-api/tools/<name>` with
+  the same arguments and the same JSON answer as the connector. The session
+  token is checked with Supabase Auth; admin, fleet_admin and office must have
+  done the second step (TOTP, `aal2`); staff and viewer need not. 120 calls a
+  minute per person; CORS allows `OFFICE_WEB_URL`.
+
+Roles: admin (everything, accounts), fleet_admin (runs the fleet), office
+(sees everything, assigns tasks and requests), staff (own vehicle requests),
+viewer (read only), driver (the app). The table is in `docs/office-web-plan.md`.
+
+Office accounts never involve a password in a chat: `create_office_user`
+returns a one-time set-password link (sent by WhatsApp), `reset_office_password`
+a fresh one, `set_office_user_active` switches a person off (sign-in banned,
+keys revoked, sessions refused at once).
+
 - `database.types.ts` is generated. After a schema change:
-  `npx supabase gen types typescript --local --schema public > supabase/functions/office-mcp/database.types.ts`
+  `npx supabase gen types typescript --local --schema public > supabase/functions/_shared/fleet/database.types.ts`
+  (and copy it to `apps/driver/src/lib/database.types.ts`).
 
 Deploying (needs Sahan's go-ahead each time):
 
@@ -182,7 +206,11 @@ npx supabase db push                                         # only when there i
 npx supabase functions deploy office-mcp --no-verify-jwt     # the key in the URL replaces the JWT check
 npx supabase functions deploy read-odometer --no-verify-jwt  # checks the driver's token itself
 npx supabase functions deploy push-task --no-verify-jwt      # called by the database with the server key
+npx supabase functions deploy office-api --no-verify-jwt     # checks the office user's session and role itself
 ```
+
+Secrets for office-api: `OFFICE_WEB_URL` (the web app's origin, for CORS and
+the set-password links; the local test needs none).
 
 ## Push notifications and sounds
 
@@ -312,10 +340,13 @@ npx supabase start
 npx supabase db reset --local
 npx supabase test db                 # last line: Result: PASS
 
-# 2. The connector, end to end: every tool, plus what the driver app will do
-printf 'OFFICE_MCP_KEY=%s\n' "$(openssl rand -hex 32)" > /tmp/office-mcp.env   # throwaway local key
-npx supabase functions serve office-mcp --env-file /tmp/office-mcp.env        # leave running
+# 2. The office tools, end to end, through both channels: every tool, plus what the
+#    driver app does; then the tool answers are compared with the artifact's contract
+#    (scripts/tool-shapes.json), then the smoke test
+printf 'OFFICE_MCP_KEY=%s\nSERVER_KEY=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 24)" > /tmp/office-mcp.env
+npx supabase functions serve --env-file /tmp/office-mcp.env                   # all functions; leave running
 scripts/test-mcp-local.sh /tmp/office-mcp.env                                 # in a second terminal
+# After a change that is meant to alter a tool's answer: scripts/snapshot-tool-shapes.py --write
 
 npx supabase stop                    # when finished
 ```
@@ -325,8 +356,10 @@ on the laptop, so it runs in Docker):
 
 ```bash
 docker run --rm --cpus 2 --memory 2g -v deno-cache:/deno-dir -v "$PWD/supabase/functions:/fn:ro" \
-  -w /fn/office-mcp denoland/deno:alpine \
-  sh -c 'deno check index.ts && deno lint && deno fmt --check && deno test geo_test.ts gaps_test.ts \
+  -w /fn denoland/deno:alpine \
+  sh -c 'cd /fn/_shared/fleet && deno check index.ts && deno lint && deno fmt --check && deno test geo_test.ts gaps_test.ts \
+         && cd /fn/office-mcp && deno check index.ts && deno lint && deno fmt --check \
+         && cd /fn/office-api && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/read-odometer && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/push-task && deno check index.ts && deno lint && deno fmt --check'
 ```

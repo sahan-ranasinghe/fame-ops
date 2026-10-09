@@ -65,7 +65,7 @@ export const createRequest = tool({
     tools: z.boolean().optional().describe("true if tools or equipment travel too"),
     note: zText(1000).optional(),
   }),
-  async run(args, { db, now }) {
+  async run(args, { db, now, actor }) {
     realDate(args.date);
     const neededAt = utcIso(args.date, args.time);
     const backBy = args.back_by ? utcIso(args.date, args.back_by) : null;
@@ -74,14 +74,16 @@ export const createRequest = tool({
     // A project that is known from Zoho is linked; anything else is kept as a label.
     const matched = args.project ? (await matchProjects(db, args.project)).projects : [];
     const project = matched.length === 1 ? matched[0] : null;
+    // Staff always ask in their own name; the office may ask for anyone.
+    const staff = actor.role === "staff";
     const wantName = args.requested_by.toLowerCase();
-    const employee = unwrap(await db.from("employees").select("id, name, code").eq("active", true).limit(1000), "employees")
+    const employee = staff ? null : unwrap(await db.from("employees").select("id, name, code").eq("active", true).limit(1000), "employees")
       .find((e) => e.name.toLowerCase() === wantName || e.code.toLowerCase() === wantName);
 
     const created = unwrap(
       await db.from("vehicle_requests").insert({
-        requested_by_name: args.requested_by,
-        requested_by_employee_id: employee?.id ?? null,
+        requested_by_name: staff ? actor.name : args.requested_by,
+        requested_by_employee_id: staff ? actor.employeeId : employee?.id ?? null,
         project_id: project?.id ?? null,
         project_label: project ? project.short_name ?? project.name : args.project ?? null,
         needed_at: neededAt,
@@ -114,9 +116,11 @@ export const listRequests = tool({
   description: "Vehicle requests. By default those waiting for approval, soonest first.",
   readOnly: true,
   input: z.object({ status: z.enum(["waiting", "approved", "declined", "all"]).optional().describe("Default: waiting") }),
-  async run({ status = "waiting" }, { db, now }) {
+  async run({ status = "waiting" }, { db, now, actor }) {
     let query = db.from("vehicle_requests").select("*");
     if (status !== "all") query = query.eq("status", status);
+    // Staff see their own requests only.
+    if (actor.role === "staff") query = query.eq("requested_by_employee_id", actor.employeeId ?? "00000000-0000-0000-0000-000000000000");
     const rows = unwrap(await query.order("needed_at", { ascending: status === "waiting" }).limit(100), "vehicle requests");
     return {
       result: { status, count: rows.length, requests: rows.map((r) => requestCard(r, now)) },

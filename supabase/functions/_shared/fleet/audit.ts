@@ -3,6 +3,7 @@
 
 import type { Db } from "./db.ts";
 import { unwrap } from "./db.ts";
+import type { Actor } from "./roles.ts";
 
 const HIDDEN_KEYS = new Set(["pin", "password"]);
 const MAX_TEXT = 1000;
@@ -29,11 +30,18 @@ export function summariseArgs(args: unknown): string {
   return clip(JSON.stringify(redact(args ?? {})));
 }
 
-/** Records the call. Throws if the row cannot be written: then the tool must not run. */
-export async function auditStart(db: Db, toolName: string, args: unknown): Promise<number> {
+/** Records the call with the person and the channel. Throws if the row cannot be written: then the tool must not run. */
+export async function auditStart(db: Db, toolName: string, args: unknown, actor: Actor): Promise<number> {
   const row = unwrap(
     await db.from("office_audit")
-      .insert({ tool: toolName, args_summary: summariseArgs(args), result_summary: "started" })
+      .insert({
+        tool: toolName,
+        args_summary: summariseArgs(args),
+        result_summary: "started",
+        actor_employee_id: actor.employeeId,
+        actor_name: actor.name,
+        channel: actor.channel,
+      })
       .select("id")
       .single(),
     "audit log",

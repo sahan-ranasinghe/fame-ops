@@ -165,14 +165,14 @@ isOneToOne: false
                   ]
                 },"employees": {
                   Row: {
-                    "active": boolean,"auth_user_id": string | null,"code": string,"created_at": string,"current_vehicle_id": string | null,"id": string,"language": string,"licence_expiry": string | null,"name": string,"phone": string | null,"role": string,"updated_at": string,"username": string | null
+                    "active": boolean,"auth_user_id": string | null,"code": string,"created_at": string,"current_vehicle_id": string | null,"email": string | null,"id": string,"language": string,"licence_expiry": string | null,"name": string,"phone": string | null,"role": string,"updated_at": string,"username": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "active"?: boolean,"auth_user_id"?: string | null,"code": string,"created_at"?: string,"current_vehicle_id"?: string | null,"id"?: string,"language"?: string,"licence_expiry"?: string | null,"name": string,"phone"?: string | null,"role"?: string,"updated_at"?: string,"username"?: string | null
+                    "active"?: boolean,"auth_user_id"?: string | null,"code": string,"created_at"?: string,"current_vehicle_id"?: string | null,"email"?: string | null,"id"?: string,"language"?: string,"licence_expiry"?: string | null,"name": string,"phone"?: string | null,"role"?: string,"updated_at"?: string,"username"?: string | null
                   }
                   Update: {
-                    "active"?: boolean,"auth_user_id"?: string | null,"code"?: string,"created_at"?: string,"current_vehicle_id"?: string | null,"id"?: string,"language"?: string,"licence_expiry"?: string | null,"name"?: string,"phone"?: string | null,"role"?: string,"updated_at"?: string,"username"?: string | null
+                    "active"?: boolean,"auth_user_id"?: string | null,"code"?: string,"created_at"?: string,"current_vehicle_id"?: string | null,"email"?: string | null,"id"?: string,"language"?: string,"licence_expiry"?: string | null,"name"?: string,"phone"?: string | null,"role"?: string,"updated_at"?: string,"username"?: string | null
                   }
                   Relationships: [
                     {
@@ -319,17 +319,43 @@ isOneToOne: false
                   ]
                 },"office_audit": {
                   Row: {
-                    "args_summary": string | null,"at": string,"id": number,"result_summary": string | null,"tool": string
+                    "actor_employee_id": string | null,"actor_name": string | null,"args_summary": string | null,"at": string,"channel": string,"id": number,"result_summary": string | null,"tool": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "args_summary"?: string | null,"at"?: string,"id"?: never,"result_summary"?: string | null,"tool": string
+                    "actor_employee_id"?: string | null,"actor_name"?: string | null,"args_summary"?: string | null,"at"?: string,"channel"?: string,"id"?: never,"result_summary"?: string | null,"tool": string
                   }
                   Update: {
-                    "args_summary"?: string | null,"at"?: string,"id"?: never,"result_summary"?: string | null,"tool"?: string
+                    "actor_employee_id"?: string | null,"actor_name"?: string | null,"args_summary"?: string | null,"at"?: string,"channel"?: string,"id"?: never,"result_summary"?: string | null,"tool"?: string
                   }
                   Relationships: [
-                    
+                    {
+      foreignKeyName: "office_audit_actor_employee_id_fkey"
+      columns: ["actor_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"office_keys": {
+                  Row: {
+                    "created_at": string,"employee_id": string,"id": string,"key_hash": string,"label": string | null,"last_used_at": string | null,"revoked_at": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"employee_id": string,"id"?: string,"key_hash": string,"label"?: string | null,"last_used_at"?: string | null,"revoked_at"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"employee_id"?: string,"id"?: string,"key_hash"?: string,"label"?: string | null,"last_used_at"?: string | null,"revoked_at"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "office_keys_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
                   ]
                 },"photos": {
                   Row: {

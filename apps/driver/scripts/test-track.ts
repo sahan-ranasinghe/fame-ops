@@ -107,7 +107,7 @@ check(Math.abs(state.metres / 1000 - trip.km) < 0.1, 'feeding fixes one by one g
 
 // --- 3. the two copies are the same file ---------------------------------------
 const appCopy = readFileSync(join(here, '..', 'src', 'lib', 'track.ts'), 'utf8');
-const connectorCopy = readFileSync(join(here, '..', '..', '..', 'supabase', 'functions', 'office-mcp', 'track.ts'), 'utf8');
+const connectorCopy = readFileSync(join(here, '..', '..', '..', 'supabase', 'functions', '_shared', 'fleet', 'track.ts'), 'utf8');
 check(appCopy === connectorCopy, 'the connector has the same track.ts as the app');
 
 console.log(failures === 0 ? '\nAll track tests passed.' : `\n${failures} track test(s) failed.`);

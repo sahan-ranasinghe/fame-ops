@@ -25,6 +25,12 @@ API = os.environ["API_URL"].rstrip("/")
 ANON = os.environ["ANON_KEY"]
 KEY = os.environ["OFFICE_MCP_KEY"]
 DB_CONTAINER = os.environ.get("DB_CONTAINER", "supabase_db_fame-ops")
+# Which channel the office calls go through: "mcp" (the connector, shared key) or
+# "api" (office-api as a signed-in admin who has done the second step).
+CHANNEL = os.environ.get("CHANNEL", "mcp")
+SERVICE = os.environ.get("SERVICE_ROLE_KEY", "")
+API_TOKEN = ""
+ACTOR_NAME = "Office (shared key)" if CHANNEL == "mcp" else "Test Admin"
 if not API.startswith(("http://127.0.0.1", "http://localhost")):
     sys.exit("This test only runs against a local stack (API_URL must be http://127.0.0.1 or http://localhost).")
 MCP_URL = f"{API}/functions/v1/office-mcp/{KEY}/mcp"
@@ -74,10 +80,59 @@ def mcp(method, params):
     return code, json.loads(text)
 
 
+def api_headers(token):
+    return {"apikey": ANON, "Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def totp(secret_b32):
+    """A TOTP code for a base32 secret (RFC 6238: SHA-1, 30 s, 6 digits), to enrol the second step in the test."""
+    import base64, hmac, hashlib, struct, time
+    key = base64.b32decode(secret_b32.upper() + "=" * (-len(secret_b32) % 8))
+    counter = struct.pack(">Q", int(time.time()) // 30)
+    digest = hmac.new(key, counter, hashlib.sha1).digest()
+    offset = digest[-1] & 0x0F
+    return str((struct.unpack(">I", digest[offset:offset + 4])[0] & 0x7FFFFFFF) % 1_000_000).zfill(6)
+
+
+def office_sign_in(email, password, enrol_totp):
+    """Signs an office user in; with enrol_totp, enrols a TOTP factor and verifies it (the session becomes aal2)."""
+    code, s = http("POST", f"{API}/auth/v1/token?grant_type=password", {"apikey": ANON, "Content-Type": "application/json"},
+                   {"email": email, "password": password})
+    if code != 200:
+        raise RuntimeError(f"sign-in failed for {email}: {code} {s}")
+    token = s["access_token"]
+    if not enrol_totp:
+        return token
+    code, f = http("POST", f"{API}/auth/v1/factors", api_headers(token), {"factor_type": "totp", "friendly_name": "test", "issuer": "Fame Fleet"})
+    if code != 200:
+        raise RuntimeError(f"TOTP enrol failed: {code} {f} (is [auth.mfa.totp] enabled in config.toml?)")
+    code, c = http("POST", f"{API}/auth/v1/factors/{f['id']}/challenge", api_headers(token), {})
+    code, v = http("POST", f"{API}/auth/v1/factors/{f['id']}/verify", api_headers(token), {"challenge_id": c["id"], "code": totp(f["totp"]["secret"])})
+    if code != 200:
+        raise RuntimeError(f"TOTP verify failed: {code} {v}")
+    return v["access_token"]
+
+
+def api_call(token, name, args):
+    return http("POST", f"{API}/functions/v1/office-api/tools/{name}", api_headers(token), args or {})
+
+
 def tool(name, args=None, expect_error=False):
     """Returns the tool's JSON result, or its error text when expect_error."""
     global calls
     calls += 1
+    if CHANNEL == "api":
+        code, answer = api_call(API_TOKEN, name, args)
+        if code == 200:
+            if expect_error:
+                raise RuntimeError(f"{name}: expected an error, got {str(answer)[:200]}")
+            return answer["result"]
+        text = answer.get("error", "") if isinstance(answer, dict) else str(answer)
+        if isinstance(answer, dict) and answer.get("issues"):
+            text += ": " + "; ".join(f"{i['path']} {i['message']}" for i in answer["issues"])
+        if code in (400, 403, 409) and expect_error:
+            return text
+        raise RuntimeError(f"{name}: office-api {code}: {text or str(answer)[:200]}")
     code, answer = mcp("tools/call", {"name": name, "arguments": args or {}})
     result = answer.get("result")
     if result is None:
@@ -135,6 +190,29 @@ TINY_JPEG = bytes.fromhex(
     "a2a3a4a5a6a7a8a9aab2b3b4b5b6b7b8b9bac2c3c4c5c6c7c8c9cad2d3d4d5d6d7d8d9dae1e2e3e4e5e6e7e8e9eaf1f2f3f4f5f6f7f8f9faffda0008010100003f00fbfcffd9")
 
 # ---------------------------------------------------------------------------
+if CHANNEL == "api":
+    print("\n== 0. An admin signs in to office-api ==")
+    if not SERVICE:
+        sys.exit("CHANNEL=api needs SERVICE_ROLE_KEY (scripts/test-mcp-local.sh exports it).")
+    admin_email = f"admin.{uuid.uuid4().hex[:6]}@fame.test"
+    admin_pw = "Adm1n-" + uuid.uuid4().hex[:10]
+    code, au = http("POST", f"{API}/auth/v1/admin/users", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"},
+                    {"email": admin_email, "password": admin_pw, "email_confirm": True})
+    check(code in (200, 201), "the test admin's sign-in is created (service role, local only)", f"{code} {str(au)[:120]}")
+    psql(f"insert into employees (code, name, email, role, auth_user_id) values ('ADM-{uuid.uuid4().hex[:4]}', 'Test Admin', '{admin_email}', 'admin', '{au['id']}')")
+    aal1 = office_sign_in(admin_email, admin_pw, enrol_totp=False)
+    code, body = http("GET", f"{API}/functions/v1/office-api/me", api_headers(aal1))
+    check(code == 403 and body.get("error") == "mfa_required", "an admin without the second step is refused (403 mfa_required)", f"{code} {body}")
+    API_TOKEN = office_sign_in(admin_email, admin_pw, enrol_totp=True)
+    code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(API_TOKEN))
+    check(code == 200 and me.get("role") == "admin" and me.get("mfa") is True and "create_office_user" in me.get("tools", []),
+          "after TOTP the admin is in: /me gives the role, mfa true and the admin tools", f"{code} {str(me)[:200]}")
+    code, body = http("GET", f"{API}/functions/v1/office-api/me", {"apikey": ANON, "Content-Type": "application/json"})
+    check(code == 401, "no token: 401", code)
+    code, tl = http("GET", f"{API}/functions/v1/office-api/tools", api_headers(API_TOKEN))
+    check(code == 200 and any(t["name"] == "create_task" and t["input"].get("properties", {}).get("title") for t in tl.get("tools", [])),
+          "/tools lists the tools with their input schemas", f"{code}")
+
 print("\n== 1. Set up the fleet through the tools ==")
 tool("add_rental_company", {"name": "Lanka Rent-a-Car", "phone": "0112345678"})
 tool("add_rental_company", {"name": "City Wheels"})
@@ -464,8 +542,13 @@ check("No driver matches" in r, "an unknown driver gives a clear message", r)
 
 # ---------------------------------------------------------------------------
 print("\n== 6. Audit log ==")
-audit = psql("select count(*) from office_audit")
-check(int(audit) == calls, f"office_audit has one row per tool call ({calls})", audit)
+audit = psql("select count(*) from office_audit where channel <> 'driver'")
+check(int(audit) == calls, f"office_audit has one row per office tool call ({calls})", audit)
+named = psql(f"select count(*) from office_audit where channel = '{'web' if CHANNEL == 'api' else 'claude'}' and actor_name = '{ACTOR_NAME}'")
+check(int(named) == calls, f"every office call carries the person's name ({ACTOR_NAME}) and the channel ({'web' if CHANNEL == 'api' else 'claude'})", named)
+drv = psql("select string_agg(tool || ':' || actor_name, ',' order by id) from office_audit where channel = 'driver'")
+check("driver_task_in_progress:Nuwan Perera" in drv and "driver_task_completed:Nuwan Perera" in drv and "driver_report:Nuwan Perera" in drv,
+      "the driver app's start, finish and problem report are in the same log, with the driver's name and channel driver", drv)
 check(psql("select count(*) from office_audit where result_summary = 'started'") == "0", "every audit row was completed with a result")
 leaks = psql(f"select count(*) from office_audit where args_summary ~ '({PIN1}|{PIN2}|{NEW_PIN}|111111)' or result_summary ~ '({PIN1}|{PIN2}|{NEW_PIN})'")
 check(leaks == "0" and psql("select count(*) from office_audit where tool in ('create_driver','reset_pin') and args_summary like '%\"pin\":\"[hidden]\"%'") == "5",
@@ -475,6 +558,63 @@ for line in psql("select tool || '  |  ' || left(args_summary, 70) || '  |  ' ||
     print("     " + line)
 check(psql("select count(*) from office_audit where result_summary like 'refused:%'") != "0" and psql("select count(*) from office_audit where result_summary like 'error:%'") == "0",
       "refused calls are logged as 'refused: …'; there were no internal errors", psql("select tool || ': ' || result_summary from office_audit where result_summary like 'error:%' limit 3"))
+
+if CHANNEL == "api":
+    print("\n== 7. The same answers through office-api as through the connector ==")
+    shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
+                            env={**os.environ, "CHANNEL": "api", "API_TOKEN": API_TOKEN}, capture_output=True, text=True)
+    check(shapes.returncode == 0, "every read tool's JSON through office-api has the same shape as the connector's contract (scripts/tool-shapes.json)",
+          shapes.stdout[-600:] + shapes.stderr[-300:])
+
+    print("\n== 8. Roles: a staff member on office-api ==")
+    staff_email = f"staff.{uuid.uuid4().hex[:6]}@fame.test"
+    created = tool("create_office_user", {"name": "Test Staff", "email": staff_email, "role": "staff"})
+    check(created["created"]["role"] == "staff" and created["set_password_link"].startswith("http") and "token" in created["set_password_link"],
+          "create_office_user returns a one-time set-password link (no password typed anywhere)", str(created)[:200])
+    # The person would open the link; the test sets the password through the admin API instead.
+    staff_uid = psql(f"select auth_user_id from employees where email = '{staff_email}'")
+    staff_pw = "St4ff-" + uuid.uuid4().hex[:10]
+    code, _ = http("PUT", f"{API}/auth/v1/admin/users/{staff_uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": staff_pw})
+    staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
+    code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
+    check(code == 200 and me.get("role") == "staff" and sorted(me.get("tools", [])) == ["create_request", "find_project", "list_places", "list_requests", "task_detail"],
+          "staff signs in without a second step and sees only the request tools", f"{code} {str(me)[:200]}")
+    code, body = api_call(staff_token, "task_board", {})
+    check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
+    code, body = api_call(staff_token, "list_requests", {"status": "all"})
+    check(code == 200 and body["result"]["count"] == 0, "staff see none of the office's requests", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "create_request", {"requested_by": "Somebody Else", "date": day(3), "time": "09:00", "route_to": "Galle", "pax": 2})
+    check(code == 200 and body["result"]["request"]["requested_by"] == "Test Staff", "a staff request is always in their own name", f"{code} {str(body)[:200]}")
+    code, body = api_call(staff_token, "list_requests", {"status": "all"})
+    check(code == 200 and body["result"]["count"] == 1, "and they see that one request", f"{code} {str(body)[:160]}")
+    off = tool("set_office_user_active", {"email": staff_email, "active": False})
+    code, body = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
+    check(off["active"] is False and code in (401, 403), "switched off: the same session is refused at once (the sign-in is banned)", f"{code} {body}")
+    key = tool("create_office_key", {"email": admin_email, "label": "test"})
+    # The function builds the URL from its own SUPABASE_URL; locally that is the docker-internal host, so point it at the stack.
+    key_url = API + "/functions/v1" + key["connector_url"].split("/functions/v1", 1)[1]
+    check("/office-mcp/" in key_url and key_url.endswith("/mcp"), "the connector URL has the connector's shape", key["connector_url"])
+    def mcp_tools_list(url):
+        code, lst = http("POST", url,
+                         {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-06-18"},
+                         {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}, raw=True)
+        text = lst.decode()
+        if text.lstrip().startswith(("event:", "data:")):
+            text = [l[6:] for l in text.replace("\r", "").split("\n") if l.startswith("data: ")][-1]
+        try:
+            message = json.loads(text)
+        except json.JSONDecodeError:
+            return code, [], text[:200]
+        tools = message.get("result", {}).get("tools", []) if isinstance(message, dict) else []
+        return code, [t["name"] for t in tools], text[:200]
+    code, names, raw_text = mcp_tools_list(key_url)
+    check(code == 200 and "create_office_user" in names, "a personal connector key opens the connector as that person (admin tools listed)", f"{code} {names[:3] or raw_text}")
+    row = psql("select actor_name || '|' || channel from office_audit where tool = 'create_office_key' order by id desc limit 1")
+    check(row == "Test Admin|web", "the key was made by Test Admin through the web channel (audit)", row)
+    code, _ = api_call(API_TOKEN, "revoke_office_key", {"key_id": key["key_id"]})
+    code, names, raw_text = mcp_tools_list(key_url)
+    check(code == 404, "a revoked key answers 404 like any wrong key", f"{code} {raw_text}")
+
 
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:
