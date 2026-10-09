@@ -1,0 +1,1552 @@
+<title>Fame Fleet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: dark ink rail with amber active pill, warm paper work surface; rail becomes a bottom tab bar under 900px (the boss's Fame Fleet design). */
+:root {
+  --bg: #f3f2ee; --surface: #ffffff; --surface-2: #ecebe5; --line: #e3e0d8; --line-strong: #d3cfc4;
+  --ink: #15181c; --muted: #676a70; --rail: #15181c; --rail-ink: #f1efe9; --rail-muted: #9aa0a8; --rail-hover: #22272c;
+  --accent: #f2a900; --accent-ink: #15181c;
+  --live: #1e4fa0; --live-bg: #e6edf8; --warn: #8a5a00; --warn-bg: #fbf0d9;
+  --bad: #b3261e; --bad-bg: #fae3e1; --ok: #1d7a4a; --ok-bg: #e1f1e7;
+  --sea: #d4e1ea; --land: #e9e7e0; --coast: #c3c0b5; --grid: rgba(21,24,28,.07); --shade: rgba(10,12,14,.45);
+  --font-display: "Archivo", "Arial Black", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111316; --surface: #1a1d21; --surface-2: #22262b; --line: #2c3036; --line-strong: #3b4048;
+  --ink: #ecebe6; --muted: #9da1a8; --rail: #0b0c0e; --rail-ink: #ecebe6; --rail-muted: #8a9098; --rail-hover: #1a1d21;
+  --accent: #f2a900; --accent-ink: #15181c;
+  --live: #8fb4f2; --live-bg: #1c2a42; --warn: #e9b65c; --warn-bg: #3a2d14;
+  --bad: #f08b84; --bad-bg: #3e1f1d; --ok: #7ecb9b; --ok-bg: #19331f;
+  --sea: #17222d; --land: #262a2f; --coast: #3a4048; --grid: rgba(255,255,255,.06); --shade: rgba(0,0,0,.6);
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111316; --surface: #1a1d21; --surface-2: #22262b; --line: #2c3036; --line-strong: #3b4048;
+  --ink: #ecebe6; --muted: #9da1a8; --rail: #0b0c0e; --rail-ink: #ecebe6; --rail-muted: #8a9098; --rail-hover: #1a1d21;
+  --accent: #f2a900; --accent-ink: #15181c;
+  --live: #8fb4f2; --live-bg: #1c2a42; --warn: #e9b65c; --warn-bg: #3a2d14;
+  --bad: #f08b84; --bad-bg: #3e1f1d; --ok: #7ecb9b; --ok-bg: #19331f;
+  --sea: #17222d; --land: #262a2f; --coast: #3a4048; --grid: rgba(255,255,255,.06); --shade: rgba(0,0,0,.6);
+  color-scheme: dark }
+
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font: 15px/1.45 var(--font-body); -webkit-font-smoothing: antialiased }
+button, input, select, textarea { font: inherit; color: inherit }
+a { color: var(--live) }
+h1, h2, h3 { text-wrap: balance; margin: 0 }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums }
+.muted { color: var(--muted) }
+.small { font-size: 13px }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px }
+
+/* ---------- shell ---------- */
+.app { display: grid; grid-template-columns: 248px minmax(0, 1fr); min-height: 100vh }
+.rail { position: sticky; top: 0; height: 100vh; background: var(--rail); color: var(--rail-ink); display: flex; flex-direction: column; padding: 22px 14px 18px; gap: 18px }
+.brand { display: flex; align-items: center; gap: 12px; padding: 0 8px }
+.logo { width: 44px; height: 44px; border-radius: 10px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 800 17px var(--font-display); flex: none }
+.brand b { display: block; font: 800 20px/1.1 var(--font-display) }
+.brand span { font-size: 13px; color: var(--rail-muted) }
+.nav { display: grid; gap: 4px; margin-top: 8px }
+.nav a { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 10px; color: var(--rail-ink); text-decoration: none; font-weight: 500 }
+.nav a:hover { background: var(--rail-hover) }
+.nav a[aria-current="page"] { background: var(--accent); color: var(--accent-ink); font-weight: 600 }
+.nav svg { width: 20px; height: 20px; flex: none }
+.badge { margin-left: auto; min-width: 24px; height: 24px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font: 700 12px/24px var(--font-body); text-align: center; padding: 0 7px }
+.nav a[aria-current="page"] .badge { background: var(--accent-ink); color: var(--accent) }
+.viewer { margin-top: auto; border-top: 1px solid var(--rail-hover); padding: 16px 8px 0; display: flex; align-items: center; gap: 12px; font-size: 14px }
+.viewer .avatar { background: var(--rail-hover); color: var(--rail-ink) }
+.viewer small { display: block; color: var(--rail-muted) }
+.main { min-width: 0; padding-inline: clamp(16px, 3vw, 40px); padding-block: 28px 56px }
+.mhead { display: none; align-items: center; gap: 12px; margin-bottom: 18px }
+.mhead b { font: 800 22px/1 var(--font-display) }
+.tabbar { display: none; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--surface); border-top: 1px solid var(--line); padding: 8px 6px calc(8px + env(safe-area-inset-bottom, 0px)); justify-content: space-around }
+.tabbar a { display: grid; justify-items: center; gap: 4px; padding: 4px 8px; color: var(--muted); text-decoration: none; font-size: 13px; font-weight: 600; min-width: 60px }
+.tabbar a i { display: grid; place-items: center; width: 56px; height: 32px; border-radius: 16px }
+.tabbar a[aria-current="page"] { color: var(--ink) }
+.tabbar a[aria-current="page"] i { background: var(--accent); color: var(--accent-ink) }
+.tabbar svg { width: 22px; height: 22px }
+@media (max-width: 900px) {
+  .app { grid-template-columns: minmax(0, 1fr) }
+  .rail { display: none }
+  .tabbar { display: flex }
+  .mhead { display: flex }
+  .main { padding-block: 18px 110px }
+}
+
+/* ---------- page header ---------- */
+.ph { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px }
+.eyebrow { color: var(--muted); font-size: 15px }
+h1 { font: 800 clamp(32px, 4.2vw, 46px)/1.05 var(--font-display); letter-spacing: -.02em; margin-top: 4px }
+h2 { font: 700 19px/1.25 var(--font-body) }
+.ph-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center }
+
+/* ---------- buttons & chips ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 10px 16px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-weight: 600; font-size: 15px; cursor: pointer; text-decoration: none; white-space: nowrap }
+.btn:hover { border-color: var(--ink) }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink) }
+.btn.primary:hover { filter: brightness(.96) }
+.btn.dark { background: var(--ink); border-color: var(--ink); color: var(--surface) }
+.btn.danger { color: var(--bad); border-color: var(--bad) }
+.btn.small { min-height: 36px; padding: 6px 12px; font-size: 14px }
+.btn.wide { width: 100% }
+.btn[disabled] { opacity: .55; cursor: progress }
+.icon-btn { width: 44px; height: 44px; padding: 0 }
+.icon-btn svg, .btn svg { width: 18px; height: 18px; flex: none }
+.chips { display: flex; flex-wrap: wrap; gap: 8px }
+.chip { min-height: 40px; padding: 8px 16px; border-radius: 999px; border: 1px solid var(--line-strong); background: var(--surface); font-weight: 600; cursor: pointer; white-space: nowrap }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink) }
+.linkish { background: none; border: 0; padding: 0; color: var(--live); font-weight: 600; text-decoration: underline; cursor: pointer }
+
+/* ---------- surfaces ---------- */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; min-width: 0 }
+.card-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--line) }
+.card-b { padding: 18px 22px }
+.stack { display: grid; gap: 20px }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; display: grid; gap: 6px; min-width: 0 }
+.tile .lbl { color: var(--muted); font-size: 15px }
+.tile .val { display: flex; align-items: baseline; gap: 8px }
+.tile .val b { font: 800 46px/1 var(--font-display); letter-spacing: -.02em }
+.tile .val span { color: var(--muted) }
+.tile .sub { font-size: 14px; font-weight: 500 }
+.tile .sub.warn { color: var(--warn) } .tile .sub.bad { color: var(--bad) }
+.two { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 20px; align-items: start }
+@media (max-width: 1150px) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) } .two { grid-template-columns: minmax(0, 1fr) } }
+@media (max-width: 420px) { .tile .val b { font-size: 38px } }
+
+.rows > * + * { border-top: 1px solid var(--line) }
+.row { display: flex; align-items: center; gap: 14px; padding: 14px 22px; flex-wrap: wrap }
+.grow { flex: 1 1 200px; min-width: 0 }
+.name { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.sub { color: var(--muted); font-size: 14px }
+.acts { display: flex; gap: 8px; flex-wrap: wrap }
+.avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--live-bg); color: var(--live); display: grid; place-items: center; font-weight: 700; font-size: 15px; flex: none }
+.avatar.sm { width: 32px; height: 32px; font-size: 12px }
+.plate { font-family: var(--font-mono); font-weight: 600; font-size: 13px; letter-spacing: .02em; border: 1.5px solid var(--ink); border-radius: 5px; padding: 0 7px; line-height: 1.6; white-space: nowrap; display: inline-block }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; background: var(--surface-2); color: var(--muted) }
+.pill.live { background: var(--live-bg); color: var(--live) } .pill.warn { background: var(--warn-bg); color: var(--warn) }
+.pill.bad { background: var(--bad-bg); color: var(--bad) } .pill.ok { background: var(--ok-bg); color: var(--ok) }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; background: var(--muted); flex: none }
+.dot.live { background: var(--live) } .dot.warn { background: var(--accent) } .dot.bad { background: var(--bad) } .dot.ok { background: var(--ok) }
+.empty { padding: 26px 22px; color: var(--muted) }
+.loading { padding: 26px 22px; color: var(--muted); display: flex; gap: 10px; align-items: center }
+.loading::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-strong); border-top-color: var(--accent); animation: spin 1s linear infinite }
+@keyframes spin { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .loading::before { animation: none } }
+
+.notice { border-radius: 12px; padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; background: var(--warn-bg); color: var(--warn); font-weight: 500 }
+.notice.bad { background: var(--bad-bg); color: var(--bad) }
+.notice.info { background: var(--live-bg); color: var(--live) }
+.notice.ok { background: var(--ok-bg); color: var(--ok) }
+.notice p { margin: 0; flex: 1 1 240px }
+.notice .btn { color: var(--ink) }
+.stale { font-size: 13px; color: var(--warn); padding: 0 0 10px }
+.updated { font-size: 13px; color: var(--muted) }
+
+/* attention */
+.att-ic { width: 44px; height: 44px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--surface-2); color: var(--muted) }
+.att-ic svg { width: 20px; height: 20px }
+.att-ic.bad { background: var(--bad-bg); color: var(--bad) } .att-ic.warn { background: var(--warn-bg); color: var(--warn) } .att-ic.live { background: var(--live-bg); color: var(--live) }
+.due { font-weight: 700; white-space: nowrap }
+.due.bad { color: var(--bad) } .due.warn { color: var(--warn) } .due.live { color: var(--live) }
+
+/* tables */
+.tbl-wrap { overflow-x: auto }
+table { width: 100%; border-collapse: collapse; font-size: 15px }
+th { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--line); font-weight: 600; white-space: nowrap }
+td { padding: 14px 16px; border-bottom: 1px solid var(--line); vertical-align: top }
+tbody tr:last-child td { border-bottom: 0 }
+tr.click { cursor: pointer } tr.click:hover td { background: var(--surface-2) }
+td.r, th.r { text-align: right }
+.bar { height: 6px; border-radius: 3px; background: var(--surface-2); margin-top: 8px; overflow: hidden; min-width: 120px }
+.bar i { display: block; height: 100%; background: var(--live); border-radius: 3px }
+.bar.over i { background: var(--bad) }
+.doc { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); margin: 0 4px 4px 0 }
+.doc.warn { background: var(--warn-bg); color: var(--warn) } .doc.bad { background: var(--bad-bg); color: var(--bad) } .doc.ok { background: var(--ok-bg); color: var(--ok) }
+.doc.unset { background: transparent; border: 1px dashed var(--line-strong) }
+
+/* tasks */
+.tasks-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 410px); gap: 24px; align-items: start }
+.board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start }
+.col { background: var(--surface-2); border-radius: 16px; padding: 12px; display: grid; gap: 10px; min-width: 0 }
+.col-h { display: flex; justify-content: space-between; align-items: center; padding: 4px 6px 2px; font-weight: 700; font-size: 17px }
+.col-h span { display: flex; gap: 10px; align-items: center }
+.col-empty { margin: 0; padding: 10px 6px; color: var(--muted); font-size: 14px }
+.tcard { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; cursor: pointer; display: grid; gap: 8px; width: 100% }
+.tcard:hover { border-color: var(--line-strong) }
+.tcard .top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--muted) }
+.tcard .top b { font-family: var(--font-mono); color: var(--ink); font-size: 15px }
+.tcard .title { font-weight: 700; font-size: 17px }
+.tcard .route { color: var(--muted); font-size: 14px; line-height: 1.5 }
+.tcard .who { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--line); padding-top: 10px; flex-wrap: wrap }
+.tcard .who .grow { font-weight: 500; flex: 1 1 auto }
+.status { font-size: 14px; font-weight: 600 }
+.status.live { color: var(--live) } .status.warn { color: var(--warn) } .status.muted { color: var(--muted) } .status.bad { color: var(--bad) }
+.daynav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+.daynav input { width: auto; min-height: 44px }
+@media (max-width: 1150px) { .tasks-layout { grid-template-columns: minmax(0, 1fr) } }
+@media (max-width: 620px) { .board { grid-template-columns: minmax(0, 1fr) } }
+
+/* forms */
+.form { display: grid; gap: 16px }
+.field { display: grid; gap: 6px; min-width: 0 }
+.field > label, .lab { font-weight: 600; font-size: 14px }
+.hint { font-size: 13px; color: var(--muted) }
+input, select, textarea { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); font-size: 15px }
+textarea { min-height: 84px; resize: vertical }
+input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-height: 0; accent-color: var(--ink); flex: none }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+@media (max-width: 480px) { .grid2 { grid-template-columns: minmax(0, 1fr) } }
+.check { display: flex; align-items: center; gap: 10px; font-weight: 500 }
+.prow { display: grid; grid-template-columns: minmax(0, 1fr) 88px 44px; gap: 8px; align-items: start; border: 1px solid var(--line); border-radius: 12px; padding: 10px }
+.prow .match { grid-column: 1 / -1; font-size: 13px; color: var(--muted) }
+.prow .match.bad { color: var(--bad) }
+.splitbar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--surface-2) }
+.splitbar i { display: block; height: 100% }
+.split-foot { display: flex; justify-content: space-between; font-size: 14px; font-weight: 600 }
+.form-msg:empty { display: none }
+.opt { display: flex; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer }
+.opt:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink) }
+.opt .sub.warn { color: var(--warn) } .opt .sub.bad { color: var(--bad) }
+
+/* live */
+.live-layout { display: grid; grid-template-columns: minmax(260px, 380px) minmax(0, 1fr); gap: 20px; align-items: start }
+.llist { max-height: 70vh; overflow-y: auto }
+.lrow { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; padding: 14px 18px; background: transparent; border: 0; cursor: pointer; border-top: 1px solid var(--line) }
+.lrow:first-child { border-top: 0 }
+.lrow:hover { background: var(--surface-2) }
+.lrow.sel { background: var(--warn-bg) }
+.lrow .dot { margin-top: 7px; box-shadow: 0 0 0 4px var(--surface-2) }
+.lrow .age { margin-left: auto; font-size: 14px; font-weight: 600; white-space: nowrap }
+.mapbox { position: relative; border-radius: 16px; overflow: hidden; border: 1px solid var(--line); background: var(--sea) }
+.mapbox svg { display: block; width: 100%; height: auto; aspect-ratio: 1000 / 640 }
+.zoom { position: absolute; top: 12px; right: 12px; display: grid; gap: 8px }
+.zoom button { width: 44px; height: 44px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-size: 22px; font-weight: 600; cursor: pointer; display: grid; place-items: center }
+.zoom svg { width: 18px; height: 18px }
+.facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 16px 0 }
+.facts dt { color: var(--muted); font-size: 13px } .facts dd { margin: 2px 0 0; font-weight: 600 }
+@media (max-width: 900px) { .live-layout { grid-template-columns: minmax(0, 1fr) } .live-map { order: -1 } .llist { max-height: none } }
+@media (max-width: 520px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)) } }
+
+/* reports */
+.rep { display: grid; gap: 10px; padding: 18px 22px }
+.photos { display: flex; gap: 8px; flex-wrap: wrap }
+
+/* drawer */
+.drawer { position: fixed; inset: 0; z-index: 60; display: flex; justify-content: flex-end; background: var(--shade) }
+.drawer-panel { width: min(580px, 100%); height: 100%; background: var(--bg); overflow-y: auto; padding: calc(20px + env(safe-area-inset-top, 0px)) clamp(16px, 3vw, 28px) calc(32px + env(safe-area-inset-bottom, 0px)); display: grid; align-content: start; gap: 18px }
+.drawer-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px }
+.drawer-top h2 { font: 800 28px/1.1 var(--font-display) }
+.kv { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px }
+.kv dt { color: var(--muted); font-size: 13px } .kv dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere }
+.section-t { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: 4px 0 -6px }
+.stop { display: flex; gap: 12px; align-items: flex-start }
+.stop .dot { margin-top: 6px }
+.confirm { display: grid; gap: 10px; border: 1px solid var(--bad); border-radius: 12px; padding: 14px }
+.more-list { display: grid; gap: 10px }
+.more-list a { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; font-weight: 600 }
+.more-list svg { width: 20px; height: 20px }
+
+#toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 12px 18px; border-radius: 12px; font-weight: 600; z-index: 80; max-width: calc(100% - 32px) }
+@media (max-width: 900px) { #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)) } }
+</style>
+
+<div class="app">
+  <aside class="rail" aria-label="Fame Fleet">
+    <div class="brand"><div class="logo">FF</div><div><b>Fame Fleet</b><span>Fleet office</span></div></div>
+    <nav class="nav" id="nav"></nav>
+    <div class="viewer" id="viewer"></div>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="mhead"><div class="logo">FF</div><div><b>Fame Fleet</b><div class="muted small" id="mdate"></div></div></div>
+    <div id="banner"></div>
+
+    <section class="view" id="v-overview" hidden>
+      <div class="ph">
+        <div><div class="eyebrow" id="ov-date"></div><h1>Overview</h1></div>
+        <div class="ph-actions">
+          <button class="btn" data-action="new-request">New request</button>
+          <a class="btn primary" href="#tasks" data-action="assign-focus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Assign task</a>
+        </div>
+      </div>
+      <div id="ov-body" class="stack"></div>
+    </section>
+
+    <section class="view" id="v-live" hidden>
+      <div class="ph">
+        <div><div class="eyebrow">Shared by drivers from the Fame Driver app</div><h1>Live locations</h1></div>
+        <div class="chips" id="live-chips"></div>
+      </div>
+      <div class="live-layout">
+        <div class="card llist" id="live-list"></div>
+        <div class="stack live-map">
+          <div class="mapbox">
+            <div id="map"></div>
+            <div class="zoom">
+              <button type="button" data-action="zoom" data-z="in" aria-label="Zoom in">+</button>
+              <button type="button" data-action="zoom" data-z="out" aria-label="Zoom out">−</button>
+              <button type="button" data-action="zoom" data-z="fit" aria-label="Fit everyone on the map"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+            </div>
+          </div>
+          <div id="live-detail"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="v-tasks" hidden>
+      <div class="ph">
+        <div><div class="eyebrow" id="tasks-eyebrow"></div><h1>Tasks</h1></div>
+        <div class="daynav">
+          <button class="btn" data-action="day" data-d="-1">‹ Yesterday</button>
+          <button class="btn dark" data-action="day" data-d="0">Today</button>
+          <button class="btn" data-action="day" data-d="1">Tomorrow ›</button>
+          <input type="date" id="task-date" aria-label="Pick a day">
+        </div>
+      </div>
+      <div class="tasks-layout">
+        <div id="board" class="board"></div>
+        <div class="card" id="assign-card">
+          <div class="card-h"><h2>Assign a task</h2></div>
+          <form class="card-b form" id="assign-form" novalidate>
+            <div class="field"><label for="af-title">Task</label><input id="af-title" name="title" maxlength="120" placeholder="Team drop · Matara sites" required></div>
+            <div class="field">
+              <span class="lab">Charge to projects <span class="muted" style="font-weight:400">· from Zoho Books projects</span></span>
+              <div id="af-projects" class="form"></div>
+              <div id="af-split"></div>
+              <button type="button" class="btn" data-action="add-project">+ Add a project</button>
+              <span class="hint">Km, fuel and driver costs from this task are split across these projects by the percentages. Leave empty for Fame internal.</span>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="af-date">Date</label><input type="date" id="af-date" required></div>
+              <div class="field"><label for="af-start">Start</label><input type="time" id="af-start" required></div>
+            </div>
+            <div class="field"><label for="af-pickup">Pickup</label><input id="af-pickup" list="places-list" maxlength="160" placeholder="Head office, Colombo 05" required></div>
+            <div class="field"><label for="af-dropoff">Drop-off</label><input id="af-dropoff" list="places-list" maxlength="160" placeholder="Saved place or address" required></div>
+            <div class="grid2">
+              <div class="field"><label for="af-driver">Driver</label><select id="af-driver" required><option value="">Loading…</option></select></div>
+              <div class="field"><label for="af-vehicle">Vehicle</label><select id="af-vehicle" required><option value="">Loading…</option></select></div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="af-end">Vehicle free by</label><input type="time" id="af-end"></div>
+              <div class="field"><label for="af-pax">Passengers</label><input type="number" id="af-pax" min="0" max="80" inputmode="numeric"></div>
+            </div>
+            <div class="grid2">
+              <div class="field"><label for="af-cname">Contact name</label><input id="af-cname" maxlength="120"></div>
+              <div class="field"><label for="af-cphone">Contact phone</label><input id="af-cphone" maxlength="30" inputmode="tel"></div>
+            </div>
+            <div class="field"><label for="af-notes">Notes for the driver</label><textarea id="af-notes" maxlength="1000"></textarea></div>
+            <div class="field">
+              <span class="lab">Send to driver</span>
+              <span class="check"><input type="checkbox" checked disabled id="af-app"> <label for="af-app">Fame Driver app (always)</label></span>
+              <span class="check"><input type="checkbox" id="af-wa"> <label for="af-wa">Also give me a WhatsApp message with the details</label></span>
+            </div>
+            <div id="af-msg" class="form-msg"></div>
+            <button class="btn primary wide" type="submit" id="af-submit">Assign &amp; send</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="v-requests" hidden>
+      <div class="ph">
+        <div><div class="eyebrow">Vehicle requests from staff</div><h1>Requests</h1></div>
+        <div class="ph-actions"><div class="chips" id="req-chips"></div><button class="btn primary" data-action="new-request">New request</button></div>
+      </div>
+      <div id="req-body"></div>
+    </section>
+
+    <section class="view" id="v-vehicles" hidden>
+      <div class="ph">
+        <div><div class="eyebrow" id="veh-eyebrow">Rented vehicles</div><h1>Vehicles</h1></div>
+        <div class="ph-actions"><button class="btn primary" data-action="new-vehicle">Register vehicle</button></div>
+      </div>
+      <div class="chips" id="veh-chips" style="margin-bottom:18px"></div>
+      <div id="veh-body"></div>
+      <p class="muted small">Document chips: Lic = revenue licence, Ins = insurance, Emi = emission test. Orange = expires within 30 days, red = within 7 days or expired.</p>
+    </section>
+
+    <section class="view" id="v-drivers" hidden>
+      <div class="ph">
+        <div><div class="eyebrow">Fame Driver sign-ins</div><h1>Drivers</h1></div>
+        <div class="ph-actions">
+          <span class="check"><input type="checkbox" id="drv-inactive"> <label for="drv-inactive">Show switched-off drivers</label></span>
+          <button class="btn primary" data-action="new-driver">Add driver</button>
+        </div>
+      </div>
+      <div id="drv-body"></div>
+    </section>
+
+    <section class="view" id="v-mileage" hidden>
+      <div class="ph">
+        <div><div class="eyebrow">Odometer, task km and fuel</div><h1>Mileage</h1></div>
+        <div class="ph-actions">
+          <input type="month" id="mil-month" aria-label="Month" style="width:auto">
+          <select id="mil-vehicle" aria-label="Vehicle" style="width:auto"><option value="">All vehicles</option></select>
+          <select id="mil-driver" aria-label="Driver" style="width:auto"><option value="">All drivers</option></select>
+        </div>
+      </div>
+      <div id="mil-body" class="stack"></div>
+    </section>
+
+    <section class="view" id="v-maintenance" hidden>
+      <div class="ph">
+        <div><div class="eyebrow">Problems reported by drivers, service and documents</div><h1>Maintenance</h1></div>
+        <div class="chips" id="rep-chips"></div>
+      </div>
+      <div id="rep-body" class="stack"></div>
+    </section>
+
+    <section class="view" id="v-projects" hidden>
+      <div class="ph">
+        <div><div class="eyebrow">Jobs from Zoho Books</div><h1>Projects</h1></div>
+      </div>
+      <div class="stack">
+        <form class="card card-b form" id="proj-form">
+          <div class="field"><label for="proj-q">Find a project</label>
+            <div style="display:flex;gap:10px;flex-wrap:wrap"><input id="proj-q" placeholder="Job number, DU ID (e.g. TRKAN1) or part of the name" style="flex:1 1 240px"><button class="btn dark" type="submit">Search</button></div>
+          </div>
+        </form>
+        <div id="proj-body"></div>
+        <div class="card card-b">
+          <h2>Bring projects in from Zoho Books</h2>
+          <p class="muted">Projects are copied from Zoho Books, so tasks can be charged to the right job. Open a chat with both the Zoho Books and Fame Fleet connectors turned on and send:</p>
+          <p class="mono" id="zoho-prompt" style="background:var(--surface-2);padding:12px 14px;border-radius:10px;margin:0 0 12px">Read all active projects from Zoho Books and import them into Fame Fleet.</p>
+          <button class="btn" data-action="copy" data-target="zoho-prompt">Copy the message</button>
+          <p class="muted small">The project cost report in the design comes later, once fuel and rent data are flowing.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="v-more" hidden>
+      <div class="ph"><div><div class="eyebrow">Everything else</div><h1>More</h1></div></div>
+      <div class="more-list" id="more-list"></div>
+    </section>
+  </main>
+
+  <nav class="tabbar" id="tabbar" aria-label="Sections"></nav>
+</div>
+
+<datalist id="places-list"></datalist>
+<div class="drawer" id="drawer" hidden><div class="drawer-panel" id="drawer-panel" role="dialog" aria-modal="true"></div></div>
+<div id="toast" role="status" hidden></div>
+
+<script>
+(function () {
+'use strict';
+const SERVER = 'Fame Fleet';
+const TZ = 'Asia/Colombo';
+
+/* ---------- icons ---------- */
+const P = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const IC = {
+  overview: P('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>'),
+  live: P('<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'),
+  tasks: P('<path d="M9 6h12M9 12h12M9 18h12"/><path d="M3.5 6l1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11M3.5 18l1.5 1.5L7.5 17"/>'),
+  requests: P('<path d="M4 5h16v11H9l-5 4z"/>'),
+  vehicles: P('<path d="M3 16V11l2-5h14l2 5v5"/><path d="M3 16h18v2H3z"/><circle cx="7.5" cy="16" r="1.6"/><circle cx="16.5" cy="16" r="1.6"/><path d="M5 11h14"/>'),
+  projects: P('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>'),
+  maintenance: P('<path d="M14.5 5.5a4 4 0 0 0 4.9 4.9L21 12l-9 9-3-3 9-9-1.6-1.6"/><path d="M14.5 5.5L12 3 9 6l2.5 2.5"/>'),
+  mileage: P('<path d="M4.5 17a8 8 0 1 1 15 0"/><path d="M12 13l4-4"/>'),
+  drivers: P('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
+  more: P('<circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/>'),
+  pin: P('<path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>'),
+  chat: P('<path d="M20 12a8 8 0 0 1-11.8 7L4 20l1.1-4A8 8 0 1 1 20 12z"/>'),
+  phone: P('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>'),
+  doc: P('<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5M10 13h6M10 17h6"/>'),
+  wrench: P('<path d="M14.5 5.5a4 4 0 0 0 4.9 4.9L21 12l-9 9-3-3 9-9-1.6-1.6"/><path d="M14.5 5.5L12 3 9 6l2.5 2.5"/>'),
+  gauge: P('<path d="M4.5 17a8 8 0 1 1 15 0"/><path d="M12 13l4-4"/>'),
+  person: P('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'),
+  alert: P('<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5v.5"/>'),
+  close: P('<path d="M6 6l12 12M18 6L6 18"/>'),
+  refresh: P('<path d="M20 11a8 8 0 0 0-14.6-4M4 4v4h4M4 13a8 8 0 0 0 14.6 4M20 20v-4h-4"/>'),
+  route: P('<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>')
+};
+const NAV = [
+  ['overview', 'Overview'], ['live', 'Live locations'], ['tasks', 'Tasks'], ['requests', 'Requests'], ['vehicles', 'Vehicles'],
+  ['projects', 'Projects'], ['maintenance', 'Maintenance'], ['mileage', 'Mileage'], ['drivers', 'Drivers']
+];
+const TABS = [['overview', 'Home'], ['live', 'Map'], ['tasks', 'Tasks'], ['vehicles', 'Vehicles'], ['more', 'More']];
+const VIEWS = NAV.map(n => n[0]).concat('more');
+
+/* ---------- state ---------- */
+const S = {
+  mcp: null, noMcp: false, booting: true, viewer: '', view: 'overview',
+  data: {}, err: {}, at: {}, loading: {}, watches: [],
+  liveFilter: 'all', selDriver: null, route: null, routeBusy: false, routeErr: null, mapZoom: 1,
+  taskDate: null, reqFilter: 'waiting', vehFilter: 'all', repFilter: 'not_closed',
+  lists: { drivers: null, vehicles: null, places: null }, listsErr: null,
+  projRows: [], lastCreated: null
+};
+const AUTHZ = new Set(['needs_reauth', 'server_not_connected', 'server_not_found', 'blocked_by_policy', 'approval_required', 'not_in_manifest', 'selection_required', 'not_granted', 'capability_disabled', 'capability_removed', 'consent_required', 'user_changed']);
+
+/* ---------- helpers ---------- */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+const timeFmt = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false });
+const today = () => dayFmt.format(new Date());
+const addDays = (d, n) => { const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+const longDate = (d, noYear) => new Date(d + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: noYear ? undefined : 'numeric', timeZone: 'UTC' });
+const clock = ms => timeFmt.format(new Date(ms));
+const initials = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0] || '').join('').toUpperCase() || '?';
+const nf = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+const num = n => (n === null || n === undefined || n === '' || isNaN(Number(n))) ? '—' : nf.format(Number(n));
+const plateOf = v => String(v || '').split(' · ')[0];
+const cap = s => s ? String(s).charAt(0).toUpperCase() + String(s).slice(1).replace(/_/g, ' ') : '';
+const human = k => ({ task_km: 'Task km', fuel_lkr: 'Fuel (LKR)', fuel_litres: 'Fuel (litres)', km_allowance: 'Allowance (km)', km_by_odometer: 'Km by odometer', odometer_km: 'Odometer (km)', reg_no: 'Vehicle', unlogged_km: 'Unlogged km' }[k] || cap(k));
+function latLng(url) {
+  if (!url) return null;
+  let s = String(url); try { s = decodeURIComponent(s); } catch (e) { /* keep raw */ }
+  const m = s.match(/(?:query|destination)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+  return m ? { lat: +m[1], lng: +m[2] } : null;
+}
+function waLink(phone, text) {
+  let d = String(phone || '').replace(/\D/g, '');
+  if (!d) return '';
+  if (d.startsWith('0')) d = '94' + d.slice(1);
+  return 'https://wa.me/' + d + (text ? '?text=' + encodeURIComponent(text) : '');
+}
+const plate = v => v ? `<span class="plate">${esc(plateOf(v))}</span>` : '';
+const pill = (text, tone) => `<span class="pill ${tone || ''}">${esc(text)}</span>`;
+const loading = t => `<div class="loading">${esc(t)}</div>`;
+const empty = t => `<div class="empty">${esc(t)}</div>`;
+const iconLink = (href, icon, label) => href ? `<a class="btn icon-btn" href="${esc(href)}" target="_blank" rel="noopener" aria-label="${esc(label)}" title="${esc(label)}">${IC[icon]}</a>` : '';
+function locTone(text) {
+  const t = String(text || '').toLowerCase();
+  if (t.includes('not sharing')) return 'bad';
+  if (t.startsWith('live') || t.includes('sharing')) return 'live';
+  return 'warn';
+}
+function stateTone(state) { return state === 'sharing' ? 'live' : state === 'stale' ? 'warn' : 'bad'; }
+function levelTone(level) { const l = String(level || '').toLowerCase(); return l === 'red' ? 'bad' : (l === 'orange' || l === 'amber' || l === 'yellow') ? 'warn' : l === 'blue' ? 'live' : l === 'green' ? 'ok' : 'warn'; }
+function warnList(p) {
+  const w = (p && (p.warnings || p.warning)) || [];
+  const arr = Array.isArray(w) ? w : [w];
+  return arr.filter(Boolean).map(x => typeof x === 'string' ? x : (x.message || x.text || x.warning || JSON.stringify(x)));
+}
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 3200);
+}
+
+/* ---------- connector ---------- */
+async function call(tool, input) {
+  if (!S.mcp) throw { code: 'not_granted', message: 'Fame Fleet is not available on this page.' };
+  const res = await S.mcp.callTool(SERVER, tool, input || {});
+  return res && res.payload !== undefined ? res.payload : res;
+}
+function watch(key, tool, input, ms) {
+  if (!S.mcp) return;
+  try {
+    const un = S.mcp.watchTool(SERVER, tool, input || {}, ev => {
+      if (ev.type === 'data') {
+        S.data[key] = ev.result.payload !== undefined ? ev.result.payload : ev.result;
+        S.at[key] = (ev.result.cache && ev.result.cache.storedAt) || Date.now();
+        delete S.err[key];
+      } else {
+        const e = ev.error || {};
+        S.err[key] = e;
+        if (AUTHZ.has(e.code)) S.data[key] = undefined;
+      }
+      render();
+    }, { refetchInterval: ms });
+    S.watches.push({ key, un });
+  } catch (e) { S.err[key] = { code: 'bad_request', message: String(e && e.message || e) }; }
+}
+function unwatch(keep) {
+  S.watches = S.watches.filter(w => { if (keep.includes(w.key)) return true; try { w.un(); } catch (e) { /* ignore */ } return false; });
+}
+async function load(key, tool, input) {
+  S.loading[key] = true; render();
+  try { S.data[key] = await call(tool, input); S.at[key] = Date.now(); delete S.err[key]; }
+  catch (e) { S.err[key] = e; if (AUTHZ.has(e && e.code)) S.data[key] = undefined; }
+  S.loading[key] = false; render();
+}
+async function refreshAll() { try { if (S.mcp) await S.mcp.invalidate(SERVER); } catch (e) { /* nothing cached */ } }
+function errText(e) {
+  const code = e && e.code;
+  switch (code) {
+    case 'server_not_connected': case 'server_not_found':
+      return ['Fame Fleet isn’t connected to your Claude account. Add it in Settings → Connectors, then reload this page.', null];
+    case 'needs_reauth': return ['Fame Fleet needs to be reconnected. Open Settings → Connectors → Fame Fleet → Connect, then reload.', null];
+    case 'not_in_manifest': case 'consent_required': return ['Fame Fleet is turned off for this page. Allow it in the page’s permissions.', 'perms'];
+    case 'approval_required': return ['Claude needs your approval before this page can use Fame Fleet.', 'approve'];
+    case 'selection_required': return ['You have more than one connector called Fame Fleet. Choose one when Claude asks, then reload.', null];
+    case 'blocked_by_policy': return ['Your organisation’s settings block this Fame Fleet tool.', null];
+    case 'server_unavailable': case 'rate_limited': case 'upstream_error': return ['Fame Fleet didn’t answer. The page tries again by itself.', 'retry'];
+    case 'not_granted': case 'capability_disabled': case 'capability_removed': return ['Open this page in Claude to use Fame Fleet.', null];
+    case 'tool_error': return [cleanMsg(e.message) || 'Fame Fleet refused the request.', null];
+    default: return [cleanMsg(e && e.message) || 'Something went wrong talking to Fame Fleet.', 'retry'];
+  }
+}
+function cleanMsg(m) {
+  if (!m) return '';
+  const s = String(m);
+  try { const j = JSON.parse(s); return j.error ? (j.error.message || j.error.code) : (j.message || s); } catch (e) { return s.replace(/^Error:\s*/, ''); }
+}
+function errBox(key, retryAction) {
+  const e = S.err[key]; if (!e) return '';
+  const [text, fix] = errText(e);
+  let btn = '';
+  if (fix === 'perms') btn = `<button class="btn small" data-action="perms">Open permissions</button>`;
+  else if (fix === 'approve') btn = `<button class="btn small" data-action="approve-load" data-key="${esc(key)}">Allow and load</button>`;
+  else if (fix === 'retry' && retryAction) btn = `<button class="btn small" data-action="${esc(retryAction)}">Try again</button>`;
+  const tone = AUTHZ.has(e.code) ? 'bad' : '';
+  return `<div class="notice ${tone}"><p>${esc(text)}</p>${btn}</div>`;
+}
+function staleNote(key) {
+  const e = S.err[key]; if (!e || AUTHZ.has(e.code)) return '';
+  return `<div class="stale">Showing data from ${S.at[key] ? clock(S.at[key]) : 'earlier'}. ${esc(errText(e)[0])}</div>`;
+}
+function updated(key) { return S.at[key] ? `<span class="updated">Updated ${clock(S.at[key])}</span>` : ''; }
+
+/* ---------- chrome ---------- */
+function renderChrome() {
+  const waiting = S.data.overview && S.data.overview.requests ? S.data.overview.requests.waiting : 0;
+  $('#nav').innerHTML = NAV.map(([k, label]) => `<a href="#${k}" ${S.view === k ? 'aria-current="page"' : ''}>${IC[k]}<span>${label}</span>${k === 'requests' && waiting ? `<span class="badge">${waiting}</span>` : ''}</a>`).join('');
+  const tabActive = ['requests', 'projects', 'maintenance', 'mileage', 'drivers', 'more'].includes(S.view) ? 'more' : S.view;
+  $('#tabbar').innerHTML = TABS.map(([k, label]) => `<a href="#${k}" ${tabActive === k ? 'aria-current="page"' : ''}><i>${IC[k]}</i>${label}</a>`).join('');
+  $('#mdate').textContent = longDate(today(), true);
+  $('#viewer').innerHTML = S.viewer ? `<span class="avatar sm">${esc(initials(S.viewer))}</span><span>${esc(S.viewer)}<small>Fleet office</small></span>` : `<span class="muted small">Fleet office</span>`;
+  $('#more-list').innerHTML = NAV.filter(n => !['overview', 'live', 'tasks', 'vehicles'].includes(n[0])).map(([k, label]) => `<a href="#${k}">${IC[k]}${label}${k === 'requests' && waiting ? `<span class="badge">${waiting}</span>` : ''}</a>`).join('');
+}
+function renderBanner() {
+  const b = $('#banner');
+  if (S.noMcp) {
+    b.innerHTML = `<div class="notice bad" style="margin-bottom:20px"><p>This page shows the fleet through the Fame Fleet connector. Open it in Claude with Fame Fleet connected (Settings → Connectors).</p></div>`;
+    return;
+  }
+  const e = S.err.overview;
+  if (e && AUTHZ.has(e.code)) {
+    const [text, fix] = errText(e);
+    b.innerHTML = `<div class="notice bad" style="margin-bottom:20px"><p>${esc(text)}</p>${fix === 'perms' ? '<button class="btn small" data-action="perms">Open permissions</button>' : fix === 'approve' ? '<button class="btn small" data-action="approve-load" data-key="overview">Allow and load</button>' : '<button class="btn small" data-action="reload">Reload</button>'}</div>`;
+  } else b.innerHTML = '';
+}
+
+/* ---------- overview ---------- */
+function tile(label, value, unit, sub, tone) {
+  return `<div class="tile"><div class="lbl">${esc(label)}</div><div class="val"><b class="num">${esc(value)}</b><span>${esc(unit)}</span></div><div class="sub ${tone || ''}">${esc(sub)}</div></div>`;
+}
+function attIcon(what) {
+  const w = String(what || '').toLowerCase();
+  if (w.includes('driver')) return 'person';
+  if (w.includes('service')) return 'wrench';
+  if (w.includes('km')) return 'gauge';
+  if (w.includes('problem')) return 'alert';
+  return 'doc';
+}
+function normReq(r) {
+  r = r || {};
+  const need = r.need || [cap(r.need_type), r.pax != null ? `${r.pax} pax` : '', r.tools ? 'tools' : ''].filter(Boolean).join(' · ');
+  return {
+    id: r.id || r.request_id,
+    by: r.requested_by || r.requested_by_name || r.by || '—',
+    project: r.project || r.project_label || r.project_name || '—',
+    when: r.when || r.needed || r.needed_at || [r.date, r.time].filter(Boolean).join(' · ') || '—',
+    back: r.back_by || '',
+    route: r.route || [r.route_from, r.route_to].filter(Boolean).join(' → ') || '—',
+    need: need || '—',
+    status: r.status || '',
+    asked: r.asked || r.requested || r.created || '',
+    note: r.note || '',
+    reason: r.decline_reason || r.reason || '',
+    task: r.task_id || ''
+  };
+}
+function renderOverview() {
+  $('#ov-date').textContent = longDate(today());
+  const el = $('#ov-body'); const o = S.data.overview;
+  if (!o) { el.innerHTML = S.noMcp ? '' : (errBox('overview', 'reload') || loading('Loading the fleet…')); return; }
+  const v = o.vehicles || {}, t = o.tasks || {}, r = o.requests || {}, rem = o.reminders || {};
+  const oldest = r.oldest || r.oldest_waiting || r.oldest_age;
+  const road = o.on_the_road || [], att = o.needs_attention || [];
+  const reqs = ((S.data.reqWaiting && S.data.reqWaiting.requests) || []).map(normReq);
+  el.innerHTML = `
+    ${staleNote('overview')}
+    <div class="tiles">
+      ${tile('Vehicles on the road', v.on_the_road ?? 0, `of ${v.total ?? 0}`, `${v.parked ?? 0} parked${v.in_garage ? ` · ${v.in_garage} in garage` : ''}`)}
+      ${tile('Tasks today', t.total ?? 0, 'jobs', `${t.in_progress ?? 0} in progress · ${t.done ?? 0} done`)}
+      ${tile('Requests to approve', r.waiting ?? 0, 'open', oldest ? `Oldest waiting ${oldest}` : 'Nothing waiting', r.waiting ? 'warn' : '')}
+      ${tile('Reminders due', rem.count ?? 0, `in ${rem.window_days ?? 14} days`, rem.red ? `${rem.red} need action now` : 'Nothing urgent', rem.red ? 'bad' : '')}
+    </div>
+    <div class="two">
+      <div class="card">
+        <div class="card-h"><h2>On the road</h2><a href="#live">All live locations</a></div>
+        <div class="rows">${road.length ? road.map(d => `
+          <div class="row">
+            <span class="avatar">${esc(initials(d.driver))}</span>
+            <div class="grow"><div class="name">${esc(d.driver)} ${plate(d.vehicle)}</div>
+              <div class="sub">${esc([d.task, d.going_to ? 'to ' + d.going_to : '', d.near ? 'near ' + d.near : ''].filter(Boolean).join(' · '))}</div></div>
+            ${pill(d.location || '—', locTone(d.location))}
+            <div class="acts">${iconLink(d.links && d.links.maps, 'pin', 'Open in Google Maps')}${iconLink(d.links && d.links.whatsapp, 'chat', 'WhatsApp')}${iconLink(d.links && d.links.call, 'phone', 'Call')}</div>
+          </div>`).join('') : empty('No vehicle is on the road right now.')}</div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h2>Needs attention</h2><span class="muted">Next ${rem.window_days ?? 14} days</span></div>
+        <div class="rows">${att.length ? att.map(a => `
+          <div class="row">
+            <span class="att-ic ${levelTone(a.level)}">${IC[attIcon(a.what)]}</span>
+            <div class="grow"><div class="name">${esc(a.what)}</div><div class="sub">${esc(a.subject || '')}</div></div>
+            <span class="due ${levelTone(a.level)}">${esc(a.due || '')}</span>
+          </div>`).join('') : empty('Nothing needs attention. Documents, services and km allowances are in order.')}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Requests awaiting approval</h2><span class="muted">${reqs.length} open</span></div>
+      ${S.err.reqWaiting && !S.data.reqWaiting ? `<div class="card-b">${errBox('reqWaiting')}</div>` : reqs.length ? `<div class="tbl-wrap"><table>
+        <thead><tr><th>Requested by</th><th>Project</th><th>When</th><th>Route</th><th>Need</th><th class="r">Action</th></tr></thead>
+        <tbody>${reqs.map(q => `<tr>
+          <td><b>${esc(q.by)}</b></td><td>${esc(q.project)}</td><td>${esc(q.when)}</td><td class="muted">${esc(q.route)}</td><td>${esc(q.need)}</td>
+          <td class="r"><div class="acts" style="justify-content:flex-end"><button class="btn small" data-action="open-request" data-id="${esc(q.id)}" data-mode="decline">Decline</button><button class="btn small dark" data-action="open-request" data-id="${esc(q.id)}">Approve &amp; assign</button></div></td>
+        </tr>`).join('')}</tbody></table></div>` : empty('No requests are waiting.')}
+    </div>`;
+}
+
+/* ---------- live map ---------- */
+const LK = [[80.04, 9.81], [80.24, 9.83], [80.45, 9.62], [80.6, 9.42], [80.82, 9.25], [81.05, 8.92], [81.23, 8.58], [81.38, 8.4], [81.5, 8.05], [81.7, 7.72], [81.85, 7.25], [81.85, 6.88], [81.7, 6.5], [81.4, 6.25], [81.12, 6.12], [80.8, 6.0], [80.59, 5.92], [80.4, 5.96], [80.22, 6.03], [80.05, 6.25], [79.96, 6.57], [79.86, 6.9], [79.84, 7.2], [79.8, 7.6], [79.82, 8.0], [79.76, 8.25], [79.9, 8.6], [79.92, 8.95], [80.1, 9.3], [80.2, 9.48], [80.0, 9.62], [79.88, 9.75]];
+const KX = Math.cos(7.8 * Math.PI / 180);
+function drawMap(markers, route) {
+  const W = 1000, H = 640;
+  let pts = markers.map(m => [m.pos.lng, m.pos.lat]);
+  if (route && route.points.length) pts = pts.concat(route.points.map(p => [p.lng, p.lat]));
+  let minX, maxX, minY, maxY;
+  if (!pts.length) { minX = 79.6; maxX = 81.95; minY = 5.85; maxY = 9.9; }
+  else { minX = Math.min(...pts.map(p => p[0])); maxX = Math.max(...pts.map(p => p[0])); minY = Math.min(...pts.map(p => p[1])); maxY = Math.max(...pts.map(p => p[1])); }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+  let sx = Math.max((maxX - minX) * KX, 0.03) * 1.45, sy = Math.max(maxY - minY, 0.03) * 1.45;
+  sx /= S.mapZoom; sy /= S.mapZoom;
+  if (sx / sy > W / H) sy = sx * H / W; else sx = sy * W / H;
+  const x0 = cx * KX - sx / 2, y1 = cy + sy / 2;
+  const pr = (lng, lat) => [((lng * KX - x0) / sx) * W, ((y1 - lat) / sy) * H];
+  const step = [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1].find(s => sy / s <= 9) || 1;
+  let grid = '';
+  for (let la = Math.ceil((y1 - sy) / step) * step; la <= y1; la += step) { const y = pr(0, la)[1]; grid += `<line x1="0" x2="${W}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}"/>`; }
+  const lngMin = x0 / KX, lngMax = (x0 + sx) / KX;
+  for (let lo = Math.ceil(lngMin / step) * step; lo <= lngMax; lo += step) { const x = pr(lo, 0)[0]; grid += `<line y1="0" y2="${H}" x1="${x.toFixed(1)}" x2="${x.toFixed(1)}"/>`; }
+  const island = 'M' + LK.map(([lo, la]) => pr(lo, la).map(v => v.toFixed(1)).join(',')).join('L') + 'Z';
+  let routeSvg = '';
+  if (route && route.points.length) {
+    const line = route.points.map(p => pr(p.lng, p.lat).map(v => v.toFixed(1)).join(',')).join(' ');
+    const a = pr(route.points[0].lng, route.points[0].lat);
+    routeSvg = `<polyline points="${line}" fill="none" stroke="var(--live)" stroke-width="5" stroke-linejoin="round" stroke-linecap="round" opacity=".85"/><circle cx="${a[0].toFixed(1)}" cy="${a[1].toFixed(1)}" r="8" fill="var(--surface)" stroke="var(--live)" stroke-width="4"/>`;
+  }
+  const marks = markers.map(m => {
+    const [x, y] = pr(m.pos.lng, m.pos.lat);
+    const tone = stateTone(m.state);
+    const color = tone === 'live' ? 'var(--live)' : tone === 'warn' ? 'var(--accent)' : 'var(--bad)';
+    const label = plateOf(m.vehicle) || m.driver || '';
+    const w = Math.max(60, label.length * 12.5 + 22), sel = m.username === S.selDriver;
+    return `<g class="mk" data-action="pick-driver" data-u="${esc(m.username)}" style="cursor:pointer" role="button" aria-label="${esc(m.driver)}">
+      ${sel ? `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="30" fill="${color}" opacity=".18"/>` : ''}
+      <rect x="${(x - 15).toFixed(1)}" y="${(y - 15).toFixed(1)}" width="30" height="30" rx="9" fill="${color}" stroke="var(--surface)" stroke-width="4"/>
+      <rect x="${(x - w / 2).toFixed(1)}" y="${(y - 62).toFixed(1)}" width="${w.toFixed(1)}" height="34" rx="7" fill="${sel ? 'var(--accent)' : 'var(--surface)'}" stroke="var(--line-strong)"/>
+      <text x="${x.toFixed(1)}" y="${(y - 39).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-weight="600" font-size="20" fill="${sel ? 'var(--accent-ink)' : 'var(--ink)'}">${esc(label)}</text></g>`;
+  }).join('');
+  const showSea = sy > 0.6;
+  $('#map').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Map of driver positions in Sri Lanka">
+    <rect width="${W}" height="${H}" fill="var(--sea)"/>
+    <path d="${island}" fill="var(--land)" stroke="var(--coast)" stroke-width="2"/>
+    <g stroke="var(--grid)" stroke-width="1.5">${grid}</g>
+    ${showSea ? `<text x="${pr(79.5, 7.3)[0].toFixed(0)}" y="${pr(79.5, 7.3)[1].toFixed(0)}" fill="var(--muted)" font-size="20" letter-spacing="6" font-family="IBM Plex Sans, sans-serif" transform="rotate(-90 ${pr(79.5, 7.3)[0].toFixed(0)} ${pr(79.5, 7.3)[1].toFixed(0)})">INDIAN OCEAN</text>` : ''}
+    ${routeSvg}${marks}
+  </svg>`;
+}
+function liveDrivers() { return ((S.data.live && S.data.live.drivers) || []).map(x => Object.assign({}, x, { pos: latLng(x.links && x.links.maps) })); }
+function renderLive() {
+  const d = S.data.live; const list = $('#live-list');
+  const LABEL = { all: 'All', sharing: 'Sharing', stale: 'Stale', not_sharing: 'Not sharing' };
+  if (!d) {
+    $('#live-chips').innerHTML = '';
+    list.innerHTML = S.noMcp ? '' : (errBox('live', 'reload') || loading('Finding drivers…'));
+    drawMap([], null); $('#live-detail').innerHTML = ''; return;
+  }
+  const c = d.counts || {};
+  $('#live-chips').innerHTML = Object.keys(LABEL).map(k => `<button class="chip" data-action="live-filter" data-f="${k}" aria-pressed="${S.liveFilter === k}">${LABEL[k]} · ${c[k] ?? 0}</button>`).join('');
+  const all = liveDrivers();
+  const shown = S.liveFilter === 'all' ? all : all.filter(x => x.state === S.liveFilter);
+  if (!S.selDriver && all[0]) S.selDriver = all[0].username;
+  list.innerHTML = staleNote('live') + (shown.length ? shown.map(x => `
+    <button class="lrow ${x.username === S.selDriver ? 'sel' : ''}" data-action="pick-driver" data-u="${esc(x.username)}">
+      <span class="dot ${stateTone(x.state)}"></span>
+      <span class="grow"><span class="name">${esc(x.driver)} ${plate(x.vehicle)}</span><span class="sub" style="display:block">${esc([x.task, x.near ? 'near ' + x.near : ''].filter(Boolean).join(' · ') || 'No task')}</span></span>
+      <span class="age status ${stateTone(x.state)}">${esc(x.state === 'not_sharing' ? 'Not sharing' : (x.location || '').replace(/^Last seen /, '') || '—')}</span>
+    </button>`).join('') : empty(all.length ? 'Nobody in this group right now.' : 'No driver is sharing their location or on a task right now.'));
+  const route = S.route && S.route.username === S.selDriver ? S.route : null;
+  drawMap(all.filter(x => x.pos), route);
+  renderLiveDetail(all.find(x => x.username === S.selDriver), route);
+}
+function renderLiveDetail(x, route) {
+  const el = $('#live-detail');
+  if (!x) { el.innerHTML = ''; return; }
+  const speed = x.speed_kmh ?? x.speed;
+  const links = x.links || {};
+  let routeHtml = '';
+  if (S.routeBusy) routeHtml = loading('Loading today’s route…');
+  else if (S.routeErr) routeHtml = `<div class="notice"><p>${esc(errText(S.routeErr)[0])}</p></div>`;
+  else if (route) routeHtml = `<div class="notice info"><p><b>Today: ${num(route.km)} km</b> from ${route.count} points, ${esc(route.first || '')}–${esc(route.last || '')}. ${route.stops.length ? 'Stops over 10 min: ' + route.stops.map(esc).join('; ') : 'No stops over 10 minutes.'}</p><button class="btn small" data-action="hide-route">Hide route</button></div>`;
+  el.innerHTML = `<div class="card card-b">
+    <div class="row" style="padding:0">
+      <span class="avatar">${esc(initials(x.driver))}</span>
+      <div class="grow"><div class="name" style="font-size:20px">${esc(x.driver)}</div><div class="sub">${esc([x.vehicle, x.task, x.going_to ? 'to ' + x.going_to : ''].filter(Boolean).join(' · '))}</div></div>
+      ${pill(x.updated ? 'Updated ' + String(x.updated).slice(-5) : (x.location || ''), stateTone(x.state))}
+    </div>
+    <dl class="facts">
+      <div><dt>Near</dt><dd>${esc(x.near || '—')}</dd></div>
+      <div><dt>Speed</dt><dd>${speed != null ? num(speed) + ' km/h' : '—'}</dd></div>
+      <div><dt>Battery</dt><dd>${x.battery_pct != null ? esc(x.battery_pct) + '%' : '—'}</dd></div>
+      <div><dt>Source</dt><dd>${esc(x.source || '—')}</dd></div>
+    </dl>
+    <div class="acts">
+      ${links.maps ? `<a class="btn dark" href="${esc(links.maps)}" target="_blank" rel="noopener">Open in Google Maps</a>` : ''}
+      ${links.whatsapp ? `<a class="btn" href="${esc(links.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+      ${links.call ? `<a class="btn" href="${esc(links.call)}">Call</a>` : ''}
+      <button class="btn" data-action="show-route" data-u="${esc(x.username)}">${IC.route}Today’s route</button>
+    </div>
+    ${routeHtml ? `<div style="margin-top:14px">${routeHtml}</div>` : ''}
+  </div>`;
+}
+async function showRoute(u) {
+  S.routeBusy = true; S.routeErr = null; render();
+  try {
+    const p = await call('driver_route', { driver: u, date: today() });
+    const cols = (p.route && p.route.columns) || ['time', 'lat', 'lng', 'km/h'];
+    const ti = cols.indexOf('time'), la = cols.indexOf('lat'), lo = cols.indexOf('lng');
+    const points = ((p.route && p.route.points) || []).map(r => ({ t: r[ti], lat: +r[la], lng: +r[lo] })).filter(q => isFinite(q.lat) && isFinite(q.lng));
+    const stops = (p.stops_over_10_min || []).map(s => typeof s === 'string' ? s : [s.from || s.start, s.to || s.end, s.near || s.place, s.minutes ? s.minutes + ' min' : ''].filter(Boolean).join(' '));
+    S.route = { username: u, km: p.km, count: p.recorded_points ?? points.length, first: p.first_point, last: p.last_point, points, stops };
+    S.mapZoom = 1;
+  } catch (e) { S.routeErr = e; S.route = null; }
+  S.routeBusy = false; render();
+}
+
+/* ---------- tasks ---------- */
+function statusTone(col, text) {
+  const t = String(text || '').toLowerCase();
+  if (col === 'completed') return 'muted';
+  if (col === 'cancelled') return 'bad';
+  if (t.includes('not opened')) return 'warn';
+  const m = t.match(/location (\d+) min old/);
+  if (m && +m[1] >= 15) return 'warn';
+  return 'live';
+}
+function taskCard(t, col) {
+  return `<button class="tcard" data-action="open-task" data-id="${esc(t.id)}">
+    <span class="top"><b>${esc(t.time || '')}</b><span>${esc(t.label || '')}</span></span>
+    <span class="title">${esc(t.title)}</span>
+    <span class="route">From ${esc(t.from || '—')}<br>To ${esc(t.to || '—')}</span>
+    <span class="who"><span class="avatar sm">${esc(initials(t.driver))}</span><span class="grow">${esc(t.driver || '')}</span>${plate(t.vehicle)}</span>
+    <span class="status ${statusTone(col, t.status)}">${esc(t.status || '')}</span>
+  </button>`;
+}
+function renderTasks() {
+  const d = S.taskDate;
+  $('#tasks-eyebrow').textContent = (d === today() ? 'Today · ' : '') + longDate(d, true);
+  if ($('#task-date').value !== d) $('#task-date').value = d;
+  const el = $('#board'); const b = S.data.board;
+  if (!b || b.date && b.date !== d) { el.innerHTML = S.noMcp ? '' : `<div style="grid-column:1/-1">${errBox('board', 'reload') || loading('Loading tasks…')}</div>`; return; }
+  const cols = [['assigned', 'Assigned', 'warn'], ['in_progress', 'In progress', 'live'], ['completed', 'Completed', '']];
+  el.innerHTML = (S.err.board ? `<div style="grid-column:1/-1">${staleNote('board')}</div>` : '') + cols.map(([k, label, dot]) => `
+    <div class="col"><div class="col-h"><span><i class="dot ${dot}"></i>${label}</span><span class="num">${(b[k] || []).length}</span></div>
+    ${(b[k] || []).map(t => taskCard(t, k)).join('') || '<p class="col-empty">No tasks</p>'}</div>`).join('')
+    + `<div class="muted small" style="align-self:end">${b.counts && b.counts.cancelled ? b.counts.cancelled + ' cancelled · ' : ''}${updated('board').replace(/<[^>]+>/g, '')}</div>`;
+}
+function fillLists() {
+  const L = S.lists;
+  const dSel = $('#af-driver'), vSel = $('#af-vehicle');
+  if (L.drivers) {
+    const keep = dSel.value;
+    dSel.innerHTML = '<option value="">Choose a driver</option>' + L.drivers.filter(x => x.active !== false).map(x => `<option value="${esc(x.username)}">${esc(x.name)}${x.current_vehicle ? ' · ' + esc(x.current_vehicle) : ''}</option>`).join('');
+    dSel.value = keep;
+    const mk = $('#mil-driver'); const k2 = mk.value;
+    mk.innerHTML = '<option value="">All drivers</option>' + L.drivers.map(x => `<option value="${esc(x.username)}">${esc(x.name)}</option>`).join(''); mk.value = k2;
+  }
+  if (L.vehicles) {
+    const keep = vSel.value;
+    vSel.innerHTML = '<option value="">Choose a vehicle</option>' + L.vehicles.map(x => `<option value="${esc(x.reg_no)}">${esc(x.reg_no)}${x.make_model ? ' · ' + esc(x.make_model) : ''}${x.status ? ' · ' + esc(x.status) : ''}</option>`).join('');
+    vSel.value = keep;
+    const mv = $('#mil-vehicle'); const k3 = mv.value;
+    mv.innerHTML = '<option value="">All vehicles</option>' + L.vehicles.map(x => `<option value="${esc(x.reg_no)}">${esc(x.reg_no)}</option>`).join(''); mv.value = k3;
+  }
+  if (L.places) $('#places-list').innerHTML = L.places.map(p => `<option value="${esc(p.name)}"></option>`).join('');
+  if (S.listsErr && !L.drivers) $('#af-msg').innerHTML = `<div class="notice"><p>Couldn’t load drivers and vehicles: ${esc(errText(S.listsErr)[0])}</p></div>`;
+}
+async function loadLists(force) {
+  if (!S.mcp) return;
+  if (!force && S.lists.drivers && S.lists.vehicles) { fillLists(); return; }
+  const [d, v, p] = await Promise.allSettled([call('list_drivers', {}), call('list_vehicles', { filter: 'all' }), call('list_places', {})]);
+  if (d.status === 'fulfilled') S.lists.drivers = d.value.drivers || []; else S.listsErr = d.reason;
+  if (v.status === 'fulfilled') S.lists.vehicles = v.value.vehicles || []; else S.listsErr = v.reason;
+  if (p.status === 'fulfilled') S.lists.places = p.value.places || [];
+  fillLists();
+}
+/* projects split in the assign form */
+const SPLIT_COLORS = ['var(--accent)', 'var(--live)', 'var(--ok)', 'var(--bad)', 'var(--muted)'];
+function renderSplit() {
+  const box = $('#af-projects');
+  box.innerHTML = S.projRows.map((r, i) => `
+    <div class="prow">
+      <input id="pr-${i}" data-pr="${i}" data-k="project" value="${esc(r.project)}" placeholder="Job no. or DU ID, e.g. 13021 or TRKAN1" aria-label="Project ${i + 1}">
+      <input id="pp-${i}" data-pr="${i}" data-k="percent" type="number" min="1" max="100" inputmode="decimal" value="${esc(r.percent)}" aria-label="Percent for project ${i + 1}">
+      <button type="button" class="btn icon-btn" data-action="del-project" data-i="${i}" aria-label="Remove project">${IC.close}</button>
+      <span class="match ${r.bad ? 'bad' : ''}">${esc(r.match || '')}</span>
+    </div>`).join('');
+  renderSplitFoot();
+}
+function renderSplitFoot() {
+  const rows = S.projRows; const f = $('#af-split');
+  if (!rows.length) { f.innerHTML = ''; return; }
+  const total = rows.reduce((a, r) => a + (Number(r.percent) || 0), 0);
+  f.innerHTML = `<div class="splitbar">${rows.map((r, i) => `<i style="width:${Math.max(0, Math.min(100, Number(r.percent) || 0))}%;background:${SPLIT_COLORS[i % SPLIT_COLORS.length]}"></i>`).join('')}</div>
+    <div class="split-foot" style="margin-top:8px"><button type="button" class="linkish" data-action="split-equal">Split equally</button><span class="${Math.abs(total - 100) < 0.01 ? 'status live' : 'status bad'}">Total ${num(total)}%</span></div>`;
+}
+let lookupTimer = null;
+function lookupProject(i) {
+  clearTimeout(lookupTimer);
+  lookupTimer = setTimeout(async () => {
+    const r = S.projRows[i]; if (!r || !r.project.trim()) return;
+    try {
+      const p = await call('find_project', { text: r.project.trim() });
+      const list = p.projects || [];
+      if (!list.length) { r.match = 'No project found. Import projects from Zoho Books first, or check the number.'; r.bad = true; }
+      else { const x = list[0]; r.match = (list.length > 1 && p.matched_by === 'contains' ? 'Several match, first: ' : '✓ ') + [x.job_no, x.short_name, x.name || x.project_name, x.customer_name].filter(Boolean).join(' · '); r.bad = false; }
+    } catch (e) { r.match = errText(e)[0]; r.bad = true; }
+    const m = $$('.prow .match')[i]; if (m) { m.textContent = r.match; m.className = 'match' + (r.bad ? ' bad' : ''); }
+  }, 450);
+}
+async function submitAssign(ev) {
+  ev.preventDefault();
+  const v = id => $(id).value.trim();
+  const msg = $('#af-msg');
+  const need = [['#af-title', 'the task'], ['#af-date', 'the date'], ['#af-start', 'the start time'], ['#af-pickup', 'the pickup'], ['#af-dropoff', 'the drop-off'], ['#af-driver', 'a driver'], ['#af-vehicle', 'a vehicle']];
+  const miss = need.filter(([id]) => !v(id)).map(n => n[1]);
+  if (miss.length) { msg.innerHTML = `<div class="notice bad"><p>Add ${esc(miss.join(', '))}.</p></div>`; return; }
+  const rows = S.projRows.filter(r => r.project.trim());
+  const total = rows.reduce((a, r) => a + (Number(r.percent) || 0), 0);
+  if (rows.length && Math.abs(total - 100) > 0.01) { msg.innerHTML = `<div class="notice bad"><p>Project percentages add up to ${num(total)}%. They must total 100%.</p></div>`; return; }
+  const input = { title: v('#af-title'), date: v('#af-date'), start_time: v('#af-start'), driver: v('#af-driver'), vehicle: v('#af-vehicle'), pickup: v('#af-pickup'), dropoff: v('#af-dropoff') };
+  if (v('#af-end')) input.end_time = v('#af-end');
+  if (v('#af-pax') !== '') input.passengers = Math.max(0, Math.min(80, parseInt(v('#af-pax'), 10) || 0));
+  if (v('#af-cname')) input.contact_name = v('#af-cname');
+  if (v('#af-cphone')) input.contact_phone = v('#af-cphone');
+  if (v('#af-notes')) input.notes = v('#af-notes');
+  if (rows.length) input.projects = rows.map(r => ({ project: r.project.trim(), percent: Number(r.percent) }));
+  if (S.viewer) input.created_by = S.viewer.slice(0, 80);
+  const btn = $('#af-submit'); btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    const p = await call('create_task', input);
+    const warns = warnList(p);
+    const drv = (S.lists.drivers || []).find(x => x.username === input.driver);
+    let wa = '';
+    if ($('#af-wa').checked && drv && drv.phone) {
+      wa = waLink(drv.phone, `New task: ${input.title}\n${input.date} ${input.start_time}\nPickup: ${input.pickup}\nDrop-off: ${input.dropoff}${input.contact_name ? '\nContact: ' + input.contact_name + (input.contact_phone ? ' ' + input.contact_phone : '') : ''}\nOpen Fame Driver for the details.`);
+    }
+    const id = p && (p.task_id || p.id || (p.task && p.task.id));
+    msg.innerHTML = `<div class="notice ok"><p><b>Sent to ${esc(drv ? drv.name : input.driver)}.</b> The task is in their Fame Driver app.</p>${id ? `<button type="button" class="btn small" data-action="open-task" data-id="${esc(id)}">Open task</button>` : ''}${wa ? `<a class="btn small" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp the driver</a>` : ($('#af-wa').checked ? '<span class="small">No phone number saved for this driver, so no WhatsApp link.</span>' : '')}</div>`
+      + (warns.length ? `<div class="notice" style="margin-top:10px"><p><b>Check:</b> ${warns.map(esc).join('<br>')}</p></div>` : '');
+    ['#af-title', '#af-notes', '#af-cname', '#af-cphone', '#af-pax', '#af-end', '#af-dropoff'].forEach(s => { $(s).value = ''; });
+    S.projRows = []; renderSplit();
+    if (input.date !== S.taskDate) { S.taskDate = input.date; enterView('tasks'); }
+    refreshAll();
+  } catch (e) {
+    msg.innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`;
+  }
+  btn.disabled = false; btn.textContent = 'Assign & send';
+}
+
+/* ---------- drawer ---------- */
+function openDrawer(html) { $('#drawer-panel').innerHTML = html; $('#drawer').hidden = false; const f = $('#drawer-panel [data-focus]') || $('#drawer-panel button'); if (f) f.focus(); }
+function closeDrawer() { $('#drawer').hidden = true; $('#drawer-panel').innerHTML = ''; }
+const drawerTop = (title, sub) => `<div class="drawer-top"><div>${sub ? `<div class="eyebrow">${sub}</div>` : ''}<h2>${esc(title)}</h2></div><button class="btn icon-btn" data-action="close-drawer" aria-label="Close" data-focus>${IC.close}</button></div>`;
+
+async function openTask(id) {
+  openDrawer(drawerTop('Task') + loading('Loading the task…'));
+  let p;
+  try { p = await call('task_detail', { task_id: id }); }
+  catch (e) { $('#drawer-panel').innerHTML = drawerTop('Task') + `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; return; }
+  const t = p.task || {}; const c = t.contact || {};
+  const tone = { assigned: 'warn', in_progress: 'live', completed: 'ok', cancelled: 'bad' }[t.status] || '';
+  const km = t.km ?? (t.end_odometer_km != null && t.start_odometer_km != null ? t.end_odometer_km - t.start_odometer_km : null);
+  const projects = Array.isArray(p.projects) ? p.projects.map(x => typeof x === 'string' ? x : [x.project || x.name, x.percent != null ? x.percent + '%' : ''].filter(Boolean).join(' · ')).join(', ') : p.projects;
+  const odo = p.odometer || [], fuel = p.fuel || [], reps = p.vehicle_reports || [];
+  const canChange = t.status === 'assigned', canCancel = t.status === 'assigned' || t.status === 'in_progress';
+  const drivers = S.lists.drivers || [], vehicles = S.lists.vehicles || [];
+  const unlogged = p.unlogged_km ?? p.unlogged ?? null;
+  $('#drawer-panel').innerHTML = drawerTop(t.title || 'Task', `${pill(cap(t.status || ''), tone)} <span class="mono">${esc(t.start || '')}</span>`) + `
+    <div class="card card-b"><dl class="kv">
+      <div><dt>Driver</dt><dd>${esc(t.driver || '—')}</dd></div>
+      <div><dt>Vehicle</dt><dd>${esc(t.vehicle || '—')}</dd></div>
+      <div><dt>Status</dt><dd>${esc(t.status_line || cap(t.status))}</dd></div>
+      <div><dt>Passengers</dt><dd>${esc(t.passengers ?? '—')}</dd></div>
+      <div><dt>Contact</dt><dd>${esc([c.name, c.phone].filter(Boolean).join(' · ') || '—')}${c.call || c.whatsapp ? `<div class="acts" style="margin-top:6px">${c.call ? `<a class="btn small" href="${esc(c.call)}">Call</a>` : ''}${c.whatsapp ? `<a class="btn small" href="${esc(c.whatsapp)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}</div>` : ''}</dd></div>
+      <div><dt>Charged to</dt><dd>${esc(projects || 'Fame internal')}</dd></div>
+      <div><dt>Sent · seen</dt><dd class="mono">${esc([t.sent, t.seen].filter(Boolean).map(s => String(s).slice(-5)).join(' · ') || '—')}</dd></div>
+      <div><dt>Started · done</dt><dd class="mono">${esc([t.started, t.completed].filter(Boolean).map(s => String(s).slice(-5)).join(' · ') || '—')}</dd></div>
+      <div><dt>Odometer</dt><dd class="num">${t.start_odometer_km != null ? num(t.start_odometer_km) : '—'}${t.end_odometer_km != null ? ' → ' + num(t.end_odometer_km) : ''}</dd></div>
+      <div><dt>Km this task</dt><dd class="num">${km != null ? num(km) + ' km' : '—'}</dd></div>
+      ${t.created_by ? `<div><dt>Assigned by</dt><dd>${esc(t.created_by)}</dd></div>` : ''}
+      ${t.notes ? `<div style="grid-column:1/-1"><dt>Notes</dt><dd style="font-weight:400">${esc(t.notes)}</dd></div>` : ''}
+    </dl></div>
+    ${unlogged ? `<div class="notice"><p>${esc(typeof unlogged === 'string' ? unlogged : 'Km were driven before this task that nobody logged: ' + JSON.stringify(unlogged))}</p></div>` : ''}
+    <div class="section-t">Stops</div>
+    <div class="card"><div class="rows">${(p.stops || []).map(s => `<div class="row"><span class="dot ${s.status === 'done' ? 'ok' : s.status === 'skipped' ? 'bad' : 'warn'}"></span><div class="grow"><div class="name">${esc(cap(s.type))} · ${esc(s.place || s.address || '')}</div><div class="sub">${esc(cap(s.status))}${s.arrived ? ' · arrived ' + esc(s.arrived) : ''}${s.done ? ' · done ' + esc(s.done) : ''}</div></div>${s.navigate ? `<a class="btn small" href="${esc(s.navigate)}" target="_blank" rel="noopener">Map</a>` : ''}</div>`).join('') || empty('No stops.')}</div></div>
+    <div class="section-t">Odometer and fuel</div>
+    <div class="card"><div class="rows">
+      ${odo.map(o => `<div class="row"><div class="grow"><div class="name num">${num(o.reading_km)} km</div><div class="sub">${esc(cap(o.kind))} · ${esc(o.at || '')}${o.ocr_value ? ' · read from photo: ' + esc(o.ocr_value) : ''}</div></div>${o.photo ? `<a class="btn small" href="${esc(o.photo)}" target="_blank" rel="noopener">Photo</a>` : ''}</div>`).join('')}
+      ${fuel.map(f => `<div class="row"><div class="grow"><div class="name">${num(f.litres)} L · LKR ${num(f.amount_lkr ?? f.amount)}</div><div class="sub">Fuel · ${esc(f.at || '')}</div></div>${f.photo || f.receipt ? `<a class="btn small" href="${esc(f.photo || f.receipt)}" target="_blank" rel="noopener">Receipt</a>` : ''}</div>`).join('')}
+      ${!odo.length && !fuel.length ? empty('No readings yet.') : ''}
+    </div></div>
+    ${reps.length ? `<div class="section-t">Problems reported</div><div class="card"><div class="rows">${reps.map(r => `<div class="row"><span class="att-ic bad">${IC.alert}</span><div class="grow"><div class="name">${esc(cap(r.category))}</div><div class="sub">${esc(r.at || '')} · ${esc(cap(r.status))}</div></div><div class="photos">${(r.photos || []).map((u, i) => `<a class="btn small" href="${esc(u)}" target="_blank" rel="noopener">Photo ${i + 1}</a>`).join('')}</div></div>`).join('')}</div></div><p class="muted small">Photo links work for 1 hour. Reopen the task for fresh links.</p>` : ''}
+    ${canChange ? `<div class="section-t">Change before it starts</div>
+      <form class="card card-b form" id="reassign-form" data-id="${esc(id)}">
+        <div class="grid2">
+          <div class="field"><label for="ra-driver">Driver</label><select id="ra-driver"><option value="">Keep</option>${drivers.filter(x => x.active !== false).map(x => `<option value="${esc(x.username)}">${esc(x.name)}</option>`).join('')}</select></div>
+          <div class="field"><label for="ra-vehicle">Vehicle</label><select id="ra-vehicle"><option value="">Keep</option>${vehicles.map(x => `<option value="${esc(x.reg_no)}">${esc(x.reg_no)}</option>`).join('')}</select></div>
+          <div class="field"><label for="ra-date">Day</label><input type="date" id="ra-date"></div>
+          <div class="field"><label for="ra-time">Start</label><input type="time" id="ra-time"></div>
+        </div>
+        <div id="ra-msg" class="form-msg"></div>
+        <button class="btn dark" type="submit">Save changes</button>
+      </form>` : ''}
+    ${canCancel ? `<div class="confirm" id="cancel-box">
+        <div class="field"><label for="cx-reason">Cancel this task</label><input id="cx-reason" maxlength="300" placeholder="Reason the driver will see"></div>
+        <div id="cx-msg" class="form-msg"></div>
+        <button class="btn danger" data-action="cancel-task" data-id="${esc(id)}">Cancel task</button>
+      </div>` : ''}`;
+}
+async function doReassign(form) {
+  const id = form.dataset.id; const input = { task_id: id };
+  const d = $('#ra-driver').value, v = $('#ra-vehicle').value, dt = $('#ra-date').value, tm = $('#ra-time').value;
+  if (d) input.driver = d; if (v) input.vehicle = v; if (dt) input.date = dt; if (tm) input.start_time = tm;
+  if (Object.keys(input).length === 1) { $('#ra-msg').innerHTML = '<div class="notice"><p>Choose what to change first.</p></div>'; return; }
+  try {
+    const p = await call('reassign_task', input); const w = warnList(p);
+    toast('Task changed'); refreshAll(); await openTask(id);
+    if (w.length) $('#drawer-panel').insertAdjacentHTML('beforeend', `<div class="notice"><p><b>Check:</b> ${w.map(esc).join('<br>')}</p></div>`);
+  } catch (e) { $('#ra-msg').innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; }
+}
+async function doCancel(id) {
+  const reason = $('#cx-reason').value.trim();
+  if (!reason) { $('#cx-msg').innerHTML = '<div class="notice bad"><p>Write the reason first. The driver sees it.</p></div>'; return; }
+  try { await call('cancel_task', { task_id: id, reason }); toast('Task cancelled'); refreshAll(); closeDrawer(); }
+  catch (e) { $('#cx-msg').innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; }
+}
+
+/* ---------- requests ---------- */
+function renderRequests() {
+  const F = { waiting: 'Waiting', approved: 'Approved', declined: 'Declined', all: 'All' };
+  $('#req-chips').innerHTML = Object.keys(F).map(k => `<button class="chip" data-action="req-filter" data-f="${k}" aria-pressed="${S.reqFilter === k}">${F[k]}</button>`).join('');
+  const el = $('#req-body'); const d = S.data.reqs;
+  if (!d) { el.innerHTML = S.noMcp ? '' : (errBox('reqs', 'reload') || loading('Loading requests…')); return; }
+  const list = (d.requests || []).map(normReq);
+  el.innerHTML = staleNote('reqs') + `<div class="card">${list.length ? `<div class="tbl-wrap"><table>
+    <thead><tr><th>Requested by</th><th>Project</th><th>When</th><th>Route</th><th>Need</th><th>Status</th><th class="r"></th></tr></thead>
+    <tbody>${list.map(q => `<tr class="click" data-action="open-request" data-id="${esc(q.id)}">
+      <td><b>${esc(q.by)}</b>${q.asked ? `<div class="sub">${esc(q.asked)}</div>` : ''}</td><td>${esc(q.project)}</td><td>${esc(q.when)}${q.back ? `<div class="sub">back by ${esc(q.back)}</div>` : ''}</td>
+      <td class="muted">${esc(q.route)}</td><td>${esc(q.need)}</td><td>${pill(cap(q.status), q.status === 'waiting' ? 'warn' : q.status === 'approved' ? 'ok' : q.status === 'declined' ? 'bad' : '')}</td>
+      <td class="r">${q.status === 'waiting' ? '<span class="btn small dark">Review</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`
+    : empty(S.reqFilter === 'waiting' ? 'No requests are waiting. Add one with New request when someone asks for a vehicle.' : 'No requests here.')}</div>`;
+}
+function findReq(id) {
+  const pools = [S.data.reqs, S.data.reqWaiting].filter(Boolean).map(p => p.requests || []);
+  for (const pool of pools) { const r = pool.find(x => (x.id || x.request_id) === id); if (r) return normReq(r); }
+  return null;
+}
+async function openRequest(id, mode) {
+  const q = findReq(id);
+  if (!q) { toast('That request is no longer in the list'); return; }
+  const head = drawerTop('Vehicle request', pill(cap(q.status || 'waiting'), q.status === 'waiting' || !q.status ? 'warn' : '')) + `
+    <div class="card card-b"><div class="name" style="font-size:19px">${esc(q.by)}</div><div class="sub">${esc(q.project)}${q.asked ? ' · ' + esc(q.asked) : ''}</div>
+    <dl class="kv" style="margin-top:14px"><div><dt>When</dt><dd>${esc(q.when)}</dd></div><div><dt>Back by</dt><dd>${esc(q.back || '—')}</dd></div><div><dt>Route</dt><dd>${esc(q.route)}</dd></div><div><dt>Need</dt><dd>${esc(q.need)}</dd></div>${q.note ? `<div style="grid-column:1/-1"><dt>Note</dt><dd style="font-weight:400">${esc(q.note)}</dd></div>` : ''}${q.reason ? `<div style="grid-column:1/-1"><dt>Declined because</dt><dd>${esc(q.reason)}</dd></div>` : ''}</dl></div>`;
+  if (q.status && q.status !== 'waiting') { openDrawer(head + (q.task ? `<button class="btn" data-action="open-task" data-id="${esc(q.task)}">Open the task</button>` : '')); return; }
+  openDrawer(head + `<div id="rq-pick">${loading('Finding free vehicles…')}</div>
+    <div class="confirm" style="border-color:var(--line)">
+      <div class="field"><label for="rq-reason">Decline with a reason</label><input id="rq-reason" maxlength="300" placeholder="e.g. No van free that morning" ${mode === 'decline' ? 'data-focus' : ''}></div>
+      <div id="rq-msg" class="form-msg"></div>
+      <div class="acts"><button class="btn" data-action="decline-request" data-id="${esc(id)}">Decline</button><button class="btn dark" data-action="approve-request" data-id="${esc(id)}">Approve &amp; send to driver</button></div>
+    </div>`);
+  if (mode === 'decline') { const r = $('#rq-reason'); if (r) r.focus(); }
+  await loadLists();
+  let vehicles = [], drivers = [], note = '';
+  try {
+    const p = await call('suggest_vehicles', { request_id: id });
+    vehicles = (p.vehicles || p.suggestions || p.options || []).map(v => ({ plate: v.reg_no || v.vehicle || v.plate, desc: [v.make_model, v.seats ? v.seats + ' seats' : ''].filter(Boolean).join(' · '), label: v.availability || v.state || v.label || v.status || v.note || '' }));
+    drivers = (p.drivers || p.free_drivers || []).map(d => typeof d === 'string' ? { u: d, name: d, label: '' } : { u: d.username || d.name || d.driver, name: d.name || d.driver || d.username, label: d.availability || d.state || d.note || '' });
+  } catch (e) { note = 'Suggestions are not available (' + errText(e)[0] + '). Pick a vehicle and driver yourself.'; }
+  if (!vehicles.length) vehicles = (S.lists.vehicles || []).map(v => ({ plate: v.reg_no, desc: [v.make_model, v.seats ? v.seats + ' seats' : ''].filter(Boolean).join(' · '), label: v.status || '' }));
+  if (!drivers.length) drivers = (S.lists.drivers || []).filter(d => d.active !== false).map(d => ({ u: d.username, name: d.name, label: '' }));
+  const box = $('#rq-pick'); if (!box) return;
+  const tone = l => /free/i.test(l) ? '' : /garage|booked/i.test(l) ? 'bad' : /over/i.test(l) ? 'warn' : '';
+  box.innerHTML = `${note ? `<div class="notice" style="margin-bottom:12px"><p>${esc(note)}</p></div>` : ''}
+    <div class="section-t" style="margin-bottom:10px">Pick a vehicle</div>
+    <div class="form">${vehicles.map((v, i) => `<label class="opt"><input type="radio" name="rq-veh" value="${esc(v.plate)}" ${i === 0 ? 'checked' : ''}><span class="grow"><span class="plate">${esc(v.plate)}</span><span class="sub ${tone(v.label)}" style="display:block;margin-top:4px">${esc([v.desc, v.label].filter(Boolean).join(' · '))}</span></span></label>`).join('') || empty('No vehicles registered yet.')}</div>
+    <div class="field" style="margin-top:16px"><label for="rq-driver">Driver</label><select id="rq-driver">${drivers.map(d => `<option value="${esc(d.u)}">${esc(d.name)}${d.label ? ' · ' + esc(d.label) : ''}</option>`).join('')}</select></div>`;
+}
+async function decideRequest(id, decision) {
+  const msg = $('#rq-msg'); const input = { request_id: id, decision };
+  if (S.viewer) input.decided_by = S.viewer.slice(0, 80);
+  if (decision === 'decline') {
+    const r = $('#rq-reason').value.trim();
+    if (!r) { msg.innerHTML = '<div class="notice bad"><p>Write the reason first. The person who asked will see it.</p></div>'; return; }
+    input.reason = r;
+  } else {
+    const v = $('input[name="rq-veh"]:checked'), d = $('#rq-driver');
+    if (!v || !d || !d.value) { msg.innerHTML = '<div class="notice bad"><p>Pick a vehicle and a driver.</p></div>'; return; }
+    input.vehicle = v.value; input.driver = d.value;
+  }
+  try {
+    const p = await call('decide_request', input); const w = warnList(p);
+    refreshAll();
+    if (decision === 'approve') {
+      const tid = p && (p.task_id || (p.task && p.task.id));
+      msg.innerHTML = `<div class="notice ok"><p><b>Approved.</b> The task is in the driver’s app.</p>${tid ? `<button class="btn small" data-action="open-task" data-id="${esc(tid)}">Open task</button>` : ''}</div>` + (w.length ? `<div class="notice" style="margin-top:10px"><p><b>Check:</b> ${w.map(esc).join('<br>')}</p></div>` : '');
+    } else { toast('Request declined'); closeDrawer(); }
+  } catch (e) { msg.innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; }
+}
+function openNewRequest() {
+  openDrawer(drawerTop('New vehicle request', 'Someone needs a vehicle') + `
+    <form class="card card-b form" id="nr-form" novalidate>
+      <div class="field"><label for="nr-by">Who needs it</label><input id="nr-by" maxlength="120" required data-focus></div>
+      <div class="field"><label for="nr-project">Project or team</label><input id="nr-project" maxlength="200" placeholder="Job no., DU ID, or e.g. HR"></div>
+      <div class="grid2">
+        <div class="field"><label for="nr-date">Day</label><input type="date" id="nr-date" value="${esc(today())}" required></div>
+        <div class="field"><label for="nr-time">Time</label><input type="time" id="nr-time" required></div>
+        <div class="field"><label for="nr-back">Back by</label><input type="time" id="nr-back"></div>
+        <div class="field"><label for="nr-need">Vehicle</label><select id="nr-need"><option value="">Any</option><option value="car">Car</option><option value="van">Van</option><option value="double_cab">Double cab</option><option value="lorry">Lorry</option><option value="other">Other</option></select></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="nr-from">From</label><input id="nr-from" maxlength="160" list="places-list"></div>
+        <div class="field"><label for="nr-to">To</label><input id="nr-to" maxlength="160" list="places-list"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="nr-pax">Passengers</label><input type="number" id="nr-pax" min="0" max="80" inputmode="numeric"></div>
+        <div class="field" style="align-content:end"><span class="check"><input type="checkbox" id="nr-tools"> <label for="nr-tools">Tools or equipment go too</label></span></div>
+      </div>
+      <div class="field"><label for="nr-note">Note</label><textarea id="nr-note" maxlength="1000"></textarea></div>
+      <div id="nr-msg" class="form-msg"></div>
+      <button class="btn primary" type="submit">Save request</button>
+    </form>`);
+  loadLists();
+}
+async function submitNewRequest() {
+  const g = id => $(id).value.trim(); const msg = $('#nr-msg');
+  if (!g('#nr-by') || !g('#nr-date') || !g('#nr-time')) { msg.innerHTML = '<div class="notice bad"><p>Add who needs it, the day and the time.</p></div>'; return; }
+  const input = { requested_by: g('#nr-by'), date: g('#nr-date'), time: g('#nr-time') };
+  if (g('#nr-project')) input.project = g('#nr-project');
+  if (g('#nr-back')) input.back_by = g('#nr-back');
+  if (g('#nr-need')) input.need_type = g('#nr-need');
+  if (g('#nr-from')) input.route_from = g('#nr-from');
+  if (g('#nr-to')) input.route_to = g('#nr-to');
+  if (g('#nr-pax') !== '') input.pax = Math.max(0, Math.min(80, parseInt(g('#nr-pax'), 10) || 0));
+  if ($('#nr-tools').checked) input.tools = true;
+  if (g('#nr-note')) input.note = g('#nr-note');
+  try { await call('create_request', input); toast('Request saved'); closeDrawer(); refreshAll(); if (S.view === 'requests') load('reqs', 'list_requests', { status: S.reqFilter }); }
+  catch (e) { msg.innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; }
+}
+
+/* ---------- vehicles ---------- */
+function docChip(name, d) {
+  const chip = d && (d.chip || d.state || d.level) || 'not set';
+  const c = String(chip).toLowerCase();
+  const cls = c === 'red' || c.includes('expired') ? 'bad' : c === 'orange' || c.includes('soon') ? 'warn' : c === 'not set' ? 'unset' : 'ok';
+  const title = d && (d.expires || d.date || d.until) ? `${name} expires ${d.expires || d.date || d.until}` : `${name}: ${chip}`;
+  return `<span class="doc ${cls}" title="${esc(title)}">${esc(name)}</span>`;
+}
+function renderVehicles() {
+  const F = { all: 'All', on_task: 'On a task', available: 'Available', in_garage: 'In garage', documents_expiring: 'Documents expiring' };
+  const d = S.data.vehicles; const c = (d && d.counts) || {};
+  $('#veh-chips').innerHTML = Object.keys(F).map(k => `<button class="chip" data-action="veh-filter" data-f="${k}" aria-pressed="${S.vehFilter === k}">${F[k]}${c[k] != null ? ' · ' + c[k] : ''}</button>`).join('');
+  const el = $('#veh-body');
+  if (!d) { el.innerHTML = S.noMcp ? '' : (errBox('vehicles', 'reload') || loading('Loading vehicles…')); return; }
+  const list = d.vehicles || [];
+  $('#veh-eyebrow').textContent = `${c.all ?? list.length} vehicles`;
+  el.innerHTML = staleNote('vehicles') + `<div class="card" style="margin-bottom:12px">${list.length ? `<div class="tbl-wrap"><table>
+    <thead><tr><th>Vehicle</th><th>Rented from</th><th>Regular driver</th><th>Km this month</th><th>Next service</th><th>Documents</th><th>Status</th></tr></thead>
+    <tbody>${list.map(v => {
+      const used = Number(v.km_this_month) || 0, allow = Number(v.km_allowance) || 0, over = allow && used > allow;
+      const svc = String(v.service_state || '').toLowerCase();
+      const docs = v.documents || {};
+      const st = String(v.status || '');
+      return `<tr class="click" data-action="edit-vehicle" data-reg="${esc(v.reg_no)}">
+        <td><span class="plate">${esc(v.reg_no)}</span><div class="sub" style="margin-top:6px">${esc([v.make_model, v.seats ? v.seats + ' seats' : '', v.type && !v.make_model ? cap(v.type) : ''].filter(Boolean).join(' · '))}</div></td>
+        <td>${esc(v.rental_company || '—')}${v.rent_until ? `<div class="sub">Until ${esc(v.rent_until)}</div>` : ''}</td>
+        <td>${esc(v.regular_driver || '—')}</td>
+        <td><span class="num"><b class="${over ? 'status bad' : ''}">${num(used)} km</b>${allow ? ' / ' + num(allow) : ''}</span>${allow ? `<div class="bar ${over ? 'over' : ''}"><i style="width:${Math.min(100, used / allow * 100).toFixed(1)}%"></i></div>` : ''}</td>
+        <td><span class="${svc.includes('overdue') ? 'status bad' : svc.includes('soon') || svc.includes('due') ? 'status warn' : ''}">${esc(v.next_service || '—')}</span></td>
+        <td>${docChip('Lic', docs.lic)}${docChip('Ins', docs.ins)}${docChip('Emi', docs.emi)}</td>
+        <td>${pill(st || '—', /task/i.test(st) ? 'live' : /garage/i.test(st) ? 'warn' : /available/i.test(st) ? '' : '')}</td></tr>`;
+    }).join('')}</tbody></table></div>` : empty('No vehicles in this group. Register the first one with Register vehicle.')}</div>`;
+}
+function vehicleForm(v) {
+  const isNew = !v; const drivers = S.lists.drivers || [];
+  const f = (id, label, type, extra) => `<div class="field"><label for="vf-${id}">${label}</label><input id="vf-${id}" type="${type || 'text'}" ${extra || ''}></div>`;
+  return drawerTop(isNew ? 'Register vehicle' : v.reg_no, isNew ? 'New rented vehicle' : esc(v.make_model || 'Vehicle')) + `
+    <form class="card card-b form" id="veh-form" data-reg="${isNew ? '' : esc(v.reg_no)}" novalidate>
+      ${isNew ? f('reg', 'Number plate', 'text', 'maxlength="20" placeholder="WP CAB-4521" required data-focus') : `<p class="muted small" style="margin:0">Fill in only what you want to change. Empty fields keep their current value.</p>`}
+      <div class="grid2">
+        ${f('model', 'Make and model', 'text', 'maxlength="80" placeholder="Toyota HiAce"')}
+        <div class="field"><label for="vf-type">Type</label><select id="vf-type"><option value="">${isNew ? 'Choose' : 'Keep'}</option><option value="car">Car</option><option value="van">Van</option><option value="double_cab">Double cab</option><option value="lorry">Lorry</option><option value="other">Other</option></select></div>
+        ${f('seats', 'Seats', 'number', 'min="1" max="80" inputmode="numeric"')}
+        ${f('allow', 'Km allowed per month', 'number', 'min="0" inputmode="numeric"')}
+        ${f('odo', 'Odometer now (km)', 'number', 'min="0" inputmode="numeric"')}
+        ${f('rent', 'Monthly rent (LKR)', 'number', 'min="0" inputmode="decimal"')}
+      </div>
+      <div class="grid2">
+        ${f('company', 'Rental company', 'text', 'maxlength="120"')}
+        ${f('until', 'Rented until', 'date')}
+      </div>
+      <p class="hint" style="margin:-8px 0 0">A new rental company must be added first: <button type="button" class="linkish" data-action="add-company">add a rental company</button>.</p>
+      <div id="company-box"></div>
+      <div class="field"><label for="vf-driver">Regular driver</label><select id="vf-driver"><option value="">${isNew ? 'None' : 'Keep'}</option>${drivers.map(d => `<option value="${esc(d.username)}">${esc(d.name)}</option>`).join('')}</select></div>
+      <div class="grid2">
+        ${f('svcint', 'Service every (km)', 'number', 'min="1" inputmode="numeric"')}
+        ${f('svclast', 'Last service at (km)', 'number', 'min="0" inputmode="numeric"')}
+        ${f('svcdate', 'Next service date', 'date')}
+        ${isNew ? '' : f('garage', 'Garage booked for', 'date')}
+      </div>
+      <div class="grid2">
+        ${f('lic', 'Revenue licence expires', 'date')}
+        ${f('ins', 'Insurance expires', 'date')}
+        ${f('emi', 'Emission test expires', 'date')}
+      </div>
+      ${isNew ? '' : `<div class="grid2">
+        <div class="field"><label for="vf-ingarage">In the garage now</label><select id="vf-ingarage"><option value="">Keep</option><option value="true">Yes</option><option value="false">No</option></select></div>
+        <div class="field"><label for="vf-active">Still rented</label><select id="vf-active"><option value="">Keep</option><option value="true">Yes</option><option value="false">No, returned</option></select></div>
+      </div>`}
+      <div id="vf-msg" class="form-msg"></div>
+      <button class="btn primary" type="submit">${isNew ? 'Register vehicle' : 'Save changes'}</button>
+    </form>`;
+}
+async function submitVehicle(form) {
+  const reg = form.dataset.reg; const isNew = !reg; const g = id => { const el = $('#vf-' + id); return el ? el.value.trim() : ''; };
+  const msg = $('#vf-msg'); const input = {};
+  const intv = (k, id) => { if (g(id) !== '') input[k] = parseInt(g(id), 10); };
+  if (isNew) { if (!g('reg')) { msg.innerHTML = '<div class="notice bad"><p>Add the number plate.</p></div>'; return; } input.reg_no = g('reg'); }
+  else input.reg_no = reg;
+  if (g('model')) input.make_model = g('model');
+  if (g('type')) input.vehicle_type = g('type');
+  intv('seats', 'seats'); intv('monthly_km_allowance', 'allow'); intv(isNew ? 'current_odometer_km' : 'current_odometer_km', 'odo');
+  if (g('rent') !== '') input.monthly_rent_lkr = Number(g('rent'));
+  if (g('company')) input.rental_company = g('company');
+  if (g('until')) input.rent_until = g('until');
+  if (g('driver')) input.regular_driver = g('driver');
+  intv('service_interval_km', 'svcint'); intv('last_service_odometer_km', 'svclast');
+  if (g('svcdate')) input.next_service_date = g('svcdate');
+  if (g('garage')) input.garage_booked_date = g('garage');
+  if (g('lic')) input.licence_expiry = g('lic');
+  if (g('ins')) input.insurance_expiry = g('ins');
+  if (g('emi')) input.emission_expiry = g('emi');
+  if (g('ingarage')) input.in_garage = g('ingarage') === 'true';
+  if (g('active')) input.active = g('active') === 'true';
+  if (!isNew && Object.keys(input).length === 1) { msg.innerHTML = '<div class="notice"><p>Nothing to change yet.</p></div>'; return; }
+  try { await call(isNew ? 'register_vehicle' : 'update_vehicle', input); toast(isNew ? 'Vehicle registered' : 'Vehicle updated'); closeDrawer(); S.lists.vehicles = null; refreshAll(); load('vehicles', 'list_vehicles', { filter: S.vehFilter }); }
+  catch (e) { msg.innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; }
+}
+
+/* ---------- drivers ---------- */
+function renderDrivers() {
+  const el = $('#drv-body'); const d = S.data.drivers;
+  if (!d) { el.innerHTML = S.noMcp ? '' : (errBox('drivers', 'reload') || loading('Loading drivers…')); return; }
+  const list = d.drivers || [];
+  el.innerHTML = staleNote('drivers') + `<div class="card">${list.length ? `<div class="tbl-wrap"><table>
+    <thead><tr><th>Driver</th><th>Code</th><th>Username</th><th>Phone</th><th>Licence expires</th><th>Vehicle</th><th>Location</th><th class="r"></th></tr></thead>
+    <tbody>${list.map(x => `<tr>
+      <td><div class="name"><span class="avatar sm">${esc(initials(x.name))}</span>${esc(x.name)}</div>${x.active === false ? pill('Switched off', 'bad') : ''}</td>
+      <td class="mono">${esc(x.code || '—')}</td><td class="mono">${esc(x.username || '—')}</td><td>${esc(x.phone || '—')}</td><td>${esc(x.licence_expiry || '—')}</td>
+      <td>${x.current_vehicle ? plate(x.current_vehicle) : '—'}</td><td>${x.location ? pill(x.location, locTone(x.location)) : '—'}</td>
+      <td class="r"><button class="btn small" data-action="edit-driver" data-u="${esc(x.username)}">Manage</button></td></tr>`).join('')}</tbody></table></div>`
+    : empty('No drivers yet. Add the first one with Add driver.')}</div>`;
+}
+const randPin = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); return String(a[0] % 1000000).padStart(6, '0'); };
+function openNewDriver() {
+  openDrawer(drawerTop('Add driver', 'New Fame Driver sign-in') + `
+    <form class="card card-b form" id="nd-form" novalidate>
+      <div class="field"><label for="nd-name">Full name</label><input id="nd-name" maxlength="120" required data-focus></div>
+      <div class="grid2">
+        <div class="field"><label for="nd-code">Employee code</label><input id="nd-code" maxlength="30" placeholder="E0123" required></div>
+        <div class="field"><label for="nd-phone">Mobile</label><input id="nd-phone" maxlength="30" inputmode="tel" placeholder="0771234567"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label for="nd-user">Username</label><input id="nd-user" maxlength="40" placeholder="nuwan.p" autocomplete="off" required><span class="hint">Letters, numbers, dot, dash, underscore.</span></div>
+        <div class="field"><label for="nd-pin">6-digit PIN</label><div style="display:flex;gap:8px"><input id="nd-pin" maxlength="6" inputmode="numeric" autocomplete="off" class="mono" required><button type="button" class="btn" data-action="gen-pin" data-target="nd-pin">New</button></div></div>
+      </div>
+      <p class="hint" style="margin:0">The PIN is shown only now. Give it to the driver straight away.</p>
+      <div id="nd-msg" class="form-msg"></div>
+      <button class="btn primary" type="submit">Add driver</button>
+    </form>`);
+}
+async function submitNewDriver() {
+  const g = id => $(id).value.trim(); const msg = $('#nd-msg');
+  const input = { name: g('#nd-name'), code: g('#nd-code'), username: g('#nd-user'), pin: g('#nd-pin') };
+  if (!input.name || !input.code || !input.username) { msg.innerHTML = '<div class="notice bad"><p>Add the name, code and username.</p></div>'; return; }
+  if (!/^[A-Za-z0-9._-]{3,40}$/.test(input.username)) { msg.innerHTML = '<div class="notice bad"><p>The username needs 3–40 letters, numbers, dots, dashes or underscores.</p></div>'; return; }
+  if (!/^\d{6}$/.test(input.pin)) { msg.innerHTML = '<div class="notice bad"><p>The PIN must be exactly 6 digits.</p></div>'; return; }
+  if (g('#nd-phone')) input.phone = g('#nd-phone');
+  try {
+    await call('create_driver', input);
+    S.lists.drivers = null; refreshAll(); load('drivers', 'list_drivers', { include_inactive: $('#drv-inactive').checked });
+    $('#drawer-panel').innerHTML = drawerTop('Driver added', esc(input.name)) + `<div class="card card-b"><p>Give these to ${esc(input.name)} for the Fame Driver app:</p>
+      <dl class="kv"><div><dt>Username</dt><dd class="mono" style="font-size:20px">${esc(input.username)}</dd></div><div><dt>PIN</dt><dd class="mono" style="font-size:20px" id="shown-pin">${esc(input.pin)}</dd></div></dl>
+      <p class="muted small">This is the only time the PIN is shown. If it is lost, set a new one from Manage.</p>
+      <button class="btn" data-action="copy" data-target="shown-pin">Copy PIN</button></div>`;
+  } catch (e) { msg.innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; }
+}
+function openDriver(u) {
+  const x = ((S.data.drivers && S.data.drivers.drivers) || []).find(d => d.username === u); if (!x) return;
+  const off = x.active === false;
+  openDrawer(drawerTop(x.name, `<span class="mono">${esc(x.username)}</span> · ${esc(x.code || '')}`) + `
+    <form class="card card-b form" id="ed-form" data-u="${esc(u)}">
+      <h2>Contact and licence</h2>
+      <div class="grid2">
+        <div class="field"><label for="ed-phone">Mobile</label><input id="ed-phone" maxlength="30" inputmode="tel" value="${esc(x.phone || '')}"></div>
+        <div class="field"><label for="ed-lic">Driving licence expires</label><input type="date" id="ed-lic" value="${esc(x.licence_expiry || '')}"></div>
+      </div>
+      <div id="ed-msg" class="form-msg"></div>
+      <button class="btn dark" type="submit">Save</button>
+    </form>
+    <form class="card card-b form" id="pin-form" data-u="${esc(u)}">
+      <h2>New PIN</h2>
+      <p class="muted small" style="margin:0">The old PIN stops working at once.</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><input id="np-pin" maxlength="6" inputmode="numeric" autocomplete="off" class="mono" style="flex:1 1 140px" aria-label="New 6-digit PIN"><button type="button" class="btn" data-action="gen-pin" data-target="np-pin">New</button><button class="btn dark" type="submit">Set PIN</button></div>
+      <div id="np-msg" class="form-msg"></div>
+    </form>
+    <div class="confirm" style="${off ? 'border-color:var(--line)' : ''}">
+      <div><b>${off ? 'Switch this driver back on' : 'Switch off this driver'}</b><p class="muted small" style="margin:4px 0 0">${off ? 'They can sign in again.' : 'They can no longer sign in, and location sharing ends. Nothing is deleted.'}</p></div>
+      <div id="sa-msg" class="form-msg"></div>
+      <button class="btn ${off ? 'dark' : 'danger'}" data-action="set-active" data-u="${esc(u)}" data-v="${off ? 'true' : 'false'}">${off ? 'Switch on' : 'Switch off'}</button>
+    </div>`);
+}
+
+/* ---------- mileage ---------- */
+function genericTable(rows) {
+  if (!rows || !rows.length) return '';
+  const keys = [];
+  rows.forEach(r => Object.keys(r || {}).forEach(k => { const v = r[k]; if ((v === null || typeof v !== 'object') && !keys.includes(k)) keys.push(k); }));
+  const isNum = k => rows.every(r => r[k] == null || typeof r[k] === 'number');
+  return `<div class="tbl-wrap"><table><thead><tr>${keys.map(k => `<th class="${isNum(k) ? 'r' : ''}">${esc(human(k))}</th>`).join('')}</tr></thead>
+    <tbody>${rows.map(r => `<tr>${keys.map(k => `<td class="${isNum(k) ? 'r num' : ''}">${isNum(k) ? num(r[k]) : (k === 'reg_no' || k === 'vehicle' ? plate(r[k]) : esc(r[k] ?? '—'))}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+}
+function renderMileage() {
+  if (!$('#mil-month').value) $('#mil-month').value = today().slice(0, 7);
+  const el = $('#mil-body'); const d = S.data.mileage;
+  if (!d) { el.innerHTML = S.noMcp ? '' : (errBox('mileage', 'reload') || loading('Adding up the month…')); return; }
+  const t = d.totals || {};
+  el.innerHTML = staleNote('mileage') + `<div class="tiles">
+      ${tile('Completed tasks', t.tasks ?? 0, 'tasks', d.month || '')}
+      ${tile('Task km', num(t.task_km ?? 0), 'km', 'From odometer readings')}
+      ${tile('Fuel', num(t.fuel_litres ?? 0), 'litres', 'LKR ' + num(t.fuel_lkr ?? 0))}
+      ${tile('Unlogged km flags', t.unlogged_km_flags ?? 0, 'flags', t.unlogged_km_flags ? 'Odometer jumped between tasks' : 'Every km accounted for', t.unlogged_km_flags ? 'bad' : '')}
+    </div>
+    <div class="card"><div class="card-h"><h2>By vehicle</h2></div>${(d.vehicles || []).length ? genericTable(d.vehicles) : empty('No completed tasks or fuel logged this month.')}</div>
+    <div class="card"><div class="card-h"><h2>Unlogged km</h2><span class="muted small">A task started more than 2 km away from the last reading</span></div>${(d.unlogged_km || []).length ? genericTable(d.unlogged_km) : empty('None this month.')}</div>`;
+}
+function loadMileage() {
+  const input = { month: $('#mil-month').value || today().slice(0, 7) };
+  if ($('#mil-vehicle').value) input.vehicle = $('#mil-vehicle').value;
+  if ($('#mil-driver').value) input.driver = $('#mil-driver').value;
+  load('mileage', 'mileage_summary', input);
+}
+
+/* ---------- maintenance ---------- */
+function renderMaintenance() {
+  const F = { not_closed: 'Not closed', open: 'Open', in_garage: 'In garage', closed: 'Closed', all: 'All' };
+  $('#rep-chips').innerHTML = Object.keys(F).map(k => `<button class="chip" data-action="rep-filter" data-f="${k}" aria-pressed="${S.repFilter === k}">${F[k]}</button>`).join('');
+  const el = $('#rep-body'); const d = S.data.reports;
+  const att = ((S.data.overview && S.data.overview.needs_attention) || []).filter(a => !/problem/i.test(a.what || ''));
+  const repHtml = !d ? (S.noMcp ? '' : (errBox('reports', 'reload') || loading('Loading reports…'))) : (d.reports || []).length ? (d.reports || []).map(r => `
+    <div class="card rep">
+      <div class="row" style="padding:0">
+        <span class="att-ic ${r.status === 'closed' ? '' : r.status === 'in_garage' ? 'warn' : 'bad'}">${IC.alert}</span>
+        <div class="grow"><div class="name">${esc(cap(r.category))} ${plate(r.vehicle)}</div><div class="sub">${esc(r.driver || '')} · reported ${esc(r.reported || '')}</div></div>
+        ${pill(cap(r.status), r.status === 'open' ? 'bad' : r.status === 'in_garage' ? 'warn' : 'ok')}
+      </div>
+      ${r.note ? `<p style="margin:0">${esc(r.note)}</p>` : ''}
+      ${r.office_note ? `<p class="muted" style="margin:0">Office: ${esc(r.office_note)}</p>` : ''}
+      <div class="photos">${(r.photos || []).map((u, i) => `<a class="btn small" href="${esc(u)}" target="_blank" rel="noopener">Photo ${i + 1}</a>`).join('')}${r.task_id ? `<button class="btn small" data-action="open-task" data-id="${esc(r.task_id)}">Open task</button>` : ''}</div>
+      <form class="form rep-form" data-id="${esc(r.id)}" data-reg="${esc(r.vehicle || '')}">
+        <div class="grid2">
+          <div class="field"><label for="rs-${esc(r.id)}">Status</label><select id="rs-${esc(r.id)}"><option value="open" ${r.status === 'open' ? 'selected' : ''}>Open</option><option value="in_garage" ${r.status === 'in_garage' ? 'selected' : ''}>In garage</option><option value="closed" ${r.status === 'closed' ? 'selected' : ''}>Closed</option></select></div>
+          <div class="field"><label for="rn-${esc(r.id)}">Note for the driver</label><input id="rn-${esc(r.id)}" maxlength="500" placeholder="e.g. Take it to City Wheels tomorrow"></div>
+        </div>
+        <span class="check"><input type="checkbox" id="rg-${esc(r.id)}"> <label for="rg-${esc(r.id)}">Also take ${esc(r.vehicle || 'the vehicle')} off the road (in garage)</label></span>
+        <div class="form-msg" id="rm-${esc(r.id)}"></div>
+        <div><button class="btn dark small" type="submit">Save</button></div>
+      </form>
+    </div>`).join('') : `<div class="card">${empty('No problem reports here.')}</div>`;
+  el.innerHTML = staleNote('reports') + `<div class="section-t">Problems reported by drivers</div>${repHtml}
+    <div class="section-t">Service and documents</div>
+    <div class="card"><div class="rows">${att.length ? att.map(a => `<div class="row"><span class="att-ic ${levelTone(a.level)}">${IC[attIcon(a.what)]}</span><div class="grow"><div class="name">${esc(a.what)}</div><div class="sub">${esc(a.subject || '')}</div></div><span class="due ${levelTone(a.level)}">${esc(a.due || '')}</span></div>`).join('') : empty('No service or document reminders in the next 14 days. Add dates on each vehicle to get reminders.')}</div></div>`;
+}
+async function submitReport(form) {
+  const id = form.dataset.id, reg = form.dataset.reg; const box = $('#rm-' + id);
+  const input = { id, status: $('#rs-' + id).value }; const note = $('#rn-' + id).value.trim(); if (note) input.office_note = note;
+  try {
+    await call('update_vehicle_report', input);
+    if ($('#rg-' + id).checked && reg) await call('update_vehicle', { reg_no: reg, in_garage: true });
+    toast('Report updated'); refreshAll(); load('reports', 'list_vehicle_reports', { status: S.repFilter });
+  } catch (e) { box.innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; }
+}
+
+/* ---------- projects ---------- */
+async function searchProjects(q) {
+  const el = $('#proj-body'); el.innerHTML = loading('Searching…');
+  try {
+    const p = await call('find_project', { text: q }); const list = p.projects || [];
+    el.innerHTML = `<div class="card">${list.length ? `<div class="card-h"><h2>${list.length} found</h2><span class="muted small">Matched by ${esc(cap(p.matched_by || ''))}</span></div><div class="rows">${list.map(x => `<div class="row"><span class="plate">${esc(x.job_no || '—')}</span><div class="grow"><div class="name">${esc(x.short_name || x.name || x.project_name)}</div><div class="sub">${esc([x.name || x.project_name, x.customer_name || x.customer].filter(Boolean).join(' · '))}</div></div>${x.status ? pill(cap(x.status), /active/i.test(x.status) ? 'ok' : '') : ''}</div>`).join('')}</div>` : empty('No project matches. If projects were never imported from Zoho Books, the list is empty: see below.')}</div>`;
+  } catch (e) { el.innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; }
+}
+
+/* ---------- views & routing ---------- */
+function enterView(view) {
+  unwatch(['overview']);
+  if (!S.mcp) return;
+  if (view === 'overview' || view === 'requests') watch('reqWaiting', 'list_requests', { status: 'waiting' }, 60000);
+  if (view === 'live') watch('live', 'live_drivers', { filter: 'all' }, 30000);
+  if (view === 'tasks') { S.data.board = S.data.board && S.data.board.date === S.taskDate ? S.data.board : undefined; watch('board', 'task_board', { date: S.taskDate }, 30000); loadLists(); }
+  if (view === 'requests') watch('reqs', 'list_requests', { status: S.reqFilter }, 60000);
+  if (view === 'vehicles') { load('vehicles', 'list_vehicles', { filter: S.vehFilter }); loadLists(); }
+  if (view === 'drivers') load('drivers', 'list_drivers', { include_inactive: $('#drv-inactive').checked });
+  if (view === 'mileage') { loadLists().then(loadMileage); }
+  if (view === 'maintenance') load('reports', 'list_vehicle_reports', { status: S.repFilter });
+}
+function setView(v) {
+  if (!VIEWS.includes(v)) v = 'overview';
+  S.view = v;
+  VIEWS.forEach(k => { const s = $('#v-' + k); if (s) s.hidden = k !== v; });
+  try { localStorage.setItem('ff.view', v); } catch (e) { /* storage blocked */ }
+  enterView(v); render(); window.scrollTo(0, 0);
+}
+function render() {
+  renderChrome(); renderBanner();
+  const fn = { overview: renderOverview, live: renderLive, tasks: renderTasks, requests: renderRequests, vehicles: renderVehicles, drivers: renderDrivers, mileage: renderMileage, maintenance: renderMaintenance }[S.view];
+  if (fn) fn();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', async ev => {
+  const a = ev.target.closest('[data-action]'); if (!a) return;
+  const act = a.dataset.action;
+  switch (act) {
+    case 'close-drawer': closeDrawer(); break;
+    case 'reload': location.reload(); break;
+    case 'perms': try { const pm = await window.claude.use('permissions'); if (pm) await pm.manage(); } catch (e) { toast('Open the page menu → Permissions and allow Fame Fleet'); } break;
+    case 'approve-load': {
+      const k = a.dataset.key; const map = { overview: ['fleet_overview', {}], live: ['live_drivers', { filter: 'all' }], board: ['task_board', { date: S.taskDate }], reqs: ['list_requests', { status: S.reqFilter }], reqWaiting: ['list_requests', { status: 'waiting' }] };
+      const m = map[k]; if (m) load(k, m[0], m[1]); break;
+    }
+    case 'new-request': openNewRequest(); break;
+    case 'assign-focus': setTimeout(() => { const t = $('#af-title'); if (t) { t.scrollIntoView({ block: 'center' }); t.focus(); } }, 60); break;
+    case 'open-request': ev.preventDefault(); openRequest(a.dataset.id, a.dataset.mode); break;
+    case 'approve-request': decideRequest(a.dataset.id, 'approve'); break;
+    case 'decline-request': decideRequest(a.dataset.id, 'decline'); break;
+    case 'live-filter': S.liveFilter = a.dataset.f; render(); break;
+    case 'pick-driver': if (S.selDriver !== a.dataset.u) { S.selDriver = a.dataset.u; S.routeErr = null; } render(); break;
+    case 'show-route': showRoute(a.dataset.u); break;
+    case 'hide-route': S.route = null; S.mapZoom = 1; render(); break;
+    case 'zoom': S.mapZoom = a.dataset.z === 'in' ? Math.min(S.mapZoom * 2, 64) : a.dataset.z === 'out' ? Math.max(S.mapZoom / 2, 1 / 64) : 1; render(); break;
+    case 'day': S.taskDate = a.dataset.d === '0' ? today() : addDays(S.taskDate, +a.dataset.d); $('#af-date').value = S.taskDate; enterView('tasks'); render(); break;
+    case 'open-task': openTask(a.dataset.id); break;
+    case 'cancel-task': doCancel(a.dataset.id); break;
+    case 'add-project': S.projRows.push({ project: '', percent: S.projRows.length ? '' : 100, match: '' }); renderSplit(); { const i = S.projRows.length - 1; const el = $('#pr-' + i); if (el) el.focus(); } break;
+    case 'del-project': S.projRows.splice(+a.dataset.i, 1); renderSplit(); break;
+    case 'split-equal': { const n = S.projRows.length; if (!n) break; const base = Math.floor(100 / n); S.projRows.forEach((r, i) => { r.percent = base + (i < 100 - base * n ? 1 : 0); }); renderSplit(); break; }
+    case 'req-filter': S.reqFilter = a.dataset.f; S.data.reqs = undefined; enterView('requests'); render(); break;
+    case 'veh-filter': S.vehFilter = a.dataset.f; load('vehicles', 'list_vehicles', { filter: S.vehFilter }); break;
+    case 'new-vehicle': await loadLists(); openDrawer(vehicleForm(null)); break;
+    case 'edit-vehicle': { await loadLists(); const v = ((S.data.vehicles && S.data.vehicles.vehicles) || []).find(x => x.reg_no === a.dataset.reg); if (v) openDrawer(vehicleForm(v)); break; }
+    case 'add-company': $('#company-box').innerHTML = `<div class="grid2" style="align-items:end"><div class="field"><label for="rc-name">Rental company</label><input id="rc-name" maxlength="120"></div><div class="field"><label for="rc-phone">Phone</label><input id="rc-phone" maxlength="30" inputmode="tel"></div></div><div style="margin-top:8px"><button type="button" class="btn small dark" data-action="save-company">Add company</button> <span id="rc-msg" class="small"></span></div>`; break;
+    case 'save-company': {
+      const n = $('#rc-name').value.trim(); if (!n) { $('#rc-msg').textContent = 'Add the name.'; break; }
+      const input = { name: n }; const ph = $('#rc-phone').value.trim(); if (ph) input.phone = ph;
+      try { await call('add_rental_company', input); $('#vf-company').value = n; $('#company-box').innerHTML = `<p class="status live small">Added ${esc(n)}.</p>`; } catch (e) { $('#rc-msg').textContent = errText(e)[0]; }
+      break;
+    }
+    case 'rep-filter': S.repFilter = a.dataset.f; load('reports', 'list_vehicle_reports', { status: S.repFilter }); break;
+    case 'new-driver': openNewDriver(); break;
+    case 'edit-driver': openDriver(a.dataset.u); break;
+    case 'gen-pin': { const t = $('#' + a.dataset.target); if (t) t.value = randPin(); break; }
+    case 'set-active': {
+      const want = a.dataset.v === 'true';
+      if (!want && a.dataset.armed !== '1') { a.dataset.armed = '1'; a.textContent = 'Yes, switch off'; break; }
+      try { await call('set_driver_active', { username: a.dataset.u, active: want }); toast(want ? 'Driver switched on' : 'Driver switched off'); closeDrawer(); S.lists.drivers = null; refreshAll(); load('drivers', 'list_drivers', { include_inactive: $('#drv-inactive').checked }); }
+      catch (e) { $('#sa-msg').innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; }
+      break;
+    }
+    case 'copy': {
+      const t = $('#' + a.dataset.target); if (!t) break; const text = t.textContent.trim();
+      try { await navigator.clipboard.writeText(text); toast('Copied'); }
+      catch (e) { const r = document.createRange(); r.selectNodeContents(t); const s = getSelection(); s.removeAllRanges(); s.addRange(r); toast('Selected. Press Ctrl+C to copy'); }
+      break;
+    }
+  }
+});
+document.addEventListener('submit', ev => {
+  const f = ev.target; ev.preventDefault();
+  if (f.id === 'assign-form') submitAssign(ev);
+  else if (f.id === 'reassign-form') doReassign(f);
+  else if (f.id === 'nr-form') submitNewRequest();
+  else if (f.id === 'veh-form') submitVehicle(f);
+  else if (f.id === 'nd-form') submitNewDriver();
+  else if (f.id === 'ed-form') {
+    const u = f.dataset.u; const input = { username: u }; const ph = $('#ed-phone').value.trim(), lic = $('#ed-lic').value;
+    input.phone = ph || null; input.licence_expiry = lic || null;
+    call('update_driver', input).then(() => { toast('Driver updated'); S.lists.drivers = null; load('drivers', 'list_drivers', { include_inactive: $('#drv-inactive').checked }); closeDrawer(); })
+      .catch(e => { $('#ed-msg').innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; });
+  }
+  else if (f.id === 'pin-form') {
+    const pin = $('#np-pin').value.trim();
+    if (!/^\d{6}$/.test(pin)) { $('#np-msg').innerHTML = '<div class="notice bad"><p>The PIN must be exactly 6 digits.</p></div>'; return; }
+    call('reset_pin', { username: f.dataset.u, pin }).then(() => { $('#np-msg').innerHTML = `<div class="notice ok"><p>New PIN <b class="mono">${esc(pin)}</b> is active. Tell the driver now.</p></div>`; })
+      .catch(e => { $('#np-msg').innerHTML = `<div class="notice bad"><p>${esc(errText(e)[0])}</p></div>`; });
+  }
+  else if (f.id === 'proj-form') { const q = $('#proj-q').value.trim(); if (q) searchProjects(q); }
+  else if (f.classList.contains('rep-form')) submitReport(f);
+});
+document.addEventListener('input', ev => {
+  const t = ev.target;
+  if (t.dataset && t.dataset.pr !== undefined) {
+    const r = S.projRows[+t.dataset.pr]; if (!r) return;
+    r[t.dataset.k] = t.value;
+    if (t.dataset.k === 'project') lookupProject(+t.dataset.pr); else renderSplitFoot();
+  }
+});
+document.addEventListener('change', ev => {
+  const t = ev.target;
+  if (t.id === 'task-date' && t.value) { S.taskDate = t.value; $('#af-date').value = t.value; enterView('tasks'); render(); }
+  if (t.id === 'af-driver') {
+    const d = (S.lists.drivers || []).find(x => x.username === t.value);
+    if (d && d.current_vehicle && !$('#af-vehicle').value) $('#af-vehicle').value = plateOf(d.current_vehicle);
+  }
+  if (t.id === 'drv-inactive') load('drivers', 'list_drivers', { include_inactive: t.checked });
+  if (['mil-month', 'mil-vehicle', 'mil-driver'].includes(t.id)) loadMileage();
+});
+document.addEventListener('keydown', ev => { if (ev.key === 'Escape' && !$('#drawer').hidden) closeDrawer(); });
+$('#drawer').addEventListener('click', ev => { if (ev.target.id === 'drawer') closeDrawer(); });
+window.addEventListener('hashchange', () => setView(location.hash.slice(1)));
+
+/* ---------- boot ---------- */
+async function boot() {
+  S.taskDate = today();
+  $('#af-date').value = S.taskDate;
+  let start = location.hash.slice(1);
+  if (!VIEWS.includes(start)) { try { start = localStorage.getItem('ff.view') || 'overview'; } catch (e) { start = 'overview'; } }
+  S.view = VIEWS.includes(start) ? start : 'overview';
+  VIEWS.forEach(k => { const s = $('#v-' + k); if (s) s.hidden = k !== S.view; });
+  render();
+  const mcp = window.claude && window.claude.use ? await window.claude.use('mcp') : null;
+  if (!mcp) { S.noMcp = true; render(); return; }
+  S.mcp = mcp;
+  if (window.claude.use) window.claude.use('user').then(async u => { if (!u) return; try { const me = await u.me(); S.viewer = (me && me.name) || ''; renderChrome(); } catch (e) { /* no name */ } }).catch(() => {});
+  try { S.data.overview = await call('fleet_overview', {}); S.at.overview = Date.now(); }
+  catch (e) { S.err.overview = e; }
+  watch('overview', 'fleet_overview', {}, 30000);
+  enterView(S.view);
+  render();
+}
+boot();
+})();
+</script>
