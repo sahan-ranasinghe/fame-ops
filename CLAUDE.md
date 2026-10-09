@@ -50,9 +50,10 @@
 ## Hard rules
 1. Drivers never need a Claude account.
 2. No hosted office web app. Office access = the connector (+ a Claude artifact in the
-   boss's account in Phase B). One planned exception, not built yet: a small live-map web
-   app `apps/web` on Cloudflare Pages (office sign-in, MapLibre, Realtime positions, one
-   driver's route), because artifacts cannot load map tiles. Plan: `docs/live-map-plan.md`.
+   boss's account in Phase B). A proposal to replace this rule with an office web app for
+   staff (one backend, several clients, roles, shared business rules, the live map as one
+   part) is in `docs/office-web-plan.md`; it waits for the boss's decision. Nothing of it
+   is built.
 3. Do NOT use the official Supabase MCP connector for the office (it gets full write access
    to the whole org). Our connector exposes only the tools listed below.
 4. Do NOT modify the existing "Fame Group Allowance Desk" artifact. Its business rules are
