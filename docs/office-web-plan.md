@@ -93,16 +93,26 @@ the person created. The connector tool behind each action is in brackets.
 3. **Second step.** For `admin`, `fleet_admin` and `office` the policies
    and the functions also require `aal2` (TOTP done), section 7.
 
-### Claude gets a key per person
+### How Claude reaches the fleet, and names in the audit log
 
-The connector today has one shared key. To put a name in the audit log and
-apply the same role table, keys become personal: `office_keys (id,
-employee_id, key_hash, label, created_at, last_used_at, revoked_at)`. The
-MCP URL keeps its shape (`/office-mcp/<key>/mcp`); the function hashes the
-key, finds the person and the role, and runs the tool as that person,
-channel `claude`. `create_office_key(email, label)` (admin) returns the URL
-once. The current `OFFICE_MCP_KEY` stays valid as the boss's key during the
-switch and is removed after.
+Claude Teams has one org-wide custom connector named "Fame Fleet": `office-mcp`
+with the shared `OFFICE_MCP_KEY`, an admin key, used by the boss and Sahan.
+The artifact has no key of its own; it uses the viewer's "Fame Fleet"
+connector. There is never a second connector named "Fame Fleet" in one
+account. The test scripts use the same shared key.
+
+Calls through the shared key are audited as "Office (shared key)". Personal
+keys exist as well, `office_keys (id, employee_id, key_hash, label,
+created_at, last_used_at, revoked_at)`, made with `create_office_key(email,
+label)` (admin, the URL shown once): the function hashes the key, finds the
+person and the role, and runs the tool as that person, channel `claude`.
+They are for a person's own Claude account or for tests; the Teams workspace
+keeps the shared key until the connector gets OAuth sign-in (section 11,
+phase 7), after which each Teams member is named without any key and the
+shared key is removed from Teams.
+
+The web app uses no connector and no key: every person signs in with their
+own account, and `office-api` checks the session and the role on every call.
 
 ### Leaving
 
@@ -341,8 +351,10 @@ Effort is for Sahan working with Claude Code, in working days.
 | 5 Zoho sync (**boss**) | 2–3 (+3–4 for push later) | `zoho-sync`, Settings page, `zoho_sync_runs` | first full load compared with Zoho Books; a changed project appears within 30 minutes; the daily budget stop | the Zoho admin's steps in section 7 |
 | 6 Hardening and go-live | 2–3 | rate limits, backup check, off-boarding runbook, custom domain, CLAUDE.md | restore a backup into the local stack; switch a test user off and watch the session die; the Cloudflare rule | DNS for `fleet.fameglobal.lk`; the backup folder |
 
-About five working weeks before Zoho push. The driver app does not change
-in any phase.
+| 7 Connector sign-in (later) | 3–4 | OAuth sign-in for the "Fame Fleet" connector (Claude's "Sign in" option for custom connectors): `office-mcp` becomes an OAuth resource with Supabase Auth as the authorization server, the same Fame Fleet accounts and the same second step; each Teams member is then named in the audit log and the shared key is removed from Teams | each Teams member signs in once from Claude; a call from the boss's chat shows the boss's name in `office_audit`; a removed account is refused | enable the connector's "Sign in" in Claude Teams; remove the shared key from the Teams connector |
+
+About five working weeks before Zoho push and the connector sign-in. The
+driver app does not change in any phase.
 
 ## 12. Monthly cost (12 vehicles, about 5 office users)
 

@@ -174,11 +174,18 @@ wrappers use it:
 
 - `office-mcp`, the connector Claude uses: an MCP server over Streamable
   HTTP at `https://hinurfsaxvplbyqgtozj.supabase.co/functions/v1/office-mcp/<KEY>/mcp`.
-  A personal key made with `create_office_key` runs the tools as that person
-  (name in the audit log, their role applied, only their tools listed); the
-  shared `OFFICE_MCP_KEY` still works as an admin key. A wrong or missing key
-  answers 404. Treat a key URL as a password.
-- `office-api`, for the web app: `GET /office-api/me`, `GET /office-api/tools`
+  Our Claude Teams workspace has one org-wide custom connector named "Fame
+  Fleet" with the shared `OFFICE_MCP_KEY` (an admin key); the boss and Sahan
+  use it, and so do the test scripts. The Fame Fleet artifact has no key of
+  its own: it uses the viewer's "Fame Fleet" connector. Never add a second
+  connector named "Fame Fleet" to an account. A personal key made with
+  `create_office_key` runs the tools as that person (name in the audit log,
+  their role applied, only their tools listed) from a person's own Claude
+  account or a test. A wrong or missing key answers 404. Treat a key URL as
+  a password.
+- `office-api`, for the web app, which uses no connector and no key: every
+  person signs in with their own account, and the API checks the session
+  and the role on every call. `GET /office-api/me`, `GET /office-api/tools`
   (with JSON schemas for the forms) and `POST /office-api/tools/<name>` with
   the same arguments and the same JSON answer as the connector. The session
   token is checked with Supabase Auth; admin, fleet_admin and office must have

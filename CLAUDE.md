@@ -49,14 +49,22 @@
 
 ## Hard rules
 1. Drivers never need a Claude account.
-2. Office access = Claude (the connector `office-mcp` + the Fame Fleet artifact, source
-   `apps/office/fame-fleet.html`) for the boss, and the office web app `apps/office`
+2. Office access = Claude for the boss and Sahan, and the office web app `apps/office`
    (Cloudflare Pages, `*.pages.dev` for the pilot) for everyone else; approved by the boss on
    9 October 2026, plan in `docs/office-web-plan.md`. Both call the same rules in
    `supabase/functions/_shared/fleet` through `office-mcp` and `office-api`. No other hosted
-   app. Every person has their own account and role; writes are checked by the server and
-   audited with the person's name. The artifact's tool names, inputs and JSON answers are a
-   contract (`scripts/tool-shapes.json`): never change them in a way that breaks it.
+   app. How Claude reaches the fleet: our Claude Teams workspace has ONE org-wide custom
+   connector named "Fame Fleet" (`office-mcp` with the shared OFFICE_MCP_KEY, an admin key),
+   used by the boss and Sahan; the Fame Fleet artifact (source `apps/office/fame-fleet.html`)
+   has no key of its own, it uses the viewer's "Fame Fleet" connector. Never two connectors
+   named "Fame Fleet" in one account. The test scripts use the same shared key. Personal keys
+   (`office_keys`) exist for a person's own Claude account and for tests; the plan's later
+   phase gives the connector OAuth sign-in so each Teams member is named without a key. The
+   web app uses no connector and no key: every person signs in with their own account, and
+   `office-api` checks their session and role on every call. Every person has their own
+   account and role; writes are checked by the server and audited with the person's name. The
+   artifact's tool names, inputs and JSON answers are a contract (`scripts/tool-shapes.json`):
+   never change them in a way that breaks it.
 3. Do NOT use the official Supabase MCP connector for the office (it gets full write access
    to the whole org). Our connector exposes only the tools listed below.
 4. Do NOT modify the existing "Fame Group Allowance Desk" artifact. Its business rules are
@@ -310,10 +318,11 @@ driver reads per driver per day (`odometer_reads`, service role only).
 All tools, the role table (`roles.ts`), the runner (`run.ts`: role check, audit row with the
 person's name and channel, the tool, the outcome) and the helpers live here. Two wrappers:
 - `office-mcp`: MCP over Streamable HTTP, deployed with `--no-verify-jwt`, path
-  `/office-mcp/<KEY>/mcp`. A personal key (`office_keys`, made with `create_office_key`)
-  runs the tools as that person with their role; the shared OFFICE_MCP_KEY still works as an
-  admin key (constant-time compare; wrong/missing → 404). Only the tools the role may call
-  are listed.
+  `/office-mcp/<KEY>/mcp`. The shared OFFICE_MCP_KEY is the admin key of the org-wide
+  "Fame Fleet" connector in Claude Teams (constant-time compare; wrong/missing → 404). A
+  personal key (`office_keys`, made with `create_office_key`) runs the tools as that person
+  with their role, for a person's own Claude account or a test; the audit log then carries
+  their name. Only the tools the role may call are listed.
 - `office-api`: HTTP for the web app, deployed with `--no-verify-jwt`: `GET /me`,
   `GET /tools` (with JSON schemas), `POST /tools/<name>` (same inputs and the same JSON
   answer as the connector; 400 bad_input, 403 role or mfa_required, 409 the tool said no).
