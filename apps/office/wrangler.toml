@@ -1,0 +1,6 @@
+# Cloudflare Pages, direct upload from the laptop (no GitHub connection):
+#   npx wrangler login                                  (once, approve in the browser)
+#   npm run build:web && npx wrangler pages deploy      (uploads dist/ to the project fame-fleet)
+name = "fame-fleet"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-01"

@@ -21,8 +21,9 @@ const zEmail = z.string().trim().toLowerCase().email().max(160);
 const zOfficeRole = z.enum(["admin", "fleet_admin", "office", "staff", "viewer"]);
 const LINK_HOURS = 1;
 
+/** The web app's address for set-password links: the first origin of OFFICE_WEB_URL (office-api allows every listed origin for CORS). */
 function webUrl(): string {
-  return (Deno.env.get("OFFICE_WEB_URL") ?? "").replace(/\/$/, "");
+  return (Deno.env.get("OFFICE_WEB_URL") ?? "").split(",")[0].trim().replace(/\/$/, "");
 }
 
 async function officeUser(db: Db, email: string) {
