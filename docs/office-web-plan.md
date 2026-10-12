@@ -367,7 +367,10 @@ Effort is for Sahan working with Claude Code, in working days.
 
 Status, 12 October 2026: phases 1 and 3 are live (the `office_read_access`
 migration is pushed); phases 2, 3 and 4 are built and green locally
-(`scripts/test-office-local.sh`), not yet deployed to Cloudflare Pages. Today's
+(`scripts/test-office-local.sh`) and deployed to Cloudflare Pages at
+https://fame-fleet.pages.dev (direct upload with wrangler from the laptop,
+no GitHub connection; `apps/office/wrangler.toml`). Sahan's test artifact
+is republished from the same source; the Teams artifact is Sahan's to update. Today's
 route on the web comes from `driver_route` (the same filtered points, thinned
 to ~300) rather than from `location_points` in the browser: one implementation
 of the drift filter, far less data per click. The Audit page waits for a tool

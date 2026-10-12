@@ -172,6 +172,12 @@
   Home, Map, Tasks, Vehicles, More (More lists the rest). No audit page yet (no tool for it).
 - `npm run dev:live` runs the dev server against the REAL project (`.env.live.local`,
   gitignored, publishable key only) for a laptop trial; `npm run dev` uses `.env.local`.
+- Hosting: Cloudflare Pages project `fame-fleet`, https://fame-fleet.pages.dev, direct upload:
+  `npm run build:web` (reads `.env.production.local`, gitignored) then
+  `npx wrangler pages deploy --branch main` from `apps/office` (`wrangler.toml`). Deploys to
+  Cloudflare need Sahan's go-ahead like Supabase deploys. The set-password links and CORS
+  come from the Edge Function secret `OFFICE_WEB_URL` (the Pages address; localhost:5173
+  stays allowed for CORS in code).
 - Checks: `npm run typecheck`, `npm test` (Vitest: transports, form rules, Overview, live rules),
   both builds, `npm run test:e2e` (Playwright against the LOCAL stack: set-password link →
   Overview → assign and cancel a task → the live map with a Realtime position → vehicles,

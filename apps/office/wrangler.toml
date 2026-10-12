@@ -1,6 +1,9 @@
 # Cloudflare Pages, direct upload from the laptop (no GitHub connection):
 #   npx wrangler login                                  (once, approve in the browser)
-#   npm run build:web && npx wrangler pages deploy      (uploads dist/ to the project fame-fleet)
+#   npm run build:web && npx wrangler pages deploy --branch main   (uploads dist/ to the project fame-fleet)
+# The project was created with `wrangler pages project create fame-fleet --production-branch main --force`:
+# wrangler steers new projects to Workers when it sees an AI agent; --force was needed once, never again.
+# Production: https://fame-fleet.pages.dev (every deploy also gets a <hash>.fame-fleet.pages.dev preview).
 name = "fame-fleet"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-10-01"
