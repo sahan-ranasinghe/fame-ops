@@ -129,8 +129,8 @@
 - One source, two builds: `npm run build:web` → `dist/` (Cloudflare Pages, code-split,
   `public/_redirects` for the SPA) and `npm run build:artifact` → `dist-artifact/index.html`
   (vite-plugin-singlefile, no Supabase code inside; `__BUILD__` from `vite.config.ts`).
-  Republish the artifact only once every screen of the current one is ported (after
-  Phase 4): until then the published artifact stays as it is.
+  Every screen of the published artifact is ported (Phase 4 done), so the artifact can be
+  republished from `dist-artifact/index.html` to the same URL, by Sahan, with his go-ahead.
 - `src/transport`: the `Transport` interface (`me`, `call`, `watch`, `invalidate`),
   `ClaudeTransport` (window.claude → the viewer's "Fame Fleet" connector, `watchTool` with
   refetchInterval) and `ApiTransport` (office-api with the session; `watch` polls on the
@@ -161,10 +161,22 @@
   (`applyLatest` in `src/data/live.ts`); the states age every 30 s (`refreshStates`,
   the server's 15-minute rule). `live_drivers` cards carry `employee_id`, `lat`, `lng`
   (additive; the contract snapshot records no live driver rows, so it did not change).
+- Phase 4 screens (`src/screens`): Vehicles (filters, table, register/update drawer with an inline
+  rental company), Drivers (add with a one-time PIN, manage: phone/licence, new PIN, switch
+  off with a second click), Mileage (month/vehicle/driver; tiles incl. km outside tasks; by
+  vehicle, biggest gaps, unlogged km, odometer checks as generic tables), Maintenance (reports
+  with status/note/"take off the road", service and document reminders from the overview),
+  Projects (find + the Zoho import message), Accounts (admin: add office user → one-time
+  set-password link shown once, new link, switch off, personal connector keys shown once,
+  revoke). Buttons appear only when `me.tools` allows the tool; the server guards. Phone tabs:
+  Home, Map, Tasks, Vehicles, More (More lists the rest). No audit page yet (no tool for it).
+- `npm run dev:live` runs the dev server against the REAL project (`.env.live.local`,
+  gitignored, publishable key only) for a laptop trial; `npm run dev` uses `.env.local`.
 - Checks: `npm run typecheck`, `npm test` (Vitest: transports, form rules, Overview, live rules),
   both builds, `npm run test:e2e` (Playwright against the LOCAL stack: set-password link →
-  Overview → assign and cancel a task → the live map with a Realtime position → 2-step on in
-  Settings → sign out and in with the code; the local stack must run Realtime). All of it:
+  Overview → assign and cancel a task → the live map with a Realtime position → vehicles,
+  drivers, maintenance, mileage, projects, accounts → 2-step on in Settings → sign out and in
+  with the code; the local stack must run Realtime). All of it:
   `scripts/test-office-local.sh <functions env file>`. The e2e uses the snap Chromium
   (`PW_CHROMIUM=/snap/bin/chromium`, profile under `~/snap/chromium/common`); no browser download.
 - Local Auth redirects for the dev server are in `supabase/config.toml` (`site_url`

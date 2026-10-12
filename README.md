@@ -177,8 +177,11 @@ set-password page and optional 2-step sign-in (Settings). Phase 3 adds Live
 locations: a real map (MapLibre, OpenFreeMap tiles) on the web with markers
 that move the moment a driver's phone reports a position (Supabase Realtime on
 `driver_latest`), the drawn map in the artifact, and today's route per driver.
-Vehicles, Drivers, Mileage, Maintenance and Projects follow in the next phase;
-the published artifact is replaced only when all of them are there.
+Phase 4 adds Vehicles, Drivers, Mileage (with km outside tasks and odometer
+checks), Maintenance, Projects and, for admins, Accounts (office users,
+set-password links, connector keys). Every screen of the published artifact
+is now in the new source, so the artifact can be republished from
+`npm run build:artifact`.
 
 ```bash
 cd apps/office && npm install && cp .env.example .env.local   # add the publishable key

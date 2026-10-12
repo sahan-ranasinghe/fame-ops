@@ -46,15 +46,18 @@ export function Live() {
 
   // Realtime: a new position moves the marker at once; the states age every 30 s.
   useEffect(() => {
+    // Only this subscription's status reaches the screen: a subscription that was torn
+    // down (React runs effects twice in development) must not report "live".
+    let alive = true;
     const stop = realtime?.driverLatest((row) => store.patch<LiveDrivers>("live", (data) => {
       const drivers = applyLatest(data.drivers, row, new Date());
       return drivers === data.drivers ? data : { ...data, drivers };
-    }), setRt);
+    }), (s) => { if (alive) setRt(s); });
     const tick = setInterval(() => store.patch<LiveDrivers>("live", (data) => {
       const drivers = refreshStates(data.drivers, new Date());
       return drivers === data.drivers ? data : { ...data, drivers };
     }), 30000);
-    return () => { stop?.(); clearInterval(tick); };
+    return () => { alive = false; stop?.(); clearInterval(tick); };
   }, [realtime, store]);
 
   const all = useMemo(() => d?.drivers ?? [], [d]);

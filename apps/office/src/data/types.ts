@@ -289,3 +289,126 @@ export interface DriverRoute {
   route?: { columns: string[]; points: (string | number)[][] };
   note?: string;
 }
+
+// ---- Phase 4: vehicles, drivers, mileage, maintenance, accounts ----
+
+export interface DocChip {
+  chip?: string;
+  expiry?: string;
+  days_left?: number;
+}
+
+export interface VehicleCard extends Vehicle {
+  rented_from?: string;
+  rent_until?: string;
+  monthly_rent_lkr?: number;
+  regular_driver?: string;
+  next_service?: string;
+  service_state?: string;
+  garage_booked?: string;
+  documents?: { lic?: DocChip; ins?: DocChip; emi?: DocChip };
+  in_garage?: boolean;
+  active?: boolean;
+}
+
+export interface VehiclesList {
+  filter: string;
+  month?: string;
+  counts: { all: number; on_task: number; available: number; in_garage: number; documents_expiring: number; inactive?: number };
+  vehicles: VehicleCard[];
+}
+
+export interface DriversList {
+  count: number;
+  drivers: Driver[];
+}
+
+/** Rows the generic table shows: flat objects, numbers right-aligned. */
+export type Row = Record<string, string | number | boolean | null | undefined>;
+
+export interface MileageSummary {
+  month: string;
+  vehicle?: string;
+  driver?: string;
+  totals: {
+    tasks: number;
+    task_km: number;
+    fuel_litres: number;
+    fuel_lkr: number;
+    unlogged_km_flags: number;
+    check_odometer: number;
+    between_tasks_km: number;
+    overnight_km: number;
+  };
+  vehicles: Row[];
+  biggest_gaps: Row[];
+  unlogged_km: Row[];
+  check_odometer: Row[];
+  photo_links?: string;
+}
+
+export interface VehicleReport {
+  id: string;
+  reported: string;
+  vehicle?: string;
+  vehicle_in_garage?: boolean;
+  driver?: string;
+  category: string;
+  note?: string | null;
+  status: "open" | "in_garage" | "closed";
+  office_note?: string | null;
+  closed?: string;
+  task_id?: string | null;
+  photos: string[];
+  driver_links?: Links;
+}
+
+export interface VehicleReports {
+  status: string;
+  count: number;
+  reports: VehicleReport[];
+  photo_links?: string;
+}
+
+export interface OfficeKey {
+  id: string;
+  label?: string | null;
+  created: string;
+  last_used: string;
+}
+
+export interface OfficeUser {
+  name: string;
+  email?: string | null;
+  phone?: string | null;
+  role: string;
+  active: boolean;
+  since?: string;
+  connector_keys: OfficeKey[];
+}
+
+export interface OfficeUsers {
+  count: number;
+  users: OfficeUser[];
+}
+
+export interface CreateOfficeUserResult {
+  created: { name: string; email: string; role: string; code: string; id: string };
+  set_password_link: string;
+  link_valid_for?: string;
+  next?: string;
+}
+
+export interface SetPasswordLinkResult {
+  name: string;
+  email: string;
+  set_password_link: string;
+  link_valid_for?: string;
+}
+
+export interface CreateKeyResult {
+  name: string;
+  key_id: string;
+  connector_url: string;
+  note?: string;
+}

@@ -57,7 +57,7 @@ test.beforeAll(() => {
   test.skip(!KEY, "OFFICE_MCP_KEY (the local shared key) is not set");
 });
 
-test("an office user sets a password, works, watches a driver live, turns on 2-step, and signs in again with the code", async ({ page }) => {
+test("an office user sets a password, runs the fleet pages, watches a driver live, turns on 2-step, and signs in again with the code", async ({ page }) => {
   // Set up through the connector, as the admin would in Claude.
   const email = `e2e.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Admin", email, role: "admin" });
@@ -130,7 +130,48 @@ test("an office user sets a password, works, watches a driver live, turns on 2-s
   await page.getByRole("button", { name: "Today’s route" }).click();
   await expect(detail).toContainText(/Today: [\d.]+ km from 2 points/);
 
-  // 5. Settings: turn on 2-step sign-in.
+  // 5. The fleet pages (phase 4): vehicles, drivers, maintenance, mileage, projects, accounts.
+  await page.getByRole("link", { name: "Vehicles" }).first().click();
+  await expect(page.getByRole("heading", { name: "Vehicles" })).toBeVisible();
+  const vrow = page.locator("tr", { hasText: plate });
+  await expect(vrow).toBeVisible();
+  await vrow.click();
+  await expect(page.getByRole("dialog").getByRole("heading", { name: plate })).toBeVisible();
+  await page.getByLabel("Seats").fill("9");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("status")).toHaveText("Vehicle updated");
+  await expect(page.locator("tr", { hasText: plate })).toContainText("9 seats");
+
+  await page.getByRole("link", { name: "Drivers" }).first().click();
+  await expect(page.getByRole("heading", { name: "Drivers" })).toBeVisible();
+  const drow = page.locator("tr", { hasText: driver.name });
+  await expect(drow).toBeVisible();
+  await drow.getByRole("button", { name: "Manage" }).click();
+  await expect(page.getByRole("dialog").getByRole("heading", { name: driver.name })).toBeVisible();
+  await page.getByLabel("New 6-digit PIN").fill("111222");
+  await page.getByRole("button", { name: "Set PIN" }).click();
+  await expect(page.getByRole("dialog")).toContainText("New PIN 111222 is active");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("link", { name: "Maintenance" }).first().click();
+  await expect(page.getByRole("heading", { name: "Maintenance" })).toBeVisible();
+  await expect(page.getByText("Problems reported by drivers", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Mileage" }).first().click();
+  await expect(page.getByRole("heading", { name: "Mileage" })).toBeVisible();
+  await expect(page.getByText("Task km", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Projects" }).first().click();
+  await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();
+  await page.getByLabel("Find a project").fill(`zzz-${stamp}`);
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page.getByText("No project matches", { exact: false })).toBeVisible();
+
+  await page.getByRole("link", { name: "Accounts" }).first().click();
+  await expect(page.getByRole("heading", { name: "Accounts" })).toBeVisible();
+  await expect(page.locator("tr", { hasText: email })).toBeVisible();
+
+  // 6. Settings: turn on 2-step sign-in.
   await page.getByRole("link", { name: "Settings" }).first().click();
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByText("Off", { exact: true })).toBeVisible();
@@ -141,7 +182,7 @@ test("an office user sets a password, works, watches a driver live, turns on 2-s
   await page.getByRole("button", { name: "Turn on 2-step sign-in" }).click();
   await expect(page.getByText("On", { exact: true })).toBeVisible();
 
-  // 6. Sign out; sign in again: password, then the code.
+  // 7. Sign out; sign in again: password, then the code.
   await page.getByRole("link", { name: "More" }).first().click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();

@@ -365,12 +365,13 @@ Effort is for Sahan working with Claude Code, in working days.
 
 | 7 Connector sign-in (later) | 3–4 | OAuth sign-in for the "Fame Fleet" connector (Claude's "Sign in" option for custom connectors): `office-mcp` becomes an OAuth resource with Supabase Auth as the authorization server, the same Fame Fleet accounts and the same second step; each Teams member is then named in the audit log and the shared key is removed from Teams | each Teams member signs in once from Claude; a call from the boss's chat shows the boss's name in `office_audit`; a removed account is refused | enable the connector's "Sign in" in Claude Teams; remove the shared key from the Teams connector |
 
-Status, 12 October 2026: phase 1 is live; phases 2 and 3 are built and green
-locally (`scripts/test-office-local.sh`), not yet deployed to Cloudflare Pages;
-the phase 3 migration `office_read_access` is not pushed yet. Today's route on
-the web comes from `driver_route` (the same filtered points, thinned to ~300)
-rather than from `location_points` in the browser: one implementation of the
-drift filter, far less data per click.
+Status, 12 October 2026: phases 1 and 3 are live (the `office_read_access`
+migration is pushed); phases 2, 3 and 4 are built and green locally
+(`scripts/test-office-local.sh`), not yet deployed to Cloudflare Pages. Today's
+route on the web comes from `driver_route` (the same filtered points, thinned
+to ~300) rather than from `location_points` in the browser: one implementation
+of the drift filter, far less data per click. The Audit page waits for a tool
+that reads `office_audit` (none exists yet; phase 6).
 
 About five working weeks before Zoho push and the connector sign-in. The
 driver app does not change in any phase.
