@@ -1120,7 +1120,9 @@ insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000e1', 'office.admin@fame.test'),
   ('00000000-0000-0000-0000-0000000000e2', 'office.viewer@fame.test'),
   ('00000000-0000-0000-0000-0000000000e3', 'office.staff@fame.test'),
-  ('00000000-0000-0000-0000-0000000000e4', 'office.left@fame.test');
+  ('00000000-0000-0000-0000-0000000000e4', 'office.left@fame.test'),
+  ('00000000-0000-0000-0000-0000000000e5', 'office.fleet@fame.test'),
+  ('00000000-0000-0000-0000-0000000000e6', 'office.office@fame.test');
 
 insert into public.employees (id, code, name, email, role, auth_user_id, active) values
   ('10000000-0000-0000-0000-00000000e001', 'O-ADMIN', 'Office Admin', 'office.admin@fame.test', 'admin',
@@ -1130,16 +1132,22 @@ insert into public.employees (id, code, name, email, role, auth_user_id, active)
   ('10000000-0000-0000-0000-00000000e003', 'O-STAFF', 'Office Staff', 'office.staff@fame.test', 'staff',
    '00000000-0000-0000-0000-0000000000e3', true),
   ('10000000-0000-0000-0000-00000000e004', 'O-LEFT', 'Office Left', 'office.left@fame.test', 'office',
-   '00000000-0000-0000-0000-0000000000e4', false);
+   '00000000-0000-0000-0000-0000000000e4', false),
+  ('10000000-0000-0000-0000-00000000e005', 'O-FLEET', 'Office Fleet', 'office.fleet@fame.test', 'fleet_admin',
+   '00000000-0000-0000-0000-0000000000e5', true),
+  ('10000000-0000-0000-0000-00000000e006', 'O-OFFICE', 'Office Office', 'office.office@fame.test', 'office',
+   '00000000-0000-0000-0000-0000000000e6', true);
 
 -- What the owner sees, to compare against.
 create temporary table office_mark as
   select (select count(*) from public.driver_latest) as latest,
+         (select count(*) from public.location_points) as points,
          (select count(*) from public.tasks) as tasks,
          (select count(*) from public.task_stops) as stops;
 grant select on office_mark to authenticated;  -- the comparisons below run as the office roles
 
 select is((select latest from office_mark) > 0, true, 'fixture: at least one driver position exists');
+select is((select points from office_mark) > 0, true, 'fixture: location points exist');
 select is((select count(*) from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'driver_latest'),
   1::bigint, 'driver_latest is in the Realtime publication');
 
@@ -1149,6 +1157,7 @@ set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e1","
 select is(public.current_office_role(), 'admin', 'current_office_role() is admin for the admin');
 select is((select count(*) from public.driver_latest), (select latest from office_mark), 'admin reads every driver position');
 select is((select count(*) from public.tasks), (select tasks from office_mark), 'admin reads every task');
+select is((select count(*) from public.location_points), 0::bigint, 'admin reads no raw location point through RLS (the route comes through driver_route)');
 select is((select count(*) from public.task_stops), (select stops from office_mark), 'admin reads every stop');
 update public.tasks set end_odometer_km = 999999 where id = '50000000-0000-0000-0000-000000000003';
 select is((select end_odometer_km from public.tasks where id = '50000000-0000-0000-0000-000000000003'), null,
@@ -1168,12 +1177,30 @@ select is((select count(*) from public.driver_latest), (select latest from offic
 select is((select count(*) from public.tasks), (select tasks from office_mark), 'viewer reads every task');
 reset role;
 
+-- The fleet admin and the office person read positions too
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e5","role":"authenticated"}';
+select is(public.current_office_role(), 'fleet_admin', 'current_office_role() is fleet_admin for the fleet admin');
+select is((select count(*) from public.driver_latest), (select latest from office_mark), 'fleet_admin reads every driver position');
+select is((select count(*) from public.tasks), (select tasks from office_mark), 'fleet_admin reads every task');
+reset role;
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e6","role":"authenticated"}';
+select is(public.current_office_role(), 'office', 'current_office_role() is office for the office person');
+select is((select count(*) from public.driver_latest), (select latest from office_mark), 'office reads every driver position');
+select is((select count(*) from public.task_stops), (select stops from office_mark), 'office reads every stop');
+reset role;
+
 -- Staff: nothing here (their own requests come through the tools)
 set role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e3","role":"authenticated"}';
 select is(public.current_office_role(), 'staff', 'current_office_role() is staff for staff');
 select is((select count(*) from public.driver_latest), 0::bigint, 'staff read no driver position');
+select is((select count(*) from public.location_points), 0::bigint, 'staff read no location point');
 select is((select count(*) from public.tasks), 0::bigint, 'staff read no task');
+select is((select count(*) from public.task_stops), 0::bigint, 'staff read no stop');
+select throws_ok('select 1 from public.vehicle_requests', '42501', 'permission denied for table vehicle_requests',
+  'staff cannot read vehicle requests through RLS either: their own come through the tools (list_requests)');
 reset role;
 
 -- A switched-off office person: nothing
