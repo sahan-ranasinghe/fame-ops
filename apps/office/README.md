@@ -5,7 +5,7 @@ One source, two builds (docs/office-web-plan.md, section 4):
 | command | output | who uses it |
 |---|---|---|
 | `npm run build:web` | `dist/` (code-split) | the office web app on Cloudflare Pages: every person signs in with their own account, every call goes through `office-api` |
-| `npm run build:artifact` | `dist-artifact/index.html` (one file) | the Fame Fleet artifact in Claude: it uses the viewer's "Fame Fleet" connector, no key in the page |
+| `npm run build:artifact` | `dist-artifact/index.html` (one file) + `capabilities.json` | the Fame Fleet artifact in Claude: it uses the viewer's "Fame Fleet" connector, no key in the page; publish with the declaration in `capabilities.json` (connector name from `src/connector.json`, the tools the source calls) |
 
 Both talk to the same tools through one `Transport` interface (`src/transport`):
 `ApiTransport` (fetch `office-api` with the Supabase session) and `ClaudeTransport`

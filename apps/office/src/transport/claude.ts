@@ -1,9 +1,17 @@
 // The artifact build: the page talks to the viewer's "Fame Fleet" connector
 // through the Claude artifact runtime. No key lives in the page.
+import connector from "../connector.json";
 import { asFleetError } from "./errors";
 import { ALL_TOOLS, type Me, type Transport, type WatchEvent } from "./types";
 
-export const SERVER = "Fame Fleet";
+/**
+ * The connector's name as claude.ai shows it ("Fame Fleet"). One source for
+ * the page's calls AND the capability declaration the artifact is published
+ * with (scripts/artifact-declaration.mjs reads the same file), so the two
+ * can never drift: a declaration naming anything else makes every call
+ * fail with not_in_manifest ("turned off for this page").
+ */
+export const SERVER: string = connector.server;
 
 interface McpResult {
   payload?: unknown;

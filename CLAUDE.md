@@ -129,8 +129,14 @@
 - One source, two builds: `npm run build:web` → `dist/` (Cloudflare Pages, code-split,
   `public/_redirects` for the SPA) and `npm run build:artifact` → `dist-artifact/index.html`
   (vite-plugin-singlefile, no Supabase code inside; `__BUILD__` from `vite.config.ts`).
-  Every screen of the published artifact is ported (Phase 4 done), so the artifact can be
-  republished from `dist-artifact/index.html` to the same URL, by Sahan, with his go-ahead.
+  Every screen of the published artifact is ported (Phase 4 done). Republish from
+  `dist-artifact/index.html` to Sahan's test artifact (1cUAyZpGXt94XfKXoJntHT) only with his
+  go-ahead, never to the Teams copy (V6vpsqYZoF1WiQQb7wMjKP, his to update). The capability
+  declaration MUST name the connector exactly as claude.ai shows it: `src/connector.json`
+  holds `"Fame Fleet"`, the page's calls read it, and `npm run build:artifact` writes the
+  matching declaration (connector name + every tool the source calls) to
+  `dist-artifact/capabilities.json` through `scripts/artifact-declaration.mjs`. Publish with
+  that file's content unchanged; the mcp__ tool-prefix segment is NOT resolved for you.
 - `src/transport`: the `Transport` interface (`me`, `call`, `watch`, `invalidate`),
   `ClaudeTransport` (window.claude → the viewer's "Fame Fleet" connector, `watchTool` with
   refetchInterval) and `ApiTransport` (office-api with the session; `watch` polls on the

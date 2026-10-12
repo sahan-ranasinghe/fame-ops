@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:live": "vite --mode live",
     "build:web": "tsc -p tsconfig.json --noEmit && vite build",
-    "build:artifact": "tsc -p tsconfig.json --noEmit && vite build --mode artifact",
+    "build:artifact": "tsc -p tsconfig.json --noEmit && vite build --mode artifact && node scripts/artifact-declaration.mjs",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
