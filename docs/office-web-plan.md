@@ -353,6 +353,9 @@ Effort is for Sahan working with Claude Code, in working days.
 
 | 7 Connector sign-in (later) | 3–4 | OAuth sign-in for the "Fame Fleet" connector (Claude's "Sign in" option for custom connectors): `office-mcp` becomes an OAuth resource with Supabase Auth as the authorization server, the same Fame Fleet accounts and the same second step; each Teams member is then named in the audit log and the shared key is removed from Teams | each Teams member signs in once from Claude; a call from the boss's chat shows the boss's name in `office_audit`; a removed account is refused | enable the connector's "Sign in" in Claude Teams; remove the shared key from the Teams connector |
 
+Status, 12 October 2026: phase 1 is live; phase 2 is built and green locally
+(`scripts/test-office-local.sh`), not yet deployed to Cloudflare Pages.
+
 About five working weeks before Zoho push and the connector sign-in. The
 driver app does not change in any phase.
 

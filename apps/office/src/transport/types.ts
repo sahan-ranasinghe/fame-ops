@@ -1,0 +1,54 @@
+// One interface, two ways to reach the Fame Fleet rules (docs/office-web-plan.md, section 4):
+//   ClaudeTransport  the artifact, through the viewer's "Fame Fleet" connector (window.claude)
+//   ApiTransport     the web app, through office-api with the person's Supabase session
+// Both give the same JSON for the same tool and arguments.
+
+export type Role = "admin" | "fleet_admin" | "office" | "staff" | "viewer";
+
+export interface Me {
+  name: string;
+  email?: string;
+  role: Role;
+  /** The tools this person may call; menus mirror it, the server enforces it. */
+  tools: string[];
+  mfa?: boolean;
+}
+
+export interface FleetError {
+  code: string;
+  message: string;
+  status?: number;
+}
+
+export type WatchEvent<T> = { type: "data"; data: T; at: number } | { type: "error"; error: FleetError };
+
+export interface Transport {
+  readonly kind: "claude" | "api";
+  me(): Promise<Me>;
+  call<T = unknown>(tool: string, args?: Record<string, unknown>): Promise<T>;
+  /** Calls now and again every intervalMs until the returned function is called. */
+  watch<T = unknown>(tool: string, args: Record<string, unknown>, cb: (ev: WatchEvent<T>) => void, intervalMs: number): () => void;
+  /** After a write: every watched tool fetches again now. */
+  invalidate(): Promise<void>;
+}
+
+export const ROLE_LABEL: Record<Role, string> = {
+  admin: "Admin",
+  fleet_admin: "Fleet admin",
+  office: "Office",
+  staff: "Staff",
+  viewer: "Viewer",
+};
+
+/** Every connector tool (supabase/functions/_shared/fleet/index.ts). The artifact build lists them all; the connector's key decides. */
+export const ALL_TOOLS = [
+  "fleet_overview", "live_drivers", "driver_route",
+  "list_drivers", "create_driver", "reset_pin", "set_driver_active", "update_driver",
+  "list_vehicles", "register_vehicle", "update_vehicle", "add_rental_company",
+  "list_places", "add_place",
+  "create_task", "task_board", "task_detail", "cancel_task", "reassign_task",
+  "create_request", "list_requests", "suggest_vehicles", "decide_request",
+  "mileage_summary", "list_vehicle_reports", "update_vehicle_report",
+  "import_projects", "find_project",
+  "list_office_users", "create_office_user", "reset_office_password", "set_office_user_active", "create_office_key", "revoke_office_key",
+];

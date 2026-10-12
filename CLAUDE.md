@@ -122,6 +122,37 @@
 - Links: Navigate = `https://www.google.com/maps/dir/?api=1&destination=<lat,lng or address>`,
   call = `tel:`, WhatsApp = `https://wa.me/<number>`.
 
+## Stack (office app, `apps/office`)
+- Vite 7 + React 19 + TypeScript + react-router 7, no UI library; the artifact's CSS is
+  `src/styles.css` unchanged (design tokens from this file). Node from `.nvmrc`; run
+  everything with `./node_modules/.bin/<tool>` or `npm run` from `apps/office`.
+- One source, two builds: `npm run build:web` → `dist/` (Cloudflare Pages, code-split,
+  `public/_redirects` for the SPA) and `npm run build:artifact` → `dist-artifact/index.html`
+  (vite-plugin-singlefile, no Supabase code inside; `__BUILD__` from `vite.config.ts`).
+  Republish the artifact only once every screen of the current one is ported (after
+  Phase 4): until then the published artifact stays as it is.
+- `src/transport`: the `Transport` interface (`me`, `call`, `watch`, `invalidate`),
+  `ClaudeTransport` (window.claude → the viewer's "Fame Fleet" connector, `watchTool` with
+  refetchInterval) and `ApiTransport` (office-api with the session; `watch` polls on the
+  same intervals: overview and board 30 s, requests 60 s; `invalidate` refetches every watch).
+  Errors become `{ code, message }` and `errors.ts` turns them into one sentence + a fix.
+- `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
+  `lists.*`); screens use `useEntry` / `useWatch` / `useLists`. Menus are filtered by
+  `me.tools`; the server is the guard.
+- Web sign-in (`src/auth`): password → `GET /me` → ready; 403 `mfa_required` → the second
+  step (enrol a TOTP app with QR + secret, or type the code; `mfa.challengeAndVerify`); a
+  `create_office_user` link lands with a recovery session → `/set-password`
+  (`PASSWORD_RECOVERY`, or `type=recovery` in the hash) → `updateUser({ password })`.
+  Sign-out resets the URL to `/`. Browser holds only the URL and the anon key (`.env.local`,
+  gitignored; `.env.example` committed).
+- Checks: `npm run typecheck`, `npm test` (Vitest: transports, form rules, Overview),
+  both builds, `npm run test:e2e` (Playwright against the LOCAL stack: set-password link →
+  TOTP → Overview → assign and cancel a task → sign out and in). All of it:
+  `scripts/test-office-local.sh <functions env file>`. The e2e uses the snap Chromium
+  (`PW_CHROMIUM=/snap/bin/chromium`, profile under `~/snap/chromium/common`); no browser download.
+- Local Auth redirects for the dev server are in `supabase/config.toml` (`site_url`
+  localhost:5173); the real project's Site URL and redirect URLs are set in the dashboard.
+
 ## Data model
 - `employees`: id uuid, code (unique), name, phone, email (office people, unique),
   role ('driver'|'staff'|'viewer'|'office'|'fleet_admin'|'admin'), active, language

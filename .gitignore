@@ -8,3 +8,6 @@ dist/
 
 # Firebase config for push notifications: supplied to builds as the EAS file variable GOOGLE_SERVICES_JSON
 apps/driver/google-services.json
+dist-artifact/
+test-results/
+playwright-report/

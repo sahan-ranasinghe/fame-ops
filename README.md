@@ -164,6 +164,27 @@ that one `expo-doctor` check in `package.json`. If a build fails in that
 library, or reading a photo does not work, remove it: the odometer is always
 typed or confirmed by hand anyway.
 
+## Office web app (`apps/office`)
+
+The office screens from the boss's design, built once and shipped two ways
+(docs/office-web-plan.md, section 4): `npm run build:web` for the web app on
+Cloudflare Pages (every person signs in with their own account; every call goes
+through `office-api`) and `npm run build:artifact` for the Fame Fleet artifact in
+Claude (one file; it uses the viewer's "Fame Fleet" connector, no key inside).
+Phase 2 has Overview, Tasks (board, assign a task, task detail, reassign, cancel)
+and Requests (list, approve or decline, new request), plus sign-in, the
+set-password page and the second step (authenticator app). Live locations,
+Vehicles, Drivers, Mileage, Maintenance and Projects follow in the next phases;
+the published artifact is replaced only when all of them are there.
+
+```bash
+cd apps/office && npm install && cp .env.example .env.local   # add the publishable key
+npm run dev                                                   # http://localhost:5173
+scripts/test-office-local.sh /tmp/office-mcp.env              # from the repo root: every check, local stack only
+```
+
+See `apps/office/README.md`.
+
 ## Office rules, connector and API
 
 Everything the office can do is a tool in `supabase/functions/_shared/fleet`
