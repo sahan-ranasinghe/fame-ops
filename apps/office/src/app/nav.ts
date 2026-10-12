@@ -9,18 +9,20 @@ export interface NavItem {
 
 export const NAV: NavItem[] = [
   { key: "overview", label: "Overview", tool: "fleet_overview", path: "/" },
+  { key: "live", label: "Live locations", tool: "live_drivers", path: "/live" },
   { key: "tasks", label: "Tasks", tool: "task_board", path: "/tasks" },
   { key: "requests", label: "Requests", tool: "list_requests", path: "/requests" },
 ];
 
-/** Phone tab bar: Home, Tasks, Requests, More. */
+/** Phone tab bar: Home, Map, Tasks, Requests, More. */
 export const TABS: NavItem[] = [
   { key: "overview", label: "Home", tool: "fleet_overview", path: "/" },
+  { key: "live", label: "Map", tool: "live_drivers", path: "/live" },
   { key: "tasks", label: "Tasks", tool: "task_board", path: "/tasks" },
   { key: "requests", label: "Requests", tool: "list_requests", path: "/requests" },
   { key: "more", label: "More", tool: "", path: "/more" },
 ];
 
-export const LATER = ["Live locations", "Vehicles", "Projects", "Maintenance", "Mileage", "Drivers"];
+export const LATER = ["Vehicles", "Projects", "Maintenance", "Mileage", "Drivers"];
 
 export const allowed = (items: NavItem[], tools: string[]) => items.filter((n) => !n.tool || tools.includes(n.tool));

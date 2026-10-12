@@ -146,14 +146,25 @@
   straight to Overview. 2-step sign-in is OPTIONAL for every role (decided 12 Oct 2026):
   the Settings page (web only, lazy) turns it on or off (`TotpEnrol`: QR + secret + one
   code). If office-api answers 403 `mfa_required` (secret `REQUIRE_MFA_ROLES` set), the
-  second-step page makes the person set it up first. Passwords: 12+ characters
-  (`MIN_PASSWORD`, matches the dashboard's minimum password length). Sign-out resets the
+  second-step page makes the person set it up first. Office passwords: 12+ characters
+  (`MIN_PASSWORD`, the set-password page only). Auth's own minimum password length stays 6
+  (dashboard and config.toml): drivers' 6-digit PINs are passwords in the same Auth project,
+  and `create_driver` / `reset_pin` fail with anything higher. Sign-out resets the
   URL to `/`. Browser holds only the URL and the anon key (`.env.local`, gitignored;
   `.env.example` committed).
-- Checks: `npm run typecheck`, `npm test` (Vitest: transports, form rules, Overview),
+- Live locations (`src/screens/Live.tsx`, Phase 3): the list, the map and the detail card
+  from `live_drivers` (watched every 30 s), plus `driver_route` for "Today's route". One
+  `MapProps` interface, two maps (`src/map`): `DrawnMap` (the artifact's SVG, both builds)
+  and `MapLibreMap` (web only, lazy chunk, OpenFreeMap Liberty tiles, markers animated
+  over ~1 s, falls back to the drawn map when the style cannot load). On the web a
+  Realtime channel on `driver_latest` (`src/data/realtime.ts`) moves a marker at once
+  (`applyLatest` in `src/data/live.ts`); the states age every 30 s (`refreshStates`,
+  the server's 15-minute rule). `live_drivers` cards carry `employee_id`, `lat`, `lng`
+  (additive; the contract snapshot records no live driver rows, so it did not change).
+- Checks: `npm run typecheck`, `npm test` (Vitest: transports, form rules, Overview, live rules),
   both builds, `npm run test:e2e` (Playwright against the LOCAL stack: set-password link →
-  Overview → assign and cancel a task → 2-step on in Settings → sign out and in with the
-  code). All of it:
+  Overview → assign and cancel a task → the live map with a Realtime position → 2-step on in
+  Settings → sign out and in with the code; the local stack must run Realtime). All of it:
   `scripts/test-office-local.sh <functions env file>`. The e2e uses the snap Chromium
   (`PW_CHROMIUM=/snap/bin/chromium`, profile under `~/snap/chromium/common`); no browser download.
 - Local Auth redirects for the dev server are in `supabase/config.toml` (`site_url`
@@ -218,6 +229,10 @@
   Unique (employee_id, recorded_at); uploads use on conflict do nothing.
 - `driver_latest`: employee_id PK, session_id, lat, lng, accuracy_m, speed_mps,
   battery_pct, recorded_at, sharing (bool). Kept current by trigger (only newer points win).
+  In the Realtime publication; office roles (admin, fleet_admin, office, viewer) read it
+  through RLS (`current_office_role()`, migration `office_read_access`), drivers and staff
+  read nothing. The same roles read all tasks and task_stops through RLS. Everything else
+  the office reads comes through the tools. No policy checks aal2.
 - `office_audit`: id, at, tool, args_summary, result_summary, actor_employee_id,
   actor_name, channel ('claude'|'web'|'driver'). Office tools write it through both
   channels; triggers add the driver app's task starts/finishes and problem reports.

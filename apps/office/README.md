@@ -38,5 +38,6 @@ npm run test:e2e         # Playwright, local stack only: scripts/test-office-loc
 - `src/auth` — sign-in, the set-password page (from a `create_office_user` link), the optional 2-step (TOTP: `TotpEnrol`, the code page)
 - `src/transport` — the two transports and the error mapping
 - `src/data` — the store (one entry per watched tool), result types, hooks
-- `src/screens` — Overview, Tasks (board, assign, task drawer), Requests (list, decide, new), Settings (2-step on/off, web only), More
+- `src/screens` — Overview, Live locations (list, map, detail, today's route), Tasks (board, assign, task drawer), Requests (list, decide, new), Settings (2-step on/off, web only), More
+- `src/map` — `DrawnMap` (the artifact's SVG), `MapLibreMap` (web only, lazy), `MapView` picks one; `src/data/live.ts` + `realtime.ts` keep the markers live
 - `src/styles.css` — the artifact's CSS, unchanged, plus the sign-in pages

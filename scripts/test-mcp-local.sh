@@ -15,6 +15,7 @@
 #
 # Then:
 #   scripts/test-mcp-local.sh /tmp/office-mcp.env
+#   SHAPES=write scripts/test-mcp-local.sh /tmp/office-mcp.env   # after adding fields to a tool's answer: rewrite the contract
 
 set -eo pipefail
 cd "$(dirname "$0")/.."
@@ -72,7 +73,8 @@ echo "== Channel 1: the connector (office-mcp, shared key) =="
 CHANNEL=mcp python3 scripts/test-mcp-local.py
 echo
 echo "== The tool answers still have the shapes the artifact reads (scripts/tool-shapes.json) =="
-python3 -I scripts/snapshot-tool-shapes.py --check | tail -3
+# SHAPES=write records a deliberate, additive change of the answers (new fields) instead of checking.
+python3 -I scripts/snapshot-tool-shapes.py "--${SHAPES:-check}" | tail -3
 echo
 reset_db
 ready "$API_URL/auth/v1/health" -H "apikey: $ANON_KEY"

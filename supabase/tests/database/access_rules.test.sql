@@ -115,7 +115,7 @@ select is(
 
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  25::bigint, 'there are 25 policies on public tables');
+  28::bigint, 'there are 28 policies on public tables');
 
 select is(
   (select count(*) from pg_policies
@@ -237,8 +237,8 @@ select throws_ok('select 1 from public.vehicle_requests', '42501',
   'permission denied for table vehicle_requests', 'driver cannot read vehicle requests');
 select throws_ok('select 1 from public.office_audit', '42501',
   'permission denied for table office_audit', 'driver cannot read the office audit log');
-select throws_ok('select 1 from public.driver_latest', '42501',
-  'permission denied for table driver_latest', 'driver cannot read driver_latest');
+select is((select count(*) from public.driver_latest), 0::bigint,
+  'driver reads no row of driver_latest (the office reads it through RLS, phase 3)');
 select throws_ok('select 1 from public.rental_companies', '42501',
   'permission denied for table rental_companies', 'driver cannot read rental companies');
 select throws_ok('select 1 from public.claims', '42501',
@@ -1108,6 +1108,96 @@ select results_eq(
   'start, finish and a problem report by the driver are logged with the driver''s name and channel driver');
 select is((select actor_employee_id from public.office_audit where channel = 'driver' and id > (select id from audit_mark) limit 1),
   '10000000-0000-0000-0000-0000000000a1'::uuid, 'and linked to the driver''s employee row');
+
+-- ---------------------------------------------------------------------------
+-- 11. Office read access (phase 3): driver_latest, tasks and task_stops
+--     through RLS for the office roles; nothing for staff, drivers, anon
+-- ---------------------------------------------------------------------------
+
+reset role;
+
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000000e1', 'office.admin@fame.test'),
+  ('00000000-0000-0000-0000-0000000000e2', 'office.viewer@fame.test'),
+  ('00000000-0000-0000-0000-0000000000e3', 'office.staff@fame.test'),
+  ('00000000-0000-0000-0000-0000000000e4', 'office.left@fame.test');
+
+insert into public.employees (id, code, name, email, role, auth_user_id, active) values
+  ('10000000-0000-0000-0000-00000000e001', 'O-ADMIN', 'Office Admin', 'office.admin@fame.test', 'admin',
+   '00000000-0000-0000-0000-0000000000e1', true),
+  ('10000000-0000-0000-0000-00000000e002', 'O-VIEW', 'Office Viewer', 'office.viewer@fame.test', 'viewer',
+   '00000000-0000-0000-0000-0000000000e2', true),
+  ('10000000-0000-0000-0000-00000000e003', 'O-STAFF', 'Office Staff', 'office.staff@fame.test', 'staff',
+   '00000000-0000-0000-0000-0000000000e3', true),
+  ('10000000-0000-0000-0000-00000000e004', 'O-LEFT', 'Office Left', 'office.left@fame.test', 'office',
+   '00000000-0000-0000-0000-0000000000e4', false);
+
+-- What the owner sees, to compare against.
+create temporary table office_mark as
+  select (select count(*) from public.driver_latest) as latest,
+         (select count(*) from public.tasks) as tasks,
+         (select count(*) from public.task_stops) as stops;
+grant select on office_mark to authenticated;  -- the comparisons below run as the office roles
+
+select is((select latest from office_mark) > 0, true, 'fixture: at least one driver position exists');
+select is((select count(*) from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'driver_latest'),
+  1::bigint, 'driver_latest is in the Realtime publication');
+
+-- The admin
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e1","role":"authenticated"}';
+select is(public.current_office_role(), 'admin', 'current_office_role() is admin for the admin');
+select is((select count(*) from public.driver_latest), (select latest from office_mark), 'admin reads every driver position');
+select is((select count(*) from public.tasks), (select tasks from office_mark), 'admin reads every task');
+select is((select count(*) from public.task_stops), (select stops from office_mark), 'admin reads every stop');
+update public.tasks set end_odometer_km = 999999 where id = '50000000-0000-0000-0000-000000000003';
+select is((select end_odometer_km from public.tasks where id = '50000000-0000-0000-0000-000000000003'), null,
+  'admin cannot change a task through RLS: the update matches no row (writes go through the tools)');
+select throws_ok($$ insert into public.tasks (title, employee_id, vehicle_id, start_at)
+  values ('x', '10000000-0000-0000-0000-0000000000a1', '20000000-0000-0000-0000-000000000001', now()) $$,
+  '42501', 'permission denied for table tasks', 'admin cannot insert a task through RLS');
+select throws_ok($$ update public.driver_latest set sharing = false $$,
+  '42501', 'permission denied for table driver_latest', 'admin cannot change driver positions');
+reset role;
+
+-- The viewer reads what the office reads
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e2","role":"authenticated"}';
+select is(public.current_office_role(), 'viewer', 'current_office_role() is viewer for the viewer');
+select is((select count(*) from public.driver_latest), (select latest from office_mark), 'viewer reads every driver position');
+select is((select count(*) from public.tasks), (select tasks from office_mark), 'viewer reads every task');
+reset role;
+
+-- Staff: nothing here (their own requests come through the tools)
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e3","role":"authenticated"}';
+select is(public.current_office_role(), 'staff', 'current_office_role() is staff for staff');
+select is((select count(*) from public.driver_latest), 0::bigint, 'staff read no driver position');
+select is((select count(*) from public.tasks), 0::bigint, 'staff read no task');
+reset role;
+
+-- A switched-off office person: nothing
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e4","role":"authenticated"}';
+select is(public.current_office_role(), null, 'current_office_role() is null for a switched-off person');
+select is((select count(*) from public.driver_latest), 0::bigint, 'a switched-off office person reads no driver position');
+select is((select count(*) from public.tasks), 0::bigint, 'a switched-off office person reads no task');
+reset role;
+
+-- Driver A: still only their own tasks, and no positions at all
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select is(public.current_office_role(), null, 'current_office_role() is null for a driver');
+select is((select count(*) from public.driver_latest), 0::bigint, 'a driver reads no driver position, not even their own');
+select is((select count(*) from public.tasks where employee_id <> '10000000-0000-0000-0000-0000000000a1'), 0::bigint,
+  'a driver still sees nobody else''s tasks');
+reset role;
+
+-- Anon: nothing
+set role anon;
+select throws_ok('select count(*) from public.driver_latest', '42501', 'permission denied for table driver_latest',
+  'anon cannot read driver positions');
+reset role;
 
 select * from finish();
 

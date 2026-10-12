@@ -221,9 +221,12 @@ As approved in the live-map plan:
   Everyone signs in with e-mail and password; a set-password link goes
   straight to Overview. Anyone turns 2-step on in Settings (Google
   Authenticator or any TOTP app, scan the QR code, type one code); from then
-  on their sign-in asks for the code. Passwords have at least 12 characters
-  (the set-password page and the project's "Minimum password length"
-  setting). To make 2-step compulsory later: set the secret
+  on their sign-in asks for the code. Office passwords have at least 12
+  characters, a rule of the set-password page only: the project's "Minimum
+  password length" stays at 6 because drivers' 6-digit PINs are passwords in
+  the same Auth project (`create_driver` and `reset_pin` fail with anything
+  higher; checked on the local stack, 12 October 2026). To make 2-step
+  compulsory later: set the secret
   `REQUIRE_MFA_ROLES` (for example `admin,fleet_admin,office`); office-api
   then answers `mfa_required` and the web app asks those people to set it
   up before anything loads. No RLS policy checks `aal2`.
@@ -354,7 +357,7 @@ Effort is for Sahan working with Claude Code, in working days.
 | phase | days | builds | test | Sahan sets up |
 |---|---|---|---|---|
 | 1 Shared rules | 4–5 | `_shared/fleet`, office-api, roles, personal keys, audit actor and channel | pgTAP; Deno tests; the local python suite through both channels; smoke test on the live project | nothing new (deploy two functions, one migration) |
-| 2 Web app core | 6–8 | `apps/office`: transports, sign-in, set-password, optional 2-step in Settings, Overview, Tasks, Requests; `build:artifact` replacing the current artifact (after phase 4) | Vitest on the transport and forms; Playwright sign-in and one task flow; the artifact rebuilt and compared screen by screen with the current one | Cloudflare account and Pages project; Auth Site URL, redirect URLs, minimum password length 12; the first admin accounts |
+| 2 Web app core | 6–8 | `apps/office`: transports, sign-in, set-password, optional 2-step in Settings, Overview, Tasks, Requests; `build:artifact` replacing the current artifact (after phase 4) | Vitest on the transport and forms; Playwright sign-in and one task flow; the artifact rebuilt and compared screen by screen with the current one | Cloudflare account and Pages project; Auth Site URL and redirect URLs; the first admin accounts |
 | 3 Live map | 3–4 | MapLibre map, Realtime markers, route of the day | the map against the phone's position on the OPPO; `driver_route` numbers equal the page's | `driver_latest` publication (in the migration) |
 | 4 All screens and roles | 5–6 | Vehicles, Drivers, Projects, Maintenance, Mileage, Accounts, Audit, staff "My requests", viewer | role matrix walked through with one account per role; Playwright per role | the five accounts, by set-password link |
 | 5 Zoho sync (**boss**) | 2–3 (+3–4 for push later) | `zoho-sync`, Settings page, `zoho_sync_runs` | first full load compared with Zoho Books; a changed project appears within 30 minutes; the daily budget stop | the Zoho admin's steps in section 7 |
@@ -362,8 +365,12 @@ Effort is for Sahan working with Claude Code, in working days.
 
 | 7 Connector sign-in (later) | 3–4 | OAuth sign-in for the "Fame Fleet" connector (Claude's "Sign in" option for custom connectors): `office-mcp` becomes an OAuth resource with Supabase Auth as the authorization server, the same Fame Fleet accounts and the same second step; each Teams member is then named in the audit log and the shared key is removed from Teams | each Teams member signs in once from Claude; a call from the boss's chat shows the boss's name in `office_audit`; a removed account is refused | enable the connector's "Sign in" in Claude Teams; remove the shared key from the Teams connector |
 
-Status, 12 October 2026: phase 1 is live; phase 2 is built and green locally
-(`scripts/test-office-local.sh`), not yet deployed to Cloudflare Pages.
+Status, 12 October 2026: phase 1 is live; phases 2 and 3 are built and green
+locally (`scripts/test-office-local.sh`), not yet deployed to Cloudflare Pages;
+the phase 3 migration `office_read_access` is not pushed yet. Today's route on
+the web comes from `driver_route` (the same filtered points, thinned to ~300)
+rather than from `location_points` in the browser: one implementation of the
+drift filter, far less data per click.
 
 About five working weeks before Zoho push and the connector sign-in. The
 driver app does not change in any phase.

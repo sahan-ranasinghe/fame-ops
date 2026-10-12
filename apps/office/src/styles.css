@@ -261,3 +261,17 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .code-input { font-family: var(--font-mono); font-size: 24px; letter-spacing: .3em; text-align: center }
 .rail .viewer small { text-transform: capitalize }
 .nav-note { color: var(--rail-muted); font-size: 13px; padding: 10px 14px }
+
+/* ---------- web build: the real map (MapLibre) ---------- */
+.mapbox.ml { aspect-ratio: 1000 / 640; min-height: 320px }
+.mapbox.ml .ml-canvas { position: absolute; inset: 0 }
+.mapbox.ml .ml-canvas canvas { outline: none }
+.ml-fit { top: 84px }
+.maplibregl-ctrl-group { border-radius: 10px !important; box-shadow: none !important; border: 1px solid var(--line) }
+.maplibregl-ctrl-group button { width: 44px !important; height: 44px !important }
+.mk-dom { display: grid; justify-items: center; gap: 6px; cursor: pointer; --mk: var(--bad) }
+.mk-dom.live { --mk: var(--live) } .mk-dom.warn { --mk: var(--accent) }
+.mk-chip { font-family: var(--font-mono); font-weight: 600; font-size: 13px; letter-spacing: .02em; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 7px; padding: 3px 8px; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.15) }
+.mk-dom.sel .mk-chip { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.mk-dot { width: 18px; height: 18px; border-radius: 6px; background: var(--mk); border: 3px solid var(--surface); box-shadow: 0 0 0 2px var(--mk) }
+.mk-dom.sel .mk-dot { box-shadow: 0 0 0 10px color-mix(in srgb, var(--mk) 22%, transparent) }

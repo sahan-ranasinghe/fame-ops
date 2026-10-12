@@ -76,7 +76,7 @@ export default function Settings() {
         </div>
         <div className="card card-b">
           <h2>Password</h2>
-          <p className="muted" style={{ margin: "6px 0 0" }}>Forgot it? The fleet admin sends you a new set-password link. Passwords have at least 12 characters.</p>
+          <p className="muted" style={{ margin: "6px 0 0" }}>Forgot it? The fleet admin sends you a new set-password link. Office passwords have at least 12 characters.</p>
         </div>
       </div>
     </section>

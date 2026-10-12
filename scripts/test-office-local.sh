@@ -4,7 +4,10 @@
 #
 #   - typecheck, unit tests (Vitest), both builds (web, artifact)
 #   - the end-to-end test (Playwright): set-password link → Overview →
-#     assign a task → cancel it → 2-step on in Settings → sign out → sign in with the code
+#     assign a task → cancel it → the live map with a Realtime position →
+#     2-step on in Settings → sign out → sign in with the code
+#
+# The local stack must include Realtime (plain `npx supabase start`; not `-x realtime`).
 #
 # Before running it, in another terminal (same as scripts/test-mcp-local.sh):
 #   npx supabase start
@@ -58,7 +61,7 @@ echo "3. Builds"
 ./node_modules/.bin/vite build --mode artifact >/dev/null
 ls -la dist-artifact/index.html | awk '{print "   artifact: " $5 " bytes"}'
 echo "4. End to end (Playwright)"
-export OFFICE_MCP_URL="$API_URL/functions/v1/office-mcp" OFFICE_MCP_KEY
+export OFFICE_MCP_URL="$API_URL/functions/v1/office-mcp" OFFICE_MCP_KEY API_URL ANON_KEY
 if [ -z "${PW_CHROMIUM:-}" ] && [ ! -d "$HOME/.cache/ms-playwright" ] && [ -x /snap/bin/chromium ]; then
   export PW_CHROMIUM=/snap/bin/chromium
   export TMPDIR="$HOME/snap/chromium/common/pw-tmp"   # snap Chromium can only write inside its own folder

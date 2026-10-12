@@ -7,6 +7,7 @@ import { Blocked } from "../auth/Blocked";
 import { SecondStep } from "../auth/SecondStep";
 import { SetPassword } from "../auth/SetPassword";
 import { SignIn } from "../auth/SignIn";
+import { subscribeDriverLatest } from "../data/realtime";
 import { FleetStore } from "../data/store";
 import { DrawerProvider } from "../ui/Drawer";
 import { ToastProvider } from "../ui/Toast";
@@ -23,6 +24,7 @@ function Gate() {
       me: auth.state.me,
       noConnector: false,
       signOut: () => void auth.signOut(),
+      realtime: { driverLatest: subscribeDriverLatest },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.state.step === "ready" ? auth.state.me : null, auth.transport]);

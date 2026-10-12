@@ -3,7 +3,7 @@ import { Notice } from "../ui/basics";
 import { AuthPage } from "./AuthPage";
 import { useAuth } from "./AuthProvider";
 
-/** Matches the project's Auth setting "Minimum password length" (dashboard) and config.toml locally. */
+/** Office passwords: a rule of this page. Auth's own minimum stays 6 because drivers' 6-digit PINs live in the same project. */
 export const MIN_PASSWORD = 12;
 
 export function SetPassword() {

@@ -55,7 +55,7 @@ export function Overview() {
 
           <div className="two">
             <div className="card">
-              <div className="card-h"><h2>On the road</h2><span className="muted small">Live map in the next phase</span></div>
+              <div className="card-h"><h2>On the road</h2>{me.tools.includes("live_drivers") && <Link to="/live">All live locations</Link>}</div>
               <div className="rows">
                 {o.on_the_road.length ? o.on_the_road.map((d, i) => (
                   <div className="row" key={d.username ?? i}>

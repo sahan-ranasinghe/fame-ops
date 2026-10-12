@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Navigate, type RouteObject } from "react-router";
+import { Live } from "../screens/Live";
 import { More } from "../screens/More";
 import { Overview } from "../screens/Overview";
 import { Requests } from "../screens/Requests";
@@ -28,6 +29,7 @@ export const routes: RouteObject[] = [
     element: <Shell />,
     children: [
       { index: true, element: <Home /> },
+      { path: "live", element: <Live /> },
       { path: "tasks", element: <Tasks /> },
       { path: "requests", element: <Requests /> },
       { path: "more", element: <More /> },

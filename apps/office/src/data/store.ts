@@ -83,6 +83,14 @@ export class FleetStore {
     }
   }
 
+  /** Changes an entry's data in place (a Realtime row, the clock ticking); nothing is fetched. */
+  patch<T>(key: string, fn: (data: T) => T): void {
+    const e = this.get<T>(key);
+    if (e.data === undefined) return;
+    const next = fn(e.data);
+    if (next !== e.data) this.set(key, { data: next });
+  }
+
   /** After a write: everything watched fetches again. */
   invalidate(): Promise<void> {
     return this.transport.invalidate();

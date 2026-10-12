@@ -173,8 +173,11 @@ through `office-api`) and `npm run build:artifact` for the Fame Fleet artifact i
 Claude (one file; it uses the viewer's "Fame Fleet" connector, no key inside).
 Phase 2 has Overview, Tasks (board, assign a task, task detail, reassign, cancel)
 and Requests (list, approve or decline, new request), plus sign-in, the
-set-password page and optional 2-step sign-in (Settings). Live locations,
-Vehicles, Drivers, Mileage, Maintenance and Projects follow in the next phases;
+set-password page and optional 2-step sign-in (Settings). Phase 3 adds Live
+locations: a real map (MapLibre, OpenFreeMap tiles) on the web with markers
+that move the moment a driver's phone reports a position (Supabase Realtime on
+`driver_latest`), the drawn map in the artifact, and today's route per driver.
+Vehicles, Drivers, Mileage, Maintenance and Projects follow in the next phase;
 the published artifact is replaced only when all of them are there.
 
 ```bash

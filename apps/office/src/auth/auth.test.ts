@@ -3,7 +3,7 @@ import { MIN_PASSWORD } from "./SetPassword";
 import { qrSrc } from "./TotpEnrol";
 
 describe("sign-in rules", () => {
-  it("passwords need 12 characters, the dashboard's minimum", () => {
+  it("office passwords need 12 characters on the set-password page", () => {
     expect(MIN_PASSWORD).toBe(12);
   });
   it("shows Supabase's QR code whether it comes as SVG or as a data URL", () => {

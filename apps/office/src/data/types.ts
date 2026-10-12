@@ -237,3 +237,55 @@ export interface DecideResult {
   task_id?: string;
   warnings?: string[];
 }
+
+export type ShareState = "sharing" | "stale" | "not_sharing";
+
+export interface LiveDriver {
+  driver: string;
+  username: string;
+  employee_id?: string;
+  state: ShareState;
+  location?: string;
+  updated?: string;
+  near?: string | null;
+  speed_kmh?: number;
+  battery_pct?: number | null;
+  source?: string;
+  vehicle?: string;
+  task?: string;
+  going_to?: string;
+  lat?: number;
+  lng?: number;
+  links?: Links;
+  /** Set by a Realtime row: the ISO time of the last position. */
+  recorded_at?: string | null;
+}
+
+export interface LiveDrivers {
+  as_of: string;
+  counts: { all: number; sharing: number; stale: number; not_sharing: number };
+  drivers: LiveDriver[];
+}
+
+export interface RouteStop {
+  from: string;
+  to: string;
+  minutes: number;
+  near?: string | null;
+  maps?: string;
+}
+
+export interface DriverRoute {
+  driver: string;
+  date: string;
+  recorded_points: number;
+  usable_points?: number;
+  first_point?: string;
+  last_point?: string;
+  last_position?: string;
+  km?: number;
+  km_note?: string;
+  stops_over_10_min?: RouteStop[];
+  route?: { columns: string[]; points: (string | number)[][] };
+  note?: string;
+}

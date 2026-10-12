@@ -41,6 +41,7 @@ export const liveDrivers = tool({
       return {
         driver: e.name,
         username: e.username,
+        employee_id: e.id,
         state: share.state,
         location: share.text,
         updated: pos?.recorded_at ? colomboDateTime(pos.recorded_at) : undefined,
@@ -51,6 +52,9 @@ export const liveDrivers = tool({
         vehicle: vehicleId ? vehicleLabel(refs.veh.get(vehicleId)) : undefined,
         task: task?.title,
         going_to: task ? stops.filter((s) => s.task_id === task.id).at(-1)?.place_name : undefined,
+        // The position itself (the web map draws it; the maps link stays for Claude).
+        lat: hasPosition ? pos.lat! : undefined,
+        lng: hasPosition ? pos.lng! : undefined,
         links: { maps: hasPosition ? mapsPoint(pos.lat!, pos.lng!) : undefined, ...contactLinks(e.phone) },
         minutes: share.minutes ?? Number.MAX_SAFE_INTEGER,
       };
