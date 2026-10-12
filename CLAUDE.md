@@ -139,15 +139,21 @@
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
   `lists.*`); screens use `useEntry` / `useWatch` / `useLists`. Menus are filtered by
   `me.tools`; the server is the guard.
-- Web sign-in (`src/auth`): password → `GET /me` → ready; 403 `mfa_required` → the second
-  step (enrol a TOTP app with QR + secret, or type the code; `mfa.challengeAndVerify`); a
+- Web sign-in (`src/auth`): e-mail + password → (2-step on for this person? the code page,
+  `mfa.getAuthenticatorAssuranceLevel` says nextLevel aal2) → `GET /me` → ready. A
   `create_office_user` link lands with a recovery session → `/set-password`
-  (`PASSWORD_RECOVERY`, or `type=recovery` in the hash) → `updateUser({ password })`.
-  Sign-out resets the URL to `/`. Browser holds only the URL and the anon key (`.env.local`,
-  gitignored; `.env.example` committed).
+  (`PASSWORD_RECOVERY`, or `type=recovery` in the hash) → `updateUser({ password })` →
+  straight to Overview. 2-step sign-in is OPTIONAL for every role (decided 12 Oct 2026):
+  the Settings page (web only, lazy) turns it on or off (`TotpEnrol`: QR + secret + one
+  code). If office-api answers 403 `mfa_required` (secret `REQUIRE_MFA_ROLES` set), the
+  second-step page makes the person set it up first. Passwords: 12+ characters
+  (`MIN_PASSWORD`, matches the dashboard's minimum password length). Sign-out resets the
+  URL to `/`. Browser holds only the URL and the anon key (`.env.local`, gitignored;
+  `.env.example` committed).
 - Checks: `npm run typecheck`, `npm test` (Vitest: transports, form rules, Overview),
   both builds, `npm run test:e2e` (Playwright against the LOCAL stack: set-password link →
-  TOTP → Overview → assign and cancel a task → sign out and in). All of it:
+  Overview → assign and cancel a task → 2-step on in Settings → sign out and in with the
+  code). All of it:
   `scripts/test-office-local.sh <functions env file>`. The e2e uses the snap Chromium
   (`PW_CHROMIUM=/snap/bin/chromium`, profile under `~/snap/chromium/common`); no browser download.
 - Local Auth redirects for the dev server are in `supabase/config.toml` (`site_url`
@@ -357,8 +363,10 @@ person's name and channel, the tool, the outcome) and the helpers live here. Two
 - `office-api`: HTTP for the web app, deployed with `--no-verify-jwt`: `GET /me`,
   `GET /tools` (with JSON schemas), `POST /tools/<name>` (same inputs and the same JSON
   answer as the connector; 400 bad_input, 403 role or mfa_required, 409 the tool said no).
-  The session token is checked with Supabase Auth; admin, fleet_admin and office need aal2
-  (TOTP); 120 calls a minute per person; CORS from OFFICE_WEB_URL.
+  The session token is checked with Supabase Auth. 2-step sign-in is optional; the secret
+  `REQUIRE_MFA_ROLES` (comma-separated roles, empty by default) makes office-api refuse
+  those roles with 403 mfa_required until their session is aal2. No RLS policy checks aal2.
+  120 calls a minute per person; CORS from OFFICE_WEB_URL.
 Uses service_role internally but only through these tools. No raw SQL, no deletes. Compact
 JSON, times in Asia/Colombo, Google Maps / tel: / wa.me links. Every call logged to
 office_audit.

@@ -18,8 +18,21 @@ export interface Actor {
 }
 
 export const OFFICE_ROLES: readonly Role[] = ["admin", "fleet_admin", "office", "staff", "viewer"];
-/** These roles must have done the second sign-in step (TOTP, aal2) on the web. */
+
+/**
+ * 2-step sign-in (TOTP) is optional for every role: a person turns it on in
+ * the web app's Settings, and from then on their sign-in asks for the code.
+ * The office can make it compulsory for some roles with the Edge Function
+ * secret REQUIRE_MFA_ROLES (for example "admin,fleet_admin,office"); office-api
+ * then refuses those roles until the session has done the second step (aal2).
+ * STRONG_ROLES is the set the plan recommends when that day comes.
+ */
 export const STRONG_ROLES: readonly Role[] = ["admin", "fleet_admin", "office"];
+
+/** The roles REQUIRE_MFA_ROLES names; unknown words are ignored, empty = nobody. */
+export function mfaRequiredRoles(setting: string | undefined | null): Role[] {
+  return (setting ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(isRole);
+}
 
 const ADMIN: Role[] = ["admin"];
 const FLEET: Role[] = ["admin", "fleet_admin"];

@@ -1,5 +1,6 @@
 // The plan's Phase 2 end-to-end check on the LOCAL stack: the set-password link,
-// the second step, sign-in, Overview, one task assigned and cancelled, sign out.
+// Overview, one task assigned and cancelled, 2-step turned on in Settings,
+// sign out, sign in with the code.
 //
 // Needs: supabase start, functions serve (OFFICE_MCP_KEY in its env), the web
 // app's .env.local pointing at the local stack, and these variables:
@@ -30,7 +31,7 @@ test.beforeAll(() => {
   test.skip(!KEY, "OFFICE_MCP_KEY (the local shared key) is not set");
 });
 
-test("an office user sets a password, enrols the second step, assigns and cancels a task", async ({ page }) => {
+test("an office user sets a password, works, turns on 2-step, and signs in again with the code", async ({ page }) => {
   // Set up through the connector, as the admin would in Claude.
   const email = `e2e.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Admin", email, role: "admin" });
@@ -39,27 +40,24 @@ test("an office user sets a password, enrols the second step, assigns and cancel
   const plate = `WP E2E-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
 
-  // 1. The set-password link opens the app with a recovery session.
+  // 1. The set-password link opens the app with a recovery session. 12 characters at least.
   await page.goto(user.set_password_link);
   await expect(page.getByRole("heading", { name: "Choose a password" })).toBeVisible();
+  await page.getByLabel("New password").fill("short one");
+  await page.getByLabel("Again").fill("short one");
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByText("Use at least 12 characters.")).toBeVisible();
   const password = `Sentence for ${stamp}!`;
   await page.getByLabel("New password").fill(password);
   await page.getByLabel("Again").fill(password);
   await page.getByRole("button", { name: "Save password" }).click();
 
-  // 2. An admin must set up the second step before anything loads.
-  await expect(page.getByRole("heading", { name: "Set up your authenticator" })).toBeVisible();
-  const secret = (await page.getByTestId("totp-secret").textContent())?.trim() ?? "";
-  expect(secret.length).toBeGreaterThan(10);
-  await page.getByLabel("6-digit code").fill(totp(secret));
-  await page.getByRole("button", { name: "Continue" }).click();
-
-  // 3. Overview, as this person.
+  // 2. Straight to Overview, as this person: 2-step is optional.
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await expect(page.getByText("E2E Admin")).toBeVisible();
   await expect(page.getByText("Vehicles on the road")).toBeVisible();
 
-  // 4. Assign a task; it appears on the board; open it; cancel it.
+  // 3. Assign a task; it appears on the board; open it; cancel it.
   await page.getByRole("button", { name: "Assign task" }).click();
   await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
   const title = `E2E drop ${stamp}`;
@@ -79,9 +77,21 @@ test("an office user sets a password, enrols the second step, assigns and cancel
   await page.getByLabel("Cancel this task").fill("E2E test over");
   await page.getByRole("button", { name: "Cancel task" }).click();
   await expect(page.getByRole("status")).toHaveText("Task cancelled");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(card).toHaveCount(0);
 
-  // 5. Sign out, sign in again with the password and a fresh code.
+  // 4. Settings: turn on 2-step sign-in.
+  await page.getByRole("link", { name: "Settings" }).first().click();
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByText("Off", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Turn on 2-step sign-in" }).click();
+  const secret = (await page.getByTestId("totp-secret").textContent())?.trim() ?? "";
+  expect(secret.length).toBeGreaterThan(10);
+  await page.getByLabel("6-digit code").fill(totp(secret));
+  await page.getByRole("button", { name: "Turn on 2-step sign-in" }).click();
+  await expect(page.getByText("On", { exact: true })).toBeVisible();
+
+  // 5. Sign out; sign in again: password, then the code.
   await page.getByRole("link", { name: "More" }).first().click();
   await page.getByRole("button", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
@@ -93,7 +103,6 @@ test("an office user sets a password, enrols the second step, assigns and cancel
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
-  // The audit log carries the person's name on the web channel.
   const users = await tool<{ users: { email: string; role: string }[] }>("list_office_users", {});
   expect(users.users.find((u) => u.email === email)?.role).toBe("admin");
 });

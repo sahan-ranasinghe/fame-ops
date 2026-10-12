@@ -38,7 +38,7 @@ function Banner() {
 }
 
 export function Shell() {
-  const { me, store, noConnector } = useFleet();
+  const { me, store, noConnector, signOut } = useFleet();
   const overview = useEntry<Overview>("overview");
   const waiting = overview.data?.requests?.waiting ?? 0;
   const nav = allowed(NAV, me.tools);
@@ -72,6 +72,7 @@ export function Shell() {
               <Icon name={n.key} /><span>{n.label}</span>{badge(n.key)}
             </NavLink>
           ))}
+          {signOut && <NavLink to="/settings"><Icon name="settings" /><span>Settings</span></NavLink>}
           <NavLink to="/more"><Icon name="more" /><span>More</span></NavLink>
         </nav>
         <div className="viewer">

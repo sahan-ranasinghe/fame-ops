@@ -3,8 +3,8 @@
 # It never touches the real project.
 #
 #   - typecheck, unit tests (Vitest), both builds (web, artifact)
-#   - the end-to-end test (Playwright): set-password link → second step →
-#     Overview → assign a task → cancel it → sign out → sign in
+#   - the end-to-end test (Playwright): set-password link → Overview →
+#     assign a task → cancel it → 2-step on in Settings → sign out → sign in with the code
 #
 # Before running it, in another terminal (same as scripts/test-mcp-local.sh):
 #   npx supabase start

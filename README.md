@@ -173,7 +173,7 @@ through `office-api`) and `npm run build:artifact` for the Fame Fleet artifact i
 Claude (one file; it uses the viewer's "Fame Fleet" connector, no key inside).
 Phase 2 has Overview, Tasks (board, assign a task, task detail, reassign, cancel)
 and Requests (list, approve or decline, new request), plus sign-in, the
-set-password page and the second step (authenticator app). Live locations,
+set-password page and optional 2-step sign-in (Settings). Live locations,
 Vehicles, Drivers, Mileage, Maintenance and Projects follow in the next phases;
 the published artifact is replaced only when all of them are there.
 
@@ -209,9 +209,10 @@ wrappers use it:
   and the role on every call. `GET /office-api/me`, `GET /office-api/tools`
   (with JSON schemas for the forms) and `POST /office-api/tools/<name>` with
   the same arguments and the same JSON answer as the connector. The session
-  token is checked with Supabase Auth; admin, fleet_admin and office must have
-  done the second step (TOTP, `aal2`); staff and viewer need not. 120 calls a
-  minute per person; CORS allows `OFFICE_WEB_URL`.
+  token is checked with Supabase Auth. 2-step sign-in is optional for every
+  role; the secret `REQUIRE_MFA_ROLES` (for example `admin,fleet_admin`) makes
+  the API refuse those roles until their session has done the second step.
+  120 calls a minute per person; CORS allows `OFFICE_WEB_URL`.
 
 Roles: admin (everything, accounts), fleet_admin (runs the fleet), office
 (sees everything, assigns tasks and requests), staff (own vehicle requests),

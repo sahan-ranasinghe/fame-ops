@@ -1,7 +1,9 @@
 // Sign-in for the web app (docs/office-web-plan.md, section 5):
-//   password → office-api /me → ready
-//                              ↳ mfa_required → the second step (enrol a TOTP app, or type the code)
-//   a set-password link (from create_office_user) lands here with a recovery session → choose a password
+//   e-mail + password → (the person turned 2-step on? → their code) → office-api /me → ready
+//   a set-password link (from create_office_user) lands here with a recovery session → choose a password → ready
+// 2-step sign-in is optional: a person turns it on in Settings. If the office
+// makes it compulsory for a role (secret REQUIRE_MFA_ROLES), office-api answers
+// mfa_required and the person is asked to set it up before anything loads.
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ApiTransport } from "../transport/api";
 import type { FleetError, Me } from "../transport/types";
@@ -11,7 +13,8 @@ export type AuthState =
   | { step: "loading" }
   | { step: "signed_out"; notice?: string }
   | { step: "set_password" }
-  | { step: "second_step"; mode: "verify" | "enrol"; factorId: string; secret?: string; qr?: string; uri?: string }
+  | { step: "second_step"; mode: "verify"; factorId: string }
+  | { step: "second_step"; mode: "enrol" }
   | { step: "blocked"; reason: "not_an_office_user" | "switched_off" | "not_configured" }
   | { step: "ready"; me: Me };
 
@@ -21,6 +24,8 @@ interface AuthApi {
   signIn(email: string, password: string): Promise<string | null>;
   setPassword(password: string): Promise<string | null>;
   verifyCode(code: string): Promise<string | null>;
+  /** After the person set up 2-step on the second-step page: ask office-api again. */
+  recheck(): Promise<void>;
   signOut(): Promise<void>;
 }
 
@@ -32,7 +37,12 @@ export function useAuth(): AuthApi {
   return a;
 }
 
-const message = (e: unknown) => (e as { message?: string })?.message || String(e);
+/** The person's verified authenticator, if they turned 2-step on. */
+export async function verifiedTotpFactor(): Promise<{ id: string } | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.mfa.listFactors();
+  return data?.totp.find((f) => f.status === "verified") ?? null;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ step: "loading" });
@@ -40,45 +50,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // A recovery link is being handled: ignore sign-in events until the password is set.
   const recovering = useRef(/[#&]type=recovery(&|$)/.test(location.hash));
 
-  /** Asks office-api who this is; decides the next step. */
+  /** Who is this? The person's own 2-step first, then office-api decides the rest. */
   const check = useCallback(async () => {
-    if (recovering.current) return;
+    if (recovering.current || !supabase) return;
+    const { data: aal } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+    if (aal && aal.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
+      const factor = await verifiedTotpFactor();
+      if (factor) {
+        setState({ step: "second_step", mode: "verify", factorId: factor.id });
+        return;
+      }
+    }
     try {
       const me = await transport.me();
       setState({ step: "ready", me });
     } catch (e) {
       const err = e as FleetError;
-      if (err.code === "mfa_required") await secondStep();
-      else if (err.code === "not_an_office_user" || err.code === "switched_off") setState({ step: "blocked", reason: err.code });
+      if (err.code === "mfa_required") {
+        const factor = await verifiedTotpFactor();
+        setState(factor ? { step: "second_step", mode: "verify", factorId: factor.id } : { step: "second_step", mode: "enrol" });
+      } else if (err.code === "not_an_office_user" || err.code === "switched_off") setState({ step: "blocked", reason: err.code });
       else if (err.code === "not_signed_in") setState({ step: "signed_out" });
       else setState({ step: "signed_out", notice: err.message });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [transport]);
-
-  async function secondStep() {
-    if (!supabase) return;
-    const { data, error } = await supabase.auth.mfa.listFactors();
-    if (error) {
-      setState({ step: "signed_out", notice: error.message });
-      return;
-    }
-    const verified = data.totp.find((f) => f.status === "verified");
-    if (verified) {
-      setState({ step: "second_step", mode: "verify", factorId: verified.id });
-      return;
-    }
-    // A half-done enrolment from before: remove it, then start again.
-    for (const f of data.all.filter((f) => f.factor_type === "totp" && f.status !== "verified")) {
-      await supabase.auth.mfa.unenroll({ factorId: f.id });
-    }
-    const enrol = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: "Fame Fleet" });
-    if (enrol.error || !enrol.data) {
-      setState({ step: "signed_out", notice: enrol.error?.message ?? "Could not start the second step." });
-      return;
-    }
-    setState({ step: "second_step", mode: "enrol", factorId: enrol.data.id, secret: enrol.data.totp.secret, qr: enrol.data.totp.qr_code, uri: enrol.data.totp.uri });
-  }
 
   useEffect(() => {
     if (!supabase || !configured) {
@@ -121,22 +116,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) return error.message;
       recovering.current = false;
-      history.replaceState(null, "", location.pathname);
+      history.replaceState(null, "", "/");
       setState({ step: "loading" });
       await check();
       return null;
     },
     async verifyCode(code) {
-      if (!supabase || state.step !== "second_step") return "Not ready.";
-      try {
-        const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: state.factorId, code: code.replace(/\s/g, "") });
-        if (error) return /invalid|expired/i.test(error.message) ? "That code is not right. Try the next one." : error.message;
-      } catch (e) {
-        return message(e);
-      }
+      if (!supabase || state.step !== "second_step" || state.mode !== "verify") return "Not ready.";
+      const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId: state.factorId, code: code.replace(/\s/g, "") });
+      if (error) return /invalid|expired/i.test(error.message) ? "That code is not right. Try the next one." : error.message;
       setState({ step: "loading" });
       await check();
       return null;
+    },
+    async recheck() {
+      setState({ step: "loading" });
+      await check();
     },
     async signOut() {
       if (!supabase) return;

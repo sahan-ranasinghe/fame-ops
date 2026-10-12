@@ -11,7 +11,10 @@ export interface Me {
   role: Role;
   /** The tools this person may call; menus mirror it, the server enforces it. */
   tools: string[];
+  /** The session has done the second step (web only). */
   mfa?: boolean;
+  /** office-api requires the second step for this role (secret REQUIRE_MFA_ROLES). */
+  mfa_required?: boolean;
 }
 
 export interface FleetError {

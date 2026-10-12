@@ -78,7 +78,7 @@ reset_db
 ready "$API_URL/auth/v1/health" -H "apikey: $ANON_KEY"
 ready "$API_URL/rest/v1/" -H "apikey: $ANON_KEY"
 ready "$API_URL/rest/v1/employees?select=email&limit=1" -H "apikey: $SERVICE_ROLE_KEY" -H "Authorization: Bearer $SERVICE_ROLE_KEY"
-echo "== Channel 2: the web app's API (office-api, signed-in admin with TOTP) =="
+echo "== Channel 2: the web app's API (office-api, signed-in admin; 2-step optional) =="
 CHANNEL=api python3 scripts/test-mcp-local.py
 echo
 OFFICE_MCP_URL="$API_URL/functions/v1/office-mcp" scripts/test-mcp.sh

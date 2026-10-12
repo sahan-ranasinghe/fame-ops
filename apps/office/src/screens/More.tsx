@@ -1,3 +1,4 @@
+import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { LATER } from "../app/nav";
 import { ROLE_LABEL } from "../transport/types";
@@ -16,7 +17,8 @@ export function More() {
             <div><dt>Fame Fleet</dt><dd>{__VERSION__} · {transport.kind === "api" ? "web" : "Claude"}</dd></div>
           </dl>
           {signOut && (
-            <div style={{ marginTop: 16 }}>
+            <div className="acts" style={{ marginTop: 16 }}>
+              <Link className="btn" to="/settings">Sign-in and security</Link>
               <button type="button" className="btn" onClick={signOut}>Sign out</button>
             </div>
           )}

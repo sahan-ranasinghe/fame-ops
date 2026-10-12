@@ -90,8 +90,12 @@ the person created. The connector tool behind each action is in brackets.
    names; `viewer` reads what office reads. No office role has insert or
    update through RLS: writes go through the functions, which run as
    service role after the role check. Drivers' policies are untouched.
-3. **Second step.** For `admin`, `fleet_admin` and `office` the policies
-   and the functions also require `aal2` (TOTP done), section 7.
+3. **Second step.** 2-step sign-in is optional for every role (decided
+   12 October 2026): the person turns it on in Settings and the web app then
+   asks for the code at sign-in. No policy checks `aal2`. The office can make
+   it compulsory for some roles later with one setting, the Edge Function
+   secret `REQUIRE_MFA_ROLES` (empty by default); office-api then refuses
+   those roles until the session has done the second step.
 
 ### How Claude reaches the fleet, and names in the audit log
 
@@ -146,12 +150,12 @@ imports). `track.ts` stays byte-identical to the driver app's copy;
 
 | route | does |
 |---|---|
-| `GET /office-api/me` | name, role, whether TOTP is done, which tools this person may call |
+| `GET /office-api/me` | name, role, whether the second step is done (`mfa`) and whether the role must do it (`mfa_required`), which tools this person may call |
 | `GET /office-api/tools` | the tool list with input schemas (zod → JSON Schema), for the UI's forms |
 | `POST /office-api/tools/<name>` | body = the tool's arguments, exactly as the connector takes them; reply = the tool's result JSON, exactly as the connector returns it; errors as `{ error }` with 400 (input), 403 (role), 409 (tool refused) |
 
 Auth: `Authorization: Bearer <session token>` → `auth.getUser` → the
-`employees` row (active, role) → `aal2` where required → `TOOL_ROLES` →
+`employees` row (active, role) → `aal2` only for the roles in `REQUIRE_MFA_ROLES` → `TOOL_ROLES` →
 run with `ctx.actor = { employeeId, name, role, channel: 'web' }`. CORS
 allows only the web app's origin. Rate limit: 120 calls a minute per person
 (in the function) plus a Cloudflare rule in front.
@@ -213,16 +217,21 @@ As approved in the live-map plan:
   chooses a password. `reset_office_password(email)` returns a fresh link.
   No password ever appears in a chat, and Supabase's built-in e-mail (team
   members only, two an hour) is not used.
-- **TOTP required** for `admin`, `fleet_admin` and `office`: enrolment on
-  first sign-in (Google Authenticator or any TOTP app), then every policy
-  and every function call for those roles checks `aal2`. `staff` and
-  `viewer`: optional.
+- **2-step sign-in is optional for every role** (decided 12 October 2026).
+  Everyone signs in with e-mail and password; a set-password link goes
+  straight to Overview. Anyone turns 2-step on in Settings (Google
+  Authenticator or any TOTP app, scan the QR code, type one code); from then
+  on their sign-in asks for the code. Passwords have at least 12 characters
+  (the set-password page and the project's "Minimum password length"
+  setting). To make 2-step compulsory later: set the secret
+  `REQUIRE_MFA_ROLES` (for example `admin,fleet_admin,office`); office-api
+  then answers `mfa_required` and the web app asks those people to set it
+  up before anything loads. No RLS policy checks `aal2`.
 - **Google / Microsoft sign-in later: worth it only if the company gives
   everyone a Google Workspace or Microsoft 365 account.** Then it removes
   passwords and set-password links, and leaving the company switches the
   person off centrally. It costs an OAuth app registration and one Supabase
-  setting. Not now: today's five users have no such accounts, and TOTP
-  stays required for the three strong roles whatever the provider.
+  setting. Not now: today's five users have no such accounts.
 
 ## 6. Live map and today's route (web build only)
 
@@ -311,7 +320,7 @@ go stale. Proposal: a scheduled, read-only sync run by the server.
 | requirement | how it is met |
 |---|---|
 | personal accounts | one Auth user per person, role on `employees`, personal connector keys |
-| TOTP | required for admin, fleet_admin, office (`aal2` in RLS and in the functions) |
+| 2-step sign-in | optional per person (Settings); compulsory per role when `REQUIRE_MFA_ROLES` is set (office-api only, never RLS) |
 | audit with names | `office_audit.actor_name` + `channel` on every write, driver events by trigger |
 | switching off people who leave | `set_office_user_active(false)`: inactive row, keys revoked, sessions signed out |
 | backups | Supabase Pro daily backups (7 days); a weekly `pg_dump` from the laptop into private storage until the boss wants PITR (USD 100/month add-on, not needed yet) |
@@ -325,8 +334,8 @@ go stale. Proposal: a scheduled, read-only sync run by the server.
 1. `roles`: `employees.role` check grows to the six roles; `office_keys`;
    `office_audit` actor and channel columns; driver-side audit trigger.
 2. `office_read_access`: `current_role()` helper; select policies for the
-   office roles and for staff (own requests); `aal2` on the three strong
-   roles; `driver_latest` in the Realtime publication; grants.
+   office roles and for staff (own requests); no `aal2` condition anywhere;
+   `driver_latest` in the Realtime publication; grants.
 3. `accounts`: the three account tools' RPCs if any logic lands in SQL
    (otherwise none).
 4. `zoho_sync` (after the boss's OK): `zoho_sync_runs`, `projects.customer_id`
@@ -334,9 +343,9 @@ go stale. Proposal: a scheduled, read-only sync run by the server.
 
 Tests: each role reads exactly its rows and nothing more; no office role can
 insert or update through RLS; a driver sees nothing new; anon sees nothing;
-an inactive person reads nothing; `aal1` sessions of strong roles read
-nothing; audit rows carry the actor; the same tool through office-mcp and
-office-api gives the same JSON (the local test runs both channels).
+an inactive person reads nothing; audit rows carry the actor; the same
+tool through office-mcp and office-api gives the same JSON (the local test
+runs both channels).
 
 ## 11. Phases, effort, what to test, what Sahan sets up
 
@@ -345,7 +354,7 @@ Effort is for Sahan working with Claude Code, in working days.
 | phase | days | builds | test | Sahan sets up |
 |---|---|---|---|---|
 | 1 Shared rules | 4–5 | `_shared/fleet`, office-api, roles, personal keys, audit actor and channel | pgTAP; Deno tests; the local python suite through both channels; smoke test on the live project | nothing new (deploy two functions, one migration) |
-| 2 Web app core | 6–8 | `apps/office`: transports, sign-in, set-password, TOTP enrolment, Overview, Tasks, Requests; `build:artifact` replacing the current artifact | Vitest on the transport and forms; Playwright sign-in and one task flow; the artifact rebuilt and compared screen by screen with the current one | Cloudflare account and Pages project; Auth Site URL and MFA; the first admin account (Sahan) |
+| 2 Web app core | 6–8 | `apps/office`: transports, sign-in, set-password, optional 2-step in Settings, Overview, Tasks, Requests; `build:artifact` replacing the current artifact (after phase 4) | Vitest on the transport and forms; Playwright sign-in and one task flow; the artifact rebuilt and compared screen by screen with the current one | Cloudflare account and Pages project; Auth Site URL, redirect URLs, minimum password length 12; the first admin accounts |
 | 3 Live map | 3–4 | MapLibre map, Realtime markers, route of the day | the map against the phone's position on the OPPO; `driver_route` numbers equal the page's | `driver_latest` publication (in the migration) |
 | 4 All screens and roles | 5–6 | Vehicles, Drivers, Projects, Maintenance, Mileage, Accounts, Audit, staff "My requests", viewer | role matrix walked through with one account per role; Playwright per role | the five accounts, by set-password link |
 | 5 Zoho sync (**boss**) | 2–3 (+3–4 for push later) | `zoho-sync`, Settings page, `zoho_sync_runs` | first full load compared with Zoho Books; a changed project appears within 30 minutes; the daily budget stop | the Zoho admin's steps in section 7 |
@@ -399,6 +408,7 @@ driver app does not change in any phase.
    should also be allowed (cancelling a task they created?).
 2. Zoho sync, read-only, scheduled: yes or no. Pushing costs is a later
    decision.
-3. TOTP for the three strong roles from day one, or optional for the first
-   month.
+3. ~~TOTP for the three strong roles from day one, or optional for the first
+   month.~~ Decided 12 October 2026: optional for everyone, per person in
+   Settings; `REQUIRE_MFA_ROLES` can make it compulsory later.
 4. Domain name: `fleet.fameglobal.lk` or another.

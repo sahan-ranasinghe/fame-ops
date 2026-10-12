@@ -71,6 +71,6 @@ export const INSTRUCTIONS = [
 ].join("\n");
 
 export { adminClient, type Db, ToolError } from "./db.ts";
-export { type Actor, canCall, type Channel, isRole, OFFICE_ROLES, type Role, STRONG_ROLES, TOOL_ROLES } from "./roles.ts";
+export { type Actor, canCall, type Channel, isRole, mfaRequiredRoles, OFFICE_ROLES, type Role, STRONG_ROLES, TOOL_ROLES } from "./roles.ts";
 export { runTool, type ToolOutcome } from "./run.ts";
 export type { AnyTool } from "./tool.ts";

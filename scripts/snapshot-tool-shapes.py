@@ -11,7 +11,7 @@ proved not to change them:
     scripts/snapshot-tool-shapes.py --check     # fails if any tool's shape changed
 
 Needs API_URL and OFFICE_MCP_KEY (the local serve's), and optionally
-CHANNEL=api with API_TOKEN (an aal2 office session) to go through office-api
+CHANNEL=api with API_TOKEN (an office session) to go through office-api
 instead of office-mcp. Writes are never called here.
 """
 

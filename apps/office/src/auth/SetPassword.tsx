@@ -3,7 +3,8 @@ import { Notice } from "../ui/basics";
 import { AuthPage } from "./AuthPage";
 import { useAuth } from "./AuthProvider";
 
-export const MIN_PASSWORD = 10;
+/** Matches the project's Auth setting "Minimum password length" (dashboard) and config.toml locally. */
+export const MIN_PASSWORD = 12;
 
 export function SetPassword() {
   const auth = useAuth();

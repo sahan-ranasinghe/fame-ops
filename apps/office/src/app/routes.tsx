@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Navigate, type RouteObject } from "react-router";
 import { More } from "../screens/More";
 import { Overview } from "../screens/Overview";
@@ -14,6 +15,13 @@ function Home() {
   return <Navigate to="/requests" replace />;
 }
 
+// Settings (2-step sign-in) talks to Supabase Auth: web build only, loaded on demand.
+const Settings = __BUILD__ === "web" ? lazy(() => import("../screens/Settings")) : null;
+function SettingsRoute() {
+  if (!Settings) return <Navigate to="/more" replace />;
+  return <Suspense fallback={<div className="loading">Opening settings…</div>}><Settings /></Suspense>;
+}
+
 export const routes: RouteObject[] = [
   {
     path: "/",
@@ -23,6 +31,7 @@ export const routes: RouteObject[] = [
       { path: "tasks", element: <Tasks /> },
       { path: "requests", element: <Requests /> },
       { path: "more", element: <More /> },
+      { path: "settings", element: <SettingsRoute /> },
       { path: "*", element: <Navigate to="/" replace /> },
     ],
   },

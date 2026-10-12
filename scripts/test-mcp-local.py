@@ -26,7 +26,7 @@ ANON = os.environ["ANON_KEY"]
 KEY = os.environ["OFFICE_MCP_KEY"]
 DB_CONTAINER = os.environ.get("DB_CONTAINER", "supabase_db_fame-ops")
 # Which channel the office calls go through: "mcp" (the connector, shared key) or
-# "api" (office-api as a signed-in admin who has done the second step).
+# "api" (office-api as a signed-in admin; 2-step is optional, the test turns it on).
 CHANNEL = os.environ.get("CHANNEL", "mcp")
 SERVICE = os.environ.get("SERVICE_ROLE_KEY", "")
 API_TOKEN = ""
@@ -202,11 +202,12 @@ if CHANNEL == "api":
     psql(f"insert into employees (code, name, email, role, auth_user_id) values ('ADM-{uuid.uuid4().hex[:4]}', 'Test Admin', '{admin_email}', 'admin', '{au['id']}')")
     aal1 = office_sign_in(admin_email, admin_pw, enrol_totp=False)
     code, body = http("GET", f"{API}/functions/v1/office-api/me", api_headers(aal1))
-    check(code == 403 and body.get("error") == "mfa_required", "an admin without the second step is refused (403 mfa_required)", f"{code} {body}")
+    check(code == 200 and body.get("mfa") is False and body.get("mfa_required") is False,
+          "an admin signs in with the password alone (2-step optional): /me gives mfa false", f"{code} {body}")
     API_TOKEN = office_sign_in(admin_email, admin_pw, enrol_totp=True)
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(API_TOKEN))
     check(code == 200 and me.get("role") == "admin" and me.get("mfa") is True and "create_office_user" in me.get("tools", []),
-          "after TOTP the admin is in: /me gives the role, mfa true and the admin tools", f"{code} {str(me)[:200]}")
+          "after turning on 2-step: /me gives the role, mfa true and the admin tools", f"{code} {str(me)[:200]}")
     code, body = http("GET", f"{API}/functions/v1/office-api/me", {"apikey": ANON, "Content-Type": "application/json"})
     check(code == 401, "no token: 401", code)
     code, tl = http("GET", f"{API}/functions/v1/office-api/tools", api_headers(API_TOKEN))

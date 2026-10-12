@@ -8,20 +8,25 @@
 //                                       429 too many calls · 500 { error }
 //
 // Who: Authorization: Bearer <Supabase session token>. The token is checked
-// with Supabase Auth, the person is their employees row (active, office
-// role), and admin, fleet_admin and office must have done the second
-// sign-in step (aal2). Every call runs through the shared runner (role
-// check, audit with the person's name, channel "web").
+// with Supabase Auth and the person is their employees row (active, office
+// role). 2-step sign-in is optional (the person turns it on in Settings and
+// the web app then asks for the code); the secret REQUIRE_MFA_ROLES, empty by
+// default, names the roles that are refused (403 mfa_required) until their
+// session has done the second step (aal2). Every call runs through the shared
+// runner (role check, audit with the person's name, channel "web").
 //
 // Deployed with verify_jwt off (config.toml): the check is done here.
-// Secrets: OFFICE_WEB_URL (the web app's origin, for CORS and links).
+// Secrets: OFFICE_WEB_URL (the web app's origin, for CORS and links),
+// REQUIRE_MFA_ROLES (optional, see above).
 
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { type Actor, adminClient, canCall, isRole, OFFICE_ROLES, runTool, STRONG_ROLES, TOOLS } from "../_shared/fleet/index.ts";
+import { type Actor, adminClient, canCall, isRole, mfaRequiredRoles, OFFICE_ROLES, runTool, TOOLS } from "../_shared/fleet/index.ts";
 
 const CALLS_PER_MINUTE = 120;
 const db = adminClient();
+/** Roles that must have done the second step; empty unless the secret REQUIRE_MFA_ROLES says otherwise. */
+const MFA_ROLES = mfaRequiredRoles(Deno.env.get("REQUIRE_MFA_ROLES"));
 const calls = new Map<string, number[]>();
 
 function env(name: string): string {
@@ -81,7 +86,7 @@ async function resolvePerson(request: Request): Promise<Resolved> {
   if (!row || !isRole(row.role) || !OFFICE_ROLES.includes(row.role)) return { ok: false, status: 403, error: "not_an_office_user" };
   if (!row.active) return { ok: false, status: 403, error: "switched_off" };
   const mfa = aalOf(token) === "aal2";
-  if (STRONG_ROLES.includes(row.role) && !mfa) return { ok: false, status: 403, error: "mfa_required" };
+  if (MFA_ROLES.includes(row.role) && !mfa) return { ok: false, status: 403, error: "mfa_required" };
   return {
     ok: true,
     actor: { employeeId: row.id, name: row.name, role: row.role, channel: "web" },
@@ -113,6 +118,7 @@ Deno.serve(async (request) => {
       email: person.email,
       role: actor.role,
       mfa: person.mfa,
+      mfa_required: MFA_ROLES.includes(actor.role),
       tools: TOOLS.filter((t) => canCall(actor.role, t.name)).map((t) => t.name),
     }, cors);
   }

@@ -146,7 +146,7 @@ export const createOfficeUser = tool({
         set_password_link: link,
         link_valid_for: `${LINK_HOURS} hour`,
         next:
-          "Send the link by WhatsApp. The person opens it, chooses a password and signs in. Admin, fleet_admin and office must also set up the second step (authenticator app).",
+          "Send the link by WhatsApp. The person opens it, chooses a password (12+ characters) and signs in. They can turn on 2-step sign-in in Settings.",
       },
       summary: `created office user ${email} (${role})`,
     };
