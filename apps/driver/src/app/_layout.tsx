@@ -15,7 +15,9 @@ import * as Notifications from 'expo-notifications';
 import { Stack, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef } from 'react';
+import { View } from 'react-native';
 
+import { LocationGate } from '@/components/LocationGate';
 import { anyFormDirty } from '@/components/navigation';
 import { tapData } from '@/lib/notifications';
 import { AppProvider, useApp } from '@/state/app';
@@ -52,7 +54,12 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
   }, [ready, me, response, router]);
 
   if (!ready) return null;
-  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }} />;
+  return (
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }} />
+      {me && <LocationGate />}
+    </View>
+  );
 }
 
 export default function RootLayout() {

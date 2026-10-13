@@ -9,7 +9,7 @@ import { getJson, KEYS, setJson } from '../lib/kv';
 import { supabase } from '../lib/supabase';
 import type { Employee } from '../lib/types';
 import { createSync, type FlushResult, type Op } from './engine';
-import { addOp, queueStore } from './store';
+import { addOp, queueStore, replaceOp } from './store';
 
 const PHOTO_BUCKET = 'driver-photos';
 
@@ -85,6 +85,12 @@ function changed(): void {
 /** Puts something in the queue. It is on the phone from this moment, whatever the connection. */
 export function enqueue(...ops: Op[]): void {
   for (const op of ops) addOp(op);
+  changed();
+}
+
+/** Puts something in the queue of which only the newest matters (a heartbeat): older waiting ones are dropped. */
+export function enqueueLatest(op: Op): void {
+  replaceOp(op);
   changed();
 }
 

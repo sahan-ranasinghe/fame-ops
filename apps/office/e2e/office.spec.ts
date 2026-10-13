@@ -67,7 +67,12 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
 
   // 1. The set-password link opens the app with a recovery session. 12 characters at least.
-  await page.goto(user.set_password_link);
+  // The link's redirect lands on the Site URL (port 5173); the test's own server is on 5174, so
+  // the recovery tokens are taken from the redirect and handed to the app directly.
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  expect(landing).toContain("#access_token=");
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
   await expect(page.getByRole("heading", { name: "Choose a password" })).toBeVisible();
   await page.getByLabel("New password").fill("short one");
   await page.getByLabel("Again").fill("short one");
@@ -106,27 +111,34 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(card).toHaveCount(0);
 
-  // 4. Live locations: the driver shares a position; a newer one arrives over Realtime.
+  // 4. Live locations, the one status rule: no signal → Location off (heartbeat) → live (a fresh point), all over Realtime.
   const app = await driverRest(driver.username, driver.pin);
   const [me] = await app.get<{ id: string }[]>("employees?select=id");
   const session = randomUUID();
   expect(await app.post("duty_sessions", { id: session, employee_id: me.id, device_info: { model: "e2e" } })).toBe(201);
   const at = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1000).toISOString();
-  expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(60), lat: 6.8649, lng: 79.8997, accuracy_m: 8, speed_mps: 10, battery_pct: 77 }])).toBe(201);
+  // The only point so far is 4 minutes old: sharing, but nothing fresh.
+  expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(240), lat: 6.8649, lng: 79.8997, accuracy_m: 8, speed_mps: 10, battery_pct: 77 }])).toBe(201);
   await page.getByRole("link", { name: "Live locations" }).first().click();
   await expect(page.getByRole("heading", { name: "Live locations" })).toBeVisible();
   const row = page.locator(".lrow", { hasText: driver.name });
   await expect(row).toBeVisible();
-  await expect(row).toContainText(/Live · \d+ min/);
   await row.click(); // another driver may be selected by default
   const detail = page.getByTestId("live-detail");
   await expect(detail).toContainText(driver.name);
-  await expect(detail).toContainText("36 km/h");
-  // A new point: the trigger updates driver_latest, Realtime delivers it, the detail changes without a reload.
+  await expect(detail).toContainText("No signal since");
   await expect(page.getByTestId("rt-status")).toHaveText("Live updates");
+  // The phone reports Location off: red within seconds, with since when, through Realtime.
+  expect(await app.post("rpc/send_heartbeat", { p_at: new Date().toISOString(), p_sharing: true, p_location_on: false, p_permission: "always", p_battery_pct: 70, p_app_version: "e2e", p_queued_points: 2 })).toBeLessThan(300);
+  await expect(detail).toContainText("Location off since", { timeout: 8000 });
+  await expect(page.getByTestId("phone-line")).toContainText("Location off");
+  await expect(page.getByTestId("phone-line")).toContainText("2 points waiting");
+  await expect(page.getByRole("button", { name: /^Location off · \d+$/ })).toBeVisible();
+  // A fresh point: live again at once, the marker moves, the speed shows.
   expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(2), lat: 6.9, lng: 79.95, accuracy_m: 8, speed_mps: 20, battery_pct: 76 }])).toBe(201);
-  await expect(detail).toContainText("72 km/h", { timeout: 8000 });
-  await expect(detail).toContainText("76%");
+  await expect(detail).toContainText(/Live · \d+ min/, { timeout: 8000 });
+  await expect(detail).toContainText("72 km/h");
+  await expect(row).toContainText(/\d+ min/);
   await page.getByRole("button", { name: "Today’s route" }).click();
   await expect(detail).toContainText(/Today: [\d.]+ km from 2 points/);
 
@@ -159,7 +171,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
 
   await page.getByRole("link", { name: "Mileage" }).first().click();
   await expect(page.getByRole("heading", { name: "Mileage" })).toBeVisible();
-  await expect(page.getByText("Task km", { exact: true })).toBeVisible();
+  await expect(page.locator(".tile .lbl", { hasText: "Task km" })).toBeVisible(); // the tile; the by-vehicle table has a column of the same name
 
   await page.getByRole("link", { name: "Projects" }).first().click();
   await expect(page.getByRole("heading", { name: "Projects", exact: true })).toBeVisible();

@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { fetchAll, unwrap } from "../db.ts";
-import { findDriver, loadLatest, loadRefs, nearestTown, sharing, vehicleLabel } from "../fleet.ts";
+import { findDriver, loadLatest, loadRefs, nearestTown, sharing, statusOf, vehicleLabel } from "../fleet.ts";
 import { contactLinks, kmh, mapsPoint } from "../format.ts";
 import { GPS_KM_NOTE, type Point, summariseRoute, thin } from "../geo.ts";
 import { colomboDate, colomboDateTime, colomboTime, dayRange } from "../time.ts";
@@ -11,11 +11,15 @@ import { realDate, tool, zDate, zText } from "../tool.ts";
 export const liveDrivers = tool({
   name: "live_drivers",
   title: "Live locations",
-  description: "Where drivers are now. Lists every driver who is sharing their location or has a task in progress: " +
-    "sharing (last point under 15 min old), stale (older) or not sharing, with nearest town, speed, vehicle, current task " +
-    "and Google Maps / WhatsApp / call links.",
+  description: "Where drivers are now. Lists every driver who is sharing their location or has a task in progress, with the " +
+    "status: live (a GPS point under 3 min old), location_off (the phone reports Location off or the permission missing, since when), " +
+    "no_signal (sharing on but nothing from the phone for over 3 min) or not_sharing; last position time, nearest town, speed, " +
+    "vehicle, current task and Google Maps / WhatsApp / call links. The older state (sharing / stale / not_sharing, 15 min rule) " +
+    "is still answered too.",
   readOnly: true,
-  input: z.object({ filter: z.enum(["all", "sharing", "stale", "not_sharing"]).optional().describe("Default: all") }),
+  input: z.object({
+    filter: z.enum(["all", "sharing", "stale", "not_sharing", "live", "no_signal", "location_off"]).optional().describe("Default: all"),
+  }),
   async run({ filter = "all" }, { db, now }) {
     const [refs, latest, running, openSessions] = await Promise.all([
       loadRefs(db),
@@ -35,6 +39,7 @@ export const liveDrivers = tool({
     const cards = await Promise.all(shown.map(async (e) => {
       const pos = latest.get(e.id);
       const share = sharing(pos, now);
+      const { fields } = statusOf(pos, now);
       const task = tasks.find((t) => t.employee_id === e.id);
       const vehicleId = task?.vehicle_id ?? sessions.find((s) => s.employee_id === e.id)?.vehicle_id ?? e.current_vehicle_id;
       const hasPosition = pos?.lat != null && pos?.lng != null;
@@ -44,6 +49,7 @@ export const liveDrivers = tool({
         employee_id: e.id,
         state: share.state,
         location: share.text,
+        ...fields,
         updated: pos?.recorded_at ? colomboDateTime(pos.recorded_at) : undefined,
         near: hasPosition ? await nearestTown(db, pos.lat!, pos.lng!) : undefined,
         speed_kmh: share.state === "sharing" ? kmh(pos?.speed_mps) : undefined,
@@ -62,8 +68,9 @@ export const liveDrivers = tool({
 
     const order = { sharing: 0, stale: 1, not_sharing: 2 };
     const count = (state: string) => cards.filter((c) => c.state === state).length;
+    const countStatus = (status: string) => cards.filter((c) => c.status === status).length;
     const drivers = cards
-      .filter((c) => filter === "all" || c.state === filter)
+      .filter((c) => filter === "all" || c.state === filter || c.status === filter)
       .sort((a, b) => order[a.state] - order[b.state] || a.minutes - b.minutes)
       .map(({ minutes: _minutes, ...card }) => card);
 
@@ -71,6 +78,12 @@ export const liveDrivers = tool({
       result: {
         as_of: colomboDateTime(now),
         counts: { all: cards.length, sharing: count("sharing"), stale: count("stale"), not_sharing: count("not_sharing") },
+        status_counts: {
+          live: countStatus("live"),
+          no_signal: countStatus("no_signal"),
+          location_off: countStatus("location_off"),
+          not_sharing: countStatus("not_sharing"),
+        },
         drivers,
       },
       summary: `${drivers.length} drivers (${filter})`,

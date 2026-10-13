@@ -431,6 +431,7 @@ ld = tool("live_drivers")
 d = ld["drivers"][0]
 check(ld["counts"]["sharing"] == 1 and d["location"] in ("Live · 2 min", "Live · 3 min") and d["near"] == "Polgahawela" and d["speed_kmh"] == 54,
       "live_drivers: Live · 2 min, near Polgahawela, 54 km/h", json.dumps(d)[:300])
+
 check(d["vehicle"] == "WP CAB-4521 · Toyota HiAce" and d["task"] == "Team drop · Kurunegala site" and d["going_to"] == "Kurunegala tower site"
       and d["links"]["maps"].endswith("query=7.3381,80.3003") and d["links"]["whatsapp"] == "https://wa.me/94771234567",
       "live_drivers: vehicle, current task, destination and links", json.dumps(d)[:400])
@@ -446,6 +447,52 @@ rt = tool("driver_route", {"driver": "nuwan.p"})
 # The points are 41 s apart (real phones record every 5 s), so the drift filter drops the last step of each leg: a little under 68 km, a stop of 13-15 min.
 check(rt["recorded_points"] == len(points) and 60 <= rt["km"] <= 80 and len(rt["stops_over_10_min"]) == 1 and 12 <= rt["stops_over_10_min"][0]["minutes"] <= 16
       and len(rt["route"]["points"]) == len(points), "driver_route: about 65 km, one stop of about 14 minutes", json.dumps({k: rt[k] for k in ("recorded_points", "km", "stops_over_10_min")}))
+
+# --- The phone's heartbeat and the one status rule ---------------------------
+check(d["status"] == "live" and d["status_text"].startswith("Live · ") and d["last_position_at"] == d["updated"][-5:] and d["signal"]["sharing"] is True,
+      "live_drivers: the new status is live, with the last position time and the raw signal", json.dumps({k: d.get(k) for k in ("status", "status_text", "last_position_at", "signal")})[:300])
+
+# The phone's heartbeat: Location switched off 12 minutes ago, still off now (two heartbeats, as the app sends them).
+# A point under 3 minutes old always means live, so first let the newest point age to 4 minutes (test-only, straight in the table).
+psql(f"update driver_latest set recorded_at = now() - interval '4 minutes' where employee_id='{ME}'")
+d = tool("live_drivers")["drivers"][0]
+check(d["status"] == "no_signal" and d["status_text"].startswith("No signal since ") and d["state"] == "sharing",
+      "4 minutes without a point: no_signal (the old 15-minute state is still 'sharing')", json.dumps({k: d.get(k) for k in ("status", "status_text", "state")}))
+hb = lambda minutes_ago, on, perm="always", queued=0: app.post("rpc/send_heartbeat", {
+    "p_at": iso(now - dt.timedelta(minutes=minutes_ago)), "p_sharing": True, "p_location_on": on, "p_permission": perm,
+    "p_battery_pct": 77, "p_app_version": "1.1.0+test", "p_queued_points": queued})
+code1, _ = hb(12, False); code2, _ = hb(0, False, queued=4)
+check(code1 in (200, 204) and code2 in (200, 204), "driver sends two heartbeats with Location off (12 min ago and now)", f"{code1} {code2}")
+ld = tool("live_drivers")
+d = ld["drivers"][0]
+check(d["status"] == "location_off" and d["status_text"].startswith("Location off since ") and d["queued_points"] == 4 and d["app_version"] == "1.1.0+test"
+      and ld["status_counts"]["location_off"] == 1 and ld["counts"]["sharing"] == 1,
+      "live_drivers: status location_off since the first off heartbeat; the old 'sharing' state is unchanged", json.dumps({k: d.get(k) for k in ("status", "status_text", "queued_points", "app_version")}) + str(ld["status_counts"]))
+check(tool("live_drivers", {"filter": "location_off"})["drivers"][0]["username"] == d["username"], "live_drivers filter=location_off finds the driver")
+ov = tool("fleet_overview")
+road = [r for r in ov["on_the_road"] if r["driver"] == d["driver"]]
+check(road and road[0]["status"] == "location_off" and road[0]["last_position_at"] == d["last_position_at"], "fleet_overview: on the road carries the status too", json.dumps(road)[:300])
+whats = [a["what"] for a in ov["needs_attention"]]
+check("Driver's location is off" in whats and any(a["level"] == "red" and a["due"].startswith("for 1") for a in ov["needs_attention"] if a["what"] == "Driver's location is off"),
+      "fleet_overview: a running task with Location off for 12 min needs attention (red, 'for 12 min')", json.dumps(ov["needs_attention"])[:400])
+# Location back on, no new point for a while: no signal; then a fresh point: live again.
+code3, _ = hb(-0.2, True)
+d = tool("live_drivers")["drivers"][0]
+check(code3 in (200, 204) and d["status"] == "no_signal" and d["status_text"].startswith("No signal since "), "heartbeat with Location on but the last point is old: no_signal", json.dumps({k: d.get(k) for k in ("status", "status_text")}))
+code4, _ = app.post("location_points?on_conflict=employee_id,recorded_at", [{"employee_id": ME, "session_id": SESSION, "recorded_at": iso(now - dt.timedelta(seconds=30)),
+    "lat": B[0], "lng": B[1], "accuracy_m": 8, "speed_mps": 15.0, "heading": 45, "battery_pct": 81, "is_mock": False}], prefer="resolution=ignore-duplicates,return=minimal")
+d = tool("live_drivers")["drivers"][0]
+check(code4 == 201 and d["status"] == "live", "a fresh point makes the driver live again", d.get("status_text"))
+# A backlog that arrives late (older points uploaded after newer ones): the route is still in time order, the latest position unchanged.
+late = [{"employee_id": ME, "session_id": SESSION, "recorded_at": iso(t0 - dt.timedelta(minutes=30 - i)), "lat": A[0] - 0.01 * i, "lng": A[1], "accuracy_m": 8,
+         "speed_mps": 10.0, "heading": 0, "battery_pct": 85, "is_mock": False} for i in range(5)]
+code5, _ = app.post("location_points?on_conflict=employee_id,recorded_at", late, prefer="resolution=ignore-duplicates,return=minimal")
+route_late = tool("driver_route", {"driver": "nuwan.p"})
+times = [r[0] for r in route_late["route"]["points"]]
+check(code5 == 201 and route_late["recorded_points"] == len(points) + 1 + 5 and times == sorted(times) and route_late["first_point"] == times[0],
+      "a backlog uploaded late is placed by recorded_at in driver_route (first point is now the oldest)", {"first": route_late.get("first_point"), "n": route_late.get("recorded_points")})
+check(psql(f"select to_char(recorded_at at time zone 'UTC', 'HH24:MI') from driver_latest where employee_id='{ME}'") == (now - dt.timedelta(seconds=30)).strftime("%H:%M"),
+      "driver_latest keeps the newest point, not the last uploaded one")
 
 rep_id = str(uuid.uuid4())
 code, _ = app.post("vehicle_reports", {"id": rep_id, "vehicle_id": V1, "employee_id": ME, "task_id": T1, "category": "tyre", "note": "Front left tyre is worn"})

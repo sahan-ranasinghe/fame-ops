@@ -1226,6 +1226,88 @@ select throws_ok('select count(*) from public.driver_latest', '42501', 'permissi
   'anon cannot read driver positions');
 reset role;
 
+-- ---------------------------------------------------------------------------
+-- 12. Heartbeats: a driver reports its phone through send_heartbeat(); the
+--     office reads it on driver_latest; nobody else can write it
+-- ---------------------------------------------------------------------------
+
+reset role;
+
+-- Driver A, sharing (section 6): a heartbeat with Location on.
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select lives_ok(
+  $$ select public.send_heartbeat(now() - interval '20 seconds', true, true, 'always', 81, '1.1.0+abc12345', 0) $$,
+  'driver sends a heartbeat');
+select throws_ok(
+  $$ update public.driver_latest set hb_location_on = false where employee_id = '10000000-0000-0000-0000-0000000000a1' $$,
+  '42501', 'permission denied for table driver_latest', 'driver cannot write driver_latest directly');
+select throws_ok(
+  $$ select public.send_heartbeat(now(), true, true, 'sometimes', null, null, 0) $$,
+  'P0001', 'Unknown permission value sometimes', 'a heartbeat with a made-up permission word is refused');
+reset role;
+
+select is(
+  (select (hb_sharing, hb_location_on, hb_permission, hb_battery_pct, hb_app_version, hb_queued_points, hb_location_off_since is null)::text
+     from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000000a1'),
+  '(t,t,always,81,1.1.0+abc12345,0,t)',
+  'the heartbeat is stored on the driver''s row; Location on means no "off since"');
+select is(
+  (select hb_at <= now() from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000000a1'),
+  true, 'hb_at never lies in the future');
+
+-- Location switched off: "off since" is the first off heartbeat and stays while it is off.
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select lives_ok($$ select public.send_heartbeat(now() - interval '10 seconds', true, false, 'always', 80, '1.1.0', 3) $$, 'heartbeat: Location off');
+select lives_ok($$ select public.send_heartbeat(now() - interval '5 seconds', true, false, 'always', 79, '1.1.0', 5) $$, 'heartbeat: still off');
+reset role;
+select is(
+  (select (hb_location_on, hb_queued_points, hb_location_off_since = hb_at - interval '5 seconds')::text
+     from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000000a1'),
+  '(f,5,t)', '"off since" is the first off heartbeat, the rest is the newest');
+
+-- A heartbeat that arrives late (older than the stored one) changes nothing.
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select lives_ok($$ select public.send_heartbeat(now() - interval '2 minutes', true, true, 'always', 50, '1.0.9', 0) $$, 'an old heartbeat is accepted…');
+reset role;
+select is(
+  (select (hb_location_on, hb_battery_pct)::text from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000000a1'),
+  '(f,79)', '…but ignored: the newer heartbeat stays');
+
+-- Permission taken away counts as off too; back to normal clears "off since".
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select lives_ok($$ select public.send_heartbeat(now() - interval '1 second', true, true, 'foreground', 78, '1.1.0', 0) $$, 'heartbeat: permission only while in use');
+reset role;
+select is((select hb_location_off_since is not null from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000000a1'),
+  true, 'a permission that is not "always" keeps "off since"');
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000a1","role":"authenticated"}';
+select lives_ok($$ select public.send_heartbeat(now(), true, true, 'always', 78, '1.1.0', 0) $$, 'heartbeat: all well again');
+reset role;
+select is((select hb_location_off_since from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000000a1'),
+  null, 'Location on with the permission "always" clears "off since"');
+
+-- The office reads the heartbeat; a stranger cannot send one.
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e1","role":"authenticated"}';
+select is((select hb_permission from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000000a1'),
+  'always', 'the admin reads the heartbeat columns');
+select throws_ok($$ select public.send_heartbeat(now(), true, true, 'always', null, null, 0) $$,
+  'P0001', 'Only a signed-in driver can send a heartbeat', 'an office person is not a driver: no heartbeat');
+reset role;
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000d1","role":"authenticated"}';
+select throws_ok($$ select public.send_heartbeat(now(), true, true, 'always', null, null, 0) $$,
+  'P0001', 'Only a signed-in driver can send a heartbeat', 'a stranger cannot send a heartbeat');
+reset role;
+set role anon;
+select throws_ok($$ select public.send_heartbeat(now(), true, true, 'always', null, null, 0) $$,
+  '42501', null, 'anon cannot call send_heartbeat');
+reset role;
+
 select * from finish();
 
 rollback;

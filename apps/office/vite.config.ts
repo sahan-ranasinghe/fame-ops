@@ -3,6 +3,7 @@
 //   vite build                  → dist/           the web app for Cloudflare Pages (code-split)
 //   vite build --mode artifact  → dist-artifact/  one self-contained HTML file, the Fame Fleet artifact
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
@@ -16,6 +17,12 @@ export default defineConfig(({ mode }) => {
     define: {
       __BUILD__: JSON.stringify(artifact ? "artifact" : "web"),
       __VERSION__: JSON.stringify(pkg.version),
+    },
+    resolve: {
+      alias: {
+        // The one status rule, shared with the connector (no copy): supabase/functions/_shared/fleet/status.ts
+        "@fleet/status": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/status.ts", import.meta.url)),
+      },
     },
     build: {
       outDir: artifact ? "dist-artifact" : "dist",

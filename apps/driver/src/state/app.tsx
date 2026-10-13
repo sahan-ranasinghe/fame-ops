@@ -14,7 +14,8 @@ import { isSupabaseConfigured } from '@/config';
 import { deviceLanguage, translate, translateList, type Vars } from '@/i18n';
 import * as api from '@/lib/api';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
-import { checkTracking, getSharing, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
+import { sendHeartbeat, startHeartbeatLoop } from '@/lib/heartbeat';
+import { checkTracking, getSharing, readiness, type StartResult, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
 import { ensureChannels, notifyNewTask, onNotificationTap } from '@/lib/notifications';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
@@ -31,6 +32,14 @@ import { clearQueue, queueCounts, type QueueCounts, retryFailed, tasksWaiting } 
 export type SignInOutcome = 'ok' | 'wrong' | 'network' | 'switched_off' | 'not_configured';
 export type SignOutOutcome = 'ok' | 'task' | 'queue';
 export type LiveStatus = 'connected' | 'connecting' | 'off';
+
+/** The "Turn on Location" cover (components/LocationGate.tsx): why it is up and what for. */
+export interface GateState {
+  reason: 'services' | 'permission';
+  /** start = starting a task, sharing = switching sharing on, task = a task is in progress with Location off. */
+  purpose: 'start' | 'sharing' | 'task';
+}
+export type GateOutcome = 'ready' | 'cancelled';
 
 export interface FuelEntry {
   litres: number | null;
@@ -79,11 +88,18 @@ interface AppValue {
   refreshing: boolean;
   offline: boolean;
 
+  /** The Location cover, when it is up. */
+  gate: GateState | null;
+  /** The cover reports: Location is on now ('ready'), or the driver chose "Not now". */
+  resolveGate: (outcome: GateOutcome) => void;
+  /** Runs the action once Location is on (showing the cover first if it is not); false when the driver cancelled. */
+  requireLocation: (purpose: 'start' | 'sharing', action: () => Promise<void> | void) => Promise<boolean>;
+
   signIn: (username: string, pin: string) => Promise<SignInOutcome>;
   signOut: () => Promise<SignOutOutcome>;
   refresh: () => Promise<void>;
   sendNow: (includeFailed?: boolean) => Promise<void>;
-  setSharing: (on: boolean) => Promise<'on' | 'off' | 'no_permission'>;
+  setSharing: (on: boolean) => Promise<'on' | 'off' | 'no_permission' | 'cancelled'>;
   checkTrackingNow: () => Promise<void>;
   checkUpdate: () => Promise<UpdateOutcome>;
   /** Registers this phone for push notifications (after sign-in, and when notifications are allowed). */
@@ -91,7 +107,8 @@ interface AppValue {
   chooseVehicle: (vehicleId: string) => void;
   markSeen: (taskIds: string[]) => void;
   markStopDone: (stop: TaskStop) => void;
-  startTask: (task: TaskWithStops, reading: OdometerEntry) => Promise<void>;
+  /** false when Location stayed off and the driver chose "Not now": nothing was started. */
+  startTask: (task: TaskWithStops, reading: OdometerEntry) => Promise<boolean>;
   completeTask: (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => void;
   logOdometer: (reading: OdometerEntry) => void;
   logFuel: (fuel: FuelEntry, odometerKm: number | null) => void;
@@ -127,6 +144,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [waitingTasks, setWaitingTasks] = useState<Set<string>>(() => tasksWaiting());
   const [refreshing, setRefreshing] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [gate, setGate] = useState<GateState | null>(null);
+  const gateResolve = useRef<((outcome: GateOutcome) => void) | null>(null);
 
   // The newest values, for callbacks that run later.
   const meRef = useRef(me);
@@ -227,6 +246,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setGpsKm(kmCounters());
   }, [serviceTexts]);
 
+  // --- Location required for work --------------------------------------------
+  const resolveGate = useCallback((outcome: GateOutcome) => {
+    const resolve = gateResolve.current;
+    gateResolve.current = null;
+    setGate(null);
+    resolve?.(outcome);
+  }, []);
+
+  const requireLocation = useCallback(async (purpose: 'start' | 'sharing', action: () => Promise<void> | void) => {
+    const ready = await readiness();
+    if (!ready.ok) {
+      const outcome = await new Promise<GateOutcome>((resolve) => {
+        gateResolve.current = resolve;
+        setGate({ reason: ready.servicesOn ? 'permission' : 'services', purpose });
+      });
+      if (outcome !== 'ready') return false;
+    }
+    await action();
+    return true;
+  }, []);
+
   // --- start-up -------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
@@ -302,6 +342,31 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, TICK_MS);
     return () => clearInterval(timer);
   }, [signedIn, checkTrackingNow]);
+
+  // While sharing is on: a heartbeat a minute, and one the moment Location or the permission changes.
+  useEffect(() => {
+    if (!signedIn || !sharing) return;
+    return startHeartbeatLoop();
+  }, [signedIn, sharing]);
+
+  // A task in progress needs Location: the cover goes up when it is off and comes down by itself when it is back.
+  useEffect(() => {
+    if (!signedIn) return;
+    const timer = setInterval(() => {
+      if (AppState.currentState !== 'active') return;
+      if (!tasksRef.current.some((task) => task.status === 'in_progress')) {
+        setGate((current) => (current?.purpose === 'task' ? null : current));
+        return;
+      }
+      void readiness().then((ready) => {
+        setGate((current) => {
+          if (ready.ok) return current?.purpose === 'task' ? null : current;
+          return current ?? { reason: ready.servicesOn ? 'permission' : 'services', purpose: 'task' };
+        });
+      });
+    }, 5_000);
+    return () => clearInterval(timer);
+  }, [signedIn]);
 
   // The driver tapped the "sharing stopped" notification: look again right away.
   useEffect(() => onNotificationTap((data) => {
@@ -411,13 +476,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await stopSharing('driver');
       setSharingState(false);
       setTracking(TRACKING_OFF);
+      void sendHeartbeat(); // the office hears "not sharing" at once
       return 'off' as const;
     }
-    const result = await startSharing(serviceTexts);
-    setSharingState(result === 'on');
-    if (result === 'on') void checkTrackingNow();
-    return result;
-  }, [serviceTexts, checkTrackingNow]);
+    const outcome = { result: 'no_permission' as StartResult };
+    const went = await requireLocation('sharing', async () => {
+      outcome.result = await startSharing(serviceTexts);
+    });
+    if (!went) return 'cancelled' as const;
+    setSharingState(outcome.result === 'on');
+    if (outcome.result === 'on') void checkTrackingNow();
+    return outcome.result;
+  }, [serviceTexts, checkTrackingNow, requireLocation]);
 
   const chooseVehicle = useCallback((vehicleId: string) => {
     const current = meRef.current;
@@ -465,7 +535,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [patchLocalTask]);
 
   const startTask = useCallback(
-    async (task: TaskWithStops, reading: OdometerEntry) => {
+    (task: TaskWithStops, reading: OdometerEntry) => requireLocation('start', async () => {
       const current = meRef.current;
       if (!current) return;
       const now = new Date().toISOString();
@@ -505,8 +575,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSharingState(result === 'on');
       void checkTrackingNow();
       void flushNow();
-    },
-    [bumpOdometer, patchLocalTask, saveMe, serviceTexts, checkTrackingNow],
+    }),
+    [bumpOdometer, patchLocalTask, saveMe, serviceTexts, checkTrackingNow, requireLocation],
   );
 
   const queueFuel = useCallback((fuel: FuelEntry, vehicleId: string, taskId: string | null, odometerKm: number | null, at: string) => {
@@ -643,6 +713,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const value: AppValue = {
     booted, me, language, t, tList, setLanguage,
     vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, waitingTasks, refreshing, offline,
+    gate, resolveGate, requireLocation,
     signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopDone,
     startTask, completeTask, logOdometer, logFuel, sendReport,
   };

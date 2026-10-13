@@ -213,11 +213,48 @@ export async function insertClosedSession(
   );
 }
 
+/** A batch of points that gets no answer in this long is tried again later (a stalled connection must not block the queue). */
+export const UPLOAD_TIMEOUT_MS = 45_000;
+
 export async function insertPoints(client: Client, points: PointInsert[]): Promise<void> {
-  check(
-    await client.from('location_points').upsert(points, { onConflict: 'employee_id,recorded_at', ignoreDuplicates: true }),
-    'location',
-  );
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  try {
+    check(
+      await client
+        .from('location_points')
+        .upsert(points, { onConflict: 'employee_id,recorded_at', ignoreDuplicates: true })
+        .abortSignal(controller.signal),
+      'location',
+    );
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** What the phone reports about itself (lib/heartbeat.ts), stored on driver_latest by send_heartbeat(). */
+export interface HeartbeatRow {
+  /** Phone time, ISO. The server never stores it later than its own clock. */
+  at: string;
+  sharing: boolean;
+  location_on: boolean;
+  permission: 'always' | 'foreground' | 'denied' | 'unknown';
+  battery_pct: number | null;
+  app_version: string | null;
+  queued_points: number;
+}
+
+export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<void> {
+  const res = await client.rpc('send_heartbeat', {
+    p_at: row.at,
+    p_sharing: row.sharing,
+    p_location_on: row.location_on,
+    p_permission: row.permission,
+    p_battery_pct: row.battery_pct ?? undefined,
+    p_app_version: row.app_version ?? undefined,
+    p_queued_points: row.queued_points,
+  });
+  if (res.error) fail(res, 'heartbeat');
 }
 
 export async function insertPhoto(client: Client, photo: PhotoInsert): Promise<void> {

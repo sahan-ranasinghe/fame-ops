@@ -6,7 +6,19 @@ import type { Db, Row } from "./db.ts";
 import { fetchAll, ToolError, unwrap } from "./db.ts";
 import { closest } from "./geo.ts";
 import { plain, thousands } from "./format.ts";
-import { ago, colomboDate, colomboDayTime, colomboTime, dayRange, daysBetween, minutesSince, monthRange, shortDate } from "./time.ts";
+import { driverStatus, type StatusResult, statusText } from "./status.ts";
+import {
+  ago,
+  colomboDate,
+  colomboDateTime,
+  colomboDayTime,
+  colomboTime,
+  dayRange,
+  daysBetween,
+  minutesSince,
+  monthRange,
+  shortDate,
+} from "./time.ts";
 
 export type Employee = Row<"employees">;
 export type Vehicle = Row<"vehicles">;
@@ -106,6 +118,65 @@ export function sharing(latest: Latest | undefined, now: Date): Sharing {
   if (!latest.recorded_at || minutes === null) return { state: "stale", text: "Sharing · no location yet", minutes: null };
   if (minutes < STALE_AFTER_MINUTES) return { state: "sharing", text: `Live · ${ago(latest.recorded_at, now)}`, minutes };
   return { state: "stale", text: `Last seen ${ago(latest.recorded_at, now)}`, minutes };
+}
+
+/** The newer status (status.ts) with the fields the tools add to a driver card. The old `state`/`location` fields stay as they were. */
+export interface SignalFields {
+  status: StatusResult["status"];
+  /** "Live · 2 min", "Location off since 11:56", "No signal since 11:56", "Not sharing" */
+  status_text: string;
+  /** When the state began (Asia/Colombo), when known. */
+  status_since?: string;
+  /** "HH:MM" of the newest GPS point. */
+  last_position_at?: string;
+  heartbeat_at?: string;
+  location_on?: boolean;
+  permission?: string;
+  app_version?: string;
+  queued_points?: number;
+  /** The raw times (ISO) so a screen can recompute the status as the clock ticks or a Realtime row arrives. */
+  signal: {
+    sharing: boolean;
+    point_at: string | null;
+    heartbeat_at: string | null;
+    location_on: boolean | null;
+    permission: string | null;
+    location_off_since: string | null;
+  };
+}
+
+export function statusOf(latest: Latest | undefined, now: Date): { result: StatusResult; fields: SignalFields } {
+  const signal = {
+    sharing: latest?.sharing ?? false,
+    point_at: latest?.recorded_at ?? null,
+    heartbeat_at: latest?.hb_at ?? null,
+    location_on: latest?.hb_location_on ?? null,
+    permission: latest?.hb_permission ?? null,
+    location_off_since: latest?.hb_location_off_since ?? null,
+  };
+  const result = driverStatus({
+    sharing: signal.sharing,
+    pointAt: signal.point_at,
+    heartbeatAt: signal.heartbeat_at,
+    locationOn: signal.location_on,
+    permission: signal.permission,
+    locationOffSince: signal.location_off_since,
+  }, now);
+  return {
+    result,
+    fields: {
+      status: result.status,
+      status_text: statusText(result, now),
+      status_since: result.since ? colomboDateTime(result.since) : undefined,
+      last_position_at: latest?.recorded_at ? colomboTime(latest.recorded_at) : undefined,
+      heartbeat_at: latest?.hb_at ? colomboDateTime(latest.hb_at) : undefined,
+      location_on: latest?.hb_location_on ?? undefined,
+      permission: latest?.hb_permission ?? undefined,
+      app_version: latest?.hb_app_version ?? undefined,
+      queued_points: latest?.hb_queued_points ?? undefined,
+      signal,
+    },
+  };
 }
 
 export async function loadLatest(db: Db): Promise<Map<string, Latest>> {

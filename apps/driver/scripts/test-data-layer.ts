@@ -216,6 +216,7 @@ async function main() {
     { kind: 'task_patch', id: task1, patch: { seen_at: at(50) } },
     { kind: 'employee_patch', id: a.row.id, patch: { current_vehicle_id: van.id, language: 'si' } },
     { kind: 'session_start', id: session, employee_id: a.row.id, vehicle_id: van.id, started_at: at(45), device_info: { model: 'test phone' } },
+    { kind: 'heartbeat', row: { at: at(43), sharing: true, location_on: false, permission: 'always', battery_pct: 80, app_version: '1.1.0+test', queued_points: 45 } },
     photoOp(pStart, 'odometer'),
     { kind: 'odometer_log', row: { id: logStart, vehicle_id: van.id, employee_id: a.row.id, task_id: task1, reading_km: 84512, ocr_value: 84512, photo_id: pStart, kind: 'task_start', logged_at: at(44) } },
     { kind: 'task_patch', id: task1, patch: { status: 'in_progress', start_odometer_km: 84512, started_at: at(44) } },
@@ -260,6 +261,8 @@ async function main() {
   const pointCount = (await admin.from('location_points').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id)).count;
   const latest = must(await admin.from('driver_latest').select('*').eq('employee_id', a.row.id).single(), 'driver_latest');
   check(pointCount === 45 && latest.sharing === false && Math.abs((latest.lat ?? 0) - (6.8868 + 44 * 0.01)) < 1e-6, '45 location points stored; the office sees the newest one and "not sharing"', { pointCount, lat: latest.lat });
+  check(latest.hb_location_on === false && latest.hb_permission === 'always' && latest.hb_queued_points === 45 && latest.hb_app_version === '1.1.0+test' && latest.hb_location_off_since !== null,
+    'the heartbeat reached driver_latest: Location off, 45 points were waiting, app 1.1.0+test', { hb: latest.hb_location_on, since: latest.hb_location_off_since });
   const meNow = await api.fetchMe(client);
   check(meNow?.language === 'si' && meNow.current_vehicle_id === van.id, 'language and current vehicle were saved');
   const reports = await api.fetchReports(client);
@@ -309,6 +312,24 @@ async function main() {
   const rescued = must(await admin.from('duty_sessions').select('ended_at, end_reason').eq('id', lost).single(), 'session');
   const after = (await admin.from('location_points').select('id', { count: 'exact', head: true }).eq('session_id', lost)).count;
   check(result.failed === 0 && after === 3 && rescued.end_reason === 'auto' && rescued.ended_at !== null, 'the period is registered after the fact and its 3 points are stored', { result, after, rescued });
+
+  console.log('\n== A day with no coverage: 450 points queued, then the connection returns ==');
+  const offlineDay = randomUUID();
+  queue.add({ kind: 'session_start', id: offlineDay, employee_id: a.row.id, vehicle_id: van.id, started_at: new Date(now - 8 * 3600000).toISOString(), device_info: { model: 'test phone' } });
+  // 450 points over 8 hours (a parked vehicle sends about 60 an hour), the newest just after everything stored so far.
+  queue.addPoints(Array.from({ length: 450 }, (_, i) => ({
+    // 7 s off the minute, so no point lands on a time this driver already has stored (the key is employee + time).
+    session_id: offlineDay, recorded_at: new Date(now - 8 * 3600000 + 7000 + i * 64000 + (i === 449 ? 8 * 3600000 - 7000 - 449 * 64000 + 5000 : 0)).toISOString(),
+    lat: 6.9 + i * 0.0001, lng: 79.9, accuracy_m: 6, speed_mps: 0, heading: null, battery_pct: 60, is_mock: false,
+  })));
+  const t0 = Date.now();
+  result = await sync.flush();
+  const backlog = (await admin.from('location_points').select('id', { count: 'exact', head: true }).eq('session_id', offlineDay)).count;
+  const latestAfter = must(await admin.from('driver_latest').select('recorded_at, lat').eq('employee_id', a.row.id).single(), 'driver_latest');
+  check(!result.offline && result.failed === 0 && result.sent === 451 && queue.points() === 0 && backlog === 450,
+    `the whole backlog went up in batches of 200 without a point lost (${Math.round((Date.now() - t0) / 100) / 10} s)`, { result, backlog });
+  check(latestAfter.recorded_at !== null && Math.abs(new Date(latestAfter.recorded_at).getTime() - (now + 5000)) < 2000 && Math.abs((latestAfter.lat ?? 0) - (6.9 + 449 * 0.0001)) < 1e-6,
+    'driver_latest ends on the newest point of the backlog', latestAfter);
 
   console.log('\n== The other driver ==');
   const clientB = driverClient({ value: true });

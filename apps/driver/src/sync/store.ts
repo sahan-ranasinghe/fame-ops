@@ -66,6 +66,14 @@ export function addOp(op: Op): void {
   db.runSync('INSERT INTO ops (op) VALUES (?)', JSON.stringify(op));
 }
 
+/** Adds an op of a kind of which only the newest matters (heartbeats): older waiting ones are dropped first. */
+export function replaceOp(op: Op): void {
+  db.withTransactionSync(() => {
+    db.runSync("DELETE FROM ops WHERE failed = 0 AND op LIKE ?", `{"kind":"${op.kind}"%`);
+    db.runSync('INSERT INTO ops (op) VALUES (?)', JSON.stringify(op));
+  });
+}
+
 /** Adds location points. A point with a time that is already stored is ignored. */
 export function addPoints(points: Omit<StoredPoint, 'seq'>[]): void {
   db.withTransactionSync(() => {

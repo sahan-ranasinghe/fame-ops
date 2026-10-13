@@ -33,7 +33,9 @@ export type Op =
   | { kind: 'odometer_log'; row: api.OdometerInsert }
   | { kind: 'fuel_log'; row: api.FuelInsert }
   | { kind: 'report'; row: api.ReportInsert }
-  | { kind: 'employee_patch'; id: string; patch: { current_vehicle_id?: string | null; language?: Language } };
+  | { kind: 'employee_patch'; id: string; patch: { current_vehicle_id?: string | null; language?: Language } }
+  /** Only the newest one matters: the store keeps one waiting heartbeat at a time (replaceOp). */
+  | { kind: 'heartbeat'; row: api.HeartbeatRow };
 
 export interface StoredOp {
   seq: number;
@@ -125,6 +127,8 @@ export function createSync(deps: SyncDeps) {
           api.insertFuelLog(client, { ...op.row, receipt_photo_id: null }));
       case 'report':
         return api.insertReport(client, op.row);
+      case 'heartbeat':
+        return api.sendHeartbeat(client, op.row);
     }
   }
 

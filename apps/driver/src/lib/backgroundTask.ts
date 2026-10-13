@@ -21,6 +21,8 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 
 import { translate } from '../i18n';
+import { flushNow } from '../sync';
+import { sendHeartbeat } from './heartbeat';
 import { getJson, KEYS, setJson } from './kv';
 import { DEAD_AFTER_MS, getSharing, LOCATION_TASK, serviceTextsFor, startLocationUpdates } from './location';
 import { notifyTrackingStopped } from './notifications';
@@ -33,6 +35,10 @@ TaskManager.defineTask(TRACKING_CHECK_TASK, async () => {
   try {
     const sharing = getSharing();
     if (!sharing) return BackgroundTask.BackgroundTaskResult.Success;
+
+    // Whenever Android lets the job run: tell the office how the phone is, and send any backlog.
+    await sendHeartbeat().catch(() => undefined);
+    await flushNow().catch(() => undefined);
 
     const running = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK).catch(() => false);
     const lastFix = getJson<number>(KEYS.lastFix) ?? Date.parse(sharing.startedAt);

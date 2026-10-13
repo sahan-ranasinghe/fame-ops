@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import { useWatch } from "../data/hooks";
-import { applyLatest, positionOf, refreshStates, stateTone } from "../data/live";
+import { applyLatest, positionOf, refreshStates, statusLine, statusTone } from "../data/live";
 import type { DriverRoute, LiveDriver, LiveDrivers } from "../data/types";
 import { joinDots, num, plateOf } from "../lib/format";
 import { MapView } from "../map/MapView";
@@ -11,8 +11,9 @@ import type { FleetError } from "../transport/types";
 import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 
-type Filter = "all" | "sharing" | "stale" | "not_sharing";
-const FILTERS: [Filter, string][] = [["all", "All"], ["sharing", "Sharing"], ["stale", "Stale"], ["not_sharing", "Not sharing"]];
+type Filter = "all" | "live" | "no_signal" | "location_off" | "not_sharing";
+const FILTERS: [Filter, string][] = [["all", "All"], ["live", "Live"], ["no_signal", "No signal"], ["location_off", "Location off"], ["not_sharing", "Not sharing"]];
+const tone = (x: LiveDriver) => statusTone(x.status, x.state);
 
 export interface Route {
   username: string;
@@ -61,14 +62,14 @@ export function Live() {
   }, [realtime, store]);
 
   const all = useMemo(() => d?.drivers ?? [], [d]);
-  const shown = filter === "all" ? all : all.filter((x) => x.state === filter);
+  const shown = filter === "all" ? all : all.filter((x) => (x.status ?? (x.state === "sharing" ? "live" : x.state === "stale" ? "no_signal" : "not_sharing")) === filter);
   const sel = all.find((x) => x.username === selected) ?? all[0];
   useEffect(() => { if (!selected && all[0]) setSelected(all[0].username); }, [all, selected]);
 
   const markers = useMemo<MapMarker[]>(() => all.flatMap((x) => {
     const pos = positionOf(x);
     if (!pos) return [];
-    return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, title: x.driver, lat: pos.lat, lng: pos.lng, tone: stateTone(x.state), selected: x.username === sel?.username }];
+    return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, title: x.driver, lat: pos.lat, lng: pos.lng, tone: tone(x), selected: x.username === sel?.username }];
   }), [all, sel?.username]);
   const mapRoute = useMemo<MapRoute | null>(() => (route && route.username === sel?.username ? { points: route.points } : null), [route, sel?.username]);
 
@@ -85,7 +86,7 @@ export function Live() {
     setRouteBusy(false);
   }
 
-  const counts = d?.counts;
+  const counts = d?.status_counts ? { all: d.counts.all, ...d.status_counts } : undefined;
   return (
     <section className="view">
       <div className="ph">
@@ -96,7 +97,7 @@ export function Live() {
           </div>
           <h1>Live locations</h1>
         </div>
-        {counts && <Chips options={FILTERS} value={filter} onChange={setFilter} counts={counts} />}
+        {d && <Chips options={FILTERS} value={filter} onChange={setFilter} counts={counts} />}
       </div>
       <div className="live-layout">
         <div className="card llist">
@@ -109,12 +110,12 @@ export function Live() {
           {d && <StaleNote entry={live} />}
           {d && (shown.length ? shown.map((x) => (
             <button type="button" key={x.username} className={`lrow ${x.username === sel?.username ? "sel" : ""}`} onClick={() => { setSelected(x.username); setRouteErr(null); }}>
-              <span className={`dot ${stateTone(x.state)}`} />
+              <span className={`dot ${tone(x)}`} />
               <span className="grow">
                 <span className="name">{x.driver} <Plate v={x.vehicle} /></span>
                 <span className="sub" style={{ display: "block" }}>{joinDots([x.task, x.near && "near " + x.near]) || "No task"}</span>
               </span>
-              <span className={`age status ${stateTone(x.state)}`}>{x.state === "not_sharing" ? "Not sharing" : (x.location || "").replace(/^Last seen /, "") || "—"}</span>
+              <span className={`age status ${tone(x)}`}>{statusLine(x).replace(/^Live · /, "")}</span>
             </button>
           )) : <Empty>{all.length ? "Nobody in this group right now." : "No driver is sharing their location or on a task right now."}</Empty>)}
         </div>
@@ -134,14 +135,20 @@ function Detail({ x, route, busy, err, onRoute, onHide }: { x: LiveDriver; route
       <div className="row" style={{ padding: 0 }}>
         <Avatar name={x.driver} />
         <div className="grow"><div className="name" style={{ fontSize: 20 }}>{x.driver}</div><div className="sub">{joinDots([x.vehicle, x.task, x.going_to && "to " + x.going_to])}</div></div>
-        <Pill tone={stateTone(x.state)}>{x.updated ? "Updated " + String(x.updated).slice(-5) : x.location || ""}</Pill>
+        <Pill tone={tone(x)}>{statusLine(x)}</Pill>
       </div>
       <dl className="facts">
+        <div><dt>Last position</dt><dd>{x.last_position_at ?? (x.updated ? String(x.updated).slice(-5) : "—")}</dd></div>
         <div><dt>Near</dt><dd>{x.near || "—"}</dd></div>
-        <div><dt>Speed</dt><dd>{x.speed_kmh != null ? num(x.speed_kmh) + " km/h" : "—"}</dd></div>
+        <div><dt>Speed</dt><dd>{x.speed_kmh != null && (x.status ?? "live") === "live" ? num(x.speed_kmh) + " km/h" : "—"}</dd></div>
         <div><dt>Battery</dt><dd>{x.battery_pct != null ? x.battery_pct + "%" : "—"}</dd></div>
-        <div><dt>Source</dt><dd>{x.source || "—"}</dd></div>
       </dl>
+      {x.heartbeat_at && (
+        <p className="muted small" style={{ margin: "0 0 12px" }} data-testid="phone-line">
+          Phone {String(x.heartbeat_at).slice(-5)}: Location {x.location_on === false ? "off" : "on"} · permission {x.permission ?? "?"}
+          {x.app_version ? ` · app ${x.app_version}` : ""}{x.queued_points ? ` · ${x.queued_points} points waiting on the phone` : ""}
+        </p>
+      )}
       <div className="acts">
         {links.maps && <a className="btn dark" href={links.maps} target="_blank" rel="noopener">Open in Google Maps</a>}
         {links.whatsapp && <a className="btn" href={links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}

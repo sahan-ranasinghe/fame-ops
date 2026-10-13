@@ -2,7 +2,8 @@ import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry, useWatch } from "../data/hooks";
 import type { Overview as OverviewData, RequestsList } from "../data/types";
-import { attIcon, joinDots, levelTone, locTone, longDate, today } from "../lib/format";
+import { statusLine, statusTone } from "../data/live";
+import { attIcon, joinDots, levelTone, longDate, today } from "../lib/format";
 import { Avatar, Empty, ErrBox, IconLink, Loading, Notice, Pill, Plate, StaleNote, Tile } from "../ui/basics";
 import { useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
@@ -64,7 +65,7 @@ export function Overview() {
                       <div className="name">{d.driver} <Plate v={d.vehicle} /></div>
                       <div className="sub">{joinDots([d.task, d.going_to && "to " + d.going_to, d.near && "near " + d.near])}</div>
                     </div>
-                    <Pill tone={locTone(d.location)}>{d.location || "—"}</Pill>
+                    <Pill tone={statusTone(d.status, d.location?.toLowerCase().includes("not sharing") ? "not_sharing" : d.location?.toLowerCase().startsWith("live") ? "sharing" : "stale")}>{statusLine({ status_text: d.status_text, location: d.location, state: undefined })}</Pill>
                     <div className="acts">
                       <IconLink href={d.links?.maps} icon="pin" label="Open in Google Maps" />
                       <IconLink href={d.links?.whatsapp} icon="chat" label="WhatsApp" />

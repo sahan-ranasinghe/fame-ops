@@ -38,9 +38,13 @@ const point = (secondsAgo, speed) => ({ employee_id: me.id, session_id: session,
 r = await drv.from("location_points").insert([point(30, 10)]); if (r.error) throw r.error;
 await new Promise((x) => setTimeout(x, 2000));
 r = await drv.from("location_points").insert([point(1, 20)]); if (r.error) throw r.error;
+await new Promise((x) => setTimeout(x, 2000));
+// A heartbeat saying Location is off: the same row changes again (hb_* columns).
+r = await drv.rpc("send_heartbeat", { p_at: new Date().toISOString(), p_sharing: true, p_location_on: false, p_permission: "always", p_battery_pct: 70, p_app_version: "rt-check", p_queued_points: 1 });
+if (r.error) throw r.error;
 await new Promise((x) => setTimeout(x, 6000));
-console.log("4. events received:", seen.length, seen.map((p) => `${p.eventType} speed=${p.new?.speed_mps} rec=${p.new?.recorded_at ?? "?"}`).join(" | "));
+console.log("4. events received:", seen.length, seen.map((p) => `${p.eventType} speed=${p.new?.speed_mps} hb_on=${p.new?.hb_location_on} hb_at=${p.new?.hb_at ? "set" : "null"}`).join(" | "));
 const { data: rows, error } = await office.from("driver_latest").select("employee_id, speed_mps, sharing").eq("employee_id", me.id);
 console.log("5. REST read as the office user:", error ? String(error.message) : JSON.stringify(rows));
 await office.removeAllChannels();
-process.exit(status === "SUBSCRIBED" && seen.length >= 2 ? 0 : 1);
+process.exit(status === "SUBSCRIBED" && seen.length >= 3 ? 0 : 1);

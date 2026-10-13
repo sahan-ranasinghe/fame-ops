@@ -150,19 +150,19 @@ export function AssignForm({ date, lists, onDate, onOpenTask }: Props) {
           <div className="field">
             <label htmlFor="af-driver">Driver</label>
             <select id="af-driver" value={f.driver} onChange={(e) => pickDriver(e.target.value)}>
-              <option value="">{lists.drivers ? "Choose a driver" : "Loading…"}</option>
+              <option value="">{lists.drivers ? "Choose a driver" : lists.error ? "Couldn’t load" : "Loading…"}</option>
               {drivers.map((d) => <option key={d.username} value={d.username}>{d.name}{d.current_vehicle ? ` · ${d.current_vehicle}` : ""}</option>)}
             </select>
           </div>
           <div className="field">
             <label htmlFor="af-vehicle">Vehicle</label>
             <select id="af-vehicle" value={f.vehicle} onChange={(e) => set("vehicle", e.target.value)}>
-              <option value="">{lists.vehicles ? "Choose a vehicle" : "Loading…"}</option>
+              <option value="">{lists.vehicles ? "Choose a vehicle" : lists.error ? "Couldn’t load" : "Loading…"}</option>
               {vehicles.map((v) => <option key={v.reg_no} value={v.reg_no}>{v.reg_no}{v.make_model ? ` · ${v.make_model}` : ""}{v.status ? ` · ${v.status}` : ""}</option>)}
             </select>
           </div>
         </div>
-        {lists.error && !lists.drivers && <Notice>Couldn’t load drivers and vehicles: {lists.error} <button type="button" className="btn small" onClick={lists.reload}>Try again</button></Notice>}
+        {lists.error && (!lists.drivers || !lists.vehicles) && <Notice>Couldn’t load the {!lists.drivers && !lists.vehicles ? "drivers and vehicles" : !lists.drivers ? "drivers" : "vehicles"}: {lists.error} <button type="button" className="btn small" onClick={lists.reload}>Try again</button></Notice>}
         <div className="grid2">
           <div className="field"><label htmlFor="af-end">Vehicle free by</label><input type="time" id="af-end" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
           <div className="field"><label htmlFor="af-pax">Passengers</label><input type="number" id="af-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>

@@ -113,14 +113,14 @@ isOneToOne: false
                   ]
                 },"driver_latest": {
                   Row: {
-                    "accuracy_m": number | null,"battery_pct": number | null,"employee_id": string,"lat": number | null,"lng": number | null,"recorded_at": string | null,"session_id": string | null,"sharing": boolean,"speed_mps": number | null
+                    "accuracy_m": number | null,"battery_pct": number | null,"employee_id": string,"hb_app_version": string | null,"hb_at": string | null,"hb_battery_pct": number | null,"hb_location_off_since": string | null,"hb_location_on": boolean | null,"hb_permission": string | null,"hb_queued_points": number | null,"hb_sharing": boolean | null,"lat": number | null,"lng": number | null,"recorded_at": string | null,"session_id": string | null,"sharing": boolean,"speed_mps": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "accuracy_m"?: number | null,"battery_pct"?: number | null,"employee_id": string,"lat"?: number | null,"lng"?: number | null,"recorded_at"?: string | null,"session_id"?: string | null,"sharing"?: boolean,"speed_mps"?: number | null
+                    "accuracy_m"?: number | null,"battery_pct"?: number | null,"employee_id": string,"hb_app_version"?: string | null,"hb_at"?: string | null,"hb_battery_pct"?: number | null,"hb_location_off_since"?: string | null,"hb_location_on"?: boolean | null,"hb_permission"?: string | null,"hb_queued_points"?: number | null,"hb_sharing"?: boolean | null,"lat"?: number | null,"lng"?: number | null,"recorded_at"?: string | null,"session_id"?: string | null,"sharing"?: boolean,"speed_mps"?: number | null
                   }
                   Update: {
-                    "accuracy_m"?: number | null,"battery_pct"?: number | null,"employee_id"?: string,"lat"?: number | null,"lng"?: number | null,"recorded_at"?: string | null,"session_id"?: string | null,"sharing"?: boolean,"speed_mps"?: number | null
+                    "accuracy_m"?: number | null,"battery_pct"?: number | null,"employee_id"?: string,"hb_app_version"?: string | null,"hb_at"?: string | null,"hb_battery_pct"?: number | null,"hb_location_off_since"?: string | null,"hb_location_on"?: boolean | null,"hb_permission"?: string | null,"hb_queued_points"?: number | null,"hb_sharing"?: boolean | null,"lat"?: number | null,"lng"?: number | null,"recorded_at"?: string | null,"session_id"?: string | null,"sharing"?: boolean,"speed_mps"?: number | null
                   }
                   Relationships: [
                     {
@@ -666,6 +666,9 @@ isOneToOne: false
             "current_employee_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"current_office_role":
+{ Args: Record<PropertyKey, never>; Returns: string
+                           },
 "odometer_log_flag":
 { Args: { "p_ai_status": string,"p_ai_value": number,"p_entry": string,"p_reading": number }; Returns: string
                            },
@@ -683,6 +686,9 @@ isOneToOne: false
                            },
 "remove_device_token":
 { Args: { "p_token": string }; Returns: undefined
+                           },
+"send_heartbeat":
+{ Args: { "p_app_version"?: string,"p_at": string,"p_battery_pct"?: number,"p_location_on": boolean,"p_permission": string,"p_queued_points"?: number,"p_sharing": boolean }; Returns: undefined
                            },
 "send_push":
 { Args: { "p_employee_id": string,"p_kind": string,"p_task_id": string }; Returns: undefined

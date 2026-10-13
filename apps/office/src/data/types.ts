@@ -8,7 +8,33 @@ export interface Links {
   call?: string;
 }
 
-export interface RoadDriver {
+export type DriverStatus = "live" | "location_off" | "no_signal" | "not_sharing";
+
+/** The raw times behind a status (ISO), so a screen can recompute it as the clock ticks or a Realtime row arrives. */
+export interface Signal {
+  sharing: boolean;
+  point_at: string | null;
+  heartbeat_at: string | null;
+  location_on: boolean | null;
+  permission: string | null;
+  location_off_since: string | null;
+}
+
+/** The status fields every driver card carries (live_drivers, fleet_overview). */
+export interface StatusFields {
+  status?: DriverStatus;
+  status_text?: string;
+  status_since?: string;
+  last_position_at?: string;
+  heartbeat_at?: string;
+  location_on?: boolean;
+  permission?: string;
+  app_version?: string;
+  queued_points?: number;
+  signal?: Signal;
+}
+
+export interface RoadDriver extends StatusFields {
   driver: string;
   username?: string;
   vehicle?: string;
@@ -240,7 +266,7 @@ export interface DecideResult {
 
 export type ShareState = "sharing" | "stale" | "not_sharing";
 
-export interface LiveDriver {
+export interface LiveDriver extends StatusFields {
   driver: string;
   username: string;
   employee_id?: string;
@@ -264,6 +290,7 @@ export interface LiveDriver {
 export interface LiveDrivers {
   as_of: string;
   counts: { all: number; sharing: number; stale: number; not_sharing: number };
+  status_counts?: { live: number; no_signal: number; location_off: number; not_sharing: number };
   drivers: LiveDriver[];
 }
 

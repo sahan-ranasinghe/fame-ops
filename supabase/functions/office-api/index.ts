@@ -37,7 +37,8 @@ function env(name: string): string {
 
 function allowedOrigins(): string[] {
   const configured = (Deno.env.get("OFFICE_WEB_URL") ?? "").split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
-  return [...configured, "http://localhost:5173", "http://127.0.0.1:5173"];
+  // 5173 = `npm run dev`, 5174 = the end-to-end test's own server.
+  return [...configured, "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"];
 }
 
 function corsHeaders(origin: string | null): Record<string, string> {

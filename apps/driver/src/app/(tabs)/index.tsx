@@ -63,7 +63,12 @@ export default function TodayScreen() {
   function openNext() {
     if (!next) return;
     if (next.status === 'in_progress') router.push({ pathname: '/task/[id]', params: { id: next.id } });
-    else router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: next.id, from: 'today' } });
+    else {
+      // Location must be on to start a task; the cover asks for it first, then the odometer screen opens.
+      void app.requireLocation('start', () => {
+        router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: next.id, from: 'today' } });
+      });
+    }
   }
 
   const people = next ? peopleLine(next) : null;

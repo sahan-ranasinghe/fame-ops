@@ -192,16 +192,22 @@ export default function LogMileageScreen() {
     if (step.kind === 'typing' && step.entry === 'photo_changed' && !(await confirmChange(step.aiKm))) return;
 
     setSaving(true);
-    allowLeave();
     if (mode === 'start' && task) {
-      await app.startTask(task, reading);
+      // Location must be on: the cover asks for it; "Not now" leaves the form as it is.
+      if (!(await app.startTask(task, reading))) {
+        setSaving(false);
+        return;
+      }
+      allowLeave();
       // Opened from the task screen: back to it, now in progress. Opened from Today: the task takes this screen's place.
       if (params.from === 'task') router.back();
       else router.replace({ pathname: '/task/[id]', params: { id: task.id } });
     } else if (mode === 'finish' && task) {
+      allowLeave();
       app.completeTask(task, reading, fuel);
       router.back();
     } else {
+      allowLeave();
       app.logOdometer(reading);
       router.back();
     }

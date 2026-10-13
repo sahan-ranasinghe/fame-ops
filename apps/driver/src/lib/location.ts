@@ -227,6 +227,45 @@ export async function requestLocationPermissions(): Promise<PermissionStatus> {
   return { location: true, background: background.granted };
 }
 
+export type LocationPermission = 'always' | 'foreground' | 'denied' | 'unknown';
+
+/** Is this phone ready for work: Location services on, and the permission "Allow all the time". */
+export interface Readiness {
+  servicesOn: boolean;
+  permission: LocationPermission;
+  ok: boolean;
+}
+
+export async function readiness(): Promise<Readiness> {
+  const [servicesOn, foreground, background] = await Promise.all([
+    Location.hasServicesEnabledAsync().catch(() => true),
+    Location.getForegroundPermissionsAsync().catch(() => null),
+    Location.getBackgroundPermissionsAsync().catch(() => null),
+  ]);
+  const permission: LocationPermission = !foreground || !background
+    ? 'unknown'
+    : background.granted
+    ? 'always'
+    : foreground.granted
+    ? 'foreground'
+    : 'denied';
+  return { servicesOn, permission, ok: servicesOn && permission === 'always' };
+}
+
+/**
+ * Android's own dialog to switch Location on (Google Play services), as
+ * ride-hailing apps show it. Resolves true when Location is on afterwards.
+ * Phones without the dialog get the Location settings page instead.
+ */
+export async function enableLocation(): Promise<boolean> {
+  try {
+    await Location.enableNetworkProviderAsync();
+  } catch {
+    await openLocationSettings();
+  }
+  return Location.hasServicesEnabledAsync().catch(() => false);
+}
+
 /** Android's location settings (to switch location on). */
 export async function openLocationSettings(): Promise<void> {
   await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.LOCATION_SOURCE_SETTINGS).catch(() => Linking.openSettings());

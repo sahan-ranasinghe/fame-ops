@@ -33,26 +33,66 @@ export interface Lists {
   reload: () => void;
 }
 
-/** Drivers, vehicles and places for the forms: loaded once, kept in the store. */
+/** The three list loads, by store key. */
+const LIST_TOOLS: Record<string, [tool: string, args: Record<string, unknown>]> = {
+  "lists.drivers": ["list_drivers", {}],
+  "lists.vehicles": ["list_vehicles", { filter: "all" }],
+  "lists.places": ["list_places", {}],
+};
+/** A dropped connection or a busy server: worth one more try (a read, so nothing happens twice). */
+const RETRY_CODES = new Set(["network", "server_unavailable", "rate_limited", "upstream_error"]);
+const RETRY_AFTER_MS = [1500, 5000];
+/** Retries made per key since the last success, per store. */
+const retriesByStore = new WeakMap<object, Map<string, number>>();
+const retriesOf = (store: object) => {
+  let m = retriesByStore.get(store);
+  if (!m) retriesByStore.set(store, (m = new Map()));
+  return m;
+};
+
+/** Drivers, vehicles and places for the forms: loaded once, kept in the store; a dropped load is retried, then shown. */
 export function useLists(enabled = true): Lists {
   const { store, me } = useFleet();
   const d = useEntry<{ drivers: Driver[] }>("lists.drivers");
   const v = useEntry<{ vehicles: Vehicle[] }>("lists.vehicles");
   const p = useEntry<{ places: Place[] }>("lists.places");
   const can = (tool: string) => me.tools.includes(tool);
+  const retries = retriesOf(store);
+  const load = (key: string) => {
+    const [tool, args] = LIST_TOOLS[key];
+    if (!can(tool)) return;
+    void store.load(key, tool, args).then((data) => {
+      if (data) retries.delete(key);
+    });
+  };
   const reload = useCallback(() => {
-    if (can("list_drivers")) void store.load("lists.drivers", "list_drivers", {});
-    if (can("list_vehicles")) void store.load("lists.vehicles", "list_vehicles", { filter: "all" });
-    if (can("list_places")) void store.load("lists.places", "list_places", {});
+    retries.clear();
+    Object.keys(LIST_TOOLS).forEach(load);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store, me.tools.join(",")]);
   useEffect(() => {
     if (!enabled) return;
-    if (!d.data && !d.loading && can("list_drivers")) void store.load("lists.drivers", "list_drivers", {});
-    if (!v.data && !v.loading && can("list_vehicles")) void store.load("lists.vehicles", "list_vehicles", { filter: "all" });
-    if (!p.data && !p.loading && can("list_places")) void store.load("lists.places", "list_places", {});
+    if (!d.data && !d.loading) load("lists.drivers");
+    if (!v.data && !v.loading) load("lists.vehicles");
+    if (!p.data && !p.loading) load("lists.places");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, store]);
+  // A list that failed on a dropped connection is tried again by itself, twice, before the person is told.
+  useEffect(() => {
+    if (!enabled) return;
+    const timers: number[] = [];
+    const entries: [string, Entry<unknown>][] = [["lists.drivers", d], ["lists.vehicles", v], ["lists.places", p]];
+    for (const [key, e] of entries) {
+      const code = e.err?.code;
+      if (e.data || e.loading || !code || !RETRY_CODES.has(code)) continue;
+      const n = retries.get(key) ?? 0;
+      if (n >= RETRY_AFTER_MS.length) continue;
+      retries.set(key, n + 1);
+      timers.push(window.setTimeout(() => load(key), RETRY_AFTER_MS[n]));
+    }
+    return () => timers.forEach((t) => clearTimeout(t));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, d.err, v.err, p.err, d.loading, v.loading, p.loading]);
   const firstErr = d.err ?? v.err;
   return {
     drivers: d.data?.drivers,

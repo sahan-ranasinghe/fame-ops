@@ -143,8 +143,9 @@
   same intervals: overview and board 30 s, requests 60 s; `invalidate` refetches every watch).
   Errors become `{ code, message }` and `errors.ts` turns them into one sentence + a fix.
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
-  `lists.*`); screens use `useEntry` / `useWatch` / `useLists`. Menus are filtered by
-  `me.tools`; the server is the guard.
+  `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
+  dropped connection is retried twice by itself, then the form shows the error with Try again).
+  Menus are filtered by `me.tools`; the server is the guard.
 - Web sign-in (`src/auth`): e-mail + password → (2-step on for this person? the code page,
   `mfa.getAuthenticatorAssuranceLevel` says nextLevel aal2) → `GET /me` → ready. A
   `create_office_user` link lands with a recovery session → `/set-password`
@@ -252,7 +253,10 @@
   accuracy_m, speed_mps, heading, battery_pct, is_mock, source ('app'), received_at.
   Unique (employee_id, recorded_at); uploads use on conflict do nothing.
 - `driver_latest`: employee_id PK, session_id, lat, lng, accuracy_m, speed_mps,
-  battery_pct, recorded_at, sharing (bool). Kept current by trigger (only newer points win).
+  battery_pct, recorded_at, sharing (bool), plus the heartbeat columns hb_at, hb_sharing,
+  hb_location_on, hb_permission ('always'|'foreground'|'denied'|'unknown'), hb_battery_pct,
+  hb_app_version, hb_queued_points, hb_location_off_since (written by `send_heartbeat()`).
+  Kept current by trigger (only newer points win).
   In the Realtime publication; office roles (admin, fleet_admin, office, viewer) read it
   through RLS (`current_office_role()`, migration `office_read_access`), drivers and staff
   read nothing. The same roles read all tasks and task_stops through RLS. Everything else
@@ -279,8 +283,24 @@ The office sees photos only through 1-hour signed URLs returned by connector too
   confirms or corrects it. If it differs from the last logged reading by more than 2 km,
   flag "unlogged km" for the office.
 - Task km = end_odometer_km − start_odometer_km (must be ≥ 0).
-- Status words for the office: Sharing = last point < 15 min; Stale = older; Not sharing =
-  sharing off. "Seen by driver HH:MM" from seen_at; "Sent · not opened yet" if seen_at is null.
+- Driver status (ONE rule, `supabase/functions/_shared/fleet/status.ts`, used by live_drivers,
+  fleet_overview, the web app and the artifact; the web imports the same file as
+  `@fleet/status`): Live = last GPS point under 3 min (blue); Location off = the phone's last
+  heartbeat (under 3 min old) says Location services off or the permission not "always", with
+  "since HH:MM" (red); No signal = sharing on but no point and no fresh heartbeat for over 3 min,
+  or a fresh heartbeat with no GPS fix (amber); Not sharing = the driver turned sharing off
+  (red). Every card also carries `last_position_at` ("HH:MM") and the raw `signal` times. A task
+  in progress that is Location off / No signal for 10+ min is in fleet_overview needs-attention.
+  The old fields stay for the Teams artifact: Sharing = last point < 15 min; Stale = older;
+  Not sharing = sharing off. "Seen by driver HH:MM" from seen_at; "Sent · not opened yet" if
+  seen_at is null.
+- Heartbeats (`apps/driver/src/lib/heartbeat.ts` → RPC `send_heartbeat` → columns `hb_*` on
+  `driver_latest`, Realtime to the web): about every 60 s while sharing, at once when Location
+  or the permission changes (checked every 10 s), once when sharing stops, and whenever the
+  background job runs; sharing on/off, Location on/off, permission, battery, app version
+  (`1.1.0+<update id>`), queued points. Queued offline like points, only the newest waits
+  (`replaceOp`); the server ignores one older than the stored heartbeat and never stores a
+  phone time after now(). Drivers only; the office reads the columns through RLS.
 - Assign checks (warnings, not blocks): the vehicle has another task overlapping the time;
   the driver has another task at the same time; the vehicle is over its monthly km
   allowance; the vehicle is in garage; a document has expired.
@@ -338,6 +358,18 @@ Tabs: Today, Mileage, Report, Me.
    my reports with status.
 8. Me tab (not designed): name, code, phone, language, current vehicle, app version,
    sign out (disabled while a task is in progress).
+Location required for work (`components/LocationGate.tsx`, like going online in a
+ride-hailing app): Start task and switching "Sharing my location" on need Location services
+on and the permission "Allow all the time". If not, a full-screen "Turn on Location" cover with
+one big button opens Android's own dialog (`Location.enableNetworkProviderAsync`, fallback the
+Location settings page; for the permission, the app's settings page); once Location is on the
+driver continues where they were (`requireLocation(purpose, action)` in `state/app.tsx`);
+"Not now" cancels. While a task is in progress and Location goes off, the same cover goes over
+the whole app ("Location is off. Turn it on to continue the task") with "Call office"
+(`EXPO_PUBLIC_OFFICE_PHONE` / app.json `extra.officePhone`; no button when empty) and "Report a
+problem" still reachable, and disappears by itself when Location is back (checked every 5 s;
+the cover looks every 2 s). Everything else (Me, Report, Mileage, sign out with no task running)
+works with Location off. Texts under `gate.*` in en + si.
 Back navigation rules (Android back button, our back arrow and the back gesture always do
 the same thing):
 - A screen opened from another screen is pushed on top of it. Back returns to that screen
@@ -365,8 +397,13 @@ the same thing):
   to the background. A list that opens a screen (Today's lists, today's tasks on Mileage)
   gets it back on back.
 
-Offline: location points, odometer/fuel logs, reports and photos are queued on the phone
-and retried. Location: a fix every ~5 s (High accuracy, handed over in batches of up to
+Offline: location points, odometer/fuel logs, reports, photos and heartbeats are queued on the
+phone and retried. The point queue (SQLite) has no cap: a parked vehicle adds about 60 points
+an hour, a moving one about 720 (one every 5 s), about 150 bytes each, so a 10-hour day is
+~1 MB. Uploads go in batches of 200 with a 45 s limit per request (`UPLOAD_TIMEOUT_MS`), one
+batch after another until the queue is empty, from the location task (every ~30 s), on
+refresh, and from the background job; driver_latest keeps the newest point by recorded_at
+whatever the upload order, and driver_route orders by recorded_at. Location: a fix every ~5 s (High accuracy, handed over in batches of up to
 15 s); the GPS drift filter `src/lib/track.ts` (same file in the connector) ignores fixes
 worse than 50 m, jumps over 150 km/h and drift while standing still, and a move only
 counts once a second fix agrees; one point recorded every 5 s while moving, one a minute

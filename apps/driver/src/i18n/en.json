@@ -285,5 +285,19 @@
   "service": {
     "title": "Sharing my location",
     "body": "The office can see where you are."
+  },
+  "gate": {
+    "title": "Location is off",
+    "titlePermission": "Location permission needed",
+    "startBody": "Turn on Location to start the task.",
+    "sharingBody": "Turn on Location to share your location with the office.",
+    "taskBody": "Location is off. Turn it on to continue the task.",
+    "permissionBody": "Fame Driver needs location set to \"Allow all the time\". Open the app settings and allow it.",
+    "turnOn": "Turn on Location",
+    "openSettings": "Open app settings",
+    "callOffice": "Call office",
+    "reportProblem": "Report a problem",
+    "notNow": "Not now",
+    "checking": "Waiting for Location…"
   }
 }

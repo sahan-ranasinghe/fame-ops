@@ -3,11 +3,15 @@
 # It never touches the real project.
 #
 #   - typecheck, unit tests (Vitest), both builds (web, artifact)
+#   Note: the local edge runtime (config.toml policy per_worker) retires a worker when its CPU
+#   budget is used up and drops the responses still in flight; the web app retries a dropped
+#   list load by itself, so one such drop does not fail the e2e.
 #   - the end-to-end test (Playwright): set-password link → Overview →
 #     assign a task → cancel it → the live map with a Realtime position →
 #     2-step on in Settings → sign out → sign in with the code
 #
 # The local stack must include Realtime (plain `npx supabase start`; not `-x realtime`).
+# The test runs its own dev server on port 5174, so `npm run dev:live` may keep port 5173.
 #
 # Before running it, in another terminal (same as scripts/test-mcp-local.sh):
 #   npx supabase start

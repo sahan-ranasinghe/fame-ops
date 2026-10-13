@@ -1,5 +1,6 @@
 // fleet_overview: the numbers and lists of the Overview / Fleet today screens.
 
+import { needsAttention } from "../status.ts";
 import { z } from "zod";
 import { unwrap } from "../db.ts";
 import {
@@ -12,6 +13,7 @@ import {
   odometerCheck,
   service,
   sharing,
+  statusOf,
   VEHICLE_DOCS,
   vehicleLabel,
 } from "../fleet.ts";
@@ -94,6 +96,7 @@ export const fleetOverview = tool({
         task: t.title,
         going_to: stopRows.filter((s) => s.task_id === t.id).at(-1)?.place_name,
         location: sharing(pos, now).text,
+        ...statusOf(pos, now).fields,
         near: hasPosition ? await nearestTown(db, pos.lat!, pos.lng!) : undefined,
         links: { maps: hasPosition ? mapsPoint(pos.lat!, pos.lng!) : undefined, ...contactLinks(driver?.phone) },
       };
@@ -101,6 +104,23 @@ export const fleetOverview = tool({
 
     // --- Needs attention ---------------------------------------------------
     const attention: Attention[] = [];
+    // A task in progress whose driver has had Location off or no signal for 10 minutes or more.
+    for (const t of running) {
+      const { result, fields } = statusOf(latest.get(t.employee_id), now);
+      if (!needsAttention(result, t.started_at, now)) continue;
+      const from = result.since ?? t.started_at;
+      attention.push({
+        what: result.status === "location_off"
+          ? (result.permissionProblem ? "Driver's location permission removed" : "Driver's location is off")
+          : "No signal from the driver",
+        subject: [refs.emp.get(t.employee_id)?.name, t.title, `last position ${fields.last_position_at ?? "none"}`].filter(Boolean).join(
+          " · ",
+        ),
+        due: from ? `for ${ago(from, now)}` : "",
+        level: result.status === "location_off" ? "red" : "amber",
+        days: -3,
+      });
+    }
     const soon = (dateText: string | null) => {
       if (!dateText) return null;
       const days = daysBetween(today, dateText);

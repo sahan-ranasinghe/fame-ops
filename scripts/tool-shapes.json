@@ -186,7 +186,11 @@
   "counts.not_sharing: number",
   "counts.sharing: number",
   "counts.stale: number",
-  "drivers[]: empty"
+  "drivers[]: empty",
+  "status_counts.live: number",
+  "status_counts.location_off: number",
+  "status_counts.no_signal: number",
+  "status_counts.not_sharing: number"
  ],
  "mileage_summary {\"driver\": \"kasun.s\"}": [
   "biggest_gaps[]: empty",

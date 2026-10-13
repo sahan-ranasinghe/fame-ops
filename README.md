@@ -191,6 +191,21 @@ scripts/test-office-local.sh /tmp/office-mcp.env              # from the repo ro
 
 See `apps/office/README.md`.
 
+## Driver status and heartbeats
+
+One rule decides what the office sees for a driver, in
+`supabase/functions/_shared/fleet/status.ts`, used by the connector tools, the
+web app and the artifact alike: **Live** (a GPS point under 3 minutes old),
+**Location off** (the phone's heartbeat says Location services are off or the
+permission is not "Allow all the time", with since when), **No signal** (sharing
+on, but nothing from the phone for over 3 minutes), **Not sharing**. The phone
+sends a small heartbeat about every minute while sharing, at once when
+Location changes, so the office sees the truth within about a minute; a task in
+progress without location for 10 minutes goes into "needs attention". In the
+driver app, Location is required for work: starting a task or sharing with
+Location off shows a full-screen "Turn on Location" cover with Android's own
+dialog, and a task in progress is covered until Location is back.
+
 ## Office rules, connector and API
 
 Everything the office can do is a tool in `supabase/functions/_shared/fleet`
