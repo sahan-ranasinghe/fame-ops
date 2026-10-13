@@ -1,0 +1,56 @@
+// fleet-jobs: the background work the database asks for (docs/dispatch-plan.md, 4.3).
+//
+//   POST { "job": "sync", "task_id"?, "report_id"?, "request_id"?, "vehicle_id"? }
+//
+// with the header x-server-key = SERVER_KEY (the same key push-task checks). Called
+// by pg_cron every 5 minutes (fleet_sync()) and by the triggers on vehicle_reports,
+// tasks and vehicle_requests with a scope. A sync recomputes the ETAs of the running
+// tasks (through the 2-minute cache) and brings the issues table in line with the
+// data: opens, updates, auto-resolves. Answers the counts.
+
+import { adminClient } from "../_shared/fleet/db.ts";
+import { syncIssues, type SyncScope } from "../_shared/fleet/issues.ts";
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
+}
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+const isUuid = (v: unknown): v is string =>
+  typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+
+Deno.serve(async (request) => {
+  if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
+  const key = request.headers.get("x-server-key") ?? "";
+  const expected = Deno.env.get("SERVER_KEY") ?? "";
+  if (expected.length < 16 || !constantTimeEqual(key, expected)) return json(401, { error: "bad_server_key" });
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return json(400, { error: "bad_request" });
+  }
+  if (body.job !== "sync") return json(400, { error: "unknown_job" });
+  const scope: SyncScope = {};
+  for (const k of ["task_id", "report_id", "request_id", "vehicle_id"] as const) {
+    if (body[k] === undefined || body[k] === null) continue;
+    if (!isUuid(body[k])) return json(400, { error: "bad_request", field: k });
+    scope[k] = body[k];
+  }
+
+  const started = Date.now();
+  try {
+    const result = await syncIssues(adminClient(), new Date(), scope);
+    return json(200, { job: "sync", scope, ...result, ms: Date.now() - started });
+  } catch (error) {
+    console.error("fleet-jobs sync failed", error);
+    return json(500, { error: "sync_failed", message: error instanceof Error ? error.message : String(error) });
+  }
+});

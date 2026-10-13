@@ -50,6 +50,10 @@ export interface Attention {
   subject?: string;
   due?: string;
   level?: string;
+  /** Phase 5: the issue behind the item (opens /issues/:id). */
+  issue_id?: string;
+  kind?: string;
+  severity?: string;
 }
 
 export interface Overview {
@@ -624,4 +628,54 @@ export interface CreateKeyResult {
   key_id: string;
   connector_url: string;
   note?: string;
+}
+
+// ---- Phase 5, Part 3a: issues ----
+export type IssueSeverity = "info" | "warning" | "critical";
+export type IssueStatus = "open" | "in_progress" | "resolved" | "dismissed";
+export interface Issue {
+  id: string;
+  kind: string;
+  kind_text?: string;
+  scope?: "task" | "fleet";
+  severity: IssueSeverity | string;
+  title: string;
+  detail?: string;
+  due?: string;
+  status: IssueStatus | string;
+  opened: string;
+  updated: string;
+  resolved?: string;
+  resolved_by?: string;
+  resolution_note?: string;
+  assigned_to?: { name: string; email?: string };
+  vehicle?: string;
+  driver?: string;
+  driver_username?: string;
+  task_id?: string;
+  request_id?: string;
+  vehicle_report_id?: string;
+  driver_links?: Links;
+}
+export interface IssuesList {
+  status: string;
+  count: number;
+  open: number;
+  in_progress: number;
+  issues: Issue[];
+}
+export interface IssueEvent {
+  at: string;
+  actor?: string;
+  action: string;
+  note?: string;
+  from?: string;
+  to?: string;
+}
+export interface IssueHistory {
+  issue: Issue;
+  events: IssueEvent[];
+  task?: { id: string; title: string; status: string; driver?: string; vehicle?: string; leave_by?: string };
+  report?: { id: string; category: string; note?: string | null; status: string; office_note?: string | null; reported: string; driver?: string; vehicle?: string; task_id?: string; photos: string[] };
+  request?: { id: string; requested_by: string; route?: string; when: string; status: string; task_id?: string };
 }

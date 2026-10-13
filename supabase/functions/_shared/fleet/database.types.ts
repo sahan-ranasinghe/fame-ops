@@ -235,6 +235,82 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"issue_events": {
+                  Row: {
+                    "action": string,"actor": string | null,"actor_employee_id": string | null,"at": string,"from_status": string | null,"id": number,"issue_id": string,"note": string | null,"to_status": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor"?: string | null,"actor_employee_id"?: string | null,"at"?: string,"from_status"?: string | null,"id"?: never,"issue_id": string,"note"?: string | null,"to_status"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor"?: string | null,"actor_employee_id"?: string | null,"at"?: string,"from_status"?: string | null,"id"?: never,"issue_id"?: string,"note"?: string | null,"to_status"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "issue_events_actor_employee_id_fkey"
+      columns: ["actor_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "issue_events_issue_id_fkey"
+      columns: ["issue_id"]
+isOneToOne: false
+      referencedRelation: "issues"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"issues": {
+                  Row: {
+                    "assigned_to": string | null,"auto": boolean,"detail": string | null,"due": string | null,"employee_id": string | null,"id": string,"kind": string,"opened_at": string,"ref_key": string,"request_id": string | null,"resolution_note": string | null,"resolved_at": string | null,"resolved_by": string | null,"severity": string,"sort_key": number,"status": string,"task_id": string | null,"title": string,"updated_at": string,"vehicle_id": string | null,"vehicle_report_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "assigned_to"?: string | null,"auto"?: boolean,"detail"?: string | null,"due"?: string | null,"employee_id"?: string | null,"id"?: string,"kind": string,"opened_at"?: string,"ref_key": string,"request_id"?: string | null,"resolution_note"?: string | null,"resolved_at"?: string | null,"resolved_by"?: string | null,"severity": string,"sort_key"?: number,"status"?: string,"task_id"?: string | null,"title": string,"updated_at"?: string,"vehicle_id"?: string | null,"vehicle_report_id"?: string | null
+                  }
+                  Update: {
+                    "assigned_to"?: string | null,"auto"?: boolean,"detail"?: string | null,"due"?: string | null,"employee_id"?: string | null,"id"?: string,"kind"?: string,"opened_at"?: string,"ref_key"?: string,"request_id"?: string | null,"resolution_note"?: string | null,"resolved_at"?: string | null,"resolved_by"?: string | null,"severity"?: string,"sort_key"?: number,"status"?: string,"task_id"?: string | null,"title"?: string,"updated_at"?: string,"vehicle_id"?: string | null,"vehicle_report_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "issues_assigned_to_fkey"
+      columns: ["assigned_to"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "issues_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "issues_request_id_fkey"
+      columns: ["request_id"]
+isOneToOne: false
+      referencedRelation: "vehicle_requests"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "issues_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "issues_vehicle_id_fkey"
+      columns: ["vehicle_id"]
+isOneToOne: false
+      referencedRelation: "vehicles"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "issues_vehicle_report_id_fkey"
+      columns: ["vehicle_report_id"]
+isOneToOne: false
+      referencedRelation: "vehicle_reports"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"location_points": {
                   Row: {
                     "accuracy_m": number | null,"battery_pct": number | null,"employee_id": string,"heading": number | null,"id": number,"is_mock": boolean,"lat": number,"lng": number,"received_at": string,"recorded_at": string,"session_id": string,"source": string,"speed_mps": number | null
@@ -775,6 +851,9 @@ isOneToOne: false
 "bump_routing_calls":
 { Args: { "p_ok": boolean,"p_provider": string }; Returns: undefined
                            },
+"call_edge_function":
+{ Args: { "p_body": Json,"p_name": string }; Returns: undefined
+                           },
 "current_employee_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -783,6 +862,9 @@ isOneToOne: false
                            },
 "decline_task":
 { Args: { "p_at"?: string,"p_note"?: string,"p_reason": string,"p_task_id": string }; Returns: string
+                           },
+"fleet_sync":
+{ Args: { "p_scope"?: Json }; Returns: undefined
                            },
 "odometer_log_flag":
 { Args: { "p_ai_status": string,"p_ai_value": number,"p_entry": string,"p_reading": number }; Returns: string

@@ -7,7 +7,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ApiTransport } from "../transport/api";
 import type { FleetError, Me } from "../transport/types";
-import { accessToken, apiBase, configured, supabase } from "./supabase";
+import { accessToken, apiBase, configured, recoveryLink, supabase } from "./supabase";
 
 export type AuthState =
   | { step: "loading" }
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({ step: "loading" });
   const transport = useMemo(() => new ApiTransport(apiBase, accessToken), []);
   // A recovery link is being handled: ignore sign-in events until the password is set.
-  const recovering = useRef(/[#&]type=recovery(&|$)/.test(location.hash));
+  const recovering = useRef(recoveryLink);
 
   /** Who is this? The person's own 2-step first, then office-api decides the rest. */
   const check = useCallback(async () => {

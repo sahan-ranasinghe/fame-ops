@@ -28,3 +28,16 @@ export function subscribeDriverLatest(cb: (row: LatestRow) => void, onStatus?: (
     });
   return () => { void client.removeChannel(channel); };
 }
+
+/** Web only: any change on the issues table (the bell and the Issues page reload their list). */
+export function subscribeIssues(cb: () => void): () => void {
+  if (!supabase) return () => {};
+  const client = supabase;
+  const channel = client
+    .channel(`issues:${++serial}:${Date.now()}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "issues" }, () => cb())
+    .subscribe((status, err) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn(`Realtime issues: ${status}`, err?.message ?? "");
+    });
+  return () => { void client.removeChannel(channel); };
+}

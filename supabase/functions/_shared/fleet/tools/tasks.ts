@@ -7,6 +7,8 @@ import type { Json } from "../database.types.ts";
 import type { Db, Row } from "../db.ts";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { freeAt } from "../availability.ts";
+import { DECLINE_TEXT } from "../decline.ts";
+export { DECLINE_TEXT };
 import { basePoint, type Eta, taskEta } from "../eta.ts";
 import {
   assignWarnings,
@@ -503,14 +505,6 @@ export async function prepareTask(db: Db, settings: Settings, now: Date, args: {
 // ---------------------------------------------------------------------------
 // Status lines, as on the Tasks screen
 // ---------------------------------------------------------------------------
-
-/** The driver's reasons for declining a task, as the office reads them. */
-export const DECLINE_TEXT: Record<string, string> = {
-  vehicle_problem: "Vehicle problem",
-  not_available: "Not available",
-  unwell: "Unwell",
-  other: "Other",
-};
 
 function declinedLine(task: Task): string {
   const reason = DECLINE_TEXT[task.declined_reason ?? ""] ?? task.declined_reason ?? "no reason given";

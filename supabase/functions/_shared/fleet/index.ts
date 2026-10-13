@@ -20,6 +20,7 @@ import { fleetOverview } from "./tools/overview.ts";
 import { addPlace, listPlaces } from "./tools/places.ts";
 import { findProject, importProjects } from "./tools/projects.ts";
 import { createRequest, decideRequest, listRequests, suggestVehicles } from "./tools/requests.ts";
+import { issueHistory, listIssues, updateIssue } from "./tools/issues.ts";
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
 import { cancelTask, createTask, planTask, reassignTask, taskBoard, taskDetail, updateTaskStops } from "./tools/tasks.ts";
 import { addRentalCompany, listVehicles, registerVehicle, updateVehicle } from "./tools/vehicles.ts";
@@ -65,6 +66,9 @@ export const TOOLS: AnyTool[] = [
   getSettings,
   updateSettings,
   routingUsage,
+  listIssues,
+  updateIssue,
+  issueHistory,
 ];
 
 export const INSTRUCTIONS = [
@@ -76,6 +80,8 @@ export const INSTRUCTIONS = [
   "The leave-by time is planned from the deadlines (plan_task previews it); update_task_stops changes the stops of a task with its plan_version.",
   "A driver accepts or declines a task in the app. A declined task waits in task_board's declined column (needs a driver): " +
   "reassign_task gives it to another driver or back to the same one; cancel_task closes it. task_detail shows the reason and who is free.",
+  "Issues (list_issues): everything that needs attention, opened and auto-resolved by the system (fleet_overview's needs_attention " +
+  "is the same list). update_issue takes, notes, resolves or dismisses one; a vehicle problem issue mirrors onto the driver's report.",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",

@@ -17,7 +17,7 @@ import { Users } from "../screens/settings/Users";
 import { Vehicles } from "../screens/Vehicles";
 import { can } from "../transport/types";
 import { useFleet } from "./FleetContext";
-import { ROUTES_NEED } from "./nav";
+import { ROUTES_NEED, ISSUES_NEED } from "./nav";
 import { Shell } from "./Shell";
 
 /** The screen, or "No access" when the person holds none of the permissions (the server refuses the tools either way). */
@@ -36,6 +36,8 @@ function Home() {
 
 // The Settings home talks to Supabase Auth (2-step sign-in) in the web build: loaded on demand.
 const SettingsHome = lazy(() => import("../screens/settings/SettingsHome"));
+const Issues = lazy(() => import("../screens/Issues"));
+const IssuePage = lazy(() => import("../screens/IssuePage"));
 function SettingsRoute() {
   return <Suspense fallback={<div className="loading">Opening settings…</div>}><SettingsHome /></Suspense>;
 }
@@ -48,6 +50,8 @@ export const routes: RouteObject[] = [
       { index: true, element: <Home /> },
       { path: "live", element: <Guard need={["view"]}><Live /></Guard> },
       { path: "tasks", element: <Guard need={["assign_tasks"]}><Tasks /></Guard> },
+      { path: "issues", element: <Guard need={ISSUES_NEED}><Suspense fallback={<div className="loading">Opening issues…</div>}><Issues /></Suspense></Guard> },
+      { path: "issues/:id", element: <Guard need={ISSUES_NEED}><Suspense fallback={<div className="loading">Opening the issue…</div>}><IssuePage /></Suspense></Guard> },
       { path: "requests", element: <Guard need={["view", "request"]}><Requests /></Guard> },
       { path: "vehicles", element: <Guard need={["view"]}><Vehicles /></Guard> },
       { path: "projects", element: <Guard need={["view", "request"]}><Projects /></Guard> },

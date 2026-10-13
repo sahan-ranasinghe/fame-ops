@@ -145,7 +145,7 @@
   same intervals: overview and board 30 s, requests 60 s; `invalidate` refetches every watch).
   Errors become `{ code, message }` and `errors.ts` turns them into one sentence + a fix.
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
-  `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
+  `issues` (the bell), `issuesAll` (the Issues page), `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
   dropped connection is retried twice by itself, then the form shows the error with Try again).
   Menus are filtered by `me.tools`; the server is the guard.
 - Web sign-in (`src/auth`): e-mail + password → (2-step on for this person? the code page,
@@ -320,6 +320,23 @@
   `register_device_token()` / `remove_device_token()`.
 - `push_log`: one row per push-task call (task_id, employee_id, kind, tokens, sent, failed,
   errors). Service role only.
+- `issues` (Phase 5 Part 3a): one row per thing that needs the office's attention: kind
+  (vehicle_report, odometer_flag, km_gap, service_due, document, licence, allowance, rental,
+  garage_booked, signal, late_start, running_late, not_accepted, declined, request_waiting,
+  push_failed, routing_failed), severity ('info'|'warning'|'critical'), title, detail, due,
+  sort_key, the links (vehicle_id, employee_id, task_id, request_id, vehicle_report_id),
+  ref_key (unique while open or in progress), status ('open'|'in_progress'|'resolved'|
+  'dismissed'), assigned_to, opened_at, updated_at, resolved_at, resolved_by ('system' or the
+  person), resolution_note, auto. `issue_events`: opened, assigned, note, status,
+  auto_resolved with actor and from/to. Office people with `view` read both through RLS;
+  `issues` is in the Realtime publication (the web's bell). The rules live in
+  `_shared/fleet/issues.ts` (`computeWanted` + the pure `reconcile`; `syncIssues(db, now,
+  scope?)` opens, updates in place and auto-resolves). `fleet_overview` runs `syncIssues`
+  and answers `needs_attention` from the active issues (with issue_id, kind, severity).
+  The Edge Function `fleet-jobs` (x-server-key = SERVER_KEY) runs a sync when pg_cron
+  (`fleet-sync`, every 5 min) or the triggers on vehicle_reports, tasks and vehicle_requests
+  call `fleet_sync(scope)` → `call_edge_function` (Vault functions_url / server_key). A key
+  a person resolved or dismissed stays quiet for 30 days unless it comes back worse.
 - `odometer_reads`: one row per `read-odometer` model call (employee_id, vehicle_id,
   photo_path, last_km, gps_km, reading_km, confidence, status, mode ('driver'|'server'),
   log_id, model, ok, error, ms, created_at). Service role only.
@@ -555,7 +572,13 @@ office_audit.
 - Mileage and reports: `mileage_summary(month, vehicle?, driver?)` (task km, odometer km vs
   allowance, between_tasks_km and overnight_km per vehicle with the biggest gaps, unlogged
   km flags, check_odometer, fuel litres/LKR), `list_vehicle_reports(status?)`,
-  `update_vehicle_report(id, status, office_note?)`.
+  `update_vehicle_report(id, status, office_note?)` (mirrors onto the report's issue).
+- Issues: `list_issues(status? active|open|in_progress|resolved|dismissed|all, kind?,
+  vehicle?, assigned_to? email|me, limit?)` (issues, or assign_tasks for the task kinds only;
+  `open` / `in_progress` counts for the bell), `update_issue(id, status?, note?, assign_to?
+  email|me|none)` (issues; a vehicle_report issue mirrors onto the driver's report: resolved
+  or dismissed = closed, in_progress = in the garage, open = open), `issue_history(id)`
+  (events + the linked task / report with photos / request).
 - Projects: `import_projects(projects[])` (upsert; the office's Claude reads Zoho and sends
   them), `find_project(text)`.
 

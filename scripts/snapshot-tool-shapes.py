@@ -103,7 +103,9 @@ def main():
             board = alt
             skipped.add("task_board {}")
     task_id = next((t["id"] for col in ("in_progress", "assigned", "completed") for t in board.get(col, [])), None)
-    request_id = (requests.get("requests") or [{}])[0].get("id")
+    # A request with a project when there is one, so the recorded shape keeps request.project.
+    rows = requests.get("requests") or []
+    request_id = next((r["id"] for r in rows if r.get("project")), (rows[0] if rows else {}).get("id"))
 
     calls = [
         ("fleet_overview", {}),
@@ -123,18 +125,23 @@ def main():
         ("mileage_summary", {"driver": driver}),
         ("list_vehicle_reports", {"status": "all"}),
         ("find_project", {"text": "a"}),
+        ("list_issues", {}),
+        ("list_issues", {"status": "all"}),
         ("get_settings", {}),
         ("routing_usage", {}),
         ("plan_task", {"date": board.get("date"), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Kurunegala"}),
     ]
     if task_id:
         calls.append(("task_detail", {"task_id": task_id}))
+    issue_id = (call("list_issues", {"status": "all"}).get("issues") or [{}])[0].get("id")
+    if issue_id:
+        calls.append(("issue_history", {"id": issue_id}))
     if request_id:
         calls.append(("suggest_vehicles", {"request_id": request_id}))
 
     def label_of(tool, args):
         # Ids and dates differ every run: the label names the argument, not the value.
-        shown = {k: ("<id>" if k.endswith("_id") else "<date>" if k == "date" else v) for k, v in args.items()}
+        shown = {k: ("<id>" if k == "id" or k.endswith("_id") else "<date>" if k == "date" else v) for k, v in args.items()}
         return f"{tool} {json.dumps(shown, sort_keys=True)}"
 
     shapes = {}

@@ -1,14 +1,71 @@
-import { useEffect } from "react";
-import { NavLink, Outlet, useLocation } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useEntry } from "../data/hooks";
-import type { Overview } from "../data/types";
+import { subscribeIssues } from "../data/realtime";
+import type { IssuesList, Overview } from "../data/types";
+import { bellCount, severityTone } from "../screens/issuesLogic";
 import { longDate, today } from "../lib/format";
 import { AUTHZ, errText } from "../transport/errors";
 import { can, ROLE_LABEL } from "../transport/types";
 import { Notice } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { useFleet } from "./FleetContext";
-import { allowed, LOCK_HINT, NAV, navState, TABS } from "./nav";
+import { allowed, ISSUES_NEED, LOCK_HINT, NAV, navState, TABS } from "./nav";
+
+const BELL_ARGS = { status: "active", limit: 10 };
+
+/** The bell: how many issues are open or in progress, the newest ten in a dropdown. */
+function Bell() {
+  const { me, store, noConnector } = useFleet();
+  const show = !noConnector && can(me, ...ISSUES_NEED);
+  const entry = useEntry<IssuesList>("issues");
+  const [open, setOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    if (!show) return;
+    store.watch("issues", "list_issues", BELL_ARGS, 60000);
+    return () => store.unwatch("issues");
+  }, [store, show]);
+  // Web: a change on the issues table refreshes the count at once (one reload a second at most).
+  useEffect(() => {
+    if (!show) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    return subscribeIssues(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        void store.load("issues", "list_issues", BELL_ARGS);
+      }, 1000);
+    });
+  }, [store, show]);
+  useEffect(() => setOpen(false), [pathname]);
+
+  if (!show) return null;
+  const count = bellCount(entry.data);
+  const items = entry.data?.issues ?? [];
+  return (
+    <div className="bell">
+      <button type="button" className="bell-btn" aria-label={`Issues: ${count} open`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        <Icon name="issues" />
+        {count > 0 && <span className="badge" data-testid="bell-count">{count}</span>}
+      </button>
+      {open && (
+        <div className="bell-menu" role="menu" data-testid="bell-menu">
+          {items.length
+            ? items.map((i) => (
+              <Link key={i.id} role="menuitem" to={`/issues/${i.id}`} className="bell-item">
+                <i className={`dot ${severityTone(i.severity)}`} />
+                <span className="grow"><b>{i.title}</b><small>{i.detail ?? ""}</small></span>
+              </Link>
+            ))
+            : <div className="bell-item muted">Nothing needs attention.</div>}
+          <Link role="menuitem" to="/issues" className="bell-all">All issues{count > items.length ? ` (${count})` : ""}</Link>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Banner() {
   const { noConnector, store, managePermissions } = useFleet();
@@ -66,6 +123,7 @@ export function Shell() {
           <div className="logo">FF</div>
           <div><b>Fame Fleet</b><span>Fleet office</span></div>
         </div>
+        <Bell />
         <nav className="nav">
           {nav.map((n) => (
             <NavLink
@@ -91,7 +149,8 @@ export function Shell() {
       <main className="main">
         <div className="mhead">
           <div className="logo">FF</div>
-          <div><b>Fame Fleet</b><div className="muted small">{longDate(today(), true)}</div></div>
+          <div className="grow"><b>Fame Fleet</b><div className="muted small">{longDate(today(), true)}</div></div>
+          <Bell />
         </div>
         <Banner />
         <Outlet />

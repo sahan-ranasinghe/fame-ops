@@ -67,5 +67,5 @@ export const ALL_TOOLS = [
   "import_projects", "find_project",
   "list_office_users", "create_office_user", "reset_office_password", "set_office_user_active", "create_office_key", "revoke_office_key",
   "update_office_user",
-  "plan_task", "update_task_stops", "get_settings", "update_settings", "routing_usage",
+  "plan_task", "update_task_stops", "get_settings", "update_settings", "routing_usage", "list_issues", "update_issue", "issue_history",
 ];

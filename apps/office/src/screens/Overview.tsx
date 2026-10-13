@@ -98,7 +98,7 @@ export function Overview() {
                   {o.needs_attention.length ? o.needs_attention.map((a, i) => (
                     <div className="row" key={i}>
                       <span className={`att-ic ${levelTone(a.level)}`}><Icon name={attIcon(a.what)} /></span>
-                      <div className="grow"><div className="name">{a.what}</div><div className="sub">{a.subject || ""}</div></div>
+                      <div className="grow"><div className="name">{a.issue_id ? <Link to={`/issues/${a.issue_id}`}>{a.what}</Link> : a.what}</div><div className="sub">{a.subject || ""}</div></div>
                       <span className={`due ${levelTone(a.level)}`}>{a.due || ""}</span>
                     </div>
                   )) : <Empty>{can(me, "issues") ? "Nothing needs attention. Documents, services and km allowances are in order." : "No task needs attention right now."}</Empty>}

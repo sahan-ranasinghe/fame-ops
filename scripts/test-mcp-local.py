@@ -9,6 +9,11 @@ username + PIN, share location, run a task with photos, report a problem), and
 checks what every tool reports, down to the audit log.
 
 Never point it at the real project: it creates drivers, vehicles and tasks.
+
+Time of day (Colombo): the driver's route is built from points of the last
+~95 minutes, so between about 22:30 and 01:40 it straddles midnight and the
+driver_route checks fail; after 21:15 the tasks go on tomorrow and the shape
+snapshot skips the plain task_board. Run it between 01:40 and 21:15.
 """
 import base64
 import datetime as dt
@@ -581,8 +586,10 @@ ov = tool("fleet_overview", {"date": task_day})
 check(ov["vehicles"] == {"on_the_road": 1, "total": 3, "parked": 2, "in_garage": 1} and ov["tasks"]["total"] == 3 and ov["tasks"]["in_progress"] == 1,
       "fleet_overview: 1 of 3 on the road, 2 parked, 3 tasks, 1 in progress", json.dumps(ov["vehicles"]) + json.dumps(ov["tasks"]))
 whats = [a["what"] for a in ov["needs_attention"]]
-check(ov["requests"]["waiting"] == 0 and {"Revenue licence expires", "Rental agreement ends", "Driver licence expires", "Garage booked", "Service due"} <= set(whats)
-      and "Emission test expires" not in whats, "fleet_overview needs-attention: licence, rental end, driver licence, garage, service (and not the emission test due in 20 days)",
+check(ov["requests"]["waiting"] == 0 and {"Revenue licence expires", "Rental agreement ends", "Driver licence expires", "Garage booked", "Service due", "Emission test expires"} <= set(whats)
+      and next(a for a in ov["needs_attention"] if a["what"] == "Emission test expires")["severity"] == "warning"
+      and next(a for a in ov["needs_attention"] if a["what"] == "Revenue licence expires")["severity"] == "critical",
+      "fleet_overview needs-attention: licence (critical, 4 days), rental end, driver licence, garage, service, emission test (warning, 20 days)",
       json.dumps(ov["needs_attention"])[:600])
 check(ov["on_the_road"][0]["driver"] == "Nuwan Perera" and ov["on_the_road"][0]["near"] == "Polgahawela", "fleet_overview on-the-road list names the driver and the nearest town")
 rt = tool("driver_route", {"driver": "nuwan.p"})
@@ -769,6 +776,85 @@ for line in psql("select tool || '  |  ' || left(args_summary, 70) || '  |  ' ||
 check(psql("select count(*) from office_audit where result_summary like 'refused:%'") != "0" and psql("select count(*) from office_audit where result_summary like 'error:%'") == "0",
       "refused calls are logged as 'refused: …'; there were no internal errors", psql("select tool || ': ' || result_summary from office_audit where result_summary like 'error:%' limit 3"))
 
+print("\n== 6b. Issues ==")
+SERVER_KEY = os.environ.get("SERVER_KEY", "")
+def fleet_jobs(scope=None):
+    return http("POST", f"{API}/functions/v1/fleet-jobs", {"Content-Type": "application/json", "x-server-key": SERVER_KEY}, {"job": "sync", **(scope or {})})
+code, body = http("POST", f"{API}/functions/v1/fleet-jobs", {"Content-Type": "application/json", "x-server-key": "wrong"}, {"job": "sync"})
+check(code == 401, "fleet-jobs refuses a wrong server key (401)", f"{code} {body}")
+code, body = fleet_jobs()
+check(code == 200 and body["job"] == "sync" and body["active"] >= 1, "fleet-jobs sync answers the counts", f"{code} {str(body)[:200]}")
+li = tool("list_issues")
+by_kind = {}
+for i in li["issues"]:
+    by_kind.setdefault(i["kind"], []).append(i)
+check(li["open"] + li["in_progress"] == li["count"] and "document" in by_kind
+      and any(i["severity"] == "critical" and "Revenue licence" in i["title"] for i in by_kind["document"])
+      and any(i["severity"] == "warning" and "Emission test" in i["title"] for i in by_kind["document"]),
+      "list_issues: the revenue licence (4 days) is critical, the emission test (20 days) a warning", json.dumps(by_kind.get("document"))[:300])
+check({"rental", "garage_booked", "licence", "service_due"} <= set(by_kind) and by_kind["garage_booked"][0]["severity"] == "info",
+      "rental end, garage booked (info), driver licence and service due are issues", str(sorted(by_kind)))
+check("odometer_flag" not in by_kind and "km_gap" not in by_kind, "nothing flagged by the photo check and 18 km outside tasks is under 30: no such issues")
+ov = tool("fleet_overview")
+check(all("issue_id" in a and "kind" in a for a in ov["needs_attention"]) and len(ov["needs_attention"]) == li["count"],
+      "fleet_overview.needs_attention is the same list, with issue_id and kind", f"{len(ov['needs_attention'])} vs {li['count']}")
+# The tyre report (in the garage, then closed in section 4) left a resolved issue with the mirror's history.
+old = [i for i in tool("list_issues", {"status": "resolved", "kind": "vehicle_report"})["issues"] if i["vehicle_report_id"] == rep_id]
+check(len(old) == 1 and old[0]["resolved_by"] == "system" and old[0]["title"] == "Vehicle problem: tyre (in garage)",
+      "the tyre report's issue resolved by itself when the report was closed", json.dumps(old)[:300])
+ih = tool("issue_history", {"id": old[0]["id"]})
+check([e["action"] for e in ih["events"]] == ["opened", "auto_resolved"] and ih["events"][0]["to"] == "in_progress" and ih["events"][1]["to"] == "resolved"
+      and ih["report"]["status"] == "closed" and len(ih["report"]["photos"]) == 1,
+      "issue_history: opened in progress (the report was already in the garage), auto-resolved when the report was closed; the report with its photo",
+      json.dumps(ih["events"])[:300])
+# A new breakdown report from the driver: a critical issue the office takes, notes and resolves (which closes the report).
+rep2 = str(uuid.uuid4())
+code, _ = app.post("vehicle_reports", {"id": rep2, "vehicle_id": V1, "employee_id": ME, "category": "breakdown", "note": "Engine stalls at idle"})
+code2, body = fleet_jobs({"report_id": rep2})
+check(code == 201 and code2 == 200 and body["opened"] == 1 and body["scope"] == {"report_id": rep2}, "a scoped sync opens the new report's issue only", f"{code} {code2} {str(body)[:160]}")
+new = [i for i in tool("list_issues", {"kind": "vehicle_report"})["issues"] if i["vehicle_report_id"] == rep2]
+check(len(new) == 1 and new[0]["severity"] == "critical" and new[0]["status"] == "open" and new[0]["title"] == "Vehicle problem: breakdown"
+      and "Engine stalls" in new[0]["detail"] and new[0]["vehicle"] == "WP CAB-4521" and new[0]["driver"] == "Nuwan Perera",
+      "a breakdown is a critical open issue with the vehicle, the driver and the note", json.dumps(new)[:300])
+rid = new[0]["id"]
+r = tool("update_issue", {"id": rid}, expect_error=True)
+check("Nothing to change" in r, "update_issue with nothing is refused", r)
+taker_email = f"issues.{uuid.uuid4().hex[:6]}@fame.test"
+tool("create_office_user", {"name": "Issue Taker", "email": taker_email, "permissions": ["view", "issues"]})
+ui = tool("update_issue", {"id": rid, "assign_to": taker_email, "note": "Looking at it", "status": "in_progress"})
+check(ui["issue"]["assigned_to"]["email"] == taker_email and ui["issue"]["assigned_to"]["name"] == "Issue Taker" and ui["issue"]["status"] == "in_progress"
+      and psql(f"select status from vehicle_reports where id = '{rep2}'") == "in_garage",
+      "update_issue assigns by e-mail, notes, sets in progress: the driver's report goes to the garage", json.dumps(ui)[:300])
+ui = tool("update_issue", {"id": rid, "status": "resolved", "note": "Fuel pump replaced"})
+check(ui["issue"]["status"] == "resolved" and ui["issue"]["resolved_by"] and ui["issue"]["resolution_note"] == "Fuel pump replaced"
+      and psql(f"select status || '|' || coalesce(office_note, '') from vehicle_reports where id = '{rep2}'") == "closed|Fuel pump replaced",
+      "resolving the issue closes the driver's report with the note", json.dumps(ui)[:300])
+hist = tool("issue_history", {"id": rid})["events"]
+check([e["action"] for e in hist] == ["opened", "assigned", "status", "status"] and hist[2]["note"] == "Looking at it" and hist[3]["to"] == "resolved",
+      "the history has every step (a note given with a status change rides on that event)", json.dumps(hist)[:300])
+check(not any(i["id"] == rid for i in tool("list_issues")["issues"]) and any(i["id"] == rid for i in tool("list_issues", {"status": "all", "kind": "vehicle_report"})["issues"]),
+      "the resolved issue left the active list; list_issues filters by status and kind")
+cab = tool("list_issues", {"vehicle": "cab4521"})["issues"]
+van = tool("list_issues", {"vehicle": "ph2087"})["issues"]
+check(len(cab) >= 1 and all(i["vehicle"] == "WP CAB-4521" for i in cab) and all(i["vehicle"] == "WP PH-2087" for i in van),
+      "list_issues filters by vehicle", f"cab {len(cab)}, van {len(van)}")
+# A request waiting over 30 minutes and a task not accepted after the reminder.
+re3 = tool("create_request", {"requested_by": "Late Asker", "date": day(3), "time": "10:00", "route_to": "Jaffna", "need_type": "van", "pax": 3})
+psql(f"update vehicle_requests set created_at = now() - interval '45 minutes' where id = '{re3['request']['id']}'")
+psql(f"update tasks set accept_reminder_sent_at = now() where id = '{T2}' and accepted_at is null")
+code, body = fleet_jobs({"request_id": re3["request"]["id"]})
+check(code == 200 and body["opened"] == 1 and body["scope"] == {"request_id": re3["request"]["id"]}, "a scoped sync opens the request-waiting issue only", f"{code} {str(body)[:200]}")
+code, body = fleet_jobs({"task_id": T2})
+kinds2 = {i["kind"] for i in tool("list_issues")["issues"]}
+check("request_waiting" in kinds2 and "not_accepted" in kinds2, "request_waiting and not_accepted issues are open", str(sorted(kinds2)))
+tool("decide_request", {"request_id": re3["request"]["id"], "decision": "decline", "reason": "No van"})
+code, body = fleet_jobs({"request_id": re3["request"]["id"]})
+check(body["resolved"] == 1 and "request_waiting" not in {i["kind"] for i in tool("list_issues")["issues"]}, "deciding the request auto-resolves its issue", f"{code} {str(body)[:200]}")
+if CHANNEL != "api":
+    r = tool("list_issues", {"assigned_to": "me"}, expect_error=True)
+    check("shared connector" in r, "assigned_to=me needs a person (the shared key has none)", r)
+
+
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")
     shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
@@ -824,7 +910,7 @@ if CHANNEL == "api":
     code, body = api_call(staff_token, "task_detail", {"task_id": T1})
     check(code == 200, "and any task opens", f"{code} {str(body)[:120]}")
     code, body = api_call(staff_token, "fleet_overview", {})
-    check(code == 200 and all(a["what"].startswith(("Driver's location", "No signal")) for a in body["result"]["needs_attention"]),
+    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined") for a in body["result"]["needs_attention"]),
           "with assign_tasks the overview's needs-attention holds task items only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
     code, body = api_call(staff_token, "mileage_summary", {})
     check(code == 403, "mileage needs the vehicles permission (403)", f"{code} {str(body)[:120]}")
@@ -834,6 +920,14 @@ if CHANNEL == "api":
     check(code == 403 and "users" in str(body.get("needs", [])), "but not change the fleet settings (403, needs users)", f"{code} {body}")
     code, body = api_call(staff_token, "get_settings", {})
     check(code == 200 and body["result"]["settings"]["buffer_min"] == 15, "get_settings answers a dispatcher (read-only)", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "list_issues", {})
+    check(code == 200 and all(i["scope"] == "task" for i in body["result"]["issues"]) and body["result"]["count"] >= 1,
+          "with assign_tasks list_issues shows the task issues only", f"{code} {str(body['result'].get('issues'))[:200]}")
+    code, body = api_call(staff_token, "update_issue", {"id": body["result"]["issues"][0]["id"], "status": "dismissed"})
+    check(code == 403 and "issues" in str(body.get("needs", [])), "but cannot change one (403, needs issues)", f"{code} {body}")
+    code, body = api_call(staff_token, "fleet_overview", {})
+    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined") for a in body["result"]["needs_attention"]),
+          "and the overview's needs-attention holds task issues only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
     tool("update_office_user", {"email": staff_email, "permissions": ["request"]})
     code, body = api_call(staff_token, "get_settings", {})
     code2, body2 = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})

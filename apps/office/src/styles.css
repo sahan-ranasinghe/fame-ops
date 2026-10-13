@@ -328,3 +328,24 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .mk-cursor { display: grid; justify-items: center; gap: 4px; pointer-events: none }
 .mk-cursor-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); box-shadow: 0 1px 6px rgba(0,0,0,.3) }
 .mk-cursor-label { font-family: var(--font-mono); font-size: 12px; font-weight: 600; background: var(--ink); color: var(--surface); border-radius: 6px; padding: 2px 7px; white-space: nowrap }
+
+/* Phase 5, Part 3a: the bell and the issues centre */
+.bell { position: relative }
+.rail .bell { margin: -6px 0 -6px; display: none }
+@media (min-width: 621px) { .rail .bell { display: block } .mhead .bell { display: none } }
+.bell-btn { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 8px; border-radius: 10px; font: inherit }
+.rail .bell-btn { color: var(--rail-ink); width: 100% }
+.rail .bell-btn:hover { background: var(--rail-hover) }
+.bell-btn svg { width: 22px; height: 22px }
+.bell-btn .badge { margin-left: 0 }
+.bell-menu { position: absolute; z-index: 40; top: 100%; left: 0; min-width: 300px; max-width: min(360px, 90vw); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 6px; display: grid }
+.mhead .bell-menu { left: auto; right: 0 }
+.bell-item { display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 8px; color: inherit; text-decoration: none; font-size: 14px }
+.bell-item:hover { background: var(--bg) }
+.bell-item .dot { margin-top: 6px; flex: none }
+.bell-item b { display: block; font-weight: 600 }
+.bell-item small { display: block; color: var(--muted) }
+.bell-all { display: block; text-align: center; padding: 8px; margin-top: 4px; border-top: 1px solid var(--line); font-weight: 600; color: inherit; text-decoration: none }
+.issue-row { text-decoration: none; color: inherit }
+.filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px }
+.filters .field { min-width: 180px }

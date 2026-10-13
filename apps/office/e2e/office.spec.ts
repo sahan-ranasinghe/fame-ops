@@ -400,11 +400,77 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(card).toContainText("Sent · not opened yet");
-  await expect(page.getByText("Needs a driver")).toHaveCount(0);
+  // This task left the "Needs a driver" column (another run's declined task may still sit there).
+  await expect(page.locator(".col", { hasText: "Needs a driver" }).locator(".tcard", { hasText: `E2E decline ${stamp}` })).toHaveCount(0);
 
   // Drivers: accepts and declines in the last 30 days.
   await page.goto("/drivers");
   const row = page.locator("tr", { hasText: d1.name });
   await expect(row).toContainText("1 accepted");
   await expect(row).toContainText("1 declined");
+});
+
+test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note, Resolve closes the driver's report", async ({ page }) => {
+  const email = `e2e.issues.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Fleet Admin", email, permissions: ["view", "issues", "vehicles"] });
+  const driver = { name: `E2E Reporter ${stamp}`, code: `E2R-${stamp}`, username: `e2r.${stamp}`, pin: "975310" };
+  await tool("create_driver", driver);
+  const plate = `WP E2R-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 500 });
+  // The driver reports a breakdown from the app; the sync (fleet-jobs, as pg_cron and the trigger call it) opens the issue.
+  const app = await driverRest(driver.username, driver.pin);
+  const [me] = await app.get<{ id: string }[]>("employees?select=id");
+  const [vehicle] = await app.get<{ id: string }[]>(`vehicles?select=id&reg_no=eq.${encodeURIComponent(plate)}`);
+  const reportId = randomUUID();
+  expect(await app.post("vehicle_reports", { id: reportId, vehicle_id: vehicle.id, employee_id: me.id, category: "breakdown", note: "Engine stalls at idle" })).toBe(201);
+  const sync = await fetch(`${API}/functions/v1/fleet-jobs`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-server-key": process.env.SERVER_KEY ?? "" },
+    body: JSON.stringify({ job: "sync", report_id: reportId }),
+  });
+  expect(sync.status).toBe(200);
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Fleet admin for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // The bell counts it; the dropdown names it; the issue page shows the report.
+  await expect(page.getByTestId("bell-count").first()).toBeVisible();
+  const before = Number(await page.getByTestId("bell-count").first().textContent());
+  expect(before).toBeGreaterThan(0);
+  await page.getByRole("button", { name: /^Issues: \d+ open$/ }).first().click();
+  await page.getByTestId("bell-menu").getByRole("menuitem", { name: /Vehicle problem: breakdown/ }).first().click();
+  await expect(page.getByTestId("issue-page")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vehicle problem: breakdown" })).toBeVisible();
+  await expect(page.getByTestId("issue-report")).toContainText("Engine stalls at idle");
+  await expect(page.getByTestId("issue-history")).toContainText("Opened by system");
+
+  // Take, a note, resolve: the driver's report is closed with the note.
+  await page.getByRole("button", { name: "Take" }).click();
+  await expect(page.getByRole("status")).toHaveText("Taken");
+  await expect(page.getByTestId("issue-history")).toContainText("assigned it to E2E Fleet Admin");
+  await page.getByLabel(/^Note/).fill("Towed to the garage");
+  await page.getByRole("button", { name: "Add note" }).click();
+  await expect(page.getByRole("status")).toHaveText("Note added");
+  await page.getByLabel(/^Note/).fill("Fuel pump replaced");
+  await page.getByRole("button", { name: "Resolve" }).click();
+  await expect(page.getByRole("status")).toHaveText("Issue resolved");
+  await expect(page.getByText(/Resolved by E2E Fleet Admin/)).toBeVisible();
+  await expect(page.getByTestId("issue-report")).toContainText("closed");
+  const reports = await tool<{ reports: { id: string; status: string; office_note?: string }[] }>("list_vehicle_reports", { status: "closed" });
+  const closed = reports.reports.find((r) => r.id === reportId);
+  expect(closed?.status).toBe("closed");
+  expect(closed?.office_note).toBe("Fuel pump replaced");
+
+  // The Issues page: the resolved tab has it; the open tab no longer.
+  await page.goto("/issues?tab=resolved");
+  await expect(page.getByTestId("issues-list")).toContainText("Vehicle problem: breakdown");
+  await page.goto("/issues");
+  await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
+  await expect(page.getByTestId("issues-list").getByText(`${plate}`)).toHaveCount(0);
 });

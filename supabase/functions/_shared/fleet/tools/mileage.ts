@@ -4,6 +4,7 @@ import { z } from "zod";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { describeGap, findDriver, findVehicle, gapPlaces, loadGaps, loadRefs, odometerCheck } from "../fleet.ts";
 import { centsToLkr, contactLinks } from "../format.ts";
+import { syncIssues } from "../issues.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
 import { tool, zId, zMonth, zText } from "../tool.ts";
@@ -253,6 +254,8 @@ export const updateVehicleReport = tool({
       }).eq("id", id).select("*").single(),
       "vehicle report",
     );
+    // The issue about this report follows it (open / in the garage / closed).
+    await syncIssues(db, now, { report_id: id });
     const vehicle = unwrapMaybe(await db.from("vehicles").select("reg_no, in_garage").eq("id", report.vehicle_id).maybeSingle(), "vehicle");
     return {
       result: {

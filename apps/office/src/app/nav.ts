@@ -22,10 +22,14 @@ export interface NavState extends NavItem {
 
 export const LOCK_HINT = "Ask an admin for access";
 
+/** The issues centre and the bell: everything with issues, the task kinds with assign_tasks. */
+export const ISSUES_NEED: Permission[] = ["issues", "assign_tasks"];
+
 export const NAV: NavItem[] = [
   { key: "overview", label: "Overview", need: ["view"], path: "/" },
   { key: "live", label: "Live locations", need: ["view"], path: "/live" },
   { key: "tasks", label: "Tasks", need: ["assign_tasks"], path: "/tasks" },
+  { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
   { key: "requests", label: "Requests", need: ["view", "request"], path: "/requests" },
   { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
   { key: "projects", label: "Projects", need: ["view", "request"], path: "/projects" },
@@ -45,7 +49,7 @@ export const TABS: NavItem[] = [
 ];
 
 /** What the More page lists on a phone: everything that is not on the tab bar. */
-export const MORE_KEYS = ["requests", "projects", "maintenance", "mileage", "drivers", "settings"];
+export const MORE_KEYS = ["issues", "requests", "projects", "maintenance", "mileage", "drivers", "settings"];
 
 /** The driver page (route history) and everything that calls driver_route. */
 export const ROUTES_NEED: Permission[] = ["assign_tasks", "vehicles"];

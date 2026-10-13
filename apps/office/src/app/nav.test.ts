@@ -7,12 +7,12 @@ const locks = (me: { permissions: readonly Permission[] }) => Object.fromEntries
 describe("menu from permissions", () => {
   it("a requester-only person sees Requests, Projects and Settings open and the rest locked; the tab bar keeps only More", () => {
     const me = { permissions: PRESETS.requester.permissions };
-    expect(locks(me)).toEqual({ overview: true, live: true, tasks: true, requests: false, vehicles: true, projects: false, maintenance: true, mileage: true, drivers: true, settings: false });
+    expect(locks(me)).toEqual({ overview: true, live: true, tasks: true, issues: true, requests: false, vehicles: true, projects: false, maintenance: true, mileage: true, drivers: true, settings: false });
     expect(allowed(TABS, me).map((t) => t.key)).toEqual(["more"]);
   });
   it("a viewer opens the counts, live locations, drivers, vehicles and own requests; tasks, maintenance and mileage are locked", () => {
     const me = { permissions: PRESETS.viewer.permissions };
-    expect(locks(me)).toEqual({ overview: false, live: false, tasks: true, requests: false, vehicles: false, projects: false, maintenance: true, mileage: true, drivers: false, settings: false });
+    expect(locks(me)).toEqual({ overview: false, live: false, tasks: true, issues: true, requests: false, vehicles: false, projects: false, maintenance: true, mileage: true, drivers: false, settings: false });
     expect(allowed(TABS, me).map((t) => t.key)).toEqual(["overview", "live", "vehicles", "more"]);
   });
   it("a dispatcher opens the tasks board and the driver page, not maintenance or mileage; a fleet admin everything", () => {
@@ -24,7 +24,7 @@ describe("menu from permissions", () => {
     expect(navState(NAV, { permissions: PRESETS.fleet_admin.permissions }).filter((n) => n.locked)).toEqual([]);
   });
   it("the More page lists what is not on the tab bar", () => {
-    expect(MORE_KEYS).toEqual(["requests", "projects", "maintenance", "mileage", "drivers", "settings"]);
+    expect(MORE_KEYS).toEqual(["issues", "requests", "projects", "maintenance", "mileage", "drivers", "settings"]);
     expect(NAV.map((n) => n.key)).toContain("settings");
   });
 });

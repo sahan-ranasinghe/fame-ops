@@ -351,6 +351,15 @@ select cron.schedule('fleet-sync', '*/5 * * * *', $$select public.fleet_sync()$$
 -- vehicle_requests (insert, decision).
 ```
 
+**As built (14 October 2026, migration `20261014130000_issues`).** As above, plus the columns
+`due` (the overview's due text) and `sort_key` (its order) on `issues`, and indexes on task_id
+and vehicle_id for the scoped syncs. `call_edge_function` and `fleet_sync` are security
+definer and revoked from anon / authenticated; the triggers: `vehicle_reports` (insert, status
+change), `tasks` (status → declined / in_progress / completed / cancelled, accepted_at set, a
+new driver), `vehicle_requests` (insert, status change). `send_push` is unchanged. pgTAP:
+`supabase/tests/database/issues.test.sql` (RLS, the publication, the key rule, the triggers'
+pg_net calls with their scope, the cron job).
+
 ### 3.5 `notifications` (Part 3b)
 
 ```sql
@@ -681,6 +690,21 @@ Dedupe tests (`issues_test.ts`, pure on an in-memory set): the same key is not o
 while active; a resolved key reopens as a new row on recurrence; severity changes update in
 place; auto-resolve writes the event; the mirror with vehicle reports in both directions.
 
+**As built (14 October 2026).** `issues.ts`: `computeWanted(db, now, scope)` builds the wanted
+set (the rules above; a scope computes only its family: task kinds for a task, the report for
+a report, the request for a request, the fleet kinds for a vehicle), the pure `reconcile(active,
+wanted, muted)` plans open / update / resolve, `syncIssues` writes it (an insert hitting the
+unique key is skipped: a parallel sync won; mirror status changes and auto-resolutions write
+events with actor `system`). Two deliberate departures: `fleet_overview` runs `syncIssues`
+before reading the active issues, so the overview is always current and never waits for the
+5-minute job; and a key a person resolved or dismissed is not reopened for 30 days unless it
+comes back at a higher severity (otherwise a dismissed "licence expires in 20 days" would
+return five minutes later). Documents open at 30 days as in the table (the overview used 14
+before). Odometer flags and km gaps are opened for 7 days and kept for 14 (`keep_only`).
+`fleet-jobs` runs `syncIssues` (which recomputes the running tasks' ETAs through the
+2-minute cache) and answers the counts; `update_vehicle_report` syncs its report after the
+change (the mirror), `update_issue` syncs the report after mirroring onto it.
+
 ## 9. Notifications and the PWA
 
 Events and recipients (`recipientsFor`), the sender never receives their own event:
@@ -796,6 +820,19 @@ made the same way into the `functions serve` env file.
   `task_detail` / `list_vehicle_reports`), the event timeline, Take (assign to me), Add note,
   Resolve with note, Dismiss (`issues`); the Maintenance report card keeps working through the
   mirror. Artifact: polling, no Realtime.
+  *As built (14 October 2026).* The bell (`Shell.tsx`): in the rail on a desktop and in the
+  phone header, shown with issues or assign_tasks; the count from `list_issues` (active, 10)
+  watched every 60 s and reloaded at once by a Realtime channel on `issues` (web only, one
+  reload a second at most); the dropdown lists the ten newest with a severity dot and "All
+  issues". Issues page (`/issues`, `screens/Issues.tsx`): one `list_issues(all, 200)` watched
+  every 60 s (plus Realtime), tabs Open / In progress / Resolved (resolved and dismissed
+  together) with counts, selects by kind and vehicle (`issuesLogic.ts`, Vitest). Item page
+  (`/issues/:id`, `screens/IssuePage.tsx`): `issue_history`; the task (drawer), the driver
+  (page, with routes), Call / WhatsApp, the report with its photos, the timeline in words,
+  and with the issues permission Take (assign to me + in progress), Add note, Resolve (the
+  note becomes the resolution), Dismiss, Reopen. Overview's attention items link to the
+  issue. Playwright: a breakdown report → fleet-jobs sync → the bell → the issue page → Take →
+  note → Resolve → the report is closed with the note → the Resolved tab.
 - **Part 3b.** Settings → Notifications; PWA files; the service worker.
 - **Part 6.** Request form (`request`): vehicle type (car, van, double cab, lorry, any), pax,
   tools, when, back by, from, to, project, note; "Sent to the fleet admin · you'll be
