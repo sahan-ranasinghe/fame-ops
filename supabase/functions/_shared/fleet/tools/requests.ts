@@ -9,7 +9,8 @@ import { hasAny } from "../permissions.ts";
 import { ago, colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime, zVehicleType } from "../tool.ts";
 import { matchProjects } from "./projects.ts";
-import { activeDriver, activeVehicle, saveTask, type Split } from "./tasks.ts";
+import { loadSettings } from "../settings.ts";
+import { activeDriver, activeVehicle, prepareTask, saveTask, type Split } from "./tasks.ts";
 
 type VehicleRequest = Row<"vehicle_requests">;
 
@@ -267,6 +268,14 @@ export const decideRequest = tool({
       }
       : { rows: [], shown: [], label: request.project_label };
     const requester = request.requested_by_employee_id ? refs.emp.get(request.requested_by_employee_id) : undefined;
+    const settings = await loadSettings(db);
+    const prepared = await prepareTask(db, settings, now, {
+      day: colomboDate(request.needed_at),
+      pickup: request.route_from ?? "To be confirmed",
+      dropoff: request.route_to ?? "To be confirmed",
+      leaveAt: request.needed_at,
+    });
+    warnings.push(...prepared.plan.warnings.map((w) => w.text));
 
     const saved = await saveTask(db, {
       title: args.title ?? (request.route_to ? `Trip · ${request.route_to}` : `Trip for ${request.requested_by_name}`),
@@ -279,8 +288,14 @@ export const decideRequest = tool({
       contactName: request.requested_by_name,
       contactPhone: requester?.phone ?? null,
       notes: [request.note, request.tools ? "Tools / equipment travel too." : null].filter(Boolean).join(" ") || null,
-      pickup: request.route_from ?? "To be confirmed",
-      dropoff: request.route_to ?? "To be confirmed",
+      stops: prepared.stops,
+      start: prepared.start,
+      returnToBase: false,
+      avoidExpressway: false,
+      leaveBy: prepared.leaveBy,
+      leaveBySource: prepared.leaveBySource,
+      bufferMin: null,
+      plan: prepared.plan,
       split,
       createdBy: decidedBy,
       request: { id: request.id, decidedBy },

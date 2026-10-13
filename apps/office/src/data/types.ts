@@ -71,9 +71,14 @@ export interface BoardCard {
   title: string;
   from?: string;
   to?: string;
+  stops_count?: number;
+  leave_by?: string;
   driver?: string;
   vehicle?: string;
   status?: string;
+  eta_next?: string;
+  eta_final?: string;
+  late_min?: number;
 }
 
 export interface Board {
@@ -87,12 +92,82 @@ export interface Board {
 export interface Stop {
   seq: number;
   type: string;
+  what?: string;
   place?: string;
   address?: string;
+  note?: string;
+  dwell_min?: number;
+  arrive_by?: string;
+  planned_arrive?: string;
+  planned_depart?: string;
+  lat?: number;
+  lng?: number;
+  pin?: string;
   status: string;
   arrived?: string;
   done?: string;
+  skip_reason?: string;
+  skip_note?: string;
   navigate?: string;
+}
+
+export interface PlanLeg {
+  from: string;
+  to: string;
+  depart?: string;
+  arrive?: string;
+  km: number;
+  minutes: number;
+  source: string;
+  via_expressway?: boolean;
+  factor?: number;
+}
+
+/** The plan as the tools answer it (create_task, plan_task, task_detail). */
+export interface PlanSummary {
+  source: string;
+  source_label?: string;
+  computed_at?: string;
+  leave_by?: string;
+  leave_by_source?: string;
+  ends_at?: string;
+  total_drive_min: number;
+  total_km: number;
+  buffer_min?: number;
+  legs: PlanLeg[];
+  warnings: string[];
+}
+
+export interface PlannedStop {
+  seq: number;
+  type: string;
+  what?: string;
+  place?: string;
+  arrive_by?: string;
+  planned_arrive?: string;
+  planned_depart?: string;
+  dwell_min?: number;
+  pin?: string;
+}
+
+export interface PlanPreview {
+  date: string;
+  leave_by: string;
+  leave_by_at?: string;
+  leave_by_source: string;
+  start?: { name: string; has_pin: boolean };
+  stops: PlannedStop[];
+  plan?: PlanSummary;
+  warnings: string[];
+}
+
+export interface TaskEta {
+  next_stop?: string;
+  next?: string;
+  final?: string;
+  late_min?: number;
+  source?: string;
+  as_of?: string;
 }
 
 export interface ProjectShare {
@@ -158,8 +233,18 @@ export interface TaskDetail {
     km?: number | null;
     gps_km?: number;
     gps_km_note?: string;
+    leave_by?: string;
+    leave_by_source?: string;
+    buffer_min?: number;
+    start_place?: string;
+    return_to_base?: boolean;
+    avoid_expressway?: boolean;
+    plan_version?: number;
+    eta?: TaskEta;
   };
+  plan?: PlanSummary;
   stops: Stop[];
+  removed_stops?: { seq: number; place: string; removed?: string }[];
   projects: string | ProjectShare[];
   odometer: OdometerRead[];
   unlogged_km?: { km: number; last_logged_km: number; last_logged_at: string; start_km: number };
@@ -225,6 +310,10 @@ export interface Place {
   maps?: string;
 }
 
+export interface PlaceWithId extends Place {
+  id?: string;
+}
+
 export interface Suggestions {
   request: RequestCard;
   vehicles: { reg_no: string; make_model?: string; type?: string; seats?: number; availability: string; pick: string; but?: string; regular_driver?: string }[];
@@ -251,10 +340,47 @@ export interface CreateTaskResult {
   task_id: string;
   title: string;
   when?: string;
+  leave_by?: string;
+  leave_by_source?: string;
   driver?: string;
   vehicle?: string;
+  plan?: PlanSummary;
   warnings?: string[];
   notes?: string[];
+}
+
+export interface UpdateStopsResult {
+  task_id: string;
+  plan_version: number;
+  leave_by?: string;
+  plan?: PlanSummary;
+  warnings?: string[];
+}
+
+export interface FleetSettings {
+  dwell_min: Record<string, number>;
+  buffer_min: number;
+  base_place_id: string | null;
+  avg_speed_kmh: number;
+  road_factor: number;
+  accept_within_min: number;
+  accept_before_leave_min: number;
+  rush_hour: { factor: number; centre: { lat: number; lng: number }; radius_km: number; bands: { days: number[]; from: string; to: string }[] };
+}
+
+export interface SettingsResult {
+  settings: FleetSettings;
+  defaults: FleetSettings;
+  about: Record<string, string>;
+  base_place: { id: string; name: string; address?: string | null; has_pin: boolean } | null;
+  routing_provider: string;
+  note?: string;
+}
+
+export interface RoutingUsage {
+  provider: string;
+  daily_budget: { ors: number };
+  days: { day: string; provider: string; calls: number; errors: number }[];
 }
 
 export interface DecideResult {
@@ -283,6 +409,10 @@ export interface LiveDriver extends StatusFields {
   lat?: number;
   lng?: number;
   links?: Links;
+  next_stop?: string;
+  eta_next?: string;
+  eta_final?: string;
+  late_min?: number;
   /** Set by a Realtime row: the ISO time of the last position. */
   recorded_at?: string | null;
 }

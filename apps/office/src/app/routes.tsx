@@ -12,6 +12,7 @@ import { Overview } from "../screens/Overview";
 import { Projects } from "../screens/Projects";
 import { Requests } from "../screens/Requests";
 import { Tasks } from "../screens/Tasks";
+import { FleetSettings } from "../screens/settings/FleetSettings";
 import { Users } from "../screens/settings/Users";
 import { Vehicles } from "../screens/Vehicles";
 import { can } from "../transport/types";
@@ -56,6 +57,7 @@ export const routes: RouteObject[] = [
       { path: "drivers/:username", element: <Guard need={ROUTES_NEED}><DriverPage /></Guard> },
       { path: "settings", element: <SettingsRoute /> },
       { path: "settings/users", element: <Guard need={["users"]}><Users /></Guard> },
+      { path: "settings/fleet", element: <Guard need={["users"]}><FleetSettings /></Guard> },
       { path: "accounts", element: <Navigate to="/settings/users" replace /> },
       { path: "more", element: <More /> },
       { path: "*", element: <Navigate to="/" replace /> },

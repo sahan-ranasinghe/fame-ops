@@ -30,6 +30,8 @@ import { enqueue, flushNow, onQueueChange } from '@/sync';
 import { clearQueue, queueCounts, type QueueCounts, retryFailed, tasksWaiting } from '@/sync/store';
 
 export type SignInOutcome = 'ok' | 'wrong' | 'network' | 'switched_off' | 'not_configured';
+/** Why a stop was skipped (task_stops.skip_reason); not_visited = the task was finished with the stop still open. */
+export type SkipReason = 'closed' | 'nobody_there' | 'not_needed' | 'not_visited' | 'other';
 export type SignOutOutcome = 'ok' | 'task' | 'queue';
 export type LiveStatus = 'connected' | 'connecting' | 'off';
 
@@ -106,7 +108,9 @@ interface AppValue {
   registerPush: () => Promise<boolean>;
   chooseVehicle: (vehicleId: string) => void;
   markSeen: (taskIds: string[]) => void;
+  markStopArrived: (stop: TaskStop) => void;
   markStopDone: (stop: TaskStop) => void;
+  skipStop: (stop: TaskStop, reason: SkipReason, note: string) => void;
   /** false when Location stayed off and the driver chose "Not now": nothing was started. */
   startTask: (task: TaskWithStops, reading: OdometerEntry) => Promise<boolean>;
   completeTask: (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => void;
@@ -524,15 +528,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void flushNow();
   }, [patchLocalTask]);
 
-  const markStopDone = useCallback((stop: TaskStop) => {
-    const now = new Date().toISOString();
-    enqueue({ kind: 'stop_patch', id: stop.id, patch: { status: 'done', done_at: now } });
+  const patchStop = useCallback((stop: TaskStop, patch: api.StopPatch) => {
+    enqueue({ kind: 'stop_patch', id: stop.id, patch });
     patchLocalTask(stop.task_id, (task) => ({
       ...task,
-      task_stops: task.task_stops.map((item) => (item.id === stop.id ? { ...item, status: 'done', done_at: now } : item)),
+      task_stops: task.task_stops.map((item) => (item.id === stop.id ? { ...item, ...patch } : item)),
     }));
     void flushNow();
   }, [patchLocalTask]);
+
+  const markStopArrived = useCallback((stop: TaskStop) => {
+    patchStop(stop, { status: 'arrived', arrived_at: new Date().toISOString() });
+  }, [patchStop]);
+
+  const markStopDone = useCallback((stop: TaskStop) => {
+    const now = new Date().toISOString();
+    patchStop(stop, { status: 'done', done_at: now, arrived_at: stop.arrived_at ?? now });
+  }, [patchStop]);
+
+  const skipStop = useCallback((stop: TaskStop, reason: SkipReason, note: string) => {
+    patchStop(stop, { status: 'skipped', skip_reason: reason, skip_note: note.trim() === '' ? null : note.trim(), done_at: new Date().toISOString() });
+  }, [patchStop]);
 
   const startTask = useCallback(
     (task: TaskWithStops, reading: OdometerEntry) => requireLocation('start', async () => {
@@ -623,10 +639,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
       });
       if (fuel) queueFuel(fuel, task.vehicle_id, task.id, odometerKm, now);
-      // Stops can only be marked while the task is running, so close the open ones first.
+      // Stops can only be marked while the task is running: the ones still open are
+      // skipped as "not visited" first (the driver confirmed finishing without them).
       const open = task.task_stops.filter((stop) => stop.status === 'pending' || stop.status === 'arrived');
+      const skipped = { status: 'skipped', skip_reason: 'not_visited', done_at: now } as const;
       enqueue(
-        ...open.map((stop) => ({ kind: 'stop_patch' as const, id: stop.id, patch: { status: 'done', done_at: now } })),
+        ...open.map((stop) => ({ kind: 'stop_patch' as const, id: stop.id, patch: { ...skipped } })),
         { kind: 'task_patch', id: task.id, patch: { status: 'completed', end_odometer_km: odometerKm, completed_at: now } },
       );
       patchLocalTask(task.id, (item) => ({
@@ -635,7 +653,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         end_odometer_km: odometerKm,
         completed_at: now,
         km: item.start_odometer_km === null ? null : odometerKm - item.start_odometer_km,
-        task_stops: item.task_stops.map((stop) => (open.includes(stop) ? { ...stop, status: 'done', done_at: now } : stop)),
+        task_stops: item.task_stops.map((stop) => (open.includes(stop) ? { ...stop, ...skipped } : stop)),
       }));
       bumpOdometer(task.vehicle_id, odometerKm);
       void playSound('done');
@@ -714,7 +732,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     booted, me, language, t, tList, setLanguage,
     vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, waitingTasks, refreshing, offline,
     gate, resolveGate, requireLocation,
-    signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopDone,
+    signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, skipStop,
     startTask, completeTask, logOdometer, logFuel, sendReport,
   };
 

@@ -8,15 +8,16 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Check, ChevronLeft, Navigation, Phone, Play } from '@/components/icons';
 import { useEffect, useMemo, useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
+import { SkipSheet } from '@/components/SkipSheet';
+import { leaveTime, nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { colomboTime } from '@/lib/time';
-import type { TaskWithStops } from '@/lib/types';
+import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -121,6 +122,7 @@ export default function TaskScreen() {
   const task: TaskWithStops | undefined = tasks.find((item) => item.id === id);
   const running = task?.status === 'in_progress';
   const myPosition = useMyPosition(running);
+  const [skipping, setSkipping] = useState<TaskStop | null>(null);
 
   if (!app.me) return <Redirect href="/login" />;
 
@@ -186,7 +188,7 @@ export default function TaskScreen() {
           </Txt>
           {running && task.started_at
             ? <Mono size={16} color={colors.muted}>{t('task.started', { time: colomboTime(task.started_at) })}</Mono>
-            : <Mono size={18} bold>{`${dateLabel(task.start_at)} ${colomboTime(task.start_at)}`}</Mono>}
+            : <Mono size={18} bold>{`${dateLabel(task.start_at)} ${colomboTime(leaveTime(task))}`}</Mono>}
         </View>
 
         <View>
@@ -219,18 +221,39 @@ export default function TaskScreen() {
             <View style={{ gap: 8 }}>
               {task.task_stops.map((item) => {
                 const done = item.status === 'done' || item.status === 'skipped';
+                const current = stop?.id === item.id;
+                const detail = [
+                  item.arrive_by ? t('task.arriveBy', { time: colomboTime(item.arrive_by) }) : null,
+                  item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min }) : null,
+                  item.status === 'skipped' ? t('task.skipped') : item.status === 'arrived' && item.arrived_at ? `${t('task.arrived')} ${colomboTime(item.arrived_at)}` : null,
+                ].filter(Boolean).join(' · ');
                 return (
-                  <View key={item.id} style={styles.stopRow}>
+                  <View key={item.id} style={[styles.stopRow, current && styles.stopRowCurrent, done && { opacity: 0.6 }]}>
                     <View style={{ flex: 1 }}>
-                      <Txt variant="muted" size={14}>{t(item.type === 'pickup' ? 'today.pickup' : item.type === 'drop' ? 'today.dropoff' : 'today.visit')}</Txt>
+                      <Txt variant="muted" size={14}>
+                        {current ? `${t('task.currentStop')} · ` : ''}{t(item.type === 'pickup' ? 'today.pickup' : item.type === 'drop' ? 'today.dropoff' : 'today.visit')}
+                      </Txt>
                       <Txt variant="strong">{item.place_name}</Txt>
+                      {detail !== '' && <Txt variant="small">{detail}</Txt>}
+                      {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
                     </View>
                     {done ? (
                       <View style={styles.doneBadge}><Check size={18} color={colors.blue} strokeWidth={3} /></View>
                     ) : (
-                      <Pressable accessibilityRole="button" onPress={() => app.markStopDone(item)} style={styles.doneButton}>
-                        <Txt variant="strong" size={15}>{t('task.done')}</Txt>
-                      </Pressable>
+                      <View style={{ gap: 6, alignItems: 'flex-end' }}>
+                        {item.status === 'pending' ? (
+                          <Pressable accessibilityRole="button" onPress={() => app.markStopArrived(item)} style={styles.doneButton}>
+                            <Txt variant="strong" size={15}>{t('task.arrived')}</Txt>
+                          </Pressable>
+                        ) : (
+                          <Pressable accessibilityRole="button" onPress={() => app.markStopDone(item)} style={[styles.doneButton, { backgroundColor: colors.ink }]}>
+                            <Txt variant="strong" size={15} color="#ffffff">{t('task.done')}</Txt>
+                          </Pressable>
+                        )}
+                        <Pressable accessibilityRole="button" onPress={() => setSkipping(item)} hitSlop={8}>
+                          <Txt variant="small" color={colors.red}>{t('task.skip')}</Txt>
+                        </Pressable>
+                      </View>
                     )}
                   </View>
                 );
@@ -245,7 +268,17 @@ export default function TaskScreen() {
               kind="dark"
               icon={Check}
               label={t('task.complete')}
-              onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'finish', taskId: task.id } })}
+              onPress={() => {
+                const open = task.task_stops.filter((item) => item.status === 'pending' || item.status === 'arrived').length;
+                const finish = () => router.push({ pathname: '/log-mileage', params: { mode: 'finish', taskId: task.id } });
+                if (open === 0) finish();
+                else {
+                  Alert.alert(t('task.stopsLeftTitle', { n: open }), t('task.stopsLeftBody'), [
+                    { text: t('common.cancel'), style: 'cancel' },
+                    { text: t('task.finishAnyway'), style: 'destructive', onPress: finish },
+                  ]);
+                }
+              }}
             />
             <Button
               kind="danger-text"
@@ -280,6 +313,7 @@ export default function TaskScreen() {
           </>
         )}
       </ScrollView>
+      <SkipSheet stop={skipping} onClose={() => setSkipping(null)} />
     </View>
   );
 }
@@ -320,6 +354,7 @@ const styles = StyleSheet.create({
   stats: { backgroundColor: colors.page, borderRadius: 14, padding: 16, flexDirection: 'row', gap: 12 },
   gpsLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingHorizontal: 4, marginTop: -6 },
   stopRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 12 },
+  stopRowCurrent: { borderColor: colors.blue, borderWidth: 2, backgroundColor: colors.blueChip },
   doneButton: { minHeight: 44, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   doneBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.blueChip, alignItems: 'center', justifyContent: 'center' },
 });

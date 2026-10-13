@@ -104,7 +104,13 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "list_places",
     "list_requests",
     "find_project",
+    "get_settings",
   ]);
+  assertEquals(allows(PRESETS.dispatcher.permissions, "plan_task"), true);
+  assertEquals(allows(PRESETS.dispatcher.permissions, "update_task_stops"), true);
+  assertEquals(allows(["approve"], "plan_task"), true);
+  assertEquals(allows(["approve"], "update_task_stops"), false);
+  assertEquals(allows(["users"], "update_settings"), true);
   assertEquals(toolsFor([...PERMISSIONS], names), names);
   assertEquals(normalisePermissions(["users", "view", "boss", "view", 3]), ["view", "users"]);
   assertEquals(normalisePermissions(undefined), []);

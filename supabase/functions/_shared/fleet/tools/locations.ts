@@ -4,7 +4,9 @@ import { z } from "zod";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { type Employee, findDriver, loadLatest, loadRefs, nearestTown, sharing, statusOf, vehicleLabel } from "../fleet.ts";
 import { contactLinks, kmh, mapsPoint } from "../format.ts";
+import { taskEta } from "../eta.ts";
 import { GPS_KM_NOTE } from "../geo.ts";
+import { loadSettings } from "../settings.ts";
 import { buildRoute, type Segment } from "../route.ts";
 import type { Fix } from "../track.ts";
 import { colomboDate, colomboDateTime, colomboTime, dayRange, utcIso } from "../time.ts";
@@ -23,16 +25,21 @@ export const liveDrivers = tool({
     filter: z.enum(["all", "sharing", "stale", "not_sharing", "live", "no_signal", "location_off"]).optional().describe("Default: all"),
   }),
   async run({ filter = "all" }, { db, now }) {
-    const [refs, latest, running, openSessions] = await Promise.all([
+    const [refs, latest, settings, running, openSessions] = await Promise.all([
       loadRefs(db),
       loadLatest(db),
-      db.from("tasks").select("id, title, employee_id, vehicle_id").eq("status", "in_progress"),
+      loadSettings(db),
+      db.from("tasks").select("id, title, employee_id, vehicle_id, status, return_to_base, avoid_expressway").eq("status", "in_progress"),
       db.from("duty_sessions").select("employee_id, vehicle_id").is("ended_at", null),
     ]);
     const tasks = unwrap(running, "tasks");
     const sessions = unwrap(openSessions, "sharing periods");
     const stops = tasks.length > 0
-      ? unwrap(await db.from("task_stops").select("task_id, seq, place_name").in("task_id", tasks.map((t) => t.id)).order("seq"), "stops")
+      ? unwrap(
+        await db.from("task_stops").select("task_id, seq, place_name, type, what, status, lat, lng, dwell_min, arrive_by")
+          .in("task_id", tasks.map((t) => t.id)).neq("status", "removed").order("seq"),
+        "stops",
+      )
       : [];
 
     const shown = refs.employees.filter((e) =>
@@ -45,6 +52,8 @@ export const liveDrivers = tool({
       const task = tasks.find((t) => t.employee_id === e.id);
       const vehicleId = task?.vehicle_id ?? sessions.find((s) => s.employee_id === e.id)?.vehicle_id ?? e.current_vehicle_id;
       const hasPosition = pos?.lat != null && pos?.lng != null;
+      const taskStops = task ? stops.filter((s) => s.task_id === task.id) : [];
+      const eta = task ? await taskEta(db, task, taskStops, pos, settings, now) : null;
       return {
         driver: e.name,
         username: e.username,
@@ -59,7 +68,11 @@ export const liveDrivers = tool({
         source: "Fame Driver app",
         vehicle: vehicleId ? vehicleLabel(refs.veh.get(vehicleId)) : undefined,
         task: task?.title,
-        going_to: task ? stops.filter((s) => s.task_id === task.id).at(-1)?.place_name : undefined,
+        going_to: task ? taskStops.at(-1)?.place_name : undefined,
+        next_stop: eta?.next_seq != null ? taskStops.find((s) => s.seq === eta.next_seq)?.place_name : undefined,
+        eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
+        eta_final: eta?.final_eta_at ? colomboTime(eta.final_eta_at) : undefined,
+        late_min: eta && eta.late_min > 0 ? eta.late_min : undefined,
         // The position itself (the web map draws it; the maps link stays for Claude).
         lat: hasPosition ? pos.lat! : undefined,
         lng: hasPosition ? pos.lng! : undefined,

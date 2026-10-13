@@ -104,7 +104,9 @@
     "noTasksHint": "කාර්යාලයෙන් එවන නව කාර්යයන් මෙහි දිස්වේ.",
     "newTask": "නව කාර්යයක්",
     "finishFirst": "පළමුව දැන් කෙරෙන කාර්යය අවසන් කරන්න.",
-    "notSentYet": "තවම කාර්යාලයට යවා නැත"
+    "notSentYet": "තවම කාර්යාලයට යවා නැත",
+    "leaveBy": "{time} ට පිටත් වන්න",
+    "moreStops": "තවත් {n}"
   },
   "task": {
     "started": "ආරම්භය {time}",
@@ -122,7 +124,27 @@
     "gone": "මෙම කාර්යය තවදුරටත් ඔබට පවරා නැත.",
     "completed": "අවසන් කළා",
     "cancelled": "අවලංගු කළා",
-    "backToToday": "\"අද\" වෙත ආපසු"
+    "backToToday": "\"අද\" වෙත ආපසු",
+    "leaveBy": "{time} ට පිටත් වන්න",
+    "arriveBy": "{time} ට පෙර ළඟා වන්න",
+    "arrived": "ළඟා විය",
+    "skip": "මඟ හරින්න",
+    "skipTitle": "මෙම නැවතුම මඟ හරිනවාද?",
+    "skipWhy": "ඇයි?",
+    "skipReason": {
+      "closed": "වසා ඇත",
+      "nobodyThere": "කිසිවෙක් නැත",
+      "notNeeded": "අවශ්‍ය නැත",
+      "other": "වෙනත්"
+    },
+    "skipNote": "කාර්යාලයට වචනයක් (අත්‍යවශ්‍ය නොවේ)",
+    "skipConfirm": "නැවතුම මඟ හරින්න",
+    "skipped": "මඟ හැරිණි",
+    "currentStop": "දැන්",
+    "stopsLeftTitle": "නැවතුම් {n} ක් අවසන් කර නැත",
+    "stopsLeftBody": "කෙසේ වෙතත් කාර්යය අවසන් කරනවාද? ඒවා නොගිය ලෙස සලකුණු වේ.",
+    "finishAnyway": "කෙසේ වෙතත් අවසන් කරන්න",
+    "minutesThere": "එහි විනාඩි {n}"
   },
   "log": {
     "title": "ධාවන දුර සටහන් කරන්න",

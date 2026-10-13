@@ -16,7 +16,14 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
     <button type="button" className="tcard" onClick={() => onOpen(t.id)}>
       <span className="top"><b>{t.time}</b><span>{t.label || ""}</span></span>
       <span className="title">{t.title}</span>
-      <span className="route">From {t.from || "—"}<br />To {t.to || "—"}</span>
+      <span className="route">From {t.from || "—"}<br />To {t.to || "—"}{t.stops_count && t.stops_count > 2 ? ` · ${t.stops_count} stops` : ""}</span>
+      {(t.leave_by || t.late_min || t.eta_final) && (
+        <span className="leave">
+          {t.leave_by && <span className="num">Leave by {t.leave_by}</span>}
+          {t.eta_final && <span className="muted"> · ETA {t.eta_final}</span>}
+          {t.late_min ? <span className="status bad"> · late by {t.late_min} min</span> : null}
+        </span>
+      )}
       <span className="who"><Avatar name={t.driver} small /><span className="grow">{t.driver || ""}</span><Plate v={t.vehicle} /></span>
       <span className={`status ${statusTone(col, t.status)}`}>{t.status || ""}</span>
     </button>

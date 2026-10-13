@@ -1,19 +1,23 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useFleet } from "../app/FleetContext";
+import { ROUTES_NEED } from "../app/nav";
 import { useLists } from "../data/hooks";
 import { mapRouteOf, minutesText, type Route, routeOf } from "../data/route";
-import type { DriverRoute, TaskDetail } from "../data/types";
+import type { DriverRoute, TaskDetail, UpdateStopsResult } from "../data/types";
 import { cap, hhmm, joinDots, num, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
-import { ROUTES_NEED } from "../app/nav";
 import { MapView } from "../map/MapView";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { DrawerTop, useDirty, useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
 import { useToast } from "../ui/Toast";
+import { PlanPanel } from "./PlanPanel";
+import { StopsEditor } from "./StopsEditor";
+import { draftsFromStops, driveText, type StopDraft, stopsInput, TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
 
 const TONE = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad" } as const;
+const SKIP_TEXT: Record<string, string> = { closed: "closed", nobody_there: "nobody there", not_needed: "not needed", not_visited: "not visited (task finished)", other: "other" };
 
 export function TaskDrawer({ id }: { id: string }) {
   const { me, store, transport } = useFleet();
@@ -27,6 +31,7 @@ export function TaskDrawer({ id }: { id: string }) {
   const [raMsg, setRaMsg] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [cxMsg, setCxMsg] = useState<string | null>(null);
+  const [stopsMsg, setStopsMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   useDirty(Object.values(ra).some((v) => v !== "") || reason.trim() !== "");
 
@@ -49,6 +54,8 @@ export function TaskDrawer({ id }: { id: string }) {
   const projects = typeof p.projects === "string" ? p.projects : p.projects.map((x) => joinDots([x.project, x.percent != null ? `${x.percent}%` : ""])).join(", ");
   const canChange = t.status === "assigned" && me.tools.includes("reassign_task");
   const canCancel = (t.status === "assigned" || t.status === "in_progress") && me.tools.includes("cancel_task");
+  const canStops = (t.status === "assigned" || t.status === "in_progress") && me.tools.includes("update_task_stops");
+  const pending = p.stops.filter((s) => s.status === "pending");
 
   async function reassign(ev: FormEvent) {
     ev.preventDefault();
@@ -93,8 +100,28 @@ export function TaskDrawer({ id }: { id: string }) {
     }
   }
 
+  /** The stops editor replaces this panel; on save the task reopens with the new plan. */
+  function editStops() {
+    const version = t.plan_version ?? 0;
+    const onSave = async (drafts: StopDraft[]) => {
+      const v = stopsInput(drafts);
+      if ("error" in v) return;
+      try {
+        const out = await transport.call<UpdateStopsResult>("update_task_stops", { task_id: id, plan_version: version, stops: v.stops });
+        toast(`Stops saved · leave by ${out.leave_by?.slice(-5) ?? "—"}`);
+        void store.invalidate();
+      } catch (e) {
+        const text = errText(e as FleetError)[0];
+        setStopsMsg({ tone: "bad", text: /changed since/i.test(text) ? `${text} The task below is reloaded.` : text });
+      }
+      drawer.open(<TaskDrawer id={id} />);
+    };
+    drawer.open(<StopsEditor title={`Stops · ${t.title}`} stops={draftsFromStops(pending)} places={lists.places ?? []} onSave={(d) => void onSave(d)} />);
+  }
+
   const drivers = (lists.drivers ?? []).filter((d) => d.active !== false);
   const ext = { target: "_blank", rel: "noopener" } as const;
+  const eta = t.eta;
 
   return (
     <>
@@ -104,6 +131,17 @@ export function TaskDrawer({ id }: { id: string }) {
           <div><dt>Driver</dt><dd>{t.driver || "—"}</dd></div>
           <div><dt>Vehicle</dt><dd>{t.vehicle || "—"}</dd></div>
           <div><dt>Status</dt><dd>{t.status_line || cap(t.status)}</dd></div>
+          <div><dt>Leave by</dt><dd className="mono">{t.leave_by ? `${hhmm(t.leave_by)} (${t.leave_by_source === "plan" ? "planned" : "typed"})` : "—"}</dd></div>
+          {eta && (
+            <div style={{ gridColumn: "1/-1" }} data-testid="eta">
+              <dt>ETA (live)</dt>
+              <dd>
+                {eta.next_stop ? `${eta.next_stop} ` : "next "}{eta.next ?? "—"} · final {eta.final ?? "—"}
+                {eta.late_min ? <span className="status bad"> · running late by {eta.late_min} min</span> : <span className="status live"> · on time</span>}
+                <span className="muted small"> · as of {eta.as_of}</span>
+              </dd>
+            </div>
+          )}
           <div><dt>Passengers</dt><dd>{t.passengers ?? "—"}</dd></div>
           <div>
             <dt>Contact</dt>
@@ -135,21 +173,47 @@ export function TaskDrawer({ id }: { id: string }) {
       <WarningsNote warnings={warnings} />
       {can(me, ...ROUTES_NEED) && <TaskRoute id={id} started={t.started} />}
 
-      <div className="section-t">Stops</div>
+      <div className="section-t">Stops{t.start_place ? ` · from ${t.start_place}` : ""}{t.return_to_base ? " · back to the office" : ""}{t.avoid_expressway ? " · no expressway" : ""}</div>
+      {stopsMsg && <Notice tone={stopsMsg.tone}>{stopsMsg.text}</Notice>}
       <div className="card">
         <div className="rows">
           {p.stops.length ? p.stops.map((s) => (
             <div className="row" key={s.seq}>
-              <span className={`dot ${s.status === "done" ? "ok" : s.status === "skipped" ? "bad" : "warn"}`} />
+              <span className={`dot ${s.status === "done" ? "ok" : s.status === "skipped" ? "bad" : s.status === "arrived" ? "live" : "warn"}`} />
               <div className="grow">
-                <div className="name">{cap(s.type)} · {s.place || s.address || ""}</div>
-                <div className="sub">{cap(s.status)}{s.arrived ? " · arrived " + s.arrived : ""}{s.done ? " · done " + s.done : ""}</div>
+                <div className="name">{TYPE_LABEL[s.type as keyof typeof TYPE_LABEL] ?? cap(s.type)}{s.what ? ` · ${WHAT_LABEL[s.what as keyof typeof WHAT_LABEL] ?? s.what}` : ""} · {s.place || s.address || ""}</div>
+                <div className="sub">
+                  {joinDots([
+                    s.planned_arrive ? `planned ${s.planned_arrive}${s.planned_depart && s.planned_depart !== s.planned_arrive ? `–${s.planned_depart}` : ""}` : null,
+                    s.arrive_by ? `by ${s.arrive_by}` : null,
+                    s.dwell_min != null ? `${s.dwell_min} min there` : null,
+                    s.status === "pending" ? null : cap(s.status),
+                    s.arrived ? `arrived ${s.arrived}` : null,
+                    s.done ? `done ${s.done}` : null,
+                    s.skip_reason ? `skipped: ${SKIP_TEXT[s.skip_reason] ?? s.skip_reason}${s.skip_note ? ` (${s.skip_note})` : ""}` : null,
+                    s.pin === "none" ? "no map pin" : null,
+                  ])}
+                </div>
+                {s.note && <div className="sub">Note: {s.note}</div>}
               </div>
               {s.navigate && <a className="btn small" href={s.navigate} {...ext}>Map</a>}
             </div>
           )) : <Empty>No stops.</Empty>}
         </div>
+        {(canStops || p.removed_stops?.length) && (
+          <div className="card-b" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            {canStops && <button type="button" className="btn" onClick={editStops}>Edit stops</button>}
+            {p.removed_stops?.length ? <span className="muted small">{p.removed_stops.length} stop{p.removed_stops.length > 1 ? "s" : ""} edited out earlier: {p.removed_stops.map((r) => r.place).join(", ")}</span> : null}
+          </div>
+        )}
       </div>
+      {p.plan && (
+        <>
+          <div className="section-t">Plan</div>
+          <PlanPanel plan={p.plan} stops={p.stops.map((s) => ({ seq: s.seq, type: s.type, place: s.place, arrive_by: s.arrive_by, planned_arrive: s.planned_arrive, planned_depart: s.planned_depart, pin: s.pin }))} />
+          <p className="muted small" style={{ margin: 0 }}>{driveText(p.plan.total_drive_min)} driving in {p.plan.legs.length} leg{p.plan.legs.length === 1 ? "" : "s"} · computed {p.plan.computed_at}</p>
+        </>
+      )}
 
       <div className="section-t">Odometer and fuel</div>
       <div className="card">
@@ -201,7 +265,7 @@ export function TaskDrawer({ id }: { id: string }) {
               <div className="field"><label htmlFor="ra-vehicle">Vehicle</label>
                 <select id="ra-vehicle" value={ra.vehicle} onChange={(e) => setRa({ ...ra, vehicle: e.target.value })}><option value="">Keep</option>{(lists.vehicles ?? []).map((v) => <option key={v.reg_no} value={v.reg_no}>{v.reg_no}</option>)}</select></div>
               <div className="field"><label htmlFor="ra-date">Day</label><input type="date" id="ra-date" value={ra.date} onChange={(e) => setRa({ ...ra, date: e.target.value })} /></div>
-              <div className="field"><label htmlFor="ra-time">Start</label><input type="time" id="ra-time" value={ra.time} onChange={(e) => setRa({ ...ra, time: e.target.value })} /></div>
+              <div className="field"><label htmlFor="ra-time">Leave by</label><input type="time" id="ra-time" value={ra.time} onChange={(e) => setRa({ ...ra, time: e.target.value })} /></div>
             </div>
             {raMsg && <Notice tone="bad">{raMsg}</Notice>}
             <button className="btn dark" type="submit" disabled={busy}>Save changes</button>

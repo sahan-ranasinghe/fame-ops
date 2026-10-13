@@ -8,7 +8,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguagePill } from '@/components/LanguageSwitch';
-import { StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
+import { leaveTime, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
@@ -133,11 +133,11 @@ export default function TodayScreen() {
                 <Txt variant="label" color={next.status === 'in_progress' ? colors.blue : colors.amberText}>
                   {t(next.status === 'in_progress' ? 'today.inProgress' : 'today.nextTask')}
                 </Txt>
-                <Mono size={24} bold>{colomboTime(next.start_at)}</Mono>
+                <Mono size={24} bold>{colomboTime(leaveTime(next))}</Mono>
               </View>
-              {colomboDate(next.start_at) !== today && <Txt variant="muted">{dateLabel(next.start_at)}</Txt>}
+              <Txt variant="muted">{[colomboDate(next.start_at) !== today ? dateLabel(next.start_at) : null, next.status === 'assigned' ? t('today.leaveBy', { time: colomboTime(leaveTime(next)) }) : null].filter(Boolean).join(' · ')}</Txt>
               <Txt variant="title" size={27} style={{ marginTop: 4, marginBottom: 14 }}>{next.title}</Txt>
-              <StopTimeline stops={next.task_stops} />
+              <StopTimeline stops={next.task_stops} compact />
               {people && <Txt variant="muted" style={{ marginTop: 14 }}>{people}</Txt>}
               {waitingTasks.has(next.id) && <Txt variant="small" color={colors.amberText} style={{ marginTop: 8 }}>{t('today.notSentYet')}</Txt>}
               <Button
@@ -179,7 +179,7 @@ function TaskList({ title, tasks, showDate = false }: { title: string; tasks: Ta
             style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
           >
             <View style={{ width: 62 }}>
-              <Mono size={18} bold>{colomboTime(task.start_at)}</Mono>
+              <Mono size={18} bold>{colomboTime(leaveTime(task))}</Mono>
               {showDate && <Txt variant="small">{dateLabel(task.start_at)}</Txt>}
             </View>
             <View style={{ flex: 1 }}>

@@ -104,7 +104,9 @@
     "noTasksHint": "New tasks from the office appear here.",
     "newTask": "New task",
     "finishFirst": "Finish the task in progress first.",
-    "notSentYet": "Not sent to the office yet"
+    "notSentYet": "Not sent to the office yet",
+    "leaveBy": "Leave by {time}",
+    "moreStops": "+{n} more"
   },
   "task": {
     "started": "Started {time}",
@@ -122,7 +124,27 @@
     "gone": "This task is no longer assigned to you.",
     "completed": "COMPLETED",
     "cancelled": "CANCELLED",
-    "backToToday": "Back to Today"
+    "backToToday": "Back to Today",
+    "leaveBy": "Leave by {time}",
+    "arriveBy": "Arrive by {time}",
+    "arrived": "Arrived",
+    "skip": "Skip",
+    "skipTitle": "Skip this stop?",
+    "skipWhy": "Why?",
+    "skipReason": {
+      "closed": "Closed",
+      "nobodyThere": "Nobody there",
+      "notNeeded": "Not needed",
+      "other": "Other"
+    },
+    "skipNote": "A word for the office (optional)",
+    "skipConfirm": "Skip stop",
+    "skipped": "Skipped",
+    "currentStop": "Now",
+    "stopsLeftTitle": "{n} stops are not done",
+    "stopsLeftBody": "Finish the task anyway? They will be marked as not visited.",
+    "finishAnyway": "Finish anyway",
+    "minutesThere": "{n} min there"
   },
   "log": {
     "title": "Log mileage",

@@ -1,22 +1,29 @@
-// Pieces for showing a task: the pickup / drop-off timeline and the small text lines.
+// Pieces for showing a task: the stops timeline and the small text lines.
 
 import { StyleSheet, View } from 'react-native';
 
 import { Txt } from '@/components/ui';
-import { colomboParts } from '@/lib/time';
+import { colomboParts, colomboTime } from '@/lib/time';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
 const STOP_LABEL: Record<string, string> = { pickup: 'today.pickup', drop: 'today.dropoff', visit: 'today.visit' };
+/** On the Today card: the first two stops, then "+N more". */
+const COMPACT_STOPS = 2;
 
-/** Pickup (hollow dot) down to drop-off (filled dot), as on the Today card. */
-export function StopTimeline({ stops }: { stops: TaskStop[] }) {
+/**
+ * Pickup (hollow dot) down to drop-off (filled dot), as on the Today card.
+ * compact: the first two stops and "+N more"; a stop with a deadline shows it.
+ */
+export function StopTimeline({ stops, compact = false }: { stops: TaskStop[]; compact?: boolean }) {
   const { t } = useApp();
+  const shown = compact ? stops.slice(0, COMPACT_STOPS) : stops;
+  const more = stops.length - shown.length;
   return (
     <View>
-      {stops.map((stop, index) => {
-        const last = index === stops.length - 1;
+      {shown.map((stop, index) => {
+        const last = index === shown.length - 1 && more === 0;
         return (
           <View key={stop.id} style={styles.stop}>
             <View style={styles.rail}>
@@ -24,12 +31,18 @@ export function StopTimeline({ stops }: { stops: TaskStop[] }) {
               {!last && <View style={styles.line} />}
             </View>
             <View style={{ flex: 1, paddingBottom: last ? 0 : 14 }}>
-              <Txt variant="muted" size={15}>{t(STOP_LABEL[stop.type] ?? 'today.visit')}</Txt>
+              <Txt variant="muted" size={15}>{t(STOP_LABEL[stop.type] ?? 'today.visit')}{stop.arrive_by ? ` · ${t('task.arriveBy', { time: colomboTime(stop.arrive_by) })}` : ''}</Txt>
               <Txt variant="strong" size={18}>{stop.place_name}</Txt>
             </View>
           </View>
         );
       })}
+      {more > 0 && (
+        <View style={styles.stop}>
+          <View style={styles.rail}><View style={[styles.dot, { backgroundColor: colors.ink }]} /></View>
+          <Txt variant="muted" size={15}>{t('today.moreStops', { n: more })}</Txt>
+        </View>
+      )}
     </View>
   );
 }
@@ -58,13 +71,18 @@ export function usePeopleLine(): (task: TaskWithStops) => string | null {
   };
 }
 
-/** The stop the driver is heading to: the first one not done yet, else the last. */
+/** The stop the driver is heading to (or at): the first one not done or skipped, else the last. */
 export function nextStop(task: TaskWithStops): TaskStop | null {
   return (
     task.task_stops.find((stop) => stop.status === 'pending' || stop.status === 'arrived') ??
     task.task_stops[task.task_stops.length - 1] ??
     null
   );
+}
+
+/** The time to show on a task card: when to leave (the plan) rather than the office's start time. */
+export function leaveTime(task: Pick<TaskWithStops, 'leave_by' | 'start_at'>): string {
+  return task.leave_by ?? task.start_at;
 }
 
 const styles = StyleSheet.create({

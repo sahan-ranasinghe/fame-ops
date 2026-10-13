@@ -1,7 +1,8 @@
 // The Assign-a-task form's rules, kept apart from the screen so they can be
 // tested: what is required, how the project split must add up, and the exact
-// create_task arguments (the connector contract).
+// create_task / plan_task arguments (the connector contract).
 import { waLink } from "../lib/format";
+import { defaultStops, hasDeadline, type StopDraft, stopsInput } from "./stopsLogic";
 
 export interface ProjectRow {
   project: string;
@@ -13,9 +14,13 @@ export interface ProjectRow {
 export interface AssignFields {
   title: string;
   date: string;
+  /** The leave-by time typed by hand; empty = planned from the stops' deadlines. */
+  leaveBy: string;
+  stops: StopDraft[];
   start: string;
-  pickup: string;
-  dropoff: string;
+  returnToBase: boolean;
+  avoidExpressway: boolean;
+  buffer: string;
   driver: string;
   vehicle: string;
   end: string;
@@ -27,28 +32,45 @@ export interface AssignFields {
 }
 
 export const emptyAssign = (date: string): AssignFields => ({
-  title: "", date, start: "", pickup: "", dropoff: "", driver: "", vehicle: "", end: "", pax: "", cname: "", cphone: "", notes: "", whatsapp: false,
+  title: "", date, leaveBy: "", stops: defaultStops(), start: "", returnToBase: false, avoidExpressway: false, buffer: "",
+  driver: "", vehicle: "", end: "", pax: "", cname: "", cphone: "", notes: "", whatsapp: false,
 });
 
 export const splitTotal = (rows: ProjectRow[]) => rows.reduce((a, r) => a + (Number(r.percent) || 0), 0);
 
+/** The part of the form the planner needs, as plan_task takes it; null when it cannot be planned yet. */
+export function planInput(f: AssignFields): Record<string, unknown> | null {
+  const t = (s: string) => s.trim();
+  if (!t(f.date)) return null;
+  const s = stopsInput(f.stops);
+  if ("error" in s) return null;
+  if (!t(f.leaveBy) && !hasDeadline(f.stops)) return null;
+  const input: Record<string, unknown> = { date: t(f.date), stops: s.stops };
+  if (t(f.leaveBy)) input.leave_by = t(f.leaveBy);
+  if (t(f.start)) input.start = { place: t(f.start) };
+  if (f.returnToBase) input.return_to_base = true;
+  if (f.avoidExpressway) input.avoid_expressway = true;
+  if (t(f.buffer) !== "") input.buffer_min = Math.max(0, Math.min(600, parseInt(t(f.buffer), 10) || 0));
+  if (t(f.driver)) input.driver = t(f.driver);
+  if (t(f.vehicle)) input.vehicle = t(f.vehicle);
+  if (t(f.end)) input.end_time = t(f.end);
+  return input;
+}
+
 export function validateAssign(f: AssignFields, rows: ProjectRow[], createdBy?: string): { error: string } | { input: Record<string, unknown> } {
   const t = (s: string) => s.trim();
-  const need: [string, string][] = [
-    [t(f.title), "the task"], [t(f.date), "the date"], [t(f.start), "the start time"], [t(f.pickup), "the pickup"],
-    [t(f.dropoff), "the drop-off"], [t(f.driver), "a driver"], [t(f.vehicle), "a vehicle"],
-  ];
+  const need: [string, string][] = [[t(f.title), "the task"], [t(f.date), "the date"], [t(f.driver), "a driver"], [t(f.vehicle), "a vehicle"]];
   const miss = need.filter(([v]) => !v).map((n) => n[1]);
   if (miss.length) return { error: `Add ${miss.join(", ")}.` };
+  const s = stopsInput(f.stops);
+  if ("error" in s) return s;
+  if (!t(f.leaveBy) && !hasDeadline(f.stops)) return { error: "Add a leave-by time, or an arrive-by time on a stop so it can be planned." };
   const used = rows.filter((r) => r.project.trim());
   const total = splitTotal(used);
   if (used.length && Math.abs(total - 100) > 0.01) {
     return { error: `Project percentages add up to ${total}%. They must total 100%.` };
   }
-  const input: Record<string, unknown> = {
-    title: t(f.title), date: t(f.date), start_time: t(f.start), driver: t(f.driver), vehicle: t(f.vehicle), pickup: t(f.pickup), dropoff: t(f.dropoff),
-  };
-  if (t(f.end)) input.end_time = t(f.end);
+  const input: Record<string, unknown> = { ...planInput(f), title: t(f.title), driver: t(f.driver), vehicle: t(f.vehicle) };
   if (t(f.pax) !== "") input.passengers = Math.max(0, Math.min(80, parseInt(t(f.pax), 10) || 0));
   if (t(f.cname)) input.contact_name = t(f.cname);
   if (t(f.cphone)) input.contact_phone = t(f.cphone);
@@ -59,8 +81,11 @@ export function validateAssign(f: AssignFields, rows: ProjectRow[], createdBy?: 
 }
 
 /** The WhatsApp message for the driver, when the office asked for one. */
-export function driverWhatsApp(input: Record<string, unknown>, phone?: string | null): string {
+export function driverWhatsApp(input: Record<string, unknown>, phone?: string | null, leaveBy?: string): string {
   const s = (k: string) => (typeof input[k] === "string" ? (input[k] as string) : "");
+  const stops = (input.stops as { type: string; place?: string }[] | undefined) ?? [];
+  const word: Record<string, string> = { pickup: "Pickup", drop: "Drop-off", visit: "Visit" };
+  const lines = stops.map((x) => `${word[x.type] ?? "Stop"}: ${x.place ?? ""}`.trim());
   const contact = s("contact_name") ? `\nContact: ${s("contact_name")}${s("contact_phone") ? " " + s("contact_phone") : ""}` : "";
-  return waLink(phone, `New task: ${s("title")}\n${s("date")} ${s("start_time")}\nPickup: ${s("pickup")}\nDrop-off: ${s("dropoff")}${contact}\nOpen Fame Driver for the details.`);
+  return waLink(phone, `New task: ${s("title")}\n${leaveBy ?? `${s("date")} ${s("leave_by")}`}\n${lines.join("\n")}${contact}\nOpen Fame Driver for the details.`);
 }

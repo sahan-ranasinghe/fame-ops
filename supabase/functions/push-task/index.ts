@@ -4,7 +4,7 @@
 //
 //   POST /functions/v1/push-task
 //   x-server-key: <SERVER_KEY>            (called by the database trigger tasks_notify_push, through pg_net)
-//   { "task_id": "...", "kind": "new" | "changed" | "cancelled" | "removed", "employee_id": "..." }
+//   { "task_id": "...", "kind": "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder", "employee_id": "..." }
 //   200 { "sent": 1, "failed": 0 }   (also 200 with sent 0 when the driver has no registered phone)
 //
 // The text is in the driver's language (employees.language). Android plays
@@ -12,7 +12,9 @@
 // bundled sounds): tasks-new for a new task, tasks-changed for a changed or
 // cancelled one, general for "no longer yours". Tapping the notification
 // opens the task (data.taskId). Tokens Expo reports as DeviceNotRegistered
-// are deleted. Every call is written to push_log.
+// are deleted. Every call is written to push_log. leave_30 and leave_now come
+// from the pg_cron job task-reminders (queue_task_reminders), accept_reminder
+// from the accept rule.
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -21,10 +23,18 @@ const COLOMBO_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-type Kind = "new" | "changed" | "cancelled" | "removed";
+type Kind = "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder";
 type Language = "en" | "si";
 
-const CHANNEL: Record<Kind, string> = { new: "tasks-new", changed: "tasks-changed", cancelled: "tasks-changed", removed: "general" };
+const CHANNEL: Record<Kind, string> = {
+  new: "tasks-new",
+  changed: "tasks-changed",
+  cancelled: "tasks-changed",
+  removed: "general",
+  leave_30: "tasks-changed",
+  leave_now: "tasks-new",
+  accept_reminder: "tasks-new",
+};
 
 const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
   en: {
@@ -32,12 +42,18 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     changed: { title: "Task changed {when}", body: "{title} · {pickup} → {dropoff}" },
     cancelled: { title: "Task cancelled", body: "{title} · {reason}" },
     removed: { title: "Task reassigned", body: "{title} is no longer yours." },
+    leave_30: { title: "Leave by {leave}", body: "{title} · leave in 30 minutes · {pickup} → {dropoff}" },
+    leave_now: { title: "Time to leave", body: "{title} · leave by {leave} · {pickup} → {dropoff}" },
+    accept_reminder: { title: "Please accept your task", body: "{when} · {title} · open Fame Driver and tap Accept" },
   },
   si: {
     new: { title: "නව කාර්යය {when}", body: "{title} · {pickup} → {dropoff}" },
     changed: { title: "කාර්යය වෙනස් විය {when}", body: "{title} · {pickup} → {dropoff}" },
     cancelled: { title: "කාර්යය අවලංගු විය", body: "{title} · {reason}" },
     removed: { title: "කාර්යය වෙනත් අයෙකුට පැවරිණි", body: "{title} තවදුරටත් ඔබගේ නොවේ." },
+    leave_30: { title: "{leave} ට පිටත් වන්න", body: "{title} · විනාඩි 30 කින් පිටත් වන්න · {pickup} → {dropoff}" },
+    leave_now: { title: "පිටත් වීමට වෙලාවයි", body: "{title} · {leave} ට පිටත් වන්න · {pickup} → {dropoff}" },
+    accept_reminder: { title: "ඔබේ කාර්යය පිළිගන්න", body: "{when} · {title} · Fame Driver විවෘත කර පිළිගන්න ඔබන්න" },
   },
 };
 
@@ -72,6 +88,11 @@ function when(iso: string): string {
   return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`;
 }
 
+/** "09:00" in Colombo time. */
+function clock(iso: string): string {
+  return when(iso).slice(-5);
+}
+
 function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? "");
 }
@@ -90,7 +111,9 @@ Deno.serve(async (request) => {
   }
   const taskId = typeof body.task_id === "string" && body.task_id.length === 36 ? body.task_id : null;
   const employeeId = typeof body.employee_id === "string" && body.employee_id.length === 36 ? body.employee_id : null;
-  const kind = (["new", "changed", "cancelled", "removed"] as const).find((k) => k === body.kind) ?? null;
+  const kind = (["new", "changed", "cancelled", "removed", "leave_30", "leave_now", "accept_reminder"] as const).find((k) =>
+    k === body.kind
+  ) ?? null;
   if (!taskId || !employeeId || !kind) return json(400, { error: "bad_request" });
 
   const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
@@ -98,8 +121,8 @@ Deno.serve(async (request) => {
   });
 
   const [taskRes, stopsRes, driverRes, tokensRes] = await Promise.all([
-    admin.from("tasks").select("id, title, start_at, status, cancelled_reason").eq("id", taskId).maybeSingle(),
-    admin.from("task_stops").select("seq, place_name").eq("task_id", taskId).order("seq"),
+    admin.from("tasks").select("id, title, start_at, leave_by, status, cancelled_reason").eq("id", taskId).maybeSingle(),
+    admin.from("task_stops").select("seq, place_name").eq("task_id", taskId).neq("status", "removed").order("seq"),
     admin.from("employees").select("id, name, language, active").eq("id", employeeId).maybeSingle(),
     admin.from("device_tokens").select("id, token").eq("employee_id", employeeId),
   ]);
@@ -118,6 +141,7 @@ Deno.serve(async (request) => {
   const language: Language = driver.language === "si" ? "si" : "en";
   const vars = {
     when: when(task.start_at),
+    leave: clock(task.leave_by ?? task.start_at),
     title: task.title,
     pickup: stops[0]?.place_name ?? "",
     dropoff: stops.length > 1 ? stops[stops.length - 1].place_name : "",

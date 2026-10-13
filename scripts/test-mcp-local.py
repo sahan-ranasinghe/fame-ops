@@ -16,6 +16,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -114,7 +115,13 @@ def office_sign_in(email, password, enrol_totp):
 
 
 def api_call(token, name, args):
-    return http("POST", f"{API}/functions/v1/office-api/tools/{name}", api_headers(token), args or {})
+    # office-api allows 120 calls a minute per person (a sliding window): the suite waits its turn.
+    for _ in range(20):
+        code, answer = http("POST", f"{API}/functions/v1/office-api/tools/{name}", api_headers(token), args or {})
+        if code != 429:
+            return code, answer
+        time.sleep(5)
+    return code, answer
 
 
 def tool(name, args=None, expect_error=False):
@@ -339,6 +346,69 @@ t3 = tool("create_task", {"title": "Bank documents run", "date": task_day, "star
 T3 = t3["task_id"]
 check(any("in the garage" in w for w in t3["warnings"]), "assigning a vehicle that is in the garage gives a warning", json.dumps(t3["warnings"]))
 
+print("\n== 2b. Stops and the leave-by plan ==")
+st = tool("get_settings")
+check(st["settings"]["buffer_min"] == 15 and st["settings"].get("base_place_id") is None and st["routing_provider"] == "estimate" and "No base place" in st["note"]
+      and st["defaults"]["avg_speed_kmh"] == 35 and st["about"]["dwell_min"],
+      "get_settings: the defaults, no base place yet, the estimate provider (no routing key)", json.dumps(st)[:300])
+r = tool("update_settings", {"key": "buffer_min", "value": 999}, expect_error=True)
+check("buffer_min" in r, "update_settings refuses a buffer of 999 minutes", r)
+r = tool("update_settings", {"key": "base_place_id", "value": str(uuid.uuid4())}, expect_error=True)
+check("No saved place" in r, "update_settings refuses an unknown base place", r)
+tool("update_settings", {"key": "buffer_min", "value": 20})
+check(tool("get_settings")["settings"]["buffer_min"] == 20 and psql("select updated_by from fleet_settings where key = 'buffer_min'") != "",
+      "update_settings saves the buffer with who changed it")
+tool("update_settings", {"key": "buffer_min", "value": 15})
+pl = tool("plan_task", {"date": day(2), "stops": [
+    {"type": "pickup", "place": "Head office"},
+    {"type": "visit", "place": "Kurunegala tower site", "what": "goods", "dwell_min": 30, "arrive_by": "10:00"},
+    {"type": "drop", "place": "Head office"}], "driver": "nuwan.p", "vehicle": "cab4521"})
+check(pl["leave_by_source"] == "plan" and pl["leave_by"][-5:] == pl["plan"]["leave_by"][-5:], "plan_task plans the leave-by time from the deadline", json.dumps(pl)[:200])
+legs = pl["plan"]["legs"]
+check(pl["plan"]["source"] == "estimate" and len(legs) == 2 and legs[0]["from"] == "Head office, Colombo 05" and legs[0]["to"] == "Kurunegala tower site"
+      and legs[0]["km"] > 60 and legs[0]["minutes"] > 60 and legs[0]["arrive"] <= "09:45" and pl["plan"]["buffer_min"] == 15,
+      "plan_task: two estimated legs; the first arrives at the deadline minus the buffer", json.dumps(pl["plan"])[:400])
+check(pl["stops"][1]["dwell_min"] == 30 and pl["stops"][1]["arrive_by"] == "10:00" and pl["stops"][1]["planned_arrive"] <= "09:45"
+      and pl["stops"][2]["planned_arrive"] > pl["stops"][1]["planned_depart"], "plan_task: planned arrive and depart at every stop", json.dumps(pl["stops"])[:400])
+check(any("No base place" in w for w in pl["warnings"]) and pl["leave_by"][-5:] == pl["stops"][0]["planned_arrive"] and legs[0]["depart"] == pl["stops"][0]["planned_depart"]
+      and pl["stops"][0]["planned_depart"] > pl["stops"][0]["planned_arrive"],
+      "plan_task: the no-base warning; leave-by = at the first stop, the first leg departs after the minutes there", json.dumps(pl["warnings"]) + " " + pl["leave_by"] + " " + json.dumps(pl["stops"][0]))
+r = tool("plan_task", {"date": day(2), "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kurunegala tower site"}]}, expect_error=True)
+check("start_time" in r and "arrive_by" in r, "plan_task with no time at all is refused (give start_time or an arrive_by)", r)
+t5 = tool("create_task", {"title": "Site round · Kurunegala", "date": day(2), "driver": "nuwan.p", "vehicle": "cab4521", "return_to_base": True, "avoid_expressway": True,
+                          "stops": [{"type": "pickup", "place": "Head office", "what": "people"},
+                                    {"type": "visit", "place": "Kurunegala tower site", "what": "goods", "dwell_min": 30, "arrive_by": "10:00", "note": "Ask for Mr Perera"},
+                                    {"type": "drop", "place": "Head office"}]})
+T5 = t5["task_id"]
+check(t5["leave_by"] == pl["leave_by"] and t5["leave_by_source"] == "plan" and len(t5["stops"]) == 3 and t5["stops"][1]["note"] == "Ask for Mr Perera"
+      and t5["plan"]["source"] == "estimate",
+      "create_task with stops[] plans the leave-by time from the deadline (same as plan_task)", json.dumps(t5)[:400])
+check(psql(f"select leave_by_source || '|' || plan_version || '|' || return_to_base || '|' || avoid_expressway || '|' || (leave_by = start_at) || '|' || (select count(*) from task_stops where task_id = t.id) from tasks t where id = '{T5}'")
+      == "plan|0|true|true|true|3", "the task row keeps leave_by (= start_at), the plan, return_to_base and avoid_expressway; 3 stops")
+td5 = tool("task_detail", {"task_id": T5})
+check(td5["task"]["leave_by"] == t5["leave_by"] and td5["task"]["plan_version"] == 0 and td5["plan"]["legs"][0]["to"] == "Kurunegala tower site"
+      and td5["stops"][1]["planned_arrive"] and td5["stops"][1]["arrive_by"] == "10:00" and td5.get("removed_stops") is None,
+      "task_detail: leave_by, plan_version 0, the plan's legs, planned times on the stops", json.dumps(td5)[:400])
+r = tool("update_task_stops", {"task_id": T5, "plan_version": 7, "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kurunegala tower site"}]}, expect_error=True)
+check("changed since you loaded it" in r, "update_task_stops with a stale plan_version is refused", r)
+us = tool("update_task_stops", {"task_id": T5, "plan_version": 0, "stops": [
+    {"type": "pickup", "place": "Head office", "what": "people"},
+    {"type": "visit", "place": "Kurunegala tower site", "what": "goods", "dwell_min": 30, "arrive_by": "11:00"},
+    {"type": "visit", "place": "Wariyapola", "what": "documents", "dwell_min": 10},
+    {"type": "drop", "place": "Head office"}]})
+check(us["plan_version"] == 1 and len(us["stops"]) == 4 and us["leave_by"] > t5["leave_by"] and us["leave_by_source"] == "plan",
+      "update_task_stops: version 1, four stops, a later leave-by (deadline moved to 11:00)", json.dumps(us)[:400])
+check(psql(f"select string_agg(seq || ':' || status, ',' order by seq) from task_stops where task_id = '{T5}'") == "1:removed,2:removed,3:removed,4:pending,5:pending,6:pending,7:pending",
+      "the old stops are marked removed (never deleted); the new ones continue the sequence")
+td5 = tool("task_detail", {"task_id": T5})
+check(td5["task"]["plan_version"] == 1 and len(td5["stops"]) == 4 and len(td5["removed_stops"]) == 3 and td5["removed_stops"][0]["place"] == "Head office, Colombo 05",
+      "task_detail after the edit: 4 stops, 3 removed stops listed, plan_version 1", json.dumps(td5.get("removed_stops")))
+b5 = tool("task_board", {"date": day(2)})
+c5 = next(c for c in b5["assigned"] if c["id"] == T5)
+check(c5["stops_count"] == 4 and c5["leave_by"] == us["leave_by"][-5:] and c5["to"] == "Head office, Colombo 05", "task_board card: stops_count 4, leave_by HH:MM, the last stop as 'to'", json.dumps(c5)[:300])
+ru = tool("routing_usage", {"days": 7})
+check(ru["provider"] == "estimate" and ru["daily_budget"]["ors"] == 1900 and ru["days"] == [], "routing_usage: estimate provider, no provider calls recorded", json.dumps(ru))
+
 # Two days ahead: in the evening the tasks above are already on tomorrow, and the approved request's task must not join their day.
 re1 = tool("create_request", {"requested_by": "Dilini Rajapaksha", "project": "13036", "date": day(2), "time": "06:30", "back_by": "18:00",
                               "route_from": "Head office", "route_to": "Matara sites", "need_type": "van", "pax": 6, "tools": True})
@@ -386,7 +456,7 @@ V1 = next(v["id"] for v in vehicles if v["reg_no"] == "WP CAB-4521")
 code, err = app.get("vehicles?select=*")
 check(code in (401, 403) and "permission denied" in json.dumps(err), "select * on vehicles is refused for the driver (REST)", f"{code} {str(err)[:120]}")
 code, mine = app.get("tasks?select=id,title,status&order=title")
-check(code == 200 and sorted(t["id"] for t in mine) == sorted([T1, T2]), "driver sees only their own 2 tasks", str(mine)[:200])
+check(code == 200 and sorted(t["id"] for t in mine) == sorted([T1, T2, T5]), "driver sees only their own 3 tasks", str(mine)[:200])
 code, _ = app.patch("employees?id=eq." + ME, {"current_vehicle_id": V1})
 check(code == 200, "driver sets their current vehicle")
 code, _ = app.patch("tasks?id=eq." + T1, {"seen_at": iso(now)})
@@ -610,7 +680,7 @@ check("completed" in r, "a completed task cannot be reassigned", r)
 ra = tool("reassign_task", {"task_id": T2, "driver": "kasun.s", "vehicle": "WP PH-2087"})
 check(ra["driver"] == "Kasun Silva" and ra["vehicle"] == "WP PH-2087" and psql(f"select seen_at is null from tasks where id='{T2}'") == "t", "reassign_task moves the task to Kasun and resets 'seen'")
 code, mine = app.get("tasks?select=id")
-check(sorted(t["id"] for t in mine) == [T1], "the previous driver no longer sees the reassigned task")
+check(sorted(t["id"] for t in mine) == sorted([T1, T5]), "the previous driver no longer sees the reassigned task")
 r = tool("cancel_task", {"task_id": T1, "reason": "x"}, expect_error=True)
 check("already completed" in r, "a completed task cannot be cancelled", r)
 ca = tool("cancel_task", {"task_id": T3, "reason": "Bank closed today"})
@@ -713,6 +783,17 @@ if CHANNEL == "api":
           "with assign_tasks the overview's needs-attention holds task items only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
     code, body = api_call(staff_token, "mileage_summary", {})
     check(code == 403, "mileage needs the vehicles permission (403)", f"{code} {str(body)[:120]}")
+    code, body = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})
+    check(code == 200 and body["result"]["leave_by_source"] == "manual", "with assign_tasks they can plan a task", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "update_settings", {"key": "buffer_min", "value": 10})
+    check(code == 403 and "users" in str(body.get("needs", [])), "but not change the fleet settings (403, needs users)", f"{code} {body}")
+    code, body = api_call(staff_token, "get_settings", {})
+    check(code == 200 and body["result"]["settings"]["buffer_min"] == 15, "get_settings answers a dispatcher (read-only)", f"{code} {str(body)[:160]}")
+    tool("update_office_user", {"email": staff_email, "permissions": ["request"]})
+    code, body = api_call(staff_token, "get_settings", {})
+    code2, body2 = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})
+    check(code == 403 and code2 == 403, "a requester can neither read the settings nor plan a task (403)", f"{code} {code2}")
+    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "assign_tasks"]})
     code, body = api_call(API_TOKEN, "update_office_user", {"email": admin_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
     check(code == 409 and "own users permission" in body.get("error", ""), "an admin cannot remove their own users permission (409)", f"{code} {body}")
     off = tool("set_office_user_active", {"email": staff_email, "active": False})

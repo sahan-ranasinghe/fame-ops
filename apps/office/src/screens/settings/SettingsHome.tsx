@@ -12,6 +12,7 @@ const SecurityCard = __BUILD__ === "web" ? lazy(() => import("./SecurityCard")) 
 
 const PAGE_TEXT: Record<string, string> = {
   users: "Office users, their permissions, set-password links, connector keys",
+  fleet: "Dispatch defaults: minutes at stops, the buffer, the base place, rush hour, the routing provider's usage",
 };
 
 export default function SettingsHome() {
@@ -24,7 +25,7 @@ export default function SettingsHome() {
         <div className="more-list">
           {pages.map((p) => (
             <Link key={p.key} to={p.path} className={p.locked ? "locked" : undefined} aria-disabled={p.locked || undefined} title={p.locked ? LOCK_HINT : undefined}>
-              <Icon name="accounts" />
+              <Icon name={p.key === "fleet" ? "settings" : "accounts"} />
               <span className="grow">{p.label}<span className="sub" style={{ display: "block", fontWeight: 400 }}>{PAGE_TEXT[p.key]}</span></span>
               {p.locked && <i className="lock"><Icon name="lock" /></i>}
             </Link>

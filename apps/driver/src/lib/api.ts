@@ -93,7 +93,8 @@ export async function fetchTasks(client: Client, since: Date): Promise<TaskWithS
       .order('start_at'),
     'tasks',
   );
-  return tasks.map((task) => ({ ...task, task_stops: [...task.task_stops].sort((a, b) => a.seq - b.seq) }));
+  // A stop the office edited out stays in the table as 'removed' and is shown nowhere.
+  return tasks.map((task) => ({ ...task, task_stops: task.task_stops.filter((stop) => stop.status !== 'removed').sort((a, b) => a.seq - b.seq) }));
 }
 
 export async function fetchTaskStatus(client: Client, id: string): Promise<string | null> {
@@ -144,7 +145,7 @@ export type TaskPatch = Pick<
   Tables['tasks']['Update'],
   'seen_at' | 'started_at' | 'completed_at' | 'start_odometer_km' | 'end_odometer_km' | 'status'
 >;
-export type StopPatch = Pick<Tables['task_stops']['Update'], 'status' | 'arrived_at' | 'done_at'>;
+export type StopPatch = Pick<Tables['task_stops']['Update'], 'status' | 'arrived_at' | 'done_at' | 'skip_reason' | 'skip_note'>;
 export type OdometerInsert = Tables['odometer_logs']['Insert'] & { id: string };
 export type FuelInsert = Tables['fuel_logs']['Insert'] & { id: string };
 export type ReportInsert = Pick<

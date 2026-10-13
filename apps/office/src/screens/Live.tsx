@@ -148,6 +148,11 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
         <div><dt>Speed</dt><dd>{x.speed_kmh != null && (x.status ?? "live") === "live" ? num(x.speed_kmh) + " km/h" : "—"}</dd></div>
         <div><dt>Battery</dt><dd>{x.battery_pct != null ? x.battery_pct + "%" : "—"}</dd></div>
       </dl>
+      {(x.eta_next || x.eta_final) && (
+        <p className="small" style={{ margin: "0 0 12px" }} data-testid="eta-line">
+          ETA{x.next_stop ? ` ${x.next_stop}` : " next"} {x.eta_next ?? "—"} · final {x.eta_final ?? "—"} (live){x.late_min ? <span className="status bad"> · running late by {x.late_min} min</span> : null}
+        </p>
+      )}
       {x.heartbeat_at && (
         <p className="muted small" style={{ margin: "0 0 12px" }} data-testid="phone-line">
           Phone {String(x.heartbeat_at).slice(-5)}: Location {x.location_on === false ? "off" : "on"} · permission {x.permission ?? "?"}

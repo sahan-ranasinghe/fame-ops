@@ -126,7 +126,11 @@ async function main() {
     return must(
       await admin.rpc('office_create_task', {
         p_task: { title, employee_id: driverId, vehicle_id: vehicleId, start_at: new Date(Date.now() + minutesFromNow * 60000).toISOString(), passengers: 5, contact_name: 'Ashan W.', contact_phone: '0779998877', created_by: 'test' },
-        p_stops: [{ seq: 2, type: 'drop', place_name: 'Kurunegala tower site', lat: 7.4839, lng: 80.3683 }, { seq: 1, type: 'pickup', place_name: 'Head office, Colombo 05', lat: 6.8868, lng: 79.8612 }],
+        p_stops: [
+          { seq: 3, type: 'drop', place_name: 'Kurunegala tower site', lat: 7.4839, lng: 80.3683 },
+          { seq: 1, type: 'pickup', place_name: 'Head office, Colombo 05', lat: 6.8868, lng: 79.8612, what: 'people' },
+          { seq: 2, type: 'visit', place_name: 'Kurunegala hardware store', what: 'goods', dwell_min: 10, note: 'Collect the cable drums' },
+        ],
         p_projects: [],
       }),
       'task',
@@ -135,6 +139,8 @@ async function main() {
   const task1 = await makeTask(`Team drop ${run}`, a.row.id, van.id, 10);
   const task2 = await makeTask(`Return team ${run}`, a.row.id, van.id, 300);
   const taskOfB = await makeTask(`Other driver ${run}`, b.row.id, car.id, 10);
+  // The office edited a stop out of task 1: it stays in the table as 'removed'.
+  must(await admin.from('task_stops').insert({ task_id: task1, seq: 4, type: 'visit', place_name: 'Wariyapola junction', status: 'removed', removed_at: new Date().toISOString() }).select('id').single(), 'removed stop');
   // A sharing period left open by an earlier install of the app.
   const stale = must(await admin.from('duty_sessions').insert({ employee_id: a.row.id, started_at: new Date(Date.now() - 86400000).toISOString() }).select('id').single(), 'stale session');
 
@@ -163,7 +169,9 @@ async function main() {
   const since = new Date(Date.now() - 3600000);
   let tasks = await api.fetchTasks(client, since);
   check(tasks.length === 2 && tasks.every((t) => t.employee_id === a.row.id) && !tasks.some((t) => t.id === taskOfB), 'fetchTasks returns my 2 tasks and not the other driver\'s', tasks.map((t) => t.title));
-  check(tasks[0]?.id === task1 && tasks[0].task_stops.map((s) => s.type).join('>') === 'pickup>drop', 'tasks come soonest first, stops in order (pickup, then drop)', tasks[0]?.task_stops.map((s) => s.seq));
+  check(tasks[0]?.id === task1 && tasks[0].task_stops.map((s) => s.type).join('>') === 'pickup>visit>drop', 'tasks come soonest first, stops in order (pickup, visit, drop)', tasks[0]?.task_stops.map((s) => s.seq));
+  check(tasks[0]?.task_stops.length === 3 && !tasks[0].task_stops.some((s) => s.place_name === 'Wariyapola junction'), 'a stop the office removed is not shown', tasks[0]?.task_stops.map((s) => s.status));
+  check(tasks[0]?.task_stops[1]?.dwell_min === 10 && tasks[0]?.task_stops[1]?.note === 'Collect the cable drums' && tasks[0]?.task_stops[1]?.what === 'goods', 'a stop carries its minutes, note and what', tasks[0]?.task_stops[1]);
 
   // --- the queue ---------------------------------------------------------------
   console.log('\n== Offline queue: a whole working day, first with no connection ==');
@@ -220,14 +228,16 @@ async function main() {
     photoOp(pStart, 'odometer'),
     { kind: 'odometer_log', row: { id: logStart, vehicle_id: van.id, employee_id: a.row.id, task_id: task1, reading_km: 84512, ocr_value: 84512, photo_id: pStart, kind: 'task_start', logged_at: at(44) } },
     { kind: 'task_patch', id: task1, patch: { status: 'in_progress', start_odometer_km: 84512, started_at: at(44) } },
+    { kind: 'stop_patch', id: stops[0]!.id, patch: { status: 'arrived', arrived_at: at(42) } },
     { kind: 'stop_patch', id: stops[0]!.id, patch: { status: 'done', done_at: at(40) } },
+    { kind: 'stop_patch', id: stops[1]!.id, patch: { status: 'skipped', skip_reason: 'closed', skip_note: 'Shutter down', done_at: at(30) } },
     { kind: 'report', row: { id: report, vehicle_id: van.id, employee_id: a.row.id, task_id: task1, category: 'tyre', note: 'Front left tyre is worn', created_at: at(20) } },
     photoOp(pReport, 'vehicle_report', report),
     photoOp(pEnd, 'odometer'),
     { kind: 'odometer_log', row: { id: randomUUID(), vehicle_id: van.id, employee_id: a.row.id, task_id: task1, reading_km: 84563, ocr_value: 84568, photo_id: pEnd, kind: 'task_end', logged_at: at(3) } },
     photoOp(pFuel, 'fuel_receipt'),
     { kind: 'fuel_log', row: { id: randomUUID(), vehicle_id: van.id, employee_id: a.row.id, task_id: task1, litres: 32, amount_cents: 1184000, receipt_photo_id: pFuel, odometer_km: 84563, logged_at: at(3) } },
-    { kind: 'stop_patch', id: stops[1]!.id, patch: { status: 'done', done_at: at(3) } },
+    { kind: 'stop_patch', id: stops[2]!.id, patch: { status: 'done', done_at: at(3) } },
     { kind: 'task_patch', id: task1, patch: { status: 'completed', end_odometer_km: 84563, completed_at: at(3) } },
     { kind: 'session_end', id: session, ended_at: at(1), end_reason: 'driver' },
   ];
@@ -248,8 +258,9 @@ async function main() {
   const row = must(await admin.from('tasks').select('*').eq('id', task1).single(), 'task');
   check(row.status === 'completed' && row.km === 51 && row.start_odometer_km === 84512 && row.seen_at !== null, 'the task is completed on the server with 51 km', { status: row.status, km: row.km });
   check(row.started_at !== null && row.completed_at !== null && Math.abs(new Date(row.started_at).getTime() - (now - 44 * 60000)) < 2000, 'start and finish keep the times from the phone, not the time of sending', { started: row.started_at });
-  const stopRows = must(await admin.from('task_stops').select('status').eq('task_id', task1), 'stops');
-  check(stopRows.every((s) => s.status === 'done'), 'both stops are marked done');
+  const stopRows = must(await admin.from('task_stops').select('seq, status, arrived_at, skip_reason, skip_note').eq('task_id', task1).order('seq'), 'stops');
+  check(stopRows.map((s) => s.status).join(',') === 'done,skipped,done,removed', 'the stops are done, skipped, done; the removed one stays removed', stopRows.map((s) => s.status));
+  check(stopRows[0]?.arrived_at !== null && stopRows[1]?.skip_reason === 'closed' && stopRows[1]?.skip_note === 'Shutter down', 'the pickup keeps its arrival time; the skipped stop keeps the reason and the note', stopRows.slice(0, 2));
   const photos = must(await admin.from('photos').select('id, kind, odometer_log_id, fuel_log_id, vehicle_report_id, storage_path').eq('employee_id', a.row.id), 'photos');
   check(photos.length === 4 && photos.find((p) => p.id === pStart)?.odometer_log_id === logStart && photos.find((p) => p.id === pFuel)?.fuel_log_id !== null && photos.find((p) => p.id === pReport)?.vehicle_report_id === report, '4 photo records, each linked to its reading, fuel entry or report', photos);
   const files = must(await admin.storage.from('driver-photos').list(`${a.row.id}/${day}`), 'files');

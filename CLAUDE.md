@@ -243,10 +243,29 @@
   end_by (nullable), passengers, contact_name, contact_phone, notes,
   status ('assigned'|'in_progress'|'completed'|'cancelled'), sent_at, seen_at,
   started_at, completed_at, start_odometer_km, end_odometer_km, km (computed),
-  request_id (nullable), created_by (text), cancelled_reason.
+  request_id (nullable), created_by (text), cancelled_reason, plus the plan (Phase 5 Part 4):
+  start_place_id/start_name/start_lat/start_lng (where the trip starts; default the base
+  place or the first stop), return_to_base, avoid_expressway, leave_by, leave_by_source
+  ('plan'|'manual'), buffer_min, plan_json (legs, warnings, settings used), plan_version
+  (update_task_stops must send the one it loaded), reminder_30_sent_at, reminder_0_sent_at.
+  start_at = leave_by. Planner: `_shared/fleet/plan.ts` (pure; leave-by from the deadlines
+  minus the buffer, dwell per stop kind); road times: `routing.ts` (ROUTING_PROVIDER
+  secret: ors with ORS_KEY, google with GOOGLE_ROUTES_KEY, or estimate = straight line ×
+  road_factor ÷ avg_speed_kmh when unset; `route_legs` cache 30 days, `routing_calls` per
+  day, rush-hour factor from settings); `eta.ts` (`task_eta`, 2-minute cache) for the
+  running task's ETA and "late by N min". `fleet_settings` (key, value jsonb, updated_by):
+  dwell_min, buffer_min, base_place_id (null until an admin picks a real place: no seeded
+  sample place), avg_speed_kmh, road_factor, accept_within_min, accept_before_leave_min,
+  rush_hour. The pg_cron job `task-reminders` (every minute) queues leave_30 / leave_now
+  pushes through `send_push`.
 - `task_stops`: id, task_id, seq, type ('pickup'|'drop'|'visit'), place_id (nullable),
-  place_name, address, lat/lng (nullable), status ('pending'|'arrived'|'done'|'skipped'),
-  arrived_at, done_at. The design shows one pickup and one drop-off; more stops allowed.
+  place_name, address, lat/lng (nullable), status ('pending'|'arrived'|'done'|'skipped'|
+  'removed'), arrived_at, done_at, what ('people'|'goods'|'documents'|'other'), note,
+  dwell_min, arrive_by (deadline), planned_arrive_at, planned_depart_at, skip_reason
+  ('closed'|'nobody_there'|'not_needed'|'not_visited'|'other'), skip_note, removed_at.
+  The design shows one pickup and one drop-off; up to 12 stops allowed. A stop the office
+  edits out is marked 'removed' (never deleted) and shown nowhere; the driver's unfinished
+  stops at Save & finish become skipped · not_visited.
 - `task_projects`: task_id, project_id (null = Fame internal), percent. Sum = 100 per task.
 - `odometer_logs`: id, vehicle_id, employee_id, task_id (nullable), reading_km,
   ocr_value (nullable), photo_id, kind ('task_start'|'task_end'|'manual'), logged_at,
@@ -496,11 +515,22 @@ office_audit.
   chips, status), `register_vehicle(...)`, `update_vehicle(reg_no, ...)`,
   `add_rental_company(name, phone?)`.
 - Places: `list_places`, `add_place(name, address?, lat?, lng?, kind?)`.
-- Tasks: `create_task(title, date, start_time, driver, vehicle, pickup, dropoff,
-  passengers?, contact_name?, contact_phone?, notes?, projects[{project, percent}])`
-  returning warnings; `task_board(date)` (assigned / in progress / completed with status
-  lines); `task_detail(task_id)` (odometer/fuel photo links, GPS km); `cancel_task(task_id, reason)`;
-  `reassign_task(task_id, driver?, vehicle?, start_time?)`.
+- Tasks: `create_task(title, date, start_time?, driver, vehicle, pickup, dropoff | stops[{type,
+  what?, place?, address?, lat?, lng?, dwell_min?, arrive_by?, note?}], start?, return_to_base?,
+  avoid_expressway?, leave_by?, buffer_min?, passengers?, contact_name?, contact_phone?,
+  notes?, projects[{project, percent}])` returning warnings, leave_by, stops and the plan
+  (start_time or leave_by, or an arrive_by on a stop, is needed); `plan_task(date, same
+  stop fields, driver?, vehicle?)` (preview, creates nothing); `update_task_stops(task_id,
+  plan_version, stops[])` (pending stops → removed, new ones appended, re-planned, driver
+  told "Task changed"; a stale plan_version is refused); `task_board(date)` (assigned / in
+  progress / completed with status lines, stops_count, leave_by, eta_next, eta_final,
+  late_min); `task_detail(task_id)` (odometer/fuel photo links, GPS km, plan, planned and
+  actual times per stop, skip reasons, removed_stops, plan_version); `cancel_task(task_id,
+  reason)`; `reassign_task(task_id, driver?, vehicle?, start_time?)` (shifts leave_by and
+  the planned times).
+- Settings: `get_settings` (view, assign_tasks or approve), `update_settings(key, value)` and
+  `routing_usage(days?)` (users). Tool answers never carry null fields (run.ts prunes
+  them): a null setting such as base_place_id is simply absent.
 - Requests: `create_request(...)`, `list_requests(status?)`, `suggest_vehicles(request_id)`
   (free all day / over km allowance / booked), `decide_request(request_id, decision,
   vehicle?, driver?, reason?)` (approve creates the task).

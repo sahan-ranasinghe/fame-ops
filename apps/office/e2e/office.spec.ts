@@ -93,18 +93,22 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
   const title = `E2E drop ${stamp}`;
   await page.getByLabel("Task", { exact: true }).fill(title);
-  await page.getByLabel("Start", { exact: true }).fill("09:30");
+  await page.getByLabel("Leave by", { exact: true }).fill("09:30");
   await page.getByLabel("Pickup").fill("Head office");
   await page.getByLabel("Drop-off").fill("Nugegoda");
   await page.getByLabel("Driver", { exact: true }).selectOption(driver.username);
   await page.getByLabel("Vehicle", { exact: true }).selectOption(plate);
+  // The plan preview follows the form (a moment after the last change): leave-by time and the estimated legs.
+  await expect(page.getByTestId("plan-panel")).toContainText("Leave by", { timeout: 15000 });
   await page.getByRole("button", { name: "Assign & send" }).click();
   await expect(page.getByText(`Sent to ${driver.name}.`)).toBeVisible();
   const card = page.locator(".tcard", { hasText: title });
   await expect(card).toBeVisible();
+  await expect(card).toContainText("Leave by 09:30");
   await card.click();
   await expect(page.getByRole("dialog").getByRole("heading", { name: title })).toBeVisible();
   await expect(page.getByRole("dialog").getByText("Fame internal")).toBeVisible();
+  await expect(page.getByRole("dialog").getByTestId("plan-panel")).toContainText("estimate");
   await page.getByLabel("Cancel this task").fill("E2E test over");
   await page.getByRole("button", { name: "Cancel task" }).click();
   await expect(page.getByRole("status")).toHaveText("Task cancelled");

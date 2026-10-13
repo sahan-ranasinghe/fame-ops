@@ -183,7 +183,18 @@ td.r, th.r { text-align: right }
 .tcard .who .grow { font-weight: 500; flex: 1 1 auto }
 .status { font-size: 14px; font-weight: 600 }
 .status.live { color: var(--live) } .status.warn { color: var(--warn) } .status.muted { color: var(--muted) } .status.bad { color: var(--bad) }
+.tcard .leave { font-size: 14px; display: block }
 .daynav { display: flex; gap: 8px; flex-wrap: wrap; align-items: center }
+
+/* stops and the plan */
+.stop-row { display: grid; gap: 12px }
+.plan { display: grid; gap: 10px; background: var(--surface-2); border-radius: 12px; padding: 14px }
+.plan-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline }
+.plan-stops { display: grid; gap: 4px }
+.plan-stop { display: flex; gap: 12px; align-items: baseline; font-size: 14px }
+.plan-stop .when { flex: none; width: 108px }
+.stop-times { font-family: var(--font-mono); font-size: 13px; color: var(--muted) }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px }
 .daynav input { width: auto; min-height: 44px }
 @media (max-width: 1150px) { .tasks-layout { grid-template-columns: minmax(0, 1fr) } }
 @media (max-width: 620px) { .board { grid-template-columns: minmax(0, 1fr) } }

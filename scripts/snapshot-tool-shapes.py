@@ -18,6 +18,7 @@ instead of office-mcp. Writes are never called here.
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -40,8 +41,12 @@ def http(method, url, headers, body=None):
 
 def call(tool, args):
     if CHANNEL == "api":
-        code, text = http("POST", f"{API}/functions/v1/office-api/tools/{tool}",
-                          {"Content-Type": "application/json", "Authorization": f"Bearer {os.environ['API_TOKEN']}"}, args)
+        for _ in range(20):
+            code, text = http("POST", f"{API}/functions/v1/office-api/tools/{tool}",
+                              {"Content-Type": "application/json", "Authorization": f"Bearer {os.environ['API_TOKEN']}"}, args)
+            if code != 429:  # 120 calls a minute per person: wait for the window
+                break
+            time.sleep(5)
         if code != 200:
             raise RuntimeError(f"{tool}: office-api {code} {text[:200]}")
         return json.loads(text)["result"]
@@ -118,6 +123,9 @@ def main():
         ("mileage_summary", {"driver": driver}),
         ("list_vehicle_reports", {"status": "all"}),
         ("find_project", {"text": "a"}),
+        ("get_settings", {}),
+        ("routing_usage", {}),
+        ("plan_task", {"date": board.get("date"), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Kurunegala"}),
     ]
     if task_id:
         calls.append(("task_detail", {"task_id": task_id}))

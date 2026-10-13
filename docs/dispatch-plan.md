@@ -245,6 +245,19 @@ Row Level Security: drivers read `task_stops` of their own tasks already (`selec
 whole-table), so the new stop columns reach the app; `fleet_settings`, `route_legs`,
 `routing_calls`, `task_eta` are service-role only.
 
+**As built (13 October 2026, migration `20261014110000_task_plan`).** Everything above,
+plus: `task_stops.status` gains `removed` (the office's edits never delete a stop) and
+`skip_reason` includes `not_visited` (the driver's unfinished stops at Save & finish);
+`tasks.plan_version` (integer, default 0) guards `update_task_stops`; `office_create_task`
+accepts the new task and stop fields and `office_update_task_stops(p_task_id, p_version,
+p_task, p_stops)` marks the pending stops removed and appends the new ones with the
+sequence continuing (so history keeps every stop a task ever had); `fleet_settings` is
+seeded with the eight keys and `base_place_id` = null (no sample place); `route_legs`,
+`routing_calls` (+ `bump_routing_calls`) and `task_eta` are service-role only;
+`queue_task_reminders()` runs every minute (pg_cron `task-reminders`) and sends leave_30 /
+leave_now once each through `send_push`; `tasks_notify_push` also fires on a
+`plan_version` change (kind `changed`). pgTAP: `supabase/tests/database/task_plan.test.sql`.
+
 ### 3.3 `task_accept_decline` (Part 5)
 
 ```sql
@@ -732,6 +745,22 @@ made the same way into the `functions serve` env file.
   fresh task), "ETA next HH:MM · final HH:MM (live)" and "Running late by N min". Task board
   cards: "Leave by HH:MM", lateness. Live map card: the ETA line. Settings → Fleet (`users`).
   Artifact: the same on the drawn map (pin by lat,lng only).
+  *As built (13 October 2026).* The Assign-a-task card holds the stops inline (Pickup /
+  Drop-off rows, "Add stop", ↑↓, a place or town or free text, what, minutes there,
+  arrive-by, a note), "Stops in detail" opens the same rows in the shared dialog
+  (`StopsEditor.tsx`, Save stops / Cancel with the discard rule), Date + "Leave by"
+  (typed = manual, empty = planned from the deadlines), "Start from", Return to office,
+  No expressway; the plan preview (`PlanPanel.tsx`, `plan_task` 700 ms after the last
+  change) shows leave-by, every leg with km / minutes / source, the planned times and the
+  warnings. The task drawer shows Leave by, the ETA line, planned and actual times per
+  stop with skip reasons, "Edit stops" (→ `update_task_stops` with the loaded
+  `plan_version`; a stale one shows the server's "changed since you loaded it" message),
+  the removed stops, and a "Leave by" field in Reassign. Task cards: "Leave by HH:MM ·
+  ETA HH:MM · late by N min". Live locations: next stop and ETA on the card. Settings →
+  Fleet (`settings/FleetSettings.tsx`, users permission): base place (saved places with a
+  pin), minutes at a stop, the numbers, rush-hour bands, the routing provider and its
+  usage table. `plan_task` takes `leave_by` (HH:MM), not `start_time`. Tool answers never
+  carry null fields (run.ts prunes them), so a null setting is simply absent.
 - **Part 5.** Status lines; the "Needs a driver" column (declined) on the board; the task
   drawer shows the reason and "Reassign" with suggestions (free drivers, free vehicles);
   the driver page and Drivers table show accepts/declines in 30 days.
@@ -771,6 +800,19 @@ stops editor, plan timeline, lock state, bell, issue severities.
   (they become `skipped · not_visited`). Push kinds `leave_30`, `leave_now`, `accept_reminder`
   open the task on tap (as today). `database.types.ts` regenerated in both copies (driver and
   shared).
+  *As built (13 October 2026).* Today card and "Later today": the time shown is
+  `leave_by` (falls back to `start_at`) with "Leave by HH:MM" under it; the first two
+  stops and "+N more"; a stop with a deadline shows "Arrive by HH:MM". Task screen:
+  every stop in a row (type, place, arrive-by, minutes there, the office's note), the
+  current stop outlined in blue with "Now", Arrived (pending → arrived) then Done
+  (dark), Skip → a bottom sheet (`components/SkipSheet.tsx`: Closed / Nobody there / Not
+  needed / Other, an optional note, Skip stop / Cancel; the back button closes it); the
+  map and Navigate follow the current stop; Complete task with open stops asks "N stops
+  are not done · Finish the task anyway? They will be marked as not visited." → Finish
+  anyway, and Save & finish marks them skipped · not_visited. The stop patches go through
+  the offline queue (`stop_patch` with skip_reason / skip_note); `fetchTasks` hides
+  removed stops. Data-layer test: a skipped stop keeps its reason and note, a removed
+  stop is not shown, the stop fields (what, minutes, note) arrive.
 - **Part 5.** NEXT TASK card and Later today items: a big "Accept" button while `accepted_at`
   is null (then "Accepted ✓ HH:MM"), the link "Can't do this task" under it; the sheet with the
   four reasons (Vehicle problem / Not available / Unwell / Other), an optional note, confirm;
@@ -860,6 +902,31 @@ task"), `task.declineTitle`, `task.declineReason.vehicleProblem` / `notAvailable
 `other`, `task.declineNote`, `task.declineConfirm`, `task.declined`, `task.alreadyReassigned`
 ("This task was already reassigned"), `task.alreadyStarted`, `push.acceptReminder`. The full
 list with Sinhala comes with Part 7 for Sahan to check.
+
+### Part 4 strings (as built, 13 October 2026)
+
+| key | English |
+|---|---|
+| `today.leaveBy` | Leave by {time} |
+| `today.moreStops` | +{n} more |
+| `task.leaveBy` | Leave by {time} |
+| `task.arriveBy` | Arrive by {time} |
+| `task.arrived` | Arrived |
+| `task.skip` | Skip |
+| `task.skipTitle` | Skip this stop? |
+| `task.skipWhy` | Why? |
+| `task.skipReason.closed` / `nobodyThere` / `notNeeded` / `other` | Closed / Nobody there / Not needed / Other |
+| `task.skipNote` | A word for the office (optional) |
+| `task.skipConfirm` | Skip stop |
+| `task.skipped` | Skipped |
+| `task.currentStop` | Now |
+| `task.stopsLeftTitle` | {n} stops are not done |
+| `task.stopsLeftBody` | Finish the task anyway? They will be marked as not visited. |
+| `task.finishAnyway` | Finish anyway |
+| `task.minutesThere` | {n} min there |
+
+The Sinhala texts for all of these are in `si.json`; the full Sinhala list for the boss's
+check comes with Part 7.
 
 ## 14. Documents at the end (Part 7)
 

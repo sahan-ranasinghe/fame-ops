@@ -1,17 +1,25 @@
+// Assign a task: the stops (inline place names, the full editor in the
+// dialog), the start place, the return and expressway toggles, the leave-by
+// time (typed, or planned from the stops' deadlines: the plan panel shows the
+// preview as the form changes), the driver and vehicle, the project split.
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import type { Lists } from "../data/hooks";
-import type { CreateTaskResult, FindProject } from "../data/types";
+import type { CreateTaskResult, FindProject, PlanPreview } from "../data/types";
 import { num, plateOf, splitEqually, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Notice, WarningsNote } from "../ui/basics";
-import { useDirty } from "../ui/Drawer";
+import { useDirty, useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
-import { driverWhatsApp, emptyAssign, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
+import { driverWhatsApp, emptyAssign, planInput, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
+import { PlanPanel } from "./PlanPanel";
+import { StopsEditor } from "./StopsEditor";
+import { defaultStops, newStop, stopLabel } from "./stopsLogic";
 
 const SPLIT_COLORS = ["var(--accent)", "var(--live)", "var(--ok)", "var(--bad)", "var(--muted)"];
+const PLAN_DEBOUNCE_MS = 700;
 
 interface Props {
   date: string;
@@ -22,15 +30,18 @@ interface Props {
 
 export function AssignForm({ date, lists, onDate, onOpenTask }: Props) {
   const { me, store, transport } = useFleet();
+  const drawer = useDrawer();
   const location = useLocation();
   const [f, setF] = useState(() => emptyAssign(date));
   const [rows, setRows] = useState<ProjectRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "" | "bad" | "ok"; text: React.ReactNode; warnings?: string[] } | null>(null);
+  const [preview, setPreview] = useState<PlanPreview | null>(null);
+  const [previewErr, setPreviewErr] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // What a reload would lose (the fields a successful send clears).
-  useDirty([f.title, f.notes, f.cname, f.cphone, f.pax, f.end, f.dropoff].some((v) => v.trim() !== "") || rows.length > 0);
+  useDirty([f.title, f.notes, f.cname, f.cphone, f.pax, f.end].some((v) => v.trim() !== "") || rows.length > 0 || f.stops.some((s) => s.place.trim() !== ""));
 
   // The day picked on the board is the form's default day.
   useEffect(() => setF((x) => ({ ...x, date })), [date]);
@@ -40,7 +51,32 @@ export function AssignForm({ date, lists, onDate, onOpenTask }: Props) {
     }
   }, [location.state]);
 
+  // The plan preview follows the form, a moment after the last change.
+  const planKey = JSON.stringify(planInput(f));
+  useEffect(() => {
+    const input = JSON.parse(planKey) as Record<string, unknown> | null;
+    if (!input) {
+      setPreview(null);
+      setPreviewErr(null);
+      return;
+    }
+    let alive = true;
+    const timer = setTimeout(async () => {
+      try {
+        const p = await transport.call<PlanPreview>("plan_task", input);
+        if (alive) {
+          setPreview(p);
+          setPreviewErr(null);
+        }
+      } catch (e) {
+        if (alive) setPreviewErr(errText(e as FleetError)[0]);
+      }
+    }, PLAN_DEBOUNCE_MS);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [planKey, transport]);
+
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  const setStop = (i: number, place: string) => setF((x) => ({ ...x, stops: x.stops.map((s, j) => (j === i ? { ...s, place } : s)) }));
   const drivers = (lists.drivers ?? []).filter((d) => d.active !== false);
   const vehicles = lists.vehicles ?? [];
 
@@ -83,21 +119,22 @@ export function AssignForm({ date, lists, onDate, onOpenTask }: Props) {
     try {
       const p = await transport.call<CreateTaskResult>("create_task", v.input);
       const drv = drivers.find((x) => x.username === v.input.driver);
-      const wa = f.whatsapp && drv?.phone ? driverWhatsApp(v.input, drv.phone) : "";
+      const wa = f.whatsapp && drv?.phone ? driverWhatsApp(v.input, drv.phone, p.leave_by ? `Leave by ${p.leave_by}` : undefined) : "";
       setMsg({
         tone: "ok",
         warnings: warnList(p),
         text: (
           <>
-            <b>Sent to {drv ? drv.name : String(v.input.driver)}.</b> The task is in their Fame Driver app.{" "}
+            <b>Sent to {drv ? drv.name : String(v.input.driver)}.</b> Leave by {p.leave_by?.slice(-5) ?? "—"}. The task is in their Fame Driver app.{" "}
             {p.task_id && <button type="button" className="btn small" onClick={() => onOpenTask(p.task_id)}>Open task</button>}{" "}
             {wa ? <a className="btn small" href={wa} target="_blank" rel="noopener">WhatsApp the driver</a>
               : f.whatsapp ? <span className="small">No phone number saved for this driver, so no WhatsApp link.</span> : null}
           </>
         ),
       });
-      setF((x) => ({ ...x, title: "", notes: "", cname: "", cphone: "", pax: "", end: "", dropoff: "" }));
+      setF((x) => ({ ...x, title: "", notes: "", cname: "", cphone: "", pax: "", end: "", leaveBy: "", stops: defaultStops() }));
       setRows([]);
+      setPreview(null);
       if (v.input.date !== date) onDate(String(v.input.date));
       void store.invalidate();
     } catch (e) {
@@ -107,6 +144,7 @@ export function AssignForm({ date, lists, onDate, onOpenTask }: Props) {
   }
 
   const total = splitTotal(rows);
+  const openEditor = () => drawer.open(<StopsEditor stops={f.stops} places={lists.places ?? []} onSave={(stops) => set("stops", stops)} />);
 
   return (
     <div className="card" id="assign-card">
@@ -142,13 +180,36 @@ export function AssignForm({ date, lists, onDate, onOpenTask }: Props) {
           <button type="button" className="btn" onClick={() => setRows((rs) => [...rs, { project: "", percent: rs.length ? "" : 100 }])}>+ Add a project</button>
           <span className="hint">Km, fuel and driver costs from this task are split across these projects by the percentages. Leave empty for Fame internal.</span>
         </div>
+
+        <div className="field">
+          <span className="lab">Stops</span>
+          {f.stops.map((s, i) => (
+            <div className="field" key={s.key}>
+              <label htmlFor={`af-stop-${s.key}`}>{stopLabel(i, s.type, f.stops.length)}{s.arriveBy ? <span className="muted"> · by {s.arriveBy}</span> : null}</label>
+              <input id={`af-stop-${s.key}`} list="places-list" maxLength={160} placeholder={i === 0 ? "Head office, Colombo 05" : "Saved place, town or address"} value={s.place} onChange={(e) => setStop(i, e.target.value)} />
+            </div>
+          ))}
+          <datalist id="places-list">{(lists.places ?? []).map((p) => <option key={p.name} value={p.name} />)}</datalist>
+          <div className="acts">
+            <button type="button" className="btn" onClick={() => set("stops", [...f.stops, newStop("drop")])}><Icon name="plus" />Add stop</button>
+            <button type="button" className="btn" onClick={openEditor}>Stops in detail</button>
+          </div>
+          <span className="hint">Stops in detail: order, what is carried, minutes there, arrive-by deadlines, notes, map pins.</span>
+        </div>
         <div className="grid2">
           <div className="field"><label htmlFor="af-date">Date</label><input type="date" id="af-date" value={f.date} onChange={(e) => set("date", e.target.value)} /></div>
-          <div className="field"><label htmlFor="af-start">Start</label><input type="time" id="af-start" value={f.start} onChange={(e) => set("start", e.target.value)} /></div>
+          <div className="field"><label htmlFor="af-leave">Leave by</label><input type="time" id="af-leave" value={f.leaveBy} onChange={(e) => set("leaveBy", e.target.value)} /><span className="hint">Empty: planned from the stops’ arrive-by times.</span></div>
         </div>
-        <div className="field"><label htmlFor="af-pickup">Pickup</label><input id="af-pickup" list="places-list" maxLength={160} placeholder="Head office, Colombo 05" value={f.pickup} onChange={(e) => set("pickup", e.target.value)} /></div>
-        <div className="field"><label htmlFor="af-dropoff">Drop-off</label><input id="af-dropoff" list="places-list" maxLength={160} placeholder="Saved place or address" value={f.dropoff} onChange={(e) => set("dropoff", e.target.value)} /></div>
-        <datalist id="places-list">{(lists.places ?? []).map((p) => <option key={p.name} value={p.name} />)}</datalist>
+        <div className="field"><label htmlFor="af-start">Start from</label><input id="af-start" list="places-list" maxLength={160} placeholder="The base place (Settings)" value={f.start} onChange={(e) => set("start", e.target.value)} /></div>
+        <div className="grid2">
+          <span className="check"><input type="checkbox" id="af-return" checked={f.returnToBase} onChange={(e) => set("returnToBase", e.target.checked)} /> <label htmlFor="af-return">Return to office</label></span>
+          <span className="check"><input type="checkbox" id="af-noexp" checked={f.avoidExpressway} onChange={(e) => set("avoidExpressway", e.target.checked)} /> <label htmlFor="af-noexp">No expressway</label></span>
+        </div>
+        {(preview || previewErr) && (
+          <div>
+            {previewErr ? <Notice>{previewErr}</Notice> : <PlanPanel preview={preview} />}
+          </div>
+        )}
         <div className="grid2">
           <div className="field">
             <label htmlFor="af-driver">Driver</label>
