@@ -6,7 +6,7 @@ import { availabilityTone, cap, joinDots, requestTone, warnList } from "../lib/f
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
-import { DrawerTop, useDrawer } from "../ui/Drawer";
+import { DrawerTop, useDirty, useDrawer } from "../ui/Drawer";
 import { useToast } from "../ui/Toast";
 import { decisionInput } from "./requestLogic";
 import { TaskDrawer } from "./TaskDrawer";
@@ -30,6 +30,9 @@ export function RequestDrawer({ id, mode }: { id: string; mode?: "decline" }) {
   const [vehicle, setVehicle] = useState("");
   const [driver, setDriver] = useState("");
   const [reason, setReason] = useState("");
+  // A pick or a typed reason is unsaved input until the decision is made.
+  const [touched, setTouched] = useState(false);
+  useDirty(touched || reason.trim() !== "");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "bad" | "ok"; text: React.ReactNode; warnings?: string[] } | null>(null);
   const decides = me.tools.includes("decide_request");
@@ -74,6 +77,8 @@ export function RequestDrawer({ id, mode }: { id: string; mode?: "decline" }) {
     setBusy(true);
     try {
       const p = await transport.call<DecideResult>("decide_request", v.input);
+      setTouched(false);
+      setReason("");
       void store.invalidate();
       if (decision === "approve") {
         setMsg({
@@ -134,7 +139,7 @@ export function RequestDrawer({ id, mode }: { id: string; mode?: "decline" }) {
             <div className="form">
               {vehicles.length ? vehicles.map((v) => (
                 <label className="opt" key={v.plate}>
-                  <input type="radio" name="rq-veh" value={v.plate} checked={vehicle === v.plate} onChange={() => setVehicle(v.plate)} />
+                  <input type="radio" name="rq-veh" value={v.plate} checked={vehicle === v.plate} onChange={() => { setVehicle(v.plate); setTouched(true); }} />
                   <span className="grow">
                     <span className="plate">{v.plate}</span>
                     <span className={`sub ${availabilityTone(v.label)}`} style={{ display: "block", marginTop: 4 }}>{joinDots([v.desc, v.label])}</span>
@@ -144,7 +149,7 @@ export function RequestDrawer({ id, mode }: { id: string; mode?: "decline" }) {
             </div>
             <div className="field" style={{ marginTop: 16 }}>
               <label htmlFor="rq-driver">Driver</label>
-              <select id="rq-driver" value={driver} onChange={(e) => setDriver(e.target.value)}>
+              <select id="rq-driver" value={driver} onChange={(e) => { setDriver(e.target.value); setTouched(true); }}>
                 {drivers.map((d) => <option key={d.u} value={d.u}>{d.name}{d.label ? ` · ${d.label}` : ""}</option>)}
               </select>
             </div>

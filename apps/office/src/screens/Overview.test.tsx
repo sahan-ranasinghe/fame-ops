@@ -52,6 +52,7 @@ describe("Overview", () => {
       </FleetProvider>,
     );
     expect(screen.getByText("Vehicles on the road").parentElement?.textContent).toContain("2of 5");
+    expect(screen.getByText("Free now").parentElement?.textContent).toContain("2vehicles"); // 3 parked, 1 in garage
     expect(screen.getByText("Oldest waiting 3 h")).toBeTruthy();
     expect(screen.getByText("1 need action now")).toBeTruthy();
     expect(screen.getByText("Nuwan Perera")).toBeTruthy();

@@ -6,7 +6,7 @@ import { joinDots, num } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Chips, Empty, ErrBox, Loading, Notice, Pill, StaleNote } from "../ui/basics";
-import { DrawerTop, useDrawer } from "../ui/Drawer";
+import { DrawerTop, useDirty, useDraft, useDrawer } from "../ui/Drawer";
 import { useToast } from "../ui/Toast";
 import { docTone, emptyVehicle, type VehicleFields, vehicleInput } from "./vehicleLogic";
 
@@ -100,10 +100,11 @@ export function VehicleDrawer({ vehicle }: { vehicle: VehicleCard | null }) {
   const toast = useToast();
   const lists = useLists();
   const isNew = vehicle === null;
-  const [f, setF] = useState<VehicleFields>(emptyVehicle);
+  const [f, setF, markClean] = useDraft<VehicleFields>(emptyVehicle());
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [company, setCompany] = useState<{ open: boolean; name: string; phone: string; msg: string | null }>({ open: false, name: "", phone: "", msg: null });
+  useDirty(company.open && (company.name.trim() !== "" || company.phone.trim() !== ""));
   const set = <K extends keyof VehicleFields>(k: K, v: VehicleFields[K]) => setF((x) => ({ ...x, [k]: v }));
   const field = (id: keyof VehicleFields, label: string, type = "text", extra: Record<string, unknown> = {}) => (
     <div className="field">
@@ -122,6 +123,7 @@ export function VehicleDrawer({ vehicle }: { vehicle: VehicleCard | null }) {
     setBusy(true);
     try {
       await transport.call(v.tool, v.input);
+      markClean();
       toast(isNew ? "Vehicle registered" : "Vehicle updated");
       drawer.close();
       void store.invalidate();

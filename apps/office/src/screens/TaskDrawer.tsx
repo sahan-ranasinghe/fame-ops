@@ -5,10 +5,11 @@ import { mapRouteOf, minutesText, type Route, routeOf } from "../data/route";
 import type { DriverRoute, TaskDetail } from "../data/types";
 import { cap, hhmm, joinDots, num, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
-import type { FleetError } from "../transport/types";
+import { can, type FleetError } from "../transport/types";
+import { ROUTES_NEED } from "../app/nav";
 import { MapView } from "../map/MapView";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
-import { DrawerTop, useDrawer } from "../ui/Drawer";
+import { DrawerTop, useDirty, useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
 import { useToast } from "../ui/Toast";
 
@@ -27,6 +28,7 @@ export function TaskDrawer({ id }: { id: string }) {
   const [reason, setReason] = useState("");
   const [cxMsg, setCxMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useDirty(Object.values(ra).some((v) => v !== "") || reason.trim() !== "");
 
   async function load() {
     try {
@@ -131,7 +133,7 @@ export function TaskDrawer({ id }: { id: string }) {
         </Notice>
       )}
       <WarningsNote warnings={warnings} />
-      <TaskRoute id={id} started={t.started} />
+      {can(me, ...ROUTES_NEED) && <TaskRoute id={id} started={t.started} />}
 
       <div className="section-t">Stops</div>
       <div className="card">

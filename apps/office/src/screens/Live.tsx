@@ -8,8 +8,9 @@ import { useLiveDrivers } from "../data/useLive";
 import { joinDots, num, plateOf } from "../lib/format";
 import { MapView } from "../map/MapView";
 import type { MapMarker, MapRoute } from "../map/types";
+import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
-import type { FleetError } from "../transport/types";
+import { can, type FleetError } from "../transport/types";
 import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 
@@ -19,7 +20,8 @@ const tone = (x: LiveDriver) => statusTone(x.status, x.state);
 const sharingNow = (x: LiveDriver) => (x.signal ? x.signal.sharing : x.state !== "not_sharing");
 
 export function Live() {
-  const { store, transport, noConnector, managePermissions } = useFleet();
+  const { me, store, transport, noConnector, managePermissions } = useFleet();
+  const routes = can(me, ...ROUTES_NEED);
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<string | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
@@ -52,7 +54,7 @@ export function Live() {
 
   // Trails on: load today's route of every sharing driver that has none yet.
   useEffect(() => {
-    if (!trails) return;
+    if (!trails || !routes) return;
     for (const x of all) {
       if (!sharingNow(x) || trailMap.has(x.username) || loading.current.has(x.username)) continue;
       loading.current.add(x.username);
@@ -61,7 +63,7 @@ export function Live() {
         .catch(() => undefined)
         .finally(() => loading.current.delete(x.username));
     }
-  }, [trails, all, trailMap, transport]);
+  }, [trails, routes, all, trailMap, transport]);
 
   const markers = useMemo<MapMarker[]>(() => all.flatMap((x) => {
     const pos = positionOf(x);
@@ -98,7 +100,7 @@ export function Live() {
         {d && (
           <div className="ph-actions">
             <Chips options={FILTERS} value={filter} onChange={setFilter} counts={counts} />
-            <button type="button" className="chip" aria-pressed={trails} onClick={() => setTrails((t) => !t)}><Icon name="route" />Show today’s trails</button>
+            {routes && <button type="button" className="chip" aria-pressed={trails} onClick={() => setTrails((t) => !t)}><Icon name="route" />Show today’s trails</button>}
           </div>
         )}
       </div>
@@ -124,20 +126,20 @@ export function Live() {
         </div>
         <div className="stack live-map">
           <MapView markers={markers} route={mapRoute} trails={mapTrails} onPick={(id) => setSelected(id)} />
-          {sel && <Detail x={sel} route={route && route.username === sel.username ? route : null} busy={routeBusy} err={routeErr} onRoute={() => void showRoute(sel.username)} onHide={() => setRoute(null)} />}
+          {sel && <Detail x={sel} routes={routes} route={route && route.username === sel.username ? route : null} busy={routeBusy} err={routeErr} onRoute={() => void showRoute(sel.username)} onHide={() => setRoute(null)} />}
         </div>
       </div>
     </section>
   );
 }
 
-function Detail({ x, route, busy, err, onRoute, onHide }: { x: LiveDriver; route: Route | null; busy: boolean; err: string | null; onRoute: () => void; onHide: () => void }) {
+function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDriver; routes: boolean; route: Route | null; busy: boolean; err: string | null; onRoute: () => void; onHide: () => void }) {
   const links = x.links ?? {};
   return (
     <div className="card card-b" data-testid="live-detail">
       <div className="row" style={{ padding: 0 }}>
         <Avatar name={x.driver} />
-        <div className="grow"><div className="name" style={{ fontSize: 20 }}><Link to={`/drivers/${x.username}`}>{x.driver}</Link></div><div className="sub">{joinDots([x.vehicle, x.task, x.going_to && "to " + x.going_to])}</div></div>
+        <div className="grow"><div className="name" style={{ fontSize: 20 }}>{routes ? <Link to={`/drivers/${x.username}`}>{x.driver}</Link> : x.driver}</div><div className="sub">{joinDots([x.vehicle, x.task, x.going_to && "to " + x.going_to])}</div></div>
         <Pill tone={tone(x)}>{statusLine(x)}</Pill>
       </div>
       <dl className="facts">
@@ -153,11 +155,11 @@ function Detail({ x, route, busy, err, onRoute, onHide }: { x: LiveDriver; route
         </p>
       )}
       <div className="acts">
-        <Link className="btn dark" to={`/drivers/${x.username}`}><Icon name="route" />Driver page</Link>
+        {routes && <Link className="btn dark" to={`/drivers/${x.username}`}><Icon name="route" />Driver page</Link>}
         {links.maps && <a className="btn" href={links.maps} target="_blank" rel="noopener">Open in Google Maps</a>}
         {links.whatsapp && <a className="btn" href={links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}
         {links.call && <a className="btn" href={links.call}>Call</a>}
-        <button type="button" className="btn" onClick={onRoute} disabled={busy}>Today’s route</button>
+        {routes && <button type="button" className="btn" onClick={onRoute} disabled={busy}>Today’s route</button>}
       </div>
       {(busy || err || route) && (
         <div style={{ marginTop: 14 }}>

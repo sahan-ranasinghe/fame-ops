@@ -4,10 +4,11 @@ import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { Driver, DriversList } from "../data/types";
 import { locTone } from "../lib/format";
+import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
-import type { FleetError } from "../transport/types";
+import { can, type FleetError } from "../transport/types";
 import { Avatar, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
-import { DrawerTop, useDrawer } from "../ui/Drawer";
+import { DrawerTop, useDirty, useDraft, useDrawer } from "../ui/Drawer";
 import { useToast } from "../ui/Toast";
 import { emptyDriver, isPin, randomPin, validateNewDriver } from "./driverLogic";
 import { docTone } from "./vehicleLogic";
@@ -18,6 +19,7 @@ export function Drivers() {
   const [inactive, setInactive] = useState(false);
   const entry = useEntry<DriversList>("drivers");
   const canManage = me.tools.includes("update_driver");
+  const routes = can(me, ...ROUTES_NEED);
 
   useEffect(() => {
     if (noConnector) return;
@@ -54,7 +56,7 @@ export function Drivers() {
                   <tbody>
                     {list.map((x) => (
                       <tr key={x.username}>
-                        <td><div className="name"><Avatar name={x.name} small />{x.username ? <Link to={`/drivers/${x.username}`}>{x.name}</Link> : x.name}</div>{x.active === false && <Pill tone="bad">Switched off</Pill>}</td>
+                        <td><div className="name"><Avatar name={x.name} small />{x.username && routes ? <Link to={`/drivers/${x.username}`}>{x.name}</Link> : x.name}</div>{x.active === false && <Pill tone="bad">Switched off</Pill>}</td>
                         <td className="mono">{x.code || "—"}</td>
                         <td className="mono">{x.username || "—"}</td>
                         <td>{x.phone || "—"}</td>
@@ -77,7 +79,7 @@ export function Drivers() {
 
 function NewDriverDrawer() {
   const { store, transport } = useFleet();
-  const [f, setF] = useState(emptyDriver);
+  const [f, setF, markClean] = useDraft(emptyDriver());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<{ username: string; pin: string } | null>(null);
@@ -94,6 +96,7 @@ function NewDriverDrawer() {
     setBusy(true);
     try {
       await transport.call("create_driver", v.input);
+      markClean();
       setDone({ username: String(v.input.username), pin: String(v.input.pin) });
       void store.invalidate();
       void store.load("lists.drivers", "list_drivers", {});
@@ -155,6 +158,7 @@ function DriverDrawer({ driver: x }: { driver: Driver }) {
   const [armed, setArmed] = useState(false);
   const [saMsg, setSaMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useDirty(phone !== (x.phone ?? "") || lic !== (x.licence?.expiry ?? "") || pin.trim() !== "");
 
   const after = () => {
     void store.invalidate();
@@ -183,6 +187,7 @@ function DriverDrawer({ driver: x }: { driver: Driver }) {
     try {
       await transport.call("reset_pin", { username: x.username, pin: pin.trim() });
       setPinMsg({ tone: "ok", text: `New PIN ${pin.trim()} is active. Tell the driver now.` });
+      setPin("");
     } catch (e) {
       setPinMsg({ tone: "bad", text: errText(e as FleetError)[0] });
     }

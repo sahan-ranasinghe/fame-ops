@@ -32,6 +32,8 @@ interface Attention {
   level: "red" | "amber";
   /** Days until due; negative = overdue. Used for sorting only. */
   days: number;
+  /** task = about a running task (the dispatcher's business); fleet = documents, service, km, reports, readings. */
+  scope: "task" | "fleet";
 }
 
 function dueText(days: number, date: string): string {
@@ -48,10 +50,11 @@ export const fleetOverview = tool({
     "(and the oldest), reminders due in the next 14 days, who is on the road now, and what needs attention " +
     "(documents, service, km allowance, rental end, driver licences, open vehicle problems, odometer readings flagged in the last 7 days, " +
     `km outside tasks over ${GAP_ATTENTION_KM} km in the last 7 days). ` +
-    "The task counts follow `date`; everything else describes now.",
+    "The task counts follow `date`; everything else describes now. needs_attention is answered in full with the issues permission, " +
+    "with the task items only (location off / no signal during a task) with assign_tasks, and empty otherwise.",
   readOnly: true,
   input: z.object({ date: zDate.optional().describe("Day for the task counts. Default: today") }),
-  async run({ date }, { db, now }) {
+  async run({ date }, { db, now, actor }) {
     const today = colomboDate(now);
     const day = realDate(date ?? today);
     const { from, to } = dayRange(day);
@@ -119,6 +122,7 @@ export const fleetOverview = tool({
         due: from ? `for ${ago(from, now)}` : "",
         level: result.status === "location_off" ? "red" : "amber",
         days: -3,
+        scope: "task",
       });
     }
     const soon = (dateText: string | null) => {
@@ -139,6 +143,7 @@ export const fleetOverview = tool({
             due: dueText(days, expiry),
             level: days <= 7 ? "red" : "amber",
             days,
+            scope: "fleet",
           });
         }
       }
@@ -151,6 +156,7 @@ export const fleetOverview = tool({
           due: svc.state === "overdue" ? "now" : svc.date ? dueText(days, svc.date) : "soon",
           level: svc.state === "overdue" ? "red" : "amber",
           days: svc.state === "overdue" ? -1 : days,
+          scope: "fleet",
         });
       }
       const used = km.get(v.id) ?? 0;
@@ -161,6 +167,7 @@ export const fleetOverview = tool({
           due: "now",
           level: "red",
           days: -1,
+          scope: "fleet",
         });
       }
       const rentDays = soon(v.rent_until);
@@ -172,6 +179,7 @@ export const fleetOverview = tool({
           due: dueText(rentDays, v.rent_until),
           level: rentDays <= 7 ? "red" : "amber",
           days: rentDays,
+          scope: "fleet",
         });
       }
       const garageDays = soon(v.garage_booked_date);
@@ -182,6 +190,7 @@ export const fleetOverview = tool({
           due: dueText(garageDays, v.garage_booked_date),
           level: "amber",
           days: garageDays,
+          scope: "fleet",
         });
       }
     }
@@ -194,6 +203,7 @@ export const fleetOverview = tool({
           due: dueText(days, e.licence_expiry),
           level: days <= 7 ? "red" : "amber",
           days,
+          scope: "fleet",
         });
       }
     }
@@ -204,6 +214,7 @@ export const fleetOverview = tool({
         due: `reported ${ago(r.created_at, now)} ago`,
         level: "red",
         days: -2,
+        scope: "fleet",
       });
     }
     for (const l of flagged) {
@@ -218,6 +229,7 @@ export const fleetOverview = tool({
         due: `logged ${ago(l.logged_at, now)} ago`,
         level: "amber",
         days: -1,
+        scope: "fleet",
       });
     }
     for (const g of gaps) {
@@ -232,9 +244,16 @@ export const fleetOverview = tool({
         due: `ended ${ago(g.to.logged_at, now)} ago`,
         level: "amber",
         days: -1,
+        scope: "fleet",
       });
     }
     attention.sort((a, b) => a.days - b.days);
+    // Who sees what needs attention: everything with issues, the task items with assign_tasks, nothing otherwise.
+    const shown = actor.permissions.includes("issues")
+      ? attention
+      : actor.permissions.includes("assign_tasks")
+      ? attention.filter((a) => a.scope === "task")
+      : [];
 
     const onRoadVehicles = new Set(running.map((t) => t.vehicle_id)).size;
     const count = (status: string) => tasks.filter((t) => t.status === status).length;
@@ -255,14 +274,15 @@ export const fleetOverview = tool({
         cancelled: count("cancelled"),
       },
       requests: { waiting: waiting.length, oldest_waiting: waiting[0] ? ago(waiting[0].created_at, now) : undefined },
-      reminders: { count: attention.length, window_days: REMINDER_DAYS, red: attention.filter((a) => a.level === "red").length },
+      reminders: { count: shown.length, window_days: REMINDER_DAYS, red: shown.filter((a) => a.level === "red").length },
       on_the_road: onTheRoad,
-      needs_attention: attention.map(({ days: _days, ...item }) => item),
+      needs_attention: shown.map(({ days: _days, scope: _scope, ...item }) => item),
     };
     return {
       result,
       summary:
-        `${onRoadVehicles}/${vehicles.length} on the road, ${result.tasks.total} tasks, ${waiting.length} requests waiting, ${attention.length} reminders`,
+        `${onRoadVehicles}/${vehicles.length} on the road, ${result.tasks.total} tasks, ${waiting.length} requests waiting, ${shown.length} reminders` +
+        (shown.length !== attention.length ? ` shown of ${attention.length}` : ""),
     };
   },
 });

@@ -23,39 +23,49 @@ export const PERMISSIONS: readonly Permission[] = ["view", "request", "approve",
 
 /** What each permission means, in the words the Users page shows. */
 export const PERMISSION_TEXT: Record<Permission, { label: string; text: string }> = {
-  view: { label: "View", text: "See the fleet: overview, live locations, tasks, vehicles, drivers, mileage, problem reports" },
+  view: {
+    label: "View",
+    text: "Overview counts and who is on the road, live locations, the drivers list, the vehicles board, your own requests",
+  },
   request: { label: "Request", text: "Ask for a vehicle and follow your own requests" },
-  approve: { label: "Approve", text: "Approve or decline requests, book a vehicle in one step" },
-  assign_tasks: { label: "Assign tasks", text: "Create, change and cancel tasks and their stops" },
-  vehicles: { label: "Vehicles", text: "Vehicles, rental companies, places, drivers, projects" },
-  issues: { label: "Issues", text: "Update issues and vehicle problem reports" },
-  users: { label: "Users", text: "Office users, connector keys and settings" },
+  approve: { label: "Approve", text: "The requests queue: approve or decline, book a vehicle directly" },
+  assign_tasks: {
+    label: "Assign tasks",
+    text: "The tasks board: assign, reassign and cancel tasks and their stops; task details, routes and task attention items",
+  },
+  vehicles: { label: "Vehicles", text: "Register and edit vehicles, rental companies, places, driver accounts; mileage and maintenance" },
+  issues: { label: "Issues", text: "The issues centre, vehicle problem reports and every attention item" },
+  users: { label: "Users", text: "Settings: office users, connector keys, fleet settings" },
 };
 
 const V: readonly Permission[] = ["view"];
-/** With request alone: the person's own requests, the task of an own request, places and projects. */
+/** Reference data the request form needs too: places and projects, own requests. */
 const VR: readonly Permission[] = ["view", "request"];
 const AA: readonly Permission[] = ["approve", "assign_tasks"];
 const VEH: readonly Permission[] = ["vehicles"];
 const USERS: readonly Permission[] = ["users"];
 
-/** The permission a tool needs. Holding any one of the listed permissions allows the call. */
+/**
+ * The permission a tool needs. Holding any one of the listed permissions allows the call.
+ * Some tools answer less to some holders (the "own rows" rules in the tools themselves):
+ *   list_requests   every request with approve; otherwise the person's own
+ *   task_detail     any task with assign_tasks; a request's task with approve; an own request's task with request
+ *   fleet_overview  needs_attention: every item with issues, the task items with assign_tasks, otherwise none
+ */
 export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   fleet_overview: V,
   live_drivers: V,
-  driver_route: V,
-  task_board: V,
   list_vehicles: V,
   list_drivers: V,
-  mileage_summary: V,
-  list_vehicle_reports: V,
   list_requests: VR,
-  task_detail: VR,
   list_places: VR,
   find_project: VR,
   create_request: ["request"],
   suggest_vehicles: AA,
   decide_request: ["approve"],
+  task_board: ["assign_tasks"],
+  task_detail: ["assign_tasks", "approve", "request"],
+  driver_route: ["assign_tasks", "vehicles"],
   create_task: ["assign_tasks"],
   reassign_task: ["assign_tasks"],
   cancel_task: ["assign_tasks"],
@@ -67,7 +77,9 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   set_driver_active: VEH,
   update_driver: VEH,
   import_projects: VEH,
+  mileage_summary: VEH,
   add_place: ["vehicles", "assign_tasks"],
+  list_vehicle_reports: ["issues"],
   update_vehicle_report: ["issues"],
   list_office_users: USERS,
   create_office_user: USERS,

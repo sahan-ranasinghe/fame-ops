@@ -244,6 +244,7 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .stop { display: flex; gap: 12px; align-items: flex-start }
 .stop .dot { margin-top: 6px }
 .confirm { display: grid; gap: 10px; border: 1px solid var(--bad); border-radius: 12px; padding: 14px }
+.discard { position: sticky; top: 0; z-index: 2; display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--bad); border-radius: 12px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.12) }
 .more-list { display: grid; gap: 10px }
 .more-list a { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; font-weight: 600 }
 .more-list svg { width: 20px; height: 20px }

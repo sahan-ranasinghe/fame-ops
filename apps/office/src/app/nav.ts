@@ -1,5 +1,9 @@
 // The screens, in the order of the boss's design, each with the permission it
-// needs (any one of the list; an empty list = everyone). A screen the person
+// needs (any one of the list; an empty list = everyone). View is the narrow
+// one: the overview counts and who is on the road, live locations, the drivers
+// list, the vehicles board, one's own requests. Tasks need assign_tasks;
+// Maintenance and Mileage need vehicles; the driver page (routes) needs
+// assign_tasks or vehicles. A screen the person
 // may not open stays in the menu, greyed with a lock: the server refuses the
 // tools either way, and a direct URL shows the "No access" page.
 import type { Permission } from "@fleet/permissions";
@@ -21,12 +25,12 @@ export const LOCK_HINT = "Ask an admin for access";
 export const NAV: NavItem[] = [
   { key: "overview", label: "Overview", need: ["view"], path: "/" },
   { key: "live", label: "Live locations", need: ["view"], path: "/live" },
-  { key: "tasks", label: "Tasks", need: ["view"], path: "/tasks" },
+  { key: "tasks", label: "Tasks", need: ["assign_tasks"], path: "/tasks" },
   { key: "requests", label: "Requests", need: ["view", "request"], path: "/requests" },
   { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
   { key: "projects", label: "Projects", need: ["view", "request"], path: "/projects" },
-  { key: "maintenance", label: "Maintenance", need: ["view"], path: "/maintenance" },
-  { key: "mileage", label: "Mileage", need: ["view"], path: "/mileage" },
+  { key: "maintenance", label: "Maintenance", need: ["vehicles"], path: "/maintenance" },
+  { key: "mileage", label: "Mileage", need: ["vehicles"], path: "/mileage" },
   { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
   { key: "settings", label: "Settings", need: [], path: "/settings" },
 ];
@@ -35,13 +39,16 @@ export const NAV: NavItem[] = [
 export const TABS: NavItem[] = [
   { key: "overview", label: "Home", need: ["view"], path: "/" },
   { key: "live", label: "Map", need: ["view"], path: "/live" },
-  { key: "tasks", label: "Tasks", need: ["view"], path: "/tasks" },
+  { key: "tasks", label: "Tasks", need: ["assign_tasks"], path: "/tasks" },
   { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
   { key: "more", label: "More", need: [], path: "/more" },
 ];
 
 /** What the More page lists on a phone: everything that is not on the tab bar. */
 export const MORE_KEYS = ["requests", "projects", "maintenance", "mileage", "drivers", "settings"];
+
+/** The driver page (route history) and everything that calls driver_route. */
+export const ROUTES_NEED: Permission[] = ["assign_tasks", "vehicles"];
 
 /** The pages under Settings and what they need. */
 export const SETTINGS_PAGES: NavItem[] = [

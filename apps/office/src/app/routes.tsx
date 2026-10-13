@@ -16,6 +16,7 @@ import { Users } from "../screens/settings/Users";
 import { Vehicles } from "../screens/Vehicles";
 import { can } from "../transport/types";
 import { useFleet } from "./FleetContext";
+import { ROUTES_NEED } from "./nav";
 import { Shell } from "./Shell";
 
 /** The screen, or "No access" when the person holds none of the permissions (the server refuses the tools either way). */
@@ -45,14 +46,14 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <Home /> },
       { path: "live", element: <Guard need={["view"]}><Live /></Guard> },
-      { path: "tasks", element: <Guard need={["view"]}><Tasks /></Guard> },
+      { path: "tasks", element: <Guard need={["assign_tasks"]}><Tasks /></Guard> },
       { path: "requests", element: <Guard need={["view", "request"]}><Requests /></Guard> },
       { path: "vehicles", element: <Guard need={["view"]}><Vehicles /></Guard> },
       { path: "projects", element: <Guard need={["view", "request"]}><Projects /></Guard> },
-      { path: "maintenance", element: <Guard need={["view"]}><Maintenance /></Guard> },
-      { path: "mileage", element: <Guard need={["view"]}><Mileage /></Guard> },
+      { path: "maintenance", element: <Guard need={["vehicles"]}><Maintenance /></Guard> },
+      { path: "mileage", element: <Guard need={["vehicles"]}><Mileage /></Guard> },
       { path: "drivers", element: <Guard need={["view"]}><Drivers /></Guard> },
-      { path: "drivers/:username", element: <Guard need={["view"]}><DriverPage /></Guard> },
+      { path: "drivers/:username", element: <Guard need={ROUTES_NEED}><DriverPage /></Guard> },
       { path: "settings", element: <SettingsRoute /> },
       { path: "settings/users", element: <Guard need={["users"]}><Users /></Guard> },
       { path: "accounts", element: <Navigate to="/settings/users" replace /> },

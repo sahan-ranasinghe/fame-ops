@@ -317,16 +317,17 @@ export const taskDetail = tool({
   input: z.object({ task_id: zId }),
   async run({ task_id }, { db, now, actor }) {
     const task = await getTask(db, task_id);
-    // Without the view permission a person sees only the task of their own request.
-    if (!actor.permissions.includes("view")) {
-      const own = task.request_id
-        ? unwrapMaybe(
+    // Without assign_tasks a person sees a request's task only: any request's with approve, their own request's otherwise.
+    if (!actor.permissions.includes("assign_tasks")) {
+      if (!task.request_id) throw new ToolError("This task did not come from a vehicle request.");
+      if (!actor.permissions.includes("approve")) {
+        const own = unwrapMaybe(
           await db.from("vehicle_requests").select("id").eq("id", task.request_id).eq("requested_by_employee_id", actor.employeeId ?? "")
             .maybeSingle(),
           "vehicle request",
-        )
-        : null;
-      if (!own) throw new ToolError("This task did not come from one of your requests.");
+        );
+        if (!own) throw new ToolError("This task did not come from one of your requests.");
+      }
     }
     const [refs, latest, stopsRes, splitRes, odoRes, fuelRes, reportsRes] = await Promise.all([
       loadRefs(db),

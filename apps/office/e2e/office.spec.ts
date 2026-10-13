@@ -303,3 +303,47 @@ test("a requester-only user sees locked menu items, a No access page, and asks i
   await expect(page.getByRole("status")).toHaveText("Request saved");
   await expect(page.locator("tr", { hasText: "E2E Requester" })).toBeVisible();
 });
+
+test("a dispatcher (view + assign tasks) gets the tasks board, not mileage or the requests queue; a form dialog never closes on a click outside", async ({ page }) => {
+  const email = `e2e.dispatch.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Dispatcher", email, permissions: ["view", "request", "assign_tasks"] });
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Dispatcher for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+
+  // Overview: the counts and the task attention card, no requests queue.
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(page.getByText("Free now")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Needs attention" })).toBeVisible();
+  await expect(page.getByText("Requests to approve")).toHaveCount(0);
+  await expect(page.getByText("Requests awaiting approval")).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Tasks" }).first()).not.toHaveAttribute("aria-disabled", "true");
+  await expect(page.getByRole("link", { name: "Mileage" }).first()).toHaveAttribute("aria-disabled", "true");
+  await page.goto("/mileage");
+  await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
+  await page.goto("/settings");
+  await expect(page.getByRole("link", { name: /^Users/ })).toHaveAttribute("aria-disabled", "true");
+  await page.goto("/tasks");
+  await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Assign a task" })).toBeVisible();
+  await page.goto("/requests");
+  await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
+
+  // The dialog rules: a click outside does nothing; Esc asks; Keep editing keeps the text; Close then Discard closes.
+  await page.getByRole("button", { name: "New request" }).click();
+  await page.getByLabel("Who needs it").fill("Somebody");
+  await page.locator(".drawer").click({ position: { x: 20, y: 300 } });
+  await expect(page.getByLabel("Who needs it")).toHaveValue("Somebody");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("discard")).toContainText("Discard changes?");
+  await page.getByRole("button", { name: "Keep editing" }).click();
+  await expect(page.getByTestId("discard")).toHaveCount(0);
+  await expect(page.getByLabel("Who needs it")).toHaveValue("Somebody");
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Discard" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});

@@ -1,14 +1,19 @@
+// Maintenance (the vehicles permission): problems drivers reported (shown with
+// the issues permission, which the reports tool needs) and the service and
+// document reminders of the next 14 days (from the overview's needs-attention
+// list when the person holds issues; otherwise read off the vehicles list).
 import { type FormEvent, useEffect, useState } from "react";
 import { useFleet } from "../app/FleetContext";
-import { useEntry } from "../data/hooks";
+import { useEntry, useLists } from "../data/hooks";
 import type { Overview, VehicleReport, VehicleReports } from "../data/types";
-import { attIcon, cap, levelTone } from "../lib/format";
+import { attIcon, cap, levelTone, today } from "../lib/format";
 import { errText } from "../transport/errors";
-import type { FleetError } from "../transport/types";
+import { can, type FleetError } from "../transport/types";
 import { Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
 import { useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
 import { useToast } from "../ui/Toast";
+import { dueFromVehicles } from "./maintenanceLogic";
 import { TaskDrawer } from "./TaskDrawer";
 
 type Filter = "not_closed" | "open" | "in_garage" | "closed" | "all";
@@ -76,30 +81,36 @@ function ReportCard({ r }: { r: VehicleReport }) {
 }
 
 export function Maintenance() {
-  const { store, noConnector, managePermissions } = useFleet();
+  const { me, store, noConnector, managePermissions } = useFleet();
   const [filter, setFilter] = useState<Filter>("not_closed");
+  const canReports = me.tools.includes("list_vehicle_reports");
+  const fromOverview = can(me, "issues");
   const entry = useEntry<VehicleReports>("reports");
   const overview = useEntry<Overview>("overview");
+  const lists = useLists(!noConnector && !fromOverview);
 
   useEffect(() => {
-    if (noConnector) return;
+    if (noConnector || !canReports) return;
     store.reset("reports");
     store.watch("reports", "list_vehicle_reports", { status: filter }, 60000);
     return () => store.unwatch("reports");
-  }, [store, filter, noConnector]);
+  }, [store, filter, noConnector, canReports]);
 
   const d = entry.data && entry.data.status === filter ? entry.data : undefined;
-  const att = (overview.data?.needs_attention ?? []).filter((a) => !/problem/i.test(a.what || ""));
+  const att = fromOverview
+    ? (overview.data?.needs_attention ?? []).filter((a) => !/problem/i.test(a.what || ""))
+    : dueFromVehicles(lists.vehicles ?? [], today());
   return (
     <section className="view">
       <div className="ph">
         <div><div className="eyebrow">Problems reported by drivers, service and documents</div><h1>Maintenance</h1></div>
-        <Chips options={FILTERS} value={filter} onChange={setFilter} />
+        {canReports && <Chips options={FILTERS} value={filter} onChange={setFilter} />}
       </div>
       <div className="stack">
         {d && <StaleNote entry={entry} />}
         <div className="section-t">Problems reported by drivers</div>
-        {!d && !noConnector && (
+        {!canReports && <Notice tone="info">Problem reports need the Issues permission. Ask an admin for access if you handle them.</Notice>}
+        {canReports && !d && !noConnector && (
           <>
             <ErrBox entry={entry} onRetry={() => void store.load("reports", "list_vehicle_reports", { status: filter })} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
             {!entry.err && <Loading>Loading reports…</Loading>}

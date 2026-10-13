@@ -18,8 +18,8 @@ export function Requests() {
   const [filter, setFilter] = useState<Filter>("waiting");
   const reqs = useWatch<RequestsList>("reqs", "list_requests", { status: filter }, 60000, !noConnector);
   const d = reqs.data && reqs.data.status === filter ? reqs.data : undefined;
-  // Without the view permission the list holds only this person's own requests.
-  const staff = !can(me, "view");
+  // The queue (everyone's requests) is the approver's; everyone else sees their own.
+  const staff = !can(me, "approve");
   const decides = me.tools.includes("decide_request");
 
   return (

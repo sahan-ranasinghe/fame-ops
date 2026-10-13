@@ -400,18 +400,21 @@ same way and answers `permissions` in `/me`.
 
 The table (section 0 decisions 3–5 included):
 
-| permission | tools |
-|---|---|
-| `view` | fleet_overview, live_drivers, driver_route, task_board, list_vehicles, list_drivers, mileage_summary, list_vehicle_reports, list_issues, issue_history, get_settings (also `assign_tasks`, `approve`) |
-| `view` or `request` | list_requests, task_detail, list_places, find_project (with `request` alone: own requests / the task of an own request only) |
-| `request` | create_request |
-| `approve` or `assign_tasks` | suggest_vehicles, plan_task |
-| `approve` | decide_request, book_vehicle, cancel_request |
-| `assign_tasks` | create_task, reassign_task, cancel_task, update_task_stops |
-| `vehicles` | register_vehicle, update_vehicle, add_rental_company, create_driver, reset_pin, set_driver_active, update_driver, import_projects, add_place (also `assign_tasks`) |
-| `issues` | update_issue, update_vehicle_report |
-| `users` | list_office_users, create_office_user, update_office_user, reset_office_password, set_office_user_active, create_office_key, revoke_office_key, update_settings, routing_usage |
-| any office permission | my_notification_settings, set_my_notification_settings, register_web_push, remove_web_push (own rows) |
+Narrowed on 13 October 2026 (Part 2b): `view` is the small one. What each permission opens:
+
+| permission | screens | tools |
+|---|---|---|
+| `view` (everyone) | Overview reduced to the counts (on the road / free / in garage, tasks today) and the on-the-road list, no needs-attention list; Live locations; the Drivers list (name, phone, vehicle, status; no route history, no accept/decline counts); the Vehicles board read-only (status, back ~HH:MM, assigned to); My requests | fleet_overview (`needs_attention` empty), live_drivers, list_drivers, list_vehicles, list_requests (own rows), list_places, find_project, get_settings |
+| `request` | Request a vehicle; My requests | create_request, list_requests (own), task_detail (the task of an own request), list_places, find_project |
+| `approve` | the Requests queue, decide, book directly (Part 6) | decide_request, book_vehicle, cancel_request, suggest_vehicles, plan_task, list_requests (every row), task_detail (any request's task) |
+| `assign_tasks` (dispatcher) | the Tasks board, Assign a task, the stops editor, reassign, cancel, task detail with odometer and fuel photos, the driver page (route history) and the per-task route, the task attention items (declined, not accepted, late start, running late, location off during a task) on Overview and in the bell | task_board, task_detail (any task), create_task, reassign_task, cancel_task, update_task_stops, plan_task, suggest_vehicles, driver_route, add_place, list_issues (task kinds), fleet_overview (`needs_attention`: task items) |
+| `vehicles` | Vehicles edit and register, rental companies, places, driver accounts, Mileage, Maintenance (reports only with `issues`; the service and document reminders read off the vehicles list otherwise), odometer flags, the driver page | register_vehicle, update_vehicle, add_rental_company, add_place, create_driver, reset_pin, set_driver_active, update_driver, import_projects, mileage_summary, driver_route |
+| `issues` | the Issues centre, vehicle problem reports, every attention item on Overview and in the bell | list_vehicle_reports, update_vehicle_report, list_issues (all kinds), update_issue, issue_history, fleet_overview (`needs_attention`: everything) |
+| `users` | Settings: office users, connector keys, fleet settings | list_office_users, create_office_user, update_office_user, reset_office_password, set_office_user_active, create_office_key, revoke_office_key, update_settings, routing_usage |
+| any office permission | Settings → Notifications (own) | my_notification_settings, set_my_notification_settings, register_web_push, remove_web_push |
+
+The shared Teams key holds every permission. A screen the person lacks stays in the menu,
+greyed with a lock; a direct URL shows "No access"; the server refuses the tools either way.
 
 ### 4.2 New modules (Part 4, 3a, 3b)
 
@@ -702,6 +705,14 @@ made the same way into the `functions serve` env file.
 
 ## 10. Office web app and artifact, per part
 
+- **Part 2b** (13 October 2026). One shared dialog component (`ui/Drawer.tsx`): a click
+  outside never closes a form dialog; Close, Cancel and Esc ask "Discard changes?" when a
+  form in the panel has unsaved input (`useDraft` / `useDirty`); leaving the page warns
+  (`beforeunload`) while any form is dirty, the Assign-a-task card included. Forms on it:
+  new and edit office user, new request, decide request, task drawer (reassign, cancel),
+  register and update vehicle (with the inline rental company), add driver, manage driver;
+  Part 4's stops editor and add-place dialog use it too. The narrower `view` of the table
+  above, in the menu, the routes and the screens.
 - **Part 2.** `Me.permissions`; `nav.ts` items carry `permission` instead of `tool`; locked
   items render greyed with a lock icon and the tooltip "Ask an admin for access" (rail and More
   list; the phone tab bar hides locked tabs); a direct URL to a locked screen shows a "No

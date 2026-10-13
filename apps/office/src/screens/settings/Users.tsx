@@ -10,7 +10,7 @@ import { waLink } from "../../lib/format";
 import { errText } from "../../transport/errors";
 import { type FleetError, ROLE_LABEL, type Role } from "../../transport/types";
 import { Avatar, Empty, ErrBox, Loading, Notice, Pill, StaleNote } from "../../ui/basics";
-import { DrawerTop, useDrawer } from "../../ui/Drawer";
+import { DrawerTop, useDirty, useDraft, useDrawer } from "../../ui/Drawer";
 import { useToast } from "../../ui/Toast";
 import { emptyUser, type Preset, presetOf, togglePermission, updateInput, type UserFields, validateNewUser } from "./usersLogic";
 
@@ -64,7 +64,7 @@ function PermissionPicker({ value, onChange, idPrefix }: { value: Permission[]; 
 
 function NewUserDrawer() {
   const { store, transport } = useFleet();
-  const [f, setF] = useState<UserFields>(emptyUser);
+  const [f, setF, markClean] = useDraft<UserFields>(emptyUser());
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<CreateOfficeUserResult | null>(null);
@@ -79,6 +79,7 @@ function NewUserDrawer() {
     setBusy(true);
     try {
       setDone(await transport.call<CreateOfficeUserResult>("create_office_user", v.input));
+      markClean();
       void store.invalidate();
     } catch (e) {
       setErr(errText(e as FleetError)[0]);
@@ -118,10 +119,11 @@ function UserDrawer({ user: u }: { user: OfficeUser }) {
   const toast = useToast();
   const email = u.email ?? "";
   const before = { email, name: u.name, phone: u.phone, permissions: normalisePermissions(u.permissions) };
-  const [f, setF] = useState<UserFields>({ name: u.name, email, phone: u.phone ?? "", permissions: before.permissions });
+  const [f, setF, markClean] = useDraft<UserFields>({ name: u.name, email, phone: u.phone ?? "", permissions: before.permissions });
   const [edMsg, setEdMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [secret, setSecret] = useState<{ label: string; value: string; hint: string } | null>(null);
   const [label, setLabel] = useState("");
+  useDirty(label.trim() !== "");
   const [msg, setMsg] = useState<string | null>(null);
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -150,6 +152,7 @@ function UserDrawer({ user: u }: { user: OfficeUser }) {
     setBusy(true);
     try {
       const r = await transport.call<UpdateOfficeUserResult>("update_office_user", v.input);
+      markClean();
       toast("User updated");
       setEdMsg({ tone: "ok", text: `Saved. ${r.updated.name} now has: ${normalisePermissions(r.updated.permissions).map((p) => PERMISSION_TEXT[p].label).join(", ") || "no permissions"}. It applies to their next call.` });
       void store.invalidate();
@@ -166,6 +169,7 @@ function UserDrawer({ user: u }: { user: OfficeUser }) {
     const input: Record<string, unknown> = { email };
     if (label.trim()) input.label = label.trim();
     const r = await transport.call<CreateKeyResult>("create_office_key", input);
+    setLabel("");
     setSecret({ label: "Personal connector URL", value: r.connector_url, hint: "Shown once. They add it in their own Claude: Settings → Connectors → Add custom connector. Treat it like a password." });
     void store.invalidate();
   });

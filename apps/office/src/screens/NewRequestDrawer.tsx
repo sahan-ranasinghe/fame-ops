@@ -6,7 +6,7 @@ import { errText } from "../transport/errors";
 import { can } from "../transport/types";
 import type { FleetError } from "../transport/types";
 import { Notice } from "../ui/basics";
-import { DrawerTop, useDrawer } from "../ui/Drawer";
+import { DrawerTop, useDraft, useDrawer } from "../ui/Drawer";
 import { useToast } from "../ui/Toast";
 import { emptyRequest, validateNewRequest } from "./requestLogic";
 
@@ -17,7 +17,7 @@ export function NewRequestDrawer() {
   const lists = useLists();
   // Someone who can neither approve nor assign asks in their own name (the server does the same).
   const staff = !can(me, "approve", "assign_tasks");
-  const [f, setF] = useState(() => emptyRequest(today()));
+  const [f, setF, markClean] = useDraft(emptyRequest(today()));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -32,6 +32,7 @@ export function NewRequestDrawer() {
     setBusy(true);
     try {
       await transport.call("create_request", v.input);
+      markClean();
       toast("Request saved");
       drawer.close();
       void store.invalidate();

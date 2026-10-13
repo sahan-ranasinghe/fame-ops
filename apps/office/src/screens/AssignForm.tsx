@@ -7,6 +7,7 @@ import { num, plateOf, splitEqually, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Notice, WarningsNote } from "../ui/basics";
+import { useDirty } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
 import { driverWhatsApp, emptyAssign, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
 
@@ -28,6 +29,8 @@ export function AssignForm({ date, lists, onDate, onOpenTask }: Props) {
   const [msg, setMsg] = useState<{ tone: "" | "bad" | "ok"; text: React.ReactNode; warnings?: string[] } | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // What a reload would lose (the fields a successful send clears).
+  useDirty([f.title, f.notes, f.cname, f.cphone, f.pax, f.end, f.dropoff].some((v) => v.trim() !== "") || rows.length > 0);
 
   // The day picked on the board is the form's default day.
   useEffect(() => setF((x) => ({ ...x, date })), [date]);

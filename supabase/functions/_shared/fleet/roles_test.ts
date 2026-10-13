@@ -12,11 +12,13 @@ Deno.test("REQUIRE_MFA_ROLES: empty means nobody, names are trimmed, unknown wor
   assertEquals(mfaRequiredRoles("boss,admin,"), ["admin"]);
 });
 
-Deno.test("an actor with a role's default permissions: staff reach the request tools and the fleet, viewer only reads", () => {
+Deno.test("an actor with a role's default permissions: staff reach the request tools and the fleet's lists, viewer only reads", () => {
   assertEquals(canCall(actorOf("staff"), "create_request"), true);
-  assertEquals(canCall(actorOf("staff"), "task_board"), true);
+  assertEquals(canCall(actorOf("staff"), "live_drivers"), true);
+  assertEquals(canCall(actorOf("staff"), "task_board"), false);
   assertEquals(canCall(actorOf("staff"), "create_task"), false);
   assertEquals(canCall(actorOf("viewer"), "fleet_overview"), true);
+  assertEquals(canCall(actorOf("viewer"), "task_board"), false);
   assertEquals(canCall(actorOf("viewer"), "create_task"), false);
   assertEquals(canCall(actorOf("office"), "create_task"), true);
   assertEquals(canCall(actorOf("office"), "cancel_task"), true);

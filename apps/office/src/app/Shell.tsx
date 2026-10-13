@@ -40,7 +40,7 @@ function Banner() {
 export function Shell() {
   const { me, store, noConnector } = useFleet();
   const overview = useEntry<Overview>("overview");
-  const waiting = overview.data?.requests?.waiting ?? 0;
+  const waiting = can(me, "approve") ? overview.data?.requests?.waiting ?? 0 : 0;
   const nav = navState(NAV, me);
   const tabs = allowed(TABS, me);
   const { pathname } = useLocation();

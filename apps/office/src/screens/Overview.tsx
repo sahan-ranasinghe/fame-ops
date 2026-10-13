@@ -1,9 +1,16 @@
+// Overview. Everyone with view: the counts (on the road, free, in garage,
+// tasks today) and who is on the road. The requests queue belongs to approve,
+// the needs-attention list to issues (everything) and assign_tasks (the task
+// items; the server already filters), the driver links to assign_tasks or
+// vehicles.
 import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
+import { ROUTES_NEED } from "../app/nav";
 import { useEntry, useWatch } from "../data/hooks";
 import type { Overview as OverviewData, RequestsList } from "../data/types";
 import { statusLine, statusTone } from "../data/live";
 import { attIcon, joinDots, levelTone, longDate, today } from "../lib/format";
+import { can } from "../transport/types";
 import { Avatar, Empty, ErrBox, IconLink, Loading, Notice, Pill, Plate, StaleNote, Tile } from "../ui/basics";
 import { useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
@@ -15,9 +22,12 @@ export function Overview() {
   const drawer = useDrawer();
   const navigate = useNavigate();
   const ov = useEntry<OverviewData>("overview");
-  const canRequests = me.tools.includes("list_requests");
-  const rq = useWatch<RequestsList>("reqWaiting", "list_requests", { status: "waiting" }, 60000, canRequests && !noConnector);
+  const approves = can(me, "approve");
+  const attention = can(me, "issues", "assign_tasks");
+  const routes = can(me, ...ROUTES_NEED);
+  const rq = useWatch<RequestsList>("reqWaiting", "list_requests", { status: "waiting" }, 60000, approves && !noConnector);
   const o = ov.data;
+  const free = o ? Math.max(0, (o.vehicles.parked ?? 0) - (o.vehicles.in_garage ?? 0)) : 0;
 
   const openRequest = (id: string, mode?: "decline") => drawer.open(<RequestDrawer id={id} mode={mode} />);
 
@@ -48,13 +58,19 @@ export function Overview() {
         <div className="stack">
           <StaleNote entry={ov} />
           <div className="tiles">
-            <Tile label="Vehicles on the road" value={o.vehicles.on_the_road ?? 0} unit={`of ${o.vehicles.total ?? 0}`} sub={`${o.vehicles.parked ?? 0} parked${o.vehicles.in_garage ? ` · ${o.vehicles.in_garage} in garage` : ""}`} />
+            <Tile label="Vehicles on the road" value={o.vehicles.on_the_road ?? 0} unit={`of ${o.vehicles.total ?? 0}`} sub={`${o.tasks.in_progress ?? 0} task${o.tasks.in_progress === 1 ? "" : "s"} in progress`} />
+            <Tile label="Free now" value={free} unit="vehicles" sub="not on a task, not in the garage" />
+            <Tile label="In garage" value={o.vehicles.in_garage ?? 0} unit="vehicles" sub={o.vehicles.in_garage ? "off the road" : "none"} tone={o.vehicles.in_garage ? "warn" : ""} />
             <Tile label="Tasks today" value={o.tasks.total ?? 0} unit="jobs" sub={`${o.tasks.in_progress ?? 0} in progress · ${o.tasks.done ?? 0} done`} />
-            <Tile label="Requests to approve" value={o.requests.waiting ?? 0} unit="open" sub={o.requests.oldest ? `Oldest waiting ${o.requests.oldest}` : "Nothing waiting"} tone={o.requests.waiting ? "warn" : ""} />
-            <Tile label="Reminders due" value={o.reminders.count ?? 0} unit={`in ${o.reminders.window_days ?? 14} days`} sub={o.reminders.red ? `${o.reminders.red} need action now` : "Nothing urgent"} tone={o.reminders.red ? "bad" : ""} />
+            {approves && (
+              <Tile label="Requests to approve" value={o.requests.waiting ?? 0} unit="open" sub={o.requests.oldest ? `Oldest waiting ${o.requests.oldest}` : "Nothing waiting"} tone={o.requests.waiting ? "warn" : ""} />
+            )}
+            {attention && (
+              <Tile label="Reminders due" value={o.reminders.count ?? 0} unit={`in ${o.reminders.window_days ?? 14} days`} sub={o.reminders.red ? `${o.reminders.red} need action now` : "Nothing urgent"} tone={o.reminders.red ? "bad" : ""} />
+            )}
           </div>
 
-          <div className="two">
+          <div className={attention ? "two" : ""}>
             <div className="card">
               <div className="card-h"><h2>On the road</h2>{me.tools.includes("live_drivers") && <Link to="/live">All live locations</Link>}</div>
               <div className="rows">
@@ -62,7 +78,7 @@ export function Overview() {
                   <div className="row" key={d.username ?? i}>
                     <Avatar name={d.driver} />
                     <div className="grow">
-                      <div className="name">{d.username ? <Link to={`/drivers/${d.username}`}>{d.driver}</Link> : d.driver} <Plate v={d.vehicle} /></div>
+                      <div className="name">{d.username && routes ? <Link to={`/drivers/${d.username}`}>{d.driver}</Link> : d.driver} <Plate v={d.vehicle} /></div>
                       <div className="sub">{joinDots([d.task, d.going_to && "to " + d.going_to, d.near && "near " + d.near])}</div>
                     </div>
                     <Pill tone={statusTone(d.status, d.location?.toLowerCase().includes("not sharing") ? "not_sharing" : d.location?.toLowerCase().startsWith("live") ? "sharing" : "stale")}>{statusLine({ status_text: d.status_text, location: d.location, state: undefined })}</Pill>
@@ -75,21 +91,23 @@ export function Overview() {
                 )) : <Empty>No vehicle is on the road right now.</Empty>}
               </div>
             </div>
-            <div className="card">
-              <div className="card-h"><h2>Needs attention</h2><span className="muted">Next {o.reminders.window_days ?? 14} days</span></div>
-              <div className="rows">
-                {o.needs_attention.length ? o.needs_attention.map((a, i) => (
-                  <div className="row" key={i}>
-                    <span className={`att-ic ${levelTone(a.level)}`}><Icon name={attIcon(a.what)} /></span>
-                    <div className="grow"><div className="name">{a.what}</div><div className="sub">{a.subject || ""}</div></div>
-                    <span className={`due ${levelTone(a.level)}`}>{a.due || ""}</span>
-                  </div>
-                )) : <Empty>Nothing needs attention. Documents, services and km allowances are in order.</Empty>}
+            {attention && (
+              <div className="card">
+                <div className="card-h"><h2>Needs attention</h2><span className="muted">Next {o.reminders.window_days ?? 14} days</span></div>
+                <div className="rows">
+                  {o.needs_attention.length ? o.needs_attention.map((a, i) => (
+                    <div className="row" key={i}>
+                      <span className={`att-ic ${levelTone(a.level)}`}><Icon name={attIcon(a.what)} /></span>
+                      <div className="grow"><div className="name">{a.what}</div><div className="sub">{a.subject || ""}</div></div>
+                      <span className={`due ${levelTone(a.level)}`}>{a.due || ""}</span>
+                    </div>
+                  )) : <Empty>{can(me, "issues") ? "Nothing needs attention. Documents, services and km allowances are in order." : "No task needs attention right now."}</Empty>}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {canRequests && (
+          {approves && (
             <div className="card">
               <div className="card-h"><h2>Requests awaiting approval</h2><span className="muted">{rq.data?.requests.length ?? 0} open</span></div>
               {rq.err && !rq.data ? (
@@ -104,8 +122,8 @@ export function Overview() {
                           <td><b>{q.requested_by}</b></td><td>{q.project || "—"}</td><td>{q.when}</td><td className="muted">{q.route || "—"}</td><td>{q.need || "—"}</td>
                           <td className="r">
                             <div className="acts" style={{ justifyContent: "flex-end" }}>
-                              {me.tools.includes("decide_request") && <button type="button" className="btn small" onClick={() => openRequest(q.id, "decline")}>Decline</button>}
-                              <button type="button" className="btn small dark" onClick={() => openRequest(q.id)}>{me.tools.includes("decide_request") ? "Approve & assign" : "Open"}</button>
+                              <button type="button" className="btn small" onClick={() => openRequest(q.id, "decline")}>Decline</button>
+                              <button type="button" className="btn small dark" onClick={() => openRequest(q.id)}>Approve &amp; assign</button>
                             </div>
                           </td>
                         </tr>
@@ -116,7 +134,9 @@ export function Overview() {
               ) : rq.data ? <Empty>No requests are waiting.</Empty> : <Loading>Loading requests…</Loading>}
             </div>
           )}
-          {!canRequests && <Notice tone="info">Requests are handled by the fleet office. <Link to="/tasks">See today’s tasks</Link>.</Notice>}
+          {!approves && can(me, "request") && (
+            <Notice tone="info">Need a vehicle? <Link to="/requests">New request</Link> sends it to the fleet office; you are told when it is decided.</Notice>
+          )}
         </div>
       )}
     </section>

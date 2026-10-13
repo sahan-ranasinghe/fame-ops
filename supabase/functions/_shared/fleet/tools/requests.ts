@@ -114,14 +114,15 @@ export const createRequest = tool({
 export const listRequests = tool({
   name: "list_requests",
   title: "List vehicle requests",
-  description: "Vehicle requests. By default those waiting for approval, soonest first.",
+  description: "Vehicle requests. By default those waiting for approval, soonest first. Everyone's with the approve permission; " +
+    "otherwise the person's own.",
   readOnly: true,
   input: z.object({ status: z.enum(["waiting", "approved", "declined", "all"]).optional().describe("Default: waiting") }),
   async run({ status = "waiting" }, { db, now, actor }) {
     let query = db.from("vehicle_requests").select("*");
     if (status !== "all") query = query.eq("status", status);
-    // Without the view permission a person sees their own requests only.
-    if (!actor.permissions.includes("view")) {
+    // The queue (everyone's requests) is the approver's; everyone else sees their own.
+    if (!actor.permissions.includes("approve")) {
       query = query.eq("requested_by_employee_id", actor.employeeId ?? "00000000-0000-0000-0000-000000000000");
     }
     const rows = unwrap(await query.order("needed_at", { ascending: status === "waiting" }).limit(100), "vehicle requests");
