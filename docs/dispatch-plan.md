@@ -212,8 +212,8 @@ alter table tasks
 
 create table fleet_settings (key text primary key, value jsonb not null,
   updated_at timestamptz not null default now(), updated_by text);
--- seeded with the defaults of section 6; base_place_id = the one place of kind 'office'
--- whose name starts with 'Head office' when there is exactly one, else null.
+-- seeded with the defaults of section 6; base_place_id null until an admin picks a real
+-- place in Settings (sample names from the design are never seeded).
 
 create table route_legs (                      -- the 30-day cache, one row per leg and provider
   id bigint generated always as identity primary key,
@@ -558,7 +558,7 @@ The connector's `INSTRUCTIONS` text gains two lines (leave-by and stops; issues)
 |---|---|---|
 | `dwell_min` | `{"pickup.people":10,"pickup.goods":15,"drop.people":5,"drop.goods":15,"visit":60,"documents":10,"default":10}` | planner (stop type + what; `documents` for either type) |
 | `buffer_min` | `15` | planner (arrive this early) |
-| `base_place_id` | the Head office place id when one exists, else `null` | start and return legs |
+| `base_place_id` | `null` (an admin picks the real head office in Settings; never seeded) | start and return legs; empty = the plan starts from the first stop and warns |
 | `avg_speed_kmh` | `35` | estimate provider |
 | `road_factor` | `1.3` | estimate provider |
 | `accept_within_min` | `30` | accept reminder |
@@ -598,7 +598,7 @@ planTask(input, settings, legMinutes): Promise<Plan>
 - Warnings: `not_reachable` when leave_by < now (text with the earliest possible arrival from
   a forward pass starting now); `no_coordinates` for a stop with no pin after the server tried
   `places` by name and `towns` by name (the leg is counted as 0 km and the text says so);
-  `long_day` when `ends_at − leave_by > 12 h`; `no_base` when `return_to_base` and no base.
+  `long_day` when `ends_at − leave_by > 12 h`; `no_base` ("No base place set — add it in Settings") whenever `base_place_id` is empty: the plan then starts from the first stop (no first leg) and a return leg cannot be planned.
 - Across midnight: every time is absolute, nothing special; the test proves it.
 
 Deno tests (`plan_test.ts`), all with fixed `legMinutes`: Kalutara → Galle → Matara by 10:00;
@@ -885,7 +885,7 @@ an audit page; project costs.
 7. "Task reassigned" push only to a driver who had accepted: default kept.
 8. Accounts under Settings → Users with the redirect: yes. Decided.
 9. `VAPID_SUBJECT`: default `mailto:` (Sahan runs the key command himself at Part 3b).
-10. The base place "Head office, Colombo 05" and an openrouteservice free account: default kept.
+10. No base place is seeded ("Head office, Colombo 05" is a sample name from the design): `base_place_id` stays empty until an admin picks the real head office in Settings; meanwhile the planner starts from the first stop and warns "No base place set — add it in Settings". An openrouteservice free account: default kept.
 
 The defaults in 3, 4, 7, 9 and 10 can still change before Part 2 starts; the Part 1
 checkpoint repeats them.
