@@ -85,7 +85,7 @@ export async function ensureChannels(): Promise<void> {
     sound: 'general.wav',
   });
   await Notifications.setNotificationChannelAsync(CHANNELS.tracking, {
-    name: 'Location sharing',
+    name: 'On duty',
     importance: Notifications.AndroidImportance.HIGH,
     vibrationPattern: [0, 400, 200, 400],
   });
