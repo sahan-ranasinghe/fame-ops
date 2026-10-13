@@ -483,7 +483,12 @@ office_audit.
   drift-filtered km, driving and stopped minutes, stops > 10 min near a town, gaps > 10 min
   with no data, a timeline of driving / stopped / no_data rows with sentences, and the
   line thinned by shape (Douglas–Peucker, corners kept, at most 3000 points) with km/h and
-  the ISO time per point; the old fields stay).
+  the ISO time per point; the old fields stay). Two rules learnt from test.driver's real
+  12 October: stops with under 100 m of accepted movement between them are ONE stay (the
+  filter only corrected where the parked phone is; never a "Driving · 0 km" row), and the
+  line gets a wait (two points at one place) only for a pause of 60 s or more, so slow
+  traffic keeps its true average speed. Check a route change against a real day through
+  the connector before the checkpoint, not after the deploy.
 - Drivers: `list_drivers`, `create_driver(name, code, username, pin, phone?)`,
   `reset_pin(username, pin)`, `set_driver_active(username, active)`,
   `update_driver(username, phone?, licence_expiry?)`.

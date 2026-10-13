@@ -7,13 +7,16 @@
 //
 //   line       the positions the drift filter accepted, in time order, with the
 //              speed of the step that reached each one (km/h); where the vehicle
-//              waited, a second point at the same place marks the end of the
-//              wait, so a playback marker stays put for as long as it did
+//              waited a minute or more, a second point at the same place marks
+//              the end of the wait, so a playback marker stays put for as long
+//              as it did (a shorter pause is part of the step)
 //   segments   "driving" (between stops; traffic lights and short halts are
 //              part of driving), "stopped" (10 minutes or more at one place,
-//              from the filter), "no_data" (over 10 minutes with no usable fix:
-//              no coverage, phone off, the app frozen); a stop that spans a
-//              data gap is cut in two around it
+//              from the filter; stops with under 100 m of movement between
+//              them are one stay, because the filter only corrected where the
+//              parked phone is), "no_data" (over 10 minutes with no usable
+//              fix: no coverage, phone off, the app frozen); a stop that spans
+//              a data gap is cut in two around it
 //   numbers    km (drift filtered, a little under the odometer), driving and
 //              stopped minutes, the number of stops
 //
@@ -21,7 +24,7 @@
 // location the phone delivered again (a cell tower's position, a stale fix):
 // it is dropped before anything else looks at it.
 
-import { distanceM, type Fix, newTrack, openStop, step, type Stop, type TrackState, usable } from "./track.ts";
+import { distanceM, type Fix, newTrack, openStop, step, type Stop, STOP_MINUTES, type TrackState, usable } from "./track.ts";
 
 /** No usable fix for this long is a gap in the data. */
 export const GAP_MINUTES = 10;
@@ -29,6 +32,13 @@ export const GAP_MINUTES = 10;
 export const SIMPLIFY_M = 12;
 /** The line never has more points than this; the tolerance doubles until it fits. */
 export const MAX_LINE_POINTS = 3000;
+/**
+ * Under this much accepted movement, the time between two stops (or before the first, after the last) was
+ * not a drive: the filter only corrected where the parked phone is. The stops are one stay.
+ */
+export const MIN_LEG_M = 100;
+/** A pause shorter than this is part of the drive; the line gets a wait (two points at one place) only for a longer one. */
+export const WAIT_SECONDS = 60;
 /** Speed classes for colouring the line (km/h): under 3 standing, under 20 slow, under 60 normal, else fast. */
 export const SPEED_SLOW_KMH = 3;
 export const SPEED_NORMAL_KMH = 20;
@@ -221,8 +231,11 @@ export function buildRoute(input: Fix[], opts: BuildOptions = {}): RouteBuild {
     if (result.stop) stops.push(result.stop);
     if (result.accepted) {
       const prev = line[line.length - 1];
-      // The vehicle waited at the previous position: mark the end of the wait before the move.
-      if (prev && waitedUntil > prev.at && result.verdict !== "first") line.push({ at: waitedUntil, lat: prev.lat, lng: prev.lng, kmh: 0 });
+      // The vehicle waited at the previous position for a minute or more: mark the end of the wait before the move.
+      // A shorter pause (slow traffic, a fix that had not moved far enough yet) is part of the step, at its true average speed.
+      if (prev && waitedUntil - prev.at >= WAIT_SECONDS * 1000 && result.verdict !== "first") {
+        line.push({ at: waitedUntil, lat: prev.lat, lng: prev.lng, kmh: 0 });
+      }
       push(result.accepted.at, result.accepted.lat, result.accepted.lng);
       if (result.movedM > 0) moves.push({ at: result.accepted.at, metres: result.movedM });
     }
@@ -230,26 +243,79 @@ export function buildRoute(input: Fix[], opts: BuildOptions = {}): RouteBuild {
   const open = openStop(state);
   if (open) stops.push(open);
   const last = line[line.length - 1];
-  if (last && lastAt !== null && lastAt > last.at && state.anchor && state.anchor.lat === last.lat && state.anchor.lng === last.lng) {
+  if (
+    last && lastAt !== null && lastAt - last.at >= WAIT_SECONDS * 1000 && state.anchor && state.anchor.lat === last.lat &&
+    state.anchor.lng === last.lng
+  ) {
     line.push({ at: lastAt, lat: last.lat, lng: last.lng, kmh: 0 });
   }
 
-  const segments = buildSegments(firstAt, lastAt, stops, gaps, moves);
+  const settled = settleStops(firstAt, lastAt, stops, moves);
+  // No stop of 10 minutes from the filter and no movement at all: the whole time is one stay at the first position.
+  const stay: Stop[] =
+    settled.length === 0 && firstAt !== null && lastAt !== null && lastAt - firstAt >= 60000 && state.metres < MIN_LEG_M && line.length > 0
+      ? [{ from: firstAt, to: lastAt, minutes: minutes(firstAt, lastAt), lat: line[0].lat, lng: line[0].lng }]
+      : [];
+  const stays = settled.length ? settled : stay;
+  const reported = stays.filter((s) => s.minutes >= STOP_MINUTES);
+  const segments = buildSegments(firstAt, lastAt, stays, gaps, moves);
   const km = roundKm(state.metres);
   return {
     line: simplifyLine(line, opts),
     segments,
-    stops,
+    stops: reported,
     gaps,
     km,
     drivingMinutes: segments.filter((s) => s.kind === "driving").reduce((s, x) => s + x.minutes, 0),
     stoppedMinutes: segments.filter((s) => s.kind === "stopped").reduce((s, x) => s + x.minutes, 0),
-    stopsCount: stops.length,
+    stopsCount: reported.length,
     usable: usableCount,
     repeats,
     firstAt,
     lastAt,
   };
+}
+
+/**
+ * The filter's stops, settled into stays. A parked phone's position is corrected now and then (a poor first fix,
+ * drift indoors): the filter ends one stop and starts another a few minutes later without adding distance. With
+ * under 100 m of accepted movement between them that was no drive: the stops are one stay, at the place of its
+ * longest part. The same goes for the minutes before the first stop and after the last one.
+ */
+export function settleStops(firstAt: number | null, lastAt: number | null, stops: Stop[], moves: { at: number; metres: number }[]): Stop[] {
+  const metresBetween = (from: number, to: number) => moves.filter((m) => m.at > from && m.at <= to).reduce((s, m) => s + m.metres, 0);
+  const out: Stop[] = [];
+  /** How long the part that gave each stay its position lasted. */
+  const longest: number[] = [];
+  for (const stop of [...stops].sort((a, b) => a.from - b.from)) {
+    const prev = out[out.length - 1];
+    const lasted = stop.to - stop.from;
+    if (prev && metresBetween(prev.to, stop.from) < MIN_LEG_M) {
+      const here = lasted > longest[longest.length - 1] ? stop : prev;
+      longest[longest.length - 1] = Math.max(lasted, longest[longest.length - 1]);
+      out[out.length - 1] = {
+        from: prev.from,
+        to: Math.max(prev.to, stop.to),
+        minutes: minutes(prev.from, Math.max(prev.to, stop.to)),
+        lat: here.lat,
+        lng: here.lng,
+      };
+    } else {
+      out.push({ ...stop });
+      longest.push(lasted);
+    }
+  }
+  if (out.length && firstAt !== null && lastAt !== null) {
+    const first = out[0];
+    if (first.from > firstAt && metresBetween(firstAt, first.from) < MIN_LEG_M) {
+      out[0] = { ...first, from: firstAt, minutes: minutes(firstAt, first.to) };
+    }
+    const last = out[out.length - 1];
+    if (last.to < lastAt && metresBetween(last.to, lastAt) < MIN_LEG_M) {
+      out[out.length - 1] = { ...last, to: lastAt, minutes: minutes(last.from, lastAt) };
+    }
+  }
+  return out;
 }
 
 /** Stops and driving legs over the day, then the data gaps cut into them. */

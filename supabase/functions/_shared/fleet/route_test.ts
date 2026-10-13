@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import { buildRoute, dropRepeats, positionAt, simplifyKeep, speedClass } from "./route.ts";
+import { buildRoute, dropRepeats, positionAt, settleStops, simplifyKeep, speedClass } from "./route.ts";
 import type { Fix } from "./track.ts";
 
 const T0 = Date.parse("2026-10-12T02:30:00Z"); // 08:00 in Colombo
@@ -156,4 +156,65 @@ Deno.test("speed classes", () => {
     "fast",
     "fast",
   ]);
+});
+
+Deno.test("a parked phone whose position the filter corrects is one stop, not drives of 0 km", () => {
+  // Learnt from test.driver on 12 October 2026: parked at one place from 09:55 to 15:38, the day came out as four
+  // stops with three "Driving · 0 km" rows of a few minutes between them.
+  const yard: At = { lat: 6.9576, lng: 79.8942, at: T0 };
+  const first = park(yard, 30);
+  // The same yard, but the phone now says 60 m further north (no speed): the filter moves the anchor, adding no distance.
+  const corrected = park({ lat: yard.lat + 0.00055, lng: yard.lng, at: T0 + min(33) }, 20);
+  const leave = endOf(corrected);
+  const away = drive({ lat: leave.lat + 0.00002, lng: leave.lng, at: leave.at + 60000 }, 5, 40);
+  const r = buildRoute([...first, ...corrected, ...away]);
+  assertEquals(r.segments.map((s) => s.kind), ["stopped", "driving"]);
+  assertEquals(r.stopsCount, 1);
+  assertEquals(r.stops[0].from, T0);
+  assert(Math.abs(r.stops[0].to - leave.at) < min(2), "the stay lasts until the vehicle leaves");
+  assert(Math.abs(r.stops[0].lat - yard.lat) < 0.0002, "at the place of its longest part");
+  assert(!r.segments.some((s) => s.kind === "driving" && (s.km ?? 0) < 0.1), "no drive of 0 km");
+  assert(Math.abs(r.km - 5) < 0.5, `km ${r.km}`);
+  assert(r.stoppedMinutes >= 50 && r.stoppedMinutes <= 55, `stopped ${r.stoppedMinutes}`);
+});
+
+Deno.test("two stops with a real drive between them stay two stops", () => {
+  const a = park({ lat: 6.9, lng: 79.87, at: T0 }, 15);
+  const hop = drive({ lat: 6.90002, lng: 79.87, at: T0 + min(16) }, 0.6, 20); // 600 m to the next site
+  const there = endOf(hop);
+  const b = park({ lat: there.lat + 0.00002, lng: there.lng, at: there.at + 60000 }, 15);
+  const r = buildRoute([...a, ...hop, ...b]);
+  assertEquals(r.stopsCount, 2);
+  assertEquals(r.segments.map((s) => s.kind), ["stopped", "driving", "stopped"]);
+  assert(Math.abs(r.segments[1].km! - 0.6) < 0.15, `hop km ${r.segments[1].km}`);
+});
+
+Deno.test("settleStops: merges across no movement, extends to the ends, keeps a real drive apart", () => {
+  const stop = (from: number, to: number, lat: number) => ({ from: min(from), to: min(to), minutes: to - from, lat, lng: 79.9 });
+  const moves = [{ at: min(100), metres: 4000 }];
+  const out = settleStops(min(0), min(140), [stop(2, 40, 6.95), stop(44, 60, 6.9506), stop(62, 90, 6.9507), stop(110, 138, 7.0)], moves);
+  assertEquals(out.map((s) => [s.from / 60000, s.to / 60000, s.minutes, s.lat]), [[0, 90, 90, 6.95], [110, 140, 30, 7.0]]);
+  assertEquals(settleStops(null, null, [], []), []);
+});
+
+Deno.test("a few minutes without moving and no stop of 10 minutes is a short Stopped row, not a drive", () => {
+  const r = buildRoute(park({ lat: 6.9, lng: 79.87, at: T0 }, 4));
+  assertEquals(r.segments.map((s) => [s.kind, s.minutes]), [["stopped", 4]]);
+  assertEquals(r.stopsCount, 0, "not a stop of 10 minutes or more");
+  assertEquals(r.stops, []);
+  assertEquals(r.km, 0);
+});
+
+Deno.test("slow traffic: a pause of a few seconds is part of the drive, a halt of minutes is a wait", () => {
+  // 15 km/h: 21 m per fix, under the filter's 25 m, so only every second or third fix moves the accepted position.
+  const crawl = drive({ lat: 6.9, lng: 79.87, at: T0 }, 1, 15);
+  const here = endOf(crawl);
+  const halt = park({ lat: here.lat + 0.00001, lng: here.lng, at: here.at + 5000 }, 3, 3);
+  const on = drive({ lat: here.lat + 0.00003, lng: here.lng, at: endOf(halt).at + 5000 }, 1, 15);
+  const r = buildRoute([...crawl, ...halt, ...on]);
+  const waits = r.line.filter((p, i) => i > 0 && p.lat === r.line[i - 1].lat && p.lng === r.line[i - 1].lng);
+  assertEquals(waits.length, 1, "one wait: the 3-minute halt");
+  const moving = r.line.filter((p, i) => i > 0 && !waits.includes(p));
+  assert(moving.every((p) => p.kmh >= 9 && p.kmh <= 20), `speeds of the moving steps: ${moving.map((p) => p.kmh).join(",")}`);
+  assert(Math.abs(r.km - 2) < 0.3, `km ${r.km}`);
 });
