@@ -1,6 +1,7 @@
 // The web build: the same tools through the Edge Function office-api, with
 // the person's Supabase session. office-api checks the session, the role and
 // the second step on every call and audits it with the person's name.
+import { normalisePermissions, permissionsForRole } from "@fleet/permissions";
 import type { FleetError, Me, Transport, WatchEvent } from "./types";
 
 type TokenSource = () => Promise<string | null>;
@@ -61,8 +62,10 @@ export class ApiTransport implements Transport {
     return json as T;
   }
 
-  me(): Promise<Me> {
-    return this.request<Me>("GET", "/me");
+  async me(): Promise<Me> {
+    const m = await this.request<Me & { permissions?: unknown[] }>("GET", "/me");
+    // An office-api from before the permissions column answers none: the role's defaults then.
+    return { ...m, permissions: m.permissions ? normalisePermissions(m.permissions) : permissionsForRole(m.role) };
   }
 
   async call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {

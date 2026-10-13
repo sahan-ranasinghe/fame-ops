@@ -31,6 +31,9 @@
       ],
       "@fleet/track": [
         "../../supabase/functions/_shared/fleet/track.ts"
+      ],
+      "@fleet/permissions": [
+        "../../supabase/functions/_shared/fleet/permissions.ts"
       ]
     },
     "allowImportingTsExtensions": true

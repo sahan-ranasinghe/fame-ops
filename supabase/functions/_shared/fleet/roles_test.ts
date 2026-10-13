@@ -1,5 +1,8 @@
 import { assertEquals } from "@std/assert";
-import { canCall, mfaRequiredRoles } from "./roles.ts";
+import { permissionsForRole } from "./permissions.ts";
+import { type Actor, canCall, mfaRequiredRoles, type Role } from "./roles.ts";
+
+const actorOf = (role: Role): Actor => ({ employeeId: "x", name: "x", role, permissions: permissionsForRole(role), channel: "web" });
 
 Deno.test("REQUIRE_MFA_ROLES: empty means nobody, names are trimmed, unknown words ignored", () => {
   assertEquals(mfaRequiredRoles(undefined), []);
@@ -9,12 +12,15 @@ Deno.test("REQUIRE_MFA_ROLES: empty means nobody, names are trimmed, unknown wor
   assertEquals(mfaRequiredRoles("boss,admin,"), ["admin"]);
 });
 
-Deno.test("the role table: staff only reach the request tools, viewer only reads", () => {
-  assertEquals(canCall("staff", "create_request"), true);
-  assertEquals(canCall("staff", "task_board"), false);
-  assertEquals(canCall("viewer", "fleet_overview"), true);
-  assertEquals(canCall("viewer", "create_task"), false);
-  assertEquals(canCall("office", "create_task"), true);
-  assertEquals(canCall("office", "cancel_task"), false);
-  assertEquals(canCall("admin", "create_office_key"), true);
+Deno.test("an actor with a role's default permissions: staff reach the request tools and the fleet, viewer only reads", () => {
+  assertEquals(canCall(actorOf("staff"), "create_request"), true);
+  assertEquals(canCall(actorOf("staff"), "task_board"), true);
+  assertEquals(canCall(actorOf("staff"), "create_task"), false);
+  assertEquals(canCall(actorOf("viewer"), "fleet_overview"), true);
+  assertEquals(canCall(actorOf("viewer"), "create_task"), false);
+  assertEquals(canCall(actorOf("office"), "create_task"), true);
+  assertEquals(canCall(actorOf("office"), "cancel_task"), true);
+  assertEquals(canCall(actorOf("office"), "decide_request"), false);
+  assertEquals(canCall(actorOf("admin"), "create_office_key"), true);
+  assertEquals(canCall({ permissions: ["request"] }, "task_board"), false);
 });

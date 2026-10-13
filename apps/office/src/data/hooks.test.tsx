@@ -11,7 +11,7 @@ class FlakyTransport implements Transport {
   calls: string[] = [];
   constructor(private failures: number, private code = "network") {}
   me(): Promise<Me> {
-    return Promise.resolve({ name: "Sahan", role: "admin", tools: ["list_drivers", "list_vehicles", "list_places"] });
+    return Promise.resolve({ name: "Sahan", role: "admin", permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"], tools: ["list_drivers", "list_vehicles", "list_places"] });
   }
   call<T>(tool: string): Promise<T> {
     this.calls.push(tool);

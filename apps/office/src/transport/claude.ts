@@ -1,5 +1,6 @@
 // The artifact build: the page talks to the viewer's "Fame Fleet" connector
 // through the Claude artifact runtime. No key lives in the page.
+import { PERMISSIONS } from "@fleet/permissions";
 import connector from "../connector.json";
 import { asFleetError } from "./errors";
 import { ALL_TOOLS, type Me, type Transport, type WatchEvent } from "./types";
@@ -58,7 +59,8 @@ export class ClaudeTransport implements Transport {
     } catch {
       /* no name: the chrome shows "Fleet office" */
     }
-    return { name, role: "admin", tools: ALL_TOOLS };
+    // The connector's key decides what the viewer may do; the page shows every screen.
+    return { name, role: "admin", permissions: [...PERMISSIONS], tools: ALL_TOOLS };
   }
 
   async call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {

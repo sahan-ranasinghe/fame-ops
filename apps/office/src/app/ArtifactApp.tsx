@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { createHashRouter, RouterProvider } from "react-router";
 import { FleetStore } from "../data/store";
 import { ClaudeTransport, connectClaude } from "../transport/claude";
+import { PERMISSIONS } from "@fleet/permissions";
 import { ALL_TOOLS, type Me, type Transport } from "../transport/types";
 import { DrawerProvider } from "../ui/Drawer";
 import { ToastProvider } from "../ui/Toast";
@@ -14,7 +15,7 @@ import { routes } from "./routes";
 class NoTransport implements Transport {
   readonly kind = "claude" as const;
   me(): Promise<Me> {
-    return Promise.resolve({ name: "", role: "admin", tools: ALL_TOOLS });
+    return Promise.resolve({ name: "", role: "admin", permissions: [...PERMISSIONS], tools: ALL_TOOLS });
   }
   call<T>(): Promise<T> {
     return Promise.reject({ code: "not_granted", message: "Fame Fleet is not available on this page." });

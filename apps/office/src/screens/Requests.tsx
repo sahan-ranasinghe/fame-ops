@@ -3,6 +3,7 @@ import { useFleet } from "../app/FleetContext";
 import { useWatch } from "../data/hooks";
 import type { RequestsList } from "../data/types";
 import { cap, requestTone } from "../lib/format";
+import { can } from "../transport/types";
 import { Chips, Empty, ErrBox, Loading, Pill, StaleNote } from "../ui/basics";
 import { useDrawer } from "../ui/Drawer";
 import { NewRequestDrawer } from "./NewRequestDrawer";
@@ -17,7 +18,8 @@ export function Requests() {
   const [filter, setFilter] = useState<Filter>("waiting");
   const reqs = useWatch<RequestsList>("reqs", "list_requests", { status: filter }, 60000, !noConnector);
   const d = reqs.data && reqs.data.status === filter ? reqs.data : undefined;
-  const staff = me.role === "staff";
+  // Without the view permission the list holds only this person's own requests.
+  const staff = !can(me, "view");
   const decides = me.tools.includes("decide_request");
 
   return (

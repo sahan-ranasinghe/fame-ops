@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Db, Row } from "../db.ts";
 import { ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { assignWarnings, loadRefs, monthKm, openTasksOn, type Task, taskWindow } from "../fleet.ts";
+import { hasAny } from "../permissions.ts";
 import { ago, colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime, zVehicleType } from "../tool.ts";
 import { matchProjects } from "./projects.ts";
@@ -74,8 +75,8 @@ export const createRequest = tool({
     // A project that is known from Zoho is linked; anything else is kept as a label.
     const matched = args.project ? (await matchProjects(db, args.project)).projects : [];
     const project = matched.length === 1 ? matched[0] : null;
-    // Staff always ask in their own name; the office may ask for anyone.
-    const staff = actor.role === "staff";
+    // Someone who can neither approve nor assign asks in their own name; the office may ask for anyone.
+    const staff = !hasAny(actor.permissions, ["approve", "assign_tasks"]);
     const wantName = args.requested_by.toLowerCase();
     const employee = staff ? null : unwrap(await db.from("employees").select("id, name, code").eq("active", true).limit(1000), "employees")
       .find((e) => e.name.toLowerCase() === wantName || e.code.toLowerCase() === wantName);
@@ -119,8 +120,10 @@ export const listRequests = tool({
   async run({ status = "waiting" }, { db, now, actor }) {
     let query = db.from("vehicle_requests").select("*");
     if (status !== "all") query = query.eq("status", status);
-    // Staff see their own requests only.
-    if (actor.role === "staff") query = query.eq("requested_by_employee_id", actor.employeeId ?? "00000000-0000-0000-0000-000000000000");
+    // Without the view permission a person sees their own requests only.
+    if (!actor.permissions.includes("view")) {
+      query = query.eq("requested_by_employee_id", actor.employeeId ?? "00000000-0000-0000-0000-000000000000");
+    }
     const rows = unwrap(await query.order("needed_at", { ascending: status === "waiting" }).limit(100), "vehicle requests");
     return {
       result: { status, count: rows.length, requests: rows.map((r) => requestCard(r, now)) },

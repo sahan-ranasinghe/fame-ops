@@ -51,6 +51,9 @@ h1, h2, h3 { text-wrap: balance; margin: 0 }
 .nav svg { width: 20px; height: 20px; flex: none }
 .badge { margin-left: auto; min-width: 24px; height: 24px; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font: 700 12px/24px var(--font-body); text-align: center; padding: 0 7px }
 .nav a[aria-current="page"] .badge { background: var(--accent-ink); color: var(--accent) }
+.nav a.locked, .more-list a.locked { opacity: .45 }
+.nav a .lock, .more-list a .lock { margin-left: auto; display: grid; place-items: center }
+.nav a .lock svg, .more-list a .lock svg { width: 16px; height: 16px }
 .viewer { margin-top: auto; border-top: 1px solid var(--rail-hover); padding: 16px 8px 0; display: flex; align-items: center; gap: 12px; font-size: 14px }
 .viewer .avatar { background: var(--rail-hover); color: var(--rail-ink) }
 .viewer small { display: block; color: var(--rail-muted) }
@@ -244,6 +247,16 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .more-list { display: grid; gap: 10px }
 .more-list a { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; color: var(--ink); text-decoration: none; font-weight: 600 }
 .more-list svg { width: 20px; height: 20px }
+
+/* permissions (Settings → Users) */
+.perm { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--live-bg); color: var(--live); margin: 0 4px 4px 0; white-space: nowrap }
+.presets { display: flex; flex-wrap: wrap; gap: 8px }
+.perm-list { display: grid; gap: 8px }
+.perm-list label { display: flex; gap: 12px; align-items: flex-start; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer }
+.perm-list label:has(input:checked) { border-color: var(--ink) }
+.perm-list label b { display: block }
+.perm-list label span { font-size: 13px; color: var(--muted) }
+.perm-list input { margin-top: 3px }
 
 #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 12px 18px; border-radius: 12px; font-weight: 600; z-index: 80; max-width: calc(100% - 32px) }
 @media (max-width: 900px) { #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)) } }

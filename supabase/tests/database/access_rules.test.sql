@@ -1111,7 +1111,7 @@ select is((select actor_employee_id from public.office_audit where channel = 'dr
 
 -- ---------------------------------------------------------------------------
 -- 11. Office read access (phase 3): driver_latest, tasks and task_stops
---     through RLS for the office roles; nothing for staff, drivers, anon
+--     through RLS for everyone with the view permission; nothing for drivers, anon
 -- ---------------------------------------------------------------------------
 
 reset role;
@@ -1191,16 +1191,26 @@ select is((select count(*) from public.driver_latest), (select latest from offic
 select is((select count(*) from public.task_stops), (select stops from office_mark), 'office reads every stop');
 reset role;
 
--- Staff: nothing here (their own requests come through the tools)
+-- Staff: since Phase 5 the policies follow the view permission, which every office
+-- account holds by default (the boss: everyone sees the fleet). Their own requests
+-- still come through the tools. Without view (a requester-only account): nothing.
 set role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e3","role":"authenticated"}';
 select is(public.current_office_role(), 'staff', 'current_office_role() is staff for staff');
-select is((select count(*) from public.driver_latest), 0::bigint, 'staff read no driver position');
+select is((select count(*) from public.driver_latest), (select latest from office_mark), 'staff with the default view read every driver position');
 select is((select count(*) from public.location_points), 0::bigint, 'staff read no location point');
-select is((select count(*) from public.tasks), 0::bigint, 'staff read no task');
-select is((select count(*) from public.task_stops), 0::bigint, 'staff read no stop');
+select is((select count(*) from public.tasks), (select tasks from office_mark), 'staff with view read every task');
+select is((select count(*) from public.task_stops), (select stops from office_mark), 'staff with view read every stop');
 select throws_ok('select 1 from public.vehicle_requests', '42501', 'permission denied for table vehicle_requests',
   'staff cannot read vehicle requests through RLS either: their own come through the tools (list_requests)');
+reset role;
+update public.employees set permissions = array['request'] where id = '10000000-0000-0000-0000-00000000e003';
+set role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e3","role":"authenticated"}';
+select is(public.office_can('view'), false, 'a requester-only staff member has no view');
+select is((select count(*) from public.driver_latest), 0::bigint, 'a requester-only staff member reads no driver position');
+select is((select count(*) from public.tasks), 0::bigint, 'a requester-only staff member reads no task');
+select is((select count(*) from public.task_stops), 0::bigint, 'a requester-only staff member reads no stop');
 reset role;
 
 -- A switched-off office person: nothing

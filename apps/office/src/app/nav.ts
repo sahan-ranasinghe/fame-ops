@@ -1,35 +1,55 @@
-// The screens, in the order of the boss's design. A screen is shown only when
-// the person's role may call its tool (the server decides either way).
+// The screens, in the order of the boss's design, each with the permission it
+// needs (any one of the list; an empty list = everyone). A screen the person
+// may not open stays in the menu, greyed with a lock: the server refuses the
+// tools either way, and a direct URL shows the "No access" page.
+import type { Permission } from "@fleet/permissions";
+import { can, type Me } from "../transport/types";
+
 export interface NavItem {
   key: string;
   label: string;
-  tool: string;
+  need: Permission[];
   path: string;
 }
 
+export interface NavState extends NavItem {
+  locked: boolean;
+}
+
+export const LOCK_HINT = "Ask an admin for access";
+
 export const NAV: NavItem[] = [
-  { key: "overview", label: "Overview", tool: "fleet_overview", path: "/" },
-  { key: "live", label: "Live locations", tool: "live_drivers", path: "/live" },
-  { key: "tasks", label: "Tasks", tool: "task_board", path: "/tasks" },
-  { key: "requests", label: "Requests", tool: "list_requests", path: "/requests" },
-  { key: "vehicles", label: "Vehicles", tool: "list_vehicles", path: "/vehicles" },
-  { key: "projects", label: "Projects", tool: "find_project", path: "/projects" },
-  { key: "maintenance", label: "Maintenance", tool: "list_vehicle_reports", path: "/maintenance" },
-  { key: "mileage", label: "Mileage", tool: "mileage_summary", path: "/mileage" },
-  { key: "drivers", label: "Drivers", tool: "list_drivers", path: "/drivers" },
-  { key: "accounts", label: "Accounts", tool: "list_office_users", path: "/accounts" },
+  { key: "overview", label: "Overview", need: ["view"], path: "/" },
+  { key: "live", label: "Live locations", need: ["view"], path: "/live" },
+  { key: "tasks", label: "Tasks", need: ["view"], path: "/tasks" },
+  { key: "requests", label: "Requests", need: ["view", "request"], path: "/requests" },
+  { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
+  { key: "projects", label: "Projects", need: ["view", "request"], path: "/projects" },
+  { key: "maintenance", label: "Maintenance", need: ["view"], path: "/maintenance" },
+  { key: "mileage", label: "Mileage", need: ["view"], path: "/mileage" },
+  { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
+  { key: "settings", label: "Settings", need: [], path: "/settings" },
 ];
 
-/** Phone tab bar (the boss's design): Home, Map, Tasks, Vehicles, More. */
+/** Phone tab bar (the boss's design): Home, Map, Tasks, Vehicles, More. Locked tabs are hidden; More always shows. */
 export const TABS: NavItem[] = [
-  { key: "overview", label: "Home", tool: "fleet_overview", path: "/" },
-  { key: "live", label: "Map", tool: "live_drivers", path: "/live" },
-  { key: "tasks", label: "Tasks", tool: "task_board", path: "/tasks" },
-  { key: "vehicles", label: "Vehicles", tool: "list_vehicles", path: "/vehicles" },
-  { key: "more", label: "More", tool: "", path: "/more" },
+  { key: "overview", label: "Home", need: ["view"], path: "/" },
+  { key: "live", label: "Map", need: ["view"], path: "/live" },
+  { key: "tasks", label: "Tasks", need: ["view"], path: "/tasks" },
+  { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
+  { key: "more", label: "More", need: [], path: "/more" },
 ];
 
 /** What the More page lists on a phone: everything that is not on the tab bar. */
-export const MORE_KEYS = ["requests", "projects", "maintenance", "mileage", "drivers", "accounts"];
+export const MORE_KEYS = ["requests", "projects", "maintenance", "mileage", "drivers", "settings"];
 
-export const allowed = (items: NavItem[], tools: string[]) => items.filter((n) => !n.tool || tools.includes(n.tool));
+/** The pages under Settings and what they need. */
+export const SETTINGS_PAGES: NavItem[] = [
+  { key: "users", label: "Users", need: ["users"], path: "/settings/users" },
+];
+
+/** Every item, marked locked when the person lacks all of its permissions. */
+export const navState = (items: NavItem[], me: Pick<Me, "permissions">): NavState[] => items.map((n) => ({ ...n, locked: !can(me, ...n.need) }));
+
+/** Only the items the person may open. */
+export const allowed = (items: NavItem[], me: Pick<Me, "permissions">): NavItem[] => items.filter((n) => can(me, ...n.need));

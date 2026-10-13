@@ -13,12 +13,15 @@
 import { z } from "zod";
 import type { Db } from "../db.ts";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
+import { normalisePermissions, PERMISSIONS, permissionsForRole, roleForPermissions } from "../permissions.ts";
 import { isRole, OFFICE_ROLES, type Role } from "../roles.ts";
 import { colomboDateTime } from "../time.ts";
 import { tool, zText } from "../tool.ts";
 
 const zEmail = z.string().trim().toLowerCase().email().max(160);
 const zOfficeRole = z.enum(["admin", "fleet_admin", "office", "staff", "viewer"]);
+const zPermissions = z.array(z.enum(PERMISSIONS as [string, ...string[]])).max(PERMISSIONS.length)
+  .describe("Any of: view, request, approve, assign_tasks, vehicles, issues, users");
 const LINK_HOURS = 1;
 
 /** The web app's address for set-password links: the first origin of OFFICE_WEB_URL (office-api allows every listed origin for CORS). */
@@ -28,7 +31,8 @@ function webUrl(): string {
 
 async function officeUser(db: Db, email: string) {
   const row = unwrapMaybe(
-    await db.from("employees").select("id, code, name, email, role, active, auth_user_id").eq("email", email).maybeSingle(),
+    await db.from("employees").select("id, code, name, email, phone, role, permissions, active, auth_user_id").eq("email", email)
+      .maybeSingle(),
     "office user",
   );
   if (!row || !OFFICE_ROLES.includes(row.role as Role)) {
@@ -67,14 +71,15 @@ function randomKey(): string {
 export const listOfficeUsers = tool({
   name: "list_office_users",
   title: "Office users",
-  description: "The people with an office sign-in (admin, fleet_admin, office, staff, viewer), active or not, with their connector keys.",
+  description: "The people with an office sign-in, active or not, with their permissions (view, request, approve, assign_tasks, " +
+    "vehicles, issues, users), the role label and their connector keys.",
   readOnly: true,
   input: z.object({}),
   async run(_args, { db }) {
     const [users, keys] = await Promise.all([
       fetchAll(
         (a, b) =>
-          db.from("employees").select("id, code, name, email, phone, role, active, created_at")
+          db.from("employees").select("id, code, name, email, phone, role, permissions, active, created_at")
             .in("role", [...OFFICE_ROLES]).order("name").range(a, b),
         "office users",
       ),
@@ -92,6 +97,7 @@ export const listOfficeUsers = tool({
           email: u.email,
           phone: u.phone,
           role: u.role,
+          permissions: normalisePermissions(u.permissions),
           active: u.active,
           since: colomboDateTime(u.created_at),
           connector_keys: keys.filter((k) => k.employee_id === u.id && !k.revoked_at).map((k) => ({
@@ -111,20 +117,25 @@ export const createOfficeUser = tool({
   name: "create_office_user",
   title: "Create an office user",
   description: "Creates a sign-in for the web app for an office person (not a driver) and returns a one-time set-password link to send " +
-    "by WhatsApp. No password is chosen here. Roles: admin, fleet_admin, office, staff (vehicle requests only), viewer (read only).",
+    "by WhatsApp. No password is chosen here. Give the permissions (view, request, approve, assign_tasks, vehicles, issues, users) " +
+    "or a role as a shorthand: admin = everything, fleet_admin = everything but users, office = view + request + assign_tasks, " +
+    "staff = view + request, viewer = view.",
   readOnly: false,
   input: z.object({
     name: zText(120),
     email: zEmail,
-    role: zOfficeRole,
+    role: zOfficeRole.optional().describe("Shorthand for a set of permissions. Default: derived from the permissions, or viewer"),
+    permissions: zPermissions.optional().describe("Default: the role's permissions"),
     phone: zText(30).optional(),
     code: zText(30).optional().describe("Employee number. Default: made from the e-mail"),
   }),
-  async run({ name, email, role, phone, code }, { db }) {
+  async run({ name, email, role, permissions, phone, code }, { db }) {
     const existing = unwrapMaybe(await db.from("employees").select("id").eq("email", email).maybeSingle(), "office user");
     if (existing) throw new ToolError(`${email} already has an account. Use reset_office_password or set_office_user_active.`);
+    const perms = permissions ? normalisePermissions(permissions) : permissionsForRole(role ?? "viewer");
+    const label = role ?? roleForPermissions(perms);
 
-    const { data: created, error } = await db.auth.admin.createUser({ email, email_confirm: true, user_metadata: { name, role } });
+    const { data: created, error } = await db.auth.admin.createUser({ email, email_confirm: true, user_metadata: { name, role: label } });
     if (error || !created.user) throw new ToolError(`Could not create the sign-in: ${error?.message ?? "unknown error"}`);
 
     const employeeCode = code ?? `O-${email.split("@")[0].replace(/[^a-z0-9]/gi, "").slice(0, 20).toUpperCase() || "USER"}`;
@@ -134,7 +145,8 @@ export const createOfficeUser = tool({
         name,
         email,
         phone: phone ?? null,
-        role,
+        role: label,
+        permissions: perms,
         active: true,
         auth_user_id: created.user.id,
       }).select("id").single(),
@@ -143,13 +155,59 @@ export const createOfficeUser = tool({
     const link = await setPasswordLink(db, email);
     return {
       result: {
-        created: { name, email, role, code: employeeCode, id: row.id },
+        created: { name, email, role: label, permissions: perms, code: employeeCode, id: row.id },
         set_password_link: link,
         link_valid_for: `${LINK_HOURS} hour`,
         next:
           "Send the link by WhatsApp. The person opens it, chooses a password (12+ characters) and signs in. They can turn on 2-step sign-in in Settings.",
       },
-      summary: `created office user ${email} (${role})`,
+      summary: `created office user ${email} (${label}: ${perms.join(", ") || "no permissions"})`,
+    };
+  },
+});
+
+export const updateOfficeUser = tool({
+  name: "update_office_user",
+  title: "Change an office user",
+  description: "Changes an office user's name, phone and/or permissions (view, request, approve, assign_tasks, vehicles, issues, users). " +
+    "The permissions list replaces the old one and takes effect on the person's next call. You cannot remove your own users permission.",
+  readOnly: false,
+  input: z.object({
+    email: zEmail,
+    name: zText(120).optional(),
+    phone: zText(30).nullable().optional(),
+    permissions: zPermissions.optional().describe("The full new list"),
+    role: zOfficeRole.optional().describe("The label. Default: derived from the permissions"),
+  }),
+  async run({ email, name, phone, permissions, role }, { db, actor }) {
+    const user = await officeUser(db, email);
+    if (name === undefined && phone === undefined && permissions === undefined && role === undefined) {
+      throw new ToolError("Nothing to change: give a name, phone, permissions and/or role.");
+    }
+    const perms = permissions !== undefined ? normalisePermissions(permissions) : normalisePermissions(user.permissions);
+    if (permissions !== undefined && actor.employeeId === user.id && !perms.includes("users")) {
+      throw new ToolError("You cannot remove your own users permission. Ask another admin to do it.");
+    }
+    const label = role ?? (permissions !== undefined ? roleForPermissions(perms) : user.role);
+    const updated = unwrap(
+      await db.from("employees").update({
+        ...(name !== undefined && { name }),
+        ...(phone !== undefined && { phone }),
+        ...(permissions !== undefined && { permissions: perms }),
+        ...((permissions !== undefined || role !== undefined) && { role: label }),
+      }).eq("id", user.id).select("name, email, phone, role, permissions").single(),
+      "office user",
+    );
+    const changed = [
+      name !== undefined && "name",
+      phone !== undefined && "phone",
+      permissions !== undefined && "permissions",
+      role !== undefined && "role",
+    ]
+      .filter(Boolean);
+    return {
+      result: { updated: { ...updated, permissions: normalisePermissions(updated.permissions) } },
+      summary: `updated office user ${email}: ${changed.join(", ")}${permissions !== undefined ? ` (${perms.join(", ") || "none"})` : ""}`,
     };
   },
 });

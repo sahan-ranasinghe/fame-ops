@@ -317,7 +317,8 @@ export const taskDetail = tool({
   input: z.object({ task_id: zId }),
   async run({ task_id }, { db, now, actor }) {
     const task = await getTask(db, task_id);
-    if (actor.role === "staff") {
+    // Without the view permission a person sees only the task of their own request.
+    if (!actor.permissions.includes("view")) {
       const own = task.request_id
         ? unwrapMaybe(
           await db.from("vehicle_requests").select("id").eq("id", task.request_id).eq("requested_by_employee_id", actor.employeeId ?? "")

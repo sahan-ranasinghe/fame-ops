@@ -25,6 +25,8 @@ export default defineConfig(({ mode }) => {
         // The route builder and the GPS drift filter it uses, the same files the connector runs.
         "@fleet/route": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/route.ts", import.meta.url)),
         "@fleet/track": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/track.ts", import.meta.url)),
+        // The permission table (tool → permission, presets): the menu can never disagree with the server.
+        "@fleet/permissions": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/permissions.ts", import.meta.url)),
       },
     },
     build: {

@@ -203,9 +203,32 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByText("No project matches", { exact: false })).toBeVisible();
 
-  await page.getByRole("link", { name: "Accounts" }).first().click();
-  await expect(page.getByRole("heading", { name: "Accounts" })).toBeVisible();
-  await expect(page.locator("tr", { hasText: email })).toBeVisible();
+  // Settings → Users: the admin's row shows every permission; a dispatcher is made from the preset, then given Approve.
+  await page.getByRole("link", { name: "Settings" }).first().click();
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await page.getByRole("link", { name: /^Users/ }).click();
+  await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
+  const myRow = page.locator("tr", { hasText: email });
+  await expect(myRow).toBeVisible();
+  await expect(myRow).toContainText("Users");
+  await page.getByRole("button", { name: "Add office user" }).click();
+  const dispEmail = `e2e.disp.${stamp}@fame.test`;
+  await page.getByLabel("Full name").fill("E2E Dispatcher");
+  await page.getByLabel("E-mail").fill(dispEmail);
+  await page.getByRole("button", { name: "Dispatcher" }).click();
+  await expect(page.getByRole("checkbox", { name: /^Assign tasks/ })).toBeChecked();
+  await expect(page.getByRole("checkbox", { name: /^Approve/ })).not.toBeChecked();
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Account created");
+  await page.keyboard.press("Escape");
+  const dRow = page.locator("tr", { hasText: dispEmail });
+  await expect(dRow).toContainText("Assign tasks");
+  await dRow.getByRole("button", { name: "Manage" }).click();
+  await page.getByRole("checkbox", { name: /^Approve/ }).check();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("User updated");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("tr", { hasText: dispEmail })).toContainText("Approve");
 
   // 6. Settings: turn on 2-step sign-in.
   await page.getByRole("link", { name: "Settings" }).first().click();
@@ -241,4 +264,42 @@ test("a wrong password is refused", async ({ page }) => {
   await page.getByLabel("Password").fill("not the password");
   await page.getByRole("button", { name: "Sign in" }).click();
   await expect(page.getByText("Wrong e-mail or password.")).toBeVisible();
+});
+
+test("a requester-only user sees locked menu items, a No access page, and asks in their own name", async ({ page }) => {
+  const email = `e2e.req.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string; created: { permissions: string[]; role: string } }>(
+    "create_office_user", { name: "E2E Requester", email, permissions: ["request"] },
+  );
+  expect(user.created.permissions).toEqual(["request"]);
+  expect(user.created.role).toBe("staff");
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Requester for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+
+  // Home for a requester is their own requests; the fleet screens are in the menu but locked.
+  await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
+  const overview = page.getByRole("link", { name: "Overview" }).first();
+  await expect(overview).toHaveAttribute("aria-disabled", "true");
+  await expect(overview).toHaveAttribute("title", "Ask an admin for access");
+  await expect(page.getByRole("link", { name: "Requests" }).first()).not.toHaveAttribute("aria-disabled", "true");
+  await page.goto("/vehicles");
+  await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
+  await expect(page.getByTestId("no-access")).toContainText("View");
+  await page.goto("/settings/users");
+  await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
+
+  // A new request has no "Who needs it" field: it is in their own name.
+  await page.goto("/requests");
+  await page.getByRole("button", { name: "New request" }).click();
+  await expect(page.getByLabel("Who needs it")).toHaveCount(0);
+  await page.getByLabel("Time", { exact: true }).fill("09:00");
+  await page.getByLabel("To", { exact: true }).fill("Galle");
+  await page.getByRole("button", { name: "Save request" }).click();
+  await expect(page.getByRole("status")).toHaveText("Request saved");
+  await expect(page.locator("tr", { hasText: "E2E Requester" })).toBeVisible();
 });

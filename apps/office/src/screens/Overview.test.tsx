@@ -24,7 +24,7 @@ class FakeTransport implements Transport {
   readonly kind = "api" as const;
   calls: string[] = [];
   me(): Promise<Me> {
-    return Promise.resolve({ name: "Sahan", role: "admin", tools: ["fleet_overview", "list_requests", "decide_request", "create_task", "create_request"] });
+    return Promise.resolve({ name: "Sahan", role: "admin", permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"], tools: ["fleet_overview", "list_requests", "decide_request", "create_task", "create_request"] });
   }
   call<T>(tool: string): Promise<T> {
     this.calls.push(tool);

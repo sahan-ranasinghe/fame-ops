@@ -11,6 +11,7 @@ import {
   resetOfficePassword,
   revokeOfficeKey,
   setOfficeUserActive,
+  updateOfficeUser,
 } from "./tools/accounts.ts";
 import { createDriver, listDrivers, resetPin, setDriverActive, updateDriver } from "./tools/drivers.ts";
 import { driverRoute, liveDrivers } from "./tools/locations.ts";
@@ -57,6 +58,7 @@ export const TOOLS: AnyTool[] = [
   setOfficeUserActive,
   createOfficeKey,
   revokeOfficeKey,
+  updateOfficeUser,
 ];
 
 export const INSTRUCTIONS = [
@@ -67,10 +69,24 @@ export const INSTRUCTIONS = [
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
-  "Office accounts (admin only): create_office_user returns a one-time set-password link to send by WhatsApp; never ask for or type a password.",
+  "Office accounts (users permission): create_office_user returns a one-time set-password link to send by WhatsApp; never ask for or type a password. " +
+  "Each office person has permissions (view, request, approve, assign_tasks, vehicles, issues, users); update_office_user changes them.",
 ].join("\n");
 
 export { adminClient, type Db, ToolError } from "./db.ts";
+export {
+  allows,
+  hasAny,
+  normalisePermissions,
+  type Permission,
+  PERMISSION_TEXT,
+  PERMISSIONS,
+  permissionsForRole,
+  PRESETS,
+  roleForPermissions,
+  TOOL_PERMISSION,
+  toolsFor,
+} from "./permissions.ts";
 export { type Actor, canCall, type Channel, isRole, mfaRequiredRoles, OFFICE_ROLES, type Role, STRONG_ROLES, TOOL_ROLES } from "./roles.ts";
 export { runTool, type ToolOutcome } from "./run.ts";
 export type { AnyTool } from "./tool.ts";

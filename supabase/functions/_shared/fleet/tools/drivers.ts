@@ -118,7 +118,7 @@ export const createDriver = tool({
     }
 
     const inserted = await db.from("employees")
-      .insert({ code, name: args.name, username, phone: args.phone ?? null, role: "driver", auth_user_id: authUserId })
+      .insert({ code, name: args.name, username, phone: args.phone ?? null, role: "driver", permissions: [], auth_user_id: authUserId })
       .select("*")
       .single();
     if (inserted.error) {

@@ -437,6 +437,7 @@ export interface OfficeUser {
   email?: string | null;
   phone?: string | null;
   role: string;
+  permissions?: string[];
   active: boolean;
   since?: string;
   connector_keys: OfficeKey[];
@@ -448,10 +449,14 @@ export interface OfficeUsers {
 }
 
 export interface CreateOfficeUserResult {
-  created: { name: string; email: string; role: string; code: string; id: string };
+  created: { name: string; email: string; role: string; permissions?: string[]; code: string; id: string };
   set_password_link: string;
   link_valid_for?: string;
   next?: string;
+}
+
+export interface UpdateOfficeUserResult {
+  updated: { name: string; email?: string | null; phone?: string | null; role: string; permissions: string[] };
 }
 
 export interface SetPasswordLinkResult {

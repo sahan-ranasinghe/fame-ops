@@ -1,5 +1,5 @@
-// The MCP server for one person: the tools their role may call, each going
-// through the shared runner (role check, audit row, the tool, the outcome).
+// The MCP server for one person: the tools their permissions allow, each going
+// through the shared runner (permission check, audit row, the tool, the outcome).
 
 import { McpServer } from "@modelcontextprotocol/server";
 import { type Actor, canCall, type Db, INSTRUCTIONS, runTool, TOOLS } from "../_shared/fleet/index.ts";
@@ -17,7 +17,7 @@ function reply(text: string, isError = false): ToolReply {
 export function buildServer(db: Db, actor: Actor): McpServer {
   const server = new McpServer({ name: "fame-fleet-office", version: "1.1.0" }, { instructions: INSTRUCTIONS });
   for (const def of TOOLS) {
-    if (!canCall(actor.role, def.name)) continue;
+    if (!canCall(actor, def.name)) continue;
     server.registerTool(
       def.name,
       {

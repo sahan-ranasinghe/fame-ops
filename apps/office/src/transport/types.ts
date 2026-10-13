@@ -3,18 +3,30 @@
 //   ApiTransport     the web app, through office-api with the person's Supabase session
 // Both give the same JSON for the same tool and arguments.
 
+import type { Permission } from "@fleet/permissions";
+
+export type { Permission };
+
 export type Role = "admin" | "fleet_admin" | "office" | "staff" | "viewer";
 
 export interface Me {
   name: string;
   email?: string;
+  /** A label; the permissions decide. */
   role: Role;
+  /** What this person may do (employees.permissions); the artifact and the shared key hold every permission. */
+  permissions: Permission[];
   /** The tools this person may call; menus mirror it, the server enforces it. */
   tools: string[];
   /** The session has done the second step (web only). */
   mfa?: boolean;
   /** office-api requires the second step for this role (secret REQUIRE_MFA_ROLES). */
   mfa_required?: boolean;
+}
+
+/** True when the person holds any one of the permissions (none asked = everyone). */
+export function can(me: Pick<Me, "permissions">, ...any: Permission[]): boolean {
+  return any.length === 0 || any.some((p) => me.permissions.includes(p));
 }
 
 export interface FleetError {
@@ -43,7 +55,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   viewer: "Viewer",
 };
 
-/** Every connector tool (supabase/functions/_shared/fleet/index.ts). The artifact build lists them all; the connector's key decides. */
+/** Every connector tool (supabase/functions/_shared/fleet/index.ts), in the connector's order. The artifact build lists them all; the connector's key decides. */
 export const ALL_TOOLS = [
   "fleet_overview", "live_drivers", "driver_route",
   "list_drivers", "create_driver", "reset_pin", "set_driver_active", "update_driver",
@@ -54,4 +66,5 @@ export const ALL_TOOLS = [
   "mileage_summary", "list_vehicle_reports", "update_vehicle_report",
   "import_projects", "find_project",
   "list_office_users", "create_office_user", "reset_office_password", "set_office_user_active", "create_office_key", "revoke_office_key",
+  "update_office_user",
 ];

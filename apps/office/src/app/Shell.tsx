@@ -4,11 +4,11 @@ import { useEntry } from "../data/hooks";
 import type { Overview } from "../data/types";
 import { longDate, today } from "../lib/format";
 import { AUTHZ, errText } from "../transport/errors";
-import { ROLE_LABEL } from "../transport/types";
+import { can, ROLE_LABEL } from "../transport/types";
 import { Notice } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { useFleet } from "./FleetContext";
-import { allowed, NAV, TABS } from "./nav";
+import { allowed, LOCK_HINT, NAV, navState, TABS } from "./nav";
 
 function Banner() {
   const { noConnector, store, managePermissions } = useFleet();
@@ -38,19 +38,19 @@ function Banner() {
 }
 
 export function Shell() {
-  const { me, store, noConnector, signOut } = useFleet();
+  const { me, store, noConnector } = useFleet();
   const overview = useEntry<Overview>("overview");
   const waiting = overview.data?.requests?.waiting ?? 0;
-  const nav = allowed(NAV, me.tools);
-  const tabs = allowed(TABS, me.tools);
+  const nav = navState(NAV, me);
+  const tabs = allowed(TABS, me);
   const { pathname } = useLocation();
 
   // The overview feeds the Requests badge and the Home tiles: watched while the app is open.
   useEffect(() => {
-    if (noConnector || !me.tools.includes("fleet_overview")) return;
+    if (noConnector || !can(me, "view")) return;
     store.watch("overview", "fleet_overview", {}, 30000);
     return () => store.unwatch("overview");
-  }, [store, noConnector, me.tools]);
+  }, [store, noConnector, me]);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -68,11 +68,17 @@ export function Shell() {
         </div>
         <nav className="nav">
           {nav.map((n) => (
-            <NavLink key={n.key} to={n.path} end={n.path === "/"}>
-              <Icon name={n.key} /><span>{n.label}</span>{badge(n.key)}
+            <NavLink
+              key={n.key}
+              to={n.path}
+              end={n.path === "/"}
+              className={n.locked ? "locked" : undefined}
+              aria-disabled={n.locked || undefined}
+              title={n.locked ? LOCK_HINT : undefined}
+            >
+              <Icon name={n.key} /><span>{n.label}</span>{n.locked ? <i className="lock"><Icon name="lock" /></i> : badge(n.key)}
             </NavLink>
           ))}
-          {signOut && <NavLink to="/settings"><Icon name="settings" /><span>Settings</span></NavLink>}
           <NavLink to="/more"><Icon name="more" /><span>More</span></NavLink>
         </nav>
         <div className="viewer">

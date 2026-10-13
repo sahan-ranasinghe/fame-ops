@@ -1,7 +1,7 @@
 // Edge Function office-api: the office web app's way to the same tools the
 // connector offers, with the same inputs and the same JSON answers.
 //
-//   GET  /office-api/me                 who is signed in, their role, whether the second step is done, the tools they may call
+//   GET  /office-api/me                 who is signed in, their permissions and role, whether the second step is done, the tools they may call
 //   GET  /office-api/tools              the tools with their input schemas (for the forms)
 //   POST /office-api/tools/<name>       body = the tool's arguments; 200 { result } exactly as the connector returns it
 //                                       400 { error: "bad_input", issues } · 403 { error } · 404 · 409 { error } (the tool said no)
@@ -21,7 +21,18 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
-import { type Actor, adminClient, canCall, isRole, mfaRequiredRoles, OFFICE_ROLES, runTool, TOOLS } from "../_shared/fleet/index.ts";
+import {
+  type Actor,
+  adminClient,
+  canCall,
+  isRole,
+  mfaRequiredRoles,
+  normalisePermissions,
+  OFFICE_ROLES,
+  runTool,
+  TOOL_PERMISSION,
+  TOOLS,
+} from "../_shared/fleet/index.ts";
 
 const CALLS_PER_MINUTE = 120;
 const db = adminClient();
@@ -78,8 +89,8 @@ async function resolvePerson(request: Request): Promise<Resolved> {
   const { data, error } = await asCaller.auth.getUser(token);
   if (error || !data.user) return { ok: false, status: 401, error: "not_signed_in" };
 
-  const { data: row, error: lookup } = await db.from("employees").select("id, name, email, role, active").eq("auth_user_id", data.user.id)
-    .maybeSingle();
+  const { data: row, error: lookup } = await db.from("employees").select("id, name, email, role, permissions, active")
+    .eq("auth_user_id", data.user.id).maybeSingle();
   if (lookup) {
     console.error(`office-api: employee lookup failed: ${lookup.message}`);
     return { ok: false, status: 500, error: "lookup_failed" };
@@ -90,7 +101,14 @@ async function resolvePerson(request: Request): Promise<Resolved> {
   if (MFA_ROLES.includes(row.role) && !mfa) return { ok: false, status: 403, error: "mfa_required" };
   return {
     ok: true,
-    actor: { employeeId: row.id, name: row.name, role: row.role, channel: "web" },
+    actor: {
+      employeeId: row.id,
+      name: row.name,
+      role: row.role,
+      permissions: normalisePermissions(row.permissions),
+      authUserId: data.user.id,
+      channel: "web",
+    },
     email: row.email ?? data.user.email ?? "",
     mfa,
   };
@@ -118,15 +136,16 @@ Deno.serve(async (request) => {
       name: actor.name,
       email: person.email,
       role: actor.role,
+      permissions: actor.permissions,
       mfa: person.mfa,
       mfa_required: MFA_ROLES.includes(actor.role),
-      tools: TOOLS.filter((t) => canCall(actor.role, t.name)).map((t) => t.name),
+      tools: TOOLS.filter((t) => canCall(actor, t.name)).map((t) => t.name),
     }, cors);
   }
 
   if (request.method === "GET" && path === "/tools") {
     return json(200, {
-      tools: TOOLS.filter((t) => canCall(actor.role, t.name)).map((t) => ({
+      tools: TOOLS.filter((t) => canCall(actor, t.name)).map((t) => ({
         name: t.name,
         title: t.title,
         description: t.description,
@@ -140,7 +159,9 @@ Deno.serve(async (request) => {
   if (!match) return json(404, { error: "not_found" }, cors);
   const def = TOOLS.find((t) => t.name === match[1]);
   if (!def) return json(404, { error: "no_such_tool" }, cors);
-  if (!canCall(actor.role, def.name)) return json(403, { error: "forbidden", role: actor.role }, cors);
+  if (!canCall(actor, def.name)) {
+    return json(403, { error: "forbidden", role: actor.role, needs: TOOL_PERMISSION[def.name] ?? [] }, cors);
+  }
   if (actor.employeeId && overLimit(actor.employeeId)) return json(429, { error: "too_many_calls" }, cors);
 
   let raw: unknown = {};

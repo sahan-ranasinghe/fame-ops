@@ -80,12 +80,23 @@ def shape(value, prefix, out):
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "--check"
     # What the artifact reads, with arguments it uses. Ids come from the lists.
+    import datetime as dt
     drivers = call("list_drivers", {})
     vehicles = call("list_vehicles", {})
     board = call("task_board", {})
     requests = call("list_requests", {"status": "all"})
     driver = (drivers.get("drivers") or [{}])[0].get("username") or "nobody"
     reg_no = (vehicles.get("vehicles") or [{}])[0].get("reg_no") or "X"
+    has_tasks = lambda b: any(b.get(col) for col in ("in_progress", "assigned", "completed"))
+    # Late in the evening the test suite puts its tasks on tomorrow: look at that day, and
+    # leave today's (empty) board out rather than compare it with a recorded day that had tasks.
+    skipped = set()
+    if not has_tasks(board):
+        tomorrow = (dt.date.fromisoformat(board["date"]) + dt.timedelta(days=1)).isoformat()
+        alt = call("task_board", {"date": tomorrow})
+        if has_tasks(alt):
+            board = alt
+            skipped.add("task_board {}")
     task_id = next((t["id"] for col in ("in_progress", "assigned", "completed") for t in board.get(col, [])), None)
     request_id = (requests.get("requests") or [{}])[0].get("id")
 
@@ -98,7 +109,7 @@ def main():
         ("list_vehicles", {}),
         ("list_vehicles", {"filter": "documents_expiring"}),
         ("list_places", {}),
-        ("task_board", {}),
+        *([] if skipped else [("task_board", {})]),
         ("task_board", {"date": board.get("date")}),
         ("list_requests", {"status": "all"}),
         ("list_requests", {"status": "waiting"}),
@@ -136,6 +147,9 @@ def main():
     expected = json.loads(SHAPES_FILE.read_text())
     bad = 0
     for label in sorted(set(expected) | set(shapes)):
+        if label in skipped:
+            print(f"  SKIP  {label}: no tasks today (the suite's tasks are on tomorrow this late); run before 21:15 Colombo to compare it")
+            continue
         before, after = set(expected.get(label, [])), set(shapes.get(label, []))
         if before == after:
             print(f"  PASS  {label}: {len(after)} fields unchanged")

@@ -7,6 +7,7 @@ import { auditFinish, auditStart } from "./audit.ts";
 import type { Db } from "./db.ts";
 import { ToolError } from "./db.ts";
 import { prune } from "./format.ts";
+import { PERMISSION_TEXT, TOOL_PERMISSION } from "./permissions.ts";
 import { type Actor, canCall } from "./roles.ts";
 import type { AnyTool } from "./tool.ts";
 
@@ -23,8 +24,12 @@ const messageOf = (error: unknown) => (error instanceof Error ? error.message : 
 
 /** Runs one tool call. Arguments are never written to the function log (they can hold a PIN). */
 export async function runTool(db: Db, def: AnyTool, args: unknown, actor: Actor): Promise<ToolOutcome> {
-  if (!canCall(actor.role, def.name)) {
-    return { text: `Your role (${actor.role}) cannot use ${def.name}.`, kind: "forbidden" };
+  if (!canCall(actor, def.name)) {
+    const needs = (TOOL_PERMISSION[def.name] ?? []).map((p) => PERMISSION_TEXT[p].label).join(" or ");
+    return {
+      text: `Your account cannot use ${def.name}${needs ? ` (it needs the ${needs} permission)` : ""}. Ask an admin for access.`,
+      kind: "forbidden",
+    };
   }
 
   let auditId: number;

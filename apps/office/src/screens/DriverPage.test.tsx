@@ -34,7 +34,7 @@ class FakeTransport implements Transport {
   readonly kind = "api" as const;
   calls: { tool: string; args: Record<string, unknown> }[] = [];
   me(): Promise<Me> {
-    return Promise.resolve({ name: "Sahan", role: "admin", tools: ["live_drivers", "driver_route", "list_drivers", "list_vehicles", "list_places"] });
+    return Promise.resolve({ name: "Sahan", role: "admin", permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"], tools: ["live_drivers", "driver_route", "list_drivers", "list_vehicles", "list_places"] });
   }
   answer(tool: string, args: Record<string, unknown>): unknown {
     if (tool === "driver_route") return args.date === day ? route : { driver: "Nuwan Perera", date: String(args.date), recorded_points: 0, note: "No location was shared on this day." };

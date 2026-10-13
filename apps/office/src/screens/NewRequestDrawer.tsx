@@ -3,6 +3,7 @@ import { useFleet } from "../app/FleetContext";
 import { useLists } from "../data/hooks";
 import { today } from "../lib/format";
 import { errText } from "../transport/errors";
+import { can } from "../transport/types";
 import type { FleetError } from "../transport/types";
 import { Notice } from "../ui/basics";
 import { DrawerTop, useDrawer } from "../ui/Drawer";
@@ -14,7 +15,8 @@ export function NewRequestDrawer() {
   const drawer = useDrawer();
   const toast = useToast();
   const lists = useLists();
-  const staff = me.role === "staff";
+  // Someone who can neither approve nor assign asks in their own name (the server does the same).
+  const staff = !can(me, "approve", "assign_tasks");
   const [f, setF] = useState(() => emptyRequest(today()));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);

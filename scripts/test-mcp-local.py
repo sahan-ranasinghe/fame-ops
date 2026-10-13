@@ -199,15 +199,17 @@ if CHANNEL == "api":
     code, au = http("POST", f"{API}/auth/v1/admin/users", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"},
                     {"email": admin_email, "password": admin_pw, "email_confirm": True})
     check(code in (200, 201), "the test admin's sign-in is created (service role, local only)", f"{code} {str(au)[:120]}")
-    psql(f"insert into employees (code, name, email, role, auth_user_id) values ('ADM-{uuid.uuid4().hex[:4]}', 'Test Admin', '{admin_email}', 'admin', '{au['id']}')")
+    psql(f"insert into employees (code, name, email, role, permissions, auth_user_id) values ('ADM-{uuid.uuid4().hex[:4]}', 'Test Admin', '{admin_email}', 'admin', "
+         f"array['view','request','approve','assign_tasks','vehicles','issues','users'], '{au['id']}')")
     aal1 = office_sign_in(admin_email, admin_pw, enrol_totp=False)
     code, body = http("GET", f"{API}/functions/v1/office-api/me", api_headers(aal1))
     check(code == 200 and body.get("mfa") is False and body.get("mfa_required") is False,
           "an admin signs in with the password alone (2-step optional): /me gives mfa false", f"{code} {body}")
     API_TOKEN = office_sign_in(admin_email, admin_pw, enrol_totp=True)
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(API_TOKEN))
-    check(code == 200 and me.get("role") == "admin" and me.get("mfa") is True and "create_office_user" in me.get("tools", []),
-          "after turning on 2-step: /me gives the role, mfa true and the admin tools", f"{code} {str(me)[:200]}")
+    check(code == 200 and me.get("role") == "admin" and me.get("mfa") is True and "create_office_user" in me.get("tools", [])
+          and me.get("permissions") == ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"],
+          "after turning on 2-step: /me gives the role, the permissions, mfa true and the admin tools", f"{code} {str(me)[:200]}")
     code, body = http("GET", f"{API}/functions/v1/office-api/me", {"apikey": ANON, "Content-Type": "application/json"})
     check(code == 401, "no token: 401", code)
     code, tl = http("GET", f"{API}/functions/v1/office-api/tools", api_headers(API_TOKEN))
@@ -277,10 +279,32 @@ f = tool("find_project", {"text": "1302_"})
 check(f["count"] == 0, "'_' in the search text is not treated as a wildcard")
 
 # ---------------------------------------------------------------------------
+print("\n== 1b. Office accounts and permissions ==")
+REQ_EMAIL = f"requester.{uuid.uuid4().hex[:6]}@fame.test"
+cu = tool("create_office_user", {"name": "Test Requester", "email": REQ_EMAIL, "permissions": ["request"]})
+check(cu["created"]["permissions"] == ["request"] and cu["created"]["role"] == "staff" and cu["set_password_link"].startswith("http"),
+      "create_office_user with permissions ['request']: the role label is derived (staff), a set-password link comes back", json.dumps(cu["created"]))
+cv = tool("create_office_user", {"name": "Test Viewer", "email": f"viewer.{uuid.uuid4().hex[:6]}@fame.test", "role": "viewer"})
+check(cv["created"]["permissions"] == ["view"], "create_office_user with a role only: the role's permissions", json.dumps(cv["created"]))
+up = tool("update_office_user", {"email": REQ_EMAIL, "permissions": ["request", "view"], "phone": "0712223334"})
+check(up["updated"]["permissions"] == ["view", "request"] and up["updated"]["role"] == "staff" and up["updated"]["phone"] == "0712223334",
+      "update_office_user replaces the permissions (in the table's order) and the phone", json.dumps(up))
+lu = tool("list_office_users", {})
+req_row = next((u for u in lu["users"] if u["email"] == REQ_EMAIL), None)
+check(req_row is not None and req_row["permissions"] == ["view", "request"] and req_row["role"] == "staff", "list_office_users shows the permissions", json.dumps(req_row))
+r = tool("update_office_user", {"email": REQ_EMAIL}, expect_error=True)
+check("Nothing to change" in r, "update_office_user with nothing to change is refused", r)
+check(psql("select permissions from employees where username = 'nuwan.p'") == "{}", "a driver made by create_driver has no office permissions")
+
+# ---------------------------------------------------------------------------
 print("\n== 2. Tasks and requests ==")
-start = (now.astimezone(colombo) + dt.timedelta(minutes=20)).strftime("%H:%M")
-end = (now.astimezone(colombo) + dt.timedelta(hours=3)).strftime("%H:%M")
-can_today = (now.astimezone(colombo) + dt.timedelta(hours=3, minutes=5)).date() == today
+base = now.astimezone(colombo) + dt.timedelta(minutes=20)
+can_today = (base + dt.timedelta(hours=2, minutes=45)).date() == today
+if not can_today:
+    # Late in the evening the window would cross midnight (end_time must be on the same day): tomorrow morning instead.
+    base = dt.datetime.combine(today + dt.timedelta(days=1), dt.time(9, 0), tzinfo=colombo)
+start = base.strftime("%H:%M")
+end = (base + dt.timedelta(hours=2, minutes=40)).strftime("%H:%M")
 task_day = iso(today) if can_today else day(1)
 r = tool("create_task", {"title": "Bad split", "date": task_day, "start_time": start, "driver": "nuwan.p", "vehicle": "cab4521",
                          "pickup": "Head office", "dropoff": "Kurunegala tower site",
@@ -315,7 +339,8 @@ t3 = tool("create_task", {"title": "Bank documents run", "date": task_day, "star
 T3 = t3["task_id"]
 check(any("in the garage" in w for w in t3["warnings"]), "assigning a vehicle that is in the garage gives a warning", json.dumps(t3["warnings"]))
 
-re1 = tool("create_request", {"requested_by": "Dilini Rajapaksha", "project": "13036", "date": day(1), "time": "06:30", "back_by": "18:00",
+# Two days ahead: in the evening the tasks above are already on tomorrow, and the approved request's task must not join their day.
+re1 = tool("create_request", {"requested_by": "Dilini Rajapaksha", "project": "13036", "date": day(2), "time": "06:30", "back_by": "18:00",
                               "route_from": "Head office", "route_to": "Matara sites", "need_type": "van", "pax": 6, "tools": True})
 R1 = re1["request"]["id"]
 check(re1["request"]["need"] == "Van · 6 pax + tools" and re1["request"]["route"] == "Head office → Matara sites" and re1["request"]["status"] == "waiting",
@@ -638,7 +663,7 @@ if CHANNEL == "api":
 
     print("\n== 8. Roles: a staff member on office-api ==")
     staff_email = f"staff.{uuid.uuid4().hex[:6]}@fame.test"
-    created = tool("create_office_user", {"name": "Test Staff", "email": staff_email, "role": "staff"})
+    created = tool("create_office_user", {"name": "Test Staff", "email": staff_email, "permissions": ["request"]})
     check(created["created"]["role"] == "staff" and created["set_password_link"].startswith("http") and "token" in created["set_password_link"],
           "create_office_user returns a one-time set-password link (no password typed anywhere)", str(created)[:200])
     # The person would open the link; the test sets the password through the admin API instead.
@@ -647,8 +672,9 @@ if CHANNEL == "api":
     code, _ = http("PUT", f"{API}/auth/v1/admin/users/{staff_uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": staff_pw})
     staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
-    check(code == 200 and me.get("role") == "staff" and sorted(me.get("tools", [])) == ["create_request", "find_project", "list_places", "list_requests", "task_detail"],
-          "staff signs in without a second step and sees only the request tools", f"{code} {str(me)[:200]}")
+    check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["request"]
+          and sorted(me.get("tools", [])) == ["create_request", "find_project", "list_places", "list_requests", "task_detail"],
+          "a requester-only person signs in without a second step and sees only the request tools", f"{code} {str(me)[:200]}")
     code, body = api_call(staff_token, "task_board", {})
     check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})
@@ -657,6 +683,18 @@ if CHANNEL == "api":
     check(code == 200 and body["result"]["request"]["requested_by"] == "Test Staff", "a staff request is always in their own name", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})
     check(code == 200 and body["result"]["count"] == 1, "and they see that one request", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "update_office_user", {"email": staff_email, "permissions": ["view", "request", "users"]})
+    check(code == 403 and "users" in str(body.get("needs", [])), "they cannot give themselves permissions (403 names what it needs)", f"{code} {body}")
+    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request"]})
+    code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
+    check(code == 200 and me.get("permissions") == ["view", "request"] and "task_board" in me.get("tools", []),
+          "given view by the admin: the next /me lists the fleet tools too", f"{code} {str(me)[:200]}")
+    code, body = api_call(staff_token, "task_board", {})
+    check(code == 200, "and the task board answers (200)", f"{code} {str(body)[:120]}")
+    code, body = api_call(staff_token, "list_requests", {"status": "all"})
+    check(code == 200 and body["result"]["count"] > 1, "with view they see everyone's requests", f"{code} {str(body)[:160]}")
+    code, body = api_call(API_TOKEN, "update_office_user", {"email": admin_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
+    check(code == 409 and "own users permission" in body.get("error", ""), "an admin cannot remove their own users permission (409)", f"{code} {body}")
     off = tool("set_office_user_active", {"email": staff_email, "active": False})
     code, body = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(off["active"] is False and code in (401, 403), "switched off: the same session is refused at once (the sign-in is banned)", f"{code} {body}")
