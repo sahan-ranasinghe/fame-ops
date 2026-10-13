@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import { useWatch } from "../data/hooks";
-import { applyLatest, positionOf, refreshStates, statusLine, statusTone } from "../data/live";
-import type { DriverRoute, LiveDriver, LiveDrivers } from "../data/types";
+import { positionOf, statusLine, statusTone } from "../data/live";
+import { appendLive, mapRouteOf, type Route, routeOf, trailOf } from "../data/route";
+import type { DriverRoute, LiveDriver } from "../data/types";
+import { useLiveDrivers } from "../data/useLive";
 import { joinDots, num, plateOf } from "../lib/format";
 import { MapView } from "../map/MapView";
 import type { MapMarker, MapRoute } from "../map/types";
@@ -14,64 +16,60 @@ import { Icon } from "../ui/icons";
 type Filter = "all" | "live" | "no_signal" | "location_off" | "not_sharing";
 const FILTERS: [Filter, string][] = [["all", "All"], ["live", "Live"], ["no_signal", "No signal"], ["location_off", "Location off"], ["not_sharing", "Not sharing"]];
 const tone = (x: LiveDriver) => statusTone(x.status, x.state);
-
-export interface Route {
-  username: string;
-  km?: number;
-  count: number;
-  first?: string;
-  last?: string;
-  points: { lat: number; lng: number }[];
-  stops: string[];
-}
-
-/** The tool's route rows → points and stop sentences. */
-export function routeOf(username: string, p: DriverRoute): Route {
-  const cols = p.route?.columns ?? ["time", "lat", "lng", "km/h"];
-  const la = cols.indexOf("lat"), lo = cols.indexOf("lng");
-  const points = (p.route?.points ?? []).map((r) => ({ lat: Number(r[la]), lng: Number(r[lo]) })).filter((q) => isFinite(q.lat) && isFinite(q.lng));
-  const stops = (p.stops_over_10_min ?? []).map((s) => joinDots([`${s.from}–${s.to}`, s.near, `${s.minutes} min`]));
-  return { username, km: p.km, count: p.recorded_points ?? points.length, first: p.first_point, last: p.last_point, points, stops };
-}
+const sharingNow = (x: LiveDriver) => (x.signal ? x.signal.sharing : x.state !== "not_sharing");
 
 export function Live() {
-  const { store, transport, noConnector, managePermissions, realtime } = useFleet();
+  const { store, transport, noConnector, managePermissions } = useFleet();
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<string | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
   const [routeBusy, setRouteBusy] = useState(false);
   const [routeErr, setRouteErr] = useState<string | null>(null);
-  const [rt, setRt] = useState<"none" | "connecting" | "live" | "error">(realtime ? "connecting" : "none");
-  const live = useWatch<LiveDrivers>("live", "live_drivers", { filter: "all" }, 30000, !noConnector);
+  // "Show today's trails": every sharing driver's line today, loaded once each, then grown from the Realtime rows.
+  const [trails, setTrails] = useState(false);
+  const [trailMap, setTrailMap] = useState<Map<string, Route>>(new Map());
+  const loading = useRef(new Set<string>());
+  const driversRef = useRef<LiveDriver[]>([]);
+
+  const { live, rt } = useLiveDrivers((row) => {
+    const who = driversRef.current.find((x) => x.employee_id === row.employee_id);
+    if (!who) return;
+    setTrailMap((m) => {
+      const r = m.get(who.username);
+      if (!r) return m;
+      const next = new Map(m);
+      next.set(who.username, appendLive(r, row));
+      return next;
+    });
+    setRoute((r) => (r && r.username === who.username ? appendLive(r, row) : r));
+  });
   const d = live.data;
-
-  // Realtime: a new position moves the marker at once; the states age every 30 s.
-  useEffect(() => {
-    // Only this subscription's status reaches the screen: a subscription that was torn
-    // down (React runs effects twice in development) must not report "live".
-    let alive = true;
-    const stop = realtime?.driverLatest((row) => store.patch<LiveDrivers>("live", (data) => {
-      const drivers = applyLatest(data.drivers, row, new Date());
-      return drivers === data.drivers ? data : { ...data, drivers };
-    }), (s) => { if (alive) setRt(s); });
-    const tick = setInterval(() => store.patch<LiveDrivers>("live", (data) => {
-      const drivers = refreshStates(data.drivers, new Date());
-      return drivers === data.drivers ? data : { ...data, drivers };
-    }), 30000);
-    return () => { alive = false; stop?.(); clearInterval(tick); };
-  }, [realtime, store]);
-
   const all = useMemo(() => d?.drivers ?? [], [d]);
+  driversRef.current = all;
   const shown = filter === "all" ? all : all.filter((x) => (x.status ?? (x.state === "sharing" ? "live" : x.state === "stale" ? "no_signal" : "not_sharing")) === filter);
   const sel = all.find((x) => x.username === selected) ?? all[0];
   useEffect(() => { if (!selected && all[0]) setSelected(all[0].username); }, [all, selected]);
+
+  // Trails on: load today's route of every sharing driver that has none yet.
+  useEffect(() => {
+    if (!trails) return;
+    for (const x of all) {
+      if (!sharingNow(x) || trailMap.has(x.username) || loading.current.has(x.username)) continue;
+      loading.current.add(x.username);
+      void transport.call<DriverRoute>("driver_route", { driver: x.username })
+        .then((p) => setTrailMap((m) => new Map(m).set(x.username, routeOf(x.username, p))))
+        .catch(() => undefined)
+        .finally(() => loading.current.delete(x.username));
+    }
+  }, [trails, all, trailMap, transport]);
 
   const markers = useMemo<MapMarker[]>(() => all.flatMap((x) => {
     const pos = positionOf(x);
     if (!pos) return [];
     return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, title: x.driver, lat: pos.lat, lng: pos.lng, tone: tone(x), selected: x.username === sel?.username }];
   }), [all, sel?.username]);
-  const mapRoute = useMemo<MapRoute | null>(() => (route && route.username === sel?.username ? { points: route.points } : null), [route, sel?.username]);
+  const mapRoute = useMemo<MapRoute | null>(() => (route && route.username === sel?.username ? mapRouteOf(route) : null), [route, sel?.username]);
+  const mapTrails = useMemo<MapRoute[]>(() => (trails ? [...trailMap.values()].filter((r) => !(mapRoute && r.username === sel?.username)).map(trailOf) : []), [trails, trailMap, mapRoute, sel?.username]);
 
   async function showRoute(username: string) {
     setRouteBusy(true);
@@ -97,7 +95,12 @@ export function Live() {
           </div>
           <h1>Live locations</h1>
         </div>
-        {d && <Chips options={FILTERS} value={filter} onChange={setFilter} counts={counts} />}
+        {d && (
+          <div className="ph-actions">
+            <Chips options={FILTERS} value={filter} onChange={setFilter} counts={counts} />
+            <button type="button" className="chip" aria-pressed={trails} onClick={() => setTrails((t) => !t)}><Icon name="route" />Show today’s trails</button>
+          </div>
+        )}
       </div>
       <div className="live-layout">
         <div className="card llist">
@@ -120,7 +123,7 @@ export function Live() {
           )) : <Empty>{all.length ? "Nobody in this group right now." : "No driver is sharing their location or on a task right now."}</Empty>)}
         </div>
         <div className="stack live-map">
-          <MapView markers={markers} route={mapRoute} onPick={(id) => setSelected(id)} />
+          <MapView markers={markers} route={mapRoute} trails={mapTrails} onPick={(id) => setSelected(id)} />
           {sel && <Detail x={sel} route={route && route.username === sel.username ? route : null} busy={routeBusy} err={routeErr} onRoute={() => void showRoute(sel.username)} onHide={() => setRoute(null)} />}
         </div>
       </div>
@@ -134,7 +137,7 @@ function Detail({ x, route, busy, err, onRoute, onHide }: { x: LiveDriver; route
     <div className="card card-b" data-testid="live-detail">
       <div className="row" style={{ padding: 0 }}>
         <Avatar name={x.driver} />
-        <div className="grow"><div className="name" style={{ fontSize: 20 }}>{x.driver}</div><div className="sub">{joinDots([x.vehicle, x.task, x.going_to && "to " + x.going_to])}</div></div>
+        <div className="grow"><div className="name" style={{ fontSize: 20 }}><Link to={`/drivers/${x.username}`}>{x.driver}</Link></div><div className="sub">{joinDots([x.vehicle, x.task, x.going_to && "to " + x.going_to])}</div></div>
         <Pill tone={tone(x)}>{statusLine(x)}</Pill>
       </div>
       <dl className="facts">
@@ -150,10 +153,11 @@ function Detail({ x, route, busy, err, onRoute, onHide }: { x: LiveDriver; route
         </p>
       )}
       <div className="acts">
-        {links.maps && <a className="btn dark" href={links.maps} target="_blank" rel="noopener">Open in Google Maps</a>}
+        <Link className="btn dark" to={`/drivers/${x.username}`}><Icon name="route" />Driver page</Link>
+        {links.maps && <a className="btn" href={links.maps} target="_blank" rel="noopener">Open in Google Maps</a>}
         {links.whatsapp && <a className="btn" href={links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}
         {links.call && <a className="btn" href={links.call}>Call</a>}
-        <button type="button" className="btn" onClick={onRoute} disabled={busy}><Icon name="route" />Today’s route</button>
+        <button type="button" className="btn" onClick={onRoute} disabled={busy}>Today’s route</button>
       </div>
       {(busy || err || route) && (
         <div style={{ marginTop: 14 }}>
@@ -161,7 +165,7 @@ function Detail({ x, route, busy, err, onRoute, onHide }: { x: LiveDriver; route
           {!busy && err && <Notice>{err}</Notice>}
           {!busy && !err && route && (
             <Notice tone="info" action={<button type="button" className="btn small" onClick={onHide}>Hide route</button>}>
-              <b>Today: {num(route.km)} km</b> from {route.count} points{route.first ? `, ${route.first}–${route.last}` : ""}. {route.stops.length ? "Stops over 10 min: " + route.stops.join("; ") : "No stops over 10 minutes."}
+              <b>Today: {num(route.km)} km</b> from {route.count} points{route.first ? `, ${route.first}–${route.last}` : ""}. {route.stops.length ? "Stops over 10 min: " + route.stops.map((s) => s.text).join("; ") : "No stops over 10 minutes."}
             </Notice>
           )}
         </div>

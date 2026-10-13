@@ -66,6 +66,20 @@ echo "3. Builds"
 ls -la dist-artifact/index.html | awk '{print "   artifact: " $5 " bytes"}'
 echo "4. End to end (Playwright)"
 export OFFICE_MCP_URL="$API_URL/functions/v1/office-mcp" OFFICE_MCP_KEY API_URL ANON_KEY
+# Realtime must be streaming changes before the live step: a database reset (the connector
+# suite, pgTAP) restarts the Realtime container, and its change stream takes about half a
+# minute more to come up, during which subscriptions succeed but nothing is delivered.
+SERVICE_ROLE_KEY=$(value SERVICE_ROLE_KEY)
+export SERVICE_ROLE_KEY
+rt_ok=0
+for attempt in 1 2 3 4 5 6; do
+  if node e2e/realtime-check.mjs >/tmp/realtime-check.$$ 2>&1; then rt_ok=1; break; fi
+  echo "   Realtime not delivering yet (attempt $attempt), waiting 15 s..."
+  sleep 15
+done
+[ "$rt_ok" = 1 ] || { cat /tmp/realtime-check.$$; rm -f /tmp/realtime-check.$$; echo "Realtime is not delivering driver_latest changes. Restart the stack (npx supabase stop && npx supabase start ...) and run again." >&2; exit 1; }
+rm -f /tmp/realtime-check.$$
+echo "   Realtime delivers changes."
 if [ -z "${PW_CHROMIUM:-}" ] && [ ! -d "$HOME/.cache/ms-playwright" ] && [ -x /snap/bin/chromium ]; then
   export PW_CHROMIUM=/snap/bin/chromium
   export TMPDIR="$HOME/snap/chromium/common/pw-tmp"   # snap Chromium can only write inside its own folder

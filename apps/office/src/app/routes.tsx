@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Navigate, type RouteObject } from "react-router";
 import { Accounts } from "../screens/Accounts";
+import { DriverPage } from "../screens/DriverPage";
 import { Drivers } from "../screens/Drivers";
 import { Live } from "../screens/Live";
 import { Maintenance } from "../screens/Maintenance";
@@ -43,6 +44,7 @@ export const routes: RouteObject[] = [
       { path: "maintenance", element: <Maintenance /> },
       { path: "mileage", element: <Mileage /> },
       { path: "drivers", element: <Drivers /> },
+      { path: "drivers/:username", element: <DriverPage /> },
       { path: "accounts", element: <Accounts /> },
       { path: "more", element: <More /> },
       { path: "settings", element: <SettingsRoute /> },

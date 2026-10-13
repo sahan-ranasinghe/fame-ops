@@ -3,7 +3,9 @@
   "date: string",
   "driver: string",
   "note: string",
-  "recorded_points: number"
+  "recorded_points: number",
+  "window.from: string",
+  "window.to: string"
  ],
  "find_project {\"text\": \"a\"}": [
   "count: number",

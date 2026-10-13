@@ -21,6 +21,8 @@ const IC: Record<string, string> = {
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   refresh: '<path d="M20 11a8 8 0 0 0-14.6-4M4 4v4h4M4 13a8 8 0 0 0 14.6 4M20 20v-4h-4"/>',
   route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>',
+  play: '<path d="M7 5l12 7-12 7z"/>',
+  pause: '<path d="M7 5h4v14H7zM13 5h4v14h-4z"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   fit: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
   accounts: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M21.5 20a6.5 6.5 0 0 0-5-6.3"/>',

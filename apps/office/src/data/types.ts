@@ -300,19 +300,47 @@ export interface RouteStop {
   minutes: number;
   near?: string | null;
   maps?: string;
+  lat?: number;
+  lng?: number;
+}
+
+export type SegmentKind = "driving" | "stopped" | "no_data";
+
+/** A row of the timeline: a driving leg, a stop of 10 minutes or more, or over 10 minutes with no data. */
+export interface RouteSegment {
+  kind: SegmentKind;
+  from: string;
+  to: string;
+  from_at: string;
+  to_at: string;
+  minutes: number;
+  km?: number;
+  near?: string | null;
+  lat?: number;
+  lng?: number;
+  text: string;
 }
 
 export interface DriverRoute {
   driver: string;
   date: string;
+  window?: { from: string; to: string };
+  task?: { id: string; title: string; started?: string; completed?: string | null };
   recorded_points: number;
   usable_points?: number;
+  repeated_points?: number;
   first_point?: string;
   last_point?: string;
   last_position?: string;
   km?: number;
   km_note?: string;
+  driving_minutes?: number;
+  stopped_minutes?: number;
+  stops_count?: number;
   stops_over_10_min?: RouteStop[];
+  gaps?: { from: string; to: string; minutes: number }[];
+  timeline?: RouteSegment[];
+  /** columns: time, lat, lng, km/h and (new) the ISO time; older answers have four columns. */
   route?: { columns: string[]; points: (string | number)[][] };
   note?: string;
 }

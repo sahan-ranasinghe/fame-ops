@@ -1,10 +1,12 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import { useLists } from "../data/hooks";
-import type { TaskDetail } from "../data/types";
+import { mapRouteOf, minutesText, type Route, routeOf } from "../data/route";
+import type { DriverRoute, TaskDetail } from "../data/types";
 import { cap, hhmm, joinDots, num, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
+import { MapView } from "../map/MapView";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { DrawerTop, useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
@@ -129,6 +131,7 @@ export function TaskDrawer({ id }: { id: string }) {
         </Notice>
       )}
       <WarningsNote warnings={warnings} />
+      <TaskRoute id={id} started={t.started} />
 
       <div className="section-t">Stops</div>
       <div className="card">
@@ -210,6 +213,39 @@ export function TaskDrawer({ id }: { id: string }) {
           <button type="button" className="btn danger" onClick={() => void cancel()} disabled={busy}>Cancel task</button>
         </div>
       )}
+    </>
+  );
+}
+
+/** The route between Start task and Save & finish (or now), on the same map as the driver page, with GPS km next to the odometer. */
+function TaskRoute({ id, started }: { id: string; started?: string | null }) {
+  const { transport } = useFleet();
+  const [route, setRoute] = useState<Route | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!started) return;
+    let alive = true;
+    setBusy(true);
+    transport.call<DriverRoute>("driver_route", { task_id: id })
+      .then((p) => { if (alive) setRoute(routeOf("", p)); })
+      .catch((e) => { if (alive) setErr(errText(e as FleetError)[0]); })
+      .finally(() => { if (alive) setBusy(false); });
+    return () => { alive = false; };
+  }, [id, started, transport]);
+  if (!started) return null;
+  const line = route && !route.note
+    ? joinDots([`GPS ${num(route.km)} km`, `driving ${minutesText(route.drivingMinutes)}`, `stopped ${minutesText(route.stoppedMinutes)}`, route.stopsCount ? `${route.stopsCount} stop${route.stopsCount > 1 ? "s" : ""} of 10 min or more` : "no stops of 10 min or more"])
+    : route?.note;
+  return (
+    <>
+      <div className="section-t">Route</div>
+      <div className="card card-b stack" data-testid="task-route">
+        {busy && <Loading>Loading the route…</Loading>}
+        {err && <Notice tone="bad">{err}</Notice>}
+        {route && route.points.length > 0 && <MapView markers={[]} route={mapRouteOf(route)} onPick={() => undefined} />}
+        {line && <p className="muted small" style={{ margin: 0 }}>{line}</p>}
+      </div>
     </>
   );
 }

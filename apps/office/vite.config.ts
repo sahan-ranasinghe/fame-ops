@@ -22,6 +22,9 @@ export default defineConfig(({ mode }) => {
       alias: {
         // The one status rule, shared with the connector (no copy): supabase/functions/_shared/fleet/status.ts
         "@fleet/status": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/status.ts", import.meta.url)),
+        // The route builder and the GPS drift filter it uses, the same files the connector runs.
+        "@fleet/route": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/route.ts", import.meta.url)),
+        "@fleet/track": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/track.ts", import.meta.url)),
       },
     },
     build: {

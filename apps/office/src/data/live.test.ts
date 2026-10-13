@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { applyLatest, positionOf, recordedAtOf, refreshStates, statusFields, statusTone } from "./live";
 import type { LiveDriver } from "./types";
 import { projection } from "../map/DrawnMap";
-import { routeOf } from "../screens/Live";
+import { routeOf } from "./route";
 
 const now = new Date("2026-10-12T06:30:00Z"); // 12:00 in Colombo
 const ago = (minutes: number) => new Date(now.getTime() - minutes * 60000).toISOString();
@@ -96,8 +96,8 @@ describe("positions and routes", () => {
       stops_over_10_min: [{ from: "08:21", to: "08:33", minutes: 12, near: "Gampaha" }],
       route: { columns: ["time", "lat", "lng", "km/h"], points: [["08:01", 6.88, 79.86, 0], ["09:40", 7.33, 80.3, 54]] },
     });
-    expect(r.points).toEqual([{ lat: 6.88, lng: 79.86 }, { lat: 7.33, lng: 80.3 }]);
-    expect(r.stops).toEqual(["08:21–08:33 · Gampaha · 12 min"]);
+    expect(r.points).toMatchObject([{ lat: 6.88, lng: 79.86 }, { lat: 7.33, lng: 80.3, kmh: 54 }]);
+    expect(r.stops.map((s) => s.text)).toEqual(["08:21–08:33 · near Gampaha · 12 min"]);
   });
   it("projects the island onto the drawn map the way the artifact did", () => {
     const { pr } = projection([], 1);

@@ -15,6 +15,7 @@ export interface LatestRow {
   lat: number | null;
   lng: number | null;
   speed_mps: number | null;
+  accuracy_m?: number | null;
   battery_pct: number | null;
   recorded_at: string | null;
   sharing: boolean;

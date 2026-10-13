@@ -1,30 +1,18 @@
 // The GPS filter on the phone: its state between deliveries of the background
-// location task, the km counters the screens show, and the choice of which
-// fixes are worth recording.
-//
-// Recording: every fix that moved the vehicle (after the filter in track.ts
-// agreed), the fix where it arrived, and otherwise one fix a minute as a
-// heartbeat, so the office keeps seeing the driver while the vehicle is
-// parked. Driving at 5 s per fix, parked at 1 fix a minute.
+// location task and the km counters the screens show. Which fixes are worth
+// recording is decided in recording.ts (pure, tested by scripts/test-track.ts).
 
 import type * as Location from 'expo-location';
 
 import { getJson, KEYS, setJson } from './kv';
-import { type Fix, newTrack, step, type TrackState } from './track';
+import type { PhoneFix, RecordingState } from './recording';
+import { newTrack } from './track';
 
-export const HEARTBEAT_MS = 60_000;
+export { HEARTBEAT_MS, type PhoneFix, recordable } from './recording';
 
-export interface PhoneFix extends Fix {
-  heading: number | null;
-  mocked: boolean;
-}
-
-export interface TrackRecord {
+export interface TrackRecord extends RecordingState {
   /** The sharing period the filter state belongs to. */
   sessionId: string;
-  state: TrackState;
-  /** Time of the newest recorded fix. */
-  lastKeptAt: number;
   /** The task in progress and the km driven since it started. */
   taskId: string | null;
   taskKm: number;
@@ -38,6 +26,7 @@ function fresh(sessionId: string, carry?: TrackRecord | null): TrackRecord {
     sessionId,
     state: newTrack(),
     lastKeptAt: 0,
+    lastRaw: null,
     taskId: carry?.taskId ?? null,
     taskKm: carry?.taskKm ?? 0,
     odometerKm: carry?.odometerKm ?? 0,
@@ -72,48 +61,6 @@ export function toPhoneFix(location: Location.LocationObject): PhoneFix {
     heading: coords.heading !== null && coords.heading >= 0 ? coords.heading : null,
     mocked: location.mocked === true,
   };
-}
-
-/**
- * Feeds a delivery of fixes (any order) through the filter, updates the km
- * counters, and returns the fixes to record, oldest first.
- */
-export function recordable(track: TrackRecord, fixes: PhoneFix[]): PhoneFix[] {
-  const ordered = [...fixes].sort((a, b) => a.at - b.at);
-  const byTime = new Map(ordered.map((fix) => [fix.at, fix]));
-  const keep = new Map<number, PhoneFix>();
-  let heartbeat: { fix: PhoneFix; still: boolean } | null = null;
-
-  for (const fix of ordered) {
-    const result = step(track.state, fix);
-    if (result.movedM > 0) {
-      track.taskKm += result.movedM / 1000;
-      track.odometerKm += result.movedM / 1000;
-    }
-    if (result.accepted) {
-      const accepted = byTime.get(result.accepted.at) ?? { ...result.accepted, heading: null, mocked: false };
-      keep.set(accepted.at, accepted);
-      track.lastKeptAt = Math.max(track.lastKeptAt, accepted.at);
-    }
-    if (result.arrived) {
-      keep.set(fix.at, fix);
-      track.lastKeptAt = Math.max(track.lastKeptAt, fix.at);
-    }
-    // Heartbeat: when nothing has been recorded for a minute, keep the most trustworthy fix of this delivery.
-    if (fix.at - track.lastKeptAt >= HEARTBEAT_MS) {
-      const still = result.verdict === 'still';
-      const better = !heartbeat ||
-        (still && !heartbeat.still) ||
-        (still === heartbeat.still && (fix.accuracyM ?? 999) < (heartbeat.fix.accuracyM ?? 999));
-      if (better) heartbeat = { fix, still };
-    }
-  }
-
-  if (heartbeat && heartbeat.fix.at - track.lastKeptAt >= HEARTBEAT_MS) {
-    keep.set(heartbeat.fix.at, heartbeat.fix);
-    track.lastKeptAt = Math.max(track.lastKeptAt, heartbeat.fix.at);
-  }
-  return [...keep.values()].sort((a, b) => a.at - b.at);
 }
 
 // --- counters the screens use ------------------------------------------------

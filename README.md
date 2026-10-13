@@ -181,7 +181,17 @@ Phase 4 adds Vehicles, Drivers, Mileage (with km outside tasks and odometer
 checks), Maintenance, Projects and, for admins, Accounts (office users,
 set-password links, connector keys). Every screen of the published artifact
 is now in the new source, so the artifact can be republished from
-`npm run build:artifact`.
+`npm run build:artifact`. The driver page (a driver's name anywhere opens it)
+shows the driver's status, the day's GPS km, driving and stopped time and
+stops, the route on the map coloured by speed with stops and data gaps marked,
+a timeline beside it, any day's history (Today, Yesterday, a date) and, on the
+web, playback with a moving marker. "Show today's trails" on Live locations
+draws every sharing driver's line; the task drawer shows the task's own route.
+The route comes from one builder shared with the connector
+(`supabase/functions/_shared/fleet/route.ts`: the drift filter, a timeline of
+driving / stopped / no data, Douglas–Peucker thinning so the line follows the
+roads on a long day) and today's line grows live from the same Realtime rows
+the live map uses.
 
 ```bash
 cd apps/office && npm install && cp .env.example .env.local   # add the publishable key

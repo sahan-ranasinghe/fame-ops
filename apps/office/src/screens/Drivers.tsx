@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { Driver, DriversList } from "../data/types";
@@ -53,7 +54,7 @@ export function Drivers() {
                   <tbody>
                     {list.map((x) => (
                       <tr key={x.username}>
-                        <td><div className="name"><Avatar name={x.name} small />{x.name}</div>{x.active === false && <Pill tone="bad">Switched off</Pill>}</td>
+                        <td><div className="name"><Avatar name={x.name} small />{x.username ? <Link to={`/drivers/${x.username}`}>{x.name}</Link> : x.name}</div>{x.active === false && <Pill tone="bad">Switched off</Pill>}</td>
                         <td className="mono">{x.code || "—"}</td>
                         <td className="mono">{x.username || "—"}</td>
                         <td>{x.phone || "—"}</td>

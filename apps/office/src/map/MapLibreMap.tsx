@@ -1,12 +1,16 @@
 // The real map (web build only): MapLibre GL with OpenFreeMap's Liberty style,
 // the driver app's tiles. A marker per driver (plate chip over a dot, blue
-// live / amber stale / red not sharing), moves animated over about a second,
-// the day's route as a line.
+// live / amber stale / red not sharing), moves animated over about a second;
+// routes as lines (coloured by speed when asked), stops as small circles with
+// their times, data gaps dashed, a playback marker, other drivers' trails
+// drawn lighter; a focus (a timeline row) zooms to those points.
+import { speedClass } from "@fleet/route";
+import type { Feature, FeatureCollection } from "geojson";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/icons";
-import type { MapProps } from "./types";
+import { type MapProps, type RoutePoint, SPEED_COLORS } from "./types";
 
 export const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 const SRI_LANKA: [number, number] = [80.7, 7.8];
@@ -20,22 +24,37 @@ interface Live {
   started: number;
 }
 
-function fitTo(map: maplibregl.Map, points: [number, number][]) {
+function fitTo(map: maplibregl.Map, points: [number, number][], maxZoom = 14) {
   if (!points.length) return;
   if (points.length === 1) {
     map.easeTo({ center: points[0], zoom: Math.max(map.getZoom(), 12), duration: 600 });
     return;
   }
   const b = points.reduce((box, p) => box.extend(p), new maplibregl.LngLatBounds(points[0], points[0]));
-  map.fitBounds(b, { padding: 70, maxZoom: 14, duration: 600 });
+  map.fitBounds(b, { padding: 70, maxZoom, duration: 600 });
 }
 
-export default function MapLibreMap({ markers, route, onPick, onFail }: MapProps & { onFail: () => void }) {
+const lngLat = (p: RoutePoint): [number, number] => [p.lng, p.lat];
+
+/** One LineString per step, carrying its speed class (the layer colours by it). */
+function stepFeatures(points: RoutePoint[], bySpeed: boolean): Feature[] {
+  if (!bySpeed) return points.length > 1 ? [{ type: "Feature", properties: { cls: "normal" }, geometry: { type: "LineString", coordinates: points.map(lngLat) } }] : [];
+  const out: Feature[] = [];
+  for (let i = 1; i < points.length; i++) {
+    out.push({ type: "Feature", properties: { cls: speedClass(points[i].kmh ?? 0) }, geometry: { type: "LineString", coordinates: [lngLat(points[i - 1]), lngLat(points[i])] } });
+  }
+  return out;
+}
+
+export default function MapLibreMap({ markers, route, trails = [], focus = null, onPick, onFail }: MapProps & { onFail: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const live = useRef(new Map<string, Live>());
+  const stopEls = useRef<maplibregl.Marker[]>([]);
+  const cursorEl = useRef<maplibregl.Marker | null>(null);
   const pick = useRef(onPick);
   const fitted = useRef(false);
+  const fittedRoute = useRef<string>("");
   const [ready, setReady] = useState(false);
   pick.current = onPick;
 
@@ -50,8 +69,24 @@ export default function MapLibreMap({ markers, route, onPick, onFail }: MapProps
     }
     m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
     m.on("load", () => {
-      m.addSource("route", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      m.addLayer({ id: "route-line", type: "line", source: "route", paint: { "line-color": "#1e4fa0", "line-width": 5, "line-opacity": 0.85 }, layout: { "line-join": "round", "line-cap": "round" } });
+      const empty = (): FeatureCollection => ({ type: "FeatureCollection", features: [] });
+      m.addSource("trails", { type: "geojson", data: empty() });
+      m.addLayer({ id: "trails-line", type: "line", source: "trails", paint: { "line-color": "#1e4fa0", "line-width": 3, "line-opacity": 0.45 }, layout: { "line-join": "round", "line-cap": "round" } });
+      m.addSource("gaps", { type: "geojson", data: empty() });
+      m.addLayer({ id: "gaps-line", type: "line", source: "gaps", paint: { "line-color": "#8d9096", "line-width": 3, "line-dasharray": [2, 2] }, layout: { "line-cap": "round" } });
+      m.addSource("route", { type: "geojson", data: empty() });
+      m.addLayer({
+        id: "route-line",
+        type: "line",
+        source: "route",
+        filter: ["==", "$type", "LineString"],
+        paint: {
+          "line-color": ["match", ["get", "cls"], "stopped", SPEED_COLORS.stopped, "slow", SPEED_COLORS.slow, "fast", SPEED_COLORS.fast, SPEED_COLORS.normal],
+          "line-width": 5,
+          "line-opacity": 0.9,
+        },
+        layout: { "line-join": "round", "line-cap": "round" },
+      });
       m.addLayer({ id: "route-start", type: "circle", source: "route", filter: ["==", "$type", "Point"], paint: { "circle-radius": 7, "circle-color": "#ffffff", "circle-stroke-color": "#1e4fa0", "circle-stroke-width": 4 } });
       setReady(true);
     });
@@ -64,6 +99,10 @@ export default function MapLibreMap({ markers, route, onPick, onFail }: MapProps
     return () => {
       live.current.forEach((l) => l.marker.remove());
       live.current.clear();
+      stopEls.current.forEach((s) => s.remove());
+      stopEls.current = [];
+      cursorEl.current?.remove();
+      cursorEl.current = null;
       m.remove();
       map.current = null;
     };
@@ -118,32 +157,99 @@ export default function MapLibreMap({ markers, route, onPick, onFail }: MapProps
     }
   }, [markers]);
 
-  // The day's route.
+  // The route: the line (by speed), the start, the gaps, the stops; fitted once per route, not on every new point.
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
     const src = m.getSource("route") as maplibregl.GeoJSONSource | undefined;
-    if (!src) return;
+    const gapSrc = m.getSource("gaps") as maplibregl.GeoJSONSource | undefined;
+    if (!src || !gapSrc) return;
+    stopEls.current.forEach((s) => s.remove());
+    stopEls.current = [];
     if (!route || !route.points.length) {
       src.setData({ type: "FeatureCollection", features: [] });
+      gapSrc.setData({ type: "FeatureCollection", features: [] });
+      fittedRoute.current = "";
       return;
     }
-    const coords = route.points.map((p): [number, number] => [p.lng, p.lat]);
+    const coords = route.points.map(lngLat);
     src.setData({
       type: "FeatureCollection",
-      features: [
-        { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } },
-        { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: coords[0] } },
-      ],
+      features: [...stepFeatures(route.points, !!route.bySpeed), { type: "Feature", properties: {}, geometry: { type: "Point", coordinates: coords[0] } }],
     });
-    fitTo(m, coords);
+    gapSrc.setData({
+      type: "FeatureCollection",
+      features: (route.gaps ?? []).map((g) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [lngLat(g.from), lngLat(g.to)] } })),
+    });
+    for (const s of route.stops ?? []) {
+      const el = document.createElement("div");
+      el.className = "mk-stop";
+      el.innerHTML = `<span class="mk-stop-dot"></span><span class="mk-stop-label"></span>`;
+      (el.lastChild as HTMLElement).textContent = s.label;
+      el.title = `Stopped ${s.label}`;
+      stopEls.current.push(new maplibregl.Marker({ element: el, anchor: "left", offset: [-8, 0] }).setLngLat([s.lng, s.lat]).addTo(m));
+    }
+    const key = `${route.points[0].lat},${route.points[0].lng},${route.points[0].kmh ?? ""}`;
+    if (fittedRoute.current !== key) {
+      fittedRoute.current = key;
+      fitTo(m, coords);
+    }
   }, [route, ready]);
+
+  // The playback marker.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const c = route?.cursor;
+    if (!c) {
+      cursorEl.current?.remove();
+      cursorEl.current = null;
+      return;
+    }
+    if (!cursorEl.current) {
+      const el = document.createElement("div");
+      el.className = "mk-cursor";
+      el.innerHTML = `<span class="mk-cursor-label"></span><span class="mk-cursor-dot"></span>`;
+      cursorEl.current = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([c.lng, c.lat]).addTo(m);
+    }
+    cursorEl.current.setLngLat([c.lng, c.lat]);
+    (cursorEl.current.getElement().firstChild as HTMLElement).textContent = c.label;
+  }, [route?.cursor]);
+
+  // Other drivers' trails.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    const src = m.getSource("trails") as maplibregl.GeoJSONSource | undefined;
+    if (!src) return;
+    src.setData({
+      type: "FeatureCollection",
+      features: trails.filter((t) => t.points.length > 1).map((t) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: t.points.map(lngLat) } })),
+    });
+  }, [trails, ready]);
+
+  // A timeline row: zoom to it.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !focus || !focus.length) return;
+    fitTo(m, focus.map(lngLat), 16);
+  }, [focus]);
 
   return (
     <div className="mapbox ml">
       <div ref={box} className="ml-canvas" />
       <div className="zoom ml-fit">
-        <button type="button" aria-label="Fit everyone on the map" onClick={() => { const m = map.current; if (m) fitTo(m, markers.map((mk) => [mk.lng, mk.lat])); }}><Icon name="fit" /></button>
+        <button
+          type="button"
+          aria-label="Fit everyone on the map"
+          onClick={() => {
+            const m = map.current;
+            if (!m) return;
+            const pts: [number, number][] = markers.map((mk) => [mk.lng, mk.lat]);
+            if (route) pts.push(...route.points.map(lngLat));
+            fitTo(m, pts);
+          }}
+        ><Icon name="fit" /></button>
       </div>
     </div>
   );

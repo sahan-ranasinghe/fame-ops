@@ -62,7 +62,7 @@ export function Overview() {
                   <div className="row" key={d.username ?? i}>
                     <Avatar name={d.driver} />
                     <div className="grow">
-                      <div className="name">{d.driver} <Plate v={d.vehicle} /></div>
+                      <div className="name">{d.username ? <Link to={`/drivers/${d.username}`}>{d.driver}</Link> : d.driver} <Plate v={d.vehicle} /></div>
                       <div className="sub">{joinDots([d.task, d.going_to && "to " + d.going_to, d.near && "near " + d.near])}</div>
                     </div>
                     <Pill tone={statusTone(d.status, d.location?.toLowerCase().includes("not sharing") ? "not_sharing" : d.location?.toLowerCase().startsWith("live") ? "sharing" : "stale")}>{statusLine({ status_text: d.status_text, location: d.location, state: undefined })}</Pill>

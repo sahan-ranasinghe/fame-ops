@@ -25,8 +25,15 @@
     "paths": {
       "@fleet/status": [
         "../../supabase/functions/_shared/fleet/status.ts"
+      ],
+      "@fleet/route": [
+        "../../supabase/functions/_shared/fleet/route.ts"
+      ],
+      "@fleet/track": [
+        "../../supabase/functions/_shared/fleet/track.ts"
       ]
-    }
+    },
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src",

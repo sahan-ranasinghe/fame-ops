@@ -392,8 +392,10 @@ def leg(p, q, t0, minutes, n):
 t0 = now - dt.timedelta(minutes=62)
 leg(A, STOP, t0, 20, 30)
 for i in range(13):
+    # Parked: a fix a minute with a few metres of GPS jitter (a fix repeating the exact coordinates would be a cached one, and is dropped).
     points.append({"employee_id": ME, "session_id": SESSION, "recorded_at": iso(t0 + dt.timedelta(minutes=21 + i)),
-                   "lat": STOP[0], "lng": STOP[1], "accuracy_m": 6, "speed_mps": 0, "heading": 0, "battery_pct": 80, "is_mock": False})
+                   "lat": round(STOP[0] + (i % 3 - 1) * 0.00002, 6), "lng": round(STOP[1] + ((i * 7) % 5 - 2) * 0.00002, 6),
+                   "accuracy_m": 6, "speed_mps": 0, "heading": 0, "battery_pct": 80, "is_mock": False})
 leg(STOP, B, t0 + dt.timedelta(minutes=35), 25, 40)
 points[-1]["recorded_at"] = iso(now - dt.timedelta(minutes=2))
 code, _ = app.post("location_points?on_conflict=employee_id,recorded_at", points, prefer="resolution=ignore-duplicates,return=minimal")
@@ -446,7 +448,20 @@ check(ov["on_the_road"][0]["driver"] == "Nuwan Perera" and ov["on_the_road"][0][
 rt = tool("driver_route", {"driver": "nuwan.p"})
 # The points are 41 s apart (real phones record every 5 s), so the drift filter drops the last step of each leg: a little under 68 km, a stop of 13-15 min.
 check(rt["recorded_points"] == len(points) and 60 <= rt["km"] <= 80 and len(rt["stops_over_10_min"]) == 1 and 12 <= rt["stops_over_10_min"][0]["minutes"] <= 16
-      and len(rt["route"]["points"]) == len(points), "driver_route: about 65 km, one stop of about 14 minutes", json.dumps({k: rt[k] for k in ("recorded_points", "km", "stops_over_10_min")}))
+      and 2 <= len(rt["route"]["points"]) <= len(points), "driver_route: about 65 km, one stop of about 14 minutes", json.dumps({k: rt[k] for k in ("recorded_points", "km", "stops_over_10_min")}))
+# The route builder (shared with the web app): a timeline, the day's numbers, the line thinned by shape, a task's own window.
+kinds = [s["kind"] for s in rt["timeline"]]
+check(kinds.count("stopped") == 1 and kinds.count("driving") == 2 and "no_data" not in kinds and all(s["text"] and s["from_at"] <= s["to_at"] for s in rt["timeline"])
+      and rt["timeline"][1]["near"] and rt["timeline"][1]["text"].endswith(" Stopped near " + rt["timeline"][1]["near"]),
+      "driver_route timeline: driving, stopped near a town, driving, each row with a sentence", json.dumps(rt["timeline"])[:500])
+check(rt["stops_count"] == 1 and 40 <= rt["driving_minutes"] <= 50 and 12 <= rt["stopped_minutes"] <= 16 and rt["gaps"] == [] and abs(rt["stops_over_10_min"][0]["lat"] - STOP[0]) < 0.001,
+      "driver_route numbers: one stop, about 45 driving minutes, about 13 stopped minutes, no data gap, the stop's coordinates",
+      {k: rt[k] for k in ("stops_count", "driving_minutes", "stopped_minutes", "gaps")})
+check(rt["route"]["columns"] == ["time", "lat", "lng", "km/h", "at"] and len(rt["route"]["points"]) < len(points) // 2
+      and all(len(r) == 5 and r[4].endswith("Z") for r in rt["route"]["points"]) and rt["window"]["from"] < rt["window"]["to"],
+      "driver_route line: two straight legs thin to a few points (corners kept), each with km/h and an ISO time", {"line": len(rt["route"]["points"]), "recorded": rt["recorded_points"]})
+check("not started" in tool("driver_route", {"task_id": T2})["note"], "driver_route(task_id) of a task that has not started says so")
+check("which driver" in tool("driver_route", {}, expect_error=True), "driver_route with neither a driver nor a task is refused")
 
 # --- The phone's heartbeat and the one status rule ---------------------------
 check(d["status"] == "live" and d["status_text"].startswith("Live · ") and d["last_position_at"] == d["updated"][-5:] and d["signal"]["sharing"] is True,
@@ -493,6 +508,13 @@ check(code5 == 201 and route_late["recorded_points"] == len(points) + 1 + 5 and 
       "a backlog uploaded late is placed by recorded_at in driver_route (first point is now the oldest)", {"first": route_late.get("first_point"), "n": route_late.get("recorded_points")})
 check(psql(f"select to_char(recorded_at at time zone 'UTC', 'HH24:MI') from driver_latest where employee_id='{ME}'") == (now - dt.timedelta(seconds=30)).strftime("%H:%M"),
       "driver_latest keeps the newest point, not the last uploaded one")
+# The task's own window: it started after the drive, so a point recorded now (after Start task) is the only one inside it.
+code6, _ = app.post("location_points?on_conflict=employee_id,recorded_at", [{"employee_id": ME, "session_id": SESSION, "recorded_at": iso(dt.datetime.now(dt.timezone.utc)),
+    "lat": B[0] + 0.001, "lng": B[1], "accuracy_m": 8, "speed_mps": 12.0, "heading": 45, "battery_pct": 80, "is_mock": False}], prefer="resolution=ignore-duplicates,return=minimal")
+tr = tool("driver_route", {"task_id": T1})
+check(tr["task"]["id"] == T1 and tr["task"]["title"] == "Team drop · Kurunegala site" and tr["driver"] == "Nuwan Perera" and code6 == 201 and tr["recorded_points"] == 1
+      and tr["task"].get("completed") is None and tr["window"]["from"] == tr["task"]["started"],
+      "driver_route(task_id): the task's own window from Start task to now, no driver needed", json.dumps({k: tr.get(k) for k in ("task", "recorded_points", "km", "window")})[:300])
 
 rep_id = str(uuid.uuid4())
 code, _ = app.post("vehicle_reports", {"id": rep_id, "vehicle_id": V1, "employee_id": ME, "task_id": T1, "category": "tyre", "note": "Front left tyre is worn"})

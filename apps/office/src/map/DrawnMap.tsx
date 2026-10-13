@@ -1,9 +1,12 @@
 // The artifact's hand-drawn map, ported: the island's outline, a grid, the
-// markers as plate chips over a square dot, the route as a line. Zoom in,
-// out and fit.
-import { useMemo, useState } from "react";
+// markers as plate chips over a square dot, routes as lines (coloured by speed
+// when asked), stops as small circles with their times, data gaps dashed, a
+// playback marker, and other drivers' trails drawn lighter. Zoom in, out and
+// fit; a focus (a timeline row) zooms to those points.
+import { speedClass } from "@fleet/route";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../ui/icons";
-import type { MapProps } from "./types";
+import { type MapProps, type RoutePoint, SPEED_COLORS } from "./types";
 
 const LK: [number, number][] = [[80.04, 9.81], [80.24, 9.83], [80.45, 9.62], [80.6, 9.42], [80.82, 9.25], [81.05, 8.92], [81.23, 8.58], [81.38, 8.4], [81.5, 8.05], [81.7, 7.72], [81.85, 7.25], [81.85, 6.88], [81.7, 6.5], [81.4, 6.25], [81.12, 6.12], [80.8, 6.0], [80.59, 5.92], [80.4, 5.96], [80.22, 6.03], [80.05, 6.25], [79.96, 6.57], [79.86, 6.9], [79.84, 7.2], [79.8, 7.6], [79.82, 8.0], [79.76, 8.25], [79.9, 8.6], [79.92, 8.95], [80.1, 9.3], [80.2, 9.48], [80.0, 9.62], [79.88, 9.75]];
 const KX = Math.cos(7.8 * Math.PI / 180);
@@ -26,14 +29,34 @@ export function projection(points: [number, number][], zoom: number) {
   return { pr, sx, sy, x0, y1 };
 }
 
-export default function DrawnMap({ markers, route, onPick }: MapProps) {
+/** Consecutive steps of the same speed class, so each run is one polyline. */
+export function speedRuns(points: RoutePoint[]): { cls: keyof typeof SPEED_COLORS; pts: RoutePoint[] }[] {
+  const out: { cls: keyof typeof SPEED_COLORS; pts: RoutePoint[] }[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const cls = speedClass(points[i].kmh ?? 0);
+    const last = out[out.length - 1];
+    if (last && last.cls === cls) last.pts.push(points[i]);
+    else out.push({ cls, pts: [points[i - 1], points[i]] });
+  }
+  return out;
+}
+
+export default function DrawnMap({ markers, route, trails = [], focus = null, onPick }: MapProps) {
   const [zoom, setZoom] = useState(1);
-  const view = useMemo(() => {
-    const pts: [number, number][] = markers.map((m) => [m.lng, m.lat]);
-    if (route) pts.push(...route.points.map((p): [number, number] => [p.lng, p.lat]));
-    return projection(pts, zoom);
-  }, [markers, route, zoom]);
-  const { pr, sx, sy, x0, y1 } = view;
+  // A focus (a timeline row) replaces the box the view is fitted to, until "fit" is pressed.
+  const [view, setView] = useState<[number, number][] | null>(null);
+  useEffect(() => {
+    setView(focus && focus.length ? focus.map((p): [number, number] => [p.lng, p.lat]) : null);
+    setZoom(1);
+  }, [focus]);
+  const pts = useMemo(() => {
+    if (view) return view;
+    const all: [number, number][] = markers.map((m) => [m.lng, m.lat]);
+    if (route) all.push(...route.points.map((p): [number, number] => [p.lng, p.lat]));
+    for (const t of trails) all.push(...t.points.map((p): [number, number] => [p.lng, p.lat]));
+    return all;
+  }, [markers, route, trails, view]);
+  const { pr, sx, sy, x0, y1 } = useMemo(() => projection(pts, zoom), [pts, zoom]);
   const step = [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1].find((s) => sy / s <= 9) || 1;
   const grid: { x1: number; x2: number; y1: number; y2: number }[] = [];
   for (let la = Math.ceil((y1 - sy) / step) * step; la <= y1; la += step) { const y = pr(0, la)[1]; grid.push({ x1: 0, x2: W, y1: y, y2: y }); }
@@ -43,6 +66,8 @@ export default function DrawnMap({ markers, route, onPick }: MapProps) {
   const sea = pr(79.5, 7.3);
   const start = route?.points[0] ? pr(route.points[0].lng, route.points[0].lat) : null;
   const color = (t: string) => (t === "live" ? "var(--live)" : t === "warn" ? "var(--accent)" : "var(--bad)");
+  const line = (points: RoutePoint[]) => points.map((p) => pr(p.lng, p.lat).map((v) => v.toFixed(1)).join(",")).join(" ");
+  const cursor = route?.cursor ? pr(route.cursor.lng, route.cursor.lat) : null;
 
   return (
     <div className="mapbox">
@@ -53,11 +78,36 @@ export default function DrawnMap({ markers, route, onPick }: MapProps) {
         {sy > 0.6 && (
           <text x={sea[0].toFixed(0)} y={sea[1].toFixed(0)} fill="var(--muted)" fontSize="20" letterSpacing="6" fontFamily="IBM Plex Sans, sans-serif" transform={`rotate(-90 ${sea[0].toFixed(0)} ${sea[1].toFixed(0)})`}>INDIAN OCEAN</text>
         )}
+        {trails.map((t, i) => t.points.length > 1 && (
+          <polyline key={"t" + i} points={line(t.points)} fill="none" stroke="var(--live)" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" opacity=".45" />
+        ))}
         {route && route.points.length > 0 && (
-          <>
-            <polyline points={route.points.map((p) => pr(p.lng, p.lat).map((v) => v.toFixed(1)).join(",")).join(" ")} fill="none" stroke="var(--live)" strokeWidth="5" strokeLinejoin="round" strokeLinecap="round" opacity=".85" />
+          <g data-testid="drawn-route">
+            {route.bySpeed
+              ? speedRuns(route.points).map((r, i) => (
+                <polyline key={i} points={line(r.pts)} fill="none" stroke={SPEED_COLORS[r.cls]} strokeWidth="5" strokeLinejoin="round" strokeLinecap="round" opacity=".9" />
+              ))
+              : <polyline points={line(route.points)} fill="none" stroke="var(--live)" strokeWidth="5" strokeLinejoin="round" strokeLinecap="round" opacity=".85" />}
+            {(route.gaps ?? []).map((g, i) => (
+              <polyline key={"g" + i} points={line([g.from, g.to])} fill="none" stroke="var(--muted)" strokeWidth="4" strokeDasharray="10 10" strokeLinecap="round" />
+            ))}
             {start && <circle cx={start[0].toFixed(1)} cy={start[1].toFixed(1)} r="8" fill="var(--surface)" stroke="var(--live)" strokeWidth="4" />}
-          </>
+            {(route.stops ?? []).map((s, i) => {
+              const [x, y] = pr(s.lng, s.lat);
+              return (
+                <g key={"s" + i} className="stop">
+                  <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="9" fill="var(--surface)" stroke="var(--ink)" strokeWidth="3" />
+                  <text x={(x + 14).toFixed(1)} y={(y + 5).toFixed(1)} fontFamily="IBM Plex Mono, monospace" fontSize="15" fill="var(--ink)">{s.label}</text>
+                </g>
+              );
+            })}
+            {cursor && route.cursor && (
+              <g className="cursor">
+                <circle cx={cursor[0].toFixed(1)} cy={cursor[1].toFixed(1)} r="11" fill="var(--accent)" stroke="var(--surface)" strokeWidth="4" />
+                <text x={cursor[0].toFixed(1)} y={(cursor[1] - 18).toFixed(1)} textAnchor="middle" fontFamily="IBM Plex Mono, monospace" fontWeight="600" fontSize="16" fill="var(--ink)">{route.cursor.label}</text>
+              </g>
+            )}
+          </g>
         )}
         {markers.map((m) => {
           const [x, y] = pr(m.lng, m.lat);
@@ -75,7 +125,7 @@ export default function DrawnMap({ markers, route, onPick }: MapProps) {
       <div className="zoom">
         <button type="button" aria-label="Zoom in" onClick={() => setZoom((z) => Math.min(z * 2, 64))}>+</button>
         <button type="button" aria-label="Zoom out" onClick={() => setZoom((z) => Math.max(z / 2, 1 / 64))}>−</button>
-        <button type="button" aria-label="Fit everyone on the map" onClick={() => setZoom(1)}><Icon name="fit" /></button>
+        <button type="button" aria-label="Fit everyone on the map" onClick={() => { setView(null); setZoom(1); }}><Icon name="fit" /></button>
       </div>
     </div>
   );

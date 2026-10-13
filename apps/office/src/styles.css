@@ -275,3 +275,31 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .mk-dom.sel .mk-chip { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
 .mk-dot { width: 18px; height: 18px; border-radius: 6px; background: var(--mk); border: 3px solid var(--surface); box-shadow: 0 0 0 2px var(--mk) }
 .mk-dom.sel .mk-dot { box-shadow: 0 0 0 10px color-mix(in srgb, var(--mk) 22%, transparent) }
+
+/* ---------- driver page: route, timeline, playback ---------- */
+.driver-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); gap: 20px; align-items: start }
+@media (max-width: 900px) { .driver-layout { grid-template-columns: minmax(0, 1fr) } }
+.datebar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.datebar input[type=date] { min-height: 40px; border: 1px solid var(--line-strong); border-radius: 999px; padding: 6px 14px; font: inherit; font-weight: 600; background: var(--surface); color: var(--ink) }
+.timeline { max-height: 72vh; overflow-y: auto }
+.tl-row { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; padding: 12px 16px; background: transparent; border: 0; border-top: 1px solid var(--line); cursor: pointer; font: inherit; color: inherit }
+.tl-row:first-child { border-top: 0 }
+.tl-row:hover { background: var(--surface-2) }
+.tl-row.sel { background: var(--warn-bg) }
+.tl-row .bar { width: 4px; align-self: stretch; border-radius: 2px; background: var(--line-strong); flex: none }
+.tl-row.driving .bar { background: var(--live) } .tl-row.stopped .bar { background: var(--accent) } .tl-row.no_data .bar { background: var(--bad) }
+.tl-row .when { font-family: var(--font-mono); font-size: 14px; white-space: nowrap; margin-top: 2px; flex: none }
+.tl-row .what { font-weight: 600; display: block }
+.tl-row .sub { display: block }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted) }
+.legend i { display: inline-block; width: 22px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px }
+.legend i.dashed { background: repeating-linear-gradient(90deg, var(--muted) 0 5px, transparent 5px 9px) }
+.legend i.ring { width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 3px solid var(--ink) }
+.play { display: flex; flex-wrap: wrap; gap: 12px; align-items: center }
+.play input[type=range] { flex: 1 1 200px; min-width: 160px; accent-color: var(--accent) }
+.mk-stop { display: flex; align-items: center; gap: 6px; pointer-events: none }
+.mk-stop-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--surface); border: 3px solid var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,.2) }
+.mk-stop-label { font-family: var(--font-mono); font-size: 12px; font-weight: 600; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 6px; padding: 2px 6px; white-space: nowrap }
+.mk-cursor { display: grid; justify-items: center; gap: 4px; pointer-events: none }
+.mk-cursor-dot { width: 18px; height: 18px; border-radius: 50%; background: var(--accent); border: 3px solid var(--surface); box-shadow: 0 1px 6px rgba(0,0,0,.3) }
+.mk-cursor-label { font-family: var(--font-mono); font-size: 12px; font-weight: 600; background: var(--ink); color: var(--surface); border-radius: 6px; padding: 2px 7px; white-space: nowrap }

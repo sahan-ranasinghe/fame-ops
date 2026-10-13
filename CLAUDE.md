@@ -131,7 +131,9 @@
   (vite-plugin-singlefile, no Supabase code inside; `__BUILD__` from `vite.config.ts`).
   Every screen of the published artifact is ported (Phase 4 done). Republish from
   `dist-artifact/index.html` to Sahan's test artifact (1cUAyZpGXt94XfKXoJntHT) only with his
-  go-ahead, never to the Teams copy (V6vpsqYZoF1WiQQb7wMjKP, his to update). The capability
+  go-ahead, never to the Teams copy (RsGzozM5V4qCv4UeAECatu, made in his Teams chat; he
+  updates it himself from the file + message we give him). V6vpsqYZoF1WiQQb7wMjKP is a
+  different artifact: never publish to it. The capability
   declaration MUST name the connector exactly as claude.ai shows it: `src/connector.json`
   holds `"Fame Fleet"`, the page's calls read it, and `npm run build:artifact` writes the
   matching declaration (connector name + every tool the source calls) to
@@ -168,6 +170,22 @@
   (`applyLatest` in `src/data/live.ts`); the states age every 30 s (`refreshStates`,
   the server's 15-minute rule). `live_drivers` cards carry `employee_id`, `lat`, `lng`
   (additive; the contract snapshot records no live driver rows, so it did not change).
+  "Show today's trails" draws every sharing driver's line today (one `driver_route` call
+  each, then grown from the Realtime rows); the detail card links to the driver page.
+- Driver page (`src/screens/DriverPage.tsx`, route `/drivers/:username`, opened from a
+  driver's name on Drivers, Live locations, the map card and Overview's on-the-road list):
+  name, phone (Call / WhatsApp), status with the last position time, vehicle and task,
+  the day's numbers (GPS km, driving time, stopped time, stops), the map with the route
+  coloured by speed (standing / under 20 / 20–60 / over 60 km/h), stops as circles with
+  their times, data gaps dashed, a date bar (Today / Yesterday / a date), the timeline
+  beside the map (a row zooms the map to it) and, web only, playback (`usePlayback`:
+  Play / Pause, ×10 ×60 ×300, a time slider, a marker with time and speed). Data: one
+  shared builder `supabase/functions/_shared/fleet/route.ts` (imported as `@fleet/route`,
+  with `@fleet/track`) feeds `driver_route`; the page watches it every 60 s for today
+  (once for a past day) and grows today's line at once from the driver_latest Realtime
+  rows (`appendLive` in `src/data/route.ts`); no Realtime on location_points. The task
+  drawer shows the task's own route (`driver_route(task_id)`) with GPS km next to the
+  odometer. The artifact has the same screens on the drawn map, polling, no playback.
 - Phase 4 screens (`src/screens`): Vehicles (filters, table, register/update drawer with an inline
   rental company), Drivers (add with a one-time PIN, manage: phone/licence, new PIN, switch
   off with a second click), Mileage (month/vehicle/driver; tiles incl. km outside tasks; by
@@ -190,7 +208,9 @@
   Overview → assign and cancel a task → the live map with a Realtime position → vehicles,
   drivers, maintenance, mileage, projects, accounts → 2-step on in Settings → sign out and in
   with the code; the local stack must run Realtime). All of it:
-  `scripts/test-office-local.sh <functions env file>`. The e2e uses the snap Chromium
+  `scripts/test-office-local.sh <functions env file>` (before the e2e it waits until Realtime
+  delivers a driver_latest change: a `db reset` restarts the Realtime container and its change
+  stream takes about half a minute more, during which subscriptions succeed but deliver nothing). The e2e uses the snap Chromium
   (`PW_CHROMIUM=/snap/bin/chromium`, profile under `~/snap/chromium/common`); no browser download.
 - Local Auth redirects for the dev server are in `supabase/config.toml` (`site_url`
   localhost:5173); the real project's Site URL and redirect URLs are set in the dashboard.
@@ -407,7 +427,10 @@ whatever the upload order, and driver_route orders by recorded_at. Location: a f
 15 s); the GPS drift filter `src/lib/track.ts` (same file in the connector) ignores fixes
 worse than 50 m, jumps over 150 km/h and drift while standing still, and a move only
 counts once a second fix agrees; one point recorded every 5 s while moving, one a minute
-while parked; upload every ~30 s or 10+ queued points. A dead location service is
+while parked (`src/lib/recording.ts`: only a precise fix under 50 m, never a cell-tower or
+Wi-Fi guess, and a fix repeating the previous fix's exact coordinates is a cached one
+Android delivered again and is dropped before anything sees it); upload every ~30 s or
+10+ queued points. A dead location service is
 restarted when the app opens, comes to the front, or every minute while on screen; a
 watchdog notification fires 12 min after the last position. Location points are kept 90
 days (pg_cron job `prune-location-points`).
@@ -455,8 +478,12 @@ office_audit.
   (in progress, done), requests waiting (+ oldest), reminders due in 14 days, on-the-road
   list, needs-attention list. (Powers Desktop · Overview and Office · Home later.)
 - Locations: `live_drivers(filter?)` (sharing / stale / not sharing, near town, speed,
-  vehicle, current task, links), `driver_route(driver, date)` (thinned to ~300 points,
-  drift-filtered km, stops > 10 min).
+  vehicle, current task, links), `driver_route(driver?, date?, task_id?, from?, to?)` (a
+  day, a task's own window from Start task to Save & finish, or two times of a day:
+  drift-filtered km, driving and stopped minutes, stops > 10 min near a town, gaps > 10 min
+  with no data, a timeline of driving / stopped / no_data rows with sentences, and the
+  line thinned by shape (Douglas–Peucker, corners kept, at most 3000 points) with km/h and
+  the ISO time per point; the old fields stay).
 - Drivers: `list_drivers`, `create_driver(name, code, username, pin, phone?)`,
   `reset_pin(username, pin)`, `set_driver_active(username, active)`,
   `update_driver(username, phone?, licence_expiry?)`.

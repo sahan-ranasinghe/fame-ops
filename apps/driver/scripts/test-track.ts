@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { type PhoneFix, recordable, type RecordingState } from '../src/lib/recording';
 import { type Fix, newTrack, step, summarise } from '../src/lib/track';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -109,6 +110,61 @@ check(Math.abs(state.metres / 1000 - trip.km) < 0.1, 'feeding fixes one by one g
 const appCopy = readFileSync(join(here, '..', 'src', 'lib', 'track.ts'), 'utf8');
 const connectorCopy = readFileSync(join(here, '..', '..', '..', 'supabase', 'functions', '_shared', 'fleet', 'track.ts'), 'utf8');
 check(appCopy === connectorCopy, 'the connector has the same track.ts as the app');
+
+// --- 4. what the phone records (src/lib/recording.ts) ---------------------------
+const phone = (fixes: Fix[], heading: number | null = null): PhoneFix[] => fixes.map((f) => ({ ...f, heading, mocked: false }));
+const freshRecord = (): RecordingState => ({ state: newTrack(), lastKeptAt: 0, taskKm: 0, odometerKm: 0, lastRaw: null });
+/** Android hands fixes to the app in batches of up to 15 s: feed them that way. */
+function deliver(rec: RecordingState, fixes: PhoneFix[], batchMs = 15_000): PhoneFix[] {
+  const kept: PhoneFix[] = [];
+  const ordered = [...fixes].sort((a, b) => a.at - b.at);
+  let batch: PhoneFix[] = [];
+  for (const fix of ordered) {
+    if (batch.length && fix.at - batch[0].at >= batchMs) {
+      kept.push(...recordable(rec, batch));
+      batch = [];
+    }
+    batch.push(fix);
+  }
+  if (batch.length) kept.push(...recordable(rec, batch));
+  return kept;
+}
+const BASE = { lat: 6.9575, lng: 79.8941, at: Date.parse('2026-10-12T08:00:00+05:30') };
+{
+  // Driving: a point for about every fix.
+  const rec = freshRecord();
+  const kept = deliver(rec, phone(drive(BASE, 2, 40), 10));
+  const total = drive(BASE, 2, 40).length;
+  check(kept.length >= total - 3, `driving: ${kept.length} of ${total} fixes recorded`, kept.length);
+  check(rec.taskKm > 1.9 && rec.taskKm < 2.1, 'driving: the km counter follows', rec.taskKm);
+}
+{
+  // Parked with precise fixes every 5 s: one a minute.
+  const rec = freshRecord();
+  const kept = deliver(rec, phone(park(BASE, 5)));
+  check(kept.length >= 5 && kept.length <= 7, `parked: ${kept.length} points for 5 minutes (one a minute)`, kept.length);
+}
+{
+  // Parked indoors with only cell-tower guesses (100 m): nothing is recorded, the office sees the phone's heartbeat instead.
+  const rec = freshRecord();
+  const guesses: Fix[] = [];
+  for (let m = 0; m <= 5; m++) guesses.push({ at: BASE.at + m * 60000, lat: 6.9585879 + m * 0.0001, lng: 79.8939055, accuracyM: 100, speedMps: 0 });
+  const kept = deliver(rec, phone(guesses));
+  check(kept.length === 0, 'only 100 m guesses: nothing recorded', kept.length);
+}
+{
+  // The same cached location delivered again and again (new timestamps, identical coordinates) is dropped.
+  const rec = freshRecord();
+  const first = recordable(rec, phone([{ at: BASE.at, lat: 6.9575, lng: 79.8941, accuracyM: 10, speedMps: 0 }]));
+  const repeats: Fix[] = [];
+  for (let m = 1; m <= 6; m++) repeats.push({ at: BASE.at + m * 60000, lat: 6.9575, lng: 79.8941, accuracyM: 10, speedMps: 0 });
+  const kept = deliver(rec, phone(repeats));
+  check(first.length === 1 && kept.length === 0, 'a repeated identical fix is never recorded', { first: first.length, kept: kept.length });
+  check(rec.lastRaw?.lat === 6.9575, 'the last delivered coordinates are remembered between deliveries');
+  // A real new fix after that is recorded again.
+  const later = recordable(rec, phone([{ at: BASE.at + 8 * 60000, lat: 6.95751, lng: 79.8941, accuracyM: 10, speedMps: 0 }]));
+  check(later.length === 1, 'a new fix after the repeats is recorded', later.length);
+}
 
 console.log(failures === 0 ? '\nAll track tests passed.' : `\n${failures} track test(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

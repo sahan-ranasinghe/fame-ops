@@ -139,8 +139,32 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(detail).toContainText(/Live · \d+ min/, { timeout: 8000 });
   await expect(detail).toContainText("72 km/h");
   await expect(row).toContainText(/\d+ min/);
+  // A third point a second later, about where the speed says: the move is confirmed, so the day has a line and km.
+  expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(1), lat: 6.9002, lng: 79.9502, accuracy_m: 8, speed_mps: 20, battery_pct: 76 }])).toBe(201);
   await page.getByRole("button", { name: "Today’s route" }).click();
-  await expect(detail).toContainText(/Today: [\d.]+ km from 2 points/);
+  await expect(detail).toContainText(/Today: [\d.]+ km from 3 points/);
+
+  // 4b. The driver page: status, the day's numbers, the timeline beside the map, playback; yesterday has nothing.
+  await detail.getByRole("link", { name: "Driver page" }).click();
+  const dp = page.getByTestId("driver-page");
+  await expect(dp.getByRole("heading", { name: driver.name })).toBeVisible();
+  await expect(dp).toContainText("Km (GPS)");
+  await expect(dp).toContainText(/Live · \d+ min/);
+  const timeline = page.getByTestId("timeline");
+  await expect(timeline).toContainText("Driving", { timeout: 10000 });
+  await expect(page.getByTestId("playback")).toBeVisible();
+  await timeline.getByRole("button").first().click();
+  await page.getByRole("button", { name: "Play" }).click();
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
+  await page.getByRole("button", { name: "Yesterday" }).click();
+  await expect(dp).toContainText("No location was shared", { timeout: 10000 });
+  await page.getByRole("button", { name: "Today" }).click();
+  await expect(timeline).toContainText("Driving", { timeout: 10000 });
+  await page.getByRole("link", { name: "Live locations" }).first().click();
+  await expect(page.getByRole("heading", { name: "Live locations" })).toBeVisible();
+  // Trails: every sharing driver's line today on the live map.
+  await page.getByRole("button", { name: "Show today’s trails" }).click();
+  await expect(page.getByRole("button", { name: "Show today’s trails" })).toHaveAttribute("aria-pressed", "true");
 
   // 5. The fleet pages (phase 4): vehicles, drivers, maintenance, mileage, projects, accounts.
   await page.getByRole("link", { name: "Vehicles" }).first().click();
