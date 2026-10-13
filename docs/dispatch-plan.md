@@ -20,12 +20,10 @@ prompt assumes. Each has a default; the work follows the default unless Sahan sa
    (the app is English-only by design; the artifact too). Building an i18n layer would touch
    every screen for no user. Default: new office screens keep inline English, as today. The
    driver app's `en.json` + `si.json` carry every new driver string.
-2. **What `view` gives `staff`.** The prompt backfills `staff → view, request` and makes `view`
-   the key for every read tool. Today a staff account sees only its own requests; with `view` it
-   would see Overview, Live locations (drivers' phones and positions), Tasks, Vehicles,
-   Drivers, Mileage. Default: follow the prompt (`view, request`). My recommendation is
-   `request` only for existing staff rows, and ticking `view` per person when wanted. The
-   migration takes a one-line map either way.
+2. **What `view` gives `staff`.** Decided by Sahan (13 October 2026, the boss's instruction):
+   every office user sees drivers, live locations and the fleet. Every existing row, staff
+   included, and every new user gets `view`; the tick-box lets an admin remove it per person.
+   Request-only is possible, never the default.
 3. **Requester-only accounts.** A person with `request` and no `view` must still see their own
    requests, the task that came from one, places and projects. So four read tools accept
    `view` **or** `request`, and with `request` alone they answer the person's own rows only
@@ -37,23 +35,23 @@ prompt assumes. Each has a default; the work follows the default unless Sahan sa
 6. **Order of work** is not the numbering: Part 3's issue rules read `leave_by`, `accepted_at`
    and `declined`, and Part 6's booking sends Part 3's notifications. Order: 1, 2, 4, 5, 3a
    (issues), 3b (web push), 6, 7. Section 2 has the table.
-7. **One deploy, at the end** (Part 7), as the prompt's Part 7 reads: local checkpoints after
-   every part (code + test results), one go for migration push + function deploys + eas update
-   + web redeploy + artifact. If Sahan prefers to see the permissions live early, Part 2 can
-   be its own small deploy (one migration, two functions, the web app); I would then ask for
-   that go separately.
+7. **Four deploy checkpoints** (decided by Sahan, 13 October 2026): after Part 2
+   (permissions), after Part 5 (stops + accept/decline, with an eas update for the phones),
+   after Part 3b (issues + push) and after Part 7. Every other part ends with a local
+   checkpoint (code + test results). Each deploy waits for a go; the Teams artifact file is
+   rebuilt only at Part 7.
 8. **Stops not done at "Complete task".** Today the app silently marks every open stop `done`
    when the task is finished. Default: after the confirm ("2 stops are not done. Finish
    anyway?") they become `skipped` with the reason `not_visited`, so the office sees the truth.
 9. **Skip reasons** are four fixed choices (Closed / Nobody there / Not needed / Other) with an
    optional note, stored in two new columns `task_stops.skip_reason` and `skip_note`
    (additive; the prompt's column list did not name a place for the reason).
-10. **Editing stops** replaces the pending stops of a task. The connector's service role has
-    no DELETE privilege on purpose ("nothing can be deleted"). Default: a SECURITY DEFINER RPC
-    `office_update_task_stops` owned by postgres deletes only *pending* stops of the task it is
-    given, inside one transaction, and bumps `plan_version`. Started, done and skipped stops are
-    never deleted. If Sahan would rather keep every stop row, the alternative is a
-    `removed_at` column and the driver app hiding removed stops; say so.
+10. **Editing stops never deletes** (decided by Sahan, 13 October 2026). The pending stops of
+    the old plan get the status `removed` (an additive enum value) and stay in the table for
+    history and audit; the new stops are inserted after them (`seq` continues). Removed stops
+    are kept out of every list, the planner, the driver app and the pushes. The replacement and
+    the `plan_version` check run in one ordinary RPC (`office_update_task_stops`, the caller's
+    own privileges, like `office_create_task`); no SECURITY DEFINER delete anywhere.
 11. **Cancelling an approved request** needs a tool that does not exist: `cancel_request`
     (`approve`), plus one more notification event, `vehicle.booking_cancelled` → custodian
     (the prompt lists the events but says the custodian is pushed on cancel).
@@ -129,10 +127,18 @@ prompt assumes. Each has a default; the work follows the default unless Sahan sa
 | 6 | `custodians-and-booking` | migration (`vehicles.custodian_*`, requests columns + `cancelled`), tools (`list_vehicles` availability, `update_vehicle` custodian, `create_request`, `list_requests` timeline, `suggest_vehicles` groups, `book_vehicle`, `cancel_request`), web Request form by type, My requests timeline, Assign now section, Vehicles "Assigned to" | `custodians_booking` | connector suite (one-step booking in one transaction), Vitest, e2e (one-step booking) | 2.5 |
 | 7 | `phase5-finish` | CLAUDE.md, docs, README, artifact build, message for the Teams chat, test plan, Sinhala list; then the deploy on Sahan's go | none | everything green: pgTAP, Deno, both connector channels + shapes, office checks, driver checks; the artifact file path and `capabilities.json` | 1.5 |
 
-About 19 working days. Each checkpoint names the commit; the final go covers exactly the
-commit shown at Part 7. Deploy order on the go: `db push` (six migrations) → `functions deploy`
-office-mcp, office-api, push-task, fleet-jobs, notify-office → `eas update` (preview) → web
-build + wrangler → republish the test artifact → the Teams file + message.
+About 19 working days. Each checkpoint names the commit; a go covers exactly the commit
+shown. Four deploy rounds, each on its own go:
+
+| after | pushes | deploys | phones | web | artifact |
+|---|---|---|---|---|---|
+| Part 2 | `permissions` | office-mcp, office-api | no | yes | test artifact only |
+| Part 5 | `task_plan`, `task_accept_decline` | office-mcp, office-api, push-task | `eas update` (preview) | yes | test artifact only |
+| Part 3b | `issues`, `notifications` | office-mcp, office-api, fleet-jobs, notify-office | no | yes (PWA) | test artifact only |
+| Part 7 | `custodians_booking` | office-mcp, office-api | `eas update` if the app changed | yes | test artifact + the Teams file and message |
+
+Order inside a round: `db push` → `functions deploy` → `eas update` → web build + wrangler →
+republish. Secrets are set by Sahan before the round that needs them (section 9).
 
 ## 3. Data model: the six migrations
 
@@ -152,7 +158,7 @@ update employees set permissions = case role
   when 'admin'       then '{view,request,approve,assign_tasks,vehicles,issues,users}'
   when 'fleet_admin' then '{view,request,approve,assign_tasks,vehicles,issues}'
   when 'office'      then '{view,request,assign_tasks}'
-  when 'staff'       then '{view,request}'      -- decision 2: or '{request}'
+  when 'staff'       then '{view,request}'      -- the boss: every office user sees the fleet
   when 'viewer'      then '{view}'
   else '{}' end;                                 -- drivers
 -- The permission check for RLS (replaces current_office_role() in the three office policies).
@@ -177,8 +183,17 @@ alter table task_stops
   add column planned_arrive_at timestamptz,
   add column planned_depart_at timestamptz,
   add column skip_reason text check (skip_reason in ('closed','nobody_there','not_needed','not_visited','other')),
-  add column skip_note text;
+  add column skip_note text,
+  add column removed_at timestamptz;
+alter table task_stops drop constraint task_stops_status_check;
+alter table task_stops add constraint task_stops_status_check
+  check (status in ('pending','arrived','done','skipped','removed'));   -- removed = edited out by the office, kept for history
 grant update (status, arrived_at, done_at, skip_reason, skip_note) on task_stops to authenticated;
+-- task_stops_update_own_in_progress (drivers) additionally refuses the value 'removed' (with check).
+create function office_update_task_stops(p_task_id uuid, p_version integer, p_stops jsonb, p_task jsonb) returns integer;
+--   the caller's privileges (service_role): update tasks ... where plan_version = p_version (else raise 'version changed');
+--   pending stops -> status 'removed', removed_at = now(); the new stops inserted with seq after the kept ones;
+--   plan columns from p_task; returns the new plan_version.
 
 alter table tasks
   add column start_place_id uuid references places(id),
@@ -470,8 +485,9 @@ Every change below is additive. New tools go to the end of `TOOLS` and `ALL_TOOL
   existing assign warnings too; `settings_used`.
 - `update_task_stops(task_id, plan_version, stops[], start?, return_to_base?, avoid_expressway?,
   leave_by?)` (new): refuses when `plan_version` differs ("This task changed since you loaded
-  it (version N). Reload it."); re-plans, bumps `plan_version`, keeps non-pending stops; the
-  trigger pushes "Task changed".
+  it (version N). Reload it."); re-plans, bumps `plan_version`, keeps arrived / done / skipped
+  stops, marks the pending ones `removed` and inserts the new list; the trigger pushes "Task
+  changed". Removed stops appear nowhere except `task_detail.removed_stops[]`.
 - `task_detail`: task adds `leave_by`, `leave_by_source`, `buffer_min`, `plan_version`,
   `plan { source, computed_at, total_drive_min, total_km, legs[] { from, to, km, minutes,
   source, via_expressway } }`, `eta { next_stop, next, final, late_min, as_of }`, `accepted`,
@@ -764,8 +780,9 @@ Tests: `scripts/test-data-layer.ts` gains accept (earliest time kept on replay),
   cannot read `issues`, `notifications`, `fleet_settings`, `route_legs`; `office_can` per
   permission; `accept_task` / `decline_task` only by the task's driver and only while assigned;
   the earliest accepted_at wins; `decline_task` answers `already_started` / `already_reassigned`;
-  starting sets `accepted_at`; `office_update_task_stops` keeps non-pending stops; the status
-  checks accept `declined` and `cancelled`.
+  starting sets `accepted_at`; `office_update_task_stops` marks pending stops `removed`, keeps
+  the others and refuses a stale version; a driver cannot set a stop to `removed`; the status
+  checks accept `declined`, `cancelled` and `removed`.
 - Deno (`_shared/fleet`): `permissions_test.ts` (every tool has an entry, presets, backfill map,
   `canCall`, request-only rows), `plan_test.ts`, `routing_test.ts`, `issues_test.ts`,
   `eta_test.ts` (the arithmetic with fixed legs), `notifications_test.ts` (recipients per
@@ -806,7 +823,7 @@ Changed keys in `en.json` (Sinhala at the end of the phase):
 | `today.sharingOff` | Off duty · trips are not recorded |
 | `today.needLocation` | Allow location first, then go on duty. |
 | `task.sharingLocation` / `task.notSharing` | On duty / Off duty |
-| `permissions.locationWhy` | Fame Driver needs Location all the time to record trips and mileage. Choose "Allow all the time". |
+| `permissions.locationWhy` | Fame Driver needs Location all the time to record trips and mileage. (The amber hint under it, `permissions.locationAlways`, still says: On the next screen choose "Allow all the time".) |
 | `permissions.batteryWhy` | So the phone does not stop recording to save battery. |
 | `permissions.backgroundWhy` | Some phones stop apps that work in the background. Without this, recording stops when the screen is off. |
 | `tracking.locationOff` | Location is switched off on this phone. Trips are not recorded. |
@@ -857,15 +874,18 @@ Road snapping of GPS lines; the e-mail channel (designed, `dead: email_not_imple
 push to iOS; Google routing (code path present, no key); a Claude Teams OAuth connector;
 an audit page; project costs.
 
-## 16. Questions for Sahan (answer in one line each, or "defaults")
+## 16. Questions for Sahan and the answers (13 October 2026)
 
-1. Decision 2: existing staff get `view, request` (the prompt) or `request` only (my recommendation)?
-2. Decision 4/5: `add_place` also for `assign_tasks`; `import_projects` under `vehicles`?
-3. Decision 6/7: the order 1, 2, 4, 5, 3a, 3b, 6, 7 and one deploy at the end?
-4. Decision 8/9: unfinished stops become `skipped · not_visited` after the confirm; the four skip reasons?
-5. Decision 10: deleting pending stops through the SECURITY DEFINER RPC when stops are edited?
-6. Decision 11: `cancel_request` and the extra `vehicle.booking_cancelled` event?
-7. Decision 13: "Task reassigned" push only to a driver who had accepted?
-8. Decision 14: Accounts moves under Settings → Users (with a redirect)?
-9. `VAPID_SUBJECT`: a `mailto:` address or the Pages URL? (Either works; `mailto:` is what the push services recommend.)
-10. The base place: is "Head office, Colombo 05" the saved place to use, and is an openrouteservice account something you will create (free plan)?
+1. Staff and `view`: every office user, staff included, gets `view` (the boss's instruction); an admin can untick it per person. Decided.
+2. Office app strings stay inline English; i18n is the driver app's. Decided.
+3. The order 1, 2, 4, 5, 3a, 3b, 6, 7: default kept. Deploys: four rounds (after Parts 2, 5, 3b, 7), not one. Decided.
+4. Unfinished stops become `skipped · not_visited` after the confirm; the four skip reasons: default kept.
+5. Editing stops marks pending stops `removed`; no delete RPC. Decided.
+6. `cancel_request` and `vehicle.booking_cancelled`: yes. Decided.
+7. "Task reassigned" push only to a driver who had accepted: default kept.
+8. Accounts under Settings → Users with the redirect: yes. Decided.
+9. `VAPID_SUBJECT`: default `mailto:` (Sahan runs the key command himself at Part 3b).
+10. The base place "Head office, Colombo 05" and an openrouteservice free account: default kept.
+
+The defaults in 3, 4, 7, 9 and 10 can still change before Part 2 starts; the Part 1
+checkpoint repeats them.
