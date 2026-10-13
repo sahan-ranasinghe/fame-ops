@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  30::bigint, 'there are 30 tables in public (the dispatch tables of Phase 5 part 4 included)');
+  31::bigint, 'there are 31 tables in public (the dispatch tables of Phase 5 parts 4 and 5 included)');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -115,7 +115,7 @@ select is(
 
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  28::bigint, 'there are 28 policies on public tables');
+  29::bigint, 'there are 29 policies on public tables');
 
 select is(
   (select count(*) from pg_policies
@@ -1021,12 +1021,14 @@ select is(
   (select count(*) from net.http_request_queue where url like '%/push-task' and convert_from(body, 'utf8')::jsonb ->> 'kind' = 'changed'),
   1::bigint, 'a changed time is pushed as "changed"');
 
+-- The old driver had accepted the task (a task he never accepted leaves his list quietly: dispatch.test.sql).
+update public.tasks set accepted_at = now() where id = '50000000-0000-0000-0000-000000000009';
 update public.tasks set employee_id = '10000000-0000-0000-0000-0000000000b1' where id = '50000000-0000-0000-0000-000000000009';
 select is(
   (select count(*) from net.http_request_queue where url like '%/push-task'
      and convert_from(body, 'utf8')::jsonb ->> 'kind' = 'removed'
      and convert_from(body, 'utf8')::jsonb ->> 'employee_id' = '10000000-0000-0000-0000-0000000000a1'),
-  1::bigint, 'a reassigned task is pushed as "removed" to the old driver');
+  1::bigint, 'a reassigned task is pushed as "removed" to the old driver who had accepted it');
 select is(
   (select count(*) from net.http_request_queue where url like '%/push-task'
      and convert_from(body, 'utf8')::jsonb ->> 'kind' = 'new'

@@ -177,6 +177,7 @@ async function main() {
   console.log('\n== Offline queue: a whole working day, first with no connection ==');
   const queue = memoryStore();
   const uploads: string[] = [];
+  const answers: string[] = [];
   const sync = createSync({
     client,
     store: queue.store,
@@ -202,6 +203,7 @@ async function main() {
       throw new ApiError(`photo: upload refused (${res.status})`, res.status >= 400 && res.status < 500 && res.status !== 401);
     },
     removeFile: () => undefined,
+    onAnswer: (op, answer) => answers.push(`${op.kind}:${answer}`),
   });
 
   const now = Date.now();
@@ -261,6 +263,30 @@ async function main() {
   const stopRows = must(await admin.from('task_stops').select('seq, status, arrived_at, skip_reason, skip_note').eq('task_id', task1).order('seq'), 'stops');
   check(stopRows.map((s) => s.status).join(',') === 'done,skipped,done,removed', 'the stops are done, skipped, done; the removed one stays removed', stopRows.map((s) => s.status));
   check(stopRows[0]?.arrived_at !== null && stopRows[1]?.skip_reason === 'closed' && stopRows[1]?.skip_note === 'Shutter down', 'the pickup keeps its arrival time; the skipped stop keeps the reason and the note', stopRows.slice(0, 2));
+
+  console.log('\n== Accept and decline ==');
+  const task5 = await makeTask(`Accept twice ${run}`, a.row.id, van.id, 400);
+  const task6 = await makeTask(`Decline me ${run}`, a.row.id, van.id, 420);
+  const task7 = await makeTask(`Taken away ${run}`, a.row.id, van.id, 440);
+  queue.add(
+    { kind: 'task_accept', id: task5, at: at(20) },
+    { kind: 'task_accept', id: task5, at: at(25) },
+    { kind: 'task_decline', id: task6, reason: 'unwell', note: 'Fever', at: at(15) },
+    { kind: 'task_accept', id: task7, at: at(10) },
+  );
+  // Meanwhile the office gives task 7 to driver B.
+  must(await admin.from('tasks').update({ employee_id: b.row.id, sent_at: new Date().toISOString(), seen_at: null }).eq('id', task7).select('id').single(), 'reassign');
+  result = await sync.flush();
+  check(!result.offline && result.failed === 0 && result.sent === 4 && queue.waiting() === 0, 'accept and decline go through the queue like everything else', result);
+  const t5 = must(await admin.from('tasks').select('accepted_at').eq('id', task5).single(), 'task 5');
+  check(t5.accepted_at !== null && Math.abs(new Date(t5.accepted_at).getTime() - (now - 25 * 60000)) < 2000, 'the earliest acceptance wins when a tap is replayed', t5);
+  const t6 = must(await admin.from('tasks').select('status, declined_reason, declined_note, declined_after_accept').eq('id', task6).single(), 'task 6');
+  check(t6.status === 'declined' && t6.declined_reason === 'unwell' && t6.declined_note === 'Fever' && t6.declined_after_accept === false, 'a declined task carries the reason and the note', t6);
+  check(answers.join(',') === 'task_accept:accepted,task_accept:accepted,task_decline:declined,task_accept:already_reassigned',
+    'the app hears every answer; a task given away meanwhile answers already_reassigned, not an error', answers);
+  const history = must(await client.from('task_assignment_events').select('action').eq('task_id', task6).order('id'), 'events');
+  check(history.map((e) => e.action).join(',') === 'assigned,declined', 'the driver reads the history of their own declined task', history);
+  check((await api.fetchTasks(client, since)).find((t) => t.id === task6)?.status === 'declined', 'fetchTasks shows the declined task as declined (the app lists it nowhere)');
   const photos = must(await admin.from('photos').select('id, kind, odometer_log_id, fuel_log_id, vehicle_report_id, storage_path').eq('employee_id', a.row.id), 'photos');
   check(photos.length === 4 && photos.find((p) => p.id === pStart)?.odometer_log_id === logStart && photos.find((p) => p.id === pFuel)?.fuel_log_id !== null && photos.find((p) => p.id === pReport)?.vehicle_report_id === report, '4 photo records, each linked to its reading, fuel entry or report', photos);
   const files = must(await admin.storage.from('driver-photos').list(`${a.row.id}/${day}`), 'files');
@@ -352,7 +378,7 @@ async function main() {
     clientB.from('odometer_logs').select('id', { count: 'exact', head: true }).eq('employee_id', a.row.id),
     clientB.storage.from('driver-photos').list(`${a.row.id}/${day}`),
   ]);
-  check(tasksB.length === 1 && tasksB[0]?.id === taskOfB, 'driver B sees only their own task');
+  check(tasksB.every((t) => t.employee_id === b.row.id) && tasksB.some((t) => t.id === taskOfB) && tasksB.some((t) => t.id === task7), 'driver B sees only their own tasks, including the one given to B', tasksB.map((t) => t.title));
   check(seenByB[0].count === 0 && seenByB[1].count === 0 && seenByB[2].count === 0 && (seenByB[3].data ?? []).length === 0, 'driver B sees none of driver A\'s points, photos, readings or files');
 
   await admin.from('employees').update({ active: false }).eq('id', a.row.id);

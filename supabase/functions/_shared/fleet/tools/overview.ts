@@ -20,6 +20,7 @@ import {
 import { contactLinks, mapsPoint, thousands } from "../format.ts";
 import { ago, colomboDate, colomboDateTime, colomboDayTime, dayRange, daysBetween, shortDate } from "../time.ts";
 import { realDate, tool, zDate } from "../tool.ts";
+import { DECLINE_TEXT } from "./tasks.ts";
 
 const REMINDER_DAYS = 14;
 /** Flagged odometer readings and big km gaps stay in "needs attention" this long. */
@@ -59,7 +60,7 @@ export const fleetOverview = tool({
     const day = realDate(date ?? today);
     const { from, to } = dayRange(day);
 
-    const [refs, latest, dayTasks, runningRes, waitingRes, reportsRes, flaggedRes] = await Promise.all([
+    const [refs, latest, dayTasks, runningRes, waitingRes, reportsRes, flaggedRes, declinedRes, unacceptedRes] = await Promise.all([
       loadRefs(db),
       loadLatest(db),
       db.from("tasks").select("id, status").gte("start_at", from).lt("start_at", to),
@@ -71,7 +72,18 @@ export const fleetOverview = tool({
       db.from("odometer_logs").select("id, vehicle_id, employee_id, reading_km, ai_value, entry, flag, ai_checked_at, logged_at")
         .not("flag", "is", null).gte("logged_at", new Date(now.getTime() - ODOMETER_FLAG_DAYS * 86400000).toISOString())
         .order("logged_at", { ascending: false }),
+      // Declined tasks that nobody has given to another driver yet (yesterday's and later).
+      db.from("tasks").select(
+        "id, title, employee_id, start_at, leave_by, declined_at, declined_reason, declined_note, declined_after_accept",
+      )
+        .eq("status", "declined").gte("start_at", new Date(now.getTime() - 86400000).toISOString()).order("start_at"),
+      // Reminded to accept, still not accepted, not left yet.
+      db.from("tasks").select("id, title, employee_id, start_at, leave_by, sent_at")
+        .eq("status", "assigned").is("accepted_at", null).not("accept_reminder_sent_at", "is", null)
+        .gte("start_at", now.toISOString()).order("start_at"),
     ]);
+    const declined = unwrap(declinedRes, "declined tasks");
+    const unaccepted = unwrap(unacceptedRes, "unaccepted tasks");
     const flagged = unwrap(flaggedRes, "odometer logs");
     const tasks = unwrap(dayTasks, "tasks");
     const running = unwrap(runningRes, "tasks");
@@ -122,6 +134,28 @@ export const fleetOverview = tool({
         due: from ? `for ${ago(from, now)}` : "",
         level: result.status === "location_off" ? "red" : "amber",
         days: -3,
+        scope: "task",
+      });
+    }
+    // A declined task needs a driver; a task nobody accepted needs a word with the driver.
+    for (const t of declined) {
+      const reason = DECLINE_TEXT[t.declined_reason ?? ""] ?? t.declined_reason ?? "no reason given";
+      attention.push({
+        what: `Task declined${t.declined_after_accept ? " after accepting" : ""}: ${reason}`,
+        subject: [refs.emp.get(t.employee_id)?.name, t.title, t.declined_note].filter(Boolean).join(" · "),
+        due: `leave by ${colomboDayTime(t.leave_by ?? t.start_at)} · needs a driver`,
+        level: "red",
+        days: -2,
+        scope: "task",
+      });
+    }
+    for (const t of unaccepted) {
+      attention.push({
+        what: "Not accepted yet",
+        subject: [refs.emp.get(t.employee_id)?.name, t.title, `sent ${ago(t.sent_at, now)} ago`].filter(Boolean).join(" · "),
+        due: `leave by ${colomboDayTime(t.leave_by ?? t.start_at)}`,
+        level: "amber",
+        days: -1,
         scope: "task",
       });
     }

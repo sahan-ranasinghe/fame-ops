@@ -6,6 +6,7 @@ import { z } from "zod";
 import type { Json } from "../database.types.ts";
 import type { Db, Row } from "../db.ts";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
+import { freeAt } from "../availability.ts";
 import { basePoint, type Eta, taskEta } from "../eta.ts";
 import {
   assignWarnings,
@@ -503,10 +504,28 @@ export async function prepareTask(db: Db, settings: Settings, now: Date, args: {
 // Status lines, as on the Tasks screen
 // ---------------------------------------------------------------------------
 
+/** The driver's reasons for declining a task, as the office reads them. */
+export const DECLINE_TEXT: Record<string, string> = {
+  vehicle_problem: "Vehicle problem",
+  not_available: "Not available",
+  unwell: "Unwell",
+  other: "Other",
+};
+
+function declinedLine(task: Task): string {
+  const reason = DECLINE_TEXT[task.declined_reason ?? ""] ?? task.declined_reason ?? "no reason given";
+  return `Declined${task.declined_after_accept ? " after accepting" : ""} (${reason})${
+    task.declined_note ? ` · ${task.declined_note}` : ""
+  }`;
+}
+
 function statusLine(task: Task, latest: Latest | undefined, now: Date): string {
   switch (task.status) {
     case "assigned":
+      if (task.accepted_at) return `Accepted ${colomboTime(task.accepted_at)}`;
       return task.seen_at ? `Seen by driver ${colomboTime(task.seen_at)}` : "Sent · not opened yet";
+    case "declined":
+      return declinedLine(task);
     case "in_progress": {
       const share = sharing(latest, now);
       const where = share.state === "sharing"
@@ -795,8 +814,9 @@ export const updateTaskStops = tool({
 export const taskBoard = tool({
   name: "task_board",
   title: "Task board",
-  description: "The day's tasks in three columns (assigned, in progress, completed) with status lines such as " +
-    '"Seen by driver 10:42", "Sent · not opened yet", "Started 07:06 · sharing location", "Done 07:55 · 62 km logged", ' +
+  description: "The day's tasks in four columns (assigned, in progress, completed, declined = needs a driver) with status lines such as " +
+    '"Seen by driver 10:42", "Accepted 10:50", "Sent · not opened yet", "Declined (Vehicle problem)", "Started 07:06 · sharing location", ' +
+    '"Done 07:55 · 62 km logged", ' +
     'the leave-by time ("Leave by HH:MM"), the number of stops, and for a task under way the live ETA and how late it runs.',
   readOnly: true,
   input: z.object({ date: zDate.optional().describe("Default: today") }),
@@ -830,6 +850,7 @@ export const taskBoard = tool({
         ...endsOf(mine),
         stops_count: mine.length,
         leave_by: t.leave_by ? colomboTime(t.leave_by) : undefined,
+        accepted: t.accepted_at ? colomboTime(t.accepted_at) : undefined,
         driver: refs.emp.get(t.employee_id)?.name,
         vehicle: refs.veh.get(t.vehicle_id)?.reg_no,
         status: statusLine(t, latest.get(t.employee_id), now),
@@ -839,7 +860,12 @@ export const taskBoard = tool({
       };
     };
     const column = async (status: string) => await Promise.all(tasks.filter((t) => t.status === status).map(card));
-    const board = { assigned: await column("assigned"), in_progress: await column("in_progress"), completed: await column("completed") };
+    const board = {
+      assigned: await column("assigned"),
+      in_progress: await column("in_progress"),
+      completed: await column("completed"),
+      declined: await column("declined"),
+    };
     const cancelled = tasks.filter((t) => t.status === "cancelled").length;
 
     return {
@@ -850,10 +876,12 @@ export const taskBoard = tool({
           in_progress: board.in_progress.length,
           completed: board.completed.length,
           cancelled,
+          declined: board.declined.length,
         },
         ...board,
       },
-      summary: `${day}: ${board.assigned.length} assigned, ${board.in_progress.length} in progress, ${board.completed.length} completed`,
+      summary: `${day}: ${board.assigned.length} assigned, ${board.in_progress.length} in progress, ${board.completed.length} completed` +
+        (board.declined.length ? `, ${board.declined.length} declined` : ""),
     };
   },
 });
@@ -881,7 +909,7 @@ export const taskDetail = tool({
         if (!own) throw new ToolError("This task did not come from one of your requests.");
       }
     }
-    const [refs, latest, settings, stopsRes, splitRes, odoRes, fuelRes, reportsRes] = await Promise.all([
+    const [refs, latest, settings, stopsRes, splitRes, odoRes, fuelRes, reportsRes, eventsRes] = await Promise.all([
       loadRefs(db),
       loadLatest(db),
       loadSettings(db),
@@ -890,7 +918,9 @@ export const taskDetail = tool({
       db.from("odometer_logs").select("*").eq("task_id", task.id).order("logged_at"),
       db.from("fuel_logs").select("*").eq("task_id", task.id).order("logged_at"),
       db.from("vehicle_reports").select("*").eq("task_id", task.id).order("created_at"),
+      db.from("task_assignment_events").select("*").eq("task_id", task.id).order("at").order("id"),
     ]);
+    const events = unwrap(eventsRes, "assignment history");
     const allStops = unwrap(stopsRes, "stops");
     const stops = live(allStops);
     const removed = allStops.filter((s) => s.status === "removed");
@@ -949,6 +979,16 @@ export const taskDetail = tool({
           created_by: task.created_by,
           sent: when(task.sent_at),
           seen: task.seen_at ? colomboDateTime(task.seen_at) : "not opened yet",
+          accepted: when(task.accepted_at),
+          declined: task.status === "declined"
+            ? {
+              at: when(task.declined_at),
+              reason: task.declined_reason ?? undefined,
+              reason_text: DECLINE_TEXT[task.declined_reason ?? ""] ?? task.declined_reason ?? undefined,
+              note: task.declined_note ?? undefined,
+              after_accept: task.declined_after_accept,
+            }
+            : undefined,
           started: when(task.started_at),
           completed: when(task.completed_at),
           cancelled_reason: task.cancelled_reason,
@@ -1010,6 +1050,15 @@ export const taskDetail = tool({
           at: colomboDateTime(r.created_at),
           photos: links.byReport.get(r.id) ?? [],
         })),
+        assignment_history: events.map((e) => ({
+          at: colomboDateTime(e.at),
+          action: e.action,
+          driver: e.employee_id ? refs.emp.get(e.employee_id)?.name : undefined,
+          vehicle: e.vehicle_id ? refs.veh.get(e.vehicle_id)?.reg_no : undefined,
+          actor: e.actor ?? undefined,
+          note: e.note ?? undefined,
+        })),
+        suggestions: task.status === "declined" ? await freeAt(db, task.start_at, task.end_by, task.id) : undefined,
         from_request: requestRow
           ? {
             id: requestRow.id,
@@ -1073,20 +1122,31 @@ export const cancelTask = tool({
   name: "cancel_task",
   title: "Cancel a task",
   description:
-    "Cancels a task that is assigned or in progress. The reason is required and the driver's app shows the task as cancelled. Nothing is deleted.",
+    "Cancels a task that is assigned, in progress or declined. The reason is required and the driver's app shows the task as cancelled. Nothing is deleted.",
   readOnly: false,
   input: z.object({ task_id: zId, reason: zText(300) }),
-  async run({ task_id, reason }, { db }) {
+  async run({ task_id, reason }, { db, actor }) {
     const task = await getTask(db, task_id);
     if (task.status === "completed" || task.status === "cancelled") {
       throw new ToolError(`This task is already ${task.status}; it cannot be cancelled.`);
     }
     const changed = unwrap(
       await db.from("tasks").update({ status: "cancelled", cancelled_reason: reason })
-        .eq("id", task.id).in("status", ["assigned", "in_progress"]).select("id"),
+        .eq("id", task.id).in("status", ["assigned", "in_progress", "declined"]).select("id"),
       "task",
     );
     if (changed.length === 0) throw new ToolError("The task changed just now (the driver may have completed it). Check task_detail.");
+    unwrap(
+      await db.from("task_assignment_events").insert({
+        task_id: task.id,
+        action: "cancelled",
+        employee_id: task.employee_id,
+        vehicle_id: task.vehicle_id,
+        actor: actor.name,
+        note: reason,
+      }),
+      "assignment history",
+    );
 
     const driver = unwrapMaybe(await db.from("employees").select("name, phone").eq("id", task.employee_id).maybeSingle(), "employee");
     return {
@@ -1108,8 +1168,9 @@ export const cancelTask = tool({
 export const reassignTask = tool({
   name: "reassign_task",
   title: "Reassign or move a task",
-  description: "Changes the driver, the vehicle and/or the leave time of a task that has not started yet. " +
-    "A new driver gets it as a new task; a moved task keeps its plan, shifted. Returns the same warnings as create_task.",
+  description: "Changes the driver, the vehicle and/or the leave time of a task that has not started yet, or gives a declined task " +
+    "to another driver (or back to the same one). A new driver gets it as a new task; a moved task keeps its plan, shifted. " +
+    "Returns the same warnings as create_task.",
   readOnly: false,
   input: z.object({
     task_id: zId,
@@ -1118,11 +1179,12 @@ export const reassignTask = tool({
     start_time: zTime.optional().describe("New leave time, HH:MM"),
     date: zDate.optional().describe("New day, YYYY-MM-DD"),
   }),
-  async run({ task_id, driver, vehicle, start_time, date }, { db, now }) {
+  async run({ task_id, driver, vehicle, start_time, date }, { db, now, actor }) {
     if (!driver && !vehicle && !start_time && !date) throw new ToolError("Nothing to change: give a driver, vehicle, start_time or date.");
     if (date) realDate(date);
     const task = await getTask(db, task_id);
-    if (task.status !== "assigned") {
+    const wasDeclined = task.status === "declined";
+    if (task.status !== "assigned" && !wasDeclined) {
       throw new ToolError(
         `This task is ${
           task.status.replace("_", " ")
@@ -1139,6 +1201,8 @@ export const reassignTask = tool({
     // Keep the planned length of the task when it moves.
     const endBy = shift(task.end_by);
     const driverChanged = newDriver.id !== task.employee_id;
+    // A new driver (or a driver who declined and gets it back) starts afresh: not seen, not accepted, no reminder yet.
+    const fresh = driverChanged || wasDeclined;
 
     const changed = unwrap(
       await db.from("tasks").update({
@@ -1146,12 +1210,31 @@ export const reassignTask = tool({
         vehicle_id: newVehicle.id,
         start_at: startAt,
         end_by: endBy,
+        status: "assigned",
         ...(delta !== 0 && task.leave_by && { leave_by: shift(task.leave_by), leave_by_source: "manual" }),
-        ...(driverChanged && { sent_at: now.toISOString(), seen_at: null }),
-      }).eq("id", task.id).eq("status", "assigned").select("id"),
+        ...(fresh && { sent_at: now.toISOString(), seen_at: null, accepted_at: null, accept_reminder_sent_at: null }),
+        ...(wasDeclined &&
+          { declined_at: null, declined_by: null, declined_reason: null, declined_note: null, declined_after_accept: false }),
+      }).eq("id", task.id).in("status", ["assigned", "declined"]).select("id"),
       "task",
     );
     if (changed.length === 0) throw new ToolError("The driver started this task just now, so it was not changed. Check task_detail.");
+    unwrap(
+      await db.from("task_assignment_events").insert({
+        task_id: task.id,
+        action: "reassigned",
+        employee_id: newDriver.id,
+        vehicle_id: newVehicle.id,
+        actor: actor.name,
+        note: [
+          wasDeclined ? "after a decline" : null,
+          driverChanged ? `driver ${refs.emp.get(task.employee_id)?.name ?? "?"} → ${newDriver.name}` : null,
+          newVehicle.id !== task.vehicle_id ? `vehicle ${refs.veh.get(task.vehicle_id)?.reg_no ?? "?"} → ${newVehicle.reg_no}` : null,
+          delta !== 0 ? `time ${colomboDateTime(task.start_at)} → ${colomboDateTime(startAt)}` : null,
+        ].filter(Boolean).join("; ") || undefined,
+      }),
+      "assignment history",
+    );
     if (delta !== 0) {
       // The planned times move with the task.
       const stops = unwrap(
@@ -1180,8 +1263,12 @@ export const reassignTask = tool({
         when: colomboDayTime(startAt),
         driver: newDriver.name,
         vehicle: newVehicle.reg_no,
+        was: wasDeclined ? "declined" : undefined,
         warnings,
-        notes: driverChanged ? [`${previousDriver?.name ?? "The previous driver"} no longer sees this task.`] : [],
+        notes: [
+          ...(driverChanged ? [`${previousDriver?.name ?? "The previous driver"} no longer sees this task.`] : []),
+          ...(wasDeclined ? [`${newDriver.name} gets it as a new task to accept.`] : []),
+        ],
         links: { whatsapp_driver: waLink(newDriver.phone), call_driver: telLink(newDriver.phone) },
       },
       summary: `reassigned task ${task.id}: ${newDriver.name}, ${newVehicle.reg_no}, ${colomboDateTime(startAt)}`,

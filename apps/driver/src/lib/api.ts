@@ -168,6 +168,21 @@ export interface SessionStart {
   device_info: Json;
 }
 
+export type AcceptAnswer = 'accepted' | 'declined' | 'already_started' | 'already_reassigned' | 'already_declined' | 'cancelled';
+export type DeclineReason = 'vehicle_problem' | 'not_available' | 'unwell' | 'other';
+
+/** Accept a task. The server keeps the earliest time; an answer other than 'accepted' says why nothing changed. */
+export async function acceptTask(client: Client, id: string, at: string): Promise<AcceptAnswer> {
+  const res = await client.rpc('accept_task', { p_task_id: id, p_at: at });
+  return check(res, 'accept') as AcceptAnswer;
+}
+
+/** Decline a task with a reason. Only while it is still assigned to this driver. */
+export async function declineTask(client: Client, id: string, reason: DeclineReason, note: string | null, at: string): Promise<AcceptAnswer> {
+  const res = await client.rpc('decline_task', { p_task_id: id, p_reason: reason, p_note: note ?? undefined, p_at: at });
+  return check(res, 'decline') as AcceptAnswer;
+}
+
 export async function patchTask(client: Client, id: string, patch: TaskPatch): Promise<void> {
   const rows = check(await client.from('tasks').update(patch).eq('id', id).select('id'), 'task');
   if (rows.length === 0) throw new ApiError('task: it is no longer assigned to this driver', true, 'gone');

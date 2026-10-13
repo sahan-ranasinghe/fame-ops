@@ -511,6 +511,38 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"task_assignment_events": {
+                  Row: {
+                    "action": string,"actor": string | null,"at": string,"employee_id": string | null,"id": number,"note": string | null,"task_id": string,"vehicle_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor"?: string | null,"at"?: string,"employee_id"?: string | null,"id"?: never,"note"?: string | null,"task_id": string,"vehicle_id"?: string | null
+                  }
+                  Update: {
+                    "action"?: string,"actor"?: string | null,"at"?: string,"employee_id"?: string | null,"id"?: never,"note"?: string | null,"task_id"?: string,"vehicle_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "task_assignment_events_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_assignment_events_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_assignment_events_vehicle_id_fkey"
+      columns: ["vehicle_id"]
+isOneToOne: false
+      referencedRelation: "vehicles"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"task_eta": {
                   Row: {
                     "computed_at": string,"final_eta_at": string | null,"late_min": number | null,"next_eta_at": string | null,"next_seq": number | null,"source": string | null,"task_id": string
@@ -585,17 +617,23 @@ isOneToOne: false
                   ]
                 },"tasks": {
                   Row: {
-                    "avoid_expressway": boolean,"buffer_min": number | null,"cancelled_reason": string | null,"completed_at": string | null,"contact_name": string | null,"contact_phone": string | null,"created_at": string,"created_by": string | null,"employee_id": string,"end_by": string | null,"end_odometer_km": number | null,"id": string,"km": number | null,"label": string | null,"leave_by": string | null,"leave_by_source": string | null,"notes": string | null,"passengers": number | null,"plan_json": Json | null,"plan_version": number,"reminder_0_sent_at": string | null,"reminder_30_sent_at": string | null,"request_id": string | null,"return_to_base": boolean,"seen_at": string | null,"sent_at": string,"start_at": string,"start_lat": number | null,"start_lng": number | null,"start_name": string | null,"start_odometer_km": number | null,"start_place_id": string | null,"started_at": string | null,"status": string,"title": string,"updated_at": string,"vehicle_id": string
+                    "accept_reminder_sent_at": string | null,"accepted_at": string | null,"avoid_expressway": boolean,"buffer_min": number | null,"cancelled_reason": string | null,"completed_at": string | null,"contact_name": string | null,"contact_phone": string | null,"created_at": string,"created_by": string | null,"declined_after_accept": boolean,"declined_at": string | null,"declined_by": string | null,"declined_note": string | null,"declined_reason": string | null,"employee_id": string,"end_by": string | null,"end_odometer_km": number | null,"id": string,"km": number | null,"label": string | null,"leave_by": string | null,"leave_by_source": string | null,"notes": string | null,"passengers": number | null,"plan_json": Json | null,"plan_version": number,"reminder_0_sent_at": string | null,"reminder_30_sent_at": string | null,"request_id": string | null,"return_to_base": boolean,"seen_at": string | null,"sent_at": string,"start_at": string,"start_lat": number | null,"start_lng": number | null,"start_name": string | null,"start_odometer_km": number | null,"start_place_id": string | null,"started_at": string | null,"status": string,"title": string,"updated_at": string,"vehicle_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"employee_id": string,"end_by"?: string | null,"end_odometer_km"?: number | null,"id"?: string,"km"?: never,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at": string,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title": string,"updated_at"?: string,"vehicle_id": string
+                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id": string,"end_by"?: string | null,"end_odometer_km"?: number | null,"id"?: string,"km"?: never,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at": string,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title": string,"updated_at"?: string,"vehicle_id": string
                   }
                   Update: {
-                    "avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"employee_id"?: string,"end_by"?: string | null,"end_odometer_km"?: number | null,"id"?: string,"km"?: never,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at"?: string,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string,"vehicle_id"?: string
+                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id"?: string,"end_by"?: string | null,"end_odometer_km"?: number | null,"id"?: string,"km"?: never,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at"?: string,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string,"vehicle_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "tasks_declined_by_fkey"
+      columns: ["declined_by"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "tasks_employee_id_fkey"
       columns: ["employee_id"]
 isOneToOne: false
@@ -731,7 +769,10 @@ isOneToOne: false
             [_ in never]: never
           }
           Functions: {
-            "bump_routing_calls":
+            "accept_task":
+{ Args: { "p_at"?: string,"p_task_id": string }; Returns: string
+                           },
+"bump_routing_calls":
 { Args: { "p_ok": boolean,"p_provider": string }; Returns: undefined
                            },
 "current_employee_id":
@@ -739,6 +780,9 @@ isOneToOne: false
                            },
 "current_office_role":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"decline_task":
+{ Args: { "p_at"?: string,"p_note"?: string,"p_reason": string,"p_task_id": string }; Returns: string
                            },
 "odometer_log_flag":
 { Args: { "p_ai_status": string,"p_ai_value": number,"p_entry": string,"p_reading": number }; Returns: string
@@ -754,6 +798,9 @@ isOneToOne: false
                            },
 "prune_location_points":
 { Args: { "p_batch"?: number,"p_keep_days"?: number }; Returns: number
+                           },
+"queue_accept_reminders":
+{ Args: Record<PropertyKey, never>; Returns: number
                            },
 "queue_odometer_checks":
 { Args: Record<PropertyKey, never>; Returns: number

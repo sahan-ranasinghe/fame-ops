@@ -8,6 +8,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguagePill } from '@/components/LanguageSwitch';
+import { DeclineSheet } from '@/components/DeclineSheet';
 import { leaveTime, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
@@ -33,6 +34,7 @@ export default function TodayScreen() {
   const [needLocation, setNeedLocation] = useState(false);
 
   const today = colomboDate();
+  const [declining, setDeclining] = useState<TaskWithStops | null>(null);
   const running = tasks.find((task) => task.status === 'in_progress');
   const assigned = tasks
     .filter((task) => task.status === 'assigned')
@@ -125,6 +127,11 @@ export default function TodayScreen() {
             </Card>
           </Pressable>
           {needLocation && <Notice tone="warn" text={t('today.needLocation')} />}
+          {app.notice && (
+            <Pressable accessibilityRole="button" onPress={app.clearNotice}>
+              <Notice tone="info" text={t(app.notice)} />
+            </Pressable>
+          )}
           <TrackingNotice />
 
           {next ? (
@@ -140,12 +147,23 @@ export default function TodayScreen() {
               <StopTimeline stops={next.task_stops} compact />
               {people && <Txt variant="muted" style={{ marginTop: 14 }}>{people}</Txt>}
               {waitingTasks.has(next.id) && <Txt variant="small" color={colors.amberText} style={{ marginTop: 8 }}>{t('today.notSentYet')}</Txt>}
-              <Button
-                label={t(next.status === 'in_progress' ? 'today.openTask' : 'today.startTask')}
-                icon={next.status === 'in_progress' ? undefined : Play}
-                onPress={openNext}
-                style={{ marginTop: 18 }}
-              />
+              {next.status === 'assigned' && next.accepted_at && (
+                <Txt variant="strong" color={colors.blue} style={{ marginTop: 14 }}>{t('task.accepted', { time: colomboTime(next.accepted_at) })}</Txt>
+              )}
+              {next.status === 'assigned' && !next.accepted_at ? (
+                <>
+                  <Button label={t('task.accept')} icon={Check} onPress={() => app.acceptTask(next)} style={{ marginTop: 18 }} />
+                  <Button label={t('today.startTask')} kind="outline" icon={Play} onPress={openNext} style={{ marginTop: 10 }} />
+                </>
+              ) : (
+                <Button
+                  label={t(next.status === 'in_progress' ? 'today.openTask' : 'today.startTask')}
+                  icon={next.status === 'in_progress' ? undefined : Play}
+                  onPress={openNext}
+                  style={{ marginTop: 18 }}
+                />
+              )}
+              {next.status === 'assigned' && <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(next)} />}
             </View>
           ) : (
             <Card style={{ alignItems: 'center', paddingVertical: 34, gap: 6 }}>
@@ -158,6 +176,7 @@ export default function TodayScreen() {
           <TaskList title={t('today.upcoming')} tasks={upcoming} showDate />
         </View>
       </ScrollView>
+      <DeclineSheet task={declining} onClose={() => setDeclining(null)} />
     </View>
   );
 }
@@ -185,6 +204,9 @@ function TaskList({ title, tasks, showDate = false }: { title: string; tasks: Ta
             <View style={{ flex: 1 }}>
               <Txt variant="strong" size={18}>{task.title}</Txt>
               {task.task_stops[0] && <Txt variant="muted">{t('today.from', { place: task.task_stops[0].place_name })}</Txt>}
+              {task.status === 'assigned' && (
+                <Txt variant="small" color={task.accepted_at ? colors.blue : colors.amberText}>{t(task.accepted_at ? 'today.accepted' : 'today.notAccepted')}</Txt>
+              )}
             </View>
             <ChevronRight size={22} color={colors.ink} />
           </Pressable>

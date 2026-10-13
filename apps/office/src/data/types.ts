@@ -73,6 +73,7 @@ export interface BoardCard {
   to?: string;
   stops_count?: number;
   leave_by?: string;
+  accepted?: string;
   driver?: string;
   vehicle?: string;
   status?: string;
@@ -83,10 +84,26 @@ export interface BoardCard {
 
 export interface Board {
   date: string;
-  counts: { assigned: number; in_progress: number; completed: number; cancelled: number };
+  counts: { assigned: number; in_progress: number; completed: number; cancelled: number; declined?: number };
   assigned: BoardCard[];
   in_progress: BoardCard[];
   completed: BoardCard[];
+  /** Needs a driver (Phase 5): declined by the driver, not yet reassigned. */
+  declined?: BoardCard[];
+}
+
+export interface AssignmentEvent {
+  at: string;
+  action: string;
+  driver?: string;
+  vehicle?: string;
+  actor?: string;
+  note?: string;
+}
+/** Who is free at a task's time (task_detail.suggestions for a declined task). */
+export interface FreeAt {
+  drivers: { name: string; username?: string | null; availability: string }[];
+  vehicles: { reg_no: string; make_model?: string | null; type: string; seats?: number | null; availability: string }[];
 }
 
 export interface Stop {
@@ -213,7 +230,7 @@ export interface TaskDetail {
     id: string;
     title: string;
     label?: string;
-    status: "assigned" | "in_progress" | "completed" | "cancelled";
+    status: "assigned" | "in_progress" | "completed" | "cancelled" | "declined" | string;
     status_line?: string;
     start: string;
     end_by?: string;
@@ -225,6 +242,8 @@ export interface TaskDetail {
     created_by?: string | null;
     sent?: string;
     seen?: string;
+    accepted?: string;
+    declined?: { at?: string; reason?: string; reason_text?: string; note?: string; after_accept?: boolean };
     started?: string;
     completed?: string;
     cancelled_reason?: string | null;
@@ -253,6 +272,9 @@ export interface TaskDetail {
   from_request?: { id: string; requested_by: string; project?: string; asked: string };
   driver_links?: Links;
   photo_links?: string;
+  assignment_history?: AssignmentEvent[];
+  /** Who is free at the task's time; only for a declined task. */
+  suggestions?: FreeAt;
 }
 
 export interface RequestCard {
@@ -290,6 +312,7 @@ export interface Driver {
   licence?: { chip?: string; expiry?: string; days_left?: number };
   call?: string;
   whatsapp?: string;
+  last_30_days?: { accepted: number; declined: number };
 }
 
 export interface Vehicle {

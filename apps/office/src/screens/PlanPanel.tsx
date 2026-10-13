@@ -15,6 +15,8 @@ export function PlanPanel({ preview, plan, stops, compact }: { preview?: PlanPre
   const leaveBy = preview?.leave_by ?? p?.leave_by;
   const source = preview?.leave_by_source ?? p?.leave_by_source;
   const viaLegs = (p?.legs ?? []).filter((l) => l.via_expressway);
+  // A leg slowed by the rush-hour factor (ors and estimate legs; Google's own traffic needs none).
+  const rushLegs = (p?.legs ?? []).filter((l) => l.factor && l.factor !== 1);
   return (
     <div className="plan" data-testid="plan-panel">
       <div className="plan-head">
@@ -32,6 +34,7 @@ export function PlanPanel({ preview, plan, stops, compact }: { preview?: PlanPre
         </div>
       )}
       {viaLegs.length > 0 && <div className="small">Via expressway: {viaLegs.map((l) => `${l.from} → ${l.to}`).join(", ")}</div>}
+      {rushLegs.length > 0 && <div className="small">Rush hour: {rushLegs.map((l) => `${l.from} → ${l.to} ×${l.factor}`).join(", ")}</div>}
       {warnings.map((w, i) => <Notice key={i} tone={/not set|cannot|already|past/i.test(w) ? "bad" : ""}>{w}</Notice>)}
     </div>
   );

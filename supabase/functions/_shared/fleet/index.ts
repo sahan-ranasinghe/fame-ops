@@ -74,6 +74,8 @@ export const INSTRUCTIONS = [
   "create_task, reassign_task and decide_request return warnings. They never block: read them to the user.",
   "A task has stops (pickup, drop, visit; what: people, goods, documents) with a dwell time and an optional arrive_by deadline. " +
   "The leave-by time is planned from the deadlines (plan_task previews it); update_task_stops changes the stops of a task with its plan_version.",
+  "A driver accepts or declines a task in the app. A declined task waits in task_board's declined column (needs a driver): " +
+  "reassign_task gives it to another driver or back to the same one; cancel_task closes it. task_detail shows the reason and who is free.",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",

@@ -97,6 +97,7 @@ export function DriverPage() {
             <div className="grow">
               <div className="name" style={{ fontSize: 20 }}>{name} {(card?.vehicle ?? info?.current_vehicle) && <Plate v={card?.vehicle ?? info?.current_vehicle} />}</div>
               <div className="sub">{[phone, card?.task ? `On task: ${card.task}` : card ? "No task" : null, card?.near ? `near ${card.near}` : null].filter(Boolean).join(" · ") || "—"}</div>
+              {info?.last_30_days && <div className="sub">Last 30 days: {info.last_30_days.accepted} accepted · {info.last_30_days.declined} declined</div>}
             </div>
             <Pill tone={tone}>{status}</Pill>
           </div>

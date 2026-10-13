@@ -77,7 +77,8 @@ export function levelTone(level?: string | null): Tone {
 export function statusTone(col: string, text?: string | null): Tone {
   const t = String(text || "").toLowerCase();
   if (col === "completed") return "muted";
-  if (col === "cancelled") return "bad";
+  if (col === "cancelled" || col === "declined") return "bad";
+  if (t.startsWith("declined")) return "bad";
   if (t.includes("not opened")) return "warn";
   const m = t.match(/location (\d+) min old/);
   if (m && +m[1] >= 15) return "warn";

@@ -48,8 +48,10 @@ export function Tasks() {
   }, [store, date, noConnector]);
 
   const b = board.data && board.data.date === date ? board.data : undefined;
-  const cols: [keyof Pick<Board, "assigned" | "in_progress" | "completed">, string, "warn" | "live" | ""][] = [
+  const cols: [keyof Pick<Board, "assigned" | "in_progress" | "completed" | "declined">, string, "warn" | "live" | "bad" | ""][] = [
     ["assigned", "Assigned", "warn"], ["in_progress", "In progress", "live"], ["completed", "Completed", ""],
+    // Declined by the driver, waiting for the office (Phase 5): shown only when there is one.
+    ...(b?.declined?.length ? [["declined", "Needs a driver", "bad"] as ["declined", string, "bad"]] : []),
   ];
   const openTask = (id: string) => drawer.open(<TaskDrawer id={id} />);
 
@@ -75,8 +77,8 @@ export function Tasks() {
           {b && board.err && <div style={{ gridColumn: "1/-1" }}><StaleNote entry={board} /></div>}
           {b && cols.map(([k, label, dot]) => (
             <div className="col" key={k}>
-              <div className="col-h"><span><Dot tone={dot} />{label}</span><span className="num">{b[k].length}</span></div>
-              {b[k].length ? b[k].map((t) => <TaskCard key={t.id} t={t} col={k} onOpen={openTask} />) : <p className="col-empty">No tasks</p>}
+              <div className="col-h"><span><Dot tone={dot} />{label}</span><span className="num">{(b[k] ?? []).length}</span></div>
+              {b[k]?.length ? b[k].map((t) => <TaskCard key={t.id} t={t} col={k} onOpen={openTask} />) : <p className="col-empty">No tasks</p>}
             </div>
           ))}
           {b && (

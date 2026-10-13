@@ -106,7 +106,9 @@
     "finishFirst": "පළමුව දැන් කෙරෙන කාර්යය අවසන් කරන්න.",
     "notSentYet": "තවම කාර්යාලයට යවා නැත",
     "leaveBy": "{time} ට පිටත් වන්න",
-    "moreStops": "තවත් {n}"
+    "moreStops": "තවත් {n}",
+    "notAccepted": "තවම පිළිගෙන නැත",
+    "accepted": "පිළිගත්තා"
   },
   "task": {
     "started": "ආරම්භය {time}",
@@ -144,7 +146,23 @@
     "stopsLeftTitle": "නැවතුම් {n} ක් අවසන් කර නැත",
     "stopsLeftBody": "කෙසේ වෙතත් කාර්යය අවසන් කරනවාද? ඒවා නොගිය ලෙස සලකුණු වේ.",
     "finishAnyway": "කෙසේ වෙතත් අවසන් කරන්න",
-    "minutesThere": "එහි විනාඩි {n}"
+    "minutesThere": "එහි විනාඩි {n}",
+    "accept": "පිළිගන්න",
+    "accepted": "පිළිගත්තා ✓ {time}",
+    "cantDo": "මෙම කාර්යය කළ නොහැක",
+    "declineTitle": "මෙම කාර්යය කළ නොහැකිද?",
+    "declineReason": {
+      "vehicleProblem": "වාහනයේ ගැටලුවක්",
+      "notAvailable": "ලබා ගත නොහැක",
+      "unwell": "අසනීපයි",
+      "other": "වෙනත්"
+    },
+    "declineNote": "කාර්යාලයට වචනයක් (අත්‍යවශ්‍ය නොවේ)",
+    "declineConfirm": "කළ නොහැක",
+    "declined": "ප්‍රතික්ෂේප කළා",
+    "alreadyReassigned": "මෙම කාර්යය දැනටමත් වෙනත් රියදුරෙකුට දී ඇත.",
+    "alreadyStarted": "මෙම කාර්යය දැනටමත් ආරම්භ කර ඇත.",
+    "declinedBody": "කාර්යාලය මෙම කාර්යය වෙනත් රියදුරෙකුට දෙනු ඇත."
   },
   "log": {
     "title": "ධාවන දුර සටහන් කරන්න",

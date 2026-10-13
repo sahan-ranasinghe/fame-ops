@@ -48,14 +48,29 @@ async function authUserIdByEmail(db: Db, email: string): Promise<string | null> 
 export const listDrivers = tool({
   name: "list_drivers",
   title: "List drivers",
-  description: "All drivers with code, username, phone, licence expiry, current vehicle and whether they are sharing their location.",
+  description:
+    "All drivers with code, username, phone, licence expiry, current vehicle, whether they are sharing their location, and how many tasks each accepted and declined in the last 30 days.",
   readOnly: true,
   input: z.object({
     include_inactive: z.boolean().optional().describe("Also show drivers who have been switched off"),
   }),
   async run({ include_inactive }, { db, now }) {
-    const [refs, latest] = await Promise.all([loadRefs(db), loadLatest(db)]);
+    const since = new Date(now.getTime() - 30 * 86400000).toISOString();
+    const [refs, latest, eventsRes] = await Promise.all([
+      loadRefs(db),
+      loadLatest(db),
+      db.from("task_assignment_events").select("employee_id, action").in("action", ["accepted", "declined"]).gte("at", since),
+    ]);
     const today = colomboDate(now);
+    // Accepts and declines per driver in the last 30 days.
+    const last30 = new Map<string, { accepted: number; declined: number }>();
+    for (const e of unwrap(eventsRes, "assignment history")) {
+      if (!e.employee_id) continue;
+      const row = last30.get(e.employee_id) ?? { accepted: 0, declined: 0 };
+      if (e.action === "accepted") row.accepted += 1;
+      else row.declined += 1;
+      last30.set(e.employee_id, row);
+    }
     const drivers = refs.employees
       .filter((e) => e.role === "driver" && (include_inactive || e.active))
       .map((e) => ({
@@ -65,6 +80,7 @@ export const listDrivers = tool({
           sharing(latest.get(e.id), now).text,
         ),
         licence: e.licence_expiry ? docChip(e.licence_expiry, today) : undefined,
+        last_30_days: last30.get(e.id) ?? { accepted: 0, declined: 0 },
       }));
     return { result: { count: drivers.length, drivers }, summary: `${drivers.length} drivers` };
   },

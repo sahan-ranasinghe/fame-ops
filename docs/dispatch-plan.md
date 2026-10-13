@@ -301,6 +301,20 @@ create function queue_accept_reminders() returns integer;   -- added to the task
 --   (the two minutes come from fleet_settings).
 ```
 
+**As built (13 October 2026, migration `20261014120000_task_accept_decline`).** As above, with:
+an insert trigger writes the `assigned` event (actor = `created_by`) and starting a task writes
+`accepted` ("by starting the task"); `accept_task` keeps the earliest time even when a replay
+arrives later (the plan's `least(coalesce(...))` kept the first write); both RPCs answer
+`cancelled` for a cancelled task; `decline_task` trims the note and refuses an unknown reason
+(22023); the `removed` push goes to the previous driver only when `old.accepted_at` is set and
+he did not decline (the plan's rule; a task never accepted just leaves his list), and a
+declined task given back to the same driver is pushed as `new`; `queue_accept_reminders()` is
+the second call of the `task-reminders` minute job (`cron.unschedule` + `cron.schedule`), skips
+tasks whose leave-by has passed, and reads the two minutes from `fleet_settings`. The office
+writes `reassigned` and `cancelled` events from the tools with the person's name. pgTAP:
+`supabase/tests/database/dispatch.test.sql`. No `queue_notification` call yet (Part 3b adds
+it) and no fleet-jobs call (Part 3a).
+
 ### 3.4 `issues` (Part 3a)
 
 ```sql
@@ -764,6 +778,17 @@ made the same way into the `functions serve` env file.
 - **Part 5.** Status lines; the "Needs a driver" column (declined) on the board; the task
   drawer shows the reason and "Reassign" with suggestions (free drivers, free vehicles);
   the driver page and Drivers table show accepts/declines in 30 days.
+  *As built (13 October 2026).* Tasks board: a fourth column "Needs a driver" appears when
+  the day has a declined task; cards show "Accepted HH:MM" / "Declined (reason) · note".
+  Task drawer: an Accepted row, a red notice with the decline (reason, note, after accepting),
+  "Free at that time" chips (drivers and vehicles from `task_detail.suggestions`; a click
+  fills the Reassign form), "Give it to a driver" with a Reassign button, Cancel task also
+  for a declined task, and a History card (`assignment_history`). Drivers table: a "Last 30
+  days" column (accepted · declined); the driver page shows the same line. Overview's
+  needs-attention (scope task) lists "Task declined: reason" and "Not accepted yet" from
+  `fleet_overview` (no issues table yet: Part 3a turns them into issues). Playwright: a
+  driver accepts one task and declines another through the RPCs, the board, the drawer's
+  suggestions → Reassign, the history, the drivers' counts.
 - **Part 3a.** The bell in the header (both layouts): open count from `list_issues` watched
   every 60 s and patched by Realtime on `issues` (web); the newest 10 in a dropdown; Issues
   page (`/issues`, `view`) with tabs Open / In progress / Resolved, filters by kind and vehicle;
@@ -823,6 +848,16 @@ stops editor, plan timeline, lock state, bell, issue severities.
   refreshes. "Start task" works whether or not Accept was tapped (the trigger sets
   `accepted_at`). The local notification for a new task (phones without a push token) is
   unchanged.
+  *As built (13 October 2026).* NEXT TASK card: Accept (amber) + Start task (outline) while
+  not accepted, "Accepted ✓ HH:MM" + Start task after; "Can't do this task" under it; the
+  task screen has the same. One `ReasonSheet` component serves Skip a stop and Can't do this
+  task (`DeclineSheet`: Vehicle problem / Not available / Unwell / Other, a note, "Can't do
+  it"). Later-today rows say Accepted / Not accepted yet. Queue ops `task_accept` and
+  `task_decline` call the RPCs; the engine hands every answer to `onAnswer`; the app shows
+  "This task was already given to another driver." / "…already started." once on Today
+  (tap to dismiss) and refreshes. A declined task shows "Declined" with "The office will
+  give this task to another driver." and Back to Today; it is listed nowhere. No local
+  accept reminder on the phone: the server's push does it (`accept_reminder`).
 
 Tests: `scripts/test-data-layer.ts` gains accept (earliest time kept on replay), decline
 (outcome), already_reassigned, stop skip with reason; `test-track` unchanged; typecheck.
@@ -927,6 +962,26 @@ list with Sinhala comes with Part 7 for Sahan to check.
 
 The Sinhala texts for all of these are in `si.json`; the full Sinhala list for the boss's
 check comes with Part 7.
+
+### Part 5 strings (as built, 13 October 2026)
+
+| key | English |
+|---|---|
+| `task.accept` | Accept |
+| `task.accepted` | Accepted ✓ {time} |
+| `task.cantDo` | Can't do this task |
+| `task.declineTitle` | Can't do this task? |
+| `task.declineReason.vehicleProblem` / `notAvailable` / `unwell` / `other` | Vehicle problem / Not available / Unwell / Other |
+| `task.declineNote` | A word for the office (optional) |
+| `task.declineConfirm` | Can't do it |
+| `task.declined` | Declined |
+| `task.declinedBody` | The office will give this task to another driver. |
+| `task.alreadyReassigned` | This task was already given to another driver. |
+| `task.alreadyStarted` | This task was already started. |
+| `today.accepted` / `today.notAccepted` | Accepted / Not accepted yet |
+
+`push.acceptReminder` is not a phone string: the reminder is the server's push (push-task, kind
+`accept_reminder`, en + si).
 
 ## 14. Documents at the end (Part 7)
 

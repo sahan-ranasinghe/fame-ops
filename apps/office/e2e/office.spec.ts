@@ -351,3 +351,60 @@ test("a dispatcher (view + assign tasks) gets the tasks board, not mileage or th
   await page.getByRole("button", { name: "Discard" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("a driver accepts one task and declines another; the office gives it to a free driver from the suggestions", async ({ page }) => {
+  const email = `e2e.dispatch2.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Dispatcher Two", email, permissions: ["view", "assign_tasks"] });
+  const d1 = { name: `E2E Decliner ${stamp}`, code: `E2D-${stamp}`, username: `e2d.${stamp}`, pin: "135790" };
+  const d2 = { name: `E2E Standby ${stamp}`, code: `E2S-${stamp}`, username: `e2s.${stamp}`, pin: "135791" };
+  await tool("create_driver", d1);
+  await tool("create_driver", d2);
+  const plate = `WP E2D-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
+  const day = new Date(Date.now() + 5.5 * 3600000 + 86400000).toISOString().slice(0, 10); // tomorrow in Colombo
+  const t1 = await tool<{ task_id: string }>("create_task", { title: `E2E accept ${stamp}`, date: day, start_time: "08:00", end_time: "09:00", driver: d1.username, vehicle: plate, pickup: "Head office", dropoff: "Nugegoda" });
+  const t2 = await tool<{ task_id: string }>("create_task", { title: `E2E decline ${stamp}`, date: day, start_time: "10:00", end_time: "11:00", driver: d1.username, vehicle: plate, pickup: "Head office", dropoff: "Galle" });
+  // The driver's app: Accept on one, "Can't do this task" on the other (the RPCs the app's queue sends).
+  const app = await driverRest(d1.username, d1.pin);
+  expect(await app.post("rpc/accept_task", { p_task_id: t1.task_id, p_at: new Date().toISOString() })).toBe(200);
+  expect(await app.post("rpc/decline_task", { p_task_id: t2.task_id, p_reason: "vehicle_problem", p_note: "Flat tyre" })).toBe(200);
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Dispatcher two for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // The board: Accepted HH:MM on one card; the other in "Needs a driver" with the reason.
+  await page.goto(`/tasks?date=${day}`);
+  const accepted = page.locator(".tcard", { hasText: `E2E accept ${stamp}` });
+  await expect(accepted).toContainText(/Accepted \d\d:\d\d/);
+  await expect(page.getByText("Needs a driver")).toBeVisible();
+  const card = page.locator(".tcard", { hasText: `E2E decline ${stamp}` });
+  await expect(card).toContainText("Declined (Vehicle problem) · Flat tyre");
+
+  // The drawer: the reason, who is free, one click fills the driver, Reassign.
+  await card.click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByText(/Flat tyre/).first()).toBeVisible();
+  await dialog.getByTestId("suggestions").getByRole("button", { name: d2.name }).click();
+  await expect(dialog.getByLabel("Driver", { exact: true })).toHaveValue(d2.username);
+  await dialog.getByRole("button", { name: "Reassign" }).click();
+  await expect(page.getByRole("status")).toHaveText("Task changed");
+  await expect(dialog.getByTestId("history")).toContainText("Declined");
+  await expect(dialog.getByTestId("history")).toContainText("Reassigned");
+  await expect(dialog.getByText(d2.name).first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(card).toContainText("Sent · not opened yet");
+  await expect(page.getByText("Needs a driver")).toHaveCount(0);
+
+  // Drivers: accepts and declines in the last 30 days.
+  await page.goto("/drivers");
+  const row = page.locator("tr", { hasText: d1.name });
+  await expect(row).toContainText("1 accepted");
+  await expect(row).toContainText("1 declined");
+});

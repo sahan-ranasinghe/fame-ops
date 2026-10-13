@@ -52,7 +52,7 @@ export function Drivers() {
             {list.length ? (
               <div className="tbl-wrap">
                 <table>
-                  <thead><tr><th>Driver</th><th>Code</th><th>Username</th><th>Phone</th><th>Licence expires</th><th>Vehicle</th><th>Location</th><th className="r"></th></tr></thead>
+                  <thead><tr><th>Driver</th><th>Code</th><th>Username</th><th>Phone</th><th>Licence expires</th><th>Vehicle</th><th>Location</th><th>Last 30 days</th><th className="r"></th></tr></thead>
                   <tbody>
                     {list.map((x) => (
                       <tr key={x.username}>
@@ -63,6 +63,7 @@ export function Drivers() {
                         <td>{x.licence?.expiry ? <span className={`doc ${docTone(x.licence.chip)}`}>{x.licence.expiry}</span> : "—"}</td>
                         <td>{x.current_vehicle ? <Plate v={x.current_vehicle} /> : "—"}</td>
                         <td>{x.location ? <Pill tone={locTone(x.location)}>{x.location}</Pill> : "—"}</td>
+                        <td className="small">{x.last_30_days ? <>{x.last_30_days.accepted} accepted{x.last_30_days.declined ? <span className="status bad"> · {x.last_30_days.declined} declined</span> : " · 0 declined"}</> : "—"}</td>
                         <td className="r">{canManage && <button type="button" className="btn small" onClick={() => drawer.open(<DriverDrawer driver={x} />)}>Manage</button>}</td>
                       </tr>
                     ))}

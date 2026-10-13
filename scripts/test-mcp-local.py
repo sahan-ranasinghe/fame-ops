@@ -461,11 +461,56 @@ code, _ = app.patch("employees?id=eq." + ME, {"current_vehicle_id": V1})
 check(code == 200, "driver sets their current vehicle")
 code, _ = app.patch("tasks?id=eq." + T1, {"seen_at": iso(now)})
 check(code == 200, "driver records seen_at")
+code, ans = app.post("rpc/accept_task", {"p_task_id": T1, "p_at": iso(now - dt.timedelta(minutes=1))})
+check(code == 200 and ans == "accepted", "driver accepts a task (accept_task)", f"{code} {ans}")
+code, ans = app.post("rpc/accept_task", {"p_task_id": T1, "p_at": iso(now - dt.timedelta(minutes=3))})
+check(code == 200 and ans == "accepted" and psql(f"select (accepted_at = '{iso(now - dt.timedelta(minutes=3))}'::timestamptz) from tasks where id = '{T1}'") == "t",
+      "an offline replay with an earlier time keeps the earliest acceptance", f"{code} {ans}")
+code, ans = app.post("rpc/accept_task", {"p_task_id": T3, "p_at": iso(now)})
+check(code == 200 and ans == "already_reassigned", "another driver's task answers already_reassigned", f"{code} {ans}")
+code, ans = app.post("rpc/decline_task", {"p_task_id": T5, "p_reason": "vehicle_problem", "p_note": "Flat tyre"})
+check(code == 200 and ans == "declined", "driver declines the site round (decline_task)", f"{code} {ans}")
+code, ans = app.post("rpc/decline_task", {"p_task_id": T5, "p_reason": "other"})
+check(code == 200 and ans == "already_declined", "declining twice answers already_declined", f"{code} {ans}")
+code, ans = app.post("rpc/decline_task", {"p_task_id": T1, "p_reason": "tired"})
+check(code in (400, 500) and "reason must be" in json.dumps(ans), "an unknown reason is refused", f"{code} {str(ans)[:120]}")
 
 board = tool("task_board", {"date": task_day})
 cards = {c["id"]: c for col in ("assigned", "in_progress", "completed") for c in board[col]}
-check(cards[T1]["status"].startswith("Seen by driver ") and cards[T2]["status"] == "Sent · not opened yet", "task_board: 'Seen by driver HH:MM' and 'Sent · not opened yet'",
-      f"{cards[T1]['status']} / {cards[T2]['status']}")
+check(cards[T1]["status"].startswith("Accepted ") and cards[T1]["accepted"] == cards[T1]["status"][-5:] and cards[T2]["status"] == "Sent · not opened yet",
+      "task_board: 'Accepted HH:MM' (with the time on the card) and 'Sent · not opened yet'", f"{cards[T1]['status']} / {cards[T2]['status']}")
+b2 = tool("task_board", {"date": day(2)})
+check(b2["counts"]["declined"] == 1 and b2["declined"][0]["id"] == T5 and b2["declined"][0]["status"] == "Declined (Vehicle problem) · Flat tyre",
+      "task_board: the declined column (needs a driver) with the reason and note", json.dumps(b2.get("declined"))[:300])
+td = tool("task_detail", {"task_id": T5})
+check(td["task"]["status"] == "declined" and td["task"]["declined"]["reason"] == "vehicle_problem" and td["task"]["declined"]["note"] == "Flat tyre"
+      and td["task"]["declined"]["after_accept"] is False,
+      "task_detail: declined with reason, note, not after accepting", json.dumps(td["task"].get("declined")))
+check(any(d["username"] == "nuwan.p" and d["availability"] == "free all day" for d in td["suggestions"]["drivers"])
+      and not any(d["username"] == "kasun.s" for d in td["suggestions"]["drivers"])
+      and any(v["reg_no"] == "WP CAB-4521" for v in td["suggestions"]["vehicles"]) and not any(v["reg_no"] == "WP CAR-1182" for v in td["suggestions"]["vehicles"]),
+      "task_detail: suggestions = who is free then (Kasun has the Matara trip, the car is in the garage)", json.dumps(td.get("suggestions"))[:400])
+check([e["action"] for e in td["assignment_history"]] == ["assigned", "declined"] and td["assignment_history"][0]["actor"]
+      and td["assignment_history"][1]["driver"] == "Nuwan Perera" and td["assignment_history"][1]["note"] == "vehicle_problem: Flat tyre",
+      "task_detail: the assignment history (assigned by whom, declined by whom with the note)", json.dumps(td.get("assignment_history"))[:300])
+ov = tool("fleet_overview", {"date": day(2)})
+check(any(a["what"].startswith("Task declined: Vehicle problem") and "Nuwan Perera" in a["subject"] and "needs a driver" in a["due"] for a in ov["needs_attention"]),
+      "fleet_overview: a declined task is in needs-attention (task scope)", json.dumps(ov.get("needs_attention"))[:300])
+ra5 = tool("reassign_task", {"task_id": T5, "driver": "kasun.s"})
+check(ra5["was"] == "declined" and ra5["driver"] == "Kasun Silva" and any("new task to accept" in n for n in ra5["notes"])
+      and psql(f"select status || '|' || coalesce(declined_reason, '-') || '|' || (accepted_at is null)::text || '|' || (seen_at is null)::text from tasks where id = '{T5}'") == "assigned|-|true|true",
+      "reassign_task gives a declined task to another driver: assigned again, the decline cleared", json.dumps(ra5)[:300])
+check([e["action"] for e in tool("task_detail", {"task_id": T5})["assignment_history"]] == ["assigned", "declined", "reassigned"]
+      and tool("task_board", {"date": day(2)})["counts"]["declined"] == 0, "the history gains 'reassigned'; the declined column is empty again")
+t6 = tool("create_task", {"title": "Evening drop", "date": day(2), "start_time": "15:00", "driver": "nuwan.p", "vehicle": "cab4521", "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+T6 = t6["task_id"]
+code, ans = app.post("rpc/decline_task", {"p_task_id": T6, "p_reason": "unwell"})
+cx6 = tool("cancel_task", {"task_id": T6, "reason": "Nobody else is free"})
+check(ans == "declined" and cx6["was"] == "declined" and psql(f"select status from tasks where id = '{T6}'") == "cancelled", "cancel_task closes a declined task", json.dumps(cx6)[:200])
+ld = tool("list_drivers")
+nuwan = next(d for d in ld["drivers"] if d["username"] == "nuwan.p")
+check(nuwan["last_30_days"] == {"accepted": 1, "declined": 2}, "list_drivers: Nuwan accepted 1 and declined 2 in the last 30 days", json.dumps(nuwan.get("last_30_days")))
+
 check(cards[T1]["from"] == "Head office, Colombo 05" and cards[T1]["to"] == "Kurunegala tower site" and cards[T1]["vehicle"] == "WP CAB-4521", "task_board card has from / to / vehicle")
 
 SESSION = str(uuid.uuid4())
@@ -680,7 +725,7 @@ check("completed" in r, "a completed task cannot be reassigned", r)
 ra = tool("reassign_task", {"task_id": T2, "driver": "kasun.s", "vehicle": "WP PH-2087"})
 check(ra["driver"] == "Kasun Silva" and ra["vehicle"] == "WP PH-2087" and psql(f"select seen_at is null from tasks where id='{T2}'") == "t", "reassign_task moves the task to Kasun and resets 'seen'")
 code, mine = app.get("tasks?select=id")
-check(sorted(t["id"] for t in mine) == sorted([T1, T5]), "the previous driver no longer sees the reassigned task")
+check(sorted(t["id"] for t in mine) == sorted([T1, T6]), "the previous driver no longer sees the reassigned task (nor the site round given to Kasun)", str(mine)[:200])
 r = tool("cancel_task", {"task_id": T1, "reason": "x"}, expect_error=True)
 check("already completed" in r, "a completed task cannot be cancelled", r)
 ca = tool("cancel_task", {"task_id": T3, "reason": "Bank closed today"})

@@ -16,7 +16,7 @@ import { PlanPanel } from "./PlanPanel";
 import { StopsEditor } from "./StopsEditor";
 import { draftsFromStops, driveText, type StopDraft, stopsInput, TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
 
-const TONE = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad" } as const;
+const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
 const SKIP_TEXT: Record<string, string> = { closed: "closed", nobody_there: "nobody there", not_needed: "not needed", not_visited: "not visited (task finished)", other: "other" };
 
 export function TaskDrawer({ id }: { id: string }) {
@@ -52,8 +52,9 @@ export function TaskDrawer({ id }: { id: string }) {
   const c = t.contact ?? {};
   const km = t.km ?? (t.end_odometer_km != null && t.start_odometer_km != null ? t.end_odometer_km - t.start_odometer_km : null);
   const projects = typeof p.projects === "string" ? p.projects : p.projects.map((x) => joinDots([x.project, x.percent != null ? `${x.percent}%` : ""])).join(", ");
-  const canChange = t.status === "assigned" && me.tools.includes("reassign_task");
-  const canCancel = (t.status === "assigned" || t.status === "in_progress") && me.tools.includes("cancel_task");
+  const declined = t.status === "declined";
+  const canChange = (t.status === "assigned" || declined) && me.tools.includes("reassign_task");
+  const canCancel = (t.status === "assigned" || t.status === "in_progress" || declined) && me.tools.includes("cancel_task");
   const canStops = (t.status === "assigned" || t.status === "in_progress") && me.tools.includes("update_task_stops");
   const pending = p.stops.filter((s) => s.status === "pending");
 
@@ -65,8 +66,15 @@ export function TaskDrawer({ id }: { id: string }) {
     if (ra.date) input.date = ra.date;
     if (ra.time) input.start_time = ra.time;
     if (Object.keys(input).length === 1) {
-      setRaMsg("Choose what to change first.");
-      return;
+      if (!declined) {
+        setRaMsg("Choose what to change first.");
+        return;
+      }
+      input.driver = t.driver ?? "";
+      if (!input.driver) {
+        setRaMsg("Choose the driver first.");
+        return;
+      }
     }
     setBusy(true);
     try {
@@ -131,6 +139,7 @@ export function TaskDrawer({ id }: { id: string }) {
           <div><dt>Driver</dt><dd>{t.driver || "—"}</dd></div>
           <div><dt>Vehicle</dt><dd>{t.vehicle || "—"}</dd></div>
           <div><dt>Status</dt><dd>{t.status_line || cap(t.status)}</dd></div>
+          {t.accepted && <div><dt>Accepted</dt><dd>{t.accepted}</dd></div>}
           <div><dt>Leave by</dt><dd className="mono">{t.leave_by ? `${hhmm(t.leave_by)} (${t.leave_by_source === "plan" ? "planned" : "typed"})` : "—"}</dd></div>
           {eta && (
             <div style={{ gridColumn: "1/-1" }} data-testid="eta">
@@ -255,9 +264,34 @@ export function TaskDrawer({ id }: { id: string }) {
         </>
       )}
 
+      {t.declined && (
+        <Notice tone="bad">
+          Declined{t.declined.after_accept ? " after accepting" : ""}{t.declined.at ? ` at ${t.declined.at}` : ""}: {t.declined.reason_text ?? t.declined.reason ?? "no reason given"}
+          {t.declined.note ? ` · “${t.declined.note}”` : ""}. Give it to another driver below, or cancel it.
+        </Notice>
+      )}
+      {p.suggestions && canChange && (
+        <div className="card card-b" data-testid="suggestions" style={{ display: "grid", gap: 8 }}>
+          <b>Free at that time</b>
+          <div className="chips">
+            {p.suggestions.drivers.length
+              ? p.suggestions.drivers.map((d) => (
+                <button type="button" key={d.username ?? d.name} className="chip" aria-pressed={!!d.username && ra.driver === d.username} title={d.availability} onClick={() => setRa({ ...ra, driver: d.username ?? "" })}>{d.name}</button>
+              ))
+              : <span className="muted small">No driver is free then.</span>}
+          </div>
+          <div className="chips">
+            {p.suggestions.vehicles.length
+              ? p.suggestions.vehicles.map((v) => (
+                <button type="button" key={v.reg_no} className="chip" aria-pressed={ra.vehicle === v.reg_no} title={v.availability} onClick={() => setRa({ ...ra, vehicle: v.reg_no })}>{v.reg_no}</button>
+              ))
+              : <span className="muted small">No vehicle is free then.</span>}
+          </div>
+        </div>
+      )}
       {canChange && (
         <>
-          <div className="section-t">Change before it starts</div>
+          <div className="section-t">{declined ? "Give it to a driver" : "Change before it starts"}</div>
           <form className="card card-b form" onSubmit={reassign}>
             <div className="grid2">
               <div className="field"><label htmlFor="ra-driver">Driver</label>
@@ -268,7 +302,7 @@ export function TaskDrawer({ id }: { id: string }) {
               <div className="field"><label htmlFor="ra-time">Leave by</label><input type="time" id="ra-time" value={ra.time} onChange={(e) => setRa({ ...ra, time: e.target.value })} /></div>
             </div>
             {raMsg && <Notice tone="bad">{raMsg}</Notice>}
-            <button className="btn dark" type="submit" disabled={busy}>Save changes</button>
+            <button className="btn dark" type="submit" disabled={busy}>{declined ? "Reassign" : "Save changes"}</button>
           </form>
         </>
       )}
@@ -279,6 +313,21 @@ export function TaskDrawer({ id }: { id: string }) {
           <button type="button" className="btn danger" onClick={() => void cancel()} disabled={busy}>Cancel task</button>
         </div>
       )}
+      {p.assignment_history?.length ? (
+        <>
+          <div className="section-t">History</div>
+          <div className="card card-b" data-testid="history">
+            <dl className="kv">
+              {p.assignment_history.map((e, i) => (
+                <div key={i} style={{ gridColumn: "1/-1" }}>
+                  <dt>{e.at}</dt>
+                  <dd>{[cap(e.action), e.driver, e.vehicle, e.actor ? `by ${e.actor}` : null, e.note].filter(Boolean).join(" · ")}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </>
+      ) : null}
     </>
   );
 }

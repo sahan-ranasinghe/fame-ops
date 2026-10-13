@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DeclineSheet } from '@/components/DeclineSheet';
 import { SkipSheet } from '@/components/SkipSheet';
 import { leaveTime, nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { TrackingNotice } from '@/components/tracking';
@@ -123,6 +124,7 @@ export default function TaskScreen() {
   const running = task?.status === 'in_progress';
   const myPosition = useMyPosition(running);
   const [skipping, setSkipping] = useState<TaskStop | null>(null);
+  const [declining, setDeclining] = useState(false);
 
   if (!app.me) return <Redirect href="/login" />;
 
@@ -184,7 +186,7 @@ export default function TaskScreen() {
 
         <View style={styles.topRow}>
           <Txt variant="label" color={running ? colors.blue : colors.amberText}>
-            {t(running ? 'today.inProgress' : task.status === 'assigned' ? 'today.nextTask' : task.status === 'cancelled' ? 'task.cancelled' : 'task.completed')}
+            {t(running ? 'today.inProgress' : task.status === 'assigned' ? 'today.nextTask' : task.status === 'cancelled' ? 'task.cancelled' : task.status === 'declined' ? 'task.declined' : 'task.completed')}
           </Txt>
           {running && task.started_at
             ? <Mono size={16} color={colors.muted}>{t('task.started', { time: colomboTime(task.started_at) })}</Mono>
@@ -295,7 +297,14 @@ export default function TaskScreen() {
               <Mono size={20} bold>{`${thousands(task.km)} ${t('common.km')}`}</Mono>
             )}
             {task.status === 'cancelled' && task.cancelled_reason && <Notice tone="warn" text={task.cancelled_reason} />}
-            {(task.status === 'completed' || task.status === 'cancelled') && (
+            {task.status === 'declined' && <Notice tone="warn" text={t('task.declinedBody')} />}
+            {task.status === 'assigned' && task.accepted_at && (
+              <Txt variant="strong" color={colors.blue}>{t('task.accepted', { time: colomboTime(task.accepted_at) })}</Txt>
+            )}
+            {task.status === 'assigned' && !task.accepted_at && (
+              <Button label={t('task.accept')} icon={Check} onPress={() => app.acceptTask(task)} />
+            )}
+            {(task.status === 'completed' || task.status === 'cancelled' || task.status === 'declined') && (
               <Button label={t('task.backToToday')} onPress={goHome} style={{ marginTop: 8 }} />
             )}
             {task.status === 'assigned' && (
@@ -308,12 +317,14 @@ export default function TaskScreen() {
                   onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: task.id, from: 'task' } })}
                 />
                 {call && <Button kind="outline" icon={Phone} label={t('task.callContact')} onPress={() => Linking.openURL(call)} />}
+                <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(true)} />
               </>
             )}
           </>
         )}
       </ScrollView>
       <SkipSheet stop={skipping} onClose={() => setSkipping(null)} />
+      <DeclineSheet task={declining ? task : null} onClose={() => setDeclining(false)} onDeclined={goHome} />
     </View>
   );
 }

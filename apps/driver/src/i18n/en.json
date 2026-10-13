@@ -106,7 +106,9 @@
     "finishFirst": "Finish the task in progress first.",
     "notSentYet": "Not sent to the office yet",
     "leaveBy": "Leave by {time}",
-    "moreStops": "+{n} more"
+    "moreStops": "+{n} more",
+    "notAccepted": "Not accepted yet",
+    "accepted": "Accepted"
   },
   "task": {
     "started": "Started {time}",
@@ -144,7 +146,23 @@
     "stopsLeftTitle": "{n} stops are not done",
     "stopsLeftBody": "Finish the task anyway? They will be marked as not visited.",
     "finishAnyway": "Finish anyway",
-    "minutesThere": "{n} min there"
+    "minutesThere": "{n} min there",
+    "accept": "Accept",
+    "accepted": "Accepted ✓ {time}",
+    "cantDo": "Can't do this task",
+    "declineTitle": "Can't do this task?",
+    "declineReason": {
+      "vehicleProblem": "Vehicle problem",
+      "notAvailable": "Not available",
+      "unwell": "Unwell",
+      "other": "Other"
+    },
+    "declineNote": "A word for the office (optional)",
+    "declineConfirm": "Can't do it",
+    "declined": "Declined",
+    "alreadyReassigned": "This task was already given to another driver.",
+    "alreadyStarted": "This task was already started.",
+    "declinedBody": "The office will give this task to another driver."
   },
   "log": {
     "title": "Log mileage",

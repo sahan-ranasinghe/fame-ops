@@ -17,6 +17,9 @@ export type Op =
   | { kind: 'session_start'; id: string; employee_id: string; vehicle_id: string | null; started_at: string; device_info: Json }
   | { kind: 'session_end'; id: string; ended_at: string; end_reason: 'driver' | 'auto' }
   | { kind: 'task_patch'; id: string; patch: api.TaskPatch }
+  /** Accept / decline go through RPCs that answer a word; an 'already_*' answer is done, not an error. */
+  | { kind: 'task_accept'; id: string; at: string }
+  | { kind: 'task_decline'; id: string; reason: api.DeclineReason; note: string | null; at: string }
   | { kind: 'stop_patch'; id: string; patch: api.StopPatch }
   | {
     kind: 'photo';
@@ -74,6 +77,8 @@ export interface SyncDeps {
   uploadFile: (localUri: string, storagePath: string) => Promise<void>;
   /** Frees the phone's copy once the photo is safely uploaded. */
   removeFile: (localUri: string) => void;
+  /** Hears the server's answer to an accept or decline (the screen tells the driver about an 'already_*' one). */
+  onAnswer?: (op: Op, answer: api.AcceptAnswer) => void;
 }
 
 export interface FlushResult {
@@ -99,6 +104,16 @@ export function createSync(deps: SyncDeps) {
         return api.endSession(client, op.id, op.ended_at, op.end_reason);
       case 'task_patch':
         return sendTaskPatch(op.id, op.patch);
+      case 'task_accept': {
+        const answer = await api.acceptTask(client, op.id, op.at);
+        deps.onAnswer?.(op, answer);
+        return;
+      }
+      case 'task_decline': {
+        const answer = await api.declineTask(client, op.id, op.reason, op.note, op.at);
+        deps.onAnswer?.(op, answer);
+        return;
+      }
       case 'stop_patch':
         return api.patchStop(client, op.id, op.patch);
       case 'employee_patch':

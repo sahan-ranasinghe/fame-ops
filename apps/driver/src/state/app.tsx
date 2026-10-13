@@ -26,7 +26,7 @@ import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
 import type { Employee, Language, ReportCategory, TaskStop, TaskWithStops, Vehicle, VehicleReport } from '@/lib/types';
 import { applyDownloadedUpdate, checkForUpdate, forgetDownloadedUpdate, type UpdateOutcome } from '@/lib/updates';
-import { enqueue, flushNow, onQueueChange } from '@/sync';
+import { enqueue, flushNow, onAnswer, onQueueChange } from '@/sync';
 import { clearQueue, queueCounts, type QueueCounts, retryFailed, tasksWaiting } from '@/sync/store';
 
 export type SignInOutcome = 'ok' | 'wrong' | 'network' | 'switched_off' | 'not_configured';
@@ -111,6 +111,13 @@ interface AppValue {
   markStopArrived: (stop: TaskStop) => void;
   markStopDone: (stop: TaskStop) => void;
   skipStop: (stop: TaskStop, reason: SkipReason, note: string) => void;
+  /** Accept a task (the server keeps the earliest time). */
+  acceptTask: (task: TaskWithStops) => void;
+  /** "Can't do this task": the office gives it to someone else. */
+  declineTask: (task: TaskWithStops, reason: api.DeclineReason, note: string) => void;
+  /** An i18n key to show once (e.g. "This task was already given to another driver."), or null. */
+  notice: string | null;
+  clearNotice: () => void;
   /** false when Location stayed off and the driver chose "Not now": nothing was started. */
   startTask: (task: TaskWithStops, reading: OdometerEntry) => Promise<boolean>;
   completeTask: (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => void;
@@ -161,6 +168,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const t = useCallback((key: string, vars?: Vars) => translate(language, key, vars), [language]);
   const tList = useCallback((key: string) => translateList(language, key), [language]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const clearNotice = useCallback(() => setNotice(null), []);
   const serviceTexts = useMemo(
     () => ({
       title: t('service.title'),
@@ -550,6 +559,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     patchStop(stop, { status: 'skipped', skip_reason: reason, skip_note: note.trim() === '' ? null : note.trim(), done_at: new Date().toISOString() });
   }, [patchStop]);
 
+  const acceptTask = useCallback((task: TaskWithStops) => {
+    const now = new Date().toISOString();
+    enqueue({ kind: 'task_accept', id: task.id, at: now });
+    patchLocalTask(task.id, (item) => ({ ...item, accepted_at: item.accepted_at ?? now }));
+    void flushNow();
+  }, [patchLocalTask]);
+
+  const declineTask = useCallback((task: TaskWithStops, reason: api.DeclineReason, note: string) => {
+    const now = new Date().toISOString();
+    const trimmed = note.trim() === '' ? null : note.trim();
+    enqueue({ kind: 'task_decline', id: task.id, reason, note: trimmed, at: now });
+    patchLocalTask(task.id, (item) => ({
+      ...item,
+      status: 'declined',
+      declined_at: now,
+      declined_reason: reason,
+      declined_note: trimmed,
+      declined_after_accept: item.accepted_at !== null,
+    }));
+    void flushNow();
+  }, [patchLocalTask]);
+
+  // The server's answer to an accept or decline: a task given away or started meanwhile is told once, then the list is refreshed.
+  useEffect(() => onAnswer((_op, answer) => {
+    if (answer === 'already_reassigned') setNotice('task.alreadyReassigned');
+    else if (answer === 'already_started') setNotice('task.alreadyStarted');
+    else if (answer !== 'cancelled') return;
+    void refresh();
+  }), [refresh]);
+
   const startTask = useCallback(
     (task: TaskWithStops, reading: OdometerEntry) => requireLocation('start', async () => {
       const current = meRef.current;
@@ -733,6 +772,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, waitingTasks, refreshing, offline,
     gate, resolveGate, requireLocation,
     signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, skipStop,
+    acceptTask, declineTask, notice, clearNotice,
     startTask, completeTask, logOdometer, logFuel, sendReport,
   };
 

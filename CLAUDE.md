@@ -248,7 +248,19 @@
   place or the first stop), return_to_base, avoid_expressway, leave_by, leave_by_source
   ('plan'|'manual'), buffer_min, plan_json (legs, warnings, settings used), plan_version
   (update_task_stops must send the one it loaded), reminder_30_sent_at, reminder_0_sent_at.
-  start_at = leave_by. Planner: `_shared/fleet/plan.ts` (pure; leave-by from the deadlines
+  start_at = leave_by. Accept / decline (Phase 5 Part 5): status also 'declined'; accepted_at,
+  declined_at, declined_by, declined_reason ('vehicle_problem'|'not_available'|'unwell'|'other'),
+  declined_note, declined_after_accept, accept_reminder_sent_at. The driver calls the RPCs
+  `accept_task(p_task_id, p_at)` and `decline_task(p_task_id, p_reason, p_note, p_at)` (security
+  definer; only the task's driver, only while assigned; answers 'accepted' | 'declined' |
+  'already_started' | 'already_reassigned' | 'already_declined' | 'cancelled'; the earliest
+  accepted_at wins; starting a task accepts it). `task_assignment_events` (task_id, at, action
+  'assigned'|'accepted'|'declined'|'reassigned'|'cancelled', employee_id, vehicle_id, actor,
+  note): drivers read their own tasks' rows, the office sees them in task_detail. Pushes: a
+  reassigned task is 'removed' to the old driver only if he had accepted it; 'accept_reminder'
+  once, accept_within_min after sending or accept_before_leave_min before leave-by
+  (`queue_accept_reminders`, in the task-reminders minute job).
+  Planner: `_shared/fleet/plan.ts` (pure; leave-by from the deadlines
   minus the buffer, dwell per stop kind); road times: `routing.ts` (ROUTING_PROVIDER
   secret: ors with ORS_KEY, google with GOOGLE_ROUTES_KEY, or estimate = straight line ×
   road_factor ÷ avg_speed_kmh when unset; `route_legs` cache 30 days, `routing_calls` per
@@ -379,9 +391,11 @@ Tabs: Today, Mileage, Report, Me.
 2. Permissions (not designed): location "Allow all the time", notifications, battery
    optimisation help.
 3. Today (designed): date, "Morning, <name>", සිංහල/English switch, current vehicle +
-   Change, "Sharing my location · Office can see you · works in background" toggle,
-   NEXT TASK card (time, title, Pickup, Drop-off, passengers · contact, Start task),
-   "Later today" list. Records seen_at the first time a task is shown. Pull to refresh +
+   Change, "On duty" toggle, NEXT TASK card (leave-by time, title, the first two stops,
+   passengers · contact, Accept + Start task, or "Accepted ✓ HH:MM" + Start task, and the
+   link "Can't do this task" → a reasons sheet: Vehicle problem / Not available / Unwell /
+   Other, an optional note; a declined task leaves the list), "Later today" list (each
+   row: Accepted / Not accepted yet). Records seen_at the first time a task is shown. Pull to refresh +
    Supabase Realtime.
 4. Task in progress (designed): map with my position and the destination (straight line
    when the destination has coordinates), IN PROGRESS, Started HH:MM, destination,
@@ -523,11 +537,15 @@ office_audit.
   stop fields, driver?, vehicle?)` (preview, creates nothing); `update_task_stops(task_id,
   plan_version, stops[])` (pending stops → removed, new ones appended, re-planned, driver
   told "Task changed"; a stale plan_version is refused); `task_board(date)` (assigned / in
-  progress / completed with status lines, stops_count, leave_by, eta_next, eta_final,
-  late_min); `task_detail(task_id)` (odometer/fuel photo links, GPS km, plan, planned and
-  actual times per stop, skip reasons, removed_stops, plan_version); `cancel_task(task_id,
-  reason)`; `reassign_task(task_id, driver?, vehicle?, start_time?)` (shifts leave_by and
-  the planned times).
+  progress / completed / declined = needs a driver, with status lines "Seen by driver HH:MM",
+  "Accepted HH:MM", "Declined (reason) · note", stops_count, leave_by, accepted, eta_next,
+  eta_final, late_min); `task_detail(task_id)` (odometer/fuel photo links, GPS km, plan,
+  planned and actual times per stop, skip reasons, removed_stops, plan_version, accepted,
+  declined {at, reason, reason_text, note, after_accept}, assignment_history[], and for a
+  declined task `suggestions` = who is free then); `cancel_task(task_id, reason)` (assigned,
+  in progress or declined); `reassign_task(task_id, driver?, vehicle?, start_time?)` (shifts
+  leave_by and the planned times; a declined task goes back to assigned, the decline cleared,
+  result `was: "declined"`). `list_drivers` adds `last_30_days {accepted, declined}`.
 - Settings: `get_settings` (view, assign_tasks or approve), `update_settings(key, value)` and
   `routing_usage(days?)` (users). Tool answers never carry null fields (run.ts prunes
   them): a null setting such as base_place_id is simply absent.

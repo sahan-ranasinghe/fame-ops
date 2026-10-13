@@ -4,7 +4,7 @@
 import { File, UploadType } from 'expo-file-system';
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
-import { ApiError } from '../lib/api';
+import { type AcceptAnswer, ApiError } from '../lib/api';
 import { getJson, KEYS, setJson } from '../lib/kv';
 import { supabase } from '../lib/supabase';
 import type { Employee } from '../lib/types';
@@ -59,12 +59,26 @@ function removeFile(localUri: string): void {
   }
 }
 
+type AnswerListener = (op: Op, answer: AcceptAnswer) => void;
+const answerListeners = new Set<AnswerListener>();
+
+/** Hears the server's answer to an accept or decline ('accepted', 'declined', or an 'already_*' word). */
+export function onAnswer(listener: AnswerListener): () => void {
+  answerListeners.add(listener);
+  return () => {
+    answerListeners.delete(listener);
+  };
+}
+
 const sync = createSync({
   client: supabase,
   store: queueStore,
   employeeId: () => getJson<Employee>(KEYS.me)?.id ?? null,
   uploadFile: uploadPhotoFile,
   removeFile,
+  onAnswer: (op, answer) => {
+    for (const listener of answerListeners) listener(op, answer);
+  },
 });
 
 type Listener = () => void;
