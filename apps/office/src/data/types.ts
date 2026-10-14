@@ -389,6 +389,8 @@ export interface Suggestions {
   drivers: { name: string; username: string; availability: string }[];
   groups?: { free_pool: SuggestedVehicle[]; free_assigned: SuggestedVehicle[]; busy: SuggestedVehicle[]; in_garage: SuggestedVehicle[] };
   drivers_free?: { name: string; username: string }[];
+  /** The fleet setting: may a custodian drive with no driver assigned. */
+  self_drive_allowed?: boolean;
   next?: string;
 }
 
@@ -450,6 +452,8 @@ export interface FleetSettings {
   accept_within_min: number;
   accept_before_leave_min: number;
   rush_hour: { factor: number; centre: { lat: number; lng: number }; radius_km: number; bands: { days: number[]; from: string; to: string }[] };
+  /** Off = every booking needs a driver (Part 7). */
+  self_drive_allowed?: boolean;
 }
 
 export interface SettingsResult {

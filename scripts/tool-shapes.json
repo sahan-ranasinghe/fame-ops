@@ -52,6 +52,7 @@
   "about.dwell_min: string",
   "about.road_factor: string",
   "about.rush_hour: string",
+  "about.self_drive_allowed: string",
   "defaults.accept_before_leave_min: number",
   "defaults.accept_within_min: number",
   "defaults.avg_speed_kmh: number",
@@ -71,6 +72,7 @@
   "defaults.rush_hour.centre.lng: number",
   "defaults.rush_hour.factor: number",
   "defaults.rush_hour.radius_km: number",
+  "defaults.self_drive_allowed: bool",
   "note: string",
   "routing_provider: string",
   "settings.accept_before_leave_min: number",
@@ -91,7 +93,8 @@
   "settings.rush_hour.centre.lat: number",
   "settings.rush_hour.centre.lng: number",
   "settings.rush_hour.factor: number",
-  "settings.rush_hour.radius_km: number"
+  "settings.rush_hour.radius_km: number",
+  "settings.self_drive_allowed: bool"
  ],
  "issue_history {\"id\": \"<id>\"}": [
   "events[].action: string",
@@ -550,6 +553,7 @@
   "request.timeline.seen: string",
   "request.timeline.sent: string",
   "request.when: string",
+  "self_drive_allowed: bool",
   "vehicles[].assigned_to: string",
   "vehicles[].availability: string",
   "vehicles[].but: string",

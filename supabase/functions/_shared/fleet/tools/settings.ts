@@ -11,7 +11,8 @@ export const getSettings = tool({
   title: "Fleet settings",
   description:
     "The dispatch settings: dwell minutes by stop kind, the buffer before a deadline, the base place, the estimate's speed and " +
-    "road factor, the accept windows, the rush-hour bands; with the defaults and what each means. The routing provider in use.",
+    "road factor, the accept windows, the rush-hour bands, whether self-drive bookings are allowed; with the defaults and what " +
+    "each means. The routing provider in use.",
   readOnly: true,
   input: z.object({}),
   async run(_args, { db }) {
@@ -43,7 +44,8 @@ export const updateSettings = tool({
   title: "Change a fleet setting",
   description:
     "Sets one setting: dwell_min (an object of minutes by stop kind), buffer_min, base_place_id (the id of a saved place with a " +
-    "map pin, or null), avg_speed_kmh, road_factor, accept_within_min, accept_before_leave_min, rush_hour (factor, centre, radius_km, bands).",
+    "map pin, or null), avg_speed_kmh, road_factor, accept_within_min, accept_before_leave_min, rush_hour (factor, centre, radius_km, bands), " +
+    "self_drive_allowed (true or false: may a vehicle's custodian drive it with no driver).",
   readOnly: false,
   input: z.object({
     key: z.enum(SETTING_KEYS as [SettingKey, ...SettingKey[]]),

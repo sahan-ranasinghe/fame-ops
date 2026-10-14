@@ -525,6 +525,21 @@ r = tool("decide_request", {"request_id": re4["request"]["id"], "decision": "app
 check("has no custodian" in r, "approving without a driver on a pool vehicle is refused even when no driver is required", r)
 ap4 = tool("decide_request", {"request_id": re4["request"]["id"], "decision": "approve", "vehicle": "car1182"})
 check(ap4["driver"] == "Pool Custodian" and ap4["request"] == "approved", "approved without a driver: the custodian drives", json.dumps(ap4)[:200])
+# The switch (Part 7): with self-drive off, every booking needs a driver.
+tool("update_settings", {"key": "self_drive_allowed", "value": False})
+check(tool("get_settings")["settings"]["self_drive_allowed"] is False, "update_settings switches self-drive bookings off")
+r = tool("create_request", {"requested_by": "Pool Custodian", "date": day(4), "time": "15:00", "route_to": "Kandy", "driver_required": False}, expect_error=True)
+check("switched off" in r, "a request with no driver needed is refused while self-drive is off", r)
+r = tool("book_vehicle", {"date": day(4), "time": "15:00", "vehicle": "car1182", "driver_required": False}, expect_error=True)
+check("switched off" in r, "a one-step booking with the custodian driving is refused while self-drive is off", r)
+re5 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(4), "time": "16:00", "route_to": "Kandy"})
+r = tool("decide_request", {"request_id": re5["request"]["id"], "decision": "approve", "vehicle": "car1182"}, expect_error=True)
+check("Give a driver" in r, "approving a request without a driver is refused: the request needs one", r)
+check(tool("suggest_vehicles", {"request_id": re5["request"]["id"]})["self_drive_allowed"] is False, "suggest_vehicles says the switch is off (the web hides the custodian path)")
+tool("decide_request", {"request_id": re5["request"]["id"], "decision": "decline", "reason": "Test only"})
+r = tool("update_settings", {"key": "self_drive_allowed", "value": "yes"}, expect_error=True)
+check("true or false" in r, "the switch takes only true or false", r)
+tool("update_settings", {"key": "self_drive_allowed", "value": True})
 tool("update_vehicle", {"reg_no": "WP CAR-1182", "in_garage": True})  # back in the garage: the later sections count on it
 
 # ---------------------------------------------------------------------------
@@ -1129,11 +1144,13 @@ if CHANNEL == "api":
     staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["request"]
-          and sorted(me.get("tools", [])) == ["create_request", "find_project", "list_places", "list_requests", "my_notification_settings",
+          and sorted(me.get("tools", [])) == ["create_request", "find_project", "get_settings", "list_places", "list_requests", "my_notification_settings",
                                              "register_web_push", "remove_web_push", "set_my_notification_settings", "task_detail"],
           "a requester-only person signs in without a second step and sees only the request tools", f"{code} {str(me)[:200]}")
     code, body = api_call(staff_token, "task_board", {})
     check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
+    code, body = api_call(staff_token, "get_settings", {})
+    check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True, "a requester reads the fleet settings (the request form needs the self-drive switch)", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "my_notification_settings", {})
     check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "vehicle.booked", "vehicle.booking_cancelled"],
           "a requester's notification settings hold their decided-request event and the two custodian events", f"{code} {str(body)[:200]}")
@@ -1192,7 +1209,8 @@ if CHANNEL == "api":
     tool("update_office_user", {"email": staff_email, "permissions": ["request"]})
     code, body = api_call(staff_token, "get_settings", {})
     code2, body2 = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})
-    check(code == 403 and code2 == 403, "a requester can neither read the settings nor plan a task (403)", f"{code} {code2}")
+    check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True and code2 == 403,
+          "a requester reads the settings (the request form needs the self-drive switch) but cannot plan a task (403)", f"{code} {code2}")
     tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "assign_tasks"]})
     code, body = api_call(API_TOKEN, "update_office_user", {"email": admin_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
     check(code == 409 and "own users permission" in body.get("error", ""), "an admin cannot remove their own users permission (409)", f"{code} {body}")

@@ -5,7 +5,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import { useLists } from "../data/hooks";
-import type { BookResult, SuggestedVehicle, Suggestions } from "../data/types";
+import type { BookResult, SettingsResult, SuggestedVehicle, Suggestions } from "../data/types";
 import { joinDots, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can } from "../transport/types";
@@ -60,7 +60,20 @@ export function NewRequestDrawer() {
   const [vehicle, setVehicle] = useState("");
   const [driver, setDriver] = useState("");
   const [booked, setBooked] = useState<BookResult | null>(null);
+  // The fleet switch: with self-drive off every booking needs a driver, and the box is not shown.
+  const [selfDrive, setSelfDrive] = useState(true);
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  useEffect(() => {
+    if (!me.tools.includes("get_settings")) return;
+    let alive = true;
+    void transport.call<SettingsResult>("get_settings", {}).then((s) => {
+      if (!alive || s.settings.self_drive_allowed !== false) return;
+      setSelfDrive(false);
+      setF((x) => ({ ...x, driver: true }));
+    }).catch(() => {});
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transport]);
 
   // The free vehicles for that day and time, fetched a moment after the fields settle.
   const sugArgs = books ? suggestInput(f) : null;
@@ -88,7 +101,7 @@ export function NewRequestDrawer() {
   }, [sugKey, transport]);
 
   const picked = sug ? [...(sug.groups ? Object.values(sug.groups).flat() : sug.vehicles)].find((v) => v.reg_no === vehicle) : undefined;
-  const custodianDrives = !f.driver && !!picked?.assigned_to;
+  const custodianDrives = selfDrive && !f.driver && !!picked?.assigned_to;
   const freeDrivers = sug?.drivers_free ?? sug?.drivers.filter((d) => /free/.test(d.availability)).map((d) => ({ name: d.name, username: d.username })) ?? [];
 
   async function submit(ev: FormEvent) {
@@ -174,10 +187,10 @@ export function NewRequestDrawer() {
           <div className="field"><label htmlFor="nr-pax">Passengers</label><input type="number" id="nr-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
           <div className="field" style={{ alignContent: "end", gap: 8 }}>
             <span className="check"><input type="checkbox" id="nr-tools" checked={f.tools} onChange={(e) => set("tools", e.target.checked)} /> <label htmlFor="nr-tools">Tools or equipment go too</label></span>
-            <span className="check"><input type="checkbox" id="nr-driver" checked={f.driver} onChange={(e) => set("driver", e.target.checked)} /> <label htmlFor="nr-driver">A driver is needed</label></span>
+            {selfDrive && <span className="check"><input type="checkbox" id="nr-driver" checked={f.driver} onChange={(e) => set("driver", e.target.checked)} /> <label htmlFor="nr-driver">A driver is needed</label></span>}
           </div>
         </div>
-        <p className="hint" style={{ margin: "-8px 0 0" }}>Untick "A driver is needed" when the person drives a vehicle assigned to them.</p>
+        {selfDrive && <p className="hint" style={{ margin: "-8px 0 0" }}>Untick "A driver is needed" when the person drives a vehicle assigned to them.</p>}
         <div className="field"><label htmlFor="nr-note">Note</label><textarea id="nr-note" maxLength={1000} value={f.note} onChange={(e) => set("note", e.target.value)} /></div>
 
         {books && (

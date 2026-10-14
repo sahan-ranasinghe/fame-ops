@@ -498,7 +498,7 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
 
 test("an approver books a vehicle in one step from the Free group; the task is on the board with Leave by; the booking is cancelled", async ({ page }) => {
   const email = `e2e.book.${stamp}@fame.test`;
-  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Booker", email, permissions: ["view", "request", "approve", "assign_tasks"] });
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Booker", email, permissions: ["view", "request", "approve", "assign_tasks", "users"] });
   const driver = { name: `E2E Pool Driver ${stamp}`, code: `E2B-${stamp}`, username: `e2b.${stamp}`, pin: "246810" };
   await tool("create_driver", driver);
   const plate = `WP E2B-${stamp.slice(-4).toUpperCase()}`;
@@ -547,4 +547,21 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   expect(mine?.cancel_reason).toBe("Trip called off");
   const board = await tool<{ counts: { cancelled: number } }>("task_board", { date: day });
   expect(board.counts.cancelled).toBeGreaterThan(0);
+
+  // The self-drive switch (Settings → Fleet): off hides "A driver is needed" on the request form; then back on.
+  // The local database is not reset between runs: start from on, whatever the last run left.
+  await tool("update_settings", { key: "self_drive_allowed", value: true });
+  await page.goto("/settings/fleet");
+  const selfDrive = page.getByRole("checkbox", { name: /Self-drive bookings allowed/ });
+  await expect(selfDrive).toBeChecked();
+  await selfDrive.uncheck();
+  await expect(page.getByRole("status")).toHaveText("Setting saved");
+  await page.goto("/requests");
+  await page.getByRole("button", { name: "New request" }).click();
+  await expect(page.getByLabel("Who needs it")).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "A driver is needed" })).toHaveCount(0);
+  // Back on through the tool (the same save as the untick above; the local runtime sometimes drops a second call).
+  await tool("update_settings", { key: "self_drive_allowed", value: true });
+  await page.goto("/settings/fleet");
+  await expect(page.getByRole("checkbox", { name: /Self-drive bookings allowed/ })).toBeChecked();
 });

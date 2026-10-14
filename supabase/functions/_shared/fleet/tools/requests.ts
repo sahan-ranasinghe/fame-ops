@@ -114,10 +114,13 @@ async function markSeen(db: Db, request: VehicleRequest, actor: Actor, now: Date
   return rows[0] ?? request;
 }
 
-/** The driver of a booking: the one named, or the vehicle's custodian when no driver is needed. */
-function pickDriver(refs: Refs, typed: string | undefined, driverRequired: boolean, vehicle: Vehicle): Employee {
+const SELF_DRIVE_OFF = "Self-drive bookings are switched off (Settings → Fleet, self_drive_allowed): give a driver.";
+
+/** The driver of a booking: the one named, or the vehicle's custodian when no driver is needed (and self-drive is allowed). */
+function pickDriver(refs: Refs, typed: string | undefined, driverRequired: boolean, vehicle: Vehicle, selfDrive: boolean): Employee {
   if (typed) return activeDriver(refs, typed);
   if (!driverRequired) {
+    if (!selfDrive) throw new ToolError(SELF_DRIVE_OFF);
     const custodian = vehicle.custodian_employee_id ? refs.emp.get(vehicle.custodian_employee_id) : undefined;
     if (custodian?.active) return custodian;
     throw new ToolError(`${vehicle.reg_no} has no custodian to drive it: give a driver.`);
@@ -172,6 +175,7 @@ export const createRequest = tool({
     const backBy = args.back_by ? utcIso(args.date, args.back_by) : null;
     if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
 
+    if (args.driver_required === false && !(await loadSettings(db)).self_drive_allowed) throw new ToolError(SELF_DRIVE_OFF);
     // A project that is known from Zoho is linked; anything else is kept as a label.
     const matched = args.project ? (await matchProjects(db, args.project)).projects : [];
     const project = matched.length === 1 ? matched[0] : null;
@@ -288,7 +292,11 @@ export const suggestVehicles = tool({
 
     const refs = await loadRefs(db);
     const vehicles = refs.vehicles.filter((v) => v.active);
-    const [tasks, km] = await Promise.all([openTasksOn(db, day), monthKm(db, vehicles.map((v) => v.id), day.slice(0, 7))]);
+    const [tasks, km, settings] = await Promise.all([
+      openTasksOn(db, day),
+      monthKm(db, vehicles.map((v) => v.id), day.slice(0, 7)),
+      loadSettings(db),
+    ]);
 
     const ranked = vehicles.map((v) => {
       const mine = tasks.filter((t) => t.vehicle_id === v.id);
@@ -372,6 +380,7 @@ export const suggestVehicles = tool({
         drivers: drivers.map(({ free: _free, ...card }) => card),
         groups,
         drivers_free: drivers.filter((d) => d.free).map((d) => ({ name: d.name, username: d.username })),
+        self_drive_allowed: settings.self_drive_allowed,
         next: request
           ? ranked.some((r) => r.card.pick === "good")
             ? "decide_request with decision=approve, a vehicle and a driver (none needed when the custodian drives)."
@@ -434,9 +443,9 @@ export const decideRequest = tool({
     if (!args.vehicle) {
       throw new ToolError("To approve, give a vehicle (and a driver, unless the custodian drives). suggest_vehicles shows who is free.");
     }
-    const refs = await loadRefs(db);
+    const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     const vehicle = activeVehicle(refs, args.vehicle);
-    const driver = pickDriver(refs, args.driver, request.driver_required, vehicle);
+    const driver = pickDriver(refs, args.driver, request.driver_required, vehicle, settings.self_drive_allowed);
     const warnings = await assignWarnings(db, { driver, vehicle, startAt: request.needed_at, endBy: request.back_by });
     warnings.push(...fitWarnings(vehicle, request));
 
@@ -448,7 +457,6 @@ export const decideRequest = tool({
       }
       : { rows: [], shown: [], label: request.project_label };
     const requesterRow = request.requested_by_employee_id ? refs.emp.get(request.requested_by_employee_id) : undefined;
-    const settings = await loadSettings(db);
     const prepared = await prepareTask(db, settings, now, {
       day: colomboDate(request.needed_at),
       pickup: request.route_from ?? "To be confirmed",
@@ -530,7 +538,7 @@ export const bookVehicle = tool({
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     const vehicle = activeVehicle(refs, args.vehicle);
     const driverRequired = args.driver_required ?? true;
-    const driver = pickDriver(refs, args.driver, driverRequired, vehicle);
+    const driver = pickDriver(refs, args.driver, driverRequired, vehicle, settings.self_drive_allowed);
     const warnings = await assignWarnings(db, { driver, vehicle, startAt: neededAt, endBy: backBy });
     warnings.push(...fitWarnings(vehicle, args));
     const prepared = await prepareTask(db, settings, now, {

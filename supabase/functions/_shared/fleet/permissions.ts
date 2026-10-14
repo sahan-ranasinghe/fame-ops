@@ -75,7 +75,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   cancel_task: ["assign_tasks"],
   plan_task: AA,
   update_task_stops: ["assign_tasks"],
-  get_settings: ["view", "assign_tasks", "approve"],
+  get_settings: ANY,
   update_settings: USERS,
   routing_usage: USERS,
   register_vehicle: VEH,

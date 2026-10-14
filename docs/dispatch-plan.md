@@ -135,7 +135,7 @@ shown. Four deploy rounds, each on its own go:
 | Part 2 | `permissions` | office-mcp, office-api | no | yes | test artifact only |
 | Part 5 | `task_plan`, `task_accept_decline` | office-mcp, office-api, push-task | `eas update` (preview) | yes | test artifact only |
 | Part 3b | `issues`, `notifications` | office-mcp, office-api, fleet-jobs, notify-office | no | yes (PWA) | test artifact only |
-| Part 7 | `custodians_booking` | office-mcp, office-api | `eas update` if the app changed | yes | test artifact + the Teams file and message |
+| Part 7 | `custodians_booking` | office-mcp, office-api, fleet-jobs | no (only the generated types changed in the driver app) | yes | test artifact + the Teams file and message |
 
 Order inside a round: `db push` → `functions deploy` → `eas update` → web build + wrangler →
 republish. Secrets are set by Sahan before the round that needs them (section 9).
@@ -1118,6 +1118,20 @@ check comes with Part 7.
   `list_issues`); notifications on Windows Chrome and on Android Chrome with the site installed
   (Palitha's phone); the OPPO settings unchanged.
 - The list of new Sinhala strings.
+
+**As built (14 October 2026, Part 7).** One addition asked for at the Part 6 checkpoint: the
+fleet setting `self_drive_allowed` (default true). Off, every booking needs a driver:
+`create_request` and `book_vehicle` refuse `driver_required: false`, `decide_request` needs a
+driver whatever the request says, `suggest_vehicles` answers the switch (`self_drive_allowed`),
+the request form hides "A driver is needed" and the drawer the custodian-drives path. Settings →
+Fleet has the checkbox ("Bookings"). `get_settings` is open to every office permission so the
+request form can read the switch. The deliverables: CLAUDE.md and this file as built,
+`docs/office-web-plan.md` status, README (the connector's tools, the checks, the deploys),
+`docs/phase5-test-plan.md` (per role, per phone, the connector, the notifications),
+`docs/phase5-sinhala-strings.md` (the 55 new or changed driver strings with their Sinhala, for
+the boss's check), `docs/teams-artifact-update.md` (the file, the declaration and the message
+for the Teams chat). No `eas update` in round 4: the driver app changed only in its generated
+types since round 2.
 
 ## 15. Not in this phase
 

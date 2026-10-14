@@ -77,7 +77,7 @@ export function RequestDrawer({ id, mode }: { id: string; mode?: "decline" }) {
     : (lists.drivers ?? []).filter((d) => d.active !== false).map((d) => ({ u: d.username, name: d.name, label: "" }));
   const ready = sug !== null || sugNote !== null || !suggests;
   const picked = options.find((v) => v.reg_no === vehicle);
-  const custodianDrives = q?.driver_required === false && !!picked?.assigned_to;
+  const custodianDrives = q?.driver_required === false && !!picked?.assigned_to && sug?.self_drive_allowed !== false;
 
   useEffect(() => {
     if (!vehicle && options[0]) setVehicle(options[0].reg_no);

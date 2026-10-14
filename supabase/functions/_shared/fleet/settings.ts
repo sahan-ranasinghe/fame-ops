@@ -28,6 +28,8 @@ export interface Settings {
   accept_within_min: number;
   accept_before_leave_min: number;
   rush_hour: RushHour;
+  /** Off = every booking needs a driver: the "A driver is needed" box and the custodian-drives path are hidden. */
+  self_drive_allowed: boolean;
 }
 
 export const SETTINGS_DEFAULTS: Settings = {
@@ -44,6 +46,7 @@ export const SETTINGS_DEFAULTS: Settings = {
     radius_km: 25,
     bands: [{ days: [1, 2, 3, 4, 5], from: "07:00", to: "09:30" }, { days: [1, 2, 3, 4, 5], from: "16:30", to: "19:00" }],
   },
+  self_drive_allowed: true,
 };
 
 export type SettingKey = keyof Settings;
@@ -58,6 +61,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   accept_within_min: "A driver should accept a task within this many minutes of receiving it",
   accept_before_leave_min: "… and at the latest this many minutes before the leave-by time",
   rush_hour: "Rush hour: the factor on legs that start or end within the radius of the centre during the bands (weekdays)",
+  self_drive_allowed:
+    "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -100,6 +105,9 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
     case "accept_within_min":
     case "accept_before_leave_min":
       return number(value, key, 1, 1440, true);
+    case "self_drive_allowed":
+      if (typeof value !== "boolean") throw new ToolError("self_drive_allowed: true or false.");
+      return value;
     case "rush_hour": {
       const r = value as Partial<RushHour> | null;
       if (!r || typeof r !== "object") throw new ToolError("rush_hour: an object with factor, centre, radius_km and bands is needed.");

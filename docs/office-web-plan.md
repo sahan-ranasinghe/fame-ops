@@ -379,6 +379,13 @@ that reads `office_audit` (none exists yet; phase 6).
 About five working weeks before Zoho push and the connector sign-in. The
 driver app does not change in any phase.
 
+Status, 14 October 2026: Phase 5 of the fleet (docs/dispatch-plan.md) is built on top of
+this plan: permissions per person replace the role table (Settings → Users), the
+Settings section holds Users, Fleet (the dispatch defaults, the self-drive switch) and
+Notifications (web push, web only), the issues centre and the bell, the request timeline
+and one-step booking, and the web build is installable. The Audit page still waits for a
+tool; the Zoho sync (phase 5 here) and the connector sign-in (phase 7) are unchanged.
+
 ## 12. Monthly cost (12 vehicles, about 5 office users)
 
 | item | USD / month |

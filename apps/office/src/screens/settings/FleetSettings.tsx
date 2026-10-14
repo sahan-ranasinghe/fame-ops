@@ -103,6 +103,14 @@ export function FleetSettings() {
           <div><button className="btn dark" type="submit" disabled={busy !== null || !changed("dwell_min")}>Save</button></div>
         </form>
 
+        <div className="card card-b form" data-testid="fleet-bookings">
+          <h2>Bookings</h2>
+          <label className="row" style={{ padding: 0, cursor: "pointer" }}>
+            <input type="checkbox" checked={draft.self_drive_allowed !== false} disabled={busy !== null} onChange={(e) => { setDraft({ ...draft, self_drive_allowed: e.target.checked }); void save("self_drive_allowed", e.target.checked); }} />
+            <span className="grow"><span className="name">Self-drive bookings allowed</span><span className="sub" style={{ display: "block" }}>{data.about.self_drive_allowed}</span></span>
+          </label>
+        </div>
+
         <div className="card card-b form">
           <h2>Numbers</h2>
           {NUMBERS.map(([key, label, unit]) => (

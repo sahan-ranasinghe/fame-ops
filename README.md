@@ -193,6 +193,16 @@ driving / stopped / no data, Douglas–Peucker thinning so the line follows the
 roads on a long day) and today's line grows live from the same Realtime rows
 the live map uses.
 
+Phase 5 (docs/dispatch-plan.md, October 2026) adds: tasks with stops and a leave-by
+time planned from the deadlines (the plan panel, the stops editor, road times from
+openrouteservice when the key is set, the estimate otherwise); permissions per person
+with locked menu items and Settings → Users; the issues centre (the bell, the Issues
+pages, a vehicle problem that closes the driver's report when resolved); office
+notifications by web push (Settings → Notifications, web only) and the installable web
+app; the driver's accept and decline with "Needs a driver" and reassign from
+suggestions; custodians, the request timeline, booking by vehicle type in one step
+("Assign now"), cancelling a booking, and the self-drive switch in Settings → Fleet.
+
 ```bash
 cd apps/office && npm install && cp .env.example .env.local   # add the publishable key
 npm run dev                                                   # http://localhost:5173
@@ -219,10 +229,12 @@ dialog, and a task in progress is covered until Location is back.
 ## Office rules, connector and API
 
 Everything the office can do is a tool in `supabase/functions/_shared/fleet`
-(34 tools, no raw SQL, no deletes). `roles.ts` says which role may call
-which tool; `run.ts` runs a call for a person: the role check, the audit row
-(with the person's name and the channel), the tool, the outcome. Two thin
-wrappers use it:
+(49 tools, no raw SQL, no deletes). `permissions.ts` says which permission each
+tool needs (view, request, approve, assign_tasks, vehicles, issues, users; a
+person holds any set of them, `roles.ts` keeps the role as a label); `run.ts`
+runs a call for a person: the permission check, the audit row (with the
+person's name and the channel), the tool, the outcome. Two thin wrappers use
+it:
 
 - `office-mcp`, the connector Claude uses: an MCP server over Streamable
   HTTP at `https://hinurfsaxvplbyqgtozj.supabase.co/functions/v1/office-mcp/<KEY>/mcp`.
@@ -245,9 +257,9 @@ wrappers use it:
   the API refuse those roles until their session has done the second step.
   120 calls a minute per person; CORS allows `OFFICE_WEB_URL`.
 
-Roles: admin (everything, accounts), fleet_admin (runs the fleet), office
-(sees everything, assigns tasks and requests), staff (own vehicle requests),
-viewer (read only), driver (the app). The table is in `docs/office-web-plan.md`.
+Permissions per person (Settings → Users, with the presets Fleet admin, Dispatcher,
+Requester, Viewer): the table is in `docs/dispatch-plan.md`, section 4.1. The role
+(admin, fleet_admin, office, staff, viewer, driver) is a label derived from them.
 
 Office accounts never involve a password in a chat: `create_office_user`
 returns a one-time set-password link (sent by WhatsApp), `reset_office_password`
@@ -443,7 +455,8 @@ touches the real project.
 source ~/.nvm/nvm.sh && nvm use
 npx supabase start
 
-# 1. Database access rules (needs an empty local database)
+# 1. Database rules, pgTAP (needs an empty local database): access rules, permissions, the
+#    task plan, accept/decline, issues, notifications, custodians and booking
 npx supabase db reset --local
 npx supabase test db                 # last line: Result: PASS
 
@@ -453,7 +466,11 @@ npx supabase test db                 # last line: Result: PASS
 printf 'OFFICE_MCP_KEY=%s\nSERVER_KEY=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 24)" > /tmp/office-mcp.env
 npx supabase functions serve --env-file /tmp/office-mcp.env                   # all functions; leave running
 scripts/test-mcp-local.sh /tmp/office-mcp.env                                 # in a second terminal
-# After a change that is meant to alter a tool's answer: scripts/snapshot-tool-shapes.py --write
+# After a change that is meant to alter a tool's answer: SHAPES=write scripts/test-mcp-local.sh /tmp/office-mcp.env
+# Run it between 01:40 and 21:15 Colombo: the route checks straddle midnight before that,
+# and after 21:15 the tasks fall on tomorrow. With VAPID keys in the env file the suite
+# pushes a real encrypted notification into a sink on the laptop; without them it checks
+# the dead rows instead.
 
 npx supabase stop                    # when finished
 ```
@@ -464,7 +481,7 @@ on the laptop, so it runs in Docker):
 ```bash
 docker run --rm --cpus 2 --memory 2g -v deno-cache:/deno-dir -v "$PWD/supabase/functions:/fn:ro" \
   -w /fn denoland/deno:alpine \
-  sh -c 'cd /fn/_shared/fleet && deno check index.ts && deno lint && deno fmt --check && deno test geo_test.ts gaps_test.ts \
+  sh -c 'cd /fn/_shared/fleet && deno check index.ts && deno lint && deno fmt --check && deno test \
          && cd /fn/office-mcp && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/office-api && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/read-odometer && deno check index.ts && deno lint && deno fmt --check \

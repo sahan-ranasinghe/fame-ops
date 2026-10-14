@@ -42,10 +42,15 @@
   (Expo push + FCM, `device_tokens`, trigger `tasks_notify_push` → pg_net → Edge Function
   `push-task`) and task sounds (channels with bundled sounds, expo-audio in the app).
   Details: `docs/push-notifications-plan.md`.
-- **C (later)**: Project costs, Maintenance, Mileage and Drivers office pages; road distance /
-  ETA (routing API); WhatsApp automation; pushing costs to
+- **Phase 5 (done, 14 October 2026)**: dispatch with stops and a planned leave-by time,
+  permissions per person, the issues centre, office notifications (web push) and the
+  installable web app, the driver's accept / decline, custodians and booking by vehicle type
+  in one step. Plan and as-built notes: `docs/dispatch-plan.md`; test plan:
+  `docs/phase5-test-plan.md`; the driver strings for the Sinhala check:
+  `docs/phase5-sinhala-strings.md`.
+- **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
-  boss's OK; tables may exist, no UI yet).
+  boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
 
 ## Hard rules
 1. Drivers never need a Claude account.
@@ -80,8 +85,9 @@
 7. Money: LKR stored as integer cents (bigint).
 8. No Zoho calls from our code. The office's existing Zoho connector in Claude reads Zoho
    and sends us projects through `import_projects`.
-9. Location is recorded only while "Sharing my location" is on. Starting a task turns it
-   on automatically; the driver can turn it off when not working.
+9. Location is recorded only while "On duty" is on (the app's wording since Phase 5; the
+   code and the tables still say sharing). Starting a task turns it on automatically; the
+   driver can turn it off when not working.
 
 ## Environment notes (Sahan's laptop)
 - Ubuntu, Node managed by nvm. The default Node (v22) belongs to another project: never
@@ -291,7 +297,9 @@
   running task's ETA and "late by N min". `fleet_settings` (key, value jsonb, updated_by):
   dwell_min, buffer_min, base_place_id (null until an admin picks a real place: no seeded
   sample place), avg_speed_kmh, road_factor, accept_within_min, accept_before_leave_min,
-  rush_hour. The pg_cron job `task-reminders` (every minute) queues leave_30 / leave_now
+  rush_hour, self_drive_allowed (default true; off = every booking needs a driver, the
+  request form hides "A driver is needed" and the custodian-drives path). The pg_cron job
+  `task-reminders` (every minute) queues leave_30 / leave_now
   pushes through `send_push`.
 - `task_stops`: id, task_id, seq, type ('pickup'|'drop'|'visit'), place_id (nullable),
   place_name, address, lat/lng (nullable), status ('pending'|'arrived'|'done'|'skipped'|
@@ -614,9 +622,10 @@ office_audit.
   in progress or declined); `reassign_task(task_id, driver?, vehicle?, start_time?)` (shifts
   leave_by and the planned times; a declined task goes back to assigned, the decline cleared,
   result `was: "declined"`). `list_drivers` adds `last_30_days {accepted, declined}`.
-- Settings: `get_settings` (view, assign_tasks or approve), `update_settings(key, value)` and
-  `routing_usage(days?)` (users). Tool answers never carry null fields (run.ts prunes
-  them): a null setting such as base_place_id is simply absent.
+- Settings: `get_settings` (any office permission: the request form reads
+  `self_drive_allowed`), `update_settings(key, value)` and `routing_usage(days?)` (users).
+  Tool answers never carry null fields (run.ts prunes them): a null setting such as
+  base_place_id is simply absent.
 - Requests: `create_request(..., driver_required?)` (a staff member asks in their own name;
   result `next` "Sent to the fleet admin · you'll be notified."), `list_requests(status?
   waiting|approved|declined|cancelled|all)` (cards carry `timeline {sent, seen, decided,
@@ -652,9 +661,10 @@ office_audit.
   them), `find_project(text)`.
 
 ## Not now
-Office artifact (Phase B); project costs, maintenance and driver pages, FCM push, routing
-and ETA, WhatsApp as a location source or automated WhatsApp sending (use wa.me links),
-Zoho cost push, allowance claims UI (Phase C); HR; iOS; Play Store.
+Project costs, WhatsApp as a location source or automated WhatsApp sending (use wa.me links),
+Zoho cost push, allowance claims UI (Phase C); an audit page; the e-mail channel for office
+notifications (designed, `dead: email_not_implemented`); Google routing (code path present, no
+key); a Claude Teams OAuth connector; road snapping of GPS lines; HR; iOS; Play Store.
 
 ## Working rules for Claude Code
 - Explain each command before running anything that changes Supabase (migrations,

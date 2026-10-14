@@ -95,6 +95,7 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "create_request",
     "list_requests",
     "find_project",
+    "get_settings",
     "my_notification_settings",
     "set_my_notification_settings",
     "register_web_push",
