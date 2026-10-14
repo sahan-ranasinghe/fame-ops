@@ -11,3 +11,6 @@ apps/driver/google-services.json
 dist-artifact/
 test-results/
 playwright-report/
+
+# Real site lists (data/sites/*.xlsx) and anything else dropped in data/: never in git
+data/
