@@ -418,6 +418,65 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
   runs and the driver is off duty, disarmed when On duty is switched on, armed again when it
   is switched off; tapping opens Today. Nothing else is asked of drivers.
 
+### 6.1 Part 2 as built (14 October 2026, branch `phase6-2-approvals`)
+
+- Migration `20261014180000_phase6_requests.sql`: `vehicle_requests.version` (bumped on every
+  edit and decision), `changed_at / changed_by / change_note`, `previous` (the fields before
+  the last edit), `on_behalf_of`, status `changed` (= approved and edited since; `changed_at`
+  marks it and is cleared when decided again); `request_events` (created, seen, edited,
+  approved, declined, changed, redecided, postponed, cancelled; actor, note, changes; read
+  through RLS by approvers and by the requester for their own; backfilled from the columns);
+  `task_assignment_events.changes` and the action `changed`; the leave-by backfill;
+  `get_driver_settings()` (shift_start, shift_days; a driver may read nothing else);
+  `send_push(…, p_extra)` and a `tasks_notify_push` that names what changed (time, end_by,
+  vehicle, title, stops = plan_json changed, passengers, notes); `office_book_vehicle` carries
+  on_behalf_of. pgTAP: `phase6_requests.test.sql`.
+- Tools (`_shared/fleet`): `availability(at, until?, need_type?, pax?)` (`availability.ts`:
+  `driverAvailability` pure, with `availability_test.ts`; the vehicles through
+  `availabilityFor`, now shared with `suggest_vehicles`), `update_request` and
+  `redecide_request` (`requests_rules.ts`: `requestDiff`, `diffText`, `statusAfterEdit`,
+  `checkVersion`, `canRedecide`, with `requests_edit_test.ts`), `update_task` on top of
+  `changeTask` in `tools/tasks.ts` (also used by redecide: a moved time shifts the planned
+  times; a new driver gets the task as new; a route replaces the pending stops through
+  `office_update_task_stops` and re-plans from the new leave time; one history event with the
+  diff; `booking.changed` to the requester and the custodian, `vehicle.booking_cancelled` to a
+  custodian whose vehicle is no longer used). `create_request` / `book_vehicle` take
+  `on_behalf_of` (`requested_by` is now optional: the request is in the asker's name).
+  `list_requests`: `status=waiting` includes `changed`, `status=changed` alone; cards carry
+  `version`, `on_behalf_of`, `fields` (date, time, back_by, route, need_type, pax, tools, note,
+  driver_required, on_behalf_of: what the edit form needs), `changed`, `changes` (previous →
+  now, for a changed one), `timeline.changed`, `events[]`. `task_detail.task` adds `date` and
+  `time`; `assignment_history[]` rows add `changes`. `list_drivers` adds `on_duty_since` /
+  `off_duty_since`, `live_drivers` `on_duty_since`. `fleet_overview` and the `request_waiting`
+  issue count a changed booking as waiting (from its edit). Events `request.changed`
+  (approvers), `request.redecided` (the requester), `booking.changed` (requester + custodian).
+  Settings `shift_start` (HH:MM) and `shift_days` (0 = Sunday … 6). Every decision bumps the
+  version. push-task: "Task changed: new time 09:30 · vehicle WP KL-1234 · stops changed" in
+  en and si. Deno: 108 tests. `tool-shapes.json` rewritten (SHAPES=write).
+- Web: `AvailabilityPanel` (`availabilityLogic.ts`: tones, the line, the arguments; 400 ms
+  after the time settles, every 60 s while open; a click fills the driver) on the decide page,
+  the request form's "Assign now", the task form and the task edit page; "On behalf of" on the
+  request form (everyone asks in their own name; "Who needs it" is gone); `/requests/:id/edit`
+  (`RequestEdit`: `editFields`, `updateRequestInput`; "This booking is approved: your change
+  needs re-approval"); the decide page's second mode for an approved or changed booking (what
+  changed, Keep as asked / Change the vehicle, driver, day, time or back-by / Decline;
+  `redecideInput`); the request detail and list show "Changed · needs re-approval" with the diff,
+  Edit request, Review on a changed one, a Changed filter, "for X"; the timeline comes from
+  the events (`timelineSteps`, `diffLines`). `/tasks/:id/edit` uses `update_task` for the
+  day, leave-by, end time, driver, vehicle, title, passengers, contact and notes (the words
+  only while under way) with the task's plan_version; the history card prints each change's
+  diff. Presence on Drivers, the live card and the driver page. Settings → Fleet: the shift
+  nudge's time and days. Vitest 103; Playwright adds "a requester changes an approved booking;
+  the approver sees who is available and keeps it; a task is changed with its history".
+- Driver app: `get_driver_settings` on every refresh (`fetchDriverSettings`, cached);
+  `armShiftNudge` / `disarmShiftNudge` in `lib/notifications.ts` (one weekly local
+  notification per day on the `general` channel, armed while signed in and off duty,
+  disarmed when On duty goes on and on sign-out; nothing is rescheduled while the settings and
+  texts are the ones already scheduled); strings `shift.title` / `shift.body` (en + si).
+- The connector suite's section 3b covers the edit (waiting stays waiting; approved becomes
+  changed), stale versions, keep / postpone / change / decline, `update_task` with the history
+  and the planned times, `availability`, presence and the shift settings.
+
 ## 7. Part 3: the Fuel tab and the videos
 
 ### 7.1 Driver app

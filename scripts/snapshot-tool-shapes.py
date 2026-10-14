@@ -120,6 +120,8 @@ def main():
         ("task_board", {"date": board.get("date")}),
         ("list_requests", {"status": "all"}),
         ("list_requests", {"status": "waiting"}),
+        ("list_requests", {"status": "changed"}),
+        ("availability", {"at": f"{board.get('date')} 09:00", "until": "12:00"}),
         ("mileage_summary", {}),
         ("mileage_summary", {"vehicle": reg_no}),
         ("mileage_summary", {"driver": driver}),

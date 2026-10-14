@@ -13,7 +13,10 @@
 //     when positions have stopped arriving while sharing is on (the phone has
 //     killed the app). Tapping it opens the app, which restarts sharing.
 //   - a new task seen through Realtime, only on a phone with no push token;
-//   - the "test sound" on the Permissions screen.
+//   - the "test sound" on the Permissions screen;
+//   - the shift nudge (Phase 6): "At work? Switch On duty" at the fleet's
+//     shift_start on each of shift_days, armed while the driver is off duty
+//     and disarmed when On duty is switched on. Tapping it opens Today.
 
 import * as Notifications from 'expo-notifications';
 
@@ -183,4 +186,55 @@ export function tapData(response: Notifications.NotificationResponse | null | un
 export function onNotificationTap(callback: (data: TapData) => void): () => void {
   const subscription = Notifications.addNotificationResponseReceivedListener((response) => callback(tapData(response)));
   return () => subscription.remove();
+}
+
+/** The shift nudge's time and days (0 = Sunday … 6 = Saturday, as the office stores them). */
+export interface ShiftSettings {
+  shift_start: string;
+  shift_days: number[];
+}
+
+const SHIFT_ID = (day: number) => `shift-${day}`;
+
+/**
+ * Schedules the nudge: one weekly notification per day, at the shift's start.
+ * Cheap to call often: nothing is touched while the settings and texts are the
+ * ones already scheduled.
+ */
+export async function armShiftNudge(settings: ShiftSettings, texts: { title: string; body: string }): Promise<void> {
+  const want = JSON.stringify({ ...settings, ...texts });
+  if (getJson<string>(KEYS.shiftArmed) === want) return;
+  const m = /^(\d{2}):(\d{2})$/.exec(settings.shift_start);
+  if (!m) return;
+  try {
+    if (!(await notificationsAllowed())) return;
+    await ensureChannels();
+    await disarmShiftNudge();
+    for (const day of settings.shift_days) {
+      await Notifications.scheduleNotificationAsync({
+        identifier: SHIFT_ID(day),
+        content: { title: texts.title, body: texts.body, data: { kind: 'shift' } },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+          weekday: day + 1, // Expo counts Sunday as 1
+          hour: Number(m[1]),
+          minute: Number(m[2]),
+          channelId: CHANNELS.general,
+        },
+      });
+    }
+    setJson(KEYS.shiftArmed, want);
+  } catch {
+    // Notifications not allowed, or the trigger refused: the Today screen still shows the On duty switch.
+  }
+}
+
+/** Cancels the nudge (the driver went on duty, or signed out). */
+export async function disarmShiftNudge(): Promise<void> {
+  remove(KEYS.shiftArmed);
+  try {
+    for (let day = 0; day <= 6; day++) await Notifications.cancelScheduledNotificationAsync(SHIFT_ID(day));
+  } catch {
+    // Nothing was scheduled.
+  }
 }

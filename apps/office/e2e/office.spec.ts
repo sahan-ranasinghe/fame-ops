@@ -268,7 +268,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByTestId("notifications")).toContainText(/in this browser|not switched on for the office/);
   const requestBox = page.getByRole("checkbox", { name: "A vehicle request comes in" });
   await expect(requestBox).toBeChecked();
-  await expect(page.getByRole("checkbox")).toHaveCount(8);
+  await expect(page.getByRole("checkbox")).toHaveCount(11);
   await requestBox.uncheck();
   await expect(page.getByRole("status")).toHaveText("Saved");
   await page.reload();
@@ -328,15 +328,16 @@ test("a requester-only user sees only their own screens in the menu, a No access
   // Their notifications: the one event a requester can get.
   await page.goto("/settings/notifications");
   await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
-  // Their decided-request event, plus the two custodian events everyone can get.
-  await expect(page.getByRole("checkbox")).toHaveCount(3);
+  // Their decided and redecided request events, plus the three booking events everyone can get.
+  await expect(page.getByRole("checkbox")).toHaveCount(5);
   await expect(page.getByRole("checkbox", { name: "Your request is decided" })).toBeChecked();
 
-  // A new request (its own page) has no "Who needs it" field: it is in their own name.
+  // A new request (its own page) is in their own name; "On behalf of" is for someone else.
   await page.goto("/requests");
   await page.getByRole("link", { name: "New request" }).first().click();
   await expect(page).toHaveURL(/\/requests\/new$/);
   await expect(page.getByLabel("Who needs it")).toHaveCount(0);
+  await expect(page.getByLabel("On behalf of")).toBeVisible();
   await page.getByLabel("Time", { exact: true }).fill("09:00");
   await page.getByLabel("To", { exact: true }).fill("Galle");
   await page.getByRole("button", { name: "Save request" }).click();
@@ -377,22 +378,22 @@ test("a dispatcher (view + assign tasks) gets the tasks board, not mileage or th
   // Drafts: what was typed survives leaving the page; coming back offers Resume or Discard.
   await page.getByRole("link", { name: "New request" }).first().click();
   await expect(page).toHaveURL(/\/requests\/new$/);
-  await page.getByLabel("Who needs it").fill("Somebody");
+  await page.getByLabel("On behalf of").fill("Somebody");
   await page.getByLabel("Note").fill("Draft note");
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
   await page.getByRole("link", { name: "New request" }).first().click();
   await expect(page.getByTestId("draft-banner")).toContainText("Resume draft from");
-  await expect(page.getByLabel("Who needs it")).toHaveValue("");
+  await expect(page.getByLabel("On behalf of")).toHaveValue("");
   await page.getByRole("button", { name: "Resume" }).click();
-  await expect(page.getByLabel("Who needs it")).toHaveValue("Somebody");
+  await expect(page.getByLabel("On behalf of")).toHaveValue("Somebody");
   await expect(page.getByLabel("Note")).toHaveValue("Draft note");
   await expect(page.getByTestId("draft-banner")).toHaveCount(0);
   // Leave again, come back, discard: the form starts empty and the draft is gone.
   await page.getByRole("link", { name: "Overview" }).first().click();
   await page.goto("/requests/new");
   await page.getByRole("button", { name: "Discard" }).click();
-  await expect(page.getByLabel("Who needs it")).toHaveValue("");
+  await expect(page.getByLabel("On behalf of")).toHaveValue("");
   await page.reload();
   await expect(page.getByTestId("draft-banner")).toHaveCount(0);
 });
@@ -440,7 +441,7 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await page.getByTestId("suggestions").getByRole("button", { name: d2.name }).click();
   await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(d2.username);
   await page.getByRole("button", { name: "Reassign" }).click();
-  await expect(page.getByRole("status")).toHaveText("Task changed");
+  await expect(page.getByRole("status")).toHaveText("Task sent to the driver");
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+(\?date=.*)?$/);
   await expect(detail.getByTestId("history")).toContainText("Declined");
   await expect(detail.getByTestId("history")).toContainText("Reassigned");
@@ -545,7 +546,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
 
   // New request → Assign now: the Free group lists the pool van; pick it and a free driver; Book now.
   await page.goto("/requests/new");
-  await page.getByLabel("Who needs it").fill("Someone from HR");
+  await page.getByLabel("On behalf of").fill("Someone from HR");
   await page.getByLabel("Day").fill(day);
   await page.getByLabel("Time", { exact: true }).fill("09:30");
   await page.getByLabel("To", { exact: true }).fill("Galle");
@@ -570,8 +571,8 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await page.getByLabel("Cancel this booking with a reason").fill("Trip called off");
   await page.getByRole("button", { name: "Cancel booking" }).click();
   await expect(page.getByRole("status")).toHaveText("Booking cancelled");
-  const cancelled = await tool<{ requests: { requested_by: string; status: string; cancel_reason?: string; task_id?: string }[] }>("list_requests", { status: "cancelled" });
-  const mine = cancelled.requests.find((r) => r.requested_by === "Someone from HR");
+  const cancelled = await tool<{ requests: { requested_by: string; on_behalf_of?: string; status: string; cancel_reason?: string; task_id?: string }[] }>("list_requests", { status: "cancelled" });
+  const mine = cancelled.requests.find((r) => r.on_behalf_of === "Someone from HR" && r.requested_by === "E2E Booker");
   expect(mine?.cancel_reason).toBe("Trip called off");
   const board = await tool<{ counts: { cancelled: number } }>("task_board", { date: day });
   expect(board.counts.cancelled).toBeGreaterThan(0);
@@ -585,10 +586,115 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await selfDrive.uncheck();
   await expect(page.getByRole("status")).toHaveText("Setting saved");
   await page.goto("/requests/new");
-  await expect(page.getByLabel("Who needs it")).toBeVisible();
+  await expect(page.getByLabel("On behalf of")).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "A driver is needed" })).toHaveCount(0);
   // Back on through the tool (the same save as the untick above; the local runtime sometimes drops a second call).
   await tool("update_settings", { key: "self_drive_allowed", value: true });
   await page.goto("/settings/fleet");
   await expect(page.getByRole("checkbox", { name: /Self-drive bookings allowed/ })).toBeChecked();
+});
+
+test("a requester changes an approved booking; the approver sees who is available and keeps it; a task is changed with its history", async ({ page }) => {
+  const approverEmail = `e2e.p6a.${stamp}@fame.test`;
+  const requesterEmail = `e2e.p6r.${stamp}@fame.test`;
+  const requester = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E P6 Requester", email: requesterEmail, permissions: ["request"] });
+  const driver = { name: `E2E P6 Driver ${stamp}`, code: `E2P-${stamp}`, username: `e2p.${stamp}`, pin: "864209" };
+  await tool("create_driver", driver);
+  const plate = `WP E2P-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 9, current_odometer_km: 300 });
+  // Four days ahead (Colombo), so nothing else of the suite shares the day.
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(Date.now() + 4 * 864e5));
+  const landingOf = async (link: string) => {
+    const verify = await fetch(link, { redirect: "manual" });
+    const landing = verify.headers.get("location") ?? "";
+    return "/" + landing.slice(landing.indexOf("#"));
+  };
+  const setPassword = async (link: string, password: string) => {
+    await page.goto(await landingOf(link));
+    await page.getByLabel("New password").fill(password);
+    await page.getByLabel("Again").fill(password);
+    await page.getByRole("button", { name: "Save password" }).click();
+  };
+  const signOut = async () => {
+    await page.goto("/more");
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+  };
+  const visitor = `A visitor ${stamp}`;
+  const requesterPassword = `P6 requester ${stamp}!`;
+  const approverPassword = `P6 approver ${stamp}!`;
+
+  // 1. The requester asks, on behalf of a visitor.
+  await setPassword(requester.set_password_link, requesterPassword);
+  await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
+  await page.goto("/requests/new");
+  await page.getByLabel("On behalf of").fill(visitor);
+  await page.getByLabel("Day").fill(day);
+  await page.getByLabel("Time", { exact: true }).fill("09:00");
+  await page.getByLabel("Back by").fill("12:00");
+  await page.getByLabel("To", { exact: true }).fill("Galle");
+  await page.getByRole("button", { name: "Save request" }).click();
+  await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
+  const row = page.locator("tr", { hasText: visitor });
+  await expect(row).toBeVisible();
+  const list = await tool<{ requests: { id: string; on_behalf_of?: string; version: number }[] }>("list_requests", { status: "waiting" });
+  const req = list.requests.find((r) => r.on_behalf_of === visitor)!;
+  expect(req.version).toBe(0);
+
+  // The office approves it (through the connector, as Claude would).
+  const approved = await tool<{ task_id: string }>("decide_request", { request_id: req.id, decision: "approve", vehicle: plate, driver: driver.username, decided_by: "E2E P6 Approver" });
+
+  // 2. The requester changes the approved booking: it needs re-approval.
+  await page.goto(`/requests/${req.id}`);
+  await expect(page.getByTestId("request-timeline")).toContainText("Approved");
+  await page.getByRole("link", { name: "Edit request" }).click();
+  await expect(page).toHaveURL(new RegExp(`/requests/${req.id}/edit$`));
+  await expect(page.getByText("your change needs re-approval")).toBeVisible();
+  await page.getByLabel("Time", { exact: true }).fill("09:30");
+  await page.getByLabel("To", { exact: true }).fill("Matara");
+  await page.getByRole("button", { name: "Save · ask for re-approval" }).click();
+  await expect(page.getByRole("status")).toHaveText("Changed · the office will decide again");
+  await expect(page).toHaveURL(new RegExp(`/requests/${req.id}$`));
+  await expect(page.getByTestId("changed-notice")).toContainText("needs re-approval");
+  await expect(page.getByTestId("changes")).toContainText("to Galle → Matara");
+  await expect(page.getByTestId("changes")).toContainText("09:30");
+  await expect(page.getByTestId("request-timeline")).toContainText("Changed · needs re-approval");
+  await signOut();
+
+  // 3. The approver: the changed booking is in the queue; the decide page shows what changed and who is available; Keep as asked.
+  // (Their set-password link is made now: a link is one use, and it is used right away.)
+  const approver = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E P6 Approver", email: approverEmail, permissions: ["view", "request", "approve", "assign_tasks"] });
+  await setPassword(approver.set_password_link, approverPassword);
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await page.goto("/requests");
+  await expect(page.locator("tr", { hasText: visitor })).toContainText("Changed");
+  await page.getByRole("button", { name: "Changed", exact: true }).click();
+  await page.locator("tr", { hasText: visitor }).getByRole("link", { name: "Review" }).click();
+  await expect(page).toHaveURL(new RegExp(`/requests/${req.id}/decide$`));
+  await expect(page.getByRole("heading", { name: "Decide the change" })).toBeVisible();
+  await expect(page.getByTestId("changes")).toContainText("to Galle → Matara");
+  await expect(page.getByTestId("availability")).toContainText(driver.name, { timeout: 15000 });
+  await expect(page.getByTestId("availability").locator(".avail-row", { hasText: driver.name })).toContainText(/Busy|Free/);
+  await page.getByRole("button", { name: "Keep as asked" }).click();
+  await expect(page.getByText("Kept as asked.")).toBeVisible();
+  const after = await tool<{ task: { start: string; plan_version: number }; stops: { place: string }[]; assignment_history: { action: string; changes?: Record<string, { to?: string }> }[] }>("task_detail", { task_id: approved.task_id });
+  expect(after.task.start.endsWith("09:30")).toBe(true);
+  expect(after.stops[after.stops.length - 1].place).toBe("Matara");
+  expect(after.assignment_history[after.assignment_history.length - 1].action).toBe("changed");
+
+  // 4. The task's edit page: who is available beside the picks; a note and a later end time; the history shows the diff.
+  await page.goto(`/tasks/${approved.task_id}/edit`);
+  await expect(page.getByRole("heading", { name: "Change the task" })).toBeVisible();
+  await expect(page.getByTestId("availability")).toContainText(driver.name, { timeout: 15000 });
+  await page.getByLabel("Vehicle free again by").fill("13:00");
+  await page.getByLabel("Notes for the driver").fill("Bring the ladder");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByRole("status")).toHaveText("Task changed");
+  await expect(page).toHaveURL(new RegExp(`/tasks/${approved.task_id}$`));
+  const history = page.getByTestId("history");
+  await expect(history).toContainText("Changed");
+  await expect(history).toContainText("end by 12:00 → 13:00");
+  await expect(history).toContainText("notes — → Bring the ladder");
+  // Stale version: a second tab's old plan_version is refused by the server.
+  await expect(tool("update_task", { task_id: approved.task_id, plan_version: 0, notes: "late" })).rejects.toThrow(/changed since you loaded it/);
 });

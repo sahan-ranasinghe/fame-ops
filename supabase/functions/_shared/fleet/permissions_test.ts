@@ -100,6 +100,7 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "set_my_notification_settings",
     "register_web_push",
     "remove_web_push",
+    "update_request",
   ]);
   assertEquals(toolsFor(PRESETS.viewer.permissions, names), [
     "fleet_overview",
@@ -120,6 +121,14 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
   assertEquals(allows(["approve"], "plan_task"), true);
   assertEquals(allows(["approve"], "update_task_stops"), false);
   assertEquals(allows(["users"], "update_settings"), true);
+  // Phase 6: the requester edits, the approver decides again, the dispatcher changes a task, both see who is available.
+  assertEquals(allows(["request"], "update_request"), true);
+  assertEquals(allows(["request"], "redecide_request"), false);
+  assertEquals(allows(["approve"], "redecide_request"), true);
+  assertEquals(allows(["approve"], "availability"), true);
+  assertEquals(allows(PRESETS.dispatcher.permissions, "availability"), true);
+  assertEquals(allows(PRESETS.dispatcher.permissions, "update_task"), true);
+  assertEquals(allows(PRESETS.viewer.permissions, "availability"), false);
   assertEquals(toolsFor([...PERMISSIONS], names), names);
   assertEquals(normalisePermissions(["users", "view", "boss", "view", 3]), ["view", "users"]);
   assertEquals(normalisePermissions(undefined), []);

@@ -2,7 +2,8 @@
 import type { DraftControls } from "../data/drafts";
 import { clock } from "../lib/format";
 
-export function DraftBanner({ draft }: { draft: DraftControls }) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function DraftBanner({ draft }: { draft: DraftControls<any> }) {
   if (!draft.saved) return null;
   return (
     <div className="draft-banner" role="status" data-testid="draft-banner">

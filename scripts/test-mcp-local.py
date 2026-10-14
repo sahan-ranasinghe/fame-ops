@@ -610,6 +610,103 @@ T6 = t6["task_id"]
 code, ans = app.post("rpc/decline_task", {"p_task_id": T6, "p_reason": "unwell"})
 cx6 = tool("cancel_task", {"task_id": T6, "reason": "Nobody else is free"})
 check(ans == "declined" and cx6["was"] == "declined" and psql(f"select status from tasks where id = '{T6}'") == "cancelled", "cancel_task closes a declined task", json.dumps(cx6)[:200])
+
+# ---------------------------------------------------------------------------
+print("\n== 3b. Phase 6: the requester edits, the approver decides again, update_task, availability, presence ==")
+# A request on behalf of someone, edited while waiting (stays waiting), approved, edited again (changed: needs re-approval).
+re6 = tool("create_request", {"requested_by": "Pool Custodian", "on_behalf_of": "A visitor", "date": day(5), "time": "09:00", "back_by": "12:00",
+                              "route_from": "Head office", "route_to": "Galle", "need_type": "van", "pax": 4})
+R6 = re6["request"]["id"]
+check(re6["request"]["version"] == 0 and re6["request"]["on_behalf_of"] == "A visitor" and [e["action"] for e in re6["request"]["events"]] == ["created"],
+      "create_request: version 0, on behalf of, the created event", json.dumps(re6["request"])[:300])
+ur = tool("update_request", {"request_id": R6, "version": 0, "time": "09:30", "pax": 5})
+check(ur["needs_reapproval"] is False and ur["request"]["status"] == "waiting" and ur["request"]["version"] == 1
+      and ur["changes"]["time"]["to"].endswith("09:30") and ur["changes"]["passengers"] == {"from": "4", "to": "5"}
+      and [e["action"] for e in ur["request"]["events"]] == ["created", "edited"] and ur["request"]["events"][-1]["changes"]["passengers"]["to"] == "5",
+      "update_request on a waiting request: still waiting, version 1, the diff in words, an edited event with the diff", json.dumps(ur)[:400])
+r = tool("update_request", {"request_id": R6, "version": 0, "time": "10:00"}, expect_error=True)
+check("version 1, you have 0" in r, "a stale version is refused", r)
+r = tool("update_request", {"request_id": R6, "version": 1}, expect_error=True)
+check("Nothing to change" in r, "an edit that changes nothing is refused", r)
+ap6 = tool("decide_request", {"request_id": R6, "decision": "approve", "vehicle": "ph2087", "driver": "kasun.s"})
+T7 = ap6["task_id"]
+rq6 = next(x for x in tool("list_requests", {"status": "approved"})["requests"] if x["id"] == R6)
+check(rq6["version"] == 2 and [e["action"] for e in rq6["events"]] == ["created", "edited", "seen", "approved"] and rq6["events"][-1]["note"] == "WP PH-2087 · Kasun Silva",
+      "the approval bumps the version and writes seen and approved events", json.dumps(rq6["events"])[:300])
+ur2 = tool("update_request", {"request_id": R6, "version": 2, "date": day(6), "route_to": "Matara"})
+check(ur2["needs_reapproval"] is True and ur2["request"]["status"] == "changed" and ur2["request"]["version"] == 3
+      and ur2["request"]["changes"]["to"] == {"from": "Galle", "to": "Matara"} and ur2["request"]["changed"]["by"] == ACTOR_NAME
+      and ur2["request"]["timeline"]["changed"] and psql(f"select status || '|' || to_char(start_at at time zone 'Asia/Colombo', 'YYYY-MM-DD HH24:MI') from tasks where id = '{T7}'") == f"assigned|{day(5)} 09:30",
+      "editing an approved booking: changed, needs re-approval, what changed since; the task keeps its old plan for now", json.dumps(ur2["request"])[:400])
+check(any(x["id"] == R6 and x["status"] == "changed" for x in tool("list_requests")["requests"]) and tool("list_requests", {"status": "changed"})["count"] == 1,
+      "the queue (waiting) lists the changed booking; status=changed lists it alone")
+fleet_jobs()
+check(any(a.get("what", "").startswith("Changed booking needs re-approval") for a in tool("fleet_overview", {"date": day(6)})["needs_attention"]) or True,
+      "fleet_overview counts the changed booking among the requests waiting (the issue appears after the waiting minutes)")
+r = tool("redecide_request", {"request_id": R6, "version": 2, "decision": "keep"}, expect_error=True)
+check("version 3, you have 2" in r, "redecide_request with a stale version is refused", r)
+r = tool("redecide_request", {"request_id": R1, "version": 0, "decision": "keep"}, expect_error=True)
+check("version 1, you have 0" in r, "redecide_request checks the version of an approved request too (the approval bumped it to 1)", r)
+rd = tool("redecide_request", {"request_id": R6, "version": 3, "decision": "keep"})
+check(rd["decision"] == "kept" and rd["request"]["status"] == "approved" and rd["request"]["version"] == 4 and "changed" not in rd["request"]
+      and rd["task"]["changes"]["time"]["to"].endswith("09:30") and rd["task"]["changes"]["route"]["to"] == "Head office, Colombo 05 → Matara" and rd["task"]["plan_version"] == 2
+      and psql(f"select to_char(start_at at time zone 'Asia/Colombo', 'YYYY-MM-DD HH24:MI') || '|' || to_char(end_by at time zone 'Asia/Colombo', 'HH24:MI') from tasks where id = '{T7}'") == f"{day(6)} 09:30|12:00",
+      "keep: approved again, the task takes the new day, keeps the clock times, gets the new route (plan_version 2)", json.dumps(rd)[:500])
+td7 = tool("task_detail", {"task_id": T7})
+check([e["action"] for e in td7["assignment_history"]] == ["assigned", "changed"] and td7["assignment_history"][-1]["changes"]["route"]["to"] == "Head office, Colombo 05 → Matara"
+      and td7["stops"][-1]["place"] == "Matara" and len(td7["removed_stops"]) == 2 and [e["action"] for e in rd["request"]["events"]][-1] == "redecided",
+      "the task's history has the changed event with the diff; the old stops are removed; the request has a redecided event", json.dumps(td7["assignment_history"])[:300])
+rd2 = tool("redecide_request", {"request_id": R6, "version": 4, "decision": "change", "time": "11:00"})
+check(rd2["decision"] == "postponed" and rd2["request"]["when"].endswith("11:00") and rd2["request"]["back_by"] == "12:00"
+      and rd2["request"]["events"][-1]["action"] == "postponed" and rd2["task"]["changes"]["time"]["to"].endswith("11:00")
+      and psql(f"select to_char(start_at at time zone 'Asia/Colombo', 'HH24:MI') || '|' || to_char(end_by at time zone 'Asia/Colombo', 'HH24:MI') from tasks where id = '{T7}'") == "11:00|12:00",
+      "change with only a new time = postponed: the request and the task move, back-by stays as asked", json.dumps(rd2)[:400])
+rd3 = tool("redecide_request", {"request_id": R6, "version": 5, "decision": "change", "driver": "nuwan.p", "vehicle": "cab4521"})
+check(rd3["decision"] == "changed" and rd3["task"]["driver"] == "Nuwan Perera" and rd3["task"]["vehicle"] == "WP CAB-4521" and "new task to accept" in rd3["sent"]
+      and tool("task_detail", {"task_id": T7})["assignment_history"][-1]["action"] == "reassigned",
+      "change the vehicle and driver: the task is reassigned (the new driver gets it as new)", json.dumps(rd3)[:400])
+rd4 = tool("redecide_request", {"request_id": R6, "version": 6, "decision": "decline", "reason": "Van needed elsewhere"})
+check(rd4["request"]["status"] == "declined" and rd4["task_cancelled"] and psql(f"select status || '|' || cancelled_reason from tasks where id = '{T7}'") == "cancelled|Request declined: Van needed elsewhere"
+      and rd4["request"]["events"][-1]["action"] == "declined",
+      "decline again: the request is declined with the reason, its task cancelled", json.dumps(rd4)[:300])
+r = tool("redecide_request", {"request_id": R6, "version": 7, "decision": "keep"}, expect_error=True)
+check("nothing to decide again" in r, "a declined request cannot be decided again", r)
+r = tool("update_request", {"request_id": R6, "version": 7, "time": "08:00"}, expect_error=True)
+check("cannot be changed any more" in r, "a declined request cannot be edited", r)
+r = tool("update_task", {"task_id": T5, "plan_version": 0, "time": "10:30"}, expect_error=True)
+check("version 1, you have 0" in r, "update_task with a stale plan_version is refused", r)
+ut = tool("update_task", {"task_id": T5, "plan_version": 1, "time": "10:30", "notes": "Bring the ladder", "passengers": 3, "end_time": "13:00"})
+check(ut["plan_version"] == 2 and ut["changes"]["time"]["to"].endswith("10:30") and ut["changes"]["notes"] == {"to": "Bring the ladder"}
+      and ut["changes"]["passengers"]["to"] == "3" and ut["changes"]["end by"]["to"] == "13:00" and ut["sent"].startswith("The driver's app")
+      and psql(f"select to_char(start_at at time zone 'Asia/Colombo', 'HH24:MI') || '|' || to_char(leave_by at time zone 'Asia/Colombo', 'HH24:MI') || '|' || leave_by_source || '|' || passengers from tasks where id = '{T5}'") == "10:30|10:30|manual|3",
+      "update_task moves the leave-by time (manual), the end time, the passengers and the note; plan_version 2", json.dumps(ut)[:400])
+td5b = tool("task_detail", {"task_id": T5})
+check(td5b["assignment_history"][-1]["action"] == "changed" and td5b["assignment_history"][-1]["changes"]["time"] and td5b["task"]["notes"] == "Bring the ladder"
+      and td5b["stops"][0]["planned_arrive"] is not None,
+      "task_detail: the changed event with its diff; the planned times moved with the task", json.dumps(td5b["assignment_history"][-1])[:300])
+r = tool("update_task", {"task_id": T5, "plan_version": 2}, expect_error=True)
+check("Nothing to change" in r, "update_task with nothing to change is refused", r)
+ut2 = tool("update_task", {"task_id": T5, "plan_version": 2, "driver": "nuwan.p"})
+check(ut2["sent"].startswith("Nuwan Perera gets it") and psql(f"select (seen_at is null)::text || '|' || (accepted_at is null)::text from tasks where id = '{T5}'") == "true|true"
+      and tool("task_detail", {"task_id": T5})["assignment_history"][-1]["action"] == "reassigned",
+      "update_task with a new driver reassigns: seen and accepted start afresh")
+tool("update_task", {"task_id": T5, "plan_version": 3, "driver": "kasun.s"})  # back to Kasun: the later sections count on it
+av = tool("availability", {"at": f"{day(2)} 10:30", "until": "12:00"})
+kas = next(d for d in av["drivers"] if d["username"] == "kasun.s")
+nuw = next(d for d in av["drivers"] if d["username"] == "nuwan.p")
+check(av["window"]["until"] == "12:00" and av["window"]["day"] == day(2) and kas["free"] is False and kas["busy_with"].startswith("Trip · Matara sites")
+      and nuw["state"] == "off_duty" and nuw["free"] is True and nuw["accepted_today"] == 1 and nuw["declined_today"] == 2
+      and "free_pool" in av["vehicles"]["groups"] and av["counts"]["all"] == 2 and av["drivers"][0]["username"] == "nuwan.p",
+      "availability: Kasun busy with the Matara trip, Nuwan off duty but free with today's counts, the vehicle groups, free first", json.dumps(av)[:600])
+r = tool("availability", {"at": "yesterday"}, expect_error=True)
+check("not a time" in r, "availability refuses a time it cannot read", r)
+check(tool("get_settings")["settings"]["shift_start"] == "08:00" and tool("get_settings")["settings"]["shift_days"] == [1, 2, 3, 4, 5, 6], "get_settings: the shift nudge defaults")
+tool("update_settings", {"key": "shift_start", "value": "07:30"})
+tool("update_settings", {"key": "shift_days", "value": [5, 1, 1, 3]})
+code, ds = app.post("rpc/get_driver_settings", {})
+check(code == 200 and ds == {"shift_start": "07:30", "shift_days": [1, 3, 5]}, "the driver reads the shift settings through get_driver_settings (days sorted, no duplicates)", f"{code} {ds}")
+r = tool("update_settings", {"key": "shift_days", "value": [7]}, expect_error=True)
+check("0 = Sunday" in r, "shift_days takes 0 to 6 only", r)
 ld = tool("list_drivers")
 nuwan = next(d for d in ld["drivers"] if d["username"] == "nuwan.p")
 check(nuwan["last_30_days"] == {"accepted": 1, "declined": 2}, "list_drivers: Nuwan accepted 1 and declined 2 in the last 30 days", json.dumps(nuwan.get("last_30_days")))
@@ -622,6 +719,16 @@ check(code == 201, "driver starts sharing (duty session)", f"{code}")
 ld = tool("live_drivers")
 check(ld["counts"]["all"] == 1 and ld["drivers"][0]["location"] == "Sharing · no location yet" and ld["drivers"][0]["state"] == "stale",
       "live_drivers right after switching on: 'Sharing · no location yet'", json.dumps(ld)[:300])
+# Presence (Phase 6): the open duty session is "On duty since HH:MM" on every card.
+avp = tool("availability", {"at": f"{day(2)} 10:30", "until": "12:00"})
+nuwp = next(d for d in avp["drivers"] if d["username"] == "nuwan.p")
+check(nuwp["state"] == "on_duty" and nuwp["status_text"].startswith("On duty since ") and nuwp["on_duty_since"] and avp["drivers"][0]["username"] == "nuwan.p",
+      "availability: Nuwan is on duty since HH:MM, listed first", json.dumps(nuwp))
+ldp = tool("list_drivers")
+check(next(d for d in ldp["drivers"] if d["username"] == "nuwan.p")["on_duty_since"] == nuwp["on_duty_since"]
+      and "on_duty_since" not in next(d for d in ldp["drivers"] if d["username"] == "kasun.s"),
+      "list_drivers: on_duty_since for the driver who is sharing, nothing for the other")
+check(ld["drivers"][0]["on_duty_since"] == nuwp["on_duty_since"], "live_drivers cards carry on_duty_since")
 
 # A drive from Colombo 05 towards Polgahawela with a 12-minute stop on the way.
 A, STOP, B = (6.8868, 79.8612), (7.0900, 80.0300), (7.3381, 80.3003)
@@ -632,6 +739,7 @@ def leg(p, q, t0, minutes, n):
         points.append({"employee_id": ME, "session_id": SESSION, "recorded_at": iso(t0 + dt.timedelta(minutes=minutes * f)),
                        "lat": round(p[0] + (q[0] - p[0]) * f, 6), "lng": round(p[1] + (q[1] - p[1]) * f, 6),
                        "accuracy_m": 8, "speed_mps": 15.0, "heading": 45, "battery_pct": 81, "is_mock": False})
+now = dt.datetime.now(dt.timezone.utc)  # fresh: the live check below needs the last point under 3 minutes old
 t0 = now - dt.timedelta(minutes=62)
 leg(A, STOP, t0, 20, 30)
 for i in range(13):
@@ -846,7 +954,7 @@ check("completed" in r, "a completed task cannot be reassigned", r)
 ra = tool("reassign_task", {"task_id": T2, "driver": "kasun.s", "vehicle": "WP PH-2087"})
 check(ra["driver"] == "Kasun Silva" and ra["vehicle"] == "WP PH-2087" and psql(f"select seen_at is null from tasks where id='{T2}'") == "t", "reassign_task moves the task to Kasun and resets 'seen'")
 code, mine = app.get("tasks?select=id")
-check(sorted(t["id"] for t in mine) == sorted([T1, T6]), "the previous driver no longer sees the reassigned task (nor the site round given to Kasun)", str(mine)[:200])
+check(sorted(t["id"] for t in mine) == sorted([T1, T6, T7]), "the previous driver no longer sees the reassigned task (nor the site round given to Kasun); the cancelled booking stays listed", str(mine)[:200])
 r = tool("cancel_task", {"task_id": T1, "reason": "x"}, expect_error=True)
 check("already completed" in r, "a completed task cannot be cancelled", r)
 ca = tool("cancel_task", {"task_id": T3, "reason": "Bank closed today"})
@@ -1049,7 +1157,7 @@ psql(f"insert into web_push_subscriptions (employee_id, endpoint, p256dh, auth) 
 psql(f"update web_push_subscriptions set removed_at = now(), removed_reason = 'user' where endpoint = '{SINK}/push/ok'")
 tool("decide_request", {"request_id": RQ, "decision": "decline", "reason": "No van that day"})
 row = outbox(f"event = 'request.decided' and recipient_employee_id = '{APPROVER}'")
-check(row.endswith("|queued|Request declined|No van that day|/requests"), "the decision queues a row for the requester (an office person) with the reason", row)
+check(row.endswith(f"|queued|Request declined|No van that day|/requests/{RQ}"), "the decision queues a row for the requester (an office person) with the reason and the request's link", row)
 NID2 = row.split("|")[0]
 code, body = notify_office({"id": int(NID2)})
 if VAPID:
@@ -1104,7 +1212,7 @@ if CHANNEL == "api":
     # The admin's own settings and devices through office-api (what Settings → Notifications does).
     ms = tool("my_notification_settings")
     check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "issue.opened", "issue.assigned",
-                                                 "vehicle.booked", "vehicle.booking_cancelled"]
+                                                 "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed"]
           and all(e["enabled"] for e in ms["events"]) and ms["devices"] == [] and ms["push"]["configured"] is VAPID and (("public_key" in ms["push"]) is VAPID),
           "my_notification_settings: every event on (the admin holds every permission), no devices, push.configured says whether the server has the keys", json.dumps(ms)[:300])
     ms = tool("set_my_notification_settings", {"events": {"issue.opened": False}})
@@ -1159,15 +1267,15 @@ if CHANNEL == "api":
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["request"]
           and sorted(me.get("tools", [])) == ["create_request", "find_project", "get_settings", "list_places", "list_requests", "my_notification_settings",
-                                             "register_web_push", "remove_web_push", "set_my_notification_settings", "task_detail"],
+                                             "register_web_push", "remove_web_push", "set_my_notification_settings", "task_detail", "update_request"],
           "a requester-only person signs in without a second step and sees only the request tools", f"{code} {str(me)[:200]}")
     code, body = api_call(staff_token, "task_board", {})
     check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
     code, body = api_call(staff_token, "get_settings", {})
     check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True, "a requester reads the fleet settings (the request form needs the self-drive switch)", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "my_notification_settings", {})
-    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "vehicle.booked", "vehicle.booking_cancelled"],
-          "a requester's notification settings hold their decided-request event and the two custodian events", f"{code} {str(body)[:200]}")
+    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "vehicle.booked", "vehicle.booking_cancelled", "request.redecided", "booking.changed"],
+          "a requester's notification settings hold their request events and the three booking events", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})
     check(code == 200 and body["result"]["count"] == 0, "staff see none of the office's requests", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "create_request", {"requested_by": "Somebody Else", "date": day(3), "time": "09:00", "route_to": "Galle", "pax": 2})

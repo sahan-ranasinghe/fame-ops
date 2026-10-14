@@ -1,9 +1,9 @@
 // Pieces the request pages share: the four vehicle groups and one vehicle as
 // an option (the plate, what it is, how it stands, the custodian's links), and
 // the requester's timeline.
-import type { RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
+import type { FieldChanges, RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
 import { joinDots } from "../lib/format";
-import { timelineSteps } from "./requestLogic";
+import { diffLines, timelineSteps } from "./requestLogic";
 
 export const GROUPS: [keyof NonNullable<Suggestions["groups"]>, string][] = [
   ["free_pool", "Free"],
@@ -32,17 +32,32 @@ export function VehicleOption({ v, name, checked, disabled, onPick }: { v: Sugge
   );
 }
 
-/** The requester's timeline: sent → seen → decided / cancelled. */
+/** The requester's timeline: sent → seen → approved → changed → decided again / cancelled (from the events). */
 export function Timeline({ q }: { q: RequestCard }) {
   return (
     <ol className="rq-timeline" data-testid="request-timeline">
-      {timelineSteps(q).map((s) => (
-        <li key={s.label} className={s.done ? "done" : ""}>
+      {timelineSteps(q).map((s, i) => (
+        <li key={`${s.label}-${i}`} className={s.done ? "done" : ""}>
           <i className={`dot ${s.done ? "ok" : "muted"}`} />
-          <span><b>{s.label}</b>{s.at ? <span className="sub" style={{ display: "block" }}>{s.at}</span> : null}</span>
+          <span>
+            <b>{s.label}</b>
+            {s.at ? <span className="sub" style={{ display: "block" }}>{s.at}</span> : null}
+            {s.lines?.length ? <span className="sub" style={{ display: "block" }}>{s.lines.join(" · ")}</span> : null}
+          </span>
         </li>
       ))}
     </ol>
+  );
+}
+
+/** What changed, one line per field: "time Thu 15 Oct 09:00 → Thu 15 Oct 09:30". */
+export function ChangesList({ changes, testId = "changes" }: { changes?: FieldChanges | null; testId?: string }) {
+  const lines = diffLines(changes);
+  if (lines.length === 0) return null;
+  return (
+    <ul className="changes" data-testid={testId}>
+      {lines.map((l) => <li key={l}>{l}</li>)}
+    </ul>
   );
 }
 

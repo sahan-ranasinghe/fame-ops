@@ -19,6 +19,8 @@ import { Icon } from "../ui/icons";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { type AssignFields, driverWhatsApp, emptyAssign, planInput, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
+import { availabilityArgs } from "./availabilityLogic";
+import { AvailabilityPanel } from "./AvailabilityPanel";
 import { PlanPanel } from "./PlanPanel";
 import { planReasons } from "./planLogic";
 import { StopsRows } from "./StopsEditor";
@@ -211,6 +213,7 @@ export function NewTask() {
             </div>
           </div>
           {lists.error && (!lists.drivers || !lists.vehicles) && <Notice>Couldn’t load the {!lists.drivers && !lists.vehicles ? "drivers and vehicles" : !lists.drivers ? "drivers" : "vehicles"}: {lists.error} <button type="button" className="btn small" onClick={lists.reload}>Try again</button></Notice>}
+          <AvailabilityPanel args={availabilityArgs(f.date, f.leaveBy || preview?.leave_by?.slice(-5) || "", f.end)} picked={f.driver} onPick={(d) => { if (d.username) pickDriver(d.username); }} />
           <div className="grid2">
             <div className="field"><label htmlFor="af-end">Vehicle free by</label><input type="time" id="af-end" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
             <div className="field"><label htmlFor="af-pax">Passengers</label><input type="number" id="af-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>

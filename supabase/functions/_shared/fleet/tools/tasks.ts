@@ -31,6 +31,7 @@ import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { type Plan, type PlanPoint, type PlanStop, planTask as runPlanner, type StopType, type What } from "../plan.ts";
 import { legFnFor, providerFromEnv } from "../routing.ts";
 import { notifyEvent } from "../notifications.ts";
+import type { Actor } from "../roles.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
@@ -396,6 +397,7 @@ export interface BookingRequest {
   tools: boolean;
   note: string | null;
   driver_required: boolean;
+  on_behalf_of: string | null;
 }
 
 const stopRow = (s: ResolvedStop) => ({
@@ -1008,6 +1010,9 @@ export const taskDetail = tool({
           status: task.status,
           status_line: statusLine(task, latest.get(task.employee_id), now, driver),
           start: colomboDayTime(task.start_at),
+          // The day and clock as the edit form needs them.
+          date: colomboDate(task.start_at),
+          time: colomboTime(task.start_at),
           end_by: task.end_by ? colomboTime(task.end_by) : undefined,
           leave_by: task.leave_by ? colomboDayTime(task.leave_by) : undefined,
           leave_by_source: task.leave_by_source ?? undefined,
@@ -1104,6 +1109,7 @@ export const taskDetail = tool({
           vehicle: e.vehicle_id ? refs.veh.get(e.vehicle_id)?.reg_no : undefined,
           actor: e.actor ?? undefined,
           note: e.note ?? undefined,
+          changes: e.changes ?? undefined,
         })),
         suggestions: task.status === "declined" ? await freeAt(db, task.start_at, task.end_by, task.id) : undefined,
         from_request: requestRow
@@ -1164,6 +1170,308 @@ export async function unloggedBeforeStart(db: Db, startLog: Row<"odometer_logs">
     start_km: startLog.reading_km,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Changing a task (Phase 6, Part 2): the time, the end time, the driver, the
+// vehicle, the words, the route. Shared by update_task and redecide_request.
+// ---------------------------------------------------------------------------
+
+export interface TaskChanges {
+  /** ISO: the new leave-by time (a task not started yet). */
+  startAt?: string;
+  /** ISO, or null to clear; undefined = keep (it moves with the time). */
+  endBy?: string | null;
+  driver?: Employee;
+  vehicle?: Vehicle;
+  title?: string;
+  passengers?: number | null;
+  contactName?: string | null;
+  contactPhone?: string | null;
+  notes?: string | null;
+  /** Replace the pending stops with this route (a request's route after an edit) and re-plan. */
+  route?: { from: string; to: string };
+}
+
+export interface FieldChange {
+  from: string | null;
+  to: string | null;
+}
+
+export interface ChangedTask {
+  task: Task;
+  /** What changed, by label, in the office's words. */
+  changes: Record<string, FieldChange>;
+  warnings: string[];
+  plan_version: number;
+  driverChanged: boolean;
+}
+
+/** "time Thu 15 Oct 09:00 → Thu 15 Oct 09:30, vehicle WP CAB-4521 → WP KL-1234" */
+export const changesText = (changes: Record<string, FieldChange>): string =>
+  Object.entries(changes).map(([label, c]) => `${label} ${c.from ?? "—"} → ${c.to ?? "—"}`).join(", ");
+
+/**
+ * Applies changes to a task that has not finished. A moved time shifts the
+ * plan (the planned times move with it); a new driver gets the task as new
+ * (seen and accepted start afresh, the previous driver hears it is gone if he
+ * had accepted it); a declined task goes back to assigned; a route replaces the
+ * pending stops and re-plans. One history event carries the diff; the driver's
+ * push names the changed fields; a request's requester and the vehicle's
+ * custodian hear about a moved or re-equipped booking. `version` is the
+ * plan_version the caller loaded (refused when stale).
+ */
+export async function changeTask(
+  db: Db,
+  now: Date,
+  actor: Actor,
+  task: Task,
+  c: TaskChanges,
+  opts: { version?: number; note?: string; tellRequester?: boolean; allowNoop?: boolean } = {},
+): Promise<ChangedTask> {
+  if (task.status === "completed" || task.status === "cancelled") throw new ToolError(`This task is ${task.status}; it cannot be changed.`);
+  if (opts.version !== undefined && task.plan_version !== opts.version) {
+    throw new ToolError(
+      `This task changed since you loaded it (version ${task.plan_version}, you have ${opts.version}). Reload it and try again.`,
+    );
+  }
+  const running = task.status === "in_progress";
+  const wasDeclined = task.status === "declined";
+  if (running && (c.startAt || c.driver || c.vehicle || c.route || c.endBy !== undefined)) {
+    throw new ToolError("This task has started: its time, driver, vehicle and route cannot change now (the title, passengers, contact and notes can).");
+  }
+
+  const refs = await loadRefs(db);
+  const oldDriver = refs.emp.get(task.employee_id);
+  const oldVehicle = refs.veh.get(task.vehicle_id);
+  const driver = c.driver ?? oldDriver;
+  const vehicle = c.vehicle ?? oldVehicle;
+  if (!driver || !vehicle) throw new ToolError("The task's driver or vehicle no longer exists.");
+  const driverChanged = driver.id !== task.employee_id;
+  const vehicleChanged = vehicle.id !== task.vehicle_id;
+  const startAt = c.startAt ?? task.start_at;
+  const delta = new Date(startAt).getTime() - new Date(task.start_at).getTime();
+  const shift = (iso: string | null) => iso && delta !== 0 ? new Date(new Date(iso).getTime() + delta).toISOString() : iso;
+  const endBy = c.endBy !== undefined ? c.endBy : shift(task.end_by);
+  if (endBy && endBy <= startAt) throw new ToolError("The end time must be later than the leave-by time.");
+
+  const changes: Record<string, FieldChange> = {};
+  const note = (label: string, from: string | null, to: string | null) => {
+    if (from !== to) changes[label] = { from, to };
+  };
+  note("time", colomboDayTime(task.start_at), colomboDayTime(startAt));
+  note("end by", task.end_by ? colomboTime(task.end_by) : null, endBy ? colomboTime(endBy) : null);
+  note("driver", oldDriver?.name ?? null, driver.name);
+  note("vehicle", oldVehicle?.reg_no ?? null, vehicle.reg_no);
+  if (c.title !== undefined) note("title", task.title, c.title);
+  if (c.passengers !== undefined) note("passengers", task.passengers == null ? null : String(task.passengers), c.passengers == null ? null : String(c.passengers));
+  if (c.contactName !== undefined || c.contactPhone !== undefined) {
+    const was = [task.contact_name, task.contact_phone].filter(Boolean).join(" ") || null;
+    const next = [c.contactName === undefined ? task.contact_name : c.contactName, c.contactPhone === undefined ? task.contact_phone : c.contactPhone]
+      .filter(Boolean).join(" ") || null;
+    note("contact", was, next);
+  }
+  if (c.notes !== undefined) note("notes", task.notes, c.notes);
+  // A route is compared after resolving it (a typed "Head office" is the saved "Head office, Colombo 05"),
+  // so a request decided again with the same route keeps its stops and plan.
+  let newStops: ResolvedStop[] | null = null;
+  if (c.route) {
+    const existing = unwrap(await db.from("task_stops").select("*").eq("task_id", task.id).order("seq"), "stops");
+    const current = live(existing);
+    const from = current[0]?.place_name ?? null;
+    const to = current.length > 1 ? current[current.length - 1].place_name : null;
+    const nextSeq = existing.reduce((m, s) => Math.max(m, s.seq), 0) + 1;
+    const resolved = await resolveStops(db, colomboDate(startAt), { pickup: c.route.from, dropoff: c.route.to }, nextSeq);
+    const wantFrom = resolved[0]?.place_name ?? null;
+    const wantTo = resolved.length > 1 ? resolved[resolved.length - 1].place_name : null;
+    if (from !== wantFrom || to !== wantTo) {
+      newStops = resolved;
+      note("route", [from, to].filter(Boolean).join(" → ") || null, [wantFrom, wantTo].filter(Boolean).join(" → ") || null);
+    }
+  }
+  if (Object.keys(changes).length === 0 && !wasDeclined) {
+    if (opts.allowNoop) return { task, changes, warnings: [], plan_version: task.plan_version, driverChanged: false };
+    throw new ToolError("Nothing to change.");
+  }
+
+  // A new driver (or a driver who declined and gets it back) starts afresh: not seen, not accepted, no reminder yet.
+  const fresh = driverChanged || wasDeclined;
+  let version = task.plan_version + 1;
+  const updated = unwrap(
+    await db.from("tasks").update({
+      employee_id: driver.id,
+      vehicle_id: vehicle.id,
+      start_at: startAt,
+      end_by: endBy,
+      ...(delta !== 0 && { leave_by: startAt, leave_by_source: "manual" }),
+      ...(c.title !== undefined && { title: c.title }),
+      ...(c.passengers !== undefined && { passengers: c.passengers }),
+      ...(c.contactName !== undefined && { contact_name: c.contactName }),
+      ...(c.contactPhone !== undefined && { contact_phone: c.contactPhone }),
+      ...(c.notes !== undefined && { notes: c.notes }),
+      status: running ? "in_progress" : "assigned",
+      plan_version: version,
+      ...(fresh && { sent_at: now.toISOString(), seen_at: null, accepted_at: null, accept_reminder_sent_at: null }),
+      ...(wasDeclined && { declined_at: null, declined_by: null, declined_reason: null, declined_note: null, declined_after_accept: false }),
+    }).eq("id", task.id).eq("plan_version", task.plan_version).in("status", ["assigned", "declined", "in_progress"]).select("*"),
+    "task",
+  );
+  if (updated.length === 0) throw new ToolError("The task changed just now (the driver may have started or finished it). Reload it and try again.");
+  let saved: Task = updated[0];
+
+  if (newStops) {
+    // The pending stops are replaced by the route and the task is planned again from the (new) leave time.
+    const settings = await loadSettings(db);
+    const stops = newStops;
+    const start = saved.start_name
+      ? { place_id: saved.start_place_id, name: saved.start_name, lat: saved.start_lat, lng: saved.start_lng }
+      : await resolveStart(db, settings, undefined);
+    const plan = await makePlan(db, settings, {
+      now,
+      start,
+      stops,
+      returnToBase: saved.return_to_base,
+      avoidExpressway: saved.avoid_expressway,
+      leaveAt: startAt,
+      bufferMin: saved.buffer_min,
+    });
+    version = unwrap(
+      await db.rpc("office_update_task_stops", {
+        p_task_id: task.id,
+        p_version: version,
+        p_task: { leave_by: plan.leave_by, leave_by_source: plan.leave_by_source, start_at: plan.leave_by, plan_json: plan as unknown as Json },
+        p_stops: stops.map(stopRow),
+      }),
+      "task stops",
+    );
+    saved = await getTask(db, task.id);
+  } else if (delta !== 0) {
+    // The planned times move with the task.
+    const stops = unwrap(
+      await db.from("task_stops").select("id, planned_arrive_at, planned_depart_at").eq("task_id", task.id).neq("status", "removed"),
+      "stops",
+    );
+    for (const s of stops) {
+      if (!s.planned_arrive_at && !s.planned_depart_at) continue;
+      unwrap(
+        await db.from("task_stops").update({ planned_arrive_at: shift(s.planned_arrive_at), planned_depart_at: shift(s.planned_depart_at) }).eq("id", s.id),
+        "stop",
+      );
+    }
+  }
+
+  unwrap(
+    await db.from("task_assignment_events").insert({
+      task_id: task.id,
+      action: driverChanged ? "reassigned" : "changed",
+      employee_id: driver.id,
+      vehicle_id: vehicle.id,
+      actor: actor.name,
+      note: [opts.note, wasDeclined ? "after a decline" : null, changesText(changes) || null].filter(Boolean).join(" · ") || null,
+      changes: changes as unknown as Json,
+    }),
+    "assignment history",
+  );
+
+  // Who else hears: a request's requester and the vehicle's custodian about a moved or re-equipped booking;
+  // the previous vehicle's custodian that theirs is free again.
+  const moved = changes.time || changes["end by"] || changes.driver || changes.vehicle || changes.route;
+  if (moved) {
+    const request = task.request_id
+      ? unwrapMaybe(await db.from("vehicle_requests").select("requested_by_employee_id").eq("id", task.request_id).maybeSingle(), "vehicle request")
+      : null;
+    await notifyEvent(db, "booking.changed", {
+      title: `Booking changed · ${saved.title}`,
+      body: `${changesText(changes)} · ${actor.name}`,
+      url: task.request_id ? `/requests/${task.request_id}` : `/tasks?task=${task.id}`,
+      tag: task.request_id ? `request:${task.request_id}` : `task:${task.id}`,
+    }, {
+      actor: actor.employeeId,
+      requester: opts.tellRequester === false ? null : request?.requested_by_employee_id ?? null,
+      custodian: vehicle.custodian_employee_id,
+    });
+    if (vehicleChanged && oldVehicle?.custodian_employee_id && oldVehicle.custodian_employee_id !== vehicle.custodian_employee_id) {
+      await notifyEvent(db, "vehicle.booking_cancelled", {
+        title: `${oldVehicle.reg_no} no longer booked`,
+        body: `${saved.title} · now ${vehicle.reg_no} · ${colomboDayTime(startAt)}`,
+        url: `/tasks?task=${task.id}`,
+        tag: `task:${task.id}`,
+      }, { actor: actor.employeeId, custodian: oldVehicle.custodian_employee_id });
+    }
+  }
+
+  const warnings = running ? [] : await assignWarnings(db, { driver, vehicle, startAt, endBy, ignoreTaskId: task.id });
+  if (!running && new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
+  return { task: saved, changes, warnings, plan_version: version, driverChanged };
+}
+
+/** "" clears a text field (null); undefined keeps it. */
+const zClearable = (max: number) => z.string().trim().max(max).nullable().optional();
+const cleared = (v: string | null | undefined): string | null | undefined => v === undefined ? undefined : v === "" ? null : v;
+
+export const updateTask = tool({
+  name: "update_task",
+  title: "Change a task",
+  description:
+    "Changes a task that has not finished: the day and leave-by time (the plan shifts with it), the end time, the driver (they get it " +
+    "as a new task; the previous driver hears it is gone if they had accepted it), the vehicle, the title, passengers, contact and " +
+    'notes. The change goes into the task\'s history with what changed, and the driver\'s app says "Task changed: new time 09:30 · ' +
+    'vehicle WP KL-1234". plan_version must be the one task_detail showed. A task under way takes only the title, passengers, contact ' +
+    "and notes. Returns the same warnings as create_task.",
+  readOnly: false,
+  input: z.object({
+    task_id: zId,
+    plan_version: z.number().int().min(0).describe("From task_detail"),
+    date: zDate.optional().describe("New day, YYYY-MM-DD"),
+    time: zTime.optional().describe("New leave-by time, HH:MM"),
+    end_time: zTime.nullable().optional().describe("When the vehicle should be free again, HH:MM; null clears it"),
+    driver: zText(80).optional().describe("New driver: username, code or name"),
+    vehicle: zText(20).optional().describe("New vehicle plate"),
+    title: zText(120).optional(),
+    passengers: z.number().int().min(0).max(80).nullable().optional(),
+    contact_name: zClearable(120),
+    contact_phone: zClearable(30),
+    notes: zClearable(1000),
+  }),
+  async run(args, { db, now, actor }) {
+    if (args.date) realDate(args.date);
+    const task = await getTask(db, args.task_id);
+    const refs = (args.driver || args.vehicle) ? await loadRefs(db) : null;
+    const day = args.date ?? colomboDate(task.start_at);
+    const startAt = args.date || args.time ? utcIso(day, args.time ?? colomboTime(task.start_at)) : undefined;
+    const endBy = args.end_time === undefined ? undefined : args.end_time === null ? null : utcIso(day, args.end_time);
+    const out = await changeTask(db, now, actor, task, {
+      startAt,
+      endBy,
+      driver: args.driver && refs ? activeDriver(refs, args.driver) : undefined,
+      vehicle: args.vehicle && refs ? activeVehicle(refs, args.vehicle) : undefined,
+      title: args.title,
+      passengers: args.passengers,
+      contactName: cleared(args.contact_name),
+      contactPhone: cleared(args.contact_phone),
+      notes: cleared(args.notes),
+    }, { version: args.plan_version });
+    const driver = out.task.employee_id ? unwrapMaybe(await db.from("employees").select("name, phone").eq("id", out.task.employee_id).maybeSingle(), "employee") : null;
+    return {
+      result: {
+        task_id: task.id,
+        title: out.task.title,
+        when: colomboDayTime(out.task.start_at),
+        leave_by: out.task.leave_by ? colomboDayTime(out.task.leave_by) : undefined,
+        until: out.task.end_by ? colomboTime(out.task.end_by) : undefined,
+        driver: driver?.name,
+        plan_version: out.plan_version,
+        changes: out.changes,
+        warnings: out.warnings,
+        sent: out.driverChanged
+          ? `${driver?.name ?? "The new driver"} gets it as a new task to accept.`
+          : "The driver's app shows the change (Task changed).",
+        links: { whatsapp_driver: waLink(driver?.phone), call_driver: telLink(driver?.phone) },
+      },
+      summary: `task ${task.id} changed (version ${out.plan_version}): ${changesText(out.changes) || "given back after a decline"}` +
+        (out.warnings.length > 0 ? ` (${out.warnings.length} warnings)` : ""),
+    };
+  },
+});
 
 export const cancelTask = tool({
   name: "cancel_task",
@@ -1266,6 +1574,11 @@ export const reassignTask = tool({
       "task",
     );
     if (changed.length === 0) throw new ToolError("The driver started this task just now, so it was not changed. Check task_detail.");
+    const reassignChanges: Record<string, FieldChange> = {
+      ...(driverChanged && { driver: { from: refs.emp.get(task.employee_id)?.name ?? null, to: newDriver.name } }),
+      ...(newVehicle.id !== task.vehicle_id && { vehicle: { from: refs.veh.get(task.vehicle_id)?.reg_no ?? null, to: newVehicle.reg_no } }),
+      ...(delta !== 0 && { time: { from: colomboDayTime(task.start_at), to: colomboDayTime(startAt) } }),
+    };
     unwrap(
       await db.from("task_assignment_events").insert({
         task_id: task.id,
@@ -1273,12 +1586,8 @@ export const reassignTask = tool({
         employee_id: newDriver.id,
         vehicle_id: newVehicle.id,
         actor: actor.name,
-        note: [
-          wasDeclined ? "after a decline" : null,
-          driverChanged ? `driver ${refs.emp.get(task.employee_id)?.name ?? "?"} → ${newDriver.name}` : null,
-          newVehicle.id !== task.vehicle_id ? `vehicle ${refs.veh.get(task.vehicle_id)?.reg_no ?? "?"} → ${newVehicle.reg_no}` : null,
-          delta !== 0 ? `time ${colomboDateTime(task.start_at)} → ${colomboDateTime(startAt)}` : null,
-        ].filter(Boolean).join("; ") || undefined,
+        note: [wasDeclined ? "after a decline" : null, changesText(reassignChanges) || null].filter(Boolean).join(" · ") || undefined,
+        changes: reassignChanges as unknown as Json,
       }),
       "assignment history",
     );

@@ -32,6 +32,9 @@ export interface Settings {
   self_drive_allowed: boolean;
   /** Snap to roads on the route maps: none, google_roads (secret GOOGLE_ROADS_KEY) or osrm (secret OSRM_URL). */
   map_matching: { provider: MapMatchingProvider };
+  /** The driver app's "At work? Switch On duty" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
+  shift_start: string;
+  shift_days: number[];
 }
 
 export type MapMatchingProvider = "none" | "google_roads" | "osrm";
@@ -53,6 +56,8 @@ export const SETTINGS_DEFAULTS: Settings = {
   },
   self_drive_allowed: true,
   map_matching: { provider: "none" },
+  shift_start: "08:00",
+  shift_days: [1, 2, 3, 4, 5, 6],
 };
 
 export type SettingKey = keyof Settings;
@@ -71,6 +76,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
   map_matching:
     "Snap to roads on the route maps: provider none, google_roads (Roads API, secret GOOGLE_ROADS_KEY) or osrm (self-hosted, secret OSRM_URL); km stay from the odometer",
+  shift_start: "The driver app's shift nudge (\"At work? Switch On duty\"): the time of day, HH:MM, shown only to a driver who is off duty",
+  shift_days: "… on these days (0 = Sunday … 6 = Saturday); empty = never",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -116,6 +123,15 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
     case "self_drive_allowed":
       if (typeof value !== "boolean") throw new ToolError("self_drive_allowed: true or false.");
       return value;
+    case "shift_start":
+      if (!isTime(value)) throw new ToolError("shift_start: a time of day, HH:MM.");
+      return value as string;
+    case "shift_days": {
+      if (!Array.isArray(value) || !value.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) {
+        throw new ToolError("shift_days: a list of days, 0 = Sunday … 6 = Saturday (for example [1, 2, 3, 4, 5, 6]).");
+      }
+      return [...new Set(value as number[])].sort((a, b) => a - b);
+    }
     case "map_matching": {
       const provider = (value as { provider?: unknown } | null)?.provider;
       if (!value || typeof value !== "object" || !MAP_MATCHING_PROVIDERS.includes(provider as MapMatchingProvider)) {

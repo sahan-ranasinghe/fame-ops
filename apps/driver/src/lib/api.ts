@@ -79,6 +79,21 @@ export async function fetchMe(client: Client): Promise<Employee | null> {
   return checkMaybe(await client.from('employees').select('*').maybeSingle(), 'employee');
 }
 
+/** The only fleet settings a driver may read (Phase 6): the shift nudge's time and days (0 = Sunday … 6 = Saturday). */
+export interface DriverSettings {
+  shift_start: string;
+  shift_days: number[];
+}
+export const DEFAULT_DRIVER_SETTINGS: DriverSettings = { shift_start: '08:00', shift_days: [1, 2, 3, 4, 5, 6] };
+
+export async function fetchDriverSettings(client: Client): Promise<DriverSettings> {
+  const res = await client.rpc('get_driver_settings');
+  const value = check(res, 'settings') as Partial<DriverSettings> | null;
+  const start = typeof value?.shift_start === 'string' && /^\d{2}:\d{2}$/.test(value.shift_start) ? value.shift_start : DEFAULT_DRIVER_SETTINGS.shift_start;
+  const days = Array.isArray(value?.shift_days) ? value.shift_days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6) : DEFAULT_DRIVER_SETTINGS.shift_days;
+  return { shift_start: start, shift_days: days };
+}
+
 export async function fetchVehicles(client: Client): Promise<Vehicle[]> {
   return check(await client.from('vehicles').select(VEHICLE_COLUMNS).order('reg_no'), 'vehicles');
 }

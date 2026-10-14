@@ -1,7 +1,8 @@
-// The new-request page (/requests/new): staff ask in their own name, the
-// office may name anyone; for someone who approves the "Assign now" section
-// (the free vehicles for that day and time in four groups, the free drivers,
-// one call that makes the request and its task together). Kept as a draft.
+// The new-request page (/requests/new): everyone asks in their own name, "On
+// behalf of" names the person it is for when that is someone else (Phase 6);
+// for someone who approves the "Assign now" section (the free vehicles for that
+// day and time in four groups, who's available, one call that makes the request
+// and its task together). Kept as a draft.
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -16,6 +17,8 @@ import { Empty, Loading, Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { availabilityArgs } from "./availabilityLogic";
+import { AvailabilityPanel } from "./AvailabilityPanel";
 import { bookInput, emptyRequest, type RequestFields, suggestInput, validateNewRequest } from "./requestLogic";
 import { VehicleGroups } from "./requestParts";
 
@@ -84,7 +87,7 @@ export function NewRequest() {
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
-    const v = validateNewRequest(f, staff ? me.name : undefined);
+    const v = validateNewRequest(f);
     if ("error" in v) {
       setErr(v.error);
       return;
@@ -127,7 +130,7 @@ export function NewRequest() {
       <section className="view">
         <PageTop title="Booked" sub={joinDots([booked.vehicle, booked.driver])} backTo="/requests" />
         <div className="card card-b" style={{ display: "grid", gap: 12, maxWidth: 720 }} data-testid="booked">
-          <Notice tone="ok"><b>Booked.</b> {booked.request.requested_by} has {booked.vehicle} on {booked.when}{booked.leave_by ? ` · leave by ${booked.leave_by}` : ""}.</Notice>
+          <Notice tone="ok"><b>Booked.</b> {booked.request.on_behalf_of ?? booked.request.requested_by} has {booked.vehicle} on {booked.when}{booked.leave_by ? ` · leave by ${booked.leave_by}` : ""}.</Notice>
           <WarningsNote warnings={warnList(booked)} />
           <div className="acts">
             {booked.task_id && me.tools.includes("task_detail") && <Link className="btn" to={`/tasks/${booked.task_id}`}>Open task</Link>}
@@ -144,9 +147,7 @@ export function NewRequest() {
       <DraftBanner draft={draft} />
       <form className="page-form" onSubmit={submit} noValidate>
         <div className="card card-b form">
-          {!staff && (
-            <div className="field"><label htmlFor="nr-by">Who needs it</label><input id="nr-by" maxLength={120} value={f.by} onChange={(e) => set("by", e.target.value)} data-focus placeholder={books ? "Default: you" : undefined} /></div>
-          )}
+          <div className="field"><label htmlFor="nr-behalf">On behalf of</label><input id="nr-behalf" maxLength={120} value={f.behalf} onChange={(e) => set("behalf", e.target.value)} placeholder="Only when the vehicle is for someone else" /></div>
           <div className="field"><label htmlFor="nr-project">Project or team</label><input id="nr-project" maxLength={200} placeholder="Job no., DU ID, or e.g. HR" value={f.project} onChange={(e) => set("project", e.target.value)} /></div>
           <div className="grid2">
             <div className="field"><label htmlFor="nr-date">Day</label><input type="date" id="nr-date" value={f.date} onChange={(e) => set("date", e.target.value)} /></div>
@@ -198,6 +199,9 @@ export function NewRequest() {
               </div>
             )}
           </div>
+        )}
+        {books && !custodianDrives && (
+          <AvailabilityPanel args={availabilityArgs(f.date, f.time, f.back, f.need, f.pax)} picked={f.pickedDriver} onPick={(d) => { if (d.username) set("pickedDriver", d.username); }} />
         )}
         {err && <Notice tone="bad">{err}</Notice>}
         <StickyActions>

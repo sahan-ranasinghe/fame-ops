@@ -13,8 +13,8 @@ import { Icon } from "../ui/icons";
 import { ListWithDetail } from "../ui/Page";
 import { timelineSteps } from "./requestLogic";
 
-type Filter = "waiting" | "approved" | "declined" | "cancelled" | "all";
-const FILTERS: [Filter, string][] = [["waiting", "Waiting"], ["approved", "Approved"], ["declined", "Declined"], ["cancelled", "Cancelled"], ["all", "All"]];
+type Filter = "waiting" | "changed" | "approved" | "declined" | "cancelled" | "all";
+const FILTERS: [Filter, string][] = [["waiting", "Waiting"], ["changed", "Changed"], ["approved", "Approved"], ["declined", "Declined"], ["cancelled", "Cancelled"], ["all", "All"]];
 
 export function Requests() {
   const { me, store, noConnector, managePermissions } = useFleet();
@@ -56,7 +56,7 @@ export function Requests() {
                     <tbody>
                       {d.requests.map((q) => (
                         <tr key={q.id} className="click" onClick={() => navigate(`/requests/${q.id}`)}>
-                          <td data-label="Requested by"><b>{q.requested_by}</b>{q.asked && <div className="sub">{q.asked}</div>}</td>
+                          <td data-label="Requested by"><b>{q.requested_by}</b>{q.on_behalf_of && <span className="muted"> · for {q.on_behalf_of}</span>}{q.asked && <div className="sub">{q.asked}</div>}</td>
                           <td data-label="Project">{q.project || "—"}</td>
                           <td data-label="When">{q.when}{q.back_by && <div className="sub">back by {q.back_by}</div>}</td>
                           <td data-label="Route" className="muted">{q.route || "—"}</td>
@@ -70,7 +70,7 @@ export function Requests() {
                             })()}
                           </td>
                           <td className="r">
-                            {q.status === "waiting" && decides
+                            {(q.status === "waiting" || q.status === "changed") && decides
                               ? <Link className="btn small dark" to={`/requests/${q.id}/decide`} onClick={(e) => e.stopPropagation()}>Review</Link>
                               : q.task_id ? <Link className="btn small" to={`/tasks/${q.task_id}`} onClick={(e) => e.stopPropagation()}>Task</Link> : null}
                           </td>

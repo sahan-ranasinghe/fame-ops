@@ -69,4 +69,5 @@ export const ALL_TOOLS = [
   "update_office_user",
   "plan_task", "update_task_stops", "get_settings", "update_settings", "routing_usage", "list_issues", "update_issue", "issue_history",
   "my_notification_settings", "set_my_notification_settings", "register_web_push", "remove_web_push",
+  "availability", "update_request", "redecide_request", "update_task",
 ];

@@ -5,7 +5,7 @@ import type { Db } from "../db.ts";
 import { ToolError, unwrap } from "../db.ts";
 import { docChip, type Employee, findDriver, loadLatest, loadRefs, sharing } from "../fleet.ts";
 import { contactLinks } from "../format.ts";
-import { colomboDate } from "../time.ts";
+import { colomboDate, colomboTime, dayRange } from "../time.ts";
 import { realDate, tool, zDate, zText } from "../tool.ts";
 
 // Drivers sign in with a username and a 6-digit PIN. Supabase Auth needs an
@@ -49,19 +49,24 @@ export const listDrivers = tool({
   name: "list_drivers",
   title: "List drivers",
   description:
-    "All drivers with code, username, phone, licence expiry, current vehicle, whether they are sharing their location, and how many tasks each accepted and declined in the last 30 days.",
+    "All drivers with code, username, phone, licence expiry, current vehicle, whether they are sharing their location (on duty since HH:MM, or off duty since), and how many tasks each accepted and declined in the last 30 days.",
   readOnly: true,
   input: z.object({
     include_inactive: z.boolean().optional().describe("Also show drivers who have been switched off"),
   }),
   async run({ include_inactive }, { db, now }) {
     const since = new Date(now.getTime() - 30 * 86400000).toISOString();
-    const [refs, latest, eventsRes] = await Promise.all([
+    const today = colomboDate(now);
+    const [refs, latest, eventsRes, openRes, endedRes] = await Promise.all([
       loadRefs(db),
       loadLatest(db),
       db.from("task_assignment_events").select("employee_id, action").in("action", ["accepted", "declined"]).gte("at", since),
+      db.from("duty_sessions").select("employee_id, started_at").is("ended_at", null),
+      db.from("duty_sessions").select("employee_id, ended_at").gte("ended_at", dayRange(today).from).order("ended_at", { ascending: false }).limit(2000),
     ]);
-    const today = colomboDate(now);
+    const onDuty = new Map(unwrap(openRes, "duty sessions").map((s) => [s.employee_id, s.started_at]));
+    const offDuty = new Map<string, string>();
+    for (const s of unwrap(endedRes, "duty sessions")) if (s.ended_at && !offDuty.has(s.employee_id)) offDuty.set(s.employee_id, s.ended_at);
     // Accepts and declines per driver in the last 30 days.
     const last30 = new Map<string, { accepted: number; declined: number }>();
     for (const e of unwrap(eventsRes, "assignment history")) {
@@ -81,6 +86,9 @@ export const listDrivers = tool({
         ),
         licence: e.licence_expiry ? docChip(e.licence_expiry, today) : undefined,
         last_30_days: last30.get(e.id) ?? { accepted: 0, declined: 0 },
+        // Presence: on duty = sharing location (the open duty session); off duty since = when the last one ended today.
+        on_duty_since: onDuty.has(e.id) ? colomboTime(onDuty.get(e.id)!) : undefined,
+        off_duty_since: !onDuty.has(e.id) && offDuty.has(e.id) ? colomboTime(offDuty.get(e.id)!) : undefined,
       }));
     return { result: { count: drivers.length, drivers }, summary: `${drivers.length} drivers` };
   },

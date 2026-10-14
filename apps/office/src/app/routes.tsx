@@ -16,6 +16,7 @@ import { Overview } from "../screens/Overview";
 import { Projects } from "../screens/Projects";
 import { RequestDecide } from "../screens/RequestDecide";
 import { RequestDetail } from "../screens/RequestDetail";
+import { RequestEdit } from "../screens/RequestEdit";
 import { Requests } from "../screens/Requests";
 import { TaskDetail } from "../screens/TaskDetail";
 import { TaskEdit } from "../screens/TaskEdit";
@@ -88,6 +89,7 @@ export const routes: RouteObject[] = [
       },
       { path: "requests/new", element: <Guard need={RA}><NewRequest /></Guard> },
       { path: "requests/:id/decide", element: <Guard need={["approve"]}><RequestDecide /></Guard> },
+      { path: "requests/:id/edit", element: <Guard need={RA}><RequestEdit /></Guard> },
       {
         path: "vehicles",
         element: <Guard need={["view"]}><Vehicles /></Guard>,

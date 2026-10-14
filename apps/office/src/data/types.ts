@@ -108,7 +108,12 @@ export interface AssignmentEvent {
   vehicle?: string;
   actor?: string;
   note?: string;
+  /** What a change altered, by label: { time: { from, to }, vehicle: { from, to } } (Phase 6). */
+  changes?: FieldChanges;
 }
+
+/** A diff in the office's words: { time: { from: "09:00", to: "09:30" } }. */
+export type FieldChanges = Record<string, { from?: string | null; to?: string | null }>;
 /** Who is free at a task's time (task_detail.suggestions for a declined task). */
 export interface FreeAt {
   drivers: { name: string; username?: string | null; availability: string }[];
@@ -242,6 +247,9 @@ export interface TaskDetail {
     status: "assigned" | "in_progress" | "completed" | "cancelled" | "declined" | string;
     status_line?: string;
     start: string;
+    /** The day and clock as the edit form needs them (Phase 6). */
+    date?: string;
+    time?: string;
     end_by?: string;
     driver?: string;
     vehicle?: string;
@@ -291,7 +299,32 @@ export interface RequestTimeline {
   seen?: string;
   decided?: string;
   decided_by?: string;
+  changed?: string;
   cancelled?: string;
+}
+
+/** One row of a request's timeline (request_events). */
+export interface RequestEvent {
+  at: string;
+  action: "created" | "seen" | "edited" | "approved" | "declined" | "changed" | "redecided" | "postponed" | "cancelled" | string;
+  actor?: string;
+  note?: string;
+  changes?: FieldChanges;
+}
+
+/** The request's fields as the edit form needs them. */
+export interface RequestEditFields {
+  date: string;
+  time: string;
+  back_by?: string;
+  route_from?: string;
+  route_to?: string;
+  need_type?: string;
+  pax?: number;
+  tools?: boolean;
+  note?: string;
+  driver_required?: boolean;
+  on_behalf_of?: string;
 }
 
 export interface RequestCard {
@@ -302,12 +335,21 @@ export interface RequestCard {
   back_by?: string;
   route?: string;
   need?: string;
-  status: "waiting" | "approved" | "declined" | "cancelled";
+  status: "waiting" | "approved" | "changed" | "declined" | "cancelled";
   asked?: string;
   decided?: string;
   decline_reason?: string;
   task_id?: string;
   note?: string;
+  /** The person the vehicle is for, when it is not the asker (Phase 6). */
+  on_behalf_of?: string;
+  /** Bumped on every edit and decision; update_request and redecide_request send it back. */
+  version?: number;
+  fields?: RequestEditFields;
+  /** An approved booking the requester edited: when, by whom, and what changed since it was approved. */
+  changed?: { at: string; by?: string; note?: string };
+  changes?: FieldChanges;
+  events?: RequestEvent[];
   /** false = the vehicle's custodian drives (Part 6). */
   driver_required?: boolean;
   /** Booked directly by the office: request and task in one go. */
@@ -337,6 +379,9 @@ export interface Driver {
   call?: string;
   whatsapp?: string;
   last_30_days?: { accepted: number; declined: number };
+  /** Presence (Phase 6): sharing since HH:MM, or when the last sharing ended today. */
+  on_duty_since?: string;
+  off_duty_since?: string;
 }
 
 export interface Vehicle {
@@ -459,6 +504,9 @@ export interface FleetSettings {
   rush_hour: { factor: number; centre: { lat: number; lng: number }; radius_km: number; bands: { days: number[]; from: string; to: string }[] };
   /** Off = every booking needs a driver (Part 7). */
   self_drive_allowed?: boolean;
+  /** The driver app's shift nudge: HH:MM on these days (0 = Sunday … 6 = Saturday). */
+  shift_start?: string;
+  shift_days?: number[];
 }
 
 export interface SettingsResult {
@@ -510,6 +558,8 @@ export interface LiveDriver extends StatusFields {
   recorded_at?: string | null;
   /** Heading of the last position in degrees, when the phone gave one (the marker turns with it). */
   heading?: number | null;
+  /** Sharing since HH:MM (Phase 6). */
+  on_duty_since?: string;
 }
 
 export interface LiveDrivers {
@@ -793,4 +843,59 @@ export interface NotificationSettings {
   push: { configured: boolean; public_key?: string };
   registered?: { id: string; device: string; endpoint_hash: string };
   removed?: number;
+}
+
+/** The task change tools' answers (Phase 6). */
+export interface UpdateTaskResult {
+  task_id: string;
+  title?: string;
+  when?: string;
+  leave_by?: string;
+  until?: string;
+  driver?: string;
+  plan_version: number;
+  changes: FieldChanges;
+  warnings?: string[];
+  sent?: string;
+}
+
+export interface UpdateRequestResult {
+  request: RequestCard;
+  needs_reapproval: boolean;
+  changes: FieldChanges;
+  next?: string;
+}
+
+export interface RedecideResult {
+  request: RequestCard;
+  decision: "kept" | "changed" | "postponed" | "declined";
+  task?: { task_id: string; when?: string; until?: string; driver?: string; vehicle?: string; plan_version?: number; changes?: FieldChanges };
+  task_cancelled?: string;
+  warnings?: string[];
+  sent?: string;
+}
+
+/** availability(at, until): who is on duty, off duty or on a task, and whether they are free then. */
+export interface AvailableDriver {
+  name: string;
+  username?: string | null;
+  state: "on_task" | "on_duty" | "off_duty";
+  status_text: string;
+  on_duty_since?: string;
+  off_duty_since?: string;
+  current_task?: { title: string; ends_planned?: string; ends_live?: string };
+  next_task_start?: string;
+  accepted_today: number;
+  declined_today: number;
+  licence: { chip: "ok" | "orange" | "red" | "not set"; expiry?: string };
+  free: boolean;
+  busy_with?: string;
+}
+
+export interface Availability {
+  as_of: string;
+  window: { from: string; until: string; day: string };
+  drivers: AvailableDriver[];
+  counts: { free: number; on_duty: number; all: number };
+  vehicles: { groups: NonNullable<Suggestions["groups"]>; drivers_free: { name: string; username: string }[]; self_drive_allowed?: boolean };
 }

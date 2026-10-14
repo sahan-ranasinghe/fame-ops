@@ -16,7 +16,7 @@ import * as api from '@/lib/api';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
 import { sendHeartbeat, startHeartbeatLoop } from '@/lib/heartbeat';
 import { checkTracking, getSharing, readiness, type StartResult, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
-import { ensureChannels, notifyNewTask, onNotificationTap } from '@/lib/notifications';
+import { armShiftNudge, disarmShiftNudge, ensureChannels, notifyNewTask, onNotificationTap } from '@/lib/notifications';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
@@ -149,6 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<TaskWithStops[]>(() => getJson<TaskWithStops[]>(KEYS.tasks) ?? []);
   const [reports, setReports] = useState<VehicleReport[]>(() => getJson<VehicleReport[]>(KEYS.reports) ?? []);
   const [sharing, setSharingState] = useState(() => getSharing() !== null);
+  const [shift, setShift] = useState<api.DriverSettings>(() => getJson<api.DriverSettings>(KEYS.shift) ?? api.DEFAULT_DRIVER_SETTINGS);
   const [tracking, setTracking] = useState<TrackingStatus>(TRACKING_OFF);
   const [gpsKm, setGpsKm] = useState<KmCounters>(() => kmCounters());
   const [live, setLive] = useState<LiveStatus>('off');
@@ -222,11 +223,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // The driver asked (or the app came back): refused points get another go, and the upload backoff is ignored.
       maybeRetryRejected('refresh');
       const sent = await flushNow(true);
-      const [row, vehicleRows, taskRows, reportRows] = await Promise.all([
+      const [row, vehicleRows, taskRows, reportRows, shiftSettings] = await Promise.all([
         api.fetchMe(supabase),
         api.fetchVehicles(supabase),
         api.fetchTasks(supabase, startOfColomboDay(colomboDate())),
         api.fetchReports(supabase),
+        api.fetchDriverSettings(supabase).catch(() => null),
       ]);
       if (!row) {
         // The office switched this account off.
@@ -241,6 +243,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setJson(KEYS.vehicles, vehicleRows);
       setReports(reportRows);
       setJson(KEYS.reports, reportRows);
+      if (shiftSettings) {
+        setShift(shiftSettings);
+        setJson(KEYS.shift, shiftSettings);
+      }
       // While something is still waiting on the phone, keep what the driver did rather than the older server copy.
       if (!sent.offline) saveTasks(taskRows);
       setOffline(sent.offline);
@@ -365,6 +371,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [signedIn, checkTrackingNow]);
 
+  // The shift nudge ("At work? Switch On duty"): scheduled while the driver is signed in and off duty, gone while on duty.
+  useEffect(() => {
+    if (!signedIn) return;
+    if (sharing) void disarmShiftNudge();
+    else void armShiftNudge(shift, { title: t('shift.title'), body: t('shift.body') });
+  }, [signedIn, sharing, shift, t]);
+
   // While sharing is on: a heartbeat a minute, and one the moment Location or the permission changes.
   useEffect(() => {
     if (!signedIn || !sharing) return;
@@ -480,6 +493,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (left.ops > 0 || left.points > 0) return 'queue';
     await unregisterPush();
     await unregisterTrackingCheck();
+    await disarmShiftNudge();
     await supabase.auth.signOut({ scope: 'local' });
     forgetEverything();
     return 'ok';

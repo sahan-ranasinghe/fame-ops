@@ -68,7 +68,7 @@ export function TaskDetail() {
   const km = t.km ?? (t.end_odometer_km != null && t.start_odometer_km != null ? t.end_odometer_km - t.start_odometer_km : null);
   const projects = typeof p.projects === "string" ? p.projects : p.projects.map((x) => joinDots([x.project, x.percent != null ? `${x.percent}%` : ""])).join(", ");
   const declined = t.status === "declined";
-  const canChange = (t.status === "assigned" || declined) && me.tools.includes("reassign_task");
+  const canChange = (t.status === "assigned" || t.status === "in_progress" || declined) && (me.tools.includes("update_task") || me.tools.includes("reassign_task"));
   const canCancel = (t.status === "assigned" || t.status === "in_progress" || declined) && me.tools.includes("cancel_task");
   const canStops = (t.status === "assigned" || t.status === "in_progress") && me.tools.includes("update_task_stops");
   const ext = { target: "_blank", rel: "noopener" } as const;
@@ -219,7 +219,7 @@ export function TaskDetail() {
 
       {(canChange || canCancel) && (
         <div className="acts">
-          {canChange && <Link className="btn dark" to={`/tasks/${id}/edit${q}`}>{declined ? "Give it to a driver" : "Change driver, vehicle or time"}</Link>}
+          {canChange && <Link className="btn dark" to={`/tasks/${id}/edit${q}`}>{declined ? "Give it to a driver" : "Change the task"}</Link>}
           {canCancel && <Link className="btn danger" to={`/tasks/${id}/edit${q}#cancel`}>Cancel task</Link>}
         </div>
       )}
@@ -231,7 +231,10 @@ export function TaskDetail() {
               {p.assignment_history.map((e, i) => (
                 <div key={i} style={{ gridColumn: "1/-1" }}>
                   <dt>{e.at}</dt>
-                  <dd>{[cap(e.action), e.driver, e.vehicle, e.actor ? `by ${e.actor}` : null, e.note].filter(Boolean).join(" · ")}</dd>
+                  <dd>
+                    {[cap(e.action), e.driver, e.vehicle, e.actor ? `by ${e.actor}` : null, e.changes ? null : e.note].filter(Boolean).join(" · ")}
+                    {e.changes && <ul className="changes">{Object.entries(e.changes).map(([k, c]) => <li key={k}>{k} {c.from ?? "—"} → {c.to ?? "—"}</li>)}</ul>}
+                  </dd>
                 </div>
               ))}
             </dl>

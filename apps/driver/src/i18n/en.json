@@ -340,5 +340,9 @@
     "reportProblem": "Report a problem",
     "notNow": "Not now",
     "checking": "Waiting for Location…"
+  },
+  "shift": {
+    "title": "At work?",
+    "body": "Switch On duty when you start."
   }
 }

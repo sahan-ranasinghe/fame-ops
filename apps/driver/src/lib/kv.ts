@@ -43,6 +43,10 @@ export const KEYS = {
   updateDownloaded: 'updates.downloaded',
   /** The Expo push token this phone registered with the office. */
   pushToken: 'push.token',
+  /** The shift nudge's time and days, as the office set them (Phase 6). */
+  shift: 'shift.settings',
+  /** The settings the nudge is scheduled with right now (JSON), so it is not rescheduled on every run. */
+  shiftArmed: 'shift.armed',
   /** The upload backoff after a failed connection (sync/engine.ts). */
   backoff: 'sync.backoff',
   /** When the refused points were last put back in line (ms), and for which app update. */

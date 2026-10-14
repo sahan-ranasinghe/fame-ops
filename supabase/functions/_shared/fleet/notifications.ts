@@ -8,6 +8,9 @@
 // task.declined and task.not_accepted are written in SQL (decline_task and the
 // accept reminder) with the same shapes; vehicle.booked comes from saving a task
 // on a custodian's vehicle, vehicle.booking_cancelled from cancel_request.
+// Phase 6: request.changed (the requester edited an approved booking) goes to the
+// approvers, request.redecided to the requester, booking.changed (the office moved
+// or re-equipped a booking) to the requester and the custodian.
 
 import type { Db } from "./db.ts";
 import { unwrap } from "./db.ts";
@@ -22,7 +25,10 @@ export type NotifyEvent =
   | "issue.opened"
   | "issue.assigned"
   | "vehicle.booked"
-  | "vehicle.booking_cancelled";
+  | "vehicle.booking_cancelled"
+  | "request.changed"
+  | "request.redecided"
+  | "booking.changed";
 
 export interface EventInfo {
   event: NotifyEvent;
@@ -73,6 +79,24 @@ export const EVENTS: readonly EventInfo[] = [
     text: "A booking of a vehicle you look after is cancelled",
     needs: [],
   },
+  {
+    event: "request.changed",
+    label: "An approved request is changed",
+    text: "The person who asked changed an approved booking: it needs re-approval",
+    needs: ["approve"],
+  },
+  {
+    event: "request.redecided",
+    label: "Your changed request is decided again",
+    text: "A booking you changed is kept, changed or declined by the office",
+    needs: ["request"],
+  },
+  {
+    event: "booking.changed",
+    label: "A booking is changed by the office",
+    text: "The time, vehicle or driver of a booking you asked for, or of a vehicle you look after, is changed",
+    needs: [],
+  },
 ];
 
 export interface Message {
@@ -96,7 +120,7 @@ export interface RecipientContext {
   requester?: string | null;
   /** issue.assigned: who got it. */
   assignee?: string | null;
-  /** vehicle.*: who looks after the vehicle. */
+  /** vehicle.* and booking.changed: who looks after the vehicle. */
   custodian?: string | null;
 }
 
@@ -124,6 +148,15 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
     case "vehicle.booked":
     case "vehicle.booking_cancelled":
       ids = ctx.custodian ? [ctx.custodian] : [];
+      break;
+    case "request.changed":
+      ids = holders("approve");
+      break;
+    case "request.redecided":
+      ids = ctx.requester ? [ctx.requester] : [];
+      break;
+    case "booking.changed":
+      ids = [ctx.requester, ctx.custodian].flatMap((id) => id ? [id] : []);
       break;
   }
   const known = new Set(people.map((p) => p.id));

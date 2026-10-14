@@ -51,6 +51,7 @@ const ANY: readonly Permission[] = PERMISSIONS;
  * The permission a tool needs. Holding any one of the listed permissions allows the call.
  * Some tools answer less to some holders (the "own rows" rules in the tools themselves):
  *   list_requests   every request with approve; otherwise the person's own
+ *   update_request  any request with approve; otherwise the person's own
  *   task_detail     any task with assign_tasks; a request's task with approve; an own request's task with request
  *   fleet_overview  needs_attention: every item with issues, the task items with assign_tasks, otherwise none
  */
@@ -67,6 +68,9 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   decide_request: ["approve"],
   book_vehicle: ["approve"],
   cancel_request: ["approve"],
+  update_request: ["request", "approve"],
+  redecide_request: ["approve"],
+  availability: AA,
   task_board: ["assign_tasks"],
   task_detail: ["assign_tasks", "approve", "request"],
   driver_route: ["assign_tasks", "vehicles"],
@@ -75,6 +79,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   cancel_task: ["assign_tasks"],
   plan_task: AA,
   update_task_stops: ["assign_tasks"],
+  update_task: ["assign_tasks"],
   get_settings: ANY,
   update_settings: USERS,
   routing_usage: USERS,

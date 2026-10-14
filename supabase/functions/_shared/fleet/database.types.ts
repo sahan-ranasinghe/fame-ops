@@ -3,25 +3,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type Database = {
   
-  "graphql_public": {
-          Tables: {
-            [_ in never]: never
-          }
-          Views: {
-            [_ in never]: never
-          }
-          Functions: {
-            "graphql":
-{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
-                           }
-          }
-          Enums: {
-            [_ in never]: never
-          }
-          CompositeTypes: {
-            [_ in never]: never
-          }
-        },"public": {
+  "public": {
           Tables: {
             "allowance_types": {
                   Row: {
@@ -651,6 +633,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"request_events": {
+                  Row: {
+                    "action": string,"actor": string | null,"at": string,"changes": Json | null,"id": number,"note": string | null,"request_id": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"actor"?: string | null,"at"?: string,"changes"?: Json | null,"id"?: never,"note"?: string | null,"request_id": string
+                  }
+                  Update: {
+                    "action"?: string,"actor"?: string | null,"at"?: string,"changes"?: Json | null,"id"?: never,"note"?: string | null,"request_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "request_events_request_id_fkey"
+      columns: ["request_id"]
+isOneToOne: false
+      referencedRelation: "vehicle_requests"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"route_legs": {
                   Row: {
                     "avoid_expressway": boolean,"computed_at": string,"from_lat": number,"from_lng": number,"id": number,"km": number,"minutes": number,"provider": string,"to_lat": number,"to_lng": number,"via_expressway": boolean | null
@@ -701,14 +703,14 @@ isOneToOne: false
                   ]
                 },"task_assignment_events": {
                   Row: {
-                    "action": string,"actor": string | null,"at": string,"employee_id": string | null,"id": number,"note": string | null,"task_id": string,"vehicle_id": string | null
+                    "action": string,"actor": string | null,"at": string,"changes": Json | null,"employee_id": string | null,"id": number,"note": string | null,"task_id": string,"vehicle_id": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "action": string,"actor"?: string | null,"at"?: string,"employee_id"?: string | null,"id"?: never,"note"?: string | null,"task_id": string,"vehicle_id"?: string | null
+                    "action": string,"actor"?: string | null,"at"?: string,"changes"?: Json | null,"employee_id"?: string | null,"id"?: never,"note"?: string | null,"task_id": string,"vehicle_id"?: string | null
                   }
                   Update: {
-                    "action"?: string,"actor"?: string | null,"at"?: string,"employee_id"?: string | null,"id"?: never,"note"?: string | null,"task_id"?: string,"vehicle_id"?: string | null
+                    "action"?: string,"actor"?: string | null,"at"?: string,"changes"?: Json | null,"employee_id"?: string | null,"id"?: never,"note"?: string | null,"task_id"?: string,"vehicle_id"?: string | null
                   }
                   Relationships: [
                     {
@@ -895,14 +897,14 @@ isOneToOne: false
                   ]
                 },"vehicle_requests": {
                   Row: {
-                    "back_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"created_at": string,"decided_at": string | null,"decided_by": string | null,"decline_reason": string | null,"driver_required": boolean,"id": string,"need_type": string | null,"needed_at": string,"note": string | null,"one_step": boolean,"pax": number | null,"project_id": string | null,"project_label": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"requested_by_user_id": string | null,"route_from": string | null,"route_to": string | null,"seen_at": string | null,"seen_by": string | null,"status": string,"task_id": string | null,"tools": boolean
+                    "back_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"change_note": string | null,"changed_at": string | null,"changed_by": string | null,"created_at": string,"decided_at": string | null,"decided_by": string | null,"decline_reason": string | null,"driver_required": boolean,"id": string,"need_type": string | null,"needed_at": string,"note": string | null,"on_behalf_of": string | null,"one_step": boolean,"pax": number | null,"previous": Json | null,"project_id": string | null,"project_label": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"requested_by_user_id": string | null,"route_from": string | null,"route_to": string | null,"seen_at": string | null,"seen_by": string | null,"status": string,"task_id": string | null,"tools": boolean,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"id"?: string,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"one_step"?: boolean,"pax"?: number | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean
+                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"id"?: string,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean,"version"?: number
                   }
                   Update: {
-                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"id"?: string,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"one_step"?: boolean,"pax"?: number | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean
+                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"id"?: string,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean,"version"?: number
                   }
                   Relationships: [
                     {
@@ -1010,6 +1012,9 @@ isOneToOne: false
 "fleet_sync":
 { Args: { "p_scope"?: Json }; Returns: undefined
                            },
+"get_driver_settings":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "issue_visible":
 { Args: { "p_kind": string }; Returns: boolean
                            },
@@ -1061,11 +1066,14 @@ isOneToOne: false
 "remove_device_token":
 { Args: { "p_token": string }; Returns: undefined
                            },
+"request_event_visible":
+{ Args: { "p_request_id": string }; Returns: boolean
+                           },
 "send_heartbeat":
 { Args: { "p_app_state"?: string,"p_app_version"?: string,"p_at": string,"p_battery_pct"?: number,"p_data_available"?: boolean,"p_fix_age_s"?: number,"p_location_on": boolean,"p_permission": string,"p_queued_points"?: number,"p_rejected_points"?: number,"p_sharing": boolean }; Returns: undefined
                            },
 "send_push":
-{ Args: { "p_employee_id": string,"p_kind": string,"p_task_id": string }; Returns: undefined
+{ Args: { "p_employee_id": string,"p_extra"?: Json,"p_kind": string,"p_task_id": string }; Returns: undefined
                            },
 "set_odometer_ai":
 { Args: { "p_ai_status": string,"p_ai_value": number,"p_log_id": string }; Returns: undefined
@@ -1186,11 +1194,7 @@ export type CompositeTypes<
   : never
 
 export const Constants = {
-  "graphql_public": {
-          Enums: {
-            
-          }
-        },"public": {
+  "public": {
           Enums: {
             
           }

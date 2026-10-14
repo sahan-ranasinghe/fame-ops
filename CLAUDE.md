@@ -173,6 +173,20 @@
   line above Save with the exact reason when there is none (`planLogic.ts`), computed 1.5 s
   after the last edit or with Plan now. The modal drawer is gone. Playwright has a `phone`
   project (412 × 915) running `e2e/phone.spec.ts`. Plan and as built: `docs/phase6-plan.md`.
+- Phase 6 Part 2 (14 October 2026): a request has a `version` (sent back by `update_request` and
+  `redecide_request`), events (`request_events`: the timeline) and may be made "on behalf of"
+  someone (`on_behalf_of`; the request is always in the asker's name). The requester edits a
+  request on `/requests/:id/edit`: a waiting one stays waiting, an approved booking becomes
+  `changed` (needs re-approval; the approvers are told; the task keeps its old plan) and the
+  approver decides it again on `/requests/:id/decide` (keep / change / decline →
+  `redecide_request`, which applies the request's fields to the task through `changeTask`).
+  `update_task(task_id, plan_version, …)` changes a task's day, leave-by, end time, driver,
+  vehicle, title, passengers, contact or notes (the words only while under way); every change is
+  a history event with its diff and the driver's push names the fields. `availability(at, until)`
+  feeds the "Who's available" panel (decide, new request, new task, task edit): on duty since /
+  off duty / on a task until, the day's counts, the licence, free or busy. Presence
+  (`on_duty_since`) on the driver cards. Fleet settings `shift_start` / `shift_days` drive the
+  driver app's "At work? Switch On duty" local notification (`get_driver_settings()`).
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
   `issues` (the bell), `issuesAll` (the Issues page), `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
   dropped connection is retried twice by itself, then the form shows the error with Try again).

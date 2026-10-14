@@ -59,7 +59,7 @@ export function Drivers() {
                         <td data-label="Phone">{x.phone || "—"}</td>
                         <td data-label="Licence expires">{x.licence?.expiry ? <span className={`doc ${docTone(x.licence.chip)}`}>{x.licence.expiry}</span> : "—"}</td>
                         <td data-label="Vehicle">{x.current_vehicle ? <Plate v={x.current_vehicle} /> : "—"}</td>
-                        <td data-label="Location">{x.location ? <Pill tone={locTone(x.location)}>{x.location}</Pill> : "—"}</td>
+                        <td data-label="Location">{x.location ? <Pill tone={locTone(x.location)}>{x.location}</Pill> : "—"}{x.on_duty_since ? <div className="sub">On duty since {x.on_duty_since}</div> : x.off_duty_since ? <div className="sub">Off duty since {x.off_duty_since}</div> : null}</td>
                         <td data-label="Last 30 days" className="small">{x.last_30_days ? <span>{x.last_30_days.accepted} accepted{x.last_30_days.declined ? <span className="status bad"> · {x.last_30_days.declined} declined</span> : " · 0 declined"}</span> : "—"}</td>
                         <td className="r">{canManage && <Link className="btn small" to={`/drivers/${x.username}/edit`}>Manage</Link>}</td>
                       </tr>

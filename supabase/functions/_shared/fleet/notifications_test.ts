@@ -40,15 +40,23 @@ Deno.test("a booking goes to the custodian, not when they booked it", () => {
 });
 
 Deno.test("the Settings page shows a person the events their permissions can bring", () => {
-  // Every office person can be a vehicle's custodian: the two booking events are for everyone.
-  assertEquals(relevantEvents(["view"]).map((e) => e.event), ["vehicle.booked", "vehicle.booking_cancelled"]);
-  assertEquals(relevantEvents(["request"]).map((e) => e.event), ["request.decided", "vehicle.booked", "vehicle.booking_cancelled"]);
+  // Every office person can be a vehicle's custodian: the booking events are for everyone.
+  assertEquals(relevantEvents(["view"]).map((e) => e.event), ["vehicle.booked", "vehicle.booking_cancelled", "booking.changed"]);
+  assertEquals(relevantEvents(["request"]).map((e) => e.event), [
+    "request.decided",
+    "vehicle.booked",
+    "vehicle.booking_cancelled",
+    "request.redecided",
+    "booking.changed",
+  ]);
   assertEquals(relevantEvents(["view", "request", "assign_tasks"]).map((e) => e.event), [
     "request.decided",
     "task.declined",
     "task.not_accepted",
     "vehicle.booked",
     "vehicle.booking_cancelled",
+    "request.redecided",
+    "booking.changed",
   ]);
   assertEquals(relevantEvents(["view", "request", "approve", "assign_tasks", "vehicles", "issues"]).length, EVENTS.length);
 });
@@ -72,4 +80,13 @@ Deno.test("a device is named by its browser and system", () => {
   );
   assertEquals(deviceLabel("Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"), "Firefox on Linux");
   assertEquals(deviceLabel(null), "A browser");
+});
+
+Deno.test("a changed booking goes to the approvers; the redecision to the requester; an office change to requester and custodian", () => {
+  assertEquals(recipientsFor("request.changed", people, { actor: "staff" }), ["boss", "fleet"]);
+  assertEquals(recipientsFor("request.redecided", people, { requester: "staff", actor: "fleet" }), ["staff"]);
+  assertEquals(recipientsFor("request.redecided", people, { requester: "fleet", actor: "fleet" }), []);
+  assertEquals(recipientsFor("booking.changed", people, { requester: "staff", custodian: "dispatcher", actor: "fleet" }), ["staff", "dispatcher"]);
+  assertEquals(recipientsFor("booking.changed", people, { requester: "staff", custodian: "staff", actor: "boss" }), ["staff"]);
+  assertEquals(recipientsFor("booking.changed", people, { custodian: null, requester: null }), []);
 });

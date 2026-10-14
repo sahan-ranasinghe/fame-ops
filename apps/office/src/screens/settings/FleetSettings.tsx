@@ -100,6 +100,22 @@ export function FleetSettings() {
           <div><button className="btn dark" type="submit" disabled={busy !== null || !changed("dwell_min")}>Save</button></div>
         </form>
 
+        <form className="card card-b form" data-testid="shift-settings" onSubmit={(ev) => { ev.preventDefault(); void save("shift_start", draft.shift_start ?? "08:00").then(() => (JSON.stringify(draft.shift_days) !== JSON.stringify(data.settings.shift_days) ? save("shift_days", draft.shift_days ?? []) : undefined)); }}>
+          <h2>Shift nudge in the driver app</h2>
+          <p className="muted small" style={{ margin: 0 }}>{data.about.shift_start}. {data.about.shift_days}.</p>
+          <div className="grid2">
+            <div className="field"><label htmlFor="fs-shift-start">Time</label><input id="fs-shift-start" type="time" value={draft.shift_start ?? "08:00"} onChange={(e) => setDraft({ ...draft, shift_start: e.target.value })} /></div>
+            <div className="field"><span className="lab">Days</span>
+              <div className="chips">
+                {DAYS.map((d, i) => (
+                  <label key={d} className="check"><input type="checkbox" checked={(draft.shift_days ?? []).includes(i)} onChange={(e) => setDraft({ ...draft, shift_days: e.target.checked ? [...new Set([...(draft.shift_days ?? []), i])].sort((a, b) => a - b) : (draft.shift_days ?? []).filter((x) => x !== i) })} /> {d}</label>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="acts"><button className="btn dark" type="submit" disabled={busy !== null || (!changed("shift_start") && !changed("shift_days"))}>Save</button></div>
+        </form>
+
         <div className="card card-b form" data-testid="fleet-bookings">
           <h2>Bookings</h2>
           <label className="row" style={{ padding: 0, cursor: "pointer" }}>

@@ -33,7 +33,7 @@ export const fleetOverview = tool({
       loadLatest(db),
       db.from("tasks").select("id, status").gte("start_at", from).lt("start_at", to),
       db.from("tasks").select("id, title, employee_id, vehicle_id, started_at").eq("status", "in_progress").order("started_at"),
-      db.from("vehicle_requests").select("id, created_at").eq("status", "waiting").order("created_at"),
+      db.from("vehicle_requests").select("id, created_at").in("status", ["waiting", "changed"]).order("created_at"),
     ]);
     const tasks = unwrap(dayTasks, "tasks");
     const running = unwrap(runningRes, "tasks");

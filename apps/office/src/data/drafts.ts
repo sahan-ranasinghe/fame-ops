@@ -57,13 +57,15 @@ export function removeDraft(key: string): void {
   }
 }
 
-export interface DraftControls {
+export interface DraftControls<T = unknown> {
   /** A draft from an earlier visit that has not been resumed or discarded yet. */
   saved: { at: number } | null;
   resume: () => void;
   discard: () => void;
   /** After a successful save: the draft is gone and nothing more is saved until the next change. */
   clear: () => void;
+  /** Sets the form to what was loaded (an edit page's record) without counting it as a change. */
+  reset: (value: T) => void;
 }
 
 /**
@@ -72,7 +74,7 @@ export interface DraftControls {
  * an earlier draft is offered through `draft.saved` until resumed or discarded,
  * or until the person starts typing afresh (then the new text replaces it).
  */
-export function useFormDraft<T>(form: string, record: string | null, initial: T | (() => T), enabled = true): [T, Dispatch<SetStateAction<T>>, DraftControls] {
+export function useFormDraft<T>(form: string, record: string | null, initial: T | (() => T), enabled = true): [T, Dispatch<SetStateAction<T>>, DraftControls<T>] {
   const { me } = useFleet();
   const key = draftKey(me.email ?? "artifact", form, record);
   const [value, setValue] = useState<T>(initial);
@@ -130,7 +132,11 @@ export function useFormDraft<T>(form: string, record: string | null, initial: T 
     removeDraft(key);
     setSaved(null);
   }, [key]);
+  const reset = useCallback((v: T) => {
+    seen.current = v;
+    setValue(v);
+  }, []);
 
-  const controls = useMemo<DraftControls>(() => ({ saved: saved ? { at: saved.at } : null, resume, discard, clear }), [saved, resume, discard, clear]);
+  const controls = useMemo<DraftControls<T>>(() => ({ saved: saved ? { at: saved.at } : null, resume, discard, clear, reset }), [saved, resume, discard, clear, reset]);
   return [value, setValue, controls];
 }

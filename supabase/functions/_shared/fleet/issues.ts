@@ -442,20 +442,22 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
 
   // --- Requests nobody has decided ------------------------------------------------------
   if (requestScope) {
-    let q = db.from("vehicle_requests").select("*").eq("status", "waiting");
+    let q = db.from("vehicle_requests").select("*").in("status", ["waiting", "changed"]);
     if (scope.request_id) q = q.eq("id", scope.request_id);
     for (const r of unwrap(await q, "vehicle requests")) {
-      if (new Date(r.created_at).getTime() + REQUEST_WAIT_MIN * 60000 > now.getTime()) continue;
+      // A changed booking waits from its edit, not from the day it was first asked.
+      const since = r.status === "changed" ? r.changed_at ?? r.created_at : r.created_at;
+      if (new Date(since).getTime() + REQUEST_WAIT_MIN * 60000 > now.getTime()) continue;
       wanted.push({
         kind: "request_waiting",
         ref_key: `request:${r.id}`,
         severity: "warning",
-        title: "Vehicle request waiting",
+        title: r.status === "changed" ? "Changed booking needs re-approval" : "Vehicle request waiting",
         detail: [r.requested_by_name, [r.route_from, r.route_to].filter(Boolean).join(" → ") || null, colomboDayTime(r.needed_at)].filter(
           Boolean,
         )
           .join(" · "),
-        due: `waiting ${ago(r.created_at, now)}`,
+        due: `waiting ${ago(since, now)}`,
         sort_key: -1,
         request_id: r.id,
         employee_id: r.requested_by_employee_id,

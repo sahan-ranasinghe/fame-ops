@@ -45,7 +45,7 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   // The rail is gone; the tab bar has Home, Requests, Tasks, Map, More and nothing else.
   await expect(page.locator("aside.rail")).toBeHidden();
-  await expect(tabs(page)).toHaveText(["Home", "Requests", "Tasks", "Map", "More"]);
+  await expect(tabs(page)).toHaveText(["Home", /^Requests\d*$/, "Tasks", "Map", "More"]); // the digits are the waiting badge
   // The big action: Requests to approve (N) while any wait (other tests leave some), else Assign a task.
   const big = page.getByTestId("home-action");
   await expect(big).toHaveText(/^(Assign a task|Requests to approve \(\d+\))$/);
@@ -140,6 +140,7 @@ test("a requester on a phone: four tabs, New request as the big action, the requ
   await page.getByTestId("home-action").click();
   await expect(page).toHaveURL(/\/requests\/new$/);
   await expect(page.getByLabel("Who needs it")).toHaveCount(0);
+  await expect(page.getByLabel("On behalf of")).toBeVisible();
   await page.getByLabel("Note").fill("Phone draft");
   await tabs(page).filter({ hasText: "Map" }).click();
   await expect(page.getByRole("heading", { name: "Live locations" })).toBeVisible();

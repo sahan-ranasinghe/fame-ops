@@ -415,3 +415,11 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .rq-timeline li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px }
 .rq-timeline li .dot { margin-top: 5px; flex: none }
 .rq-timeline li:not(.done) { color: var(--muted) }
+
+/* Phase 6 Part 2: what changed, who's available */
+.changes { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 2px }
+.avail-row { width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); font: inherit; color: inherit; cursor: default; padding: 10px 0 }
+button.avail-row { cursor: pointer }
+button.avail-row:hover { background: var(--bg) }
+.avail-row.picked { background: var(--chip-blue, #e6edf8) }
+.avail-row:first-child { border-top: 0 }

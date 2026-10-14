@@ -198,6 +198,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
       </div>
       <dl className="facts">
         <div><dt>Last position</dt><dd>{x.last_position_at ?? (x.updated ? String(x.updated).slice(-5) : "—")}</dd></div>
+        <div><dt>On duty since</dt><dd>{x.on_duty_since ?? "—"}</dd></div>
         <div><dt>Near</dt><dd>{x.near || "—"}</dd></div>
         <div><dt>Speed</dt><dd>{x.speed_kmh != null && (x.status ?? "live") === "live" ? num(x.speed_kmh) + " km/h" : "—"}</dd></div>
         <div><dt>Battery</dt><dd>{x.battery_pct != null ? x.battery_pct + "%" : "—"}</dd></div>

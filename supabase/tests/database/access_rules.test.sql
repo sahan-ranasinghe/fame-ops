@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  37::bigint, 'there are 37 tables in public (the dispatch tables of Phase 5 parts 4, 5, 3a and 3b included)');
+  40::bigint, 'there are 40 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included)');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -115,7 +115,7 @@ select is(
 
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  31::bigint, 'there are 31 policies on public tables');
+  35::bigint, 'there are 35 policies on public tables');
 
 select is(
   (select count(*) from pg_policies
@@ -1159,7 +1159,7 @@ set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000e1","
 select is(public.current_office_role(), 'admin', 'current_office_role() is admin for the admin');
 select is((select count(*) from public.driver_latest), (select latest from office_mark), 'admin reads every driver position');
 select is((select count(*) from public.tasks), (select tasks from office_mark), 'admin reads every task');
-select is((select count(*) from public.location_points), 0::bigint, 'admin reads no raw location point through RLS (the route comes through driver_route)');
+select is((select count(*) from public.location_points) > 0, true, 'admin reads the raw location points through RLS (since route_quality: the driver page grows its line from Realtime)');
 select is((select count(*) from public.task_stops), (select stops from office_mark), 'admin reads every stop');
 update public.tasks set end_odometer_km = 999999 where id = '50000000-0000-0000-0000-000000000003';
 select is((select end_odometer_km from public.tasks where id = '50000000-0000-0000-0000-000000000003'), null,

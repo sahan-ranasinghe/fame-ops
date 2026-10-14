@@ -4,7 +4,8 @@
 //
 //   POST /functions/v1/push-task
 //   x-server-key: <SERVER_KEY>            (called by the database trigger tasks_notify_push, through pg_net)
-//   { "task_id": "...", "kind": "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder", "employee_id": "..." }
+//   { "task_id": "...", "kind": "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder", "employee_id": "...",
+//     "changes": { "time": "Thu 15 Oct 09:30", "vehicle": "WP KL-1234", "end_by": "12:00", "title": "…", "stops": true, "passengers": 4, "notes": true } }  (changed only)
 //   200 { "sent": 1, "failed": 0 }   (also 200 with sent 0 when the driver has no registered phone)
 //
 // The text is in the driver's language (employees.language). Android plays
@@ -36,10 +37,26 @@ const CHANNEL: Record<Kind, string> = {
   accept_reminder: "tasks-new",
 };
 
+/** The words for each changed field ("Task changed: new time 09:30 · vehicle WP KL-1234"). */
+const CHANGE_TEXT: Record<Language, Record<string, string>> = {
+  en: { time: "new time {time}", vehicle: "vehicle {vehicle}", end_by: "back by {end_by}", title: "now “{title}”", stops: "stops changed", passengers: "{passengers} passengers", notes: "note changed" },
+  si: { time: "නව වේලාව {time}", vehicle: "වාහනය {vehicle}", end_by: "ආපසු {end_by} ට", title: "දැන් “{title}”", stops: "නැවතුම් වෙනස් විය", passengers: "මගීන් {passengers}", notes: "සටහන වෙනස් විය" },
+};
+const CHANGE_ORDER = ["time", "end_by", "vehicle", "stops", "title", "passengers", "notes"];
+
+/** "new time 09:30 · vehicle WP KL-1234", or "" when nothing is named. */
+export function changesLine(language: Language, changes: unknown): string {
+  if (!changes || typeof changes !== "object") return "";
+  const c = changes as Record<string, unknown>;
+  return CHANGE_ORDER.filter((k) => c[k] !== undefined && c[k] !== null && c[k] !== false)
+    .map((k) => fill(CHANGE_TEXT[language][k], { [k]: String(c[k]) }))
+    .join(" · ");
+}
+
 const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
   en: {
     new: { title: "New task {when}", body: "{title} · {pickup} → {dropoff}" },
-    changed: { title: "Task changed {when}", body: "{title} · {pickup} → {dropoff}" },
+    changed: { title: "Task changed {when}", body: "{title} · {changes}" },
     cancelled: { title: "Task cancelled", body: "{title} · {reason}" },
     removed: { title: "Task reassigned", body: "{title} is no longer yours." },
     leave_30: { title: "Leave by {leave}", body: "{title} · leave in 30 minutes · {pickup} → {dropoff}" },
@@ -48,7 +65,7 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
   },
   si: {
     new: { title: "නව කාර්යය {when}", body: "{title} · {pickup} → {dropoff}" },
-    changed: { title: "කාර්යය වෙනස් විය {when}", body: "{title} · {pickup} → {dropoff}" },
+    changed: { title: "කාර්යය වෙනස් විය {when}", body: "{title} · {changes}" },
     cancelled: { title: "කාර්යය අවලංගු විය", body: "{title} · {reason}" },
     removed: { title: "කාර්යය වෙනත් අයෙකුට පැවරිණි", body: "{title} තවදුරටත් ඔබගේ නොවේ." },
     leave_30: { title: "{leave} ට පිටත් වන්න", body: "{title} · විනාඩි 30 කින් පිටත් වන්න · {pickup} → {dropoff}" },
@@ -139,6 +156,7 @@ Deno.serve(async (request) => {
   }
 
   const language: Language = driver.language === "si" ? "si" : "en";
+  const route = [stops[0]?.place_name ?? "", stops.length > 1 ? stops[stops.length - 1].place_name : ""].filter(Boolean).join(" → ");
   const vars = {
     when: when(task.start_at),
     leave: clock(task.leave_by ?? task.start_at),
@@ -146,6 +164,8 @@ Deno.serve(async (request) => {
     pickup: stops[0]?.place_name ?? "",
     dropoff: stops.length > 1 ? stops[stops.length - 1].place_name : "",
     reason: task.cancelled_reason ?? "",
+    // A changed task names what changed; with nothing named (an older caller) the route is shown as before.
+    changes: changesLine(language, body.changes) || route,
   };
   const text = TEXT[language][kind];
   const messages = tokens.map((t) => ({

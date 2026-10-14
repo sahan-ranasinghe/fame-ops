@@ -59,3 +59,19 @@ describe("useFormDraft", () => {
     expect(readDraft(key)).toBeNull();
   });
 });
+
+describe("useFormDraft.reset", () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => vi.useRealTimers());
+  it("sets the loaded record without saving a draft; typing after it does", () => {
+    vi.useFakeTimers();
+    const { result } = renderHook(() => useFormDraft("request-edit", "r1", { note: "" }), { wrapper });
+    act(() => result.current[2].reset({ note: "loaded" }));
+    act(() => { vi.advanceTimersByTime(DRAFT_SAVE_MS * 2); });
+    expect(result.current[0]).toEqual({ note: "loaded" });
+    expect(readDraft(draftKey(me.email ?? "", "request-edit", "r1"))).toBeNull();
+    act(() => result.current[1]({ note: "typed" }));
+    act(() => { vi.advanceTimersByTime(DRAFT_SAVE_MS); });
+    expect(readDraft<{ note: string }>(draftKey(me.email ?? "", "request-edit", "r1"))?.state).toEqual({ note: "typed" });
+  });
+});

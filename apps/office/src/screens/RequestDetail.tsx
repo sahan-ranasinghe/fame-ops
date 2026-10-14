@@ -1,6 +1,7 @@
 // One request, read only (/requests/:id): what was asked, its timeline, the
-// decision or the cancellation; Review opens /requests/:id/decide; an approved
-// booking can be cancelled here with a reason (its task too).
+// decision or the cancellation; Review opens /requests/:id/decide (a changed
+// booking too); Edit opens /requests/:id/edit for the person who asked (or an
+// approver); an approved booking can be cancelled here with a reason (its task too).
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -12,7 +13,7 @@ import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
-import { Timeline } from "./requestParts";
+import { ChangesList, Timeline } from "./requestParts";
 
 /**
  * The request from the lists already loaded (followed as they refresh), else
@@ -52,6 +53,7 @@ export function RequestDetail() {
   const [busy, setBusy] = useState(false);
   const decides = me.tools.includes("decide_request");
   const cancels = me.tools.includes("cancel_request");
+  const approver = me.permissions.includes("approve");
 
   async function cancel() {
     const r = cancelReason.trim();
@@ -79,11 +81,17 @@ export function RequestDetail() {
         title="Vehicle request"
         sub={<Pill tone={requestTone(q.status)}>{cap(q.status || "waiting")}</Pill>}
         backTo="/requests"
-        actions={q.status === "waiting" && decides ? <Link className="btn small dark" to={`/requests/${id}/decide`}>Review</Link> : undefined}
+        actions={(q.status === "waiting" || q.status === "changed") && decides ? <Link className="btn small dark" to={`/requests/${id}/decide`}>Review</Link> : undefined}
       />
       <div className="card card-b">
-        <div className="name" style={{ fontSize: 19 }}>{q.requested_by}</div>
+        <div className="name" style={{ fontSize: 19 }}>{q.requested_by}{q.on_behalf_of ? <span className="muted"> · for {q.on_behalf_of}</span> : null}</div>
         <div className="sub">{joinDots([q.project, q.asked, q.one_step ? "booked directly by the office" : ""])}</div>
+        {q.status === "changed" && (
+          <div className="notice" style={{ marginTop: 12 }} data-testid="changed-notice">
+            <p><b>Changed{q.changed?.by ? ` by ${q.changed.by}` : ""}{q.changed?.at ? ` · ${q.changed.at}` : ""} · needs re-approval.</b> The booking keeps its old plan until the office decides again.</p>
+            <ChangesList changes={q.changes} />
+          </div>
+        )}
         <dl className="kv" style={{ marginTop: 14 }}>
           <div><dt>When</dt><dd>{q.when}</dd></div>
           <div><dt>Back by</dt><dd>{q.back_by || "—"}</dd></div>
@@ -95,11 +103,19 @@ export function RequestDetail() {
         </dl>
         <Timeline q={q} />
       </div>
-      {q.task_id && me.tools.includes("task_detail") && <Link className="btn" to={`/tasks/${q.task_id}`}>Open the task</Link>}
+      <div className="acts">
+        {q.task_id && me.tools.includes("task_detail") && <Link className="btn" to={`/tasks/${q.task_id}`}>Open the task</Link>}
+        {(q.status === "waiting" || q.status === "approved" || q.status === "changed") && me.tools.includes("update_request") && (approver || q.requested_by === me.name) && (
+          <Link className="btn" to={`/requests/${id}/edit`}>Edit request</Link>
+        )}
+      </div>
       {q.status === "waiting" && (decides
         ? <Link className="btn dark" to={`/requests/${id}/decide`}>Approve or decline</Link>
         : <Notice tone="info">The fleet office will approve or decline this request.</Notice>)}
-      {q.status === "approved" && cancels && (
+      {q.status === "changed" && (decides
+        ? <Link className="btn dark" to={`/requests/${id}/decide`}>Decide the change</Link>
+        : <Notice tone="info">The fleet office will keep, change or decline the changed booking.</Notice>)}
+      {(q.status === "approved" || q.status === "changed") && cancels && (
         <div className="confirm" style={{ borderColor: "var(--line)" }} data-testid="cancel-booking">
           <div className="field">
             <label htmlFor="rq-cancel">Cancel this booking with a reason</label>

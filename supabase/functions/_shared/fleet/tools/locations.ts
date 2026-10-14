@@ -30,7 +30,7 @@ export const liveDrivers = tool({
       loadLatest(db),
       loadSettings(db),
       db.from("tasks").select("id, title, employee_id, vehicle_id, status, return_to_base, avoid_expressway").eq("status", "in_progress"),
-      db.from("duty_sessions").select("employee_id, vehicle_id").is("ended_at", null),
+      db.from("duty_sessions").select("employee_id, vehicle_id, started_at").is("ended_at", null),
     ]);
     const tasks = unwrap(running, "tasks");
     const sessions = unwrap(openSessions, "sharing periods");
@@ -50,7 +50,8 @@ export const liveDrivers = tool({
       const share = sharing(pos, now);
       const { fields } = statusOf(pos, now);
       const task = tasks.find((t) => t.employee_id === e.id);
-      const vehicleId = task?.vehicle_id ?? sessions.find((s) => s.employee_id === e.id)?.vehicle_id ?? e.current_vehicle_id;
+      const session = sessions.find((s) => s.employee_id === e.id);
+      const vehicleId = task?.vehicle_id ?? session?.vehicle_id ?? e.current_vehicle_id;
       const hasPosition = pos?.lat != null && pos?.lng != null;
       const taskStops = task ? stops.filter((s) => s.task_id === task.id) : [];
       const eta = task ? await taskEta(db, task, taskStops, pos, settings, now) : null;
@@ -62,6 +63,7 @@ export const liveDrivers = tool({
         location: share.text,
         ...fields,
         updated: pos?.recorded_at ? colomboDateTime(pos.recorded_at) : undefined,
+        on_duty_since: session?.started_at ? colomboTime(session.started_at) : undefined,
         near: hasPosition ? await nearestTown(db, pos.lat!, pos.lng!) : undefined,
         speed_kmh: share.state === "sharing" ? kmh(pos?.speed_mps) : undefined,
         battery_pct: pos?.battery_pct,

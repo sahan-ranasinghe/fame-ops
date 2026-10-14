@@ -80,6 +80,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setState({ step: "blocked", reason: "not_configured" });
       return;
     }
+    // A set-password link pasted into a tab that already shows the app (after a sign-out the
+    // URL is "/"): the browser changes only the hash and does not load the page again, so the
+    // link would never be read. Load it again, as a fresh tab would.
+    const onHash = () => {
+      if (/[#&]type=recovery(&|$)/.test(location.hash)) location.reload();
+    };
+    window.addEventListener("hashchange", onHash);
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         recovering.current = true;
@@ -97,7 +104,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setState({ step: "signed_out" });
       }
     });
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      sub.subscription.unsubscribe();
+    };
   }, [check]);
 
   const api: AuthApi = useMemo(() => ({

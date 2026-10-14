@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { driverWhatsApp, emptyAssign, planInput, validateAssign } from "./assignLogic";
-import { bookInput, decisionInput, emptyRequest, suggestInput, timelineSteps, validateNewRequest } from "./requestLogic";
+import { bookInput, decisionInput, emptyRequest, suggestInput, timelineSteps, validateNewRequest, diffLines, editFields, redecideInput, updateRequestInput } from "./requestLogic";
 
 function filledAssign() {
   const f = { ...emptyAssign("2026-10-12"), title: "Team drop · Matara", leaveBy: "06:30", driver: "kasun.s", vehicle: "WP CAB-4521" };
@@ -52,12 +52,13 @@ describe("Assign a task", () => {
 });
 
 describe("Vehicle requests", () => {
-  it("needs who, the day and the time", () => {
-    expect(validateNewRequest(emptyRequest("2026-10-12"))).toEqual({ error: "Add who needs it, the day and the time." });
+  it("needs the day and the time", () => {
+    expect(validateNewRequest(emptyRequest("2026-10-12"))).toEqual({ error: "Add the day and the time." });
   });
-  it("builds the create_request arguments, in the staff member's own name", () => {
-    const v = validateNewRequest({ ...emptyRequest("2026-10-12"), time: "08:00", project: "HR", need: "van", pax: "6", tools: true, to: "Matara" }, "Test Staff");
-    expect(v).toEqual({ input: { requested_by: "Test Staff", date: "2026-10-12", time: "08:00", project: "HR", need_type: "van", route_to: "Matara", pax: 6, tools: true } });
+  it("builds the create_request arguments, in the asker's own name, with who it is for when that is someone else", () => {
+    const v = validateNewRequest({ ...emptyRequest("2026-10-12"), time: "08:00", project: "HR", need: "van", pax: "6", tools: true, to: "Matara" });
+    expect(v).toEqual({ input: { date: "2026-10-12", time: "08:00", project: "HR", need_type: "van", route_to: "Matara", pax: 6, tools: true } });
+    expect(validateNewRequest({ ...emptyRequest("2026-10-12"), time: "08:00", behalf: " A visitor " })).toEqual({ input: { date: "2026-10-12", time: "08:00", on_behalf_of: "A visitor" } });
   });
   it("decides with a vehicle and driver, or a reason", () => {
     expect(decisionInput({ id: "r1", decision: "approve" })).toEqual({ error: "Pick a vehicle and a driver." });
@@ -70,9 +71,9 @@ describe("Vehicle requests", () => {
 });
 
 describe("Vehicle requests (Part 6: custodians and one-step booking)", () => {
-  const f = { ...emptyRequest("2026-10-17"), by: "Pool Custodian", time: "09:00", back: "12:00", need: "car", pax: "2", to: "Rajagiriya" };
+  const f = { ...emptyRequest("2026-10-17"), time: "09:00", back: "12:00", need: "car", pax: "2", to: "Rajagiriya" };
   it("sends driver_required only when the driver box is unticked", () => {
-    expect(validateNewRequest(f)).toEqual({ input: { requested_by: "Pool Custodian", date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", route_to: "Rajagiriya", pax: 2 } });
+    expect(validateNewRequest(f)).toEqual({ input: { date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", route_to: "Rajagiriya", pax: 2 } });
     expect(validateNewRequest({ ...f, driver: false })).toMatchObject({ input: { driver_required: false } });
   });
   it("looks for free vehicles once the day and time are known", () => {
@@ -84,7 +85,7 @@ describe("Vehicle requests (Part 6: custodians and one-step booking)", () => {
     expect(bookInput(f, { vehicle: "WP CAR-1182", driver: "", hasCustodian: false })).toEqual({ error: "Pick a driver." });
     expect(bookInput(f, { vehicle: "WP CAR-1182", driver: "", hasCustodian: true })).toEqual({ error: 'Pick a driver, or untick "A driver is needed" so the custodian drives.' });
     expect(bookInput({ ...f, driver: false }, { vehicle: "WP CAR-1182", driver: "", hasCustodian: true })).toEqual({
-      input: { requested_by: "Pool Custodian", date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", route_to: "Rajagiriya", pax: 2, driver_required: false, vehicle: "WP CAR-1182" },
+      input: { date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", route_to: "Rajagiriya", pax: 2, driver_required: false, vehicle: "WP CAR-1182" },
     });
     expect(bookInput(f, { vehicle: "WP PH-2087", driver: "kasun.s", hasCustodian: false })).toMatchObject({ input: { vehicle: "WP PH-2087", driver: "kasun.s" } });
   });
@@ -107,5 +108,46 @@ describe("Vehicle form (Part 6: the custodian)", () => {
       input: { reg_no: "WP CAR-1182", custodian: "pool@fame.test", custodian_note: "Keeps it at Rajagiriya" }, tool: "update_vehicle",
     });
     expect(vehicleInput({ ...emptyVehicle(), custodian: "none" }, "WP CAR-1182")).toEqual({ input: { reg_no: "WP CAR-1182", custodian: null }, tool: "update_vehicle" });
+  });
+});
+
+describe("Vehicle requests (Phase 6: edits, re-approval, the timeline from events)", () => {
+  const was = { ...emptyRequest("2026-10-17"), time: "09:00", back: "12:00", need: "van", pax: "4", from: "Head office", to: "Galle", note: "" };
+  it("reads the edit form from the card's fields", () => {
+    expect(editFields({ fields: { date: "2026-10-17", time: "09:00", back_by: "12:00", route_from: "Head office", route_to: "Galle", need_type: "van", pax: 4, tools: false, driver_required: true, on_behalf_of: "A visitor" } }))
+      .toEqual({ ...was, behalf: "A visitor" });
+    expect(editFields({ note: "old note" }).note).toBe("old note");
+  });
+  it("sends update_request only the fields that changed, with the version", () => {
+    expect(updateRequestInput("r1", 2, was, was)).toEqual({ error: "Nothing changed." });
+    expect(updateRequestInput("r1", 2, { ...was, time: "09:30", to: "Matara", back: "", pax: "", tools: true, driver: false, behalf: "Someone" }, was)).toEqual({
+      input: { request_id: "r1", version: 2, time: "09:30", back_by: null, route_to: "Matara", pax: null, tools: true, driver_required: false, on_behalf_of: "Someone" },
+    });
+    expect(updateRequestInput("r1", 2, { ...was, date: "" }, was)).toEqual({ error: "Add the day and the time." });
+  });
+  it("decides a changed booking again: keep, change with a pick, decline with a reason", () => {
+    expect(redecideInput({ id: "r1", version: 3, decision: "keep" })).toEqual({ input: { request_id: "r1", version: 3, decision: "keep" } });
+    expect(redecideInput({ id: "r1", version: 3, decision: "decline", reason: " " })).toEqual({ error: "Write the reason first. The person who asked will see it." });
+    expect(redecideInput({ id: "r1", version: 3, decision: "decline", reason: "No van" })).toEqual({ input: { request_id: "r1", version: 3, decision: "decline", reason: "No van" } });
+    expect(redecideInput({ id: "r1", version: 3, decision: "change", was: { date: "2026-10-17", time: "09:00", back: "12:00" }, date: "2026-10-17", time: "09:00", back: "12:00" }))
+      .toEqual({ error: "Pick what to change: the vehicle, the driver, the day, the time or the back-by time." });
+    expect(redecideInput({ id: "r1", version: 3, decision: "change", driver: "kasun.s", time: "11:00", was: { time: "09:00", back: "12:00" }, back: "" }))
+      .toEqual({ input: { request_id: "r1", version: 3, decision: "change", driver: "kasun.s", time: "11:00", back_by: null } });
+  });
+  it("tells the timeline from the events, with the diff of an edit, and what is still to come", () => {
+    const events = [
+      { at: "14 Oct 09:00", action: "created", actor: "Asker" },
+      { at: "14 Oct 09:10", action: "seen", actor: "Sahan" },
+      { at: "14 Oct 09:20", action: "approved", actor: "Sahan", note: "WP CAB-4521 · Kasun" },
+      { at: "14 Oct 10:00", action: "changed", actor: "Asker", changes: { time: { from: "Thu 15 Oct 09:00", to: "Thu 15 Oct 09:30" } } },
+    ];
+    const steps = timelineSteps({ status: "changed", events });
+    expect(steps.map((s) => `${s.label}:${s.done}`)).toEqual(["Sent:true", "Seen by the office:true", "Approved:true", "Changed · needs re-approval:true", "Decision on the change:false"]);
+    expect(steps[1].at).toBe("14 Oct 09:10 by Sahan");
+    expect(steps[3].lines).toEqual(["time Thu 15 Oct 09:00 → Thu 15 Oct 09:30"]);
+    const kept = timelineSteps({ status: "approved", events: [...events, { at: "14 Oct 10:30", action: "redecided", actor: "Sahan", note: "kept as asked: time …" }] });
+    expect(kept.map((s) => s.label).slice(-1)).toEqual(["Kept as asked"]);
+    expect(timelineSteps({ status: "waiting", events: [events[0]] }).map((s) => s.label)).toEqual(["Sent", "Seen by the office", "Decision"]);
+    expect(diffLines({ to: { from: "Galle", to: "Matara" }, "back by": { from: "12:00", to: null } })).toEqual(["to Galle → Matara", "back by 12:00 → —"]);
   });
 });
