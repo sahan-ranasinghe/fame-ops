@@ -173,6 +173,9 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(2), lat: 6.9, lng: 79.95, accuracy_m: 8, speed_mps: 20, battery_pct: 76 }])).toBe(201);
   await expect(live).toContainText(/Live · \d+ min/, { timeout: 8000 });
   await expect(live).toContainText("72 km/h");
+  // The position time with seconds, from the Realtime row: on the card and under the marker.
+  await expect(live.getByTestId("live-position")).toHaveText(/^\d\d:\d\d:\d\d$/);
+  await expect(page.getByText(/^position \d\d:\d\d:\d\d$/).first()).toBeVisible();
   await expect(row).toContainText(/\d+ min/);
   // A third point a second later, about where the speed says: the move is confirmed, so the day has a line and km.
   expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(1), lat: 6.9002, lng: 79.9502, accuracy_m: 8, speed_mps: 20, battery_pct: 76 }])).toBe(201);

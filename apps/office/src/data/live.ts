@@ -3,7 +3,7 @@
 // how a Realtime row from driver_latest updates a driver card, and how the
 // cards age as the clock ticks. The older state/location fields (15 min
 // rule) are kept for the published Teams artifact.
-import { colomboClock, driverStatus, statusText } from "@fleet/status";
+import { colomboClock, colomboClockS, driverStatus, statusText } from "@fleet/status";
 import { latLng } from "../lib/format";
 import type { DriverStatus, LiveDriver, ShareState, Signal } from "./types";
 
@@ -54,7 +54,7 @@ const colomboDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo", 
 export const colomboDateTime = (iso: string) => `${colomboDay.format(new Date(iso))} ${colomboClock(iso)}`;
 
 /** The status fields of a card from its raw signal, with the shared rule. */
-export function statusFields(signal: Signal, now: Date): Pick<LiveDriver, "status" | "status_text" | "status_since" | "last_position_at"> {
+export function statusFields(signal: Signal, now: Date): Pick<LiveDriver, "status" | "status_text" | "status_since" | "last_position_at" | "last_position_time"> {
   const r = driverStatus({
     sharing: signal.sharing,
     pointAt: signal.point_at,
@@ -69,6 +69,7 @@ export function statusFields(signal: Signal, now: Date): Pick<LiveDriver, "statu
     status_text: statusText(r, now),
     status_since: r.since ? colomboDateTime(r.since) : undefined,
     last_position_at: signal.point_at ? colomboClock(signal.point_at) : undefined,
+    last_position_time: signal.point_at ? colomboClockS(signal.point_at) : undefined,
   };
 }
 

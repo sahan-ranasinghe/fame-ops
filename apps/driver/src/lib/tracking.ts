@@ -9,7 +9,7 @@ import { getJson, KEYS, setJson } from './kv';
 import { type DropCounts, type PhoneFix, type RecordingState, zeroCounts } from './recording';
 import { newTrack } from './track';
 
-export { type DropCounts, HEARTBEAT_MS, type PhoneFix, recordable } from './recording';
+export { type DropCounts, HEARTBEAT_MS, isMoving, type PhoneFix, recordable } from './recording';
 
 export interface TrackRecord extends RecordingState {
   /** The sharing period the state belongs to. */

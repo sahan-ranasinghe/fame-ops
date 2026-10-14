@@ -11,7 +11,8 @@ import * as realApi from '../src/lib/api';
 import { ApiError, type HeartbeatRow } from '../src/lib/api';
 import { CHUNK_BYTES, type UploadMeta, type VideoStore } from '../src/lib/videoStore';
 import {
-  BACKOFF_MS,
+  BACKOFF_MOVING_MS,
+  BACKOFF_PARKED_MS,
   type Connection,
   createSync,
   HEARTBEAT_BATCH,
@@ -37,6 +38,7 @@ function memoryStore() {
   const points: StoredPoint[] = [];
   const rejected = new Map<number, { status: number | undefined; error: string }>();
   const heartbeats: StoredHeartbeat[] = [];
+  const rejectedHb = new Map<number, { status: number | undefined; error: string }>();
   const store: QueueStore = {
     nextOps: (limit) => ops.filter((item) => item.failed === undefined).slice(0, limit),
     removeOp: (id) => void ops.splice(ops.findIndex((item) => item.seq === id), 1),
@@ -53,10 +55,11 @@ function memoryStore() {
       for (const id of seqs) points.splice(points.findIndex((p) => p.seq === id), 1);
     },
     rejectPoints: (seqs, status, error) => seqs.forEach((id) => rejected.set(id, { status, error })),
-    nextHeartbeats: (limit) => heartbeats.slice(0, limit),
+    nextHeartbeats: (limit) => heartbeats.filter((h) => !rejectedHb.has(h.seq)).slice(0, limit),
     removeHeartbeats: (seqs) => {
       for (const id of seqs) heartbeats.splice(heartbeats.findIndex((h) => h.seq === id), 1);
     },
+    rejectHeartbeats: (seqs, status, error) => seqs.forEach((id) => rejectedHb.set(id, { status, error })),
   };
   return {
     store,
@@ -84,6 +87,8 @@ function memoryStore() {
     rejected: () => [...rejected.values()],
     retryRejected: () => rejected.clear(),
     heartbeats: () => heartbeats.length,
+    rejectedHeartbeats: () => [...rejectedHb.values()],
+    retryRejectedHeartbeats: () => rejectedHb.clear(),
     ops: () => ops.filter((item) => item.failed === undefined).length,
     opAt: (i: number) => ops[i],
   };
@@ -207,7 +212,7 @@ function fakeServer() {
 
 async function main() {
   const clock = { now: 1_000_000 };
-  const makeSync = (q: ReturnType<typeof memoryStore>, s: ReturnType<typeof fakeServer>) =>
+  const makeSync = (q: ReturnType<typeof memoryStore>, s: ReturnType<typeof fakeServer>, moving?: () => boolean) =>
     createSync({
       client: {} as realApi.Client,
       store: q.store,
@@ -216,6 +221,7 @@ async function main() {
       removeFile: () => undefined,
       api: s.api,
       now: () => clock.now,
+      moving,
     });
 
   // --- 1. batches of 500, oldest first, until empty ------------------------------
@@ -230,7 +236,7 @@ async function main() {
     check(s.calls[0].first! < s.calls[0].last! && s.calls[0].last! < s.calls[1].first!, 'oldest first, batch after batch', s.calls.map((c) => [c.first, c.last]));
   }
 
-  // --- 2. a failed connection keeps everything and waits 5 s, 30 s, 2 min, 5 min, 5 min ------
+  // --- 2. a failed connection keeps everything; parked it waits 5 s, 15 s, 30 s, 1 min, 2 min, 5 min, 5 min --
   {
     const q = memoryStore();
     const s = fakeServer();
@@ -239,7 +245,7 @@ async function main() {
     s.set('network', 1); // the second batch fails
     let r = await sync.flush();
     check(r.offline && r.sent === 500 && q.waiting() === 700, 'the connection drops on batch 2: 500 sent, 700 kept', { r, waiting: q.waiting() });
-    check(sync.backoff().nextTryAt === clock.now + BACKOFF_MS[0], 'the next attempt waits 5 s', sync.backoff());
+    check(sync.backoff().nextTryAt === clock.now + BACKOFF_PARKED_MS[0], 'the next attempt waits 5 s', sync.backoff());
     r = await sync.flush();
     check(r.skipped && s.calls.length === 2, 'an attempt inside the wait does nothing', { r, calls: s.calls.length });
     r = await sync.flush({ force: true });
@@ -250,12 +256,56 @@ async function main() {
       await sync.flush();
       waits.push(sync.backoff().nextTryAt - clock.now);
     }
-    check(waits.join(',') === '30000,120000,300000,300000,300000', 'then 30 s, 2 min, 5 min, 5 min, 5 min', waits);
+    check(waits.join(',') === '15000,30000,60000,120000,300000', 'parked: then 15 s, 30 s, 1 min, 2 min, 5 min', waits);
     s.set('ok');
     clock.now = sync.backoff().nextTryAt;
+    const before = s.calls.length;
     r = await sync.flush();
     check(!r.offline && q.waiting() === 0 && sync.backoff().failures === 0, 'the connection is back: the rest goes and the ladder resets', { r, backoff: sync.backoff() });
+    // The batch that failed is the first one sent next time: batch 1 (already off the phone) never goes again.
+    const resumed = s.calls.slice(before).filter((c) => c.what === 'points');
+    const point501 = new Date(Date.parse('2026-10-14T03:00:00Z') + 500 * 5000).toISOString();
+    check(resumed.length === 2 && resumed[0].first === point501 && resumed[0].n === 500 && resumed[1].n === 200, 'the upload resumes from the batch that failed (point 501), not from the start', resumed);
     check(s.calls.filter((c) => c.what === 'points').every((c) => c.n <= POINT_BATCH), 'never more than 500 in a batch');
+  }
+
+  // --- 2b. while the vehicle moves the wait never passes 30 s: 5 s, 15 s, 30 s, 30 s … --------
+  {
+    const q = memoryStore();
+    const s = fakeServer();
+    const sync = makeSync(q, s, () => true);
+    q.addPoints(20);
+    s.set('network');
+    const waits: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      clock.now = Math.max(clock.now, sync.backoff().nextTryAt);
+      await sync.flush({ force: true });
+      waits.push(sync.backoff().nextTryAt - clock.now);
+    }
+    check(waits.join(',') === '5000,15000,30000,30000,30000', 'moving: 5 s, 15 s, 30 s, 30 s, 30 s', waits);
+    check(BACKOFF_MOVING_MS[BACKOFF_MOVING_MS.length - 1] === 30_000 && BACKOFF_PARKED_MS[BACKOFF_PARKED_MS.length - 1] === 300_000, 'the ladders top out at 30 s moving and 5 min parked');
+    // The phone reports the network back: the ladder resets and the next attempt is not skipped.
+    sync.resetBackoff();
+    s.set('ok');
+    const r = await sync.flush();
+    check(!r.skipped && !r.offline && q.waiting() === 0 && sync.backoff().failures === 0, 'network back: the ladder resets and the queue goes at once', { r, backoff: sync.backoff() });
+  }
+
+  // --- 2c. refused heartbeat history is kept and marked, never dropped -------------------
+  {
+    const q = memoryStore();
+    const s = fakeServer();
+    const sync = makeSync(q, s);
+    q.addHeartbeats(3);
+    s.set('refuse');
+    let r = await sync.flush();
+    check(r.failed === 3 && q.heartbeats() === 3 && q.rejectedHeartbeats().length === 3 && q.rejectedHeartbeats()[0].status === 400, 'refused history rows stay on the phone, marked with the answer', { r, rejected: q.rejectedHeartbeats() });
+    r = await sync.flush();
+    check(s.calls.filter((c) => c.what === 'heartbeats').length === 1, 'they are not sent again until put back in line');
+    q.retryRejectedHeartbeats();
+    s.set('ok');
+    r = await sync.flush();
+    check(r.sent === 3 && q.heartbeats() === 0, 'put back in line, they go', r);
   }
 
   // --- 3. refused points are kept, marked with the answer, and tried again on request ----

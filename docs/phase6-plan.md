@@ -629,6 +629,38 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
   fill continues at the next step; "Use this video" waits for the steps and the 30 s unless no
   more pieces can be added (never a retake of a fill that happened); leaving with pieces that
   are not complete asks "Continue recording / Discard", and a piece under way is kept first.
+- Driver app additions (same branch, 14 October, before round 2b):
+  1. Upload cadence: the location task uploads every 20 s while the vehicle moves (the recording
+     rules' `moving`), every 60 s while it stands, or at 10+ waiting points (`UPLOAD_MOVING_MS`,
+     `UPLOAD_PARKED_MS` in `lib/locationTask.ts`).
+  2. Retry: two ladders in `sync/engine.ts`: moving 5 s, 15 s, 30 s, then every 30 s
+     (`BACKOFF_MOVING_MS`); parked 5 s, 15 s, 30 s, 1 min, 2 min, then every 5 min
+     (`BACKOFF_PARKED_MS`). When expo-network's listener says the network is back (the phone's
+     own report; `@react-native-community/netinfo` is not in the build and would need a new
+     native build), `sync/index.ts` resets the ladder and flushes at once. A batch that fails is
+     the first one sent next time: the batches before it were removed from the phone as they went
+     (test-sync proves it with point 501).
+  3. Standing still (`lib/recording.ts`): a fixed 10 m radius from the anchor, never widened by
+     the accuracy, no speed test; the vehicle leaves "still" when a fix is over 10 m from the
+     anchor or the movement added up fix to fix since the last stored point passes 10 m, and that
+     fix becomes the anchor; one point a minute while still. Walking at 4 km/h stores a point
+     every 10–15 m; a parked car with the half-metre wobble of a standing GPS gets one a minute
+     (test-track covers both). A phone whose fixes wobble 8 m while parked, or the real indoor
+     recording, now stores most of its fixes (the wobble counts as movement under this rule; the
+     server's filter still removes the phantom km).
+  4. Heartbeat history: `driver_route` answered `heartbeats: 0` for every driver all day because
+     the route_quality migration grants drivers INSERT on an explicit column list and the
+     fuel_videos migration added `video_uploads_waiting` / `video_bytes_waiting` without extending
+     it; the app sends both, PostgREST answered "permission denied", and the queue dropped every
+     refused batch as "history the server will never take". So the rows were written on the phone
+     and uploaded, and refused on the server. Fix: migration `20261014220000_heartbeat_video_columns_grant`
+     (the grant), the pgTAP test and the connector suite insert a row as a driver with every
+     column the app sends (a column added without its grant now fails the tests), and the queue
+     keeps a refused history batch as rejected (retried with the points) instead of dropping it.
+     Today's rows before the fix are gone from the phones (they were dropped); from the fix on,
+     "App not running" and "no GPS" are real.
+  5. The live card and the marker show "position HH:MM:SS" (`last_position_time` on every
+     driver card, additive; the web's Realtime update keeps it current).
 
 ## 8. Part 4: site lists and place search
 

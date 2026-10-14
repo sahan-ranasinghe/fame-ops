@@ -117,7 +117,7 @@ export function DriverPage() {
             <Pill tone={tone}>{status}</Pill>
           </div>
           <dl className="facts">
-            <div><dt>Last position</dt><dd>{card?.last_position_at ?? route?.last ?? "—"}</dd></div>
+            <div><dt>Last position</dt><dd>{card?.last_position_time ?? card?.last_position_at ?? route?.last ?? "—"}</dd></div>
             <div><dt>{card?.on_duty_since ?? info?.on_duty_since ? "On duty since" : "Off duty"}</dt><dd>{card?.on_duty_since ?? info?.on_duty_since ?? (info?.off_duty_since ? `since ${info.off_duty_since}` : "—")}</dd></div>
             <div><dt>Vehicle</dt><dd>{card?.vehicle ?? info?.current_vehicle ?? "—"}</dd></div>
             <div><dt>Task</dt><dd>{card?.task ?? "—"}</dd></div>

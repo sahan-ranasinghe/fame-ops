@@ -6,7 +6,7 @@ import type { Db, Row } from "./db.ts";
 import { fetchAll, ToolError, unwrap } from "./db.ts";
 import { closest } from "./geo.ts";
 import { plain, thousands } from "./format.ts";
-import { driverStatus, type StatusResult, statusText } from "./status.ts";
+import { colomboClockS, driverStatus, type StatusResult, statusText } from "./status.ts";
 import {
   ago,
   colomboDate,
@@ -146,6 +146,8 @@ export interface SignalFields {
   status_since?: string;
   /** "HH:MM" of the newest GPS point. */
   last_position_at?: string;
+  /** "HH:MM:SS" of the newest GPS point: shown beside the marker and on the live card as "position HH:MM:SS". */
+  last_position_time?: string;
   heartbeat_at?: string;
   location_on?: boolean;
   permission?: string;
@@ -194,6 +196,7 @@ export function statusOf(latest: Latest | undefined, now: Date): { result: Statu
       status_text: statusText(result, now),
       status_since: result.since ? colomboDateTime(result.since) : undefined,
       last_position_at: latest?.recorded_at ? colomboTime(latest.recorded_at) : undefined,
+      last_position_time: latest?.recorded_at ? colomboClockS(latest.recorded_at) : undefined,
       heartbeat_at: latest?.hb_at ? colomboDateTime(latest.hb_at) : undefined,
       location_on: latest?.hb_location_on ?? undefined,
       permission: latest?.hb_permission ?? undefined,

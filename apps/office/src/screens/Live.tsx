@@ -122,7 +122,7 @@ export function Live() {
     const pos = positionOf(x);
     if (!pos) return [];
     const at = recordedAtOf(x);
-    return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, title: x.driver, lat: pos.lat, lng: pos.lng, tone: tone(x), selected: x.username === sel?.username, heading: x.heading ?? null, at: at ? Date.parse(at) : null }];
+    return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, sub: x.last_position_time ? `position ${x.last_position_time}` : undefined, title: x.driver, lat: pos.lat, lng: pos.lng, tone: tone(x), selected: x.username === sel?.username, heading: x.heading ?? null, at: at ? Date.parse(at) : null }];
   }), [all, sel?.username]);
   const mapRoute = useMemo<MapRoute | null>(() => (route && route.username === sel?.username ? mapRouteOf(route) : null), [route, sel?.username]);
   const mapTrails = useMemo<MapRoute[]>(() => (trails ? [...trailMap.values()].filter((r) => !(mapRoute && r.username === sel?.username)).map(trailOf) : []), [trails, trailMap, mapRoute, sel?.username]);
@@ -198,7 +198,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
         <Pill tone={tone(x)}>{statusLine(x)}</Pill>
       </div>
       <dl className="facts">
-        <div><dt>Last position</dt><dd>{x.last_position_at ?? (x.updated ? String(x.updated).slice(-5) : "—")}</dd></div>
+        <div><dt>Last position</dt><dd className="mono" data-testid="live-position">{x.last_position_time ?? x.last_position_at ?? (x.updated ? String(x.updated).slice(-5) : "—")}</dd></div>
         <div><dt>On duty since</dt><dd>{x.on_duty_since ?? "—"}</dd></div>
         <div><dt>Near</dt><dd>{x.near || "—"}</dd></div>
         <div><dt>Speed</dt><dd>{x.speed_kmh != null && (x.status ?? "live") === "live" ? num(x.speed_kmh) + " km/h" : "—"}</dd></div>

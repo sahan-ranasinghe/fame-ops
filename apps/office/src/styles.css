@@ -355,6 +355,9 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .mk-dom.live { --mk: var(--live) } .mk-dom.warn { --mk: var(--accent) }
 .mk-chip { font-family: var(--font-mono); font-weight: 600; font-size: 13px; letter-spacing: .02em; background: var(--surface); color: var(--ink); border: 1px solid var(--line-strong); border-radius: 7px; padding: 3px 8px; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.15) }
 .mk-dom.sel .mk-chip { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
+.mk-chip .mk-label, .mk-chip .mk-sub { display: block; text-align: center }
+.mk-chip .mk-sub { font-size: 11px; font-weight: 500; letter-spacing: 0; opacity: .75 }
+.mk-chip .mk-sub:empty { display: none }
 .mk-dot { width: 18px; height: 18px; border-radius: 6px; background: var(--mk); border: 3px solid var(--surface); box-shadow: 0 0 0 2px var(--mk) }
 .mk-dom.sel .mk-dot { box-shadow: 0 0 0 10px color-mix(in srgb, var(--mk) 22%, transparent) }
 .mk-dot { position: relative }

@@ -10,10 +10,11 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 import { type AcceptAnswer, ApiError, type HeartbeatRow } from '../lib/api';
 import { getJson, KEYS, setJson } from '../lib/kv';
 import { supabase } from '../lib/supabase';
+import { currentTrack } from '../lib/tracking';
 import type { Employee } from '../lib/types';
 import { base64Decode, SupabaseTusStore } from '../lib/videoStore';
 import { type BackoffState, type Connection, createSync, type FlushResult, type Op } from './engine';
-import { addHeartbeatLog, addOp, queueCounts, queueStore, replaceOp, retryRejectedPoints } from './store';
+import { addHeartbeatLog, addOp, queueCounts, queueStore, replaceOp, retryRejectedHeartbeats, retryRejectedPoints } from './store';
 
 const PHOTO_BUCKET = 'driver-photos';
 /** Refused points are put back in line once a day (and after an app update, and on pull to refresh). */
@@ -144,7 +145,23 @@ const sync = createSync({
   wifiOnly,
   connection: connectionKind,
   onProgress: () => changed(),
+  moving: () => currentTrack().moving === true,
 });
+
+// The phone says the network is back: the ladder starts again and what waits goes at once (no waiting for a timer).
+let wasConnected: boolean | null = null;
+try {
+  Network.addNetworkStateListener((state) => {
+    const connected = state.isConnected === true && state.isInternetReachable !== false;
+    if (connected && wasConnected === false) {
+      sync.resetBackoff();
+      void flushNow(true);
+    }
+    wasConnected = connected;
+  });
+} catch {
+  // No listener on this runtime: the timers alone.
+}
 
 
 /** Puts something in the queue. It is on the phone from this moment, whatever the connection. */
@@ -169,9 +186,10 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Sends what is waiting, if signed in. Safe to call often: after a failed
- * connection the next attempt waits (5 s, 30 s, 2 min, 5 min, then every
- * 5 min) unless forced (pull to refresh, the app coming to the front, the
- * connection coming back). A failed attempt also books the next one itself.
+ * connection the next attempt waits (5 s, 15 s, 30 s, then every 30 s while
+ * the vehicle moves; up to 5 min while it stands) unless forced (pull to
+ * refresh, the app coming to the front, the network coming back). A failed
+ * attempt also books the next one itself.
  */
 export async function flushNow(force = false): Promise<FlushResult> {
   setJson(KEYS.lastFlush, Date.now());
@@ -199,14 +217,15 @@ export async function flushNow(force = false): Promise<FlushResult> {
  * many were put back.
  */
 export function maybeRetryRejected(reason: 'refresh' | 'start', updateId: string | null = null): number {
-  if (queueCounts().rejected === 0) return 0;
+  const counts = queueCounts();
+  if (counts.rejected + counts.rejectedHeartbeats === 0) return 0;
   const last = getJson<number>(KEYS.rejectedRetryAt) ?? 0;
   const lastUpdate = getJson<string>(KEYS.rejectedRetryUpdate);
   const due = reason === 'refresh' || (updateId !== null && updateId !== lastUpdate) || Date.now() - last >= REJECTED_RETRY_EVERY_MS;
   if (!due) return 0;
   setJson(KEYS.rejectedRetryAt, Date.now());
   if (updateId !== null) setJson(KEYS.rejectedRetryUpdate, updateId);
-  const n = retryRejectedPoints();
+  const n = retryRejectedPoints() + retryRejectedHeartbeats();
   changed();
   return n;
 }

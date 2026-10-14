@@ -79,8 +79,9 @@ describe("the cards age with the clock", () => {
     expect(refreshStates([card], now)[0]).toBe(card); // nothing changed: same object
   });
   it("computes the fields of a card from its signal", () => {
-    expect(statusFields({ sharing: true, point_at: ago(1), heartbeat_at: null, location_on: null, permission: null, location_off_since: null }, now))
-      .toEqual({ status: "live", status_text: "Live · 1 min", status_since: "2026-10-12 11:59", last_position_at: "11:59" });
+    const fields = statusFields({ sharing: true, point_at: ago(1), heartbeat_at: null, location_on: null, permission: null, location_off_since: null }, now);
+    expect(fields).toMatchObject({ status: "live", status_text: "Live · 1 min", status_since: "2026-10-12 11:59", last_position_at: "11:59" });
+    expect(fields.last_position_time).toMatch(/^11:59:\d\d$/);
   });
 });
 

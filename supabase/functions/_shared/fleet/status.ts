@@ -77,6 +77,9 @@ export function driverStatus(i: StatusInput, now: Date): StatusResult {
 const clock = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", minute: "2-digit", hour12: false });
 /** "HH:MM" in Asia/Colombo. */
 export const colomboClock = (iso: string): string => clock.format(new Date(iso));
+const clockS = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+/** "HH:MM:SS" in Asia/Colombo: the position time beside a live marker. */
+export const colomboClockS = (iso: string): string => clockS.format(new Date(iso));
 
 /** The age text the office reads: "2 min", "3 h", "2 d". */
 export function ageText(iso: string, now: Date): string {

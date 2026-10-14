@@ -134,7 +134,7 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
       if (!l) {
         const el = document.createElement("div");
         el.className = "mk-dom";
-        el.innerHTML = `<span class="mk-chip"></span><span class="mk-dot"><span class="mk-arrow"></span></span>`;
+        el.innerHTML = `<span class="mk-chip"><span class="mk-label"></span><span class="mk-sub"></span></span><span class="mk-dot"><span class="mk-arrow"></span></span>`;
         el.addEventListener("click", (ev) => { ev.stopPropagation(); pick.current(mk.id); });
         const marker = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([mk.lng, mk.lat]).addTo(m);
         l = { marker, el, from: [mk.lng, mk.lat], to: [mk.lng, mk.lat], started: 0, duration: 0, at: mk.at ?? null };
@@ -144,7 +144,9 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
       entry.el.className = `mk-dom ${mk.tone}${mk.selected ? " sel" : ""}${mk.heading != null ? " heading" : ""}`;
       entry.el.title = mk.title;
       entry.el.setAttribute("aria-label", mk.title);
-      (entry.el.firstChild as HTMLElement).textContent = mk.label;
+      const chip = entry.el.firstChild as HTMLElement;
+      (chip.firstChild as HTMLElement).textContent = mk.label;
+      (chip.lastChild as HTMLElement).textContent = mk.sub ?? "";
       const arrow = entry.el.querySelector(".mk-arrow") as HTMLElement | null;
       if (arrow) arrow.style.transform = mk.heading != null ? `rotate(${Math.round(mk.heading)}deg)` : "";
       if (entry.to[0] !== mk.lng || entry.to[1] !== mk.lat) {

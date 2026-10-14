@@ -57,6 +57,16 @@ if (!pointColumns.has('rejected')) {
   `);
 }
 
+const heartbeatColumns = new Set(db.getAllSync<{ name: string }>('PRAGMA table_info(heartbeats)').map((c) => c.name));
+if (!heartbeatColumns.has('rejected')) {
+  db.execSync(`
+    ALTER TABLE heartbeats ADD COLUMN rejected INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE heartbeats ADD COLUMN reject_status INTEGER;
+    ALTER TABLE heartbeats ADD COLUMN reject_error TEXT;
+    ALTER TABLE heartbeats ADD COLUMN rejected_at TEXT;
+  `);
+}
+
 interface OpRow {
   seq: number;
   op: string;
@@ -106,12 +116,22 @@ export const queueStore: QueueStore = {
   },
   nextHeartbeats(limit) {
     return db
-      .getAllSync<{ seq: number; row: string }>('SELECT seq, row FROM heartbeats ORDER BY seq LIMIT ?', limit)
+      .getAllSync<{ seq: number; row: string }>('SELECT seq, row FROM heartbeats WHERE rejected = 0 ORDER BY seq LIMIT ?', limit)
       .map((r): StoredHeartbeat => ({ seq: r.seq, row: JSON.parse(r.row) as HeartbeatRow }));
   },
   removeHeartbeats(seqs) {
     if (seqs.length === 0) return;
     db.runSync(`DELETE FROM heartbeats WHERE seq IN (${seqs.map(() => '?').join(',')})`, seqs);
+  },
+  rejectHeartbeats(seqs, status, error) {
+    if (seqs.length === 0) return;
+    db.runSync(
+      `UPDATE heartbeats SET rejected = 1, reject_status = ?, reject_error = ?, rejected_at = ? WHERE seq IN (${seqs.map(() => '?').join(',')})`,
+      status ?? null,
+      error.slice(0, 300),
+      new Date().toISOString(),
+      ...seqs,
+    );
   },
 };
 
@@ -158,6 +178,8 @@ export interface QueueCounts {
   rejected: number;
   /** Heartbeat history rows waiting to be sent. */
   heartbeats: number;
+  /** Heartbeat history rows the server refused; kept, tried again later. */
+  rejectedHeartbeats: number;
   /** Things the server refused; kept so the driver and the office can see them. */
   failed: number;
   /** Fuel videos waiting to be uploaded (not failed). */
@@ -171,12 +193,13 @@ export function queueCounts(): QueueCounts {
     `SELECT (SELECT COUNT(*) FROM ops WHERE failed = 0) AS ops,
             (SELECT COUNT(*) FROM points WHERE rejected = 0) AS points,
             (SELECT COUNT(*) FROM points WHERE rejected = 1) AS rejected,
-            (SELECT COUNT(*) FROM heartbeats) AS heartbeats,
+            (SELECT COUNT(*) FROM heartbeats WHERE rejected = 0) AS heartbeats,
+            (SELECT COUNT(*) FROM heartbeats WHERE rejected = 1) AS rejectedHeartbeats,
             (SELECT COUNT(*) FROM ops WHERE failed = 1) AS failed`,
   );
   const videos = videoUploads().filter((v) => !v.failed);
   return {
-    ...(row ?? { ops: 0, points: 0, rejected: 0, heartbeats: 0, failed: 0 }),
+    ...(row ?? { ops: 0, points: 0, rejected: 0, heartbeats: 0, rejectedHeartbeats: 0, failed: 0 }),
     videos: videos.length,
     videoBytes: videos.reduce((sum, v) => sum + Math.max(0, v.op.bytes - v.op.offset), 0),
   };
@@ -242,6 +265,11 @@ export function retryFailed(): void {
 /** Puts the refused points back in line. Returns how many. */
 export function retryRejectedPoints(): number {
   return db.runSync('UPDATE points SET rejected = 0, reject_status = NULL, reject_error = NULL, rejected_at = NULL WHERE rejected = 1').changes;
+}
+
+/** Puts the refused heartbeat history back in line (with the points: once a day, after an app update, on pull to refresh). */
+export function retryRejectedHeartbeats(): number {
+  return db.runSync('UPDATE heartbeats SET rejected = 0, reject_status = NULL, reject_error = NULL, rejected_at = NULL WHERE rejected = 1').changes;
 }
 
 export function clearQueue(): void {

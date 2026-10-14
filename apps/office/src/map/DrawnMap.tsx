@@ -119,7 +119,9 @@ export default function DrawnMap({ markers, route, trails = [], focus = null, on
         )}
         {markers.map((m) => {
           const [x, y] = pr(m.lng, m.lat);
-          const w = Math.max(60, m.label.length * 12.5 + 22);
+          const w = Math.max(60, Math.max(m.label.length * 12.5, (m.sub?.length ?? 0) * 7.5) + 22);
+          const h = m.sub ? 52 : 34;
+          const top = y - 28 - h;
           return (
             <g key={m.id} className="mk" style={{ cursor: "pointer" }} role="button" aria-label={m.title} onClick={() => onPick(m.id)}>
               {m.selected && <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="30" fill={color(m.tone)} opacity=".18" />}
@@ -127,8 +129,9 @@ export default function DrawnMap({ markers, route, trails = [], focus = null, on
               {m.heading != null && (
                 <polygon points={`${x.toFixed(1)},${(y - 9).toFixed(1)} ${(x + 6).toFixed(1)},${(y + 6).toFixed(1)} ${(x - 6).toFixed(1)},${(y + 6).toFixed(1)}`} fill="var(--surface)" transform={`rotate(${Math.round(m.heading)} ${x.toFixed(1)} ${y.toFixed(1)})`} />
               )}
-              <rect x={(x - w / 2).toFixed(1)} y={(y - 62).toFixed(1)} width={w.toFixed(1)} height="34" rx="7" fill={m.selected ? "var(--accent)" : "var(--surface)"} stroke="var(--line-strong)" />
-              <text x={x.toFixed(1)} y={(y - 39).toFixed(1)} textAnchor="middle" fontFamily="IBM Plex Mono, monospace" fontWeight="600" fontSize="20" fill={m.selected ? "var(--accent-ink)" : "var(--ink)"}>{m.label}</text>
+              <rect x={(x - w / 2).toFixed(1)} y={top.toFixed(1)} width={w.toFixed(1)} height={h} rx="7" fill={m.selected ? "var(--accent)" : "var(--surface)"} stroke="var(--line-strong)" />
+              <text x={x.toFixed(1)} y={(top + 23).toFixed(1)} textAnchor="middle" fontFamily="IBM Plex Mono, monospace" fontWeight="600" fontSize="20" fill={m.selected ? "var(--accent-ink)" : "var(--ink)"}>{m.label}</text>
+              {m.sub && <text x={x.toFixed(1)} y={(top + 42).toFixed(1)} textAnchor="middle" fontFamily="IBM Plex Mono, monospace" fontSize="12" fill={m.selected ? "var(--accent-ink)" : "var(--muted)"}>{m.sub}</text>}
             </g>
           );
         })}

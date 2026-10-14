@@ -28,6 +28,8 @@ export interface StatusFields {
   status_text?: string;
   status_since?: string;
   last_position_at?: string;
+  /** "HH:MM:SS" of the newest GPS point: "position HH:MM:SS" beside the marker and on the live card. */
+  last_position_time?: string;
   heartbeat_at?: string;
   location_on?: boolean;
   permission?: string;

@@ -104,7 +104,18 @@ select lives_ok($$
   select public.send_heartbeat(now(), true, true, 'always', 80, '1.1.0', 0, 0, true, 'foreground', 5, 1, 12000000)
 $$, 'a heartbeat with one video waiting');
 select lives_ok($$ select public.send_heartbeat(now(), true, true, 'always', 80, '1.1.0', 0) $$, 'the older call shape still works');
+-- The history: a driver writes a row with every column the app sends (the insert grant lists the columns; on 14 October the two
+-- video columns had no grant, every batch was refused, and driver_route counted no heartbeats at all).
+select lives_ok($$
+  insert into public.driver_heartbeats (employee_id, at, session_id, sharing, location_on, permission, battery_pct, app_state, data_available,
+    fixes_seen, fixes_stored, dropped_accuracy, dropped_jump, dropped_jitter, dropped_duplicate, last_gps_fix_age_s, queued_points,
+    rejected_points, app_version, video_uploads_waiting, video_bytes_waiting)
+  values ('10000000-0000-0000-0000-0000000000f5', now(), null, true, true, 'always', 80, 'background', true,
+    12, 12, 0, 0, 0, 0, 5, 0, 0, '1.1.0', 1, 12000000)
+$$, 'a driver writes a heartbeat history row with every column the app sends, the video columns included');
 reset role;
+select is((select count(*) from public.driver_heartbeats where employee_id = '10000000-0000-0000-0000-0000000000f5' and video_uploads_waiting = 1), 1::bigint,
+  'the history row is there with its video count');
 select is((select hb_video_uploads_waiting || '|' || hb_video_bytes_waiting from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000000f5'),
   '1|12000000', 'driver_latest keeps the counts of the newest heartbeat');
 

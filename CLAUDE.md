@@ -486,7 +486,9 @@ The office sees photos only through 1-hour signed URLs returned by connector too
   heartbeat (under 3 min old) says Location services off or the permission not "always", with
   "since HH:MM" (red); No signal = sharing on but no point and no fresh heartbeat for over 3 min,
   or a fresh heartbeat with no GPS fix (amber); Not sharing = the driver turned sharing off
-  (red). Every card also carries `last_position_at` ("HH:MM") and the raw `signal` times. A task
+  (red). Every card also carries `last_position_at` ("HH:MM"), `last_position_time` ("HH:MM:SS":
+  "position HH:MM:SS" under the marker and on the live card, kept current by Realtime) and the
+  raw `signal` times. A task
   in progress that is Location off / No signal for 10+ min is in fleet_overview needs-attention.
   The old fields stay for the Teams artifact: Sharing = last point < 15 min; Stale = older;
   Not sharing = sharing off. "Seen by driver HH:MM" from seen_at; "Sent · not opened yet" if
@@ -600,10 +602,14 @@ Offline: location points, odometer/fuel logs, reports, photos and heartbeats are
 phone and retried. The point queue (SQLite) has no cap: a parked vehicle adds about 60 points
 an hour, a moving one about 720 (one every 5 s), about 150 bytes each, so a 10-hour day is
 ~1 MB. Uploads go in batches of 500 with a 45 s limit per request (`UPLOAD_TIMEOUT_MS`), one
-batch after another until the queue is empty, from the location task (every ~60 s or 10+
-points), every heartbeat, on refresh (forced), and from the background job; after a failed
-connection the next try waits 5 s, 30 s, 2 min, 5 min, then every 5 min (`sync/engine.ts`
-BACKOFF_MS; a forced flush ignores it). A batch the server refuses for good is never dropped:
+batch after another until the queue is empty, from the location task (every ~20 s while the
+vehicle moves, every ~60 s while it stands, or 10+ points), every heartbeat, on refresh (forced),
+when the phone reports the network back (expo-network's listener: the ladder resets and a forced
+flush runs), and from the background job; after a failed connection the next try waits 5 s, 15 s,
+30 s, then every 30 s while moving, and 5 s, 15 s, 30 s, 1 min, 2 min, then every 5 min while
+parked (`sync/engine.ts` BACKOFF_MOVING_MS / BACKOFF_PARKED_MS; a forced flush ignores it); the
+batch that failed is the first one sent next time, what went before it is already off the phone.
+A batch the server refuses for good is never dropped:
 it is marked rejected (status + message) and put back in line once a day, after an app update
 and on pull to refresh; the heartbeat reports `rejected_points` and the office status line says
 "N points refused". driver_latest keeps the newest point by recorded_at whatever the upload
@@ -612,14 +618,19 @@ handed over in batches of up to 15 s). Recording is "store raw, filter on the se
 (`src/lib/recording.ts`, since 14 October 2026): every fix is stored unless it is worse than
 150 m, a jump over 150 km/h from the last stored fix (three agreeing fixes in a row win), a
 repeat of the previous fix's exact coordinates with no speed under a minute after the last
-stored point, or jitter (within max(10 m, accuracy) of the standing anchor with a speed under
-1 m/s; then one a minute). So every fix while moving or walking, one a minute parked. The GPS
+stored point, or the vehicle stands still (within a fixed 10 m of the anchor, never widened by
+the accuracy, no speed test, and under 10 m of movement added up fix to fix since the last stored
+point; then one a minute; the first fix beyond either limit is stored and becomes the anchor). So
+every fix while driving, a point every 10–15 m walking, one a minute parked; `moving` on the
+saved track picks the upload cadence and the retry ladder. The GPS
 drift filter `src/lib/track.ts` (same file in the connector) runs on the phone only for the km
 counters; the server's buildRoute (`_shared/fleet/route.ts`) decides km, stops, the timeline
 and the line from the stored points. The heartbeat (every 60 s) carries the fix counters
 (seen, stored, dropped by reason), data available, app state, GPS age, queued and rejected
 points; every heartbeat is also logged on the phone (30 days) and uploaded in batches into
-`driver_heartbeats`. A dead location service is
+`driver_heartbeats` (the insert grant lists the columns: a column added to the table needs its
+grant too, else every batch is refused; a refused batch is kept as rejected like points and put
+back in line with them, never dropped). A dead location service is
 restarted when the app opens, comes to the front, or every minute while on screen; a
 watchdog notification fires 12 min after the last position. Location points are kept 90
 days (pg_cron job `prune-location-points`).

@@ -85,6 +85,7 @@ function memoryStore() {
       for (const id of seqs) points.splice(points.findIndex((p) => p.seq === id), 1);
     },
     rejectPoints: (seqs) => seqs.forEach((id) => rejected.add(id)),
+    rejectHeartbeats: () => undefined,
     nextHeartbeats: (limit) => heartbeats.slice(0, limit),
     removeHeartbeats: (seqs) => {
       for (const id of seqs) heartbeats.splice(heartbeats.findIndex((h) => h.seq === id), 1);

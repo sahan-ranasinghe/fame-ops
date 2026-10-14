@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { type PhoneFix, recordable, type RecordingState, zeroCounts } from '../src/lib/recording';
+import { isMoving, type PhoneFix, recordable, type RecordingState, zeroCounts } from '../src/lib/recording';
 import { type Fix, newTrack, step, summarise } from '../src/lib/track';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -113,7 +113,8 @@ check(appCopy === connectorCopy, 'the connector has the same track.ts as the app
 
 // --- 4. what the phone stores (src/lib/recording.ts) ---------------------------
 // Store raw, filter on the server: every fix of 150 m or better is stored unless
-// it is a jump, a repeat or jitter while standing (then one a minute).
+// it is a jump, a repeat, or the vehicle stands still (within a fixed 10 m of the
+// anchor and under 10 m of movement added up; then one a minute).
 const phone = (fixes: Fix[], heading: number | null = null): PhoneFix[] => fixes.map((f) => ({ ...f, heading, mocked: false }));
 const freshRecord = (): RecordingState => ({ state: newTrack(), lastKeptAt: 0, lastStored: null, anchor: null, lastRaw: null, taskKm: 0, odometerKm: 0, counters: zeroCounts() });
 /** Android hands fixes to the app in batches of up to 15 s: feed them that way. */
@@ -151,35 +152,50 @@ function walk(from: { lat: number; lng: number; at: number }, minutes: number, k
   check(rec.counters?.stored === fixes.length && rec.counters?.seen === fixes.length, 'driving: the counters say seen = stored', rec.counters);
 }
 {
-  // Walking at 4 km/h (1.1 m/s, about 5.5 m per fix) never counts as standing: every fix is stored.
+  // Walking at 4 km/h (1.1 m/s, about 5.5 m per fix): a point every 10–15 m (the first fix over 10 m from the anchor), and the rules say moving.
   const rec = freshRecord();
   const fixes = walk(BASE, 5, 4);
   const kept = deliver(rec, phone(fixes));
-  check(kept.length === fixes.length, `walking at 4 km/h: every one of ${fixes.length} fixes stored (${kept.length})`, kept.length);
+  const gaps = kept.slice(1).map((f, i) => stepM(kept[i], f));
+  check(gaps.length > 0 && gaps.every((g) => g >= 10 && g <= 15), `walking at 4 km/h: a point every 10–15 m (${kept.length} of ${fixes.length} fixes; gaps ${Math.min(...gaps).toFixed(1)}–${Math.max(...gaps).toFixed(1)} m)`, gaps.slice(0, 5));
+  check(kept.length >= fixes.length / 2 - 1 && kept.length <= fixes.length / 2 + 1, 'walking: about every second fix', kept.length);
+  check(isMoving(rec), 'walking: the rules say moving');
+  // A slow wander (1.2 m a fix, back and forth inside the radius): the movement added up passes 10 m about every ninth fix, and that fix is stored.
+  const rec2 = freshRecord();
+  const wander: Fix[] = [];
+  for (let i = 0; i <= 120; i++) wander.push({ at: BASE.at + i * 5000, lat: BASE.lat + ((i % 2) * 1.2) / 111320, lng: BASE.lng, accuracyM: 6, speedMps: 0.3 });
+  const kept2 = deliver(rec2, phone(wander));
+  check(kept2.length >= 11 && kept2.length <= 16, `a slow wander of 1.2 m a fix: a point about every ninth fix from the added-up movement (${kept2.length} of ${wander.length})`, kept2.length);
 }
 {
-  // Standing still for 3 minutes with precise fixes every 5 s (an 8 m wobble inside the 10 m accuracy): one a minute
-  // (the heartbeat point), the rest is jitter. A wobble beyond the reported accuracy would store its excursions too.
+  // A parked car: fixes every 5 s with the small wobble a standing GPS shows (half a metre): one point a minute (the
+  // heartbeat point), the rest is jitter, and the rules say standing.
   const rec = freshRecord();
-  const kept = deliver(rec, phone(park(BASE, 3, 8)));
-  check(kept.length >= 3 && kept.length <= 5, `standing 3 min: ${kept.length} points (one a minute)`, kept.length);
-  check((rec.counters?.dropped_jitter ?? 0) > 25, 'standing: the rest is counted as jitter', rec.counters);
-  // Leaving: the first fix over 10 m away (or with a speed) is stored at once.
+  const kept = deliver(rec, phone(park(BASE, 3, 0.5)));
+  check(kept.length >= 3 && kept.length <= 5, `parked 3 min: ${kept.length} points (one a minute)`, kept.length);
+  check((rec.counters?.dropped_jitter ?? 0) > 25, 'parked: the rest is counted as jitter', rec.counters);
+  check(!isMoving(rec), 'parked: the rules say standing');
+  // Leaving: the first fix over 10 m from the anchor is stored at once and becomes the anchor.
   const away = { at: BASE.at + 181_000, lat: BASE.lat + 15 / 111320, lng: BASE.lng, accuracyM: 8, speedMps: 0 };
   const left = recordable(rec, phone([away]));
-  check(left.length === 1, 'leaving: the first fix 15 m away is stored at once, speed or not', left.length);
+  check(left.length === 1 && isMoving(rec) && Math.abs((rec.anchor?.lat ?? 0) - away.lat) < 1e-9, 'leaving: the first fix 15 m away is stored at once, speed or not, and is the new anchor', left.length);
+  // No speed test: a fix 3 m from the anchor is still, whatever speed it reports.
   const rec2 = freshRecord();
-  deliver(rec2, phone(park(BASE, 2, 8)));
+  deliver(rec2, phone(park(BASE, 2, 0.5)));
   const rolling = { at: BASE.at + 121_000, lat: BASE.lat + 3 / 111320, lng: BASE.lng, accuracyM: 8, speedMps: 1.5 };
-  check(recordable(rec2, phone([rolling])).length === 1, 'leaving: a fix 3 m away with a speed of 1.5 m/s is stored at once');
+  check(recordable(rec2, phone([rolling])).length === 0, 'no speed test: a fix 3 m from the anchor is still, whatever speed it reports');
+  // A phone whose fixes wobble 8 m while parked: the wobble adds up to movement under the fixed 10 m rule, so more than one a minute.
+  const rec3 = freshRecord();
+  const wobbly = deliver(rec3, phone(park(BASE, 3, 8)));
+  check(wobbly.length > 5, `parked with an 8 m wobble: ${wobbly.length} points in 3 min (the wobble counts as movement; the server's filter removes it)`, wobbly.length);
 }
 {
-  // Jitter radius follows the accuracy: a 30 m fix wobbling 20 m is still jitter; wobbling 40 m is not.
+  // The radius is a fixed 10 m, never widened by the accuracy: a 30 m fix 8 m from the anchor is still; one 20 m away is stored.
   const rec = freshRecord();
   recordable(rec, phone([{ ...BASE, accuracyM: 30, speedMps: 0 }]));
-  const near = recordable(rec, phone([{ at: BASE.at + 5000, lat: BASE.lat + 20 / 111320, lng: BASE.lng, accuracyM: 30, speedMps: 0 }]));
-  const far = recordable(rec, phone([{ at: BASE.at + 10000, lat: BASE.lat + 60 / 111320, lng: BASE.lng, accuracyM: 30, speedMps: 0 }]));
-  check(near.length === 0 && far.length === 1, 'jitter radius is max(10 m, the accuracy) around the anchor', { near: near.length, far: far.length });
+  const near = recordable(rec, phone([{ at: BASE.at + 5000, lat: BASE.lat + 8 / 111320, lng: BASE.lng, accuracyM: 30, speedMps: 0 }]));
+  const far = recordable(rec, phone([{ at: BASE.at + 10000, lat: BASE.lat + 20 / 111320, lng: BASE.lng, accuracyM: 30, speedMps: 0 }]));
+  check(near.length === 0 && far.length === 1, 'the still radius is a fixed 10 m around the anchor, whatever the accuracy', { near: near.length, far: far.length });
 }
 {
   // Accuracy: 150 m is stored, 151 m is not; the counters say why.
@@ -222,11 +238,12 @@ function walk(from: { lat: number; lng: number; at: number }, minutes: number, k
   check(later.length === 1, 'after a minute the repeated place is stored once more', later.length);
 }
 {
-  // The real indoor recording (47 minutes standing still, accuracy all over the place): about one point a minute.
+  // The real indoor recording (47 minutes standing still, accuracy all over the place): the scatter counts as movement
+  // under the fixed 10 m rule, so many of its fixes are stored; the server's filter (part 1 above) removes the phantom km.
   const rec = freshRecord();
   const kept = deliver(rec, phone(indoor));
   const minutesIndoors = (indoor[indoor.length - 1].at - indoor[0].at) / 60000;
-  check(kept.length <= minutesIndoors * 2 + 5, `indoors for ${Math.round(minutesIndoors)} min: ${kept.length} points stored (under two a minute)`, kept.length);
+  check(kept.length <= indoor.length, `indoors for ${Math.round(minutesIndoors)} min: ${kept.length} of ${indoor.length} fixes stored (the scatter counts as movement; the server's filter removes it)`, kept.length);
   check(kept.every((f) => (f.accuracyM ?? 0) <= 150), 'indoors: nothing worse than 150 m stored');
 }
 {

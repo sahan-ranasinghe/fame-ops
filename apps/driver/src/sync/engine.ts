@@ -16,11 +16,17 @@
 //               batch the server refuses for good is kept, marked rejected with
 //               the answer, and tried again later; it never blocks the rest.
 //   heartbeats  the heartbeat history, in batches of up to 500 after the points.
+//               A batch the server refuses for good is kept and marked rejected
+//               like points (tried again later), never dropped.
 //
-// After a failed connection the next attempt waits: 5 s, 30 s, 2 min, 5 min,
-// then every 5 min (BACKOFF_MS). A forced flush (the driver pulled to
-// refresh, the app came to the front, the connection came back) ignores the
-// wait. A success starts the ladder again from the bottom.
+// After a failed connection the next attempt waits. While the vehicle moves:
+// 5 s, 15 s, 30 s, then every 30 s (BACKOFF_MOVING_MS). While it stands (or
+// nothing is recorded): 5 s, 15 s, 30 s, 1 min, 2 min, then every 5 min
+// (BACKOFF_PARKED_MS). A forced flush (the driver pulled to refresh, the app
+// came to the front) ignores the wait; when the phone reports the network is
+// back, sync/index.ts resets the ladder and flushes at once. A success starts
+// the ladder again from the bottom. A batch that fails is the first one sent
+// next time: what went before it is already off the phone.
 
 import * as realApi from '../lib/api';
 import { ApiError, type Client } from '../lib/api';
@@ -113,8 +119,11 @@ export interface QueueStore {
   removePoints(seqs: number[]): void;
   /** The server refused these for good: kept, marked, tried again later. */
   rejectPoints(seqs: number[], status: number | undefined, error: string): void;
+  /** Waiting history rows, oldest first. Rejected ones are not returned until they are put back in line. */
   nextHeartbeats(limit: number): StoredHeartbeat[];
   removeHeartbeats(seqs: number[]): void;
+  /** The server refused these for good: kept, marked, tried again later (never dropped: the office's "app not running" depends on them). */
+  rejectHeartbeats(seqs: number[], status: number | undefined, error: string): void;
 }
 
 export interface BackoffState {
@@ -152,6 +161,8 @@ export interface SyncDeps {
   connection?: () => Promise<Connection>;
   /** A chunk went up: the screens show the new offset. */
   onProgress?: (op: VideoUploadOp) => void;
+  /** Whether the vehicle is moving right now (the recording rules' last word): picks the retry ladder. */
+  moving?: () => boolean;
 }
 
 export interface FlushResult {
@@ -169,8 +180,12 @@ export interface FlushResult {
 
 export const POINT_BATCH = 500;
 export const HEARTBEAT_BATCH = 500;
-/** The wait after 1, 2, 3, 4 failed attempts in a row; the last one repeats. */
-export const BACKOFF_MS = [5_000, 30_000, 120_000, 300_000];
+/** The wait after 1, 2, 3 … failed attempts in a row while the vehicle moves; the last one repeats (never more than 30 s). */
+export const BACKOFF_MOVING_MS = [5_000, 15_000, 30_000];
+/** … while it stands still, or nothing is being recorded: up to 5 minutes. */
+export const BACKOFF_PARKED_MS = [5_000, 15_000, 30_000, 60_000, 120_000, 300_000];
+/** The old name: the parked ladder. */
+export const BACKOFF_MS = BACKOFF_PARKED_MS;
 
 const ORDER = ['assigned', 'in_progress', 'completed'];
 
@@ -377,7 +392,8 @@ export function createSync(deps: SyncDeps) {
     const failedConnection = () => {
       const state = backoff.get();
       const failures = state.failures + 1;
-      backoff.set({ failures, nextTryAt: now() + BACKOFF_MS[Math.min(failures, BACKOFF_MS.length) - 1] });
+      const ladder = deps.moving?.() ? BACKOFF_MOVING_MS : BACKOFF_PARKED_MS;
+      backoff.set({ failures, nextTryAt: now() + ladder[Math.min(failures, ladder.length) - 1] });
       result.offline = true;
       return result;
     };
@@ -443,8 +459,8 @@ export function createSync(deps: SyncDeps) {
         result.sent += batch.length;
       } catch (error) {
         if (error instanceof ApiError && error.permanent) {
-          // History the server will never take (a rule changed): let it go rather than block the rest for ever.
-          store.removeHeartbeats(seqs);
+          // Refused for good (a column the server does not take yet, a rule): kept and marked, tried again later; the rest goes on.
+          store.rejectHeartbeats(seqs, error.status, error.message);
           result.failed += batch.length;
           continue;
         }
@@ -473,6 +489,8 @@ export function createSync(deps: SyncDeps) {
     },
     /** The backoff state (for the screens and the tests). */
     backoff: () => backoff.get(),
+    /** The network is back (the phone said so): the ladder starts again from the bottom. */
+    resetBackoff: () => backoff.set({ failures: 0, nextTryAt: 0 }),
   };
 }
 

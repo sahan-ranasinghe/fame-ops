@@ -4,6 +4,8 @@
 export interface MapMarker {
   id: string;
   label: string;
+  /** A second, smaller line under the label ("position 17:32:05"). */
+  sub?: string;
   title: string;
   lat: number;
   lng: number;
