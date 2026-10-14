@@ -158,6 +158,21 @@
   refetchInterval) and `ApiTransport` (office-api with the session; `watch` polls on the
   same intervals: overview and board 30 s, requests 60 s; `invalidate` refetches every watch).
   Errors become `{ code, message }` and `errors.ts` turns them into one sentence + a fix.
+- Phase 6 Part 1 (14 October 2026): every form is a page with its own URL (`/requests/new`,
+  `/requests/:id/decide`, `/tasks/new`, `/tasks/:id/edit`, `/tasks/:id/stops`, `/vehicles/new`,
+  `/vehicles/:reg/edit`, `/drivers/new`, `/drivers/:username/edit`, `/settings/users/new`,
+  `/settings/users/:email/edit`); a detail is a child route of its list (`/requests/:id`,
+  `/tasks/:id`, `/vehicles/:reg`): a panel beside the list on a desktop, a full screen with a
+  back arrow on a phone (`ui/Page.tsx`: `PageTop`, `ListWithDetail`, `StickyActions`;
+  `ui/phone.ts`: one breakpoint, 768 px). The phone tab bar is `tabsFor(me)` in `app/nav.ts`
+  (at most five, from the permissions, More last; `moreFor` lists the rest, never a tab twice;
+  `homeAction` is the big button on Home); menu items the person cannot use are hidden, not
+  greyed (a direct URL still gets "No access"). Every form keeps a draft in localStorage
+  (`data/drafts.ts`, `useFormDraft`; "Resume draft from HH:MM · Discard"). Stops are rows with
+  their own type and arrive-by, numbered within the type (`stopLabel(list, i)`); the plan is one
+  line above Save with the exact reason when there is none (`planLogic.ts`), computed 1.5 s
+  after the last edit or with Plan now. The modal drawer is gone. Playwright has a `phone`
+  project (412 × 915) running `e2e/phone.spec.ts`. Plan and as built: `docs/phase6-plan.md`.
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
   `issues` (the bell), `issuesAll` (the Issues page), `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
   dropped connection is retried twice by itself, then the form shows the error with Try again).

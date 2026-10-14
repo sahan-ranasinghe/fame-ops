@@ -10,16 +10,13 @@ import { attIcon, cap } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { Loading, Notice, Pill, Plate } from "../ui/basics";
-import { useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
 import { useToast } from "../ui/Toast";
 import { eventText, kindText, severityTone, statusTone } from "./issuesLogic";
-import { TaskDrawer } from "./TaskDrawer";
 
 export default function IssuePage() {
   const { id = "" } = useParams();
   const { me, store, transport } = useFleet();
-  const drawer = useDrawer();
   const toast = useToast();
   const [h, setH] = useState<IssueHistory | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -97,7 +94,7 @@ export default function IssuePage() {
           </div>
           {i.resolution_note && <Notice tone="ok">Resolved by {i.resolved_by ?? "?"} {i.resolved ? `at ${i.resolved}` : ""}: {i.resolution_note}</Notice>}
           <div className="chips">
-            {h.task && me.tools.includes("task_detail") && <button type="button" className="btn small" onClick={() => drawer.open(<TaskDrawer id={h.task!.id} />)}>Task · {h.task.title}</button>}
+            {h.task && me.tools.includes("task_detail") && <Link className="btn small" to={`/tasks/${h.task.id}`}>Task · {h.task.title}</Link>}
             {driverLink && <Link className="btn small" to={driverLink}>Driver · {i.driver}</Link>}
             {i.driver_links?.call && <a className="btn small" href={i.driver_links.call}>Call driver</a>}
             {i.driver_links?.whatsapp && <a className="btn small" href={i.driver_links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}

@@ -1,4 +1,4 @@
-/* Layout: dark ink rail with amber active pill, warm paper work surface; rail becomes a bottom tab bar under 900px (the boss's Fame Fleet design). */
+/* Layout: dark ink rail with amber active pill, warm paper work surface; rail becomes a bottom tab bar at 768px and under (the boss's Fame Fleet design; one phone breakpoint, src/ui/phone.ts has the same). */
 :root {
   --bg: #f3f2ee; --surface: #ffffff; --surface-2: #ecebe5; --line: #e3e0d8; --line-strong: #d3cfc4;
   --ink: #15181c; --muted: #676a70; --rail: #15181c; --rail-ink: #f1efe9; --rail-muted: #9aa0a8; --rail-hover: #22272c;
@@ -66,13 +66,35 @@ h1, h2, h3 { text-wrap: balance; margin: 0 }
 .tabbar a[aria-current="page"] { color: var(--ink) }
 .tabbar a[aria-current="page"] i { background: var(--accent); color: var(--accent-ink) }
 .tabbar svg { width: 22px; height: 22px }
-@media (max-width: 900px) {
+.tabbar a { position: relative }
+.tab-badge { position: absolute; top: 0; right: 4px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--bad); color: #fff; font: 700 12px/20px var(--font-body); text-align: center; padding: 0 5px }
+.phone-only { display: none }
+@media (max-width: 768px) {
   .app { grid-template-columns: minmax(0, 1fr) }
   .rail { display: none }
   .tabbar { display: flex }
   .mhead { display: flex }
   .main { padding-block: 18px 110px }
+  .phone-only { display: block }
+  .desktop-only { display: none }
+  /* 48 px targets */
+  .btn { min-height: 48px }
+  .btn.small { min-height: 40px }
+  .icon-btn { width: 48px; height: 48px }
+  .chip { min-height: 44px }
+  input, select, textarea { min-height: 48px }
+  /* tables become cards: each cell shows its column's name */
+  .tbl-wrap table, .tbl-wrap tbody, .tbl-wrap tr { display: block }
+  .tbl-wrap thead { display: none }
+  .tbl-wrap tr { border: 1px solid var(--line); border-radius: 12px; margin: 10px 12px; padding: 6px 0; background: var(--surface) }
+  .tbl-wrap tr.click { cursor: pointer }
+  .tbl-wrap td { display: flex; gap: 12px; align-items: flex-start; border: 0; padding: 6px 14px; text-align: left }
+  .tbl-wrap td.r { text-align: left }
+  .tbl-wrap td[data-label]::before { content: attr(data-label); flex: 0 0 34%; color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; padding-top: 3px }
+  .tbl-wrap td:empty { display: none }
+  .tbl-wrap .acts { justify-content: flex-start }
 }
+@media (max-width: 900px) { .two { grid-template-columns: minmax(0, 1fr) } }
 
 /* ---------- page header ---------- */
 .ph { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 24px }
@@ -271,7 +293,40 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .perm-list input { margin-top: 3px }
 
 #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 12px 18px; border-radius: 12px; font-weight: 600; z-index: 80; max-width: calc(100% - 32px) }
-@media (max-width: 900px) { #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)) } }
+@media (max-width: 768px) { #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)) } }
+
+/* ---------- pages (Phase 6): the back arrow, list + detail, sticky actions, drafts, pull to refresh ---------- */
+.page-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px }
+.page-top .back { flex: none }
+.page-title { font: 800 26px/1.15 var(--font-display); letter-spacing: -.01em; overflow-wrap: anywhere }
+.page-form { max-width: 720px; display: grid; gap: 18px }
+.split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; align-items: start }
+.split.has-detail { grid-template-columns: minmax(0, 1fr) minmax(380px, 520px) }
+.split-detail { position: sticky; top: 20px; max-height: calc(100vh - 40px); overflow-y: auto; background: var(--bg); display: grid; align-content: start; gap: 18px; padding: 4px 2px 20px }
+.detail-page { display: grid; gap: 18px }
+@media (max-width: 1150px) { .split.has-detail { grid-template-columns: minmax(0, 1fr) minmax(340px, 440px) } }
+.sticky-acts { display: flex; gap: 10px; flex-wrap: wrap; align-items: center }
+.draft-banner { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 12px 14px; font-weight: 600 }
+.pull { text-align: center; color: var(--muted); font-size: 13px; padding: 8px 0 }
+.pull.busy { color: var(--live) }
+.home-action { display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 64px; font-size: 19px; font-weight: 700; border-radius: 16px }
+.plan-line { font-size: 15px; font-weight: 600; line-height: 1.5 }
+.plan-line .muted { font-weight: 400 }
+.reasons { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none }
+.reasons li { color: var(--bad); font-weight: 600; font-size: 14px }
+.reasons li.note { color: var(--muted); font-weight: 400 }
+.stop-card { display: grid; gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; background: var(--surface) }
+.stop-card .stop-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
+.stop-card .stop-h b { flex: 1 1 auto }
+.stop-card .stop-h select { width: auto; min-width: 128px }
+.stop-card .stop-h .acts .btn { width: 40px; height: 40px; padding: 0 }
+.stop-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(120px, 1fr); gap: 10px }
+@media (max-width: 480px) { .stop-grid { grid-template-columns: minmax(0, 1fr) } .split-detail { position: static; max-height: none } }
+@media (max-width: 768px) {
+  .sticky-acts { position: sticky; bottom: calc(84px + env(safe-area-inset-bottom, 0px)); z-index: 20; background: var(--bg); padding: 10px 0; margin-top: 8px }
+  .sticky-acts .btn.primary, .sticky-acts .btn.dark { flex: 1 1 100% }
+  .page-title { font-size: 24px }
+}
 
 /* ---------- web build: sign-in, set-password, second step ---------- */
 .auth { min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg) }

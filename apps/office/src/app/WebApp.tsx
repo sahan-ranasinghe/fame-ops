@@ -10,7 +10,6 @@ import { SignIn } from "../auth/SignIn";
 import { subscribeDriverLatest, subscribeDriverPoints, subscribeDriversPoints } from "../data/realtime";
 import { FleetStore } from "../data/store";
 import { registerServiceWorker } from "../push";
-import { DrawerProvider } from "../ui/Drawer";
 import { ToastProvider } from "../ui/Toast";
 import { FleetProvider } from "./FleetContext";
 import { routes } from "./routes";
@@ -51,9 +50,7 @@ function Gate() {
       return (
         <FleetProvider value={fleet!}>
           <ToastProvider>
-            <DrawerProvider>
-              <RouterProvider router={router!} />
-            </DrawerProvider>
+            <RouterProvider router={router!} />
           </ToastProvider>
         </FleetProvider>
       );

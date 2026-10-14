@@ -24,11 +24,14 @@ let serial = 0;
 export const newStop = (type: StopType = "visit"): StopDraft => ({ key: `s${++serial}`, type, what: "", place: "", pin: "", dwell: "", arriveBy: "", note: "" });
 export const defaultStops = (): StopDraft[] => [newStop("pickup"), newStop("drop")];
 
-/** "Pickup", "Drop-off", or "Stop 3" for the inline rows. */
-export function stopLabel(i: number, type: StopType, count: number): string {
-  if (i === 0 && type === "pickup") return "Pickup";
-  if (i === count - 1 && type === "drop" && count > 1) return "Drop-off";
-  return `${TYPE_LABEL[type]} ${i + 1}`;
+/**
+ * The row's label, numbered within its type: "Pickup 1", "Drop-off 1", "Drop-off 2", "Visit 1".
+ * Adding, removing or moving a row never changes another row's type; only the numbers follow.
+ */
+export function stopLabel(list: { type: StopType }[], i: number): string {
+  const type = list[i].type;
+  const n = list.slice(0, i + 1).filter((s) => s.type === type).length;
+  return `${TYPE_LABEL[type]} ${n}`;
 }
 
 export function moveStop(list: StopDraft[], i: number, dir: -1 | 1): StopDraft[] {

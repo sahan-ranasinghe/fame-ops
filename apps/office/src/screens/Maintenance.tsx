@@ -3,6 +3,7 @@
 // document reminders of the next 14 days (from the overview's needs-attention
 // list when the person holds issues; otherwise read off the vehicles list).
 import { type FormEvent, useEffect, useState } from "react";
+import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry, useLists } from "../data/hooks";
 import type { Overview, VehicleReport, VehicleReports } from "../data/types";
@@ -10,18 +11,15 @@ import { attIcon, cap, levelTone, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
-import { useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
 import { useToast } from "../ui/Toast";
 import { dueFromVehicles } from "./maintenanceLogic";
-import { TaskDrawer } from "./TaskDrawer";
 
 type Filter = "not_closed" | "open" | "in_garage" | "closed" | "all";
 const FILTERS: [Filter, string][] = [["not_closed", "Not closed"], ["open", "Open"], ["in_garage", "In garage"], ["closed", "Closed"], ["all", "All"]];
 
 function ReportCard({ r }: { r: VehicleReport }) {
   const { me, store, transport } = useFleet();
-  const drawer = useDrawer();
   const toast = useToast();
   const [status, setStatus] = useState<VehicleReport["status"]>(r.status);
   const [note, setNote] = useState("");
@@ -59,7 +57,7 @@ function ReportCard({ r }: { r: VehicleReport }) {
       {r.office_note && <p className="muted" style={{ margin: 0 }}>Office: {r.office_note}</p>}
       <div className="photos">
         {r.photos.map((u, i) => <a key={i} className="btn small" href={u} target="_blank" rel="noopener">Photo {i + 1}</a>)}
-        {r.task_id && me.tools.includes("task_detail") && <button type="button" className="btn small" onClick={() => drawer.open(<TaskDrawer id={r.task_id!} />)}>Open task</button>}
+        {r.task_id && me.tools.includes("task_detail") && <Link className="btn small" to={`/tasks/${r.task_id}`}>Open task</Link>}
         {r.driver_links?.call && <a className="btn small" href={r.driver_links.call}>Call driver</a>}
       </div>
       {canEdit && (

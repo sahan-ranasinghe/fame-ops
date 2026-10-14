@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
 import type { Me, Transport, WatchEvent } from "../transport/types";
-import { DrawerProvider } from "../ui/Drawer";
 import { ToastProvider } from "../ui/Toast";
 import { Overview } from "./Overview";
 
@@ -48,7 +47,7 @@ describe("Overview", () => {
     store.watch("overview", "fleet_overview", {}, 30000);
     render(
       <FleetProvider value={{ store, transport, me, noConnector: false }}>
-        <ToastProvider><DrawerProvider><MemoryRouter><Overview /></MemoryRouter></DrawerProvider></ToastProvider>
+        <ToastProvider><MemoryRouter><Overview /></MemoryRouter></ToastProvider>
       </FleetProvider>,
     );
     expect(screen.getByText("Vehicles on the road").parentElement?.textContent).toContain("2of 5");
@@ -59,7 +58,7 @@ describe("Overview", () => {
     expect(screen.getByText("Live · 2 min")).toBeTruthy();
     expect(screen.getByText("Revenue licence expires")).toBeTruthy();
     expect(await screen.findByText("Isuru Bandara")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Approve & assign" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Approve & assign" }).getAttribute("href")).toMatch(/\/requests\/.+\/decide$/);
     expect(transport.calls).toContain("watch:list_requests");
   });
 });

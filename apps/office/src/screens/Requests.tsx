@@ -1,13 +1,16 @@
+// Requests (/requests): the queue for someone who approves, one's own for
+// everyone else; the detail beside the list (a panel on a desktop, a full
+// screen on a phone); New request at /requests/new.
 import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useWatch } from "../data/hooks";
 import type { RequestsList } from "../data/types";
 import { cap, requestTone } from "../lib/format";
 import { can } from "../transport/types";
 import { Chips, Empty, ErrBox, Loading, Pill, StaleNote } from "../ui/basics";
-import { useDrawer } from "../ui/Drawer";
-import { NewRequestDrawer } from "./NewRequestDrawer";
-import { RequestDrawer } from "./RequestDrawer";
+import { Icon } from "../ui/icons";
+import { ListWithDetail } from "../ui/Page";
 import { timelineSteps } from "./requestLogic";
 
 type Filter = "waiting" | "approved" | "declined" | "cancelled" | "all";
@@ -15,65 +18,74 @@ const FILTERS: [Filter, string][] = [["waiting", "Waiting"], ["approved", "Appro
 
 export function Requests() {
   const { me, store, noConnector, managePermissions } = useFleet();
-  const drawer = useDrawer();
+  const navigate = useNavigate();
   const [filter, setFilter] = useState<Filter>("waiting");
   const reqs = useWatch<RequestsList>("reqs", "list_requests", { status: filter }, 60000, !noConnector);
   const d = reqs.data && reqs.data.status === filter ? reqs.data : undefined;
   // The queue (everyone's requests) is the approver's; everyone else sees their own.
   const staff = !can(me, "approve");
   const decides = me.tools.includes("decide_request");
+  const asks = me.tools.includes("create_request");
 
   return (
     <section className="view">
-      <div className="ph">
-        <div><div className="eyebrow">{staff ? "Vehicles you asked for" : "Vehicle requests from staff"}</div><h1>{staff ? "My requests" : "Requests"}</h1></div>
-        <div className="ph-actions">
-          <Chips options={FILTERS} value={filter} onChange={(k) => { store.reset("reqs"); setFilter(k); }} />
-          {me.tools.includes("create_request") && <button type="button" className="btn primary" onClick={() => drawer.open(<NewRequestDrawer />)}>New request</button>}
-        </div>
-      </div>
-      {!d && !noConnector && (
-        <>
-          <ErrBox entry={reqs} onRetry={() => void store.load("reqs", "list_requests", { status: filter })} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-          {!reqs.err && <Loading>Loading requests…</Loading>}
-        </>
-      )}
-      {d && (
-        <>
-          <StaleNote entry={reqs} />
-          <div className="card">
-            {d.requests.length ? (
-              <div className="tbl-wrap">
-                <table>
-                  <thead><tr><th>Requested by</th><th>Project</th><th>When</th><th>Route</th><th>Need</th><th>Status</th><th className="r"></th></tr></thead>
-                  <tbody>
-                    {d.requests.map((q) => (
-                      <tr key={q.id} className="click" onClick={() => drawer.open(<RequestDrawer id={q.id} />)}>
-                        <td><b>{q.requested_by}</b>{q.asked && <div className="sub">{q.asked}</div>}</td>
-                        <td>{q.project || "—"}</td>
-                        <td>{q.when}{q.back_by && <div className="sub">back by {q.back_by}</div>}</td>
-                        <td className="muted">{q.route || "—"}</td>
-                        <td>{q.need || "—"}{q.driver_required === false && <div className="sub">no driver · custodian drives</div>}</td>
-                        <td>
-                          <Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>
-                          {(() => {
-                            const last = timelineSteps(q).filter((s) => s.done).pop();
-                            const words = q.one_step ? "booked directly" : last && last.label !== "Sent" ? `${last.label}${last.at ? ` · ${last.at}` : ""}` : last?.at ? `sent ${last.at}` : "";
-                            return words ? <div className="sub" style={{ marginTop: 4 }}>{words}</div> : null;
-                          })()}
-                        </td>
-                        <td className="r">{q.status === "waiting" && decides ? <span className="btn small dark">Review</span> : q.task_id ? <span className="btn small">Task</span> : null}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <Empty>{filter === "waiting" ? (staff ? "You have no request waiting. Add one with New request." : "No requests are waiting. Add one with New request when someone asks for a vehicle.") : "No requests here."}</Empty>
-            )}
+      <ListWithDetail>
+        <div className="ph">
+          <div><div className="eyebrow">{staff ? "Vehicles you asked for" : "Vehicle requests from staff"}</div><h1>{staff ? "My requests" : "Requests"}</h1></div>
+          <div className="ph-actions">
+            <Chips options={FILTERS} value={filter} onChange={(k) => { store.reset("reqs"); setFilter(k); }} />
+            {asks && <Link className="btn primary desktop-only" to="/requests/new">New request</Link>}
           </div>
-        </>
-      )}
+        </div>
+        {asks && staff && <Link className="btn primary home-action phone-only" to="/requests/new" style={{ marginBottom: 18 }}><Icon name="plus" />New request</Link>}
+        {asks && !staff && <Link className="btn primary phone-only" to="/requests/new" style={{ marginBottom: 18 }}>New request</Link>}
+        {!d && !noConnector && (
+          <>
+            <ErrBox entry={reqs} onRetry={() => void store.load("reqs", "list_requests", { status: filter })} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
+            {!reqs.err && <Loading>Loading requests…</Loading>}
+          </>
+        )}
+        {d && (
+          <>
+            <StaleNote entry={reqs} />
+            <div className="card">
+              {d.requests.length ? (
+                <div className="tbl-wrap">
+                  <table>
+                    <thead><tr><th>Requested by</th><th>Project</th><th>When</th><th>Route</th><th>Need</th><th>Status</th><th className="r"></th></tr></thead>
+                    <tbody>
+                      {d.requests.map((q) => (
+                        <tr key={q.id} className="click" onClick={() => navigate(`/requests/${q.id}`)}>
+                          <td data-label="Requested by"><b>{q.requested_by}</b>{q.asked && <div className="sub">{q.asked}</div>}</td>
+                          <td data-label="Project">{q.project || "—"}</td>
+                          <td data-label="When">{q.when}{q.back_by && <div className="sub">back by {q.back_by}</div>}</td>
+                          <td data-label="Route" className="muted">{q.route || "—"}</td>
+                          <td data-label="Need">{q.need || "—"}{q.driver_required === false && <div className="sub">no driver · custodian drives</div>}</td>
+                          <td data-label="Status">
+                            <Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>
+                            {(() => {
+                              const last = timelineSteps(q).filter((s) => s.done).pop();
+                              const words = q.one_step ? "booked directly" : last && last.label !== "Sent" ? `${last.label}${last.at ? ` · ${last.at}` : ""}` : last?.at ? `sent ${last.at}` : "";
+                              return words ? <div className="sub" style={{ marginTop: 4 }}>{words}</div> : null;
+                            })()}
+                          </td>
+                          <td className="r">
+                            {q.status === "waiting" && decides
+                              ? <Link className="btn small dark" to={`/requests/${q.id}/decide`} onClick={(e) => e.stopPropagation()}>Review</Link>
+                              : q.task_id ? <Link className="btn small" to={`/tasks/${q.task_id}`} onClick={(e) => e.stopPropagation()}>Task</Link> : null}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <Empty>{filter === "waiting" ? (staff ? "You have no request waiting. Add one with New request." : "No requests are waiting. Add one with New request when someone asks for a vehicle.") : "No requests here."}</Empty>
+              )}
+            </div>
+          </>
+        )}
+      </ListWithDetail>
     </section>
   );
 }

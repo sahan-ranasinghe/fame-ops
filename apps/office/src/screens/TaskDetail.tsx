@@ -1,52 +1,67 @@
-import { type FormEvent, useEffect, useState } from "react";
+// One task, read only (/tasks/:id): a panel beside the board on a desktop, a
+// full screen on a phone. The facts, the route, the stops with planned and
+// actual times, the plan, odometer and fuel, problems, the decline, the
+// history; Change and Cancel open /tasks/:id/edit, Edit stops /tasks/:id/stops.
+import { useEffect, useState } from "react";
+import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
-import { useLists } from "../data/hooks";
 import { type Route, mapRouteOf, minutesText, routeOf, snapLegend } from "../data/route";
-import type { DriverRoute, TaskDetail, UpdateStopsResult } from "../data/types";
-import { cap, hhmm, joinDots, num, warnList } from "../lib/format";
+import type { DriverRoute, TaskDetail as TaskDetailData } from "../data/types";
+import { cap, hhmm, joinDots, num, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { MapView } from "../map/MapView";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
-import { DrawerTop, useDirty, useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
-import { useToast } from "../ui/Toast";
+import { PageTop } from "../ui/Page";
 import { PlanPanel } from "./PlanPanel";
-import { StopsEditor } from "./StopsEditor";
-import { draftsFromStops, driveText, type StopDraft, stopsInput, TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
+import { driveText, TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
 
-const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
+export const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
 const SKIP_TEXT: Record<string, string> = { closed: "closed", nobody_there: "nobody there", not_needed: "not needed", not_visited: "not visited (task finished)", other: "other" };
 
-export function TaskDrawer({ id }: { id: string }) {
-  const { me, store, transport } = useFleet();
-  const drawer = useDrawer();
-  const toast = useToast();
-  const lists = useLists();
-  const [p, setP] = useState<TaskDetail | null>(null);
+/** Loads one task; loads again when the page is returned to (after an edit). */
+export function useTask(id: string): { p: TaskDetailData | null; err: string | null; reload: () => Promise<void> } {
+  const { transport } = useFleet();
+  const { key } = useLocation();
+  const [p, setP] = useState<TaskDetailData | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [warnings, setWarnings] = useState<string[]>([]);
-  const [ra, setRa] = useState({ driver: "", vehicle: "", date: "", time: "" });
-  const [raMsg, setRaMsg] = useState<string | null>(null);
-  const [reason, setReason] = useState("");
-  const [cxMsg, setCxMsg] = useState<string | null>(null);
-  const [stopsMsg, setStopsMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-  useDirty(Object.values(ra).some((v) => v !== "") || reason.trim() !== "");
-
-  async function load() {
+  const reload = async () => {
     try {
-      setP(await transport.call<TaskDetail>("task_detail", { task_id: id }));
+      setP(await transport.call<TaskDetailData>("task_detail", { task_id: id }));
       setErr(null);
     } catch (e) {
       setErr(errText(e as FleetError)[0]);
     }
-  }
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id]);
+  };
+  useEffect(() => { void reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id, key]);
+  return { p, err, reload };
+}
 
-  if (err) return <><DrawerTop title="Task" /><Notice tone="bad">{err}</Notice></>;
-  if (!p) return <><DrawerTop title="Task" /><Loading>Loading the task…</Loading></>;
+/** The board's day as a query string (`?date=…`, empty for today), carried from the board through a task's pages. */
+export function useBoardQuery(): string {
+  const [params] = useSearchParams();
+  const date = params.get("date");
+  return date && date !== today() ? `?date=${date}` : "";
+}
+
+/** The board's day in the URL, kept when going back to it. */
+export function useBoardBack(): string {
+  return `/tasks${useBoardQuery()}`;
+}
+
+export function TaskDetail() {
+  const { id = "" } = useParams();
+  const { me } = useFleet();
+  const { p, err } = useTask(id);
+  const backTo = useBoardBack();
+  const q = useBoardQuery();
+  // The warnings of a change just made on /tasks/:id/edit (passed in the navigation state).
+  const flash = (useLocation().state as { warnings?: string[] } | null)?.warnings ?? [];
+
+  if (err) return <><PageTop title="Task" backTo={backTo} /><Notice tone="bad">{err}</Notice></>;
+  if (!p) return <><PageTop title="Task" backTo={backTo} /><Loading>Loading the task…</Loading></>;
 
   const t = p.task;
   const c = t.contact ?? {};
@@ -56,84 +71,18 @@ export function TaskDrawer({ id }: { id: string }) {
   const canChange = (t.status === "assigned" || declined) && me.tools.includes("reassign_task");
   const canCancel = (t.status === "assigned" || t.status === "in_progress" || declined) && me.tools.includes("cancel_task");
   const canStops = (t.status === "assigned" || t.status === "in_progress") && me.tools.includes("update_task_stops");
-  const pending = p.stops.filter((s) => s.status === "pending");
-
-  async function reassign(ev: FormEvent) {
-    ev.preventDefault();
-    const input: Record<string, unknown> = { task_id: id };
-    if (ra.driver) input.driver = ra.driver;
-    if (ra.vehicle) input.vehicle = ra.vehicle;
-    if (ra.date) input.date = ra.date;
-    if (ra.time) input.start_time = ra.time;
-    if (Object.keys(input).length === 1) {
-      if (!declined) {
-        setRaMsg("Choose what to change first.");
-        return;
-      }
-      input.driver = t.driver ?? "";
-      if (!input.driver) {
-        setRaMsg("Choose the driver first.");
-        return;
-      }
-    }
-    setBusy(true);
-    try {
-      const out = await transport.call("reassign_task", input);
-      toast("Task changed");
-      setRaMsg(null);
-      setRa({ driver: "", vehicle: "", date: "", time: "" });
-      setWarnings(warnList(out));
-      void store.invalidate();
-      await load();
-    } catch (e) {
-      setRaMsg(errText(e as FleetError)[0]);
-    }
-    setBusy(false);
-  }
-
-  async function cancel() {
-    if (!reason.trim()) {
-      setCxMsg("Write the reason first. The driver sees it.");
-      return;
-    }
-    setBusy(true);
-    try {
-      await transport.call("cancel_task", { task_id: id, reason: reason.trim() });
-      toast("Task cancelled");
-      void store.invalidate();
-      drawer.close();
-    } catch (e) {
-      setCxMsg(errText(e as FleetError)[0]);
-      setBusy(false);
-    }
-  }
-
-  /** The stops editor replaces this panel; on save the task reopens with the new plan. */
-  function editStops() {
-    const version = t.plan_version ?? 0;
-    const onSave = async (drafts: StopDraft[]) => {
-      const v = stopsInput(drafts);
-      if ("error" in v) return;
-      try {
-        const out = await transport.call<UpdateStopsResult>("update_task_stops", { task_id: id, plan_version: version, stops: v.stops });
-        toast(`Stops saved · leave by ${out.leave_by?.slice(-5) ?? "—"}`);
-        void store.invalidate();
-      } catch (e) {
-        const text = errText(e as FleetError)[0];
-        setStopsMsg({ tone: "bad", text: /changed since/i.test(text) ? `${text} The task below is reloaded.` : text });
-      }
-      drawer.open(<TaskDrawer id={id} />);
-    };
-    drawer.open(<StopsEditor title={`Stops · ${t.title}`} stops={draftsFromStops(pending)} places={lists.places ?? []} onSave={(d) => void onSave(d)} />);
-  }
-
-  const drivers = (lists.drivers ?? []).filter((d) => d.active !== false);
   const ext = { target: "_blank", rel: "noopener" } as const;
   const eta = t.eta;
 
   return (
-    <>
-      <DrawerTop title={t.title || "Task"} sub={<><Pill tone={TONE[t.status] ?? ""}>{cap(t.status)}</Pill> <span className="mono">{t.start}</span></>} />
+    <div data-testid="task-detail">
+      <PageTop
+        title={t.title || "Task"}
+        sub={<><Pill tone={TONE[t.status] ?? ""}>{cap(t.status)}</Pill> <span className="mono">{t.start}</span></>}
+        backTo={backTo}
+        actions={(canChange || canCancel) ? <Link className="btn small" to={`/tasks/${id}/edit${q}`}>{declined ? "Give it to a driver" : "Change"}</Link> : undefined}
+      />
+      <WarningsNote warnings={flash} />
       <div className="card card-b">
         <dl className="kv">
           <div><dt>Driver</dt><dd>{t.driver || "—"}</dd></div>
@@ -179,11 +128,15 @@ export function TaskDrawer({ id }: { id: string }) {
           {num(p.unlogged_km.km)} km were driven before this task that nobody logged (last reading {num(p.unlogged_km.last_logged_km)} km at {p.unlogged_km.last_logged_at}, this task started at {num(p.unlogged_km.start_km)} km).
         </Notice>
       )}
-      <WarningsNote warnings={warnings} />
+      {t.declined && (
+        <Notice tone="bad">
+          Declined{t.declined.after_accept ? " after accepting" : ""}{t.declined.at ? ` at ${t.declined.at}` : ""}: {t.declined.reason_text ?? t.declined.reason ?? "no reason given"}
+          {t.declined.note ? ` · “${t.declined.note}”` : ""}. {canChange ? <Link to={`/tasks/${id}/edit${q}`}>Give it to another driver</Link> : null}
+        </Notice>
+      )}
       {can(me, ...ROUTES_NEED) && <TaskRoute id={id} started={t.started} />}
 
       <div className="section-t">Stops{t.start_place ? ` · from ${t.start_place}` : ""}{t.return_to_base ? " · back to the office" : ""}{t.avoid_expressway ? " · no expressway" : ""}</div>
-      {stopsMsg && <Notice tone={stopsMsg.tone}>{stopsMsg.text}</Notice>}
       <div className="card">
         <div className="rows">
           {p.stops.length ? p.stops.map((s) => (
@@ -211,7 +164,7 @@ export function TaskDrawer({ id }: { id: string }) {
         </div>
         {(canStops || p.removed_stops?.length) && (
           <div className="card-b" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-            {canStops && <button type="button" className="btn" onClick={editStops}>Edit stops</button>}
+            {canStops && <Link className="btn" to={`/tasks/${id}/stops${q}`}>Edit stops</Link>}
             {p.removed_stops?.length ? <span className="muted small">{p.removed_stops.length} stop{p.removed_stops.length > 1 ? "s" : ""} edited out earlier: {p.removed_stops.map((r) => r.place).join(", ")}</span> : null}
           </div>
         )}
@@ -264,53 +217,10 @@ export function TaskDrawer({ id }: { id: string }) {
         </>
       )}
 
-      {t.declined && (
-        <Notice tone="bad">
-          Declined{t.declined.after_accept ? " after accepting" : ""}{t.declined.at ? ` at ${t.declined.at}` : ""}: {t.declined.reason_text ?? t.declined.reason ?? "no reason given"}
-          {t.declined.note ? ` · “${t.declined.note}”` : ""}. Give it to another driver below, or cancel it.
-        </Notice>
-      )}
-      {p.suggestions && canChange && (
-        <div className="card card-b" data-testid="suggestions" style={{ display: "grid", gap: 8 }}>
-          <b>Free at that time</b>
-          <div className="chips">
-            {p.suggestions.drivers.length
-              ? p.suggestions.drivers.map((d) => (
-                <button type="button" key={d.username ?? d.name} className="chip" aria-pressed={!!d.username && ra.driver === d.username} title={d.availability} onClick={() => setRa({ ...ra, driver: d.username ?? "" })}>{d.name}</button>
-              ))
-              : <span className="muted small">No driver is free then.</span>}
-          </div>
-          <div className="chips">
-            {p.suggestions.vehicles.length
-              ? p.suggestions.vehicles.map((v) => (
-                <button type="button" key={v.reg_no} className="chip" aria-pressed={ra.vehicle === v.reg_no} title={v.availability} onClick={() => setRa({ ...ra, vehicle: v.reg_no })}>{v.reg_no}</button>
-              ))
-              : <span className="muted small">No vehicle is free then.</span>}
-          </div>
-        </div>
-      )}
-      {canChange && (
-        <>
-          <div className="section-t">{declined ? "Give it to a driver" : "Change before it starts"}</div>
-          <form className="card card-b form" onSubmit={reassign}>
-            <div className="grid2">
-              <div className="field"><label htmlFor="ra-driver">Driver</label>
-                <select id="ra-driver" value={ra.driver} onChange={(e) => setRa({ ...ra, driver: e.target.value })}><option value="">Keep</option>{drivers.map((d) => <option key={d.username} value={d.username}>{d.name}</option>)}</select></div>
-              <div className="field"><label htmlFor="ra-vehicle">Vehicle</label>
-                <select id="ra-vehicle" value={ra.vehicle} onChange={(e) => setRa({ ...ra, vehicle: e.target.value })}><option value="">Keep</option>{(lists.vehicles ?? []).map((v) => <option key={v.reg_no} value={v.reg_no}>{v.reg_no}</option>)}</select></div>
-              <div className="field"><label htmlFor="ra-date">Day</label><input type="date" id="ra-date" value={ra.date} onChange={(e) => setRa({ ...ra, date: e.target.value })} /></div>
-              <div className="field"><label htmlFor="ra-time">Leave by</label><input type="time" id="ra-time" value={ra.time} onChange={(e) => setRa({ ...ra, time: e.target.value })} /></div>
-            </div>
-            {raMsg && <Notice tone="bad">{raMsg}</Notice>}
-            <button className="btn dark" type="submit" disabled={busy}>{declined ? "Reassign" : "Save changes"}</button>
-          </form>
-        </>
-      )}
-      {canCancel && (
-        <div className="confirm">
-          <div className="field"><label htmlFor="cx-reason">Cancel this task</label><input id="cx-reason" maxLength={300} placeholder="Reason the driver will see" value={reason} onChange={(e) => setReason(e.target.value)} /></div>
-          {cxMsg && <Notice tone="bad">{cxMsg}</Notice>}
-          <button type="button" className="btn danger" onClick={() => void cancel()} disabled={busy}>Cancel task</button>
+      {(canChange || canCancel) && (
+        <div className="acts">
+          {canChange && <Link className="btn dark" to={`/tasks/${id}/edit${q}`}>{declined ? "Give it to a driver" : "Change driver, vehicle or time"}</Link>}
+          {canCancel && <Link className="btn danger" to={`/tasks/${id}/edit${q}#cancel`}>Cancel task</Link>}
         </div>
       )}
       {p.assignment_history?.length ? (
@@ -328,7 +238,7 @@ export function TaskDrawer({ id }: { id: string }) {
           </div>
         </>
       ) : null}
-    </>
+    </div>
   );
 }
 

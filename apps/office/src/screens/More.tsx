@@ -1,24 +1,25 @@
 import { PERMISSION_TEXT } from "@fleet/permissions";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import { LOCK_HINT, MORE_KEYS, NAV, navState } from "../app/nav";
+import { moreFor } from "../app/nav";
 import { ROLE_LABEL } from "../transport/types";
 import { Icon } from "../ui/icons";
 
+/** Everything the person may open that is not on the phone's tab bar, and their account. */
 export function More() {
   const { me, signOut, transport } = useFleet();
-  const more = navState(NAV, me).filter((n) => MORE_KEYS.includes(n.key));
+  const more = moreFor(me);
   return (
     <section className="view">
       <div className="ph"><div><div className="eyebrow">Your account and everything else</div><h1>More</h1></div></div>
       <div className="stack" style={{ maxWidth: 560 }}>
-        <div className="more-list">
-          {more.map((n) => (
-            <Link key={n.key} to={n.path} className={n.locked ? "locked" : undefined} aria-disabled={n.locked || undefined} title={n.locked ? LOCK_HINT : undefined}>
-              <Icon name={n.key} />{n.label}{n.locked && <i className="lock"><Icon name="lock" /></i>}
-            </Link>
-          ))}
-        </div>
+        {more.length > 0 && (
+          <div className="more-list" data-testid="more-list">
+            {more.map((n) => (
+              <Link key={n.key} to={n.path}><Icon name={n.key} />{n.label}</Link>
+            ))}
+          </div>
+        )}
         <div className="card card-b">
           <dl className="kv">
             <div><dt>Name</dt><dd>{me.name || "—"}</dd></div>
@@ -36,10 +37,6 @@ export function More() {
               <button type="button" className="btn" onClick={signOut}>Sign out</button>
             </div>
           )}
-        </div>
-        <div className="card card-b">
-          <h2>Coming next</h2>
-          <p className="muted" style={{ margin: "6px 0 0" }}>Stops and leave-by times, issues and notifications, driver accept/decline, booking by vehicle type. Until then the Fame Fleet connector in Claude answers those questions.</p>
         </div>
       </div>
     </section>

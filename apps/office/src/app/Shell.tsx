@@ -9,8 +9,9 @@ import { AUTHZ, errText } from "../transport/errors";
 import { can, ROLE_LABEL } from "../transport/types";
 import { Notice } from "../ui/basics";
 import { Icon } from "../ui/icons";
+import { PullToRefresh } from "../ui/PullToRefresh";
 import { useFleet } from "./FleetContext";
-import { allowed, ISSUES_NEED, LOCK_HINT, NAV, navState, TABS } from "./nav";
+import { allowed, ISSUES_NEED, NAV, tabsFor } from "./nav";
 
 const BELL_ARGS = { status: "active", limit: 10 };
 
@@ -98,8 +99,9 @@ export function Shell() {
   const { me, store, noConnector } = useFleet();
   const overview = useEntry<Overview>("overview");
   const waiting = can(me, "approve") ? overview.data?.requests?.waiting ?? 0 : 0;
-  const nav = navState(NAV, me);
-  const tabs = allowed(TABS, me);
+  // The rail lists only what this person may open; the phone tab bar follows its own order.
+  const nav = allowed(NAV, me);
+  const tabs = tabsFor(me);
   const { pathname } = useLocation();
 
   // The overview feeds the Requests badge and the Home tiles: watched while the app is open.
@@ -115,6 +117,8 @@ export function Shell() {
 
   const badge = (key: string) => key === "requests" && waiting ? <span className="badge">{waiting}</span> : null;
   const role = me.name ? ROLE_LABEL[me.role] ?? "Fleet office" : "Fleet office";
+  // A tab is current on its own screen and on every page under it (/requests/new, /tasks/:id …).
+  const current = (path: string) => (path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(path + "/"));
 
   return (
     <div className="app">
@@ -126,15 +130,8 @@ export function Shell() {
         <Bell />
         <nav className="nav">
           {nav.map((n) => (
-            <NavLink
-              key={n.key}
-              to={n.path}
-              end={n.path === "/"}
-              className={n.locked ? "locked" : undefined}
-              aria-disabled={n.locked || undefined}
-              title={n.locked ? LOCK_HINT : undefined}
-            >
-              <Icon name={n.key} /><span>{n.label}</span>{n.locked ? <i className="lock"><Icon name="lock" /></i> : badge(n.key)}
+            <NavLink key={n.key} to={n.path} end={n.path === "/"}>
+              <Icon name={n.key} /><span>{n.label}</span>{badge(n.key)}
             </NavLink>
           ))}
           <NavLink to="/more"><Icon name="more" /><span>More</span></NavLink>
@@ -153,13 +150,13 @@ export function Shell() {
           <Bell />
         </div>
         <Banner />
-        <Outlet />
+        <PullToRefresh><Outlet /></PullToRefresh>
       </main>
 
       <nav className="tabbar" aria-label="Sections">
         {tabs.map((t) => (
-          <NavLink key={t.key} to={t.path} end={t.path === "/"}>
-            <i><Icon name={t.key} /></i>{t.label}
+          <NavLink key={t.key} to={t.path} end={t.path === "/"} className={current(t.path) ? "active" : undefined} aria-current={current(t.path) ? "page" : undefined}>
+            <i><Icon name={t.key} /></i>{t.label}{t.key === "requests" && waiting ? <span className="tab-badge" aria-label={`${waiting} waiting`}>{waiting}</span> : null}
           </NavLink>
         ))}
       </nav>

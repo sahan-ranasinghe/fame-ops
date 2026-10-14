@@ -88,31 +88,39 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByText("E2E Admin")).toBeVisible();
   await expect(page.getByText("Vehicles on the road")).toBeVisible();
 
-  // 3. Assign a task; it appears on the board; open it; cancel it.
-  await page.getByRole("button", { name: "Assign task" }).click();
-  await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
+  // 3. Assign a task (its own page); it appears on the board; open it (the detail panel); cancel it from the edit page.
+  await page.getByRole("link", { name: "Assign task" }).click();
+  await expect(page).toHaveURL(/\/tasks\/new$/);
+  await expect(page.getByRole("heading", { name: "Assign a task" })).toBeVisible();
   const title = `E2E drop ${stamp}`;
   await page.getByLabel("Task", { exact: true }).fill(title);
   await page.getByLabel("Leave by", { exact: true }).fill("09:30");
-  await page.getByLabel("Pickup").fill("Head office");
-  await page.getByLabel("Drop-off").fill("Nugegoda");
+  // The stops are rows with their own type; the labels are numbered within the type.
+  await page.getByLabel("Pickup 1", { exact: true }).fill("Head office");
+  await page.getByLabel("Drop-off 1", { exact: true }).fill("Nugegoda");
   await page.getByLabel("Driver", { exact: true }).selectOption(driver.username);
   await page.getByLabel("Vehicle", { exact: true }).selectOption(plate);
-  // The plan preview follows the form (a moment after the last change): leave-by time and the estimated legs.
-  await expect(page.getByTestId("plan-panel")).toContainText("Leave by", { timeout: 15000 });
+  // The plan follows the form in one line (1.5 s after the last change): "Leave by 09:30 · … · estimated times".
+  await expect(page.getByTestId("plan-line")).toContainText("Leave by 09:30", { timeout: 15000 });
+  await expect(page.getByTestId("plan-line")).toContainText("estimated times");
   await page.getByRole("button", { name: "Assign & send" }).click();
   await expect(page.getByText(`Sent to ${driver.name}.`)).toBeVisible();
+  await page.getByRole("link", { name: "The board" }).click();
   const card = page.locator(".tcard", { hasText: title });
   await expect(card).toBeVisible();
   await expect(card).toContainText("Leave by 09:30");
   await card.click();
-  await expect(page.getByRole("dialog").getByRole("heading", { name: title })).toBeVisible();
-  await expect(page.getByRole("dialog").getByText("Fame internal")).toBeVisible();
-  await expect(page.getByRole("dialog").getByTestId("plan-panel")).toContainText("estimate");
+  const detail = page.getByTestId("detail");
+  await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+(\?date=.*)?$/);
+  await expect(detail.getByRole("heading", { name: title })).toBeVisible();
+  await expect(detail.getByText("Fame internal")).toBeVisible();
+  await expect(detail.getByTestId("plan-panel")).toContainText("estimate");
+  await detail.getByRole("link", { name: "Cancel task" }).click();
+  await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+\/edit/);
   await page.getByLabel("Cancel this task").fill("E2E test over");
   await page.getByRole("button", { name: "Cancel task" }).click();
   await expect(page.getByRole("status")).toHaveText("Task cancelled");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/tasks$/);
   await expect(card).toHaveCount(0);
 
   // 4. Live locations, the one status rule: no signal → Location off (heartbeat) → live (a fresh point), all over Realtime.
@@ -128,28 +136,28 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   const row = page.locator(".lrow", { hasText: driver.name });
   await expect(row).toBeVisible();
   await row.click(); // another driver may be selected by default
-  const detail = page.getByTestId("live-detail");
-  await expect(detail).toContainText(driver.name);
-  await expect(detail).toContainText("No signal since");
+  const live = page.getByTestId("live-detail");
+  await expect(live).toContainText(driver.name);
+  await expect(live).toContainText("No signal since");
   await expect(page.getByTestId("rt-status")).toHaveText("Live updates");
   // The phone reports Location off: red within seconds, with since when, through Realtime.
   expect(await app.post("rpc/send_heartbeat", { p_at: new Date().toISOString(), p_sharing: true, p_location_on: false, p_permission: "always", p_battery_pct: 70, p_app_version: "e2e", p_queued_points: 2 })).toBeLessThan(300);
-  await expect(detail).toContainText("Location off since", { timeout: 8000 });
+  await expect(live).toContainText("Location off since", { timeout: 8000 });
   await expect(page.getByTestId("phone-line")).toContainText("Location off");
   await expect(page.getByTestId("phone-line")).toContainText("2 points waiting");
   await expect(page.getByRole("button", { name: /^Location off · \d+$/ })).toBeVisible();
   // A fresh point: live again at once, the marker moves, the speed shows.
   expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(2), lat: 6.9, lng: 79.95, accuracy_m: 8, speed_mps: 20, battery_pct: 76 }])).toBe(201);
-  await expect(detail).toContainText(/Live · \d+ min/, { timeout: 8000 });
-  await expect(detail).toContainText("72 km/h");
+  await expect(live).toContainText(/Live · \d+ min/, { timeout: 8000 });
+  await expect(live).toContainText("72 km/h");
   await expect(row).toContainText(/\d+ min/);
   // A third point a second later, about where the speed says: the move is confirmed, so the day has a line and km.
   expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(1), lat: 6.9002, lng: 79.9502, accuracy_m: 8, speed_mps: 20, battery_pct: 76 }])).toBe(201);
   await page.getByRole("button", { name: "Today’s route" }).click();
-  await expect(detail).toContainText(/Today: [\d.]+ km from 3 points/);
+  await expect(live).toContainText(/Today: [\d.]+ km from 3 points/);
 
   // 4b. The driver page: status, the day's numbers, the timeline beside the map, playback; yesterday has nothing.
-  await detail.getByRole("link", { name: "Driver page" }).click();
+  await live.getByRole("link", { name: "Driver page" }).click();
   const dp = page.getByTestId("driver-page");
   await expect(dp.getByRole("heading", { name: driver.name })).toBeVisible();
   await expect(dp).toContainText("Km (GPS)");
@@ -176,22 +184,28 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   const vrow = page.locator("tr", { hasText: plate });
   await expect(vrow).toBeVisible();
   await vrow.click();
-  await expect(page.getByRole("dialog").getByRole("heading", { name: plate })).toBeVisible();
+  // The vehicle's detail beside the list, then its own edit page.
+  await expect(page.getByTestId("vehicle-detail")).toContainText(plate);
+  await page.getByTestId("vehicle-detail").getByRole("link", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(/\/vehicles\/.+\/edit$/);
   await page.getByLabel("Seats").fill("9");
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("status")).toHaveText("Vehicle updated");
+  await expect(page.getByTestId("vehicle-detail")).toContainText("9 seats");
   await expect(page.locator("tr", { hasText: plate })).toContainText("9 seats");
 
   await page.getByRole("link", { name: "Drivers" }).first().click();
   await expect(page.getByRole("heading", { name: "Drivers" })).toBeVisible();
   const drow = page.locator("tr", { hasText: driver.name });
   await expect(drow).toBeVisible();
-  await drow.getByRole("button", { name: "Manage" }).click();
-  await expect(page.getByRole("dialog").getByRole("heading", { name: driver.name })).toBeVisible();
+  await drow.getByRole("link", { name: "Manage" }).click();
+  await expect(page).toHaveURL(/\/drivers\/.+\/edit$/);
+  await expect(page.getByRole("heading", { name: driver.name })).toBeVisible();
   await page.getByLabel("New 6-digit PIN").fill("111222");
   await page.getByRole("button", { name: "Set PIN" }).click();
-  await expect(page.getByRole("dialog")).toContainText("New PIN 111222 is active");
-  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("driver-manage")).toContainText("New PIN 111222 is active");
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page).toHaveURL(/\/drivers$/);
 
   await page.getByRole("link", { name: "Maintenance" }).first().click();
   await expect(page.getByRole("heading", { name: "Maintenance" })).toBeVisible();
@@ -215,7 +229,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   const myRow = page.locator("tr", { hasText: email });
   await expect(myRow).toBeVisible();
   await expect(myRow).toContainText("Users");
-  await page.getByRole("button", { name: "Add office user" }).click();
+  await page.getByRole("link", { name: "Add office user" }).click();
+  await expect(page).toHaveURL(/\/settings\/users\/new$/);
   const dispEmail = `e2e.disp.${stamp}@fame.test`;
   await page.getByLabel("Full name").fill("E2E Dispatcher");
   await page.getByLabel("E-mail").fill(dispEmail);
@@ -223,15 +238,16 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByRole("checkbox", { name: /^Assign tasks/ })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: /^Approve/ })).not.toBeChecked();
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Account created");
-  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("user-created")).toContainText("Account created");
+  await page.getByRole("link", { name: "Done" }).click();
   const dRow = page.locator("tr", { hasText: dispEmail });
   await expect(dRow).toContainText("Assign tasks");
-  await dRow.getByRole("button", { name: "Manage" }).click();
+  await dRow.getByRole("link", { name: "Manage" }).click();
+  await expect(page).toHaveURL(/\/settings\/users\/.+\/edit$/);
   await page.getByRole("checkbox", { name: /^Approve/ }).check();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByRole("status")).toHaveText("User updated");
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Back" }).click();
   await expect(page.locator("tr", { hasText: dispEmail })).toContainText("Approve");
 
   // 6. Settings: turn on 2-step sign-in.
@@ -284,7 +300,7 @@ test("a wrong password is refused", async ({ page }) => {
   await expect(page.getByText("Wrong e-mail or password.")).toBeVisible();
 });
 
-test("a requester-only user sees locked menu items, a No access page, and asks in their own name", async ({ page }) => {
+test("a requester-only user sees only their own screens in the menu, a No access page on a direct URL, and asks in their own name", async ({ page }) => {
   const email = `e2e.req.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string; created: { permissions: string[]; role: string } }>(
     "create_office_user", { name: "E2E Requester", email, permissions: ["request"] },
@@ -299,12 +315,11 @@ test("a requester-only user sees locked menu items, a No access page, and asks i
   await page.getByLabel("Again").fill(password);
   await page.getByRole("button", { name: "Save password" }).click();
 
-  // Home for a requester is their own requests; the fleet screens are in the menu but locked.
+  // Home for a requester is their own requests; the fleet screens are not in the menu at all.
   await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
-  const overview = page.getByRole("link", { name: "Overview" }).first();
-  await expect(overview).toHaveAttribute("aria-disabled", "true");
-  await expect(overview).toHaveAttribute("title", "Ask an admin for access");
-  await expect(page.getByRole("link", { name: "Requests" }).first()).not.toHaveAttribute("aria-disabled", "true");
+  await expect(page.getByRole("link", { name: "Overview" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Live locations" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Requests" }).first()).toBeVisible();
   await page.goto("/vehicles");
   await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
   await expect(page.getByTestId("no-access")).toContainText("View");
@@ -317,9 +332,10 @@ test("a requester-only user sees locked menu items, a No access page, and asks i
   await expect(page.getByRole("checkbox")).toHaveCount(3);
   await expect(page.getByRole("checkbox", { name: "Your request is decided" })).toBeChecked();
 
-  // A new request has no "Who needs it" field: it is in their own name.
+  // A new request (its own page) has no "Who needs it" field: it is in their own name.
   await page.goto("/requests");
-  await page.getByRole("button", { name: "New request" }).click();
+  await page.getByRole("link", { name: "New request" }).first().click();
+  await expect(page).toHaveURL(/\/requests\/new$/);
   await expect(page.getByLabel("Who needs it")).toHaveCount(0);
   await page.getByLabel("Time", { exact: true }).fill("09:00");
   await page.getByLabel("To", { exact: true }).fill("Galle");
@@ -329,7 +345,7 @@ test("a requester-only user sees locked menu items, a No access page, and asks i
   await expect(page.locator("tr", { hasText: "E2E Requester" })).toContainText("sent ");
 });
 
-test("a dispatcher (view + assign tasks) gets the tasks board, not mileage or the requests queue; a form dialog never closes on a click outside", async ({ page }) => {
+test("a dispatcher (view + assign tasks) gets the tasks board, not mileage or the requests queue; a form keeps a draft when the page is left", async ({ page }) => {
   const email = `e2e.dispatch.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Dispatcher", email, permissions: ["view", "request", "assign_tasks"] });
   const verify = await fetch(user.set_password_link, { redirect: "manual" });
@@ -346,31 +362,39 @@ test("a dispatcher (view + assign tasks) gets the tasks board, not mileage or th
   await expect(page.getByRole("heading", { name: "Needs attention" })).toBeVisible();
   await expect(page.getByText("Requests to approve")).toHaveCount(0);
   await expect(page.getByText("Requests awaiting approval")).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Tasks" }).first()).not.toHaveAttribute("aria-disabled", "true");
-  await expect(page.getByRole("link", { name: "Mileage" }).first()).toHaveAttribute("aria-disabled", "true");
+  await expect(page.getByRole("link", { name: "Tasks" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Mileage" })).toHaveCount(0);
   await page.goto("/mileage");
   await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
   await page.goto("/settings");
-  await expect(page.getByRole("link", { name: /^Users/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(page.getByRole("link", { name: /^Users/ })).toHaveCount(0);
   await page.goto("/tasks");
   await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Assign a task" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Assign a task" })).toBeVisible();
   await page.goto("/requests");
   await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
 
-  // The dialog rules: a click outside does nothing; Esc asks; Keep editing keeps the text; Close then Discard closes.
-  await page.getByRole("button", { name: "New request" }).click();
+  // Drafts: what was typed survives leaving the page; coming back offers Resume or Discard.
+  await page.getByRole("link", { name: "New request" }).first().click();
+  await expect(page).toHaveURL(/\/requests\/new$/);
   await page.getByLabel("Who needs it").fill("Somebody");
-  await page.locator(".drawer").click({ position: { x: 20, y: 300 } });
+  await page.getByLabel("Note").fill("Draft note");
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
+  await page.getByRole("link", { name: "New request" }).first().click();
+  await expect(page.getByTestId("draft-banner")).toContainText("Resume draft from");
+  await expect(page.getByLabel("Who needs it")).toHaveValue("");
+  await page.getByRole("button", { name: "Resume" }).click();
   await expect(page.getByLabel("Who needs it")).toHaveValue("Somebody");
-  await page.keyboard.press("Escape");
-  await expect(page.getByTestId("discard")).toContainText("Discard changes?");
-  await page.getByRole("button", { name: "Keep editing" }).click();
-  await expect(page.getByTestId("discard")).toHaveCount(0);
-  await expect(page.getByLabel("Who needs it")).toHaveValue("Somebody");
-  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByLabel("Note")).toHaveValue("Draft note");
+  await expect(page.getByTestId("draft-banner")).toHaveCount(0);
+  // Leave again, come back, discard: the form starts empty and the draft is gone.
+  await page.getByRole("link", { name: "Overview" }).first().click();
+  await page.goto("/requests/new");
   await page.getByRole("button", { name: "Discard" }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByLabel("Who needs it")).toHaveValue("");
+  await page.reload();
+  await expect(page.getByTestId("draft-banner")).toHaveCount(0);
 });
 
 test("a driver accepts one task and declines another; the office gives it to a free driver from the suggestions", async ({ page }) => {
@@ -407,19 +431,23 @@ test("a driver accepts one task and declines another; the office gives it to a f
   const card = page.locator(".tcard", { hasText: `E2E decline ${stamp}` });
   await expect(card).toContainText("Declined (Vehicle problem) · Flat tyre");
 
-  // The drawer: the reason, who is free, one click fills the driver, Reassign.
+  // The detail: the reason; the edit page: who is free, one click fills the driver, Reassign; back to the detail with the history.
   await card.click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.getByText(/Flat tyre/).first()).toBeVisible();
-  await dialog.getByTestId("suggestions").getByRole("button", { name: d2.name }).click();
-  await expect(dialog.getByLabel("Driver", { exact: true })).toHaveValue(d2.username);
-  await dialog.getByRole("button", { name: "Reassign" }).click();
+  const detail = page.getByTestId("detail");
+  await expect(detail.getByText(/Flat tyre/).first()).toBeVisible();
+  await detail.getByRole("link", { name: "Give it to a driver" }).first().click();
+  await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+\/edit(\?date=.*)?$/);
+  await page.getByTestId("suggestions").getByRole("button", { name: d2.name }).click();
+  await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(d2.username);
+  await page.getByRole("button", { name: "Reassign" }).click();
   await expect(page.getByRole("status")).toHaveText("Task changed");
-  await expect(dialog.getByTestId("history")).toContainText("Declined");
-  await expect(dialog.getByTestId("history")).toContainText("Reassigned");
-  await expect(dialog.getByText(d2.name).first()).toBeVisible();
+  await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+(\?date=.*)?$/);
+  await expect(detail.getByTestId("history")).toContainText("Declined");
+  await expect(detail.getByTestId("history")).toContainText("Reassigned");
+  await expect(detail.getByText(d2.name).first()).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(dialog).toHaveCount(0);
+  await expect(detail).toHaveCount(0);
+  await expect(page).toHaveURL(/\/tasks/);
   await expect(card).toContainText("Sent · not opened yet");
   // This task left the "Needs a driver" column (another run's declined task may still sit there).
   await expect(page.locator(".col", { hasText: "Needs a driver" }).locator(".tcard", { hasText: `E2E decline ${stamp}` })).toHaveCount(0);
@@ -516,8 +544,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
   // New request → Assign now: the Free group lists the pool van; pick it and a free driver; Book now.
-  await page.goto("/requests");
-  await page.getByRole("button", { name: "New request" }).click();
+  await page.goto("/requests/new");
   await page.getByLabel("Who needs it").fill("Someone from HR");
   await page.getByLabel("Day").fill(day);
   await page.getByLabel("Time", { exact: true }).fill("09:30");
@@ -528,7 +555,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await page.getByRole("button", { name: "Book now" }).click();
   await expect(page.getByTestId("booked")).toContainText("Someone from HR has");
   await expect(page.getByTestId("booked")).toContainText(plate);
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("link", { name: "Done" }).click();
 
   // The task is on that day's board with its leave-by time.
   await page.goto(`/tasks?date=${day}`);
@@ -538,6 +565,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await page.goto("/requests");
   await page.getByRole("button", { name: "Approved", exact: true }).click();
   await page.locator("tr", { hasText: "Someone from HR" }).first().click();
+  await expect(page).toHaveURL(/\/requests\/[0-9a-f-]+$/);
   await expect(page.getByTestId("request-timeline")).toContainText("Approved");
   await page.getByLabel("Cancel this booking with a reason").fill("Trip called off");
   await page.getByRole("button", { name: "Cancel booking" }).click();
@@ -556,8 +584,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await expect(selfDrive).toBeChecked();
   await selfDrive.uncheck();
   await expect(page.getByRole("status")).toHaveText("Setting saved");
-  await page.goto("/requests");
-  await page.getByRole("button", { name: "New request" }).click();
+  await page.goto("/requests/new");
   await expect(page.getByLabel("Who needs it")).toBeVisible();
   await expect(page.getByRole("checkbox", { name: "A driver is needed" })).toHaveCount(0);
   // Back on through the tool (the same save as the untick above; the local runtime sometimes drops a second call).

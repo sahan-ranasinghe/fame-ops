@@ -20,6 +20,7 @@ const IC: Record<string, string> = {
   person: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   alert: '<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5v.5"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  back: '<path d="M19 12H5M12 19l-7-7 7-7"/>',
   refresh: '<path d="M20 11a8 8 0 0 0-14.6-4M4 4v4h4M4 13a8 8 0 0 0 14.6 4M20 20v-4h-4"/>',
   route: '<circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="6" r="2.5"/><path d="M8.5 18H15a3 3 0 0 0 0-6H9a3 3 0 0 1 0-6h6.5"/>',
   play: '<path d="M7 5l12 7-12 7z"/>',

@@ -6,7 +6,6 @@ import { FleetStore } from "../data/store";
 import { ClaudeTransport, connectClaude } from "../transport/claude";
 import { PERMISSIONS } from "@fleet/permissions";
 import { ALL_TOOLS, type Me, type Transport } from "../transport/types";
-import { DrawerProvider } from "../ui/Drawer";
 import { ToastProvider } from "../ui/Toast";
 import { FleetProvider } from "./FleetContext";
 import { routes } from "./routes";
@@ -58,9 +57,7 @@ export function ArtifactApp() {
   return (
     <FleetProvider value={fleet}>
       <ToastProvider>
-        <DrawerProvider>
           <RouterProvider router={router} />
-        </DrawerProvider>
       </ToastProvider>
     </FleetProvider>
   );

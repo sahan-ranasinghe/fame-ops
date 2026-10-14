@@ -3,9 +3,9 @@
 // one: the overview counts and who is on the road, live locations, the drivers
 // list, the vehicles board, one's own requests. Tasks need assign_tasks;
 // Maintenance and Mileage need vehicles; the driver page (routes) needs
-// assign_tasks or vehicles. A screen the person
-// may not open stays in the menu, greyed with a lock: the server refuses the
-// tools either way, and a direct URL shows the "No access" page.
+// assign_tasks or vehicles. Since Phase 6 a screen the person may not open is
+// not in the menu at all (a direct URL shows the "No access" page; the server
+// refuses the tools either way).
 import type { Permission } from "@fleet/permissions";
 import { can, type Me } from "../transport/types";
 
@@ -39,17 +39,44 @@ export const NAV: NavItem[] = [
   { key: "settings", label: "Settings", need: [], path: "/settings" },
 ];
 
-/** Phone tab bar (the boss's design): Home, Map, Tasks, Vehicles, More. Locked tabs are hidden; More always shows. */
-export const TABS: NavItem[] = [
-  { key: "overview", label: "Home", need: ["view"], path: "/" },
-  { key: "live", label: "Map", need: ["view"], path: "/live" },
+/** At most this many tabs on a phone, the last one always More. */
+export const TAB_COUNT = 5;
+
+/**
+ * The phone tab bar: Home first, then the first screens of this list the person
+ * may open, in this order, until four are filled; More is always the fifth.
+ * So a requester gets Home, My requests, Map, Vehicles, More; a fleet admin
+ * Home, Requests, Tasks, Map, More; a dispatcher (who may also ask) Home,
+ * Tasks, My requests, Map, More; a viewer Home, Map, Vehicles, Drivers, More.
+ */
+export const TAB_ORDER: NavItem[] = [
+  { key: "requests", label: "Requests", need: ["approve"], path: "/requests" },
   { key: "tasks", label: "Tasks", need: ["assign_tasks"], path: "/tasks" },
+  { key: "requests", label: "My requests", need: ["request"], path: "/requests" },
+  { key: "live", label: "Map", need: ["view"], path: "/live" },
   { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
-  { key: "more", label: "More", need: [], path: "/more" },
+  { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
+  { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
 ];
 
-/** What the More page lists on a phone: everything that is not on the tab bar. */
-export const MORE_KEYS = ["issues", "requests", "projects", "maintenance", "mileage", "drivers", "settings"];
+export const HOME_TAB: NavItem = { key: "overview", label: "Home", need: [], path: "/" };
+export const MORE_TAB: NavItem = { key: "more", label: "More", need: [], path: "/more" };
+
+export function tabsFor(me: Pick<Me, "permissions">): NavItem[] {
+  const picked: NavItem[] = [HOME_TAB];
+  for (const t of TAB_ORDER) {
+    if (picked.length >= TAB_COUNT - 1) break;
+    if (!can(me, ...t.need) || picked.some((p) => p.key === t.key)) continue;
+    picked.push(t);
+  }
+  return [...picked, MORE_TAB];
+}
+
+/** What the More page lists on a phone: every screen the person may open that is not on the tab bar. On a desktop the rail has them all. */
+export function moreFor(me: Pick<Me, "permissions">): NavItem[] {
+  const onBar = new Set(tabsFor(me).map((t) => t.key));
+  return allowed(NAV, me).filter((n) => !onBar.has(n.key));
+}
 
 /** The driver page (route history) and everything that calls driver_route. */
 export const ROUTES_NEED: Permission[] = ["assign_tasks", "vehicles"];
@@ -67,3 +94,13 @@ export const navState = (items: NavItem[], me: Pick<Me, "permissions">): NavStat
 
 /** Only the items the person may open. */
 export const allowed = (items: NavItem[], me: Pick<Me, "permissions">): NavItem[] => items.filter((n) => can(me, ...n.need));
+
+/** The one thing this person does most, as the big button on a phone's Home. */
+export function homeAction(me: Pick<Me, "permissions">, waiting = 0): { label: string; path: string } | null {
+  const has = (p: Permission) => me.permissions.includes(p);
+  if (has("approve") && (waiting > 0 || !has("assign_tasks"))) return { label: waiting ? `Requests to approve (${waiting})` : "Requests to approve", path: "/requests" };
+  if (has("assign_tasks")) return { label: "Assign a task", path: "/tasks/new" };
+  if (has("request")) return { label: "New request", path: "/requests/new" };
+  if (has("view")) return { label: "Live locations", path: "/live" };
+  return null;
+}

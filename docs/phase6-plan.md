@@ -271,6 +271,57 @@ only; its dirty-state and discard rules move to the page forms (`useDraft` → t
   arrival), "Add a date", "Add at least one stop with a place", "No routing key — times are
   estimates" (source estimate, shown as a note, not an error).
 
+### 4.5 Part 1 as built (14 October 2026, branch `phase6-1-pages`)
+
+- Pages and routes as in 4.1: `/requests/new`, `/requests/:id` (child route of the list),
+  `/requests/:id/decide`, `/tasks/new`, `/tasks/:id`, `/tasks/:id/edit` (driver, vehicle, day,
+  leave-by through `reassign_task`; Cancel with a reason), `/tasks/:id/stops`, `/vehicles/:reg`,
+  `/vehicles/new`, `/vehicles/:reg/edit`, `/drivers/new`, `/drivers/:username/edit`,
+  `/settings/users/new`, `/settings/users/:email/edit`. `ui/Page.tsx`: `PageTop` (the back
+  arrow; Esc goes back), `StickyActions`, `ListWithDetail` (the child route in a right panel on
+  a desktop, alone and full screen on a phone). The modal drawer (`ui/Drawer.tsx`) is gone.
+  A change saved on `/tasks/:id/edit` returns to `/tasks/:id`, which shows the tool's
+  warnings (the vehicle is busy, a document expired, …) above the facts; the board's day
+  (`?date=`) travels through a task's detail, edit and stops pages back to the board. A
+  vehicle's or a request's detail follows its list as the list refreshes (`useVehicle`,
+  `useRequest`), so an edit shows at once.
+- Phone (`ui/phone.ts`, 768 px): `tabsFor(me)` in `app/nav.ts` (Home, then the first of
+  Requests (approve), Tasks, My requests (request), Map, Vehicles, Issues, Drivers the person
+  may open until four are filled, then More; `moreFor(me)` lists the rest, never a tab twice;
+  a dispatcher who may also ask gets Home, Tasks, My requests, Map, More); `homeAction(me,
+  waiting)` is the big button on Home (New request / Requests to approve (N) / Assign a task /
+  Live locations; for someone who approves it appears once the overview is in, so it never
+  changes under the thumb); tables become cards (`td[data-label]`), 48 px targets, `StickyActions`
+  above the tab bar, `PullToRefresh` around every page (70 px from the top →
+  `store.invalidate()`); hidden menu items (`allowed`), the `Guard` keeps "No access".
+- Drafts (`data/drafts.ts`, `useFormDraft(form, record, initial)`): localStorage
+  `fame-fleet:draft:<e-mail or artifact>:<form>[:<record>]`, saved 300 ms after a change and
+  when the page is hidden; `DraftBanner` "Resume draft from HH:MM · Discard"; `clear()` after
+  a save. Forms: request-new, request-decide, task-new, task-edit, task-stops, vehicle-new,
+  vehicle-edit, driver-new, driver-edit, user-new, user-edit.
+- Stops editor (`StopsRows`): rows with a type select, the place, the arrive-by time, and
+  Details (what, minutes there, pin, note); `stopLabel(list, i)` numbers within the type. The
+  plan (`planLogic.ts`): `planLine` "Leave by 07:30 · Head office, Colombo 05 07:30 · Galle
+  09:45 · 2 h 5 min driving · road time OpenRouteService" and `planReasons` ("Add a date.",
+  "Add at least one stop with a place.", "Add a leave-by time, or an arrive-by time on a stop,
+  so it can be planned.", "<stop> has no pin — add one.", "No base place set — pick it in
+  Settings → Fleet.", the server's other warnings, the estimate note); computed 1.5 s after
+  the last edit or with Plan now.
+- The live check: `plan_task` on the real project with the pinned head office and Galle
+  (6.0329, 80.2168) with arrive-by 10:00 answers "Leave by Fri 16 Oct 07:30" (OpenRouteService,
+  117.5 km, via the expressway) and the warning "No base place set"; the page shows that line.
+- Tests: Vitest 94 (nav tabs and More per preset, the home action, drafts, stop numbering,
+  the plan line and reasons, the rest as before); Playwright desktop (the full flows on the
+  pages) and the `phone` project (`e2e/phone.spec.ts`: five tabs and More for a fleet admin,
+  four for a requester, the big action, the stops rows, a detail as a full screen with Back,
+  drafts, pull to refresh).
+- Mobitel names (the split rule, refined once more): after the code, tokens with a digit
+  (`0UL00`, `GUL00`, `89L`) are skipped until the first word; the name is the words that
+  follow until a token with a digit, a 2-letter district tag or a tag such as NOA / IP / BK;
+  trailing digits come off a name token (`Padiyathalawa2` → `Padiyathalawa`). Result on the
+  real file: 3,543 places with a code and a name, 231 with a bare code only, 338 with a name
+  only, none with neither (4,112 in all).
+
 ## 5. Tools: new and changed, by part (inputs → result fields)
 
 All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` once per part.
@@ -634,7 +685,26 @@ the operators' lists are the company's own files; GeoNames stays), the Teams art
 and the message for the Teams chat, `docs/phase6-test-plan.md` per role on a phone and on a
 desktop, the Sinhala list.
 
-## 13. Questions for Sahan
+## 13. Questions for Sahan, and the answers (14 October 2026)
+
+Answered after the review: (1) a requester is anyone with the `request` permission;
+`requested_by` is their office user; the request form gets an optional "On behalf of" name
+for a request made for someone else, and the asker stays the one notified. (2) Silent videos;
+the driver sees only "Recorded 0:45 · retake"; playback on the office web only. (3) The
+checklist defaults (pump display with litres and amount, the vehicle's odometer, the number
+plate) live in a fleet setting `fuel_video_checklist` so they can change without an app
+update. (4) Part 4 stays in round 3; round 3 does not wait for Google: `map_package` is
+`open` until the secrets exist. (5) Shift nudge 08:00 Mon–Sat, only when off duty, a fleet
+setting for the time and the days, no per-driver override. (6) Everything else: my default,
+listed at the Part 1 checkpoint. Also: Mobitel names get the split rule for the
+run-together form (code = the leading capitals up to and including the first digit run, name
+= the letters that follow until the next digit, the sector suffix dropped; counts at the
+Part 1 checkpoint); the plan preview is computed 1.5 s after the last edit or on a Plan
+button, kept only in page memory for the editing session, and every Google call counts
+against `google_routes_daily_cap`; the live check at the Part 1 checkpoint is a new task
+with two pinned stops and an arrive-by showing "Leave by" on the page.
+
+The questions as asked:
 
 1. Decision 2: is "requester" `view + request` (the staff preset) everywhere in this phase?
 2. Decision 5: Mobitel at 4 decimals (4,112 places) or 5 (4,357)?

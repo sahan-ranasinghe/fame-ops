@@ -1,13 +1,14 @@
+// The day's board (/tasks), the detail beside it (/tasks/:id: a panel on a
+// desktop, a full screen on a phone), Assign a task at /tasks/new.
 import { useEffect } from "react";
-import { useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import { useEntry, useLists } from "../data/hooks";
+import { useEntry } from "../data/hooks";
 import type { Board, BoardCard } from "../data/types";
 import { addDays, longDate, statusTone, today } from "../lib/format";
 import { Avatar, Dot, ErrBox, Loading, Plate, StaleNote, Updated } from "../ui/basics";
-import { useDrawer } from "../ui/Drawer";
-import { AssignForm } from "./AssignForm";
-import { TaskDrawer } from "./TaskDrawer";
+import { Icon } from "../ui/icons";
+import { ListWithDetail } from "../ui/Page";
 
 const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
@@ -32,12 +33,12 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
 
 export function Tasks() {
   const { me, store, noConnector, managePermissions } = useFleet();
-  const drawer = useDrawer();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const date = isDate(params.get("date")) ? params.get("date")! : today();
+  const q = date === today() ? "" : `?date=${date}`;
   const setDate = (d: string) => setParams(d === today() ? {} : { date: d }, { replace: true });
   const board = useEntry<Board>("board");
-  const lists = useLists(!noConnector);
   const canAssign = me.tools.includes("create_task");
 
   useEffect(() => {
@@ -53,28 +54,30 @@ export function Tasks() {
     // Declined by the driver, waiting for the office (Phase 5): shown only when there is one.
     ...(b?.declined?.length ? [["declined", "Needs a driver", "bad"] as ["declined", string, "bad"]] : []),
   ];
-  const openTask = (id: string) => drawer.open(<TaskDrawer id={id} />);
-  // /tasks?task=<id> (a notification's link) opens that task once, then drops the parameter.
+  const openTask = (id: string) => navigate(`/tasks/${id}${q}`);
+  // /tasks?task=<id> (a notification's link) opens that task.
   const linked = params.get("task");
   useEffect(() => {
     if (!linked) return;
-    openTask(linked);
-    setParams((p) => { p.delete("task"); return p; }, { replace: true });
+    navigate(`/tasks/${linked}`, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked]);
 
   return (
     <section className="view">
-      <div className="ph">
-        <div><div className="eyebrow">{(date === today() ? "Today · " : "") + longDate(date, true)}</div><h1>Tasks</h1></div>
-        <div className="daynav">
+      <ListWithDetail>
+        <div className="ph">
+          <div><div className="eyebrow">{(date === today() ? "Today · " : "") + longDate(date, true)}</div><h1>Tasks</h1></div>
+          <div className="ph-actions">
+            {canAssign && <Link className="btn primary" to={`/tasks/new${q}`}><Icon name="plus" />Assign a task</Link>}
+          </div>
+        </div>
+        <div className="daynav" style={{ marginBottom: 18 }}>
           <button type="button" className="btn" onClick={() => setDate(addDays(date, -1))}>‹ Yesterday</button>
           <button type="button" className="btn dark" onClick={() => setDate(today())}>Today</button>
           <button type="button" className="btn" onClick={() => setDate(addDays(date, 1))}>Tomorrow ›</button>
           <input type="date" aria-label="Pick a day" value={date} onChange={(e) => { if (e.target.value) setDate(e.target.value); }} />
         </div>
-      </div>
-      <div className={canAssign ? "tasks-layout" : ""}>
         <div className="board">
           {!b && !noConnector && (
             <div style={{ gridColumn: "1/-1" }}>
@@ -95,8 +98,7 @@ export function Tasks() {
             </div>
           )}
         </div>
-        {canAssign && <AssignForm date={date} lists={lists} onDate={setDate} onOpenTask={openTask} />}
-      </div>
+      </ListWithDetail>
     </section>
   );
 }

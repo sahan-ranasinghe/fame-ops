@@ -7,7 +7,6 @@ import type { FleetSettings as Values, PlaceWithId, RoutingUsage, SettingsResult
 import { errText } from "../../transport/errors";
 import type { FleetError } from "../../transport/types";
 import { Loading, Notice, Pill } from "../../ui/basics";
-import { useDirty } from "../../ui/Drawer";
 import { GenericTable } from "../../ui/GenericTable";
 import { useToast } from "../../ui/Toast";
 
@@ -30,8 +29,6 @@ export function FleetSettings() {
   const [err, setErr] = useState<string | null>(null);
   const [draft, setDraft] = useState<Values | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const dirty = !!data && !!draft && JSON.stringify(draft) !== JSON.stringify(data.settings);
-  useDirty(dirty);
 
   async function load() {
     try {

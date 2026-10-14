@@ -3,24 +3,19 @@
 // the needs-attention list to issues (everything) and assign_tasks (the task
 // items; the server already filters), the driver links to assign_tasks or
 // vehicles.
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import { ROUTES_NEED } from "../app/nav";
+import { homeAction, ROUTES_NEED } from "../app/nav";
 import { useEntry, useWatch } from "../data/hooks";
 import type { Overview as OverviewData, RequestsList } from "../data/types";
 import { statusLine, statusTone } from "../data/live";
 import { attIcon, joinDots, levelTone, longDate, today } from "../lib/format";
 import { can } from "../transport/types";
 import { Avatar, Empty, ErrBox, IconLink, Loading, Notice, Pill, Plate, StaleNote, Tile } from "../ui/basics";
-import { useDrawer } from "../ui/Drawer";
 import { Icon } from "../ui/icons";
-import { NewRequestDrawer } from "./NewRequestDrawer";
-import { RequestDrawer } from "./RequestDrawer";
 
 export function Overview() {
   const { me, store, noConnector, managePermissions } = useFleet();
-  const drawer = useDrawer();
-  const navigate = useNavigate();
   const ov = useEntry<OverviewData>("overview");
   const approves = can(me, "approve");
   const attention = can(me, "issues", "assign_tasks");
@@ -29,7 +24,8 @@ export function Overview() {
   const o = ov.data;
   const free = o ? Math.max(0, (o.vehicles.parked ?? 0) - (o.vehicles.in_garage ?? 0)) : 0;
 
-  const openRequest = (id: string, mode?: "decline") => drawer.open(<RequestDrawer id={id} mode={mode} />);
+  // An approver's big action depends on how many requests wait: shown once the overview is in, so it never changes under the thumb.
+  const big = o || !can(me, "approve") ? homeAction(me, o?.requests?.waiting ?? 0) : null;
 
   return (
     <section className="view">
@@ -37,15 +33,14 @@ export function Overview() {
         <div><div className="eyebrow">{longDate(today())}</div><h1>Overview</h1></div>
         <div className="ph-actions">
           {me.tools.includes("create_request") && (
-            <button type="button" className="btn" onClick={() => drawer.open(<NewRequestDrawer />)}>New request</button>
+            <Link className="btn desktop-only" to="/requests/new">New request</Link>
           )}
           {me.tools.includes("create_task") && (
-            <button type="button" className="btn primary" onClick={() => navigate("/tasks", { state: { focus: "title" } })}>
-              <Icon name="plus" />Assign task
-            </button>
+            <Link className="btn primary desktop-only" to="/tasks/new"><Icon name="plus" />Assign task</Link>
           )}
         </div>
       </div>
+      {big && <Link className="btn primary home-action phone-only" to={big.path} data-testid="home-action" style={{ marginBottom: 18 }}>{big.label}</Link>}
 
       {!o && !noConnector && (
         <>
@@ -119,11 +114,11 @@ export function Overview() {
                     <tbody>
                       {rq.data.requests.map((q) => (
                         <tr key={q.id}>
-                          <td><b>{q.requested_by}</b></td><td>{q.project || "—"}</td><td>{q.when}</td><td className="muted">{q.route || "—"}</td><td>{q.need || "—"}</td>
+                          <td data-label="Requested by"><b>{q.requested_by}</b></td><td data-label="Project">{q.project || "—"}</td><td data-label="When">{q.when}</td><td data-label="Route" className="muted">{q.route || "—"}</td><td data-label="Need">{q.need || "—"}</td>
                           <td className="r">
                             <div className="acts" style={{ justifyContent: "flex-end" }}>
-                              <button type="button" className="btn small" onClick={() => openRequest(q.id, "decline")}>Decline</button>
-                              <button type="button" className="btn small dark" onClick={() => openRequest(q.id)}>Approve &amp; assign</button>
+                              <Link className="btn small" to={`/requests/${q.id}/decide?mode=decline`}>Decline</Link>
+                              <Link className="btn small dark" to={`/requests/${q.id}/decide`}>Approve &amp; assign</Link>
                             </div>
                           </td>
                         </tr>
@@ -135,7 +130,7 @@ export function Overview() {
             </div>
           )}
           {!approves && can(me, "request") && (
-            <Notice tone="info">Need a vehicle? <Link to="/requests">New request</Link> sends it to the fleet office; you are told when it is decided.</Notice>
+            <Notice tone="info">Need a vehicle? <Link to="/requests/new">New request</Link> sends it to the fleet office; you are told when it is decided.</Notice>
           )}
         </div>
       )}

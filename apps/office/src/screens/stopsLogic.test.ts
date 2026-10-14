@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { defaultStops, draftsFromStops, driveText, hasDeadline, moveStop, newStop, parsePin, stopLabel, stopsInput } from "./stopsLogic";
 
 describe("stops editor rules", () => {
-  it("labels the first pickup and the last drop-off, numbers the rest", () => {
-    expect(stopLabel(0, "pickup", 3)).toBe("Pickup");
-    expect(stopLabel(2, "drop", 3)).toBe("Drop-off");
-    expect(stopLabel(1, "visit", 3)).toBe("Visit 2");
-    expect(stopLabel(1, "drop", 3)).toBe("Drop-off 2");
+  it("numbers every row within its type; adding or moving a row never changes another row's label type", () => {
+    const list = [newStop("pickup"), newStop("drop"), newStop("drop"), newStop("visit")];
+    expect(list.map((_, i) => stopLabel(list, i))).toEqual(["Pickup 1", "Drop-off 1", "Drop-off 2", "Visit 1"]);
+    const added = [...list, newStop("pickup")];
+    expect(added.map((_, i) => stopLabel(added, i))).toEqual(["Pickup 1", "Drop-off 1", "Drop-off 2", "Visit 1", "Pickup 2"]);
+    expect(added.slice(0, 4).map((s) => s.type)).toEqual(list.map((s) => s.type));
+    const moved = moveStop(added, 4, -1);
+    expect(moved.map((_, i) => stopLabel(moved, i))).toEqual(["Pickup 1", "Drop-off 1", "Drop-off 2", "Pickup 2", "Visit 1"]);
   });
   it("reorders and parses pins", () => {
     const [a, b, c] = [newStop("pickup"), newStop("visit"), newStop("drop")];
