@@ -1,13 +1,13 @@
-# Updating the Teams copy of the Fame Fleet artifact (Phase 5)
+# Updating the Teams copy of the Fame Fleet artifact (Phase 6, Part 2)
 
-14 October 2026. Sahan updates the Teams artifact (`RsGzozM5V4qCv4UeAECatu`, made in his
-Teams chat) himself from the file below; Claude Code never publishes to it, and nobody else
-gets access yet.
+14 October 2026 (Phase 6 Part 2, deploy round 1, commit f9bc685). Sahan updates the Teams
+artifact (`RsGzozM5V4qCv4UeAECatu`, made in his Teams chat) himself from the file below;
+Claude Code never publishes to it, and nobody else gets access yet.
 
 ## The file
 
-- `apps/office/dist-artifact/index.html`, built with `npm run build:artifact` from the
-  commit of deploy round 4 (one self-contained file; no Supabase code, no key inside).
+- `apps/office/dist-artifact/index.html`, built with `npm run build:artifact` from main at
+  f9bc685 (one self-contained file; no Supabase code, no key inside).
 - `apps/office/dist-artifact/capabilities.json`, the declaration to paste unchanged when
   publishing: the connector named exactly **Fame Fleet** (as claude.ai shows it) and exactly
   the tools the artifact build calls, derived by `scripts/artifact-declaration.mjs` from the
@@ -17,7 +17,7 @@ gets access yet.
   (`set_my_notification_settings`, `register_web_push`, `remove_web_push`) are reached only on
   the web and are not, nor are `add_place` and `import_projects`, which no screen calls.
 
-The declared tools, 44 in the connector's order (claude.ai derives the same set from the page):
+The declared tools, 48 in the connector's order (claude.ai derives the same set from the page):
 
 - `fleet_overview`
 - `live_drivers`
@@ -63,6 +63,10 @@ The declared tools, 44 in the connector's order (claude.ai derives the same set 
 - `update_issue`
 - `issue_history`
 - `my_notification_settings`
+- `availability`
+- `update_request`
+- `redecide_request`
+- `update_task`
 
 If claude.ai shows a different count when the Teams copy is updated, the page and the
 declaration have drifted: rebuild with `npm run build:artifact` and compare.
@@ -76,7 +80,28 @@ declaration have drifted: rebuild with `npm run build:artifact` and compare.
    item is in the menu; Settings lists Users and Fleet.
 3. Do not share it with anyone new yet.
 
-## The message for the Teams chat
+## The message for the Teams chat (Phase 6, Part 2)
+
+> Fame Fleet is updated. What is new for the office:
+>
+> - Who's available: when you decide a request, book a vehicle or assign a task, every driver
+>   is listed with On duty since, Off duty, or On a task until about when, what they have next,
+>   today's accepted and declined counts and the licence. A click picks the driver.
+> - The person who asked for a vehicle can change their request. A waiting one stays waiting.
+>   An approved booking becomes "Changed · needs re-approval": you see what changed and decide
+>   again — keep as asked, change the vehicle, driver or time, or decline. The driver's phone
+>   follows, and the vehicle's custodian is told.
+> - Change a task without recreating it: the day, leave-by, end time, driver, vehicle, title,
+>   passengers, contact or notes. Every change is in the task's history with what changed, and
+>   the driver's phone says "Task changed: new time 09:30 · vehicle WP KL-1234".
+> - A request is always in the asker's name; "On behalf of" names who the vehicle is for.
+> - Drivers show On duty since HH:MM on the drivers list, the live map and the driver page.
+> - Settings → Fleet: the time and days of the drivers' "At work? Switch On duty" reminder.
+>
+> The web app at fame-fleet.pages.dev has the same screens plus the live map, the driver
+> pages with playback, and notifications; it can be installed on a phone from Chrome's menu.
+
+## The earlier message (Phase 5), kept for reference
 
 > Fame Fleet is updated to Phase 5. What is new for the office:
 >
