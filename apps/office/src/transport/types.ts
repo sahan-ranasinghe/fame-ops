@@ -58,6 +58,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 /** Every connector tool (supabase/functions/_shared/fleet/index.ts), in the connector's order. The artifact build lists them all; the connector's key decides. */
 export const ALL_TOOLS = [
   "fleet_overview", "live_drivers", "driver_route",
+  "watch_drivers",
   "list_drivers", "create_driver", "reset_pin", "set_driver_active", "update_driver",
   "list_vehicles", "register_vehicle", "update_vehicle", "add_rental_company",
   "list_places", "add_place",

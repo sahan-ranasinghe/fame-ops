@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "@std/assert";
-import { buildRoute, dropRepeats, positionAt, settleStops, simplifyKeep, speedClass } from "./route.ts";
+import { buildRoute, dropRepeats, type LinePoint, positionAt, settleStops, simplifyKeep, simplifyLine, speedClass, withSpeeds } from "./route.ts";
 import type { Fix } from "./track.ts";
 
 const T0 = Date.parse("2026-10-12T02:30:00Z"); // 08:00 in Colombo
@@ -217,4 +217,24 @@ Deno.test("slow traffic: a pause of a few seconds is part of the drive, a halt o
   const moving = r.line.filter((p, i) => i > 0 && !waits.includes(p));
   assert(moving.every((p) => p.kmh >= 9 && p.kmh <= 20), `speeds of the moving steps: ${moving.map((p) => p.kmh).join(",")}`);
   assert(Math.abs(r.km - 2) < 0.3, `km ${r.km}`);
+});
+
+Deno.test("tolerance 0: nothing removed while the line fits the cap; above it the smallest tolerance that fits; 12 m doubles as before", () => {
+  const line = withSpeeds(drive({ lat: 6.9, lng: 79.9, at: T0 }, 10, 40).map((f) => ({ at: f.at, lat: f.lat, lng: f.lng, kmh: 0, acc: f.accuracyM ?? null })));
+  // A straight 10 km drive: every point stays at 0 (the web maps), 12 m keeps almost nothing (Claude's default).
+  assertEquals(simplifyLine(line, { simplifyM: 0, maxPoints: 3000 }).length, line.length);
+  assert(simplifyLine(line, { simplifyM: 12, maxPoints: 3000 }).length < line.length / 10);
+  // Over the cap: 4000 points with wiggles of every size come back with at most 3000, at the smallest tolerance that
+  // fits: no fewer than doubling from 0.5 m keeps, most of the line, the first and last point always.
+  const wiggly: LinePoint[] = [];
+  for (let i = 0; i < 4000; i++) {
+    const amplitude = ((i % 50) * 0.3) / 110540; // 0 to 15 m sideways, growing and repeating
+    wiggly.push({ at: T0 + i * 5000, lat: 6.9 + i * 0.00005, lng: 79.9 + (i % 2 ? amplitude : -amplitude), kmh: 0, acc: 8 });
+  }
+  const capped = simplifyLine(wiggly, { simplifyM: 0, maxPoints: 3000 });
+  const doubled = simplifyLine(wiggly, { simplifyM: 0.5, maxPoints: 3000 });
+  assert(capped.length <= 3000 && capped.length >= doubled.length, `capped to ${capped.length} (doubling from 0.5 m: ${doubled.length})`);
+  assert(capped.length > 2000, `the smallest fitting tolerance keeps most of the line (${capped.length})`);
+  assertEquals(capped[0].at, wiggly[0].at);
+  assertEquals(capped[capped.length - 1].at, wiggly[wiggly.length - 1].at);
 });

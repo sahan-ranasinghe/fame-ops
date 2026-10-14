@@ -104,6 +104,15 @@ select lives_ok($$
   select public.send_heartbeat(now(), true, true, 'always', 80, '1.1.0', 0, 0, true, 'foreground', 5, 1, 12000000)
 $$, 'a heartbeat with one video waiting');
 select lives_ok($$ select public.send_heartbeat(now(), true, true, 'always', 80, '1.1.0', 0) $$, 'the older call shape still works');
+-- Watched mode: the heartbeat answers whether the office is watching this driver (watch_drivers sets driver_latest.watched_until).
+select is((select public.send_heartbeat(now(), true, true, 'always', 80, '1.1.0', 0)) ->> 'watched', 'false', 'a heartbeat answers watched: false while nobody watches');
+reset role;
+update public.driver_latest set watched_until = now() + interval '90 seconds' where employee_id = '10000000-0000-0000-0000-0000000000f5';
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f5","role":"authenticated"}';
+select is((select public.send_heartbeat(now(), true, true, 'always', 80, '1.1.0', 0)) ->> 'watched', 'true', 'and watched: true once the office set watched_until');
+select throws_ok($$ update public.driver_latest set watched_until = null where employee_id = '10000000-0000-0000-0000-0000000000f5' $$,
+  '42501', 'permission denied for table driver_latest', 'a driver cannot change watched_until');
 -- The history: a driver writes a row with every column the app sends (the insert grant lists the columns; on 14 October the two
 -- video columns had no grant, every batch was refused, and driver_route counted no heartbeats at all).
 select lives_ok($$

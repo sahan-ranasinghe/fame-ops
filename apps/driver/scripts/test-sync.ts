@@ -181,6 +181,7 @@ function fakeServer() {
     sendHeartbeat: async () => {
       calls.push({ what: 'heartbeat', n: 1 });
       if (calls.length > failAfterCalls) fail();
+      return { watched: true };
     },
     patchEmployee: async () => {
       calls.push({ what: 'employee', n: 1 });
@@ -212,7 +213,7 @@ function fakeServer() {
 
 async function main() {
   const clock = { now: 1_000_000 };
-  const makeSync = (q: ReturnType<typeof memoryStore>, s: ReturnType<typeof fakeServer>, moving?: () => boolean) =>
+  const makeSync = (q: ReturnType<typeof memoryStore>, s: ReturnType<typeof fakeServer>, moving?: () => boolean, onHeartbeat?: (a: realApi.HeartbeatAnswer) => void) =>
     createSync({
       client: {} as realApi.Client,
       store: q.store,
@@ -222,6 +223,7 @@ async function main() {
       api: s.api,
       now: () => clock.now,
       moving,
+      onHeartbeat,
     });
 
   // --- 1. batches of 500, oldest first, until empty ------------------------------
@@ -289,6 +291,17 @@ async function main() {
     s.set('ok');
     const r = await sync.flush();
     check(!r.skipped && !r.offline && q.waiting() === 0 && sync.backoff().failures === 0, 'network back: the ladder resets and the queue goes at once', { r, backoff: sync.backoff() });
+  }
+
+  // --- 2d. the heartbeat's answer (watched mode) reaches the phone ----------------------
+  {
+    const q = memoryStore();
+    const s = fakeServer();
+    const answers: realApi.HeartbeatAnswer[] = [];
+    const sync = makeSync(q, s, undefined, (a) => answers.push(a));
+    q.add({ kind: 'heartbeat', row: { at: new Date(clock.now).toISOString(), sharing: true, location_on: true, permission: 'always', battery_pct: 80, app_version: 't', queued_points: 0 } });
+    const r = await sync.flush();
+    check(r.sent === 1 && answers.length === 1 && answers[0].watched === true, 'the server says the office is watching: the phone hears it with the heartbeat', { r, answers });
   }
 
   // --- 2c. refused heartbeat history is kept and marked, never dropped -------------------

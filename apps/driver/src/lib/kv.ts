@@ -51,6 +51,8 @@ export const KEYS = {
   videoWifiOnly: 'video.wifiOnly',
   /** The upload backoff after a failed connection (sync/engine.ts). */
   backoff: 'sync.backoff',
+  /** The office is watching this driver until here (ms; the heartbeat's answer): uploads every 10 s while moving. */
+  watchedUntil: 'tracking.watchedUntil',
   /** When the refused points were last put back in line (ms), and for which app update. */
   rejectedRetryAt: 'sync.rejectedRetryAt',
   rejectedRetryUpdate: 'sync.rejectedRetryUpdate',

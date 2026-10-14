@@ -12,6 +12,38 @@ import { buildRoute, type LinePoint, type RouteFix, type Segment, withSpeeds } f
 import { colomboDate, colomboDateTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
 
+/** watch_drivers keeps a driver watched this long; the web calls it again every 30 s while the page is open. */
+export const WATCH_SECONDS = 90;
+
+export const watchDrivers = tool({
+  name: "watch_drivers",
+  title: "Watch drivers (their phones upload faster)",
+  description: "The office is looking at these drivers right now (the driver page, the driver selected on Live locations, every " +
+    "sharing driver while today's trails are on): their phones upload every 10 s while moving for the next 90 s instead of 20 s. " +
+    "The web app calls it every 30 s while the page is open; call it again to keep watching. A driver who has never shared is not " +
+    "yet watchable.",
+  readOnly: false,
+  input: z.object({
+    drivers: z.array(zText(80)).min(1).max(20).describe("Usernames, codes or names"),
+  }),
+  async run({ drivers }, { db, now }) {
+    const refs = await loadRefs(db);
+    const until = new Date(now.getTime() + WATCH_SECONDS * 1000).toISOString();
+    const watched: string[] = [];
+    const notYet: string[] = [];
+    for (const name of [...new Set(drivers)]) {
+      const who = findDriver(refs, name);
+      const { data, error } = await db.from("driver_latest").update({ watched_until: until }).eq("employee_id", who.id).select("employee_id");
+      if (error) throw new Error(`watch drivers: ${error.message}`);
+      (data?.length ? watched : notYet).push(who.name);
+    }
+    return {
+      result: { watched, not_yet_sharing: notYet.length ? notYet : undefined, until: colomboDateTime(until), seconds: WATCH_SECONDS },
+      summary: `watch ${watched.join(", ") || "nobody"}${notYet.length ? ` (not yet sharing: ${notYet.join(", ")})` : ""}`,
+    };
+  },
+});
+
 export const liveDrivers = tool({
   name: "live_drivers",
   title: "Live locations",
@@ -127,8 +159,8 @@ export const driverRoute = tool({
     task_id: zId.optional().describe("One task's time: from Start task to Save & finish, or now if it is still running"),
     from: zTime.optional().describe("HH:MM: start of the window on the date"),
     to: zTime.optional().describe("HH:MM: end of the window on the date"),
-    line_tolerance_m: z.number().min(0.5).max(500).optional()
-      .describe("How closely the line follows the points, in metres (Douglas–Peucker; default 12, the web map uses 3)"),
+    line_tolerance_m: z.number().min(0).max(500).optional()
+      .describe("How closely the line follows the points, in metres (Douglas–Peucker; default 12 for Claude; 0 removes nothing up to max_line_points and above that uses the smallest tolerance that fits: the web maps pass 0)"),
     max_line_points: z.number().int().min(50).max(10000).optional().describe("At most this many points on the line (default 3000)"),
     snap: z.boolean().optional().describe("Also answer the driving legs snapped to roads (route_snapped) when the map_matching setting names a provider"),
   }),

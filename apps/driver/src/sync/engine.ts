@@ -163,6 +163,8 @@ export interface SyncDeps {
   onProgress?: (op: VideoUploadOp) => void;
   /** Whether the vehicle is moving right now (the recording rules' last word): picks the retry ladder. */
   moving?: () => boolean;
+  /** The server answered a heartbeat: whether the office is watching this driver (watched mode). */
+  onHeartbeat?: (answer: realApi.HeartbeatAnswer) => void;
 }
 
 export interface FlushResult {
@@ -333,8 +335,11 @@ export function createSync(deps: SyncDeps) {
           api.insertFuelLog(client, { ...op.row, receipt_photo_id: null }));
       case 'report':
         return api.insertReport(client, op.row);
-      case 'heartbeat':
-        return api.sendHeartbeat(client, op.row);
+      case 'heartbeat': {
+        const answer = await api.sendHeartbeat(client, op.row);
+        deps.onHeartbeat?.({ watched: answer?.watched === true });
+        return;
+      }
       case 'video_upload':
         return sendVideo(seq, op);
     }

@@ -3,14 +3,16 @@
 // trails". A trail is loaded once from driver_route and then grows point by
 // point from ONE Realtime channel on location_points filtered to the drivers
 // currently sharing (each point put in by its time, so a backlog lands in its
-// place); every 60 s the trails and the shown route are fetched again as the
+// place); every 60 s the trails and the shown route are fetched again (at
+// tolerance 0, like the driver page) and merged by time into the line already drawn, as the
 // fallback, so the line never depends on one point per upload.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { positionOf, recordedAtOf, statusLine, statusTone } from "../data/live";
 import { megabytes } from "./fuelLogic";
-import { insertPoint, mapRouteOf, type Route, routeOf, trailOf } from "../data/route";
+import { insertPoint, mapRouteOf, mergeRoute, type Route, routeOf, trailOf } from "../data/route";
+import { useWatchDrivers } from "../data/watchDrivers";
 import type { DriverRoute, LiveDriver } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { joinDots, num, plateOf } from "../lib/format";
@@ -25,7 +27,8 @@ import { Icon } from "../ui/icons";
 /** The trails and the shown route are fetched again this often (the fallback when Realtime is not delivering). */
 const TRAIL_REFRESH_MS = 60000;
 /** The shown route of one driver: every point the tool kept with a 3 m tolerance. */
-const ROUTE_ARGS = { line_tolerance_m: 3, max_line_points: 3000 };
+/** The line the maps draw: every stored point up to 3,000 (tolerance 0); above that the tool picks the smallest tolerance that fits. */
+const ROUTE_ARGS = { line_tolerance_m: 0, max_line_points: 3000 };
 
 type Filter = "all" | "live" | "no_signal" | "location_off" | "not_sharing";
 const FILTERS: [Filter, string][] = [["all", "All"], ["live", "Live"], ["no_signal", "No signal"], ["location_off", "Location off"], ["not_sharing", "Not sharing"]];
@@ -87,15 +90,19 @@ export function Live() {
       for (const x of driversRef.current) {
         if (!trails || !sharingNow(x) || !trailMapRef.current.has(x.username) || loading.current.has(x.username)) continue;
         loading.current.add(x.username);
-        void transport.call<DriverRoute>("driver_route", { driver: x.username })
-          .then((p) => setTrailMap((m) => new Map(m).set(x.username, routeOf(x.username, p))))
+        void transport.call<DriverRoute>("driver_route", { driver: x.username, ...ROUTE_ARGS })
+          .then((p) => setTrailMap((m) => {
+            const cur = m.get(x.username);
+            const fresh = routeOf(x.username, p);
+            return new Map(m).set(x.username, cur ? mergeRoute(cur, fresh) : fresh);
+          }))
           .catch(() => undefined)
           .finally(() => loading.current.delete(x.username));
       }
       const shown = routeRef.current;
       if (shown) {
         void transport.call<DriverRoute>("driver_route", { driver: shown.username, ...ROUTE_ARGS })
-          .then((p) => setRoute((r) => (r && r.username === shown.username ? routeOf(shown.username, p) : r)))
+          .then((p) => setRoute((r) => (r && r.username === shown.username ? mergeRoute(r, routeOf(shown.username, p)) : r)))
           .catch(() => undefined);
       }
     }, TRAIL_REFRESH_MS);
@@ -104,6 +111,8 @@ export function Live() {
   const shown = filter === "all" ? all : all.filter((x) => (x.status ?? (x.state === "sharing" ? "live" : x.state === "stale" ? "no_signal" : "not_sharing")) === filter);
   const sel = all.find((x) => x.username === selected) ?? all[0];
   useEffect(() => { if (!selected && all[0]) setSelected(all[0].username); }, [all, selected]);
+  // Watched mode: the selected driver (every sharing driver while the trails are on) uploads every 10 s while moving.
+  useWatchDrivers(trails ? all.filter(sharingNow).map((x) => x.username) : sel && sharingNow(sel) ? [sel.username] : []);
 
   // Trails on: load today's route of every sharing driver that has none yet.
   useEffect(() => {
@@ -111,7 +120,7 @@ export function Live() {
     for (const x of all) {
       if (!sharingNow(x) || trailMap.has(x.username) || loading.current.has(x.username)) continue;
       loading.current.add(x.username);
-      void transport.call<DriverRoute>("driver_route", { driver: x.username })
+      void transport.call<DriverRoute>("driver_route", { driver: x.username, ...ROUTE_ARGS })
         .then((p) => setTrailMap((m) => new Map(m).set(x.username, routeOf(x.username, p))))
         .catch(() => undefined)
         .finally(() => loading.current.delete(x.username));

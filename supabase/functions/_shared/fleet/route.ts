@@ -294,11 +294,14 @@ const sameSpot = (a: { lat: number; lng: number }, b: { lat: number; lng: number
 /**
  * Thins the line by shape (corners stay, straight runs go), keeping the waits, the ends of holes (`keepAt`:
  * the times of points that must stay) and the first and last point. The speeds are recomputed per step.
+ * A tolerance of 0 (the web maps) removes nothing while the line fits `maxPoints`; above that it finds the
+ * smallest tolerance that gets under (doubling from 0.5 m, then bisecting to 5 cm). A tolerance above 0
+ * (Claude's default 12 m) is applied as given and doubled until the line fits, as before.
  */
 export function simplifyLine(line: LinePoint[], opts: BuildOptions = {}, keepAt?: Set<number>): LinePoint[] {
-  let tolerance = opts.simplifyM ?? SIMPLIFY_M;
+  const requested = opts.simplifyM ?? SIMPLIFY_M;
   const max = opts.maxPoints ?? MAX_LINE_POINTS;
-  for (;;) {
+  const thin = (tolerance: number): LinePoint[] => {
     const keep = simplifyKeep(line, tolerance);
     for (let i = 1; i < line.length; i++) {
       // A wait (same place as the point before) is a time anchor: keep it and the point it waits at.
@@ -308,9 +311,32 @@ export function simplifyLine(line: LinePoint[], opts: BuildOptions = {}, keepAt?
       }
     }
     if (keepAt) for (let i = 0; i < line.length; i++) if (keepAt.has(line[i].at)) keep[i] = true;
-    const out = line.filter((_, i) => keep[i]);
+    return line.filter((_, i) => keep[i]);
+  };
+  if (requested <= 0) {
+    if (line.length <= max) return withSpeeds(line);
+    let lo = 0;
+    let hi = 0.5;
+    let fit = thin(hi);
+    while (fit.length > max && hi < 5000) {
+      lo = hi;
+      hi *= 2;
+      fit = thin(hi);
+    }
+    for (let i = 0; i < 12 && hi - lo > 0.05; i++) {
+      const mid = (lo + hi) / 2;
+      const out = thin(mid);
+      if (out.length > max) lo = mid;
+      else {
+        hi = mid;
+        fit = out;
+      }
+    }
+    return withSpeeds(fit);
+  }
+  for (let tolerance = requested;; tolerance *= 2) {
+    const out = thin(tolerance);
     if (out.length <= max || tolerance > 5000) return withSpeeds(out);
-    tolerance *= 2;
   }
 }
 

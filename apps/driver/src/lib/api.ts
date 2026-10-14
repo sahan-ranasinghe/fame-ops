@@ -330,7 +330,12 @@ export interface HeartbeatRow {
   video_bytes_waiting?: number;
 }
 
-export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<void> {
+/** The heartbeat's answer: whether the office is watching this driver right now (the phone then uploads every 10 s while moving). */
+export interface HeartbeatAnswer {
+  watched: boolean;
+}
+
+export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<HeartbeatAnswer> {
   const res = await client.rpc('send_heartbeat', {
     p_at: row.at,
     p_sharing: row.sharing,
@@ -347,6 +352,8 @@ export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<
     p_video_bytes_waiting: row.video_bytes_waiting ?? undefined,
   });
   if (res.error) fail(res, 'heartbeat');
+  const data = res.data as { watched?: unknown } | null;
+  return { watched: data?.watched === true };
 }
 
 /** The heartbeat history: a batch of rows into driver_heartbeats; one already there (same time) is ignored. */

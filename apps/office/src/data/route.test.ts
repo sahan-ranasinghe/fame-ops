@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusOf, insertPoint, mapRouteOf, minutesText, routeOf } from "./route";
+import { focusOf, insertPoint, mapRouteOf, mergeRoute, minutesText, routeOf } from "./route";
 import type { DriverRoute } from "./types";
 
 const day = "2026-10-12";
@@ -110,5 +110,31 @@ describe("the map and the timeline rows", () => {
     expect(minutesText(60)).toBe("1 h");
     expect(minutesText(95)).toBe("1 h 35 min");
     expect(minutesText(undefined)).toBe("—");
+  });
+});
+
+describe("the 60-second refetch merges into the line already drawn", () => {
+  it("keeps the Realtime points the thinned answer does not carry, takes the numbers from the fresh answer", () => {
+    const base = routeOf("nuwan.p", answer);
+    // The live line: the tool's points plus three Realtime rows between and after them.
+    let live = base;
+    const rows: [string, number, number][] = [["08:02:30", 6.885, 79.862], ["08:03:10", 6.887, 79.863], ["16:31:40", 6.931, 79.861]];
+    for (const [t, lat, lng] of rows) {
+      live = insertPoint(live, { employee_id: "e1", recorded_at: `${day}T${t}+05:30`, lat, lng, accuracy_m: 5, speed_mps: 8, heading: null });
+    }
+    expect(live.points.length).toBe(base.points.length + 3);
+    // The fresh answer: the same thinned line, a new km figure, and one point it already has at a Realtime time (its own position wins).
+    const [first, ...rest] = answer.route!.points;
+    const fresh = routeOf("nuwan.p", { ...answer, km: 43.9, recorded_points: 900, route: { columns: answer.route!.columns, points: [first, ["08:02", 6.886, 79.862, 12, `${day}T08:02:30+05:30`], ...rest] } });
+    const merged = mergeRoute(live, fresh);
+    expect(merged.points.length).toBe(fresh.points.length + 2);
+    expect(merged.km).toBe(43.9);
+    expect(merged.count).toBe(900);
+    expect(merged.points.map((p) => p.at)).toEqual([...merged.points.map((p) => p.at)].sort((a, b) => a - b));
+    const at0802 = merged.points.find((p) => p.at === Date.parse(`${day}T08:02:30+05:30`));
+    expect(at0802?.lat).toBe(6.886);
+    expect(merged.lineEndAt).toBe(Date.parse(`${day}T16:31:40+05:30`));
+    // Another driver's answer is never merged in.
+    expect(mergeRoute(live, routeOf("other", answer)).username).toBe("other");
   });
 });

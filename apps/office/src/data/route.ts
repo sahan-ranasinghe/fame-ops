@@ -161,6 +161,24 @@ export function insertPoint(route: Route, row: PointRow): Route {
   return { ...route, points, count: route.count + 1, last: last.at === at ? colomboClock(row.recorded_at) : route.last };
 }
 
+/**
+ * A fresh answer from the tool (the 60-second refetch) merged into the line already drawn: the fresh
+ * line's points (the server's 3 m line) plus every point the Realtime rows added that the fresh line
+ * does not carry at the same time, so the dense live line never collapses to the thinned one; the km,
+ * the timeline, the stops and the holes come from the fresh answer.
+ */
+export function mergeRoute(current: Route, fresh: Route): Route {
+  if (current.username !== fresh.username || current.date !== fresh.date) return fresh;
+  const have = new Set(fresh.points.map((p) => p.at));
+  let points = fresh.points;
+  for (const p of current.points) {
+    if (have.has(p.at)) continue;
+    have.add(p.at);
+    points = insertByTime(points, p);
+  }
+  return { ...fresh, points, lineEndAt: points.length ? points[points.length - 1].at : null };
+}
+
 /** The points of a timeline row, to zoom the map to. */
 export function focusOf(route: Route, row: TimelineRow): { lat: number; lng: number }[] {
   if (row.kind === "stopped" && row.lat != null && row.lng != null) return [{ lat: row.lat, lng: row.lng }];

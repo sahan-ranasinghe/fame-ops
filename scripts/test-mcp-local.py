@@ -1009,6 +1009,12 @@ code, body = app.post("driver_heartbeats", {"employee_id": ME, "at": iso(dt.date
                                              "video_uploads_waiting": 1, "video_bytes_waiting": 12000000})
 check(code == 201, "a driver writes a heartbeat history row with every column the app sends (the video columns included)", f"{code} {str(body)[:160]}")
 check(tool("driver_route", {"driver": "nuwan.p"})["heartbeats"] >= 1, "driver_route counts the history row in today's window")
+# Watched mode: the office watches a driver for 90 s; the phone's next heartbeat hears it.
+w = tool("watch_drivers", {"drivers": ["nuwan.p"]})
+check(len(w["watched"]) == 1 and w["seconds"] == 90 and "until" in w, "watch_drivers: the office watches a driver for 90 s", json.dumps(w))
+code, hb = app.post("rpc/send_heartbeat", {"p_at": iso(dt.datetime.now(dt.timezone.utc)), "p_sharing": True, "p_location_on": True, "p_permission": "always", "p_queued_points": 0,
+                                           "p_video_uploads_waiting": 1, "p_video_bytes_waiting": 12000000})
+check(code == 200 and hb == {"watched": True}, "the phone's next heartbeat answers watched: true", f"{code} {hb}")
 ldv = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "nuwan.p")
 check(ldv.get("video_uploads_waiting") == 1 and ldv.get("video_bytes_waiting") == 12000000, "live_drivers: the card carries the waiting video and its size", json.dumps({k: ldv.get(k) for k in ("video_uploads_waiting", "video_bytes_waiting")}))
 

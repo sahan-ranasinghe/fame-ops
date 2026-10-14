@@ -668,6 +668,26 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
      "App not running" and "no GPS" are real.
   5. The live card and the marker show "position HH:MM:SS" (`last_position_time` on every
      driver card, additive; the web's Realtime update keeps it current).
+- Round 2c (branch `phase6-3c-live-trails`, 14 October): (a) the Live page bug: the trail calls
+  passed only the driver name (the tool's default 12 m thinning) and the 60-second refetch
+  replaced the trail, so the dense Realtime line collapsed to a few far-apart points every
+  minute. The trails now ask for 3 m / 3000 points like the driver page, and the refetch merges
+  by recorded_at into the line already drawn (`mergeRoute` in `src/data/route.ts`: the fresh
+  line plus the Realtime points it lacks, the numbers from the fresh answer); the shown route
+  merges the same way. (b) Watched mode: `watch_drivers(drivers[])` (view) sets
+  `driver_latest.watched_until` 90 s ahead (migration `20261014230000_watched_drivers`); the web
+  calls it every 30 s (`useWatchDrivers`) for the driver page today, the selected driver on Live
+  locations, and every sharing driver while the trails are on; `send_heartbeat()` now answers
+  `{watched}` (jsonb; void before), the phone keeps the mode 150 s after a heartbeat that said
+  so and uploads every 10 s while moving (`UPLOAD_WATCHED_MS`), 20 s unwatched, 60 s parked.
+  (c) Every route view asks for tolerance 0 with 3,000 points: the driver page (today and a past
+  day), the task route and the Live page. The server (`simplifyLine`) removes nothing while the
+  line fits the cap; above it, it finds the smallest tolerance that gets under (doubling from
+  0.5 m, then bisecting to 5 cm). Claude's default 12 m is applied and doubled as before. The
+  driver page's 60-second refetch merges too (`mergeRoute`) and keeps the selected timeline row;
+  playback steps through every point of the line in time order (a gap waits at most 1.5 s).
+  Round 2c deploys the migration, the three functions and the web; the phone part waits for the
+  round 3 eas update.
 
 ## 8. Part 4: site lists and place search
 

@@ -233,13 +233,16 @@
   the server's 15-minute rule). `live_drivers` cards carry `employee_id`, `lat`, `lng`
   (additive; the contract snapshot records no live driver rows, so it did not change).
   "Show today's trails" draws every sharing driver's line today (one `driver_route` call
-  each, then grown point by point from ONE Realtime channel on `location_points` filtered to
-  the drivers currently sharing, each point inserted by its time; the trails and the shown
-  route are fetched again every 60 s as the fallback; never one point per upload); the
+  each at tolerance 0 / 3000 points, then grown point by point from ONE Realtime channel on
+  `location_points` filtered to the drivers currently sharing, each point inserted by its time;
+  the trails and the shown route are fetched again every 60 s as the fallback and merged by time
+  into the line already drawn (`mergeRoute`: the fresh line plus the Realtime points it lacks),
+  never replaced, so the dense live line does not collapse; never one point per upload); the
   detail card links to the driver page.
 - Driver page (`src/screens/DriverPage.tsx`, route `/drivers/:username`, opened from a
   driver's name on Drivers, Live locations, the map card and Overview's on-the-road list;
-  since 14 October: the line at 3 m tolerance, every new point through Realtime on
+  since 14 October: the line at tolerance 0 (every stored point up to 3,000, then the smallest
+  tolerance that fits), every new point through Realtime on
   `location_points` inserted by time (`insertPoint` in `src/data/route.ts`), poor fixes thin
   and lighter, holes dashed and labelled, the "Snap to roads" toggle and legend when a provider
   is set, markers gliding over the real time between positions and turning to the heading):
@@ -248,10 +251,12 @@
   coloured by speed (standing / under 20 / 20–60 / over 60 km/h), stops as circles with
   their times, data gaps dashed, a date bar (Today / Yesterday / a date), the timeline
   beside the map (a row zooms the map to it) and, web only, playback (`usePlayback`:
-  Play / Pause, ×10 ×60 ×300, a time slider, a marker with time and speed). Data: one
+  Play / Pause, ×10 ×60 ×300, a time slider, the marker stepping through every point of the
+  line in time order with its time and speed). Data: one
   shared builder `supabase/functions/_shared/fleet/route.ts` (imported as `@fleet/route`,
   with `@fleet/track`) feeds `driver_route`; the page watches it every 60 s for today
-  (once for a past day) and grows today's line at once from the driver_latest Realtime
+  (once for a past day), each answer merged by time into the line drawn (`mergeRoute`, never
+  replacing it, the selected timeline row kept), and grows today's line at once from the driver_latest Realtime
   rows (`appendLive` in `src/data/route.ts`); no Realtime on location_points. The task
   drawer shows the task's own route (`driver_route(task_id)`) with GPS km next to the
   odometer. The artifact has the same screens on the drawn map, polling, no playback.
@@ -407,7 +412,8 @@
   hb_app_version, hb_queued_points, hb_location_off_since (written by `send_heartbeat()`).
   Kept current by trigger (only newer points win).
   Also hb_rejected_points, hb_data_available, hb_app_state, hb_fix_age_s and the last point's
-  heading (migration `route_quality`). In the Realtime publication; office roles (admin,
+  heading (migration `route_quality`), and `watched_until` (migration `watched_drivers`: set by
+  `watch_drivers`, read back by `send_heartbeat()`'s answer). In the Realtime publication; office roles (admin,
   fleet_admin, office, viewer) read it through RLS (`current_office_role()`, migration
   `office_read_access`), drivers and staff read nothing. The same roles read all tasks,
   task_stops and (since `route_quality`) location_points through RLS; location_points is in
@@ -603,7 +609,9 @@ phone and retried. The point queue (SQLite) has no cap: a parked vehicle adds ab
 an hour, a moving one about 720 (one every 5 s), about 150 bytes each, so a 10-hour day is
 ~1 MB. Uploads go in batches of 500 with a 45 s limit per request (`UPLOAD_TIMEOUT_MS`), one
 batch after another until the queue is empty, from the location task (every ~20 s while the
-vehicle moves, every ~60 s while it stands, or 10+ points), every heartbeat, on refresh (forced),
+vehicle moves, 10 s while the office is watching this driver (watched mode: `watch_drivers` →
+`driver_latest.watched_until`, the heartbeat's answer `{watched}`, kept 150 s on the phone),
+every ~60 s while it stands, or 10+ points), every heartbeat, on refresh (forced),
 when the phone reports the network back (expo-network's listener: the ladder resets and a forced
 flush runs), and from the background job; after a failed connection the next try waits 5 s, 15 s,
 30 s, then every 30 s while moving, and 5 s, 15 s, 30 s, 1 min, 2 min, then every 5 min while
@@ -678,7 +686,11 @@ office_audit.
   (in progress, done), requests waiting (+ oldest), reminders due in 14 days, on-the-road
   list, needs-attention list. (Powers Desktop · Overview and Office · Home later.)
 - Locations: `live_drivers(filter?)` (sharing / stale / not sharing, near town, speed,
-  vehicle, current task, links, heading), `driver_route(driver?, date?, task_id?, from?, to?,
+  vehicle, current task, links, heading), `watch_drivers(drivers[])` (view; the office is looking
+  at these drivers: `driver_latest.watched_until` 90 s ahead, the web calls it every 30 s from the
+  driver page, the selected driver on Live locations, every sharing driver with the trails on;
+  `send_heartbeat()` answers `{watched}` and the phone uploads every 10 s while moving),
+  `driver_route(driver?, date?, task_id?, from?, to?,
   line_tolerance_m?, max_line_points?, snap?)` (a day, a task's own window from Start task to
   Save & finish, or two times of a day: drift-filtered km from the raw points, driving and
   stopped minutes, stops > 10 min near a town, gaps > 10 min with their kind (no_gps = heartbeats
@@ -686,7 +698,8 @@ office_audit.
   driving / stopped / no_gps / no_data rows with sentences and "Offline here · uploaded HH:MM"
   on legs whose points landed over 5 min late, holes (> 2 min between line points, dashed on the
   map), the line smoothed for display (never the km) and thinned by shape (Douglas–Peucker
-  `line_tolerance_m` default 12, the web passes 3, at most `max_line_points` 3000) with km/h,
+  `line_tolerance_m` default 12 for Claude; 0, which every web map passes, removes nothing up to
+  `max_line_points` 3000 and above that uses the smallest tolerance that fits) with km/h,
   the ISO time and the accuracy per point, points_stored / points_shown, and with `snap` the
   driving legs snapped to roads (`route_snapped`, `snapped.status`) when the `map_matching`
   setting names a provider (google_roads: GOOGLE_ROADS_KEY, osrm: OSRM_URL; results cached per

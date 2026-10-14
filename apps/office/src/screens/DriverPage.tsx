@@ -10,8 +10,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useLists, useWatch } from "../data/hooks";
+import { useWatchDrivers } from "../data/watchDrivers";
 import { positionOf, recordedAtOf, statusLine, statusTone } from "../data/live";
-import { focusOf, insertPoint, KIND_LABEL, mapRouteOf, minutesText, positionAt, type Route, routeOf, snapLegend, type TimelineRow } from "../data/route";
+import { focusOf, insertPoint, KIND_LABEL, mapRouteOf, mergeRoute, minutesText, type Route, routeOf, snapLegend, type TimelineRow } from "../data/route";
 import type { DriverRoute } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { addDays, clock, longDate, num, today, waLink } from "../lib/format";
@@ -24,8 +25,8 @@ import { type PlaybackSpeed, SPEEDS, usePlayback } from "./usePlayback";
 const ROUTE_EVERY_MS = 60000;
 const PAST_DAY_MS = 6 * 3600000;
 
-/** The line the web map draws: every point the tool kept with a 3 m tolerance (invisible on the map), up to 3,000. */
-const LINE_ARGS = { line_tolerance_m: 3, max_line_points: 3000 };
+/** The line the map draws: every stored point up to 3,000 (tolerance 0); above that the tool picks the smallest tolerance that fits. */
+const LINE_ARGS = { line_tolerance_m: 0, max_line_points: 3000 };
 
 export function DriverPage() {
   const { username = "" } = useParams();
@@ -43,12 +44,18 @@ export function DriverPage() {
 
   const key = `route.${username}.${date}.${snap ? "snap" : "raw"}`;
   const entry = useWatch<DriverRoute>(key, "driver_route", { driver: username, date, ...LINE_ARGS, snap }, isToday ? ROUTE_EVERY_MS : PAST_DAY_MS, !noConnector && !!username);
+  // Watched mode: today, this driver's phone uploads every 10 s while moving.
+  useWatchDrivers(isToday && username ? [username] : []);
   const { live, rt } = useLiveDrivers();
+  // A fresh answer for the same day is merged by time into the line drawn (the Realtime points stay); another day or driver replaces it.
   useEffect(() => {
-    setRoute(entry.data ? routeOf(username, entry.data) : null);
+    const fresh = entry.data ? routeOf(username, entry.data) : null;
+    setRoute((r) => (r && fresh && r.username === fresh.username && r.date === fresh.date ? mergeRoute(r, fresh) : fresh));
+  }, [entry.data, username]);
+  useEffect(() => {
     setSelected(null);
     setFocus(null);
-  }, [entry.data, username]);
+  }, [username, date]);
 
   const card = live.data?.drivers.find((d) => d.username === username);
   const employeeId = card?.employee_id;
@@ -71,12 +78,13 @@ export function DriverPage() {
 
   const playback = usePlayback(route?.points ?? []);
   const webPlayback = __BUILD__ === "web" && !!route && route.points.length > 1;
+  // The marker sits on the point the playback is at (every point of the line in turn, nothing interpolated).
   const cursor = useMemo(() => {
     if (!webPlayback || !route) return null;
-    const p = positionAt(route.points, playback.t);
-    return p ? { lat: p.lat, lng: p.lng, label: `${clock(playback.t)} · ${p.kmh} km/h` } : null;
-  }, [webPlayback, route, playback.t]);
-  const mapRoute = useMemo(() => mapRouteOf(route, playback.playing || (webPlayback && playback.t > playback.start) ? cursor : null, snap), [route, cursor, playback.playing, playback.t, playback.start, webPlayback, snap]);
+    const p = route.points[playback.index];
+    return p ? { lat: p.lat, lng: p.lng, label: `${clock(p.at)} · ${p.kmh} km/h` } : null;
+  }, [webPlayback, route, playback.index]);
+  const mapRoute = useMemo(() => mapRouteOf(route, playback.playing || (webPlayback && playback.index > 0) ? cursor : null, snap), [route, cursor, playback.playing, playback.index, webPlayback, snap]);
   const markers = useMemo<MapMarker[]>(() => {
     const pos = card && isToday ? positionOf(card) : null;
     if (!pos || !card) return [];

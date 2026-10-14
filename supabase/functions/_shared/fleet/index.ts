@@ -14,7 +14,7 @@ import {
   updateOfficeUser,
 } from "./tools/accounts.ts";
 import { createDriver, listDrivers, resetPin, setDriverActive, updateDriver } from "./tools/drivers.ts";
-import { driverRoute, liveDrivers } from "./tools/locations.ts";
+import { driverRoute, liveDrivers, watchDrivers } from "./tools/locations.ts";
 import { listFuel } from "./tools/fuel.ts";
 import { listVehicleReports, mileageSummary, updateVehicleReport } from "./tools/mileage.ts";
 import { fleetOverview } from "./tools/overview.ts";
@@ -32,6 +32,7 @@ export const TOOLS: AnyTool[] = [
   fleetOverview,
   liveDrivers,
   driverRoute,
+  watchDrivers,
   listDrivers,
   createDriver,
   resetPin,

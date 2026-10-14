@@ -58,6 +58,7 @@ const ANY: readonly Permission[] = PERMISSIONS;
 export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   fleet_overview: V,
   live_drivers: V,
+  watch_drivers: V,
   list_vehicles: V,
   list_drivers: V,
   list_requests: VR,

@@ -10,7 +10,7 @@ import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 import { type AcceptAnswer, ApiError, type HeartbeatRow } from '../lib/api';
 import { getJson, KEYS, setJson } from '../lib/kv';
 import { supabase } from '../lib/supabase';
-import { currentTrack } from '../lib/tracking';
+import { currentTrack, setWatched } from '../lib/tracking';
 import type { Employee } from '../lib/types';
 import { base64Decode, SupabaseTusStore } from '../lib/videoStore';
 import { type BackoffState, type Connection, createSync, type FlushResult, type Op } from './engine';
@@ -146,6 +146,7 @@ const sync = createSync({
   connection: connectionKind,
   onProgress: () => changed(),
   moving: () => currentTrack().moving === true,
+  onHeartbeat: (answer) => setWatched(answer.watched),
 });
 
 // The phone says the network is back: the ladder starts again and what waits goes at once (no waiting for a timer).

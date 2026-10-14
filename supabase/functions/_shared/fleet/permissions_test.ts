@@ -105,6 +105,7 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
   assertEquals(toolsFor(PRESETS.viewer.permissions, names), [
     "fleet_overview",
     "live_drivers",
+    "watch_drivers",
     "list_drivers",
     "list_vehicles",
     "list_places",

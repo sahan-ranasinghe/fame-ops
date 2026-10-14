@@ -69,6 +69,21 @@ export function toPhoneFix(location: Location.LocationObject): PhoneFix {
   };
 }
 
+// --- watched mode (the heartbeat's answer) --------------------------------------
+
+/** The phone keeps watched mode this long after a heartbeat that said so (heartbeats come every 60 s; one may be missed). */
+export const WATCHED_FOR_MS = 150_000;
+
+/** The heartbeat's answer: the office is (not) watching this driver. */
+export function setWatched(on: boolean, now = Date.now()): void {
+  setJson(KEYS.watchedUntil, on ? now + WATCHED_FOR_MS : 0);
+}
+
+/** Whether the office is watching this driver right now: uploads every 10 s while moving. */
+export function isWatched(now = Date.now()): boolean {
+  return (getJson<number>(KEYS.watchedUntil) ?? 0) > now;
+}
+
 // --- what the heartbeat reports -----------------------------------------------
 
 /** The fix counters since they were last taken; taking them starts them again at zero. */

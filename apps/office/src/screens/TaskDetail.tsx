@@ -260,7 +260,7 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
     if (!started) return;
     let alive = true;
     setBusy(true);
-    transport.call<DriverRoute>("driver_route", { task_id: id, line_tolerance_m: 3, max_line_points: 3000, snap: true })
+    transport.call<DriverRoute>("driver_route", { task_id: id, line_tolerance_m: 0, max_line_points: 3000, snap: true })
       .then((p) => { if (alive) setRoute(routeOf("", p)); })
       .catch((e) => { if (alive) setErr(errText(e as FleetError)[0]); })
       .finally(() => { if (alive) setBusy(false); });
