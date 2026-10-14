@@ -31,6 +31,12 @@ function updates(): UpdatesModule | null {
   return loaded;
 }
 
+/** The id of the update now running, or null when this build has no updates (development build). */
+export function runningUpdateId(): string | null {
+  const module = updates();
+  return module?.isEnabled ? module.updateId ?? null : null;
+}
+
 /** When the code now running was published, or null when this build has no updates (development build). */
 export function runningUpdate(): { publishedAt: Date | null; channel: string | null } | null {
   const module = updates();

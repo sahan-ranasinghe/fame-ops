@@ -31,6 +31,8 @@ export interface StatusInput {
   permission: string | null;
   /** Since when the phone has reported Location off / permission missing. */
   locationOffSince: string | null;
+  /** Points the server refused and the phone keeps (the last heartbeat's count); shown as "N points refused". */
+  rejectedPoints?: number | null;
 }
 
 export interface StatusResult {
@@ -41,6 +43,8 @@ export interface StatusResult {
   minutesSinceSignal: number | null;
   /** The heartbeat is fresh and says the permission is missing (not just the switch). */
   permissionProblem: boolean;
+  /** Points the server refused, when the phone reported any. */
+  rejectedPoints?: number;
 }
 
 export const minutesBetween = (fromIso: string, now: Date): number =>
@@ -52,8 +56,9 @@ const later = (a: string | null, b: string | null) => (a && b ? (a > b ? a : b) 
 export function driverStatus(i: StatusInput, now: Date): StatusResult {
   const newest = later(i.pointAt, i.heartbeatAt);
   const minutesSinceSignal = newest ? minutesBetween(newest, now) : null;
-  if (!i.sharing) return { status: "not_sharing", since: null, minutesSinceSignal, permissionProblem: false };
-  if (fresh(i.pointAt, now)) return { status: "live", since: i.pointAt, minutesSinceSignal, permissionProblem: false };
+  const rejected = i.rejectedPoints != null && i.rejectedPoints > 0 ? { rejectedPoints: i.rejectedPoints } : {};
+  if (!i.sharing) return { status: "not_sharing", since: null, minutesSinceSignal, permissionProblem: false, ...rejected };
+  if (fresh(i.pointAt, now)) return { status: "live", since: i.pointAt, minutesSinceSignal, permissionProblem: false, ...rejected };
   const heartbeatFresh = fresh(i.heartbeatAt, now);
   const locationOff = i.locationOn === false || (i.permission !== null && i.permission !== "always");
   if (heartbeatFresh && locationOff) {
@@ -62,10 +67,11 @@ export function driverStatus(i: StatusInput, now: Date): StatusResult {
       since: i.locationOffSince ?? i.heartbeatAt,
       minutesSinceSignal,
       permissionProblem: i.permission !== null && i.permission !== "always",
+      ...rejected,
     };
   }
   // No fresh point: either nothing at all reaches the office, or the phone is alive but has no GPS fix.
-  return { status: "no_signal", since: newest, minutesSinceSignal, permissionProblem: false };
+  return { status: "no_signal", since: newest, minutesSinceSignal, permissionProblem: false, ...rejected };
 }
 
 const clock = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", minute: "2-digit", hour12: false });
@@ -80,17 +86,18 @@ export function ageText(iso: string, now: Date): string {
   return `${Math.floor(minutes / (24 * 60))} d`;
 }
 
-/** The sentence for a status, the same on every screen. */
+/** The sentence for a status, the same on every screen; "· N points refused" when the server refused points the phone keeps. */
 export function statusText(r: StatusResult, now: Date): string {
+  const refused = r.rejectedPoints ? ` · ${r.rejectedPoints} point${r.rejectedPoints === 1 ? "" : "s"} refused` : "";
   switch (r.status) {
     case "live":
-      return `Live · ${r.since ? ageText(r.since, now) : "now"}`;
+      return `Live · ${r.since ? ageText(r.since, now) : "now"}${refused}`;
     case "location_off":
-      return `${r.permissionProblem ? "Location permission removed" : "Location off"}${r.since ? ` since ${colomboClock(r.since)}` : ""}`;
+      return `${r.permissionProblem ? "Location permission removed" : "Location off"}${r.since ? ` since ${colomboClock(r.since)}` : ""}${refused}`;
     case "no_signal":
-      return `No signal${r.since ? ` since ${colomboClock(r.since)}` : ""}`;
+      return `No signal${r.since ? ` since ${colomboClock(r.since)}` : ""}${refused}`;
     case "not_sharing":
-      return "Not sharing";
+      return `Not sharing${refused}`;
   }
 }
 

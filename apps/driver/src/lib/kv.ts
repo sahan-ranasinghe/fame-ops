@@ -43,4 +43,9 @@ export const KEYS = {
   updateDownloaded: 'updates.downloaded',
   /** The Expo push token this phone registered with the office. */
   pushToken: 'push.token',
+  /** The upload backoff after a failed connection (sync/engine.ts). */
+  backoff: 'sync.backoff',
+  /** When the refused points were last put back in line (ms), and for which app update. */
+  rejectedRetryAt: 'sync.rejectedRetryAt',
+  rejectedRetryUpdate: 'sync.rejectedRetryUpdate',
 } as const;

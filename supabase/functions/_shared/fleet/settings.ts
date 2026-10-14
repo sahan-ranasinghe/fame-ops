@@ -30,7 +30,12 @@ export interface Settings {
   rush_hour: RushHour;
   /** Off = every booking needs a driver: the "A driver is needed" box and the custodian-drives path are hidden. */
   self_drive_allowed: boolean;
+  /** Snap to roads on the route maps: none, google_roads (secret GOOGLE_ROADS_KEY) or osrm (secret OSRM_URL). */
+  map_matching: { provider: MapMatchingProvider };
 }
+
+export type MapMatchingProvider = "none" | "google_roads" | "osrm";
+export const MAP_MATCHING_PROVIDERS: MapMatchingProvider[] = ["none", "google_roads", "osrm"];
 
 export const SETTINGS_DEFAULTS: Settings = {
   dwell_min: { "pickup.people": 10, "pickup.goods": 15, "drop.people": 5, "drop.goods": 15, visit: 60, documents: 10, default: 10 },
@@ -47,6 +52,7 @@ export const SETTINGS_DEFAULTS: Settings = {
     bands: [{ days: [1, 2, 3, 4, 5], from: "07:00", to: "09:30" }, { days: [1, 2, 3, 4, 5], from: "16:30", to: "19:00" }],
   },
   self_drive_allowed: true,
+  map_matching: { provider: "none" },
 };
 
 export type SettingKey = keyof Settings;
@@ -63,6 +69,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   rush_hour: "Rush hour: the factor on legs that start or end within the radius of the centre during the bands (weekdays)",
   self_drive_allowed:
     "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
+  map_matching:
+    "Snap to roads on the route maps: provider none, google_roads (Roads API, secret GOOGLE_ROADS_KEY) or osrm (self-hosted, secret OSRM_URL); km stay from the odometer",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -108,6 +116,13 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
     case "self_drive_allowed":
       if (typeof value !== "boolean") throw new ToolError("self_drive_allowed: true or false.");
       return value;
+    case "map_matching": {
+      const provider = (value as { provider?: unknown } | null)?.provider;
+      if (!value || typeof value !== "object" || !MAP_MATCHING_PROVIDERS.includes(provider as MapMatchingProvider)) {
+        throw new ToolError("map_matching: an object { provider: none | google_roads | osrm }.");
+      }
+      return { provider: provider as MapMatchingProvider };
+    }
     case "rush_hour": {
       const r = value as Partial<RushHour> | null;
       if (!r || typeof r !== "object") throw new ToolError("rush_hour: an object with factor, centre, radius_km and bands is needed.");

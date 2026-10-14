@@ -25,8 +25,8 @@ import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
 import type { Employee, Language, ReportCategory, TaskStop, TaskWithStops, Vehicle, VehicleReport } from '@/lib/types';
-import { applyDownloadedUpdate, checkForUpdate, forgetDownloadedUpdate, type UpdateOutcome } from '@/lib/updates';
-import { enqueue, flushNow, onAnswer, onQueueChange } from '@/sync';
+import { applyDownloadedUpdate, checkForUpdate, forgetDownloadedUpdate, runningUpdateId, type UpdateOutcome } from '@/lib/updates';
+import { enqueue, flushNow, maybeRetryRejected, onAnswer, onQueueChange } from '@/sync';
 import { clearQueue, queueCounts, type QueueCounts, retryFailed, tasksWaiting } from '@/sync/store';
 
 export type SignInOutcome = 'ok' | 'wrong' | 'network' | 'switched_off' | 'not_configured';
@@ -89,6 +89,8 @@ interface AppValue {
   waitingTasks: Set<string>;
   refreshing: boolean;
   offline: boolean;
+  /** Whether the phone has a data connection, as Android reports it (false shows "Offline · N points waiting"). */
+  dataAvailable: boolean;
 
   /** The Location cover, when it is up. */
   gate: GateState | null;
@@ -155,6 +157,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [waitingTasks, setWaitingTasks] = useState<Set<string>>(() => tasksWaiting());
   const [refreshing, setRefreshing] = useState(false);
   const [offline, setOffline] = useState(false);
+  const [dataAvailable, setDataAvailable] = useState(true);
   const [gate, setGate] = useState<GateState | null>(null);
   const gateResolve = useRef<((outcome: GateOutcome) => void) | null>(null);
 
@@ -216,7 +219,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!meRef.current) return;
     setRefreshing(true);
     try {
-      const sent = await flushNow();
+      // The driver asked (or the app came back): refused points get another go, and the upload backoff is ignored.
+      maybeRetryRejected('refresh');
+      const sent = await flushNow(true);
       const [row, vehicleRows, taskRows, reportRows] = await Promise.all([
         api.fetchMe(supabase),
         api.fetchVehicles(supabase),
@@ -290,6 +295,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (!data.session) {
         if (meRef.current) forgetEverything();
       } else if (meRef.current) {
+        maybeRetryRejected('start', runningUpdateId());
         await checkTrackingNow();
         void refresh();
         // The channels (with their sounds) must exist before the first push arrives.
@@ -335,8 +341,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void checkForUpdate(safeToApplyUpdate);
     });
     const network = Network.addNetworkStateListener((state) => {
-      if (state.isInternetReachable) void refresh();
+      const up = state.isInternetReachable ?? state.isConnected ?? true;
+      setDataAvailable(up);
+      if (up) void refresh();
     });
+    void Network.getNetworkStateAsync().then((state) => setDataAvailable(state.isInternetReachable ?? state.isConnected ?? true)).catch(() => undefined);
     return () => {
       appState.remove();
       network.remove();
@@ -769,7 +778,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppValue = {
     booted, me, language, t, tList, setLanguage,
-    vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, waitingTasks, refreshing, offline,
+    vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, waitingTasks, refreshing, offline, dataAvailable,
     gate, resolveGate, requireLocation,
     signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, skipStop,
     acceptTask, declineTask, notice, clearNotice,

@@ -1,17 +1,18 @@
-// The GPS filter on the phone: its state between deliveries of the background
-// location task and the km counters the screens show. Which fixes are worth
-// recording is decided in recording.ts (pure, tested by scripts/test-track.ts).
+// The recording rules' state between deliveries of the background location
+// task, the km counters the screens show, and the counters the heartbeat
+// reports. Which fixes are stored is decided in recording.ts (pure, tested by
+// scripts/test-track.ts).
 
 import type * as Location from 'expo-location';
 
 import { getJson, KEYS, setJson } from './kv';
-import type { PhoneFix, RecordingState } from './recording';
+import { type DropCounts, type PhoneFix, type RecordingState, zeroCounts } from './recording';
 import { newTrack } from './track';
 
-export { HEARTBEAT_MS, type PhoneFix, recordable } from './recording';
+export { type DropCounts, HEARTBEAT_MS, type PhoneFix, recordable } from './recording';
 
 export interface TrackRecord extends RecordingState {
-  /** The sharing period the filter state belongs to. */
+  /** The sharing period the state belongs to. */
   sessionId: string;
   /** The task in progress and the km driven since it started. */
   taskId: string | null;
@@ -26,7 +27,12 @@ function fresh(sessionId: string, carry?: TrackRecord | null): TrackRecord {
     sessionId,
     state: newTrack(),
     lastKeptAt: 0,
+    lastStored: null,
+    anchor: null,
     lastRaw: null,
+    lastFixAt: carry?.lastFixAt ?? null,
+    jumpRun: [],
+    counters: carry?.counters ?? zeroCounts(),
     taskId: carry?.taskId ?? null,
     taskKm: carry?.taskKm ?? 0,
     odometerKm: carry?.odometerKm ?? 0,
@@ -39,7 +45,7 @@ export function currentTrack(): TrackRecord {
   return getJson<TrackRecord>(KEYS.track) ?? fresh('');
 }
 
-/** The record for one sharing period. A new period starts the filter afresh but keeps the km counters. */
+/** The record for one sharing period. A new period starts the rules afresh but keeps the km counters. */
 export function loadTrack(sessionId: string): TrackRecord {
   const saved = getJson<TrackRecord>(KEYS.track);
   return saved && saved.sessionId === sessionId ? saved : fresh(sessionId, saved);
@@ -61,6 +67,23 @@ export function toPhoneFix(location: Location.LocationObject): PhoneFix {
     heading: coords.heading !== null && coords.heading >= 0 ? coords.heading : null,
     mocked: location.mocked === true,
   };
+}
+
+// --- what the heartbeat reports -----------------------------------------------
+
+/** The fix counters since they were last taken; taking them starts them again at zero. */
+export function takeCounters(): DropCounts {
+  const track = currentTrack();
+  const counts = track.counters ?? zeroCounts();
+  track.counters = zeroCounts();
+  saveTrack(track);
+  return counts;
+}
+
+/** Seconds since a fix of 150 m or better was last seen, or null when there was none this period. */
+export function lastFixAgeS(now = Date.now()): number | null {
+  const at = currentTrack().lastFixAt;
+  return at ? Math.max(0, Math.round((now - at) / 1000)) : null;
 }
 
 // --- counters the screens use ------------------------------------------------

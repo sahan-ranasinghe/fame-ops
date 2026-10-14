@@ -7,8 +7,8 @@ import { contactLinks, kmh, mapsPoint } from "../format.ts";
 import { taskEta } from "../eta.ts";
 import { GPS_KM_NOTE } from "../geo.ts";
 import { loadSettings } from "../settings.ts";
-import { buildRoute, type Segment } from "../route.ts";
-import type { Fix } from "../track.ts";
+import { snapLegs, type SnapLeg } from "../matching.ts";
+import { buildRoute, type LinePoint, type RouteFix, type Segment, withSpeeds } from "../route.ts";
 import { colomboDate, colomboDateTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
 
@@ -73,9 +73,10 @@ export const liveDrivers = tool({
         eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
         eta_final: eta?.final_eta_at ? colomboTime(eta.final_eta_at) : undefined,
         late_min: eta && eta.late_min > 0 ? eta.late_min : undefined,
-        // The position itself (the web map draws it; the maps link stays for Claude).
+        // The position itself (the web map draws it; the maps link stays for Claude), and the heading the marker turns to.
         lat: hasPosition ? pos.lat! : undefined,
         lng: hasPosition ? pos.lng! : undefined,
+        heading: hasPosition && pos.heading != null ? Math.round(pos.heading) : undefined,
         links: { maps: hasPosition ? mapsPoint(pos.lat!, pos.lng!) : undefined, ...contactLinks(e.phone) },
         minutes: share.minutes ?? Number.MAX_SAFE_INTEGER,
       };
@@ -112,8 +113,9 @@ export const driverRoute = tool({
   description: "Where a driver went, from the points their phone shared: on one day (default today), during one task (task_id: " +
     "from Start task to Save & finish, or now), or between two times of the day (from, to). Answers the km (GPS, drift filtered; " +
     "the odometer is the true figure), driving and stopped minutes, the number of stops, a timeline of driving legs, stops over " +
-    "10 minutes (near which town) and gaps of over 10 minutes with no data, and the route line thinned by shape (corners kept) " +
-    "for a map. Only covers the time location sharing was on.",
+    "10 minutes (near which town), gaps of over 10 minutes (no_gps: the phone was alive with no GPS signal; no_data: the app " +
+    "was not running) and legs uploaded later (the phone was offline), and the route line thinned by shape (corners kept) " +
+    "for a map, each point with its accuracy. Only covers the time location sharing was on.",
   readOnly: true,
   input: z.object({
     driver: zText(80).optional().describe("Username, code or name. Not needed with task_id."),
@@ -121,8 +123,12 @@ export const driverRoute = tool({
     task_id: zId.optional().describe("One task's time: from Start task to Save & finish, or now if it is still running"),
     from: zTime.optional().describe("HH:MM: start of the window on the date"),
     to: zTime.optional().describe("HH:MM: end of the window on the date"),
+    line_tolerance_m: z.number().min(0.5).max(500).optional()
+      .describe("How closely the line follows the points, in metres (Douglas–Peucker; default 12, the web map uses 3)"),
+    max_line_points: z.number().int().min(50).max(10000).optional().describe("At most this many points on the line (default 3000)"),
+    snap: z.boolean().optional().describe("Also answer the driving legs snapped to roads (route_snapped) when the map_matching setting names a provider"),
   }),
-  async run({ driver, date, task_id, from, to }, { db, now }) {
+  async run({ driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap }, { db, now }) {
     const refs = await loadRefs(db);
     let who: Employee;
     let fromIso: string;
@@ -162,28 +168,54 @@ export const driverRoute = tool({
     }
     const day = colomboDate(fromIso);
 
-    const rows = await fetchAll(
-      (a, b) =>
-        db.from("location_points").select("id, recorded_at, lat, lng, speed_mps, accuracy_m")
-          .eq("employee_id", who.id).gte("recorded_at", fromIso).lte("recorded_at", toIso)
-          .order("recorded_at").order("id").range(a, b),
-      "location points",
-    );
+    const [rows, beats, settings] = await Promise.all([
+      fetchAll(
+        (a, b) =>
+          db.from("location_points").select("id, recorded_at, lat, lng, speed_mps, accuracy_m, received_at")
+            .eq("employee_id", who.id).gte("recorded_at", fromIso).lte("recorded_at", toIso)
+            .order("recorded_at").order("id").range(a, b),
+        "location points",
+        40000,
+      ),
+      fetchAll(
+        (a, b) =>
+          db.from("driver_heartbeats").select("at").eq("employee_id", who.id).gte("at", fromIso).lte("at", toIso)
+            .order("at").range(a, b),
+        "heartbeats",
+        5000,
+      ),
+      loadSettings(db),
+    ]);
     const window = { from: colomboDateTime(fromIso), to: colomboDateTime(toIso) };
     if (rows.length === 0) {
       return {
-        result: { driver: who.name, date: day, window, task, recorded_points: 0, note: "No location was shared in this time." },
+        result: {
+          driver: who.name,
+          date: day,
+          window,
+          task,
+          recorded_points: 0,
+          points_stored: 0,
+          points_shown: 0,
+          heartbeats: beats.length,
+          note: beats.length ? "No position was recorded in this time; the phone was on duty with no GPS signal." : "No location was shared in this time.",
+        },
         summary: `route ${who.name} ${day}: no points`,
       };
     }
-    const fixes: Fix[] = rows.map((r) => ({
+    const fixes: RouteFix[] = rows.map((r) => ({
       at: new Date(r.recorded_at).getTime(),
       lat: r.lat,
       lng: r.lng,
       speedMps: r.speed_mps,
       accuracyM: r.accuracy_m,
+      receivedAt: r.received_at ? new Date(r.received_at).getTime() : null,
     }));
-    const route = buildRoute(fixes);
+    const route = buildRoute(fixes, {
+      simplifyM: line_tolerance_m,
+      maxPoints: max_line_points,
+      heartbeats: beats.map((b) => new Date(b.at).getTime()),
+    });
 
     // The nearest town of every place the vehicle stood: once per place, also for a stop cut in two by a data gap.
     const towns = new Map<string, string | null>();
@@ -204,13 +236,15 @@ export const driverRoute = tool({
       })),
     );
     const t = (ms: number) => colomboTime(new Date(ms).toISOString());
+    const KIND_TEXT: Record<Segment["kind"], string> = { driving: "Driving", stopped: "Stopped", no_gps: "Stopped · no GPS signal", no_data: "App not running" };
     const timeline = await Promise.all(route.segments.map(async (s: Segment) => {
       const near = s.kind === "stopped" && s.lat != null && s.lng != null ? await townOf(s.lat, s.lng) : undefined;
+      const uploaded = s.uploadedAt ? ` · Offline here · uploaded ${t(s.uploadedAt)}` : "";
       const text = s.kind === "driving"
-        ? `${t(s.from)}–${t(s.to)} Driving · ${s.km ?? 0} km`
+        ? `${t(s.from)}–${t(s.to)} Driving · ${s.km ?? 0} km${uploaded}`
         : s.kind === "stopped"
-        ? `${t(s.from)}–${t(s.to)} Stopped${near ? ` near ${near}` : ""}`
-        : `${t(s.from)}–${t(s.to)} No data`;
+        ? `${t(s.from)}–${t(s.to)} Stopped${near ? ` near ${near}` : ""}${uploaded}`
+        : `${t(s.from)}–${t(s.to)} ${KIND_TEXT[s.kind]}`;
       return {
         kind: s.kind,
         from: t(s.from),
@@ -222,11 +256,51 @@ export const driverRoute = tool({
         near: near ?? undefined,
         lat: s.lat,
         lng: s.lng,
+        uploaded_at: s.uploadedAt ? new Date(s.uploadedAt).toISOString() : undefined,
+        uploaded: s.uploadedAt ? t(s.uploadedAt) : undefined,
         text,
       };
     }));
     const last = rows[rows.length - 1];
     const lastOnLine = route.line[route.line.length - 1];
+    const iso = (ms: number) => new Date(ms).toISOString();
+    const linePoint = (p: LinePoint) => [t(p.at), p.lat, p.lng, p.kmh, iso(p.at), p.acc ?? null];
+
+    // Snap to roads: the driving legs through the provider the setting names (stored per leg, re-matched at most every 2 minutes).
+    const provider = settings.map_matching.provider;
+    let snapped: { provider: string; status: string; legs?: number; matched?: number } = { provider, status: "off" };
+    let routeSnapped: { columns: string[]; points: (string | number | null)[][] } | undefined;
+    if (snap && provider !== "none" && route.line.length > 1) {
+      const legs: SnapLeg[] = [];
+      for (const s of route.segments) {
+        if (s.kind !== "driving") continue;
+        const prev = legs[legs.length - 1];
+        if (prev && prev.to === s.from) prev.to = s.to; // the pieces of one leg (cut for gaps or late uploads) are one road
+        else legs.push({ from: s.from, to: s.to, points: [] });
+      }
+      for (const leg of legs) leg.points = route.line.filter((p) => p.at >= leg.from && p.at <= leg.to).map((p) => ({ at: p.at, lat: p.lat, lng: p.lng, acc: p.acc }));
+      const usable = legs.filter((l) => l.points.length >= 2);
+      const result = usable.length ? await snapLegs(db, who.id, day, provider, usable, now) : { status: "ok" as const, legs: [] };
+      // The drawn line with every matched leg replaced by its road geometry; the rest raw.
+      const out: (LinePoint & { snapped: boolean })[] = [];
+      let i = 0;
+      for (const leg of result.legs) {
+        while (i < route.line.length && route.line[i].at < leg.from) out.push({ ...route.line[i++], snapped: false });
+        if (leg.source === "matched" && leg.points.length) {
+          const upto = leg.matchedTo ?? leg.to;
+          for (const p of leg.points) out.push({ at: p.at, lat: p.lat, lng: p.lng, kmh: 0, acc: null, snapped: true });
+          while (i < route.line.length && route.line[i].at <= upto) i++;
+        }
+        while (i < route.line.length && route.line[i].at <= leg.to) out.push({ ...route.line[i++], snapped: false });
+      }
+      while (i < route.line.length) out.push({ ...route.line[i++], snapped: false });
+      const timed = withSpeeds(out.sort((a, b) => a.at - b.at));
+      routeSnapped = {
+        columns: ["time", "lat", "lng", "km/h", "at", "acc", "snapped"],
+        points: timed.map((p, k) => [...linePoint(p), out[k].snapped ? 1 : 0]),
+      };
+      snapped = { provider, status: result.status, legs: usable.length, matched: result.legs.filter((l) => l.source === "matched").length };
+    }
 
     return {
       result: {
@@ -235,8 +309,12 @@ export const driverRoute = tool({
         window,
         task,
         recorded_points: rows.length,
+        points_stored: route.pointsStored,
+        points_shown: route.pointsShown,
         usable_points: route.usable,
         repeated_points: route.repeats,
+        outlier_points: route.outliers,
+        heartbeats: beats.length,
         first_point: colomboTime(rows[0].recorded_at),
         last_point: colomboTime(last.recorded_at),
         last_position: lastOnLine ? mapsPoint(lastOnLine.lat, lastOnLine.lng) : mapsPoint(last.lat, last.lng),
@@ -246,12 +324,22 @@ export const driverRoute = tool({
         stopped_minutes: route.stoppedMinutes,
         stops_count: route.stopsCount,
         stops_over_10_min: stops,
-        gaps: route.gaps.map((g) => ({ from: t(g.from), to: t(g.to), minutes: g.minutes })),
+        gaps: route.gaps.map((g) => ({ from: t(g.from), to: t(g.to), minutes: g.minutes, kind: g.kind, text: KIND_TEXT[g.kind] })),
+        holes: route.holes.map((h) => ({
+          from_at: iso(h.from),
+          to_at: iso(h.to),
+          minutes: h.minutes,
+          kind: h.kind,
+          text: `${KIND_TEXT[h.kind]} · ${h.minutes} min`,
+        })),
+        uploaded_later: route.late.map((w) => ({ from: t(w.from), to: t(w.to), uploaded: t(w.uploadedAt), from_at: iso(w.from), to_at: iso(w.to) })),
         timeline,
         route: {
-          columns: ["time", "lat", "lng", "km/h", "at"],
-          points: route.line.map((p) => [t(p.at), p.lat, p.lng, p.kmh, new Date(p.at).toISOString()]),
+          columns: ["time", "lat", "lng", "km/h", "at", "acc"],
+          points: route.line.map(linePoint),
         },
+        route_snapped: routeSnapped,
+        snapped,
       },
       summary: `route ${who.name} ${day}: ${rows.length} points, ${route.km} km, ${route.stopsCount} stops`,
     };

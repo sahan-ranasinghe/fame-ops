@@ -1,17 +1,20 @@
 // The offline queue wired to the phone: SQLite store, photo upload from disk,
-// and a way for screens to hear that something changed.
+// the backoff state in the phone's small store, and a way for screens to hear
+// that something changed.
 
 import { File, UploadType } from 'expo-file-system';
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
-import { type AcceptAnswer, ApiError } from '../lib/api';
+import { type AcceptAnswer, ApiError, type HeartbeatRow } from '../lib/api';
 import { getJson, KEYS, setJson } from '../lib/kv';
 import { supabase } from '../lib/supabase';
 import type { Employee } from '../lib/types';
-import { createSync, type FlushResult, type Op } from './engine';
-import { addOp, queueStore, replaceOp } from './store';
+import { type BackoffState, createSync, type FlushResult, type Op } from './engine';
+import { addHeartbeatLog, addOp, queueCounts, queueStore, replaceOp, retryRejectedPoints } from './store';
 
 const PHOTO_BUCKET = 'driver-photos';
+/** Refused points are put back in line once a day (and after an app update, and on pull to refresh). */
+export const REJECTED_RETRY_EVERY_MS = 24 * 3600_000;
 
 /**
  * Sends a photo straight from disk. A file that is already there counts as
@@ -47,7 +50,7 @@ export async function uploadPhotoFile(localUri: string, storagePath: string): Pr
   if (status >= 200 && status < 300) return;
   if (status === 409 || /duplicate|already exists/i.test(body)) return;
   const refused = status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
-  throw new ApiError(`photo: upload refused (${status})`, refused);
+  throw new ApiError(`photo: upload refused (${status})`, refused, undefined, status);
 }
 
 function removeFile(localUri: string): void {
@@ -79,6 +82,10 @@ const sync = createSync({
   onAnswer: (op, answer) => {
     for (const listener of answerListeners) listener(op, answer);
   },
+  backoff: {
+    load: () => getJson<BackoffState>(KEYS.backoff),
+    save: (state) => setJson(KEYS.backoff, state),
+  },
 });
 
 type Listener = () => void;
@@ -102,20 +109,62 @@ export function enqueue(...ops: Op[]): void {
   changed();
 }
 
-/** Puts something in the queue of which only the newest matters (a heartbeat): older waiting ones are dropped. */
+/** Puts something in the queue of which only the newest matters (the driver_latest heartbeat): older waiting ones are dropped. */
 export function enqueueLatest(op: Op): void {
   replaceOp(op);
   changed();
 }
 
-/** Sends what is waiting, if signed in. Safe to call often. */
-export async function flushNow(): Promise<FlushResult> {
+/** Appends a heartbeat to the history that is uploaded in batches (also after an outage). */
+export function logHeartbeat(row: HeartbeatRow): void {
+  addHeartbeatLog(row);
+  changed();
+}
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Sends what is waiting, if signed in. Safe to call often: after a failed
+ * connection the next attempt waits (5 s, 30 s, 2 min, 5 min, then every
+ * 5 min) unless forced (pull to refresh, the app coming to the front, the
+ * connection coming back). A failed attempt also books the next one itself.
+ */
+export async function flushNow(force = false): Promise<FlushResult> {
   setJson(KEYS.lastFlush, Date.now());
   const { data } = await supabase.auth.getSession();
-  if (!data.session) return { sent: 0, failed: 0, offline: true };
+  if (!data.session) return { sent: 0, failed: 0, rejected: 0, offline: true, skipped: false };
   try {
-    return await sync.flush();
+    const result = await sync.flush({ force });
+    if (result.offline && !result.skipped) {
+      const wait = Math.max(1000, sync.backoff().nextTryAt - Date.now());
+      if (retryTimer) clearTimeout(retryTimer);
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        if (queueCounts().ops + queueCounts().points + queueCounts().heartbeats > 0) void flushNow();
+      }, wait);
+    }
+    return result;
   } finally {
     changed();
   }
 }
+
+/**
+ * Puts the refused points back in line when it is time: on pull to refresh
+ * (force), after an app update (a new update id), or once a day. Returns how
+ * many were put back.
+ */
+export function maybeRetryRejected(reason: 'refresh' | 'start', updateId: string | null = null): number {
+  if (queueCounts().rejected === 0) return 0;
+  const last = getJson<number>(KEYS.rejectedRetryAt) ?? 0;
+  const lastUpdate = getJson<string>(KEYS.rejectedRetryUpdate);
+  const due = reason === 'refresh' || (updateId !== null && updateId !== lastUpdate) || Date.now() - last >= REJECTED_RETRY_EVERY_MS;
+  if (!due) return 0;
+  setJson(KEYS.rejectedRetryAt, Date.now());
+  if (updateId !== null) setJson(KEYS.rejectedRetryUpdate, updateId);
+  const n = retryRejectedPoints();
+  changed();
+  return n;
+}
+
+export { queueCounts } from './store';

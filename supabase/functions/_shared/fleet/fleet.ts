@@ -151,6 +151,11 @@ export interface SignalFields {
   permission?: string;
   app_version?: string;
   queued_points?: number;
+  /** Points the server refused and the phone keeps; "N points refused" is on the status line. */
+  rejected_points?: number;
+  /** The last heartbeat: whether the phone had a data connection, and whether the app was in the foreground. */
+  data_available?: boolean;
+  app_state?: string;
   /** The raw times (ISO) so a screen can recompute the status as the clock ticks or a Realtime row arrives. */
   signal: {
     sharing: boolean;
@@ -159,6 +164,7 @@ export interface SignalFields {
     location_on: boolean | null;
     permission: string | null;
     location_off_since: string | null;
+    rejected_points?: number | null;
   };
 }
 
@@ -170,6 +176,7 @@ export function statusOf(latest: Latest | undefined, now: Date): { result: Statu
     location_on: latest?.hb_location_on ?? null,
     permission: latest?.hb_permission ?? null,
     location_off_since: latest?.hb_location_off_since ?? null,
+    rejected_points: latest?.hb_rejected_points ?? null,
   };
   const result = driverStatus({
     sharing: signal.sharing,
@@ -178,6 +185,7 @@ export function statusOf(latest: Latest | undefined, now: Date): { result: Statu
     locationOn: signal.location_on,
     permission: signal.permission,
     locationOffSince: signal.location_off_since,
+    rejectedPoints: signal.rejected_points,
   }, now);
   return {
     result,
@@ -191,6 +199,9 @@ export function statusOf(latest: Latest | undefined, now: Date): { result: Statu
       permission: latest?.hb_permission ?? undefined,
       app_version: latest?.hb_app_version ?? undefined,
       queued_points: latest?.hb_queued_points ?? undefined,
+      rejected_points: latest?.hb_rejected_points ?? undefined,
+      data_available: latest?.hb_data_available ?? undefined,
+      app_state: latest?.hb_app_state ?? undefined,
       signal,
     },
   };

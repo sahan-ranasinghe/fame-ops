@@ -133,6 +133,9 @@ export default function TodayScreen() {
             </Pressable>
           )}
           <TrackingNotice />
+          {app.queue.points > 0 && (!app.dataAvailable || app.offline) && (
+            <Txt variant="small" color={colors.amberText}>{t('today.offlineWaiting', { n: app.queue.points })}</Txt>
+          )}
 
           {next ? (
             <View style={styles.nextCard}>

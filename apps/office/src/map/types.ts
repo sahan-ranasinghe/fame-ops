@@ -9,6 +9,10 @@ export interface MapMarker {
   lng: number;
   tone: "live" | "warn" | "bad";
   selected: boolean;
+  /** Heading in degrees (the marker's arrow turns with it), when the phone gave one. */
+  heading?: number | null;
+  /** The time of this position (ms): a move is animated over the real time since the last one, capped at 10 s. */
+  at?: number | null;
 }
 
 export interface RoutePoint {
@@ -16,6 +20,10 @@ export interface RoutePoint {
   lng: number;
   /** Speed of the step that reached this point, km/h (colours the line when `bySpeed` is on). */
   kmh?: number;
+  /** The fix's accuracy in metres: over 30 m the step is drawn thin and lighter. */
+  acc?: number | null;
+  /** The point lies on a road the matcher chose, not on a GPS fix. */
+  snapped?: boolean;
 }
 
 export interface MapRoute {
@@ -24,8 +32,8 @@ export interface MapRoute {
   bySpeed?: boolean;
   /** Stops of 10 minutes or more, with the label to show (the times). */
   stops?: { lat: number; lng: number; label: string }[];
-  /** Over 10 minutes with no data: drawn dashed between the last and the next known position. */
-  gaps?: { from: RoutePoint; to: RoutePoint }[];
+  /** Over 2 minutes between two line points: drawn dashed between them, with the label (what kind of hole, how long). */
+  holes?: { from: RoutePoint; to: RoutePoint; label: string }[];
   /** A moving marker (playback) and its label. */
   cursor?: { lat: number; lng: number; label: string } | null;
 }
@@ -42,3 +50,17 @@ export interface MapProps {
 
 /** The colours of the speed classes: standing grey, slow amber, normal blue, fast red. */
 export const SPEED_COLORS: Record<"stopped" | "slow" | "normal" | "fast", string> = { stopped: "#8d9096", slow: "#f2a900", normal: "#1e4fa0", fast: "#b3261e" };
+
+/** Up to this accuracy a step is drawn as a normal line; worse (to 150 m) thin and lighter. */
+export const GOOD_ACCURACY_M = 30;
+
+/** A step is "poor" when either end's fix was worse than 30 m. */
+export const poorStep = (a: RoutePoint, b: RoutePoint) => (a.acc ?? 0) > GOOD_ACCURACY_M || (b.acc ?? 0) > GOOD_ACCURACY_M;
+
+/** The marker's move is animated over the real time between the two positions, between 0.3 and 10 s. */
+export const MOVE_MIN_MS = 300;
+export const MOVE_MAX_MS = 10000;
+export const moveDuration = (fromAt: number | null | undefined, toAt: number | null | undefined, fallback = 900) => {
+  if (fromAt == null || toAt == null || toAt <= fromAt) return fallback;
+  return Math.min(MOVE_MAX_MS, Math.max(MOVE_MIN_MS, toAt - fromAt));
+};

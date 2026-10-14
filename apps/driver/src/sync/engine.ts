@@ -1,14 +1,25 @@
 // The offline queue. Everything the driver does that must reach the office is
 // first written to the phone (the store) and then sent from here, in order,
-// whenever there is a connection. Nothing here is phone-specific: the store
-// and the file upload are passed in, so the tests run this very code.
+// whenever there is a connection. Nothing here is phone-specific: the store,
+// the file upload and the clock are passed in, so the tests run this very code.
 //
-//   ops     start/stop sharing, task and stop changes, photos, odometer and
-//           fuel logs, vehicle reports. Sent strictly in the order they happened.
-//   points  location points. Sent in batches once no op is waiting, so the
-//           sharing period they belong to is already on the server.
+//   ops         start/stop sharing, task and stop changes, photos, odometer and
+//               fuel logs, vehicle reports, the driver_latest heartbeat. Sent
+//               strictly in the order they happened.
+//   points      location points. Sent in batches of up to 500, oldest first,
+//               once no op is waiting, so the sharing period they belong to is
+//               already on the server. A batch that gets no answer is sent
+//               again later (the server ignores a point it already has). A
+//               batch the server refuses for good is kept, marked rejected with
+//               the answer, and tried again later; it never blocks the rest.
+//   heartbeats  the heartbeat history, in batches of up to 500 after the points.
+//
+// After a failed connection the next attempt waits: 5 s, 30 s, 2 min, 5 min,
+// then every 5 min (BACKOFF_MS). A forced flush (the driver pulled to
+// refresh, the app came to the front, the connection came back) ignores the
+// wait. A success starts the ladder again from the bottom.
 
-import * as api from '../lib/api';
+import * as realApi from '../lib/api';
 import { ApiError, type Client } from '../lib/api';
 import type { Json } from '../lib/database.types';
 import type { Language, PhotoKind } from '../lib/types';
@@ -16,11 +27,11 @@ import type { Language, PhotoKind } from '../lib/types';
 export type Op =
   | { kind: 'session_start'; id: string; employee_id: string; vehicle_id: string | null; started_at: string; device_info: Json }
   | { kind: 'session_end'; id: string; ended_at: string; end_reason: 'driver' | 'auto' }
-  | { kind: 'task_patch'; id: string; patch: api.TaskPatch }
+  | { kind: 'task_patch'; id: string; patch: realApi.TaskPatch }
   /** Accept / decline go through RPCs that answer a word; an 'already_*' answer is done, not an error. */
   | { kind: 'task_accept'; id: string; at: string }
-  | { kind: 'task_decline'; id: string; reason: api.DeclineReason; note: string | null; at: string }
-  | { kind: 'stop_patch'; id: string; patch: api.StopPatch }
+  | { kind: 'task_decline'; id: string; reason: realApi.DeclineReason; note: string | null; at: string }
+  | { kind: 'stop_patch'; id: string; patch: realApi.StopPatch }
   | {
     kind: 'photo';
     id: string;
@@ -33,12 +44,12 @@ export type Op =
     lng: number | null;
     vehicle_report_id: string | null;
   }
-  | { kind: 'odometer_log'; row: api.OdometerInsert }
-  | { kind: 'fuel_log'; row: api.FuelInsert }
-  | { kind: 'report'; row: api.ReportInsert }
+  | { kind: 'odometer_log'; row: realApi.OdometerInsert }
+  | { kind: 'fuel_log'; row: realApi.FuelInsert }
+  | { kind: 'report'; row: realApi.ReportInsert }
   | { kind: 'employee_patch'; id: string; patch: { current_vehicle_id?: string | null; language?: Language } }
-  /** Only the newest one matters: the store keeps one waiting heartbeat at a time (replaceOp). */
-  | { kind: 'heartbeat'; row: api.HeartbeatRow };
+  /** Only the newest one matters for driver_latest: the store keeps one waiting heartbeat at a time (replaceOp). */
+  | { kind: 'heartbeat'; row: realApi.HeartbeatRow };
 
 export interface StoredOp {
   seq: number;
@@ -58,6 +69,11 @@ export interface StoredPoint {
   is_mock: boolean;
 }
 
+export interface StoredHeartbeat {
+  seq: number;
+  row: realApi.HeartbeatRow;
+}
+
 /** Where the queue lives. SQLite on the phone (sync/store.ts), memory in tests. */
 export interface QueueStore {
   /** Waiting ops, oldest first. Failed ones are not returned. */
@@ -65,8 +81,20 @@ export interface QueueStore {
   removeOp(seq: number): void;
   /** The server refused it for good. It is kept for the driver to see and not tried again. */
   failOp(seq: number, error: string): void;
+  /** Waiting points, oldest first. Rejected ones are not returned until they are put back in line. */
   nextPoints(limit: number): StoredPoint[];
   removePoints(seqs: number[]): void;
+  /** The server refused these for good: kept, marked, tried again later. */
+  rejectPoints(seqs: number[], status: number | undefined, error: string): void;
+  nextHeartbeats(limit: number): StoredHeartbeat[];
+  removeHeartbeats(seqs: number[]): void;
+}
+
+export interface BackoffState {
+  /** Failed attempts in a row. */
+  failures: number;
+  /** No attempt before this time (ms), unless forced. */
+  nextTryAt: number;
 }
 
 export interface SyncDeps {
@@ -78,20 +106,45 @@ export interface SyncDeps {
   /** Frees the phone's copy once the photo is safely uploaded. */
   removeFile: (localUri: string) => void;
   /** Hears the server's answer to an accept or decline (the screen tells the driver about an 'already_*' one). */
-  onAnswer?: (op: Op, answer: api.AcceptAnswer) => void;
+  onAnswer?: (op: Op, answer: realApi.AcceptAnswer) => void;
+  /** The server calls (the real module unless a test passes its own). */
+  api?: typeof realApi;
+  /** The clock (ms). */
+  now?: () => number;
+  /** Where the backoff state lives between runs (memory when not given). */
+  backoff?: { load(): BackoffState | null; save(state: BackoffState): void };
 }
 
 export interface FlushResult {
   sent: number;
   failed: number;
+  /** Points the server refused in this run (kept on the phone). */
+  rejected: number;
   /** true when sending stopped because there was no usable connection. */
   offline: boolean;
+  /** true when nothing was tried because the backoff wait is not over. */
+  skipped: boolean;
 }
+
+export const POINT_BATCH = 500;
+export const HEARTBEAT_BATCH = 500;
+/** The wait after 1, 2, 3, 4 failed attempts in a row; the last one repeats. */
+export const BACKOFF_MS = [5_000, 30_000, 120_000, 300_000];
 
 const ORDER = ['assigned', 'in_progress', 'completed'];
 
 export function createSync(deps: SyncDeps) {
   const { client, store } = deps;
+  const api = deps.api ?? realApi;
+  const now = deps.now ?? (() => Date.now());
+  let memory: BackoffState = { failures: 0, nextTryAt: 0 };
+  const backoff = {
+    get: (): BackoffState => deps.backoff?.load() ?? memory,
+    set: (state: BackoffState) => {
+      memory = state;
+      deps.backoff?.save(state);
+    },
+  };
   let running: Promise<FlushResult> | null = null;
 
   async function send(op: Op): Promise<void> {
@@ -156,7 +209,7 @@ export function createSync(deps: SyncDeps) {
     }
   }
 
-  async function sendTaskPatch(id: string, patch: api.TaskPatch): Promise<void> {
+  async function sendTaskPatch(id: string, patch: realApi.TaskPatch): Promise<void> {
     try {
       await api.patchTask(client, id, patch);
     } catch (error) {
@@ -165,8 +218,8 @@ export function createSync(deps: SyncDeps) {
       if (patch.status === undefined) return;
       // The answer to an earlier try may have been lost: if the task is already
       // where this change wanted it (or further), the change did arrive.
-      const now = await api.fetchTaskStatus(client, id);
-      if (now !== null && ORDER.indexOf(now) >= ORDER.indexOf(patch.status ?? '') && ORDER.includes(now)) return;
+      const current = await api.fetchTaskStatus(client, id);
+      if (current !== null && ORDER.indexOf(current) >= ORDER.indexOf(patch.status ?? '') && ORDER.includes(current)) return;
       throw error;
     }
   }
@@ -195,7 +248,14 @@ export function createSync(deps: SyncDeps) {
   }
 
   async function run(): Promise<FlushResult> {
-    const result: FlushResult = { sent: 0, failed: 0, offline: false };
+    const result: FlushResult = { sent: 0, failed: 0, rejected: 0, offline: false, skipped: false };
+    const failedConnection = () => {
+      const state = backoff.get();
+      const failures = state.failures + 1;
+      backoff.set({ failures, nextTryAt: now() + BACKOFF_MS[Math.min(failures, BACKOFF_MS.length) - 1] });
+      result.offline = true;
+      return result;
+    };
 
     for (;;) {
       const [next] = store.nextOps(1);
@@ -210,14 +270,13 @@ export function createSync(deps: SyncDeps) {
           result.failed += 1;
           continue;
         }
-        result.offline = true; // keep the order: stop here and try again later
-        return result;
+        return failedConnection(); // keep the order: stop here and try again later
       }
     }
 
     for (;;) {
       const employeeId = deps.employeeId();
-      const batch = employeeId ? store.nextPoints(200) : [];
+      const batch = employeeId ? store.nextPoints(POINT_BATCH) : [];
       if (!employeeId || batch.length === 0) break;
       const seqs = batch.map((p) => p.seq);
       try {
@@ -226,26 +285,56 @@ export function createSync(deps: SyncDeps) {
         result.sent += batch.length;
       } catch (error) {
         if (error instanceof ApiError && error.permanent) {
-          // Refused twice: these points can never be stored. Drop them rather than block everything behind them.
-          store.removePoints(seqs);
+          // Refused twice: kept on the phone with the answer, tried again later; the rest goes on.
+          store.rejectPoints(seqs, error.status, error.message);
+          result.rejected += batch.length;
+          continue;
+        }
+        return failedConnection();
+      }
+    }
+
+    for (;;) {
+      const employeeId = deps.employeeId();
+      const batch = employeeId ? store.nextHeartbeats(HEARTBEAT_BATCH) : [];
+      if (!employeeId || batch.length === 0) break;
+      const seqs = batch.map((h) => h.seq);
+      try {
+        await api.insertHeartbeats(client, employeeId, batch.map((h) => h.row));
+        store.removeHeartbeats(seqs);
+        result.sent += batch.length;
+      } catch (error) {
+        if (error instanceof ApiError && error.permanent) {
+          // History the server will never take (a rule changed): let it go rather than block the rest for ever.
+          store.removeHeartbeats(seqs);
           result.failed += batch.length;
           continue;
         }
-        result.offline = true;
-        return result;
+        return failedConnection();
       }
     }
+
+    backoff.set({ failures: 0, nextTryAt: 0 });
     return result;
   }
 
   return {
-    /** Sends what is waiting. Calls made while one is running share its result. */
-    flush(): Promise<FlushResult> {
-      running ??= run().finally(() => {
+    /**
+     * Sends what is waiting. Calls made while one is running share its result. Not forced, it does nothing
+     * while the backoff wait after a failed connection is not over.
+     */
+    flush(opts: { force?: boolean } = {}): Promise<FlushResult> {
+      if (running) return running;
+      if (!opts.force && now() < backoff.get().nextTryAt) {
+        return Promise.resolve({ sent: 0, failed: 0, rejected: 0, offline: true, skipped: true });
+      }
+      running = run().finally(() => {
         running = null;
       });
       return running;
     },
+    /** The backoff state (for the screens and the tests). */
+    backoff: () => backoff.get(),
   };
 }
 

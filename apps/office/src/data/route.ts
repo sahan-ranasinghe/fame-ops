@@ -1,20 +1,25 @@
 // A driver's route on the client: the tool's answer (driver_route) turned into
-// points, stops, gaps and timeline rows, plus what the page does by itself:
-// it grows today's line from the driver_latest rows Realtime delivers, zooms
-// to a timeline row, and feeds the playback. The speed classes and the
-// interpolation come from the shared route module, the limits from the shared
-// drift filter (the files the connector runs).
-import { type LinePoint, positionAt, speedClass } from "@fleet/route";
+// points, stops, holes and timeline rows, plus what the page does by itself:
+// it grows today's line point by point from the location_points rows Realtime
+// delivers (each one put in by its time, so a late backlog fills its gap in
+// the right place), zooms to a timeline row, and feeds the playback. The speed
+// classes, the hole rule and the interpolation come from the shared route
+// module, the limits from the shared drift filter (the files the connector runs).
+import { HOLE_MINUTES, insertByTime, type LinePoint, OUTLIER_SPEED_KMH, positionAt, SPIKE_FACTOR, SPIKE_MIN_M, SPIKE_WINDOW_MS, speedClass } from "@fleet/route";
 import { colomboClock } from "@fleet/status";
 import { distanceM, MAX_ACCURACY_M, MIN_MOVE_M } from "@fleet/track";
 import { joinDots } from "../lib/format";
-import type { MapRoute } from "../map/types";
+import type { MapRoute, RoutePoint as MapPoint } from "../map/types";
 import type { LatestRow } from "./live";
-import type { DriverRoute, SegmentKind } from "./types";
+import type { PointRow } from "./realtime";
+import type { DriverRoute, GapKind, SegmentKind } from "./types";
 
 export { positionAt, speedClass };
 
 export type RoutePoint = LinePoint;
+
+/** Stored fixes worse than this are not drawn (the phone does not store them either). */
+export const DRAW_MAX_ACCURACY_M = 150;
 
 export interface StopView {
   from: string;
@@ -38,6 +43,16 @@ export interface TimelineRow {
   near?: string | null;
   lat?: number;
   lng?: number;
+  /** "HH:MM" when the leg's points landed late (the phone was offline here). */
+  uploaded?: string;
+  text: string;
+}
+
+export interface HoleView {
+  fromAt: number;
+  toAt: number;
+  minutes: number;
+  kind: GapKind;
   text: string;
 }
 
@@ -48,11 +63,19 @@ export interface Route {
   /** Points recorded (raw). */
   count: number;
   usable?: number;
+  /** Points on the line the tool drew (after thinning). */
+  shown?: number;
   first?: string;
   last?: string;
   points: RoutePoint[];
+  /** The line with the driving legs snapped to roads, when the tool answered one. */
+  snappedPoints?: (RoutePoint & { snapped?: boolean })[];
+  snapped?: DriverRoute["snapped"];
   stops: StopView[];
-  gaps: { from: string; to: string; minutes: number }[];
+  gaps: { from: string; to: string; minutes: number; kind?: GapKind }[];
+  holes: HoleView[];
+  /** The time of the last point of the line the tool drew (points after it came from Realtime). */
+  lineEndAt: number | null;
   timeline: TimelineRow[];
   drivingMinutes?: number;
   stoppedMinutes?: number;
@@ -62,13 +85,13 @@ export interface Route {
   window?: DriverRoute["window"];
 }
 
-/** The tool's answer → the route the screens use. Older answers (four columns, no timeline) still work. */
-export function routeOf(username: string, p: DriverRoute): Route {
-  const cols = p.route?.columns ?? ["time", "lat", "lng", "km/h"];
+function pointsOf(date: string, route: DriverRoute["route"] | undefined): (RoutePoint & { snapped?: boolean })[] {
+  const cols = route?.columns ?? ["time", "lat", "lng", "km/h"];
   const la = cols.indexOf("lat"), lo = cols.indexOf("lng"), sp = cols.indexOf("km/h"), at = cols.indexOf("at"), tm = cols.indexOf("time");
-  const dayStart = Date.parse(`${p.date}T00:00:00+05:30`);
-  const points: RoutePoint[] = [];
-  for (const r of p.route?.points ?? []) {
+  const ac = cols.indexOf("acc"), sn = cols.indexOf("snapped");
+  const dayStart = Date.parse(`${date}T00:00:00+05:30`);
+  const points: (RoutePoint & { snapped?: boolean })[] = [];
+  for (const r of route?.points ?? []) {
     const lat = Number(r[la]), lng = Number(r[lo]);
     if (!isFinite(lat) || !isFinite(lng)) continue;
     // The ISO time when the tool gives it; else the HH:MM on the day (older answers).
@@ -77,21 +100,34 @@ export function routeOf(username: string, p: DriverRoute): Route {
       const [h, m] = String(r[tm]).split(":").map(Number);
       ms = dayStart + (h * 60 + m) * 60000;
     }
-    points.push({ at: isFinite(ms) ? ms : points.length, lat, lng, kmh: sp >= 0 ? Number(r[sp]) || 0 : 0 });
+    const p: RoutePoint & { snapped?: boolean } = { at: isFinite(ms) ? ms : points.length, lat, lng, kmh: sp >= 0 ? Number(r[sp]) || 0 : 0 };
+    if (ac >= 0 && r[ac] != null && isFinite(Number(r[ac]))) p.acc = Number(r[ac]);
+    if (sn >= 0) p.snapped = Number(r[sn]) === 1;
+    points.push(p);
   }
+  return points;
+}
+
+/** The tool's answer → the route the screens use. Older answers (four columns, no timeline) still work. */
+export function routeOf(username: string, p: DriverRoute): Route {
+  const points = pointsOf(p.date, p.route);
   const stops: StopView[] = (p.stops_over_10_min ?? []).map((s) => ({ ...s, text: joinDots([`${s.from}–${s.to}`, s.near && `near ${s.near}`, `${s.minutes} min`]) }));
   const timeline: TimelineRow[] = (p.timeline ?? []).map((s) => ({
-    kind: s.kind, from: s.from, to: s.to, fromAt: Date.parse(s.from_at), toAt: Date.parse(s.to_at), minutes: s.minutes, km: s.km, near: s.near, lat: s.lat, lng: s.lng, text: s.text,
+    kind: s.kind, from: s.from, to: s.to, fromAt: Date.parse(s.from_at), toAt: Date.parse(s.to_at), minutes: s.minutes, km: s.km, near: s.near, lat: s.lat, lng: s.lng,
+    uploaded: s.uploaded, text: s.text,
   }));
+  const holes: HoleView[] = (p.holes ?? []).map((h) => ({ fromAt: Date.parse(h.from_at), toAt: Date.parse(h.to_at), minutes: h.minutes, kind: h.kind, text: h.text }));
   return {
-    username, date: p.date, km: p.km, count: p.recorded_points ?? points.length, usable: p.usable_points, first: p.first_point, last: p.last_point,
-    points, stops, gaps: p.gaps ?? [], timeline, drivingMinutes: p.driving_minutes, stoppedMinutes: p.stopped_minutes, stopsCount: p.stops_count,
+    username, date: p.date, km: p.km, count: p.recorded_points ?? points.length, usable: p.usable_points, shown: p.points_shown, first: p.first_point, last: p.last_point,
+    points, snappedPoints: p.route_snapped ? pointsOf(p.date, p.route_snapped) : undefined, snapped: p.snapped,
+    stops, gaps: p.gaps ?? [], holes, lineEndAt: points.length ? points[points.length - 1].at : null, timeline,
+    drivingMinutes: p.driving_minutes, stoppedMinutes: p.stopped_minutes, stopsCount: p.stops_count,
     note: p.note, task: p.task, window: p.window,
   };
 }
 
 /**
- * A Realtime row from driver_latest grows today's line: a precise position that
+ * A Realtime row from driver_latest grows a line (the live map's trails): a precise position that
  * moved becomes a point; standing still only extends the wait at the last place.
  * The numbers and the timeline follow at the next refresh of the tool.
  */
@@ -103,17 +139,52 @@ export function appendLive(route: Route, row: LatestRow): Route {
   if (!isFinite(at) || (last && at <= last.at)) return route;
   const here = { lat: row.lat, lng: row.lng };
   const lastClock = colomboClock(row.recorded_at);
-  if (!last) return { ...route, points: [{ at, ...here, kmh: 0 }], count: route.count + 1, last: lastClock };
+  if (!last) return { ...route, points: [{ at, ...here, kmh: 0, acc: row.accuracy_m ?? null }], count: route.count + 1, last: lastClock };
   const metres = distanceM(last, here);
   if (metres < MIN_MOVE_M) {
     const before = route.points[route.points.length - 2];
-    const wait = { at, lat: last.lat, lng: last.lng, kmh: 0 };
+    const wait = { at, lat: last.lat, lng: last.lng, kmh: 0, acc: last.acc };
     const stillWaiting = before && before.lat === last.lat && before.lng === last.lng;
     return { ...route, points: stillWaiting ? [...route.points.slice(0, -1), wait] : [...route.points, wait], count: route.count + 1, last: lastClock };
   }
   const kmh = Math.round((metres / ((at - last.at) / 1000)) * 3.6);
   const km = route.km != null ? Math.round((route.km + metres / 1000) * 10) / 10 : undefined;
-  return { ...route, points: [...route.points, { at, ...here, kmh }], count: route.count + 1, km, last: lastClock };
+  return { ...route, points: [...route.points, { at, ...here, kmh, acc: row.accuracy_m ?? null }], count: route.count + 1, km, last: lastClock };
+}
+
+/** Is a point an outlier against its neighbours on the line: a jump of over 150 km/h, or an out-and-back spike. */
+export function outlierAgainst(point: RoutePoint, prev: RoutePoint | undefined, next: RoutePoint | undefined): boolean {
+  if (prev && point.at > prev.at && (distanceM(prev, point) / ((point.at - prev.at) / 1000)) * 3.6 > OUTLIER_SPEED_KMH) return true;
+  if (next && next.at > point.at && (distanceM(point, next) / ((next.at - point.at) / 1000)) * 3.6 > OUTLIER_SPEED_KMH) return true;
+  if (prev && next && next.at - prev.at <= SPIKE_WINDOW_MS) {
+    const spike = Math.max(SPIKE_FACTOR * (point.acc ?? 10), SPIKE_MIN_M);
+    const dPrev = distanceM(prev, point), dNext = distanceM(point, next);
+    if (dPrev > spike && dNext > spike && distanceM(prev, next) < Math.min(dPrev, dNext) / 2) return true;
+  }
+  return false;
+}
+
+/**
+ * A new location point (Realtime) goes into today's line by its time, so a late backlog fills its gap in
+ * the right place. Fixes worse than 150 m and outliers against their neighbours are left out; a point at a
+ * time the line already has is ignored. The km, the timeline and the holes' kinds follow at the next refresh.
+ */
+export function insertPoint(route: Route, row: PointRow): Route {
+  if (row.accuracy_m != null && row.accuracy_m > DRAW_MAX_ACCURACY_M) return route;
+  const at = Date.parse(row.recorded_at);
+  if (!isFinite(at)) return route;
+  const point: RoutePoint = { at, lat: row.lat, lng: row.lng, kmh: 0, acc: row.accuracy_m ?? null };
+  let lo = 0, hi = route.points.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (route.points[mid].at < at) lo = mid + 1;
+    else hi = mid;
+  }
+  if (route.points[lo]?.at === at) return route;
+  if (outlierAgainst(point, route.points[lo - 1], route.points[lo])) return route;
+  const points = insertByTime(route.points, point);
+  const last = points[points.length - 1];
+  return { ...route, points, count: route.count + 1, last: last.at === at ? colomboClock(row.recorded_at) : route.last };
 }
 
 /** The points of a timeline row, to zoom the map to. */
@@ -121,32 +192,58 @@ export function focusOf(route: Route, row: TimelineRow): { lat: number; lng: num
   if (row.kind === "stopped" && row.lat != null && row.lng != null) return [{ lat: row.lat, lng: row.lng }];
   const inside = route.points.filter((p) => p.at >= row.fromAt && p.at <= row.toAt);
   if (inside.length) return inside;
-  return gapEnds(route, row.fromAt, row.toAt);
+  return gapEnds(route.points, row.fromAt, row.toAt);
 }
 
 /** The last known position before a gap and the first after it. */
-function gapEnds(route: Route, fromAt: number, toAt: number): RoutePoint[] {
+function gapEnds(points: RoutePoint[], fromAt: number, toAt: number): RoutePoint[] {
   let before: RoutePoint | undefined;
-  for (const p of route.points) {
+  for (const p of points) {
     if (p.at <= fromAt) before = p;
     else break;
   }
-  const after = route.points.find((p) => p.at >= toAt);
+  const after = points.find((p) => p.at >= toAt);
   return [before, after].filter((p): p is RoutePoint => !!p);
 }
 
 /** "1 h 5 min", "45 min". */
 export const minutesText = (m: number | undefined | null) => m == null ? "—" : m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`;
 
-/** What the map draws for a route: the line by speed, the stops with their times, the gaps dashed, the playback marker. */
-export function mapRouteOf(route: Route | null, cursor?: { lat: number; lng: number; label: string } | null): MapRoute | null {
+export const KIND_LABEL: Record<SegmentKind, string> = { driving: "Driving", stopped: "Stopped", no_gps: "Stopped · no GPS signal", no_data: "App not running" };
+const HOLE_LABEL: Record<GapKind, string> = { no_gps: "No GPS signal", no_data: "App not running" };
+
+/**
+ * The holes to draw dashed: the tool's holes (over 2 minutes between two line points at different places;
+ * the thinned line keeps both ends), each cut by any point Realtime put inside it since, and the same rule
+ * over the points that came after the tool's line. A thinned straight run is never a hole: only the tool
+ * knows which points it left out.
+ */
+export function holesOf(route: Route, points: RoutePoint[]): { from: MapPoint; to: MapPoint; label: string }[] {
+  const out: { from: MapPoint; to: MapPoint; label: string }[] = [];
+  const add = (a: RoutePoint, b: RoutePoint, kind: GapKind | undefined) => {
+    if ((a.lat === b.lat && a.lng === b.lng) || b.at - a.at < HOLE_MINUTES * 60000) return;
+    out.push({ from: a, to: b, label: `${kind ? HOLE_LABEL[kind] : "No position"} · ${Math.round((b.at - a.at) / 60000)} min` });
+  };
+  for (const h of route.holes) {
+    const inside = points.filter((p) => p.at >= h.fromAt && p.at <= h.toAt);
+    for (let i = 1; i < inside.length; i++) add(inside[i - 1], inside[i], h.kind);
+  }
+  if (route.lineEndAt != null) {
+    const tail = points.filter((p) => p.at >= route.lineEndAt!);
+    for (let i = 1; i < tail.length; i++) add(tail[i - 1], tail[i], undefined);
+  }
+  return out;
+}
+
+/** What the map draws for a route: the line by speed (snapped to roads when asked and available), the stops, the holes dashed, the playback marker. */
+export function mapRouteOf(route: Route | null, cursor?: { lat: number; lng: number; label: string } | null, snap = false): MapRoute | null {
   if (!route || !route.points.length) return null;
-  const gaps = route.timeline.filter((r) => r.kind === "no_data").map((r) => gapEnds(route, r.fromAt, r.toAt)).filter((e) => e.length === 2).map(([from, to]) => ({ from, to }));
+  const points = snap && route.snappedPoints && route.snappedPoints.length > 1 ? route.snappedPoints : route.points;
   return {
-    points: route.points,
+    points,
     bySpeed: true,
     stops: route.stops.filter((s) => s.lat != null && s.lng != null).map((s) => ({ lat: s.lat!, lng: s.lng!, label: `${s.from}–${s.to}` })),
-    gaps,
+    holes: holesOf(route, points),
     cursor: cursor ?? null,
   };
 }
@@ -154,4 +251,10 @@ export function mapRouteOf(route: Route | null, cursor?: { lat: number; lng: num
 /** The lighter line of another driver on the live map. */
 export const trailOf = (route: Route): MapRoute => ({ points: route.points });
 
-export const KIND_LABEL: Record<SegmentKind, string> = { driving: "Driving", stopped: "Stopped", no_data: "No data" };
+/** The legend line for the snapped line: what the map shows and where the km come from. */
+export function snapLegend(route: Route | null, snap: boolean): string | null {
+  if (!route?.snapped || route.snapped.status === "off") return null;
+  if (!snap) return "Raw GPS line";
+  if (route.snapped.status === "failed" || !route.snappedPoints?.length) return "Raw GPS (snapping to roads failed)";
+  return `Snapped to roads · km from odometer${route.snapped.status === "partial" ? " · some legs raw GPS" : ""}`;
+}

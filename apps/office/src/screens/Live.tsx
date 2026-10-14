@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import { positionOf, statusLine, statusTone } from "../data/live";
+import { positionOf, recordedAtOf, statusLine, statusTone } from "../data/live";
 import { appendLive, mapRouteOf, type Route, routeOf, trailOf } from "../data/route";
 import type { DriverRoute, LiveDriver } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
@@ -68,7 +68,8 @@ export function Live() {
   const markers = useMemo<MapMarker[]>(() => all.flatMap((x) => {
     const pos = positionOf(x);
     if (!pos) return [];
-    return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, title: x.driver, lat: pos.lat, lng: pos.lng, tone: tone(x), selected: x.username === sel?.username }];
+    const at = recordedAtOf(x);
+    return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, title: x.driver, lat: pos.lat, lng: pos.lng, tone: tone(x), selected: x.username === sel?.username, heading: x.heading ?? null, at: at ? Date.parse(at) : null }];
   }), [all, sel?.username]);
   const mapRoute = useMemo<MapRoute | null>(() => (route && route.username === sel?.username ? mapRouteOf(route) : null), [route, sel?.username]);
   const mapTrails = useMemo<MapRoute[]>(() => (trails ? [...trailMap.values()].filter((r) => !(mapRoute && r.username === sel?.username)).map(trailOf) : []), [trails, trailMap, mapRoute, sel?.username]);

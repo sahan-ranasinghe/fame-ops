@@ -79,6 +79,7 @@
     "me": "Me"
   },
   "today": {
+    "offlineWaiting": "Offline · {n} points waiting",
     "morning": "Morning, {name}",
     "afternoon": "Afternoon, {name}",
     "evening": "Evening, {name}",

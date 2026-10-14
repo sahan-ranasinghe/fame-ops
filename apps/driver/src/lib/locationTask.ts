@@ -1,14 +1,16 @@
 // The background location task. Android runs this for every batch of
-// positions while "Sharing my location" is on, also when the app is closed.
-// It is imported from the app's entry file (index.ts) so that it is always
-// defined before Android delivers the first position.
+// positions while "On duty" is on, also when the app is closed. It is imported
+// from the app's entry file (index.ts) so that it is always defined before
+// Android delivers the first position.
 //
-// Positions arrive every 5 s (in batches of up to 15 s). Each one goes
-// through the GPS filter; what is worth keeping (lib/tracking.ts) goes into
-// the phone's queue, and uploads happen about every 30 s, or sooner when 10
-// or more points are waiting. Every delivery also notes the time (so the app
-// can tell a dead service from a live one) and pushes back the watchdog
-// notification that fires when deliveries stop.
+// Positions arrive every 5 s (in batches of up to 15 s). Each one goes through
+// the recording rules (lib/recording.ts: every fix is stored unless it is a
+// cell-tower guess, a jump, a repeat or jitter while standing); what is stored
+// goes into the phone's queue, and uploads happen about every 60 s, or sooner
+// when 10 or more points are waiting (the queue's own backoff decides whether
+// an attempt is due after a failure). Every delivery also notes the time (so
+// the app can tell a dead service from a live one) and pushes back the
+// watchdog notification that fires when deliveries stop.
 
 import * as Battery from 'expo-battery';
 import type * as Location from 'expo-location';
@@ -23,9 +25,8 @@ import { armWatchdog } from './notifications';
 import { loadTrack, recordable, saveTrack, toPhoneFix } from './tracking';
 import type { Language } from './types';
 
-const UPLOAD_EVERY_MS = 30_000;
-const UPLOAD_WHEN_QUEUED = 10;
-const RETRY_NO_SOONER_MS = 15_000;
+export const UPLOAD_EVERY_MS = 60_000;
+export const UPLOAD_WHEN_QUEUED = 10;
 
 async function batteryPercent(): Promise<number | null> {
   try {
@@ -71,7 +72,7 @@ TaskManager.defineTask<{ locations?: Location.LocationObject[] }>(LOCATION_TASK,
 
   const sinceLast = Date.now() - (getJson<number>(KEYS.lastFlush) ?? 0);
   const waiting = queueCounts().points;
-  if (waiting > 0 && (sinceLast >= UPLOAD_EVERY_MS || (waiting >= UPLOAD_WHEN_QUEUED && sinceLast >= RETRY_NO_SOONER_MS))) {
+  if (waiting > 0 && (sinceLast >= UPLOAD_EVERY_MS || waiting >= UPLOAD_WHEN_QUEUED)) {
     await flushNow();
   }
 });

@@ -79,6 +79,7 @@
     "me": "මම"
   },
   "today": {
+    "offlineWaiting": "සම්බන්ධතාවක් නැත · ස්ථාන {n}ක් යැවීමට ඇත",
     "morning": "සුබ උදෑසනක්, {name}",
     "afternoon": "සුබ දහවලක්, {name}",
     "evening": "සුබ සන්ධ්‍යාවක්, {name}",

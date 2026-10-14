@@ -1,5 +1,6 @@
 // The fleet settings' checks (docs/dispatch-plan.md, section 6), pure.
 import { assertEquals, assertThrows } from "@std/assert";
+import { ToolError } from "./db.ts";
 import { SETTING_KEYS, SETTINGS_DEFAULTS, validateSetting } from "./settings.ts";
 
 Deno.test("self-drive bookings are on by default and take only true or false", () => {
@@ -15,4 +16,12 @@ Deno.test("the numbers keep their ranges", () => {
   assertEquals(validateSetting("buffer_min", 20), 20);
   assertThrows(() => validateSetting("buffer_min", 2.5), Error, "whole number");
   assertThrows(() => validateSetting("road_factor", 4), Error, "from 1 to 3");
+});
+
+Deno.test("map_matching takes a provider of none, google_roads or osrm and nothing else", () => {
+  assertEquals(validateSetting("map_matching", { provider: "osrm" }), { provider: "osrm" });
+  assertEquals(validateSetting("map_matching", { provider: "none" }), { provider: "none" });
+  assertThrows(() => validateSetting("map_matching", { provider: "here" }), ToolError);
+  assertThrows(() => validateSetting("map_matching", "osrm"), ToolError);
+  assertEquals(SETTINGS_DEFAULTS.map_matching.provider, "none");
 });

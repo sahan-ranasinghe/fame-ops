@@ -3,7 +3,25 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type Database = {
   
-  "public": {
+  "graphql_public": {
+          Tables: {
+            [_ in never]: never
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "graphql":
+{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        },"public": {
           Tables: {
             "allowance_types": {
                   Row: {
@@ -111,16 +129,36 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"driver_latest": {
+                },"driver_heartbeats": {
                   Row: {
-                    "accuracy_m": number | null,"battery_pct": number | null,"employee_id": string,"hb_app_version": string | null,"hb_at": string | null,"hb_battery_pct": number | null,"hb_location_off_since": string | null,"hb_location_on": boolean | null,"hb_permission": string | null,"hb_queued_points": number | null,"hb_sharing": boolean | null,"lat": number | null,"lng": number | null,"recorded_at": string | null,"session_id": string | null,"sharing": boolean,"speed_mps": number | null
+                    "app_state": string | null,"app_version": string | null,"at": string,"battery_pct": number | null,"data_available": boolean | null,"dropped_accuracy": number | null,"dropped_duplicate": number | null,"dropped_jitter": number | null,"dropped_jump": number | null,"employee_id": string,"fixes_seen": number | null,"fixes_stored": number | null,"id": number,"last_gps_fix_age_s": number | null,"location_on": boolean | null,"permission": string | null,"queued_points": number | null,"received_at": string,"rejected_points": number | null,"session_id": string | null,"sharing": boolean | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "accuracy_m"?: number | null,"battery_pct"?: number | null,"employee_id": string,"hb_app_version"?: string | null,"hb_at"?: string | null,"hb_battery_pct"?: number | null,"hb_location_off_since"?: string | null,"hb_location_on"?: boolean | null,"hb_permission"?: string | null,"hb_queued_points"?: number | null,"hb_sharing"?: boolean | null,"lat"?: number | null,"lng"?: number | null,"recorded_at"?: string | null,"session_id"?: string | null,"sharing"?: boolean,"speed_mps"?: number | null
+                    "app_state"?: string | null,"app_version"?: string | null,"at": string,"battery_pct"?: number | null,"data_available"?: boolean | null,"dropped_accuracy"?: number | null,"dropped_duplicate"?: number | null,"dropped_jitter"?: number | null,"dropped_jump"?: number | null,"employee_id": string,"fixes_seen"?: number | null,"fixes_stored"?: number | null,"id"?: never,"last_gps_fix_age_s"?: number | null,"location_on"?: boolean | null,"permission"?: string | null,"queued_points"?: number | null,"received_at"?: string,"rejected_points"?: number | null,"session_id"?: string | null,"sharing"?: boolean | null
                   }
                   Update: {
-                    "accuracy_m"?: number | null,"battery_pct"?: number | null,"employee_id"?: string,"hb_app_version"?: string | null,"hb_at"?: string | null,"hb_battery_pct"?: number | null,"hb_location_off_since"?: string | null,"hb_location_on"?: boolean | null,"hb_permission"?: string | null,"hb_queued_points"?: number | null,"hb_sharing"?: boolean | null,"lat"?: number | null,"lng"?: number | null,"recorded_at"?: string | null,"session_id"?: string | null,"sharing"?: boolean,"speed_mps"?: number | null
+                    "app_state"?: string | null,"app_version"?: string | null,"at"?: string,"battery_pct"?: number | null,"data_available"?: boolean | null,"dropped_accuracy"?: number | null,"dropped_duplicate"?: number | null,"dropped_jitter"?: number | null,"dropped_jump"?: number | null,"employee_id"?: string,"fixes_seen"?: number | null,"fixes_stored"?: number | null,"id"?: never,"last_gps_fix_age_s"?: number | null,"location_on"?: boolean | null,"permission"?: string | null,"queued_points"?: number | null,"received_at"?: string,"rejected_points"?: number | null,"session_id"?: string | null,"sharing"?: boolean | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "driver_heartbeats_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"driver_latest": {
+                  Row: {
+                    "accuracy_m": number | null,"battery_pct": number | null,"employee_id": string,"hb_app_state": string | null,"hb_app_version": string | null,"hb_at": string | null,"hb_battery_pct": number | null,"hb_data_available": boolean | null,"hb_fix_age_s": number | null,"hb_location_off_since": string | null,"hb_location_on": boolean | null,"hb_permission": string | null,"hb_queued_points": number | null,"hb_rejected_points": number | null,"hb_sharing": boolean | null,"heading": number | null,"lat": number | null,"lng": number | null,"recorded_at": string | null,"session_id": string | null,"sharing": boolean,"speed_mps": number | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accuracy_m"?: number | null,"battery_pct"?: number | null,"employee_id": string,"hb_app_state"?: string | null,"hb_app_version"?: string | null,"hb_at"?: string | null,"hb_battery_pct"?: number | null,"hb_data_available"?: boolean | null,"hb_fix_age_s"?: number | null,"hb_location_off_since"?: string | null,"hb_location_on"?: boolean | null,"hb_permission"?: string | null,"hb_queued_points"?: number | null,"hb_rejected_points"?: number | null,"hb_sharing"?: boolean | null,"heading"?: number | null,"lat"?: number | null,"lng"?: number | null,"recorded_at"?: string | null,"session_id"?: string | null,"sharing"?: boolean,"speed_mps"?: number | null
+                  }
+                  Update: {
+                    "accuracy_m"?: number | null,"battery_pct"?: number | null,"employee_id"?: string,"hb_app_state"?: string | null,"hb_app_version"?: string | null,"hb_at"?: string | null,"hb_battery_pct"?: number | null,"hb_data_available"?: boolean | null,"hb_fix_age_s"?: number | null,"hb_location_off_since"?: string | null,"hb_location_on"?: boolean | null,"hb_permission"?: string | null,"hb_queued_points"?: number | null,"hb_rejected_points"?: number | null,"hb_sharing"?: boolean | null,"heading"?: number | null,"lat"?: number | null,"lng"?: number | null,"recorded_at"?: string | null,"session_id"?: string | null,"sharing"?: boolean,"speed_mps"?: number | null
                   }
                   Relationships: [
                     {
@@ -627,6 +665,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"route_matched": {
+                  Row: {
+                    "date": string,"employee_id": string,"error": string | null,"geometry": NonNullable<Json>,"id": number,"leg_from": string,"leg_to": string,"matched_at": string,"provider": string,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "date": string,"employee_id": string,"error"?: string | null,"geometry"?: NonNullable<Json>,"id"?: never,"leg_from": string,"leg_to": string,"matched_at"?: string,"provider": string,"status"?: string
+                  }
+                  Update: {
+                    "date"?: string,"employee_id"?: string,"error"?: string | null,"geometry"?: NonNullable<Json>,"id"?: never,"leg_from"?: string,"leg_to"?: string,"matched_at"?: string,"provider"?: string,"status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "route_matched_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"routing_calls": {
                   Row: {
                     "calls": number,"day": string,"errors": number,"provider": string
@@ -973,8 +1031,17 @@ isOneToOne: false
 "office_update_task_stops":
 { Args: { "p_stops": Json,"p_task": Json,"p_task_id": string,"p_version": number }; Returns: number
                            },
+"prune_driver_heartbeats":
+{ Args: { "p_batch"?: number,"p_keep_days"?: number }; Returns: number
+                           },
+"prune_location_data":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "prune_location_points":
 { Args: { "p_batch"?: number,"p_keep_days"?: number }; Returns: number
+                           },
+"prune_route_matched":
+{ Args: { "p_keep_days"?: number }; Returns: number
                            },
 "queue_accept_reminders":
 { Args: Record<PropertyKey, never>; Returns: number
@@ -995,7 +1062,7 @@ isOneToOne: false
 { Args: { "p_token": string }; Returns: undefined
                            },
 "send_heartbeat":
-{ Args: { "p_app_version"?: string,"p_at": string,"p_battery_pct"?: number,"p_location_on": boolean,"p_permission": string,"p_queued_points"?: number,"p_sharing": boolean }; Returns: undefined
+{ Args: { "p_app_state"?: string,"p_app_version"?: string,"p_at": string,"p_battery_pct"?: number,"p_data_available"?: boolean,"p_fix_age_s"?: number,"p_location_on": boolean,"p_permission": string,"p_queued_points"?: number,"p_rejected_points"?: number,"p_sharing": boolean }; Returns: undefined
                            },
 "send_push":
 { Args: { "p_employee_id": string,"p_kind": string,"p_task_id": string }; Returns: undefined
@@ -1119,7 +1186,11 @@ export type CompositeTypes<
   : never
 
 export const Constants = {
-  "public": {
+  "graphql_public": {
+          Enums: {
+            
+          }
+        },"public": {
           Enums: {
             
           }

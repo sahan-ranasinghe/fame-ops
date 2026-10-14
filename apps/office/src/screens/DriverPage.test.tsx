@@ -20,7 +20,7 @@ const route: DriverRoute = {
   timeline: [
     { kind: "driving", from: "08:01", to: "09:55", from_at: iso("08:01"), to_at: iso("09:55"), minutes: 114, km: 31.1, text: "08:01–09:55 Driving · 31.1 km" },
     { kind: "stopped", from: "09:55", to: "14:00", from_at: iso("09:55"), to_at: iso("14:00"), minutes: 245, near: "Peliyagoda", lat: 6.96, lng: 79.89, text: "09:55–14:00 Stopped near Peliyagoda" },
-    { kind: "no_data", from: "14:00", to: "14:56", from_at: iso("14:00"), to_at: iso("14:56"), minutes: 56, text: "14:00–14:56 No data" },
+    { kind: "no_data", from: "14:00", to: "14:56", from_at: iso("14:00"), to_at: iso("14:56"), minutes: 56, text: "14:00–14:56 App not running" },
   ],
   route: { columns: ["time", "lat", "lng", "km/h", "at"], points: [["08:01", 6.88, 79.86, 0, iso("08:01")], ["09:55", 6.96, 79.89, 38, iso("09:55")], ["14:00", 6.96, 79.89, 0, iso("14:00")]] },
 };
@@ -77,12 +77,12 @@ describe("DriverPage", () => {
     expect(screen.getByRole("link", { name: "Call" }).getAttribute("href")).toBe("tel:0771234567");
     expect(screen.getByText("Km (GPS)").parentElement?.textContent).toContain("41.2");
     expect(screen.getByText("Driving time").parentElement?.textContent).toContain("1 h 35 min");
-    expect(screen.getByText("Stopped time").parentElement?.textContent).toContain("1 gap with no data");
+    expect(screen.getByText("Stopped time").parentElement?.textContent).toContain("1 gap with no position");
     const rows = screen.getByTestId("timeline").querySelectorAll(".tl-row");
     expect(rows).toHaveLength(3);
     expect(rows[0].textContent).toContain("Driving · 31.1 km");
     expect(rows[1].textContent).toContain("near Peliyagoda");
-    expect(rows[2].textContent).toContain("No data");
+    expect(rows[2].textContent).toContain("App not running");
     expect(screen.getByTestId("map").textContent).toBe("3 points");
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
     fireEvent.click(rows[1]);

@@ -300,6 +300,9 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .mk-dom.sel .mk-chip { background: var(--accent); color: var(--accent-ink); border-color: var(--accent) }
 .mk-dot { width: 18px; height: 18px; border-radius: 6px; background: var(--mk); border: 3px solid var(--surface); box-shadow: 0 0 0 2px var(--mk) }
 .mk-dom.sel .mk-dot { box-shadow: 0 0 0 10px color-mix(in srgb, var(--mk) 22%, transparent) }
+.mk-dot { position: relative }
+.mk-arrow { display: none; position: absolute; inset: 0; margin: auto; width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-bottom: 8px solid var(--surface); transform-origin: 50% 60%; transition: transform .6s ease }
+.mk-dom.heading .mk-arrow { display: block }
 
 /* ---------- driver page: route, timeline, playback ---------- */
 .driver-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); gap: 20px; align-items: start }
@@ -312,13 +315,15 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .tl-row:hover { background: var(--surface-2) }
 .tl-row.sel { background: var(--warn-bg) }
 .tl-row .bar { width: 4px; align-self: stretch; border-radius: 2px; background: var(--line-strong); flex: none }
-.tl-row.driving .bar { background: var(--live) } .tl-row.stopped .bar { background: var(--accent) } .tl-row.no_data .bar { background: var(--bad) }
+.tl-row.driving .bar { background: var(--live) } .tl-row.stopped .bar { background: var(--accent) } .tl-row.no_data .bar { background: var(--bad) } .tl-row.no_gps .bar { background: var(--accent) }
+.tl-row .late { color: var(--muted); font-weight: 400 }
 .tl-row .when { font-family: var(--font-mono); font-size: 14px; white-space: nowrap; margin-top: 2px; flex: none }
 .tl-row .what { font-weight: 600; display: block }
 .tl-row .sub { display: block }
 .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted) }
 .legend i { display: inline-block; width: 22px; height: 4px; border-radius: 2px; vertical-align: middle; margin-right: 6px }
 .legend i.dashed { background: repeating-linear-gradient(90deg, var(--muted) 0 5px, transparent 5px 9px) }
+.legend i.thin { height: 2px; opacity: .5; background: var(--live) }
 .legend i.ring { width: 12px; height: 12px; border-radius: 50%; background: var(--surface); border: 3px solid var(--ink) }
 .play { display: flex; flex-wrap: wrap; gap: 12px; align-items: center }
 .play input[type=range] { flex: 1 1 200px; min-width: 160px; accent-color: var(--accent) }

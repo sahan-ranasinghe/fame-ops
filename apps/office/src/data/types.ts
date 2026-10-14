@@ -18,6 +18,8 @@ export interface Signal {
   location_on: boolean | null;
   permission: string | null;
   location_off_since: string | null;
+  /** Points the server refused and the phone keeps ("N points refused" on the status line). */
+  rejected_points?: number | null;
 }
 
 /** The status fields every driver card carries (live_drivers, fleet_overview). */
@@ -31,6 +33,9 @@ export interface StatusFields {
   permission?: string;
   app_version?: string;
   queued_points?: number;
+  rejected_points?: number;
+  data_available?: boolean;
+  app_state?: string;
   signal?: Signal;
 }
 
@@ -503,6 +508,8 @@ export interface LiveDriver extends StatusFields {
   late_min?: number;
   /** Set by a Realtime row: the ISO time of the last position. */
   recorded_at?: string | null;
+  /** Heading of the last position in degrees, when the phone gave one (the marker turns with it). */
+  heading?: number | null;
 }
 
 export interface LiveDrivers {
@@ -522,9 +529,13 @@ export interface RouteStop {
   lng?: number;
 }
 
-export type SegmentKind = "driving" | "stopped" | "no_data";
+export type SegmentKind = "driving" | "stopped" | "no_gps" | "no_data";
+export type GapKind = "no_gps" | "no_data";
 
-/** A row of the timeline: a driving leg, a stop of 10 minutes or more, or over 10 minutes with no data. */
+/**
+ * A row of the timeline: a driving leg, a stop of 10 minutes or more, over 10 minutes with no GPS fix while the
+ * phone kept sending heartbeats (no_gps), or with nothing at all (no_data: the app was not running).
+ */
 export interface RouteSegment {
   kind: SegmentKind;
   from: string;
@@ -536,6 +547,18 @@ export interface RouteSegment {
   near?: string | null;
   lat?: number;
   lng?: number;
+  /** The leg's points reached the server over 5 minutes late (the phone was offline): when they landed, "HH:MM" and ISO. */
+  uploaded?: string;
+  uploaded_at?: string;
+  text: string;
+}
+
+/** Over 2 minutes between two line points at different places: drawn dashed, labelled by its kind. */
+export interface RouteHole {
+  from_at: string;
+  to_at: string;
+  minutes: number;
+  kind: GapKind;
   text: string;
 }
 
@@ -556,10 +579,19 @@ export interface DriverRoute {
   stopped_minutes?: number;
   stops_count?: number;
   stops_over_10_min?: RouteStop[];
-  gaps?: { from: string; to: string; minutes: number }[];
+  gaps?: { from: string; to: string; minutes: number; kind?: GapKind; text?: string }[];
+  holes?: RouteHole[];
+  uploaded_later?: { from: string; to: string; uploaded: string; from_at: string; to_at: string }[];
   timeline?: RouteSegment[];
-  /** columns: time, lat, lng, km/h and (new) the ISO time; older answers have four columns. */
-  route?: { columns: string[]; points: (string | number)[][] };
+  /** columns: time, lat, lng, km/h, the ISO time and (new) the accuracy; older answers have four or five columns. */
+  route?: { columns: string[]; points: (string | number | null)[][] };
+  /** The same line with the driving legs snapped to roads (snap: true and a provider set); a "snapped" column flags its points. */
+  route_snapped?: { columns: string[]; points: (string | number | null)[][] };
+  snapped?: { provider: string; status: "off" | "ok" | "partial" | "failed"; legs?: number; matched?: number };
+  points_stored?: number;
+  points_shown?: number;
+  outlier_points?: number;
+  heartbeats?: number;
   note?: string;
 }
 

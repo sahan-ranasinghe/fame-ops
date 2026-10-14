@@ -1,12 +1,13 @@
 // The artifact's hand-drawn map, ported: the island's outline, a grid, the
-// markers as plate chips over a square dot, routes as lines (coloured by speed
-// when asked), stops as small circles with their times, data gaps dashed, a
-// playback marker, and other drivers' trails drawn lighter. Zoom in, out and
-// fit; a focus (a timeline row) zooms to those points.
+// markers as plate chips over a square dot (with an arrow that turns with the
+// heading), routes as lines (coloured by speed when asked; thin and lighter
+// where the fix was poor), stops as small circles with their times, holes
+// dashed with a label, a playback marker, and other drivers' trails drawn
+// lighter. Zoom in, out and fit; a focus (a timeline row) zooms to those points.
 import { speedClass } from "@fleet/route";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../ui/icons";
-import { type MapProps, type RoutePoint, SPEED_COLORS } from "./types";
+import { type MapProps, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
 
 const LK: [number, number][] = [[80.04, 9.81], [80.24, 9.83], [80.45, 9.62], [80.6, 9.42], [80.82, 9.25], [81.05, 8.92], [81.23, 8.58], [81.38, 8.4], [81.5, 8.05], [81.7, 7.72], [81.85, 7.25], [81.85, 6.88], [81.7, 6.5], [81.4, 6.25], [81.12, 6.12], [80.8, 6.0], [80.59, 5.92], [80.4, 5.96], [80.22, 6.03], [80.05, 6.25], [79.96, 6.57], [79.86, 6.9], [79.84, 7.2], [79.8, 7.6], [79.82, 8.0], [79.76, 8.25], [79.9, 8.6], [79.92, 8.95], [80.1, 9.3], [80.2, 9.48], [80.0, 9.62], [79.88, 9.75]];
 const KX = Math.cos(7.8 * Math.PI / 180);
@@ -29,14 +30,15 @@ export function projection(points: [number, number][], zoom: number) {
   return { pr, sx, sy, x0, y1 };
 }
 
-/** Consecutive steps of the same speed class, so each run is one polyline. */
-export function speedRuns(points: RoutePoint[]): { cls: keyof typeof SPEED_COLORS; pts: RoutePoint[] }[] {
-  const out: { cls: keyof typeof SPEED_COLORS; pts: RoutePoint[] }[] = [];
+/** Consecutive steps of the same speed class and confidence, so each run is one polyline. */
+export function speedRuns(points: RoutePoint[]): { cls: keyof typeof SPEED_COLORS; poor: boolean; pts: RoutePoint[] }[] {
+  const out: { cls: keyof typeof SPEED_COLORS; poor: boolean; pts: RoutePoint[] }[] = [];
   for (let i = 1; i < points.length; i++) {
     const cls = speedClass(points[i].kmh ?? 0);
+    const poor = poorStep(points[i - 1], points[i]);
     const last = out[out.length - 1];
-    if (last && last.cls === cls) last.pts.push(points[i]);
-    else out.push({ cls, pts: [points[i - 1], points[i]] });
+    if (last && last.cls === cls && last.poor === poor) last.pts.push(points[i]);
+    else out.push({ cls, poor, pts: [points[i - 1], points[i]] });
   }
   return out;
 }
@@ -85,12 +87,18 @@ export default function DrawnMap({ markers, route, trails = [], focus = null, on
           <g data-testid="drawn-route">
             {route.bySpeed
               ? speedRuns(route.points).map((r, i) => (
-                <polyline key={i} points={line(r.pts)} fill="none" stroke={SPEED_COLORS[r.cls]} strokeWidth="5" strokeLinejoin="round" strokeLinecap="round" opacity=".9" />
+                <polyline key={i} points={line(r.pts)} fill="none" stroke={SPEED_COLORS[r.cls]} strokeWidth={r.poor ? "2.5" : "5"} strokeLinejoin="round" strokeLinecap="round" opacity={r.poor ? ".45" : ".9"} />
               ))
               : <polyline points={line(route.points)} fill="none" stroke="var(--live)" strokeWidth="5" strokeLinejoin="round" strokeLinecap="round" opacity=".85" />}
-            {(route.gaps ?? []).map((g, i) => (
-              <polyline key={"g" + i} points={line([g.from, g.to])} fill="none" stroke="var(--muted)" strokeWidth="4" strokeDasharray="10 10" strokeLinecap="round" />
-            ))}
+            {(route.holes ?? []).map((h, i) => {
+              const a = pr(h.from.lng, h.from.lat), b = pr(h.to.lng, h.to.lat);
+              return (
+                <g key={"h" + i} className="hole">
+                  <polyline points={line([h.from, h.to])} fill="none" stroke="var(--muted)" strokeWidth="4" strokeDasharray="10 10" strokeLinecap="round" />
+                  <text x={((a[0] + b[0]) / 2).toFixed(1)} y={((a[1] + b[1]) / 2 - 8).toFixed(1)} textAnchor="middle" fontFamily="IBM Plex Sans, sans-serif" fontSize="13" fill="var(--muted)">{h.label}</text>
+                </g>
+              );
+            })}
             {start && <circle cx={start[0].toFixed(1)} cy={start[1].toFixed(1)} r="8" fill="var(--surface)" stroke="var(--live)" strokeWidth="4" />}
             {(route.stops ?? []).map((s, i) => {
               const [x, y] = pr(s.lng, s.lat);
@@ -116,6 +124,9 @@ export default function DrawnMap({ markers, route, trails = [], focus = null, on
             <g key={m.id} className="mk" style={{ cursor: "pointer" }} role="button" aria-label={m.title} onClick={() => onPick(m.id)}>
               {m.selected && <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="30" fill={color(m.tone)} opacity=".18" />}
               <rect x={(x - 15).toFixed(1)} y={(y - 15).toFixed(1)} width="30" height="30" rx="9" fill={color(m.tone)} stroke="var(--surface)" strokeWidth="4" />
+              {m.heading != null && (
+                <polygon points={`${x.toFixed(1)},${(y - 9).toFixed(1)} ${(x + 6).toFixed(1)},${(y + 6).toFixed(1)} ${(x - 6).toFixed(1)},${(y + 6).toFixed(1)}`} fill="var(--surface)" transform={`rotate(${Math.round(m.heading)} ${x.toFixed(1)} ${y.toFixed(1)})`} />
+              )}
               <rect x={(x - w / 2).toFixed(1)} y={(y - 62).toFixed(1)} width={w.toFixed(1)} height="34" rx="7" fill={m.selected ? "var(--accent)" : "var(--surface)"} stroke="var(--line-strong)" />
               <text x={x.toFixed(1)} y={(y - 39).toFixed(1)} textAnchor="middle" fontFamily="IBM Plex Mono, monospace" fontWeight="600" fontSize="20" fill={m.selected ? "var(--accent-ink)" : "var(--ink)"}>{m.label}</text>
             </g>

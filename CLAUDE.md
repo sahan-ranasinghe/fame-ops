@@ -48,6 +48,13 @@
   in one step. Plan and as-built notes: `docs/dispatch-plan.md`; test plan:
   `docs/phase5-test-plan.md`; the driver strings for the Sinhala check:
   `docs/phase5-sinhala-strings.md`.
+- **Route quality (14 October 2026, branch `route-quality`, local checkpoint)**: the phone
+  stores raw fixes (150 m cut, jump, duplicate and jitter rules) and the server filters;
+  uploads in batches of 500 with a backoff ladder, refused batches kept as rejected;
+  heartbeat history (`driver_heartbeats`); timeline kinds no_gps / no_data and "uploaded
+  later"; full-resolution line for the web, Realtime on `location_points`; smoothing,
+  confidence drawing, labelled holes, headed gliding markers; snap to roads behind the
+  `map_matching` setting. As built and the phone test steps: `docs/route-quality-plan.md`.
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
@@ -180,7 +187,11 @@
   "Show today's trails" draws every sharing driver's line today (one `driver_route` call
   each, then grown from the Realtime rows); the detail card links to the driver page.
 - Driver page (`src/screens/DriverPage.tsx`, route `/drivers/:username`, opened from a
-  driver's name on Drivers, Live locations, the map card and Overview's on-the-road list):
+  driver's name on Drivers, Live locations, the map card and Overview's on-the-road list;
+  since 14 October: the line at 3 m tolerance, every new point through Realtime on
+  `location_points` inserted by time (`insertPoint` in `src/data/route.ts`), poor fixes thin
+  and lighter, holes dashed and labelled, the "Snap to roads" toggle and legend when a provider
+  is set, markers gliding over the real time between positions and turning to the heading):
   name, phone (Call / WhatsApp), status with the last position time, vehicle and task,
   the day's numbers (GPS km, driving time, stopped time, stops), the map with the route
   coloured by speed (standing / under 20 / 20–60 / over 60 km/h), stops as circles with
@@ -344,10 +355,21 @@
   hb_location_on, hb_permission ('always'|'foreground'|'denied'|'unknown'), hb_battery_pct,
   hb_app_version, hb_queued_points, hb_location_off_since (written by `send_heartbeat()`).
   Kept current by trigger (only newer points win).
-  In the Realtime publication; office roles (admin, fleet_admin, office, viewer) read it
-  through RLS (`current_office_role()`, migration `office_read_access`), drivers and staff
-  read nothing. The same roles read all tasks and task_stops through RLS. Everything else
-  the office reads comes through the tools. No policy checks aal2.
+  Also hb_rejected_points, hb_data_available, hb_app_state, hb_fix_age_s and the last point's
+  heading (migration `route_quality`). In the Realtime publication; office roles (admin,
+  fleet_admin, office, viewer) read it through RLS (`current_office_role()`, migration
+  `office_read_access`), drivers and staff read nothing. The same roles read all tasks,
+  task_stops and (since `route_quality`) location_points through RLS; location_points is in
+  the Realtime publication too (the driver page grows its line point by point). Everything
+  else the office reads comes through the tools. No policy checks aal2.
+- `driver_heartbeats`: the heartbeat history (employee_id, at, session_id, sharing, location_on,
+  permission, battery_pct, app_state, data_available, fixes_seen, fixes_stored, dropped_accuracy,
+  dropped_jump, dropped_jitter, dropped_duplicate, last_gps_fix_age_s, queued_points,
+  rejected_points, app_version, received_at; unique employee_id + at). Drivers insert their own
+  rows in batches, office roles read; pruned after 30 days by the nightly `prune_location_data()`
+  job (points 90 days, heartbeats 30, `route_matched` 90).
+- `route_matched`: a driving leg snapped to roads (employee_id, date, provider, leg_from,
+  leg_to, geometry [[ms, lat, lng]…], matched_at, status, error). Service role only.
 - `office_audit`: id, at, tool, args_summary, result_summary, actor_employee_id,
   actor_name, channel ('claude'|'web'|'driver'). Office tools write it through both
   channels; triggers add the driver app's task starts/finishes and problem reports.
@@ -526,17 +548,27 @@ the same thing):
 Offline: location points, odometer/fuel logs, reports, photos and heartbeats are queued on the
 phone and retried. The point queue (SQLite) has no cap: a parked vehicle adds about 60 points
 an hour, a moving one about 720 (one every 5 s), about 150 bytes each, so a 10-hour day is
-~1 MB. Uploads go in batches of 200 with a 45 s limit per request (`UPLOAD_TIMEOUT_MS`), one
-batch after another until the queue is empty, from the location task (every ~30 s), on
-refresh, and from the background job; driver_latest keeps the newest point by recorded_at
-whatever the upload order, and driver_route orders by recorded_at. Location: a fix every ~5 s (High accuracy, handed over in batches of up to
-15 s); the GPS drift filter `src/lib/track.ts` (same file in the connector) ignores fixes
-worse than 50 m, jumps over 150 km/h and drift while standing still, and a move only
-counts once a second fix agrees; one point recorded every 5 s while moving, one a minute
-while parked (`src/lib/recording.ts`: only a precise fix under 50 m, never a cell-tower or
-Wi-Fi guess, and a fix repeating the previous fix's exact coordinates is a cached one
-Android delivered again and is dropped before anything sees it); upload every ~30 s or
-10+ queued points. A dead location service is
+~1 MB. Uploads go in batches of 500 with a 45 s limit per request (`UPLOAD_TIMEOUT_MS`), one
+batch after another until the queue is empty, from the location task (every ~60 s or 10+
+points), every heartbeat, on refresh (forced), and from the background job; after a failed
+connection the next try waits 5 s, 30 s, 2 min, 5 min, then every 5 min (`sync/engine.ts`
+BACKOFF_MS; a forced flush ignores it). A batch the server refuses for good is never dropped:
+it is marked rejected (status + message) and put back in line once a day, after an app update
+and on pull to refresh; the heartbeat reports `rejected_points` and the office status line says
+"N points refused". driver_latest keeps the newest point by recorded_at whatever the upload
+order, and driver_route orders by recorded_at. Location: a fix every ~5 s (High accuracy,
+handed over in batches of up to 15 s). Recording is "store raw, filter on the server"
+(`src/lib/recording.ts`, since 14 October 2026): every fix is stored unless it is worse than
+150 m, a jump over 150 km/h from the last stored fix (three agreeing fixes in a row win), a
+repeat of the previous fix's exact coordinates with no speed under a minute after the last
+stored point, or jitter (within max(10 m, accuracy) of the standing anchor with a speed under
+1 m/s; then one a minute). So every fix while moving or walking, one a minute parked. The GPS
+drift filter `src/lib/track.ts` (same file in the connector) runs on the phone only for the km
+counters; the server's buildRoute (`_shared/fleet/route.ts`) decides km, stops, the timeline
+and the line from the stored points. The heartbeat (every 60 s) carries the fix counters
+(seen, stored, dropped by reason), data available, app state, GPS age, queued and rejected
+points; every heartbeat is also logged on the phone (30 days) and uploaded in batches into
+`driver_heartbeats`. A dead location service is
 restarted when the app opens, comes to the front, or every minute while on screen; a
 watchdog notification fires 12 min after the last position. Location points are kept 90
 days (pg_cron job `prune-location-points`).
@@ -584,12 +616,20 @@ office_audit.
   (in progress, done), requests waiting (+ oldest), reminders due in 14 days, on-the-road
   list, needs-attention list. (Powers Desktop · Overview and Office · Home later.)
 - Locations: `live_drivers(filter?)` (sharing / stale / not sharing, near town, speed,
-  vehicle, current task, links), `driver_route(driver?, date?, task_id?, from?, to?)` (a
-  day, a task's own window from Start task to Save & finish, or two times of a day:
-  drift-filtered km, driving and stopped minutes, stops > 10 min near a town, gaps > 10 min
-  with no data, a timeline of driving / stopped / no_data rows with sentences, and the
-  line thinned by shape (Douglas–Peucker, corners kept, at most 3000 points) with km/h and
-  the ISO time per point; the old fields stay). Two rules learnt from test.driver's real
+  vehicle, current task, links, heading), `driver_route(driver?, date?, task_id?, from?, to?,
+  line_tolerance_m?, max_line_points?, snap?)` (a day, a task's own window from Start task to
+  Save & finish, or two times of a day: drift-filtered km from the raw points, driving and
+  stopped minutes, stops > 10 min near a town, gaps > 10 min with their kind (no_gps = heartbeats
+  but no fix, "Stopped · no GPS signal"; no_data = nothing, "App not running"), a timeline of
+  driving / stopped / no_gps / no_data rows with sentences and "Offline here · uploaded HH:MM"
+  on legs whose points landed over 5 min late, holes (> 2 min between line points, dashed on the
+  map), the line smoothed for display (never the km) and thinned by shape (Douglas–Peucker
+  `line_tolerance_m` default 12, the web passes 3, at most `max_line_points` 3000) with km/h,
+  the ISO time and the accuracy per point, points_stored / points_shown, and with `snap` the
+  driving legs snapped to roads (`route_snapped`, `snapped.status`) when the `map_matching`
+  setting names a provider (google_roads: GOOGLE_ROADS_KEY, osrm: OSRM_URL; results cached per
+  leg in `route_matched`, a live leg re-matched at most every 2 min, calls counted in
+  routing_calls). Two rules learnt from test.driver's real
   12 October: stops with under 100 m of accepted movement between them are ONE stay (the
   filter only corrected where the parked phone is; never a "Driving · 0 km" row), and the
   line gets a wait (two points at one place) only for a pause of 60 s or more, so slow
@@ -623,7 +663,8 @@ office_audit.
   leave_by and the planned times; a declined task goes back to assigned, the decline cleared,
   result `was: "declined"`). `list_drivers` adds `last_30_days {accepted, declined}`.
 - Settings: `get_settings` (any office permission: the request form reads
-  `self_drive_allowed`), `update_settings(key, value)` and `routing_usage(days?)` (users).
+  `self_drive_allowed`), `update_settings(key, value)` (also `map_matching {provider}`) and
+  `routing_usage(days?)` (users).
   Tool answers never carry null fields (run.ts prunes them): a null setting such as
   base_place_id is simply absent.
 - Requests: `create_request(..., driver_required?)` (a staff member asks in their own name;

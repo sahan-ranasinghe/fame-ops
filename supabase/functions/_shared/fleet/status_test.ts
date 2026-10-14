@@ -106,3 +106,11 @@ Deno.test("needs attention after 10 minutes of location off or no signal, not be
   const live = driverStatus({ ...base, pointAt: ago(1) }, now);
   assertEquals(needsAttention(live, ago(60), now), false);
 });
+
+Deno.test("points the server refused are on the status line, whatever the status", () => {
+  const live = driverStatus({ ...base, pointAt: ago(1), rejectedPoints: 500 }, now);
+  assertEquals(statusText(live, now), "Live · 1 min · 500 points refused");
+  const quiet = driverStatus({ ...base, pointAt: ago(20), heartbeatAt: ago(20), rejectedPoints: 1 }, now);
+  assertEquals(statusText(quiet, now), `No signal since ${new Date(ago(20)).toLocaleTimeString("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", minute: "2-digit", hour12: false })} · 1 point refused`);
+  assertEquals(statusText(driverStatus({ ...base, pointAt: ago(1), rejectedPoints: 0 }, now), now), "Live · 1 min");
+});

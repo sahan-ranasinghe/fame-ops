@@ -697,15 +697,29 @@ check(rt["recorded_points"] == len(points) and 60 <= rt["km"] <= 80 and len(rt["
       and 2 <= len(rt["route"]["points"]) <= len(points), "driver_route: about 65 km, one stop of about 14 minutes", json.dumps({k: rt[k] for k in ("recorded_points", "km", "stops_over_10_min")}))
 # The route builder (shared with the web app): a timeline, the day's numbers, the line thinned by shape, a task's own window.
 kinds = [s["kind"] for s in rt["timeline"]]
-check(kinds.count("stopped") == 1 and kinds.count("driving") == 2 and "no_data" not in kinds and all(s["text"] and s["from_at"] <= s["to_at"] for s in rt["timeline"])
-      and rt["timeline"][1]["near"] and rt["timeline"][1]["text"].endswith(" Stopped near " + rt["timeline"][1]["near"]),
-      "driver_route timeline: driving, stopped near a town, driving, each row with a sentence", json.dumps(rt["timeline"])[:500])
+# Most of these points were posted over 5 minutes after their recorded times: those legs are marked "uploaded later";
+# the newest points (under 5 minutes old) are not, so the last driving leg may be cut into a late piece and a fresh one.
+driving_rows = [s for s in rt["timeline"] if s["kind"] == "driving"]
+check(kinds.count("stopped") == 1 and 2 <= len(driving_rows) <= 3 and "no_data" not in kinds and "no_gps" not in kinds
+      and all(s["text"] and s["from_at"] <= s["to_at"] for s in rt["timeline"])
+      and rt["timeline"][1]["near"] and (" Stopped near " + rt["timeline"][1]["near"]) in rt["timeline"][1]["text"]
+      and driving_rows[0].get("uploaded")
+      and all((("Offline here · uploaded " + s["uploaded"]) in s["text"]) if s.get("uploaded") else ("Offline here" not in s["text"]) for s in driving_rows),
+      "driver_route timeline: driving, stopped near a town, driving, each row with a sentence; legs posted late say 'Offline here · uploaded HH:MM'",
+      json.dumps(rt["timeline"])[:700])
+check(rt["gaps"] == [] and rt["holes"] == [] and len(rt["uploaded_later"]) >= 1 and rt["heartbeats"] == 0 and rt["outlier_points"] == 0,
+      "driver_route: no gaps or holes, one late-upload window, no heartbeats yet", {k: rt[k] for k in ("gaps", "holes", "uploaded_later", "heartbeats", "outlier_points")})
 check(rt["stops_count"] == 1 and 40 <= rt["driving_minutes"] <= 50 and 12 <= rt["stopped_minutes"] <= 16 and rt["gaps"] == [] and abs(rt["stops_over_10_min"][0]["lat"] - STOP[0]) < 0.001,
       "driver_route numbers: one stop, about 45 driving minutes, about 13 stopped minutes, no data gap, the stop's coordinates",
       {k: rt[k] for k in ("stops_count", "driving_minutes", "stopped_minutes", "gaps")})
-check(rt["route"]["columns"] == ["time", "lat", "lng", "km/h", "at"] and len(rt["route"]["points"]) < len(points) // 2
-      and all(len(r) == 5 and r[4].endswith("Z") for r in rt["route"]["points"]) and rt["window"]["from"] < rt["window"]["to"],
-      "driver_route line: two straight legs thin to a few points (corners kept), each with km/h and an ISO time", {"line": len(rt["route"]["points"]), "recorded": rt["recorded_points"]})
+check(rt["route"]["columns"] == ["time", "lat", "lng", "km/h", "at", "acc"] and len(rt["route"]["points"]) < len(points) // 2
+      and all(len(r) == 6 and r[4].endswith("Z") and (r[5] is None or isinstance(r[5], (int, float))) for r in rt["route"]["points"])
+      and rt["points_stored"] == len(points) and rt["points_shown"] == len(rt["route"]["points"]) and rt["window"]["from"] < rt["window"]["to"]
+      and rt["snapped"]["status"] == "off" and "route_snapped" not in rt,
+      "driver_route line: two straight legs thin to a few points (corners kept), each with km/h, an ISO time and the accuracy; points_stored / points_shown; snapping off",
+      {"line": len(rt["route"]["points"]), "recorded": rt["recorded_points"], "snapped": rt.get("snapped")})
+full = tool("driver_route", {"driver": "nuwan.p", "line_tolerance_m": 3, "max_line_points": 3000})
+check(full["points_shown"] >= rt["points_shown"] and full["km"] == rt["km"], "driver_route with a 3 m tolerance keeps at least as many points and the same km", {"shown": full["points_shown"], "km": full["km"]})
 check("not started" in tool("driver_route", {"task_id": T2})["note"], "driver_route(task_id) of a task that has not started says so")
 check("which driver" in tool("driver_route", {}, expect_error=True), "driver_route with neither a driver nor a task is refused")
 

@@ -18,9 +18,9 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
 import * as api from '../src/lib/api';
-import { ApiError, VEHICLE_COLUMNS } from '../src/lib/api';
+import { ApiError, type HeartbeatRow, VEHICLE_COLUMNS } from '../src/lib/api';
 import type { Database } from '../src/lib/database.types';
-import { createSync, type Op, type QueueStore, type StoredOp, type StoredPoint } from '../src/sync/engine';
+import { createSync, type Op, type QueueStore, type StoredHeartbeat, type StoredOp, type StoredPoint } from '../src/sync/engine';
 
 // --- local stack ------------------------------------------------------------
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
@@ -66,6 +66,8 @@ function memoryStore() {
   let seq = 0;
   const ops: (StoredOp & { failed?: string })[] = [];
   const points: StoredPoint[] = [];
+  const rejected = new Set<number>();
+  const heartbeats: StoredHeartbeat[] = [];
   const store: QueueStore = {
     nextOps: (limit) => ops.filter((item) => item.failed === undefined).slice(0, limit),
     removeOp: (id) => void ops.splice(ops.findIndex((item) => item.seq === id), 1),
@@ -73,9 +75,14 @@ function memoryStore() {
       const found = ops.find((item) => item.seq === id);
       if (found) found.failed = error;
     },
-    nextPoints: (limit) => points.slice(0, limit),
+    nextPoints: (limit) => points.filter((p) => !rejected.has(p.seq)).slice(0, limit),
     removePoints: (seqs) => {
       for (const id of seqs) points.splice(points.findIndex((p) => p.seq === id), 1);
+    },
+    rejectPoints: (seqs) => seqs.forEach((id) => rejected.add(id)),
+    nextHeartbeats: (limit) => heartbeats.slice(0, limit),
+    removeHeartbeats: (seqs) => {
+      for (const id of seqs) heartbeats.splice(heartbeats.findIndex((h) => h.seq === id), 1);
     },
   };
   return {
@@ -84,7 +91,10 @@ function memoryStore() {
     addPoints: (list: Omit<StoredPoint, 'seq'>[]) => list.forEach((p) => points.push({ ...p, seq: ++seq })),
     waiting: () => ops.filter((item) => item.failed === undefined).length,
     failed: () => ops.filter((item) => item.failed !== undefined).map((item) => `${item.op.kind}: ${item.failed}`),
-    points: () => points.length,
+    points: () => points.filter((p) => !rejected.has(p.seq)).length,
+    rejected: () => rejected.size,
+    addHeartbeats: (rows: HeartbeatRow[]) => rows.forEach((row) => heartbeats.push({ seq: ++seq, row })),
+    heartbeats: () => heartbeats.length,
   };
 }
 
@@ -254,7 +264,7 @@ async function main() {
 
   console.log('\n== Connection returns ==');
   online.value = true;
-  result = await sync.flush();
+  result = await sync.flush({ force: true }); // the app forces the first try when the connection is back
   check(!result.offline && result.failed === 0 && queue.waiting() === 0 && queue.points() === 0, `everything is sent in order (${result.sent} items)`, { result, failed: queue.failed() });
 
   const row = must(await admin.from('tasks').select('*').eq('id', task1).single(), 'task');

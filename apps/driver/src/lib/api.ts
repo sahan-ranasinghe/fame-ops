@@ -29,7 +29,7 @@ export const VEHICLE_COLUMNS =
  * same request can be tried again later.
  */
 export class ApiError extends Error {
-  constructor(message: string, readonly permanent: boolean, readonly code?: string) {
+  constructor(message: string, readonly permanent: boolean, readonly code?: string, readonly status?: number) {
     super(message);
     this.name = 'ApiError';
   }
@@ -46,7 +46,7 @@ function fail(res: Result, what: string): never {
   // sign-in token expired mid-flight; it is refreshed before the next try.
   const retryLater =
     res.status === 0 || res.status >= 500 || res.status === 401 || res.status === 408 || res.status === 429 || !res.error?.code;
-  throw new ApiError(`${what}: ${res.error?.message ?? 'no answer'}`, !retryLater, res.error?.code);
+  throw new ApiError(`${what}: ${res.error?.message ?? 'no answer'}`, !retryLater, res.error?.code, res.status || undefined);
 }
 
 /** The data of a successful request; throws ApiError otherwise. */
@@ -248,7 +248,10 @@ export async function insertPoints(client: Client, points: PointInsert[]): Promi
   }
 }
 
-/** What the phone reports about itself (lib/heartbeat.ts), stored on driver_latest by send_heartbeat(). */
+/**
+ * What the phone reports about itself (lib/heartbeat.ts): the newest one goes to driver_latest through
+ * send_heartbeat(); every one is also kept in driver_heartbeats (insertHeartbeats, in batches, also after an outage).
+ */
 export interface HeartbeatRow {
   /** Phone time, ISO. The server never stores it later than its own clock. */
   at: string;
@@ -258,6 +261,21 @@ export interface HeartbeatRow {
   battery_pct: number | null;
   app_version: string | null;
   queued_points: number;
+  /** Points the server refused and the phone keeps (sync/store.ts). */
+  rejected_points?: number;
+  /** Whether the phone had a data connection. */
+  data_available?: boolean | null;
+  app_state?: 'foreground' | 'background';
+  /** Seconds since a usable GPS fix was last seen. */
+  fix_age_s?: number | null;
+  session_id?: string | null;
+  /** Fixes seen and what became of them since the last heartbeat. */
+  fixes_seen?: number;
+  fixes_stored?: number;
+  dropped_accuracy?: number;
+  dropped_jump?: number;
+  dropped_jitter?: number;
+  dropped_duplicate?: number;
 }
 
 export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<void> {
@@ -269,8 +287,47 @@ export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<
     p_battery_pct: row.battery_pct ?? undefined,
     p_app_version: row.app_version ?? undefined,
     p_queued_points: row.queued_points,
+    p_rejected_points: row.rejected_points ?? undefined,
+    p_data_available: row.data_available ?? undefined,
+    p_app_state: row.app_state ?? undefined,
+    p_fix_age_s: row.fix_age_s ?? undefined,
   });
   if (res.error) fail(res, 'heartbeat');
+}
+
+/** The heartbeat history: a batch of rows into driver_heartbeats; one already there (same time) is ignored. */
+export async function insertHeartbeats(client: Client, employeeId: string, rows: HeartbeatRow[]): Promise<void> {
+  const inserts = rows.map((row) => ({
+    employee_id: employeeId,
+    at: row.at,
+    session_id: row.session_id ?? null,
+    sharing: row.sharing,
+    location_on: row.location_on,
+    permission: row.permission,
+    battery_pct: row.battery_pct,
+    app_state: row.app_state ?? null,
+    data_available: row.data_available ?? null,
+    fixes_seen: row.fixes_seen ?? null,
+    fixes_stored: row.fixes_stored ?? null,
+    dropped_accuracy: row.dropped_accuracy ?? null,
+    dropped_jump: row.dropped_jump ?? null,
+    dropped_jitter: row.dropped_jitter ?? null,
+    dropped_duplicate: row.dropped_duplicate ?? null,
+    last_gps_fix_age_s: row.fix_age_s ?? null,
+    queued_points: row.queued_points,
+    rejected_points: row.rejected_points ?? null,
+    app_version: row.app_version,
+  }));
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT_MS);
+  try {
+    check(
+      await client.from('driver_heartbeats').upsert(inserts, { onConflict: 'employee_id,at', ignoreDuplicates: true }).abortSignal(controller.signal),
+      'heartbeats',
+    );
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function insertPhoto(client: Client, photo: PhotoInsert): Promise<void> {

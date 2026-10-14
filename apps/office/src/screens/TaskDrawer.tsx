@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
 import { useLists } from "../data/hooks";
-import { mapRouteOf, minutesText, type Route, routeOf } from "../data/route";
+import { type Route, mapRouteOf, minutesText, routeOf, snapLegend } from "../data/route";
 import type { DriverRoute, TaskDetail, UpdateStopsResult } from "../data/types";
 import { cap, hhmm, joinDots, num, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
@@ -342,7 +342,7 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
     if (!started) return;
     let alive = true;
     setBusy(true);
-    transport.call<DriverRoute>("driver_route", { task_id: id })
+    transport.call<DriverRoute>("driver_route", { task_id: id, line_tolerance_m: 3, max_line_points: 3000, snap: true })
       .then((p) => { if (alive) setRoute(routeOf("", p)); })
       .catch((e) => { if (alive) setErr(errText(e as FleetError)[0]); })
       .finally(() => { if (alive) setBusy(false); });
@@ -358,8 +358,8 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
       <div className="card card-b stack" data-testid="task-route">
         {busy && <Loading>Loading the route…</Loading>}
         {err && <Notice tone="bad">{err}</Notice>}
-        {route && route.points.length > 0 && <MapView markers={[]} route={mapRouteOf(route)} onPick={() => undefined} />}
-        {line && <p className="muted small" style={{ margin: 0 }}>{line}</p>}
+        {route && route.points.length > 0 && <MapView markers={[]} route={mapRouteOf(route, null, true)} onPick={() => undefined} />}
+        {line && <p className="muted small" style={{ margin: 0 }}>{line}{snapLegend(route, true) ? ` · ${snapLegend(route, true)}` : ""}</p>}
       </div>
     </>
   );

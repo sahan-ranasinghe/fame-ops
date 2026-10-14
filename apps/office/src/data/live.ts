@@ -26,6 +26,10 @@ export interface LatestRow {
   hb_battery_pct?: number | null;
   hb_app_version?: string | null;
   hb_queued_points?: number | null;
+  hb_rejected_points?: number | null;
+  hb_data_available?: boolean | null;
+  hb_app_state?: string | null;
+  heading?: number | null;
 }
 
 export const minutesSince = (at: string, now: Date) => Math.max(0, Math.floor((now.getTime() - new Date(at).getTime()) / 60000));
@@ -58,6 +62,7 @@ export function statusFields(signal: Signal, now: Date): Pick<LiveDriver, "statu
     locationOn: signal.location_on,
     permission: signal.permission,
     locationOffSince: signal.location_off_since,
+    rejectedPoints: signal.rejected_points,
   }, now);
   return {
     status: r.status,
@@ -92,6 +97,7 @@ export function applyLatest(drivers: LiveDriver[], row: LatestRow, now: Date): L
       location_on: row.hb_location_on ?? d.signal?.location_on ?? null,
       permission: row.hb_permission ?? d.signal?.permission ?? null,
       location_off_since: row.hb_location_off_since ?? null,
+      rejected_points: row.hb_rejected_points ?? d.signal?.rejected_points ?? null,
     };
     const share = shareOf(row.sharing, row.recorded_at, now);
     const hasPos = row.lat != null && row.lng != null;
@@ -113,6 +119,10 @@ export function applyLatest(drivers: LiveDriver[], row: LatestRow, now: Date): L
       permission: row.hb_permission ?? d.permission,
       app_version: row.hb_app_version ?? d.app_version,
       queued_points: row.hb_queued_points ?? d.queued_points,
+      rejected_points: row.hb_rejected_points ?? d.rejected_points,
+      data_available: row.hb_data_available ?? d.data_available,
+      app_state: row.hb_app_state ?? d.app_state,
+      heading: row.heading ?? d.heading,
       links: { ...d.links, maps: hasPos ? `https://www.google.com/maps/search/?api=1&query=${row.lat},${row.lng}` : d.links?.maps },
     };
   });

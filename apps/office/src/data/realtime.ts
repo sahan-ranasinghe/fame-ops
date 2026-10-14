@@ -29,6 +29,39 @@ export function subscribeDriverLatest(cb: (row: LatestRow) => void, onStatus?: (
   return () => { void client.removeChannel(channel); };
 }
 
+/** A row of location_points, as Realtime delivers an insert (the driver page grows its line from these). */
+export interface PointRow {
+  employee_id: string;
+  recorded_at: string;
+  lat: number;
+  lng: number;
+  accuracy_m: number | null;
+  speed_mps: number | null;
+  heading: number | null;
+  received_at?: string | null;
+}
+
+/** Web only: every new location point of one driver, as it lands (a late backlog too, point by point). */
+export function subscribeDriverPoints(employeeId: string, cb: (row: PointRow) => void, onStatus?: (s: RealtimeStatus) => void): () => void {
+  if (!supabase) return () => {};
+  onStatus?.("connecting");
+  const client = supabase;
+  const channel = client
+    .channel(`location_points:${employeeId}:${++serial}:${Date.now()}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "location_points", filter: `employee_id=eq.${employeeId}` }, (payload) => {
+      const row = payload.new as Partial<PointRow>;
+      if (row && typeof row.recorded_at === "string" && typeof row.lat === "number" && typeof row.lng === "number") cb(row as PointRow);
+    })
+    .subscribe((status, err) => {
+      if (status === "SUBSCRIBED") onStatus?.("live");
+      else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        console.warn(`Realtime location_points: ${status}`, err?.message ?? "");
+        onStatus?.("error");
+      } else if (status === "CLOSED") onStatus?.("connecting");
+    });
+  return () => { void client.removeChannel(channel); };
+}
+
 /** Web only: any change on the issues table (the bell and the Issues page reload their list). */
 export function subscribeIssues(cb: () => void): () => void {
   if (!supabase) return () => {};

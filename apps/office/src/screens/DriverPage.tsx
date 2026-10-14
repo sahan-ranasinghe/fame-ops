@@ -1,15 +1,17 @@
 // One driver: who they are, their status now, and where they went on a day:
-// the route on the map (coloured by speed, stops and data gaps marked), the
-// day's numbers, the timeline beside the map, and playback (web build). Today's
-// line grows as the driver moves: the earlier part of the day is loaded once
-// from driver_route (refreshed every minute for the numbers), new positions
-// come from the driver_latest rows the live page already receives.
+// the route on the map (coloured by speed, thin where the fix was poor, stops
+// and holes marked, snapped to roads when a provider is set), the day's
+// numbers, the timeline beside the map, and playback (web build). Today's line
+// grows as the driver moves: the earlier part of the day is loaded from
+// driver_route (full resolution, refreshed every minute for the numbers), and
+// on the web every new location point lands at once through Realtime, each one
+// put in by its time, so a backlog uploaded after an outage fills its gap.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useLists, useWatch } from "../data/hooks";
-import { positionOf, statusLine, statusTone } from "../data/live";
-import { appendLive, focusOf, KIND_LABEL, mapRouteOf, minutesText, positionAt, type Route, routeOf, type TimelineRow } from "../data/route";
+import { positionOf, recordedAtOf, statusLine, statusTone } from "../data/live";
+import { focusOf, insertPoint, KIND_LABEL, mapRouteOf, minutesText, positionAt, type Route, routeOf, snapLegend, type TimelineRow } from "../data/route";
 import type { DriverRoute } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { addDays, clock, longDate, num, today, waLink } from "../lib/format";
@@ -22,9 +24,12 @@ import { type PlaybackSpeed, SPEEDS, usePlayback } from "./usePlayback";
 const ROUTE_EVERY_MS = 60000;
 const PAST_DAY_MS = 6 * 3600000;
 
+/** The line the web map draws: every point the tool kept with a 3 m tolerance (invisible on the map), up to 3,000. */
+const LINE_ARGS = { line_tolerance_m: 3, max_line_points: 3000 };
+
 export function DriverPage() {
   const { username = "" } = useParams();
-  const { store, noConnector } = useFleet();
+  const { store, noConnector, realtime } = useFleet();
   const lists = useLists(!noConnector);
   const [date, setDate] = useState(today());
   const isToday = date === today();
@@ -33,13 +38,12 @@ export function DriverPage() {
   const [route, setRoute] = useState<Route | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [focus, setFocus] = useState<RoutePoint[] | null>(null);
-  const employeeId = useRef<string | undefined>(undefined);
+  const [snap, setSnap] = useState(true);
+  const [pointsRt, setPointsRt] = useState<"none" | "connecting" | "live" | "error">("none");
 
-  const key = `route.${username}.${date}`;
-  const entry = useWatch<DriverRoute>(key, "driver_route", { driver: username, date }, isToday ? ROUTE_EVERY_MS : PAST_DAY_MS, !noConnector && !!username);
-  const { live, rt } = useLiveDrivers((row) => {
-    if (isTodayRef.current && employeeId.current && row.employee_id === employeeId.current) setRoute((r) => (r ? appendLive(r, row) : r));
-  });
+  const key = `route.${username}.${date}.${snap ? "snap" : "raw"}`;
+  const entry = useWatch<DriverRoute>(key, "driver_route", { driver: username, date, ...LINE_ARGS, snap }, isToday ? ROUTE_EVERY_MS : PAST_DAY_MS, !noConnector && !!username);
+  const { live, rt } = useLiveDrivers();
   useEffect(() => {
     setRoute(entry.data ? routeOf(username, entry.data) : null);
     setSelected(null);
@@ -47,7 +51,16 @@ export function DriverPage() {
   }, [entry.data, username]);
 
   const card = live.data?.drivers.find((d) => d.username === username);
-  employeeId.current = card?.employee_id;
+  const employeeId = card?.employee_id;
+  // Web: every new point of this driver lands at once, in its place by time; the 60-second refetch is the fallback.
+  useEffect(() => {
+    if (!isToday || !employeeId || !realtime?.driverPoints) return;
+    let alive = true;
+    const stop = realtime.driverPoints(employeeId, (row) => {
+      if (alive && isTodayRef.current) setRoute((r) => (r ? insertPoint(r, row) : r));
+    }, (s) => { if (alive) setPointsRt(s); });
+    return () => { alive = false; setPointsRt("none"); stop(); };
+  }, [isToday, employeeId, realtime]);
   const info = lists.drivers?.find((d) => d.username === username);
   const name = card?.driver ?? info?.name ?? username;
   const phone = info?.phone;
@@ -63,12 +76,14 @@ export function DriverPage() {
     const p = positionAt(route.points, playback.t);
     return p ? { lat: p.lat, lng: p.lng, label: `${clock(playback.t)} · ${p.kmh} km/h` } : null;
   }, [webPlayback, route, playback.t]);
-  const mapRoute = useMemo(() => mapRouteOf(route, playback.playing || (webPlayback && playback.t > playback.start) ? cursor : null), [route, cursor, playback.playing, playback.t, playback.start, webPlayback]);
+  const mapRoute = useMemo(() => mapRouteOf(route, playback.playing || (webPlayback && playback.t > playback.start) ? cursor : null, snap), [route, cursor, playback.playing, playback.t, playback.start, webPlayback, snap]);
   const markers = useMemo<MapMarker[]>(() => {
     const pos = card && isToday ? positionOf(card) : null;
     if (!pos || !card) return [];
-    return [{ id: card.username, label: card.vehicle ? card.vehicle.split(" · ")[0] : card.driver, title: card.driver, lat: pos.lat, lng: pos.lng, tone, selected: true }];
+    const at = recordedAtOf(card);
+    return [{ id: card.username, label: card.vehicle ? card.vehicle.split(" · ")[0] : card.driver, title: card.driver, lat: pos.lat, lng: pos.lng, tone, selected: true, heading: card.heading ?? null, at: at ? Date.parse(at) : null }];
   }, [card, isToday, tone]);
+  const snapNote = snapLegend(route, snap);
 
   function pickRow(i: number, row: TimelineRow) {
     setSelected(i);
@@ -105,7 +120,7 @@ export function DriverPage() {
             <div><dt>Last position</dt><dd>{card?.last_position_at ?? route?.last ?? "—"}</dd></div>
             <div><dt>Vehicle</dt><dd>{card?.vehicle ?? info?.current_vehicle ?? "—"}</dd></div>
             <div><dt>Task</dt><dd>{card?.task ?? "—"}</dd></div>
-            <div><dt>Live updates</dt><dd>{rt === "live" ? <span className="status live">On</span> : isToday ? "Every 30 s" : "—"}</dd></div>
+            <div><dt>Live updates</dt><dd>{pointsRt === "live" ? <span className="status live">On · point by point</span> : rt === "live" ? <span className="status live">On</span> : isToday ? "Every 60 s" : "—"}</dd></div>
           </dl>
         </div>
 
@@ -121,7 +136,7 @@ export function DriverPage() {
         <div className="tiles">
           <Tile label="Km (GPS)" value={route?.km != null ? num(route.km) : "—"} unit="km" sub={route ? `from ${num(route.count)} points` : ""} />
           <Tile label="Driving time" value={minutesText(route?.drivingMinutes)} unit="" sub={route?.first ? `first point ${route.first}` : ""} />
-          <Tile label="Stopped time" value={minutesText(route?.stoppedMinutes)} unit="" sub={route?.gaps.length ? `${route.gaps.length} gap${route.gaps.length > 1 ? "s" : ""} with no data` : "no data gaps"} tone={route?.gaps.length ? "warn" : ""} />
+          <Tile label="Stopped time" value={minutesText(route?.stoppedMinutes)} unit="" sub={route?.gaps.length ? `${route.gaps.length} gap${route.gaps.length > 1 ? "s" : ""} with no position` : "no gaps"} tone={route?.gaps.length ? "warn" : ""} />
           <Tile label="Stops" value={route?.stopsCount ?? "—"} unit="of 10 min or more" sub={route?.last ? `last point ${route.last}` : ""} />
         </div>
 
@@ -141,9 +156,16 @@ export function DriverPage() {
               <span><i style={{ background: SPEED_COLORS.slow }} />Under 20 km/h</span>
               <span><i style={{ background: SPEED_COLORS.normal }} />20–60 km/h</span>
               <span><i style={{ background: SPEED_COLORS.fast }} />Over 60 km/h</span>
-              <span><i className="dashed" />No data</span>
+              <span><i className="thin" />Poor fix (over 30 m)</span>
+              <span><i className="dashed" />No GPS / app not running</span>
               <span><i className="ring" />Stop</span>
             </div>
+            {snapNote && (
+              <div className="legend" data-testid="snap-legend">
+                <label><input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap to roads</label>
+                <span>{snapNote}</span>
+              </div>
+            )}
             {webPlayback && (
               <div className="card card-b play" data-testid="playback">
                 <button type="button" className="btn dark" onClick={playback.toggle} aria-label={playback.playing ? "Pause" : "Play"}>
@@ -161,14 +183,17 @@ export function DriverPage() {
                 <span className="bar" />
                 <span className="when">{row.from}–{row.to}</span>
                 <span className="grow">
-                  <span className="what">{KIND_LABEL[row.kind]}{row.kind === "driving" && row.km != null ? ` · ${num(row.km)} km` : ""}</span>
+                  <span className="what">
+                    {KIND_LABEL[row.kind]}{row.kind === "driving" && row.km != null ? ` · ${num(row.km)} km` : ""}
+                    {row.uploaded ? <span className="late"> · Offline here · uploaded {row.uploaded}</span> : null}
+                  </span>
                   <span className="sub">{row.kind === "stopped" ? (row.near ? `near ${row.near} · ` : "") + minutesText(row.minutes) : minutesText(row.minutes)}</span>
                 </span>
               </button>
             )) : <Empty>{route ? "No timeline for this day." : entry.err ? "The route could not load." : "Loading…"}</Empty>}
           </div>
         </div>
-        {route?.km != null && <p className="muted small">Km from GPS, drift filtered: fixes worse than 50 m, jumps and drift while standing still are left out. The odometer is the true figure.</p>}
+        {route?.km != null && <p className="muted small">Km from GPS, drift filtered: fixes worse than 50 m, jumps and drift while standing still are left out. The odometer is the true figure.{route.shown != null ? ` Line: ${num(route.shown)} of ${num(route.count)} points.` : ""}</p>}
       </div>
     </section>
   );
