@@ -43,12 +43,21 @@ export interface PointRow {
 
 /** Web only: every new location point of one driver, as it lands (a late backlog too, point by point). */
 export function subscribeDriverPoints(employeeId: string, cb: (row: PointRow) => void, onStatus?: (s: RealtimeStatus) => void): () => void {
-  if (!supabase) return () => {};
+  return subscribeDriversPoints([employeeId], cb, onStatus);
+}
+
+/**
+ * Web only: every new location point of several drivers on ONE channel (the live map's trails: the drivers
+ * currently sharing). The caller subscribes again when that set changes.
+ */
+export function subscribeDriversPoints(employeeIds: string[], cb: (row: PointRow) => void, onStatus?: (s: RealtimeStatus) => void): () => void {
+  if (!supabase || employeeIds.length === 0) return () => {};
   onStatus?.("connecting");
   const client = supabase;
+  const filter = employeeIds.length === 1 ? `employee_id=eq.${employeeIds[0]}` : `employee_id=in.(${employeeIds.join(",")})`;
   const channel = client
-    .channel(`location_points:${employeeId}:${++serial}:${Date.now()}`)
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "location_points", filter: `employee_id=eq.${employeeId}` }, (payload) => {
+    .channel(`location_points:${employeeIds.length}:${++serial}:${Date.now()}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "location_points", filter }, (payload) => {
       const row = payload.new as Partial<PointRow>;
       if (row && typeof row.recorded_at === "string" && typeof row.lat === "number" && typeof row.lng === "number") cb(row as PointRow);
     })

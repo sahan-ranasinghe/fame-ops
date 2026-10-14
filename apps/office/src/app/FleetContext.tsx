@@ -19,6 +19,8 @@ export interface Fleet {
     driverLatest: (cb: (row: LatestRow) => void, onStatus?: (s: "connecting" | "live" | "error") => void) => () => void;
     /** Every new location point of one driver (the driver page's line grows point by point). */
     driverPoints?: (employeeId: string, cb: (row: PointRow) => void, onStatus?: (s: "connecting" | "live" | "error") => void) => () => void;
+    /** Every new location point of several drivers on one channel (the live map's trails). */
+    driversPoints?: (employeeIds: string[], cb: (row: PointRow) => void, onStatus?: (s: "connecting" | "live" | "error") => void) => () => void;
   };
 }
 

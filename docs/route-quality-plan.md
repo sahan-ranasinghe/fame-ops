@@ -106,6 +106,12 @@ provider is set) with the legend "Snapped to roads · km from odometer".
   the 60-second refetch stays as the fallback and brings the numbers. Poor fixes (over 30 m)
   thin and lighter; holes dashed with "No GPS signal · N min" / "App not running · N min";
   timeline rows with the new words and "Offline here · uploaded HH:MM"; the snap toggle.
+- Live map: "Show today's trails" loads each sharing driver's line once and grows it point by
+  point from one Realtime channel on `location_points` filtered to the drivers currently sharing
+  (the set is watched; the channel is opened again when it changes); the shown route of the
+  selected driver grows the same way. Every 60 s the trails and the shown route are fetched
+  again from `driver_route` as the fallback. Nothing grows from `driver_latest` any more (that
+  was one point per upload).
 - Live map and driver page markers glide over the real time between two positions (0.3–10 s)
   and turn to the heading (`driver_latest.heading`, `live_drivers.heading`).
 - The artifact (drawn map) shows the same data, polled.

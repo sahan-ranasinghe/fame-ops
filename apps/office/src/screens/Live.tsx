@@ -1,8 +1,15 @@
+// Live locations: every driver's marker (driver_latest over Realtime, the
+// tool every 30 s), the selected driver's route today, and "Show today's
+// trails". A trail is loaded once from driver_route and then grows point by
+// point from ONE Realtime channel on location_points filtered to the drivers
+// currently sharing (each point put in by its time, so a backlog lands in its
+// place); every 60 s the trails and the shown route are fetched again as the
+// fallback, so the line never depends on one point per upload.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { positionOf, recordedAtOf, statusLine, statusTone } from "../data/live";
-import { appendLive, mapRouteOf, type Route, routeOf, trailOf } from "../data/route";
+import { insertPoint, mapRouteOf, type Route, routeOf, trailOf } from "../data/route";
 import type { DriverRoute, LiveDriver } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { joinDots, num, plateOf } from "../lib/format";
@@ -14,13 +21,18 @@ import { can, type FleetError } from "../transport/types";
 import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 
+/** The trails and the shown route are fetched again this often (the fallback when Realtime is not delivering). */
+const TRAIL_REFRESH_MS = 60000;
+/** The shown route of one driver: every point the tool kept with a 3 m tolerance. */
+const ROUTE_ARGS = { line_tolerance_m: 3, max_line_points: 3000 };
+
 type Filter = "all" | "live" | "no_signal" | "location_off" | "not_sharing";
 const FILTERS: [Filter, string][] = [["all", "All"], ["live", "Live"], ["no_signal", "No signal"], ["location_off", "Location off"], ["not_sharing", "Not sharing"]];
 const tone = (x: LiveDriver) => statusTone(x.status, x.state);
 const sharingNow = (x: LiveDriver) => (x.signal ? x.signal.sharing : x.state !== "not_sharing");
 
 export function Live() {
-  const { me, store, transport, noConnector, managePermissions } = useFleet();
+  const { me, store, transport, noConnector, managePermissions, realtime } = useFleet();
   const routes = can(me, ...ROUTES_NEED);
   const [filter, setFilter] = useState<Filter>("all");
   const [selected, setSelected] = useState<string | null>(null);
@@ -30,24 +42,64 @@ export function Live() {
   // "Show today's trails": every sharing driver's line today, loaded once each, then grown from the Realtime rows.
   const [trails, setTrails] = useState(false);
   const [trailMap, setTrailMap] = useState<Map<string, Route>>(new Map());
+  const [pointsRt, setPointsRt] = useState<"none" | "connecting" | "live" | "error">("none");
   const loading = useRef(new Set<string>());
   const driversRef = useRef<LiveDriver[]>([]);
+  const trailMapRef = useRef(trailMap);
+  trailMapRef.current = trailMap;
+  const routeRef = useRef(route);
+  routeRef.current = route;
 
-  const { live, rt } = useLiveDrivers((row) => {
-    const who = driversRef.current.find((x) => x.employee_id === row.employee_id);
-    if (!who) return;
-    setTrailMap((m) => {
-      const r = m.get(who.username);
-      if (!r) return m;
-      const next = new Map(m);
-      next.set(who.username, appendLive(r, row));
-      return next;
-    });
-    setRoute((r) => (r && r.username === who.username ? appendLive(r, row) : r));
-  });
+  const { live, rt } = useLiveDrivers();
   const d = live.data;
   const all = useMemo(() => d?.drivers ?? [], [d]);
   driversRef.current = all;
+
+  // The drivers whose points are watched: everyone sharing while the trails are on, else only the driver whose route is shown.
+  const watchKey = useMemo(() => {
+    const who = trails ? all.filter(sharingNow) : all.filter((x) => route && x.username === route.username && sharingNow(x));
+    return who.map((x) => x.employee_id).filter((id): id is string => !!id).sort().join(",");
+  }, [all, trails, route]);
+  useEffect(() => {
+    if (!watchKey || !realtime?.driversPoints) return;
+    let alive = true;
+    const stop = realtime.driversPoints(watchKey.split(","), (row) => {
+      if (!alive) return;
+      const who = driversRef.current.find((x) => x.employee_id === row.employee_id);
+      if (!who) return;
+      setTrailMap((m) => {
+        const r = m.get(who.username);
+        if (!r) return m;
+        const next = new Map(m);
+        next.set(who.username, insertPoint(r, row));
+        return next;
+      });
+      setRoute((r) => (r && r.username === who.username ? insertPoint(r, row) : r));
+    }, (s) => { if (alive) setPointsRt(s); });
+    return () => { alive = false; setPointsRt("none"); stop(); };
+  }, [watchKey, realtime]);
+
+  // The fallback: every 60 s the trails and the shown route are fetched again from the tool.
+  useEffect(() => {
+    if (!trails && !route) return;
+    const timer = setInterval(() => {
+      for (const x of driversRef.current) {
+        if (!trails || !sharingNow(x) || !trailMapRef.current.has(x.username) || loading.current.has(x.username)) continue;
+        loading.current.add(x.username);
+        void transport.call<DriverRoute>("driver_route", { driver: x.username })
+          .then((p) => setTrailMap((m) => new Map(m).set(x.username, routeOf(x.username, p))))
+          .catch(() => undefined)
+          .finally(() => loading.current.delete(x.username));
+      }
+      const shown = routeRef.current;
+      if (shown) {
+        void transport.call<DriverRoute>("driver_route", { driver: shown.username, ...ROUTE_ARGS })
+          .then((p) => setRoute((r) => (r && r.username === shown.username ? routeOf(shown.username, p) : r)))
+          .catch(() => undefined);
+      }
+    }, TRAIL_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [trails, !!route, transport]);
   const shown = filter === "all" ? all : all.filter((x) => (x.status ?? (x.state === "sharing" ? "live" : x.state === "stale" ? "no_signal" : "not_sharing")) === filter);
   const sel = all.find((x) => x.username === selected) ?? all[0];
   useEffect(() => { if (!selected && all[0]) setSelected(all[0].username); }, [all, selected]);
@@ -78,7 +130,7 @@ export function Live() {
     setRouteBusy(true);
     setRouteErr(null);
     try {
-      const p = await transport.call<DriverRoute>("driver_route", { driver: username });
+      const p = await transport.call<DriverRoute>("driver_route", { driver: username, ...ROUTE_ARGS });
       setRoute(routeOf(username, p));
     } catch (e) {
       setRouteErr(errText(e as FleetError)[0]);
@@ -95,6 +147,7 @@ export function Live() {
           <div className="eyebrow">
             Shared by drivers from the Fame Driver app ·{" "}
             <span data-testid="rt-status" className={rt === "live" ? "status live" : "status muted"}>{rt === "live" ? "Live updates" : "Refreshes every 30 s"}</span>
+            {(trails || route) && pointsRt === "live" && <span className="status live"> · lines point by point</span>}
           </div>
           <h1>Live locations</h1>
         </div>

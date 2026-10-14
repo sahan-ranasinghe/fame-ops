@@ -185,7 +185,10 @@
   the server's 15-minute rule). `live_drivers` cards carry `employee_id`, `lat`, `lng`
   (additive; the contract snapshot records no live driver rows, so it did not change).
   "Show today's trails" draws every sharing driver's line today (one `driver_route` call
-  each, then grown from the Realtime rows); the detail card links to the driver page.
+  each, then grown point by point from ONE Realtime channel on `location_points` filtered to
+  the drivers currently sharing, each point inserted by its time; the trails and the shown
+  route are fetched again every 60 s as the fallback; never one point per upload); the
+  detail card links to the driver page.
 - Driver page (`src/screens/DriverPage.tsx`, route `/drivers/:username`, opened from a
   driver's name on Drivers, Live locations, the map card and Overview's on-the-road list;
   since 14 October: the line at 3 m tolerance, every new point through Realtime on

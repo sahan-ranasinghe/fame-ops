@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { appendLive, focusOf, insertPoint, mapRouteOf, minutesText, routeOf } from "./route";
+import { focusOf, insertPoint, mapRouteOf, minutesText, routeOf } from "./route";
 import type { DriverRoute } from "./types";
 
 const day = "2026-10-12";
@@ -43,35 +43,6 @@ describe("routeOf", () => {
     expect(r.points[1].at).toBe(ms("09:40"));
     expect(r.timeline).toEqual([]);
     expect(r.stops).toEqual([]);
-  });
-});
-
-describe("appendLive: today's line grows from the Realtime rows", () => {
-  const base = routeOf("nuwan.p", answer);
-  const row = (at: string, lat: number, lng: number, accuracy = 8) => ({ employee_id: "e1", lat, lng, speed_mps: 10, accuracy_m: accuracy, battery_pct: 80, recorded_at: iso(at), sharing: true });
-  it("a precise position that moved becomes a new point with the speed of the step", () => {
-    const r = appendLive(base, row("16:36", 6.94, 79.85));
-    expect(r.points).toHaveLength(7);
-    const p = r.points[6];
-    expect(p.at).toBe(ms("16:36"));
-    expect(p.kmh).toBe(19); // 1.6 km in 5 minutes
-    expect(r.count).toBe(831);
-    expect(r.km!).toBeGreaterThan(41.2);
-    expect(r.last).toBe("16:36");
-  });
-  it("standing still only extends the wait at the last place", () => {
-    const r1 = appendLive(base, row("16:36", 6.93001, 79.86001));
-    expect(r1.points).toHaveLength(7);
-    expect(r1.points[6]).toMatchObject({ lat: 6.93, lng: 79.86, kmh: 0, at: ms("16:36") });
-    const r2 = appendLive(r1, row("16:40", 6.93002, 79.86));
-    expect(r2.points).toHaveLength(7);
-    expect(r2.points[6].at).toBe(ms("16:40"));
-    expect(r2.km).toBe(base.km);
-  });
-  it("ignores a row older than the line, a coarse fix, and a row without a position", () => {
-    expect(appendLive(base, row("16:00", 6.95, 79.87))).toBe(base);
-    expect(appendLive(base, row("16:50", 6.95, 79.87, 120))).toBe(base);
-    expect(appendLive(base, { ...row("16:50", 0, 0), lat: null, lng: null })).toBe(base);
   });
 });
 
