@@ -84,13 +84,15 @@ select throws_ok($$
 $$, '42501', null, 'but not in another driver''s folder');
 reset role;
 
--- 4. The checklist reaches the driver, with the three defaults; the office's list replaces them.
+-- 4. The steps reach the driver, with the four defaults in order; the office's list replaces them.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f5","role":"authenticated"}';
-select is((select jsonb_array_length(public.get_driver_settings() -> 'fuel_video_checklist')), 3, 'get_driver_settings: the three default checklist items');
-select is((select public.get_driver_settings() -> 'fuel_video_checklist' -> 0 ->> 'key'), 'pump', 'the first is the pump display');
+select is((select jsonb_array_length(public.get_driver_settings() -> 'fuel_video_checklist')), 4, 'get_driver_settings: the four default steps');
+select is((select public.get_driver_settings() -> 'fuel_video_checklist' -> 0 ->> 'key'), 'plate', 'the first step is the number plate');
+select is((select public.get_driver_settings() -> 'fuel_video_checklist' -> 3 ->> 'short'), 'Final', 'the last step is the final pump display, with its short word for the office timeline');
 select is((select public.get_driver_settings() ->> 'fuel_video_quality'), '480p', 'get_driver_settings: the recording quality, 480p by default');
 reset role;
+select is((select value -> 1 ->> 'key' from public.fleet_settings where key = 'fuel_video_checklist'), 'zero', 'the seeded setting was replaced by the ordered steps (never edited)');
 update public.fleet_settings set value = '[{"key": "pump", "en": "Pump", "si": "පොම්පය"}, {"key": "custom", "en": "The cap closed", "si": "මූඩිය වසා ඇත"}]'::jsonb
 where key = 'fuel_video_checklist';
 set local role authenticated;

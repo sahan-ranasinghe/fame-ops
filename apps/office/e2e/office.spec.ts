@@ -739,7 +739,7 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   const path = `${employeeId}/${day}/${fuelId}.mp4`;
   const vehicles = await app.get<{ id: string }[]>(`vehicles?select=id&reg_no=eq.${encodeURIComponent(plate)}`);
   // The app saves the fill with its recorded video, uploads the file, then marks the row uploaded.
-  expect(await app.post("fuel_logs", { id: fuelId, vehicle_id: vehicles[0].id, employee_id: employeeId, litres: 28.5, amount_cents: 1054500, odometer_km: 912, video_path: path, video_status: "recorded", video_duration_s: 41, video_bytes: mp4.length, video_checklist: ["pump", "plate"] })).toBe(201);
+  expect(await app.post("fuel_logs", { id: fuelId, vehicle_id: vehicles[0].id, employee_id: employeeId, litres: 28.5, amount_cents: 1054500, odometer_km: 912, video_path: path, video_status: "recorded", video_duration_s: 41, video_bytes: mp4.length, video_checklist: [{ key: "plate", at_s: 4 }, { key: "zero", at_s: 11 }, { key: "pumping", at_s: 15 }, { key: "final", at_s: 38 }] })).toBe(201);
   expect(await app.tusUpload("fuel-videos", path, mp4, "video/mp4")).toBe(204);
   expect(await app.patch(`fuel_logs?id=eq.${fuelId}`, { video_status: "uploaded", video_uploaded_at: new Date().toISOString() })).toBe(200);
   // A second fill with no video.
@@ -750,7 +750,7 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   const piece2 = `${employeeId}/${day}/${twoId}-2.mp4`;
   expect(await app.post("fuel_logs", {
     id: twoId, vehicle_id: vehicles[0].id, employee_id: employeeId, litres: 40, amount_cents: 1480000, video_path: piece1, video_status: "recorded",
-    video_duration_s: 312, video_bytes: mp4.length * 2, video_checklist: ["pump"], video_interrupted: true,
+    video_duration_s: 312, video_bytes: mp4.length * 2, video_checklist: [{ key: "plate", at_s: 4 }, { key: "final", at_s: 250 }], video_interrupted: true,
     video_segments: [{ path: piece1, duration_s: 200, bytes: mp4.length }, { path: piece2, duration_s: 112, bytes: mp4.length }],
   })).toBe(201);
   expect(await app.tusUpload("fuel-videos", piece1, mp4, "video/mp4")).toBe(204);
@@ -781,7 +781,9 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   await expect(page).toHaveURL(new RegExp(`/fuel/${fuelId}`));
   const detail = page.getByTestId("fuel-detail");
   await expect(detail.getByTestId("fuel-video")).toHaveAttribute("src", /\/object\/sign\/fuel-videos\//);
-  await expect(detail).toContainText("Pump display: litres and amount, Number plate");
+  // The steps the driver ticked are a timeline, and bookmarks under the video.
+  await expect(detail).toContainText("Plate 0:04 · Zero 0:11 · Pumping 0:15 · Final 0:38");
+  await expect(detail.getByTestId("fuel-marks").getByRole("button")).toHaveCount(4);
   await expect(detail).toContainText("the link works for 1 hour");
   // The interrupted fill: its chip says so, the detail lists the two pieces and plays them one after another.
   const interrupted = table.locator("tr", { hasText: plate }).filter({ hasText: "5:12" });
@@ -791,6 +793,11 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   await expect(page).toHaveURL(new RegExp(`/fuel/${twoId}`));
   await expect(page.getByTestId("fuel-pieces")).toContainText("Interrupted · 2 pieces");
   await expect(page.getByTestId("fuel-pieces").getByRole("button")).toHaveCount(2);
+  await expect(page.getByTestId("fuel-video")).toHaveAttribute("src", new RegExp(`${twoId}\\.mp4`));
+  // A bookmark in the second piece opens that piece (at 0:50 into it); one in the first goes back.
+  await page.getByTestId("fuel-marks").getByRole("button", { name: "Final 4:10" }).click();
+  await expect(page.getByTestId("fuel-video")).toHaveAttribute("src", new RegExp(`${twoId}-2\\.mp4`));
+  await page.getByTestId("fuel-marks").getByRole("button", { name: "Plate 0:04" }).click();
   await expect(page.getByTestId("fuel-video")).toHaveAttribute("src", new RegExp(`${twoId}\\.mp4`));
   await page.getByTestId("fuel-pieces").getByRole("button", { name: /Piece 2/ }).click();
   await expect(page.getByTestId("fuel-video")).toHaveAttribute("src", new RegExp(`${twoId}-2\\.mp4`));
@@ -803,16 +810,20 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   const summary = await tool<{ vehicles: { vehicle: string; fuel_entries: number; fuel_videos: number }[] }>("mileage_summary", { vehicle: plate });
   expect(summary.vehicles[0]).toMatchObject({ fuel_entries: 3, fuel_videos: 2 });
 
-  // Fleet settings: the checklist starts with the three defaults; add one, save; the driver gets it.
+  // Fleet settings: the steps start with the four defaults in order; add one, move it above the last, save; the driver gets it.
   await page.goto("/settings/fleet");
   const checklist = page.getByTestId("checklist-settings");
-  await expect(checklist.getByTestId("checklist-row")).toHaveCount(3);
-  await checklist.getByRole("button", { name: "Add item" }).click();
-  await checklist.getByLabel("English").nth(3).fill("Fuel cap closed");
+  await expect(checklist.getByTestId("checklist-row")).toHaveCount(4);
+  await expect(checklist.getByLabel("Short word 1")).toHaveValue("Plate");
+  await checklist.getByRole("button", { name: "Add step" }).click();
+  await checklist.getByLabel("English").nth(4).fill("Fuel cap closed");
+  await checklist.getByLabel("Short word 5").fill("Cap");
+  await checklist.getByRole("button", { name: "Move up 5" }).click();
   await checklist.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status")).toHaveText("Setting saved");
-  const settings = await tool<{ settings: { fuel_video_checklist: { key: string; en: string; si: string }[] } }>("get_settings", {});
-  expect(settings.settings.fuel_video_checklist.map((i) => i.key)).toEqual(["pump", "odometer", "plate", "fuel_cap_closed"]);
+  const settings = await tool<{ settings: { fuel_video_checklist: { key: string; en: string; si: string; short?: string }[] } }>("get_settings", {});
+  expect(settings.settings.fuel_video_checklist.map((i) => i.key)).toEqual(["plate", "zero", "pumping", "fuel_cap_closed", "final"]);
+  expect(settings.settings.fuel_video_checklist[3]).toEqual({ key: "fuel_cap_closed", en: "Fuel cap closed", si: "Fuel cap closed", short: "Cap" });
   // The quality and the keep months: 480p and 12 months by default; a change is saved at once.
   await expect(page.getByLabel("Recording quality")).toHaveValue("480p");
   await expect(page.getByLabel("Keep videos for")).toHaveValue("12");
@@ -820,6 +831,6 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   // The toast from the checklist save may still be showing: ask the server instead.
   await expect.poll(async () => (await tool<{ settings: { fuel_video_keep_months: number } }>("get_settings", {})).settings.fuel_video_keep_months, { timeout: 15000 }).toBe(6);
   await tool("update_settings", { key: "fuel_video_keep_months", value: 12 });
-  // Back to the three (other runs and the driver tests count on them).
-  await tool("update_settings", { key: "fuel_video_checklist", value: settings.settings.fuel_video_checklist.slice(0, 3) });
+  // Back to the four in order (other runs and the driver tests count on them).
+  await tool("update_settings", { key: "fuel_video_checklist", value: settings.settings.fuel_video_checklist.filter((i) => i.key !== "fuel_cap_closed") });
 });

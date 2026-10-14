@@ -265,7 +265,7 @@ async function main() {
     { kind: 'odometer_log', row: { id: randomUUID(), vehicle_id: van.id, employee_id: a.row.id, task_id: task1, reading_km: 84563, ocr_value: 84568, photo_id: pEnd, kind: 'task_end', logged_at: at(3) } },
     photoOp(pFuel, 'fuel_receipt'),
     { kind: 'fuel_log', row: { id: fuelId, vehicle_id: van.id, employee_id: a.row.id, task_id: task1, litres: 32, amount_cents: 1184000, receipt_photo_id: pFuel, odometer_km: 84563, logged_at: at(3) ,
-      video_path: videoPath, video_status: 'recorded', video_duration_s: 5, video_bytes: TINY_MP4.length, video_checklist: ['pump', 'plate'] } },
+      video_path: videoPath, video_status: 'recorded', video_duration_s: 5, video_bytes: TINY_MP4.length, video_checklist: [{ key: 'plate', at_s: 1 }, { key: 'final', at_s: 4 }] } },
     { kind: 'video_upload', fuel_log_id: fuelId, bucket: 'fuel-videos', path: videoPath, local_uri: videoFile, bytes: TINY_MP4.length, url: null, offset: 0, content_type: 'video/mp4' },
     { kind: 'stop_patch', id: stops[2]!.id, patch: { status: 'done', done_at: at(3) } },
     { kind: 'task_patch', id: task1, patch: { status: 'completed', end_odometer_km: 84563, completed_at: at(3) } },
@@ -319,7 +319,7 @@ async function main() {
   check(photos.length === 4 && photos.find((p) => p.id === pStart)?.odometer_log_id === logStart && photos.find((p) => p.id === pFuel)?.fuel_log_id !== null && photos.find((p) => p.id === pReport)?.vehicle_report_id === report, '4 photo records, each linked to its reading, fuel entry or report', photos);
   const fuelRow = must(await admin.from('fuel_logs').select('video_status, video_uploaded_at, video_bytes, video_path, video_checklist').eq('id', fuelId).single(), 'fuel log');
   check(fuelRow.video_status === 'uploaded' && fuelRow.video_uploaded_at !== null && fuelRow.video_bytes === TINY_MP4.length && fuelRow.video_path === videoPath
-    && JSON.stringify(fuelRow.video_checklist) === '["pump","plate"]', 'the fuel video went up through the resumable upload: the row says uploaded, with its size, path and ticked items', fuelRow);
+    && JSON.stringify(fuelRow.video_checklist) === '[{"key":"plate","at_s":1},{"key":"final","at_s":4}]', 'the fuel video went up through the resumable upload: the row says uploaded, with its size, path and the steps ticked with their seconds', fuelRow);
   const listed = await admin.storage.from('fuel-videos').list(`${a.row.id}/${day}`);
   check((listed.data ?? []).some((o) => o.name === `${fuelId}.mp4`), 'the file is in the fuel-videos bucket under the driver\'s own folder', listed.data?.map((o) => o.name));
   const files = must(await admin.storage.from('driver-photos').list(`${a.row.id}/${day}`), 'files');

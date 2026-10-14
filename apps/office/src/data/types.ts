@@ -246,9 +246,21 @@ export interface VideoCard {
   segments?: { url?: string; duration_s?: number; bytes?: number }[];
   /** The recording was interrupted and continued: expect a break between the pieces. */
   interrupted?: boolean;
+  /** The keys of the steps ticked, in order. */
   checklist?: string[];
+  /** The steps with the second of each: bookmarks into the video (rows written since the steps became a sequence). */
+  marks?: VideoMark[];
+  /** "Plate 0:04 · Zero 0:11 · Pumping 0:15 · Final 3:52" */
+  timeline?: string;
   uploaded_at?: string;
   note?: string;
+}
+
+export interface VideoMark {
+  key: string;
+  label: string;
+  at_s: number;
+  clock: string;
 }
 
 /** list_fuel: the month's fills with their receipts and videos. */
@@ -563,6 +575,8 @@ export interface ChecklistItem {
   key: string;
   en: string;
   si: string;
+  /** The word on the office's timeline ("Plate 0:04"); the English text when missing. */
+  short?: string;
 }
 
 export interface SettingsResult {

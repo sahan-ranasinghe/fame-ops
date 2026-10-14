@@ -190,8 +190,11 @@
 - Phase 6 Part 3 (14 October 2026): every fuel fill has a silent video. The driver app's fifth
   tab, Fuel, lists the month's fills with each video's state; the fuel form needs a recording
   (`record-video`: `CameraView`, the whole fill, 480p / 1.0 Mbps by default or 720p when the
-  setting `fuel_video_quality` says so, at most 12 min with a countdown in the last 30 s, the
-  office's checklist to tick from `fuel_video_checklist`, both through `get_driver_settings()`;
+  setting `fuel_video_quality` says so, at most 12 min a piece with a countdown in the last 30 s,
+  the fill at least 30 s, the office's steps from `fuel_video_checklist` shown one at a time in
+  order (plate, pump display at zero, pumping, final display; the driver ticks each, Stop opens
+  after the last; each tick's second is kept in `video_checklist` as [{key, at_s}] and shown on
+  `/fuel/:id` as bookmarks that open the video there), both through `get_driver_settings()`;
   an interrupted recording is kept and continued in up to 3 pieces, `video_segments` +
   `video_interrupted`, never thrown away without asking); the files wait in the app's folder
   and go up through the queue as `video_upload` ops, one per piece (`lib/videoStore.ts`:

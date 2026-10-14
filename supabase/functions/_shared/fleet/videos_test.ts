@@ -1,6 +1,6 @@
 // Fuel videos (Phase 6, Part 3): the card's words and link rule, the prune selection. Pure.
 import { assertEquals } from "@std/assert";
-import { pruneDue, segmentsOf, videoCard, videoStatusOf } from "./videos.ts";
+import { clockOf, markLabel, marksOf, pruneDue, segmentsOf, timelineOf, videoCard, videoStatusOf } from "./videos.ts";
 
 const base = {
   id: "f1",
@@ -24,9 +24,40 @@ Deno.test("the card: an uploaded video carries its link, duration, size and the 
     segments: [{ url: "https://x/signed", duration_s: 47, bytes: 16_000_000 }],
     interrupted: undefined,
     checklist: ["pump", "odometer"],
+    marks: undefined,
+    timeline: undefined,
     uploaded_at: "2026-10-14 10:30",
     note: undefined,
   });
+});
+
+Deno.test("the card: the steps ticked with their seconds become labelled bookmarks and a timeline; older rows keep the keys alone", () => {
+  const items = [
+    { key: "plate", short: "Plate", en: "Number plate", si: "" },
+    { key: "zero", short: "Zero", en: "Pump display at zero before pumping", si: "" },
+    { key: "pumping", en: "Pumping", si: "" },
+    { key: "final", short: "Final", en: "Final pump display: litres and amount", si: "" },
+  ];
+  const ticked = { ...base, video_checklist: [{ key: "plate", at_s: 4 }, { key: "zero", at_s: 11.4 }, { key: "pumping", at_s: 15 }, { key: "final", at_s: 232 }, { key: "fuel_cap", at_s: 240 }] };
+  const card = videoCard(ticked, links, undefined, items);
+  assertEquals(card.checklist, ["plate", "zero", "pumping", "final", "fuel_cap"]);
+  assertEquals(card.marks, [
+    { key: "plate", label: "Plate", at_s: 4, clock: "0:04" },
+    { key: "zero", label: "Zero", at_s: 11, clock: "0:11" },
+    { key: "pumping", label: "Pumping", at_s: 15, clock: "0:15" },
+    { key: "final", label: "Final", at_s: 232, clock: "3:52" },
+    { key: "fuel_cap", label: "Fuel cap", at_s: 240, clock: "4:00" },
+  ]);
+  assertEquals(card.timeline, "Plate 0:04 · Zero 0:11 · Pumping 0:15 · Final 3:52 · Fuel cap 4:00");
+  // A row from before the steps had seconds: the keys, no bookmarks; a broken entry is skipped.
+  assertEquals(marksOf({ video_checklist: ["pump", { key: "x", at_s: -3 }, { nope: 1 }, { key: "y", at_s: "7" }] }), [{ key: "pump" }, { key: "x", at_s: undefined }, { key: "y", at_s: undefined }]);
+  assertEquals(videoCard({ ...base, video_checklist: ["pump"] }, links, undefined, items).marks, undefined);
+  assertEquals(videoCard({ ...base, video_checklist: null }, links, undefined, items).checklist, undefined);
+  assertEquals(markLabel("pumping", items), "Pumping");
+  assertEquals(markLabel("odometer", items), "Odometer");
+  assertEquals(timelineOf(undefined), undefined);
+  assertEquals(clockOf(0), "0:00");
+  assertEquals(clockOf(725), "12:05");
 });
 
 Deno.test("the card: an interrupted fill has every piece with its link, and says so", () => {

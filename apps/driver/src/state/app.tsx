@@ -695,7 +695,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             video_status: 'recorded',
             video_duration_s: fuel.video.durationS,
             video_bytes: fuel.video.bytes,
-            video_checklist: fuel.video.checklist,
+            video_checklist: fuel.video.marks,
             video_segments: videoSegmentRows(fuel.video, id, current.id),
             video_interrupted: fuel.video.interrupted,
           }

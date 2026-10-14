@@ -611,6 +611,24 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
   month and answers `keep_months`.
 - The Fuel tab says "Uploading 38 MB · 12 %" for the whole fill (every piece still on the
   phone counted); "Upload videos on Wi-Fi only" stays off by default.
+- Addition (same branch, 14 October): the checklist is an ordered sequence of steps. The
+  default, from the setting `fuel_video_checklist` (migration
+  `20261014210000_fuel_video_steps` replaces the seeded value where it was never edited):
+  1 Number plate, 2 Pump display at zero before pumping, 3 Pumping, 4 Final pump display
+  (litres and amount), each with a `short` word for the office ("Plate", "Zero", "Pumping",
+  "Final"; the English text when missing). The recording screen shows the current step large
+  with "Done · next step"; a double tap never ticks two; Stop is disabled until the last step
+  is ticked and the fill is 30 s (`MIN_VIDEO_SECONDS`, "Stop opens after the last step" /
+  "At least 30 s" under the button). Each tick's second in the fill (across the pieces) is
+  saved in `fuel_logs.video_checklist` as [{key, at_s}] (older rows keep their list of keys);
+  `list_fuel` and `task_detail` answer `video.checklist` (the keys, unchanged), `video.marks`
+  [{key, label, at_s, clock}] and `video.timeline` ("Plate 0:04 · Zero 0:11 · Pumping 0:15 ·
+  Final 3:52"). On `/fuel/:id` the bookmarks sit under the video; a click opens the video
+  there (the right piece, then the second within it: `pieceAt`). Settings → Fleet ("Fuel video
+  steps") orders them (Move up / down), names the short word, adds and removes. An interrupted
+  fill continues at the next step; "Use this video" waits for the steps and the 30 s unless no
+  more pieces can be added (never a retake of a fill that happened); leaving with pieces that
+  are not complete asks "Continue recording / Discard", and a piece under way is kept first.
 
 ## 8. Part 4: site lists and place search
 
@@ -792,9 +810,21 @@ from the web only), cached per leg 30 days, `google_roads_daily_cap` 150 through
 | `fuel.record` | Record video | වීඩියෝව පටිගත කරන්න |
 | `fuel.retake` | Retake | නැවත පටිගත කරන්න |
 | `fuel.required` | A video of the fill is needed. | ඉන්ධන පිරවීමේ වීඩියෝවක් අවශ්‍යයි. |
-| `fuel.checklist.pump` | Pump display: litres and amount | පොම්ප තිරය: ලීටර් සහ මුදල |
-| `fuel.checklist.odometer` | Odometer | ඔඩෝමීටරය |
-| `fuel.checklist.plate` | Number plate | අංක තහඩුව |
+| `fuel.checklist.plate` (step 1, the setting's default) | Number plate | අංක තහඩුව |
+| `fuel.checklist.zero` (step 2) | Pump display at zero before pumping | පොම්ප කිරීමට පෙර පොම්ප තිරය බිංදුවේ |
+| `fuel.checklist.pumping` (step 3) | Pumping | පොම්ප කරමින් |
+| `fuel.checklist.final` (step 4) | Final pump display: litres and amount | අවසාන පොම්ප තිරය: ලීටර් සහ මුදල |
+| `fuel.recordHint` | Show each step in turn and tick it. No sound is recorded. | එක් එක් පියවර පිළිවෙළින් පෙන්වා හරි ලකුණ තබන්න. ශබ්දය පටිගත නොවේ. |
+| `fuel.maxLength` | At least 30 s · up to 12 minutes | අවම තත්පර 30 · උපරිම විනාඩි 12 |
+| `fuel.step` | Step {n} of {total} | පියවර {n} / {total} |
+| `fuel.tickStep` | Done · next step | හරි · ඊළඟ පියවර |
+| `fuel.allSteps` | All steps done. Tap Stop when the pump has stopped. | සියලු පියවර අවසන්. පොම්පය නැවතුණු විට නවත්වන්න තට්ටු කරන්න. |
+| `fuel.stopAfterSteps` | Stop opens after the last step | අවසාන පියවරෙන් පසු නවත්වන්න විවෘත වේ |
+| `fuel.minLength` | At least 30 s | අවම තත්පර 30 |
+| `fuel.stepsLeft` | {n} steps still to show | තව පියවර {n} ක් පෙන්විය යුතුයි |
+| `fuel.notComplete` | The video is not complete: {reason} | වීඩියෝව සම්පූර්ණ නැත: {reason} |
+| `fuel.discardPieces` | Discard | ඉවත දමන්න |
+| `fuel.tooShort` | Record at least 30 seconds. | අවම වශයෙන් තත්පර 30 ක් පටිගත කරන්න. |
 | `fuel.recorded` | Recorded · {duration} · {size} | පටිගත කළා · {duration} · {size} |
 | `fuel.uploading` | Uploading {pct} % · continues when there is signal | උඩුගත වෙමින් {pct} % · සංඥාව ලැබුණු විට ඉදිරියට යයි |
 | `fuel.waitingWifi` | Waiting for Wi-Fi | Wi-Fi සඳහා රැඳී සිටී |

@@ -49,7 +49,18 @@ export function videoChip(status: VideoCard["status"], interrupted?: boolean): s
   return { uploaded: "Video", recorded: "On the phone", uploading: "Uploading", failed: "Upload failed", none: "No video", pruned: "Pruned" }[status] ?? status;
 }
 
-/** The checklist items the driver ticked, by their English names when the setting knows them. */
+/** Which piece a second of the fill falls in, and the second within it: the pieces play one after another. */
+export function pieceAt(atS: number, pieces: { duration_s?: number }[]): { piece: number; offset: number } {
+  let start = 0;
+  for (let i = 0; i < pieces.length; i++) {
+    const d = pieces[i]?.duration_s ?? 0;
+    if (atS < start + d || i === pieces.length - 1) return { piece: i, offset: Math.max(0, atS - start) };
+    start += d;
+  }
+  return { piece: 0, offset: Math.max(0, atS) };
+}
+
+/** The checklist items the driver ticked, by their English names when the setting knows them (rows from before the steps had seconds). */
 export function checklistWords(ticked: string[] | undefined, items: { key: string; en: string }[] | undefined): string {
   if (!ticked?.length) return "";
   return ticked.map((k) => items?.find((i) => i.key === k)?.en ?? k).join(", ");

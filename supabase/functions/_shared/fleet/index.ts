@@ -108,7 +108,8 @@ export const INSTRUCTIONS = [
   "decline). update_task changes a task's time, driver, vehicle, title, passengers, contact or notes with plan_version; the driver " +
   "hears what changed. availability(at, until) says who is on duty, off duty or on a task, and which vehicles are free.",
   "Every fuel fill has a silent video from the driver's phone (list_fuel: the month's entries with 1-hour video links; task_detail " +
-  "shows a task's fills). Videos are kept 12 months. The checklist the driver ticks while recording is the setting fuel_video_checklist.",
+  "shows a task's fills, each with marks: the steps the driver ticked and the second of each). Videos are kept 12 months (fuel_video_keep_months). " +
+  "The steps the driver shows in order while recording are the setting fuel_video_checklist (plate, zero, pumping, final by default).",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",

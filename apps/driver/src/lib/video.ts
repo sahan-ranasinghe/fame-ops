@@ -1,10 +1,12 @@
 // Fuel videos on the phone (Phase 6, Part 3 and 3b): a recording covers the
-// whole fill, from the first frame to the pump stopping. A recording the phone
-// interrupted (a call, the app sent to the back, the camera taken away) is
-// kept as a piece; the driver may continue in another piece, up to three; the
-// pieces go up as one fill marked interrupted. Each piece lives in the app's
-// own folder until the queue has uploaded it, then it is deleted. The
-// recording screen hands its result back through a small in-memory holder.
+// whole fill, from the first frame to the pump stopping, with the office's
+// steps ticked in order (the second of each tick is kept: the office's
+// bookmarks). A recording the phone interrupted (a call, the app sent to the
+// back, the camera taken away) is kept as a piece; the driver may continue in
+// another piece, up to three; the pieces go up as one fill marked interrupted.
+// Each piece lives in the app's own folder until the queue has uploaded it,
+// then it is deleted. The recording screen hands its result back through a
+// small in-memory holder.
 
 import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
@@ -18,8 +20,10 @@ export const VIDEO_CONTENT_TYPE = 'video/mp4';
 export const MAX_VIDEO_SECONDS = 12 * 60;
 /** The countdown shows when this much is left. */
 export const COUNTDOWN_SECONDS = 30;
-/** Shorter than this is not a recording. */
-export const MIN_VIDEO_SECONDS = 3;
+/** A fill shorter than this is not a recording (Stop opens at 30 s, after the last step). */
+export const MIN_VIDEO_SECONDS = 30;
+/** A piece shorter than this is nothing (the camera stopped at once): not kept. */
+export const MIN_PIECE_SECONDS = 1;
 /** An interrupted fill may be continued this many times in all. */
 export const MAX_SEGMENTS = 3;
 
@@ -34,6 +38,12 @@ export interface VideoSegment {
   bytes: number;
 }
 
+/** One step ticked while recording, at this second of the fill (across the pieces). A type, not an interface: it is stored as Json. */
+export type VideoMark = {
+  key: string;
+  at_s: number;
+};
+
 export interface RecordedVideo {
   /** Also the id of the fuel log it belongs to, once saved. */
   id: string;
@@ -45,8 +55,8 @@ export interface RecordedVideo {
   recordedAt: string;
   /** The recording was interrupted and continued (more than one piece). */
   interrupted: boolean;
-  /** The checklist items the driver ticked while recording. */
-  checklist: string[];
+  /** The steps the driver ticked while recording, in order, with the second of each. */
+  marks: VideoMark[];
 }
 
 function videosFolder(): Directory {
@@ -63,7 +73,7 @@ export function keepSegment(tempUri: string, durationS: number): VideoSegment {
 }
 
 /** The pieces as one recording. */
-export function assembleVideo(segments: VideoSegment[], checklist: string[]): RecordedVideo {
+export function assembleVideo(segments: VideoSegment[], marks: VideoMark[]): RecordedVideo {
   return {
     id: Crypto.randomUUID(),
     segments,
@@ -71,7 +81,7 @@ export function assembleVideo(segments: VideoSegment[], checklist: string[]): Re
     bytes: segments.reduce((sum, s) => sum + s.bytes, 0),
     recordedAt: new Date().toISOString(),
     interrupted: segments.length > 1,
-    checklist,
+    marks,
   };
 }
 

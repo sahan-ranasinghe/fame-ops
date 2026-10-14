@@ -88,15 +88,16 @@ export interface ChecklistItem {
 export interface DriverSettings {
   shift_start: string;
   shift_days: number[];
-  /** What to show while recording a fuel video (Phase 6, Part 3), in both languages. */
+  /** The steps to show in order while recording a fuel video (Phase 6, Part 3 and 3b), in both languages; the last unlocks Stop. */
   fuel_video_checklist: ChecklistItem[];
   /** The recording quality the office chose: 480p (default) or 720p. */
   fuel_video_quality: '480p' | '720p';
 }
 export const DEFAULT_CHECKLIST: ChecklistItem[] = [
-  { key: 'pump', en: 'Pump display: litres and amount', si: 'පොම්ප තිරය: ලීටර් සහ මුදල' },
-  { key: 'odometer', en: 'Odometer', si: 'ඔඩෝමීටරය' },
   { key: 'plate', en: 'Number plate', si: 'අංක තහඩුව' },
+  { key: 'zero', en: 'Pump display at zero before pumping', si: 'පොම්ප කිරීමට පෙර පොම්ප තිරය බිංදුවේ' },
+  { key: 'pumping', en: 'Pumping', si: 'පොම්ප කරමින්' },
+  { key: 'final', en: 'Final pump display: litres and amount', si: 'අවසාන පොම්ප තිරය: ලීටර් සහ මුදල' },
 ];
 export const DEFAULT_DRIVER_SETTINGS: DriverSettings = { shift_start: '08:00', shift_days: [1, 2, 3, 4, 5, 6], fuel_video_checklist: DEFAULT_CHECKLIST, fuel_video_quality: '480p' };
 

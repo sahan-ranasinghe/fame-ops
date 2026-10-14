@@ -35,7 +35,7 @@ export interface Settings {
   /** The driver app's "At work? Switch On duty" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
   shift_start: string;
   shift_days: number[];
-  /** The items the driver ticks while recording a fuel video, in both languages (Phase 6, Part 3). */
+  /** The steps the driver shows in order while recording a fuel video, ticked one by one (Phase 6, Part 3 and 3b); the last unlocks Stop. */
   fuel_video_checklist: ChecklistItem[];
   /** The recording quality: 480p (about 1.0 Mbps, the default) or 720p (about 1.5 Mbps). */
   fuel_video_quality: VideoQuality;
@@ -49,6 +49,8 @@ export interface ChecklistItem {
   key: string;
   en: string;
   si: string;
+  /** The word on the office's timeline ("Plate 0:04"); the English text when missing. */
+  short?: string;
 }
 
 export type MapMatchingProvider = "none" | "google_roads" | "osrm";
@@ -73,9 +75,10 @@ export const SETTINGS_DEFAULTS: Settings = {
   shift_start: "08:00",
   shift_days: [1, 2, 3, 4, 5, 6],
   fuel_video_checklist: [
-    { key: "pump", en: "Pump display: litres and amount", si: "පොම්ප තිරය: ලීටර් සහ මුදල" },
-    { key: "odometer", en: "Odometer", si: "ඔඩෝමීටරය" },
-    { key: "plate", en: "Number plate", si: "අංක තහඩුව" },
+    { key: "plate", short: "Plate", en: "Number plate", si: "අංක තහඩුව" },
+    { key: "zero", short: "Zero", en: "Pump display at zero before pumping", si: "පොම්ප කිරීමට පෙර පොම්ප තිරය බිංදුවේ" },
+    { key: "pumping", short: "Pumping", en: "Pumping", si: "පොම්ප කරමින්" },
+    { key: "final", short: "Final", en: "Final pump display: litres and amount", si: "අවසාන පොම්ප තිරය: ලීටර් සහ මුදල" },
   ],
   fuel_video_quality: "480p",
   fuel_video_keep_months: 12,
@@ -100,7 +103,7 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   shift_start: "The driver app's shift nudge (\"At work? Switch On duty\"): the time of day, HH:MM, shown only to a driver who is off duty",
   shift_days: "… on these days (0 = Sunday … 6 = Saturday); empty = never",
   fuel_video_checklist:
-    "What the driver shows while recording a fuel video: a list of items { key, en, si } (1 to 8), ticked on the phone and kept with the entry",
+    "The steps the driver shows in order while recording a fuel video: a list of 1 to 8 { key, en, si, short? }, ticked one by one on the phone (the last unlocks Stop); each tick's second is kept with the entry and shown as a bookmark; short is the word on the office's timeline",
   fuel_video_quality: "The fuel video's quality on the phone: 480p (about 1.0 Mbps, a 5-minute fill is about 38 MB) or 720p (about 1.5 Mbps, about 56 MB)",
   fuel_video_keep_months: "How many months fuel videos are kept before the monthly prune removes the files: 6 or 12",
 };
@@ -158,17 +161,18 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       return [...new Set(value as number[])].sort((a, b) => a - b);
     }
     case "fuel_video_checklist": {
-      if (!Array.isArray(value) || value.length < 1 || value.length > 8) throw new ToolError("fuel_video_checklist: a list of 1 to 8 items { key, en, si }.");
+      if (!Array.isArray(value) || value.length < 1 || value.length > 8) throw new ToolError("fuel_video_checklist: a list of 1 to 8 steps { key, en, si, short? }, in order.");
       const keys = new Set<string>();
       return value.map((item, i) => {
         const it = (item ?? {}) as Record<string, unknown>;
         const key = typeof it.key === "string" ? it.key.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 30) : "";
         const en = typeof it.en === "string" ? it.en.trim().slice(0, 60) : "";
         const si = typeof it.si === "string" ? it.si.trim().slice(0, 60) : "";
-        if (!key || !en) throw new ToolError(`fuel_video_checklist: item ${i + 1} needs a key and an English text (si may repeat the English).`);
+        const short = typeof it.short === "string" ? it.short.trim().slice(0, 20) : "";
+        if (!key || !en) throw new ToolError(`fuel_video_checklist: step ${i + 1} needs a key and an English text (si may repeat the English).`);
         if (keys.has(key)) throw new ToolError(`fuel_video_checklist: the key "${key}" is used twice.`);
         keys.add(key);
-        return { key, en, si: si || en };
+        return short ? { key, en, si: si || en, short } : { key, en, si: si || en };
       });
     }
     case "fuel_video_quality":

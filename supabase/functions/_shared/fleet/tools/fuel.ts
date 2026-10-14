@@ -6,6 +6,7 @@ import { fetchAll, unwrap } from "../db.ts";
 import { findDriver, findVehicle, loadRefs } from "../fleet.ts";
 import { centsToLkr } from "../format.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
+import { loadSettings } from "../settings.ts";
 import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
 import { tool, zMonth, zText } from "../tool.ts";
 import { VIDEO_LINK_NOTE, videoCard, videoLinks, videoStatusOf } from "../videos.ts";
@@ -16,8 +17,9 @@ export const listFuel = tool({
   description:
     "Every fuel entry of a month (newest first): the vehicle, the driver, litres, LKR, the odometer, the receipt photo link, and the " +
     "video of the fill: its status (uploaded with 1-hour links, one per piece when the recording was interrupted and continued; " +
-    "uploading or recorded on the phone; failed; pruned after the keep months; none), its length, size and the checklist items the " +
-    "driver ticked. Totals for the month.",
+    "uploading or recorded on the phone; failed; pruned after the keep months; none), its length, size, and the steps the driver " +
+    "ticked while recording with the second of each (marks: bookmarks into the video; timeline: \"Plate 0:04 · Zero 0:11 · …\"). " +
+    "Totals for the month.",
   readOnly: true,
   input: z.object({
     month: zMonth.optional().describe("YYYY-MM. Default: this month"),
@@ -27,7 +29,7 @@ export const listFuel = tool({
   async run({ month, vehicle, driver }, { db, now }) {
     const which = month ?? colomboDate(now).slice(0, 7);
     const { from, to } = monthRange(which);
-    const refs = await loadRefs(db);
+    const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     const onlyVehicle = vehicle ? findVehicle(refs, vehicle) : null;
     const onlyDriver = driver ? findDriver(refs, driver) : null;
     const logs = await fetchAll((a, b) => {
@@ -51,7 +53,7 @@ export const listFuel = tool({
       lkr: centsToLkr(l.amount_cents),
       odometer_km: l.odometer_km,
       receipt: photoOrNote(photos, l.receipt_photo_id),
-      video: videoCard(l, videos, l.video_uploaded_at ? colomboDateTime(l.video_uploaded_at) : undefined),
+      video: videoCard(l, videos, l.video_uploaded_at ? colomboDateTime(l.video_uploaded_at) : undefined, settings.fuel_video_checklist),
     }));
     const totals = {
       entries: entries.length,

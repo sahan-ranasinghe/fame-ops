@@ -5,7 +5,7 @@
 
 import type { Db, Row } from "./db.ts";
 import { unwrap } from "./db.ts";
-import { loadSettings } from "./settings.ts";
+import { type ChecklistItem, loadSettings } from "./settings.ts";
 
 export const VIDEO_BUCKET = "fuel-videos";
 const ONE_HOUR_SECONDS = 60 * 60;
@@ -24,6 +24,16 @@ export interface VideoSegment {
   bytes?: number;
 }
 
+/** One step the driver ticked while recording, at this second of the fill: a bookmark for the office. */
+export interface VideoMark {
+  key: string;
+  /** The step's short word (the setting's `short`, else its English text, else the key). */
+  label: string;
+  at_s: number;
+  /** "0:04" */
+  clock: string;
+}
+
 export interface VideoCard {
   status: VideoStatus;
   /** The whole fill's length and size (every piece). */
@@ -35,7 +45,12 @@ export interface VideoCard {
   segments?: { url?: string; duration_s?: number; bytes?: number }[];
   /** The recording was interrupted and continued: the office should expect a break between the pieces. */
   interrupted?: boolean;
+  /** The keys of the steps ticked, in order. */
   checklist?: string[];
+  /** The steps with the second of each (rows written since the steps became a sequence): bookmarks. */
+  marks?: VideoMark[];
+  /** "Plate 0:04 · Zero 0:11 · Pumping 0:15 · Final 3:52" */
+  timeline?: string;
   uploaded_at?: string;
   /** "Uploading on the phone", "No video", "Pruned after 12 months", … */
   note?: string;
@@ -50,6 +65,43 @@ export function segmentsOf(log: Pick<FuelLog, "video_path" | "video_segments" | 
   });
   if (parsed.length > 0) return parsed;
   return log.video_path ? [{ path: log.video_path, duration_s: log.video_duration_s ?? undefined, bytes: log.video_bytes ?? undefined }] : [];
+}
+
+/** The steps the driver ticked: the stored [{key, at_s}], or the keys alone from an older row. */
+export function marksOf(log: Pick<FuelLog, "video_checklist">): { key: string; at_s?: number }[] {
+  const list = Array.isArray(log.video_checklist) ? (log.video_checklist as unknown[]) : [];
+  return list.flatMap((x) => {
+    if (typeof x === "string") return [{ key: x }];
+    const m = x as { key?: unknown; at_s?: unknown } | null;
+    if (!m || typeof m.key !== "string") return [];
+    const at = typeof m.at_s === "number" && Number.isFinite(m.at_s) && m.at_s >= 0 ? Math.round(m.at_s) : undefined;
+    return [{ key: m.key, at_s: at }];
+  });
+}
+
+/** "0:04", "3:52" */
+export function clockOf(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+/** The step's word on the timeline: the setting's short, else its English text, else the key in words ("fuel_cap" → "Fuel cap"). */
+export function markLabel(key: string, items: ChecklistItem[] | undefined): string {
+  const item = items?.find((i) => i.key === key);
+  if (item) return item.short || item.en;
+  const words = key.replace(/_/g, " ").trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : key;
+}
+
+/** The bookmarks of a fill with their words, or none when the row has only keys (older rows). */
+export function marksWithLabels(log: Pick<FuelLog, "video_checklist">, items: ChecklistItem[] | undefined): VideoMark[] | undefined {
+  const marks = marksOf(log).flatMap((m) => m.at_s === undefined ? [] : [{ key: m.key, label: markLabel(m.key, items), at_s: m.at_s, clock: clockOf(m.at_s) }]);
+  return marks.length > 0 ? marks : undefined;
+}
+
+/** "Plate 0:04 · Zero 0:11 · Pumping 0:15 · Final 3:52" */
+export function timelineOf(marks: VideoMark[] | undefined): string | undefined {
+  return marks?.length ? marks.map((m) => `${m.label} ${m.clock}`).join(" · ") : undefined;
 }
 
 const NOTE: Record<VideoStatus, string | undefined> = {
@@ -69,11 +121,13 @@ export function videoStatusOf(log: Pick<FuelLog, "video_status">): VideoStatus {
 
 type VideoLog = Pick<FuelLog, "id" | "video_path" | "video_status" | "video_duration_s" | "video_bytes" | "video_checklist" | "video_uploaded_at" | "video_segments" | "video_interrupted">;
 
-/** The video part of a fuel entry, with its links when there are any. Pure given the links (path → url). */
-export function videoCard(log: VideoLog, links: Map<string, string> | undefined, uploadedAt?: string): VideoCard {
+/** The video part of a fuel entry, with its links when there are any. Pure given the links (path → url) and the steps setting (the words). */
+export function videoCard(log: VideoLog, links: Map<string, string> | undefined, uploadedAt?: string, items?: ChecklistItem[]): VideoCard {
   const status = videoStatusOf(log);
   const pieces = segmentsOf(log);
   const first = pieces[0]?.path ? links?.get(pieces[0].path) : undefined;
+  const keys = marksOf(log).map((m) => m.key);
+  const marks = marksWithLabels(log, items);
   return {
     status,
     duration_s: log.video_duration_s ?? undefined,
@@ -83,7 +137,9 @@ export function videoCard(log: VideoLog, links: Map<string, string> | undefined,
       ? pieces.map((p) => ({ url: links?.get(p.path), duration_s: p.duration_s, bytes: p.bytes }))
       : undefined,
     interrupted: log.video_interrupted || pieces.length > 1 ? true : undefined,
-    checklist: Array.isArray(log.video_checklist) ? (log.video_checklist as unknown[]).filter((x): x is string => typeof x === "string") : undefined,
+    checklist: keys.length > 0 ? keys : undefined,
+    marks,
+    timeline: timelineOf(marks),
     uploaded_at: uploadedAt,
     note: status === "uploaded" && !first ? "The file is not in storage (not uploaded yet, or removed)" : NOTE[status],
   };

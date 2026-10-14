@@ -117,22 +117,38 @@ export function FleetSettings() {
         </form>
 
         <form className="card card-b form" data-testid="checklist-settings" onSubmit={(ev) => { ev.preventDefault(); void save("fuel_video_checklist", draft.fuel_video_checklist ?? []); }}>
-          <h2>Fuel video checklist</h2>
-          <p className="muted small" style={{ margin: 0 }}>{data.about.fuel_video_checklist}. The driver ticks these while recording; the office sees what was ticked on the Fuel page.</p>
-          {(draft.fuel_video_checklist ?? []).map((item, i) => (
-            <div className="grid2" key={i} data-testid="checklist-row">
-              <div className="field"><label htmlFor={`fs-ck-en-${i}`}>English</label>
-                <input id={`fs-ck-en-${i}`} maxLength={60} value={item.en} onChange={(e) => setDraft({ ...draft, fuel_video_checklist: (draft.fuel_video_checklist ?? []).map((x, j) => (j === i ? { ...x, en: e.target.value, key: x.key || e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30) } : x)) })} /></div>
-              <div className="field"><label htmlFor={`fs-ck-si-${i}`}>Sinhala</label>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input id={`fs-ck-si-${i}`} maxLength={60} value={item.si} onChange={(e) => setDraft({ ...draft, fuel_video_checklist: (draft.fuel_video_checklist ?? []).map((x, j) => (j === i ? { ...x, si: e.target.value } : x)) })} />
-                  <button type="button" className="btn small" aria-label={`Remove item ${i + 1}`} onClick={() => setDraft({ ...draft, fuel_video_checklist: (draft.fuel_video_checklist ?? []).filter((_, j) => j !== i) })}>Remove</button>
+          <h2>Fuel video steps</h2>
+          <p className="muted small" style={{ margin: 0 }}>{data.about.fuel_video_checklist}. The driver shows them in this order, ticking each to move on; Stop opens after the last one. The short word names the bookmark on the Fuel page.</p>
+          {(draft.fuel_video_checklist ?? []).map((item, i, list) => {
+            const setList = (next: typeof list) => setDraft({ ...draft, fuel_video_checklist: next });
+            const patch = (p: Partial<typeof item>) => setList(list.map((x, j) => (j === i ? { ...x, ...p } : x)));
+            const swap = (k: number) => {
+              const next = [...list];
+              const a = next[i];
+              const b = next[k];
+              if (!a || !b) return;
+              next[i] = b;
+              next[k] = a;
+              setList(next);
+            };
+            return (
+              <div className="grid2" key={i} data-testid="checklist-row">
+                <div className="field"><label htmlFor={`fs-ck-en-${i}`}>Step {i + 1} · English</label>
+                  <input id={`fs-ck-en-${i}`} maxLength={60} value={item.en} onChange={(e) => patch({ en: e.target.value, key: item.key || e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, "_").slice(0, 30) })} /></div>
+                <div className="field"><label htmlFor={`fs-ck-si-${i}`}>Sinhala</label>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input id={`fs-ck-si-${i}`} maxLength={60} value={item.si} onChange={(e) => patch({ si: e.target.value })} style={{ flex: "1 1 160px" }} />
+                    <input aria-label={`Short word ${i + 1}`} placeholder="Short word" maxLength={20} value={item.short ?? ""} onChange={(e) => patch({ short: e.target.value })} style={{ width: 110 }} />
+                    <button type="button" className="btn small" aria-label={`Move up ${i + 1}`} disabled={i === 0} onClick={() => swap(i - 1)}>↑</button>
+                    <button type="button" className="btn small" aria-label={`Move down ${i + 1}`} disabled={i === list.length - 1} onClick={() => swap(i + 1)}>↓</button>
+                    <button type="button" className="btn small" aria-label={`Remove step ${i + 1}`} onClick={() => setList(list.filter((_, j) => j !== i))}>Remove</button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <div className="acts">
-            <button type="button" className="btn" disabled={(draft.fuel_video_checklist ?? []).length >= 8} onClick={() => setDraft({ ...draft, fuel_video_checklist: [...(draft.fuel_video_checklist ?? []), { key: "", en: "", si: "" }] })}>Add item</button>
+            <button type="button" className="btn" disabled={(draft.fuel_video_checklist ?? []).length >= 8} onClick={() => setDraft({ ...draft, fuel_video_checklist: [...(draft.fuel_video_checklist ?? []), { key: "", en: "", si: "" }] })}>Add step</button>
             <button className="btn dark" type="submit" disabled={busy !== null || !changed("fuel_video_checklist")}>Save</button>
           </div>
         </form>

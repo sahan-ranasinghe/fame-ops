@@ -1096,7 +1096,7 @@ export const taskDetail = tool({
           odometer_km: f.odometer_km,
           at: colomboDateTime(f.logged_at),
           receipt_photo: photoOrNote(links, f.receipt_photo_id),
-          video: videoCard(f, videos, f.video_uploaded_at ? colomboDateTime(f.video_uploaded_at) : undefined),
+          video: videoCard(f, videos, f.video_uploaded_at ? colomboDateTime(f.video_uploaded_at) : undefined, settings.fuel_video_checklist),
         })),
         vehicle_reports: reports.map((r) => ({
           id: r.id,

@@ -928,13 +928,15 @@ check((c1, c2, code) == (201, 201, 200) and row[0]["km"] == 51, "driver logs end
 vid = str(uuid.uuid4())
 vpath = f"{ME}/{iso(today)}/{vid}.mp4"
 c3, _ = app.post("fuel_logs", {"id": vid, "vehicle_id": V1, "employee_id": ME, "task_id": T1, "litres": 10, "amount_cents": 370000,
-                               "video_path": vpath, "video_status": "recorded", "video_duration_s": 5, "video_bytes": len(TINY_MP4), "video_checklist": ["pump", "plate"]})
+                               "video_path": vpath, "video_status": "recorded", "video_duration_s": 5, "video_bytes": len(TINY_MP4),
+                               "video_checklist": [{"key": "plate", "at_s": 1}, {"key": "zero", "at_s": 2}, {"key": "pumping", "at_s": 3}, {"key": "final", "at_s": 4}]})
 check(c3 == 201, "driver saves a second fill with its recorded video (status recorded)", f"{c3}")
 lf = tool("list_fuel")
 mine = next(e for e in lf["entries"] if e["id"] == vid)
-check(mine["video"]["status"] == "recorded" and "url" not in mine["video"] and mine["video"]["note"].startswith("Recorded") and mine["video"]["checklist"] == ["pump", "plate"]
+check(mine["video"]["status"] == "recorded" and "url" not in mine["video"] and mine["video"]["note"].startswith("Recorded") and mine["video"]["checklist"] == ["plate", "zero", "pumping", "final"]
+      and mine["video"]["timeline"] == "Plate 0:01 · Zero 0:02 · Pumping 0:03 · Final 0:04" and mine["video"]["marks"][3] == {"key": "final", "label": "Final", "at_s": 4, "clock": "0:04"}
       and lf["totals"]["videos_waiting"] == 1 and lf["totals"]["videos_missing"] == 1 and lf["totals"]["entries"] == 2,
-      "list_fuel: the video is still on the phone (no link), the earlier fill has none", json.dumps(mine)[:300])
+      "list_fuel: the video is still on the phone (no link), the steps ticked are a timeline with bookmarks, the earlier fill has none", json.dumps(mine)[:400])
 code, loc = app.tus_create("fuel-videos", vpath, len(TINY_MP4), "video/mp4")
 check(code == 201 and isinstance(loc, str) and "/upload/resumable/" in loc, "the resumable upload is created in the driver's own folder", f"{code} {loc}")
 code, off = app.tus_patch(loc, 0, TINY_MP4)
@@ -953,8 +955,9 @@ check(mine["video"]["status"] == "uploaded" and mine["video"]["url"].startswith(
 code, body = http("GET", mine["video"]["url"].replace("http://kong:8000", API), raw=True)
 check(code == 200 and body == TINY_MP4, "a signed video link really returns the file", f"{code}")
 td1v = tool("task_detail", {"task_id": T1})
-check(sorted(f["video"]["status"] for f in td1v["fuel"]) == ["none", "uploaded"] and next(f for f in td1v["fuel"] if f["id"] == vid)["video"]["url"].startswith("http"),
-      "task_detail: each fill carries its video (one none, one uploaded with a link)", json.dumps([f.get("video") for f in td1v["fuel"]])[:300])
+check(sorted(f["video"]["status"] for f in td1v["fuel"]) == ["none", "uploaded"] and next(f for f in td1v["fuel"] if f["id"] == vid)["video"]["url"].startswith("http")
+      and next(f for f in td1v["fuel"] if f["id"] == vid)["video"]["timeline"].startswith("Plate 0:01"),
+      "task_detail: each fill carries its video (one none, one uploaded with a link and its timeline)", json.dumps([f.get("video") for f in td1v["fuel"]])[:300])
 ms = tool("mileage_summary", {"vehicle": "cab4521"})
 check(ms["vehicles"][0]["fuel_entries"] == 2 and ms["vehicles"][0]["fuel_videos"] == 1, "mileage_summary counts the fills with an uploaded video", json.dumps(ms["vehicles"][0])[:200])
 # An interrupted fill in two pieces (Part 3b): one row, two files, one link per piece, marked interrupted.
@@ -962,6 +965,7 @@ vid2 = str(uuid.uuid4())
 p1, p2 = f"{ME}/{iso(today)}/{vid2}.mp4", f"{ME}/{iso(today)}/{vid2}-2.mp4"
 c4, _ = app.post("fuel_logs", {"id": vid2, "vehicle_id": V1, "employee_id": ME, "litres": 40, "amount_cents": 1480000, "video_path": p1, "video_status": "recorded",
                                "video_duration_s": 312, "video_bytes": 2 * len(TINY_MP4), "video_interrupted": True,
+                               "video_checklist": [{"key": "plate", "at_s": 4}, {"key": "zero", "at_s": 11}, {"key": "pumping", "at_s": 15}, {"key": "final", "at_s": 250}],
                                "video_segments": [{"path": p1, "duration_s": 200, "bytes": len(TINY_MP4)}, {"path": p2, "duration_s": 112, "bytes": len(TINY_MP4)}]})
 for pth in (p1, p2):
     code, loc = app.tus_create("fuel-videos", pth, len(TINY_MP4), "video/mp4")
@@ -970,8 +974,9 @@ code, _ = app.patch("fuel_logs?id=eq." + vid2, {"video_status": "uploaded", "vid
 two = next(e for e in tool("list_fuel")["entries"] if e["id"] == vid2)
 check(c4 == 201 and code == 200 and two["video"]["interrupted"] is True and len(two["video"]["segments"]) == 2
       and all(seg["url"].startswith("http") for seg in two["video"]["segments"]) and two["video"]["segments"][1]["duration_s"] == 112
-      and two["video"]["duration_s"] == 312 and tool("list_fuel")["totals"]["interrupted"] == 1,
-      "list_fuel: an interrupted fill carries its two pieces with a link each, and is counted", json.dumps(two["video"])[:400])
+      and two["video"]["duration_s"] == 312 and tool("list_fuel")["totals"]["interrupted"] == 1
+      and two["video"]["timeline"] == "Plate 0:04 · Zero 0:11 · Pumping 0:15 · Final 4:10",
+      "list_fuel: an interrupted fill carries its two pieces with a link each, its bookmarks (the final one in piece 2), and is counted", json.dumps(two["video"])[:400])
 check(tool("get_settings")["settings"]["fuel_video_quality"] == "480p" and tool("get_settings")["settings"]["fuel_video_keep_months"] == 12, "get_settings: 480p and 12 months by default")
 tool("update_settings", {"key": "fuel_video_quality", "value": "720p"})
 code, dsq = app.post("rpc/get_driver_settings", {})
@@ -981,15 +986,19 @@ r = tool("update_settings", {"key": "fuel_video_keep_months", "value": 9}, expec
 check("6 or 12" in r, "keep months takes 6 or 12 only", r)
 code, pr = fleet_jobs(job="prune_fuel_videos")
 check(code == 200 and pr["job"] == "prune_fuel_videos" and pr["pruned"] == 0 and pr["failed"] == 0 and pr["keep_months"] == 12, "the monthly prune runs with the keep months (nothing is older than 12 months)", f"{code} {pr}")
-check(tool("get_settings")["settings"]["fuel_video_checklist"][0]["key"] == "pump" and len(tool("get_settings")["settings"]["fuel_video_checklist"]) == 3,
-      "get_settings: the three default checklist items")
-us = tool("update_settings", {"key": "fuel_video_checklist", "value": [{"key": "pump", "en": "Pump", "si": "පොම්පය"}, {"key": "cap", "en": "Fuel cap closed"}]})
+steps = tool("get_settings")["settings"]["fuel_video_checklist"]
+check([s["key"] for s in steps] == ["plate", "zero", "pumping", "final"] and [s["short"] for s in steps] == ["Plate", "Zero", "Pumping", "Final"],
+      "get_settings: the four default steps in order, each with its short word", json.dumps(steps)[:300])
+us = tool("update_settings", {"key": "fuel_video_checklist", "value": [{"key": "pump", "en": "Pump", "si": "පොම්පය", "short": " Pump "}, {"key": "cap", "en": "Fuel cap closed"}]})
 code, ds = app.post("rpc/get_driver_settings", {})
-check(code == 200 and ds["fuel_video_checklist"] == [{"key": "pump", "en": "Pump", "si": "පොම්පය"}, {"key": "cap", "en": "Fuel cap closed", "si": "Fuel cap closed"}],
-      "the office's checklist reaches the phone through get_driver_settings (Sinhala falls back to the English)", f"{code} {ds}")
+check(code == 200 and ds["fuel_video_checklist"] == [{"key": "pump", "en": "Pump", "si": "පොම්පය", "short": "Pump"}, {"key": "cap", "en": "Fuel cap closed", "si": "Fuel cap closed"}],
+      "the office's steps reach the phone through get_driver_settings (Sinhala falls back to the English; short kept when given)", f"{code} {ds}")
+# With the office's own steps the bookmarks take their words; a step the setting no longer has keeps its key in words.
+mine = next(e for e in tool("list_fuel")["entries"] if e["id"] == vid)
+check(mine["video"]["timeline"] == "Plate 0:01 · Zero 0:02 · Pumping 0:03 · Final 0:04", "a fill's bookmarks keep their words from the keys when the steps change", mine["video"]["timeline"])
 r = tool("update_settings", {"key": "fuel_video_checklist", "value": []}, expect_error=True)
-check("1 to 8" in r, "the checklist needs 1 to 8 items", r)
-tool("update_settings", {"key": "fuel_video_checklist", "value": [{"key": "pump", "en": "Pump display: litres and amount", "si": "පොම්ප තිරය: ලීටර් සහ මුදල"}, {"key": "odometer", "en": "Odometer", "si": "ඔඩෝමීටරය"}, {"key": "plate", "en": "Number plate", "si": "අංක තහඩුව"}]})
+check("1 to 8" in r, "the steps need 1 to 8 entries", r)
+tool("update_settings", {"key": "fuel_video_checklist", "value": steps})
 code, _ = app.post("rpc/send_heartbeat", {"p_at": iso(dt.datetime.now(dt.timezone.utc)), "p_sharing": True, "p_location_on": True, "p_permission": "always", "p_queued_points": 0, "p_video_uploads_waiting": 1, "p_video_bytes_waiting": 12000000})
 check(code in (200, 204), "a heartbeat says one video waits on the phone", f"{code}")
 ldv = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "nuwan.p")
