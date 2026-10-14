@@ -223,11 +223,51 @@ export interface OdometerRead {
 }
 
 export interface FuelRead {
+  id?: string;
   litres: number | null;
   amount_lkr: number;
   odometer_km?: number | null;
   at: string;
   receipt_photo?: string;
+  /** The video of the fill (Phase 6, Part 3). */
+  video?: VideoCard;
+}
+
+export type VideoStatus = "none" | "recorded" | "uploading" | "uploaded" | "failed" | "pruned";
+
+export interface VideoCard {
+  status: VideoStatus;
+  duration_s?: number;
+  bytes?: number;
+  /** A 1-hour signed link, only while the file is there. */
+  url?: string;
+  checklist?: string[];
+  uploaded_at?: string;
+  note?: string;
+}
+
+/** list_fuel: the month's fills with their receipts and videos. */
+export interface FuelEntry {
+  id: string;
+  at: string;
+  vehicle?: string;
+  driver?: string;
+  driver_username?: string;
+  task_id?: string;
+  litres: number | null;
+  lkr: number | null;
+  odometer_km?: number | null;
+  receipt?: string;
+  video: VideoCard;
+}
+
+export interface FuelList {
+  month: string;
+  vehicle?: string;
+  driver?: string;
+  totals: { entries: number; litres: number; lkr: number; videos: number; videos_waiting: number; videos_missing: number; bytes: number };
+  entries: FuelEntry[];
+  links?: string;
 }
 
 export interface ReportRead {
@@ -507,6 +547,14 @@ export interface FleetSettings {
   /** The driver app's shift nudge: HH:MM on these days (0 = Sunday … 6 = Saturday). */
   shift_start?: string;
   shift_days?: number[];
+  /** What the driver shows while recording a fuel video (Phase 6, Part 3). */
+  fuel_video_checklist?: ChecklistItem[];
+}
+
+export interface ChecklistItem {
+  key: string;
+  en: string;
+  si: string;
 }
 
 export interface SettingsResult {
@@ -560,6 +608,9 @@ export interface LiveDriver extends StatusFields {
   heading?: number | null;
   /** Sharing since HH:MM (Phase 6). */
   on_duty_since?: string;
+  /** Fuel videos still on the phone, and their bytes (Phase 6, Part 3). */
+  video_uploads_waiting?: number;
+  video_bytes_waiting?: number;
 }
 
 export interface LiveDrivers {

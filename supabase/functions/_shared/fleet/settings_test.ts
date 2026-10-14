@@ -25,3 +25,10 @@ Deno.test("map_matching takes a provider of none, google_roads or osrm and nothi
   assertThrows(() => validateSetting("map_matching", "osrm"), ToolError);
   assertEquals(SETTINGS_DEFAULTS.map_matching.provider, "none");
 });
+
+Deno.test("the fuel video checklist: 1 to 8 items with a key and texts; Sinhala falls back to the English", () => {
+  assertEquals(validateSetting("fuel_video_checklist", [{ key: "Pump Display", en: " Pump ", si: "" }]), [{ key: "pump_display", en: "Pump", si: "Pump" }]);
+  assertThrows(() => validateSetting("fuel_video_checklist", []), ToolError, "1 to 8");
+  assertThrows(() => validateSetting("fuel_video_checklist", [{ key: "a", en: "A" }, { key: "a", en: "B" }]), ToolError, "twice");
+  assertThrows(() => validateSetting("fuel_video_checklist", [{ en: "no key" }]), ToolError, "needs a key");
+});

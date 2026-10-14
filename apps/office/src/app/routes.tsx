@@ -7,6 +7,8 @@ import { DriverPage } from "../screens/DriverPage";
 import { Drivers } from "../screens/Drivers";
 import { Live } from "../screens/Live";
 import { Maintenance } from "../screens/Maintenance";
+import { Fuel } from "../screens/Fuel";
+import { FuelDetail } from "../screens/FuelDetail";
 import { Mileage } from "../screens/Mileage";
 import { More } from "../screens/More";
 import { NewRequest } from "../screens/NewRequest";
@@ -100,6 +102,11 @@ export const routes: RouteObject[] = [
       { path: "projects", element: <Guard need={VR}><Projects /></Guard> },
       { path: "maintenance", element: <Guard need={["vehicles"]}><Maintenance /></Guard> },
       { path: "mileage", element: <Guard need={["vehicles"]}><Mileage /></Guard> },
+      {
+        path: "fuel",
+        element: <Guard need={["vehicles"]}><Fuel /></Guard>,
+        children: [{ path: ":id", element: <FuelDetail /> }],
+      },
       { path: "drivers", element: <Guard need={["view"]}><Drivers /></Guard> },
       { path: "drivers/new", element: <Guard need={["vehicles"]}><DriverForm /></Guard> },
       { path: "drivers/:username", element: <Guard need={ROUTES_NEED}><DriverPage /></Guard> },

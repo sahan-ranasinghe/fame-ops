@@ -187,6 +187,18 @@
   off duty / on a task until, the day's counts, the licence, free or busy. Presence
   (`on_duty_since`) on the driver cards. Fleet settings `shift_start` / `shift_days` drive the
   driver app's "At work? Switch On duty" local notification (`get_driver_settings()`).
+- Phase 6 Part 3 (14 October 2026): every fuel fill has a silent video. The driver app's fifth
+  tab, Fuel, lists the month's fills with each video's state; the fuel form needs a recording
+  (`record-video`: `CameraView`, 720p / 1.5 Mbps, at most 90 s, the office's checklist to tick,
+  from the setting `fuel_video_checklist` through `get_driver_settings()`); the file waits in
+  the app's folder and goes up through the queue as a `video_upload` op (`lib/videoStore.ts`:
+  Supabase's resumable upload, 6 MB chunks, the offset kept after every chunk, Wi-Fi only on
+  Me). Bucket `fuel-videos` (private, own folder only; 1-hour links through the tools; pruned
+  after 12 months by `fleet-jobs` `prune_fuel_videos`, pg_cron the 1st at 21:45 UTC).
+  `fuel_logs` carries `video_path / video_status / video_duration_s / video_bytes /
+  video_uploaded_at / video_checklist`; `list_fuel(month, vehicle?, driver?)` feeds `/fuel`
+  and `/fuel/:id`; `task_detail.fuel[].video`; the live card says how many videos wait on
+  the phone (`hb_video_uploads_waiting` / `hb_video_bytes_waiting`).
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
   `issues` (the bell), `issuesAll` (the Issues page), `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
   dropped connection is retried twice by itself, then the form shows the error with Try again).

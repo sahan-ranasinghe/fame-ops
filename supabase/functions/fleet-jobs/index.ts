@@ -1,6 +1,8 @@
 // fleet-jobs: the background work the database asks for (docs/dispatch-plan.md, 4.3).
 //
 //   POST { "job": "sync", "task_id"?, "report_id"?, "request_id"?, "vehicle_id"? }
+//   POST { "job": "prune_fuel_videos" }   (pg_cron fuel-videos-prune, monthly: the files older
+//                                          than 12 months go, the rows are marked pruned)
 //
 // with the header x-server-key = SERVER_KEY (the same key push-task checks). Called
 // by pg_cron every 5 minutes (fleet_sync()) and by the triggers on vehicle_reports,
@@ -10,6 +12,7 @@
 
 import { adminClient } from "../_shared/fleet/db.ts";
 import { syncIssues, type SyncScope } from "../_shared/fleet/issues.ts";
+import { pruneFuelVideos } from "../_shared/fleet/videos.ts";
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
@@ -36,6 +39,16 @@ Deno.serve(async (request) => {
     body = (await request.json()) as Record<string, unknown>;
   } catch {
     return json(400, { error: "bad_request" });
+  }
+  if (body.job === "prune_fuel_videos") {
+    const started = Date.now();
+    try {
+      const result = await pruneFuelVideos(adminClient(), new Date());
+      return json(200, { job: "prune_fuel_videos", ...result, ms: Date.now() - started });
+    } catch (error) {
+      console.error("fleet-jobs prune_fuel_videos failed", error);
+      return json(500, { error: "prune_failed", message: error instanceof Error ? error.message : String(error) });
+    }
   }
   if (body.job !== "sync") return json(400, { error: "unknown_job" });
   const scope: SyncScope = {};

@@ -35,6 +35,7 @@ export const NAV: NavItem[] = [
   { key: "projects", label: "Projects", need: ["view", "request"], path: "/projects" },
   { key: "maintenance", label: "Maintenance", need: ["vehicles"], path: "/maintenance" },
   { key: "mileage", label: "Mileage", need: ["vehicles"], path: "/mileage" },
+  { key: "fuel", label: "Fuel", need: ["vehicles"], path: "/fuel" },
   { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
   { key: "settings", label: "Settings", need: [], path: "/settings" },
 ];

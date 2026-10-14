@@ -4,8 +4,11 @@
 // the file upload and the clock are passed in, so the tests run this very code.
 //
 //   ops         start/stop sharing, task and stop changes, photos, odometer and
-//               fuel logs, vehicle reports, the driver_latest heartbeat. Sent
-//               strictly in the order they happened.
+//               fuel logs, vehicle reports, the driver_latest heartbeat, and the
+//               fuel videos (one resumable upload each, sent a chunk at a time
+//               with the offset kept after every chunk). Sent strictly in the
+//               order they happened; a video waiting for Wi-Fi is stepped over
+//               so it never blocks the rest.
 //   points      location points. Sent in batches of up to 500, oldest first,
 //               once no op is waiting, so the sharing period they belong to is
 //               already on the server. A batch that gets no answer is sent
@@ -23,6 +26,7 @@ import * as realApi from '../lib/api';
 import { ApiError, type Client } from '../lib/api';
 import type { Json } from '../lib/database.types';
 import type { Language, PhotoKind } from '../lib/types';
+import { CHUNK_BYTES, type VideoStore } from '../lib/videoStore';
 
 export type Op =
   | { kind: 'session_start'; id: string; employee_id: string; vehicle_id: string | null; started_at: string; device_info: Json }
@@ -49,7 +53,25 @@ export type Op =
   | { kind: 'report'; row: realApi.ReportInsert }
   | { kind: 'employee_patch'; id: string; patch: { current_vehicle_id?: string | null; language?: Language } }
   /** Only the newest one matters for driver_latest: the store keeps one waiting heartbeat at a time (replaceOp). */
-  | { kind: 'heartbeat'; row: realApi.HeartbeatRow };
+  | { kind: 'heartbeat'; row: realApi.HeartbeatRow }
+  /** A fuel video: the file on the phone, its place in the bucket, and how far the upload got (url + offset, kept after every chunk). */
+  | VideoUploadOp;
+
+export interface VideoUploadOp {
+  kind: 'video_upload';
+  fuel_log_id: string;
+  bucket: string;
+  path: string;
+  local_uri: string;
+  bytes: number;
+  /** The upload URL once created; null = not started (or expired: a new one is made). */
+  url: string | null;
+  /** Bytes the server had after the last chunk. */
+  offset: number;
+  content_type: string;
+}
+
+export type Connection = 'wifi' | 'cellular' | 'none' | 'unknown';
 
 export interface StoredOp {
   seq: number;
@@ -79,6 +101,8 @@ export interface QueueStore {
   /** Waiting ops, oldest first. Failed ones are not returned. */
   nextOps(limit: number): StoredOp[];
   removeOp(seq: number): void;
+  /** Replaces an op in place (a video upload keeps its URL and offset after every chunk). */
+  updateOp(seq: number, op: Op): void;
   /** The server refused it for good. It is kept for the driver to see and not tried again. */
   failOp(seq: number, error: string): void;
   /** Waiting points, oldest first. Rejected ones are not returned until they are put back in line. */
@@ -113,6 +137,18 @@ export interface SyncDeps {
   now?: () => number;
   /** Where the backoff state lives between runs (memory when not given). */
   backoff?: { load(): BackoffState | null; save(state: BackoffState): void };
+  /** Where the fuel videos go (sync/index.ts: Supabase's resumable upload). Without it video ops wait. */
+  video?: VideoStore;
+  /** Reads `length` bytes of the file at `offset` (the phone reads the file at a position; tests hand over memory). */
+  readChunk?: (localUri: string, offset: number, length: number) => Promise<Uint8Array>;
+  /** The file's size now, or null when it is gone from the phone. */
+  fileSize?: (localUri: string) => number | null;
+  /** The driver's "Upload videos on Wi-Fi only" switch. */
+  wifiOnly?: () => boolean;
+  /** What the phone is connected through right now. */
+  connection?: () => Promise<Connection>;
+  /** A chunk went up: the screens show the new offset. */
+  onProgress?: (op: VideoUploadOp) => void;
 }
 
 export interface FlushResult {
@@ -124,6 +160,8 @@ export interface FlushResult {
   offline: boolean;
   /** true when nothing was tried because the backoff wait is not over. */
   skipped: boolean;
+  /** Videos stepped over because they wait for Wi-Fi. */
+  deferred: number;
 }
 
 export const POINT_BATCH = 500;
@@ -147,7 +185,71 @@ export function createSync(deps: SyncDeps) {
   };
   let running: Promise<FlushResult> | null = null;
 
-  async function send(op: Op): Promise<void> {
+  /**
+   * One video, chunk by chunk, keeping the server's offset in the op after
+   * each chunk. A lost connection throws (the ladder); an expired upload URL
+   * starts again from 0; a file gone from the phone marks the row failed.
+   */
+  async function sendVideo(seq: number, op: VideoUploadOp): Promise<void> {
+    if (!deps.video || !deps.readChunk) throw new ApiError('video: no upload store', false);
+    const size = deps.fileSize ? deps.fileSize(op.local_uri) : op.bytes;
+    if (size === null) {
+      await api.patchFuelVideo(client, op.fuel_log_id, { video_status: 'failed' }).catch(() => undefined);
+      throw new ApiError('video: the file is no longer on the phone', true, 'gone');
+    }
+    let current: VideoUploadOp = size !== op.bytes ? { ...op, bytes: size } : op;
+    // Where the server is: the stored offset is a hint, the server's answer is the truth.
+    if (current.url) {
+      try {
+        const offset = await deps.video.offset(current.url);
+        current = { ...current, offset };
+      } catch (error) {
+        if (!(error instanceof ApiError) || error.code !== 'gone') throw error;
+        current = { ...current, url: null, offset: 0 };
+      }
+    }
+    if (!current.url) {
+      let url: string;
+      try {
+        ({ url } = await deps.video.createUpload({ bucket: current.bucket, path: current.path, contentType: current.content_type, bytes: current.bytes }));
+      } catch (error) {
+        // The file is already in the bucket (an earlier run finished, its answer was lost): that counts as uploaded, as with photos.
+        if (!(error instanceof ApiError) || error.code !== 'exists') throw error;
+        await api.patchFuelVideo(client, op.fuel_log_id, { video_status: 'uploaded', video_uploaded_at: new Date(now()).toISOString(), video_bytes: current.bytes });
+        deps.removeFile(op.local_uri);
+        return;
+      }
+      current = { ...current, url, offset: 0 };
+      store.updateOp(seq, current);
+      await api.patchFuelVideo(client, op.fuel_log_id, { video_status: 'uploading' }).catch(() => undefined);
+    }
+    while (current.offset < current.bytes) {
+      const length = Math.min(CHUNK_BYTES, current.bytes - current.offset);
+      const bytes = await deps.readChunk(current.local_uri, current.offset, length);
+      let next: number;
+      try {
+        next = await deps.video.sendChunk(current.url!, current.offset, bytes);
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'gone') {
+          // The upload expired between chunks: start again next time.
+          store.updateOp(seq, { ...current, url: null, offset: 0 });
+        }
+        if (error instanceof ApiError && error.code === 'offset') {
+          // The server is elsewhere: ask it and go on from there next time.
+          store.updateOp(seq, { ...current, offset: await deps.video.offset(current.url!) });
+          throw new ApiError('video: offset corrected, continuing', false);
+        }
+        throw error;
+      }
+      current = { ...current, offset: next };
+      store.updateOp(seq, current);
+      deps.onProgress?.(current);
+    }
+    await api.patchFuelVideo(client, op.fuel_log_id, { video_status: 'uploaded', video_uploaded_at: new Date(now()).toISOString(), video_bytes: current.bytes });
+    deps.removeFile(op.local_uri);
+  }
+
+  async function send(op: Op, seq: number): Promise<void> {
     switch (op.kind) {
       case 'session_start': {
         const { kind: _kind, ...session } = op;
@@ -197,6 +299,8 @@ export function createSync(deps: SyncDeps) {
         return api.insertReport(client, op.row);
       case 'heartbeat':
         return api.sendHeartbeat(client, op.row);
+      case 'video_upload':
+        return sendVideo(seq, op);
     }
   }
 
@@ -248,7 +352,7 @@ export function createSync(deps: SyncDeps) {
   }
 
   async function run(): Promise<FlushResult> {
-    const result: FlushResult = { sent: 0, failed: 0, rejected: 0, offline: false, skipped: false };
+    const result: FlushResult = { sent: 0, failed: 0, rejected: 0, offline: false, skipped: false, deferred: 0 };
     const failedConnection = () => {
       const state = backoff.get();
       const failures = state.failures + 1;
@@ -257,16 +361,29 @@ export function createSync(deps: SyncDeps) {
       return result;
     };
 
+    // A video that must wait for Wi-Fi is stepped over, so the rest of the queue goes on.
+    const deferred = new Set<number>();
+    const waitForWifi = async (op: Op) => {
+      if (op.kind !== 'video_upload' || !deps.wifiOnly?.()) return false;
+      const kind = deps.connection ? await deps.connection() : 'unknown';
+      return kind !== 'wifi';
+    };
     for (;;) {
-      const [next] = store.nextOps(1);
+      const next = store.nextOps(50).find((item) => !deferred.has(item.seq));
       if (!next) break;
+      if (await waitForWifi(next.op)) {
+        deferred.add(next.seq);
+        result.deferred += 1;
+        continue;
+      }
       try {
-        await send(next.op);
+        await send(next.op, next.seq);
         store.removeOp(next.seq);
         result.sent += 1;
       } catch (error) {
         if (error instanceof ApiError && error.permanent) {
           store.failOp(next.seq, error.message);
+          if (next.op.kind === 'video_upload') await api.patchFuelVideo(client, next.op.fuel_log_id, { video_status: 'failed' }).catch(() => undefined);
           result.failed += 1;
           continue;
         }
@@ -326,7 +443,7 @@ export function createSync(deps: SyncDeps) {
     flush(opts: { force?: boolean } = {}): Promise<FlushResult> {
       if (running) return running;
       if (!opts.force && now() < backoff.get().nextTryAt) {
-        return Promise.resolve({ sent: 0, failed: 0, rejected: 0, offline: true, skipped: true });
+        return Promise.resolve({ sent: 0, failed: 0, rejected: 0, offline: true, skipped: true, deferred: 0 });
       }
       running = run().finally(() => {
         running = null;

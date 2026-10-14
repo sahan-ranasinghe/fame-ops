@@ -20,6 +20,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as api from '../src/lib/api';
 import { ApiError, type HeartbeatRow, VEHICLE_COLUMNS } from '../src/lib/api';
 import type { Database } from '../src/lib/database.types';
+import { base64Decode, SupabaseTusStore } from '../src/lib/videoStore';
 import { createSync, type Op, type QueueStore, type StoredHeartbeat, type StoredOp, type StoredPoint } from '../src/sync/engine';
 
 // --- local stack ------------------------------------------------------------
@@ -71,6 +72,10 @@ function memoryStore() {
   const store: QueueStore = {
     nextOps: (limit) => ops.filter((item) => item.failed === undefined).slice(0, limit),
     removeOp: (id) => void ops.splice(ops.findIndex((item) => item.seq === id), 1),
+    updateOp: (id, op) => {
+      const found = ops.find((item) => item.seq === id);
+      if (found) found.op = op;
+    },
     failOp: (id, error) => {
       const found = ops.find((item) => item.seq === id);
       if (found) found.failed = error;
@@ -193,6 +198,11 @@ async function main() {
     store: queue.store,
     employeeId: () => a.row.id,
     // Same request the phone makes: the file is POSTed straight to storage with the driver's token.
+    // The fuel video goes through the same resumable upload the phone uses (chunks read from the file at a position).
+    video: new SupabaseTusStore(API_URL, { apiKey: ANON_KEY, token: async () => (await client.auth.getSession()).data.session?.access_token ?? null },
+      (url, init) => (online.value ? fetch(url, init) : Promise.reject(new TypeError('Network request failed')))),
+    readChunk: async (localUri, offset, length) => base64Decode(readFileSync(localUri).subarray(offset, offset + length).toString('base64')),
+    fileSize: (localUri) => { try { return readFileSync(localUri).length; } catch { return null; } },
     uploadFile: async (localUri, storagePath) => {
       const { data } = await client.auth.getSession();
       let res: Response;
@@ -230,6 +240,12 @@ async function main() {
 
   const session = randomUUID();
   const [pStart, pEnd, pFuel, pReport, report] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  // A valid, empty MP4 (an ftyp box and a free box): enough for the bucket's mime rule.
+  const TINY_MP4 = Buffer.from('00000018667479706d703432000000006d70343269736f6d0000000866726565', 'hex');
+  const fuelId = randomUUID();
+  const videoFile = join(tmp, `${fuelId}.mp4`);
+  writeFileSync(videoFile, TINY_MP4);
+  const videoPath = `${a.row.id}/${day}/${fuelId}.mp4`;
   const logStart = randomUUID();
   const stops = tasks[0]!.task_stops;
   const day1: Op[] = [
@@ -248,7 +264,9 @@ async function main() {
     photoOp(pEnd, 'odometer'),
     { kind: 'odometer_log', row: { id: randomUUID(), vehicle_id: van.id, employee_id: a.row.id, task_id: task1, reading_km: 84563, ocr_value: 84568, photo_id: pEnd, kind: 'task_end', logged_at: at(3) } },
     photoOp(pFuel, 'fuel_receipt'),
-    { kind: 'fuel_log', row: { id: randomUUID(), vehicle_id: van.id, employee_id: a.row.id, task_id: task1, litres: 32, amount_cents: 1184000, receipt_photo_id: pFuel, odometer_km: 84563, logged_at: at(3) } },
+    { kind: 'fuel_log', row: { id: fuelId, vehicle_id: van.id, employee_id: a.row.id, task_id: task1, litres: 32, amount_cents: 1184000, receipt_photo_id: pFuel, odometer_km: 84563, logged_at: at(3) ,
+      video_path: videoPath, video_status: 'recorded', video_duration_s: 5, video_bytes: TINY_MP4.length, video_checklist: ['pump', 'plate'] } },
+    { kind: 'video_upload', fuel_log_id: fuelId, bucket: 'fuel-videos', path: videoPath, local_uri: videoFile, bytes: TINY_MP4.length, url: null, offset: 0, content_type: 'video/mp4' },
     { kind: 'stop_patch', id: stops[2]!.id, patch: { status: 'done', done_at: at(3) } },
     { kind: 'task_patch', id: task1, patch: { status: 'completed', end_odometer_km: 84563, completed_at: at(3) } },
     { kind: 'session_end', id: session, ended_at: at(1), end_reason: 'driver' },
@@ -299,6 +317,11 @@ async function main() {
   check((await api.fetchTasks(client, since)).find((t) => t.id === task6)?.status === 'declined', 'fetchTasks shows the declined task as declined (the app lists it nowhere)');
   const photos = must(await admin.from('photos').select('id, kind, odometer_log_id, fuel_log_id, vehicle_report_id, storage_path').eq('employee_id', a.row.id), 'photos');
   check(photos.length === 4 && photos.find((p) => p.id === pStart)?.odometer_log_id === logStart && photos.find((p) => p.id === pFuel)?.fuel_log_id !== null && photos.find((p) => p.id === pReport)?.vehicle_report_id === report, '4 photo records, each linked to its reading, fuel entry or report', photos);
+  const fuelRow = must(await admin.from('fuel_logs').select('video_status, video_uploaded_at, video_bytes, video_path, video_checklist').eq('id', fuelId).single(), 'fuel log');
+  check(fuelRow.video_status === 'uploaded' && fuelRow.video_uploaded_at !== null && fuelRow.video_bytes === TINY_MP4.length && fuelRow.video_path === videoPath
+    && JSON.stringify(fuelRow.video_checklist) === '["pump","plate"]', 'the fuel video went up through the resumable upload: the row says uploaded, with its size, path and ticked items', fuelRow);
+  const listed = await admin.storage.from('fuel-videos').list(`${a.row.id}/${day}`);
+  check((listed.data ?? []).some((o) => o.name === `${fuelId}.mp4`), 'the file is in the fuel-videos bucket under the driver\'s own folder', listed.data?.map((o) => o.name));
   const files = must(await admin.storage.from('driver-photos').list(`${a.row.id}/${day}`), 'files');
   check(files.length === 4 && uploads.every((u) => u.startsWith('200')), '4 photo files are in the driver\'s own folder', uploads);
   const vanNow = must(await admin.from('vehicles').select('current_odometer_km').eq('id', van.id).single(), 'vehicle');

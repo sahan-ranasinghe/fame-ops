@@ -78,6 +78,8 @@ export async function sendHeartbeat(): Promise<Readiness> {
     dropped_jump: counts.dropped_jump,
     dropped_jitter: counts.dropped_jitter,
     dropped_duplicate: counts.dropped_duplicate,
+    video_uploads_waiting: queue.videos,
+    video_bytes_waiting: queue.videoBytes,
   };
   enqueueLatest({ kind: 'heartbeat', row });
   logHeartbeat(row);

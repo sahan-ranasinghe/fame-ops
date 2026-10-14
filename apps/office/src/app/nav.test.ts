@@ -35,7 +35,7 @@ describe("the phone tab bar: at most five, chosen from the permissions, More alw
       expect(bar.length).toBeLessThanOrEqual(5);
       expect(bar[bar.length - 1]).toBe("more");
     }
-    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["issues", "vehicles", "projects", "maintenance", "mileage", "drivers", "settings"]);
+    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["issues", "vehicles", "projects", "maintenance", "mileage", "fuel", "drivers", "settings"]);
     expect(keys(moreFor(me(PRESETS.requester.permissions)))).toEqual(["projects", "settings"]);
   });
   it("the big Home action is the one thing the person does most", () => {

@@ -6,7 +6,6 @@ export type { LucideIcon } from 'lucide-react-native';
 export { default as BatteryCharging } from 'lucide-react-native/icons/battery-charging';
 export { default as Bell } from 'lucide-react-native/icons/bell';
 export { default as Camera } from 'lucide-react-native/icons/camera';
-export { default as Check } from 'lucide-react-native/icons/check';
 export { default as ChevronLeft } from 'lucide-react-native/icons/chevron-left';
 export { default as ChevronRight } from 'lucide-react-native/icons/chevron-right';
 export { default as Fuel } from 'lucide-react-native/icons/fuel';
@@ -23,3 +22,7 @@ export { default as TriangleAlert } from 'lucide-react-native/icons/triangle-ale
 export { default as User } from 'lucide-react-native/icons/user';
 export { default as Van } from 'lucide-react-native/icons/van';
 export { default as X } from 'lucide-react-native/icons/x';
+export { default as Video } from 'lucide-react-native/icons/video';
+export { default as Wifi } from 'lucide-react-native/icons/wifi';
+export { default as Square } from 'lucide-react-native/icons/square';
+export { default as Check } from 'lucide-react-native/icons/check';

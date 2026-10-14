@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry, useLists } from "../data/hooks";
 import type { MileageSummary } from "../data/types";
 import { num, today } from "../lib/format";
 import { Empty, ErrBox, Loading, StaleNote, Tile } from "../ui/basics";
 import { GenericTable } from "../ui/GenericTable";
+import { Icon } from "../ui/icons";
 
 export function Mileage() {
   const { store, noConnector, managePermissions } = useFleet();
@@ -60,6 +62,7 @@ export function Mileage() {
             <Tile label="Km outside tasks" value={num(outside)} unit="km" sub={outside ? `${num(t.between_tasks_km)} between tasks · ${num(t.overnight_km)} overnight` : "Nothing driven between tasks"} tone={outside > 0 ? "warn" : ""} />
             <Tile label="Fuel" value={num(t.fuel_litres)} unit="litres" sub={`LKR ${num(t.fuel_lkr)}`} />
           </div>
+          <div className="acts"><Link className="btn" to={`/fuel?month=${d.month}`}><Icon name="video" />Fuel entries and videos</Link></div>
           <div className="card">
             <div className="card-h"><h2>By vehicle</h2><span className="muted small">Odometer km is everything the vehicle drove; task km only the tasks</span></div>
             {d.vehicles.length ? <GenericTable rows={d.vehicles} /> : <Empty>No completed tasks or fuel logged this month.</Empty>}

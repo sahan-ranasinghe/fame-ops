@@ -4,9 +4,9 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { LogOut, RefreshCw } from '@/components/icons';
+import { LogOut, RefreshCw, Wifi } from '@/components/icons';
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
@@ -14,6 +14,7 @@ import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { colomboTime } from '@/lib/time';
 import { runningUpdate } from '@/lib/updates';
+import { megabytes } from '@/lib/video';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -99,6 +100,19 @@ export default function MeScreen() {
           )}
         </Card>
 
+        <Card style={{ gap: 12 }}>
+          <Pressable accessibilityRole="switch" accessibilityState={{ checked: app.wifiOnly }} onPress={() => app.setWifiOnly(!app.wifiOnly)} style={styles.line}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              <Wifi size={22} color={colors.ink} />
+              <Txt variant="strong" style={{ flex: 1 }}>{t('me.wifiOnly')}</Txt>
+            </View>
+            <View style={[styles.toggle, app.wifiOnly && { backgroundColor: colors.blue }]}>
+              <View style={[styles.knob, app.wifiOnly && { alignSelf: 'flex-end' }]} />
+            </View>
+          </Pressable>
+          {queue.videos > 0 && <Txt variant="muted">{`${queue.videos} · ${megabytes(queue.videoBytes)}`}</Txt>}
+        </Card>
+
         <Button kind="outline" label={t('me.permissions')} onPress={() => router.push('/permissions')} />
 
         <Card style={{ gap: 14 }}>
@@ -141,4 +155,6 @@ function Line({ label, children }: { label: string; children: React.ReactNode })
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.page },
   line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  toggle: { width: 52, height: 30, borderRadius: 15, backgroundColor: '#c9c5bb', padding: 3, justifyContent: 'center' },
+  knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.card },
 });

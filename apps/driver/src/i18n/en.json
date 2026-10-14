@@ -76,7 +76,8 @@
     "today": "Today",
     "mileage": "Mileage",
     "report": "Report",
-    "me": "Me"
+    "me": "Me",
+    "fuel": "Fuel"
   },
   "today": {
     "offlineWaiting": "Offline · {n} points waiting",
@@ -295,7 +296,8 @@
     "liveOn": "Connected",
     "liveConnecting": "Connecting…",
     "liveOff": "Off",
-    "updateDownloaded": "Update downloaded. It starts when the task is finished and everything is sent."
+    "updateDownloaded": "Update downloaded. It starts when the task is finished and everything is sent.",
+    "wifiOnly": "Upload videos on Wi-Fi only"
   },
   "vehicle": {
     "title": "Choose your vehicle",
@@ -344,5 +346,37 @@
   "shift": {
     "title": "At work?",
     "body": "Switch On duty when you start."
+  },
+  "fuel": {
+    "title": "Fuel",
+    "thisMonth": "This month",
+    "entries": "Fills",
+    "litres": "litres",
+    "logFuel": "Log fuel",
+    "nothingYet": "No fuel logged this month.",
+    "record": "Record video",
+    "retake": "Retake",
+    "required": "A video of the fill is needed.",
+    "recorded": "Recorded · {duration} · {size}",
+    "uploading": "Uploading {pct} % · continues when there is signal",
+    "waitingWifi": "Waiting for Wi-Fi",
+    "uploaded": "Uploaded",
+    "failed": "Failed · tap to retry",
+    "noVideo": "No video",
+    "savedOffline": "Saved · sends when there is signal",
+    "recordTitle": "Record the fill",
+    "recordHint": "Show these while you record. No sound is recorded.",
+    "start": "Start",
+    "stop": "Stop",
+    "maxLength": "Up to {seconds} s",
+    "cameraDenied": "Fame Driver is not allowed to use the camera.",
+    "recordFailed": "Recording did not work. Try again.",
+    "tooShort": "Record at least 3 seconds.",
+    "checklist": {
+      "pump": "Pump display: litres and amount",
+      "odometer": "Odometer",
+      "plate": "Number plate"
+    },
+    "use": "Use this video"
   }
 }

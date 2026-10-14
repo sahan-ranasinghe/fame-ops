@@ -46,7 +46,7 @@ export const mileageSummary = tool({
         return q.order("completed_at").order("id").range(a, b);
       }, "tasks"),
       fetchAll((a, b) => {
-        let q = db.from("fuel_logs").select("id, vehicle_id, employee_id, litres, amount_cents")
+        let q = db.from("fuel_logs").select("id, vehicle_id, employee_id, litres, amount_cents, video_status")
           .gte("logged_at", from).lt("logged_at", to);
         if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
         if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
@@ -147,6 +147,7 @@ export const mileageSummary = tool({
         fuel_litres: Math.round(myFuel.reduce((sum, f) => sum + Number(f.litres ?? 0), 0) * 100) / 100,
         fuel_lkr: centsToLkr(myFuel.reduce((sum, f) => sum + (f.amount_cents ?? 0), 0)),
         fuel_entries: myFuel.length,
+        fuel_videos: myFuel.filter((f) => f.video_status === "uploaded").length,
       };
     }).filter((row) =>
       onlyVehicle || row.tasks > 0 || row.fuel_entries > 0 || (row.odometer_km ?? 0) > 0 || row.between_tasks_km > 0 || row.overnight_km > 0

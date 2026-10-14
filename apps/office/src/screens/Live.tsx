@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { positionOf, recordedAtOf, statusLine, statusTone } from "../data/live";
+import { megabytes } from "./fuelLogic";
 import { insertPoint, mapRouteOf, type Route, routeOf, trailOf } from "../data/route";
 import type { DriverRoute, LiveDriver } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
@@ -212,6 +213,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
         <p className="muted small" style={{ margin: "0 0 12px" }} data-testid="phone-line">
           Phone {String(x.heartbeat_at).slice(-5)}: Location {x.location_on === false ? "off" : "on"} · permission {x.permission ?? "?"}
           {x.app_version ? ` · app ${x.app_version}` : ""}{x.queued_points ? ` · ${x.queued_points} points waiting on the phone` : ""}
+          {x.video_uploads_waiting ? ` · ${x.video_uploads_waiting} video${x.video_uploads_waiting === 1 ? "" : "s"} waiting${x.video_bytes_waiting ? ` (${megabytes(x.video_bytes_waiting)})` : ""}` : ""}
         </p>
       )}
       <div className="acts">

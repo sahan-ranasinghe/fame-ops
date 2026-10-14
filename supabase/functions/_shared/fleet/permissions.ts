@@ -92,6 +92,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   update_driver: VEH,
   import_projects: VEH,
   mileage_summary: VEH,
+  list_fuel: VEH,
   add_place: ["vehicles", "assign_tasks"],
   list_vehicle_reports: ["issues"],
   update_vehicle_report: ["issues"],

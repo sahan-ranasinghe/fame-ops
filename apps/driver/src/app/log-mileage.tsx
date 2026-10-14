@@ -12,10 +12,10 @@
 // the photo later). What the driver did goes with the log (entry, number of
 // photos) so the office sees what was checked.
 
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Camera, ChevronLeft } from '@/components/icons';
-import { useState } from 'react';
+import { Camera, ChevronLeft, Video } from '@/components/icons';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -24,6 +24,7 @@ import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/
 import { parseDecimal, parseWhole, thousands } from '@/lib/format';
 import { readOdometerPhoto, type ReadStatus } from '@/lib/odometerAi';
 import { discardPhoto, type LocalPhoto, takePhoto } from '@/lib/photos';
+import { clockOf, discardVideo, megabytes, type RecordedVideo, takePendingVideo } from '@/lib/video';
 import { type FuelEntry, type OdometerEntry, type OdometerEntryKind, useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -83,11 +84,26 @@ export default function LogMileageScreen() {
   const [litres, setLitres] = useState('');
   const [amount, setAmount] = useState('');
   const [receipt, setReceipt] = useState<LocalPhoto | null>(null);
+  // The video of the fill (Phase 6): recorded on its own screen, required for every fuel entry.
+  const [video, setVideo] = useState<RecordedVideo | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   // Unsaved input asks "Discard changes?" on back; nothing is asked after a save or while one runs.
-  const dirty = step.kind !== 'none' || typedFuelKm !== '' || litres.trim() !== '' || amount.trim() !== '' || receipt !== null;
+  const dirty = step.kind !== 'none' || typedFuelKm !== '' || litres.trim() !== '' || amount.trim() !== '' || receipt !== null || video !== null;
   const { allowLeave } = useLeaveGuard(dirty, saving);
+  // Back from the recording screen: take what it left.
+  useFocusEffect(
+    useCallback(() => {
+      const recorded = takePendingVideo();
+      if (recorded) {
+        setVideo((old) => {
+          discardVideo(old);
+          return recorded;
+        });
+        setProblem(null);
+      }
+    }, []),
+  );
 
   if (!app.me) return <Redirect href="/login" />;
   if ((mode === 'finish' || mode === 'start') && !task) return <Redirect href="/" />;
@@ -147,13 +163,14 @@ export default function LogMileageScreen() {
     setReceipt(shot);
   }
 
-  function fuelEntry(): FuelEntry | null | 'invalid' {
+  function fuelEntry(): FuelEntry | null | 'invalid' | 'no_video' {
     if (!showFuel || addedFuel === 'no') return null;
     const litresValue = litres.trim() === '' ? null : parseDecimal(litres);
     const amountValue = amount.trim() === '' ? null : parseDecimal(amount);
     const bad = (litres.trim() !== '' && (litresValue === null || litresValue <= 0)) || (amount.trim() !== '' && amountValue === null);
     if (bad || (litresValue === null && amountValue === null)) return 'invalid';
-    return { litres: litresValue, amountCents: amountValue === null ? null : Math.round(amountValue * 100), receipt };
+    if (!video) return 'no_video';
+    return { litres: litresValue, amountCents: amountValue === null ? null : Math.round(amountValue * 100), receipt, video };
   }
 
   /** The driver changed the number the photo shows: say so, and ask once. */
@@ -171,6 +188,7 @@ export default function LogMileageScreen() {
     if ((mode === 'manual' || mode === 'fuel') && !vehicle) return setProblem(t('log.needVehicle'));
     const fuel = fuelEntry();
     if (fuel === 'invalid') return setProblem(t('log.needFuel'));
+    if (fuel === 'no_video') return setProblem(t('fuel.required'));
 
     if (mode === 'fuel') {
       if (!fuel) return setProblem(t('log.needFuel'));
@@ -364,6 +382,18 @@ export default function LogMileageScreen() {
                   <Field label={t('log.amount')} mono value={amount} onChangeText={setAmount} keyboardType="decimal-pad" maxLength={10} />
                 </View>
                 <Button kind="outline" label={t(receipt ? 'log.receiptAdded' : 'log.addReceipt')} onPress={photographReceipt} />
+                {video ? (
+                  <View style={styles.videoRow}>
+                    <Video size={22} color={colors.blue} />
+                    <Txt variant="strong" color={colors.blue} style={{ flex: 1 }}>{t('fuel.recorded', { duration: clockOf(video.durationS), size: megabytes(video.bytes) })}</Txt>
+                    <Button kind="outline" label={t('fuel.retake')} onPress={() => router.push('/record-video')} />
+                  </View>
+                ) : (
+                  <>
+                    <Button icon={Video} label={t('fuel.record')} onPress={() => router.push('/record-video')} />
+                    <Txt variant="small">{t('fuel.required')}</Txt>
+                  </>
+                )}
               </>
             )}
           </Card>
@@ -423,4 +453,5 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   underOdometer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
+  videoRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
 });

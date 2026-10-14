@@ -47,6 +47,8 @@ export const KEYS = {
   shift: 'shift.settings',
   /** The settings the nudge is scheduled with right now (JSON), so it is not rescheduled on every run. */
   shiftArmed: 'shift.armed',
+  /** "Upload videos on Wi-Fi only" (Me tab). */
+  videoWifiOnly: 'video.wifiOnly',
   /** The upload backoff after a failed connection (sync/engine.ts). */
   backoff: 'sync.backoff',
   /** When the refused points were last put back in line (ms), and for which app update. */

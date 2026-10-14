@@ -1,7 +1,7 @@
-// The four tabs: Today, Mileage, Report, Me. The active one sits on an amber pill.
+// The five tabs: Today, Mileage, Fuel, Report, Me. The active one sits on an amber pill.
 
 import { Redirect, Tabs } from 'expo-router';
-import { Gauge, ListChecks, type LucideIcon, TriangleAlert, User } from '@/components/icons';
+import { Fuel, Gauge, ListChecks, type LucideIcon, TriangleAlert, User } from '@/components/icons';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import { colors } from '@/theme';
 const TABS: Record<string, { icon: LucideIcon; label: string }> = {
   index: { icon: ListChecks, label: 'tabs.today' },
   mileage: { icon: Gauge, label: 'tabs.mileage' },
+  fuel: { icon: Fuel, label: 'tabs.fuel' },
   report: { icon: TriangleAlert, label: 'tabs.report' },
   me: { icon: User, label: 'tabs.me' },
 };
@@ -60,6 +61,7 @@ export default function TabsLayout() {
     <Tabs initialRouteName="index" backBehavior="initialRoute" screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>
       <Tabs.Screen name="index" />
       <Tabs.Screen name="mileage" />
+      <Tabs.Screen name="fuel" />
       <Tabs.Screen name="report" />
       <Tabs.Screen name="me" />
     </Tabs>
@@ -75,5 +77,5 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   tab: { flex: 1, alignItems: 'center', gap: 4, minHeight: 60 },
-  pill: { width: 56, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  pill: { width: 52, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });

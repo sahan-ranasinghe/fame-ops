@@ -115,7 +115,7 @@ select is(
 
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  35::bigint, 'there are 35 policies on public tables');
+  36::bigint, 'there are 36 policies on public tables');
 
 select is(
   (select count(*) from pg_policies

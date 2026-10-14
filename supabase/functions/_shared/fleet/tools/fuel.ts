@@ -1,0 +1,77 @@
+// Fuel entries for a month with their receipts and videos (Phase 6, Part 3):
+// the office's Fuel page. Links work for 1 hour.
+
+import { z } from "zod";
+import { fetchAll, unwrap } from "../db.ts";
+import { findDriver, findVehicle, loadRefs } from "../fleet.ts";
+import { centsToLkr } from "../format.ts";
+import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
+import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
+import { tool, zMonth, zText } from "../tool.ts";
+import { VIDEO_LINK_NOTE, videoCard, videoLinks, videoStatusOf } from "../videos.ts";
+
+export const listFuel = tool({
+  name: "list_fuel",
+  title: "Fuel entries with their videos",
+  description:
+    "Every fuel entry of a month (newest first): the vehicle, the driver, litres, LKR, the odometer, the receipt photo link, and the " +
+    "video of the fill: its status (uploaded with a 1-hour link; uploading or recorded on the phone; failed; pruned after 12 months; " +
+    "none), length, size and the checklist items the driver ticked. Totals for the month.",
+  readOnly: true,
+  input: z.object({
+    month: zMonth.optional().describe("YYYY-MM. Default: this month"),
+    vehicle: zText(20).optional().describe("Plate"),
+    driver: zText(80).optional().describe("Username, code or name"),
+  }),
+  async run({ month, vehicle, driver }, { db, now }) {
+    const which = month ?? colomboDate(now).slice(0, 7);
+    const { from, to } = monthRange(which);
+    const refs = await loadRefs(db);
+    const onlyVehicle = vehicle ? findVehicle(refs, vehicle) : null;
+    const onlyDriver = driver ? findDriver(refs, driver) : null;
+    const logs = await fetchAll((a, b) => {
+      let q = db.from("fuel_logs").select("*").gte("logged_at", from).lt("logged_at", to);
+      if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
+      if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
+      return q.order("logged_at", { ascending: false }).order("id").range(a, b);
+    }, "fuel logs");
+    const [photos, videos] = await Promise.all([
+      photoLinks(db, { ids: logs.flatMap((l) => l.receipt_photo_id ? [l.receipt_photo_id] : []) }),
+      videoLinks(db, logs),
+    ]);
+    const entries = logs.map((l) => ({
+      id: l.id,
+      at: colomboDateTime(l.logged_at),
+      vehicle: refs.veh.get(l.vehicle_id)?.reg_no,
+      driver: refs.emp.get(l.employee_id)?.name,
+      driver_username: refs.emp.get(l.employee_id)?.username ?? undefined,
+      task_id: l.task_id ?? undefined,
+      litres: l.litres === null ? null : Number(l.litres),
+      lkr: centsToLkr(l.amount_cents),
+      odometer_km: l.odometer_km,
+      receipt: photoOrNote(photos, l.receipt_photo_id),
+      video: videoCard(l, videos.get(l.id), l.video_uploaded_at ? colomboDateTime(l.video_uploaded_at) : undefined),
+    }));
+    const totals = {
+      entries: entries.length,
+      litres: Math.round(entries.reduce((s, e) => s + (e.litres ?? 0), 0) * 100) / 100,
+      lkr: entries.reduce((s, e) => s + (e.lkr ?? 0), 0),
+      videos: logs.filter((l) => videoStatusOf(l) === "uploaded").length,
+      videos_waiting: logs.filter((l) => ["recorded", "uploading"].includes(videoStatusOf(l))).length,
+      videos_missing: logs.filter((l) => ["none", "failed"].includes(videoStatusOf(l))).length,
+      bytes: logs.reduce((s, l) => s + (videoStatusOf(l) === "uploaded" ? l.video_bytes ?? 0 : 0), 0),
+    };
+    return {
+      result: {
+        month: which,
+        vehicle: onlyVehicle?.reg_no,
+        driver: onlyDriver?.name,
+        totals,
+        entries,
+        links: `${PHOTO_LINK_NOTE} ${VIDEO_LINK_NOTE}`,
+      },
+      summary: `fuel ${which}: ${entries.length} entries, ${totals.videos} videos` + (onlyVehicle ? ` (${onlyVehicle.reg_no})` : "") +
+        (onlyDriver ? ` (${onlyDriver.name})` : ""),
+    };
+  },
+});

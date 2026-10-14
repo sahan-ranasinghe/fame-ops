@@ -36,6 +36,29 @@ async function driverRest(username: string, pin: string) {
       const r = await fetch(`${API}/rest/v1/${path}`, { method: "POST", headers, body: JSON.stringify(body) });
       return r.status;
     },
+    async patch(path: string, body: unknown): Promise<number> {
+      const r = await fetch(`${API}/rest/v1/${path}`, { method: "PATCH", headers, body: JSON.stringify(body) });
+      return r.status;
+    },
+    /** The resumable upload the app uses for fuel videos (TUS): one chunk, as the phone would for a small file. */
+    async tusUpload(bucket: string, path: string, bytes: Uint8Array, contentType: string): Promise<number> {
+      const b64 = (t: string) => Buffer.from(t).toString("base64");
+      const create = await fetch(`${API}/storage/v1/upload/resumable`, {
+        method: "POST",
+        headers: {
+          apikey: ANON, authorization: `Bearer ${session.access_token}`, "tus-resumable": "1.0.0", "upload-length": String(bytes.length), "x-upsert": "false",
+          "upload-metadata": `bucketName ${b64(bucket)},objectName ${b64(path)},contentType ${b64(contentType)},cacheControl ${b64("3600")}`,
+        },
+      });
+      if (create.status !== 201) return create.status;
+      const location = (create.headers.get("location") ?? "").replace("http://kong:8000", API);
+      const patch = await fetch(location, {
+        method: "PATCH",
+        headers: { apikey: ANON, authorization: `Bearer ${session.access_token}`, "tus-resumable": "1.0.0", "upload-offset": "0", "content-type": "application/offset+octet-stream" },
+        body: bytes as unknown as BodyInit,
+      });
+      return patch.status;
+    },
   };
 }
 
@@ -697,4 +720,74 @@ test("a requester changes an approved booking; the approver sees who is availabl
   await expect(history).toContainText("notes — → Bring the ladder");
   // Stale version: a second tab's old plan_version is refused by the server.
   await expect(tool("update_task", { task_id: approved.task_id, plan_version: 0, notes: "late" })).rejects.toThrow(/changed since you loaded it/);
+});
+
+test("the Fuel page: a fill with its video uploaded from the phone plays in the office; the checklist is edited in Fleet settings", async ({ page }) => {
+  const email = `e2e.fuel.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Fuel Admin", email, permissions: ["view", "vehicles", "assign_tasks", "users"] });
+  const driver = { name: `E2E Fuel Driver ${stamp}`, code: `E2F-${stamp}`, username: `e2f.${stamp}`, pin: "357913" };
+  await tool("create_driver", driver);
+  const plate = `WP E2F-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 9, current_odometer_km: 900 });
+  const app = await driverRest(driver.username, driver.pin);
+  const me = await app.get<{ id: string }[]>("employees?select=id");
+  const employeeId = me[0].id;
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date());
+  // A valid, empty MP4 (an ftyp box and a free box): enough for the bucket's mime rule.
+  const mp4 = Uint8Array.from(Buffer.from("00000018667479706d703432000000006d70343269736f6d0000000866726565", "hex"));
+  const fuelId = randomUUID();
+  const path = `${employeeId}/${day}/${fuelId}.mp4`;
+  const vehicles = await app.get<{ id: string }[]>(`vehicles?select=id&reg_no=eq.${encodeURIComponent(plate)}`);
+  // The app saves the fill with its recorded video, uploads the file, then marks the row uploaded.
+  expect(await app.post("fuel_logs", { id: fuelId, vehicle_id: vehicles[0].id, employee_id: employeeId, litres: 28.5, amount_cents: 1054500, odometer_km: 912, video_path: path, video_status: "recorded", video_duration_s: 41, video_bytes: mp4.length, video_checklist: ["pump", "plate"] })).toBe(201);
+  expect(await app.tusUpload("fuel-videos", path, mp4, "video/mp4")).toBe(204);
+  expect(await app.patch(`fuel_logs?id=eq.${fuelId}`, { video_status: "uploaded", video_uploaded_at: new Date().toISOString() })).toBe(200);
+  // A second fill with no video.
+  expect(await app.post("fuel_logs", { vehicle_id: vehicles[0].id, employee_id: employeeId, litres: 10, amount_cents: 370000 })).toBe(201);
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Fuel admin ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // The Fuel page from the menu: this month, this vehicle; the two fills with their video chips.
+  await page.getByRole("link", { name: "Fuel" }).first().click();
+  await expect(page).toHaveURL(/\/fuel/);
+  await page.getByLabel("Vehicle").selectOption(plate);
+  const table = page.getByTestId("fuel-table");
+  const withVideo = table.locator("tr", { hasText: plate }).filter({ hasText: "28.5" });
+  const without = table.locator("tr", { hasText: plate }).filter({ hasText: "3,700" });
+  await expect(withVideo).toContainText("Video");
+  await expect(withVideo).toContainText("0:41");
+  await expect(without).toContainText("No video");
+  // The fill opens beside the list with its video on a signed link, and what the driver ticked.
+  await withVideo.click();
+  await expect(page).toHaveURL(new RegExp(`/fuel/${fuelId}`));
+  const detail = page.getByTestId("fuel-detail");
+  await expect(detail.getByTestId("fuel-video")).toHaveAttribute("src", /\/object\/sign\/fuel-videos\//);
+  await expect(detail).toContainText("Pump display: litres and amount, Number plate");
+  await expect(detail).toContainText("the link works for 1 hour");
+
+  // Mileage links to the fuel page and counts the videos per vehicle.
+  await page.goto("/mileage");
+  await page.getByLabel("Vehicle").selectOption(plate);
+  await expect(page.locator("tr", { hasText: plate })).toContainText("1");
+  await expect(page.getByRole("link", { name: "Fuel entries and videos" })).toBeVisible();
+
+  // Fleet settings: the checklist starts with the three defaults; add one, save; the driver gets it.
+  await page.goto("/settings/fleet");
+  const checklist = page.getByTestId("checklist-settings");
+  await expect(checklist.getByTestId("checklist-row")).toHaveCount(3);
+  await checklist.getByRole("button", { name: "Add item" }).click();
+  await checklist.getByLabel("English").nth(3).fill("Fuel cap closed");
+  await checklist.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("status")).toHaveText("Setting saved");
+  const settings = await tool<{ settings: { fuel_video_checklist: { key: string; en: string; si: string }[] } }>("get_settings", {});
+  expect(settings.settings.fuel_video_checklist.map((i) => i.key)).toEqual(["pump", "odometer", "plate", "fuel_cap_closed"]);
+  // Back to the three (other runs and the driver tests count on them).
+  await tool("update_settings", { key: "fuel_video_checklist", value: settings.settings.fuel_video_checklist.slice(0, 3) });
 });

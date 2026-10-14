@@ -80,18 +80,42 @@ export async function fetchMe(client: Client): Promise<Employee | null> {
 }
 
 /** The only fleet settings a driver may read (Phase 6): the shift nudge's time and days (0 = Sunday … 6 = Saturday). */
+export interface ChecklistItem {
+  key: string;
+  en: string;
+  si: string;
+}
 export interface DriverSettings {
   shift_start: string;
   shift_days: number[];
+  /** What to show while recording a fuel video (Phase 6, Part 3), in both languages. */
+  fuel_video_checklist: ChecklistItem[];
 }
-export const DEFAULT_DRIVER_SETTINGS: DriverSettings = { shift_start: '08:00', shift_days: [1, 2, 3, 4, 5, 6] };
+export const DEFAULT_CHECKLIST: ChecklistItem[] = [
+  { key: 'pump', en: 'Pump display: litres and amount', si: 'පොම්ප තිරය: ලීටර් සහ මුදල' },
+  { key: 'odometer', en: 'Odometer', si: 'ඔඩෝමීටරය' },
+  { key: 'plate', en: 'Number plate', si: 'අංක තහඩුව' },
+];
+export const DEFAULT_DRIVER_SETTINGS: DriverSettings = { shift_start: '08:00', shift_days: [1, 2, 3, 4, 5, 6], fuel_video_checklist: DEFAULT_CHECKLIST };
 
 export async function fetchDriverSettings(client: Client): Promise<DriverSettings> {
   const res = await client.rpc('get_driver_settings');
   const value = check(res, 'settings') as Partial<DriverSettings> | null;
   const start = typeof value?.shift_start === 'string' && /^\d{2}:\d{2}$/.test(value.shift_start) ? value.shift_start : DEFAULT_DRIVER_SETTINGS.shift_start;
   const days = Array.isArray(value?.shift_days) ? value.shift_days.filter((d): d is number => Number.isInteger(d) && d >= 0 && d <= 6) : DEFAULT_DRIVER_SETTINGS.shift_days;
-  return { shift_start: start, shift_days: days };
+  const list = Array.isArray(value?.fuel_video_checklist)
+    ? value.fuel_video_checklist
+      .filter((i): i is ChecklistItem => !!i && typeof i === 'object' && typeof i.key === 'string' && typeof i.en === 'string')
+      .map((i) => ({ key: i.key, en: i.en, si: typeof i.si === 'string' && i.si ? i.si : i.en }))
+    : [];
+  return { shift_start: start, shift_days: days, fuel_video_checklist: list.length ? list : DEFAULT_CHECKLIST };
+}
+
+export type FuelVideoPatch = Pick<Tables['fuel_logs']['Update'], 'video_status' | 'video_uploaded_at' | 'video_bytes'>;
+
+/** The upload's progress on the fuel log row (own rows only, the video columns only). */
+export async function patchFuelVideo(client: Client, id: string, patch: FuelVideoPatch): Promise<void> {
+  check(await client.from('fuel_logs').update(patch).eq('id', id), 'fuel video');
 }
 
 export async function fetchVehicles(client: Client): Promise<Vehicle[]> {
@@ -291,6 +315,9 @@ export interface HeartbeatRow {
   dropped_jump?: number;
   dropped_jitter?: number;
   dropped_duplicate?: number;
+  /** Fuel videos still on the phone, and their bytes still to go (Phase 6, Part 3). */
+  video_uploads_waiting?: number;
+  video_bytes_waiting?: number;
 }
 
 export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<void> {
@@ -306,6 +333,8 @@ export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<
     p_data_available: row.data_available ?? undefined,
     p_app_state: row.app_state ?? undefined,
     p_fix_age_s: row.fix_age_s ?? undefined,
+    p_video_uploads_waiting: row.video_uploads_waiting ?? undefined,
+    p_video_bytes_waiting: row.video_bytes_waiting ?? undefined,
   });
   if (res.error) fail(res, 'heartbeat');
 }
@@ -328,6 +357,8 @@ export async function insertHeartbeats(client: Client, employeeId: string, rows:
     dropped_jump: row.dropped_jump ?? null,
     dropped_jitter: row.dropped_jitter ?? null,
     dropped_duplicate: row.dropped_duplicate ?? null,
+    video_uploads_waiting: row.video_uploads_waiting ?? null,
+    video_bytes_waiting: row.video_bytes_waiting ?? null,
     last_gps_fix_age_s: row.fix_age_s ?? null,
     queued_points: row.queued_points,
     rejected_points: row.rejected_points ?? null,

@@ -16,6 +16,7 @@ import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { PageTop } from "../ui/Page";
 import { PlanPanel } from "./PlanPanel";
+import { videoWords } from "./fuelLogic";
 import { driveText, TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
 
 export const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
@@ -191,7 +192,11 @@ export function TaskDetail() {
           ))}
           {p.fuel.map((f, i) => (
             <div className="row" key={"f" + i}>
-              <div className="grow"><div className="name">{num(f.litres)} L · LKR {num(f.amount_lkr)}</div><div className="sub">Fuel · {f.at}</div></div>
+              <div className="grow">
+                <div className="name">{num(f.litres)} L · LKR {num(f.amount_lkr)}</div>
+                <div className="sub">{joinDots(["Fuel", f.at, f.video ? videoWords(f.video) : ""])}</div>
+              </div>
+              {f.video?.status === "uploaded" && f.id && can(me, "vehicles") && <Link className="btn small" to={`/fuel/${f.id}`}><Icon name="video" />Video</Link>}
               {f.receipt_photo && <a className="btn small" href={f.receipt_photo} {...ext}>Receipt</a>}
             </div>
           ))}

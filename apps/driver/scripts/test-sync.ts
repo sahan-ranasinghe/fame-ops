@@ -1,14 +1,18 @@
 // Tests of the offline queue's engine (src/sync/engine.ts) with a fake server:
 // batch order and size, the backoff after a failed connection, points the
 // server refuses (kept, marked, tried again), the heartbeat history after the
-// points, and ops blocking points. Pure code, no stack needed:
+// points, ops blocking points, and the fuel video upload (chunks of exactly
+// 6 MB, resume from the server's offset after a drop, a new upload after 410,
+// Wi-Fi only, the row patched at the end). Pure code, no stack needed:
 //
 //   npm run test:sync          (from apps/driver)
 
 import * as realApi from '../src/lib/api';
 import { ApiError, type HeartbeatRow } from '../src/lib/api';
+import { CHUNK_BYTES, type UploadMeta, type VideoStore } from '../src/lib/videoStore';
 import {
   BACKOFF_MS,
+  type Connection,
   createSync,
   HEARTBEAT_BATCH,
   type Op,
@@ -17,6 +21,7 @@ import {
   type StoredHeartbeat,
   type StoredOp,
   type StoredPoint,
+  type VideoUploadOp,
 } from '../src/sync/engine';
 
 let failures = 0;
@@ -35,6 +40,10 @@ function memoryStore() {
   const store: QueueStore = {
     nextOps: (limit) => ops.filter((item) => item.failed === undefined).slice(0, limit),
     removeOp: (id) => void ops.splice(ops.findIndex((item) => item.seq === id), 1),
+    updateOp: (id, op) => {
+      const found = ops.find((item) => item.seq === id);
+      if (found) found.op = op;
+    },
     failOp: (id, error) => {
       const found = ops.find((item) => item.seq === id);
       if (found) found.failed = error;
@@ -76,6 +85,57 @@ function memoryStore() {
     retryRejected: () => rejected.clear(),
     heartbeats: () => heartbeats.length,
     ops: () => ops.filter((item) => item.failed === undefined).length,
+    opAt: (i: number) => ops[i],
+  };
+}
+
+/** A fake resumable-upload server: keeps the bytes it was given per upload, fails the way it is told. */
+function fakeVideoServer() {
+  const uploads = new Map<string, { meta: UploadMeta; got: number; expired?: boolean }>();
+  const log: string[] = [];
+  let n = 0;
+  let dropAfterChunks = Infinity;
+  let chunksSent = 0;
+  const store: VideoStore = {
+    async createUpload(meta) {
+      const url = `https://fake/upload/${++n}`;
+      uploads.set(url, { meta, got: 0 });
+      log.push(`create:${meta.path}:${meta.bytes}`);
+      return { url };
+    },
+    async offset(url) {
+      const u = uploads.get(url);
+      if (!u || u.expired) throw new ApiError('video: the upload expired on the server', true, 'gone', 410);
+      log.push(`head:${u.got}`);
+      return u.got;
+    },
+    async sendChunk(url, offset, bytes) {
+      const u = uploads.get(url);
+      if (!u || u.expired) throw new ApiError('video: the upload expired on the server', true, 'gone', 410);
+      if (offset !== u.got) throw new ApiError('video: offset mismatch', false, 'offset', 409);
+      if (chunksSent >= dropAfterChunks) {
+        chunksSent = 0;
+        dropAfterChunks = Infinity;
+        throw new ApiError('video: Network request failed', false);
+      }
+      chunksSent += 1;
+      u.got += bytes.length;
+      log.push(`chunk:${offset}+${bytes.length}`);
+      return u.got;
+    },
+  };
+  return {
+    store,
+    log,
+    uploads,
+    dropAfter: (chunks: number) => {
+      dropAfterChunks = chunks;
+      chunksSent = 0;
+    },
+    expire: (url: string) => {
+      const u = uploads.get(url);
+      if (u) u.expired = true;
+    },
   };
 }
 
@@ -117,6 +177,13 @@ function fakeServer() {
     },
     patchEmployee: async () => {
       calls.push({ what: 'employee', n: 1 });
+      if (calls.length > failAfterCalls) fail();
+    },
+    patchFuelVideo: async (_client: unknown, id: string, patch: realApi.FuelVideoPatch) => {
+      calls.push({ what: `fuel_video:${patch.video_status}`, n: 1, first: id });
+    },
+    insertFuelLog: async (_client: unknown, row: realApi.FuelInsert) => {
+      calls.push({ what: 'fuel_log', n: 1, first: row.id });
       if (calls.length > failAfterCalls) fail();
     },
   } as unknown as typeof realApi;
@@ -233,6 +300,79 @@ async function main() {
     clock.now = sync.backoff().nextTryAt;
     const r2 = await sync.flush();
     check(r2.sent === 4 && s.calls.map((c) => c.what).join(',') === 'employee,employee,points', 'then the op, then the points', s.calls);
+  }
+
+  // --- 6. a fuel video: 6 MB chunks, the offset kept, resume after a drop, a new upload after 410, Wi-Fi only ----
+  {
+    const q = memoryStore();
+    const s = fakeServer();
+    const v = fakeVideoServer();
+    const file = new Uint8Array(CHUNK_BYTES * 2 + 1234);
+    for (let i = 0; i < file.length; i += 4096) file[i] = i & 255;
+    let wifiOnly = false;
+    let connection: Connection = 'cellular';
+    const removed: string[] = [];
+    const progress: number[] = [];
+    const sync = createSync({
+      client: {} as realApi.Client,
+      store: q.store,
+      employeeId: () => 'e1',
+      uploadFile: async () => undefined,
+      removeFile: (uri) => void removed.push(uri),
+      api: s.api,
+      now: () => clock.now,
+      video: v.store,
+      readChunk: async (_uri, offset, length) => file.subarray(offset, offset + length),
+      fileSize: (uri) => (uri === 'file:///videos/v1.mp4' ? file.length : null),
+      wifiOnly: () => wifiOnly,
+      connection: async () => connection,
+      onProgress: (op) => void progress.push(op.offset),
+    });
+    const videoOp = (id: string, uri = 'file:///videos/v1.mp4'): VideoUploadOp => ({
+      kind: 'video_upload', fuel_log_id: id, bucket: 'fuel-videos', path: `e1/2026-10-14/${id}.mp4`, local_uri: uri, bytes: file.length, url: null, offset: 0, content_type: 'video/mp4',
+    });
+    q.add({ kind: 'fuel_log', row: { id: 'f1', vehicle_id: 'v', employee_id: 'e1', video_status: 'recorded', video_bytes: file.length } as realApi.FuelInsert }, videoOp('f1'));
+    q.add({ kind: 'employee_patch', id: 'e1', patch: { language: 'si' } });
+
+    // The connection drops after the first chunk: the offset is kept; the next run asks the server and goes on.
+    v.dropAfter(1);
+    let r = await sync.flush();
+    check(r.offline && r.sent === 1 && q.ops() === 2, 'the row went; the video dropped after one chunk and is kept with the rest behind it', { r, ops: q.ops() });
+    const kept = q.opAt(0)!.op as VideoUploadOp;
+    check(kept.url !== null && kept.offset === CHUNK_BYTES, 'the op remembers the upload URL and the bytes the server has', { url: kept.url, offset: kept.offset });
+    check(v.log.join(',') === `create:e1/2026-10-14/f1.mp4:${file.length},chunk:0+${CHUNK_BYTES}`, 'the first chunk is exactly 6 MB', v.log);
+    check(s.calls.some((c) => c.what === 'fuel_video:uploading'), 'the row says uploading once the upload exists');
+    clock.now = sync.backoff().nextTryAt;
+    r = await sync.flush();
+    check(r.sent === 2 && q.ops() === 0 && !r.offline, 'the rest of the video and the op behind it go through', { r, ops: q.ops() });
+    check(v.log.slice(2).join(',') === `head:${CHUNK_BYTES},chunk:${CHUNK_BYTES}+${CHUNK_BYTES},chunk:${CHUNK_BYTES * 2}+1234`, 'resumed from the server\'s offset, 6 MB then the 1,234-byte tail', v.log);
+    check(s.calls.filter((c) => c.what === 'fuel_video:uploaded' && c.first === 'f1').length === 1 && removed.join() === 'file:///videos/v1.mp4', 'the row is marked uploaded and the file deleted', { calls: s.calls, removed });
+    check(progress.join(',') === `${CHUNK_BYTES},${CHUNK_BYTES * 2},${file.length}`, 'the screens hear every chunk', progress);
+
+    // An upload that expired on the server (410): a new one starts from 0.
+    q.add(videoOp('f2'));
+    v.dropAfter(1);
+    await sync.flush();
+    const half = q.opAt(0)!.op as VideoUploadOp;
+    v.expire(half.url!);
+    clock.now = sync.backoff().nextTryAt;
+    r = await sync.flush();
+    check(r.sent === 1 && q.ops() === 0 && v.log.filter((l) => l.startsWith('create:e1/2026-10-14/f2')).length === 2, 'after 410 a new upload is created and sent from 0', v.log.slice(-5));
+
+    // Wi-Fi only: the video waits on mobile data and the ops behind it still go; on Wi-Fi it goes.
+    q.add(videoOp('f3'), { kind: 'employee_patch', id: 'e1', patch: { language: 'en' } });
+    wifiOnly = true;
+    r = await sync.flush();
+    check(r.deferred === 1 && r.sent === 1 && q.ops() === 1 && (q.opAt(0)!.op as VideoUploadOp).fuel_log_id === 'f3', 'on mobile data the video is stepped over, the op behind it is sent', { r, ops: q.ops() });
+    connection = 'wifi';
+    r = await sync.flush();
+    check(r.sent === 1 && q.ops() === 0, 'on Wi-Fi it goes', r);
+
+    // A file gone from the phone: the op fails for good and the row says failed.
+    q.add(videoOp('f4', 'file:///videos/gone.mp4'));
+    wifiOnly = false;
+    r = await sync.flush();
+    check(r.failed === 1 && s.calls.some((c) => c.what === 'fuel_video:failed' && c.first === 'f4'), 'a missing file marks the op failed and the row failed', { r, calls: s.calls.slice(-2) });
   }
 
   console.log(failures === 0 ? '\nAll sync tests passed.' : `\n${failures} sync test(s) failed.`);

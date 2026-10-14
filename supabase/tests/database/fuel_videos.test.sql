@@ -1,0 +1,107 @@
+-- Fuel videos (Phase 6, Part 3), checked with pgTAP: the bucket, the video
+-- columns a driver may update on their own rows only, the office cannot write
+-- them from the app, the storage policies (own folder only), the checklist
+-- setting through get_driver_settings, the heartbeat's video counts.
+-- Run with: npx supabase test db   (local database only; everything is rolled back)
+
+begin;
+
+create extension if not exists pgtap with schema extensions;
+
+select * from no_plan();
+
+insert into auth.users (id, email) values
+  ('00000000-0000-0000-0000-0000000000f5', 'd.fuel@drivers.fame.invalid'),
+  ('00000000-0000-0000-0000-0000000000f6', 'd.other.fuel@drivers.fame.invalid'),
+  ('00000000-0000-0000-0000-0000000000f7', 'office.fuel@fame.test');
+insert into public.employees (id, code, name, username, email, role, permissions, auth_user_id) values
+  ('10000000-0000-0000-0000-0000000000f5', 'D-FUEL', 'Fuel Driver', 'd.fuel', null, 'driver', '{}', '00000000-0000-0000-0000-0000000000f5'),
+  ('10000000-0000-0000-0000-0000000000f6', 'D-OFUEL', 'Other Driver', 'd.other.fuel', null, 'driver', '{}', '00000000-0000-0000-0000-0000000000f6'),
+  ('10000000-0000-0000-0000-0000000000f7', 'O-FUEL', 'Fuel Office', null, 'office.fuel@fame.test', 'fleet_admin', '{view,vehicles}', '00000000-0000-0000-0000-0000000000f7');
+insert into public.vehicles (id, reg_no) values ('20000000-0000-0000-0000-0000000000f5', 'WP FUEL-0001');
+
+-- 1. The bucket and the columns.
+select is((select public || '|' || file_size_limit || '|' || allowed_mime_types[1] from storage.buckets where id = 'fuel-videos'),
+  'false|125829120|video/mp4', 'the fuel-videos bucket is private, 120 MB, mp4 only');
+select has_column('public', 'fuel_logs', 'video_path', 'fuel_logs.video_path exists');
+select has_column('public', 'fuel_logs', 'video_status', 'fuel_logs.video_status exists');
+select has_column('public', 'fuel_logs', 'video_checklist', 'fuel_logs.video_checklist exists');
+select has_column('public', 'driver_heartbeats', 'video_uploads_waiting', 'driver_heartbeats.video_uploads_waiting exists');
+select has_column('public', 'driver_latest', 'hb_video_bytes_waiting', 'driver_latest.hb_video_bytes_waiting exists');
+
+-- 2. The driver inserts a log with its video, then finishes the upload on their own row only.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f5","role":"authenticated"}';
+select lives_ok($$
+  insert into public.fuel_logs (id, vehicle_id, employee_id, litres, amount_cents, video_path, video_status, video_duration_s, video_bytes, video_checklist)
+  values ('60000000-0000-0000-0000-0000000000f5', '20000000-0000-0000-0000-0000000000f5', '10000000-0000-0000-0000-0000000000f5', 30, 1100000,
+          '10000000-0000-0000-0000-0000000000f5/2026-10-14/60000000-0000-0000-0000-0000000000f5.mp4', 'recorded', 47, 16000000, '["pump", "odometer"]'::jsonb)
+$$, 'a driver saves a fuel log with its recorded video');
+select throws_ok($$
+  insert into public.fuel_logs (vehicle_id, employee_id, litres, video_path, video_status)
+  values ('20000000-0000-0000-0000-0000000000f5', '10000000-0000-0000-0000-0000000000f5', 30, '10000000-0000-0000-0000-0000000000f6/x.mp4', 'recorded')
+$$, '23514', null, 'a video path outside the driver''s own folder is refused');
+select throws_ok($$
+  update public.fuel_logs set video_status = 'done' where id = '60000000-0000-0000-0000-0000000000f5'
+$$, '23514', null, 'an unknown video status is refused');
+select lives_ok($$
+  update public.fuel_logs set video_status = 'uploaded', video_uploaded_at = now() where id = '60000000-0000-0000-0000-0000000000f5'
+$$, 'the driver marks their own video uploaded');
+select is((select video_status from public.fuel_logs where id = '60000000-0000-0000-0000-0000000000f5'), 'uploaded', 'and the row says so');
+select throws_ok($$
+  update public.fuel_logs set litres = 99 where id = '60000000-0000-0000-0000-0000000000f5'
+$$, '42501', null, 'a driver cannot change the litres after saving (video columns only)');
+
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f6","role":"authenticated"}';
+select is((select count(*) from public.fuel_logs where id = '60000000-0000-0000-0000-0000000000f5'), 0::bigint, 'another driver does not see the row');
+update public.fuel_logs set video_status = 'failed' where id = '60000000-0000-0000-0000-0000000000f5';
+reset role;
+select is((select video_status from public.fuel_logs where id = '60000000-0000-0000-0000-0000000000f5'), 'uploaded', 'and another driver''s update touches nothing');
+
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f7","role":"authenticated"}';
+update public.fuel_logs set video_status = 'pruned' where id = '60000000-0000-0000-0000-0000000000f5';
+reset role;
+select is((select video_status from public.fuel_logs where id = '60000000-0000-0000-0000-0000000000f5'), 'uploaded',
+  'an office person''s update from the app touches no row (the tools write as service role)');
+
+-- 3. Storage: own folder only (the policies exist and name the bucket).
+select is((select count(*) from pg_policies where schemaname = 'storage' and tablename = 'objects'
+           and policyname in ('fuel_videos_insert_own_folder', 'fuel_videos_update_own_folder', 'fuel_videos_select_own_folder')),
+  3::bigint, 'the three fuel-videos storage policies exist');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f5","role":"authenticated"}';
+select lives_ok($$
+  insert into storage.objects (bucket_id, name, owner) values ('fuel-videos', '10000000-0000-0000-0000-0000000000f5/2026-10-14/a.mp4', '00000000-0000-0000-0000-0000000000f5')
+$$, 'a driver may add a file inside their own folder');
+select throws_ok($$
+  insert into storage.objects (bucket_id, name, owner) values ('fuel-videos', '10000000-0000-0000-0000-0000000000f6/2026-10-14/b.mp4', '00000000-0000-0000-0000-0000000000f5')
+$$, '42501', null, 'but not in another driver''s folder');
+reset role;
+
+-- 4. The checklist reaches the driver, with the three defaults; the office's list replaces them.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f5","role":"authenticated"}';
+select is((select jsonb_array_length(public.get_driver_settings() -> 'fuel_video_checklist')), 3, 'get_driver_settings: the three default checklist items');
+select is((select public.get_driver_settings() -> 'fuel_video_checklist' -> 0 ->> 'key'), 'pump', 'the first is the pump display');
+reset role;
+update public.fleet_settings set value = '[{"key": "pump", "en": "Pump", "si": "පොම්පය"}, {"key": "custom", "en": "The cap closed", "si": "මූඩිය වසා ඇත"}]'::jsonb
+where key = 'fuel_video_checklist';
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f5","role":"authenticated"}';
+select is((select public.get_driver_settings() -> 'fuel_video_checklist' -> 1 ->> 'si'), 'මූඩිය වසා ඇත', 'the office''s own item reaches the phone in Sinhala too');
+
+-- 5. The heartbeat carries the waiting videos.
+select lives_ok($$
+  select public.send_heartbeat(now(), true, true, 'always', 80, '1.1.0', 0, 0, true, 'foreground', 5, 1, 12000000)
+$$, 'a heartbeat with one video waiting');
+select lives_ok($$ select public.send_heartbeat(now(), true, true, 'always', 80, '1.1.0', 0) $$, 'the older call shape still works');
+reset role;
+select is((select hb_video_uploads_waiting || '|' || hb_video_bytes_waiting from public.driver_latest where employee_id = '10000000-0000-0000-0000-0000000000f5'),
+  '1|12000000', 'driver_latest keeps the counts of the newest heartbeat');
+
+-- 6. The prune job is scheduled.
+select is((select count(*) from cron.job where jobname = 'fuel-videos-prune'), 1::bigint, 'the monthly prune is scheduled');
+
+select * from finish();
+rollback;

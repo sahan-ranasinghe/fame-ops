@@ -12,8 +12,8 @@
 
 import * as SQLite from 'expo-sqlite';
 
-import type { HeartbeatRow } from '../lib/api';
-import type { Op, QueueStore, StoredHeartbeat, StoredOp, StoredPoint } from './engine';
+import type { FuelInsert, HeartbeatRow } from '../lib/api';
+import type { Op, QueueStore, StoredHeartbeat, StoredOp, StoredPoint, VideoUploadOp } from './engine';
 
 export const HEARTBEAT_LOG_KEEP_DAYS = 30;
 
@@ -75,6 +75,9 @@ export const queueStore: QueueStore = {
   },
   removeOp(seq) {
     db.runSync('DELETE FROM ops WHERE seq = ?', seq);
+  },
+  updateOp(seq, op) {
+    db.runSync('UPDATE ops SET op = ? WHERE seq = ?', JSON.stringify(op), seq);
   },
   failOp(seq, error) {
     db.runSync('UPDATE ops SET failed = 1, error = ? WHERE seq = ?', error, seq);
@@ -157,17 +160,56 @@ export interface QueueCounts {
   heartbeats: number;
   /** Things the server refused; kept so the driver and the office can see them. */
   failed: number;
+  /** Fuel videos waiting to be uploaded (not failed). */
+  videos: number;
+  /** Bytes of those videos still to go. */
+  videoBytes: number;
 }
 
 export function queueCounts(): QueueCounts {
-  const row = db.getFirstSync<QueueCounts>(
+  const row = db.getFirstSync<Omit<QueueCounts, 'videos' | 'videoBytes'>>(
     `SELECT (SELECT COUNT(*) FROM ops WHERE failed = 0) AS ops,
             (SELECT COUNT(*) FROM points WHERE rejected = 0) AS points,
             (SELECT COUNT(*) FROM points WHERE rejected = 1) AS rejected,
             (SELECT COUNT(*) FROM heartbeats) AS heartbeats,
             (SELECT COUNT(*) FROM ops WHERE failed = 1) AS failed`,
   );
-  return row ?? { ops: 0, points: 0, rejected: 0, heartbeats: 0, failed: 0 };
+  const videos = videoUploads().filter((v) => !v.failed);
+  return {
+    ...(row ?? { ops: 0, points: 0, rejected: 0, heartbeats: 0, failed: 0 }),
+    videos: videos.length,
+    videoBytes: videos.reduce((sum, v) => sum + Math.max(0, v.op.bytes - v.op.offset), 0),
+  };
+}
+
+export interface VideoUploadState {
+  seq: number;
+  op: VideoUploadOp;
+  /** The server refused it (shown as "Failed · tap to retry"). */
+  failed: boolean;
+  error: string | null;
+}
+
+/** Every fuel video still on the phone, waiting or failed, oldest first. */
+export function videoUploads(): VideoUploadState[] {
+  return db
+    .getAllSync<{ seq: number; op: string; failed: number; error: string | null }>("SELECT seq, op, failed, error FROM ops WHERE op LIKE '{\"kind\":\"video_upload\"%' ORDER BY seq")
+    .map((row) => ({ seq: row.seq, op: JSON.parse(row.op) as VideoUploadOp, failed: row.failed === 1, error: row.error }));
+}
+
+/** Fuel entries saved on the phone that have not reached the server yet. */
+export function pendingFuelLogs(): FuelInsert[] {
+  return db
+    .getAllSync<{ op: string }>("SELECT op FROM ops WHERE failed = 0 AND op LIKE '{\"kind\":\"fuel_log\"%' ORDER BY seq")
+    .map((row) => (JSON.parse(row.op) as { row: FuelInsert }).row);
+}
+
+/** Puts one refused video back in line ("Failed · tap to retry"). */
+export function retryVideo(fuelLogId: string): boolean {
+  const found = videoUploads().find((v) => v.op.fuel_log_id === fuelLogId && v.failed);
+  if (!found) return false;
+  db.runSync('UPDATE ops SET failed = 0, error = NULL WHERE seq = ?', found.seq);
+  return true;
 }
 
 /** Ids of tasks that have a change waiting to be sent. */

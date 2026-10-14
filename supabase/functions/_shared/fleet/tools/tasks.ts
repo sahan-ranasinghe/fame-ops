@@ -28,6 +28,7 @@ import {
 import { centsToLkr, contactLinks, mapsDirections, telLink, waLink } from "../format.ts";
 import { GPS_KM_NOTE, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
+import { videoCard, videoLinks } from "../videos.ts";
 import { type Plan, type PlanPoint, type PlanStop, planTask as runPlanner, type StopType, type What } from "../plan.ts";
 import { legFnFor, providerFromEnv } from "../routing.ts";
 import { notifyEvent } from "../notifications.ts";
@@ -979,7 +980,7 @@ export const taskDetail = tool({
     const reports = unwrap(reportsRes, "vehicle reports");
 
     const projectIds = split.flatMap((row) => row.project_id ? [row.project_id] : []);
-    const [projectsRes, links, request, unlogged, gps, eta] = await Promise.all([
+    const [projectsRes, links, request, unlogged, gps, eta, videos] = await Promise.all([
       projectIds.length > 0
         ? db.from("projects").select("id, job_no, short_name, name, customer_name").in("id", projectIds)
         : { data: [], error: null },
@@ -993,6 +994,7 @@ export const taskDetail = tool({
       unloggedBeforeStart(db, odometer.find((o) => o.kind === "task_start")),
       taskGpsKm(db, task, now),
       taskEta(db, task, stops, latest.get(task.employee_id), settings, now),
+      videoLinks(db, fuel),
     ]);
     const projects = new Map(unwrap(projectsRes, "projects").map((p) => [p.id, p]));
     const requestRow = unwrapMaybe(request, "vehicle request");
@@ -1088,11 +1090,13 @@ export const taskDetail = tool({
         })),
         unlogged_km: unlogged,
         fuel: fuel.map((f) => ({
+          id: f.id,
           litres: f.litres === null ? null : Number(f.litres),
           amount_lkr: centsToLkr(f.amount_cents),
           odometer_km: f.odometer_km,
           at: colomboDateTime(f.logged_at),
           receipt_photo: photoOrNote(links, f.receipt_photo_id),
+          video: videoCard(f, videos.get(f.id), f.video_uploaded_at ? colomboDateTime(f.video_uploaded_at) : undefined),
         })),
         vehicle_reports: reports.map((r) => ({
           id: r.id,

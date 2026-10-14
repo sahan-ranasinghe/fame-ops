@@ -540,6 +540,50 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
   about 21 GB (14 GB). Supabase Pro includes 100 GB of storage; office viewing adds a few GB
   of egress a month at most. Most fills are shorter than 90 s, so these are upper figures.
 
+### 7.4 Part 3 as built (14 October 2026, branch `phase6-3-fuel`)
+
+- Migration `20261014190000_fuel_videos.sql`: the private bucket `fuel-videos` (120 MB,
+  video/mp4; insert, update and select inside the driver's own folder, so the resumable
+  upload works), `fuel_logs.video_path / video_status / video_duration_s / video_bytes /
+  video_uploaded_at / video_checklist` (a driver inserts them with the log and may update the
+  video columns of their own rows; `video_path` must be in their folder), the setting
+  `fuel_video_checklist` seeded with the three defaults (the office edits it; Sinhala falls
+  back to the English), `get_driver_settings()` answering it, `driver_heartbeats` /
+  `driver_latest` with `video_uploads_waiting` / `video_bytes_waiting` (`send_heartbeat` takes
+  two more optional parameters), and pg_cron `fuel-videos-prune` (the 1st, 21:45 UTC) calling
+  `fleet-jobs` `{"job": "prune_fuel_videos"}`. pgTAP `fuel_videos.test.sql`.
+- Server: `videos.ts` (`videoCard`, `videoLinks` 1-hour signed links, `pruneDue` pure,
+  `pruneFuelVideos` through the storage API in batches of 100, with `videos_test.ts`),
+  `list_fuel(month, vehicle?, driver?)` (vehicles permission; totals entries / litres / lkr /
+  videos / videos_waiting / videos_missing / bytes), `task_detail.fuel[]` rows with `id` and
+  `video`, `mileage_summary` by-vehicle rows with `fuel_videos`, `live_drivers` cards with
+  `video_uploads_waiting` / `video_bytes_waiting`; the connector suite uploads a tiny MP4
+  through the resumable endpoint and checks the links, the prune job and the checklist.
+- Driver app: a fifth tab, Fuel (this month's fills with the state of each video: Uploading
+  NN % · continues when there is signal, Waiting for Wi-Fi, Uploaded, Failed · tap to retry,
+  No video; Log fuel). The fuel form (`log-mileage`, mode fuel, and the end-of-task fill) needs
+  a video: `record-video` is a full-screen silent `CameraView` (720p at 1.5 Mbps, 480p at
+  1 Mbps when a phone refuses 720p, at most 90 s, at least 3 s) with the office's checklist to
+  tick; the file lives in `Paths.document/videos/<id>.mp4` until the server confirms the
+  upload. The upload is an op in the queue (`video_upload`, after the `fuel_log` row) behind
+  `lib/videoStore.ts` (`SupabaseTusStore`: create, head, 6 MB chunks read at a position with
+  `expo-file-system/legacy`); the engine keeps the server's offset after every chunk, asks the
+  server where it is on resume, starts afresh after a 404/410, treats "already there" as
+  uploaded, steps over a video waiting for Wi-Fi so the rest of the queue goes on, marks the
+  row failed when the file is gone, and patches `fuel_logs` uploaded at the end; the heartbeat
+  carries the waiting videos and bytes; Me has "Upload videos on Wi-Fi only". `test:sync`
+  covers the chunking, the resume, the 410, Wi-Fi only and the failed file; `test:data`
+  uploads a real tiny video into the local bucket.
+- Web: `/fuel` and `/fuel/:id` (filters month, vehicle, driver; tiles; a `<video controls>`
+  on the signed link; the ticked items by name), Fuel in the menu (vehicles), the video on the
+  task detail's fills with a link, "Fuel entries and videos" on Mileage with the per-vehicle
+  count, "1 video waiting (12 MB)" on the live card's phone line, the checklist editor in
+  Settings → Fleet (1 to 8 items, English and Sinhala). Vitest `fuelLogic.test.ts`; Playwright
+  "the Fuel page: a fill with its video uploaded from the phone plays in the office; the
+  checklist is edited in Fleet settings".
+- Not done here, on purpose: no in-app playback and silent recording (decisions 7 and 8); the
+  nudge and the Fuel tab reach phones with the round-2 EAS update.
+
 ## 8. Part 4: site lists and place search
 
 ### 8.1 What is in the files (read on 14 October 2026)

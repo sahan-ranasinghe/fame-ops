@@ -35,6 +35,14 @@ export interface Settings {
   /** The driver app's "At work? Switch On duty" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
   shift_start: string;
   shift_days: number[];
+  /** The items the driver ticks while recording a fuel video, in both languages (Phase 6, Part 3). */
+  fuel_video_checklist: ChecklistItem[];
+}
+
+export interface ChecklistItem {
+  key: string;
+  en: string;
+  si: string;
 }
 
 export type MapMatchingProvider = "none" | "google_roads" | "osrm";
@@ -58,6 +66,11 @@ export const SETTINGS_DEFAULTS: Settings = {
   map_matching: { provider: "none" },
   shift_start: "08:00",
   shift_days: [1, 2, 3, 4, 5, 6],
+  fuel_video_checklist: [
+    { key: "pump", en: "Pump display: litres and amount", si: "පොම්ප තිරය: ලීටර් සහ මුදල" },
+    { key: "odometer", en: "Odometer", si: "ඔඩෝමීටරය" },
+    { key: "plate", en: "Number plate", si: "අංක තහඩුව" },
+  ],
 };
 
 export type SettingKey = keyof Settings;
@@ -78,6 +91,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "Snap to roads on the route maps: provider none, google_roads (Roads API, secret GOOGLE_ROADS_KEY) or osrm (self-hosted, secret OSRM_URL); km stay from the odometer",
   shift_start: "The driver app's shift nudge (\"At work? Switch On duty\"): the time of day, HH:MM, shown only to a driver who is off duty",
   shift_days: "… on these days (0 = Sunday … 6 = Saturday); empty = never",
+  fuel_video_checklist:
+    "What the driver shows while recording a fuel video: a list of items { key, en, si } (1 to 8), ticked on the phone and kept with the entry",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -131,6 +146,20 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
         throw new ToolError("shift_days: a list of days, 0 = Sunday … 6 = Saturday (for example [1, 2, 3, 4, 5, 6]).");
       }
       return [...new Set(value as number[])].sort((a, b) => a - b);
+    }
+    case "fuel_video_checklist": {
+      if (!Array.isArray(value) || value.length < 1 || value.length > 8) throw new ToolError("fuel_video_checklist: a list of 1 to 8 items { key, en, si }.");
+      const keys = new Set<string>();
+      return value.map((item, i) => {
+        const it = (item ?? {}) as Record<string, unknown>;
+        const key = typeof it.key === "string" ? it.key.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 30) : "";
+        const en = typeof it.en === "string" ? it.en.trim().slice(0, 60) : "";
+        const si = typeof it.si === "string" ? it.si.trim().slice(0, 60) : "";
+        if (!key || !en) throw new ToolError(`fuel_video_checklist: item ${i + 1} needs a key and an English text (si may repeat the English).`);
+        if (keys.has(key)) throw new ToolError(`fuel_video_checklist: the key "${key}" is used twice.`);
+        keys.add(key);
+        return { key, en, si: si || en };
+      });
     }
     case "map_matching": {
       const provider = (value as { provider?: unknown } | null)?.provider;

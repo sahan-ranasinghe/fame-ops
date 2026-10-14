@@ -125,6 +125,7 @@ def main():
         ("mileage_summary", {}),
         ("mileage_summary", {"vehicle": reg_no}),
         ("mileage_summary", {"driver": driver}),
+        ("list_fuel", {}),
         ("list_vehicle_reports", {"status": "all"}),
         ("find_project", {"text": "a"}),
         ("list_issues", {}),

@@ -64,6 +64,8 @@ export const liveDrivers = tool({
         ...fields,
         updated: pos?.recorded_at ? colomboDateTime(pos.recorded_at) : undefined,
         on_duty_since: session?.started_at ? colomboTime(session.started_at) : undefined,
+        video_uploads_waiting: pos?.hb_video_uploads_waiting ?? undefined,
+        video_bytes_waiting: pos?.hb_video_bytes_waiting ?? undefined,
         near: hasPosition ? await nearestTown(db, pos.lat!, pos.lng!) : undefined,
         speed_kmh: share.state === "sharing" ? kmh(pos?.speed_mps) : undefined,
         battery_pct: pos?.battery_pct,

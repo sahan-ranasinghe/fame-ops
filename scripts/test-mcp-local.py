@@ -169,10 +169,11 @@ def psql(sql):
 SERVER_KEY = os.environ.get("SERVER_KEY", "")
 
 
-def fleet_jobs(scope=None):
+def fleet_jobs(scope=None, job="sync"):
     """The issue sync as pg_cron (every 5 min) and the triggers run it. fleet_overview syncs by itself
-    only when the last full sync is over 60 s old, so a check that wants a fresh overview runs this first."""
-    return http("POST", f"{API}/functions/v1/fleet-jobs", {"Content-Type": "application/json", "x-server-key": SERVER_KEY}, {"job": "sync", **(scope or {})})
+    only when the last full sync is over 60 s old, so a check that wants a fresh overview runs this first.
+    job="prune_fuel_videos" is the monthly video prune."""
+    return http("POST", f"{API}/functions/v1/fleet-jobs", {"Content-Type": "application/json", "x-server-key": SERVER_KEY}, {"job": job, **(scope or {})})
 
 
 def sign_in(username, pin):
@@ -198,12 +199,39 @@ class Driver:
     def upload(self, path, data):
         return http("POST", f"{API}/storage/v1/object/driver-photos/{path}", {**self.h, "Content-Type": "image/jpeg"}, data)
 
+    def tus_create(self, bucket, path, length, content_type):
+        """The resumable upload the app uses for videos (TUS): returns (status, upload url)."""
+        b64 = lambda t: base64.b64encode(t.encode()).decode()
+        headers = {**self.h, "Tus-Resumable": "1.0.0", "Upload-Length": str(length), "x-upsert": "false",
+                   "Upload-Metadata": f"bucketName {b64(bucket)},objectName {b64(path)},contentType {b64(content_type)},cacheControl {b64('3600')}"}
+        del headers["Content-Type"]
+        req = urllib.request.Request(f"{API}/storage/v1/upload/resumable", method="POST", headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=60) as res:
+                return res.status, res.headers.get("Location")
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode("utf-8", "replace")
+
+    def tus_patch(self, url, offset, data):
+        """One chunk; returns (status, the server's new offset)."""
+        if url.startswith("http://kong:8000"):
+            url = url.replace("http://kong:8000", API)
+        headers = {**self.h, "Tus-Resumable": "1.0.0", "Upload-Offset": str(offset), "Content-Type": "application/offset+octet-stream"}
+        req = urllib.request.Request(url, data=data, method="PATCH", headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=60) as res:
+                return res.status, int(res.headers.get("Upload-Offset") or -1)
+        except urllib.error.HTTPError as e:
+            return e.code, e.read().decode("utf-8", "replace")
+
 
 now = dt.datetime.now(dt.timezone.utc)
 colombo = dt.timezone(dt.timedelta(hours=5, minutes=30))
 today = now.astimezone(colombo).date()
 iso = lambda d: d.isoformat()
 day = lambda n: iso(today + dt.timedelta(days=n))
+# A valid, empty MP4 container (an ftyp box and a free box): enough for the bucket's mime rule.
+TINY_MP4 = bytes.fromhex("00000018667479706d703432000000006d70343269736f6d0000000866726565")
 TINY_JPEG = bytes.fromhex(
     "ffd8ffe000104a46494600010100000100010000ffdb004300080606070605080707070909080a0c140d0c0b0b0c1912130f141d1a1f1e1d1a1c1c20242e2720222c231c1c2837292c30313434341f27393d38323c2e333432"
     "ffc0000b080001000101011100ffc4001f0000010501010101010100000000000000000102030405060708090a0bffc400b5100002010303020403050504040000017d01020300041105122131410613516107227114"
@@ -704,7 +732,7 @@ check(tool("get_settings")["settings"]["shift_start"] == "08:00" and tool("get_s
 tool("update_settings", {"key": "shift_start", "value": "07:30"})
 tool("update_settings", {"key": "shift_days", "value": [5, 1, 1, 3]})
 code, ds = app.post("rpc/get_driver_settings", {})
-check(code == 200 and ds == {"shift_start": "07:30", "shift_days": [1, 3, 5]}, "the driver reads the shift settings through get_driver_settings (days sorted, no duplicates)", f"{code} {ds}")
+check(code == 200 and {k: ds.get(k) for k in ("shift_start", "shift_days")} == {"shift_start": "07:30", "shift_days": [1, 3, 5]}, "the driver reads the shift settings through get_driver_settings (days sorted, no duplicates)", f"{code} {ds}")
 r = tool("update_settings", {"key": "shift_days", "value": [7]}, expect_error=True)
 check("0 = Sunday" in r, "shift_days takes 0 to 6 only", r)
 ld = tool("list_drivers")
@@ -896,6 +924,55 @@ c2, _ = app.post("fuel_logs", {"vehicle_id": V1, "employee_id": ME, "task_id": T
 code, row = app.patch("tasks?id=eq." + T1, {"status": "completed", "end_odometer_km": 84581})
 check((c1, c2, code) == (201, 201, 200) and row[0]["km"] == 51, "driver logs end odometer + fuel and completes the task: 51 km", str(row)[:200])
 
+# Phase 6 Part 3: a fill with its video, uploaded through the resumable endpoint the app uses.
+vid = str(uuid.uuid4())
+vpath = f"{ME}/{iso(today)}/{vid}.mp4"
+c3, _ = app.post("fuel_logs", {"id": vid, "vehicle_id": V1, "employee_id": ME, "task_id": T1, "litres": 10, "amount_cents": 370000,
+                               "video_path": vpath, "video_status": "recorded", "video_duration_s": 5, "video_bytes": len(TINY_MP4), "video_checklist": ["pump", "plate"]})
+check(c3 == 201, "driver saves a second fill with its recorded video (status recorded)", f"{c3}")
+lf = tool("list_fuel")
+mine = next(e for e in lf["entries"] if e["id"] == vid)
+check(mine["video"]["status"] == "recorded" and "url" not in mine["video"] and mine["video"]["note"].startswith("Recorded") and mine["video"]["checklist"] == ["pump", "plate"]
+      and lf["totals"]["videos_waiting"] == 1 and lf["totals"]["videos_missing"] == 1 and lf["totals"]["entries"] == 2,
+      "list_fuel: the video is still on the phone (no link), the earlier fill has none", json.dumps(mine)[:300])
+code, loc = app.tus_create("fuel-videos", vpath, len(TINY_MP4), "video/mp4")
+check(code == 201 and isinstance(loc, str) and "/upload/resumable/" in loc, "the resumable upload is created in the driver's own folder", f"{code} {loc}")
+code, off = app.tus_patch(loc, 0, TINY_MP4)
+check(code == 204 and off == len(TINY_MP4), "one chunk completes the upload (the server's offset is the size)", f"{code} {off}")
+code, _ = app.patch("fuel_logs?id=eq." + vid, {"video_status": "uploaded", "video_uploaded_at": iso(now)})
+check(code == 200, "the driver marks the video uploaded", f"{code}")
+code, bad = app.tus_create("fuel-videos", f"{uuid.uuid4()}/{iso(today)}/x.mp4", 10, "video/mp4")
+check(code in (400, 403), "a resumable upload into another driver's folder is refused", f"{code} {str(bad)[:120]}")
+code, bad = app.tus_create("fuel-videos", f"{ME}/{iso(today)}/x.jpg", 10, "image/jpeg")
+check(code in (400, 403, 415), "a file that is not an mp4 is refused by the bucket", f"{code} {str(bad)[:120]}")
+lf = tool("list_fuel", {"vehicle": "cab4521"})
+mine = next(e for e in lf["entries"] if e["id"] == vid)
+check(mine["video"]["status"] == "uploaded" and mine["video"]["url"].startswith("http") and "/object/sign/fuel-videos/" in mine["video"]["url"]
+      and mine["video"]["duration_s"] == 5 and mine["video"]["bytes"] == len(TINY_MP4) and lf["totals"]["videos"] == 1 and lf["totals"]["bytes"] == len(TINY_MP4),
+      "list_fuel: uploaded, with a 1-hour signed link, length and size", json.dumps(mine)[:300])
+code, body = http("GET", mine["video"]["url"].replace("http://kong:8000", API), raw=True)
+check(code == 200 and body == TINY_MP4, "a signed video link really returns the file", f"{code}")
+td1v = tool("task_detail", {"task_id": T1})
+check(sorted(f["video"]["status"] for f in td1v["fuel"]) == ["none", "uploaded"] and next(f for f in td1v["fuel"] if f["id"] == vid)["video"]["url"].startswith("http"),
+      "task_detail: each fill carries its video (one none, one uploaded with a link)", json.dumps([f.get("video") for f in td1v["fuel"]])[:300])
+ms = tool("mileage_summary", {"vehicle": "cab4521"})
+check(ms["vehicles"][0]["fuel_entries"] == 2 and ms["vehicles"][0]["fuel_videos"] == 1, "mileage_summary counts the fills with an uploaded video", json.dumps(ms["vehicles"][0])[:200])
+code, pr = fleet_jobs(job="prune_fuel_videos")
+check(code == 200 and pr["job"] == "prune_fuel_videos" and pr["pruned"] == 0 and pr["failed"] == 0, "the monthly prune runs (nothing is older than 12 months)", f"{code} {pr}")
+check(tool("get_settings")["settings"]["fuel_video_checklist"][0]["key"] == "pump" and len(tool("get_settings")["settings"]["fuel_video_checklist"]) == 3,
+      "get_settings: the three default checklist items")
+us = tool("update_settings", {"key": "fuel_video_checklist", "value": [{"key": "pump", "en": "Pump", "si": "පොම්පය"}, {"key": "cap", "en": "Fuel cap closed"}]})
+code, ds = app.post("rpc/get_driver_settings", {})
+check(code == 200 and ds["fuel_video_checklist"] == [{"key": "pump", "en": "Pump", "si": "පොම්පය"}, {"key": "cap", "en": "Fuel cap closed", "si": "Fuel cap closed"}],
+      "the office's checklist reaches the phone through get_driver_settings (Sinhala falls back to the English)", f"{code} {ds}")
+r = tool("update_settings", {"key": "fuel_video_checklist", "value": []}, expect_error=True)
+check("1 to 8" in r, "the checklist needs 1 to 8 items", r)
+tool("update_settings", {"key": "fuel_video_checklist", "value": [{"key": "pump", "en": "Pump display: litres and amount", "si": "පොම්ප තිරය: ලීටර් සහ මුදල"}, {"key": "odometer", "en": "Odometer", "si": "ඔඩෝමීටරය"}, {"key": "plate", "en": "Number plate", "si": "අංක තහඩුව"}]})
+code, _ = app.post("rpc/send_heartbeat", {"p_at": iso(dt.datetime.now(dt.timezone.utc)), "p_sharing": True, "p_location_on": True, "p_permission": "always", "p_queued_points": 0, "p_video_uploads_waiting": 1, "p_video_bytes_waiting": 12000000})
+check(code in (200, 204), "a heartbeat says one video waits on the phone", f"{code}")
+ldv = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "nuwan.p")
+check(ldv.get("video_uploads_waiting") == 1 and ldv.get("video_bytes_waiting") == 12000000, "live_drivers: the card carries the waiting video and its size", json.dumps({k: ldv.get(k) for k in ("video_uploads_waiting", "video_bytes_waiting")}))
+
 # ---------------------------------------------------------------------------
 print("\n== 4. What the office sees afterwards ==")
 td = tool("task_detail", {"task_id": T1})
@@ -932,9 +1009,9 @@ check(gap_km == 18 and ms["biggest_gaps"][0]["km"] == 18 and ms["biggest_gaps"][
       and ms["biggest_gaps"][0]["to_task"] == "Team drop · Kurunegala site",
       "mileage_summary: 18 km outside tasks (84,512 -> 84,530) is the biggest gap, with the driver and the task it led to", json.dumps(ms.get("biggest_gaps"))[:300])
 row = next(v for v in ms["vehicles"] if v["vehicle"] == "WP CAB-4521")
-check(row["task_km"] == 51 and row["odometer_km"] == 69 and row["km_outside_tasks"] == 18 and row["fuel_litres"] == 32 and row["fuel_lkr"] == 11840
+check(row["task_km"] == 51 and row["odometer_km"] == 69 and row["km_outside_tasks"] == 18 and row["fuel_litres"] == 42 and row["fuel_lkr"] == 15540 and row["fuel_videos"] == 1
       and ms["totals"]["unlogged_km_flags"] == 1 and ms["unlogged_km"][0]["unlogged_km"] == 18 and ms["unlogged_km"][0]["driver"] == "Nuwan Perera",
-      "mileage_summary: 51 task km, 69 odometer km, 18 km outside tasks, fuel 32 l / LKR 11,840, 1 unlogged flag", json.dumps(ms)[:500])
+      "mileage_summary: 51 task km, 69 odometer km, 18 km outside tasks, fuel 42 l / LKR 15,540 (two fills, one with a video), 1 unlogged flag", json.dumps(ms)[:500])
 ms2 = tool("mileage_summary", {"driver": "kasun", "vehicle": "cab4521"})
 check(ms2["totals"]["tasks"] == 0 and ms2["totals"]["unlogged_km_flags"] == 0, "mileage_summary narrowed to another driver shows nothing of Nuwan's")
 vr = tool("list_vehicle_reports")

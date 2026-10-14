@@ -21,6 +21,7 @@ import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/background
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
 import { type LocalPhoto, prepareOdometerReader, queuePhoto } from '@/lib/photos';
+import { queueVideoUpload, type RecordedVideo, videoStoragePath } from '@/lib/video';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
@@ -47,6 +48,8 @@ export interface FuelEntry {
   litres: number | null;
   amountCents: number | null;
   receipt: LocalPhoto | null;
+  /** The video of the fill (Phase 6, Part 3): required for every fuel entry. */
+  video: RecordedVideo | null;
 }
 
 /** How an odometer reading was arrived at (see app/log-mileage.tsx). The server adds what it read. */
@@ -85,6 +88,11 @@ interface AppValue {
   /** Whether the live connection for new and changed tasks is up. */
   live: LiveStatus;
   queue: QueueCounts;
+  /** The fleet settings a driver may read: the shift nudge and the fuel video checklist. */
+  settings: api.DriverSettings;
+  /** "Upload videos on Wi-Fi only" (Me tab). */
+  wifiOnly: boolean;
+  setWifiOnly: (on: boolean) => void;
   /** Tasks with a start or finish that has not reached the office yet. */
   waitingTasks: Set<string>;
   refreshing: boolean;
@@ -149,7 +157,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<TaskWithStops[]>(() => getJson<TaskWithStops[]>(KEYS.tasks) ?? []);
   const [reports, setReports] = useState<VehicleReport[]>(() => getJson<VehicleReport[]>(KEYS.reports) ?? []);
   const [sharing, setSharingState] = useState(() => getSharing() !== null);
-  const [shift, setShift] = useState<api.DriverSettings>(() => getJson<api.DriverSettings>(KEYS.shift) ?? api.DEFAULT_DRIVER_SETTINGS);
+  const [shift, setShift] = useState<api.DriverSettings>(() => ({ ...api.DEFAULT_DRIVER_SETTINGS, ...(getJson<Partial<api.DriverSettings>>(KEYS.shift) ?? {}) }));
+  const [wifiOnly, setWifiOnlyState] = useState<boolean>(() => getJson<boolean>(KEYS.videoWifiOnly) === true);
+  const setWifiOnly = useCallback((on: boolean) => {
+    setWifiOnlyState(on);
+    setJson(KEYS.videoWifiOnly, on);
+    if (!on) void flushNow(true); // mobile data is fine now: send what waited
+  }, []);
   const [tracking, setTracking] = useState<TrackingStatus>(TRACKING_OFF);
   const [gpsKm, setGpsKm] = useState<KmCounters>(() => kmCounters());
   const [live, setLive] = useState<LiveStatus>('off');
@@ -661,10 +675,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const current = meRef.current;
     if (!current) return;
     if (fuel.receipt) queuePhoto(fuel.receipt, 'fuel_receipt', current.id);
+    // The video is named after the fuel log; its row goes first, the upload follows in the queue.
+    const id = fuel.video?.id ?? Crypto.randomUUID();
     enqueue({
       kind: 'fuel_log',
       row: {
-        id: Crypto.randomUUID(),
+        id,
         vehicle_id: vehicleId,
         employee_id: current.id,
         task_id: taskId,
@@ -673,8 +689,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
         receipt_photo_id: fuel.receipt?.id ?? null,
         odometer_km: odometerKm,
         logged_at: at,
+        ...(fuel.video
+          ? {
+            video_path: videoStoragePath(current.id, id, fuel.video.recordedAt),
+            video_status: 'recorded',
+            video_duration_s: fuel.video.durationS,
+            video_bytes: fuel.video.bytes,
+            video_checklist: fuel.video.checklist,
+          }
+          : {}),
       },
     });
+    if (fuel.video) queueVideoUpload(fuel.video, id, current.id);
   }, []);
 
   const completeTask = useCallback(
@@ -792,7 +818,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const value: AppValue = {
     booted, me, language, t, tList, setLanguage,
-    vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, waitingTasks, refreshing, offline, dataAvailable,
+    vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, settings: shift, wifiOnly, setWifiOnly, waitingTasks, refreshing, offline, dataAvailable,
     gate, resolveGate, requireLocation,
     signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, skipStop,
     acceptTask, declineTask, notice, clearNotice,

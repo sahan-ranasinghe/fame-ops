@@ -3,13 +3,16 @@
 // that something changed.
 
 import { File, UploadType } from 'expo-file-system';
+import { EncodingType, readAsStringAsync } from 'expo-file-system/legacy';
+import * as Network from 'expo-network';
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 import { type AcceptAnswer, ApiError, type HeartbeatRow } from '../lib/api';
 import { getJson, KEYS, setJson } from '../lib/kv';
 import { supabase } from '../lib/supabase';
 import type { Employee } from '../lib/types';
-import { type BackoffState, createSync, type FlushResult, type Op } from './engine';
+import { base64Decode, SupabaseTusStore } from '../lib/videoStore';
+import { type BackoffState, type Connection, createSync, type FlushResult, type Op } from './engine';
 import { addHeartbeatLog, addOp, queueCounts, queueStore, replaceOp, retryRejectedPoints } from './store';
 
 const PHOTO_BUCKET = 'driver-photos';
@@ -62,6 +65,37 @@ function removeFile(localUri: string): void {
   }
 }
 
+/** `length` bytes of a file at `offset`, read as base64 by the legacy file API (the only one that reads at a position). */
+async function readChunk(localUri: string, offset: number, length: number): Promise<Uint8Array> {
+  const text = await readAsStringAsync(localUri, { encoding: EncodingType.Base64, position: offset, length });
+  return base64Decode(text);
+}
+
+function fileSize(localUri: string): number | null {
+  try {
+    const file = new File(localUri);
+    return file.exists ? file.size ?? null : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What the phone is connected through, as Android reports it. */
+export async function connectionKind(): Promise<Connection> {
+  try {
+    const state = await Network.getNetworkStateAsync();
+    if (state.isConnected === false) return 'none';
+    if (state.type === Network.NetworkStateType.WIFI || state.type === Network.NetworkStateType.ETHERNET) return 'wifi';
+    if (state.type === Network.NetworkStateType.CELLULAR) return 'cellular';
+    return state.isConnected ? 'unknown' : 'none';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** The driver's "Upload videos on Wi-Fi only" switch (Me tab). */
+export const wifiOnly = () => getJson<boolean>(KEYS.videoWifiOnly) === true;
+
 type AnswerListener = (op: Op, answer: AcceptAnswer) => void;
 const answerListeners = new Set<AnswerListener>();
 
@@ -72,21 +106,6 @@ export function onAnswer(listener: AnswerListener): () => void {
     answerListeners.delete(listener);
   };
 }
-
-const sync = createSync({
-  client: supabase,
-  store: queueStore,
-  employeeId: () => getJson<Employee>(KEYS.me)?.id ?? null,
-  uploadFile: uploadPhotoFile,
-  removeFile,
-  onAnswer: (op, answer) => {
-    for (const listener of answerListeners) listener(op, answer);
-  },
-  backoff: {
-    load: () => getJson<BackoffState>(KEYS.backoff),
-    save: (state) => setJson(KEYS.backoff, state),
-  },
-});
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -102,6 +121,31 @@ export function onQueueChange(listener: Listener): () => void {
 function changed(): void {
   for (const listener of listeners) listener();
 }
+
+const sync = createSync({
+  client: supabase,
+  store: queueStore,
+  employeeId: () => getJson<Employee>(KEYS.me)?.id ?? null,
+  uploadFile: uploadPhotoFile,
+  removeFile,
+  onAnswer: (op, answer) => {
+    for (const listener of answerListeners) listener(op, answer);
+  },
+  backoff: {
+    load: () => getJson<BackoffState>(KEYS.backoff),
+    save: (state) => setJson(KEYS.backoff, state),
+  },
+  video: new SupabaseTusStore(SUPABASE_URL, {
+    apiKey: SUPABASE_PUBLISHABLE_KEY,
+    token: async () => (await supabase.auth.getSession()).data.session?.access_token ?? null,
+  }),
+  readChunk,
+  fileSize,
+  wifiOnly,
+  connection: connectionKind,
+  onProgress: () => changed(),
+});
+
 
 /** Puts something in the queue. It is on the phone from this moment, whatever the connection. */
 export function enqueue(...ops: Op[]): void {
@@ -132,7 +176,7 @@ let retryTimer: ReturnType<typeof setTimeout> | null = null;
 export async function flushNow(force = false): Promise<FlushResult> {
   setJson(KEYS.lastFlush, Date.now());
   const { data } = await supabase.auth.getSession();
-  if (!data.session) return { sent: 0, failed: 0, rejected: 0, offline: true, skipped: false };
+  if (!data.session) return { sent: 0, failed: 0, rejected: 0, offline: true, skipped: false, deferred: 0 };
   try {
     const result = await sync.flush({ force });
     if (result.offline && !result.skipped) {
@@ -167,4 +211,4 @@ export function maybeRetryRejected(reason: 'refresh' | 'start', updateId: string
   return n;
 }
 
-export { queueCounts } from './store';
+export { pendingFuelLogs, queueCounts, retryVideo, videoUploads } from './store';
