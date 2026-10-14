@@ -6,8 +6,8 @@
 // the tool that caused the event. The sender never hears about their own action.
 //
 // task.declined and task.not_accepted are written in SQL (decline_task and the
-// accept reminder) with the same shapes; vehicle.booked and
-// vehicle.booking_cancelled arrive with the booking (Part 6).
+// accept reminder) with the same shapes; vehicle.booked comes from saving a task
+// on a custodian's vehicle, vehicle.booking_cancelled from cancel_request.
 
 import type { Db } from "./db.ts";
 import { unwrap } from "./db.ts";
@@ -61,6 +61,18 @@ export const EVENTS: readonly EventInfo[] = [
     needs: ["issues"],
   },
   { event: "issue.assigned", label: "An issue is given to you", text: "Someone assigns an issue to you", needs: ["issues"] },
+  {
+    event: "vehicle.booked",
+    label: "A vehicle you look after is booked",
+    text: "The office books a vehicle you are the custodian of",
+    needs: [],
+  },
+  {
+    event: "vehicle.booking_cancelled",
+    label: "A booking of your vehicle is cancelled",
+    text: "A booking of a vehicle you look after is cancelled",
+    needs: [],
+  },
 ];
 
 export interface Message {

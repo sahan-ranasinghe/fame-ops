@@ -85,7 +85,12 @@ export function statusTone(col: string, text?: string | null): Tone {
   return "live";
 }
 export function requestTone(status?: string): Tone {
-  return status === "waiting" ? "warn" : status === "approved" ? "ok" : status === "declined" ? "bad" : "";
+  return status === "waiting" ? "warn" : status === "approved" ? "ok" : status === "declined" ? "bad" : status === "cancelled" ? "muted" : "";
+}
+/** The vehicle's availability line (list_vehicles): on a task = live, booked = warn, in garage = bad, free = ok. */
+export function vehicleAvailabilityTone(text?: string | null): Tone {
+  const t = text || "";
+  return /^On a task/i.test(t) ? "live" : /^Booked/i.test(t) ? "warn" : /garage/i.test(t) ? "bad" : /^Free/i.test(t) ? "ok" : "";
 }
 export function availabilityTone(label?: string): Tone {
   const l = label || "";

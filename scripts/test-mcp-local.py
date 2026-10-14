@@ -440,7 +440,7 @@ check(by_plate["WP CAR-1182"]["availability"] == "in garage" and by_plate["WP CA
       and by_plate["WP PH-2087"]["availability"] == "free all day" and sv["vehicles"][0]["pick"] == "good",
       "suggest_vehicles: car in garage = no; vans free all day, best first", json.dumps(sv["vehicles"])[:400])
 r = tool("decide_request", {"request_id": R1, "decision": "approve"}, expect_error=True)
-check("vehicle and a driver" in r, "approve without vehicle/driver is refused", r)
+check("give a vehicle" in r, "approve without vehicle/driver is refused", r)
 ap = tool("decide_request", {"request_id": R1, "decision": "approve", "vehicle": "WP PH-2087", "driver": "kasun.s", "decided_by": "Charuka W."})
 T4 = ap["task_id"]
 check(ap["request"] == "approved" and ap["driver"] == "Kasun Silva" and ap["title"] == "Trip · Matara sites", "decide_request approve creates the task", json.dumps(ap)[:300])
@@ -453,6 +453,79 @@ r = tool("decide_request", {"request_id": R2, "decision": "decline"}, expect_err
 check("reason" in r.lower(), "decline without a reason is refused", r)
 dc = tool("decide_request", {"request_id": R2, "decision": "decline", "reason": "No car free that afternoon"})
 check(dc["request"]["status"] == "declined" and dc["request"]["decline_reason"] == "No car free that afternoon", "decide_request decline records the reason")
+
+# ---------------------------------------------------------------------------
+print("\n== 2c. Custodians, booking in one step, cancelling ==")
+cust_email = f"custodian.{uuid.uuid4().hex[:6]}@fame.test"
+tool("create_office_user", {"name": "Pool Custodian", "email": cust_email, "permissions": ["view", "request"]})
+CUST = psql(f"select id from employees where email = '{cust_email}'")
+psql(f"update employees set phone = '0770000111' where id = '{CUST}'")
+uv = tool("update_vehicle", {"reg_no": "WP CAR-1182", "custodian": cust_email, "custodian_note": "Keeps it at Rajagiriya"})
+check(uv["updated"]["assigned_to"] == "Pool Custodian" and uv["updated"]["custodian_note"] == "Keeps it at Rajagiriya"
+      and uv["updated"]["assigned_to_links"]["call"] == "tel:+94770000111" and uv["changed"] == ["custodian_note", "custodian_employee_id"],
+      "update_vehicle assigns a custodian by e-mail: the card shows who, the note and the links", json.dumps(uv["updated"])[:300])
+r = tool("update_vehicle", {"reg_no": "WP CAR-1182", "custodian": "nobody here"}, expect_error=True)
+check("No office person" in r, "an unknown custodian is refused", r)
+lv = tool("list_vehicles")
+car = next(v for v in lv["vehicles"] if v["reg_no"] == "WP CAR-1182")
+cab = next(v for v in lv["vehicles"] if v["reg_no"] == "WP CAB-4521")
+check(car["availability"] == "In garage" and car["assigned_to"] == "Pool Custodian" and (cab["availability"] == "Free" or cab["availability"].startswith("Booked")),
+      "list_vehicles: the car is in the garage and assigned; the van is free or booked for later", f"{car['availability']} / {cab['availability']}")
+sv = tool("suggest_vehicles", {"date": day(3), "time": "09:00", "back_by": "12:00", "need_type": "car", "pax": 2})
+check("request" not in sv and sv["window"]["when"].endswith("09:00") and sv["window"]["back_by"] == "12:00" and sv["window"]["need"] == "Car · 2 pax"
+      and [v["reg_no"] for v in sv["groups"]["in_garage"]] == ["WP CAR-1182"] and sv["groups"]["in_garage"][0]["assigned_to"] == "Pool Custodian"
+      and {v["reg_no"] for v in sv["groups"]["free_pool"]} == {"WP CAB-4521", "WP PH-2087"} and sv["groups"]["free_assigned"] == []
+      and len(sv["drivers_free"]) == 2 and "book_vehicle" in sv["next"],
+      "suggest_vehicles for a day and time (no request): the window, the four groups, the free drivers", json.dumps(sv["groups"])[:400])
+tool("update_vehicle", {"reg_no": "WP CAR-1182", "in_garage": False})
+sv = tool("suggest_vehicles", {"date": day(3), "time": "09:00", "back_by": "12:00", "need_type": "car", "pax": 2})
+fa = sv["groups"]["free_assigned"]
+check(len(fa) == 1 and fa[0]["reg_no"] == "WP CAR-1182" and fa[0]["note"] == "ask first" and fa[0]["call"] == "tel:+94770000111" and fa[0]["whatsapp"] == "https://wa.me/94770000111"
+      and fa[0]["pick"] == "good" and sv["vehicles"][0]["reg_no"] == "WP CAR-1182",
+      "out of the garage the custodian's car is 'free but assigned: ask first' with the custodian's links, and the best pick for a car", json.dumps(fa)[:300])
+bk = tool("book_vehicle", {"requested_by": "Pool Custodian", "date": day(3), "time": "09:00", "back_by": "12:00", "route_from": "Head office", "route_to": "Rajagiriya",
+                           "need_type": "car", "pax": 2, "vehicle": "car1182", "driver_required": False})
+check(bk["booked"] == "in one step" and bk["request"]["status"] == "approved" and bk["request"]["one_step"] is True and bk["request"]["driver_required"] is False
+      and bk["driver"] == "Pool Custodian" and bk["vehicle"] == "WP CAR-1182" and bk["request"]["timeline"]["seen"].endswith(f"by {ACTOR_NAME}")
+      and bk["request"]["timeline"]["decided_by"] == ACTOR_NAME and bk["leave_by"].endswith("09:00") and bk["request"]["requested_by"] == "Pool Custodian",
+      "book_vehicle: the request (approved, one step, seen and decided by the booker) and its task, driven by the custodian", json.dumps(bk)[:400])
+BK, TBK = bk["request"]["id"], bk["task_id"]
+check(psql(f"select requested_by_employee_id = '{CUST}' and task_id = '{TBK}' from vehicle_requests where id = '{BK}'") == "t"
+      and psql(f"select employee_id = '{CUST}' from tasks where id = '{TBK}'") == "t"
+      and psql(f"select count(*) from office_audit where tool = 'book_vehicle' and result_summary like 'booked WP CAR-1182 for Pool Custodian (requested and approved by %'") == "1",
+      "the request is the custodian's, the task is theirs, the audit row says requested and approved by whom")
+b3 = tool("task_board", {"date": day(3)})
+check(any(c["id"] == TBK and c["status"] == "Driven by Pool Custodian (custodian · no app)" for c in b3["assigned"]), "the board says the custodian drives it (no app)", json.dumps(b3["assigned"])[:300])
+r = tool("book_vehicle", {"date": day(3), "time": "14:00", "vehicle": "ph2087"}, expect_error=True)
+check("Give a driver" in r, "a booking without a driver on a pool vehicle is refused", r)
+n_req = psql("select count(*) from vehicle_requests")
+r = tool("book_vehicle", {"date": day(3), "time": "14:00", "vehicle": "ph2087", "driver": "nobody.here"}, expect_error=True)
+check("No driver matches" in r and psql("select count(*) from vehicle_requests") == n_req, "a refused driver leaves no request behind (one transaction)", r)
+bk2 = tool("book_vehicle", {"date": day(3), "time": "14:00", "back_by": "16:00", "route_to": "Nugegoda", "vehicle": "ph2087", "driver": "kasun.s", "pax": 80, "need_type": "car"})
+check(bk2["request"]["requested_by"] == ACTOR_NAME and bk2["driver"] == "Kasun Silva" and any("seats for 80 passengers" in w for w in bk2["warnings"])
+      and any("is a van, not a car" in w for w in bk2["warnings"]),
+      "a booking is for yourself by default; too many passengers and the wrong type are warnings, not blocks", json.dumps(bk2)[:300])
+cr = tool("cancel_request", {"request_id": bk2["request"]["id"], "reason": "Trip called off"})
+check(cr["request"]["status"] == "cancelled" and cr["was"] == "approved" and cr["task_cancelled"] == "Trip · Nugegoda" and cr["request"]["cancel_reason"] == "Trip called off"
+      and cr["request"]["timeline"]["cancelled"].endswith(f"by {ACTOR_NAME}") and cr["request"]["timeline"]["decided"]
+      and psql(f"select status || '|' || cancelled_reason from tasks where id = '{bk2['task_id']}'") == "cancelled|Request cancelled: Trip called off"
+      and psql(f"select action || '|' || note from task_assignment_events where task_id = '{bk2['task_id']}' order by id desc limit 1") == "cancelled|Request cancelled: Trip called off",
+      "cancel_request cancels the booking and its task with the reason, and writes the task's history", json.dumps(cr)[:300])
+r = tool("cancel_request", {"request_id": bk2["request"]["id"], "reason": "again"}, expect_error=True)
+check("already cancelled" in r, "a cancelled request stays cancelled", r)
+check(tool("list_requests", {"status": "cancelled"})["count"] == 1 and tool("list_requests", {"status": "approved"})["count"] >= 2, "list_requests filters cancelled and approved")
+re4 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(4), "time": "08:00", "route_to": "Kandy", "need_type": "car", "driver_required": False})
+check(re4["request"]["driver_required"] is False and re4["request"]["timeline"]["sent"] and "seen" not in re4["request"]["timeline"] and re4["request"]["status"] == "waiting",
+      "create_request with driver_required false: waiting, the timeline starts at sent", json.dumps(re4["request"])[:300])
+sv4 = tool("suggest_vehicles", {"request_id": re4["request"]["id"]})
+check(sv4["request"]["timeline"]["seen"].endswith(f"by {ACTOR_NAME}") and sv4["groups"]["free_assigned"][0]["reg_no"] == "WP CAR-1182" and sv4["groups"]["free_assigned"][0]["note"] == "ask first"
+      and "custodian drives" in sv4["next"],
+      "opening a request with suggest_vehicles marks it seen; the custodian's car is 'ask first'", json.dumps(sv4["request"]["timeline"]) + sv4["next"])
+r = tool("decide_request", {"request_id": re4["request"]["id"], "decision": "approve", "vehicle": "ph2087"}, expect_error=True)
+check("has no custodian" in r, "approving without a driver on a pool vehicle is refused even when no driver is required", r)
+ap4 = tool("decide_request", {"request_id": re4["request"]["id"], "decision": "approve", "vehicle": "car1182"})
+check(ap4["driver"] == "Pool Custodian" and ap4["request"] == "approved", "approved without a driver: the custodian drives", json.dumps(ap4)[:200])
+tool("update_vehicle", {"reg_no": "WP CAR-1182", "in_garage": True})  # back in the garage: the later sections count on it
 
 # ---------------------------------------------------------------------------
 print("\n== 3. The driver's side (as the app will do it) ==")
@@ -1001,7 +1074,8 @@ check(code == 200 and f3 > f1, "the job's own sync runs regardless and records i
 if CHANNEL == "api":
     # The admin's own settings and devices through office-api (what Settings → Notifications does).
     ms = tool("my_notification_settings")
-    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "issue.opened", "issue.assigned"]
+    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "issue.opened", "issue.assigned",
+                                                 "vehicle.booked", "vehicle.booking_cancelled"]
           and all(e["enabled"] for e in ms["events"]) and ms["devices"] == [] and ms["push"]["configured"] is VAPID and (("public_key" in ms["push"]) is VAPID),
           "my_notification_settings: every event on (the admin holds every permission), no devices, push.configured says whether the server has the keys", json.dumps(ms)[:300])
     ms = tool("set_my_notification_settings", {"events": {"issue.opened": False}})
@@ -1023,6 +1097,16 @@ if CHANNEL == "api":
     check(rm["removed"] == 1 and rm["devices"] == [], "remove_web_push by endpoint (the browser's own, after unsubscribe)", json.dumps(rm)[:200])
     r = tool("remove_web_push", {}, expect_error=True)
     check("endpoint or the device id" in r, "remove_web_push needs one of the two", r)
+# vehicle.booked / vehicle.booking_cancelled → the custodian (the approver keeps WP PH-2087 from now on).
+tool("update_vehicle", {"reg_no": "WP PH-2087", "custodian": approver_email})
+bk3 = tool("book_vehicle", {"requested_by": "Notify Approver", "date": day(5), "time": "09:00", "route_to": "Galle", "vehicle": "ph2087", "driver": "kasun.s"})
+row = outbox(f"event = 'vehicle.booked' and recipient_employee_id = '{APPROVER}'")
+check("|queued|WP PH-2087 booked · " in row and f"|{ACTOR_NAME} · " in row and "→ Galle|" in row and row.endswith(f"|/tasks?task={bk3['task_id']}"),
+      "booking a custodian's vehicle queues vehicle.booked for the custodian with the booker and the route", row)
+cr3 = tool("cancel_request", {"request_id": bk3["request"]["id"], "reason": "Galle trip off"})
+row = outbox(f"event = 'vehicle.booking_cancelled' and recipient_employee_id = '{APPROVER}'")
+check("|queued|WP PH-2087 booking cancelled|Galle trip off · " in row and row.endswith("|/requests"), "cancelling it queues vehicle.booking_cancelled for the custodian", row)
+tool("update_vehicle", {"reg_no": "WP PH-2087", "custodian": None})
 sink.shutdown()
 
 
@@ -1051,11 +1135,14 @@ if CHANNEL == "api":
     code, body = api_call(staff_token, "task_board", {})
     check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
     code, body = api_call(staff_token, "my_notification_settings", {})
-    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided"], "a requester's notification settings hold the one event their permission brings", f"{code} {str(body)[:200]}")
+    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "vehicle.booked", "vehicle.booking_cancelled"],
+          "a requester's notification settings hold their decided-request event and the two custodian events", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})
     check(code == 200 and body["result"]["count"] == 0, "staff see none of the office's requests", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "create_request", {"requested_by": "Somebody Else", "date": day(3), "time": "09:00", "route_to": "Galle", "pax": 2})
-    check(code == 200 and body["result"]["request"]["requested_by"] == "Test Staff", "a staff request is always in their own name", f"{code} {str(body)[:200]}")
+    check(code == 200 and body["result"]["request"]["requested_by"] == "Test Staff" and body["result"]["next"].startswith("Sent to the fleet admin")
+          and body["result"]["request"]["timeline"]["sent"] and psql(f"select requested_by_user_id = '{staff_uid}' from vehicle_requests where requested_by_name = 'Test Staff'") == "t",
+          "a staff request is always in their own name, says it was sent to the fleet admin, and records the account that sent it", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})
     check(code == 200 and body["result"]["count"] == 1, "and they see that one request", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "update_office_user", {"email": staff_email, "permissions": ["view", "request", "users"]})

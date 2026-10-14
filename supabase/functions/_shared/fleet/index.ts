@@ -19,7 +19,7 @@ import { listVehicleReports, mileageSummary, updateVehicleReport } from "./tools
 import { fleetOverview } from "./tools/overview.ts";
 import { addPlace, listPlaces } from "./tools/places.ts";
 import { findProject, importProjects } from "./tools/projects.ts";
-import { createRequest, decideRequest, listRequests, suggestVehicles } from "./tools/requests.ts";
+import { bookVehicle, cancelRequest, createRequest, decideRequest, listRequests, suggestVehicles } from "./tools/requests.ts";
 import { issueHistory, listIssues, updateIssue } from "./tools/issues.ts";
 import { myNotificationSettings, registerWebPush, removeWebPush, setMyNotificationSettings } from "./tools/notifications.ts";
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
@@ -50,6 +50,8 @@ export const TOOLS: AnyTool[] = [
   listRequests,
   suggestVehicles,
   decideRequest,
+  bookVehicle,
+  cancelRequest,
   mileageSummary,
   listVehicleReports,
   updateVehicleReport,
@@ -90,6 +92,10 @@ export const INSTRUCTIONS = [
   "Notifications (web push in the office web app): my_notification_settings and set_my_notification_settings are a person's own " +
   "(a signed-in person or a personal key; the shared key has no person). Events: a request comes in, your request is decided, a task " +
   "declined or not accepted, a critical issue, an issue given to you.",
+  "A vehicle can have a custodian (update_vehicle custodian): list_vehicles shows who it is assigned to and whether it is free, on a " +
+  "task or booked; suggest_vehicles groups the free pool, the assigned ones (ask the custodian first), the busy and the in-garage ones. " +
+  "book_vehicle makes a request and its task in one go (the custodian drives when driver_required is false); cancel_request cancels " +
+  "a booking and its task.",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",

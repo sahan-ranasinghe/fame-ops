@@ -252,7 +252,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByTestId("notifications")).toContainText(/in this browser|not switched on for the office/);
   const requestBox = page.getByRole("checkbox", { name: "A vehicle request comes in" });
   await expect(requestBox).toBeChecked();
-  await expect(page.getByRole("checkbox")).toHaveCount(6);
+  await expect(page.getByRole("checkbox")).toHaveCount(8);
   await requestBox.uncheck();
   await expect(page.getByRole("status")).toHaveText("Saved");
   await page.reload();
@@ -313,7 +313,8 @@ test("a requester-only user sees locked menu items, a No access page, and asks i
   // Their notifications: the one event a requester can get.
   await page.goto("/settings/notifications");
   await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
-  await expect(page.getByRole("checkbox")).toHaveCount(1);
+  // Their decided-request event, plus the two custodian events everyone can get.
+  await expect(page.getByRole("checkbox")).toHaveCount(3);
   await expect(page.getByRole("checkbox", { name: "Your request is decided" })).toBeChecked();
 
   // A new request has no "Who needs it" field: it is in their own name.
@@ -323,8 +324,9 @@ test("a requester-only user sees locked menu items, a No access page, and asks i
   await page.getByLabel("Time", { exact: true }).fill("09:00");
   await page.getByLabel("To", { exact: true }).fill("Galle");
   await page.getByRole("button", { name: "Save request" }).click();
-  await expect(page.getByRole("status")).toHaveText("Request saved");
+  await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
   await expect(page.locator("tr", { hasText: "E2E Requester" })).toBeVisible();
+  await expect(page.locator("tr", { hasText: "E2E Requester" })).toContainText("sent ");
 });
 
 test("a dispatcher (view + assign tasks) gets the tasks board, not mileage or the requests queue; a form dialog never closes on a click outside", async ({ page }) => {
@@ -492,4 +494,57 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   await page.goto("/issues");
   await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
   await expect(page.getByTestId("issues-list").getByText(`${plate}`)).toHaveCount(0);
+});
+
+test("an approver books a vehicle in one step from the Free group; the task is on the board with Leave by; the booking is cancelled", async ({ page }) => {
+  const email = `e2e.book.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Booker", email, permissions: ["view", "request", "approve", "assign_tasks"] });
+  const driver = { name: `E2E Pool Driver ${stamp}`, code: `E2B-${stamp}`, username: `e2b.${stamp}`, pin: "246810" };
+  await tool("create_driver", driver);
+  const plate = `WP E2B-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Suzuki Every", vehicle_type: "van", seats: 7, current_odometer_km: 100 });
+  // Three days ahead (Colombo), so nothing else of the suite shares the day.
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(Date.now() + 3 * 864e5));
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Booker for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // New request → Assign now: the Free group lists the pool van; pick it and a free driver; Book now.
+  await page.goto("/requests");
+  await page.getByRole("button", { name: "New request" }).click();
+  await page.getByLabel("Who needs it").fill("Someone from HR");
+  await page.getByLabel("Day").fill(day);
+  await page.getByLabel("Time", { exact: true }).fill("09:30");
+  await page.getByLabel("To", { exact: true }).fill("Galle");
+  await expect(page.getByTestId("group-free_pool")).toContainText(plate);
+  await page.getByTestId("group-free_pool").locator(".opt", { hasText: plate }).getByRole("radio").check();
+  await page.getByTestId("assign-now").getByLabel("Driver", { exact: true }).selectOption({ label: driver.name });
+  await page.getByRole("button", { name: "Book now" }).click();
+  await expect(page.getByTestId("booked")).toContainText("Someone from HR has");
+  await expect(page.getByTestId("booked")).toContainText(plate);
+  await page.getByRole("button", { name: "Done" }).click();
+
+  // The task is on that day's board with its leave-by time.
+  await page.goto(`/tasks?date=${day}`);
+  await expect(page.locator(".tcard", { hasText: "Trip · Galle" }).first()).toContainText("Leave by");
+
+  // The request is approved, booked directly; its timeline says so; Cancel booking with a reason.
+  await page.goto("/requests");
+  await page.getByRole("button", { name: "Approved", exact: true }).click();
+  await page.locator("tr", { hasText: "Someone from HR" }).first().click();
+  await expect(page.getByTestId("request-timeline")).toContainText("Approved");
+  await page.getByLabel("Cancel this booking with a reason").fill("Trip called off");
+  await page.getByRole("button", { name: "Cancel booking" }).click();
+  await expect(page.getByRole("status")).toHaveText("Booking cancelled");
+  const cancelled = await tool<{ requests: { requested_by: string; status: string; cancel_reason?: string; task_id?: string }[] }>("list_requests", { status: "cancelled" });
+  const mine = cancelled.requests.find((r) => r.requested_by === "Someone from HR");
+  expect(mine?.cancel_reason).toBe("Trip called off");
+  const board = await tool<{ counts: { cancelled: number } }>("task_board", { date: day });
+  expect(board.counts.cancelled).toBeGreaterThan(0);
 });

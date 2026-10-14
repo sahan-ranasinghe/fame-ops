@@ -81,6 +81,23 @@ export function findDriver(refs: Refs, typed: string): Employee {
   return pickOne(partial, "driver", typed, show, "Use list_drivers to see the drivers.");
 }
 
+/** An office person (a custodian) by name, code, username or e-mail. */
+export function findPerson(refs: Refs, typed: string): Employee {
+  const people = refs.employees.filter((e) => e.role !== "driver" && e.active);
+  const want = typed.trim().toLowerCase();
+  const exact = people.filter((e) =>
+    e.name.toLowerCase() === want || e.code.toLowerCase() === want || (e.username ?? "").toLowerCase() === want ||
+    (e.email ?? "").toLowerCase() === want
+  );
+  const show = (e: Employee) => `${e.name} (${e.email ?? e.code})`;
+  if (exact.length > 0) return pickOne(exact, "office person", typed, show, "");
+  const partial = people.filter((e) => e.name.toLowerCase().includes(want));
+  return pickOne(partial, "office person", typed, show, "Give the person's name or e-mail.");
+}
+
+/** A task whose employee is not a driver is driven by the vehicle's custodian: no app, no reminders. */
+export const isDriver = (e: Pick<Employee, "role"> | undefined): boolean => e?.role === "driver";
+
 /** By plate; spaces, dashes and capitals do not matter ("cab4521" finds "WP CAB-4521"). */
 export function findVehicle(refs: Refs, typed: string): Vehicle {
   const want = plain(typed);

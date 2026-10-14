@@ -389,7 +389,8 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         });
       }
     }
-    for (const t of tasks.filter((x) => x.status === "assigned")) {
+    // A custodian-driven task (its employee is an office person, not a driver) has no app: nothing to start or accept.
+    for (const t of tasks.filter((x) => x.status === "assigned" && refs.emp.get(x.employee_id)?.role === "driver")) {
       const leaveBy = t.leave_by ?? t.start_at;
       if (new Date(leaveBy).getTime() + LATE_START_MIN * 60000 < now.getTime()) {
         wanted.push({

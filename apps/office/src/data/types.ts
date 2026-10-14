@@ -281,6 +281,14 @@ export interface TaskDetail {
   suggestions?: FreeAt;
 }
 
+export interface RequestTimeline {
+  sent?: string;
+  seen?: string;
+  decided?: string;
+  decided_by?: string;
+  cancelled?: string;
+}
+
 export interface RequestCard {
   id: string;
   requested_by: string;
@@ -289,12 +297,19 @@ export interface RequestCard {
   back_by?: string;
   route?: string;
   need?: string;
-  status: "waiting" | "approved" | "declined";
+  status: "waiting" | "approved" | "declined" | "cancelled";
   asked?: string;
   decided?: string;
   decline_reason?: string;
   task_id?: string;
   note?: string;
+  /** false = the vehicle's custodian drives (Part 6). */
+  driver_required?: boolean;
+  /** Booked directly by the office: request and task in one go. */
+  one_step?: boolean;
+  cancelled?: string;
+  cancel_reason?: string;
+  timeline?: RequestTimeline;
 }
 
 export interface RequestsList {
@@ -328,6 +343,13 @@ export interface Vehicle {
   km_this_month?: number;
   km_allowance?: number;
   odometer_km?: number;
+  /** The custodian (Part 6) and the availability line: Free / On a task · back ~HH:MM / Booked later today · HH:MM / In garage. */
+  assigned_to?: string;
+  assigned_to_links?: Links;
+  custodian_note?: string;
+  availability?: string;
+  back_at?: string;
+  back_source?: "planned" | "live";
 }
 
 export interface Place {
@@ -341,11 +363,46 @@ export interface PlaceWithId extends Place {
   id?: string;
 }
 
+export interface SuggestedVehicle {
+  reg_no: string;
+  make_model?: string;
+  type?: string;
+  seats?: number;
+  availability: string;
+  pick: string;
+  but?: string;
+  regular_driver?: string;
+  assigned_to?: string;
+  custodian_note?: string;
+  /** free_assigned: the custodian's links and "ask first"; busy: when it is back. */
+  call?: string;
+  whatsapp?: string;
+  note?: string;
+  back?: string;
+}
+
 export interface Suggestions {
-  request: RequestCard;
-  vehicles: { reg_no: string; make_model?: string; type?: string; seats?: number; availability: string; pick: string; but?: string; regular_driver?: string }[];
+  /** Absent when asked for a day and time rather than a request. */
+  request?: RequestCard;
+  window?: { when: string; back_by?: string; need?: string };
+  vehicles: SuggestedVehicle[];
   drivers: { name: string; username: string; availability: string }[];
+  groups?: { free_pool: SuggestedVehicle[]; free_assigned: SuggestedVehicle[]; busy: SuggestedVehicle[]; in_garage: SuggestedVehicle[] };
+  drivers_free?: { name: string; username: string }[];
   next?: string;
+}
+
+/** book_vehicle: the request, then the same fields as a created task. */
+export interface BookResult {
+  request: RequestCard;
+  request_id?: string;
+  task_id?: string;
+  title?: string;
+  when?: string;
+  leave_by?: string;
+  driver?: string;
+  vehicle?: string;
+  warnings?: string[];
 }
 
 export interface ProjectMatch {

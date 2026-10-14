@@ -62,7 +62,7 @@ export const ALL_TOOLS = [
   "list_vehicles", "register_vehicle", "update_vehicle", "add_rental_company",
   "list_places", "add_place",
   "create_task", "task_board", "task_detail", "cancel_task", "reassign_task",
-  "create_request", "list_requests", "suggest_vehicles", "decide_request",
+  "create_request", "list_requests", "suggest_vehicles", "decide_request", "book_vehicle", "cancel_request",
   "mileage_summary", "list_vehicle_reports", "update_vehicle_report",
   "import_projects", "find_project",
   "list_office_users", "create_office_user", "reset_office_password", "set_office_user_active", "create_office_key", "revoke_office_key",

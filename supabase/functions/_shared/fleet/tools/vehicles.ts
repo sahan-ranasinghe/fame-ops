@@ -7,6 +7,7 @@ import { ToolError, unwrap } from "../db.ts";
 import {
   docChip,
   findDriver,
+  findPerson,
   findVehicle,
   loadRefs,
   monthKm,
@@ -16,8 +17,8 @@ import {
   type Vehicle,
   vehicleStatus,
 } from "../fleet.ts";
-import { centsToLkr, lkrToCents } from "../format.ts";
-import { colomboDate } from "../time.ts";
+import { centsToLkr, contactLinks, lkrToCents } from "../format.ts";
+import { colomboDate, colomboTime } from "../time.ts";
 import { realDate, tool, zDate, zText, zVehicleType } from "../tool.ts";
 
 const vehicleFields = {
@@ -36,6 +37,8 @@ const vehicleFields = {
   licence_expiry: zDate.describe("Revenue licence expiry"),
   insurance_expiry: zDate,
   emission_expiry: zDate.describe("Emission test expiry"),
+  custodian: zText(120).describe("The office person who keeps this vehicle (name or e-mail): it shows as assigned to them"),
+  custodian_note: zText(200).describe('A note about the custody, e.g. "Keeps it at Rajagiriya"'),
 };
 type VehicleField = keyof typeof vehicleFields;
 
@@ -60,6 +63,7 @@ const SAME_NAME_FIELDS = [
   "licence_expiry",
   "insurance_expiry",
   "emission_expiry",
+  "custodian_note",
 ] as const;
 
 /** Turns the tool's fields into table columns. Only fields that were sent are included. */
@@ -80,6 +84,9 @@ function toColumns(args: Partial<Record<VehicleField, unknown>>, refs: Refs): Up
   if (args.regular_driver !== undefined) {
     columns.regular_driver_id = args.regular_driver === null ? null : findDriver(refs, args.regular_driver as string).id;
   }
+  if (args.custodian !== undefined) {
+    columns.custodian_employee_id = args.custodian === null ? null : findPerson(refs, args.custodian as string).id;
+  }
   return columns as Update<"vehicles">;
 }
 
@@ -93,8 +100,49 @@ function findCompany(refs: Refs, typed: string) {
   throw new ToolError(`"${typed}" matches more than one rental company: ${matches.map((c) => c.name).join("; ")}.`);
 }
 
+/** A task that keeps a vehicle busy, as availabilityOf reads it. */
+export interface VehicleBusy {
+  status: string;
+  start_at: string;
+  end_by: string | null;
+  /** The live ETA of a running task (task_eta.final_eta_at), when there is one. */
+  final_eta_at?: string | null;
+}
+
+/** "Free", "On a task · back ~HH:MM (planned | live)", "Booked later today · HH:MM", "In garage". Pure. */
+export function availabilityOf(
+  inGarage: boolean,
+  tasks: VehicleBusy[],
+  now: Date,
+): { availability: string; back_at?: string; back_source?: "planned" | "live" } {
+  if (inGarage) return { availability: "In garage" };
+  const running = tasks.find((t) => t.status === "in_progress");
+  if (running) {
+    const live = running.final_eta_at && new Date(running.final_eta_at) > now ? running.final_eta_at : null;
+    if (live) return { availability: `On a task · back ~${colomboTime(live)} (live)`, back_at: colomboTime(live), back_source: "live" };
+    if (running.end_by) {
+      return {
+        availability: `On a task · back ~${colomboTime(running.end_by)} (planned)`,
+        back_at: colomboTime(running.end_by),
+        back_source: "planned",
+      };
+    }
+    return { availability: "On a task · end time not set" };
+  }
+  const today = colomboDate(now);
+  const booked = tasks.filter((t) => t.status === "assigned" && colomboDate(t.start_at) === today)
+    .sort((a, b) => a.start_at.localeCompare(b.start_at))[0];
+  if (booked) {
+    return new Date(booked.start_at) > now
+      ? { availability: `Booked later today · ${colomboTime(booked.start_at)}` }
+      : { availability: `Booked · ${colomboTime(booked.start_at)} (not started yet)` };
+  }
+  return { availability: "Free" };
+}
+
 function vehicleCard(v: Vehicle, refs: Refs, today: string) {
   const company = v.rental_company_id ? refs.company.get(v.rental_company_id) : undefined;
+  const custodian = v.custodian_employee_id ? refs.emp.get(v.custodian_employee_id) : undefined;
   const svc = service(v, today);
   return {
     reg_no: v.reg_no,
@@ -105,6 +153,9 @@ function vehicleCard(v: Vehicle, refs: Refs, today: string) {
     rent_until: v.rent_until,
     monthly_rent_lkr: centsToLkr(v.monthly_rent_cents),
     regular_driver: v.regular_driver_id ? refs.emp.get(v.regular_driver_id)?.name : undefined,
+    assigned_to: custodian?.name,
+    assigned_to_links: custodian ? contactLinks(custodian.phone) : undefined,
+    custodian_note: custodian ? v.custodian_note ?? undefined : undefined,
     odometer_km: v.current_odometer_km,
     km_allowance: v.monthly_km_allowance,
     next_service: svc.text,
@@ -122,8 +173,10 @@ function vehicleCard(v: Vehicle, refs: Refs, today: string) {
 export const listVehicles = tool({
   name: "list_vehicles",
   title: "List vehicles",
-  description: "Vehicles with rental company, regular driver, km this month against the allowance, next service, document chips " +
-    "(lic = revenue licence, ins = insurance, emi = emission test; orange = expires within 30 days, red = within 7 days or expired) and status.",
+  description: "Vehicles with rental company, regular driver, who it is assigned to (the custodian, with call and WhatsApp links), " +
+    "km this month against the allowance, next service, document chips (lic = revenue licence, ins = insurance, emi = emission test; " +
+    "orange = expires within 30 days, red = within 7 days or expired), status and availability (Free, On a task · back ~HH:MM, " +
+    "Booked later today · HH:MM, In garage).",
   readOnly: true,
   input: z.object({
     filter: z.enum(["all", "on_task", "available", "in_garage", "documents_expiring", "inactive"]).optional()
@@ -133,11 +186,30 @@ export const listVehicles = tool({
     const today = colomboDate(now);
     const refs = await loadRefs(db);
     const active = refs.vehicles.filter((v) => v.active);
-    const [running, km] = await Promise.all([
-      db.from("tasks").select("vehicle_id").eq("status", "in_progress"),
+    const dayStart = new Date(`${today}T00:00:00+05:30`).toISOString();
+    const [running, km, booked] = await Promise.all([
+      db.from("tasks").select("id, vehicle_id, status, start_at, end_by").eq("status", "in_progress"),
       monthKm(db, active.map((v) => v.id), today.slice(0, 7)),
+      db.from("tasks").select("id, vehicle_id, status, start_at, end_by").eq("status", "assigned").gte("start_at", dayStart),
     ]);
-    const onTask = new Set(unwrap(running, "tasks").map((t) => t.vehicle_id));
+    const runningTasks = unwrap(running, "tasks");
+    const onTask = new Set(runningTasks.map((t) => t.vehicle_id));
+    const etas = runningTasks.length > 0
+      ? new Map(
+        unwrap(await db.from("task_eta").select("task_id, final_eta_at").in("task_id", runningTasks.map((t) => t.id)), "eta")
+          .map((e) => [e.task_id, e.final_eta_at]),
+      )
+      : new Map<string, string | null>();
+    const busy: (VehicleBusy & { vehicle_id: string })[] = [
+      ...runningTasks.map((t) => ({
+        vehicle_id: t.vehicle_id,
+        status: t.status,
+        start_at: t.start_at,
+        end_by: t.end_by,
+        final_eta_at: etas.get(t.id) ?? null,
+      })),
+      ...unwrap(booked, "tasks").map((t) => ({ vehicle_id: t.vehicle_id, status: t.status, start_at: t.start_at, end_by: t.end_by })),
+    ];
 
     const cards = (filter === "inactive" ? refs.vehicles.filter((v) => !v.active) : active).map((v) => {
       const card = vehicleCard(v, refs, today);
@@ -148,6 +220,7 @@ export const listVehicles = tool({
         km_this_month: used,
         over_allowance: v.monthly_km_allowance != null && used > v.monthly_km_allowance ? true : undefined,
         status: vehicleStatus(v, onTask),
+        ...availabilityOf(v.in_garage, busy.filter((t) => t.vehicle_id === v.id), now),
         expiring,
       };
     });
@@ -203,8 +276,8 @@ export const registerVehicle = tool({
 export const updateVehicle = tool({
   name: "update_vehicle",
   title: "Update vehicle",
-  description:
-    "Changes details of a vehicle: rental, km allowance, odometer, service, document dates, garage, active. Send null to clear a value.",
+  description: "Changes details of a vehicle: rental, km allowance, odometer, service, document dates, garage, active, the custodian " +
+    "(the office person who keeps it) and a custody note. Send null to clear a value.",
   readOnly: false,
   input: z.object({
     reg_no: zText(20).describe("Plate of the vehicle to change"),

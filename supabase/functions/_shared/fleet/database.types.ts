@@ -837,14 +837,14 @@ isOneToOne: false
                   ]
                 },"vehicle_requests": {
                   Row: {
-                    "back_by": string | null,"created_at": string,"decided_at": string | null,"decided_by": string | null,"decline_reason": string | null,"id": string,"need_type": string | null,"needed_at": string,"note": string | null,"pax": number | null,"project_id": string | null,"project_label": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"route_from": string | null,"route_to": string | null,"status": string,"task_id": string | null,"tools": boolean
+                    "back_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"created_at": string,"decided_at": string | null,"decided_by": string | null,"decline_reason": string | null,"driver_required": boolean,"id": string,"need_type": string | null,"needed_at": string,"note": string | null,"one_step": boolean,"pax": number | null,"project_id": string | null,"project_label": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"requested_by_user_id": string | null,"route_from": string | null,"route_to": string | null,"seen_at": string | null,"seen_by": string | null,"status": string,"task_id": string | null,"tools": boolean
                   }
                   ComputedFields: never
                   Insert: {
-                    "back_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"id"?: string,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"pax"?: number | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"route_from"?: string | null,"route_to"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean
+                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"id"?: string,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"one_step"?: boolean,"pax"?: number | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean
                   }
                   Update: {
-                    "back_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"id"?: string,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"pax"?: number | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"route_from"?: string | null,"route_to"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean
+                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"id"?: string,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"one_step"?: boolean,"pax"?: number | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean
                   }
                   Relationships: [
                     {
@@ -869,17 +869,23 @@ isOneToOne: false
                   ]
                 },"vehicles": {
                   Row: {
-                    "active": boolean,"created_at": string,"current_odometer_km": number | null,"emission_expiry": string | null,"garage_booked_date": string | null,"id": string,"in_garage": boolean,"insurance_expiry": string | null,"last_service_odometer_km": number | null,"licence_expiry": string | null,"make_model": string | null,"monthly_km_allowance": number | null,"monthly_rent_cents": number | null,"next_service_date": string | null,"reg_no": string,"regular_driver_id": string | null,"rent_until": string | null,"rental_company_id": string | null,"seats": number | null,"service_interval_km": number | null,"updated_at": string,"vehicle_type": string
+                    "active": boolean,"created_at": string,"current_odometer_km": number | null,"custodian_employee_id": string | null,"custodian_note": string | null,"emission_expiry": string | null,"garage_booked_date": string | null,"id": string,"in_garage": boolean,"insurance_expiry": string | null,"last_service_odometer_km": number | null,"licence_expiry": string | null,"make_model": string | null,"monthly_km_allowance": number | null,"monthly_rent_cents": number | null,"next_service_date": string | null,"reg_no": string,"regular_driver_id": string | null,"rent_until": string | null,"rental_company_id": string | null,"seats": number | null,"service_interval_km": number | null,"updated_at": string,"vehicle_type": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "active"?: boolean,"created_at"?: string,"current_odometer_km"?: number | null,"emission_expiry"?: string | null,"garage_booked_date"?: string | null,"id"?: string,"in_garage"?: boolean,"insurance_expiry"?: string | null,"last_service_odometer_km"?: number | null,"licence_expiry"?: string | null,"make_model"?: string | null,"monthly_km_allowance"?: number | null,"monthly_rent_cents"?: number | null,"next_service_date"?: string | null,"reg_no": string,"regular_driver_id"?: string | null,"rent_until"?: string | null,"rental_company_id"?: string | null,"seats"?: number | null,"service_interval_km"?: number | null,"updated_at"?: string,"vehicle_type"?: string
+                    "active"?: boolean,"created_at"?: string,"current_odometer_km"?: number | null,"custodian_employee_id"?: string | null,"custodian_note"?: string | null,"emission_expiry"?: string | null,"garage_booked_date"?: string | null,"id"?: string,"in_garage"?: boolean,"insurance_expiry"?: string | null,"last_service_odometer_km"?: number | null,"licence_expiry"?: string | null,"make_model"?: string | null,"monthly_km_allowance"?: number | null,"monthly_rent_cents"?: number | null,"next_service_date"?: string | null,"reg_no": string,"regular_driver_id"?: string | null,"rent_until"?: string | null,"rental_company_id"?: string | null,"seats"?: number | null,"service_interval_km"?: number | null,"updated_at"?: string,"vehicle_type"?: string
                   }
                   Update: {
-                    "active"?: boolean,"created_at"?: string,"current_odometer_km"?: number | null,"emission_expiry"?: string | null,"garage_booked_date"?: string | null,"id"?: string,"in_garage"?: boolean,"insurance_expiry"?: string | null,"last_service_odometer_km"?: number | null,"licence_expiry"?: string | null,"make_model"?: string | null,"monthly_km_allowance"?: number | null,"monthly_rent_cents"?: number | null,"next_service_date"?: string | null,"reg_no"?: string,"regular_driver_id"?: string | null,"rent_until"?: string | null,"rental_company_id"?: string | null,"seats"?: number | null,"service_interval_km"?: number | null,"updated_at"?: string,"vehicle_type"?: string
+                    "active"?: boolean,"created_at"?: string,"current_odometer_km"?: number | null,"custodian_employee_id"?: string | null,"custodian_note"?: string | null,"emission_expiry"?: string | null,"garage_booked_date"?: string | null,"id"?: string,"in_garage"?: boolean,"insurance_expiry"?: string | null,"last_service_odometer_km"?: number | null,"licence_expiry"?: string | null,"make_model"?: string | null,"monthly_km_allowance"?: number | null,"monthly_rent_cents"?: number | null,"next_service_date"?: string | null,"reg_no"?: string,"regular_driver_id"?: string | null,"rent_until"?: string | null,"rental_company_id"?: string | null,"seats"?: number | null,"service_interval_km"?: number | null,"updated_at"?: string,"vehicle_type"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "vehicles_custodian_employee_id_fkey"
+      columns: ["custodian_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "vehicles_regular_driver_id_fkey"
       columns: ["regular_driver_id"]
 isOneToOne: false
@@ -954,6 +960,9 @@ isOneToOne: false
                            },
 "odometer_log_flag":
 { Args: { "p_ai_status": string,"p_ai_value": number,"p_entry": string,"p_reading": number }; Returns: string
+                           },
+"office_book_vehicle":
+{ Args: { "p_decided_by"?: string,"p_projects"?: Json,"p_request": Json,"p_stops": Json,"p_task": Json }; Returns: Json
                            },
 "office_can":
 { Args: { "p_permission": string }; Returns: boolean

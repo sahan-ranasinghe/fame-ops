@@ -8,9 +8,10 @@ import { Chips, Empty, ErrBox, Loading, Pill, StaleNote } from "../ui/basics";
 import { useDrawer } from "../ui/Drawer";
 import { NewRequestDrawer } from "./NewRequestDrawer";
 import { RequestDrawer } from "./RequestDrawer";
+import { timelineSteps } from "./requestLogic";
 
-type Filter = "waiting" | "approved" | "declined" | "all";
-const FILTERS: [Filter, string][] = [["waiting", "Waiting"], ["approved", "Approved"], ["declined", "Declined"], ["all", "All"]];
+type Filter = "waiting" | "approved" | "declined" | "cancelled" | "all";
+const FILTERS: [Filter, string][] = [["waiting", "Waiting"], ["approved", "Approved"], ["declined", "Declined"], ["cancelled", "Cancelled"], ["all", "All"]];
 
 export function Requests() {
   const { me, store, noConnector, managePermissions } = useFleet();
@@ -52,8 +53,15 @@ export function Requests() {
                         <td>{q.project || "—"}</td>
                         <td>{q.when}{q.back_by && <div className="sub">back by {q.back_by}</div>}</td>
                         <td className="muted">{q.route || "—"}</td>
-                        <td>{q.need || "—"}</td>
-                        <td><Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill></td>
+                        <td>{q.need || "—"}{q.driver_required === false && <div className="sub">no driver · custodian drives</div>}</td>
+                        <td>
+                          <Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>
+                          {(() => {
+                            const last = timelineSteps(q).filter((s) => s.done).pop();
+                            const words = q.one_step ? "booked directly" : last && last.label !== "Sent" ? `${last.label}${last.at ? ` · ${last.at}` : ""}` : last?.at ? `sent ${last.at}` : "";
+                            return words ? <div className="sub" style={{ marginTop: 4 }}>{words}</div> : null;
+                          })()}
+                        </td>
                         <td className="r">{q.status === "waiting" && decides ? <span className="btn small dark">Review</span> : q.task_id ? <span className="btn small">Task</span> : null}</td>
                       </tr>
                     ))}

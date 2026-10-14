@@ -40,12 +40,15 @@ Deno.test("a booking goes to the custodian, not when they booked it", () => {
 });
 
 Deno.test("the Settings page shows a person the events their permissions can bring", () => {
-  assertEquals(relevantEvents(["view"]).map((e) => e.event), []);
-  assertEquals(relevantEvents(["request"]).map((e) => e.event), ["request.decided"]);
+  // Every office person can be a vehicle's custodian: the two booking events are for everyone.
+  assertEquals(relevantEvents(["view"]).map((e) => e.event), ["vehicle.booked", "vehicle.booking_cancelled"]);
+  assertEquals(relevantEvents(["request"]).map((e) => e.event), ["request.decided", "vehicle.booked", "vehicle.booking_cancelled"]);
   assertEquals(relevantEvents(["view", "request", "assign_tasks"]).map((e) => e.event), [
     "request.decided",
     "task.declined",
     "task.not_accepted",
+    "vehicle.booked",
+    "vehicle.booking_cancelled",
   ]);
   assertEquals(relevantEvents(["view", "request", "approve", "assign_tasks", "vehicles", "issues"]).length, EVENTS.length);
 });

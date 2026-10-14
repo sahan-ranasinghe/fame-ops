@@ -15,6 +15,7 @@ import {
   type Employee,
   findDriver,
   findVehicle,
+  isDriver,
   type Latest,
   loadLatest,
   loadRefs,
@@ -29,6 +30,7 @@ import { GPS_KM_NOTE, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { type Plan, type PlanPoint, type PlanStop, planTask as runPlanner, type StopType, type What } from "../plan.ts";
 import { legFnFor, providerFromEnv } from "../routing.ts";
+import { notifyEvent } from "../notifications.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
@@ -372,8 +374,28 @@ export interface NewTask {
   plan: StoredPlan;
   split: Split;
   createdBy: string | null;
-  /** Set when the task comes from approving a vehicle request. */
-  request?: { id: string; decidedBy: string | null };
+  /** Set when the task comes from approving a vehicle request (id), or books one in the same transaction (create). */
+  request?: { id: string; decidedBy: string | null } | { create: BookingRequest; decidedBy: string | null };
+  /** The person booking (employee id), so a custodian is not told about their own booking. */
+  bookedBy?: string | null;
+}
+
+/** The vehicle_requests row office_book_vehicle inserts before the task (one transaction). */
+export interface BookingRequest {
+  requested_by_name: string;
+  requested_by_employee_id: string | null;
+  requested_by_user_id: string | null;
+  project_id: string | null;
+  project_label: string | null;
+  needed_at: string;
+  back_by: string | null;
+  route_from: string | null;
+  route_to: string | null;
+  need_type: string | null;
+  pax: number | null;
+  tools: boolean;
+  note: string | null;
+  driver_required: boolean;
 }
 
 const stopRow = (s: ResolvedStop) => ({
@@ -396,38 +418,56 @@ const TYPE_WORD: Record<string, string> = { pickup: "Pickup", drop: "Drop-off", 
 
 /** Saves the task, its stops and its project split in one transaction, and builds the reply. */
 export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
-  const taskId = unwrap(
-    await db.rpc("office_create_task", {
-      p_task: {
-        title: t.title,
-        label: t.label,
-        employee_id: t.driver.id,
-        vehicle_id: t.vehicle.id,
-        start_at: t.startAt,
-        end_by: t.endBy,
-        passengers: t.passengers,
-        contact_name: t.contactName,
-        contact_phone: t.contactPhone,
-        notes: t.notes,
-        created_by: t.createdBy,
-        start_place_id: t.start?.place_id ?? null,
-        start_name: t.start?.name ?? null,
-        start_lat: t.start?.lat ?? null,
-        start_lng: t.start?.lng ?? null,
-        return_to_base: t.returnToBase,
-        avoid_expressway: t.avoidExpressway,
-        leave_by: t.leaveBy,
-        leave_by_source: t.leaveBySource,
-        buffer_min: t.bufferMin,
-        plan_json: t.plan as unknown as Json,
-      },
-      p_stops: t.stops.map(stopRow),
-      p_projects: t.split.rows,
-      p_request_id: t.request?.id,
-      p_decided_by: t.request?.decidedBy ?? undefined,
-    }),
-    "task",
-  );
+  const taskJson = {
+    title: t.title,
+    label: t.label,
+    employee_id: t.driver.id,
+    vehicle_id: t.vehicle.id,
+    start_at: t.startAt,
+    end_by: t.endBy,
+    passengers: t.passengers,
+    contact_name: t.contactName,
+    contact_phone: t.contactPhone,
+    notes: t.notes,
+    created_by: t.createdBy,
+    start_place_id: t.start?.place_id ?? null,
+    start_name: t.start?.name ?? null,
+    start_lat: t.start?.lat ?? null,
+    start_lng: t.start?.lng ?? null,
+    return_to_base: t.returnToBase,
+    avoid_expressway: t.avoidExpressway,
+    leave_by: t.leaveBy,
+    leave_by_source: t.leaveBySource,
+    buffer_min: t.bufferMin,
+    plan_json: t.plan as unknown as Json,
+  };
+  let taskId: string;
+  let requestId: string | undefined;
+  if (t.request && "create" in t.request) {
+    const booked = unwrap(
+      await db.rpc("office_book_vehicle", {
+        p_request: t.request.create as unknown as Json,
+        p_task: taskJson,
+        p_stops: t.stops.map(stopRow),
+        p_projects: t.split.rows,
+        p_decided_by: t.request.decidedBy ?? undefined,
+      }),
+      "booking",
+    ) as { request_id: string; task_id: string };
+    taskId = booked.task_id;
+    requestId = booked.request_id;
+  } else {
+    taskId = unwrap(
+      await db.rpc("office_create_task", {
+        p_task: taskJson,
+        p_stops: t.stops.map(stopRow),
+        p_projects: t.split.rows,
+        p_request_id: t.request?.id,
+        p_decided_by: t.request?.decidedBy ?? undefined,
+      }),
+      "task",
+    );
+  }
 
   const first = t.stops[0];
   const last = t.stops[t.stops.length - 1];
@@ -445,9 +485,20 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
   ].filter(Boolean).join("\n");
   const names = new Map(t.stops.map((s) => [s.seq, s.place_name]));
 
+  // The vehicle's custodian hears about the booking (not when they booked it themselves).
+  if (t.vehicle.custodian_employee_id) {
+    await notifyEvent(db, "vehicle.booked", {
+      title: `${t.vehicle.reg_no} booked · ${colomboDayTime(t.startAt)}`,
+      body: [t.createdBy ?? "the office", `${first.place_name} → ${last.place_name}`].join(" · "),
+      url: `/tasks?task=${taskId}`,
+      tag: `task:${taskId}`,
+    }, { actor: t.bookedBy ?? null, custodian: t.vehicle.custodian_employee_id });
+  }
+
   return {
     result: {
       task_id: taskId,
+      request_id: requestId,
       title: t.title,
       when: colomboDayTime(t.startAt),
       until: t.endBy ? colomboTime(t.endBy) : undefined,
@@ -513,9 +564,10 @@ function declinedLine(task: Task): string {
   }`;
 }
 
-function statusLine(task: Task, latest: Latest | undefined, now: Date): string {
+function statusLine(task: Task, latest: Latest | undefined, now: Date, employee?: Employee): string {
   switch (task.status) {
     case "assigned":
+      if (employee && !isDriver(employee)) return `Driven by ${employee.name} (custodian · no app)`;
       if (task.accepted_at) return `Accepted ${colomboTime(task.accepted_at)}`;
       return task.seen_at ? `Seen by driver ${colomboTime(task.seen_at)}` : "Sent · not opened yet";
     case "declined":
@@ -605,7 +657,7 @@ export const createTask = tool({
     projects: zSplit.optional(),
     created_by: zText(80).optional().describe("Name of the office user assigning the task, if known"),
   }),
-  async run(args, { db, now }) {
+  async run(args, { db, now, actor }) {
     realDate(args.date);
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     const driver = activeDriver(refs, args.driver);
@@ -641,7 +693,8 @@ export const createTask = tool({
       bufferMin: args.buffer_min ?? null,
       plan: prepared.plan,
       split,
-      createdBy: args.created_by ?? "office",
+      createdBy: args.created_by ?? actor.name,
+      bookedBy: actor.employeeId,
     }, warnings);
   },
 });
@@ -847,7 +900,7 @@ export const taskBoard = tool({
         accepted: t.accepted_at ? colomboTime(t.accepted_at) : undefined,
         driver: refs.emp.get(t.employee_id)?.name,
         vehicle: refs.veh.get(t.vehicle_id)?.reg_no,
-        status: statusLine(t, latest.get(t.employee_id), now),
+        status: statusLine(t, latest.get(t.employee_id), now, refs.emp.get(t.employee_id)),
         eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
         eta_final: eta?.final_eta_at ? colomboTime(eta.final_eta_at) : undefined,
         late_min: eta && eta.late_min > 0 ? eta.late_min : undefined,
@@ -953,7 +1006,7 @@ export const taskDetail = tool({
           title: task.title,
           label: task.label,
           status: task.status,
-          status_line: statusLine(task, latest.get(task.employee_id), now),
+          status_line: statusLine(task, latest.get(task.employee_id), now, driver),
           start: colomboDayTime(task.start_at),
           end_by: task.end_by ? colomboTime(task.end_by) : undefined,
           leave_by: task.leave_by ? colomboDayTime(task.leave_by) : undefined,

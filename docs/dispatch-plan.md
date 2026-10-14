@@ -422,6 +422,19 @@ create function office_book_vehicle(p_request jsonb, p_task jsonb, p_stops jsonb
 
 Driver-side column privileges on `vehicles` are unchanged (the custodian is office data).
 
+**As built (14 October 2026, migration `20261014160000_custodians_booking`).** As above, plus
+`vehicle_requests_cancelled_check` ((status = 'cancelled') = (cancelled_at is not null)); a
+request cancelled while waiting gets decided_at / decided_by too (the decided_at rule);
+`office_book_vehicle` sets `one_step`, `seen_at` and `seen_by` on the request it inserts.
+**The custodian drives = the task's employee is the custodian** (an office person): nothing
+else in the model changes, and the rule "an employee who is not a driver has no app" is
+applied where it matters: `queue_task_reminders` and `queue_accept_reminders` skip such tasks
+(replaced here), `issues.ts` opens no late-start or not-accepted issue for them, and the board
+and detail status line reads "Driven by {name} (custodian · no app)". `decide_request` follows
+the request's `driver_required`; `book_vehicle` takes its own. `requested_by_user_id` is the
+Auth account behind the caller (a web session, or the person behind a personal key; null for
+the shared key).
+
 ## 4. Server: the shared module and the functions
 
 ### 4.1 `permissions.ts` replaces the role table (Part 2)
@@ -598,6 +611,15 @@ Every change below is additive. New tools go to the end of `TOOLS` and `ALL_TOOL
   its task cancelled with "Request cancelled: {reason}" (the driver's push comes from the
   existing trigger), `vehicle.booking_cancelled` to the custodian.
 - `decide_request`: approving sets `seen_at`; `request.decided` to the requester.
+
+**As built (14 October 2026).** As above, with: `suggest_vehicles` also answers for a day and
+time with no request (`date`, `time`, `back_by?`, `need_type?`, `pax?`; the result then has
+`window` instead of `request`), which is what the "Assign now" section needs before the
+request exists; `list_vehicles.availability` also says "Booked · HH:MM (not started yet)" for
+a booking whose time has passed; `cancel_request` also cancels a waiting request (no task),
+and tells the requester with `request.decided` "Request cancelled" as well as the custodian;
+`book_vehicle` warns about the type and the seats against what was asked for; `create_request`
+names the caller when the office names nobody.
 - `list_drivers`: drivers add `last_30_days { accepted, declined }`.
 
 The connector's `INSTRUCTIONS` text gains two lines (leave-by and stops; issues).
@@ -884,6 +906,22 @@ list with Part 6.
   and the free drivers, custodian call/WhatsApp links and "ask first", one call `book_vehicle`,
   all warnings shown. Request drawer: Cancel (approved → `cancel_request`). Vehicles page:
   "Assigned to" column, the availability text, custodian fields in the vehicle drawer.
+  *As built (14 October 2026).* The new-request form (`NewRequestDrawer.tsx`): "A driver is
+  needed" (default on), and for someone who may book the "Assign now" section: once the day
+  and time are typed, `suggest_vehicles` for that window (400 ms after the last change), the
+  four groups as radio options (`VehicleOption`: plate, what it is, how it stands, the
+  custodian with the note, "ask first" and Call / WhatsApp; the garage group greyed), the free
+  drivers, "Book now" (`book_vehicle`) or "Save as waiting" (`create_request`); after a
+  booking the drawer shows what was booked, the warnings and Open task. The request drawer
+  (`RequestDrawer.tsx`): the timeline (`timelineSteps`, Vitest), "booked directly by the
+  office", "no driver · the custodian drives", the same groups, "{custodian} drives it" in
+  place of the driver select when the request needs no driver and the picked vehicle has
+  one, Approve (without "send to driver" then), and on an approved request Cancel booking with
+  a reason. Requests page: a Cancelled filter, the last timeline step under the status (a
+  staff member reads sent → seen → approved there). Vehicles page: "Assigned to" (name, note,
+  Call / WhatsApp, or "Pool"), the availability line under the status; the drawer's custodian
+  and custody-note fields ("none" clears). Playwright: an approver books in one step from the
+  Free group, the task is on the board with "Leave by", the booking is cancelled.
 
 Style: unchanged tokens (`styles.css`), desktop rail + phone tab bar as today; new CSS for the
 stops editor, plan timeline, lock state, bell, issue severities.

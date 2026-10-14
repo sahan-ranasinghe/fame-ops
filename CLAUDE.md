@@ -198,6 +198,14 @@
   Home, Map, Tasks, Vehicles, More (More lists the rest). No audit page yet (no tool for it).
 - `npm run dev:live` runs the dev server against the REAL project (`.env.live.local`,
   gitignored, publishable key only) for a laptop trial; `npm run dev` uses `.env.local`.
+- Requests (Phase 5 Part 6): the new-request form has "A driver is needed" (unticked = the
+  custodian drives) and, for someone with `book_vehicle`, the "Assign now" section
+  (`suggest_vehicles` for the day and time, the four groups with the custodian's links and
+  "ask first", the free drivers, "Book now" → `book_vehicle`, or "Save as waiting"). The
+  request drawer shows the timeline (sent → seen → decided / cancelled), the groups, "the
+  custodian drives" when no driver is needed, and Cancel booking (`cancel_request`) on an
+  approved one. The Vehicles board has an "Assigned to" column and the availability line;
+  the vehicle drawer has the custodian fields ("none" clears).
 - Settings → Notifications (`src/screens/settings/Notifications.tsx`, web only, lazy; the
   artifact points to the web app): this browser's push state in words (`notificationsLogic.ts`),
   Turn on / off in this browser (`src/push.ts`: permission → `pushManager.subscribe` with the
@@ -241,7 +249,11 @@
   current_odometer_km, service_interval_km, last_service_odometer_km, next_service_date,
   garage_booked_date, in_garage (bool), licence_expiry, insurance_expiry,
   emission_expiry, active. Status shown = in_garage → "In garage", has an in-progress
-  task → "On a task", else "Available".
+  task → "On a task", else "Available". Phase 5 Part 6: `custodian_employee_id`
+  and `custodian_note`: the office person a pooled vehicle is assigned to ("Assigned to" on the
+  Vehicles board, "ask first" when the office books it; with `driver_required` false they
+  drive it themselves: the task's employee is then an office person, with no app behind it, and
+  the leave-by / accept reminders and the not-accepted / late-start issue rules skip it).
 - `places`: id, name ("Head office, Colombo 05"), address, lat, lng (nullable),
   kind ('office'|'store'|'site'|'other').
 - `towns`: id, name, lat, lng. Seed from GeoNames Sri Lanka populated places (CC BY 4.0,
@@ -301,9 +313,14 @@
   category ('breakdown'|'accident'|'tyre'|'warning_light'|'other'), note,
   status ('open'|'in_garage'|'closed'), created_at, closed_at, office_note.
 - `vehicle_requests`: id, requested_by_name, requested_by_employee_id (nullable),
-  project_id (nullable), project_label, needed_at, back_by, route_from, route_to,
-  need_type, pax, tools (bool), note, status ('waiting'|'approved'|'declined'),
-  decided_at, decided_by, decline_reason, task_id.
+  requested_by_user_id (the Auth account that submitted it), project_id (nullable),
+  project_label, needed_at, back_by, route_from, route_to, need_type, pax, tools (bool), note,
+  driver_required (false = the custodian drives), one_step (booked directly by the office),
+  status ('waiting'|'approved'|'declined'|'cancelled'), seen_at / seen_by (the first time
+  someone who approves opens it), decided_at, decided_by, decline_reason, task_id,
+  cancelled_at / cancelled_by / cancel_reason. `office_book_vehicle(request, task, stops,
+  projects, decided_by)` inserts the request (one_step, seen) and its task through
+  `office_create_task` in one transaction.
 - `photos`: id, employee_id, kind ('odometer'|'fuel_receipt'|'vehicle_report'|'bill'),
   storage_path, taken_at, lat, lng, plus nullable links (odometer_log_id, fuel_log_id,
   vehicle_report_id, claim_line_id).
@@ -574,8 +591,11 @@ office_audit.
   `reset_pin(username, pin)`, `set_driver_active(username, active)`,
   `update_driver(username, phone?, licence_expiry?)`.
 - Vehicles: `list_vehicles(filter?)` (km this month vs allowance, next service, document
-  chips, status), `register_vehicle(...)`, `update_vehicle(reg_no, ...)`,
-  `add_rental_company(name, phone?)`.
+  chips, status, plus `assigned_to` / `assigned_to_links` / `custodian_note` and
+  `availability` "Free" | "On a task · back ~HH:MM (planned | live)" | "On a task · end time
+  not set" | "Booked later today · HH:MM" | "Booked · HH:MM (not started yet)" | "In garage",
+  with `back_at`, `back_source`), `register_vehicle(...)`, `update_vehicle(reg_no, ...,
+  custodian? name|e-mail|null, custodian_note?)`, `add_rental_company(name, phone?)`.
 - Places: `list_places`, `add_place(name, address?, lat?, lng?, kind?)`.
 - Tasks: `create_task(title, date, start_time?, driver, vehicle, pickup, dropoff | stops[{type,
   what?, place?, address?, lat?, lng?, dwell_min?, arrive_by?, note?}], start?, return_to_base?,
@@ -597,9 +617,23 @@ office_audit.
 - Settings: `get_settings` (view, assign_tasks or approve), `update_settings(key, value)` and
   `routing_usage(days?)` (users). Tool answers never carry null fields (run.ts prunes
   them): a null setting such as base_place_id is simply absent.
-- Requests: `create_request(...)`, `list_requests(status?)`, `suggest_vehicles(request_id)`
-  (free all day / over km allowance / booked), `decide_request(request_id, decision,
-  vehicle?, driver?, reason?)` (approve creates the task).
+- Requests: `create_request(..., driver_required?)` (a staff member asks in their own name;
+  result `next` "Sent to the fleet admin · you'll be notified."), `list_requests(status?
+  waiting|approved|declined|cancelled|all)` (cards carry `timeline {sent, seen, decided,
+  decided_by, cancelled}`, `driver_required`, `one_step`, `cancelled`, `cancel_reason`),
+  `suggest_vehicles(request_id? | date, time, back_by?, need_type?, pax?)` (the old
+  `vehicles[]` / `drivers[]`, plus `groups {free_pool, free_assigned (custodian, call,
+  whatsapp, note "ask first"), busy (back), in_garage}` and `drivers_free[]`; opening a
+  request this way marks it seen), `decide_request(request_id, decision, vehicle?, driver?,
+  reason?)` (approve creates the task; no driver needed when the request says
+  driver_required false and the vehicle has a custodian), `book_vehicle(requested_by?,
+  project?, date, time, back_by?, route_from?, route_to?, need_type?, pax?, tools?, note?,
+  driver_required?, vehicle, driver?, title?, stops?, start?, return_to_base?,
+  avoid_expressway?)` (approve; request + task in one transaction, audited as requested and
+  approved by the caller), `cancel_request(request_id, reason)` (approve; a waiting or
+  approved request → cancelled, its task cancelled with "Request cancelled: {reason}"; the
+  custodian and the requester are told). Saving a task on a custodian's vehicle queues
+  `vehicle.booked` for the custodian (not when they booked it).
 - Mileage and reports: `mileage_summary(month, vehicle?, driver?)` (task km, odometer km vs
   allowance, between_tasks_km and overnight_km per vehicle with the biggest gaps, unlogged
   km flags, check_odometer, fuel litres/LKR), `list_vehicle_reports(status?)`,

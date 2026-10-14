@@ -28,7 +28,7 @@ export const PERMISSION_TEXT: Record<Permission, { label: string; text: string }
     text: "Overview counts and who is on the road, live locations, the drivers list, the vehicles board, your own requests",
   },
   request: { label: "Request", text: "Ask for a vehicle and follow your own requests" },
-  approve: { label: "Approve", text: "The requests queue: approve or decline, book a vehicle directly" },
+  approve: { label: "Approve", text: "The requests queue: approve or decline, book a vehicle directly, cancel a booking" },
   assign_tasks: {
     label: "Assign tasks",
     text: "The tasks board: assign, reassign and cancel tasks and their stops; task details, routes and task attention items",
@@ -65,6 +65,8 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   create_request: ["request"],
   suggest_vehicles: AA,
   decide_request: ["approve"],
+  book_vehicle: ["approve"],
+  cancel_request: ["approve"],
   task_board: ["assign_tasks"],
   task_detail: ["assign_tasks", "approve", "request"],
   driver_route: ["assign_tasks", "vehicles"],

@@ -2,7 +2,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import { useEntry, useLists } from "../data/hooks";
 import type { VehicleCard, VehiclesList } from "../data/types";
-import { joinDots, num } from "../lib/format";
+import { joinDots, num, vehicleAvailabilityTone } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Chips, Empty, ErrBox, Loading, Notice, Pill, StaleNote } from "../ui/basics";
@@ -60,7 +60,7 @@ export function Vehicles() {
             {list.length ? (
               <div className="tbl-wrap">
                 <table>
-                  <thead><tr><th>Vehicle</th><th>Rented from</th><th>Regular driver</th><th>Km this month</th><th>Next service</th><th>Documents</th><th>Status</th></tr></thead>
+                  <thead><tr><th>Vehicle</th><th>Rented from</th><th>Regular driver</th><th>Assigned to</th><th>Km this month</th><th>Next service</th><th>Documents</th><th>Status</th></tr></thead>
                   <tbody>
                     {list.map((v) => {
                       const used = Number(v.km_this_month) || 0, allow = Number(v.km_allowance) || 0, over = allow > 0 && used > allow;
@@ -73,12 +73,32 @@ export function Vehicles() {
                           <td>{v.rented_from || "—"}{v.rent_until && <div className="sub">Until {v.rent_until}</div>}</td>
                           <td>{v.regular_driver || "—"}</td>
                           <td>
+                            {v.assigned_to
+                              ? (
+                                <>
+                                  <b>{v.assigned_to}</b>
+                                  {v.custodian_note && <div className="sub">{v.custodian_note}</div>}
+                                  {(v.assigned_to_links?.call || v.assigned_to_links?.whatsapp) && (
+                                    <div className="sub" onClick={(e) => e.stopPropagation()}>
+                                      {v.assigned_to_links?.call && <a href={v.assigned_to_links.call}>Call</a>}
+                                      {v.assigned_to_links?.call && v.assigned_to_links?.whatsapp && " · "}
+                                      {v.assigned_to_links?.whatsapp && <a href={v.assigned_to_links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}
+                                    </div>
+                                  )}
+                                </>
+                              )
+                              : <span className="muted">Pool</span>}
+                          </td>
+                          <td>
                             <span className="num"><b className={over ? "status bad" : ""}>{num(used)} km</b>{allow ? ` / ${num(allow)}` : ""}</span>
                             {allow > 0 && <div className={`bar ${over ? "over" : ""}`}><i style={{ width: `${Math.min(100, used / allow * 100).toFixed(1)}%` }} /></div>}
                           </td>
                           <td><span className={svc.includes("overdue") ? "status bad" : svc.includes("soon") || svc.includes("due") ? "status warn" : ""}>{v.next_service || "—"}</span></td>
                           <td><DocChip name="Lic" d={docs.lic} /><DocChip name="Ins" d={docs.ins} /><DocChip name="Emi" d={docs.emi} /></td>
-                          <td><Pill tone={/task/i.test(st) ? "live" : /garage/i.test(st) ? "warn" : ""}>{st || "—"}</Pill></td>
+                          <td>
+                            <Pill tone={/task/i.test(st) ? "live" : /garage/i.test(st) ? "warn" : ""}>{st || "—"}</Pill>
+                            {v.availability && <div className={`sub status ${vehicleAvailabilityTone(v.availability)}`} style={{ marginTop: 4 }}>{v.availability}</div>}
+                          </td>
                         </tr>
                       );
                     })}
@@ -197,6 +217,11 @@ export function VehicleDrawer({ vehicle }: { vehicle: VehicleCard | null }) {
             {drivers.map((d) => <option key={d.username} value={d.username}>{d.name}</option>)}
           </select>
         </div>
+        <div className="grid2">
+          {field("custodian", "Assigned to (custodian)", "text", { maxLength: 120, placeholder: isNew ? "An office person's name or e-mail" : "Name or e-mail · none to clear" })}
+          {field("custodianNote", "Custody note", "text", { maxLength: 200, placeholder: "e.g. Keeps it at Rajagiriya" })}
+        </div>
+        <p className="hint" style={{ margin: "-8px 0 0" }}>A vehicle assigned to someone shows "ask first" when the office books it; with no driver needed, that person drives.</p>
         <div className="grid2">
           {field("svcint", "Service every (km)", "number", { min: 1, inputMode: "numeric" })}
           {field("svclast", "Last service at (km)", "number", { min: 0, inputMode: "numeric" })}

@@ -22,11 +22,14 @@ export interface VehicleFields {
   emi: string;
   ingarage: "" | "true" | "false";
   active: "" | "true" | "false";
+  /** The custodian: an office person's name or e-mail; "none" clears it. */
+  custodian: string;
+  custodianNote: string;
 }
 
 export const emptyVehicle = (): VehicleFields => ({
   reg: "", model: "", type: "", seats: "", allow: "", odo: "", rent: "", company: "", until: "", driver: "",
-  svcint: "", svclast: "", svcdate: "", garage: "", lic: "", ins: "", emi: "", ingarage: "", active: "",
+  svcint: "", svclast: "", svcdate: "", garage: "", lic: "", ins: "", emi: "", ingarage: "", active: "", custodian: "", custodianNote: "",
 });
 
 /** regNo null = register a new vehicle; otherwise update that plate. */
@@ -58,6 +61,8 @@ export function vehicleInput(f: VehicleFields, regNo: string | null): { error: s
   if (t(f.emi)) input.emission_expiry = t(f.emi);
   if (f.ingarage) input.in_garage = f.ingarage === "true";
   if (f.active) input.active = f.active === "true";
+  if (t(f.custodian)) input.custodian = t(f.custodian).toLowerCase() === "none" ? null : t(f.custodian);
+  if (t(f.custodianNote)) input.custodian_note = t(f.custodianNote).toLowerCase() === "none" ? null : t(f.custodianNote);
   if (regNo !== null && Object.keys(input).length === 1) return { error: "Nothing to change yet." };
   return { input, tool: regNo === null ? "register_vehicle" : "update_vehicle" };
 }

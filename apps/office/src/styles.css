@@ -349,3 +349,9 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .issue-row { text-decoration: none; color: inherit }
 .filters { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px }
 .filters .field { min-width: 180px }
+
+/* The request's timeline: sent → seen → decided / cancelled (Phase 5, Part 6). */
+.rq-timeline { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 8px }
+.rq-timeline li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px }
+.rq-timeline li .dot { margin-top: 5px; flex: none }
+.rq-timeline li:not(.done) { color: var(--muted) }
