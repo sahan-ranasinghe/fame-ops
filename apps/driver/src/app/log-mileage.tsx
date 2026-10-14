@@ -385,7 +385,9 @@ export default function LogMileageScreen() {
                 {video ? (
                   <View style={styles.videoRow}>
                     <Video size={22} color={colors.blue} />
-                    <Txt variant="strong" color={colors.blue} style={{ flex: 1 }}>{t('fuel.recorded', { duration: clockOf(video.durationS), size: megabytes(video.bytes) })}</Txt>
+                    <Txt variant="strong" color={colors.blue} style={{ flex: 1 }}>
+                      {t('fuel.recorded', { duration: clockOf(video.durationS), size: megabytes(video.bytes) }) + (video.interrupted ? ` · ${t('fuel.segments', { n: video.segments.length })} · ${t('fuel.interruptedShort')}` : '')}
+                    </Txt>
                     <Button kind="outline" label={t('fuel.retake')} onPress={() => router.push('/record-video')} />
                   </View>
                 ) : (

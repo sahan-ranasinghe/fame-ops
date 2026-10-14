@@ -63,7 +63,12 @@ export default function FuelScreen() {
 
   // The server's rows for this month plus the ones still on the phone, newest first.
   const pending = pendingFuelLogs();
-  const uploads = new Map(videoUploads().map((u) => [u.op.fuel_log_id, u]));
+  // Every piece of a fill still on the phone, together: the size to go up and how far it is.
+  const uploads = new Map<string, { failed: boolean; bytes: number; offset: number }>();
+  for (const u of videoUploads()) {
+    const seen = uploads.get(u.op.fuel_log_id) ?? { failed: false, bytes: 0, offset: 0 };
+    uploads.set(u.op.fuel_log_id, { failed: seen.failed || u.failed, bytes: seen.bytes + u.op.bytes, offset: seen.offset + u.op.offset });
+  }
   const rows: Row[] = [
     ...(mileage?.fuel ?? []).map((f) => ({ id: f.id, at: f.logged_at, litres: f.litres === null ? null : Number(f.litres), amountCents: f.amount_cents, serverStatus: f.video_status ?? 'none', onServer: true })),
     ...pending.filter((p) => !(mileage?.fuel ?? []).some((f) => f.id === p.id)).map((p) => ({
@@ -82,14 +87,22 @@ export default function FuelScreen() {
     const up = uploads.get(row.id);
     if (up?.failed) return { text: t('fuel.failed'), tone: colors.red, retry: true };
     if (up) {
-      if (wifiOnly && !app.dataAvailable) return { text: t('fuel.waitingWifi'), tone: colors.amberText };
       if (wifiOnly) return { text: t('fuel.waitingWifi'), tone: colors.amberText };
-      return { text: t('fuel.uploading', { pct: percentOf(up.op.offset, up.op.bytes) }), tone: colors.blue };
+      // The whole fill's size and how far it has gone (every piece of the recording still on the phone is counted).
+      const pieces = pendingSegments(row.id, up);
+      return { text: t('fuel.uploadingSize', { size: megabytes(pieces.bytes), pct: percentOf(pieces.offset, pieces.bytes) }), tone: colors.blue };
     }
     if (row.serverStatus === 'uploaded') return { text: t('fuel.uploaded'), tone: colors.blue };
     if (row.serverStatus === 'failed') return { text: t('fuel.failed'), tone: colors.red };
     if (row.serverStatus === 'recorded' || row.serverStatus === 'uploading') return { text: t('fuel.uploading', { pct: 0 }), tone: colors.amberText };
     return { text: t('fuel.noVideo'), tone: colors.muted };
+  }
+
+  /** A fill's pieces already uploaded are not in the queue any more: count them as done. */
+  function pendingSegments(id: string, up: { bytes: number; offset: number }): { bytes: number; offset: number } {
+    const row = (mileage?.fuel ?? []).find((f) => f.id === id) ?? pending.find((p) => p.id === id);
+    const total = row?.video_bytes ?? up.bytes;
+    return total > up.bytes ? { bytes: total, offset: total - up.bytes + up.offset } : { bytes: up.bytes, offset: up.offset };
   }
 
   function retry(row: Row) {

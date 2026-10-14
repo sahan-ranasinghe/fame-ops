@@ -365,10 +365,10 @@
     "noVideo": "No video",
     "savedOffline": "Saved · sends when there is signal",
     "recordTitle": "Record the fill",
-    "recordHint": "Show these while you record. No sound is recorded.",
+    "recordHint": "Record the whole fill, from the first frame until the pump stops. No sound is recorded.",
     "start": "Start",
     "stop": "Stop",
-    "maxLength": "Up to {seconds} s",
+    "maxLength": "Up to 12 minutes",
     "cameraDenied": "Fame Driver is not allowed to use the camera.",
     "recordFailed": "Recording did not work. Try again.",
     "tooShort": "Record at least 3 seconds.",
@@ -377,6 +377,15 @@
       "odometer": "Odometer",
       "plate": "Number plate"
     },
-    "use": "Use this video"
+    "use": "Use this video",
+    "countdown": "{seconds} s left · the recording stops at 12 minutes",
+    "interrupted": "Recording was interrupted. What you recorded is kept.",
+    "continueRecording": "Continue recording",
+    "useVideo": "Use this video",
+    "segments": "{n} pieces",
+    "segmentsLeft": "{n} more allowed",
+    "noMoreSegments": "No more pieces can be added: use what you have.",
+    "uploadingSize": "Uploading {size} · {pct} %",
+    "interruptedShort": "interrupted"
   }
 }

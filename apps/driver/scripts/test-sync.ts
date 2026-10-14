@@ -147,6 +147,8 @@ interface Call {
 }
 
 /** A fake server: records the calls, fails the way it is told. */
+const videoStatus = new Map<string, string>();
+
 function fakeServer() {
   const calls: Call[] = [];
   let mode: 'ok' | 'network' | 'refuse' = 'ok';
@@ -181,10 +183,15 @@ function fakeServer() {
     },
     patchFuelVideo: async (_client: unknown, id: string, patch: realApi.FuelVideoPatch) => {
       calls.push({ what: `fuel_video:${patch.video_status}`, n: 1, first: id });
+      if (patch.video_status) videoStatus.set(id, patch.video_status);
     },
     insertFuelLog: async (_client: unknown, row: realApi.FuelInsert) => {
       calls.push({ what: 'fuel_log', n: 1, first: row.id });
       if (calls.length > failAfterCalls) fail();
+    },
+    fetchFuelVideoStatus: async (_client: unknown, id: string) => {
+      calls.push({ what: 'fuel_video_status', n: 1, first: id });
+      return videoStatus.get(id) ?? 'recorded';
     },
   } as unknown as typeof realApi;
   return {
@@ -373,6 +380,22 @@ async function main() {
     wifiOnly = false;
     r = await sync.flush();
     check(r.failed === 1 && s.calls.some((c) => c.what === 'fuel_video:failed' && c.first === 'f4'), 'a missing file marks the op failed and the row failed', { r, calls: s.calls.slice(-2) });
+
+    // An interrupted fill in two pieces: the row is marked uploaded after the second piece only, with the whole fill's size kept.
+    s.calls.length = 0;
+    q.add({ ...videoOp('f5'), segment: 1, segments: 2 }, { ...videoOp('f5'), path: 'e1/2026-10-14/f5-2.mp4', segment: 2, segments: 2 });
+    r = await sync.flush();
+    const marks = s.calls.filter((c) => c.first === 'f5').map((c) => c.what);
+    check(r.sent === 2 && marks.filter((m) => m === 'fuel_video:uploaded').length === 1 && marks.indexOf('fuel_video:uploaded') === marks.length - 1
+      && marks.includes('fuel_video_status'), 'two pieces: uploaded is written once, after the last piece, after a look at the row', marks);
+    check(!s.calls.some((c) => c.first === 'f5' && c.what === 'fuel_video:uploaded' && false), 'the fill keeps its total size (the last piece does not overwrite video_bytes)');
+
+    // A piece that fails for good keeps the row failed even when the last piece goes through.
+    s.calls.length = 0;
+    q.add({ ...videoOp('f6', 'file:///videos/gone.mp4'), segment: 1, segments: 2 }, { ...videoOp('f6'), path: 'e1/2026-10-14/f6-2.mp4', segment: 2, segments: 2 });
+    r = await sync.flush();
+    const marks6 = s.calls.filter((c) => c.first === 'f6').map((c) => c.what);
+    check(r.failed === 1 && r.sent === 1 && marks6.includes('fuel_video:failed') && !marks6.includes('fuel_video:uploaded'), 'a failed first piece: the row stays failed after the second piece', marks6);
   }
 
   console.log(failures === 0 ? '\nAll sync tests passed.' : `\n${failures} sync test(s) failed.`);

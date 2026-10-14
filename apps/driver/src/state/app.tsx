@@ -21,7 +21,7 @@ import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/background
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
 import { type LocalPhoto, prepareOdometerReader, queuePhoto } from '@/lib/photos';
-import { queueVideoUpload, type RecordedVideo, videoStoragePath } from '@/lib/video';
+import { queueVideoUpload, type RecordedVideo, videoSegmentRows, videoStoragePath } from '@/lib/video';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
@@ -696,6 +696,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             video_duration_s: fuel.video.durationS,
             video_bytes: fuel.video.bytes,
             video_checklist: fuel.video.checklist,
+            video_segments: videoSegmentRows(fuel.video, id, current.id),
+            video_interrupted: fuel.video.interrupted,
           }
           : {}),
       },

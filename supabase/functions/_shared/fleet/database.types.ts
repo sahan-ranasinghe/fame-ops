@@ -219,14 +219,14 @@ isOneToOne: false
                   ]
                 },"fuel_logs": {
                   Row: {
-                    "amount_cents": number | null,"employee_id": string,"id": string,"litres": number | null,"logged_at": string,"odometer_km": number | null,"receipt_photo_id": string | null,"task_id": string | null,"vehicle_id": string,"video_bytes": number | null,"video_checklist": Json | null,"video_duration_s": number | null,"video_path": string | null,"video_status": string,"video_uploaded_at": string | null
+                    "amount_cents": number | null,"employee_id": string,"id": string,"litres": number | null,"logged_at": string,"odometer_km": number | null,"receipt_photo_id": string | null,"task_id": string | null,"vehicle_id": string,"video_bytes": number | null,"video_checklist": Json | null,"video_duration_s": number | null,"video_interrupted": boolean,"video_path": string | null,"video_segments": Json | null,"video_status": string,"video_uploaded_at": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "amount_cents"?: number | null,"employee_id": string,"id"?: string,"litres"?: number | null,"logged_at"?: string,"odometer_km"?: number | null,"receipt_photo_id"?: string | null,"task_id"?: string | null,"vehicle_id": string,"video_bytes"?: number | null,"video_checklist"?: Json | null,"video_duration_s"?: number | null,"video_path"?: string | null,"video_status"?: string,"video_uploaded_at"?: string | null
+                    "amount_cents"?: number | null,"employee_id": string,"id"?: string,"litres"?: number | null,"logged_at"?: string,"odometer_km"?: number | null,"receipt_photo_id"?: string | null,"task_id"?: string | null,"vehicle_id": string,"video_bytes"?: number | null,"video_checklist"?: Json | null,"video_duration_s"?: number | null,"video_interrupted"?: boolean,"video_path"?: string | null,"video_segments"?: Json | null,"video_status"?: string,"video_uploaded_at"?: string | null
                   }
                   Update: {
-                    "amount_cents"?: number | null,"employee_id"?: string,"id"?: string,"litres"?: number | null,"logged_at"?: string,"odometer_km"?: number | null,"receipt_photo_id"?: string | null,"task_id"?: string | null,"vehicle_id"?: string,"video_bytes"?: number | null,"video_checklist"?: Json | null,"video_duration_s"?: number | null,"video_path"?: string | null,"video_status"?: string,"video_uploaded_at"?: string | null
+                    "amount_cents"?: number | null,"employee_id"?: string,"id"?: string,"litres"?: number | null,"logged_at"?: string,"odometer_km"?: number | null,"receipt_photo_id"?: string | null,"task_id"?: string | null,"vehicle_id"?: string,"video_bytes"?: number | null,"video_checklist"?: Json | null,"video_duration_s"?: number | null,"video_interrupted"?: boolean,"video_path"?: string | null,"video_segments"?: Json | null,"video_status"?: string,"video_uploaded_at"?: string | null
                   }
                   Relationships: [
                     {

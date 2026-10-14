@@ -32,3 +32,12 @@ Deno.test("the fuel video checklist: 1 to 8 items with a key and texts; Sinhala 
   assertThrows(() => validateSetting("fuel_video_checklist", [{ key: "a", en: "A" }, { key: "a", en: "B" }]), ToolError, "twice");
   assertThrows(() => validateSetting("fuel_video_checklist", [{ en: "no key" }]), ToolError, "needs a key");
 });
+
+Deno.test("the fuel video quality and the keep months take only their two values", () => {
+  assertEquals(SETTINGS_DEFAULTS.fuel_video_quality, "480p");
+  assertEquals(SETTINGS_DEFAULTS.fuel_video_keep_months, 12);
+  assertEquals(validateSetting("fuel_video_quality", "720p"), "720p");
+  assertThrows(() => validateSetting("fuel_video_quality", "1080p"), ToolError, "480p or 720p");
+  assertEquals(validateSetting("fuel_video_keep_months", 6), 6);
+  assertThrows(() => validateSetting("fuel_video_keep_months", 9), ToolError, "6 or 12");
+});

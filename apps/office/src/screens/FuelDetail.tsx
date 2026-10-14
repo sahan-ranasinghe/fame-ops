@@ -19,6 +19,8 @@ export function FuelDetail() {
   const list = useEntry<FuelList>("fuel");
   const e: FuelEntry | undefined = list.data?.entries.find((x) => x.id === id);
   const [items, setItems] = useState<{ key: string; en: string }[] | undefined>();
+  const [piece, setPiece] = useState(0);
+  useEffect(() => setPiece(0), [id]);
   const backTo = `/fuel${params.toString() ? `?${params.toString()}` : ""}`;
   useEffect(() => {
     if (!me.tools.includes("get_settings")) return;
@@ -29,12 +31,34 @@ export function FuelDetail() {
 
   if (!e) return <><PageTop title="Fill" backTo={backTo} /><Loading>Loading the fill…</Loading></>;
   const v = e.video;
+  const pieces = v.segments?.length ? v.segments : v.url ? [{ url: v.url, duration_s: v.duration_s, bytes: v.bytes }] : [];
   return (
     <div data-testid="fuel-detail">
       <PageTop title={<span className="mono">{e.at}</span>} sub={joinDots([e.vehicle, e.driver])} backTo={backTo} />
       {v.status === "uploaded" && v.url ? (
         <div className="card" style={{ overflow: "hidden" }}>
-          <video controls playsInline preload="metadata" src={v.url} style={{ width: "100%", maxHeight: 420, background: "#000", display: "block" }} data-testid="fuel-video" />
+          <video
+            key={piece}
+            controls
+            playsInline
+            preload="metadata"
+            autoPlay={piece > 0}
+            src={pieces[piece]?.url ?? v.url}
+            onEnded={() => { if (piece + 1 < pieces.length) setPiece(piece + 1); }}
+            style={{ width: "100%", maxHeight: 420, background: "#000", display: "block" }}
+            data-testid="fuel-video"
+          />
+          {pieces.length > 1 && (
+            <div className="card-b" style={{ padding: "8px 14px", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }} data-testid="fuel-pieces">
+              <Pill tone="warn">Interrupted · {pieces.length} pieces</Pill>
+              <span className="sub">The recording stopped and was continued; the pieces play one after another.</span>
+              {pieces.map((p, i) => (
+                <button key={i} type="button" className={`chip${i === piece ? " on" : ""}`} aria-pressed={i === piece} onClick={() => setPiece(i)}>
+                  Piece {i + 1}{p.duration_s != null ? ` · ${clockOf(p.duration_s)}` : ""}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="card-b sub" style={{ padding: "8px 14px" }}>{joinDots([v.duration_s != null ? clockOf(v.duration_s) : "", v.bytes ? megabytes(v.bytes) : "", v.uploaded_at ? `uploaded ${v.uploaded_at}` : ""])} · the link works for 1 hour</div>
         </div>
       ) : (

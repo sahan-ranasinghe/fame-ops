@@ -10,6 +10,8 @@ describe("the Fuel page's words", () => {
   });
   it("the video in a phrase", () => {
     expect(videoWords({ status: "uploaded", duration_s: 47, bytes: 16 * 1024 * 1024 })).toBe("Video 0:47 · 16 MB");
+    expect(videoWords({ status: "uploaded", duration_s: 312, bytes: 38 * 1024 * 1024, interrupted: true, segments: [{}, {}] })).toBe("Video 5:12 · 38 MB · interrupted, 2 pieces");
+    expect(videoChip("uploaded", true)).toBe("Video · interrupted");
     expect(videoWords({ status: "uploading", note: "Uploading on the phone" })).toBe("Uploading on the phone");
     expect(videoWords({ status: "none", note: "No video" })).toBe("No video");
   });

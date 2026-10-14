@@ -237,10 +237,15 @@ export type VideoStatus = "none" | "recorded" | "uploading" | "uploaded" | "fail
 
 export interface VideoCard {
   status: VideoStatus;
+  /** The whole fill. */
   duration_s?: number;
   bytes?: number;
-  /** A 1-hour signed link, only while the file is there. */
+  /** A 1-hour signed link to the first piece, only while the file is there. */
   url?: string;
+  /** Every piece in order with its link (one for an uninterrupted recording). */
+  segments?: { url?: string; duration_s?: number; bytes?: number }[];
+  /** The recording was interrupted and continued: expect a break between the pieces. */
+  interrupted?: boolean;
   checklist?: string[];
   uploaded_at?: string;
   note?: string;
@@ -265,7 +270,7 @@ export interface FuelList {
   month: string;
   vehicle?: string;
   driver?: string;
-  totals: { entries: number; litres: number; lkr: number; videos: number; videos_waiting: number; videos_missing: number; bytes: number };
+  totals: { entries: number; litres: number; lkr: number; videos: number; videos_waiting: number; videos_missing: number; bytes: number; interrupted?: number };
   entries: FuelEntry[];
   links?: string;
 }
@@ -549,6 +554,9 @@ export interface FleetSettings {
   shift_days?: number[];
   /** What the driver shows while recording a fuel video (Phase 6, Part 3). */
   fuel_video_checklist?: ChecklistItem[];
+  /** The recording quality on the phone and how long the files are kept (Part 3b). */
+  fuel_video_quality?: "480p" | "720p";
+  fuel_video_keep_months?: 6 | 12;
 }
 
 export interface ChecklistItem {

@@ -90,13 +90,15 @@ export interface DriverSettings {
   shift_days: number[];
   /** What to show while recording a fuel video (Phase 6, Part 3), in both languages. */
   fuel_video_checklist: ChecklistItem[];
+  /** The recording quality the office chose: 480p (default) or 720p. */
+  fuel_video_quality: '480p' | '720p';
 }
 export const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { key: 'pump', en: 'Pump display: litres and amount', si: 'පොම්ප තිරය: ලීටර් සහ මුදල' },
   { key: 'odometer', en: 'Odometer', si: 'ඔඩෝමීටරය' },
   { key: 'plate', en: 'Number plate', si: 'අංක තහඩුව' },
 ];
-export const DEFAULT_DRIVER_SETTINGS: DriverSettings = { shift_start: '08:00', shift_days: [1, 2, 3, 4, 5, 6], fuel_video_checklist: DEFAULT_CHECKLIST };
+export const DEFAULT_DRIVER_SETTINGS: DriverSettings = { shift_start: '08:00', shift_days: [1, 2, 3, 4, 5, 6], fuel_video_checklist: DEFAULT_CHECKLIST, fuel_video_quality: '480p' };
 
 export async function fetchDriverSettings(client: Client): Promise<DriverSettings> {
   const res = await client.rpc('get_driver_settings');
@@ -108,7 +110,8 @@ export async function fetchDriverSettings(client: Client): Promise<DriverSetting
       .filter((i): i is ChecklistItem => !!i && typeof i === 'object' && typeof i.key === 'string' && typeof i.en === 'string')
       .map((i) => ({ key: i.key, en: i.en, si: typeof i.si === 'string' && i.si ? i.si : i.en }))
     : [];
-  return { shift_start: start, shift_days: days, fuel_video_checklist: list.length ? list : DEFAULT_CHECKLIST };
+  const quality = value?.fuel_video_quality === '720p' ? '720p' : '480p';
+  return { shift_start: start, shift_days: days, fuel_video_checklist: list.length ? list : DEFAULT_CHECKLIST, fuel_video_quality: quality };
 }
 
 export type FuelVideoPatch = Pick<Tables['fuel_logs']['Update'], 'video_status' | 'video_uploaded_at' | 'video_bytes'>;
@@ -116,6 +119,12 @@ export type FuelVideoPatch = Pick<Tables['fuel_logs']['Update'], 'video_status' 
 /** The upload's progress on the fuel log row (own rows only, the video columns only). */
 export async function patchFuelVideo(client: Client, id: string, patch: FuelVideoPatch): Promise<void> {
   check(await client.from('fuel_logs').update(patch).eq('id', id), 'fuel video');
+}
+
+/** The row's video status (the last piece of an interrupted fill looks before marking the fill uploaded). */
+export async function fetchFuelVideoStatus(client: Client, id: string): Promise<string | null> {
+  const row = checkMaybe(await client.from('fuel_logs').select('video_status').eq('id', id).maybeSingle(), 'fuel video');
+  return row?.video_status ?? null;
 }
 
 export async function fetchVehicles(client: Client): Promise<Vehicle[]> {

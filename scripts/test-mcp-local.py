@@ -957,8 +957,30 @@ check(sorted(f["video"]["status"] for f in td1v["fuel"]) == ["none", "uploaded"]
       "task_detail: each fill carries its video (one none, one uploaded with a link)", json.dumps([f.get("video") for f in td1v["fuel"]])[:300])
 ms = tool("mileage_summary", {"vehicle": "cab4521"})
 check(ms["vehicles"][0]["fuel_entries"] == 2 and ms["vehicles"][0]["fuel_videos"] == 1, "mileage_summary counts the fills with an uploaded video", json.dumps(ms["vehicles"][0])[:200])
+# An interrupted fill in two pieces (Part 3b): one row, two files, one link per piece, marked interrupted.
+vid2 = str(uuid.uuid4())
+p1, p2 = f"{ME}/{iso(today)}/{vid2}.mp4", f"{ME}/{iso(today)}/{vid2}-2.mp4"
+c4, _ = app.post("fuel_logs", {"id": vid2, "vehicle_id": V1, "employee_id": ME, "litres": 40, "amount_cents": 1480000, "video_path": p1, "video_status": "recorded",
+                               "video_duration_s": 312, "video_bytes": 2 * len(TINY_MP4), "video_interrupted": True,
+                               "video_segments": [{"path": p1, "duration_s": 200, "bytes": len(TINY_MP4)}, {"path": p2, "duration_s": 112, "bytes": len(TINY_MP4)}]})
+for pth in (p1, p2):
+    code, loc = app.tus_create("fuel-videos", pth, len(TINY_MP4), "video/mp4")
+    app.tus_patch(loc, 0, TINY_MP4)
+code, _ = app.patch("fuel_logs?id=eq." + vid2, {"video_status": "uploaded", "video_uploaded_at": iso(now)})
+two = next(e for e in tool("list_fuel")["entries"] if e["id"] == vid2)
+check(c4 == 201 and code == 200 and two["video"]["interrupted"] is True and len(two["video"]["segments"]) == 2
+      and all(seg["url"].startswith("http") for seg in two["video"]["segments"]) and two["video"]["segments"][1]["duration_s"] == 112
+      and two["video"]["duration_s"] == 312 and tool("list_fuel")["totals"]["interrupted"] == 1,
+      "list_fuel: an interrupted fill carries its two pieces with a link each, and is counted", json.dumps(two["video"])[:400])
+check(tool("get_settings")["settings"]["fuel_video_quality"] == "480p" and tool("get_settings")["settings"]["fuel_video_keep_months"] == 12, "get_settings: 480p and 12 months by default")
+tool("update_settings", {"key": "fuel_video_quality", "value": "720p"})
+code, dsq = app.post("rpc/get_driver_settings", {})
+check(code == 200 and dsq["fuel_video_quality"] == "720p", "the quality reaches the phone through get_driver_settings", f"{code} {dsq}")
+tool("update_settings", {"key": "fuel_video_quality", "value": "480p"})
+r = tool("update_settings", {"key": "fuel_video_keep_months", "value": 9}, expect_error=True)
+check("6 or 12" in r, "keep months takes 6 or 12 only", r)
 code, pr = fleet_jobs(job="prune_fuel_videos")
-check(code == 200 and pr["job"] == "prune_fuel_videos" and pr["pruned"] == 0 and pr["failed"] == 0, "the monthly prune runs (nothing is older than 12 months)", f"{code} {pr}")
+check(code == 200 and pr["job"] == "prune_fuel_videos" and pr["pruned"] == 0 and pr["failed"] == 0 and pr["keep_months"] == 12, "the monthly prune runs with the keep months (nothing is older than 12 months)", f"{code} {pr}")
 check(tool("get_settings")["settings"]["fuel_video_checklist"][0]["key"] == "pump" and len(tool("get_settings")["settings"]["fuel_video_checklist"]) == 3,
       "get_settings: the three default checklist items")
 us = tool("update_settings", {"key": "fuel_video_checklist", "value": [{"key": "pump", "en": "Pump", "si": "පොම්පය"}, {"key": "cap", "en": "Fuel cap closed"}]})
@@ -1009,9 +1031,9 @@ check(gap_km == 18 and ms["biggest_gaps"][0]["km"] == 18 and ms["biggest_gaps"][
       and ms["biggest_gaps"][0]["to_task"] == "Team drop · Kurunegala site",
       "mileage_summary: 18 km outside tasks (84,512 -> 84,530) is the biggest gap, with the driver and the task it led to", json.dumps(ms.get("biggest_gaps"))[:300])
 row = next(v for v in ms["vehicles"] if v["vehicle"] == "WP CAB-4521")
-check(row["task_km"] == 51 and row["odometer_km"] == 69 and row["km_outside_tasks"] == 18 and row["fuel_litres"] == 42 and row["fuel_lkr"] == 15540 and row["fuel_videos"] == 1
+check(row["task_km"] == 51 and row["odometer_km"] == 69 and row["km_outside_tasks"] == 18 and row["fuel_litres"] == 82 and row["fuel_lkr"] == 30340 and row["fuel_videos"] == 2
       and ms["totals"]["unlogged_km_flags"] == 1 and ms["unlogged_km"][0]["unlogged_km"] == 18 and ms["unlogged_km"][0]["driver"] == "Nuwan Perera",
-      "mileage_summary: 51 task km, 69 odometer km, 18 km outside tasks, fuel 42 l / LKR 15,540 (two fills, one with a video), 1 unlogged flag", json.dumps(ms)[:500])
+      "mileage_summary: 51 task km, 69 odometer km, 18 km outside tasks, fuel 82 l / LKR 30,340 (three fills, two with a video), 1 unlogged flag", json.dumps(ms)[:500])
 ms2 = tool("mileage_summary", {"driver": "kasun", "vehicle": "cab4521"})
 check(ms2["totals"]["tasks"] == 0 and ms2["totals"]["unlogged_km_flags"] == 0, "mileage_summary narrowed to another driver shows nothing of Nuwan's")
 vr = tool("list_vehicle_reports")

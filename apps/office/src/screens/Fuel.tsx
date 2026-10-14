@@ -79,7 +79,7 @@ export function Fuel() {
               <Tile label="Fills" value={t.entries} unit="entries" sub={d.month} />
               <Tile label="Fuel" value={num(t.litres)} unit="litres" sub={`LKR ${num(t.lkr)}`} />
               <Tile label="Videos" value={t.videos} unit="uploaded" sub={t.bytes ? megabytes(t.bytes) : "nothing stored yet"} />
-              <Tile label="Without a video" value={t.videos_missing + t.videos_waiting} unit="fills" sub={t.videos_waiting ? `${t.videos_waiting} still on a phone` : "none missing"} tone={t.videos_missing ? "bad" : t.videos_waiting ? "warn" : ""} />
+              <Tile label="Without a video" value={t.videos_missing + t.videos_waiting} unit="fills" sub={[t.videos_waiting ? `${t.videos_waiting} still on a phone` : "none missing", t.interrupted ? `${t.interrupted} interrupted` : ""].filter(Boolean).join(" · ")} tone={t.videos_missing ? "bad" : t.videos_waiting ? "warn" : ""} />
             </div>
             <div className="card">
               {d.entries.length ? (
@@ -95,7 +95,7 @@ export function Fuel() {
                           <td data-label="Litres" className="num">{e.litres != null ? num(e.litres) : "—"}</td>
                           <td data-label="LKR" className="num">{e.lkr != null ? num(e.lkr) : "—"}</td>
                           <td data-label="Odometer" className="num">{e.odometer_km != null ? `${num(e.odometer_km)} km` : "—"}</td>
-                          <td data-label="Video"><Pill tone={videoTone(e.video.status)}>{videoChip(e.video.status)}</Pill>{e.video.status === "uploaded" && <div className="sub">{videoWords(e.video)}</div>}</td>
+                          <td data-label="Video"><Pill tone={videoTone(e.video.status)}>{videoChip(e.video.status, e.video.interrupted)}</Pill>{e.video.status === "uploaded" && <div className="sub">{videoWords(e.video)}</div>}</td>
                         </tr>
                       ))}
                     </tbody>

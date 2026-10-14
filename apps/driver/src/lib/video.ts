@@ -1,7 +1,10 @@
-// Fuel videos on the phone (Phase 6, Part 3): a recording made by the camera
-// screen is kept in the app's own folder until the queue has uploaded it,
-// then deleted. The recording screen hands its result back through a small
-// in-memory holder (the fuel form reads it when it is focused again).
+// Fuel videos on the phone (Phase 6, Part 3 and 3b): a recording covers the
+// whole fill, from the first frame to the pump stopping. A recording the phone
+// interrupted (a call, the app sent to the back, the camera taken away) is
+// kept as a piece; the driver may continue in another piece, up to three; the
+// pieces go up as one fill marked interrupted. Each piece lives in the app's
+// own folder until the queue has uploaded it, then it is deleted. The
+// recording screen hands its result back through a small in-memory holder.
 
 import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
@@ -11,16 +14,37 @@ import { colomboDate } from './time';
 
 export const VIDEO_BUCKET = 'fuel-videos';
 export const VIDEO_CONTENT_TYPE = 'video/mp4';
-/** The longest a fill's video can be (seconds). */
-export const MAX_VIDEO_SECONDS = 90;
+/** The longest one piece can be (seconds): a whole fill, with the countdown in the last 30 s. */
+export const MAX_VIDEO_SECONDS = 12 * 60;
+/** The countdown shows when this much is left. */
+export const COUNTDOWN_SECONDS = 30;
+/** Shorter than this is not a recording. */
+export const MIN_VIDEO_SECONDS = 3;
+/** An interrupted fill may be continued this many times in all. */
+export const MAX_SEGMENTS = 3;
 
-export interface RecordedVideo {
-  /** Also the name of the file and, once saved, the fuel log it belongs to. */
-  id: string;
+export type VideoQuality = '480p' | '720p';
+/** About 1.0 Mbps at 480p (a 5-minute fill is about 38 MB), about 1.5 Mbps at 720p. */
+export const VIDEO_BITRATE: Record<VideoQuality, number> = { '480p': 1_000_000, '720p': 1_500_000 };
+
+export interface VideoSegment {
+  /** The file on the phone. */
   uri: string;
   durationS: number;
   bytes: number;
+}
+
+export interface RecordedVideo {
+  /** Also the id of the fuel log it belongs to, once saved. */
+  id: string;
+  /** The pieces in order (one for an uninterrupted recording). */
+  segments: VideoSegment[];
+  /** The whole fill. */
+  durationS: number;
+  bytes: number;
   recordedAt: string;
+  /** The recording was interrupted and continued (more than one piece). */
+  interrupted: boolean;
   /** The checklist items the driver ticked while recording. */
   checklist: string[];
 }
@@ -31,46 +55,70 @@ function videosFolder(): Directory {
   return folder;
 }
 
-/** Moves a recording the camera made into the app's folder, named by its id. */
-export function keepRecording(tempUri: string, durationS: number, checklist: string[]): RecordedVideo {
-  const id = Crypto.randomUUID();
-  const kept = new File(videosFolder(), `${id}.mp4`);
-  const temp = new File(tempUri);
-  temp.move(kept);
-  return { id, uri: kept.uri, durationS: Math.round(durationS), bytes: kept.size ?? 0, recordedAt: new Date().toISOString(), checklist };
+/** Moves a piece the camera made into the app's folder. */
+export function keepSegment(tempUri: string, durationS: number): VideoSegment {
+  const kept = new File(videosFolder(), `${Crypto.randomUUID()}.mp4`);
+  new File(tempUri).move(kept);
+  return { uri: kept.uri, durationS: Math.round(durationS), bytes: kept.size ?? 0 };
+}
+
+/** The pieces as one recording. */
+export function assembleVideo(segments: VideoSegment[], checklist: string[]): RecordedVideo {
+  return {
+    id: Crypto.randomUUID(),
+    segments,
+    durationS: segments.reduce((sum, s) => sum + s.durationS, 0),
+    bytes: segments.reduce((sum, s) => sum + s.bytes, 0),
+    recordedAt: new Date().toISOString(),
+    interrupted: segments.length > 1,
+    checklist,
+  };
 }
 
 /** Removes a recording the driver decided not to use. */
 export function discardVideo(video: RecordedVideo | null): void {
   if (!video) return;
+  for (const segment of video.segments) discardSegment(segment);
+}
+
+export function discardSegment(segment: VideoSegment | { uri: string }): void {
   try {
-    const file = new File(video.uri);
+    const file = new File(segment.uri);
     if (file.exists) file.delete();
   } catch {
     // Nothing to clean up.
   }
 }
 
-/** Where the video lives in the private bucket: <employee>/<day>/<fuel log id>.mp4. */
-export function videoStoragePath(employeeId: string, fuelLogId: string, recordedAt: string): string {
-  return `${employeeId}/${colomboDate(recordedAt)}/${fuelLogId}.mp4`;
+/** Where a piece lives in the private bucket: <employee>/<day>/<fuel log id>.mp4, then -2.mp4, -3.mp4. */
+export function videoStoragePath(employeeId: string, fuelLogId: string, recordedAt: string, segment = 1): string {
+  return `${employeeId}/${colomboDate(recordedAt)}/${fuelLogId}${segment > 1 ? `-${segment}` : ''}.mp4`;
 }
 
-/** Puts the upload in the queue, after the fuel log row it belongs to. */
-export function queueVideoUpload(video: RecordedVideo, fuelLogId: string, employeeId: string): string {
-  const path = videoStoragePath(employeeId, fuelLogId, video.recordedAt);
-  enqueue({
-    kind: 'video_upload',
-    fuel_log_id: fuelLogId,
-    bucket: VIDEO_BUCKET,
-    path,
-    local_uri: video.uri,
-    bytes: video.bytes,
-    url: null,
-    offset: 0,
-    content_type: VIDEO_CONTENT_TYPE,
+/** The pieces as the fuel log row stores them (paths in the bucket, lengths, sizes). */
+export function videoSegmentRows(video: RecordedVideo, fuelLogId: string, employeeId: string): { path: string; duration_s: number; bytes: number }[] {
+  return video.segments.map((s, i) => ({ path: videoStoragePath(employeeId, fuelLogId, video.recordedAt, i + 1), duration_s: s.durationS, bytes: s.bytes }));
+}
+
+/** Puts the uploads in the queue, one per piece, after the fuel log row they belong to. */
+export function queueVideoUpload(video: RecordedVideo, fuelLogId: string, employeeId: string): string[] {
+  const paths = videoSegmentRows(video, fuelLogId, employeeId).map((r) => r.path);
+  video.segments.forEach((segment, i) => {
+    enqueue({
+      kind: 'video_upload',
+      fuel_log_id: fuelLogId,
+      bucket: VIDEO_BUCKET,
+      path: paths[i],
+      local_uri: segment.uri,
+      bytes: segment.bytes,
+      url: null,
+      offset: 0,
+      content_type: VIDEO_CONTENT_TYPE,
+      segment: i + 1,
+      segments: video.segments.length,
+    });
   });
-  return path;
+  return paths;
 }
 
 // --- the recording screen's answer -------------------------------------------
@@ -88,7 +136,7 @@ export function takePendingVideo(): RecordedVideo | null {
   return video;
 }
 
-/** "0:47" */
+/** "0:47", "5:12", "12:00" */
 export function clockOf(seconds: number): string {
   const s = Math.max(0, Math.round(seconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;

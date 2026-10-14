@@ -15,9 +15,15 @@ export function clockOf(seconds: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-/** "Video 0:47 · 16 MB", "Uploading on the phone", "No video", … */
+/** "Video 0:47 · 16 MB", "Video 5:12 · 38 MB · interrupted, 2 pieces", "Uploading on the phone", "No video", … */
 export function videoWords(v: VideoCard): string {
-  if (v.status === "uploaded") return [`Video ${v.duration_s != null ? clockOf(v.duration_s) : ""}`.trim(), v.bytes ? megabytes(v.bytes) : null].filter(Boolean).join(" · ");
+  if (v.status === "uploaded") {
+    return [
+      `Video ${v.duration_s != null ? clockOf(v.duration_s) : ""}`.trim(),
+      v.bytes ? megabytes(v.bytes) : null,
+      v.interrupted ? `interrupted, ${v.segments?.length ?? 2} pieces` : null,
+    ].filter(Boolean).join(" · ");
+  }
   return v.note ?? v.status;
 }
 
@@ -38,7 +44,8 @@ export function videoTone(status: VideoCard["status"]): Tone {
 }
 
 /** The short chip label. */
-export function videoChip(status: VideoCard["status"]): string {
+export function videoChip(status: VideoCard["status"], interrupted?: boolean): string {
+  if (status === "uploaded" && interrupted) return "Video · interrupted";
   return { uploaded: "Video", recorded: "On the phone", uploading: "Uploading", failed: "Upload failed", none: "No video", pruned: "Pruned" }[status] ?? status;
 }
 

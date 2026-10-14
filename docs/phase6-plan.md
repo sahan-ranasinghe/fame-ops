@@ -584,6 +584,34 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
 - Not done here, on purpose: no in-app playback and silent recording (decisions 7 and 8); the
   nudge and the Fuel tab reach phones with the round-2 EAS update.
 
+### 7.5 Part 3b as built (14 October 2026, branch `phase6-3b-fullfill`)
+
+- The video covers the whole fill: one piece lasts up to 12 minutes (`MAX_VIDEO_SECONDS`),
+  a countdown shows in the last 30 s, at least 3 s. Default 480p at about 1.0 Mbps; 720p at
+  1.5 Mbps only when the setting `fuel_video_quality` says so (`get_driver_settings()` carries
+  it). The bucket's per-file limit is 250 MB (migration `20261014200000_fuel_video_segments`).
+- Interrupted recordings: when a call, the app going to the back or the camera being taken
+  away stops the recording (also when the 12 minutes run out), the piece is kept and the
+  screen offers "Continue recording" (up to 3 pieces) or "Use this video"; the back arrow
+  never throws a recorded piece away without asking. The pieces are stored as
+  `fuel_logs.video_segments` [{path, duration_s, bytes}] (`<id>.mp4`, `<id>-2.mp4`,
+  `<id>-3.mp4`), `video_interrupted` true, totals in `video_duration_s` / `video_bytes`;
+  each piece is its own `video_upload` op, the first marks the row uploading, the last marks
+  it uploaded after a look at the row (a piece that failed for good keeps it failed). The
+  office sees "Video · interrupted", "interrupted, 2 pieces", and plays the pieces one after
+  another on `/fuel/:id`; `list_fuel.totals.interrupted` counts them; the prune removes every
+  piece.
+- Storage, 12 vehicles × 8 fills a month (96 fills): at 480p a 5-minute fill is about 38 MB,
+  so about 3.5 GB a month, 21 GB over 6 months, 42 GB over 12; if every fill ran the full
+  12 minutes (90 MB) it would be 8.4 GB a month, 51 GB over 6 months, 101 GB over 12. At 720p
+  a 5-minute fill is about 56 MB: 5.3 GB a month, 32 GB over 6 months, 63 GB over 12.
+  Recommendation: 12 months at 480p (typical fills stay far inside the Pro plan's 100 GB,
+  86 GB even if fills average 10 minutes); switch `fuel_video_keep_months` to 6 if 720p is
+  turned on or the bucket passes about 70 GB. The setting is live: the prune reads it each
+  month and answers `keep_months`.
+- The Fuel tab says "Uploading 38 MB · 12 %" for the whole fill (every piece still on the
+  phone counted); "Upload videos on Wi-Fi only" stays off by default.
+
 ## 8. Part 4: site lists and place search
 
 ### 8.1 What is in the files (read on 14 October 2026)

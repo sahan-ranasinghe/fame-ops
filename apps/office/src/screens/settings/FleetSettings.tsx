@@ -137,6 +137,28 @@ export function FleetSettings() {
           </div>
         </form>
 
+        <div className="card card-b form" data-testid="video-settings">
+          <h2>Fuel video quality and storage</h2>
+          <div className="grid2">
+            <div className="field">
+              <label htmlFor="fs-video-quality">Recording quality</label>
+              <select id="fs-video-quality" value={draft.fuel_video_quality ?? "480p"} disabled={busy !== null} onChange={(e) => { const v = e.target.value as "480p" | "720p"; setDraft({ ...draft, fuel_video_quality: v }); void save("fuel_video_quality", v); }}>
+                <option value="480p">480p · about 1.0 Mbps · a 5-minute fill is about 38 MB</option>
+                <option value="720p">720p · about 1.5 Mbps · about 56 MB</option>
+              </select>
+              <span className="hint">{data.about.fuel_video_quality}</span>
+            </div>
+            <div className="field">
+              <label htmlFor="fs-video-keep">Keep videos for</label>
+              <select id="fs-video-keep" value={String(draft.fuel_video_keep_months ?? 12)} disabled={busy !== null} onChange={(e) => { const v = Number(e.target.value) as 6 | 12; setDraft({ ...draft, fuel_video_keep_months: v }); void save("fuel_video_keep_months", v); }}>
+                <option value="12">12 months</option>
+                <option value="6">6 months</option>
+              </select>
+              <span className="hint">{data.about.fuel_video_keep_months}. 12 vehicles × 8 fills a month at 480p is about 3.5 GB a month: 42 GB over 12 months, 21 GB over 6.</span>
+            </div>
+          </div>
+        </div>
+
         <div className="card card-b form" data-testid="fleet-bookings">
           <h2>Bookings</h2>
           <label className="row" style={{ padding: 0, cursor: "pointer" }}>

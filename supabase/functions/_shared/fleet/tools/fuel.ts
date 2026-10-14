@@ -15,8 +15,9 @@ export const listFuel = tool({
   title: "Fuel entries with their videos",
   description:
     "Every fuel entry of a month (newest first): the vehicle, the driver, litres, LKR, the odometer, the receipt photo link, and the " +
-    "video of the fill: its status (uploaded with a 1-hour link; uploading or recorded on the phone; failed; pruned after 12 months; " +
-    "none), length, size and the checklist items the driver ticked. Totals for the month.",
+    "video of the fill: its status (uploaded with 1-hour links, one per piece when the recording was interrupted and continued; " +
+    "uploading or recorded on the phone; failed; pruned after the keep months; none), its length, size and the checklist items the " +
+    "driver ticked. Totals for the month.",
   readOnly: true,
   input: z.object({
     month: zMonth.optional().describe("YYYY-MM. Default: this month"),
@@ -50,13 +51,14 @@ export const listFuel = tool({
       lkr: centsToLkr(l.amount_cents),
       odometer_km: l.odometer_km,
       receipt: photoOrNote(photos, l.receipt_photo_id),
-      video: videoCard(l, videos.get(l.id), l.video_uploaded_at ? colomboDateTime(l.video_uploaded_at) : undefined),
+      video: videoCard(l, videos, l.video_uploaded_at ? colomboDateTime(l.video_uploaded_at) : undefined),
     }));
     const totals = {
       entries: entries.length,
       litres: Math.round(entries.reduce((s, e) => s + (e.litres ?? 0), 0) * 100) / 100,
       lkr: entries.reduce((s, e) => s + (e.lkr ?? 0), 0),
       videos: logs.filter((l) => videoStatusOf(l) === "uploaded").length,
+      interrupted: logs.filter((l) => l.video_interrupted).length,
       videos_waiting: logs.filter((l) => ["recorded", "uploading"].includes(videoStatusOf(l))).length,
       videos_missing: logs.filter((l) => ["none", "failed"].includes(videoStatusOf(l))).length,
       bytes: logs.reduce((s, l) => s + (videoStatusOf(l) === "uploaded" ? l.video_bytes ?? 0 : 0), 0),

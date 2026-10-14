@@ -5,27 +5,51 @@
 
 import type { Db, Row } from "./db.ts";
 import { unwrap } from "./db.ts";
+import { loadSettings } from "./settings.ts";
 
 export const VIDEO_BUCKET = "fuel-videos";
 const ONE_HOUR_SECONDS = 60 * 60;
 export const VIDEO_LINK_NOTE = "Video links work for 1 hour.";
-/** Videos are kept this long, then pruned (the row keeps its path, status pruned). */
+/** Videos are kept this long by default, then pruned (the row keeps its path, status pruned); the setting fuel_video_keep_months decides. */
 export const VIDEO_KEEP_MONTHS = 12;
 export const PRUNE_BATCH = 100;
 
 export type FuelLog = Row<"fuel_logs">;
 export type VideoStatus = "none" | "recorded" | "uploading" | "uploaded" | "failed" | "pruned";
 
-export interface VideoCard {
-  status: VideoStatus;
+/** One piece of a recording that was interrupted (a call, the app sent to the back): up to three per fill. */
+export interface VideoSegment {
+  path: string;
   duration_s?: number;
   bytes?: number;
-  /** A 1-hour signed link, only while the file is there (uploaded). */
+}
+
+export interface VideoCard {
+  status: VideoStatus;
+  /** The whole fill's length and size (every piece). */
+  duration_s?: number;
+  bytes?: number;
+  /** A 1-hour signed link to the first piece, only while the file is there (uploaded). */
   url?: string;
+  /** Every piece in order with its link (one piece for an uninterrupted recording). */
+  segments?: { url?: string; duration_s?: number; bytes?: number }[];
+  /** The recording was interrupted and continued: the office should expect a break between the pieces. */
+  interrupted?: boolean;
   checklist?: string[];
   uploaded_at?: string;
   /** "Uploading on the phone", "No video", "Pruned after 12 months", … */
   note?: string;
+}
+
+/** The pieces of a fill's video: the stored list, or the one path. */
+export function segmentsOf(log: Pick<FuelLog, "video_path" | "video_segments" | "video_duration_s" | "video_bytes">): VideoSegment[] {
+  const list = Array.isArray(log.video_segments) ? (log.video_segments as unknown[]) : [];
+  const parsed = list.flatMap((x) => {
+    const seg = x as Partial<VideoSegment> | null;
+    return seg && typeof seg.path === "string" ? [{ path: seg.path, duration_s: seg.duration_s ?? undefined, bytes: seg.bytes ?? undefined }] : [];
+  });
+  if (parsed.length > 0) return parsed;
+  return log.video_path ? [{ path: log.video_path, duration_s: log.video_duration_s ?? undefined, bytes: log.video_bytes ?? undefined }] : [];
 }
 
 const NOTE: Record<VideoStatus, string | undefined> = {
@@ -43,74 +67,77 @@ export function videoStatusOf(log: Pick<FuelLog, "video_status">): VideoStatus {
   return s && s in NOTE ? s : "none";
 }
 
-/** The video part of a fuel entry, with its link when there is one. Pure given the link. */
-export function videoCard(log: Pick<FuelLog, "video_status" | "video_duration_s" | "video_bytes" | "video_checklist" | "video_uploaded_at">, url: string | undefined, uploadedAt?: string): VideoCard {
+type VideoLog = Pick<FuelLog, "id" | "video_path" | "video_status" | "video_duration_s" | "video_bytes" | "video_checklist" | "video_uploaded_at" | "video_segments" | "video_interrupted">;
+
+/** The video part of a fuel entry, with its links when there are any. Pure given the links (path → url). */
+export function videoCard(log: VideoLog, links: Map<string, string> | undefined, uploadedAt?: string): VideoCard {
   const status = videoStatusOf(log);
+  const pieces = segmentsOf(log);
+  const first = pieces[0]?.path ? links?.get(pieces[0].path) : undefined;
   return {
     status,
     duration_s: log.video_duration_s ?? undefined,
     bytes: log.video_bytes ?? undefined,
-    url: status === "uploaded" ? url : undefined,
+    url: status === "uploaded" ? first : undefined,
+    segments: status === "uploaded" && pieces.length > 0
+      ? pieces.map((p) => ({ url: links?.get(p.path), duration_s: p.duration_s, bytes: p.bytes }))
+      : undefined,
+    interrupted: log.video_interrupted || pieces.length > 1 ? true : undefined,
     checklist: Array.isArray(log.video_checklist) ? (log.video_checklist as unknown[]).filter((x): x is string => typeof x === "string") : undefined,
     uploaded_at: uploadedAt,
-    note: status === "uploaded" && !url ? "The file is not in storage (not uploaded yet, or removed)" : NOTE[status],
+    note: status === "uploaded" && !first ? "The file is not in storage (not uploaded yet, or removed)" : NOTE[status],
   };
 }
 
-/** 1-hour signed links for the uploaded videos among these logs, by log id. */
-export async function videoLinks(db: Db, logs: Pick<FuelLog, "id" | "video_path" | "video_status">[]): Promise<Map<string, string>> {
-  const links = new Map<string, string>();
-  const paths = logs.filter((l) => l.video_path && videoStatusOf(l) === "uploaded").map((l) => l.video_path!);
-  if (paths.length === 0) return links;
-  const { data, error } = await db.storage.from(VIDEO_BUCKET).createSignedUrls([...new Set(paths)], ONE_HOUR_SECONDS);
-  if (error) throw new Error(`video links: ${error.message}`);
+/** 1-hour signed links for every piece of the uploaded videos among these logs, by path. */
+export async function videoLinks(db: Db, logs: Pick<FuelLog, "id" | "video_path" | "video_status" | "video_segments" | "video_duration_s" | "video_bytes">[]): Promise<Map<string, string>> {
   const byPath = new Map<string, string>();
+  const paths = [...new Set(logs.filter((l) => videoStatusOf(l) === "uploaded").flatMap((l) => segmentsOf(l).map((p) => p.path)))];
+  if (paths.length === 0) return byPath;
+  const { data, error } = await db.storage.from(VIDEO_BUCKET).createSignedUrls(paths, ONE_HOUR_SECONDS);
+  if (error) throw new Error(`video links: ${error.message}`);
   for (const item of data) if (item.path && item.signedUrl) byPath.set(item.path, item.signedUrl);
-  for (const log of logs) {
-    const url = log.video_path ? byPath.get(log.video_path) : undefined;
-    if (url) links.set(log.id, url);
-  }
-  return links;
+  return byPath;
 }
 
 /** The rows whose uploaded video is older than the keep time, oldest first, at most a batch. Pure. */
-export function pruneDue<T extends Pick<FuelLog, "id" | "video_path" | "video_status" | "video_uploaded_at" | "logged_at">>(rows: T[], now: Date, batch = PRUNE_BATCH): T[] {
+export function pruneDue<T extends Pick<FuelLog, "id" | "video_path" | "video_status" | "video_uploaded_at" | "logged_at">>(rows: T[], now: Date, batch = PRUNE_BATCH, keepMonths = VIDEO_KEEP_MONTHS): T[] {
   const cutoff = new Date(now);
-  cutoff.setUTCMonth(cutoff.getUTCMonth() - VIDEO_KEEP_MONTHS);
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - keepMonths);
   return rows
     .filter((r) => r.video_path && videoStatusOf(r) === "uploaded" && new Date(r.video_uploaded_at ?? r.logged_at) < cutoff)
     .sort((a, b) => (a.video_uploaded_at ?? a.logged_at).localeCompare(b.video_uploaded_at ?? b.logged_at))
     .slice(0, batch);
 }
 
-/** Removes the files of the videos due for pruning and marks their rows. Returns the counts. */
-export async function pruneFuelVideos(db: Db, now: Date): Promise<{ checked: number; pruned: number; failed: number }> {
+/** Removes the files (every piece) of the videos due for pruning and marks their rows. Returns the counts. */
+export async function pruneFuelVideos(db: Db, now: Date): Promise<{ checked: number; pruned: number; failed: number; keep_months: number }> {
+  const keepMonths = (await loadSettings(db)).fuel_video_keep_months;
   const cutoff = new Date(now);
-  cutoff.setUTCMonth(cutoff.getUTCMonth() - VIDEO_KEEP_MONTHS);
+  cutoff.setUTCMonth(cutoff.getUTCMonth() - keepMonths);
   const rows = unwrap(
-    await db.from("fuel_logs").select("id, video_path, video_status, video_uploaded_at, logged_at")
+    await db.from("fuel_logs").select("id, video_path, video_status, video_uploaded_at, logged_at, video_segments, video_duration_s, video_bytes")
       .eq("video_status", "uploaded").lt("video_uploaded_at", cutoff.toISOString()).order("video_uploaded_at").limit(PRUNE_BATCH * 5),
     "fuel logs",
   );
-  const due = pruneDue(rows, now, PRUNE_BATCH * 5);
+  const due = pruneDue(rows, now, PRUNE_BATCH * 5, keepMonths);
   let pruned = 0;
   let failed = 0;
   for (let i = 0; i < due.length; i += PRUNE_BATCH) {
     const slice = due.slice(i, i + PRUNE_BATCH);
-    const { data, error } = await db.storage.from(VIDEO_BUCKET).remove(slice.map((r) => r.video_path!));
+    const { error } = await db.storage.from(VIDEO_BUCKET).remove(slice.flatMap((r) => segmentsOf(r).map((p) => p.path)));
     if (error) {
       console.error(`prune fuel videos: ${error.message}`);
       failed += slice.length;
       continue;
     }
     // A file already gone counts as pruned: the row is what matters now.
-    const removed = new Set((data ?? []).map((o) => o.name));
-    const ids = slice.filter((r) => removed.has(r.video_path!) || true).map((r) => r.id);
+    const ids = slice.map((r) => r.id);
     const { error: markError } = await db.from("fuel_logs").update({ video_status: "pruned" }).in("id", ids);
     if (markError) {
       console.error(`prune fuel videos (mark): ${markError.message}`);
       failed += ids.length;
     } else pruned += ids.length;
   }
-  return { checked: rows.length, pruned, failed };
+  return { checked: rows.length, pruned, failed, keep_months: keepMonths };
 }

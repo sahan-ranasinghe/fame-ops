@@ -22,7 +22,9 @@ insert into public.vehicles (id, reg_no) values ('20000000-0000-0000-0000-000000
 
 -- 1. The bucket and the columns.
 select is((select public || '|' || file_size_limit || '|' || allowed_mime_types[1] from storage.buckets where id = 'fuel-videos'),
-  'false|125829120|video/mp4', 'the fuel-videos bucket is private, 120 MB, mp4 only');
+  'false|262144000|video/mp4', 'the fuel-videos bucket is private, 250 MB, mp4 only');
+select has_column('public', 'fuel_logs', 'video_segments', 'fuel_logs.video_segments exists (an interrupted fill in pieces)');
+select has_column('public', 'fuel_logs', 'video_interrupted', 'fuel_logs.video_interrupted exists');
 select has_column('public', 'fuel_logs', 'video_path', 'fuel_logs.video_path exists');
 select has_column('public', 'fuel_logs', 'video_status', 'fuel_logs.video_status exists');
 select has_column('public', 'fuel_logs', 'video_checklist', 'fuel_logs.video_checklist exists');
@@ -45,8 +47,11 @@ select throws_ok($$
   update public.fuel_logs set video_status = 'done' where id = '60000000-0000-0000-0000-0000000000f5'
 $$, '23514', null, 'an unknown video status is refused');
 select lives_ok($$
-  update public.fuel_logs set video_status = 'uploaded', video_uploaded_at = now() where id = '60000000-0000-0000-0000-0000000000f5'
-$$, 'the driver marks their own video uploaded');
+  update public.fuel_logs set video_status = 'uploaded', video_uploaded_at = now(), video_interrupted = true,
+    video_segments = '[{"path": "10000000-0000-0000-0000-0000000000f5/2026-10-14/60000000-0000-0000-0000-0000000000f5.mp4", "duration_s": 30, "bytes": 9000000},
+                       {"path": "10000000-0000-0000-0000-0000000000f5/2026-10-14/60000000-0000-0000-0000-0000000000f5-2.mp4", "duration_s": 17, "bytes": 7000000}]'::jsonb
+  where id = '60000000-0000-0000-0000-0000000000f5'
+$$, 'the driver marks their own video uploaded, in two pieces after an interruption');
 select is((select video_status from public.fuel_logs where id = '60000000-0000-0000-0000-0000000000f5'), 'uploaded', 'and the row says so');
 select throws_ok($$
   update public.fuel_logs set litres = 99 where id = '60000000-0000-0000-0000-0000000000f5'
@@ -84,6 +89,7 @@ set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f5","role":"authenticated"}';
 select is((select jsonb_array_length(public.get_driver_settings() -> 'fuel_video_checklist')), 3, 'get_driver_settings: the three default checklist items');
 select is((select public.get_driver_settings() -> 'fuel_video_checklist' -> 0 ->> 'key'), 'pump', 'the first is the pump display');
+select is((select public.get_driver_settings() ->> 'fuel_video_quality'), '480p', 'get_driver_settings: the recording quality, 480p by default');
 reset role;
 update public.fleet_settings set value = '[{"key": "pump", "en": "Pump", "si": "පොම්පය"}, {"key": "custom", "en": "The cap closed", "si": "මූඩිය වසා ඇත"}]'::jsonb
 where key = 'fuel_video_checklist';

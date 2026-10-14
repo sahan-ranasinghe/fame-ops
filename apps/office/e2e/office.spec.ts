@@ -744,6 +744,18 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   expect(await app.patch(`fuel_logs?id=eq.${fuelId}`, { video_status: "uploaded", video_uploaded_at: new Date().toISOString() })).toBe(200);
   // A second fill with no video.
   expect(await app.post("fuel_logs", { vehicle_id: vehicles[0].id, employee_id: employeeId, litres: 10, amount_cents: 370000 })).toBe(201);
+  // A third fill whose recording was interrupted: two pieces, uploaded one after the other.
+  const twoId = randomUUID();
+  const piece1 = `${employeeId}/${day}/${twoId}.mp4`;
+  const piece2 = `${employeeId}/${day}/${twoId}-2.mp4`;
+  expect(await app.post("fuel_logs", {
+    id: twoId, vehicle_id: vehicles[0].id, employee_id: employeeId, litres: 40, amount_cents: 1480000, video_path: piece1, video_status: "recorded",
+    video_duration_s: 312, video_bytes: mp4.length * 2, video_checklist: ["pump"], video_interrupted: true,
+    video_segments: [{ path: piece1, duration_s: 200, bytes: mp4.length }, { path: piece2, duration_s: 112, bytes: mp4.length }],
+  })).toBe(201);
+  expect(await app.tusUpload("fuel-videos", piece1, mp4, "video/mp4")).toBe(204);
+  expect(await app.tusUpload("fuel-videos", piece2, mp4, "video/mp4")).toBe(204);
+  expect(await app.patch(`fuel_logs?id=eq.${twoId}`, { video_status: "uploaded", video_uploaded_at: new Date().toISOString() })).toBe(200);
 
   const verify = await fetch(user.set_password_link, { redirect: "manual" });
   const landing = verify.headers.get("location") ?? "";
@@ -771,12 +783,25 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   await expect(detail.getByTestId("fuel-video")).toHaveAttribute("src", /\/object\/sign\/fuel-videos\//);
   await expect(detail).toContainText("Pump display: litres and amount, Number plate");
   await expect(detail).toContainText("the link works for 1 hour");
+  // The interrupted fill: its chip says so, the detail lists the two pieces and plays them one after another.
+  const interrupted = table.locator("tr", { hasText: plate }).filter({ hasText: "5:12" });
+  await expect(interrupted).toContainText("Video · interrupted");
+  await expect(interrupted).toContainText("interrupted, 2 pieces");
+  await interrupted.click();
+  await expect(page).toHaveURL(new RegExp(`/fuel/${twoId}`));
+  await expect(page.getByTestId("fuel-pieces")).toContainText("Interrupted · 2 pieces");
+  await expect(page.getByTestId("fuel-pieces").getByRole("button")).toHaveCount(2);
+  await expect(page.getByTestId("fuel-video")).toHaveAttribute("src", new RegExp(`${twoId}\\.mp4`));
+  await page.getByTestId("fuel-pieces").getByRole("button", { name: /Piece 2/ }).click();
+  await expect(page.getByTestId("fuel-video")).toHaveAttribute("src", new RegExp(`${twoId}-2\\.mp4`));
 
   // Mileage links to the fuel page and counts the videos per vehicle.
   await page.goto("/mileage");
   await page.getByLabel("Vehicle").selectOption(plate);
-  await expect(page.locator("tr", { hasText: plate })).toContainText("1");
+  await expect(page.locator("tr", { hasText: plate })).toContainText("78.5"); // 28.5 + 10 + 40 litres
   await expect(page.getByRole("link", { name: "Fuel entries and videos" })).toBeVisible();
+  const summary = await tool<{ vehicles: { vehicle: string; fuel_entries: number; fuel_videos: number }[] }>("mileage_summary", { vehicle: plate });
+  expect(summary.vehicles[0]).toMatchObject({ fuel_entries: 3, fuel_videos: 2 });
 
   // Fleet settings: the checklist starts with the three defaults; add one, save; the driver gets it.
   await page.goto("/settings/fleet");
@@ -788,6 +813,13 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   await expect(page.getByRole("status")).toHaveText("Setting saved");
   const settings = await tool<{ settings: { fuel_video_checklist: { key: string; en: string; si: string }[] } }>("get_settings", {});
   expect(settings.settings.fuel_video_checklist.map((i) => i.key)).toEqual(["pump", "odometer", "plate", "fuel_cap_closed"]);
+  // The quality and the keep months: 480p and 12 months by default; a change is saved at once.
+  await expect(page.getByLabel("Recording quality")).toHaveValue("480p");
+  await expect(page.getByLabel("Keep videos for")).toHaveValue("12");
+  await page.getByLabel("Keep videos for").selectOption("6");
+  // The toast from the checklist save may still be showing: ask the server instead.
+  await expect.poll(async () => (await tool<{ settings: { fuel_video_keep_months: number } }>("get_settings", {})).settings.fuel_video_keep_months, { timeout: 15000 }).toBe(6);
+  await tool("update_settings", { key: "fuel_video_keep_months", value: 12 });
   // Back to the three (other runs and the driver tests count on them).
   await tool("update_settings", { key: "fuel_video_checklist", value: settings.settings.fuel_video_checklist.slice(0, 3) });
 });

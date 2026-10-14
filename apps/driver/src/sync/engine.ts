@@ -69,6 +69,9 @@ export interface VideoUploadOp {
   /** Bytes the server had after the last chunk. */
   offset: number;
   content_type: string;
+  /** Which piece of the fill this is (1-based) and how many there are; the row is marked uploaded after the last. */
+  segment?: number;
+  segments?: number;
 }
 
 export type Connection = 'wifi' | 'cellular' | 'none' | 'unknown';
@@ -215,13 +218,14 @@ export function createSync(deps: SyncDeps) {
       } catch (error) {
         // The file is already in the bucket (an earlier run finished, its answer was lost): that counts as uploaded, as with photos.
         if (!(error instanceof ApiError) || error.code !== 'exists') throw error;
-        await api.patchFuelVideo(client, op.fuel_log_id, { video_status: 'uploaded', video_uploaded_at: new Date(now()).toISOString(), video_bytes: current.bytes });
+        await finishSegment(op, current.bytes);
         deps.removeFile(op.local_uri);
         return;
       }
       current = { ...current, url, offset: 0 };
       store.updateOp(seq, current);
-      await api.patchFuelVideo(client, op.fuel_log_id, { video_status: 'uploading' }).catch(() => undefined);
+      // The first piece says the fill is uploading; a later piece leaves the row alone (it may say failed by then).
+      if (!op.segment || op.segment === 1) await api.patchFuelVideo(client, op.fuel_log_id, { video_status: 'uploading' }).catch(() => undefined);
     }
     while (current.offset < current.bytes) {
       const length = Math.min(CHUNK_BYTES, current.bytes - current.offset);
@@ -245,8 +249,25 @@ export function createSync(deps: SyncDeps) {
       store.updateOp(seq, current);
       deps.onProgress?.(current);
     }
-    await api.patchFuelVideo(client, op.fuel_log_id, { video_status: 'uploaded', video_uploaded_at: new Date(now()).toISOString(), video_bytes: current.bytes });
+    await finishSegment(op, current.bytes);
     deps.removeFile(op.local_uri);
+  }
+
+  /**
+   * After a piece: the row is marked uploaded after the last piece of the fill
+   * (the pieces go up in order), unless an earlier piece failed for good, in
+   * which case the row stays failed and the office sees that.
+   */
+  async function finishSegment(op: VideoUploadOp, bytes: number): Promise<void> {
+    const last = !op.segments || (op.segment ?? 1) >= op.segments;
+    if (!last) return;
+    if (op.segments && op.segments > 1) {
+      const status = await api.fetchFuelVideoStatus(client, op.fuel_log_id).catch(() => null);
+      if (status === 'failed') return;
+    }
+    const patch: realApi.FuelVideoPatch = { video_status: 'uploaded', video_uploaded_at: new Date(now()).toISOString() };
+    if (!op.segments || op.segments === 1) patch.video_bytes = bytes;
+    await api.patchFuelVideo(client, op.fuel_log_id, patch);
   }
 
   async function send(op: Op, seq: number): Promise<void> {

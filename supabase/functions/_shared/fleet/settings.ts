@@ -37,7 +37,13 @@ export interface Settings {
   shift_days: number[];
   /** The items the driver ticks while recording a fuel video, in both languages (Phase 6, Part 3). */
   fuel_video_checklist: ChecklistItem[];
+  /** The recording quality: 480p (about 1.0 Mbps, the default) or 720p (about 1.5 Mbps). */
+  fuel_video_quality: VideoQuality;
+  /** How many months the files stay before the monthly prune removes them: 6 or 12. */
+  fuel_video_keep_months: 6 | 12;
 }
+
+export type VideoQuality = "480p" | "720p";
 
 export interface ChecklistItem {
   key: string;
@@ -71,6 +77,8 @@ export const SETTINGS_DEFAULTS: Settings = {
     { key: "odometer", en: "Odometer", si: "ඔඩෝමීටරය" },
     { key: "plate", en: "Number plate", si: "අංක තහඩුව" },
   ],
+  fuel_video_quality: "480p",
+  fuel_video_keep_months: 12,
 };
 
 export type SettingKey = keyof Settings;
@@ -93,6 +101,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   shift_days: "… on these days (0 = Sunday … 6 = Saturday); empty = never",
   fuel_video_checklist:
     "What the driver shows while recording a fuel video: a list of items { key, en, si } (1 to 8), ticked on the phone and kept with the entry",
+  fuel_video_quality: "The fuel video's quality on the phone: 480p (about 1.0 Mbps, a 5-minute fill is about 38 MB) or 720p (about 1.5 Mbps, about 56 MB)",
+  fuel_video_keep_months: "How many months fuel videos are kept before the monthly prune removes the files: 6 or 12",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -161,6 +171,12 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
         return { key, en, si: si || en };
       });
     }
+    case "fuel_video_quality":
+      if (value !== "480p" && value !== "720p") throw new ToolError("fuel_video_quality: 480p or 720p.");
+      return value;
+    case "fuel_video_keep_months":
+      if (value !== 6 && value !== 12) throw new ToolError("fuel_video_keep_months: 6 or 12.");
+      return value;
     case "map_matching": {
       const provider = (value as { provider?: unknown } | null)?.provider;
       if (!value || typeof value !== "object" || !MAP_MATCHING_PROVIDERS.includes(provider as MapMatchingProvider)) {

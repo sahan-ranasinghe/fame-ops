@@ -1,23 +1,41 @@
-// Record the fill (Phase 6, Part 3): a full-screen camera, silent, 720p at
-// about 1.5 Mbps (480p when the phone has no 720p), at most 90 seconds, with
-// the office's checklist on screen to tick while recording. Stop keeps the
-// file in the app's folder and hands it back to the fuel form; the back arrow
-// or a recording shorter than 3 s throws it away.
+// Record the fill (Phase 6, Part 3 and 3b): a full-screen silent camera at
+// the office's quality (480p at about 1.0 Mbps by default, 720p at 1.5 Mbps),
+// recording the whole fill from the first frame until the pump stops, at most
+// 12 minutes with a countdown in the last 30 s, at least 3 s, with the
+// office's checklist to tick while recording. A recording the phone
+// interrupts (a call, the app sent to the back, the camera taken away) is
+// kept as a piece; "Continue recording" adds another, up to three; "Use this
+// video" hands the pieces to the fuel form as one fill marked interrupted.
+// Nothing recorded is ever thrown away by itself; the back arrow asks.
 
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Check, ChevronLeft, Square, Video } from '@/components/icons';
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, AppState, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button, Mono, Notice, Txt } from '@/components/ui';
-import { clockOf, discardVideo, keepRecording, MAX_VIDEO_SECONDS, setPendingVideo } from '@/lib/video';
+import {
+  assembleVideo,
+  clockOf,
+  COUNTDOWN_SECONDS,
+  discardSegment,
+  keepSegment,
+  MAX_SEGMENTS,
+  MAX_VIDEO_SECONDS,
+  megabytes,
+  MIN_VIDEO_SECONDS,
+  setPendingVideo,
+  VIDEO_BITRATE,
+  type VideoQuality,
+  type VideoSegment,
+} from '@/lib/video';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
-const MIN_SECONDS = 3;
+type Phase = 'idle' | 'recording' | 'interrupted';
 
 export default function RecordVideoScreen() {
   const { t, language, settings } = useApp();
@@ -26,26 +44,43 @@ export default function RecordVideoScreen() {
   const camera = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [ready, setReady] = useState(false);
-  const [recording, setRecording] = useState(false);
+  const [phase, setPhase] = useState<Phase>('idle');
   const [seconds, setSeconds] = useState(0);
+  const [segments, setSegments] = useState<VideoSegment[]>([]);
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [problem, setProblem] = useState<string | null>(null);
-  const [quality, setQuality] = useState<'720p' | '480p'>('720p');
+  const [quality, setQuality] = useState<VideoQuality>(settings.fuel_video_quality);
   const startedAt = useRef<number | null>(null);
-  const stopping = useRef(false);
+  const stopping = useRef<'driver' | 'interrupted' | null>(null);
+  const phaseRef = useRef<Phase>('idle');
+  phaseRef.current = phase;
 
   useEffect(() => {
     if (permission && !permission.granted && permission.canAskAgain) void requestPermission();
   }, [permission, requestPermission]);
 
   useEffect(() => {
-    if (!recording) return;
+    if (phase !== 'recording') return;
     const timer = setInterval(() => setSeconds(Math.floor((Date.now() - (startedAt.current ?? Date.now())) / 1000)), 250);
     return () => clearInterval(timer);
-  }, [recording]);
+  }, [phase]);
+
+  // A call or the app sent to the back: the recording stops; what was recorded is kept.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' && phaseRef.current === 'recording' && camera.current && !stopping.current) {
+        stopping.current = 'interrupted';
+        camera.current.stopRecording();
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   const checklist = settings.fuel_video_checklist;
   const label = (item: { key: string; en: string; si: string }) => (language === 'si' ? item.si : item.en);
+  const totalSeconds = segments.reduce((sum, s) => sum + s.durationS, 0);
+  const totalBytes = segments.reduce((sum, s) => sum + s.bytes, 0);
+  const left = Math.max(0, MAX_VIDEO_SECONDS - seconds);
 
   function toggle(key: string) {
     setTicked((set) => {
@@ -57,44 +92,69 @@ export default function RecordVideoScreen() {
   }
 
   async function start() {
-    if (!camera.current || recording) return;
+    if (!camera.current || phase === 'recording') return;
     setProblem(null);
-    setRecording(true);
+    setPhase('recording');
     setSeconds(0);
     startedAt.current = Date.now();
-    stopping.current = false;
+    stopping.current = null;
     try {
       const result = await camera.current.recordAsync({ maxDuration: MAX_VIDEO_SECONDS });
       const duration = (Date.now() - (startedAt.current ?? Date.now())) / 1000;
-      setRecording(false);
+      const how = stopping.current;
+      stopping.current = null;
       if (!result?.uri) {
+        setPhase('interrupted');
         setProblem(t('fuel.recordFailed'));
         return;
       }
-      if (duration < MIN_SECONDS) {
-        discardVideo({ id: '', uri: result.uri, durationS: 0, bytes: 0, recordedAt: '', checklist: [] });
+      if (duration < MIN_VIDEO_SECONDS) {
+        discardSegment({ uri: result.uri });
+        setPhase(segments.length ? 'interrupted' : 'idle');
         setProblem(t('fuel.tooShort'));
         return;
       }
-      const kept = keepRecording(result.uri, duration, checklist.filter((i) => ticked.has(i.key)).map((i) => i.key));
-      setPendingVideo(kept);
-      router.back();
+      const piece = keepSegment(result.uri, duration);
+      const all = [...segments, piece];
+      setSegments(all);
+      // The driver stopped it: the fill is done. The phone stopped it (or the 12 minutes ran out): offer to continue.
+      if (how === 'driver') finish(all);
+      else setPhase('interrupted');
     } catch {
-      setRecording(false);
-      if (quality === '720p') {
-        // Some phones refuse 720p: the next try uses 480p.
-        setQuality('480p');
-        setProblem(t('fuel.recordFailed'));
-      } else {
-        setProblem(t('fuel.recordFailed'));
-      }
+      stopping.current = null;
+      // The camera was taken away, or the phone refused the quality: keep what there is, offer to continue (at 480p next).
+      if (quality === '720p') setQuality('480p');
+      setPhase(segments.length ? 'interrupted' : 'idle');
+      setProblem(t(segments.length ? 'fuel.interrupted' : 'fuel.recordFailed'));
     }
   }
 
   function stop() {
-    if (!camera.current || !recording || stopping.current) return;
-    stopping.current = true;
+    if (!camera.current || phase !== 'recording' || stopping.current) return;
+    stopping.current = 'driver';
     camera.current.stopRecording();
+  }
+
+  const finish = useCallback((all: VideoSegment[]) => {
+    const video = assembleVideo(all, checklist.filter((i) => ticked.has(i.key)).map((i) => i.key));
+    setPendingVideo(video);
+    router.back();
+  }, [checklist, router, ticked]);
+
+  function leave() {
+    if (phase === 'recording') {
+      stop();
+      return;
+    }
+    if (segments.length === 0) {
+      router.back();
+      return;
+    }
+    // Something is recorded: it is never thrown away without asking.
+    Alert.alert(t('fuel.interrupted'), t('fuel.useVideo') + '?', [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('fuel.useVideo'), onPress: () => finish(segments) },
+    ]);
   }
 
   if (!permission) return <View style={styles.page} />;
@@ -108,6 +168,10 @@ export default function RecordVideoScreen() {
     );
   }
 
+  const recording = phase === 'recording';
+  const countdown = recording && left <= COUNTDOWN_SECONDS;
+  const canContinue = segments.length < MAX_SEGMENTS;
+
   return (
     <View style={styles.page}>
       <StatusBar style="light" />
@@ -118,24 +182,25 @@ export default function RecordVideoScreen() {
         mode="video"
         mute
         videoQuality={quality}
-        videoBitrate={quality === '720p' ? 1_500_000 : 1_000_000}
+        videoBitrate={VIDEO_BITRATE[quality]}
         onCameraReady={() => setReady(true)}
       />
       <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('common.cancel')} onPress={() => (recording ? stop() : router.back())} style={styles.back}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('common.cancel')} onPress={leave} style={styles.back}>
           <ChevronLeft size={28} color="#fff" strokeWidth={2.6} />
         </Pressable>
         <View style={{ flex: 1 }}>
           <Txt variant="strong" color="#fff" size={18}>{t('fuel.recordTitle')}</Txt>
           <Txt variant="muted" color="#e4e1d8" size={14}>{t('fuel.recordHint')}</Txt>
         </View>
-        <View style={[styles.timer, recording && { backgroundColor: colors.red }]}>
+        <View style={[styles.timer, recording && { backgroundColor: countdown ? colors.red : colors.ink }]}>
           {recording && <View style={styles.dot} />}
           <Mono size={18} bold color="#fff">{clockOf(seconds)}</Mono>
         </View>
       </View>
 
       <View style={[styles.bottom, { paddingBottom: insets.bottom + 16 }]}>
+        {countdown && <Notice tone="warn" text={t('fuel.countdown', { seconds: left })} />}
         <View style={styles.checklist}>
           {checklist.map((item) => {
             const on = ticked.has(item.key);
@@ -150,10 +215,27 @@ export default function RecordVideoScreen() {
           })}
         </View>
         {problem && <Notice tone="danger" text={problem} />}
-        <Txt variant="muted" color="#e4e1d8" size={14} style={{ textAlign: 'center' }}>{t('fuel.maxLength', { seconds: MAX_VIDEO_SECONDS })}</Txt>
-        {recording
-          ? <Button kind="dark" icon={Square} label={t('fuel.stop')} onPress={stop} />
-          : <Button icon={Video} label={t('fuel.start')} onPress={start} disabled={!ready} />}
+        {phase === 'interrupted' && segments.length > 0 && (
+          <View style={{ gap: 8 }}>
+            <Txt variant="strong" color="#fff" size={15}>
+              {`${t('fuel.recorded', { duration: clockOf(totalSeconds), size: megabytes(totalBytes) })} · ${t('fuel.segments', { n: segments.length })}`}
+            </Txt>
+            {canContinue
+              ? <Txt variant="muted" color="#e4e1d8" size={14}>{t('fuel.segmentsLeft', { n: MAX_SEGMENTS - segments.length })}</Txt>
+              : <Txt variant="muted" color="#e4e1d8" size={14}>{t('fuel.noMoreSegments')}</Txt>}
+          </View>
+        )}
+        {!recording && phase !== 'interrupted' && (
+          <Txt variant="muted" color="#e4e1d8" size={14} style={{ textAlign: 'center' }}>{t('fuel.maxLength')}</Txt>
+        )}
+        {recording && <Button kind="dark" icon={Square} label={t('fuel.stop')} onPress={stop} />}
+        {phase === 'idle' && <Button icon={Video} label={t('fuel.start')} onPress={start} disabled={!ready} />}
+        {phase === 'interrupted' && (
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            {canContinue && <Button kind="outline" icon={Video} label={t('fuel.continueRecording')} onPress={start} disabled={!ready} style={{ flex: 1 }} />}
+            {segments.length > 0 && <Button label={t('fuel.useVideo')} onPress={() => finish(segments)} style={{ flex: 1 }} />}
+          </View>
+        )}
       </View>
     </View>
   );
