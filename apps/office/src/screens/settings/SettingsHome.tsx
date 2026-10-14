@@ -1,4 +1,4 @@
-// Settings: the pages under it (Users, later Fleet and Notifications), each
+// Settings: the pages under it (Users, Fleet, Notifications on the web), each
 // locked when the person lacks its permission, and on the web the sign-in and
 // security cards (2-step sign-in, password).
 import { lazy, Suspense } from "react";
@@ -13,11 +13,12 @@ const SecurityCard = __BUILD__ === "web" ? lazy(() => import("./SecurityCard")) 
 const PAGE_TEXT: Record<string, string> = {
   users: "Office users, their permissions, set-password links, connector keys",
   fleet: "Dispatch defaults: minutes at stops, the buffer, the base place, rush hour, the routing provider's usage",
+  notifications: "Which events reach you, and the browsers notifications are on in",
 };
 
 export default function SettingsHome() {
   const { me, signOut } = useFleet();
-  const pages = navState(SETTINGS_PAGES, me);
+  const pages = navState(__BUILD__ === "web" ? SETTINGS_PAGES : SETTINGS_PAGES.filter((p) => p.key !== "notifications"), me);
   return (
     <section className="view" data-testid="settings">
       <div className="ph"><div><div className="eyebrow">{signOut ? "Sign-in, security and the office" : "The office"}</div><h1>Settings</h1></div></div>
@@ -25,7 +26,7 @@ export default function SettingsHome() {
         <div className="more-list">
           {pages.map((p) => (
             <Link key={p.key} to={p.path} className={p.locked ? "locked" : undefined} aria-disabled={p.locked || undefined} title={p.locked ? LOCK_HINT : undefined}>
-              <Icon name={p.key === "fleet" ? "settings" : "accounts"} />
+              <Icon name={p.key === "fleet" ? "settings" : p.key === "notifications" ? "issues" : "accounts"} />
               <span className="grow">{p.label}<span className="sub" style={{ display: "block", fontWeight: 400 }}>{PAGE_TEXT[p.key]}</span></span>
               {p.locked && <i className="lock"><Icon name="lock" /></i>}
             </Link>

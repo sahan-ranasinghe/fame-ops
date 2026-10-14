@@ -9,6 +9,7 @@ import { ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { findVehicle, loadRefs, type Refs } from "../fleet.ts";
 import { contactLinks } from "../format.ts";
 import { ACTIVE, type IssueRow, type IssueStatus, KIND_TEXT, scopeOf, syncIssues, TASK_KINDS, writeEvent } from "../issues.ts";
+import { notifyEvent } from "../notifications.ts";
 import { PHOTO_LINK_NOTE, photoLinks } from "../photos.ts";
 import type { Actor } from "../roles.ts";
 import { colomboDateTime, colomboDayTime } from "../time.ts";
@@ -161,6 +162,14 @@ export const updateIssue = tool({
       unwrap(await db.from("issues").update({ assigned_to: assignee.id, updated_at: nowIso }).eq("id", id), "issue");
       await writeEvent(db, id, "assigned", { ...actorFields, note: assignee.name });
       events.push(`assigned to ${assignee.name}`);
+      if (assignee.id) {
+        await notifyEvent(db, "issue.assigned", {
+          title: `Issue for you · ${issue.title}`,
+          body: [issue.detail, `from ${actor.name}`].filter(Boolean).join(" · "),
+          url: `/issues/${id}`,
+          tag: `issue:${id}`,
+        }, { actor: actor.employeeId, assignee: assignee.id });
+      }
     }
     if (note && !status) {
       await writeEvent(db, id, "note", { ...actorFields, note });

@@ -267,10 +267,57 @@ npx supabase functions deploy office-mcp --no-verify-jwt     # the key in the UR
 npx supabase functions deploy read-odometer --no-verify-jwt  # checks the driver's token itself
 npx supabase functions deploy push-task --no-verify-jwt      # called by the database with the server key
 npx supabase functions deploy office-api --no-verify-jwt     # checks the office user's session and role itself
+npx supabase functions deploy fleet-jobs --no-verify-jwt     # the issue sync, called by the database with the server key
+npx supabase functions deploy notify-office --no-verify-jwt  # web push to the office, called by the database with the server key
 ```
 
 Secrets for office-api: `OFFICE_WEB_URL` (the web app's origin, for CORS and
-the set-password links; the local test needs none).
+the set-password links; the local test needs none). Secrets for
+`notify-office`: `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`
+(see "Office notifications" below); without them every notification is marked
+dead and nothing else breaks.
+
+## Office notifications (web push) and the installable web app
+
+The office web app tells people about what concerns them even when the tab is
+closed (docs/dispatch-plan.md, section 9): a new vehicle request (to everyone
+who approves), a request decided (to the one who asked), a task declined or not
+accepted in time (to everyone who approves or assigns), a critical issue (to the
+issues permission), an issue given to you. The sender never hears about their
+own action.
+
+1. The tools and the database write one row per recipient into the outbox
+   `notifications` through `queue_notification`, which skips a person who
+   switched that event off (Settings → Notifications) or has no browser with
+   notifications on (`web_push_subscriptions`).
+2. The insert trigger hands the row to the Edge Function `notify-office`
+   through pg_net (the Vault secrets `functions_url` / `server_key`, as the
+   driver push does); the pg_cron job `notify-retry` (every 5 minutes) asks it
+   to take rows that failed (tried again after 1, 5, 15 and 60 minutes, dead
+   after 5 attempts) or were never picked up.
+3. `notify-office` encrypts the message (RFC 8291, `@negrel/webpush`) and sends
+   it with VAPID to every browser of the recipient; a browser the push service
+   reports gone (404 / 410) is marked removed.
+4. In the browser the service worker `sw.js` shows the notification and a tap
+   opens the link in the open Fame Fleet window (or a new one). The web build
+   is installable (manifest, icons from `apps/office/scripts/make-icons.mjs`,
+   rendered with the e2e's Chromium: nothing downloaded): Android Chrome works
+   best with it installed, a laptop needs the browser running, an iPhone needs
+   Add to Home Screen first.
+
+What Sahan sets up once, himself: the VAPID key pair, printed by
+
+```bash
+source ~/.nvm/nvm.sh && nvm use >/dev/null && node scripts/make-vapid-keys.mjs
+```
+
+and set as the Edge Function secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`
+and `VAPID_SUBJECT` (`mailto:<an office address>`) with `npx supabase secrets
+set`. The browser gets the public key from `my_notification_settings`, so
+nothing is built into the web app and a new pair needs no redeploy (people turn
+notifications on again). The local test suite uses a throwaway pair in the
+`functions serve` env file; without one the outbox rows are marked dead
+(`no_vapid_keys`) and the suite checks that instead.
 
 ## Push notifications and sounds
 
@@ -421,7 +468,9 @@ docker run --rm --cpus 2 --memory 2g -v deno-cache:/deno-dir -v "$PWD/supabase/f
          && cd /fn/office-mcp && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/office-api && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/read-odometer && deno check index.ts && deno lint && deno fmt --check \
-         && cd /fn/push-task && deno check index.ts && deno lint && deno fmt --check'
+         && cd /fn/push-task && deno check index.ts && deno lint && deno fmt --check \
+         && cd /fn/fleet-jobs && deno check index.ts && deno lint && deno fmt --check \
+         && cd /fn/notify-office && deno check index.ts && deno lint && deno fmt --check'
 ```
 
 ## Data credits

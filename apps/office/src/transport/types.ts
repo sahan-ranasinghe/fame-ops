@@ -68,4 +68,5 @@ export const ALL_TOOLS = [
   "list_office_users", "create_office_user", "reset_office_password", "set_office_user_active", "create_office_key", "revoke_office_key",
   "update_office_user",
   "plan_task", "update_task_stops", "get_settings", "update_settings", "routing_usage", "list_issues", "update_issue", "issue_history",
+  "my_notification_settings", "set_my_notification_settings", "register_web_push", "remove_web_push",
 ];

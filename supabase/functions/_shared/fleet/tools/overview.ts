@@ -1,12 +1,12 @@
 // fleet_overview: the numbers and lists of the Overview / Fleet today screens.
 // needs_attention is the list of active issues (issues.ts): the overview brings
-// it in line with the data first, so it is always current, then reads it.
+// it in line with the data first (skipped when a sync finished under 60 s ago), then reads it.
 
 import { z } from "zod";
 import { unwrap } from "../db.ts";
 import { loadLatest, loadRefs, nearestTown, sharing, statusOf } from "../fleet.ts";
 import { contactLinks, mapsPoint } from "../format.ts";
-import { ACTIVE, scopeOf, syncIssues } from "../issues.ts";
+import { ACTIVE, scopeOf, syncIssuesIfStale } from "../issues.ts";
 import { ago, colomboDate, colomboDateTime, dayRange } from "../time.ts";
 import { realDate, tool, zDate } from "../tool.ts";
 
@@ -64,8 +64,8 @@ export const fleetOverview = tool({
       };
     }));
 
-    // --- Needs attention: the active issues, brought in line with the data first ---------
-    await syncIssues(db, now);
+    // --- Needs attention: the active issues, brought in line with the data first (unless a sync is under a minute old) ---
+    await syncIssuesIfStale(db, now);
     const issues = unwrap(
       await db.from("issues").select("id, kind, severity, title, detail, due, sort_key").in("status", ACTIVE)
         .order("sort_key").order("opened_at"),

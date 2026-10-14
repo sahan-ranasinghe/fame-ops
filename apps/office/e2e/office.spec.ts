@@ -245,6 +245,20 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByRole("button", { name: "Turn on 2-step sign-in" }).click();
   await expect(page.getByText("On", { exact: true })).toBeVisible();
 
+  // 6b. Settings → Notifications: this browser's state in words, the events of an admin, one switched off and kept.
+  await page.goto("/settings");
+  await page.getByRole("link", { name: "Notifications" }).click();
+  await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
+  await expect(page.getByTestId("notifications")).toContainText(/in this browser|not switched on for the office/);
+  const requestBox = page.getByRole("checkbox", { name: "A vehicle request comes in" });
+  await expect(requestBox).toBeChecked();
+  await expect(page.getByRole("checkbox")).toHaveCount(6);
+  await requestBox.uncheck();
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.reload();
+  await expect(page.getByRole("checkbox", { name: "A vehicle request comes in" })).not.toBeChecked();
+  await expect(page.getByRole("checkbox", { name: "A critical issue opens" })).toBeChecked();
+
   // 7. Sign out; sign in again: password, then the code.
   await page.getByRole("link", { name: "More" }).first().click();
   await page.getByRole("button", { name: "Sign out" }).click();
@@ -296,6 +310,11 @@ test("a requester-only user sees locked menu items, a No access page, and asks i
   await expect(page.getByTestId("no-access")).toContainText("View");
   await page.goto("/settings/users");
   await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
+  // Their notifications: the one event a requester can get.
+  await page.goto("/settings/notifications");
+  await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
+  await expect(page.getByRole("checkbox")).toHaveCount(1);
+  await expect(page.getByRole("checkbox", { name: "Your request is decided" })).toBeChecked();
 
   // A new request has no "Who needs it" field: it is in their own name.
   await page.goto("/requests");

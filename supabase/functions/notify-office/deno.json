@@ -1,0 +1,11 @@
+{
+  "lock": false,
+  "imports": {
+    "@negrel/webpush": "jsr:@negrel/webpush@0.5.0",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.117.2",
+    "zod": "npm:zod@4.6.5"
+  },
+  "fmt": {
+    "lineWidth": 140
+  }
+}

@@ -38,6 +38,7 @@ function Home() {
 const SettingsHome = lazy(() => import("../screens/settings/SettingsHome"));
 const Issues = lazy(() => import("../screens/Issues"));
 const IssuePage = lazy(() => import("../screens/IssuePage"));
+const Notifications = lazy(() => import("../screens/settings/Notifications"));
 function SettingsRoute() {
   return <Suspense fallback={<div className="loading">Opening settings…</div>}><SettingsHome /></Suspense>;
 }
@@ -62,6 +63,7 @@ export const routes: RouteObject[] = [
       { path: "settings", element: <SettingsRoute /> },
       { path: "settings/users", element: <Guard need={["users"]}><Users /></Guard> },
       { path: "settings/fleet", element: <Guard need={["users"]}><FleetSettings /></Guard> },
+      { path: "settings/notifications", element: <Suspense fallback={<div className="loading">Opening notifications…</div>}><Notifications /></Suspense> },
       { path: "accounts", element: <Navigate to="/settings/users" replace /> },
       { path: "more", element: <More /> },
       { path: "*", element: <Navigate to="/" replace /> },

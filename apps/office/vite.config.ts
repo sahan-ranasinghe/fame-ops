@@ -5,15 +5,32 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import { viteSingleFile } from "vite-plugin-singlefile";
 
 const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), "utf8")) as { version: string };
 
+/** The web build is an installable app: the manifest, the theme colour and the icons (public/). The artifact gets none of it. */
+const pwaTags = (): Plugin => ({
+  name: "fame-pwa-tags",
+  transformIndexHtml: {
+    order: "pre",
+    handler: (html) => ({
+      html,
+      tags: [
+        { tag: "link", attrs: { rel: "manifest", href: "/manifest.webmanifest" }, injectTo: "head" },
+        { tag: "meta", attrs: { name: "theme-color", content: "#15181c" }, injectTo: "head" },
+        { tag: "link", attrs: { rel: "icon", type: "image/png", href: "/icons/icon-192.png" }, injectTo: "head" },
+        { tag: "link", attrs: { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" }, injectTo: "head" },
+      ],
+    }),
+  },
+});
+
 export default defineConfig(({ mode }) => {
   const artifact = mode === "artifact";
   return {
-    plugins: [react(), ...(artifact ? [viteSingleFile({ removeViteModuleLoader: true })] : [])],
+    plugins: [react(), ...(artifact ? [viteSingleFile({ removeViteModuleLoader: true })] : [pwaTags()])],
     define: {
       __BUILD__: JSON.stringify(artifact ? "artifact" : "web"),
       __VERSION__: JSON.stringify(pkg.version),

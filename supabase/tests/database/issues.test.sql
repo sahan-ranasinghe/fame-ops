@@ -10,11 +10,15 @@ select * from no_plan();
 insert into auth.users (id, email) values
   ('00000000-0000-0000-0000-0000000000c1', 'd.issue@drivers.fame.invalid'),
   ('00000000-0000-0000-0000-0000000000c2', 'viewer.issue@fame.test'),
-  ('00000000-0000-0000-0000-0000000000c3', 'requester.issue@fame.test');
+  ('00000000-0000-0000-0000-0000000000c3', 'requester.issue@fame.test'),
+  ('00000000-0000-0000-0000-0000000000c4', 'dispatcher.issue@fame.test'),
+  ('00000000-0000-0000-0000-0000000000c5', 'issues.issue@fame.test');
 insert into public.employees (id, code, name, username, email, role, permissions, auth_user_id) values
   ('10000000-0000-0000-0000-0000000000c1', 'D-ISS', 'Issue Driver', 'd.issue', null, 'driver', '{}', '00000000-0000-0000-0000-0000000000c1'),
   ('10000000-0000-0000-0000-0000000000c2', 'V-ISS', 'Issue Viewer', null, 'viewer.issue@fame.test', 'viewer', '{view}', '00000000-0000-0000-0000-0000000000c2'),
-  ('10000000-0000-0000-0000-0000000000c3', 'R-ISS', 'Issue Requester', null, 'requester.issue@fame.test', 'staff', '{request}', '00000000-0000-0000-0000-0000000000c3');
+  ('10000000-0000-0000-0000-0000000000c3', 'R-ISS', 'Issue Requester', null, 'requester.issue@fame.test', 'staff', '{request}', '00000000-0000-0000-0000-0000000000c3'),
+  ('10000000-0000-0000-0000-0000000000c4', 'A-ISS', 'Issue Dispatcher', null, 'dispatcher.issue@fame.test', 'office', '{view,assign_tasks}', '00000000-0000-0000-0000-0000000000c4'),
+  ('10000000-0000-0000-0000-0000000000c5', 'I-ISS', 'Issue Holder', null, 'issues.issue@fame.test', 'fleet_admin', '{issues}', '00000000-0000-0000-0000-0000000000c5');
 insert into public.vehicles (id, reg_no) values ('20000000-0000-0000-0000-0000000000c1', 'WP ISS-0001');
 insert into public.tasks (id, title, employee_id, vehicle_id, start_at, created_by) values
   ('50000000-0000-0000-0000-0000000000c1', 'Issue task', '10000000-0000-0000-0000-0000000000c1', '20000000-0000-0000-0000-0000000000c1', now() + interval '2 hours', 'test');
@@ -35,17 +39,32 @@ select throws_ok($$ insert into public.issue_events (issue_id, action) select id
 select ok(exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'issues'), 'issues is in the Realtime publication');
 select is((select schedule || ' ' || command from cron.job where jobname = 'fleet-sync'), '*/5 * * * * select public.fleet_sync()', 'fleet-sync runs every 5 minutes');
 
--- Who reads what.
+-- Who reads what (Part 3b): the issues permission reads everything, assign_tasks the task
+-- kinds only, nobody else anything; the events follow their issue. The view permission
+-- alone reads nothing: the Issues page is hidden for them, and so is the table.
+insert into public.issues (id, kind, severity, title, ref_key, task_id, employee_id) values
+  ('80000000-0000-0000-0000-0000000000c1', 'declined', 'warning', 'Declined: Issue task', 'declined:50000000-0000-0000-0000-0000000000c1', '50000000-0000-0000-0000-0000000000c1', '10000000-0000-0000-0000-0000000000c1');
+insert into public.issue_events (issue_id, action, actor, to_status)
+  select id, 'opened', 'system', 'open' from public.issues where status = 'open';
+select is((select count(*) from public.issues where status = 'open'), 2::bigint, 'two open issues: a document and a declined task');
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000c1","role":"authenticated"}';
 select is((select count(*) from public.issues), 0::bigint, 'a driver reads no issues');
 select is((select count(*) from public.issue_events), 0::bigint, 'a driver reads no issue events');
 select throws_like($$ insert into public.issues (kind, severity, title, ref_key) values ('x', 'info', 'x', 'x:2') $$, '%permission denied%', 'a driver cannot write an issue');
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000c2","role":"authenticated"}';
-select is((select count(*) from public.issues), 2::bigint, 'an office person with view reads every issue (the bell)');
-select throws_like($$ update public.issues set status = 'dismissed' $$, '%permission denied%', 'but changes them only through the tools');
+select is((select count(*) from public.issues), 0::bigint, 'the view permission alone reads no issues');
+select is((select count(*) from public.issue_events), 0::bigint, 'nor their events');
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000c3","role":"authenticated"}';
-select is((select count(*) from public.issues), 0::bigint, 'a requester-only person reads none');
+select is((select count(*) from public.issues), 0::bigint, 'a requester-only person reads no issues (a direct query or the Realtime channel gets no rows)');
+select is((select count(*) from public.issue_events), 0::bigint, 'nor their events');
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000c4","role":"authenticated"}';
+select is((select string_agg(kind, ',' order by kind) from public.issues), 'declined', 'assign_tasks reads the task kinds only');
+select is((select count(*) from public.issue_events), 1::bigint, 'and the events of those issues only');
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000c5","role":"authenticated"}';
+select is((select count(*) from public.issues), 3::bigint, 'the issues permission reads every issue (open and resolved)');
+select is((select count(*) from public.issue_events), 2::bigint, 'and every event');
+select throws_like($$ update public.issues set status = 'dismissed' $$, '%permission denied%', 'but changes them only through the tools');
 reset role;
 
 -- The triggers ask fleet-jobs to sync (through pg_net, with the Vault secrets).

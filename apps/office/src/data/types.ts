@@ -679,3 +679,25 @@ export interface IssueHistory {
   report?: { id: string; category: string; note?: string | null; status: string; office_note?: string | null; reported: string; driver?: string; vehicle?: string; task_id?: string; photos: string[] };
   request?: { id: string; requested_by: string; route?: string; when: string; status: string; task_id?: string };
 }
+
+// Settings → Notifications (my_notification_settings and the three tools that answer the same).
+export interface NotificationEvent {
+  event: string;
+  label: string;
+  text: string;
+  enabled: boolean;
+}
+export interface NotificationDevice {
+  id: string;
+  device: string;
+  since: string;
+  last_ok?: string;
+  endpoint_hash: string;
+}
+export interface NotificationSettings {
+  events: NotificationEvent[];
+  devices: NotificationDevice[];
+  push: { configured: boolean; public_key?: string };
+  registered?: { id: string; device: string; endpoint_hash: string };
+  removed?: number;
+}

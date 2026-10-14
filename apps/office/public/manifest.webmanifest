@@ -1,0 +1,15 @@
+{
+  "name": "Fame Fleet",
+  "short_name": "Fame Fleet",
+  "description": "Vehicles, drivers, tasks and requests for the Fame Global Solutions fleet office.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f3f2ee",
+  "theme_color": "#15181c",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -311,6 +311,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"job_runs": {
+                  Row: {
+                    "finished_at": string | null,"job": string,"result": Json | null,"started_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "finished_at"?: string | null,"job": string,"result"?: Json | null,"started_at"?: string
+                  }
+                  Update: {
+                    "finished_at"?: string | null,"job"?: string,"result"?: Json | null,"started_at"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"location_points": {
                   Row: {
                     "accuracy_m": number | null,"battery_pct": number | null,"employee_id": string,"heading": number | null,"id": number,"is_mock": boolean,"lat": number,"lng": number,"received_at": string,"recorded_at": string,"session_id": string,"source": string,"speed_mps": number | null
@@ -334,6 +348,46 @@ isOneToOne: false
       columns: ["session_id"]
 isOneToOne: false
       referencedRelation: "duty_sessions"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"notification_settings": {
+                  Row: {
+                    "employee_id": string,"enabled": boolean,"event": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "employee_id": string,"enabled"?: boolean,"event": string,"updated_at"?: string
+                  }
+                  Update: {
+                    "employee_id"?: string,"enabled"?: boolean,"event"?: string,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "notification_settings_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"notifications": {
+                  Row: {
+                    "attempts": number,"channel": string,"created_at": string,"error": string | null,"event": string,"id": number,"next_try_at": string,"payload": NonNullable<Json>,"recipient_employee_id": string,"sent_at": string | null,"status": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "attempts"?: number,"channel"?: string,"created_at"?: string,"error"?: string | null,"event": string,"id"?: never,"next_try_at"?: string,"payload": NonNullable<Json>,"recipient_employee_id": string,"sent_at"?: string | null,"status"?: string
+                  }
+                  Update: {
+                    "attempts"?: number,"channel"?: string,"created_at"?: string,"error"?: string | null,"event"?: string,"id"?: never,"next_try_at"?: string,"payload"?: NonNullable<Json>,"recipient_employee_id"?: string,"sent_at"?: string | null,"status"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "notifications_recipient_employee_id_fkey"
+      columns: ["recipient_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
       referencedColumns: ["id"]
     }
                   ]
@@ -839,6 +893,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"web_push_subscriptions": {
+                  Row: {
+                    "auth": string,"created_at": string,"employee_id": string,"endpoint": string,"id": string,"last_ok_at": string | null,"p256dh": string,"removed_at": string | null,"removed_reason": string | null,"user_agent": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "auth": string,"created_at"?: string,"employee_id": string,"endpoint": string,"id"?: string,"last_ok_at"?: string | null,"p256dh": string,"removed_at"?: string | null,"removed_reason"?: string | null,"user_agent"?: string | null
+                  }
+                  Update: {
+                    "auth"?: string,"created_at"?: string,"employee_id"?: string,"endpoint"?: string,"id"?: string,"last_ok_at"?: string | null,"p256dh"?: string,"removed_at"?: string | null,"removed_reason"?: string | null,"user_agent"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "web_push_subscriptions_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 }
           }
           Views: {
@@ -854,6 +928,9 @@ isOneToOne: false
 "call_edge_function":
 { Args: { "p_body": Json,"p_name": string }; Returns: undefined
                            },
+"colombo_when":
+{ Args: { "p_at": string }; Returns: string
+                           },
 "current_employee_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -863,8 +940,17 @@ isOneToOne: false
 "decline_task":
 { Args: { "p_at"?: string,"p_note"?: string,"p_reason": string,"p_task_id": string }; Returns: string
                            },
+"dispatch_recipients":
+{ Args: Record<PropertyKey, never>; Returns: (string)[]
+                           },
 "fleet_sync":
 { Args: { "p_scope"?: Json }; Returns: undefined
+                           },
+"issue_visible":
+{ Args: { "p_kind": string }; Returns: boolean
+                           },
+"notify_retry":
+{ Args: Record<PropertyKey, never>; Returns: undefined
                            },
 "odometer_log_flag":
 { Args: { "p_ai_status": string,"p_ai_value": number,"p_entry": string,"p_reading": number }; Returns: string
@@ -883,6 +969,9 @@ isOneToOne: false
                            },
 "queue_accept_reminders":
 { Args: Record<PropertyKey, never>; Returns: number
+                           },
+"queue_notification":
+{ Args: { "p_event": string,"p_payload": Json,"p_recipients": (string)[] }; Returns: number
                            },
 "queue_odometer_checks":
 { Args: Record<PropertyKey, never>; Returns: number

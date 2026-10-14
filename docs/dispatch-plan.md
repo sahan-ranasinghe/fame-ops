@@ -390,6 +390,17 @@ select cron.schedule('notify-retry', '*/5 * * * *', $$select public.notify_retry
 -- Service role only on all three tables; the person's own rows come through the tools.
 ```
 
+**As built (14 October 2026, migrations `20261014140000_issues_access` and
+`20261014150000_notifications`).** As above, with: `web_push_subscriptions.removed_at` and
+`removed_reason` ('user' | 'gone') instead of a delete (nothing is deleted; the same endpoint
+registered again comes back); `queue_notification` also skips an inactive person and a person
+with no browser on, and dedupes the recipients; `job_runs` (job, started_at, finished_at,
+result) for the sync guard; `colombo_when(timestamptz)` ("HH:MM" today, "Tue 14 Oct HH:MM"
+otherwise) and `dispatch_recipients()` for the two SQL-written events; `decline_task` and
+`queue_accept_reminders` replaced to queue `task.declined` / `task.not_accepted`. The issues
+policies now follow the permission table through `issue_visible(kind)` (issues: everything;
+assign_tasks: the task kinds; nobody else; `issue_events` follow their issue).
+
 ### 3.6 `custodians_booking` (Part 6)
 
 ```sql
@@ -754,6 +765,21 @@ prints a public and a private key (base64url). Sahan sets the three secrets and 
 variable himself; nothing is printed or committed by me. The local tests use a throwaway pair
 made the same way into the `functions serve` env file.
 
+**As built (14 October 2026).** Two departures. (1) No `VITE_VAPID_PUBLIC_KEY`: the browser
+gets the public key from `my_notification_settings` (`push.public_key`, with `push.configured`),
+so the key lives in one place (the Edge Function secrets), the web app needs no rebuild when
+it changes, and the page can say "not switched on for the office yet" instead of failing.
+(2) The pair is printed by `scripts/make-vapid-keys.mjs` (Node's WebCrypto, nothing
+downloaded) in the same base64url form `web-push` prints; either works. Also: `issue.opened`
+fires when an issue opens critical *or is raised* to critical; the message `url` is a path and
+`notify-office` makes it absolute with `OFFICE_WEB_URL`; the service worker posts
+`{type: "navigate", url}` to the open window (the router follows it) and `/tasks?task=<id>`
+opens the task drawer; a device is removed with `remove_web_push(id)` from the page, with
+`remove_web_push(endpoint)` by the browser itself; the library is `jsr:@negrel/webpush@0.5.0`
+(it passed `deno check`; the by-hand fallback was not needed). The Settings page lists only the
+events the person's permissions can bring (`relevantEvents`); the vehicle.* events join the
+list with Part 6.
+
 ## 10. Office web app and artifact, per part
 
 - **Part 2b** (13 October 2026). One shared dialog component (`ui/Drawer.tsx`): a click
@@ -834,6 +860,23 @@ made the same way into the `functions serve` env file.
   issue. Playwright: a breakdown report → fleet-jobs sync → the bell → the issue page → Take →
   note → Resolve → the report is closed with the note → the Resolved tab.
 - **Part 3b.** Settings → Notifications; PWA files; the service worker.
+  *As built (14 October 2026).* Settings → Notifications (`screens/settings/Notifications.tsx`,
+  web only, lazy; the artifact's Settings home does not list it and the route points to the
+  web app): "This browser" with the state in words (not supported / needs https / iPhone needs
+  Add to Home Screen / blocked / on / off / on but not for you yet) and one button (Turn on in
+  this browser → permission → `pushManager.subscribe` → `register_web_push`; Turn off →
+  unsubscribe → `remove_web_push`), the note about Android / laptop / iPhone; "Tell me when"
+  with a checkbox per event (saved at once); "Browsers with notifications on" with the device
+  name, since, last delivered, "this one", Remove. `src/push.ts` (the browser side),
+  `notificationsLogic.ts` (pure, Vitest). `WebApp` registers `public/sw.js` after sign-in and
+  routes a notification tap; `public/manifest.webmanifest` and `public/icons/*` (from
+  `scripts/make-icons.mjs`); the head tags (manifest, theme-color, icon, apple-touch-icon) are
+  injected by `vite.config.ts` for the web build only. Playwright: the admin's six events, one
+  switched off and kept after a reload; a requester sees the one event their permission brings.
+  Sahan's two Part 3a changes landed here: the issues RLS follows the permission table (pgTAP:
+  view alone 0 rows, requester 0, assign_tasks the task kinds only, issues everything; the
+  bell and the Issues page were already hidden for a person with neither permission), and
+  `fleet_overview` skips its own sync when one finished under 60 s ago (`job_runs`).
 - **Part 6.** Request form (`request`): vehicle type (car, van, double cab, lorry, any), pax,
   tools, when, back by, from, to, project, note; "Sent to the fleet admin · you'll be
   notified"; My requests with the timeline sent → seen → approved / declined with who decided

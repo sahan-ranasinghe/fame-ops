@@ -1,6 +1,6 @@
 // The reconcile step of the issues centre (docs/dispatch-plan.md, section 8), pure.
 import { assertEquals } from "@std/assert";
-import { type ActiveRow, dueText, reconcile, scopeOf, type Wanted } from "./issues.ts";
+import { type ActiveRow, dueText, reconcile, scopeOf, syncIsFresh, type Wanted } from "./issues.ts";
 
 const row = (over: Partial<ActiveRow> & { ref_key: string }): ActiveRow => ({
   id: `id-${over.ref_key}`,
@@ -116,4 +116,16 @@ Deno.test("due text", () => {
   assertEquals(dueText(1, "2026-10-15"), "tomorrow");
   assertEquals(dueText(5, "2026-10-19"), "in 5 days");
   assertEquals(dueText(12, "2026-10-26"), "26 Oct");
+});
+
+Deno.test("an overview trusts a full sync that finished under 60 s ago, or one still running since under 60 s", () => {
+  const at = (s: number) => new Date(Date.UTC(2026, 9, 14, 8, 0, s)).toISOString();
+  const now = new Date(Date.UTC(2026, 9, 14, 8, 1, 0));
+  assertEquals(syncIsFresh(null, now), false);
+  assertEquals(syncIsFresh({ started_at: at(0), finished_at: at(5) }, now), true, "finished 55 s ago");
+  assertEquals(syncIsFresh({ started_at: at(0), finished_at: at(0) }, now), false, "finished 60 s ago");
+  assertEquals(syncIsFresh({ started_at: at(30), finished_at: null }, now), true, "running for 30 s");
+  assertEquals(syncIsFresh({ started_at: at(0), finished_at: null }, now), false, "a run that never finished, 60 s old");
+  assertEquals(syncIsFresh({ started_at: at(50), finished_at: at(0) }, now), true, "a new run started 10 s ago after an old finish");
+  assertEquals(syncIsFresh({ started_at: at(50), finished_at: at(0) }, now, 5_000), false, "with a 5 s window nothing is fresh");
 });

@@ -7,7 +7,8 @@
 // as the rest of the office tools.
 
 import type { Db, Row } from "./db.ts";
-import { unwrap } from "./db.ts";
+import { notify, officePeople, recipientsFor } from "./notifications.ts";
+import { unwrap, unwrapMaybe } from "./db.ts";
 import { DECLINE_TEXT } from "./decline.ts";
 import { taskEta } from "./eta.ts";
 import {
@@ -34,6 +35,10 @@ export type IssueRow = Row<"issues">;
 export const ACTIVE: IssueStatus[] = ["open", "in_progress"];
 
 /** The kinds about a task (the dispatcher's business, assign_tasks); the rest is the fleet (issues). */
+/** The job_runs row of the full sync, and how long an overview trusts the last one. */
+export const SYNC_JOB = "issues";
+export const SYNC_FRESH_MS = 60_000;
+
 export const TASK_KINDS = new Set(["signal", "late_start", "running_late", "not_accepted", "declined"]);
 export const scopeOf = (kind: string): "task" | "fleet" => TASK_KINDS.has(kind) ? "task" : "fleet";
 
@@ -534,6 +539,8 @@ function scoped<Q extends { eq: (c: string, v: string) => Q; not: (c: string, op
 
 /** Brings the issues table in line with the data; returns what changed. */
 export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Promise<SyncResult> {
+  const full = !scope.task_id && !scope.report_id && !scope.request_id && !scope.vehicle_id;
+  if (full) unwrap(await db.from("job_runs").upsert({ job: SYNC_JOB, started_at: now.toISOString() }, { onConflict: "job" }), "job runs");
   const mutedSince = new Date(now.getTime() - ms(30)).toISOString();
   const [wanted, activeRes, mutedRes] = await Promise.all([
     computeWanted(db, now, scope),
@@ -555,6 +562,7 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
   let opened = 0;
   let updated = 0;
   let resolved = 0;
+  const critical: { id: string; title: string; detail: string | null }[] = [];
   for (const w of plan.open) {
     const { data, error } = await db.from("issues").insert({
       kind: w.kind,
@@ -579,9 +587,11 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
     }
     await writeEvent(db, data.id, "opened", { actor: "system", to_status: w.status ?? "open", at: now });
     opened += 1;
+    if (w.severity === "critical") critical.push({ id: data.id, title: w.title, detail: w.detail ?? null });
   }
   for (const { row, patch } of plan.update) {
     unwrap(await db.from("issues").update({ ...patch, updated_at: nowIso }).eq("id", row.id), "issues");
+    if (patch.severity === "critical") critical.push({ id: row.id, title: patch.title ?? row.title, detail: patch.detail ?? row.detail });
     if (patch.status) {
       await writeEvent(db, row.id, "status", {
         actor: "system",
@@ -603,7 +613,48 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
     await writeEvent(db, row.id, "auto_resolved", { actor: "system", from_status: row.status, to_status: "resolved", at: now });
     resolved += 1;
   }
-  return { opened, updated, resolved, active: active.length + opened - resolved };
+  // A critical issue (opened so, or raised to it) tells the people with the issues permission.
+  if (critical.length > 0) {
+    try {
+      const people = await officePeople(db);
+      const to = recipientsFor("issue.opened", people);
+      for (const c of critical) {
+        await notify(db, "issue.opened", { title: c.title, body: c.detail ?? "", url: `/issues/${c.id}`, tag: `issue:${c.id}` }, to);
+      }
+    } catch (error) {
+      console.error(`issue.opened: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  const result = { opened, updated, resolved, active: active.length + opened - resolved };
+  if (full) {
+    unwrap(
+      await db.from("job_runs").upsert({ job: SYNC_JOB, finished_at: new Date().toISOString(), result }, { onConflict: "job" }),
+      "job runs",
+    );
+  }
+  return result;
+}
+
+/**
+ * fleet_overview's own sync: skipped when a full sync (the job's or another overview's)
+ * finished under maxAgeMs ago, or started under maxAgeMs ago and is still running, so
+ * several people with Overview open do not run the rules every few seconds. Pure.
+ */
+export function syncIsFresh(run: { started_at: string; finished_at: string | null } | null, now: Date, maxAgeMs = SYNC_FRESH_MS): boolean {
+  if (!run) return false;
+  const finished = run.finished_at ? Date.parse(run.finished_at) : NaN;
+  if (!Number.isNaN(finished) && now.getTime() - finished < maxAgeMs) return true;
+  const started = Date.parse(run.started_at);
+  if (Number.isNaN(started)) return false;
+  const running = Number.isNaN(finished) || started > finished;
+  return running && now.getTime() - started < maxAgeMs;
+}
+
+/** A full sync unless one is fresh (see syncIsFresh); null when skipped. */
+export async function syncIssuesIfStale(db: Db, now: Date, maxAgeMs = SYNC_FRESH_MS): Promise<SyncResult | null> {
+  const run = unwrapMaybe(await db.from("job_runs").select("started_at, finished_at").eq("job", SYNC_JOB).maybeSingle(), "job runs");
+  if (syncIsFresh(run, now, maxAgeMs)) return null;
+  return await syncIssues(db, now);
 }
 
 /** The refs an issue card needs, loaded once per call. */

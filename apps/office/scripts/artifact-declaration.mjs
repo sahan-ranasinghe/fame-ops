@@ -24,10 +24,12 @@ function files(dir) {
     return statSync(p).isDirectory() ? files(p) : [p];
   });
 }
+// Screens the artifact never shows (they need the browser's own push subscription): their tools are not declared.
+const WEB_ONLY = new Set(["src/screens/settings/Notifications.tsx", "src/push.ts"]);
 const used = new Set();
 for (const file of files(join(root, "src"))) {
   const rel = relative(root, file);
-  if (!/\.(ts|tsx)$/.test(rel) || /\.test\.(ts|tsx)$/.test(rel) || rel === "src/transport/types.ts") continue;
+  if (!/\.(ts|tsx)$/.test(rel) || /\.test\.(ts|tsx)$/.test(rel) || rel === "src/transport/types.ts" || WEB_ONLY.has(rel)) continue;
   const text = readFileSync(file, "utf8");
   for (const m of text.matchAll(/"([a-z_]+)"/g)) if (allTools.includes(m[1])) used.add(m[1]);
 }

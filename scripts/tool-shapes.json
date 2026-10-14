@@ -31,6 +31,7 @@
   "reminders.count: number",
   "reminders.red: number",
   "reminders.window_days: number",
+  "requests.oldest_waiting: string",
   "requests.waiting: number",
   "tasks.assigned: number",
   "tasks.cancelled: number",
@@ -195,6 +196,8 @@
  "list_issues {}": [
   "count: number",
   "in_progress: number",
+  "issues[].assigned_to.email: string",
+  "issues[].assigned_to.name: string",
   "issues[].detail: string",
   "issues[].driver: string",
   "issues[].driver_links.call: string",
@@ -212,6 +215,7 @@
   "issues[].title: string",
   "issues[].updated: string",
   "issues[].vehicle: string",
+  "issues[].vehicle_report_id: string",
   "open: number",
   "status: string"
  ],
@@ -240,7 +244,13 @@
  ],
  "list_requests {\"status\": \"waiting\"}": [
   "count: number",
-  "requests[]: empty",
+  "requests[].asked: string",
+  "requests[].id: string",
+  "requests[].need: string",
+  "requests[].requested_by: string",
+  "requests[].route: string",
+  "requests[].status: string",
+  "requests[].when: string",
   "status: string"
  ],
  "list_vehicle_reports {\"status\": \"all\"}": [

@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Db, Row } from "../db.ts";
 import { ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { assignWarnings, loadRefs, monthKm, openTasksOn, type Task, taskWindow } from "../fleet.ts";
+import { notifyEvent } from "../notifications.ts";
 import { hasAny } from "../permissions.ts";
 import { ago, colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime, zVehicleType } from "../tool.ts";
@@ -99,6 +100,17 @@ export const createRequest = tool({
       }).select("*").single(),
       "vehicle request",
     );
+    await notifyEvent(db, "request.created", {
+      title: `Vehicle request · ${created.requested_by_name}`,
+      body: [
+        colomboDayTime(neededAt),
+        args.need_type ? TYPE_NAME[args.need_type] : "any vehicle",
+        [args.route_from, args.route_to].filter(Boolean).join(" → "),
+      ]
+        .filter(Boolean).join(" · "),
+      url: "/requests",
+      tag: `request:${created.id}`,
+    }, { actor: actor.employeeId });
     return {
       result: {
         request: requestCard(created, now),
@@ -235,9 +247,10 @@ export const decideRequest = tool({
     title: zText(120).optional().describe("Task title. Default: built from the route"),
     decided_by: zText(80).optional().describe("Name of the office user deciding, if known"),
   }),
-  async run(args, { db, now }) {
+  async run(args, { db, now, actor }) {
     const request = await getRequest(db, args.request_id);
     if (request.status !== "waiting") throw new ToolError(`This request is already ${request.status}.`);
+    const told = { actor: actor.employeeId, requester: request.requested_by_employee_id };
     const decidedBy = args.decided_by ?? "office";
 
     if (args.decision === "decline") {
@@ -249,6 +262,12 @@ export const decideRequest = tool({
         "vehicle request",
       );
       if (changed.length === 0) throw new ToolError("Someone else decided this request just now. Check list_requests.");
+      await notifyEvent(db, "request.decided", {
+        title: "Request declined",
+        body: args.reason,
+        url: "/requests",
+        tag: `request:${request.id}`,
+      }, told);
       return { result: { request: requestCard(changed[0], now) }, summary: `declined request ${request.id}: ${args.reason}` };
     }
 
@@ -301,6 +320,14 @@ export const decideRequest = tool({
       request: { id: request.id, decidedBy },
     }, warnings);
 
+    await notifyEvent(db, "request.decided", {
+      title: `Request approved · ${vehicle.reg_no} · ${driver.name}`,
+      body: [colomboDayTime(request.needed_at), [request.route_from, request.route_to].filter(Boolean).join(" → ")].filter(Boolean).join(
+        " · ",
+      ),
+      url: "/requests",
+      tag: `request:${request.id}`,
+    }, told);
     return {
       result: { request: "approved", requested_by: request.requested_by_name, ...saved.result },
       summary: `approved request ${request.id} -> ${saved.summary}`,

@@ -44,6 +44,8 @@ const VR: readonly Permission[] = ["view", "request"];
 const AA: readonly Permission[] = ["approve", "assign_tasks"];
 const VEH: readonly Permission[] = ["vehicles"];
 const USERS: readonly Permission[] = ["users"];
+/** Personal: a person's own notification settings and devices (any office permission). */
+const ANY: readonly Permission[] = PERMISSIONS;
 
 /**
  * The permission a tool needs. Holding any one of the listed permissions allows the call.
@@ -96,6 +98,10 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   set_office_user_active: USERS,
   create_office_key: USERS,
   revoke_office_key: USERS,
+  my_notification_settings: ANY,
+  set_my_notification_settings: ANY,
+  register_web_push: ANY,
+  remove_web_push: ANY,
 };
 
 /** The four buttons on the Users page. An admin is everything, so it is not a preset. */

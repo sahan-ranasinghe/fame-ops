@@ -166,6 +166,15 @@ def psql(sql):
     return out.stdout.strip()
 
 
+SERVER_KEY = os.environ.get("SERVER_KEY", "")
+
+
+def fleet_jobs(scope=None):
+    """The issue sync as pg_cron (every 5 min) and the triggers run it. fleet_overview syncs by itself
+    only when the last full sync is over 60 s old, so a check that wants a fresh overview runs this first."""
+    return http("POST", f"{API}/functions/v1/fleet-jobs", {"Content-Type": "application/json", "x-server-key": SERVER_KEY}, {"job": "sync", **(scope or {})})
+
+
 def sign_in(username, pin):
     return http("POST", f"{API}/auth/v1/token?grant_type=password", {"apikey": ANON, "Content-Type": "application/json"},
                 {"email": f"{username}@drivers.fame.invalid", "password": pin})
@@ -498,6 +507,7 @@ check(any(d["username"] == "nuwan.p" and d["availability"] == "free all day" for
 check([e["action"] for e in td["assignment_history"]] == ["assigned", "declined"] and td["assignment_history"][0]["actor"]
       and td["assignment_history"][1]["driver"] == "Nuwan Perera" and td["assignment_history"][1]["note"] == "vehicle_problem: Flat tyre",
       "task_detail: the assignment history (assigned by whom, declined by whom with the note)", json.dumps(td.get("assignment_history"))[:300])
+fleet_jobs()  # the job's sync (the overview's own waits 60 s after the last one)
 ov = tool("fleet_overview", {"date": day(2)})
 check(any(a["what"].startswith("Task declined: Vehicle problem") and "Nuwan Perera" in a["subject"] and "needs a driver" in a["due"] for a in ov["needs_attention"]),
       "fleet_overview: a declined task is in needs-attention (task scope)", json.dumps(ov.get("needs_attention"))[:300])
@@ -582,6 +592,7 @@ check(ld["counts"]["sharing"] == 1 and d["location"] in ("Live · 2 min", "Live 
 check(d["vehicle"] == "WP CAB-4521 · Toyota HiAce" and d["task"] == "Team drop · Kurunegala site" and d["going_to"] == "Kurunegala tower site"
       and d["links"]["maps"].endswith("query=7.3381,80.3003") and d["links"]["whatsapp"] == "https://wa.me/94771234567",
       "live_drivers: vehicle, current task, destination and links", json.dumps(d)[:400])
+fleet_jobs()  # the job's sync (the overview's own waits 60 s after the last one)
 ov = tool("fleet_overview", {"date": task_day})
 check(ov["vehicles"] == {"on_the_road": 1, "total": 3, "parked": 2, "in_garage": 1} and ov["tasks"]["total"] == 3 and ov["tasks"]["in_progress"] == 1,
       "fleet_overview: 1 of 3 on the road, 2 parked, 3 tasks, 1 in progress", json.dumps(ov["vehicles"]) + json.dumps(ov["tasks"]))
@@ -631,6 +642,7 @@ check(d["status"] == "location_off" and d["status_text"].startswith("Location of
       and ld["status_counts"]["location_off"] == 1 and ld["counts"]["sharing"] == 1,
       "live_drivers: status location_off since the first off heartbeat; the old 'sharing' state is unchanged", json.dumps({k: d.get(k) for k in ("status", "status_text", "queued_points", "app_version")}) + str(ld["status_counts"]))
 check(tool("live_drivers", {"filter": "location_off"})["drivers"][0]["username"] == d["username"], "live_drivers filter=location_off finds the driver")
+fleet_jobs()  # the job's sync (the overview's own waits 60 s after the last one)
 ov = tool("fleet_overview")
 road = [r for r in ov["on_the_road"] if r["driver"] == d["driver"]]
 check(road and road[0]["status"] == "location_off" and road[0]["last_position_at"] == d["last_position_at"], "fleet_overview: on the road carries the status too", json.dumps(road)[:300])
@@ -777,9 +789,6 @@ check(psql("select count(*) from office_audit where result_summary like 'refused
       "refused calls are logged as 'refused: …'; there were no internal errors", psql("select tool || ': ' || result_summary from office_audit where result_summary like 'error:%' limit 3"))
 
 print("\n== 6b. Issues ==")
-SERVER_KEY = os.environ.get("SERVER_KEY", "")
-def fleet_jobs(scope=None):
-    return http("POST", f"{API}/functions/v1/fleet-jobs", {"Content-Type": "application/json", "x-server-key": SERVER_KEY}, {"job": "sync", **(scope or {})})
 code, body = http("POST", f"{API}/functions/v1/fleet-jobs", {"Content-Type": "application/json", "x-server-key": "wrong"}, {"job": "sync"})
 check(code == 401, "fleet-jobs refuses a wrong server key (401)", f"{code} {body}")
 code, body = fleet_jobs()
@@ -855,6 +864,168 @@ if CHANNEL != "api":
     check("shared connector" in r, "assigned_to=me needs a person (the shared key has none)", r)
 
 
+# ---------------------------------------------------------------------------
+print("\n== 6c. Notifications (the outbox, notify-office, a person's settings) ==")
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # not `import http.server`: http() is the suite's helper
+
+# A push service stand-in on this laptop: the edge runtime reaches it through host.docker.internal.
+# /push/ok answers 201 (delivered), /push/gone 410 (the browser unsubscribed).
+SINK_LOG = []
+class Sink(BaseHTTPRequestHandler):
+    def do_POST(self):
+        n = int(self.headers.get("Content-Length", "0") or 0)
+        body = self.rfile.read(n)
+        SINK_LOG.append({"path": self.path, "headers": {k.lower(): v for k, v in self.headers.items()}, "size": len(body)})
+        self.send_response(410 if self.path.endswith("/gone") else 201)
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+    def log_message(self, *args):
+        pass
+sink = ThreadingHTTPServer(("0.0.0.0", 0), Sink)
+threading.Thread(target=sink.serve_forever, daemon=True).start()
+SINK = f"http://host.docker.internal:{sink.server_address[1]}"
+VAPID = bool(os.environ.get("VAPID_PUBLIC_KEY")) and bool(os.environ.get("VAPID_PRIVATE_KEY"))
+
+def browser_keys():
+    """What pushManager.subscribe gives a page: a P-256 public key and a 16-byte secret (openssl, nothing downloaded)."""
+    priv = subprocess.run(["openssl", "ecparam", "-name", "prime256v1", "-genkey", "-noout"], capture_output=True, check=True).stdout
+    der = subprocess.run(["openssl", "ec", "-pubout", "-outform", "DER"], input=priv, capture_output=True, check=True).stdout
+    return (base64.urlsafe_b64encode(der[-65:]).rstrip(b"=").decode(), base64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode())
+
+def notify_office(body, key=None):
+    return http("POST", f"{API}/functions/v1/notify-office", {"Content-Type": "application/json", "x-server-key": SERVER_KEY if key is None else key}, body)
+
+def outbox(where):
+    return psql(f"select id || '|' || status || '|' || (payload->>'title') || '|' || (payload->>'body') || '|' || (payload->>'url') from notifications where {where} order by id")
+
+if CHANNEL != "api":
+    r = tool("my_notification_settings", {}, expect_error=True)
+    check("personal" in r and "shared key" in r, "my_notification_settings needs a person (the shared key has none)", r)
+code, body = notify_office({"retry": True}, key="wrong")
+check(code == 401, "notify-office refuses a wrong server key (401)", f"{code} {body}")
+code, body = notify_office({"nothing": 1})
+check(code == 400, "notify-office wants an id or retry: true (400)", f"{code} {body}")
+
+# An approver with a browser (as the web app registers one) and the Issue Taker from 6b with one too.
+approver_email = f"approver.{uuid.uuid4().hex[:6]}@fame.test"
+tool("create_office_user", {"name": "Notify Approver", "email": approver_email, "permissions": ["view", "request", "approve"]})
+APPROVER = psql(f"select id from employees where email = '{approver_email}'")
+TAKER = psql(f"select id from employees where email = '{taker_email}'")
+p1, a1 = browser_keys()
+psql(f"insert into web_push_subscriptions (employee_id, endpoint, p256dh, auth, user_agent) values ('{APPROVER}', '{SINK}/push/ok', '{p1}', '{a1}', "
+     f"'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36')")
+p3, a3 = browser_keys()
+psql(f"insert into web_push_subscriptions (employee_id, endpoint, p256dh, auth) values ('{TAKER}', '{SINK}/push/taker', '{p3}', '{a3}')")
+
+# request.created → the approver, with the message and the link.
+rq = tool("create_request", {"requested_by": "Notify Approver", "date": day(4), "time": "08:30", "route_from": "Head office", "route_to": "Kandy", "need_type": "van", "pax": 5})
+RQ = rq["request"]["id"]
+row = outbox(f"event = 'request.created' and recipient_employee_id = '{APPROVER}'")
+check("\n" not in row and "|queued|Vehicle request · Notify Approver|" in row and "Van" in row and "Head office → Kandy" in row and row.endswith("|/requests"),
+      "a new request queues one row for the approver: the message and the link to the requests page", row)
+NID = row.split("|")[0]
+code, body = notify_office({"id": int(NID)})
+if VAPID:
+    check(code == 200 and body["sent"] == 1 and body["vapid"] is True, "notify-office pushes it to the approver's browser (the sink on this laptop)", f"{code} {body}")
+    hit = SINK_LOG[-1] if SINK_LOG else {}
+    h = hit.get("headers", {})
+    check(hit.get("path") == "/push/ok" and h.get("content-encoding") == "aes128gcm" and h.get("authorization", "").startswith("vapid t=")
+          and h.get("ttl") == "3600" and hit.get("size", 0) > 100, "the push is encrypted (aes128gcm) and signed (VAPID) with a TTL", str(hit)[:300])
+    check(psql(f"select status || '|' || attempts from notifications where id = {NID}") == "sent|1"
+          and psql(f"select count(*) from web_push_subscriptions where employee_id = '{APPROVER}' and last_ok_at is not null") == "1",
+          "the row is sent after one attempt and the browser's last_ok_at is set")
+else:
+    check(code == 200 and body["dead"] == 1 and body["vapid"] is False and psql(f"select error from notifications where id = {NID}") == "no_vapid_keys",
+          "without VAPID keys in the functions env the row is marked dead (no_vapid_keys); nothing else breaks", f"{code} {body}")
+code, body = notify_office({"id": int(NID)})
+check(code == 200 and body["skipped"] == 1 and body["sent"] == 0, "a row already dealt with is never sent twice", f"{code} {body}")
+
+# A browser the push service reports gone (410): marked removed; the row dead when it was the only one.
+p2, a2 = browser_keys()
+psql(f"insert into web_push_subscriptions (employee_id, endpoint, p256dh, auth) values ('{APPROVER}', '{SINK}/push/gone', '{p2}', '{a2}')")
+psql(f"update web_push_subscriptions set removed_at = now(), removed_reason = 'user' where endpoint = '{SINK}/push/ok'")
+tool("decide_request", {"request_id": RQ, "decision": "decline", "reason": "No van that day"})
+row = outbox(f"event = 'request.decided' and recipient_employee_id = '{APPROVER}'")
+check(row.endswith("|queued|Request declined|No van that day|/requests"), "the decision queues a row for the requester (an office person) with the reason", row)
+NID2 = row.split("|")[0]
+code, body = notify_office({"id": int(NID2)})
+if VAPID:
+    check(code == 200 and body["dead"] == 1 and psql(f"select error from notifications where id = {NID2}") == "subscription_gone"
+          and psql(f"select removed_reason from web_push_subscriptions where endpoint = '{SINK}/push/gone'") == "gone",
+          "a browser the push service reports gone is marked removed and the row is dead", f"{code} {body}")
+
+# A switched-off event writes no row; the retry call takes every row whose time has come.
+psql(f"insert into notification_settings (employee_id, event, enabled) values ('{APPROVER}', 'request.created', false)")
+psql(f"update web_push_subscriptions set removed_at = null, removed_reason = null where endpoint = '{SINK}/push/ok'")
+n_before = psql(f"select count(*) from notifications where recipient_employee_id = '{APPROVER}'")
+tool("create_request", {"requested_by": "Quiet Asker", "date": day(4), "time": "09:30", "route_to": "Matara"})
+check(psql(f"select count(*) from notifications where recipient_employee_id = '{APPROVER}'") == n_before, "an event the person switched off writes no row")
+psql(f"update notifications set status = 'failed', attempts = 1, next_try_at = now() - interval '1 minute' where id = {NID2}")
+code, body = notify_office({"retry": True})
+check(code == 200 and body["processed"] >= 1 and body["sent"] + body["dead"] >= 1
+      and psql(f"select status from notifications where id = {NID2}") == ("sent" if VAPID else "dead"),
+      "the retry call takes the failed row whose time has come", f"{code} {body}")
+
+# task.declined (SQL): the driver declines a fresh task → a row for the approver.
+t7 = tool("create_task", {"title": "Airport run · notify", "date": day(2), "start_time": "10:00", "driver": "nuwan.p", "vehicle": "cab4521", "pickup": "Head office", "dropoff": "Airport"})
+code, ans = app.post("rpc/decline_task", {"p_task_id": t7["task_id"], "p_reason": "unwell"})
+row = outbox(f"event = 'task.declined' and recipient_employee_id = '{APPROVER}'")
+check(ans == "declined" and "|queued|Nuwan Perera can't do Airport run · notify|Unwell · leave by " in row and row.endswith(f"|/tasks?task={t7['task_id']}"),
+      "a declined task queues a row for the approver with the driver, the reason, the leave-by time and the task link", row)
+
+# issue.opened (critical only) → the issues permission; issue.assigned → the assignee.
+rep3 = str(uuid.uuid4())
+app.post("vehicle_reports", {"id": rep3, "vehicle_id": V1, "employee_id": ME, "category": "accident", "note": "Scraped the side"})
+code, body = fleet_jobs({"report_id": rep3})
+iss = [i for i in tool("list_issues", {"kind": "vehicle_report"})["issues"] if i["vehicle_report_id"] == rep3][0]
+row = outbox(f"event = 'issue.opened' and recipient_employee_id = '{TAKER}'")
+check(body["opened"] == 1 and row.endswith(f"|queued|Vehicle problem: accident|Scraped the side · WP CAB-4521 · Nuwan Perera|/issues/{iss['id']}") or
+      (body["opened"] == 1 and "|queued|Vehicle problem: accident|" in row and row.endswith(f"|/issues/{iss['id']}")),
+      "a critical issue opening queues a row for the person with the issues permission (the Issue Taker)", row)
+check(outbox(f"event = 'issue.opened' and recipient_employee_id = '{APPROVER}'") == "", "not for the approver (no issues permission)")
+tool("update_issue", {"id": iss["id"], "assign_to": taker_email})
+row = outbox(f"event = 'issue.assigned' and recipient_employee_id = '{TAKER}'")
+check(f"|queued|Issue for you · Vehicle problem: accident|" in row and row.endswith(f"|/issues/{iss['id']}"), "assigning an issue queues a row for the assignee", row)
+
+# The overview's own sync waits 60 s after the last full sync; the job's sync always runs.
+tool("fleet_overview")
+f1 = psql("select coalesce(finished_at::text, '') from job_runs where job = 'issues'")
+tool("fleet_overview")
+f2 = psql("select coalesce(finished_at::text, '') from job_runs where job = 'issues'")
+check(f1 != "" and f1 == f2, "a second fleet_overview within 60 s does not run the issue sync again (job_runs unchanged)", f"{f1} / {f2}")
+code, body = fleet_jobs()
+f3 = psql("select coalesce(finished_at::text, '') from job_runs where job = 'issues'")
+check(code == 200 and f3 > f1, "the job's own sync runs regardless and records its finish", f"{f1} -> {f3}")
+
+if CHANNEL == "api":
+    # The admin's own settings and devices through office-api (what Settings → Notifications does).
+    ms = tool("my_notification_settings")
+    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "issue.opened", "issue.assigned"]
+          and all(e["enabled"] for e in ms["events"]) and ms["devices"] == [] and ms["push"]["configured"] is VAPID and (("public_key" in ms["push"]) is VAPID),
+          "my_notification_settings: every event on (the admin holds every permission), no devices, push.configured says whether the server has the keys", json.dumps(ms)[:300])
+    ms = tool("set_my_notification_settings", {"events": {"issue.opened": False}})
+    check(next(e["enabled"] for e in ms["events"] if e["event"] == "issue.opened") is False and all(e["enabled"] for e in ms["events"] if e["event"] != "issue.opened"),
+          "set_my_notification_settings switches one event off and leaves the rest", json.dumps(ms["events"])[:300])
+    r = tool("set_my_notification_settings", {"events": {"issue.exploded": True}}, expect_error=True)
+    check("Unknown event" in r, "an unknown event is refused", r)
+    p4, a4 = browser_keys()
+    reg = tool("register_web_push", {"endpoint": f"{SINK}/push/admin", "p256dh": p4, "auth": a4, "user_agent": "Mozilla/5.0 (Linux; Android 13; CPH2119) Chrome/129.0.0.0 Mobile Safari/537.36"})
+    check(reg["registered"]["device"] == "Chrome on Android" and len(reg["devices"]) == 1 and reg["devices"][0]["endpoint_hash"] == reg["registered"]["endpoint_hash"]
+          and len(reg["registered"]["endpoint_hash"]) == 16 and all("endpoint" not in d for d in reg["devices"]),
+          "register_web_push saves the browser and lists it by its hash (the endpoint never comes back)", json.dumps(reg)[:300])
+    reg2 = tool("register_web_push", {"endpoint": f"{SINK}/push/admin", "p256dh": p4, "auth": a4})
+    check(len(reg2["devices"]) == 1, "the same endpoint registered again is one device, not two")
+    rm = tool("remove_web_push", {"id": reg["registered"]["id"]})
+    check(rm["removed"] == 1 and rm["devices"] == [], "remove_web_push by device id", json.dumps(rm)[:200])
+    tool("register_web_push", {"endpoint": f"{SINK}/push/admin", "p256dh": p4, "auth": a4})
+    rm = tool("remove_web_push", {"endpoint": f"{SINK}/push/admin"})
+    check(rm["removed"] == 1 and rm["devices"] == [], "remove_web_push by endpoint (the browser's own, after unsubscribe)", json.dumps(rm)[:200])
+    r = tool("remove_web_push", {}, expect_error=True)
+    check("endpoint or the device id" in r, "remove_web_push needs one of the two", r)
+sink.shutdown()
+
+
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")
     shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
@@ -874,10 +1045,13 @@ if CHANNEL == "api":
     staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["request"]
-          and sorted(me.get("tools", [])) == ["create_request", "find_project", "list_places", "list_requests", "task_detail"],
+          and sorted(me.get("tools", [])) == ["create_request", "find_project", "list_places", "list_requests", "my_notification_settings",
+                                             "register_web_push", "remove_web_push", "set_my_notification_settings", "task_detail"],
           "a requester-only person signs in without a second step and sees only the request tools", f"{code} {str(me)[:200]}")
     code, body = api_call(staff_token, "task_board", {})
     check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
+    code, body = api_call(staff_token, "my_notification_settings", {})
+    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided"], "a requester's notification settings hold the one event their permission brings", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})
     check(code == 200 and body["result"]["count"] == 0, "staff see none of the office's requests", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "create_request", {"requested_by": "Somebody Else", "date": day(3), "time": "09:00", "route_to": "Galle", "pax": 2})

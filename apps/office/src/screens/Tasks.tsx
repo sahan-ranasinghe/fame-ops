@@ -54,6 +54,14 @@ export function Tasks() {
     ...(b?.declined?.length ? [["declined", "Needs a driver", "bad"] as ["declined", string, "bad"]] : []),
   ];
   const openTask = (id: string) => drawer.open(<TaskDrawer id={id} />);
+  // /tasks?task=<id> (a notification's link) opens that task once, then drops the parameter.
+  const linked = params.get("task");
+  useEffect(() => {
+    if (!linked) return;
+    openTask(linked);
+    setParams((p) => { p.delete("task"); return p; }, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linked]);
 
   return (
     <section className="view">

@@ -73,7 +73,8 @@
 5. Secrets never go in the app, in the browser or in git. The driver app and the web app
    only get the Supabase URL and the publishable (anon) key and are protected by Row Level
    Security; office writes go through `office-api`, which alone runs as service role. The
-   service_role key, OFFICE_MCP_KEY and SERVER_KEY live only in Edge Function secrets.
+   service_role key, OFFICE_MCP_KEY, SERVER_KEY and the VAPID keys live only in Edge Function
+   secrets (the VAPID public key reaches the browser through `my_notification_settings`).
    `.env*` files are gitignored.
 6. Times stored as timestamptz (UTC), shown in Asia/Colombo.
 7. Money: LKR stored as integer cents (bigint).
@@ -197,6 +198,16 @@
   Home, Map, Tasks, Vehicles, More (More lists the rest). No audit page yet (no tool for it).
 - `npm run dev:live` runs the dev server against the REAL project (`.env.live.local`,
   gitignored, publishable key only) for a laptop trial; `npm run dev` uses `.env.local`.
+- Settings → Notifications (`src/screens/settings/Notifications.tsx`, web only, lazy; the
+  artifact points to the web app): this browser's push state in words (`notificationsLogic.ts`),
+  Turn on / off in this browser (`src/push.ts`: permission → `pushManager.subscribe` with the
+  public key from `my_notification_settings` → `register_web_push`; off = unsubscribe +
+  `remove_web_push`), a checkbox per event the person's permissions can bring, the browsers
+  with notifications on (Remove). `WebApp` registers `public/sw.js` after sign-in (push →
+  showNotification; a tap focuses the open window and posts `{type: "navigate", url}` to the
+  router, or opens one); `/tasks?task=<id>` opens that task. The web build is installable:
+  `public/manifest.webmanifest`, `public/icons/*` (made by `scripts/make-icons.mjs` with the
+  e2e's Chromium), the head tags come from the `pwaTags` plugin in `vite.config.ts` (web only).
 - Hosting: Cloudflare Pages project `fame-fleet`, https://fame-fleet.pages.dev, direct upload:
   `npm run build:web` (reads `.env.production.local`, gitignored) then
   `npx wrangler pages deploy --branch main` from `apps/office` (`wrangler.toml`). Deploys to
@@ -336,7 +347,27 @@
   The Edge Function `fleet-jobs` (x-server-key = SERVER_KEY) runs a sync when pg_cron
   (`fleet-sync`, every 5 min) or the triggers on vehicle_reports, tasks and vehicle_requests
   call `fleet_sync(scope)` → `call_edge_function` (Vault functions_url / server_key). A key
-  a person resolved or dismissed stays quiet for 30 days unless it comes back worse.
+  a person resolved or dismissed stays quiet for 30 days unless it comes back worse. Who
+  reads `issues` / `issue_events` (RLS, `issue_visible(kind)`): the issues permission every
+  row, assign_tasks the task kinds (signal, late_start, running_late, not_accepted, declined),
+  nobody else; the view permission alone reads nothing. `job_runs` (job, started_at,
+  finished_at, result; service role only) records the full sync: `fleet_overview` skips its own
+  sync when one finished (or is running since) under 60 s ago (`syncIssuesIfStale`).
+- Office notifications (Phase 5 Part 3b): `web_push_subscriptions` (employee_id, endpoint
+  unique, p256dh, auth, user_agent, created_at, last_ok_at, removed_at, removed_reason
+  'user'|'gone'; nothing deleted), `notification_settings` (employee_id, event, enabled; no row
+  = on), `notifications` (the outbox: event, payload {title, body, url, tag, …},
+  recipient_employee_id, channel 'web_push'|'email', status 'queued'|'sent'|'failed'|'dead',
+  attempts, next_try_at, sent_at, error). All service role only. `queue_notification(event,
+  payload, recipients[])` (security definer) writes one row per active office recipient who
+  has the event on and a browser; the trigger `notifications_deliver` →
+  `call_edge_function('notify-office', {id})`; cron `notify-retry` (5 min) → `{retry: true}`
+  when a row is due (backoff 1, 5, 15, 60 min; dead after 5). Events (`_shared/fleet/
+  notifications.ts`: `EVENTS`, pure `recipientsFor`, `notifyEvent`): request.created (approve),
+  request.decided (the requester), task.declined and task.not_accepted (approve + assign_tasks;
+  written in SQL by `decline_task` and `queue_accept_reminders`), issue.opened (critical only,
+  issues; from `syncIssues`), issue.assigned (the assignee); vehicle.booked /
+  vehicle.booking_cancelled come with Part 6. The sender never gets their own event.
 - `odometer_reads`: one row per `read-odometer` model call (employee_id, vehicle_id,
   photo_path, last_km, gps_km, reading_km, confidence, status, mode ('driver'|'server'),
   log_id, model, ok, error, ms, created_at). Service role only.
@@ -573,6 +604,10 @@ office_audit.
   allowance, between_tasks_km and overnight_km per vehicle with the biggest gaps, unlogged
   km flags, check_odometer, fuel litres/LKR), `list_vehicle_reports(status?)`,
   `update_vehicle_report(id, status, office_note?)` (mirrors onto the report's issue).
+- Notifications (personal: a signed-in person or a personal key; any office permission):
+  `my_notification_settings()` (events with on/off, devices with endpoint_hash, push
+  {configured, public_key}), `set_my_notification_settings(events {event: bool})`,
+  `register_web_push(endpoint, p256dh, auth, user_agent?)`, `remove_web_push(endpoint? | id?)`.
 - Issues: `list_issues(status? active|open|in_progress|resolved|dismissed|all, kind?,
   vehicle?, assigned_to? email|me, limit?)` (issues, or assign_tasks for the task kinds only;
   `open` / `in_progress` counts for the bell), `update_issue(id, status?, note?, assign_to?

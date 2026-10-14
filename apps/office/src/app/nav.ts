@@ -58,6 +58,8 @@ export const ROUTES_NEED: Permission[] = ["assign_tasks", "vehicles"];
 export const SETTINGS_PAGES: NavItem[] = [
   { key: "users", label: "Users", need: ["users"], path: "/settings/users" },
   { key: "fleet", label: "Fleet", need: ["users"], path: "/settings/fleet" },
+  // Web only (the browser's push subscription); the artifact points to the web app.
+  { key: "notifications", label: "Notifications", need: [], path: "/settings/notifications" },
 ];
 
 /** Every item, marked locked when the person lacks all of its permissions. */
