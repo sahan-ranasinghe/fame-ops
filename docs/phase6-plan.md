@@ -97,6 +97,13 @@ Each part: tests pass (section 10) → checkpoint → go → ff-merge. Rounds in
 is yours to run through the page after round 3. Secrets by name only: `GOOGLE_MAPS_JS_KEY`,
 `GOOGLE_ROUTES_KEY`, `GOOGLE_ROADS_KEY` (round 3, optional), nothing else.
 
+Deployed so far (14 October 2026): round 1 at f9bc685 (Part 2); round 2 at 413d820 (Part 3);
+**round 2b at 3cc39d8** (Part 3b, the ordered steps, and the five driver-app items): migrations
+`fuel_video_segments`, `fuel_video_steps`, `heartbeat_video_columns_grant` pushed; office-mcp,
+office-api and fleet-jobs deployed; web deployment 1f08955f on fame-fleet.pages.dev; EAS update
+group 435a33d9 (Android update 01a13a6e, runtime 1.1.0, channel preview). The Teams artifact
+copy is still the Part 2 build: its update is round 3.
+
 ## 3. Data model: four migrations, all additive
 
 ### 3.1 `phase6_requests` (Part 2)
