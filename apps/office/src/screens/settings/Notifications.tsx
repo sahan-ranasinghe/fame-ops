@@ -5,11 +5,12 @@
 import { useEffect, useState } from "react";
 import { useFleet } from "../../app/FleetContext";
 import type { NotificationSettings } from "../../data/types";
-import { currentSubscription, endpointHash, pushState, subscribePush, unsubscribePush } from "../../push";
+import { currentSubscription, endpointHash, pushState } from "../../push";
 import { errText } from "../../transport/errors";
 import type { FleetError } from "../../transport/types";
 import { Empty, Loading, Notice, Pill } from "../../ui/basics";
 import { useToast } from "../../ui/Toast";
+import { removeDevice, setEvent, turnOffHere, turnOnHere } from "./notificationsActions";
 import { DEVICE_NOTE, type PushState, stateText } from "./notificationsLogic";
 
 const TOOL_ARGS = {};
@@ -61,19 +62,11 @@ export default function Notifications() {
   // The box flips at once; the server's answer (or an error) settles it.
   const toggle = (event: string, enabled: boolean) => {
     setData((d) => d && { ...d, events: d.events.map((e) => (e.event === event ? { ...e, enabled } : e)) });
-    return run(() => transport.call<NotificationSettings>("set_my_notification_settings", { events: { [event]: enabled } }), "Saved");
+    return run(() => setEvent(transport, event, enabled), "Saved");
   };
-  const turnOn = () =>
-    run(async () => {
-      const sub = await subscribePush(data!.push.public_key!);
-      return transport.call<NotificationSettings>("register_web_push", { ...sub });
-    }, "Notifications are on in this browser");
-  const turnOff = () =>
-    run(async () => {
-      const endpoint = await unsubscribePush();
-      return endpoint ? transport.call<NotificationSettings>("remove_web_push", { endpoint }) : undefined;
-    }, "Notifications are off in this browser");
-  const remove = (id: string) => run(() => transport.call<NotificationSettings>("remove_web_push", { id }), "Removed");
+  const turnOn = () => run(() => turnOnHere(transport, data!.push.public_key!), "Notifications are on in this browser");
+  const turnOff = () => run(() => turnOffHere(transport), "Notifications are off in this browser");
+  const remove = (id: string) => run(() => removeDevice(transport, id), "Removed");
 
   if (__BUILD__ !== "web") {
     return (

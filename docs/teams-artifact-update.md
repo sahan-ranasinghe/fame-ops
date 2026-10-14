@@ -9,10 +9,63 @@ gets access yet.
 - `apps/office/dist-artifact/index.html`, built with `npm run build:artifact` from the
   commit of deploy round 4 (one self-contained file; no Supabase code, no key inside).
 - `apps/office/dist-artifact/capabilities.json`, the declaration to paste unchanged when
-  publishing: the connector named exactly **Fame Fleet** (as claude.ai shows it) and the
-  43 tools the page calls. The four personal notification tools are not declared: the
-  artifact has no service worker and sends nobody to Settings → Notifications but the web
-  app.
+  publishing: the connector named exactly **Fame Fleet** (as claude.ai shows it) and exactly
+  the tools the artifact build calls, derived by `scripts/artifact-declaration.mjs` from the
+  page's source. The Settings → Notifications route is bundled in the artifact too and loads
+  the person's settings (`my_notification_settings`) before it says the rest is on the web
+  app, so that tool is declared; the three actions behind its buttons
+  (`set_my_notification_settings`, `register_web_push`, `remove_web_push`) are reached only on
+  the web and are not, nor are `add_place` and `import_projects`, which no screen calls.
+
+The declared tools, 44 in the connector's order (claude.ai derives the same set from the page):
+
+- `fleet_overview`
+- `live_drivers`
+- `driver_route`
+- `list_drivers`
+- `create_driver`
+- `reset_pin`
+- `set_driver_active`
+- `update_driver`
+- `list_vehicles`
+- `register_vehicle`
+- `update_vehicle`
+- `add_rental_company`
+- `list_places`
+- `create_task`
+- `task_board`
+- `task_detail`
+- `cancel_task`
+- `reassign_task`
+- `create_request`
+- `list_requests`
+- `suggest_vehicles`
+- `decide_request`
+- `book_vehicle`
+- `cancel_request`
+- `mileage_summary`
+- `list_vehicle_reports`
+- `update_vehicle_report`
+- `find_project`
+- `list_office_users`
+- `create_office_user`
+- `reset_office_password`
+- `set_office_user_active`
+- `create_office_key`
+- `revoke_office_key`
+- `update_office_user`
+- `plan_task`
+- `update_task_stops`
+- `get_settings`
+- `update_settings`
+- `routing_usage`
+- `list_issues`
+- `update_issue`
+- `issue_history`
+- `my_notification_settings`
+
+If claude.ai shows a different count when the Teams copy is updated, the page and the
+declaration have drifted: rebuild with `npm run build:artifact` and compare.
 
 ## In the Teams chat
 

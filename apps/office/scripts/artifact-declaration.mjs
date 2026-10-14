@@ -24,8 +24,12 @@ function files(dir) {
     return statSync(p).isDirectory() ? files(p) : [p];
   });
 }
-// Screens the artifact never shows (they need the browser's own push subscription): their tools are not declared.
-const WEB_ONLY = new Set(["src/screens/settings/Notifications.tsx", "src/push.ts"]);
+// Exactly what the artifact build calls. The Settings → Notifications route is bundled in the
+// artifact too and loads the person's settings (my_notification_settings) before it says the rest
+// is on the web app, so that tool is declared; the three actions behind the page's buttons (a
+// toggle, the browser's push subscription on or off, a device removed) are reached only on the
+// web, live in notificationsActions.ts and are left out, with the browser-side push.ts.
+const WEB_ONLY = new Set(["src/screens/settings/notificationsActions.ts", "src/push.ts"]);
 const used = new Set();
 for (const file of files(join(root, "src"))) {
   const rel = relative(root, file);
