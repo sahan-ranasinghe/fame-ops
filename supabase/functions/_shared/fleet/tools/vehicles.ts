@@ -176,7 +176,7 @@ export const listVehicles = tool({
   description: "Vehicles with rental company, regular driver, who it is assigned to (the custodian, with call and WhatsApp links), " +
     "km this month against the allowance, next service, document chips (lic = revenue licence, ins = insurance, emi = emission test; " +
     "orange = expires within 30 days, red = within 7 days or expired), status and availability (Free, On a task · back ~HH:MM, " +
-    "Booked later today · HH:MM, In garage).",
+    "Booked later today · HH:MM, In garage), and the driver who holds it now (held_by, since held_since: one vehicle, one driver).",
   readOnly: true,
   input: z.object({
     filter: z.enum(["all", "on_task", "available", "in_garage", "documents_expiring", "inactive"]).optional()
@@ -187,11 +187,14 @@ export const listVehicles = tool({
     const refs = await loadRefs(db);
     const active = refs.vehicles.filter((v) => v.active);
     const dayStart = new Date(`${today}T00:00:00+05:30`).toISOString();
-    const [running, km, booked] = await Promise.all([
+    const [running, km, booked, holdersRes] = await Promise.all([
       db.from("tasks").select("id, vehicle_id, status, start_at, end_by").eq("status", "in_progress"),
       monthKm(db, active.map((v) => v.id), today.slice(0, 7)),
       db.from("tasks").select("id, vehicle_id, status, start_at, end_by").eq("status", "assigned").gte("start_at", dayStart),
+      // Phase 7: who holds each vehicle now (vehicle_assignments: one vehicle, one driver).
+      db.from("vehicle_assignments").select("employee_id, vehicle_id, from_at").is("to_at", null),
     ]);
+    const holders = new Map(unwrap(holdersRes, "vehicle holders").map((a) => [a.vehicle_id, a]));
     const runningTasks = unwrap(running, "tasks");
     const onTask = new Set(runningTasks.map((t) => t.vehicle_id));
     const etas = runningTasks.length > 0
@@ -221,6 +224,8 @@ export const listVehicles = tool({
         over_allowance: v.monthly_km_allowance != null && used > v.monthly_km_allowance ? true : undefined,
         status: vehicleStatus(v, onTask),
         ...availabilityOf(v.in_garage, busy.filter((t) => t.vehicle_id === v.id), now),
+        held_by: holders.has(v.id) ? refs.emp.get(holders.get(v.id)!.employee_id)?.name : undefined,
+        held_since: holders.has(v.id) ? colomboTime(holders.get(v.id)!.from_at) : undefined,
         expiring,
       };
     });

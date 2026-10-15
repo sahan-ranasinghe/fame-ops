@@ -924,6 +924,9 @@ export interface DocChip {
 }
 
 export interface VehicleCard extends Vehicle {
+  /** Phase 7: the driver who holds it now (vehicle_assignments), since HH:MM. */
+  held_by?: string;
+  held_since?: string;
   rented_from?: string;
   rent_until?: string;
   monthly_rent_lkr?: number;
