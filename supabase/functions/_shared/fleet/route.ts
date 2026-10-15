@@ -36,7 +36,18 @@
 // A fix that repeats the exact coordinates of the fix before it is a cached
 // location the phone delivered again: it is dropped before anything else.
 
-import { distanceM, type Fix, MAX_ACCURACY_M, newTrack, openStop, step, type Stop, STOP_MINUTES, type TrackState, usable } from "./track.ts";
+import {
+  distanceM,
+  type Fix,
+  MAX_ACCURACY_M,
+  newTrack,
+  openStop,
+  step,
+  type Stop,
+  STOP_MINUTES,
+  type TrackState,
+  usable,
+} from "./track.ts";
 
 /** No precise fix for this long is a gap in the data. */
 export const GAP_MINUTES = 10;
@@ -194,11 +205,14 @@ export interface BuildOptions {
   smooth?: boolean;
 }
 
-const minutes = (from: number, to: number) => Math.max(0, Math.round((to - from) / 60000));
+const minutes = (from: number, to: number) =>
+  Math.max(0, Math.round((to - from) / 60000));
 const roundKm = (metres: number) => Math.round((metres / 1000) * 10) / 10;
 
 /** Drops a fix that repeats the exact coordinates of the one before it. */
-export function dropRepeats<T extends Fix>(fixes: T[]): { fixes: T[]; repeats: number } {
+export function dropRepeats<T extends Fix>(
+  fixes: T[],
+): { fixes: T[]; repeats: number } {
   const out: T[] = [];
   let repeats = 0;
   let prev: Fix | null = null;
@@ -215,7 +229,8 @@ export function dropRepeats<T extends Fix>(fixes: T[]): { fixes: T[]; repeats: n
 
 function tooFast(from: Fix, to: Fix): boolean {
   const seconds = (to.at - from.at) / 1000;
-  return seconds > 0 && (distanceM(from, to) / seconds) * 3.6 > OUTLIER_SPEED_KMH;
+  return seconds > 0 &&
+    (distanceM(from, to) / seconds) * 3.6 > OUTLIER_SPEED_KMH;
 }
 
 /**
@@ -228,7 +243,9 @@ function tooFast(from: Fix, to: Fix): boolean {
  *      out-and-back trip takes longer and leaves more than one point.
  * Used for the km and for the line alike. Nothing here uses speed or heading.
  */
-export function dropOutliers<T extends Fix>(input: T[]): { fixes: T[]; dropped: number } {
+export function dropOutliers<T extends Fix>(
+  input: T[],
+): { fixes: T[]; dropped: number } {
   const kept: T[] = [];
   let run: T[] = [];
   for (const fix of input) {
@@ -255,7 +272,10 @@ export function dropOutliers<T extends Fix>(input: T[]): { fixes: T[]; dropped: 
       const spike = Math.max(SPIKE_FACTOR * (p.accuracyM ?? 10), SPIKE_MIN_M);
       const dPrev = distanceM(prev, p);
       const dNext = distanceM(p, next);
-      if (dPrev > spike && dNext > spike && distanceM(prev, next) < Math.min(dPrev, dNext) / 2) continue;
+      if (
+        dPrev > spike && dNext > spike &&
+        distanceM(prev, next) < Math.min(dPrev, dNext) / 2
+      ) continue;
     }
     out.push(p);
   }
@@ -263,7 +283,10 @@ export function dropOutliers<T extends Fix>(input: T[]): { fixes: T[]; dropped: 
 }
 
 /** Douglas–Peucker: which points to keep so that the line stays within `toleranceM` of the original. */
-export function simplifyKeep(points: { lat: number; lng: number }[], toleranceM: number): boolean[] {
+export function simplifyKeep(
+  points: { lat: number; lng: number }[],
+  toleranceM: number,
+): boolean[] {
   const n = points.length;
   const keep = new Array<boolean>(n).fill(false);
   if (n === 0) return keep;
@@ -306,7 +329,10 @@ export function simplifyKeep(points: { lat: number; lng: number }[], toleranceM:
   return keep;
 }
 
-const sameSpot = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => a.lat === b.lat && a.lng === b.lng;
+const sameSpot = (
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+) => a.lat === b.lat && a.lng === b.lng;
 
 /**
  * Thins the line by shape (corners stay, straight runs go), keeping the waits, the ends of holes (`keepAt`:
@@ -315,7 +341,11 @@ const sameSpot = (a: { lat: number; lng: number }, b: { lat: number; lng: number
  * smallest tolerance that gets under (doubling from 0.5 m, then bisecting to 5 cm). A tolerance above 0
  * (Claude's default 12 m) is applied as given and doubled until the line fits, as before.
  */
-export function simplifyLine(line: LinePoint[], opts: BuildOptions = {}, keepAt?: Set<number>): LinePoint[] {
+export function simplifyLine(
+  line: LinePoint[],
+  opts: BuildOptions = {},
+  keepAt?: Set<number>,
+): LinePoint[] {
   const requested = opts.simplifyM ?? SIMPLIFY_M;
   const max = opts.maxPoints ?? MAX_LINE_POINTS;
   const thin = (tolerance: number): LinePoint[] => {
@@ -327,7 +357,11 @@ export function simplifyLine(line: LinePoint[], opts: BuildOptions = {}, keepAt?
         keep[i - 1] = true;
       }
     }
-    if (keepAt) for (let i = 0; i < line.length; i++) if (keepAt.has(line[i].at)) keep[i] = true;
+    if (keepAt) {
+      for (let i = 0; i < line.length; i++) {
+        if (keepAt.has(line[i].at)) keep[i] = true;
+      }
+    }
     return line.filter((_, i) => keep[i]);
   };
   if (requested <= 0) {
@@ -361,7 +395,12 @@ export function simplifyLine(line: LinePoint[], opts: BuildOptions = {}, keepAt?
 export function withSpeeds(line: LinePoint[]): LinePoint[] {
   return line.map((p, i) => {
     if (i === 0 || p.at <= line[i - 1].at) return { ...p, kmh: 0 };
-    return { ...p, kmh: Math.round((distanceM(line[i - 1], p) / ((p.at - line[i - 1].at) / 1000)) * 3.6) };
+    return {
+      ...p,
+      kmh: Math.round(
+        (distanceM(line[i - 1], p) / ((p.at - line[i - 1].at) / 1000)) * 3.6,
+      ),
+    };
   });
 }
 
@@ -404,15 +443,29 @@ export function smoothLine(line: LinePoint[]): LinePoint[] {
  * "no_data" (the app was not running). No heartbeat at all in a gap of 3 minutes or more is "no_data" too.
  * Same-kind pieces are merged; a piece under a minute goes with its neighbour.
  */
-export function gapParts(from: number, to: number, heartbeats: number[] = []): { from: number; to: number; kind: GapKind }[] {
+export function gapParts(
+  from: number,
+  to: number,
+  heartbeats: number[] = [],
+): { from: number; to: number; kind: GapKind }[] {
   const cover = HEARTBEAT_COVER_MINUTES * 60000;
-  const inside = heartbeats.filter((h) => h > from && h < to).sort((a, b) => a - b);
+  const inside = heartbeats.filter((h) => h > from && h < to).sort((a, b) =>
+    a - b
+  );
   // No heartbeat at all inside: the app was not running, unless the gap is too short for one to be missed.
-  if (inside.length === 0) return [{ from, to, kind: to - from < HEARTBEAT_MISS_MINUTES * 60000 ? "no_gps" : "no_data" }];
+  if (inside.length === 0) {
+    return [{
+      from,
+      to,
+      kind: to - from < HEARTBEAT_MISS_MINUTES * 60000 ? "no_gps" : "no_data",
+    }];
+  }
   const bounds = [from, ...inside, to];
   const parts: { from: number; to: number; kind: GapKind }[] = [];
   for (let i = 1; i < bounds.length; i++) {
-    const kind: GapKind = bounds[i] - bounds[i - 1] <= cover ? "no_gps" : "no_data";
+    const kind: GapKind = bounds[i] - bounds[i - 1] <= cover
+      ? "no_gps"
+      : "no_data";
     const last = parts[parts.length - 1];
     if (last && last.kind === kind) last.to = bounds[i];
     else parts.push({ from: bounds[i - 1], to: bounds[i], kind });
@@ -429,7 +482,11 @@ export function gapParts(from: number, to: number, heartbeats: number[] = []): {
 }
 
 /** The kind of a whole hole: the kind of its longest part. */
-function holeKind(from: number, to: number, heartbeats: number[] | undefined): GapKind {
+function holeKind(
+  from: number,
+  to: number,
+  heartbeats: number[] | undefined,
+): GapKind {
   const parts = gapParts(from, to, heartbeats);
   let best = parts[0];
   for (const p of parts) if (p.to - p.from > best.to - best.from) best = p;
@@ -484,16 +541,27 @@ export function jumpsOf(line: LinePoint[]): Jump[] {
     if (b.at - a.at <= JUMP_MIN_S * 1000) continue;
     const metres = distanceM(a, b);
     if (metres <= JUMP_MIN_M) continue;
-    out.push({ from: a.at, to: b.at, metres: Math.round(metres), fromPoint: { lat: a.lat, lng: a.lng }, toPoint: { lat: b.lat, lng: b.lng } });
+    out.push({
+      from: a.at,
+      to: b.at,
+      metres: Math.round(metres),
+      fromPoint: { lat: a.lat, lng: a.lng },
+      toPoint: { lat: b.lat, lng: b.lng },
+    });
   }
   return out;
 }
 
 /** The whole route of a list of fixes (any order; sorted here). */
-export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBuild {
+export function buildRoute(
+  input: RouteFix[],
+  opts: BuildOptions = {},
+): RouteBuild {
   const sorted = [...input].sort((a, b) => a.at - b.at);
   const { fixes: noRepeat, repeats } = dropRepeats(sorted);
-  const drawable = noRepeat.filter((f) => f.accuracyM == null || f.accuracyM <= DRAW_MAX_ACCURACY_M);
+  const drawable = noRepeat.filter((f) =>
+    f.accuracyM == null || f.accuracyM <= DRAW_MAX_ACCURACY_M
+  );
   const { fixes, dropped: outliers } = dropOutliers(drawable);
   const state: TrackState = newTrack();
   const line: LinePoint[] = [];
@@ -506,10 +574,19 @@ export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBui
   let firstAt: number | null = null;
   let lastAt: number | null = null;
 
-  const push = (at: number, lat: number, lng: number, acc: number | null | undefined) => {
+  const push = (
+    at: number,
+    lat: number,
+    lng: number,
+    acc: number | null | undefined,
+  ) => {
     const prev = line[line.length - 1];
     let kmh = 0;
-    if (prev && at > prev.at) kmh = Math.round((distanceM(prev, { lat, lng }) / ((at - prev.at) / 1000)) * 3.6);
+    if (prev && at > prev.at) {
+      kmh = Math.round(
+        (distanceM(prev, { lat, lng }) / ((at - prev.at) / 1000)) * 3.6,
+      );
+    }
     line.push({ at, lat, lng, kmh, acc: acc ?? null });
   };
 
@@ -518,7 +595,9 @@ export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBui
     usableAt.push(fix.at);
     if (firstAt === null) firstAt = fix.at;
     lastAt = fix.at;
-    if (prevUsableAt !== null && fix.at - prevUsableAt > GAP_MINUTES * 60000) rawGaps.push({ from: prevUsableAt, to: fix.at });
+    if (prevUsableAt !== null && fix.at - prevUsableAt > GAP_MINUTES * 60000) {
+      rawGaps.push({ from: prevUsableAt, to: fix.at });
+    }
     prevUsableAt = fix.at;
 
     const waitedUntil = state.lastStill;
@@ -528,36 +607,75 @@ export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBui
       const prev = line[line.length - 1];
       // The vehicle waited at the previous position for a minute or more: mark the end of the wait before the move.
       // A shorter pause (slow traffic, a fix that had not moved far enough yet) is part of the step, at its true average speed.
-      if (prev && waitedUntil - prev.at >= WAIT_SECONDS * 1000 && result.verdict !== "first") {
-        line.push({ at: waitedUntil, lat: prev.lat, lng: prev.lng, kmh: 0, acc: prev.acc });
+      if (
+        prev && waitedUntil - prev.at >= WAIT_SECONDS * 1000 &&
+        result.verdict !== "first"
+      ) {
+        line.push({
+          at: waitedUntil,
+          lat: prev.lat,
+          lng: prev.lng,
+          kmh: 0,
+          acc: prev.acc,
+        });
       }
-      push(result.accepted.at, result.accepted.lat, result.accepted.lng, result.accepted.accuracyM);
-      if (result.movedM > 0) moves.push({ at: result.accepted.at, metres: result.movedM });
+      push(
+        result.accepted.at,
+        result.accepted.lat,
+        result.accepted.lng,
+        result.accepted.accuracyM,
+      );
+      if (result.movedM > 0) {
+        moves.push({ at: result.accepted.at, metres: result.movedM });
+      }
     }
   }
   const open = openStop(state);
   if (open) stops.push(open);
   const last = line[line.length - 1];
   if (
-    last && lastAt !== null && lastAt - last.at >= WAIT_SECONDS * 1000 && state.anchor && state.anchor.lat === last.lat &&
+    last && lastAt !== null && lastAt - last.at >= WAIT_SECONDS * 1000 &&
+    state.anchor && state.anchor.lat === last.lat &&
     state.anchor.lng === last.lng
   ) {
-    line.push({ at: lastAt, lat: last.lat, lng: last.lng, kmh: 0, acc: last.acc });
+    line.push({
+      at: lastAt,
+      lat: last.lat,
+      lng: last.lng,
+      kmh: 0,
+      acc: last.acc,
+    });
   }
 
   // Poor fixes (50–150 m) fill the stretches with no precise fix, thin and lighter on the map; never the km.
-  const merged = withPoorFixes(line, fixes.filter((f) => f.accuracyM != null && f.accuracyM > MAX_ACCURACY_M), usableAt);
+  const merged = withPoorFixes(
+    line,
+    fixes.filter((f) => f.accuracyM != null && f.accuracyM > MAX_ACCURACY_M),
+    usableAt,
+  );
 
   const settled = settleStops(firstAt, lastAt, stops, moves);
   // No stop of 10 minutes from the filter and no movement at all: the whole time is one stay at the first position.
   const stay: Stop[] =
-    settled.length === 0 && firstAt !== null && lastAt !== null && lastAt - firstAt >= 60000 && state.metres < MIN_LEG_M && line.length > 0
-      ? [{ from: firstAt, to: lastAt, minutes: minutes(firstAt, lastAt), lat: line[0].lat, lng: line[0].lng }]
+    settled.length === 0 && firstAt !== null && lastAt !== null &&
+      lastAt - firstAt >= 60000 && state.metres < MIN_LEG_M && line.length > 0
+      ? [{
+        from: firstAt,
+        to: lastAt,
+        minutes: minutes(firstAt, lastAt),
+        lat: line[0].lat,
+        lng: line[0].lng,
+      }]
       : [];
   const stays = settled.length ? settled : stay;
   const reported = stays.filter((s) => s.minutes >= STOP_MINUTES);
   const gaps: Gap[] = rawGaps.flatMap((g) =>
-    gapParts(g.from, g.to, opts.heartbeats).map((p) => ({ from: p.from, to: p.to, minutes: minutes(p.from, p.to), kind: p.kind }))
+    gapParts(g.from, g.to, opts.heartbeats).map((p) => ({
+      from: p.from,
+      to: p.to,
+      minutes: minutes(p.from, p.to),
+      kind: p.kind,
+    }))
   );
   const late = lateWindows(fixes);
   const segments = buildSegments(firstAt, lastAt, stays, gaps, moves, late);
@@ -568,7 +686,11 @@ export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBui
     keepAt.add(h.from);
     keepAt.add(h.to);
   }
-  const drawn = simplifyLine(opts.smooth === false ? merged : smoothLine(merged), opts, keepAt);
+  const drawn = simplifyLine(
+    opts.smooth === false ? merged : smoothLine(merged),
+    opts,
+    keepAt,
+  );
   return {
     line: drawn,
     segments,
@@ -578,8 +700,14 @@ export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBui
     jumps,
     late,
     km: roundKm(state.metres),
-    drivingMinutes: segments.filter((s) => s.kind === "driving").reduce((s, x) => s + x.minutes, 0),
-    stoppedMinutes: segments.filter((s) => s.kind === "stopped").reduce((s, x) => s + x.minutes, 0),
+    drivingMinutes: segments.filter((s) => s.kind === "driving").reduce(
+      (s, x) => s + x.minutes,
+      0,
+    ),
+    stoppedMinutes: segments.filter((s) => s.kind === "stopped").reduce(
+      (s, x) => s + x.minutes,
+      0,
+    ),
     stopsCount: reported.length,
     usable: usableAt.length,
     repeats,
@@ -595,7 +723,11 @@ export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBui
  * Poor fixes into the line, by time: only where no precise fix exists within 2 minutes, and only when further
  * than its own accuracy from the line point before it (closer adds nothing but wobble).
  */
-export function withPoorFixes(line: LinePoint[], poor: Fix[], usableAt: number[]): LinePoint[] {
+export function withPoorFixes(
+  line: LinePoint[],
+  poor: Fix[],
+  usableAt: number[],
+): LinePoint[] {
   if (poor.length === 0) return line;
   const near = POOR_FILL_MINUTES * 60000;
   const covered = (at: number): boolean => {
@@ -608,21 +740,31 @@ export function withPoorFixes(line: LinePoint[], poor: Fix[], usableAt: number[]
     }
     const after = usableAt[lo];
     const before = usableAt[lo - 1];
-    return (after !== undefined && after - at <= near) || (before !== undefined && at - before <= near);
+    return (after !== undefined && after - at <= near) ||
+      (before !== undefined && at - before <= near);
   };
   const out: LinePoint[] = [];
   let i = 0, j = 0;
   const candidates = poor.filter((f) => !covered(f.at));
   while (i < line.length || j < candidates.length) {
-    const takeLine = j >= candidates.length || (i < line.length && line[i].at <= candidates[j].at);
+    const takeLine = j >= candidates.length ||
+      (i < line.length && line[i].at <= candidates[j].at);
     if (takeLine) {
       out.push(line[i++]);
       continue;
     }
     const fix = candidates[j++];
     const prev = out[out.length - 1];
-    if (prev && distanceM(prev, fix) <= (fix.accuracyM ?? DRAW_MAX_ACCURACY_M)) continue;
-    out.push({ at: fix.at, lat: fix.lat, lng: fix.lng, kmh: 0, acc: fix.accuracyM ?? null });
+    if (
+      prev && distanceM(prev, fix) <= (fix.accuracyM ?? DRAW_MAX_ACCURACY_M)
+    ) continue;
+    out.push({
+      at: fix.at,
+      lat: fix.lat,
+      lng: fix.lng,
+      kmh: 0,
+      acc: fix.accuracyM ?? null,
+    });
   }
   return withSpeeds(out);
 }
@@ -633,8 +775,17 @@ export function withPoorFixes(line: LinePoint[], poor: Fix[], usableAt: number[]
  * under 100 m of accepted movement between them that was no drive: the stops are one stay, at the place of its
  * longest part. The same goes for the minutes before the first stop and after the last one.
  */
-export function settleStops(firstAt: number | null, lastAt: number | null, stops: Stop[], moves: { at: number; metres: number }[]): Stop[] {
-  const metresBetween = (from: number, to: number) => moves.filter((m) => m.at > from && m.at <= to).reduce((s, m) => s + m.metres, 0);
+export function settleStops(
+  firstAt: number | null,
+  lastAt: number | null,
+  stops: Stop[],
+  moves: { at: number; metres: number }[],
+): Stop[] {
+  const metresBetween = (from: number, to: number) =>
+    moves.filter((m) => m.at > from && m.at <= to).reduce(
+      (s, m) => s + m.metres,
+      0,
+    );
   const out: Stop[] = [];
   /** How long the part that gave each stay its position lasted. */
   const longest: number[] = [];
@@ -643,7 +794,10 @@ export function settleStops(firstAt: number | null, lastAt: number | null, stops
     const lasted = stop.to - stop.from;
     if (prev && metresBetween(prev.to, stop.from) < MIN_LEG_M) {
       const here = lasted > longest[longest.length - 1] ? stop : prev;
-      longest[longest.length - 1] = Math.max(lasted, longest[longest.length - 1]);
+      longest[longest.length - 1] = Math.max(
+        lasted,
+        longest[longest.length - 1],
+      );
       out[out.length - 1] = {
         from: prev.from,
         to: Math.max(prev.to, stop.to),
@@ -658,12 +812,18 @@ export function settleStops(firstAt: number | null, lastAt: number | null, stops
   }
   if (out.length && firstAt !== null && lastAt !== null) {
     const first = out[0];
-    if (first.from > firstAt && metresBetween(firstAt, first.from) < MIN_LEG_M) {
+    if (
+      first.from > firstAt && metresBetween(firstAt, first.from) < MIN_LEG_M
+    ) {
       out[0] = { ...first, from: firstAt, minutes: minutes(firstAt, first.to) };
     }
     const last = out[out.length - 1];
     if (last.to < lastAt && metresBetween(last.to, lastAt) < MIN_LEG_M) {
-      out[out.length - 1] = { ...last, to: lastAt, minutes: minutes(last.from, lastAt) };
+      out[out.length - 1] = {
+        ...last,
+        to: lastAt,
+        minutes: minutes(last.from, lastAt),
+      };
     }
   }
   return out;
@@ -679,7 +839,13 @@ export function buildSegments(
   late: LateWindow[] = [],
 ): Segment[] {
   if (firstAt === null || lastAt === null) return [];
-  const kmBetween = (from: number, to: number) => roundKm(moves.filter((m) => m.at > from && m.at <= to).reduce((s, m) => s + m.metres, 0));
+  const kmBetween = (from: number, to: number) =>
+    roundKm(
+      moves.filter((m) => m.at > from && m.at <= to).reduce(
+        (s, m) => s + m.metres,
+        0,
+      ),
+    );
   const legs: Segment[] = [];
   let cursor = firstAt;
   const ordered = [...stops].sort((a, b) => a.from - b.from);
@@ -690,28 +856,57 @@ export function buildSegments(
   };
   for (const stop of ordered) {
     addLeg(cursor, stop.from);
-    legs.push({ kind: "stopped", from: stop.from, to: stop.to, minutes: minutes(stop.from, stop.to), lat: stop.lat, lng: stop.lng });
+    legs.push({
+      kind: "stopped",
+      from: stop.from,
+      to: stop.to,
+      minutes: minutes(stop.from, stop.to),
+      lat: stop.lat,
+      lng: stop.lng,
+    });
     cursor = stop.to;
   }
   addLeg(cursor, lastAt);
 
-  const withKm = (s: Segment): Segment => (s.kind === "driving" ? { ...s, km: kmBetween(s.from, s.to) } : s);
+  const withKm = (
+    s: Segment,
+  ): Segment => (s.kind === "driving"
+    ? { ...s, km: kmBetween(s.from, s.to) }
+    : s);
   // Cut every leg around the gaps; a piece under a minute is not worth a row.
   const cut: Segment[] = [];
   for (const leg of legs) {
     let piece: Segment | null = { ...leg };
     for (const gap of gaps) {
       if (!piece || gap.to <= piece.from || gap.from >= piece.to) continue;
-      const before = { ...piece, to: gap.from, minutes: minutes(piece.from, gap.from) };
+      const before = {
+        ...piece,
+        to: gap.from,
+        minutes: minutes(piece.from, gap.from),
+      };
       if (before.minutes >= 1) cut.push(withKm(before));
-      cut.push({ kind: gap.kind, from: gap.from, to: gap.to, minutes: gap.minutes });
-      piece = gap.to < piece.to ? withKm({ ...piece, from: gap.to, minutes: minutes(gap.to, piece.to) }) : null;
+      cut.push({
+        kind: gap.kind,
+        from: gap.from,
+        to: gap.to,
+        minutes: gap.minutes,
+      });
+      piece = gap.to < piece.to
+        ? withKm({ ...piece, from: gap.to, minutes: minutes(gap.to, piece.to) })
+        : null;
     }
     if (piece && piece.minutes >= 1) cut.push(piece);
   }
   // A gap that fell between two legs (not inside one) still needs its row.
   for (const gap of gaps) {
-    if (!cut.some((s) => s.kind === gap.kind && s.from === gap.from)) cut.push({ kind: gap.kind, from: gap.from, to: gap.to, minutes: gap.minutes });
+    if (!cut.some((s) => s.kind === gap.kind && s.from === gap.from)) {
+      cut.push({
+        kind: gap.kind,
+        from: gap.from,
+        to: gap.to,
+        minutes: gap.minutes,
+      });
+    }
   }
   // Late uploads: a driving leg is cut around each window (the inside piece says when it landed); a stop is only marked.
   const out: Segment[] = [];
@@ -732,9 +927,19 @@ export function buildSegments(
       const to = Math.min(w.to, piece.to);
       const before = { ...piece, to: from, minutes: minutes(piece.from, from) };
       if (before.minutes >= 1) out.push(withKm(before));
-      const inside: Segment = withKm({ kind: "driving", from, to, minutes: minutes(from, to), uploadedAt: w.uploadedAt });
-      if (inside.minutes >= 1 || (before.minutes < 1 && to >= piece.to)) out.push(inside);
-      piece = to < piece.to ? withKm({ ...piece, from: to, minutes: minutes(to, piece.to) }) : null;
+      const inside: Segment = withKm({
+        kind: "driving",
+        from,
+        to,
+        minutes: minutes(from, to),
+        uploadedAt: w.uploadedAt,
+      });
+      if (inside.minutes >= 1 || (before.minutes < 1 && to >= piece.to)) {
+        out.push(inside);
+      }
+      piece = to < piece.to
+        ? withKm({ ...piece, from: to, minutes: minutes(to, piece.to) })
+        : null;
     }
     if (piece && piece.minutes >= 1) out.push(piece);
   }
@@ -742,7 +947,10 @@ export function buildSegments(
 }
 
 /** The position on the line at a moment, interpolated between the two points around it (for playback). */
-export function positionAt(line: LinePoint[], at: number): { lat: number; lng: number; kmh: number } | null {
+export function positionAt(
+  line: LinePoint[],
+  at: number,
+): { lat: number; lng: number; kmh: number } | null {
   if (!line.length) return null;
   if (at <= line[0].at) return { lat: line[0].lat, lng: line[0].lng, kmh: 0 };
   const last = line[line.length - 1];
@@ -757,7 +965,11 @@ export function positionAt(line: LinePoint[], at: number): { lat: number; lng: n
   const a = line[lo];
   const b = line[hi];
   const k = b.at === a.at ? 0 : (at - a.at) / (b.at - a.at);
-  return { lat: a.lat + (b.lat - a.lat) * k, lng: a.lng + (b.lng - a.lng) * k, kmh: b.kmh };
+  return {
+    lat: a.lat + (b.lat - a.lat) * k,
+    lng: a.lng + (b.lng - a.lng) * k,
+    kmh: b.kmh,
+  };
 }
 
 /** Inserts a point into a line by time (a late backlog lands in the right place); a point already there (same time) is ignored. */
@@ -774,7 +986,12 @@ export function insertByTime(line: LinePoint[], point: LinePoint): LinePoint[] {
   for (const i of [lo, lo + 1]) {
     if (i <= 0 || i >= out.length) continue;
     const a = out[i - 1], b = out[i];
-    out[i] = { ...b, kmh: b.at > a.at ? Math.round((distanceM(a, b) / ((b.at - a.at) / 1000)) * 3.6) : 0 };
+    out[i] = {
+      ...b,
+      kmh: b.at > a.at
+        ? Math.round((distanceM(a, b) / ((b.at - a.at) / 1000)) * 3.6)
+        : 0,
+    };
   }
   return out;
 }

@@ -27,7 +27,14 @@ import {
 import { thousands } from "./format.ts";
 import { loadSettings } from "./settings.ts";
 import { needsAttention } from "./status.ts";
-import { ago, colomboDate, colomboDayTime, colomboTime, daysBetween, shortDate } from "./time.ts";
+import {
+  ago,
+  colomboDate,
+  colomboDayTime,
+  colomboTime,
+  daysBetween,
+  shortDate,
+} from "./time.ts";
 
 export type Severity = "info" | "warning" | "critical";
 export type IssueStatus = "open" | "in_progress" | "resolved" | "dismissed";
@@ -39,8 +46,15 @@ export const ACTIVE: IssueStatus[] = ["open", "in_progress"];
 export const SYNC_JOB = "issues";
 export const SYNC_FRESH_MS = 60_000;
 
-export const TASK_KINDS = new Set(["signal", "late_start", "running_late", "not_accepted", "declined"]);
-export const scopeOf = (kind: string): "task" | "fleet" => TASK_KINDS.has(kind) ? "task" : "fleet";
+export const TASK_KINDS = new Set([
+  "signal",
+  "late_start",
+  "running_late",
+  "not_accepted",
+  "declined",
+]);
+export const scopeOf = (kind: string): "task" | "fleet" =>
+  TASK_KINDS.has(kind) ? "task" : "fleet";
 
 export const KIND_TEXT: Record<string, string> = {
   vehicle_report: "Vehicle problem",
@@ -83,7 +97,18 @@ export interface Wanted {
   keep_only?: boolean;
 }
 
-export type ActiveRow = Pick<IssueRow, "id" | "ref_key" | "kind" | "status" | "severity" | "title" | "detail" | "due" | "sort_key">;
+export type ActiveRow = Pick<
+  IssueRow,
+  | "id"
+  | "ref_key"
+  | "kind"
+  | "status"
+  | "severity"
+  | "title"
+  | "detail"
+  | "due"
+  | "sort_key"
+>;
 export interface Patch {
   severity?: Severity;
   title?: string;
@@ -105,7 +130,11 @@ const RANK: Record<Severity, number> = { info: 0, warning: 1, critical: 2 };
  * resolved or dismissed recently, with the severity they had then: such a key opens
  * again only when it comes back worse (a dismissed "expires in 20 days" returns at 7).
  */
-export function reconcile(active: ActiveRow[], wanted: Wanted[], muted: Map<string, Severity> = new Map()): Plan {
+export function reconcile(
+  active: ActiveRow[],
+  wanted: Wanted[],
+  muted: Map<string, Severity> = new Map(),
+): Plan {
   const byKey = new Map(active.map((r) => [r.ref_key, r]));
   const plan: Plan = { open: [], update: [], resolve: [] };
   const seen = new Set<string>();
@@ -123,7 +152,9 @@ export function reconcile(active: ActiveRow[], wanted: Wanted[], muted: Map<stri
     const patch: Patch = {};
     if (row.severity !== w.severity) patch.severity = w.severity;
     if (row.title !== w.title) patch.title = w.title;
-    if ((row.detail ?? null) !== (w.detail ?? null)) patch.detail = w.detail ?? null;
+    if ((row.detail ?? null) !== (w.detail ?? null)) {
+      patch.detail = w.detail ?? null;
+    }
     if ((row.due ?? null) !== (w.due ?? null)) patch.due = w.due ?? null;
     if (row.sort_key !== w.sort_key) patch.sort_key = w.sort_key;
     if (w.status && row.status !== w.status) patch.status = w.status;
@@ -148,7 +179,11 @@ export interface SyncScope {
   request_id?: string;
 }
 
-const DOC_KEY: Record<string, string> = { licence_expiry: "lic", insurance_expiry: "ins", emission_expiry: "emi" };
+const DOC_KEY: Record<string, string> = {
+  licence_expiry: "lic",
+  insurance_expiry: "ins",
+  emission_expiry: "emi",
+};
 const KEEP_DAYS = 14;
 const OPEN_DAYS = 7;
 const REQUEST_WAIT_MIN = 30;
@@ -157,18 +192,29 @@ const LATE_START_MIN = 10;
 const ms = (days: number) => days * 86400000;
 
 /** The wanted set from the data, for everything or for one task / report / request / vehicle. */
-export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): Promise<Wanted[]> {
+export async function computeWanted(
+  db: Db,
+  now: Date,
+  scope: SyncScope = {},
+): Promise<Wanted[]> {
   const today = colomboDate(now);
   const nowIso = now.toISOString();
-  const full = !scope.task_id && !scope.report_id && !scope.request_id && !scope.vehicle_id;
+  const full = !scope.task_id && !scope.report_id && !scope.request_id &&
+    !scope.vehicle_id;
   const fleetScope = full || !!scope.vehicle_id;
   const taskScope = full || !!scope.task_id;
   const reportScope = full || !!scope.report_id || !!scope.vehicle_id;
   const requestScope = full || !!scope.request_id;
   const wanted: Wanted[] = [];
 
-  const [refs, latest, settings] = await Promise.all([loadRefs(db), loadLatest(db), loadSettings(db)]);
-  const vehicles = refs.vehicles.filter((v) => v.active && (!scope.vehicle_id || v.id === scope.vehicle_id));
+  const [refs, latest, settings] = await Promise.all([
+    loadRefs(db),
+    loadLatest(db),
+    loadSettings(db),
+  ]);
+  const vehicles = refs.vehicles.filter((v) =>
+    v.active && (!scope.vehicle_id || v.id === scope.vehicle_id)
+  );
   const vehicleIds = vehicles.map((v) => v.id);
   const soon = (dateText: string | null, within: number) => {
     if (!dateText) return null;
@@ -204,8 +250,16 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           ref_key: `service:${v.id}`,
           severity: svc.state === "overdue" ? "critical" : "warning",
           title: svc.state === "overdue" ? "Service overdue" : "Service due",
-          detail: `${v.reg_no} · ${svc.km_to_go !== null && svc.km_to_go > 0 ? `${thousands(svc.km_to_go)} km to go` : svc.text}`,
-          due: svc.state === "overdue" ? "now" : svc.date ? dueText(days, svc.date) : "soon",
+          detail: `${v.reg_no} · ${
+            svc.km_to_go !== null && svc.km_to_go > 0
+              ? `${thousands(svc.km_to_go)} km to go`
+              : svc.text
+          }`,
+          due: svc.state === "overdue"
+            ? "now"
+            : svc.date
+            ? dueText(days, svc.date)
+            : "soon",
           sort_key: svc.state === "overdue" ? -1 : days,
           vehicle_id: v.id,
         });
@@ -217,7 +271,9 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           ref_key: `allowance:${v.id}:${today.slice(0, 7)}`,
           severity: "warning",
           title: "Over monthly km allowance",
-          detail: `${v.reg_no} · ${thousands(used)} of ${thousands(v.monthly_km_allowance)} km`,
+          detail: `${v.reg_no} · ${thousands(used)} of ${
+            thousands(v.monthly_km_allowance)
+          } km`,
           due: "now",
           sort_key: -1,
           vehicle_id: v.id,
@@ -225,12 +281,16 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       }
       const rentDays = soon(v.rent_until, 14);
       if (rentDays !== null && v.rent_until) {
-        const company = v.rental_company_id ? refs.company.get(v.rental_company_id)?.name : undefined;
+        const company = v.rental_company_id
+          ? refs.company.get(v.rental_company_id)?.name
+          : undefined;
         wanted.push({
           kind: "rental",
           ref_key: `rent:${v.id}`,
           severity: rentDays < 0 ? "critical" : "warning",
-          title: rentDays < 0 ? "Rental agreement ended" : "Rental agreement ends",
+          title: rentDays < 0
+            ? "Rental agreement ended"
+            : "Rental agreement ends",
           detail: [v.reg_no, company].filter(Boolean).join(" · "),
           due: dueText(rentDays, v.rent_until),
           sort_key: rentDays,
@@ -254,7 +314,9 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   }
   if (full) {
     for (const e of refs.employees) {
-      const days = e.role === "driver" && e.active ? soon(e.licence_expiry, 30) : null;
+      const days = e.role === "driver" && e.active
+        ? soon(e.licence_expiry, 30)
+        : null;
       if (days === null || !e.licence_expiry) continue;
       wanted.push({
         kind: "licence",
@@ -278,9 +340,17 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       wanted.push({
         kind: "vehicle_report",
         ref_key: `report:${r.id}`,
-        severity: r.category === "breakdown" || r.category === "accident" ? "critical" : "warning",
-        title: `Vehicle problem: ${r.category.replace("_", " ")}${r.status === "in_garage" ? " (in garage)" : ""}`,
-        detail: [refs.veh.get(r.vehicle_id)?.reg_no, refs.emp.get(r.employee_id)?.name, r.note].filter(Boolean).join(" · "),
+        severity: r.category === "breakdown" || r.category === "accident"
+          ? "critical"
+          : "warning",
+        title: `Vehicle problem: ${r.category.replace("_", " ")}${
+          r.status === "in_garage" ? " (in garage)" : ""
+        }`,
+        detail: [
+          refs.veh.get(r.vehicle_id)?.reg_no,
+          refs.emp.get(r.employee_id)?.name,
+          r.note,
+        ].filter(Boolean).join(" · "),
         due: `reported ${ago(r.created_at, now)} ago`,
         sort_key: -2,
         vehicle_id: r.vehicle_id,
@@ -296,10 +366,18 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   if (fleetScope && vehicleIds.length > 0) {
     const keepFrom = new Date(now.getTime() - ms(KEEP_DAYS)).toISOString();
     const openFrom = now.getTime() - ms(OPEN_DAYS);
-    let q = db.from("odometer_logs").select("id, vehicle_id, employee_id, reading_km, ai_value, entry, flag, ai_checked_at, logged_at")
-      .not("flag", "is", null).gte("logged_at", keepFrom).in("vehicle_id", vehicleIds);
+    let q = db.from("odometer_logs").select(
+      "id, vehicle_id, employee_id, reading_km, ai_value, entry, flag, ai_checked_at, logged_at",
+    )
+      .not("flag", "is", null).gte("logged_at", keepFrom).in(
+        "vehicle_id",
+        vehicleIds,
+      );
     if (scope.vehicle_id) q = q.eq("vehicle_id", scope.vehicle_id);
-    const [flaggedRes, gaps] = await Promise.all([q, loadGaps(db, vehicleIds, keepFrom, nowIso)]);
+    const [flaggedRes, gaps] = await Promise.all([
+      q,
+      loadGaps(db, vehicleIds, keepFrom, nowIso),
+    ]);
     for (const l of unwrap(flaggedRes, "odometer logs")) {
       wanted.push({
         kind: "odometer_flag",
@@ -309,7 +387,9 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         detail: [
           refs.veh.get(l.vehicle_id)?.reg_no,
           refs.emp.get(l.employee_id)?.name,
-          `${thousands(l.reading_km)} km${l.ai_value !== null ? ` (photo ${thousands(l.ai_value)})` : ""}`,
+          `${thousands(l.reading_km)} km${
+            l.ai_value !== null ? ` (photo ${thousands(l.ai_value)})` : ""
+          }`,
         ].filter(Boolean).join(" · "),
         due: `logged ${ago(l.logged_at, now)} ago`,
         sort_key: -1,
@@ -324,11 +404,15 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         kind: "km_gap",
         ref_key: `gap:${g.vehicle_id}:${g.to.id}`,
         severity: "warning",
-        title: `Km outside tasks: ${thousands(g.km)} km ${g.type === "overnight" ? "overnight" : "between tasks"}`,
+        title: `Km outside tasks: ${thousands(g.km)} km ${
+          g.type === "overnight" ? "overnight" : "between tasks"
+        }`,
         detail: [
           refs.veh.get(g.vehicle_id)?.reg_no,
           refs.emp.get(g.from.employee_id)?.name,
-          `${colomboDayTime(g.from.logged_at)} → ${colomboDayTime(g.to.logged_at)}`,
+          `${colomboDayTime(g.from.logged_at)} → ${
+            colomboDayTime(g.to.logged_at)
+          }`,
         ]
           .filter(Boolean).join(" · "),
         due: `ended ${ago(g.to.logged_at, now)} ago`,
@@ -342,17 +426,25 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
 
   // --- Tasks: signal, late start, running late, not accepted, declined ------------------
   if (taskScope) {
-    let q = db.from("tasks").select("*").in("status", ["assigned", "in_progress", "declined"]);
+    let q = db.from("tasks").select("*").in("status", [
+      "assigned",
+      "in_progress",
+      "declined",
+    ]);
     if (scope.task_id) q = q.eq("id", scope.task_id);
     const tasks = unwrap(await q, "tasks");
     const running = tasks.filter((t) => t.status === "in_progress");
     const stops = running.length > 0
       ? unwrap(
-        await db.from("task_stops").select("*").in("task_id", running.map((t) => t.id)).neq("status", "removed").order("seq"),
+        await db.from("task_stops").select("*").in(
+          "task_id",
+          running.map((t) => t.id),
+        ).neq("status", "removed").order("seq"),
         "stops",
       )
       : [];
-    const who = (t: { employee_id: string; title: string }) => [refs.emp.get(t.employee_id)?.name, t.title].filter(Boolean).join(" · ");
+    const who = (t: { employee_id: string; title: string }) =>
+      [refs.emp.get(t.employee_id)?.name, t.title].filter(Boolean).join(" · ");
     for (const t of running) {
       const pos = latest.get(t.employee_id);
       const { result, fields } = statusOf(pos, now);
@@ -363,9 +455,13 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           ref_key: `signal:${t.id}`,
           severity: result.status === "location_off" ? "critical" : "warning",
           title: result.status === "location_off"
-            ? (result.permissionProblem ? "Driver's location permission removed" : "Driver's location is off")
+            ? (result.permissionProblem
+              ? "Driver's location permission removed"
+              : "Driver's location is off")
             : "No signal from the driver",
-          detail: `${who(t)} · last position ${fields.last_position_at ?? "none"}`,
+          detail: `${who(t)} · last position ${
+            fields.last_position_at ?? "none"
+          }`,
           due: from ? `for ${ago(from, now)}` : null,
           sort_key: -3,
           vehicle_id: t.vehicle_id,
@@ -373,7 +469,14 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           task_id: t.id,
         });
       }
-      const eta = await taskEta(db, t, stops.filter((s) => s.task_id === t.id), pos, settings, now);
+      const eta = await taskEta(
+        db,
+        t,
+        stops.filter((s) => s.task_id === t.id),
+        pos,
+        settings,
+        now,
+      );
       if (eta && eta.late_min > 0) {
         wanted.push({
           kind: "running_late",
@@ -381,7 +484,9 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           severity: "warning",
           title: `Running late by ${eta.late_min} min`,
           detail: who(t),
-          due: eta.final_eta_at ? `final ETA ${colomboTime(eta.final_eta_at)}` : null,
+          due: eta.final_eta_at
+            ? `final ETA ${colomboTime(eta.final_eta_at)}`
+            : null,
           sort_key: -2,
           vehicle_id: t.vehicle_id,
           employee_id: t.employee_id,
@@ -390,9 +495,16 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       }
     }
     // A custodian-driven task (its employee is an office person, not a driver) has no app: nothing to start or accept.
-    for (const t of tasks.filter((x) => x.status === "assigned" && refs.emp.get(x.employee_id)?.role === "driver")) {
+    for (
+      const t of tasks.filter((x) =>
+        x.status === "assigned" &&
+        refs.emp.get(x.employee_id)?.role === "driver"
+      )
+    ) {
       const leaveBy = t.leave_by ?? t.start_at;
-      if (new Date(leaveBy).getTime() + LATE_START_MIN * 60000 < now.getTime()) {
+      if (
+        new Date(leaveBy).getTime() + LATE_START_MIN * 60000 < now.getTime()
+      ) {
         wanted.push({
           kind: "late_start",
           ref_key: `late_start:${t.id}`,
@@ -423,13 +535,17 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     }
     for (const t of tasks.filter((x) => x.status === "declined")) {
       const leaveBy = t.leave_by ?? t.start_at;
-      const soonLeave = new Date(leaveBy).getTime() - now.getTime() < 2 * 3600000;
-      const reason = DECLINE_TEXT[t.declined_reason ?? ""] ?? t.declined_reason ?? "no reason given";
+      const soonLeave =
+        new Date(leaveBy).getTime() - now.getTime() < 2 * 3600000;
+      const reason = DECLINE_TEXT[t.declined_reason ?? ""] ??
+        t.declined_reason ?? "no reason given";
       wanted.push({
         kind: "declined",
         ref_key: `declined:${t.id}`,
         severity: soonLeave ? "critical" : "warning",
-        title: `Task declined${t.declined_after_accept ? " after accepting" : ""}: ${reason}`,
+        title: `Task declined${
+          t.declined_after_accept ? " after accepting" : ""
+        }: ${reason}`,
         detail: [who(t), t.declined_note].filter(Boolean).join(" · "),
         due: `leave by ${colomboDayTime(leaveBy)} · needs a driver`,
         sort_key: soonLeave ? -3 : -2,
@@ -442,18 +558,31 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
 
   // --- Requests nobody has decided ------------------------------------------------------
   if (requestScope) {
-    let q = db.from("vehicle_requests").select("*").in("status", ["waiting", "changed"]);
+    let q = db.from("vehicle_requests").select("*").in("status", [
+      "waiting",
+      "changed",
+    ]);
     if (scope.request_id) q = q.eq("id", scope.request_id);
     for (const r of unwrap(await q, "vehicle requests")) {
       // A changed booking waits from its edit, not from the day it was first asked.
-      const since = r.status === "changed" ? r.changed_at ?? r.created_at : r.created_at;
-      if (new Date(since).getTime() + REQUEST_WAIT_MIN * 60000 > now.getTime()) continue;
+      const since = r.status === "changed"
+        ? r.changed_at ?? r.created_at
+        : r.created_at;
+      if (
+        new Date(since).getTime() + REQUEST_WAIT_MIN * 60000 > now.getTime()
+      ) continue;
       wanted.push({
         kind: "request_waiting",
         ref_key: `request:${r.id}`,
         severity: "warning",
-        title: r.status === "changed" ? "Changed booking needs re-approval" : "Vehicle request waiting",
-        detail: [r.requested_by_name, [r.route_from, r.route_to].filter(Boolean).join(" → ") || null, colomboDayTime(r.needed_at)].filter(
+        title: r.status === "changed"
+          ? "Changed booking needs re-approval"
+          : "Vehicle request waiting",
+        detail: [
+          r.requested_by_name,
+          [r.route_from, r.route_to].filter(Boolean).join(" → ") || null,
+          colomboDayTime(r.needed_at),
+        ].filter(
           Boolean,
         )
           .join(" · "),
@@ -469,8 +598,14 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   if (full) {
     const dayStart = new Date(now.getTime() - ms(1)).toISOString();
     const [pushRes, routingRes] = await Promise.all([
-      db.from("push_log").select("failed, errors").gt("failed", 0).gte("created_at", dayStart),
-      db.from("routing_calls").select("provider, calls, errors").eq("day", today).gt("errors", 0),
+      db.from("push_log").select("failed, errors").gt("failed", 0).gte(
+        "created_at",
+        dayStart,
+      ),
+      db.from("routing_calls").select("provider, calls, errors").eq(
+        "day",
+        today,
+      ).gt("errors", 0),
     ]);
     const pushes = unwrap(pushRes, "push log");
     if (pushes.length > 0) {
@@ -479,7 +614,8 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         ref_key: `push:${today}`,
         severity: "info",
         title: `Push notifications failed: ${pushes.length} today`,
-        detail: "Some drivers' phones did not get a task notification (expired tokens are removed by themselves).",
+        detail:
+          "Some drivers' phones did not get a task notification (expired tokens are removed by themselves).",
         due: "today",
         sort_key: 0,
       });
@@ -489,7 +625,8 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         kind: "routing_failed",
         ref_key: `routing:${r.provider}:${today}`,
         severity: "info",
-        title: `Routing calls failed: ${r.errors} of ${r.calls} (${r.provider})`,
+        title:
+          `Routing calls failed: ${r.errors} of ${r.calls} (${r.provider})`,
         detail: "Those legs were estimated instead.",
         due: "today",
         sort_key: 0,
@@ -515,7 +652,12 @@ export type EventFields = {
   at?: Date;
 };
 
-export async function writeEvent(db: Db, issueId: string, action: Row<"issue_events">["action"], f: EventFields = {}): Promise<void> {
+export async function writeEvent(
+  db: Db,
+  issueId: string,
+  action: Row<"issue_events">["action"],
+  f: EventFields = {},
+): Promise<void> {
   unwrap(
     await db.from("issue_events").insert({
       issue_id: issueId,
@@ -532,24 +674,56 @@ export async function writeEvent(db: Db, issueId: string, action: Row<"issue_eve
 }
 
 /** Which active rows a scope may touch (task issues belong to their task, not to the vehicle's scope). */
-function scoped<Q extends { eq: (c: string, v: string) => Q; not: (c: string, op: string, v: string) => Q }>(q: Q, scope: SyncScope): Q {
+function scoped<
+  Q extends {
+    eq: (c: string, v: string) => Q;
+    not: (c: string, op: string, v: string) => Q;
+  },
+>(q: Q, scope: SyncScope): Q {
   if (scope.task_id) return q.eq("task_id", scope.task_id);
   if (scope.report_id) return q.eq("vehicle_report_id", scope.report_id);
   if (scope.request_id) return q.eq("request_id", scope.request_id);
-  if (scope.vehicle_id) return q.eq("vehicle_id", scope.vehicle_id).not("kind", "in", `(${[...TASK_KINDS].join(",")})`);
+  if (scope.vehicle_id) {
+    return q.eq("vehicle_id", scope.vehicle_id).not(
+      "kind",
+      "in",
+      `(${[...TASK_KINDS].join(",")})`,
+    );
+  }
   return q;
 }
 
 /** Brings the issues table in line with the data; returns what changed. */
-export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Promise<SyncResult> {
-  const full = !scope.task_id && !scope.report_id && !scope.request_id && !scope.vehicle_id;
-  if (full) unwrap(await db.from("job_runs").upsert({ job: SYNC_JOB, started_at: now.toISOString() }, { onConflict: "job" }), "job runs");
+export async function syncIssues(
+  db: Db,
+  now: Date,
+  scope: SyncScope = {},
+): Promise<SyncResult> {
+  const full = !scope.task_id && !scope.report_id && !scope.request_id &&
+    !scope.vehicle_id;
+  if (full) {
+    unwrap(
+      await db.from("job_runs").upsert({
+        job: SYNC_JOB,
+        started_at: now.toISOString(),
+      }, { onConflict: "job" }),
+      "job runs",
+    );
+  }
   const mutedSince = new Date(now.getTime() - ms(30)).toISOString();
   const [wanted, activeRes, mutedRes] = await Promise.all([
     computeWanted(db, now, scope),
-    scoped(db.from("issues").select("id, ref_key, kind, status, severity, title, detail, due, sort_key").in("status", ACTIVE), scope),
     scoped(
-      db.from("issues").select("ref_key, severity, resolved_at").in("status", ["resolved", "dismissed"]).neq("resolved_by", "system").gte(
+      db.from("issues").select(
+        "id, ref_key, kind, status, severity, title, detail, due, sort_key",
+      ).in("status", ACTIVE),
+      scope,
+    ),
+    scoped(
+      db.from("issues").select("ref_key, severity, resolved_at").in("status", [
+        "resolved",
+        "dismissed",
+      ]).neq("resolved_by", "system").gte(
         "resolved_at",
         mutedSince,
       ).order("resolved_at", { ascending: false }),
@@ -558,7 +732,9 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
   ]);
   const active = unwrap(activeRes, "issues") as ActiveRow[];
   const muted = new Map<string, Severity>();
-  for (const r of unwrap(mutedRes, "issues")) if (!muted.has(r.ref_key)) muted.set(r.ref_key, r.severity as Severity);
+  for (const r of unwrap(mutedRes, "issues")) {
+    if (!muted.has(r.ref_key)) muted.set(r.ref_key, r.severity as Severity);
+  }
 
   const plan = reconcile(active, wanted, muted);
   const nowIso = now.toISOString();
@@ -588,13 +764,31 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
       if (error.code === "23505") continue; // opened by a parallel sync just now
       throw new Error(`issues: ${error.message}`);
     }
-    await writeEvent(db, data.id, "opened", { actor: "system", to_status: w.status ?? "open", at: now });
+    await writeEvent(db, data.id, "opened", {
+      actor: "system",
+      to_status: w.status ?? "open",
+      at: now,
+    });
     opened += 1;
-    if (w.severity === "critical") critical.push({ id: data.id, title: w.title, detail: w.detail ?? null });
+    if (w.severity === "critical") {
+      critical.push({ id: data.id, title: w.title, detail: w.detail ?? null });
+    }
   }
   for (const { row, patch } of plan.update) {
-    unwrap(await db.from("issues").update({ ...patch, updated_at: nowIso }).eq("id", row.id), "issues");
-    if (patch.severity === "critical") critical.push({ id: row.id, title: patch.title ?? row.title, detail: patch.detail ?? row.detail });
+    unwrap(
+      await db.from("issues").update({ ...patch, updated_at: nowIso }).eq(
+        "id",
+        row.id,
+      ),
+      "issues",
+    );
+    if (patch.severity === "critical") {
+      critical.push({
+        id: row.id,
+        title: patch.title ?? row.title,
+        detail: patch.detail ?? row.detail,
+      });
+    }
     if (patch.status) {
       await writeEvent(db, row.id, "status", {
         actor: "system",
@@ -608,12 +802,22 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
   }
   for (const row of plan.resolve) {
     const done = unwrap(
-      await db.from("issues").update({ status: "resolved", resolved_at: nowIso, resolved_by: "system", updated_at: nowIso })
+      await db.from("issues").update({
+        status: "resolved",
+        resolved_at: nowIso,
+        resolved_by: "system",
+        updated_at: nowIso,
+      })
         .eq("id", row.id).in("status", ACTIVE).select("id"),
       "issues",
     );
     if (done.length === 0) continue;
-    await writeEvent(db, row.id, "auto_resolved", { actor: "system", from_status: row.status, to_status: "resolved", at: now });
+    await writeEvent(db, row.id, "auto_resolved", {
+      actor: "system",
+      from_status: row.status,
+      to_status: "resolved",
+      at: now,
+    });
     resolved += 1;
   }
   // A critical issue (opened so, or raised to it) tells the people with the issues permission.
@@ -622,16 +826,34 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
       const people = await officePeople(db);
       const to = recipientsFor("issue.opened", people);
       for (const c of critical) {
-        await notify(db, "issue.opened", { title: c.title, body: c.detail ?? "", url: `/issues/${c.id}`, tag: `issue:${c.id}` }, to);
+        await notify(db, "issue.opened", {
+          title: c.title,
+          body: c.detail ?? "",
+          url: `/issues/${c.id}`,
+          tag: `issue:${c.id}`,
+        }, to);
       }
     } catch (error) {
-      console.error(`issue.opened: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `issue.opened: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
     }
   }
-  const result = { opened, updated, resolved, active: active.length + opened - resolved };
+  const result = {
+    opened,
+    updated,
+    resolved,
+    active: active.length + opened - resolved,
+  };
   if (full) {
     unwrap(
-      await db.from("job_runs").upsert({ job: SYNC_JOB, finished_at: new Date().toISOString(), result }, { onConflict: "job" }),
+      await db.from("job_runs").upsert({
+        job: SYNC_JOB,
+        finished_at: new Date().toISOString(),
+        result,
+      }, { onConflict: "job" }),
       "job runs",
     );
   }
@@ -643,10 +865,16 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
  * finished under maxAgeMs ago, or started under maxAgeMs ago and is still running, so
  * several people with Overview open do not run the rules every few seconds. Pure.
  */
-export function syncIsFresh(run: { started_at: string; finished_at: string | null } | null, now: Date, maxAgeMs = SYNC_FRESH_MS): boolean {
+export function syncIsFresh(
+  run: { started_at: string; finished_at: string | null } | null,
+  now: Date,
+  maxAgeMs = SYNC_FRESH_MS,
+): boolean {
   if (!run) return false;
   const finished = run.finished_at ? Date.parse(run.finished_at) : NaN;
-  if (!Number.isNaN(finished) && now.getTime() - finished < maxAgeMs) return true;
+  if (!Number.isNaN(finished) && now.getTime() - finished < maxAgeMs) {
+    return true;
+  }
   const started = Date.parse(run.started_at);
   if (Number.isNaN(started)) return false;
   const running = Number.isNaN(finished) || started > finished;
@@ -654,8 +882,18 @@ export function syncIsFresh(run: { started_at: string; finished_at: string | nul
 }
 
 /** A full sync unless one is fresh (see syncIsFresh); null when skipped. */
-export async function syncIssuesIfStale(db: Db, now: Date, maxAgeMs = SYNC_FRESH_MS): Promise<SyncResult | null> {
-  const run = unwrapMaybe(await db.from("job_runs").select("started_at, finished_at").eq("job", SYNC_JOB).maybeSingle(), "job runs");
+export async function syncIssuesIfStale(
+  db: Db,
+  now: Date,
+  maxAgeMs = SYNC_FRESH_MS,
+): Promise<SyncResult | null> {
+  const run = unwrapMaybe(
+    await db.from("job_runs").select("started_at, finished_at").eq(
+      "job",
+      SYNC_JOB,
+    ).maybeSingle(),
+    "job runs",
+  );
   if (syncIsFresh(run, now, maxAgeMs)) return null;
   return await syncIssues(db, now);
 }

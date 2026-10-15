@@ -31,7 +31,9 @@ export const REQUEST_FIELDS: (keyof RequestFields)[] = [
 ];
 
 export function snapshot(r: RequestFields): RequestFields {
-  return Object.fromEntries(REQUEST_FIELDS.map((k) => [k, r[k]])) as unknown as RequestFields;
+  return Object.fromEntries(
+    REQUEST_FIELDS.map((k) => [k, r[k]]),
+  ) as unknown as RequestFields;
 }
 
 export interface Change {
@@ -40,7 +42,13 @@ export interface Change {
 }
 export type Changes = Record<string, Change>;
 
-const TYPE_NAME: Record<string, string> = { car: "Car", van: "Van", double_cab: "Double cab", lorry: "Lorry", other: "Other" };
+const TYPE_NAME: Record<string, string> = {
+  car: "Car",
+  van: "Van",
+  double_cab: "Double cab",
+  lorry: "Lorry",
+  other: "Other",
+};
 
 /** The words for one field's value. */
 function word(key: keyof RequestFields, r: RequestFields): string | null {
@@ -48,7 +56,11 @@ function word(key: keyof RequestFields, r: RequestFields): string | null {
     case "needed_at":
       return colomboDayTime(r.needed_at);
     case "back_by":
-      return r.back_by ? (colomboDate(r.back_by) === colomboDate(r.needed_at) ? colomboTime(r.back_by) : colomboDayTime(r.back_by)) : null;
+      return r.back_by
+        ? (colomboDate(r.back_by) === colomboDate(r.needed_at)
+          ? colomboTime(r.back_by)
+          : colomboDayTime(r.back_by))
+        : null;
     case "need_type":
       return r.need_type ? TYPE_NAME[r.need_type] ?? r.need_type : null;
     case "pax":
@@ -76,7 +88,10 @@ export const FIELD_LABEL: Record<keyof RequestFields, string> = {
 };
 
 /** What changed between two versions of a request, by label, in words. Pure. */
-export function requestDiff(before: RequestFields, after: RequestFields): Changes {
+export function requestDiff(
+  before: RequestFields,
+  after: RequestFields,
+): Changes {
   const out: Changes = {};
   for (const key of REQUEST_FIELDS) {
     const a = word(key, before);
@@ -88,13 +103,26 @@ export function requestDiff(before: RequestFields, after: RequestFields): Change
 
 /** "time Thu 15 Oct 09:00 → Thu 15 Oct 09:30, to Galle → Matara" */
 export function diffText(changes: Changes): string {
-  return Object.entries(changes).map(([label, c]) => `${label} ${c.from ?? "—"} → ${c.to ?? "—"}`).join(", ");
+  return Object.entries(changes).map(([label, c]) =>
+    `${label} ${c.from ?? "—"} → ${c.to ?? "—"}`
+  ).join(", ");
 }
 
-export type RequestStatus = "waiting" | "approved" | "changed" | "declined" | "cancelled";
+export type RequestStatus =
+  | "waiting"
+  | "approved"
+  | "changed"
+  | "declined"
+  | "cancelled";
 
 /** What an edit does to a request in each state. */
-export function statusAfterEdit(status: string): { status: "waiting" | "changed"; event: "edited" | "changed"; needs_reapproval: boolean } {
+export function statusAfterEdit(
+  status: string,
+): {
+  status: "waiting" | "changed";
+  event: "edited" | "changed";
+  needs_reapproval: boolean;
+} {
   switch (status) {
     case "waiting":
       return { status: "waiting", event: "edited", needs_reapproval: false };
@@ -103,19 +131,31 @@ export function statusAfterEdit(status: string): { status: "waiting" | "changed"
     case "changed":
       return { status: "changed", event: "edited", needs_reapproval: true };
     default:
-      throw new ToolError(`This request is ${status}; it cannot be changed any more.`);
+      throw new ToolError(
+        `This request is ${status}; it cannot be changed any more.`,
+      );
   }
 }
 
 /** The version the caller loaded must be the current one, as with plan_version. */
 export function checkVersion(current: number, sent: number): void {
   if (current !== sent) {
-    throw new ToolError(`This request changed since you loaded it (version ${current}, you have ${sent}). Reload it and try again.`);
+    throw new ToolError(
+      `This request changed since you loaded it (version ${current}, you have ${sent}). Reload it and try again.`,
+    );
   }
 }
 
 /** Which decisions a request in a state allows (decide_request handles waiting; redecide_request the rest). */
 export function canRedecide(status: string): void {
-  if (status === "waiting") throw new ToolError("This request is still waiting for its first decision: use decide_request.");
-  if (status !== "approved" && status !== "changed") throw new ToolError(`This request is ${status}; there is nothing to decide again.`);
+  if (status === "waiting") {
+    throw new ToolError(
+      "This request is still waiting for its first decision: use decide_request.",
+    );
+  }
+  if (status !== "approved" && status !== "changed") {
+    throw new ToolError(
+      `This request is ${status}; there is nothing to decide again.`,
+    );
+  }
 }

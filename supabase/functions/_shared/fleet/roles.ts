@@ -7,9 +7,20 @@
 // The same check is applied by office-mcp (Claude) and office-api (the web
 // app) before a tool runs; menus in the clients only mirror it.
 
-import { allows, type Permission, permissionsForRole, TOOL_PERMISSION } from "./permissions.ts";
+import {
+  allows,
+  type Permission,
+  permissionsForRole,
+  TOOL_PERMISSION,
+} from "./permissions.ts";
 
-export type Role = "admin" | "fleet_admin" | "office" | "staff" | "viewer" | "driver";
+export type Role =
+  | "admin"
+  | "fleet_admin"
+  | "office"
+  | "staff"
+  | "viewer"
+  | "driver";
 export type Channel = "claude" | "web" | "driver";
 
 /** The person a tool runs for. employeeId is null only for the shared connector key (which holds every permission). */
@@ -23,7 +34,13 @@ export interface Actor {
   channel: Channel;
 }
 
-export const OFFICE_ROLES: readonly Role[] = ["admin", "fleet_admin", "office", "staff", "viewer"];
+export const OFFICE_ROLES: readonly Role[] = [
+  "admin",
+  "fleet_admin",
+  "office",
+  "staff",
+  "viewer",
+];
 
 /**
  * 2-step sign-in (TOTP) is optional for every role: a person turns it on in
@@ -37,18 +54,31 @@ export const STRONG_ROLES: readonly Role[] = ["admin", "fleet_admin", "office"];
 
 /** The roles REQUIRE_MFA_ROLES names; unknown words are ignored, empty = nobody. */
 export function mfaRequiredRoles(setting: string | undefined | null): Role[] {
-  return (setting ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(isRole);
+  return (setting ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(
+    isRole,
+  );
 }
 
 /** The roles whose default permissions allow each tool (for reference and the docs; the check itself is canCall). */
 export const TOOL_ROLES: Record<string, Role[]> = Object.fromEntries(
-  Object.keys(TOOL_PERMISSION).map((tool) => [tool, OFFICE_ROLES.filter((role) => allows(permissionsForRole(role), tool))]),
+  Object.keys(TOOL_PERMISSION).map((
+    tool,
+  ) => [
+    tool,
+    OFFICE_ROLES.filter((role) => allows(permissionsForRole(role), tool)),
+  ]),
 );
 
-export function canCall(actor: Pick<Actor, "permissions">, tool: string): boolean {
+export function canCall(
+  actor: Pick<Actor, "permissions">,
+  tool: string,
+): boolean {
   return allows(actor.permissions, tool);
 }
 
 export function isRole(value: unknown): value is Role {
-  return typeof value === "string" && ["admin", "fleet_admin", "office", "staff", "viewer", "driver"].includes(value);
+  return typeof value === "string" &&
+    ["admin", "fleet_admin", "office", "staff", "viewer", "driver"].includes(
+      value,
+    );
 }

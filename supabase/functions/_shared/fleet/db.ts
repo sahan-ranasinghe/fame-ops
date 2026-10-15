@@ -16,9 +16,15 @@ export class ToolError extends Error {}
 export function adminClient(): Db {
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!url || !key) throw new Error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
+  if (!url || !key) {
+    throw new Error("SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY is not set");
+  }
   return createClient<Database>(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
   });
 }
 
@@ -39,20 +45,28 @@ const CAUSED_BY_INPUT = /^(22|23|P0)/;
 
 function fail(error: DbError, what: string): never {
   if (error.code && CAUSED_BY_INPUT.test(error.code)) {
-    const text = error.code === "23505" && error.details ? error.details : error.message;
+    const text = error.code === "23505" && error.details
+      ? error.details
+      : error.message;
     throw new ToolError(`${what}: ${text}`);
   }
   throw new Error(`${what}: ${error.message}`);
 }
 
 /** The data of a successful query (rows, or the one row of `.single()`); throws on a database error. */
-export function unwrap<R extends DbResult>(res: R, what: string): NonNullable<R["data"]> {
+export function unwrap<R extends DbResult>(
+  res: R,
+  what: string,
+): NonNullable<R["data"]> {
   if (res.error) fail(res.error, what);
   return res.data as NonNullable<R["data"]>;
 }
 
 /** Like unwrap, for `.maybeSingle()`: null when nothing was found. */
-export function unwrapMaybe<R extends DbResult>(res: R, what: string): R["data"] {
+export function unwrapMaybe<R extends DbResult>(
+  res: R,
+  what: string,
+): R["data"] {
   if (res.error) fail(res.error, what);
   return res.data;
 }
@@ -61,7 +75,9 @@ export function unwrapMaybe<R extends DbResult>(res: R, what: string): R["data"]
  * Reads every row of a query. The API returns at most 1,000 rows per request,
  * so this pages through. The query must have a stable order.
  */
-export async function fetchAll<R extends { data: unknown[] | null; error: DbError | null }>(
+export async function fetchAll<
+  R extends { data: unknown[] | null; error: DbError | null },
+>(
   page: (from: number, to: number) => PromiseLike<R>,
   what: string,
   maxRows = 20000,

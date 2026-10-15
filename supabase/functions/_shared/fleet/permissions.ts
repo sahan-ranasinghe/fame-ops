@@ -17,25 +17,62 @@
 // when an account is made or changed, and the backfill map below is what the
 // migration gave every existing account.
 
-export type Permission = "view" | "request" | "approve" | "assign_tasks" | "vehicles" | "issues" | "users";
+export type Permission =
+  | "view"
+  | "request"
+  | "approve"
+  | "assign_tasks"
+  | "vehicles"
+  | "issues"
+  | "users";
 
-export const PERMISSIONS: readonly Permission[] = ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"];
+export const PERMISSIONS: readonly Permission[] = [
+  "view",
+  "request",
+  "approve",
+  "assign_tasks",
+  "vehicles",
+  "issues",
+  "users",
+];
 
 /** What each permission means, in the words the Users page shows. */
-export const PERMISSION_TEXT: Record<Permission, { label: string; text: string }> = {
+export const PERMISSION_TEXT: Record<
+  Permission,
+  { label: string; text: string }
+> = {
   view: {
     label: "View",
-    text: "Overview counts and who is on the road, live locations, the drivers list, the vehicles board, your own requests",
+    text:
+      "Overview counts and who is on the road, live locations, the drivers list, the vehicles board, your own requests",
   },
-  request: { label: "Request", text: "Ask for a vehicle and follow your own requests" },
-  approve: { label: "Approve", text: "The requests queue: approve or decline, book a vehicle directly, cancel a booking" },
+  request: {
+    label: "Request",
+    text: "Ask for a vehicle and follow your own requests",
+  },
+  approve: {
+    label: "Approve",
+    text:
+      "The requests queue: approve or decline, book a vehicle directly, cancel a booking",
+  },
   assign_tasks: {
     label: "Assign tasks",
-    text: "The tasks board: assign, reassign and cancel tasks and their stops; task details, routes and task attention items",
+    text:
+      "The tasks board: assign, reassign and cancel tasks and their stops; task details, routes and task attention items",
   },
-  vehicles: { label: "Vehicles", text: "Register and edit vehicles, rental companies, places, driver accounts; mileage and maintenance" },
-  issues: { label: "Issues", text: "The issues centre, vehicle problem reports and every attention item" },
-  users: { label: "Users", text: "Settings: office users, connector keys, fleet settings" },
+  vehicles: {
+    label: "Vehicles",
+    text:
+      "Register and edit vehicles, rental companies, places, driver accounts; mileage and maintenance",
+  },
+  issues: {
+    label: "Issues",
+    text: "The issues centre, vehicle problem reports and every attention item",
+  },
+  users: {
+    label: "Users",
+    text: "Settings: office users, connector keys, fleet settings",
+  },
 };
 
 const V: readonly Permission[] = ["view"];
@@ -131,9 +168,25 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
 };
 
 /** The four buttons on the Users page. An admin is everything, so it is not a preset. */
-export const PRESETS: Record<"fleet_admin" | "dispatcher" | "requester" | "viewer", { label: string; permissions: Permission[] }> = {
-  fleet_admin: { label: "Fleet admin", permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues"] },
-  dispatcher: { label: "Dispatcher", permissions: ["view", "request", "assign_tasks"] },
+export const PRESETS: Record<
+  "fleet_admin" | "dispatcher" | "requester" | "viewer",
+  { label: string; permissions: Permission[] }
+> = {
+  fleet_admin: {
+    label: "Fleet admin",
+    permissions: [
+      "view",
+      "request",
+      "approve",
+      "assign_tasks",
+      "vehicles",
+      "issues",
+    ],
+  },
+  dispatcher: {
+    label: "Dispatcher",
+    permissions: ["view", "request", "assign_tasks"],
+  },
   requester: { label: "Requester", permissions: ["request"] },
   viewer: { label: "Viewer", permissions: ["view"] },
 };
@@ -157,7 +210,9 @@ export function permissionsForRole(role: string): Permission[] {
 }
 
 /** The label for a set of permissions (the role column). */
-export function roleForPermissions(permissions: readonly string[]): "admin" | "fleet_admin" | "office" | "staff" | "viewer" {
+export function roleForPermissions(
+  permissions: readonly string[],
+): "admin" | "fleet_admin" | "office" | "staff" | "viewer" {
   const has = (p: Permission) => permissions.includes(p);
   if (has("users")) return "admin";
   if (has("approve") || has("vehicles") || has("issues")) return "fleet_admin";
@@ -167,11 +222,14 @@ export function roleForPermissions(permissions: readonly string[]): "admin" | "f
 }
 
 export function isPermission(value: unknown): value is Permission {
-  return typeof value === "string" && (PERMISSIONS as readonly string[]).includes(value);
+  return typeof value === "string" &&
+    (PERMISSIONS as readonly string[]).includes(value);
 }
 
 /** Known permissions only, each once, in the table's order. */
-export function normalisePermissions(list: readonly unknown[] | null | undefined): Permission[] {
+export function normalisePermissions(
+  list: readonly unknown[] | null | undefined,
+): Permission[] {
   const set = new Set((list ?? []).filter(isPermission));
   return PERMISSIONS.filter((p) => set.has(p));
 }
@@ -183,11 +241,17 @@ export function allows(permissions: readonly string[], tool: string): boolean {
 }
 
 /** Any one of the given permissions. */
-export function hasAny(permissions: readonly string[], wanted: readonly Permission[]): boolean {
+export function hasAny(
+  permissions: readonly string[],
+  wanted: readonly Permission[],
+): boolean {
   return wanted.some((p) => permissions.includes(p));
 }
 
 /** The tools (of the given list, in its order) the permissions allow. */
-export function toolsFor(permissions: readonly string[], tools: readonly string[]): string[] {
+export function toolsFor(
+  permissions: readonly string[],
+  tools: readonly string[],
+): string[] {
   return tools.filter((tool) => allows(permissions, tool));
 }

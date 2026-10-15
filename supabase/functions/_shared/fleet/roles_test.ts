@@ -2,13 +2,23 @@ import { assertEquals } from "@std/assert";
 import { permissionsForRole } from "./permissions.ts";
 import { type Actor, canCall, mfaRequiredRoles, type Role } from "./roles.ts";
 
-const actorOf = (role: Role): Actor => ({ employeeId: "x", name: "x", role, permissions: permissionsForRole(role), channel: "web" });
+const actorOf = (role: Role): Actor => ({
+  employeeId: "x",
+  name: "x",
+  role,
+  permissions: permissionsForRole(role),
+  channel: "web",
+});
 
 Deno.test("REQUIRE_MFA_ROLES: empty means nobody, names are trimmed, unknown words ignored", () => {
   assertEquals(mfaRequiredRoles(undefined), []);
   assertEquals(mfaRequiredRoles(""), []);
   assertEquals(mfaRequiredRoles("admin"), ["admin"]);
-  assertEquals(mfaRequiredRoles(" admin, Fleet_Admin ,office"), ["admin", "fleet_admin", "office"]);
+  assertEquals(mfaRequiredRoles(" admin, Fleet_Admin ,office"), [
+    "admin",
+    "fleet_admin",
+    "office",
+  ]);
   assertEquals(mfaRequiredRoles("boss,admin,"), ["admin"]);
 });
 

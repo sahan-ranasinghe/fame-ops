@@ -15,7 +15,13 @@ import type { Db } from "./db.ts";
 import { ORS_GEOJSON_URLS, orsFetch } from "./orsHosts.ts";
 import type { Jump } from "./route.ts";
 import { simplifyKeep } from "./route.ts";
-import { bump, callsToday, ORS_DAILY_BUDGET, orsMinute, TIMEOUT_MS } from "./routing.ts";
+import {
+  bump,
+  callsToday,
+  ORS_DAILY_BUDGET,
+  orsMinute,
+  TIMEOUT_MS,
+} from "./routing.ts";
 import type { Settings } from "./settings.ts";
 
 export const GAP_PROVIDER = "ors_gap";
@@ -37,25 +43,44 @@ export interface EstimatedLine {
 const r4 = (n: number) => Math.round(n * 10000) / 10000;
 
 export function gapKey(j: Pick<Jump, "fromPoint" | "toPoint">) {
-  return { from_lat: r4(j.fromPoint.lat), from_lng: r4(j.fromPoint.lng), to_lat: r4(j.toPoint.lat), to_lng: r4(j.toPoint.lng) };
+  return {
+    from_lat: r4(j.fromPoint.lat),
+    from_lng: r4(j.fromPoint.lng),
+    to_lat: r4(j.toPoint.lat),
+    to_lng: r4(j.toPoint.lng),
+  };
 }
 
 /** The request body: [lng, lat] pairs, the fastest road, no instructions. */
 export function gapRequestBody(j: Pick<Jump, "fromPoint" | "toPoint">) {
   return {
-    coordinates: [[j.fromPoint.lng, j.fromPoint.lat], [j.toPoint.lng, j.toPoint.lat]],
+    coordinates: [[j.fromPoint.lng, j.fromPoint.lat], [
+      j.toPoint.lng,
+      j.toPoint.lat,
+    ]],
     preference: "fastest",
     instructions: false,
   };
 }
 
 /** The GeoJSON answer's line as [lat, lng], thinned to 8 m (at most 400 points), and its km. */
-export function gapGeometry(json: unknown): { points: [number, number][]; km: number | null } {
-  const f = (json as { features?: { geometry?: { coordinates?: number[][] }; properties?: { summary?: { distance?: number } } }[] } | null)
+export function gapGeometry(
+  json: unknown,
+): { points: [number, number][]; km: number | null } {
+  const f = (json as {
+    features?: {
+      geometry?: { coordinates?: number[][] };
+      properties?: { summary?: { distance?: number } };
+    }[];
+  } | null)
     ?.features?.[0];
   const coords = f?.geometry?.coordinates;
-  if (!Array.isArray(coords) || coords.length < 2) throw new Error("openrouteservice: no line in the answer");
-  const all = coords.filter((c) => Array.isArray(c) && typeof c[0] === "number" && typeof c[1] === "number").map((c) => ({ lat: c[1], lng: c[0] }));
+  if (!Array.isArray(coords) || coords.length < 2) {
+    throw new Error("openrouteservice: no line in the answer");
+  }
+  const all = coords.filter((c) =>
+    Array.isArray(c) && typeof c[0] === "number" && typeof c[1] === "number"
+  ).map((c) => ({ lat: c[1], lng: c[0] }));
   let tolerance = GAP_SIMPLIFY_M;
   let kept = all;
   for (let i = 0; i < 6; i++) {
@@ -66,7 +91,9 @@ export function gapGeometry(json: unknown): { points: [number, number][]; km: nu
   }
   const distance = f?.properties?.summary?.distance;
   return {
-    points: kept.map((p) => [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lng * 1e6) / 1e6]),
+    points: kept.map((
+      p,
+    ) => [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lng * 1e6) / 1e6]),
     km: typeof distance === "number" ? Math.round(distance / 100) / 10 : null,
   };
 }
@@ -82,28 +109,49 @@ export async function estimatedLines(
   fetchFn: Fetcher = (url, init) => fetch(url, init),
 ): Promise<{ lines: EstimatedLine[]; note?: string }> {
   if (jumps.length === 0) return { lines: [] };
-  const since = new Date(now.getTime() - GAP_CACHE_DAYS * 86400000).toISOString();
+  const since = new Date(now.getTime() - GAP_CACHE_DAYS * 86400000)
+    .toISOString();
   const lines: EstimatedLine[] = [];
   const misses: Jump[] = [];
   for (const j of jumps) {
     const k = gapKey(j);
-    const { data } = await db.from("route_gap_lines").select("geometry, km").match(k).gte("fetched_at", since).maybeSingle();
-    if (data && Array.isArray(data.geometry)) lines.push({ from: j.from, to: j.to, points: data.geometry as [number, number][], km: data.km, cached: true });
-    else misses.push(j);
+    const { data } = await db.from("route_gap_lines").select("geometry, km")
+      .match(k).gte("fetched_at", since).maybeSingle();
+    if (data && Array.isArray(data.geometry)) {
+      lines.push({
+        from: j.from,
+        to: j.to,
+        points: data.geometry as [number, number][],
+        km: data.km,
+        cached: true,
+      });
+    } else misses.push(j);
   }
   if (misses.length === 0) return { lines };
   const key = Deno.env.get("ORS_KEY");
-  if (!key) return { lines, note: "Estimated lines need the openrouteservice key: the other gaps are straight" };
+  if (!key) {
+    return {
+      lines,
+      note:
+        "Estimated lines need the openrouteservice key: the other gaps are straight",
+    };
+  }
   let note: string | undefined;
   let made = 0;
   for (const j of misses) {
     if (made >= GAP_NEW_PER_ROUTE) {
-      note = `${misses.length - made} more gaps are straight: at most ${GAP_NEW_PER_ROUTE} new estimated lines a view`;
+      note = `${
+        misses.length - made
+      } more gaps are straight: at most ${GAP_NEW_PER_ROUTE} new estimated lines a view`;
       break;
     }
-    const [mine, ors] = await Promise.all([callsToday(db, GAP_PROVIDER), callsToday(db, "ors")]);
+    const [mine, ors] = await Promise.all([
+      callsToday(db, GAP_PROVIDER),
+      callsToday(db, "ors"),
+    ]);
     if (mine >= settings.ors_gap_daily_cap || mine + ors >= ORS_DAILY_BUDGET) {
-      note = "Estimated line limit reached for today: the other gaps are straight";
+      note =
+        "Estimated line limit reached for today: the other gaps are straight";
       break;
     }
     if (!orsMinute()) {
@@ -112,22 +160,45 @@ export async function estimatedLines(
     }
     made += 1;
     try {
-      const res = await orsFetch(ORS_GEOJSON_URLS, {
-        method: "POST",
-        headers: { Authorization: key, "Content-Type": "application/json", Accept: "application/geo+json, application/json" },
-        body: JSON.stringify(gapRequestBody(j)),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      }, "", fetchFn as typeof fetch);
+      const res = await orsFetch(
+        ORS_GEOJSON_URLS,
+        {
+          method: "POST",
+          headers: {
+            Authorization: key,
+            "Content-Type": "application/json",
+            Accept: "application/geo+json, application/json",
+          },
+          body: JSON.stringify(gapRequestBody(j)),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        },
+        "",
+        fetchFn as typeof fetch,
+      );
       const json = await res.json();
       if (!res.ok) throw new Error(`ors ${res.status}`);
       const g = gapGeometry(json);
       await bump(db, GAP_PROVIDER, true);
-      await db.from("route_gap_lines").upsert({ ...gapKey(j), geometry: g.points, km: g.km, provider: "ors", fetched_at: now.toISOString() }, {
+      await db.from("route_gap_lines").upsert({
+        ...gapKey(j),
+        geometry: g.points,
+        km: g.km,
+        provider: "ors",
+        fetched_at: now.toISOString(),
+      }, {
         onConflict: "from_lat,from_lng,to_lat,to_lng",
       }).then(() => undefined, () => undefined);
-      lines.push({ from: j.from, to: j.to, points: g.points, km: g.km, cached: false });
+      lines.push({
+        from: j.from,
+        to: j.to,
+        points: g.points,
+        km: g.km,
+        cached: false,
+      });
     } catch (error) {
-      console.error(`gap line: ${error instanceof Error ? error.message : String(error)}`);
+      console.error(
+        `gap line: ${error instanceof Error ? error.message : String(error)}`,
+      );
       await bump(db, GAP_PROVIDER, false);
       note = "openrouteservice did not answer for some gaps: they are straight";
     }

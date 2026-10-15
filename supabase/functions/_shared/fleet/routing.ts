@@ -21,7 +21,15 @@
 import type { Db } from "./db.ts";
 import { unwrap, unwrapMaybe } from "./db.ts";
 import { haversineKm } from "./geo.ts";
-import { type Fetcher, GOOGLE_MAX_INTERMEDIATES, googleUse, guarded, routesRequest, routesResponse, send } from "./google.ts";
+import {
+  type Fetcher,
+  GOOGLE_MAX_INTERMEDIATES,
+  googleUse,
+  guarded,
+  routesRequest,
+  routesResponse,
+  send,
+} from "./google.ts";
 import type { LegFn, LegResult, LegSource, PlanPoint } from "./plan.ts";
 import type { RushHour, Settings } from "./settings.ts";
 import { ORS_DIRECTIONS_URLS, orsFetch } from "./orsHosts.ts";
@@ -38,7 +46,9 @@ export const TIMEOUT_MS = 5000;
 const ORS_HIGHWAY_BIT = 1;
 const COLOMBO_OFFSET_MS = 5.5 * 3600000;
 
-export function providerFromEnv(value: string | undefined | null): "ors" | "estimate" {
+export function providerFromEnv(
+  value: string | undefined | null,
+): "ors" | "estimate" {
   const v = (value ?? "").trim().toLowerCase();
   return v === "ors" || v === "google" ? "ors" : "estimate";
 }
@@ -56,7 +66,12 @@ export interface LegAnswer {
 }
 
 /** openrouteservice wants [lng, lat] pairs. */
-export function orsRequest(from: PlanPoint, to: PlanPoint, opts: { avoid_expressway: boolean }, key: string): HttpRequest {
+export function orsRequest(
+  from: PlanPoint,
+  to: PlanPoint,
+  opts: { avoid_expressway: boolean },
+  key: string,
+): HttpRequest {
   const body: Record<string, unknown> = {
     coordinates: [[from.lng, from.lat], [to.lng, to.lat]],
     preference: "fastest",
@@ -64,36 +79,74 @@ export function orsRequest(from: PlanPoint, to: PlanPoint, opts: { avoid_express
     instructions: false,
   };
   if (opts.avoid_expressway) body.options = { avoid_features: ["highways"] };
-  return { url: ORS_URL, headers: { Authorization: key, "Content-Type": "application/json", Accept: "application/json" }, body };
+  return {
+    url: ORS_URL,
+    headers: {
+      Authorization: key,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body,
+  };
 }
 
 /** The first route's summary (metres, seconds) and whether any segment is a highway. */
 export function orsResponse(json: unknown): LegAnswer {
-  const route =
-    (json as { routes?: { summary?: { distance?: number; duration?: number }; extras?: { waycategory?: { values?: number[][] } } }[] })
-      ?.routes?.[0];
-  if (!route?.summary || typeof route.summary.distance !== "number" || typeof route.summary.duration !== "number") {
+  const route = (json as {
+    routes?: {
+      summary?: { distance?: number; duration?: number };
+      extras?: { waycategory?: { values?: number[][] } };
+    }[];
+  })
+    ?.routes?.[0];
+  if (
+    !route?.summary || typeof route.summary.distance !== "number" ||
+    typeof route.summary.duration !== "number"
+  ) {
     throw new Error("openrouteservice: no route in the answer");
   }
   const values = route.extras?.waycategory?.values ?? [];
-  const via = values.some((row) => Array.isArray(row) && typeof row[2] === "number" && (row[2] & ORS_HIGHWAY_BIT) === ORS_HIGHWAY_BIT);
-  return { km: Math.round(route.summary.distance / 100) / 10, minutes: Math.round(route.summary.duration / 6) / 10, via_expressway: via };
+  const via = values.some((row) =>
+    Array.isArray(row) && typeof row[2] === "number" &&
+    (row[2] & ORS_HIGHWAY_BIT) === ORS_HIGHWAY_BIT
+  );
+  return {
+    km: Math.round(route.summary.distance / 100) / 10,
+    minutes: Math.round(route.summary.duration / 6) / 10,
+    via_expressway: via,
+  };
 }
 
 /** Straight line × road_factor at avg_speed_kmh. */
-export function estimateLeg(from: PlanPoint, to: PlanPoint, s: Pick<Settings, "avg_speed_kmh" | "road_factor">): LegAnswer {
+export function estimateLeg(
+  from: PlanPoint,
+  to: PlanPoint,
+  s: Pick<Settings, "avg_speed_kmh" | "road_factor">,
+): LegAnswer {
   const km = Math.round(haversineKm(from, to) * s.road_factor * 10) / 10;
-  return { km, minutes: Math.round((km / s.avg_speed_kmh) * 600) / 10, via_expressway: null };
+  return {
+    km,
+    minutes: Math.round((km / s.avg_speed_kmh) * 600) / 10,
+    via_expressway: null,
+  };
 }
 
 /** The factor for a leg that starts or ends within the radius of the centre and departs inside a band on one of its days (Colombo time). */
-export function rushHourFactor(from: PlanPoint, to: PlanPoint, departAt: string, rush: RushHour): number {
-  const near = haversineKm(from, rush.centre) <= rush.radius_km || haversineKm(to, rush.centre) <= rush.radius_km;
+export function rushHourFactor(
+  from: PlanPoint,
+  to: PlanPoint,
+  departAt: string,
+  rush: RushHour,
+): number {
+  const near = haversineKm(from, rush.centre) <= rush.radius_km ||
+    haversineKm(to, rush.centre) <= rush.radius_km;
   if (!near) return 1;
   const local = new Date(new Date(departAt).getTime() + COLOMBO_OFFSET_MS);
   const day = local.getUTCDay();
   const hhmm = local.toISOString().slice(11, 16);
-  const inBand = rush.bands.some((b) => b.days.includes(day) && hhmm >= b.from && hhmm < b.to);
+  const inBand = rush.bands.some((b) =>
+    b.days.includes(day) && hhmm >= b.from && hhmm < b.to
+  );
   return inBand ? rush.factor : 1;
 }
 
@@ -109,8 +162,20 @@ export interface CacheKey {
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Coordinates rounded to 3 decimals (about 110 m): one cached leg serves every departure time. */
-export function cacheKey(from: PlanPoint, to: PlanPoint, avoid: boolean, provider: Provider): CacheKey {
-  return { from_lat: r3(from.lat), from_lng: r3(from.lng), to_lat: r3(to.lat), to_lng: r3(to.lng), avoid_expressway: avoid, provider };
+export function cacheKey(
+  from: PlanPoint,
+  to: PlanPoint,
+  avoid: boolean,
+  provider: Provider,
+): CacheKey {
+  return {
+    from_lat: r3(from.lat),
+    from_lng: r3(from.lng),
+    to_lat: r3(to.lat),
+    to_lng: r3(to.lng),
+    avoid_expressway: avoid,
+    provider,
+  };
 }
 
 /** A small per-isolate limiter: at most n calls in any 60 s. */
@@ -130,10 +195,13 @@ export const orsMinute = minuteLimiter(ORS_PER_MINUTE);
 async function cached(db: Db, key: CacheKey): Promise<LegAnswer | null> {
   const since = new Date(Date.now() - CACHE_DAYS * 86400000).toISOString();
   const row = unwrapMaybe(
-    await db.from("route_legs").select("km, minutes, via_expressway").match(key).gte("computed_at", since).maybeSingle(),
+    await db.from("route_legs").select("km, minutes, via_expressway").match(key)
+      .gte("computed_at", since).maybeSingle(),
     "route cache",
   );
-  return row ? { km: row.km, minutes: row.minutes, via_expressway: row.via_expressway } : null;
+  return row
+    ? { km: row.km, minutes: row.minutes, via_expressway: row.via_expressway }
+    : null;
 }
 
 async function store(db: Db, key: CacheKey, leg: LegAnswer): Promise<void> {
@@ -152,16 +220,29 @@ async function store(db: Db, key: CacheKey, leg: LegAnswer): Promise<void> {
 }
 
 export async function callsToday(db: Db, provider: string): Promise<number> {
-  const day = new Date(Date.now() + COLOMBO_OFFSET_MS).toISOString().slice(0, 10);
+  const day = new Date(Date.now() + COLOMBO_OFFSET_MS).toISOString().slice(
+    0,
+    10,
+  );
   const row = unwrapMaybe(
-    await db.from("routing_calls").select("calls").eq("day", day).eq("provider", provider).maybeSingle(),
+    await db.from("routing_calls").select("calls").eq("day", day).eq(
+      "provider",
+      provider,
+    ).maybeSingle(),
     "routing calls",
   );
   return row?.calls ?? 0;
 }
 
-export async function bump(db: Db, provider: string, ok: boolean): Promise<void> {
-  await db.rpc("bump_routing_calls", { p_provider: provider, p_ok: ok }).then(() => undefined, () => undefined);
+export async function bump(
+  db: Db,
+  provider: string,
+  ok: boolean,
+): Promise<void> {
+  await db.rpc("bump_routing_calls", { p_provider: provider, p_ok: ok }).then(
+    () => undefined,
+    () => undefined,
+  );
 }
 
 async function callOrs(
@@ -173,10 +254,18 @@ async function callOrs(
   const key = Deno.env.get("ORS_KEY");
   if (!key) return null;
   // The directions quota is shared with the gaps' estimated lines (ors_gap): together never over the budget.
-  if ((await callsToday(db, "ors")) + (await callsToday(db, "ors_gap")) >= ORS_DAILY_BUDGET || !orsMinute()) return null;
+  if (
+    (await callsToday(db, "ors")) + (await callsToday(db, "ors_gap")) >=
+      ORS_DAILY_BUDGET || !orsMinute()
+  ) return null;
   const req = orsRequest(from, to, opts, key);
   try {
-    const init = { method: "POST", headers: req.headers, body: JSON.stringify(req.body), signal: AbortSignal.timeout(TIMEOUT_MS) };
+    const init = {
+      method: "POST",
+      headers: req.headers,
+      body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    };
     const res = await orsFetch(ORS_DIRECTIONS_URLS, init);
     const json = await res.json();
     if (!res.ok) throw new Error(`ors ${res.status}`);
@@ -184,7 +273,9 @@ async function callOrs(
     await bump(db, "ors", true);
     return leg;
   } catch (error) {
-    console.error(`routing ors: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `routing ors: ${error instanceof Error ? error.message : String(error)}`,
+    );
     await bump(db, "ors", false);
     return null;
   }
@@ -204,7 +295,11 @@ export async function legMinutes(
 ): Promise<LegResult> {
   const provider = providerFromEnv(Deno.env.get("ROUTING_PROVIDER"));
   const factor = rushHourFactor(from, to, departAt, settings.rush_hour);
-  const withFactor = (leg: LegAnswer, source: Provider, isCached: boolean): LegResult => ({
+  const withFactor = (
+    leg: LegAnswer,
+    source: Provider,
+    isCached: boolean,
+  ): LegResult => ({
     km: leg.km,
     minutes: Math.round(leg.minutes * factor * 10) / 10,
     source,
@@ -227,7 +322,8 @@ export async function legMinutes(
 }
 
 /** The key of a leg between two points, for the legs one Google call answered. */
-export const legKey = (from: PlanPoint, to: PlanPoint) => `${from.lat},${from.lng}>${to.lat},${to.lng}`;
+export const legKey = (from: PlanPoint, to: PlanPoint) =>
+  `${from.lat},${from.lng}>${to.lat},${to.lng}`;
 
 /**
  * Every leg of a sequence of points from one Google Routes call (TRAFFIC_AWARE, the stops as
@@ -244,21 +340,42 @@ export async function googleLegs(
   fetchFn: Fetcher = fetch,
 ): Promise<{ legs: Map<string, LegResult> } | { note: string }> {
   const key = Deno.env.get("GOOGLE_SERVER_KEY");
-  if (!googleUse(settings).routes || !key) return { note: "Google road times are not in use" };
+  if (!googleUse(settings).routes || !key) {
+    return { note: "Google road times are not in use" };
+  }
   if (points.length < 2) return { legs: new Map() };
-  if (points.length - 2 > GOOGLE_MAX_INTERMEDIATES) return { note: "Too many stops for one Google call" };
-  const r = await guarded(db, "routes", settings.google_caps, async () =>
-    routesResponse(await send(routesRequest(points, departAt, key, opts, now), fetchFn), points.length - 1));
+  if (points.length - 2 > GOOGLE_MAX_INTERMEDIATES) {
+    return { note: "Too many stops for one Google call" };
+  }
+  const r = await guarded(
+    db,
+    "routes",
+    settings.google_caps,
+    async () =>
+      routesResponse(
+        await send(routesRequest(points, departAt, key, opts, now), fetchFn),
+        points.length - 1,
+      ),
+  );
   if (!r.ok) return { note: r.note };
   const legs = new Map<string, LegResult>();
   r.value.forEach((leg, i) => {
-    legs.set(legKey(points[i], points[i + 1]), { km: leg.km, minutes: leg.minutes, source: "google", via_expressway: null, factor: 1 });
+    legs.set(legKey(points[i], points[i + 1]), {
+      km: leg.km,
+      minutes: leg.minutes,
+      source: "google",
+      via_expressway: null,
+      factor: 1,
+    });
   });
   return { legs };
 }
 
 /** A leg function that answers from one Google call's legs, and from `fallback` for any other. */
-export function memoLegFn(legs: Map<string, LegResult>, fallback: LegFn): LegFn {
+export function memoLegFn(
+  legs: Map<string, LegResult>,
+  fallback: LegFn,
+): LegFn {
   return (from, to, departAt, opts) => {
     const hit = legs.get(legKey(from, to));
     return hit ? Promise.resolve(hit) : fallback(from, to, departAt, opts);
@@ -270,12 +387,22 @@ export function estimateLegFn(settings: Settings): LegFn {
   return (from, to, departAt) => {
     const leg = estimateLeg(from, to, settings);
     const factor = rushHourFactor(from, to, departAt, settings.rush_hour);
-    return Promise.resolve({ km: leg.km, minutes: Math.round(leg.minutes * factor * 10) / 10, source: "estimate", via_expressway: null, factor });
+    return Promise.resolve({
+      km: leg.km,
+      minutes: Math.round(leg.minutes * factor * 10) / 10,
+      source: "estimate",
+      via_expressway: null,
+      factor,
+    });
   };
 }
 
 /** The leg function the planner takes, bound to a database and the settings. */
 export function legFnFor(db: Db, settings: Settings) {
-  return (from: PlanPoint, to: PlanPoint, departAt: string, opts: { avoid_expressway: boolean }) =>
-    legMinutes(db, from, to, departAt, opts, settings);
+  return (
+    from: PlanPoint,
+    to: PlanPoint,
+    departAt: string,
+    opts: { avoid_expressway: boolean },
+  ) => legMinutes(db, from, to, departAt, opts, settings);
 }

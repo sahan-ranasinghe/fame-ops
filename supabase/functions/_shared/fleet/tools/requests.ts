@@ -28,11 +28,35 @@ import { contactLinks } from "../format.ts";
 import { notifyEvent } from "../notifications.ts";
 import { hasAny } from "../permissions.ts";
 import type { Actor } from "../roles.ts";
-import { ago, colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
-import { realDate, tool, zDate, zId, zText, zTime, zVehicleType } from "../tool.ts";
+import {
+  ago,
+  colomboDate,
+  colomboDateTime,
+  colomboDayTime,
+  colomboTime,
+  dayRange,
+  utcIso,
+} from "../time.ts";
+import {
+  realDate,
+  tool,
+  zDate,
+  zId,
+  zText,
+  zTime,
+  zVehicleType,
+} from "../tool.ts";
 import { matchProjects } from "./projects.ts";
 import { loadSettings } from "../settings.ts";
-import { canRedecide, checkVersion, diffText, requestDiff, type RequestFields, snapshot, statusAfterEdit } from "../requests_rules.ts";
+import {
+  canRedecide,
+  checkVersion,
+  diffText,
+  requestDiff,
+  type RequestFields,
+  snapshot,
+  statusAfterEdit,
+} from "../requests_rules.ts";
 import {
   activeDriver,
   activeVehicle,
@@ -50,32 +74,57 @@ type VehicleRequest = Row<"vehicle_requests">;
 type RequestEvent = Row<"request_events">;
 type EventAction = RequestEvent["action"];
 
-const TYPE_NAME: Record<string, string> = { car: "Car", van: "Van", double_cab: "Double cab", lorry: "Lorry", other: "Other" };
+const TYPE_NAME: Record<string, string> = {
+  car: "Car",
+  van: "Van",
+  double_cab: "Double cab",
+  lorry: "Lorry",
+  other: "Other",
+};
 
 /** "Van · 6 pax + tools" */
-function needText(r: Pick<VehicleRequest, "need_type" | "pax" | "tools">): string {
-  const parts = [r.need_type ? TYPE_NAME[r.need_type] ?? r.need_type : "Any vehicle"];
+function needText(
+  r: Pick<VehicleRequest, "need_type" | "pax" | "tools">,
+): string {
+  const parts = [
+    r.need_type ? TYPE_NAME[r.need_type] ?? r.need_type : "Any vehicle",
+  ];
   if (r.pax != null) parts.push(`${r.pax} pax`);
   return parts.join(" · ") + (r.tools ? " + tools" : "");
 }
 
-const by = (at: string | null, who: string | null) => at ? `${colomboDateTime(at)}${who ? ` by ${who}` : ""}` : undefined;
+const by = (at: string | null, who: string | null) =>
+  at ? `${colomboDateTime(at)}${who ? ` by ${who}` : ""}` : undefined;
 
 function eventCard(e: RequestEvent) {
-  return { at: colomboDateTime(e.at), action: e.action, actor: e.actor ?? undefined, note: e.note ?? undefined, changes: e.changes ?? undefined };
+  return {
+    at: colomboDateTime(e.at),
+    action: e.action,
+    actor: e.actor ?? undefined,
+    note: e.note ?? undefined,
+    changes: e.changes ?? undefined,
+  };
 }
 
-function requestCard(r: VehicleRequest, now: Date, events: RequestEvent[] = []) {
-  const sameDay = r.back_by && colomboDate(r.back_by) === colomboDate(r.needed_at);
+function requestCard(
+  r: VehicleRequest,
+  now: Date,
+  events: RequestEvent[] = [],
+) {
+  const sameDay = r.back_by &&
+    colomboDate(r.back_by) === colomboDate(r.needed_at);
   // Decided = approved or declined (a cancelled booking was approved first; a cancelled waiting request was never decided).
-  const decided = r.status === "approved" || r.status === "changed" || r.status === "declined" || (r.status === "cancelled" && r.task_id);
+  const decided = r.status === "approved" || r.status === "changed" ||
+    r.status === "declined" || (r.status === "cancelled" && r.task_id);
   return {
     id: r.id,
     requested_by: r.requested_by_name,
     on_behalf_of: r.on_behalf_of ?? undefined,
     project: r.project_label,
     when: colomboDayTime(r.needed_at),
-    back_by: r.back_by ? (sameDay ? colomboTime(r.back_by) : colomboDayTime(r.back_by)) : undefined,
+    back_by: r.back_by
+      ? (sameDay ? colomboTime(r.back_by) : colomboDayTime(r.back_by))
+      : undefined,
     route: [r.route_from, r.route_to].filter(Boolean).join(" → ") || undefined,
     need: needText(r),
     note: r.note,
@@ -104,8 +153,16 @@ function requestCard(r: VehicleRequest, now: Date, events: RequestEvent[] = []) 
       on_behalf_of: r.on_behalf_of ?? undefined,
     },
     // An approved booking the requester edited: what changed since it was approved, until it is decided again.
-    changed: r.changed_at ? { at: colomboDateTime(r.changed_at), by: r.changed_by ?? undefined, note: r.change_note ?? undefined } : undefined,
-    changes: r.status === "changed" && r.previous ? requestDiff(r.previous as unknown as RequestFields, snapshot(r)) : undefined,
+    changed: r.changed_at
+      ? {
+        at: colomboDateTime(r.changed_at),
+        by: r.changed_by ?? undefined,
+        note: r.change_note ?? undefined,
+      }
+      : undefined,
+    changes: r.status === "changed" && r.previous
+      ? requestDiff(r.previous as unknown as RequestFields, snapshot(r))
+      : undefined,
     timeline: {
       sent: colomboDateTime(r.created_at),
       seen: by(r.seen_at, r.seen_by),
@@ -122,10 +179,15 @@ function requestCard(r: VehicleRequest, now: Date, events: RequestEvent[] = []) 
 async function requestCards(db: Db, rows: VehicleRequest[], now: Date) {
   if (rows.length === 0) return [];
   const events = unwrap(
-    await db.from("request_events").select("*").in("request_id", rows.map((r) => r.id)).order("at").order("id").limit(5000),
+    await db.from("request_events").select("*").in(
+      "request_id",
+      rows.map((r) => r.id),
+    ).order("at").order("id").limit(5000),
     "request events",
   );
-  return rows.map((r) => requestCard(r, now, events.filter((e) => e.request_id === r.id)));
+  return rows.map((r) =>
+    requestCard(r, now, events.filter((e) => e.request_id === r.id))
+  );
 }
 
 async function requestCardOf(db: Db, row: VehicleRequest, now: Date) {
@@ -138,7 +200,11 @@ async function logRequestEvent(
   requestId: string,
   action: EventAction,
   actor: string | null,
-  extra: { note?: string | null; changes?: Record<string, unknown> | null; at?: string } = {},
+  extra: {
+    note?: string | null;
+    changes?: Record<string, unknown> | null;
+    at?: string;
+  } = {},
 ): Promise<void> {
   const { error } = await db.from("request_events").insert({
     request_id: requestId,
@@ -148,12 +214,23 @@ async function logRequestEvent(
     changes: (extra.changes ?? null) as Json,
     ...(extra.at && { at: extra.at }),
   });
-  if (error) console.error(`request_events ${action} for ${requestId}: ${error.message}`);
+  if (error) {
+    console.error(
+      `request_events ${action} for ${requestId}: ${error.message}`,
+    );
+  }
 }
 
 async function getRequest(db: Db, id: string): Promise<VehicleRequest> {
-  const request = unwrapMaybe(await db.from("vehicle_requests").select("*").eq("id", id).maybeSingle(), "vehicle request");
-  if (!request) throw new ToolError(`No vehicle request has the id ${id}. Use list_requests to find it.`);
+  const request = unwrapMaybe(
+    await db.from("vehicle_requests").select("*").eq("id", id).maybeSingle(),
+    "vehicle request",
+  );
+  if (!request) {
+    throw new ToolError(
+      `No vehicle request has the id ${id}. Use list_requests to find it.`,
+    );
+  }
   return request;
 }
 
@@ -161,7 +238,11 @@ async function getRequest(db: Db, id: string): Promise<VehicleRequest> {
 async function actorUserId(db: Db, actor: Actor): Promise<string | null> {
   if (actor.authUserId) return actor.authUserId;
   if (!actor.employeeId) return null;
-  const row = unwrapMaybe(await db.from("employees").select("auth_user_id").eq("id", actor.employeeId).maybeSingle(), "employee");
+  const row = unwrapMaybe(
+    await db.from("employees").select("auth_user_id").eq("id", actor.employeeId)
+      .maybeSingle(),
+    "employee",
+  );
   return row?.auth_user_id ?? null;
 }
 
@@ -173,67 +254,118 @@ async function requester(
 ): Promise<{ name: string; employeeId: string | null; userId: string | null }> {
   const userId = await actorUserId(db, actor);
   const staff = !hasAny(actor.permissions, ["approve", "assign_tasks"]);
-  if (staff || !typed) return { name: actor.name, employeeId: actor.employeeId, userId };
+  if (staff || !typed) {
+    return { name: actor.name, employeeId: actor.employeeId, userId };
+  }
   const want = typed.toLowerCase();
-  const employee = unwrap(await db.from("employees").select("id, name, code").eq("active", true).limit(1000), "employees")
-    .find((e) => e.name.toLowerCase() === want || e.code.toLowerCase() === want);
+  const employee = unwrap(
+    await db.from("employees").select("id, name, code").eq("active", true)
+      .limit(1000),
+    "employees",
+  )
+    .find((e) =>
+      e.name.toLowerCase() === want || e.code.toLowerCase() === want
+    );
   return { name: typed, employeeId: employee?.id ?? null, userId };
 }
 
 /** The first time someone who approves opens a waiting request, it counts as seen (the requester's timeline). */
-async function markSeen(db: Db, request: VehicleRequest, actor: Actor, now: Date): Promise<VehicleRequest> {
-  if (request.seen_at || request.status !== "waiting" || !actor.permissions.includes("approve")) return request;
+async function markSeen(
+  db: Db,
+  request: VehicleRequest,
+  actor: Actor,
+  now: Date,
+): Promise<VehicleRequest> {
+  if (
+    request.seen_at || request.status !== "waiting" ||
+    !actor.permissions.includes("approve")
+  ) return request;
   const rows = unwrap(
-    await db.from("vehicle_requests").update({ seen_at: now.toISOString(), seen_by: actor.name }).eq("id", request.id).is("seen_at", null)
+    await db.from("vehicle_requests").update({
+      seen_at: now.toISOString(),
+      seen_by: actor.name,
+    }).eq("id", request.id).is("seen_at", null)
       .select("*"),
     "vehicle request",
   );
-  if (rows[0]) await logRequestEvent(db, request.id, "seen", actor.name, { at: now.toISOString() });
+  if (rows[0]) {
+    await logRequestEvent(db, request.id, "seen", actor.name, {
+      at: now.toISOString(),
+    });
+  }
   return rows[0] ?? request;
 }
 
-const SELF_DRIVE_OFF = "Self-drive bookings are switched off (Settings → Fleet, self_drive_allowed): give a driver.";
+const SELF_DRIVE_OFF =
+  "Self-drive bookings are switched off (Settings → Fleet, self_drive_allowed): give a driver.";
 
 /** The driver of a booking: the one named, or the vehicle's custodian when no driver is needed (and self-drive is allowed). */
-function pickDriver(refs: Refs, typed: string | undefined, driverRequired: boolean, vehicle: Vehicle, selfDrive: boolean): Employee {
+function pickDriver(
+  refs: Refs,
+  typed: string | undefined,
+  driverRequired: boolean,
+  vehicle: Vehicle,
+  selfDrive: boolean,
+): Employee {
   if (typed) return activeDriver(refs, typed);
   if (!driverRequired) {
     if (!selfDrive) throw new ToolError(SELF_DRIVE_OFF);
-    const custodian = vehicle.custodian_employee_id ? refs.emp.get(vehicle.custodian_employee_id) : undefined;
+    const custodian = vehicle.custodian_employee_id
+      ? refs.emp.get(vehicle.custodian_employee_id)
+      : undefined;
     if (custodian?.active) return custodian;
-    throw new ToolError(`${vehicle.reg_no} has no custodian to drive it: give a driver.`);
+    throw new ToolError(
+      `${vehicle.reg_no} has no custodian to drive it: give a driver.`,
+    );
   }
-  throw new ToolError("Give a driver, or set driver_required to false so the vehicle's custodian drives it.");
+  throw new ToolError(
+    "Give a driver, or set driver_required to false so the vehicle's custodian drives it.",
+  );
 }
 
 /** Warnings about the vehicle against what was asked for (never blocks). */
-function fitWarnings(vehicle: Vehicle, need: { need_type?: string | null; pax?: number | null }): string[] {
+function fitWarnings(
+  vehicle: Vehicle,
+  need: { need_type?: string | null; pax?: number | null },
+): string[] {
   const out: string[] = [];
   if (need.need_type && vehicle.vehicle_type !== need.need_type) {
     out.push(
-      `${vehicle.reg_no} is a ${(TYPE_NAME[vehicle.vehicle_type] ?? vehicle.vehicle_type).toLowerCase()}, not a ${
-        TYPE_NAME[need.need_type]?.toLowerCase()
-      }.`,
+      `${vehicle.reg_no} is a ${
+        (TYPE_NAME[vehicle.vehicle_type] ?? vehicle.vehicle_type).toLowerCase()
+      }, not a ${TYPE_NAME[need.need_type]?.toLowerCase()}.`,
     );
   }
   if (need.pax != null && vehicle.seats != null && vehicle.seats < need.pax) {
-    out.push(`${vehicle.reg_no} has ${vehicle.seats} seats for ${need.pax} passengers.`);
+    out.push(
+      `${vehicle.reg_no} has ${vehicle.seats} seats for ${need.pax} passengers.`,
+    );
   }
   return out;
 }
 
 const requestFields = {
-  project: zText(200).optional().describe('Project or team it is for: job number, short name, or a plain label such as "HR"'),
+  project: zText(200).optional().describe(
+    'Project or team it is for: job number, short name, or a plain label such as "HR"',
+  ),
   date: zDate.describe("Day the vehicle is needed, YYYY-MM-DD"),
   time: zTime.describe("Time it is needed, HH:MM"),
-  back_by: zTime.optional().describe("Time it will be back the same day, HH:MM"),
+  back_by: zTime.optional().describe(
+    "Time it will be back the same day, HH:MM",
+  ),
   route_from: zText(160).optional(),
   route_to: zText(160).optional(),
   need_type: zVehicleType.optional().describe("Kind of vehicle needed"),
-  pax: z.number().int().min(0).max(80).optional().describe("Number of passengers"),
-  tools: z.boolean().optional().describe("true if tools or equipment travel too"),
+  pax: z.number().int().min(0).max(80).optional().describe(
+    "Number of passengers",
+  ),
+  tools: z.boolean().optional().describe(
+    "true if tools or equipment travel too",
+  ),
   note: zText(1000).optional(),
-  driver_required: z.boolean().optional().describe("false when no driver is needed: the vehicle's custodian drives. Default true"),
+  driver_required: z.boolean().optional().describe(
+    "false when no driver is needed: the vehicle's custodian drives. Default true",
+  ),
 };
 
 export const createRequest = tool({
@@ -245,19 +377,30 @@ export const createRequest = tool({
     "for when it is not the asker, who stays the one notified.",
   readOnly: false,
   input: z.object({
-    requested_by: zText(120).optional().describe("Who asks. Default: you (someone who can neither approve nor assign always asks in their own name)"),
-    on_behalf_of: zText(120).optional().describe("The person the vehicle is for, when it is not the asker"),
+    requested_by: zText(120).optional().describe(
+      "Who asks. Default: you (someone who can neither approve nor assign always asks in their own name)",
+    ),
+    on_behalf_of: zText(120).optional().describe(
+      "The person the vehicle is for, when it is not the asker",
+    ),
     ...requestFields,
   }),
   async run(args, { db, now, actor }) {
     realDate(args.date);
     const neededAt = utcIso(args.date, args.time);
     const backBy = args.back_by ? utcIso(args.date, args.back_by) : null;
-    if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
+    if (backBy && backBy <= neededAt) {
+      throw new ToolError("back_by must be later than time on the same day.");
+    }
 
-    if (args.driver_required === false && !(await loadSettings(db)).self_drive_allowed) throw new ToolError(SELF_DRIVE_OFF);
+    if (
+      args.driver_required === false &&
+      !(await loadSettings(db)).self_drive_allowed
+    ) throw new ToolError(SELF_DRIVE_OFF);
     // A project that is known from Zoho is linked; anything else is kept as a label.
-    const matched = args.project ? (await matchProjects(db, args.project)).projects : [];
+    const matched = args.project
+      ? (await matchProjects(db, args.project)).projects
+      : [];
     const project = matched.length === 1 ? matched[0] : null;
     const who = await requester(db, actor, args.requested_by);
     const staff = !hasAny(actor.permissions, ["approve", "assign_tasks"]);
@@ -268,7 +411,9 @@ export const createRequest = tool({
         requested_by_employee_id: who.employeeId,
         requested_by_user_id: who.userId,
         project_id: project?.id ?? null,
-        project_label: project ? project.short_name ?? project.name : args.project ?? null,
+        project_label: project
+          ? project.short_name ?? project.name
+          : args.project ?? null,
         needed_at: neededAt,
         back_by: backBy,
         route_from: args.route_from ?? null,
@@ -282,9 +427,13 @@ export const createRequest = tool({
       }).select("*").single(),
       "vehicle request",
     );
-    await logRequestEvent(db, created.id, "created", actor.name, { at: created.created_at });
+    await logRequestEvent(db, created.id, "created", actor.name, {
+      at: created.created_at,
+    });
     await notifyEvent(db, "request.created", {
-      title: `Vehicle request · ${created.requested_by_name}${args.on_behalf_of ? ` for ${args.on_behalf_of}` : ""}`,
+      title: `Vehicle request · ${created.requested_by_name}${
+        args.on_behalf_of ? ` for ${args.on_behalf_of}` : ""
+      }`,
       body: [
         colomboDayTime(neededAt),
         args.need_type ? TYPE_NAME[args.need_type] : "any vehicle",
@@ -298,11 +447,17 @@ export const createRequest = tool({
       result: {
         request: await requestCardOf(db, created, now),
         project_linked: args.project
-          ? (project ? `${project.job_no ?? ""} ${project.name}`.trim() : "no (kept as a label only)")
+          ? (project
+            ? `${project.job_no ?? ""} ${project.name}`.trim()
+            : "no (kept as a label only)")
           : undefined,
-        next: staff ? "Sent to the fleet admin · you'll be notified." : "suggest_vehicles shows which vehicles and drivers are free.",
+        next: staff
+          ? "Sent to the fleet admin · you'll be notified."
+          : "suggest_vehicles shows which vehicles and drivers are free.",
       },
-      summary: `request ${created.id} by ${who.name} for ${colomboDateTime(neededAt)}`,
+      summary: `request ${created.id} by ${who.name} for ${
+        colomboDateTime(neededAt)
+      }`,
     };
   },
 });
@@ -310,26 +465,47 @@ export const createRequest = tool({
 export const listRequests = tool({
   name: "list_requests",
   title: "List vehicle requests",
-  description: "Vehicle requests. By default those needing a decision (waiting, and approved ones the requester changed), soonest " +
+  description:
+    "Vehicle requests. By default those needing a decision (waiting, and approved ones the requester changed), soonest " +
     "first. Everyone's with the approve permission; otherwise the person's own. Each carries its version, its timeline (sent, seen, " +
     "decided, changed, cancelled), its events and, for a changed one, what changed since it was approved.",
   readOnly: true,
   input: z.object({
-    status: z.enum(["waiting", "changed", "approved", "declined", "cancelled", "all"]).optional().describe(
+    status: z.enum([
+      "waiting",
+      "changed",
+      "approved",
+      "declined",
+      "cancelled",
+      "all",
+    ]).optional().describe(
       "Default: waiting (which includes changed = approved and edited since, needing re-approval)",
     ),
   }),
   async run({ status = "waiting" }, { db, now, actor }) {
     let query = db.from("vehicle_requests").select("*");
-    if (status === "waiting") query = query.in("status", ["waiting", "changed"]);
-    else if (status !== "all") query = query.eq("status", status);
+    if (status === "waiting") {
+      query = query.in("status", ["waiting", "changed"]);
+    } else if (status !== "all") query = query.eq("status", status);
     // The queue (everyone's requests) is the approver's; everyone else sees their own.
     if (!actor.permissions.includes("approve")) {
-      query = query.eq("requested_by_employee_id", actor.employeeId ?? "00000000-0000-0000-0000-000000000000");
+      query = query.eq(
+        "requested_by_employee_id",
+        actor.employeeId ?? "00000000-0000-0000-0000-000000000000",
+      );
     }
-    const rows = unwrap(await query.order("needed_at", { ascending: status === "waiting" || status === "changed" }).limit(100), "vehicle requests");
+    const rows = unwrap(
+      await query.order("needed_at", {
+        ascending: status === "waiting" || status === "changed",
+      }).limit(100),
+      "vehicle requests",
+    );
     return {
-      result: { status, count: rows.length, requests: await requestCards(db, rows, now) },
+      result: {
+        status,
+        count: rows.length,
+        requests: await requestCards(db, rows, now),
+      },
       summary: `${rows.length} requests (${status})`,
     };
   },
@@ -348,7 +524,9 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
   const dayEnd = new Date(dayRange(day).to).getTime();
   const from = new Date(w.neededAt).getTime();
   const to = w.backBy ? new Date(w.backBy).getTime() : dayEnd;
-  const busy = (t: Task) => new Date(t.start_at).getTime() < to && from < (t.end_by ? new Date(t.end_by).getTime() : dayEnd);
+  const busy = (t: Task) =>
+    new Date(t.start_at).getTime() < to &&
+    from < (t.end_by ? new Date(t.end_by).getTime() : dayEnd);
 
   const vehicles = refs.vehicles.filter((v) => v.active);
   const [tasks, km, settings] = await Promise.all([
@@ -361,7 +539,8 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
     const mine = tasks.filter((t) => t.vehicle_id === v.id);
     const clash = mine.find(busy);
     const used = km.get(v.id) ?? 0;
-    const over = v.monthly_km_allowance != null && used > v.monthly_km_allowance;
+    const over = v.monthly_km_allowance != null &&
+      used > v.monthly_km_allowance;
     const availability = v.in_garage
       ? "in garage"
       : clash
@@ -373,64 +552,91 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
       : `free at that time (other task ${taskWindow(mine[0])})`;
     const fits = [
       w.need_type && v.vehicle_type !== w.need_type
-        ? `is a ${TYPE_NAME[v.vehicle_type]?.toLowerCase() ?? v.vehicle_type}, not a ${TYPE_NAME[w.need_type]?.toLowerCase()}`
+        ? `is a ${
+          TYPE_NAME[v.vehicle_type]?.toLowerCase() ?? v.vehicle_type
+        }, not a ${TYPE_NAME[w.need_type]?.toLowerCase()}`
         : null,
-      w.pax != null && v.seats != null && v.seats < w.pax ? `only ${v.seats} seats` : null,
+      w.pax != null && v.seats != null && v.seats < w.pax
+        ? `only ${v.seats} seats`
+        : null,
     ].filter(Boolean);
     const rank = (v.in_garage || clash ? 20 : over ? 10 : 0) + fits.length;
-    const custodian = v.custodian_employee_id ? refs.emp.get(v.custodian_employee_id) : undefined;
+    const custodian = v.custodian_employee_id
+      ? refs.emp.get(v.custodian_employee_id)
+      : undefined;
     const card = {
       reg_no: v.reg_no,
       make_model: v.make_model,
       type: v.vehicle_type,
       seats: v.seats,
       availability,
-      pick: v.in_garage || clash ? "no" : over || fits.length > 0 ? "possible" : "good",
+      pick: v.in_garage || clash
+        ? "no"
+        : over || fits.length > 0
+        ? "possible"
+        : "good",
       but: fits.length > 0 ? fits.join(", ") : undefined,
-      regular_driver: v.regular_driver_id ? refs.emp.get(v.regular_driver_id)?.name : undefined,
+      regular_driver: v.regular_driver_id
+        ? refs.emp.get(v.regular_driver_id)?.name
+        : undefined,
       assigned_to: custodian?.name,
       custodian_note: custodian ? v.custodian_note ?? undefined : undefined,
     };
-    const group: "in_garage" | "busy" | "free_assigned" | "free_pool" = v.in_garage
-      ? "in_garage"
-      : clash
-      ? "busy"
-      : custodian
-      ? "free_assigned"
-      : "free_pool";
+    const group: "in_garage" | "busy" | "free_assigned" | "free_pool" =
+      v.in_garage
+        ? "in_garage"
+        : clash
+        ? "busy"
+        : custodian
+        ? "free_assigned"
+        : "free_pool";
     const extra = group === "free_assigned"
       ? { ...contactLinks(custodian?.phone), note: "ask first" }
       : group === "busy" && clash
-      ? { back: clash.end_by ? `back ~${colomboTime(clash.end_by)}` : "end time not set" }
+      ? {
+        back: clash.end_by
+          ? `back ~${colomboTime(clash.end_by)}`
+          : "end time not set",
+      }
       : {};
     return { rank, group, card, entry: { ...card, ...extra } };
   }).sort((a, b) => a.rank - b.rank);
 
-  const drivers = refs.employees.filter((e) => e.role === "driver" && e.active).map((e) => {
-    const mine = tasks.filter((t) => t.employee_id === e.id);
-    const clash = mine.find(busy);
-    return {
-      name: e.name,
-      username: e.username,
-      availability: clash
-        ? `task ${taskWindow(clash)} · ${clash.title}`
-        : mine.length === 0
-        ? "free all day"
-        : `free at that time (other task ${taskWindow(mine[0])})`,
-      free: !clash,
-    };
-  }).sort((a, b) => Number(b.free) - Number(a.free));
+  const drivers = refs.employees.filter((e) => e.role === "driver" && e.active)
+    .map((e) => {
+      const mine = tasks.filter((t) => t.employee_id === e.id);
+      const clash = mine.find(busy);
+      return {
+        name: e.name,
+        username: e.username,
+        availability: clash
+          ? `task ${taskWindow(clash)} · ${clash.title}`
+          : mine.length === 0
+          ? "free all day"
+          : `free at that time (other task ${taskWindow(mine[0])})`,
+        free: !clash,
+      };
+    }).sort((a, b) => Number(b.free) - Number(a.free));
   const groups = {
-    free_pool: ranked.filter((r) => r.group === "free_pool").map((r) => r.entry),
-    free_assigned: ranked.filter((r) => r.group === "free_assigned").map((r) => r.entry),
+    free_pool: ranked.filter((r) => r.group === "free_pool").map((r) =>
+      r.entry
+    ),
+    free_assigned: ranked.filter((r) => r.group === "free_assigned").map((r) =>
+      r.entry
+    ),
     busy: ranked.filter((r) => r.group === "busy").map((r) => r.entry),
-    in_garage: ranked.filter((r) => r.group === "in_garage").map((r) => r.entry),
+    in_garage: ranked.filter((r) => r.group === "in_garage").map((r) =>
+      r.entry
+    ),
   };
   return {
     vehicles: ranked.map((r) => r.card),
     drivers: drivers.map(({ free: _free, ...card }) => card),
     groups,
-    drivers_free: drivers.filter((d) => d.free).map((d) => ({ name: d.name, username: d.username })),
+    drivers_free: drivers.filter((d) => d.free).map((d) => ({
+      name: d.name,
+      username: d.username,
+    })),
     self_drive_allowed: settings.self_drive_allowed,
     good: ranked.some((r) => r.card.pick === "good"),
     day,
@@ -446,7 +652,9 @@ export const suggestVehicles = tool({
     "when it is back; in the garage), and which drivers are free that day. Opening a request this way counts as seen.",
   readOnly: true,
   input: z.object({
-    request_id: zId.optional().describe("The request, or give date and time instead"),
+    request_id: zId.optional().describe(
+      "The request, or give date and time instead",
+    ),
     date: zDate.optional(),
     time: zTime.optional(),
     back_by: zTime.optional(),
@@ -457,15 +665,34 @@ export const suggestVehicles = tool({
     let request: VehicleRequest | null = null;
     let w: Window;
     if (args.request_id) {
-      request = await markSeen(db, await getRequest(db, args.request_id), actor, now);
-      w = { neededAt: request.needed_at, backBy: request.back_by, need_type: request.need_type, pax: request.pax };
+      request = await markSeen(
+        db,
+        await getRequest(db, args.request_id),
+        actor,
+        now,
+      );
+      w = {
+        neededAt: request.needed_at,
+        backBy: request.back_by,
+        need_type: request.need_type,
+        pax: request.pax,
+      };
     } else {
-      if (!args.date || !args.time) throw new ToolError("Give request_id, or date and time.");
+      if (!args.date || !args.time) {
+        throw new ToolError("Give request_id, or date and time.");
+      }
       realDate(args.date);
       const neededAt = utcIso(args.date, args.time);
       const backBy = args.back_by ? utcIso(args.date, args.back_by) : null;
-      if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
-      w = { neededAt, backBy, need_type: args.need_type ?? null, pax: args.pax ?? null };
+      if (backBy && backBy <= neededAt) {
+        throw new ToolError("back_by must be later than time on the same day.");
+      }
+      w = {
+        neededAt,
+        backBy,
+        need_type: args.need_type ?? null,
+        pax: args.pax ?? null,
+      };
     }
     const refs = await loadRefs(db);
     const a = await availabilityFor(db, refs, w);
@@ -514,42 +741,84 @@ export const decideRequest = tool({
     vehicle: zText(20).optional().describe("Plate (approve)"),
     driver: zText(80).optional().describe("Username, code or name (approve)"),
     reason: zText(300).optional().describe("Why it is declined (decline)"),
-    title: zText(120).optional().describe("Task title. Default: built from the route"),
-    decided_by: zText(80).optional().describe("Name of the office user deciding, if known"),
+    title: zText(120).optional().describe(
+      "Task title. Default: built from the route",
+    ),
+    decided_by: zText(80).optional().describe(
+      "Name of the office user deciding, if known",
+    ),
   }),
   async run(args, { db, now, actor }) {
     let request = await getRequest(db, args.request_id);
-    if (request.status !== "waiting") throw new ToolError(`This request is already ${request.status}.`);
+    if (request.status !== "waiting") {
+      throw new ToolError(`This request is already ${request.status}.`);
+    }
     request = await markSeen(db, request, actor, now);
     const decidedBy = args.decided_by ?? actor.name;
-    const told = { actor: actor.employeeId, requester: request.requested_by_employee_id };
+    const told = {
+      actor: actor.employeeId,
+      requester: request.requested_by_employee_id,
+    };
 
     if (args.decision === "decline") {
-      if (!args.reason) throw new ToolError("A reason is needed to decline a request.");
+      if (!args.reason) {
+        throw new ToolError("A reason is needed to decline a request.");
+      }
       const changed = unwrap(
         await db.from("vehicle_requests")
-          .update({ status: "declined", decided_at: now.toISOString(), decided_by: decidedBy, decline_reason: args.reason, version: request.version + 1 })
+          .update({
+            status: "declined",
+            decided_at: now.toISOString(),
+            decided_by: decidedBy,
+            decline_reason: args.reason,
+            version: request.version + 1,
+          })
           .eq("id", request.id).eq("status", "waiting").select("*"),
         "vehicle request",
       );
-      if (changed.length === 0) throw new ToolError("Someone else decided this request just now. Check list_requests.");
-      await logRequestEvent(db, request.id, "declined", decidedBy, { note: args.reason });
+      if (changed.length === 0) {
+        throw new ToolError(
+          "Someone else decided this request just now. Check list_requests.",
+        );
+      }
+      await logRequestEvent(db, request.id, "declined", decidedBy, {
+        note: args.reason,
+      });
       await notifyEvent(db, "request.decided", {
         title: "Request declined",
         body: args.reason,
         url: `/requests/${request.id}`,
         tag: `request:${request.id}`,
       }, told);
-      return { result: { request: await requestCardOf(db, changed[0], now) }, summary: `declined request ${request.id}: ${args.reason}` };
+      return {
+        result: { request: await requestCardOf(db, changed[0], now) },
+        summary: `declined request ${request.id}: ${args.reason}`,
+      };
     }
 
     if (!args.vehicle) {
-      throw new ToolError("To approve, give a vehicle (and a driver, unless the custodian drives). suggest_vehicles shows who is free.");
+      throw new ToolError(
+        "To approve, give a vehicle (and a driver, unless the custodian drives). suggest_vehicles shows who is free.",
+      );
     }
-    const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
+    const [refs, settings] = await Promise.all([
+      loadRefs(db),
+      loadSettings(db),
+    ]);
     const vehicle = activeVehicle(refs, args.vehicle);
-    const driver = pickDriver(refs, args.driver, request.driver_required, vehicle, settings.self_drive_allowed);
-    const warnings = await assignWarnings(db, { driver, vehicle, startAt: request.needed_at, endBy: request.back_by });
+    const driver = pickDriver(
+      refs,
+      args.driver,
+      request.driver_required,
+      vehicle,
+      settings.self_drive_allowed,
+    );
+    const warnings = await assignWarnings(db, {
+      driver,
+      vehicle,
+      startAt: request.needed_at,
+      endBy: request.back_by,
+    });
     warnings.push(...fitWarnings(vehicle, request));
 
     const split: Split = request.project_id
@@ -559,7 +828,9 @@ export const decideRequest = tool({
         label: request.project_label,
       }
       : { rows: [], shown: [], label: request.project_label };
-    const requesterRow = request.requested_by_employee_id ? refs.emp.get(request.requested_by_employee_id) : undefined;
+    const requesterRow = request.requested_by_employee_id
+      ? refs.emp.get(request.requested_by_employee_id)
+      : undefined;
     const prepared = await prepareTask(db, settings, now, {
       day: colomboDate(request.needed_at),
       pickup: request.route_from ?? "To be confirmed",
@@ -569,7 +840,10 @@ export const decideRequest = tool({
     warnings.push(...prepared.plan.warnings.map((w) => w.text));
 
     const saved = await saveTask(db, {
-      title: args.title ?? (request.route_to ? `Trip · ${request.route_to}` : `Trip for ${request.requested_by_name}`),
+      title: args.title ??
+        (request.route_to
+          ? `Trip · ${request.route_to}`
+          : `Trip for ${request.requested_by_name}`),
       label: request.project_label,
       driver,
       vehicle,
@@ -578,7 +852,11 @@ export const decideRequest = tool({
       passengers: request.pax,
       contactName: request.requested_by_name,
       contactPhone: requesterRow?.phone ?? null,
-      notes: [request.note, request.tools ? "Tools / equipment travel too." : null, isDriver(driver) ? null : "Driven by the custodian."]
+      notes: [
+        request.note,
+        request.tools ? "Tools / equipment travel too." : null,
+        isDriver(driver) ? null : "Driven by the custodian.",
+      ]
         .filter(Boolean).join(" ") || null,
       stops: prepared.stops,
       start: prepared.start,
@@ -594,11 +872,20 @@ export const decideRequest = tool({
       bookedBy: actor.employeeId,
     }, warnings);
     // Every decision bumps the version (the approval itself is written by office_create_task).
-    unwrap(await db.from("vehicle_requests").update({ version: request.version + 1 }).eq("id", request.id).select("id"), "vehicle request");
-    await logRequestEvent(db, request.id, "approved", decidedBy, { note: `${vehicle.reg_no} · ${driver.name}` });
+    unwrap(
+      await db.from("vehicle_requests").update({ version: request.version + 1 })
+        .eq("id", request.id).select("id"),
+      "vehicle request",
+    );
+    await logRequestEvent(db, request.id, "approved", decidedBy, {
+      note: `${vehicle.reg_no} · ${driver.name}`,
+    });
     await notifyEvent(db, "request.decided", {
       title: `Request approved · ${vehicle.reg_no} · ${driver.name}`,
-      body: [colomboDayTime(request.needed_at), [request.route_from, request.route_to].filter(Boolean).join(" → ")].filter(Boolean).join(
+      body: [
+        colomboDayTime(request.needed_at),
+        [request.route_from, request.route_to].filter(Boolean).join(" → "),
+      ].filter(Boolean).join(
         " · ",
       ),
       url: `/requests/${request.id}`,
@@ -606,7 +893,11 @@ export const decideRequest = tool({
     }, told);
 
     return {
-      result: { request: "approved", requested_by: request.requested_by_name, ...saved.result },
+      result: {
+        request: "approved",
+        requested_by: request.requested_by_name,
+        ...saved.result,
+      },
       summary: `approved request ${request.id} -> ${saved.summary}`,
     };
   },
@@ -623,12 +914,20 @@ export const bookVehicle = tool({
   readOnly: false,
   input: z.object({
     requested_by: zText(120).optional().describe("Who asks. Default: you"),
-    on_behalf_of: zText(120).optional().describe("The person the vehicle is for, when it is not the asker"),
+    on_behalf_of: zText(120).optional().describe(
+      "The person the vehicle is for, when it is not the asker",
+    ),
     ...requestFields,
     vehicle: zText(20).describe("Plate"),
-    driver: zText(80).optional().describe("Username, code or name; not needed when the custodian drives"),
-    title: zText(120).optional().describe("Task title. Default: built from the route"),
-    stops: zStops.optional().describe("The task's stops; default: route_from → route_to"),
+    driver: zText(80).optional().describe(
+      "Username, code or name; not needed when the custodian drives",
+    ),
+    title: zText(120).optional().describe(
+      "Task title. Default: built from the route",
+    ),
+    stops: zStops.optional().describe(
+      "The task's stops; default: route_from → route_to",
+    ),
     start: zStart.optional(),
     return_to_base: z.boolean().optional(),
     avoid_expressway: z.boolean().optional(),
@@ -637,16 +936,34 @@ export const bookVehicle = tool({
     realDate(args.date);
     const neededAt = utcIso(args.date, args.time);
     const backBy = args.back_by ? utcIso(args.date, args.back_by) : null;
-    if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
-    const matched = args.project ? (await matchProjects(db, args.project)).projects : [];
+    if (backBy && backBy <= neededAt) {
+      throw new ToolError("back_by must be later than time on the same day.");
+    }
+    const matched = args.project
+      ? (await matchProjects(db, args.project)).projects
+      : [];
     const project = matched.length === 1 ? matched[0] : null;
     const who = await requester(db, actor, args.requested_by);
 
-    const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
+    const [refs, settings] = await Promise.all([
+      loadRefs(db),
+      loadSettings(db),
+    ]);
     const vehicle = activeVehicle(refs, args.vehicle);
     const driverRequired = args.driver_required ?? true;
-    const driver = pickDriver(refs, args.driver, driverRequired, vehicle, settings.self_drive_allowed);
-    const warnings = await assignWarnings(db, { driver, vehicle, startAt: neededAt, endBy: backBy });
+    const driver = pickDriver(
+      refs,
+      args.driver,
+      driverRequired,
+      vehicle,
+      settings.self_drive_allowed,
+    );
+    const warnings = await assignWarnings(db, {
+      driver,
+      vehicle,
+      startAt: neededAt,
+      endBy: backBy,
+    });
     warnings.push(...fitWarnings(vehicle, args));
     const prepared = await prepareTask(db, settings, now, {
       day: args.date,
@@ -659,11 +976,19 @@ export const bookVehicle = tool({
       leaveAt: neededAt,
     });
     warnings.push(...prepared.plan.warnings.map((w) => w.text));
-    if (new Date(neededAt) < now) warnings.push("The time is already in the past.");
+    if (new Date(neededAt) < now) {
+      warnings.push("The time is already in the past.");
+    }
 
-    const label = project ? project.short_name ?? project.name : args.project ?? null;
+    const label = project
+      ? project.short_name ?? project.name
+      : args.project ?? null;
     const split: Split = project
-      ? { rows: [{ project_id: project.id, percent: 100 }], shown: [{ project: label ?? "project", percent: 100 }], label }
+      ? {
+        rows: [{ project_id: project.id, percent: 100 }],
+        shown: [{ project: label ?? "project", percent: 100 }],
+        label,
+      }
       : { rows: [], shown: [], label };
     const create: BookingRequest = {
       requested_by_name: who.name,
@@ -683,7 +1008,8 @@ export const bookVehicle = tool({
       on_behalf_of: args.on_behalf_of ?? null,
     };
     const saved = await saveTask(db, {
-      title: args.title ?? (args.route_to ? `Trip · ${args.route_to}` : `Trip for ${who.name}`),
+      title: args.title ??
+        (args.route_to ? `Trip · ${args.route_to}` : `Trip for ${who.name}`),
       label,
       driver,
       vehicle,
@@ -691,8 +1017,14 @@ export const bookVehicle = tool({
       endBy: backBy,
       passengers: args.pax ?? null,
       contactName: who.name,
-      contactPhone: who.employeeId ? refs.emp.get(who.employeeId)?.phone ?? null : null,
-      notes: [args.note, args.tools ? "Tools / equipment travel too." : null, isDriver(driver) ? null : "Driven by the custodian."]
+      contactPhone: who.employeeId
+        ? refs.emp.get(who.employeeId)?.phone ?? null
+        : null,
+      notes: [
+        args.note,
+        args.tools ? "Tools / equipment travel too." : null,
+        isDriver(driver) ? null : "Driven by the custodian.",
+      ]
         .filter(Boolean).join(" ") || null,
       stops: prepared.stops,
       start: prepared.start,
@@ -708,11 +1040,21 @@ export const bookVehicle = tool({
       bookedBy: actor.employeeId,
     }, warnings);
     const row = await getRequest(db, saved.result.request_id!);
-    await logRequestEvent(db, row.id, "created", actor.name, { at: row.created_at, note: "booked in one step" });
-    await logRequestEvent(db, row.id, "approved", actor.name, { note: `${vehicle.reg_no} · ${driver.name}` });
+    await logRequestEvent(db, row.id, "created", actor.name, {
+      at: row.created_at,
+      note: "booked in one step",
+    });
+    await logRequestEvent(db, row.id, "approved", actor.name, {
+      note: `${vehicle.reg_no} · ${driver.name}`,
+    });
     return {
-      result: { request: await requestCardOf(db, row, now), booked: "in one step", ...saved.result },
-      summary: `booked ${vehicle.reg_no} for ${who.name} (requested and approved by ${actor.name}) -> ${saved.summary}`,
+      result: {
+        request: await requestCardOf(db, row, now),
+        booked: "in one step",
+        ...saved.result,
+      },
+      summary:
+        `booked ${vehicle.reg_no} for ${who.name} (requested and approved by ${actor.name}) -> ${saved.summary}`,
     };
   },
 });
@@ -720,24 +1062,42 @@ export const bookVehicle = tool({
 export const cancelRequest = tool({
   name: "cancel_request",
   title: "Cancel a request or booking",
-  description: "Cancels a waiting request, or an approved one together with its task (the driver's app shows the task as cancelled; " +
+  description:
+    "Cancels a waiting request, or an approved one together with its task (the driver's app shows the task as cancelled; " +
     "the vehicle's custodian and the person who asked are told). The reason is required. Nothing is deleted.",
   readOnly: false,
   input: z.object({ request_id: zId, reason: zText(300) }),
   async run({ request_id, reason }, { db, now, actor }) {
     const request = await getRequest(db, request_id);
-    if (request.status === "declined" || request.status === "cancelled") throw new ToolError(`This request is already ${request.status}.`);
+    if (request.status === "declined" || request.status === "cancelled") {
+      throw new ToolError(`This request is already ${request.status}.`);
+    }
     const nowIso = now.toISOString();
 
     let task: Task | null = null;
     let taskCancelled: string | undefined;
     if (request.task_id) {
-      task = unwrapMaybe(await db.from("tasks").select("*").eq("id", request.task_id).maybeSingle(), "task");
-      if (task?.status === "completed") throw new ToolError("The trip is already completed: nothing to cancel.");
+      task = unwrapMaybe(
+        await db.from("tasks").select("*").eq("id", request.task_id)
+          .maybeSingle(),
+        "task",
+      );
+      if (task?.status === "completed") {
+        throw new ToolError(
+          "The trip is already completed: nothing to cancel.",
+        );
+      }
       if (task && task.status !== "cancelled") {
         const changed = unwrap(
-          await db.from("tasks").update({ status: "cancelled", cancelled_reason: `Request cancelled: ${reason}` })
-            .eq("id", task.id).in("status", ["assigned", "in_progress", "declined"]).select("id"),
+          await db.from("tasks").update({
+            status: "cancelled",
+            cancelled_reason: `Request cancelled: ${reason}`,
+          })
+            .eq("id", task.id).in("status", [
+              "assigned",
+              "in_progress",
+              "declined",
+            ]).select("id"),
           "task",
         );
         if (changed.length > 0) {
@@ -767,16 +1127,29 @@ export const cancelRequest = tool({
         changed_by: null,
         change_note: null,
         version: request.version + 1,
-        ...(request.decided_at ? {} : { decided_at: nowIso, decided_by: actor.name }),
-      }).eq("id", request.id).in("status", ["waiting", "approved", "changed"]).select("*"),
+        ...(request.decided_at
+          ? {}
+          : { decided_at: nowIso, decided_by: actor.name }),
+      }).eq("id", request.id).in("status", ["waiting", "approved", "changed"])
+        .select("*"),
       "vehicle request",
     );
-    if (rows.length === 0) throw new ToolError("Someone else changed this request just now. Check list_requests.");
-    await logRequestEvent(db, request.id, "cancelled", actor.name, { note: reason, at: nowIso });
+    if (rows.length === 0) {
+      throw new ToolError(
+        "Someone else changed this request just now. Check list_requests.",
+      );
+    }
+    await logRequestEvent(db, request.id, "cancelled", actor.name, {
+      note: reason,
+      at: nowIso,
+    });
 
     if (task) {
       const vehicle = unwrapMaybe(
-        await db.from("vehicles").select("reg_no, custodian_employee_id").eq("id", task.vehicle_id).maybeSingle(),
+        await db.from("vehicles").select("reg_no, custodian_employee_id").eq(
+          "id",
+          task.vehicle_id,
+        ).maybeSingle(),
         "vehicle",
       );
       if (vehicle?.custodian_employee_id) {
@@ -785,17 +1158,30 @@ export const cancelRequest = tool({
           body: `${reason} · ${colomboDayTime(task.start_at)}`,
           url: "/requests",
           tag: `request:${request.id}`,
-        }, { actor: actor.employeeId, custodian: vehicle.custodian_employee_id });
+        }, {
+          actor: actor.employeeId,
+          custodian: vehicle.custodian_employee_id,
+        });
       }
     }
-    await notifyEvent(db, "request.decided", { title: "Request cancelled", body: reason, url: `/requests/${request.id}`, tag: `request:${request.id}` }, {
+    await notifyEvent(db, "request.decided", {
+      title: "Request cancelled",
+      body: reason,
+      url: `/requests/${request.id}`,
+      tag: `request:${request.id}`,
+    }, {
       actor: actor.employeeId,
       requester: request.requested_by_employee_id,
     });
 
     return {
-      result: { request: await requestCardOf(db, rows[0], now), was: request.status, task_cancelled: taskCancelled },
-      summary: `cancelled request ${request.id} (was ${request.status}): ${reason}`,
+      result: {
+        request: await requestCardOf(db, rows[0], now),
+        was: request.status,
+        task_cancelled: taskCancelled,
+      },
+      summary:
+        `cancelled request ${request.id} (was ${request.status}): ${reason}`,
     };
   },
 });
@@ -815,7 +1201,7 @@ export const updateRequest = tool({
   title: "Change a request",
   description:
     "Changes what a request asks for: the day and time, back-by, route, kind of vehicle, passengers, tools, note, whether a driver " +
-    "is needed, who it is for. A waiting request stays waiting; an approved booking becomes \"changed\" and needs re-approval " +
+    'is needed, who it is for. A waiting request stays waiting; an approved booking becomes "changed" and needs re-approval ' +
     "(the approvers are told; the task keeps the old plan until redecide_request). The person who asked may change their own " +
     "request; an approver any. version must be the one list_requests showed. Returns the request and what changed.",
   readOnly: false,
@@ -824,27 +1210,36 @@ export const updateRequest = tool({
     version: z.number().int().min(0).describe("From list_requests"),
     date: zDate.optional(),
     time: zTime.optional(),
-    back_by: zTime.nullable().optional().describe("HH:MM the same day; null clears it"),
+    back_by: zTime.nullable().optional().describe(
+      "HH:MM the same day; null clears it",
+    ),
     route_from: zText(160).optional(),
     route_to: zText(160).optional(),
     need_type: zVehicleType.nullable().optional(),
     pax: z.number().int().min(0).max(80).nullable().optional(),
     tools: z.boolean().optional(),
-    note: z.string().trim().max(1000).nullable().optional().describe("The note; empty or null clears it"),
+    note: z.string().trim().max(1000).nullable().optional().describe(
+      "The note; empty or null clears it",
+    ),
     driver_required: z.boolean().optional(),
     on_behalf_of: z.string().trim().max(120).nullable().optional(),
   }),
   async run(args, { db, now, actor }) {
     if (args.date) realDate(args.date);
     const request = await getRequest(db, args.request_id);
-    if (!actor.permissions.includes("approve") && request.requested_by_employee_id !== actor.employeeId) {
+    if (
+      !actor.permissions.includes("approve") &&
+      request.requested_by_employee_id !== actor.employeeId
+    ) {
       throw new ToolError("This request is not yours to change.");
     }
     checkVersion(request.version, args.version);
     const next = statusAfterEdit(request.status);
 
     const day = args.date ?? colomboDate(request.needed_at);
-    const neededAt = args.date || args.time ? utcIso(day, args.time ?? colomboTime(request.needed_at)) : request.needed_at;
+    const neededAt = args.date || args.time
+      ? utcIso(day, args.time ?? colomboTime(request.needed_at))
+      : request.needed_at;
     const backBy = args.back_by === null
       ? null
       : args.back_by
@@ -852,9 +1247,13 @@ export const updateRequest = tool({
       : request.back_by
       ? utcIso(day, colomboTime(request.back_by))
       : null;
-    if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
+    if (backBy && backBy <= neededAt) {
+      throw new ToolError("back_by must be later than time on the same day.");
+    }
     const driverRequired = args.driver_required ?? request.driver_required;
-    if (!driverRequired && !(await loadSettings(db)).self_drive_allowed) throw new ToolError(SELF_DRIVE_OFF);
+    if (!driverRequired && !(await loadSettings(db)).self_drive_allowed) {
+      throw new ToolError(SELF_DRIVE_OFF);
+    }
 
     const before = snapshot(request);
     const after: RequestFields = {
@@ -862,16 +1261,24 @@ export const updateRequest = tool({
       back_by: backBy,
       route_from: args.route_from ?? request.route_from,
       route_to: args.route_to ?? request.route_to,
-      need_type: args.need_type === undefined ? request.need_type : args.need_type,
+      need_type: args.need_type === undefined
+        ? request.need_type
+        : args.need_type,
       pax: args.pax === undefined ? request.pax : args.pax,
       tools: args.tools ?? request.tools,
       note: args.note === undefined ? request.note : (args.note || null),
       driver_required: driverRequired,
     };
     const changes = requestDiff(before, after);
-    const onBehalfOf = args.on_behalf_of === undefined ? request.on_behalf_of : (args.on_behalf_of || null);
-    if (onBehalfOf !== request.on_behalf_of) changes["for"] = { from: request.on_behalf_of, to: onBehalfOf };
-    if (Object.keys(changes).length === 0) throw new ToolError("Nothing to change.");
+    const onBehalfOf = args.on_behalf_of === undefined
+      ? request.on_behalf_of
+      : (args.on_behalf_of || null);
+    if (onBehalfOf !== request.on_behalf_of) {
+      changes["for"] = { from: request.on_behalf_of, to: onBehalfOf };
+    }
+    if (Object.keys(changes).length === 0) {
+      throw new ToolError("Nothing to change.");
+    }
 
     const nowIso = now.toISOString();
     const rows = unwrap(
@@ -881,16 +1288,30 @@ export const updateRequest = tool({
         status: next.status,
         version: request.version + 1,
         previous: before as unknown as Json,
-        ...(next.status === "changed" && { changed_at: nowIso, changed_by: actor.name, change_note: diffText(changes) }),
+        ...(next.status === "changed" &&
+          {
+            changed_at: nowIso,
+            changed_by: actor.name,
+            change_note: diffText(changes),
+          }),
       }).eq("id", request.id).eq("version", request.version).select("*"),
       "vehicle request",
     );
-    if (rows.length === 0) throw new ToolError("Someone else changed this request just now. Reload it and try again.");
-    await logRequestEvent(db, request.id, next.event, actor.name, { note: diffText(changes), changes, at: nowIso });
+    if (rows.length === 0) {
+      throw new ToolError(
+        "Someone else changed this request just now. Reload it and try again.",
+      );
+    }
+    await logRequestEvent(db, request.id, next.event, actor.name, {
+      note: diffText(changes),
+      changes,
+      at: nowIso,
+    });
 
     if (next.needs_reapproval) {
       await notifyEvent(db, "request.changed", {
-        title: `Request changed · needs re-approval · ${request.requested_by_name}`,
+        title:
+          `Request changed · needs re-approval · ${request.requested_by_name}`,
         body: `${diffText(changes)} · ${colomboDayTime(neededAt)}`,
         url: `/requests/${request.id}/decide`,
         tag: `request:${request.id}`,
@@ -905,7 +1326,9 @@ export const updateRequest = tool({
           ? "The approvers were told; the booking keeps its old plan until they decide again (redecide_request)."
           : "Still waiting for approval, with the new details.",
       },
-      summary: `request ${request.id} edited (${next.status}, version ${request.version + 1}): ${diffText(changes)}`,
+      summary: `request ${request.id} edited (${next.status}, version ${
+        request.version + 1
+      }): ${diffText(changes)}`,
     };
   },
 });
@@ -924,10 +1347,14 @@ export const redecideRequest = tool({
     version: z.number().int().min(0).describe("From list_requests"),
     decision: z.enum(["keep", "change", "decline"]),
     vehicle: zText(20).optional().describe("New plate (change)"),
-    driver: zText(80).optional().describe("New driver: username, code or name (change)"),
+    driver: zText(80).optional().describe(
+      "New driver: username, code or name (change)",
+    ),
     date: zDate.optional().describe("New day (change)"),
     time: zTime.optional().describe("New time, HH:MM (change)"),
-    back_by: zTime.nullable().optional().describe("New back-by, HH:MM; null clears it (change)"),
+    back_by: zTime.nullable().optional().describe(
+      "New back-by, HH:MM; null clears it (change)",
+    ),
     reason: zText(300).optional().describe("Why it is declined (decline)"),
   }),
   async run(args, { db, now, actor }) {
@@ -935,14 +1362,29 @@ export const redecideRequest = tool({
     const request = await getRequest(db, args.request_id);
     canRedecide(request.status);
     checkVersion(request.version, args.version);
-    if (!request.task_id) throw new ToolError("This request has no task behind it; cancel it and make a new booking.");
-    const task = unwrapMaybe(await db.from("tasks").select("*").eq("id", request.task_id).maybeSingle(), "task");
-    if (!task) throw new ToolError("The task behind this request no longer exists.");
+    if (!request.task_id) {
+      throw new ToolError(
+        "This request has no task behind it; cancel it and make a new booking.",
+      );
+    }
+    const task = unwrapMaybe(
+      await db.from("tasks").select("*").eq("id", request.task_id)
+        .maybeSingle(),
+      "task",
+    );
+    if (!task) {
+      throw new ToolError("The task behind this request no longer exists.");
+    }
     const nowIso = now.toISOString();
-    const told = { actor: actor.employeeId, requester: request.requested_by_employee_id };
+    const told = {
+      actor: actor.employeeId,
+      requester: request.requested_by_employee_id,
+    };
 
     if (args.decision === "decline") {
-      if (!args.reason) throw new ToolError("A reason is needed to decline a request.");
+      if (!args.reason) {
+        throw new ToolError("A reason is needed to decline a request.");
+      }
       const rows = unwrap(
         await db.from("vehicle_requests").update({
           status: "declined",
@@ -956,12 +1398,26 @@ export const redecideRequest = tool({
         }).eq("id", request.id).eq("version", request.version).select("*"),
         "vehicle request",
       );
-      if (rows.length === 0) throw new ToolError("Someone else changed this request just now. Reload it and try again.");
+      if (rows.length === 0) {
+        throw new ToolError(
+          "Someone else changed this request just now. Reload it and try again.",
+        );
+      }
       let taskCancelled: string | undefined;
-      if (task.status === "assigned" || task.status === "in_progress" || task.status === "declined") {
+      if (
+        task.status === "assigned" || task.status === "in_progress" ||
+        task.status === "declined"
+      ) {
         const changed = unwrap(
-          await db.from("tasks").update({ status: "cancelled", cancelled_reason: `Request declined: ${args.reason}` })
-            .eq("id", task.id).in("status", ["assigned", "in_progress", "declined"]).select("id"),
+          await db.from("tasks").update({
+            status: "cancelled",
+            cancelled_reason: `Request declined: ${args.reason}`,
+          })
+            .eq("id", task.id).in("status", [
+              "assigned",
+              "in_progress",
+              "declined",
+            ]).select("id"),
           "task",
         );
         if (changed.length > 0) {
@@ -979,7 +1435,10 @@ export const redecideRequest = tool({
           taskCancelled = task.title;
         }
       }
-      await logRequestEvent(db, request.id, "declined", actor.name, { note: args.reason, at: nowIso });
+      await logRequestEvent(db, request.id, "declined", actor.name, {
+        note: args.reason,
+        at: nowIso,
+      });
       await notifyEvent(db, "request.redecided", {
         title: "Your changed request was declined",
         body: args.reason,
@@ -987,31 +1446,52 @@ export const redecideRequest = tool({
         tag: `request:${request.id}`,
       }, told);
       const vehicle = unwrapMaybe(
-        await db.from("vehicles").select("reg_no, custodian_employee_id").eq("id", task.vehicle_id).maybeSingle(),
+        await db.from("vehicles").select("reg_no, custodian_employee_id").eq(
+          "id",
+          task.vehicle_id,
+        ).maybeSingle(),
         "vehicle",
       );
       if (vehicle?.custodian_employee_id) {
         await notifyEvent(db, "vehicle.booking_cancelled", {
           title: `${vehicle.reg_no} booking cancelled`,
-          body: `Request declined: ${args.reason} · ${colomboDayTime(task.start_at)}`,
+          body: `Request declined: ${args.reason} · ${
+            colomboDayTime(task.start_at)
+          }`,
           url: `/requests/${request.id}`,
           tag: `request:${request.id}`,
-        }, { actor: actor.employeeId, custodian: vehicle.custodian_employee_id });
+        }, {
+          actor: actor.employeeId,
+          custodian: vehicle.custodian_employee_id,
+        });
       }
       return {
-        result: { request: await requestCardOf(db, rows[0], now), decision: "declined", task_cancelled: taskCancelled },
+        result: {
+          request: await requestCardOf(db, rows[0], now),
+          decision: "declined",
+          task_cancelled: taskCancelled,
+        },
         summary: `declined request ${request.id} again: ${args.reason}`,
       };
     }
 
     // keep or change: the task takes what the request now asks, plus the approver's own changes.
     if (task.status === "completed" || task.status === "cancelled") {
-      throw new ToolError(`The task behind this request is ${task.status}; decline the request or make a new booking.`);
+      throw new ToolError(
+        `The task behind this request is ${task.status}; decline the request or make a new booking.`,
+      );
     }
-    const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
+    const [refs, settings] = await Promise.all([
+      loadRefs(db),
+      loadSettings(db),
+    ]);
     const change = args.decision === "change";
-    const day = change && args.date ? args.date : colomboDate(request.needed_at);
-    const neededAt = change && (args.date || args.time) ? utcIso(day, args.time ?? colomboTime(request.needed_at)) : request.needed_at;
+    const day = change && args.date
+      ? args.date
+      : colomboDate(request.needed_at);
+    const neededAt = change && (args.date || args.time)
+      ? utcIso(day, args.time ?? colomboTime(request.needed_at))
+      : request.needed_at;
     const backBy = change && args.back_by === null
       ? null
       : change && args.back_by
@@ -1019,8 +1499,12 @@ export const redecideRequest = tool({
       : request.back_by
       ? utcIso(day, colomboTime(request.back_by))
       : null;
-    if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
-    const vehicle = change && args.vehicle ? activeVehicle(refs, args.vehicle) : refs.veh.get(task.vehicle_id);
+    if (backBy && backBy <= neededAt) {
+      throw new ToolError("back_by must be later than time on the same day.");
+    }
+    const vehicle = change && args.vehicle
+      ? activeVehicle(refs, args.vehicle)
+      : refs.veh.get(task.vehicle_id);
     if (!vehicle) throw new ToolError("The task's vehicle no longer exists.");
     const driver = change && args.driver
       ? activeDriver(refs, args.driver)
@@ -1036,10 +1520,18 @@ export const redecideRequest = tool({
       vehicle,
       passengers: request.pax,
       route: routeOf(request),
-    }, { note: args.decision === "keep" ? "request decided again: kept" : "request decided again: changed", tellRequester: false, allowNoop: true });
+    }, {
+      note: args.decision === "keep"
+        ? "request decided again: kept"
+        : "request decided again: changed",
+      tellRequester: false,
+      allowNoop: true,
+    });
     const warnings = [...out.warnings, ...fitWarnings(vehicle, request)];
 
-    const onlyTime = change && Object.keys(out.changes).every((k) => k === "time" || k === "end by") && (out.changes.time || out.changes["end by"]);
+    const onlyTime = change && Object.keys(out.changes).every((k) =>
+      k === "time" || k === "end by"
+    ) && (out.changes.time || out.changes["end by"]);
     const action: EventAction = onlyTime ? "postponed" : "redecided";
     const rows = unwrap(
       await db.from("vehicle_requests").update({
@@ -1056,16 +1548,29 @@ export const redecideRequest = tool({
       }).eq("id", request.id).eq("version", request.version).select("*"),
       "vehicle request",
     );
-    if (rows.length === 0) throw new ToolError("Someone else changed this request just now. Reload it and try again.");
+    if (rows.length === 0) {
+      throw new ToolError(
+        "Someone else changed this request just now. Reload it and try again.",
+      );
+    }
     const text = changesText(out.changes);
     await logRequestEvent(db, request.id, action, actor.name, {
-      note: args.decision === "keep" ? (text ? `kept as asked: ${text}` : "kept as asked") : text || "changed",
+      note: args.decision === "keep"
+        ? (text ? `kept as asked: ${text}` : "kept as asked")
+        : text || "changed",
       changes: Object.keys(out.changes).length ? out.changes : null,
       at: nowIso,
     });
     await notifyEvent(db, "request.redecided", {
-      title: args.decision === "keep" ? "Your changed request was kept" : onlyTime ? "Your booking was postponed" : "Your booking was changed",
-      body: [text || "as asked", `${vehicle.reg_no} · ${driver.name} · ${colomboDayTime(neededAt)}`].join(" · "),
+      title: args.decision === "keep"
+        ? "Your changed request was kept"
+        : onlyTime
+        ? "Your booking was postponed"
+        : "Your booking was changed",
+      body: [
+        text || "as asked",
+        `${vehicle.reg_no} · ${driver.name} · ${colomboDayTime(neededAt)}`,
+      ].join(" · "),
       url: `/requests/${request.id}`,
       tag: `request:${request.id}`,
     }, told);
@@ -1073,7 +1578,11 @@ export const redecideRequest = tool({
     return {
       result: {
         request: await requestCardOf(db, rows[0], now),
-        decision: action === "postponed" ? "postponed" : args.decision === "keep" ? "kept" : "changed",
+        decision: action === "postponed"
+          ? "postponed"
+          : args.decision === "keep"
+          ? "kept"
+          : "changed",
         task: {
           task_id: task.id,
           when: colomboDayTime(out.task.start_at),
@@ -1085,10 +1594,15 @@ export const redecideRequest = tool({
         },
         warnings,
         sent: Object.keys(out.changes).length
-          ? (out.driverChanged ? `${driver.name} gets it as a new task to accept.` : "The driver's app shows the change (Task changed).")
+          ? (out.driverChanged
+            ? `${driver.name} gets it as a new task to accept.`
+            : "The driver's app shows the change (Task changed).")
           : "Nothing changed for the driver.",
       },
-      summary: `request ${request.id} decided again (${action}): ${text || "kept as it was"}` + (warnings.length ? ` (${warnings.length} warnings)` : ""),
+      summary:
+        `request ${request.id} decided again (${action}): ${
+          text || "kept as it was"
+        }` + (warnings.length ? ` (${warnings.length} warnings)` : ""),
     };
   },
 });

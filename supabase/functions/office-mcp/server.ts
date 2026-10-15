@@ -2,7 +2,14 @@
 // through the shared runner (permission check, audit row, the tool, the outcome).
 
 import { McpServer } from "@modelcontextprotocol/server";
-import { type Actor, canCall, type Db, INSTRUCTIONS, runTool, TOOLS } from "../_shared/fleet/index.ts";
+import {
+  type Actor,
+  canCall,
+  type Db,
+  INSTRUCTIONS,
+  runTool,
+  TOOLS,
+} from "../_shared/fleet/index.ts";
 
 interface ToolReply {
   content: { type: "text"; text: string }[];
@@ -11,11 +18,17 @@ interface ToolReply {
 }
 
 function reply(text: string, isError = false): ToolReply {
-  return { content: [{ type: "text", text }], ...(isError && { isError: true }) };
+  return {
+    content: [{ type: "text", text }],
+    ...(isError && { isError: true }),
+  };
 }
 
 export function buildServer(db: Db, actor: Actor): McpServer {
-  const server = new McpServer({ name: "fame-fleet-office", version: "1.1.0" }, { instructions: INSTRUCTIONS });
+  const server = new McpServer(
+    { name: "fame-fleet-office", version: "1.1.0" },
+    { instructions: INSTRUCTIONS },
+  );
   for (const def of TOOLS) {
     if (!canCall(actor, def.name)) continue;
     server.registerTool(

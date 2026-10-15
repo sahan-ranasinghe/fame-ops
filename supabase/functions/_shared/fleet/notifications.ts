@@ -47,7 +47,12 @@ export const EVENTS: readonly EventInfo[] = [
     text: "Someone asks for a vehicle; it waits for your decision",
     needs: ["approve"],
   },
-  { event: "request.decided", label: "Your request is decided", text: "A request you made is approved or declined", needs: ["request"] },
+  {
+    event: "request.decided",
+    label: "Your request is decided",
+    text: "A request you made is approved or declined",
+    needs: ["request"],
+  },
   {
     event: "task.declined",
     label: "A driver can't do a task",
@@ -66,7 +71,12 @@ export const EVENTS: readonly EventInfo[] = [
     text: "A breakdown or accident, a document expired, a task far behind",
     needs: ["issues"],
   },
-  { event: "issue.assigned", label: "An issue is given to you", text: "Someone assigns an issue to you", needs: ["issues"] },
+  {
+    event: "issue.assigned",
+    label: "An issue is given to you",
+    text: "Someone assigns an issue to you",
+    needs: ["issues"],
+  },
   {
     event: "vehicle.booked",
     label: "A vehicle you look after is booked",
@@ -82,7 +92,8 @@ export const EVENTS: readonly EventInfo[] = [
   {
     event: "request.changed",
     label: "An approved request is changed",
-    text: "The person who asked changed an approved booking: it needs re-approval",
+    text:
+      "The person who asked changed an approved booking: it needs re-approval",
     needs: ["approve"],
   },
   {
@@ -94,7 +105,8 @@ export const EVENTS: readonly EventInfo[] = [
   {
     event: "booking.changed",
     label: "A booking is changed by the office",
-    text: "The time, vehicle or driver of a booking you asked for, or of a vehicle you look after, is changed",
+    text:
+      "The time, vehicle or driver of a booking you asked for, or of a vehicle you look after, is changed",
     needs: [],
   },
 ];
@@ -125,8 +137,15 @@ export interface RecipientContext {
 }
 
 /** Who an event goes to, from the active office people. Pure. */
-export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx: RecipientContext = {}): string[] {
-  const holders = (...perms: string[]) => people.filter((p) => perms.some((x) => p.permissions.includes(x))).map((p) => p.id);
+export function recipientsFor(
+  event: NotifyEvent,
+  people: readonly Person[],
+  ctx: RecipientContext = {},
+): string[] {
+  const holders = (...perms: string[]) =>
+    people.filter((p) => perms.some((x) => p.permissions.includes(x))).map((
+      p,
+    ) => p.id);
   let ids: string[];
   switch (event) {
     case "request.created":
@@ -165,7 +184,9 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
 
 /** The events a person can receive, by their permissions (the Settings page). Pure. */
 export function relevantEvents(permissions: readonly string[]): EventInfo[] {
-  return EVENTS.filter((e) => e.needs.length === 0 || e.needs.some((p) => permissions.includes(p)));
+  return EVENTS.filter((e) =>
+    e.needs.length === 0 || e.needs.some((p) => permissions.includes(p))
+  );
 }
 
 /** "Chrome on Android", "Safari on iPhone", "Edge on Windows"… from a browser's user agent. Pure. */
@@ -206,16 +227,28 @@ export function deviceLabel(userAgent: string | null | undefined): string {
 /** The active office people with their permissions. */
 export async function officePeople(db: Db): Promise<Person[]> {
   const rows = unwrap(
-    await db.from("employees").select("id, permissions").eq("active", true).in("role", [...OFFICE_ROLES]).limit(2000),
+    await db.from("employees").select("id, permissions").eq("active", true).in(
+      "role",
+      [...OFFICE_ROLES],
+    ).limit(2000),
     "employees",
   );
   return rows.map((e) => ({ id: e.id, permissions: e.permissions ?? [] }));
 }
 
 /** Writes the outbox rows (one per recipient the database function accepts). Never throws. */
-export async function notify(db: Db, event: NotifyEvent, message: Message, recipients: string[]): Promise<number> {
+export async function notify(
+  db: Db,
+  event: NotifyEvent,
+  message: Message,
+  recipients: string[],
+): Promise<number> {
   if (recipients.length === 0) return 0;
-  const { data, error } = await db.rpc("queue_notification", { p_event: event, p_payload: { ...message }, p_recipients: recipients });
+  const { data, error } = await db.rpc("queue_notification", {
+    p_event: event,
+    p_payload: { ...message },
+    p_recipients: recipients,
+  });
   if (error) {
     console.error(`notify ${event}: ${error.message}`);
     return 0;
@@ -224,12 +257,21 @@ export async function notify(db: Db, event: NotifyEvent, message: Message, recip
 }
 
 /** The people, the recipients, the rows: one call from a tool. */
-export async function notifyEvent(db: Db, event: NotifyEvent, message: Message, ctx: RecipientContext = {}): Promise<number> {
+export async function notifyEvent(
+  db: Db,
+  event: NotifyEvent,
+  message: Message,
+  ctx: RecipientContext = {},
+): Promise<number> {
   try {
     const people = await officePeople(db);
     return await notify(db, event, message, recipientsFor(event, people, ctx));
   } catch (error) {
-    console.error(`notify ${event}: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `notify ${event}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
     return 0;
   }
 }

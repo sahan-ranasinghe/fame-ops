@@ -9,7 +9,12 @@ import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { loadSettings } from "../settings.ts";
 import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
 import { tool, zMonth, zText } from "../tool.ts";
-import { VIDEO_LINK_NOTE, videoCard, videoLinks, videoStatusOf } from "../videos.ts";
+import {
+  VIDEO_LINK_NOTE,
+  videoCard,
+  videoLinks,
+  videoStatusOf,
+} from "../videos.ts";
 
 export const listFuel = tool({
   name: "list_fuel",
@@ -18,7 +23,7 @@ export const listFuel = tool({
     "Every fuel entry of a month (newest first): the vehicle, the driver, litres, LKR, the odometer, the receipt photo link, and the " +
     "video of the fill: its status (uploaded with 1-hour links, one per piece when the recording was interrupted and continued; " +
     "uploading or recorded on the phone; failed; pruned after the keep months; none), its length, size, and the steps the driver " +
-    "ticked while recording with the second of each (marks: bookmarks into the video; timeline: \"Plate 0:04 · Zero 0:11 · …\"). " +
+    'ticked while recording with the second of each (marks: bookmarks into the video; timeline: "Plate 0:04 · Zero 0:11 · …"). ' +
     "Totals for the month.",
   readOnly: true,
   input: z.object({
@@ -29,17 +34,27 @@ export const listFuel = tool({
   async run({ month, vehicle, driver }, { db, now }) {
     const which = month ?? colomboDate(now).slice(0, 7);
     const { from, to } = monthRange(which);
-    const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
+    const [refs, settings] = await Promise.all([
+      loadRefs(db),
+      loadSettings(db),
+    ]);
     const onlyVehicle = vehicle ? findVehicle(refs, vehicle) : null;
     const onlyDriver = driver ? findDriver(refs, driver) : null;
     const logs = await fetchAll((a, b) => {
-      let q = db.from("fuel_logs").select("*").gte("logged_at", from).lt("logged_at", to);
+      let q = db.from("fuel_logs").select("*").gte("logged_at", from).lt(
+        "logged_at",
+        to,
+      );
       if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
       if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
       return q.order("logged_at", { ascending: false }).order("id").range(a, b);
     }, "fuel logs");
     const [photos, videos] = await Promise.all([
-      photoLinks(db, { ids: logs.flatMap((l) => l.receipt_photo_id ? [l.receipt_photo_id] : []) }),
+      photoLinks(db, {
+        ids: logs.flatMap((l) =>
+          l.receipt_photo_id ? [l.receipt_photo_id] : []
+        ),
+      }),
       videoLinks(db, logs),
     ]);
     const entries = logs.map((l) => ({
@@ -53,17 +68,32 @@ export const listFuel = tool({
       lkr: centsToLkr(l.amount_cents),
       odometer_km: l.odometer_km,
       receipt: photoOrNote(photos, l.receipt_photo_id),
-      video: videoCard(l, videos, l.video_uploaded_at ? colomboDateTime(l.video_uploaded_at) : undefined, settings.fuel_video_checklist),
+      video: videoCard(
+        l,
+        videos,
+        l.video_uploaded_at ? colomboDateTime(l.video_uploaded_at) : undefined,
+        settings.fuel_video_checklist,
+      ),
     }));
     const totals = {
       entries: entries.length,
-      litres: Math.round(entries.reduce((s, e) => s + (e.litres ?? 0), 0) * 100) / 100,
+      litres: Math.round(
+        entries.reduce((s, e) => s + (e.litres ?? 0), 0) * 100,
+      ) / 100,
       lkr: entries.reduce((s, e) => s + (e.lkr ?? 0), 0),
       videos: logs.filter((l) => videoStatusOf(l) === "uploaded").length,
       interrupted: logs.filter((l) => l.video_interrupted).length,
-      videos_waiting: logs.filter((l) => ["recorded", "uploading"].includes(videoStatusOf(l))).length,
-      videos_missing: logs.filter((l) => ["none", "failed"].includes(videoStatusOf(l))).length,
-      bytes: logs.reduce((s, l) => s + (videoStatusOf(l) === "uploaded" ? l.video_bytes ?? 0 : 0), 0),
+      videos_waiting: logs.filter((l) =>
+        ["recorded", "uploading"].includes(videoStatusOf(l))
+      ).length,
+      videos_missing: logs.filter((l) =>
+        ["none", "failed"].includes(videoStatusOf(l))
+      ).length,
+      bytes: logs.reduce(
+        (s, l) =>
+          s + (videoStatusOf(l) === "uploaded" ? l.video_bytes ?? 0 : 0),
+        0,
+      ),
     };
     return {
       result: {
@@ -74,7 +104,9 @@ export const listFuel = tool({
         entries,
         links: `${PHOTO_LINK_NOTE} ${VIDEO_LINK_NOTE}`,
       },
-      summary: `fuel ${which}: ${entries.length} entries, ${totals.videos} videos` + (onlyVehicle ? ` (${onlyVehicle.reg_no})` : "") +
+      summary:
+        `fuel ${which}: ${entries.length} entries, ${totals.videos} videos` +
+        (onlyVehicle ? ` (${onlyVehicle.reg_no})` : "") +
         (onlyDriver ? ` (${onlyDriver.name})` : ""),
     };
   },

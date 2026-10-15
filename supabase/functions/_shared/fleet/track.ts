@@ -74,15 +74,15 @@ export interface TrackState {
 }
 
 export type Verdict =
-  | 'first'
-  | 'still'
-  | 'moved'
-  | 'pending'
-  | 'reanchored'
-  | 'bad_accuracy'
-  | 'jump'
-  | 'drift'
-  | 'out_of_order';
+  | "first"
+  | "still"
+  | "moved"
+  | "pending"
+  | "reanchored"
+  | "bad_accuracy"
+  | "jump"
+  | "drift"
+  | "out_of_order";
 
 export interface StepResult {
   verdict: Verdict;
@@ -97,14 +97,26 @@ export interface StepResult {
 }
 
 export function newTrack(): TrackState {
-  return { anchor: null, stopStart: 0, lastStill: 0, pending: null, driftRun: [], metres: 0, justMoved: false };
+  return {
+    anchor: null,
+    stopStart: 0,
+    lastStill: 0,
+    pending: null,
+    driftRun: [],
+    metres: 0,
+    justMoved: false,
+  };
 }
 
 /** Straight-line distance in metres. */
-export function distanceM(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+export function distanceM(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
   const dLat = rad(b.lat - a.lat);
   const dLng = rad(b.lng - a.lng);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 +
+    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * EARTH_M * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
@@ -118,7 +130,10 @@ function moving(fix: Fix): boolean {
 
 /** How far two fixes must be apart to count as different places. */
 export function moveThresholdM(a: Fix, b: Fix): number {
-  return Math.max(MIN_MOVE_M, (a.accuracyM ?? MIN_MOVE_M) + (b.accuracyM ?? MIN_MOVE_M));
+  return Math.max(
+    MIN_MOVE_M,
+    (a.accuracyM ?? MIN_MOVE_M) + (b.accuracyM ?? MIN_MOVE_M),
+  );
 }
 
 function tooFast(from: Fix, fromAt: number, to: Fix): boolean {
@@ -135,9 +150,11 @@ function tooFast(from: Fix, fromAt: number, to: Fix): boolean {
 function consistent(pending: Fix, next: Fix): boolean {
   const seconds = (next.at - pending.at) / 1000;
   if (seconds <= 0) return false;
-  const expected = (((pending.speedMps ?? 0) + (next.speedMps ?? 0)) / 2) * seconds;
+  const expected = (((pending.speedMps ?? 0) + (next.speedMps ?? 0)) / 2) *
+    seconds;
   const actual = distanceM(pending, next);
-  return actual >= 0.4 * expected && actual <= 3 * expected + moveThresholdM(pending, next);
+  return actual >= 0.4 * expected &&
+    actual <= 3 * expected + moveThresholdM(pending, next);
 }
 
 function stopAt(state: TrackState): Stop | undefined {
@@ -145,7 +162,13 @@ function stopAt(state: TrackState): Stop | undefined {
   if (!anchor) return undefined;
   const minutes = (state.lastStill - state.stopStart) / 60000;
   if (minutes < STOP_MINUTES) return undefined;
-  return { from: state.stopStart, to: state.lastStill, minutes: Math.round(minutes), lat: anchor.lat, lng: anchor.lng };
+  return {
+    from: state.stopStart,
+    to: state.lastStill,
+    minutes: Math.round(minutes),
+    lat: anchor.lat,
+    lng: anchor.lng,
+  };
 }
 
 function setAnchor(state: TrackState, fix: Fix, at: number): void {
@@ -158,17 +181,19 @@ function setAnchor(state: TrackState, fix: Fix, at: number): void {
 
 /** Feeds one fix, in time order. Changes `state` in place. */
 export function step(state: TrackState, fix: Fix): StepResult {
-  if (!usable(fix)) return { verdict: 'bad_accuracy', movedM: 0 };
+  if (!usable(fix)) return { verdict: "bad_accuracy", movedM: 0 };
 
   if (!state.anchor) {
     setAnchor(state, fix, fix.at);
-    return { verdict: 'first', movedM: 0, accepted: fix };
+    return { verdict: "first", movedM: 0, accepted: fix };
   }
 
   const reference = state.pending ?? state.anchor;
   const referenceAt = state.pending ? state.pending.at : state.lastStill;
-  if (fix.at <= referenceAt) return { verdict: 'out_of_order', movedM: 0 };
-  if (tooFast(reference, referenceAt, fix)) return { verdict: 'jump', movedM: 0 };
+  if (fix.at <= referenceAt) return { verdict: "out_of_order", movedM: 0 };
+  if (tooFast(reference, referenceAt, fix)) {
+    return { verdict: "jump", movedM: 0 };
+  }
 
   let result: StepResult | null = null;
 
@@ -181,7 +206,7 @@ export function step(state: TrackState, fix: Fix): StepResult {
       state.metres += metres;
       setAnchor(state, pending, pending.at);
       state.justMoved = true;
-      result = { verdict: 'moved', movedM: metres, accepted: pending, stop };
+      result = { verdict: "moved", movedM: metres, accepted: pending, stop };
     } else {
       state.pending = null;
     }
@@ -194,27 +219,41 @@ export function step(state: TrackState, fix: Fix): StepResult {
     state.driftRun = [];
     const arrived = state.justMoved;
     state.justMoved = false;
-    return result ? { ...result, arrived } : { verdict: 'still', movedM: 0, arrived };
+    return result
+      ? { ...result, arrived }
+      : { verdict: "still", movedM: 0, arrived };
   }
 
   if (moving(fix)) {
     state.pending = fix;
     state.driftRun = [];
-    return result ?? { verdict: 'pending', movedM: 0 };
+    return result ?? { verdict: "pending", movedM: 0 };
   }
 
   // No speed: a wrong fix, unless a run of fixes keeps agreeing on this other place.
   const run = state.driftRun;
-  if (run.length > 0 && distanceM(run[run.length - 1], fix) > moveThresholdM(run[run.length - 1], fix)) run.length = 0;
+  if (
+    run.length > 0 &&
+    distanceM(run[run.length - 1], fix) >
+      moveThresholdM(run[run.length - 1], fix)
+  ) run.length = 0;
   run.push(fix);
-  if (run.length >= REANCHOR_FIXES && (fix.at - run[0].at) / 1000 >= REANCHOR_SECONDS) {
+  if (
+    run.length >= REANCHOR_FIXES &&
+    (fix.at - run[0].at) / 1000 >= REANCHOR_SECONDS
+  ) {
     const stop = stopAt(state);
     const first = run[0];
     setAnchor(state, first, fix.at);
     state.justMoved = false;
-    return { verdict: 'reanchored', movedM: 0, accepted: first, stop: result?.stop ?? stop };
+    return {
+      verdict: "reanchored",
+      movedM: 0,
+      accepted: first,
+      stop: result?.stop ?? stop,
+    };
   }
-  return result ?? { verdict: 'drift', movedM: 0 };
+  return result ?? { verdict: "drift", movedM: 0 };
 }
 
 /** The stop the phone is in at the end of the data, if it has lasted 10 minutes or more. */
@@ -239,11 +278,16 @@ export function summarise(fixes: Fix[]): TrackSummary {
   let moved = 0;
   for (const fix of fixes) {
     const result = step(state, fix);
-    if (result.verdict !== 'bad_accuracy') usableCount += 1;
-    if (result.verdict === 'moved') moved += 1;
+    if (result.verdict !== "bad_accuracy") usableCount += 1;
+    if (result.verdict === "moved") moved += 1;
     if (result.stop) stops.push(result.stop);
   }
   const last = openStop(state);
   if (last) stops.push(last);
-  return { km: Math.round((state.metres / 1000) * 10) / 10, stops, usable: usableCount, moved };
+  return {
+    km: Math.round((state.metres / 1000) * 10) / 10,
+    stops,
+    usable: usableCount,
+    moved,
+  };
 }

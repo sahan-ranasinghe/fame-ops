@@ -4,7 +4,9 @@
 export function phoneDigits(phone: string | null | undefined): string | null {
   if (!phone) return null;
   const digits = phone.replace(/\D/g, "");
-  if (digits.length === 10 && digits.startsWith("0")) return `94${digits.slice(1)}`;
+  if (digits.length === 10 && digits.startsWith("0")) {
+    return `94${digits.slice(1)}`;
+  }
   if (digits.length === 9) return `94${digits}`;
   return digits.length >= 9 ? digits : null;
 }
@@ -14,10 +16,15 @@ export function telLink(phone: string | null | undefined): string | null {
   return digits ? `tel:+${digits}` : null;
 }
 
-export function waLink(phone: string | null | undefined, text?: string): string | null {
+export function waLink(
+  phone: string | null | undefined,
+  text?: string,
+): string | null {
   const digits = phoneDigits(phone);
   if (!digits) return null;
-  return text ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}` : `https://wa.me/${digits}`;
+  return text
+    ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/${digits}`;
 }
 
 /** Google Maps pin at a position. */
@@ -26,12 +33,22 @@ export function mapsPoint(lat: number, lng: number): string {
 }
 
 /** Google Maps directions to coordinates or, failing that, to an address. */
-export function mapsDirections(to: { lat?: number | null; lng?: number | null; text?: string | null }): string | null {
-  const destination = to.lat != null && to.lng != null ? `${to.lat},${to.lng}` : to.text?.trim();
-  return destination ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}` : null;
+export function mapsDirections(
+  to: { lat?: number | null; lng?: number | null; text?: string | null },
+): string | null {
+  const destination = to.lat != null && to.lng != null
+    ? `${to.lat},${to.lng}`
+    : to.text?.trim();
+  return destination
+    ? `https://www.google.com/maps/dir/?api=1&destination=${
+      encodeURIComponent(destination)
+    }`
+    : null;
 }
 
-export function contactLinks(phone: string | null | undefined): { call: string | null; whatsapp: string | null } {
+export function contactLinks(
+  phone: string | null | undefined,
+): { call: string | null; whatsapp: string | null } {
   return { call: telLink(phone), whatsapp: waLink(phone) };
 }
 

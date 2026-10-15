@@ -13,10 +13,20 @@ import {
   setOfficeUserActive,
   updateOfficeUser,
 } from "./tools/accounts.ts";
-import { createDriver, listDrivers, resetPin, setDriverActive, updateDriver } from "./tools/drivers.ts";
+import {
+  createDriver,
+  listDrivers,
+  resetPin,
+  setDriverActive,
+  updateDriver,
+} from "./tools/drivers.ts";
 import { driverRoute, liveDrivers, watchDrivers } from "./tools/locations.ts";
 import { listFuel } from "./tools/fuel.ts";
-import { listVehicleReports, mileageSummary, updateVehicleReport } from "./tools/mileage.ts";
+import {
+  listVehicleReports,
+  mileageSummary,
+  updateVehicleReport,
+} from "./tools/mileage.ts";
 import { fleetOverview } from "./tools/overview.ts";
 import {
   addPlace,
@@ -36,12 +46,40 @@ import {
 import { registerMapLoad } from "./tools/google.ts";
 import { findProject, importProjects } from "./tools/projects.ts";
 import { availability } from "./tools/availability.ts";
-import { bookVehicle, cancelRequest, createRequest, decideRequest, listRequests, redecideRequest, suggestVehicles, updateRequest } from "./tools/requests.ts";
+import {
+  bookVehicle,
+  cancelRequest,
+  createRequest,
+  decideRequest,
+  listRequests,
+  redecideRequest,
+  suggestVehicles,
+  updateRequest,
+} from "./tools/requests.ts";
 import { issueHistory, listIssues, updateIssue } from "./tools/issues.ts";
-import { myNotificationSettings, registerWebPush, removeWebPush, setMyNotificationSettings } from "./tools/notifications.ts";
+import {
+  myNotificationSettings,
+  registerWebPush,
+  removeWebPush,
+  setMyNotificationSettings,
+} from "./tools/notifications.ts";
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
-import { cancelTask, createTask, planTask, reassignTask, taskBoard, taskDetail, updateTask, updateTaskStops } from "./tools/tasks.ts";
-import { addRentalCompany, listVehicles, registerVehicle, updateVehicle } from "./tools/vehicles.ts";
+import {
+  cancelTask,
+  createTask,
+  planTask,
+  reassignTask,
+  taskBoard,
+  taskDetail,
+  updateTask,
+  updateTaskStops,
+} from "./tools/tasks.ts";
+import {
+  addRentalCompany,
+  listVehicles,
+  registerVehicle,
+  updateVehicle,
+} from "./tools/vehicles.ts";
 
 export const TOOLS: AnyTool[] = [
   fleetOverview,
@@ -138,7 +176,7 @@ export const INSTRUCTIONS = [
   "Every fuel fill has a silent video from the driver's phone (list_fuel: the month's entries with 1-hour video links; task_detail " +
   "shows a task's fills, each with marks: the steps the driver ticked and the second of each). Videos are kept 12 months (fuel_video_keep_months). " +
   "The steps the driver shows in order while recording are the setting fuel_video_checklist (plate, zero, pumping, final by default).",
-  "The Google package (get_settings google): search_places with google offers Google's places (credit them \"Google Maps\"); " +
+  'The Google package (get_settings google): search_places with google offers Google\'s places (credit them "Google Maps"); ' +
   "google_place gives a result's pin (kept 30 days, never saved as one of our places) and a stop takes its google_place_id with the " +
   "name as place. Plans and ETAs then use Google's traffic. Every Google call is counted against a daily and a monthly cap; at a cap " +
   "the open package answers and a note says so. Google's terms: never draw a Google stop (google: true) or Google data on a map that " +
@@ -164,7 +202,17 @@ export {
   TOOL_PERMISSION,
   toolsFor,
 } from "./permissions.ts";
-export { type Actor, canCall, type Channel, isRole, mfaRequiredRoles, OFFICE_ROLES, type Role, STRONG_ROLES, TOOL_ROLES } from "./roles.ts";
+export {
+  type Actor,
+  canCall,
+  type Channel,
+  isRole,
+  mfaRequiredRoles,
+  OFFICE_ROLES,
+  type Role,
+  STRONG_ROLES,
+  TOOL_ROLES,
+} from "./roles.ts";
 export { runTool, type ToolOutcome } from "./run.ts";
 export type { AnyTool } from "./tool.ts";
 export { googleUse } from "./google.ts";
