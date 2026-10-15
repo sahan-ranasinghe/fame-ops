@@ -12,7 +12,8 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/icons";
-import { type MapProps, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
+import { plainRuns } from "./DrawnMap";
+import { ESTIMATED_COLOR, type MapProps, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
 
 export const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 const SRI_LANKA: [number, number] = [80.7, 7.8];
@@ -41,9 +42,12 @@ const lngLat = (p: RoutePoint): [number, number] => [p.lng, p.lat];
 
 /** One LineString per step, carrying its speed class and whether the fix was poor (the layer colours and thins by them). */
 function stepFeatures(points: RoutePoint[], bySpeed: boolean): Feature[] {
-  if (!bySpeed) return points.length > 1 ? [{ type: "Feature", properties: { cls: "normal", conf: "good" }, geometry: { type: "LineString", coordinates: points.map(lngLat) } }] : [];
+  if (!bySpeed) {
+    return plainRuns(points).map((run): Feature => ({ type: "Feature", properties: { cls: "normal", conf: "good" }, geometry: { type: "LineString", coordinates: run.map(lngLat) } }));
+  }
   const out: Feature[] = [];
   for (let i = 1; i < points.length; i++) {
+    if (points[i].gapBefore) continue; // drawn as an estimated road line instead
     out.push({
       type: "Feature",
       properties: { cls: speedClass(points[i].kmh ?? 0), conf: poorStep(points[i - 1], points[i]) ? "poor" : "good" },
@@ -87,6 +91,15 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
         source: "holes",
         layout: { "symbol-placement": "line-center", "text-field": ["get", "label"], "text-size": 11, "text-font": ["Noto Sans Regular"], "text-offset": [0, -0.9], "text-allow-overlap": false },
         paint: { "text-color": "#5a5e63", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+      });
+      m.addSource("estimated", { type: "geojson", data: empty() });
+      m.addLayer({ id: "estimated-line", type: "line", source: "estimated", paint: { "line-color": ESTIMATED_COLOR, "line-width": 3.5, "line-dasharray": [1, 2] }, layout: { "line-cap": "round", "line-join": "round" } });
+      m.addLayer({
+        id: "estimated-label",
+        type: "symbol",
+        source: "estimated",
+        layout: { "symbol-placement": "line-center", "text-field": ["get", "label"], "text-size": 11, "text-font": ["Noto Sans Regular"], "text-offset": [0, -0.9], "text-allow-overlap": false },
+        paint: { "text-color": ESTIMATED_COLOR, "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
       });
       m.addSource("route", { type: "geojson", data: empty() });
       m.addLayer({
@@ -183,7 +196,16 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
     if (!m || !ready) return;
     const src = m.getSource("route") as maplibregl.GeoJSONSource | undefined;
     const holeSrc = m.getSource("holes") as maplibregl.GeoJSONSource | undefined;
+    const estSrc = m.getSource("estimated") as maplibregl.GeoJSONSource | undefined;
     if (!src || !holeSrc) return;
+    estSrc?.setData({
+      type: "FeatureCollection",
+      features: (route?.estimated ?? []).filter((e) => e.points.length > 1).map((e) => ({
+        type: "Feature",
+        properties: { label: e.label },
+        geometry: { type: "LineString", coordinates: e.points.map((p): [number, number] => [p.lng, p.lat]) },
+      })),
+    });
     stopEls.current.forEach((s) => s.remove());
     stopEls.current = [];
     if (!route || !route.points.length) {

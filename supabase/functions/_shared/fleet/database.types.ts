@@ -755,6 +755,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"route_gap_lines": {
+                  Row: {
+                    "fetched_at": string,"from_lat": number,"from_lng": number,"geometry": NonNullable<Json>,"km": number | null,"provider": string,"to_lat": number,"to_lng": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "fetched_at"?: string,"from_lat": number,"from_lng": number,"geometry": NonNullable<Json>,"km"?: number | null,"provider"?: string,"to_lat": number,"to_lng": number
+                  }
+                  Update: {
+                    "fetched_at"?: string,"from_lat"?: number,"from_lng"?: number,"geometry"?: NonNullable<Json>,"km"?: number | null,"provider"?: string,"to_lat"?: number,"to_lng"?: number
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"route_legs": {
                   Row: {
                     "avoid_expressway": boolean,"computed_at": string,"from_lat": number,"from_lng": number,"id": number,"km": number,"minutes": number,"provider": string,"to_lat": number,"to_lng": number,"via_expressway": boolean | null
@@ -897,19 +911,25 @@ isOneToOne: false
                   ]
                 },"task_stops": {
                   Row: {
-                    "address": string | null,"arrive_by": string | null,"arrived_at": string | null,"auto_detected_at": string | null,"done_at": string | null,"dwell_min": number | null,"google_fetched_at": string | null,"google_place_id": string | null,"id": string,"lat": number | null,"lng": number | null,"note": string | null,"place_id": string | null,"place_name": string,"planned_arrive_at": string | null,"planned_depart_at": string | null,"removed_at": string | null,"seq": number,"skip_note": string | null,"skip_reason": string | null,"status": string,"task_id": string,"type": string,"what": string | null
+                    "address": string | null,"arrival_accuracy_m": number | null,"arrival_at": string | null,"arrival_lat": number | null,"arrival_lng": number | null,"arrive_by": string | null,"arrived_at": string | null,"auto_detected_at": string | null,"done_at": string | null,"dwell_min": number | null,"google_fetched_at": string | null,"google_place_id": string | null,"id": string,"lat": number | null,"lng": number | null,"note": string | null,"place_id": string | null,"place_name": string,"planned_arrive_at": string | null,"planned_depart_at": string | null,"removed_at": string | null,"saved_place_id": string | null,"seq": number,"skip_note": string | null,"skip_reason": string | null,"status": string,"task_id": string,"type": string,"what": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name": string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"seq": number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id": string,"type": string,"what"?: string | null
+                    "address"?: string | null,"arrival_accuracy_m"?: number | null,"arrival_at"?: string | null,"arrival_lat"?: number | null,"arrival_lng"?: number | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name": string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"saved_place_id"?: string | null,"seq": number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id": string,"type": string,"what"?: string | null
                   }
                   Update: {
-                    "address"?: string | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name"?: string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"seq"?: number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id"?: string,"type"?: string,"what"?: string | null
+                    "address"?: string | null,"arrival_accuracy_m"?: number | null,"arrival_at"?: string | null,"arrival_lat"?: number | null,"arrival_lng"?: number | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name"?: string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"saved_place_id"?: string | null,"seq"?: number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id"?: string,"type"?: string,"what"?: string | null
                   }
                   Relationships: [
                     {
       foreignKeyName: "task_stops_place_id_fkey"
       columns: ["place_id"]
+isOneToOne: false
+      referencedRelation: "places"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_stops_saved_place_id_fkey"
+      columns: ["saved_place_id"]
 isOneToOne: false
       referencedRelation: "places"
       referencedColumns: ["id"]
@@ -1128,6 +1148,9 @@ isOneToOne: false
 "dispatch_recipients":
 { Args: Record<PropertyKey, never>; Returns: (string)[]
                            },
+"fill_stop_arrivals":
+{ Args: { "p_days"?: number }; Returns: number
+                           },
 "fleet_sync":
 { Args: { "p_scope"?: Json }; Returns: undefined
                            },
@@ -1145,6 +1168,9 @@ isOneToOne: false
                            },
 "issue_visible":
 { Args: { "p_kind": string }; Returns: boolean
+                           },
+"nearest_town_name":
+{ Args: { "p_lat": number,"p_lng": number }; Returns: string
                            },
 "notify_retry":
 { Args: Record<PropertyKey, never>; Returns: undefined

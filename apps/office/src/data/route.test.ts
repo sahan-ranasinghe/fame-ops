@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusOf, insertPoint, mapRouteOf, mergeRoute, minutesText, routeOf } from "./route";
+import { estimatedLegend, focusOf, insertPoint, mapRouteOf, mergeRoute, minutesText, routeOf } from "./route";
 import type { DriverRoute } from "./types";
 
 const day = "2026-10-12";
@@ -136,5 +136,29 @@ describe("the 60-second refetch merges into the line already drawn", () => {
     expect(merged.lineEndAt).toBe(Date.parse(`${day}T16:31:40+05:30`));
     // Another driver's answer is never merged in.
     expect(mergeRoute(live, routeOf("other", answer)).username).toBe("other");
+  });
+});
+
+describe("estimated lines over gaps (Part 5b)", () => {
+  const withGaps: DriverRoute = {
+    ...answer,
+    holes: [{ from_at: iso("15:38"), to_at: iso("16:31"), minutes: 53, kind: "no_gps", text: "Stopped · no GPS signal · 53 min" }],
+    estimated: [
+      { from_at: iso("08:01"), to_at: iso("09:55"), from: "08:01", to: "09:55", km_road: 12.4, points: [[6.88, 79.86], [6.92, 79.875], [6.96, 79.89]] },
+      { from_at: iso("15:38"), to_at: iso("16:31"), from: "15:38", to: "16:31", points: [[6.96, 79.89], [6.95, 79.87], [6.93, 79.86]] },
+    ],
+  };
+  it("a gap with an estimated road line is drawn along it, dashed: its straight step and its straight hole go, the hole's words stay", () => {
+    const m = mapRouteOf(routeOf("nuwan.p", withGaps))!;
+    expect(m.points.map((p) => !!p.gapBefore)).toEqual([false, true, false, false, false, true]);
+    expect(m.holes).toEqual([]);
+    expect(m.estimated!.map((e) => e.label)).toEqual(["estimated · 12.4 km road", "No GPS signal · 53 min · estimated"]);
+    expect(m.estimated![0].points).toEqual([{ lat: 6.88, lng: 79.86 }, { lat: 6.92, lng: 79.875 }, { lat: 6.96, lng: 79.89 }]);
+  });
+  it("the legend says what the dashed slate lines are, and why some gaps stay straight", () => {
+    expect(estimatedLegend(routeOf("nuwan.p", withGaps))).toBe("Dashed slate: 2 gaps in the GPS drawn along the likely road (estimated, not counted in km)");
+    expect(estimatedLegend(routeOf("nuwan.p", { ...answer, estimated_note: "Estimated line limit reached for today: the other gaps are straight" })))
+      .toBe("Estimated line limit reached for today: the other gaps are straight");
+    expect(estimatedLegend(routeOf("nuwan.p", answer))).toBeNull();
   });
 });

@@ -6,12 +6,13 @@ import { useEffect, useState } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
-import { type Route, mapRouteOf, minutesText, routeOf, snapLegend } from "../data/route";
+import { estimatedLegend, type Route, mapRouteOf, minutesText, routeOf, snapLegend } from "../data/route";
 import type { DriverRoute, TaskDetail as TaskDetailData } from "../data/types";
 import { cap, hhmm, joinDots, num, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { MapView } from "../map/MapView";
+import { StopArrival } from "./StopArrival";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { PageTop } from "../ui/Page";
@@ -55,7 +56,7 @@ export function useBoardBack(): string {
 export function TaskDetail() {
   const { id = "" } = useParams();
   const { me } = useFleet();
-  const { p, err } = useTask(id);
+  const { p, err, reload } = useTask(id);
   const backTo = useBoardBack();
   const q = useBoardQuery();
   // The warnings of a change just made on /tasks/:id/edit (passed in the navigation state).
@@ -159,6 +160,7 @@ export function TaskDetail() {
                   ])}
                 </div>
                 {s.note && <div className="sub">Note: {s.note}</div>}
+                <StopArrival stop={s} onSaved={() => void reload()} />
               </div>
               {s.navigate && <a className="btn small" href={s.navigate} {...ext}>Map</a>}
             </div>
@@ -261,7 +263,7 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
     if (!started) return;
     let alive = true;
     setBusy(true);
-    transport.call<DriverRoute>("driver_route", { task_id: id, line_tolerance_m: 0, max_line_points: 3000, snap: true })
+    transport.call<DriverRoute>("driver_route", { task_id: id, line_tolerance_m: 0, max_line_points: 3000, snap: true, estimate_gaps: true })
       .then((p) => { if (alive) setRoute(routeOf("", p)); })
       .catch((e) => { if (alive) setErr(errText(e as FleetError)[0]); })
       .finally(() => { if (alive) setBusy(false); });
@@ -279,6 +281,7 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
         {err && <Notice tone="bad">{err}</Notice>}
         {route && route.points.length > 0 && <MapView markers={[]} route={mapRouteOf(route, null, true)} onPick={() => undefined} />}
         {line && <p className="muted small" style={{ margin: 0 }}>{line}{snapLegend(route, true) ? ` · ${snapLegend(route, true)}` : ""}</p>}
+        {estimatedLegend(route) && <p className="muted small" style={{ margin: 0 }} data-testid="estimated-legend">{estimatedLegend(route)}</p>}
       </div>
     </>
   );

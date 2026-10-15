@@ -45,6 +45,8 @@ export interface Settings {
   ors_autocomplete_daily_cap: number;
   /** … and a minute (the throttle, under the dashboard's 100 a minute shared by all geocoding). */
   ors_autocomplete_per_minute: number;
+  /** The route views' estimated lines over gaps: openrouteservice directions calls a day (Part 5b), inside the directions budget. */
+  ors_gap_daily_cap: number;
   /** google: Google's map, place search, road times and snapping where its keys exist; open: OpenFreeMap, openrouteservice, the estimate (Part 5). */
   map_package: MapPackage;
   /** Google calls a day and a month per feature (Colombo time); the month never above 95 % of Google's free usage. */
@@ -110,6 +112,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   fuel_video_keep_months: 12,
   ors_autocomplete_daily_cap: 2500,
   ors_autocomplete_per_minute: 90,
+  ors_gap_daily_cap: 300,
   map_package: "google",
   google_caps: {
     map_loads: { day: 400, month: 9500 },
@@ -147,6 +150,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   ors_autocomplete_daily_cap:
     "The location search's map calls a day (openrouteservice geocode autocomplete; the dashboard's Geocoding quota of 3,000 a day is shared with search and reverse): after it only our own places show, with \"Map search limit reached for today\"; answers are cached 30 days and never count",
   ors_autocomplete_per_minute: "… and a minute (the dashboard allows 100 a minute for all geocoding): over it the box says \"Map search is busy, try again in a minute\"",
+  ors_gap_daily_cap:
+    "The route views' estimated lines: a gap of over 300 m and 60 s between two points is drawn as the likely road (openrouteservice, dashed, never km), each gap once (cached 30 days); this many new ones a day, inside the 1,900 directions calls a day shared with the road times",
   map_package:
     "The map package: google (Google's map, place search, traffic-aware road times and snap to roads, each where its key is set and under its caps) or open (OpenFreeMap, openrouteservice, the estimate); never mixed on one map",
   google_caps:
@@ -227,6 +232,8 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       return number(value, key, 0, 100000, true);
     case "ors_autocomplete_per_minute":
       return number(value, key, 1, 100, true);
+    case "ors_gap_daily_cap":
+      return number(value, key, 0, 1900, true);
     case "map_package":
       if (value !== "google" && value !== "open") throw new ToolError("map_package: google or open.");
       return value;

@@ -19,6 +19,7 @@ const NUMBERS: [keyof Values, string, string][] = [
   ["accept_before_leave_min", "Accept at the latest (min before leave-by)", "min"],
   ["ors_autocomplete_daily_cap", "Map search calls a day (under the openrouteservice Geocoding quota, shared with search and reverse)", "calls"],
   ["ors_autocomplete_per_minute", "Map search calls a minute (the dashboard allows 100)", "calls"],
+  ["ors_gap_daily_cap", "Estimated lines over GPS gaps: new ones a day (openrouteservice, inside the 1,900 road-time calls)", "calls"],
 ];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

@@ -9,6 +9,7 @@ import { GPS_KM_NOTE } from "../geo.ts";
 import { googleUse } from "../google.ts";
 import { loadSettings, type MapMatchingProvider, type Settings } from "../settings.ts";
 import { snapLegs, type SnapLeg } from "../matching.ts";
+import { estimatedLines } from "../gapRoutes.ts";
 import type { Channel } from "../roles.ts";
 
 /**
@@ -174,8 +175,11 @@ export const driverRoute = tool({
       .describe("How closely the line follows the points, in metres (Douglas–Peucker; default 12 for Claude; 0 removes nothing up to max_line_points and above that uses the smallest tolerance that fits: the web maps pass 0)"),
     max_line_points: z.number().int().min(50).max(10000).optional().describe("At most this many points on the line (default 3000)"),
     snap: z.boolean().optional().describe("Also answer the driving legs snapped to roads (route_snapped) when the map_matching setting names a provider"),
+    estimate_gaps: z.boolean().optional().describe(
+      "Also answer `estimated`: for each gap of over 300 m and 60 s between two points, the likely road (openrouteservice, cached; for a map, never km)",
+    ),
   }),
-  async run({ driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap }, { db, now, actor }) {
+  async run({ driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap, estimate_gaps }, { db, now, actor }) {
     const refs = await loadRefs(db);
     let who: Employee;
     let fromIso: string;
@@ -356,6 +360,15 @@ export const driverRoute = tool({
       snapped = { provider, status: result.status, legs: usable.length, matched: result.legs.filter((l) => l.source === "matched").length };
     }
 
+    // A gap of over 300 m and 60 s: the likely road, dashed on the map (openrouteservice, cached per gap; never km).
+    let estimated: { from_at: string; to_at: string; from: string; to: string; km_road?: number; points: [number, number][] }[] | undefined;
+    let estimatedNote: string | undefined;
+    if (estimate_gaps && route.jumps.length) {
+      const got = await estimatedLines(db, settings, route.jumps, now);
+      estimated = got.lines.map((l) => ({ from_at: iso(l.from), to_at: iso(l.to), from: t(l.from), to: t(l.to), km_road: l.km ?? undefined, points: l.points }));
+      estimatedNote = got.note;
+    }
+
     return {
       result: {
         driver: who.name,
@@ -395,6 +408,9 @@ export const driverRoute = tool({
         },
         route_snapped: routeSnapped,
         snapped,
+        jumps: estimate_gaps ? route.jumps.length : undefined,
+        estimated,
+        estimated_note: estimatedNote,
       },
       summary: `route ${who.name} ${day}: ${rows.length} points, ${route.km} km, ${route.stopsCount} stops`,
     };

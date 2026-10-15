@@ -124,7 +124,8 @@ export function minuteLimiter(n: number): () => boolean {
     return true;
   };
 }
-const orsMinute = minuteLimiter(ORS_PER_MINUTE);
+/** openrouteservice's 40 a minute, shared by the road times and the gaps' estimated lines (one per isolate). */
+export const orsMinute = minuteLimiter(ORS_PER_MINUTE);
 
 async function cached(db: Db, key: CacheKey): Promise<LegAnswer | null> {
   const since = new Date(Date.now() - CACHE_DAYS * 86400000).toISOString();
@@ -150,7 +151,7 @@ async function store(db: Db, key: CacheKey, leg: LegAnswer): Promise<void> {
   );
 }
 
-async function callsToday(db: Db, provider: Provider): Promise<number> {
+export async function callsToday(db: Db, provider: string): Promise<number> {
   const day = new Date(Date.now() + COLOMBO_OFFSET_MS).toISOString().slice(0, 10);
   const row = unwrapMaybe(
     await db.from("routing_calls").select("calls").eq("day", day).eq("provider", provider).maybeSingle(),
@@ -159,7 +160,7 @@ async function callsToday(db: Db, provider: Provider): Promise<number> {
   return row?.calls ?? 0;
 }
 
-async function bump(db: Db, provider: Provider, ok: boolean): Promise<void> {
+export async function bump(db: Db, provider: string, ok: boolean): Promise<void> {
   await db.rpc("bump_routing_calls", { p_provider: provider, p_ok: ok }).then(() => undefined, () => undefined);
 }
 
@@ -171,7 +172,8 @@ async function callOrs(
 ): Promise<LegAnswer | null> {
   const key = Deno.env.get("ORS_KEY");
   if (!key) return null;
-  if ((await callsToday(db, "ors")) >= ORS_DAILY_BUDGET || !orsMinute()) return null;
+  // The directions quota is shared with the gaps' estimated lines (ors_gap): together never over the budget.
+  if ((await callsToday(db, "ors")) + (await callsToday(db, "ors_gap")) >= ORS_DAILY_BUDGET || !orsMinute()) return null;
   const req = orsRequest(from, to, opts, key);
   try {
     const init = { method: "POST", headers: req.headers, body: JSON.stringify(req.body), signal: AbortSignal.timeout(TIMEOUT_MS) };

@@ -9,6 +9,11 @@ export const ORS_DIRECTIONS_URLS = [
   "https://api.heigit.org/openrouteservice/v2/directions/driving-car/json",
   "https://api.openrouteservice.org/v2/directions/driving-car/json",
 ];
+/** Directions with the road geometry (a gap's estimated line, Part 5b). */
+export const ORS_GEOJSON_URLS = [
+  "https://api.heigit.org/openrouteservice/v2/directions/driving-car/geojson",
+  "https://api.openrouteservice.org/v2/directions/driving-car/geojson",
+];
 export const ORS_AUTOCOMPLETE_URLS = [
   "https://api.heigit.org/pelias/v1/autocomplete",
   "https://api.openrouteservice.org/geocode/autocomplete",

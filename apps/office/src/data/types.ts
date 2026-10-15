@@ -123,6 +123,8 @@ export interface FreeAt {
 }
 
 export interface Stop {
+  /** task_detail's stops carry their id (Part 5b: save_arrival_place). */
+  id?: string;
   seq: number;
   type: string;
   what?: string;
@@ -143,6 +145,10 @@ export interface Stop {
   /** A Google place (Part 5): its pin is drawn on Google's map only; the id is kept, the details 30 days. */
   google?: boolean;
   google_place_id?: string;
+  /** Part 5b: where the driver's phone was when the stop was reached (ours, kept for good). */
+  arrival?: { at?: string; lat: number; lng: number; accuracy_m?: number; near?: string; maps?: string };
+  /** Part 5b: the office saved this reached Google stop as one of our places. */
+  saved_place?: { id: string; name: string };
   done?: string;
   skip_reason?: string;
   skip_note?: string;
@@ -662,6 +668,8 @@ export interface FleetSettings {
   /** The location search's map calls a day and a minute (openrouteservice autocomplete; Part 4, 4b). */
   ors_autocomplete_daily_cap?: number;
   ors_autocomplete_per_minute?: number;
+  /** Part 5b: the route views' estimated lines over GPS gaps, new ones a day. */
+  ors_gap_daily_cap?: number;
   /** Part 5: google (Google's map, places, traffic times, snap where keys exist) or open. */
   map_package?: "google" | "open";
   /** Google calls a day and a month per feature; the month at most 95 % of the free usage. */
@@ -829,6 +837,9 @@ export interface DriverRoute {
   route?: { columns: string[]; points: (string | number | null)[][] };
   /** The same line with the driving legs snapped to roads (snap: true and a provider set); a "snapped" column flags its points. */
   route_snapped?: { columns: string[]; points: (string | number | null)[][] };
+  /** Part 5b (estimate_gaps): each gap of over 300 m and 60 s as the likely road, [lat, lng]; for the map, never km. */
+  estimated?: { from_at: string; to_at: string; from: string; to: string; km_road?: number; points: [number, number][] }[];
+  estimated_note?: string;
   snapped?: { provider: string; status: "off" | "ok" | "partial" | "failed"; legs?: number; matched?: number };
   points_stored?: number;
   points_shown?: number;

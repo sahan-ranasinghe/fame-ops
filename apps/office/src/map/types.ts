@@ -26,6 +26,8 @@ export interface RoutePoint {
   acc?: number | null;
   /** The point lies on a road the matcher chose, not on a GPS fix. */
   snapped?: boolean;
+  /** The step that reaches this point is a gap drawn as an estimated road line instead (Part 5b): no solid step. */
+  gapBefore?: boolean;
 }
 
 export interface MapRoute {
@@ -38,7 +40,12 @@ export interface MapRoute {
   holes?: { from: RoutePoint; to: RoutePoint; label: string }[];
   /** A moving marker (playback) and its label. */
   cursor?: { lat: number; lng: number; label: string } | null;
+  /** Gaps of over 300 m and 60 s drawn as the likely road (openrouteservice), dashed and labelled; never km (Part 5b). */
+  estimated?: { points: { lat: number; lng: number }[]; label: string }[];
 }
+
+/** The estimated lines' colour: a quiet slate, dashed, so they never read as a driven line. */
+export const ESTIMATED_COLOR = "#5b6f94";
 
 export interface MapProps {
   markers: MapMarker[];

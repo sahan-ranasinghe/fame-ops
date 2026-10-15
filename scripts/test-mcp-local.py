@@ -980,6 +980,38 @@ check(full["points_shown"] >= rt["points_shown"] and full["km"] == rt["km"], "dr
 check("not started" in tool("driver_route", {"task_id": T2})["note"], "driver_route(task_id) of a task that has not started says so")
 check("which driver" in tool("driver_route", {}, expect_error=True), "driver_route with neither a driver nor a task is refused")
 
+print("\n== 3-5b. Part 5b: the estimated lines of gaps, the arrival point, Save as our place ==")
+eg = tool("driver_route", {"driver": "nuwan.p", "line_tolerance_m": 0, "estimate_gaps": True})
+check(isinstance(eg.get("jumps"), int) and eg["km"] == rt["km"]
+      and (eg["jumps"] == 0 or (not eg.get("estimated") and "openrouteservice key" in eg.get("estimated_note", ""))),
+      "driver_route estimate_gaps: the gaps over 300 m and 60 s counted; with no ORS key none is routed and the note says why; the km unchanged",
+      json.dumps({k: eg.get(k) for k in ("jumps", "estimated_note", "km")}))
+check("jumps" not in rt and "estimated" not in rt, "without estimate_gaps (Claude's default) nothing is asked")
+KID = psql("select id from employees where username = 'kasun.s'")
+VID = psql("select id from vehicles where reg_no = 'WP PH-2087'")
+GP2 = f"ChIJ-suite-arr-{uuid.uuid4().hex[:8]}"
+psql(f"insert into google_pins (google_place_id, lat, lng, address) values ('{GP2}', 7.2931, 80.635, 'Kandy City Centre, Kandy')")
+TID = psql(f"with t as (insert into tasks (title, employee_id, vehicle_id, start_at, created_by) values ('Arrival check', '{KID}', '{VID}', '{day(9)}T08:00:00+05:30', 'suite') returning id) select id from t")
+SID = psql(f"""with s as (insert into task_stops (task_id, seq, type, place_name, address, lat, lng, status, done_at, arrival_lat, arrival_lng, arrival_at, arrival_accuracy_m)
+  values ('{TID}', 1, 'drop', 'Kandy City Centre', 'Kandy City Centre, Kandy', 7.2931, 80.635, 'done', now(), 7.2932, 80.6352, now(), 8) returning id) select id from s""")
+OID = psql(f"with s as (insert into task_stops (task_id, seq, type, place_name, lat, lng, status, done_at, arrival_lat, arrival_lng, arrival_at) values ('{TID}', 2, 'drop', 'Our depot', 6.9, 79.86, 'done', now(), 6.9001, 79.8601, now()) returning id) select id from s")
+tda = tool("task_detail", {"task_id": TID})
+sa = next(x for x in tda["stops"] if x["id"] == SID)
+check(sa.get("google") is True and sa["arrival"]["lat"] == 7.2932 and sa["arrival"]["accuracy_m"] == 8 and sa["arrival"].get("near") and "saved_place" not in sa,
+      "task_detail: a reached Google stop carries the driver's arrival point and the town near it", json.dumps(sa)[:300])
+r = tool("save_arrival_place", {"stop_id": SID, "name": "kandy city centre"}, expect_error=True)
+check("Google's name and address cannot be kept" in r, "save_arrival_place: Google's name is refused", r)
+r = tool("save_arrival_place", {"stop_id": OID, "name": "Our depot again"}, expect_error=True)
+check("Only a Google stop" in r, "save_arrival_place: our own stop is refused (it is saved the usual way)", r)
+sp5 = tool("save_arrival_place", {"stop_id": SID, "name": f"Suite client office {uuid.uuid4().hex[:4]}"})
+check(sp5["existing"] is False and sp5["place"]["lat"] == 7.2932 and sp5["place"]["lng"] == 80.6352
+      and psql(f"select source || '|' || coalesce(address, 'none') || '|' || ((select saved_place_id from task_stops where id = '{SID}') = id)::text from places where id = '{sp5['place']['id']}'") == "arrival|none|true",
+      "save_arrival_place: one of our places at the driver's arrival point, no Google address, the stop linked to it", json.dumps(sp5["place"])[:300])
+again = tool("save_arrival_place", {"stop_id": SID, "name": "Another name"})
+check(again["existing"] is True and again["place"]["id"] == sp5["place"]["id"], "saving the same stop again answers the place already saved")
+check(next(x for x in tool("task_detail", {"task_id": TID})["stops"] if x["id"] == SID)["saved_place"]["id"] == sp5["place"]["id"], "task_detail shows the saved place")
+psql(f"update tasks set status = 'cancelled', cancelled_reason = 'suite: arrival checked' where id = '{TID}'")
+
 # --- The phone's heartbeat and the one status rule ---------------------------
 check(d["status"] == "live" and d["status_text"].startswith("Live · ") and d["last_position_at"] == d["updated"][-5:] and d["signal"]["sharing"] is True,
       "live_drivers: the new status is live, with the last position time and the raw signal", json.dumps({k: d.get(k) for k in ("status", "status_text", "last_position_at", "signal")})[:300])

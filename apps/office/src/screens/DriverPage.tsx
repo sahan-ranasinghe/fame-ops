@@ -12,12 +12,12 @@ import { useFleet } from "../app/FleetContext";
 import { useLists, useWatch } from "../data/hooks";
 import { useWatchDrivers } from "../data/watchDrivers";
 import { positionOf, recordedAtOf, statusLine, statusTone } from "../data/live";
-import { focusOf, insertPoint, KIND_LABEL, mapRouteOf, mergeRoute, minutesText, type Route, routeOf, snapLegend, type TimelineRow } from "../data/route";
+import { estimatedLegend, focusOf, insertPoint, KIND_LABEL, mapRouteOf, mergeRoute, minutesText, type Route, routeOf, snapLegend, type TimelineRow } from "../data/route";
 import type { DriverRoute } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { addDays, clock, longDate, num, today, waLink } from "../lib/format";
 import { MapView } from "../map/MapView";
-import { type MapMarker, type RoutePoint, SPEED_COLORS } from "../map/types";
+import { ESTIMATED_COLOR, type MapMarker, type RoutePoint, SPEED_COLORS } from "../map/types";
 import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, Tile } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { type PlaybackSpeed, SPEEDS, usePlayback } from "./usePlayback";
@@ -26,7 +26,7 @@ const ROUTE_EVERY_MS = 60000;
 const PAST_DAY_MS = 6 * 3600000;
 
 /** The line the map draws: every stored point up to 3,000 (tolerance 0); above that the tool picks the smallest tolerance that fits. */
-const LINE_ARGS = { line_tolerance_m: 0, max_line_points: 3000 };
+const LINE_ARGS = { line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true };
 
 export function DriverPage() {
   const { username = "" } = useParams();
@@ -169,6 +169,11 @@ export function DriverPage() {
               <span><i className="dashed" />No GPS / app not running</span>
               <span><i className="ring" />Stop</span>
             </div>
+            {estimatedLegend(route) && (
+              <div className="legend" data-testid="estimated-legend">
+                <span><i style={{ background: `repeating-linear-gradient(90deg, ${ESTIMATED_COLOR} 0 3px, transparent 3px 8px)` }} />{estimatedLegend(route)}</span>
+              </div>
+            )}
             {snapNote && (
               <div className="legend" data-testid="snap-legend">
                 <label><input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap to roads</label>

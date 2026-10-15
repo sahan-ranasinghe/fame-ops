@@ -7,7 +7,8 @@
 import { speedClass } from "@fleet/route";
 import { useEffect, useRef } from "react";
 import { Icon } from "../../ui/icons";
-import { type MapProps, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "../types";
+import { plainRuns } from "../DrawnMap";
+import { ESTIMATED_COLOR, type MapProps, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "../types";
 import { attachMap, detachMap, fitTo, type GoogleMapsApi, type HtmlMarker, htmlMarker } from "./googleMaps";
 
 interface Live {
@@ -25,14 +26,21 @@ const ll = (p: RoutePoint): google.maps.LatLngLiteral => ({ lat: p.lat, lng: p.l
 /** Runs of steps with the same speed class and confidence: one polyline each. */
 function runs(points: RoutePoint[], bySpeed: boolean): { color: string; poor: boolean; path: google.maps.LatLngLiteral[] }[] {
   if (points.length < 2) return [];
-  if (!bySpeed) return [{ color: SPEED_COLORS.normal, poor: false, path: points.map(ll) }];
+  if (!bySpeed) return plainRuns(points).map((run) => ({ color: SPEED_COLORS.normal, poor: false, path: run.map(ll) }));
   const out: { color: string; poor: boolean; path: google.maps.LatLngLiteral[] }[] = [];
+  let broken = false;
   for (let i = 1; i < points.length; i++) {
+    // A gap drawn as an estimated road line: no straight step here.
+    if (points[i].gapBefore) {
+      broken = true;
+      continue;
+    }
     const color = SPEED_COLORS[speedClass(points[i].kmh ?? 0)];
     const poor = poorStep(points[i - 1], points[i]);
     const last = out[out.length - 1];
-    if (last && last.color === color && last.poor === poor) last.path.push(ll(points[i]));
+    if (last && !broken && last.color === color && last.poor === poor) last.path.push(ll(points[i]));
     else out.push({ color, poor, path: [ll(points[i - 1]), ll(points[i])] });
+    broken = false;
   }
   return out;
 }
@@ -153,6 +161,24 @@ export default function GoogleMap({ markers, route, trails = [], focus = null, o
       label.innerHTML = `<span class="mk-stop-label"></span>`;
       (label.firstChild as HTMLElement).textContent = h.label;
       const mid = htmlMarker(maps, label, { lat: (h.from.lat + h.to.lat) / 2, lng: (h.from.lng + h.to.lng) / 2 }, "center");
+      mid.setMap(m);
+      marks.push(mid);
+    }
+    for (const e of route.estimated ?? []) {
+      if (e.points.length < 2) continue;
+      lines.push(new maps.Polyline({
+        map: m,
+        path: e.points,
+        strokeOpacity: 0,
+        clickable: false,
+        icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: ESTIMATED_COLOR, strokeWeight: 3, scale: 1.5 }, offset: "0", repeat: "8px" }],
+      }));
+      const label = document.createElement("div");
+      label.className = "mk-stop";
+      label.innerHTML = `<span class="mk-stop-label"></span>`;
+      (label.firstChild as HTMLElement).textContent = e.label;
+      (label.firstChild as HTMLElement).style.color = ESTIMATED_COLOR;
+      const mid = htmlMarker(maps, label, e.points[Math.floor(e.points.length / 2)], "center");
       mid.setMap(m);
       marks.push(mid);
     }

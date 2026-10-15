@@ -965,6 +965,41 @@ pages the same day. The console steps, the caps, the SKUs and the terms with the
 - **The Teams artifact.** No Google map, no Google place search (its `me` has no `map`), no snap;
   stops are listed, never drawn, on its drawn map; `register_map_load` answers "web only" there.
 
+### 9.2 Part 5b as built (15 October 2026, branch `phase6-5b-arrivals`; server and web only)
+
+Sahan's answer at the Part 5 checkpoint: the four Google points as built, plus two additions.
+
+- **The driver's arrival point.** Migration `stop_arrivals`: `task_stops.arrival_lat / arrival_lng /
+  arrival_at / arrival_accuracy_m`: the location point nearest the moment the stop was reached (the
+  Arrived tap, else the arrival nudge, else Done), within 5 minutes and 100 m, from our own
+  `location_points` (no new build: the phone already sends them). `fill_stop_arrivals()` every 5
+  minutes (pg_cron `stop-arrivals`; a point may come in after the tap from the offline queue) and
+  before the 30-day clean-up. Ours, kept for good. After 30 days a reached Google stop reads
+  "Google place · arrived near <town> HH:MM" (`nearest_town_name`, the towns table; the time of the
+  tap), else "Google place (details removed after 30 days)". `task_detail` stops carry `id`,
+  `arrival { at, lat, lng, accuracy_m, near, maps }` and `saved_place { id, name }`.
+- **Save as our place.** `save_arrival_place(stop_id, name, kind?)` (vehicles, assign_tasks): only a
+  reached Google stop; one of our places at the driver's arrival point (source and pin_source
+  `arrival`, no address) under the name the office types; Google's name or address refused, an
+  existing name refused, the stop linked (`saved_place_id`); a second call answers the saved place.
+  The task detail shows "the driver arrived HH:MM near <town> · phone ±N m · map", the button and
+  then "Saved as our place: <name>" (`screens/StopArrival.tsx`).
+- **Estimated lines over GPS gaps.** `buildRoute` finds the jumps (two consecutive points over 300 m
+  and 60 s apart; their ends always kept on the thinned line). `driver_route(estimate_gaps: true)`
+  (the driver page, the task's route, the shown route on Live; not the trails, not Claude by
+  default) answers `jumps` and `estimated[] { from_at, to_at, km_road, points }`: openrouteservice
+  driving between the two ends (the GeoJSON directions on api.heigit.org), cached 30 days per gap
+  by its ends rounded to 4 decimals (`route_gap_lines`), at most 25 new a view, counted as `ors_gap`
+  under its own cap (`ors_gap_daily_cap`, 300) and, with the road times' `ors` calls, under the
+  1,900 directions budget; `estimated_note` says why a gap stayed straight. All three maps draw
+  them dashed in slate with the label ("No GPS signal · 53 min · estimated · 12.4 km road"); the
+  straight step or hole they replace is not drawn; the legend says they are not counted in km. The
+  km never change (the recorded points).
+- **How many calls a normal day.** Live data, 8–15 October 2026, gaps over 300 m and 60 s: test.driver
+  0, 0, 3, 7, 2, 2 a day; test.driver2 (a phone that loses GPS often) 25, 27, 18. One call per gap
+  the first time anyone opens that route, then the cache: about 30 a driver on a bad day, so a
+  dozen drivers stay well under the 300.
+
 New driver string (en + si):
 
 | Key | English | Sinhala |

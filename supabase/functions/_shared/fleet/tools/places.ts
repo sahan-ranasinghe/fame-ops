@@ -345,6 +345,50 @@ export const googlePlace = tool({
   },
 });
 
+export const saveArrivalPlace = tool({
+  name: "save_arrival_place",
+  title: "Save a reached Google stop as one of our places",
+  description: "For a Google stop the driver reached (task_detail stops: google, arrival): saves one of our places at the driver's " +
+    "own arrival point (where the phone was when the stop was reached), with a name the office types, never Google's name or " +
+    "address. The stop then shows the saved place; next time it is found as one of ours.",
+  readOnly: false,
+  input: z.object({
+    stop_id: zId,
+    name: zText(120).describe("The office's own name for the place"),
+    kind: z.enum(["office", "store", "site", "other"]).optional().describe("Default other"),
+  }),
+  async run({ stop_id, name, kind = "other" }, { db }) {
+    const stop = unwrapMaybe(
+      await db.from("task_stops").select("id, place_name, address, google_place_id, arrival_lat, arrival_lng, saved_place_id").eq("id", stop_id).maybeSingle(),
+      "stop",
+    );
+    if (!stop) throw new ToolError(`No stop with id ${stop_id}.`);
+    if (stop.saved_place_id) {
+      const saved = unwrapMaybe(await db.from("places").select("*").eq("id", stop.saved_place_id).maybeSingle(), "place");
+      if (saved) return { result: { place: detailCard(saved), existing: true }, summary: `stop ${stop_id}: already saved as ${saved.name}` };
+    }
+    if (!stop.google_place_id) throw new ToolError("Only a Google stop is saved this way; save any other place with add_place or the search box.");
+    if (stop.arrival_lat == null || stop.arrival_lng == null) {
+      throw new ToolError("The driver's arrival point is not known yet: the stop was not reached, or the phone's points have not come in.");
+    }
+    const typed = name.trim();
+    const google = [stop.place_name, stop.address].filter((x): x is string => !!x).map((x) => x.trim().toLowerCase());
+    if (google.includes(typed.toLowerCase())) {
+      throw new ToolError("Type the office's own name for the place: Google's name and address cannot be kept.");
+    }
+    const same = unwrap(await db.from("places").select("id, name").eq("active", true).eq("operator", "other").ilike("name", escapeLike(typed)).limit(1), "places");
+    if (same[0]) throw new ToolError(`A place named "${same[0].name}" already exists: pick another name.`);
+    const created = unwrap(
+      await db.from("places").insert({
+        name: typed, kind, operator: "other", lat: stop.arrival_lat, lng: stop.arrival_lng, source: "arrival", pin_source: "arrival",
+      }).select("*").single(),
+      "place",
+    );
+    unwrap(await db.from("task_stops").update({ saved_place_id: created.id }).eq("id", stop.id), "stop");
+    return { result: { place: detailCard(created), existing: false }, summary: `saved place ${created.name} at the driver's arrival point` };
+  },
+});
+
 export const savePlace = tool({
   name: "save_place",
   title: "Save a place from the search",

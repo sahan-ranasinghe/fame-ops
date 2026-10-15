@@ -110,6 +110,8 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   // a booking's); the map load the web records before Google's map loads (anyone who sees a map or a pin).
   google_place: AA,
   register_map_load: ANY,
+  // Part 5b: a reached Google stop saved as one of our places at the driver's arrival point.
+  save_arrival_place: ["vehicles", "assign_tasks"],
   list_vehicle_reports: ["issues"],
   update_vehicle_report: ["issues"],
   list_issues: ["issues", "assign_tasks"],

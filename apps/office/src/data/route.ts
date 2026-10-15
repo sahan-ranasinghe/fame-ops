@@ -70,6 +70,9 @@ export interface Route {
   points: RoutePoint[];
   /** The line with the driving legs snapped to roads, when the tool answered one. */
   snappedPoints?: (RoutePoint & { snapped?: boolean })[];
+  /** Gaps of over 300 m and 60 s as the likely road (estimate_gaps, Part 5b): drawn dashed, never km. */
+  estimated?: { fromAt: number; toAt: number; km?: number; points: { lat: number; lng: number }[] }[];
+  estimatedNote?: string;
   snapped?: DriverRoute["snapped"];
   stops: StopView[];
   gaps: { from: string; to: string; minutes: number; kind?: GapKind }[];
@@ -120,6 +123,8 @@ export function routeOf(username: string, p: DriverRoute): Route {
   return {
     username, date: p.date, km: p.km, count: p.recorded_points ?? points.length, usable: p.usable_points, shown: p.points_shown, first: p.first_point, last: p.last_point,
     points, snappedPoints: p.route_snapped ? pointsOf(p.date, p.route_snapped) : undefined, snapped: p.snapped,
+    estimated: p.estimated?.map((e) => ({ fromAt: Date.parse(e.from_at), toAt: Date.parse(e.to_at), km: e.km_road, points: e.points.map(([lat, lng]) => ({ lat, lng })) })),
+    estimatedNote: p.estimated_note,
     stops, gaps: p.gaps ?? [], holes, lineEndAt: points.length ? points[points.length - 1].at : null, timeline,
     drivingMinutes: p.driving_minutes, stoppedMinutes: p.stopped_minutes, stopsCount: p.stops_count,
     note: p.note, task: p.task, window: p.window,
@@ -210,11 +215,11 @@ const HOLE_LABEL: Record<GapKind, string> = { no_gps: "No GPS signal", no_data: 
  * over the points that came after the tool's line. A thinned straight run is never a hole: only the tool
  * knows which points it left out.
  */
-export function holesOf(route: Route, points: RoutePoint[]): { from: MapPoint; to: MapPoint; label: string }[] {
-  const out: { from: MapPoint; to: MapPoint; label: string }[] = [];
+export function holesOf(route: Route, points: RoutePoint[]): { from: MapPoint; to: MapPoint; label: string; fromAt: number; toAt: number }[] {
+  const out: { from: MapPoint; to: MapPoint; label: string; fromAt: number; toAt: number }[] = [];
   const add = (a: RoutePoint, b: RoutePoint, kind: GapKind | undefined) => {
     if ((a.lat === b.lat && a.lng === b.lng) || b.at - a.at < HOLE_MINUTES * 60000) return;
-    out.push({ from: a, to: b, label: `${kind ? HOLE_LABEL[kind] : "No position"} · ${Math.round((b.at - a.at) / 60000)} min` });
+    out.push({ from: a, to: b, label: `${kind ? HOLE_LABEL[kind] : "No position"} · ${Math.round((b.at - a.at) / 60000)} min`, fromAt: a.at, toAt: b.at });
   };
   for (const h of route.holes) {
     const inside = points.filter((p) => p.at >= h.fromAt && p.at <= h.toAt);
@@ -230,14 +235,32 @@ export function holesOf(route: Route, points: RoutePoint[]): { from: MapPoint; t
 /** What the map draws for a route: the line by speed (snapped to roads when asked and available), the stops, the holes dashed, the playback marker. */
 export function mapRouteOf(route: Route | null, cursor?: { lat: number; lng: number; label: string } | null, snap = false): MapRoute | null {
   if (!route || !route.points.length) return null;
-  const points = snap && route.snappedPoints && route.snappedPoints.length > 1 ? route.snappedPoints : route.points;
+  const line = snap && route.snappedPoints && route.snappedPoints.length > 1 ? route.snappedPoints : route.points;
+  // A gap with an estimated road line (Part 5b) is drawn dashed along the road: its straight step and its straight hole go.
+  const est = route.estimated ?? [];
+  const byEnds = new Map(est.map((e) => [`${e.fromAt}|${e.toAt}`, e]));
+  const points = byEnds.size ? line.map((p, i) => (i > 0 && byEnds.has(`${line[i - 1].at}|${p.at}`) ? { ...p, gapBefore: true } : p)) : line;
+  const holes = holesOf(route, line);
+  const holeLabel = new Map(holes.map((h) => [`${h.fromAt}|${h.toAt}`, h.label]));
   return {
     points,
     bySpeed: true,
     stops: route.stops.filter((s) => s.lat != null && s.lng != null).map((s) => ({ lat: s.lat!, lng: s.lng!, label: `${s.from}–${s.to}` })),
-    holes: holesOf(route, points),
+    holes: holes.filter((h) => !byEnds.has(`${h.fromAt}|${h.toAt}`)),
+    estimated: est.map((e) => {
+      const hole = holeLabel.get(`${e.fromAt}|${e.toAt}`);
+      return { points: e.points, label: [hole, `estimated${e.km != null ? ` · ${e.km} km road` : ""}`].filter(Boolean).join(" · ") };
+    }),
     cursor: cursor ?? null,
   };
+}
+
+/** The legend line for the estimated lines, when the route has any (or a note why some gaps stay straight). */
+export function estimatedLegend(route: Route | null): string | null {
+  if (!route) return null;
+  const n = route.estimated?.length ?? 0;
+  if (!n && !route.estimatedNote) return null;
+  return [n ? `Dashed slate: ${n} gap${n > 1 ? "s" : ""} in the GPS drawn along the likely road (estimated, not counted in km)` : null, route.estimatedNote].filter(Boolean).join(" · ");
 }
 
 /** The lighter line of another driver on the live map. */

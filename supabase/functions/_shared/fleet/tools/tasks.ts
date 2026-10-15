@@ -19,13 +19,14 @@ import {
   type Latest,
   loadLatest,
   loadRefs,
+  nearestTown,
   odometerCheck,
   type Refs,
   sharing,
   type Task,
   type Vehicle,
 } from "../fleet.ts";
-import { centsToLkr, contactLinks, mapsDirections, telLink, waLink } from "../format.ts";
+import { centsToLkr, contactLinks, mapsDirections, mapsPoint, telLink, waLink } from "../format.ts";
 import { GPS_KM_NOTE, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { videoCard, videoLinks } from "../videos.ts";
@@ -1045,6 +1046,15 @@ export const taskDetail = tool({
     const allStops = unwrap(stopsRes, "stops");
     const stops = live(allStops);
     const removed = allStops.filter((s) => s.status === "removed");
+    // Part 5b: a reached stop saved as one of our places (its name), and the town near each arrival point.
+    const savedIds = [...new Set(stops.map((s) => s.saved_place_id).filter((x): x is string => !!x))];
+    const savedNames = new Map(
+      savedIds.length ? unwrap(await db.from("places").select("id, name").in("id", savedIds), "saved places").map((p) => [p.id, p.name]) : [],
+    );
+    const arrivalNear = new Map<string, string | null>();
+    for (const st of stops) {
+      if (st.arrival_lat != null && st.arrival_lng != null) arrivalNear.set(st.id, await nearestTown(db, st.arrival_lat, st.arrival_lng));
+    }
     const split = unwrap(splitRes, "project split");
     const odometer = unwrap(odoRes, "odometer logs");
     const fuel = unwrap(fuelRes, "fuel logs");
@@ -1126,6 +1136,7 @@ export const taskDetail = tool({
         },
         plan: planSummary(task.plan_json as Plan | null, names),
         stops: stops.map((s) => ({
+          id: s.id,
           ...stopCard(s),
           status: s.status,
           arrived: s.arrived_at ? colomboTime(s.arrived_at) : undefined,
@@ -1135,6 +1146,18 @@ export const taskDetail = tool({
           skip_reason: s.skip_reason ?? undefined,
           skip_note: s.skip_note ?? undefined,
           navigate: mapsDirections({ lat: s.lat, lng: s.lng, text: s.address ?? s.place_name }),
+          // Where the driver's own phone was when the stop was reached (ours, kept for good).
+          arrival: s.arrival_lat != null && s.arrival_lng != null
+            ? {
+              at: s.arrival_at ? colomboTime(s.arrival_at) : undefined,
+              lat: s.arrival_lat,
+              lng: s.arrival_lng,
+              accuracy_m: s.arrival_accuracy_m != null ? Math.round(s.arrival_accuracy_m) : undefined,
+              near: arrivalNear.get(s.id) ?? undefined,
+              maps: mapsPoint(s.arrival_lat, s.arrival_lng),
+            }
+            : undefined,
+          saved_place: s.saved_place_id ? { id: s.saved_place_id, name: savedNames.get(s.saved_place_id) ?? "" } : undefined,
         })),
         removed_stops: removed.length
           ? removed.map((s) => ({ seq: s.seq, place: s.place_name, removed: s.removed_at ? colomboDateTime(s.removed_at) : undefined }))

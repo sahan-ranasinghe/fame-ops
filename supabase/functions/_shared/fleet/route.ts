@@ -68,6 +68,9 @@ export const SPIKE_MIN_M = 30;
 export const SPIKE_WINDOW_MS = 2 * 60000;
 /** Over this long between two line points at different places is a hole, drawn dashed. */
 export const HOLE_MINUTES = 2;
+/** A jump between two line points this far apart in space and time is drawn as an estimated road line (Part 5b). */
+export const JUMP_MIN_M = 300;
+export const JUMP_MIN_S = 60;
 /** A point that reached the server this long after it was recorded was uploaded later (the phone was offline). */
 export const LATE_UPLOAD_MINUTES = 5;
 /** Heartbeats come about every minute; up to this long between two still means the app was alive. */
@@ -135,6 +138,18 @@ export interface Hole {
   toPoint: { lat: number; lng: number };
 }
 
+/**
+ * Two consecutive line points over 300 m and 60 s apart (the phone lost its fixes while the vehicle
+ * moved): the map draws an estimated road line between them (dashed, routed by openrouteservice), never km.
+ */
+export interface Jump {
+  from: number;
+  to: number;
+  metres: number;
+  fromPoint: { lat: number; lng: number };
+  toPoint: { lat: number; lng: number };
+}
+
 /** A stretch of points that were uploaded over 5 minutes after they were recorded. */
 export interface LateWindow {
   from: number;
@@ -148,6 +163,8 @@ export interface RouteBuild {
   stops: Stop[];
   gaps: Gap[];
   holes: Hole[];
+  /** Jumps over 300 m and 60 s: their ends are always kept on the drawn line. */
+  jumps: Jump[];
   late: LateWindow[];
   km: number;
   drivingMinutes: number;
@@ -458,6 +475,20 @@ export function holesOf(line: LinePoint[], heartbeats?: number[]): Hole[] {
   return out;
 }
 
+/** The jumps of a line: over 300 m and over 60 s between two consecutive points. */
+export function jumpsOf(line: LinePoint[]): Jump[] {
+  const out: Jump[] = [];
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1];
+    const b = line[i];
+    if (b.at - a.at <= JUMP_MIN_S * 1000) continue;
+    const metres = distanceM(a, b);
+    if (metres <= JUMP_MIN_M) continue;
+    out.push({ from: a.at, to: b.at, metres: Math.round(metres), fromPoint: { lat: a.lat, lng: a.lng }, toPoint: { lat: b.lat, lng: b.lng } });
+  }
+  return out;
+}
+
 /** The whole route of a list of fixes (any order; sorted here). */
 export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBuild {
   const sorted = [...input].sort((a, b) => a.at - b.at);
@@ -531,8 +562,9 @@ export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBui
   const late = lateWindows(fixes);
   const segments = buildSegments(firstAt, lastAt, stays, gaps, moves, late);
   const holes = holesOf(merged, opts.heartbeats);
+  const jumps = jumpsOf(merged);
   const keepAt = new Set<number>();
-  for (const h of holes) {
+  for (const h of [...holes, ...jumps]) {
     keepAt.add(h.from);
     keepAt.add(h.to);
   }
@@ -543,6 +575,7 @@ export function buildRoute(input: RouteFix[], opts: BuildOptions = {}): RouteBui
     stops: reported,
     gaps,
     holes,
+    jumps,
     late,
     km: roundKm(state.metres),
     drivingMinutes: segments.filter((s) => s.kind === "driving").reduce((s, x) => s + x.minutes, 0),

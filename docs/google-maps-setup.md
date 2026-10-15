@@ -144,13 +144,20 @@ modified 26 August 2026) and Service Specific Terms
   days)"), keeping the place id, its type, times and what the office wrote. The nightly job
   (`fleet-jobs google_content`, 03:30 Colombo) first fetches again the pins of stops still to
   be driven (from 23 days old; counted Details calls), then removes everything over 30 days old.
-  "Used before" in the search never offers a Google stop.
+  "Used before" in the search never offers a Google stop. Where the driver actually arrived is
+  ours: the stop keeps the phone's own position from the moment it was reached (`arrival_*`,
+  from our location points), so after 30 days it reads "Google place · arrived near <town>
+  HH:MM", and the office can save it as one of our places at that point under its own name
+  ("Save as our place"; Google's name and address are refused).
 - **Routes caching.** Routes 19.3: "Customer may temporarily cache latitude (lat) and longitude
   (lng) values from the Routes API for up to 30 consecutive calendar days". Durations and
   distances are not named, so Google road times are never put in the route cache
   (`route_legs`): each plan asks again. A task keeps its own plan (the leave-by time and the
   planned arrivals it was given, with each leg's minutes and km) as the record of what the
   driver was told; the live ETA stands 15 minutes (`task_eta`).
+- **Instead of snap to roads** (off): a gap of over 300 m and 60 s between two GPS points is drawn
+  along the likely road from openrouteservice (OpenStreetMap data, not Google content), dashed
+  and labelled "estimated", never counted in km.
 - **Roads caching.** Roads 17.3: latitude/longitude "for up to 30 consecutive calendar days";
   Google-snapped lines (`route_matched`, provider `google_roads`) are removed after 30 days.
 - **Attribution.** "Attribution should take the form of the Google Maps logo whenever possible.

@@ -29,6 +29,8 @@ const TRAIL_REFRESH_MS = 60000;
 /** The shown route of one driver: every point the tool kept with a 3 m tolerance. */
 /** The line the maps draw: every stored point up to 3,000 (tolerance 0); above that the tool picks the smallest tolerance that fits. */
 const ROUTE_ARGS = { line_tolerance_m: 0, max_line_points: 3000 };
+/** The shown route also asks for its gaps' estimated road lines (Part 5b); the light trails do not. */
+const SHOWN_ARGS = { ...ROUTE_ARGS, estimate_gaps: true };
 
 type Filter = "all" | "live" | "no_signal" | "location_off" | "not_sharing";
 const FILTERS: [Filter, string][] = [["all", "All"], ["live", "Live"], ["no_signal", "No signal"], ["location_off", "Location off"], ["not_sharing", "Not sharing"]];
@@ -101,7 +103,7 @@ export function Live() {
       }
       const shown = routeRef.current;
       if (shown) {
-        void transport.call<DriverRoute>("driver_route", { driver: shown.username, ...ROUTE_ARGS })
+        void transport.call<DriverRoute>("driver_route", { driver: shown.username, ...SHOWN_ARGS })
           .then((p) => setRoute((r) => (r && r.username === shown.username ? mergeRoute(r, routeOf(shown.username, p)) : r)))
           .catch(() => undefined);
       }
@@ -140,7 +142,7 @@ export function Live() {
     setRouteBusy(true);
     setRouteErr(null);
     try {
-      const p = await transport.call<DriverRoute>("driver_route", { driver: username, ...ROUTE_ARGS });
+      const p = await transport.call<DriverRoute>("driver_route", { driver: username, ...SHOWN_ARGS });
       setRoute(routeOf(username, p));
     } catch (e) {
       setRouteErr(errText(e as FleetError)[0]);

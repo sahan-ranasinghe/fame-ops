@@ -7,7 +7,7 @@
 import { speedClass } from "@fleet/route";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "../ui/icons";
-import { type MapProps, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
+import { ESTIMATED_COLOR, type MapProps, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
 
 const LK: [number, number][] = [[80.04, 9.81], [80.24, 9.83], [80.45, 9.62], [80.6, 9.42], [80.82, 9.25], [81.05, 8.92], [81.23, 8.58], [81.38, 8.4], [81.5, 8.05], [81.7, 7.72], [81.85, 7.25], [81.85, 6.88], [81.7, 6.5], [81.4, 6.25], [81.12, 6.12], [80.8, 6.0], [80.59, 5.92], [80.4, 5.96], [80.22, 6.03], [80.05, 6.25], [79.96, 6.57], [79.86, 6.9], [79.84, 7.2], [79.8, 7.6], [79.82, 8.0], [79.76, 8.25], [79.9, 8.6], [79.92, 8.95], [80.1, 9.3], [80.2, 9.48], [80.0, 9.62], [79.88, 9.75]];
 const KX = Math.cos(7.8 * Math.PI / 180);
@@ -33,14 +33,36 @@ export function projection(points: [number, number][], zoom: number) {
 /** Consecutive steps of the same speed class and confidence, so each run is one polyline. */
 export function speedRuns(points: RoutePoint[]): { cls: keyof typeof SPEED_COLORS; poor: boolean; pts: RoutePoint[] }[] {
   const out: { cls: keyof typeof SPEED_COLORS; poor: boolean; pts: RoutePoint[] }[] = [];
+  let broken = false;
   for (let i = 1; i < points.length; i++) {
+    // A gap drawn as an estimated road line: no straight step here, a new run after it.
+    if (points[i].gapBefore) {
+      broken = true;
+      continue;
+    }
     const cls = speedClass(points[i].kmh ?? 0);
     const poor = poorStep(points[i - 1], points[i]);
     const last = out[out.length - 1];
-    if (last && last.cls === cls && last.poor === poor) last.pts.push(points[i]);
+    if (last && !broken && last.cls === cls && last.poor === poor) last.pts.push(points[i]);
     else out.push({ cls, poor, pts: [points[i - 1], points[i]] });
+    broken = false;
   }
   return out;
+}
+
+/** The line in runs without the gaps that have an estimated road line (one colour). */
+export function plainRuns(points: RoutePoint[]): RoutePoint[][] {
+  const out: RoutePoint[][] = [];
+  let run: RoutePoint[] = [];
+  for (const p of points) {
+    if (p.gapBefore && run.length) {
+      out.push(run);
+      run = [];
+    }
+    run.push(p);
+  }
+  if (run.length) out.push(run);
+  return out.filter((r) => r.length > 1);
 }
 
 export default function DrawnMap({ markers, route, trails = [], focus = null, onPick }: MapProps) {
@@ -89,7 +111,17 @@ export default function DrawnMap({ markers, route, trails = [], focus = null, on
               ? speedRuns(route.points).map((r, i) => (
                 <polyline key={i} points={line(r.pts)} fill="none" stroke={SPEED_COLORS[r.cls]} strokeWidth={r.poor ? "2.5" : "5"} strokeLinejoin="round" strokeLinecap="round" opacity={r.poor ? ".45" : ".9"} />
               ))
-              : <polyline points={line(route.points)} fill="none" stroke="var(--live)" strokeWidth="5" strokeLinejoin="round" strokeLinecap="round" opacity=".85" />}
+              : plainRuns(route.points).map((r, i) => <polyline key={"p" + i} points={line(r)} fill="none" stroke="var(--live)" strokeWidth="5" strokeLinejoin="round" strokeLinecap="round" opacity=".85" />)}
+            {(route.estimated ?? []).map((e, i) => {
+              const mid = e.points[Math.floor(e.points.length / 2)];
+              const m = mid ? pr(mid.lng, mid.lat) : null;
+              return (
+                <g key={"e" + i} data-testid="estimated-line">
+                  <polyline points={line(e.points)} fill="none" stroke={ESTIMATED_COLOR} strokeWidth="4" strokeDasharray="4 8" strokeLinecap="round" strokeLinejoin="round" />
+                  {m && <text x={m[0].toFixed(1)} y={(m[1] - 8).toFixed(1)} textAnchor="middle" fontFamily="IBM Plex Sans, sans-serif" fontSize="13" fill={ESTIMATED_COLOR}>{e.label}</text>}
+                </g>
+              );
+            })}
             {(route.holes ?? []).map((h, i) => {
               const a = pr(h.from.lng, h.from.lat), b = pr(h.to.lng, h.to.lat);
               return (
