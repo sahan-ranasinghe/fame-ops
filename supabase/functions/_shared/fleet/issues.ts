@@ -39,7 +39,16 @@ export const ACTIVE: IssueStatus[] = ["open", "in_progress"];
 export const SYNC_JOB = "issues";
 export const SYNC_FRESH_MS = 60_000;
 
-export const TASK_KINDS = new Set(["signal", "late_start", "running_late", "not_accepted", "declined"]);
+export const TASK_KINDS = new Set([
+  "signal",
+  "late_start",
+  "running_late",
+  "not_accepted",
+  "declined",
+  "vehicle_conflict",
+  "arrival_override",
+  "completed_early",
+]);
 export const scopeOf = (kind: string): "task" | "fleet" => TASK_KINDS.has(kind) ? "task" : "fleet";
 
 export const KIND_TEXT: Record<string, string> = {
@@ -58,6 +67,10 @@ export const KIND_TEXT: Record<string, string> = {
   not_accepted: "Not accepted",
   declined: "Declined",
   request_waiting: "Request waiting",
+  vehicle_conflict: "Vehicle taken",
+  app_stopped: "App stopped",
+  arrival_override: "Arrived away from the stop",
+  completed_early: "Completed early",
   push_failed: "Push failed",
   routing_failed: "Routing failed",
 };
@@ -153,6 +166,9 @@ const KEEP_DAYS = 14;
 const OPEN_DAYS = 7;
 const REQUEST_WAIT_MIN = 30;
 const LATE_START_MIN = 10;
+/** Phase 7: the app counts as stopped by the phone from 2 stops a day, or with no GPS fix this long while on duty. */
+export const APP_STOPS_PER_DAY = 2;
+export const NO_FIX_MIN = 30;
 
 const ms = (days: number) => days * 86400000;
 
@@ -436,6 +452,148 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         vehicle_id: t.vehicle_id,
         employee_id: t.employee_id,
         task_id: t.id,
+      });
+    }
+  }
+
+  // --- Phase 7: a vehicle taken before a task, arrivals away from the pin, tasks completed early -------
+  if (taskScope) {
+    const who = (t: { employee_id: string; title: string }) => [refs.emp.get(t.employee_id)?.name, t.title].filter(Boolean).join(" · ");
+    const dayStart = new Date(`${today}T00:00:00+05:30`).toISOString();
+    const dayEnd = new Date(new Date(dayStart).getTime() + ms(1)).toISOString();
+    const keepFrom = new Date(now.getTime() - ms(KEEP_DAYS)).toISOString();
+    const openFrom = now.getTime() - ms(OPEN_DAYS);
+    let laterQ = db.from("tasks").select("id, title, employee_id, vehicle_id, start_at, leave_by").eq("status", "assigned")
+      .gte("start_at", dayStart).lt("start_at", dayEnd);
+    let flaggedQ = db.from("tasks").select("id, title, employee_id, vehicle_id, completed_at, finish_flag").not("finish_flag", "is", null)
+      .gte("completed_at", keepFrom);
+    let stopsQ = db.from("task_stops").select("id, task_id, seq, place_name, arrival_flag, arrival_distance_m, arrived_at, arrival_lat, arrival_lng")
+      .in("arrival_flag", ["override", "no_gps"]).gte("arrived_at", keepFrom);
+    if (scope.task_id) {
+      laterQ = laterQ.eq("id", scope.task_id);
+      flaggedQ = flaggedQ.eq("id", scope.task_id);
+      stopsQ = stopsQ.eq("task_id", scope.task_id);
+    }
+    const [laterRes, takenRes, holdersRes, flaggedRes, stopsRes] = await Promise.all([
+      laterQ,
+      db.from("vehicle_assignments").select("employee_id, vehicle_id, to_at, ended_by_name").eq("ended_how", "taken_over").gte("to_at", dayStart),
+      db.from("vehicle_assignments").select("employee_id, vehicle_id").is("to_at", null),
+      flaggedQ,
+      stopsQ,
+    ]);
+    const holders = new Map(unwrap(holdersRes, "vehicle holders").map((a) => [a.vehicle_id, a.employee_id]));
+    const taken = unwrap(takenRes, "vehicle hand-overs");
+    for (const t of unwrap(laterRes, "tasks")) {
+      if (new Date(t.leave_by ?? t.start_at).getTime() < now.getTime()) continue;
+      const holder = holders.get(t.vehicle_id);
+      const lost = taken.filter((a) => a.employee_id === t.employee_id && a.vehicle_id === t.vehicle_id).sort((a, b) =>
+        (b.to_at ?? "").localeCompare(a.to_at ?? "")
+      )[0];
+      if (!lost || !holder || holder === t.employee_id) continue;
+      const plate = vehicleLabel(refs.veh.get(t.vehicle_id));
+      wanted.push({
+        kind: "vehicle_conflict",
+        ref_key: `vehicle_conflict:${t.id}`,
+        severity: "warning",
+        title: `${plate} was taken before the task`,
+        detail: `${refs.emp.get(holder)?.name ?? "Another driver"} has it now (since ${colomboTime(lost.to_at!)}); ${
+          refs.emp.get(t.employee_id)?.name ?? "the driver"
+        }'s task "${t.title}" at ${colomboTime(t.leave_by ?? t.start_at)} needs it`,
+        due: `leave by ${colomboDayTime(t.leave_by ?? t.start_at)}`,
+        sort_key: -2,
+        vehicle_id: t.vehicle_id,
+        employee_id: t.employee_id,
+        task_id: t.id,
+      });
+    }
+    for (const t of unwrap(flaggedRes, "tasks")) {
+      const f = t.finish_flag as { odometer_km?: number; planned_km?: number; minutes?: number; planned_minutes?: number } | null;
+      wanted.push({
+        kind: "completed_early",
+        ref_key: `early:${t.id}`,
+        severity: "warning",
+        title: `Completed early: ${f?.odometer_km ?? "?"} km on the odometer for a ${f?.planned_km ?? "?"} km plan`,
+        detail: `${who(t)} · ${f?.minutes ?? "?"} min for ${f?.planned_minutes ?? "?"} min of planned driving`,
+        due: t.completed_at ? `completed ${colomboDayTime(t.completed_at)}` : null,
+        sort_key: -1,
+        vehicle_id: t.vehicle_id,
+        employee_id: t.employee_id,
+        task_id: t.id,
+        keep_only: !t.completed_at || new Date(t.completed_at).getTime() < openFrom,
+      });
+    }
+    const flaggedStops = unwrap(stopsRes, "stops");
+    const stopTasks = flaggedStops.length
+      ? unwrap(
+        await db.from("tasks").select("id, title, employee_id, vehicle_id").in("id", [...new Set(flaggedStops.map((x) => x.task_id))]),
+        "tasks",
+      )
+      : [];
+    const order = flaggedStops.length
+      ? unwrap(
+        await db.from("task_stops").select("id, task_id, seq").in("task_id", stopTasks.map((t) => t.id)).neq("status", "removed"),
+        "stops",
+      )
+      : [];
+    for (const st of flaggedStops) {
+      const t = stopTasks.find((x) => x.id === st.task_id);
+      if (!t) continue;
+      const n = order.filter((o) => o.task_id === st.task_id && o.seq <= st.seq).length;
+      const far = st.arrival_distance_m != null
+        ? (st.arrival_distance_m >= 1000 ? `${Math.round(st.arrival_distance_m / 100) / 10} km` : `${st.arrival_distance_m} m`) + " from the pin"
+        : null;
+      wanted.push({
+        kind: "arrival_override",
+        ref_key: `arrival:${st.id}`,
+        severity: "warning",
+        title: st.arrival_flag === "no_gps" ? "Arrived with no GPS fix" : "Arrived away from the stop",
+        detail: [
+          who(t),
+          `Stop ${n} · ${st.place_name}`,
+          far,
+          st.arrival_lat != null && st.arrival_lng != null ? `the phone was at ${st.arrival_lat}, ${st.arrival_lng}` : null,
+        ].filter(Boolean).join(" · "),
+        due: st.arrived_at ? `arrived ${colomboDayTime(st.arrived_at)}` : null,
+        sort_key: -1,
+        vehicle_id: t.vehicle_id,
+        employee_id: t.employee_id,
+        task_id: t.id,
+        keep_only: !st.arrived_at || new Date(st.arrived_at).getTime() < openFrom,
+      });
+    }
+  }
+
+  // --- Phase 7: the app stopped by the phone (drivers on duty) ------------------------------------
+  if (full) {
+    const dayStart = new Date(`${today}T00:00:00+05:30`).toISOString();
+    const [stopsRes, sessionsRes] = await Promise.all([
+      db.rpc("app_stops", { p_from: dayStart, p_to: nowIso }),
+      db.from("duty_sessions").select("employee_id, started_at, ended_at, device_info").or(`ended_at.is.null,started_at.gte.${dayStart}`)
+        .order("started_at", { ascending: false }),
+    ]);
+    const stops = new Map(unwrap(stopsRes, "app stops").map((r) => [r.employee_id, r.stops]));
+    const sessions = unwrap(sessionsRes, "duty sessions");
+    const drivers = refs.employees.filter((e) => e.role === "driver" && e.active);
+    for (const e of drivers) {
+      const count = stops.get(e.id) ?? 0;
+      const open = sessions.find((x) => x.employee_id === e.id && x.ended_at === null);
+      const lastFix = latest.get(e.id)?.recorded_at ?? null;
+      const since = open ? (lastFix && lastFix > open.started_at ? lastFix : open.started_at) : null;
+      const noFixMin = since ? Math.floor((now.getTime() - new Date(since).getTime()) / 60000) : 0;
+      const noFix = open !== undefined && noFixMin >= NO_FIX_MIN;
+      if (count < APP_STOPS_PER_DAY && !noFix) continue;
+      const device = (sessions.find((x) => x.employee_id === e.id)?.device_info ?? {}) as { brand?: string; model?: string };
+      const phone = [device.brand, device.model].filter(Boolean).join(" ");
+      wanted.push({
+        kind: "app_stopped",
+        ref_key: `app_stopped:${e.id}:${today}`,
+        severity: "warning",
+        title: [count >= APP_STOPS_PER_DAY ? `App stopped by the phone ${count}× today` : null, noFix ? `no GPS fix for ${noFixMin} min on duty` : null]
+          .filter(Boolean).join(" · ").replace(/^n/, "N"),
+        detail: `${e.name}${phone ? ` · ${phone}` : ""} · the phone's settings: Me → Phone setup in the app`,
+        due: "today",
+        sort_key: -1,
+        employee_id: e.id,
       });
     }
   }

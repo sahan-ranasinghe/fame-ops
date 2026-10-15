@@ -179,7 +179,7 @@ export function driverAvailability(d: DriverDay, w: AvailabilityWindow, today: s
 }
 
 /** Free drivers first, then on duty before off duty, then by name. */
-export function rankAvailability(rows: DriverAvailability[]): DriverAvailability[] {
+export function rankAvailability<T extends DriverAvailability>(rows: T[]): T[] {
   const order: Record<DriverState, number> = { on_duty: 0, on_task: 1, off_duty: 2 };
   return [...rows].sort((a, b) => Number(b.free) - Number(a.free) || order[a.state] - order[b.state] || a.name.localeCompare(b.name));
 }

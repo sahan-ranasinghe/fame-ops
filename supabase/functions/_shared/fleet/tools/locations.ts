@@ -61,25 +61,42 @@ export const watchDrivers = tool({
 export const liveDrivers = tool({
   name: "live_drivers",
   title: "Live locations",
-  description: "Where drivers are now. Lists every driver who is sharing their location or has a task in progress, with the " +
+  description: "Where drivers are now. Lists every active driver with their duty: on_task, on_duty (clocked in) or off_duty, " +
+    "since when, the vehicle they hold (the task's, else the one they clocked in with) and since when; for drivers on duty the " +
     "status: live (a GPS point under 3 min old), location_off (the phone reports Location off or the permission missing, since when), " +
-    "no_signal (sharing on but nothing from the phone for over 3 min) or not_sharing; last position time, nearest town, speed, " +
-    "vehicle, current task and Google Maps / WhatsApp / call links. The older state (sharing / stale / not_sharing, 15 min rule) " +
-    "is still answered too.",
+    "no_signal (nothing from the phone for over 3 min); not_sharing = off duty. Also the last position time, nearest town, speed, " +
+    "current task, how many times the phone stopped the app today, a vehicle hand-over today, and Google Maps / WhatsApp / call " +
+    "links. The older state (sharing / stale / not_sharing, 15 min rule) is still answered too.",
   readOnly: true,
   input: z.object({
-    filter: z.enum(["all", "sharing", "stale", "not_sharing", "live", "no_signal", "location_off"]).optional().describe("Default: all"),
+    filter: z.enum(["all", "sharing", "stale", "not_sharing", "live", "no_signal", "location_off", "on_task", "on_duty", "off_duty"]).optional()
+      .describe("Default: all. on_task / on_duty / off_duty filter by duty (on_duty includes on_task)"),
   }),
   async run({ filter = "all" }, { db, now }) {
-    const [refs, latest, settings, running, openSessions] = await Promise.all([
+    const dayStart = dayRange(colomboDate(now)).from;
+    const [refs, latest, settings, running, openSessions, todaySessions, handovers, stopsToday] = await Promise.all([
       loadRefs(db),
       loadLatest(db),
       loadSettings(db),
-      db.from("tasks").select("id, title, employee_id, vehicle_id, status, return_to_base, avoid_expressway").eq("status", "in_progress"),
-      db.from("duty_sessions").select("employee_id, vehicle_id, started_at").is("ended_at", null),
+      db.from("tasks").select("id, title, employee_id, vehicle_id, status, started_at, return_to_base, avoid_expressway").eq("status", "in_progress"),
+      db.from("duty_sessions").select("employee_id, vehicle_id, started_at, device_info").is("ended_at", null),
+      db.from("duty_sessions").select("employee_id, ended_at, end_reason, device_info").gte("ended_at", dayStart).order("ended_at", {
+        ascending: false,
+      }),
+      db.from("vehicle_assignments").select("employee_id, vehicle_id, to_at, ended_by_name").eq("ended_how", "taken_over").gte("to_at", dayStart)
+        .order("to_at", { ascending: false }),
+      db.rpc("app_stops", { p_from: dayStart, p_to: now.toISOString() }),
     ]);
     const tasks = unwrap(running, "tasks");
     const sessions = unwrap(openSessions, "sharing periods");
+    const ended = unwrap(todaySessions, "sharing periods");
+    const taken = unwrap(handovers, "vehicle hand-overs");
+    const appStops = new Map(unwrap(stopsToday, "app stops").map((r) => [r.employee_id, r.stops]));
+    const holderSince = new Map(
+      unwrap(await db.from("vehicle_assignments").select("employee_id, from_at").is("to_at", null), "vehicle holders").map((
+        a,
+      ) => [a.employee_id, a.from_at]),
+    );
     const stops = tasks.length > 0
       ? unwrap(
         await db.from("task_stops").select("task_id, seq, place_name, type, what, status, lat, lng, dwell_min, arrive_by")
@@ -88,19 +105,34 @@ export const liveDrivers = tool({
       )
       : [];
 
-    const shown = refs.employees.filter((e) =>
-      e.role === "driver" && e.active && (latest.get(e.id)?.sharing || tasks.some((t) => t.employee_id === e.id))
-    );
+    // Every active driver (Phase 7): on a task, on duty or off duty.
+    const shown = refs.employees.filter((e) => e.role === "driver" && e.active);
     const cards = await Promise.all(shown.map(async (e) => {
       const pos = latest.get(e.id);
       const share = sharing(pos, now);
       const { fields } = statusOf(pos, now);
       const task = tasks.find((t) => t.employee_id === e.id);
       const session = sessions.find((s) => s.employee_id === e.id);
-      const vehicleId = task?.vehicle_id ?? session?.vehicle_id ?? e.current_vehicle_id;
+      const lastEnd = ended.find((s) => s.employee_id === e.id);
+      // The vehicle is the task's, else the one the driver holds (vehicle_assignments; current_vehicle_id equals it).
+      const vehicleId = task?.vehicle_id ?? e.current_vehicle_id;
+      const duty: "on_task" | "on_duty" | "off_duty" = task ? "on_task" : session ? "on_duty" : "off_duty";
+      const dutySince = duty === "on_task" ? task?.started_at : duty === "on_duty" ? session?.started_at : lastEnd?.ended_at;
       const hasPosition = pos?.lat != null && pos?.lng != null;
       const taskStops = task ? stops.filter((s) => s.task_id === task.id) : [];
       const eta = task ? await taskEta(db, task, taskStops, pos, settings, now) : null;
+      const device = ((session ?? lastEnd)?.device_info ?? {}) as { brand?: string; model?: string };
+      const stopsCount = appStops.get(e.id) ?? 0;
+      // Today's hand-over: the vehicle this driver took from someone, or the one taken from them.
+      const lostTo = taken.find((a) => a.employee_id === e.id);
+      const tookFrom = vehicleId ? taken.find((a) => a.vehicle_id === vehicleId && a.ended_by_name === e.name) : undefined;
+      const handover = tookFrom
+        ? `${vehicleLabel(refs.veh.get(tookFrom.vehicle_id))} taken over from ${refs.emp.get(tookFrom.employee_id)?.name ?? "another driver"} ${
+          colomboTime(tookFrom.to_at!)
+        }`
+        : lostTo && lostTo.vehicle_id !== vehicleId
+        ? `${vehicleLabel(refs.veh.get(lostTo.vehicle_id))} now with ${lostTo.ended_by_name ?? "another driver"} ${colomboTime(lostTo.to_at!)}`
+        : undefined;
       return {
         driver: e.name,
         username: e.username,
@@ -108,8 +140,14 @@ export const liveDrivers = tool({
         state: share.state,
         location: share.text,
         ...fields,
+        duty,
+        duty_text: duty === "on_task" ? "On a task" : duty === "on_duty" ? "On duty" : "Off duty",
+        duty_since: dutySince ? colomboTime(dutySince) : undefined,
         updated: pos?.recorded_at ? colomboDateTime(pos.recorded_at) : undefined,
         on_duty_since: session?.started_at ? colomboTime(session.started_at) : undefined,
+        off_duty_how: duty === "off_duty" && lastEnd
+          ? (lastEnd.end_reason === "auto" ? "auto at the cut-off" : lastEnd.end_reason === "admin" ? "by the office" : "by the driver")
+          : undefined,
         video_uploads_waiting: pos?.hb_video_uploads_waiting ?? undefined,
         video_bytes_waiting: pos?.hb_video_bytes_waiting ?? undefined,
         near: hasPosition ? await nearestTown(db, pos.lat!, pos.lng!) : undefined,
@@ -117,7 +155,13 @@ export const liveDrivers = tool({
         battery_pct: pos?.battery_pct,
         source: "Fame Driver app",
         vehicle: vehicleId ? vehicleLabel(refs.veh.get(vehicleId)) : undefined,
+        vehicle_since: !task && e.current_vehicle_id && holderSince.get(e.id) ? colomboTime(holderSince.get(e.id)!) : undefined,
+        vehicle_note: handover,
+        app_stops_today: stopsCount > 0 ? stopsCount : undefined,
+        app_stops_text: stopsCount > 0 ? `App stopped by phone ${stopsCount}× today` : undefined,
+        phone: [device.brand, device.model].filter(Boolean).join(" ") || undefined,
         task: task?.title,
+        task_id: task?.id,
         going_to: task ? taskStops.at(-1)?.place_name : undefined,
         next_stop: eta?.next_seq != null ? taskStops.find((s) => s.seq === eta.next_seq)?.place_name : undefined,
         eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
@@ -133,11 +177,16 @@ export const liveDrivers = tool({
     }));
 
     const order = { sharing: 0, stale: 1, not_sharing: 2 };
+    const dutyOrder = { on_task: 0, on_duty: 1, off_duty: 2 };
     const count = (state: string) => cards.filter((c) => c.state === state).length;
     const countStatus = (status: string) => cards.filter((c) => c.status === status).length;
+    const countDuty = (duty: string) => cards.filter((c) => c.duty === duty).length;
     const drivers = cards
-      .filter((c) => filter === "all" || c.state === filter || c.status === filter)
-      .sort((a, b) => order[a.state] - order[b.state] || a.minutes - b.minutes)
+      .filter((c) =>
+        filter === "all" || c.state === filter || c.status === filter || c.duty === filter ||
+        (filter === "on_duty" && c.duty === "on_task")
+      )
+      .sort((a, b) => dutyOrder[a.duty] - dutyOrder[b.duty] || order[a.state] - order[b.state] || a.minutes - b.minutes)
       .map(({ minutes: _minutes, ...card }) => card);
 
     return {
@@ -150,6 +199,7 @@ export const liveDrivers = tool({
           location_off: countStatus("location_off"),
           not_sharing: countStatus("not_sharing"),
         },
+        duty_counts: { on_task: countDuty("on_task"), on_duty: countDuty("on_duty"), off_duty: countDuty("off_duty") },
         drivers,
       },
       summary: `${drivers.length} drivers (${filter})`,

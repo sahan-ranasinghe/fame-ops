@@ -174,6 +174,31 @@ export async function notifyTrackingStopped(title: string, body: string, kind: '
   }
 }
 
+const DUTY_ENDED_ID = 'duty-ended';
+
+/** Phase 7: "You were clocked out" when the app found out by itself (the push did not come or was missed). */
+export async function notifyDutyEnded(title: string, body: string): Promise<void> {
+  try {
+    await ensureChannels();
+    await Notifications.scheduleNotificationAsync({
+      identifier: DUTY_ENDED_ID,
+      content: { title, body, data: { kind: 'duty_ended' } },
+      trigger: { channelId: CHANNELS.general },
+    });
+  } catch {
+    // Notifications not allowed: Today shows the same words.
+  }
+}
+
+/** Phase 7: a push about the driver's day arrived while the app runs (vehicle_taken, vehicle_moved, the clock-outs). */
+export function onPushReceived(listener: (kind: string | undefined) => void): () => void {
+  const sub = Notifications.addNotificationReceivedListener((notification) => {
+    const data = notification.request.content.data as { kind?: unknown } | undefined;
+    listener(typeof data?.kind === 'string' ? data.kind : undefined);
+  });
+  return () => sub.remove();
+}
+
 /** Cancels the watchdog (sharing was switched off on purpose). */
 export async function disarmWatchdog(): Promise<void> {
   remove(KEYS.watchdogAt);

@@ -110,7 +110,15 @@ export const availability = tool({
         accepted_today: counts.filter((ev) => ev.action === "accepted").length,
         declined_today: counts.filter((ev) => ev.action === "declined").length,
       };
-      return driverAvailability(d, w, today);
+      // Phase 7: the vehicle the driver holds today (on duty), else their regular one.
+      const held = d.on_duty_since && e.current_vehicle_id ? refs.veh.get(e.current_vehicle_id) : undefined;
+      const regular = held ? undefined : refs.vehicles.find((v) => v.active && v.regular_driver_id === e.id);
+      const vehicle = held
+        ? { reg_no: held.reg_no, source: "on_duty" as const }
+        : regular
+        ? { reg_no: regular.reg_no, source: "regular" as const }
+        : undefined;
+      return { ...driverAvailability(d, w, today), vehicle };
     }));
 
     const vehicles = await availabilityFor(db, refs, {

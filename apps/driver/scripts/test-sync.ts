@@ -181,7 +181,7 @@ function fakeServer() {
     sendHeartbeat: async () => {
       calls.push({ what: 'heartbeat', n: 1 });
       if (calls.length > failAfterCalls) fail();
-      return { watched: true };
+      return { watched: true, on_duty: true, duty_end: null };
     },
     patchEmployee: async () => {
       calls.push({ what: 'employee', n: 1 });

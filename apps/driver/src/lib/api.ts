@@ -195,7 +195,10 @@ export type TaskPatch = Pick<
   Tables['tasks']['Update'],
   'seen_at' | 'started_at' | 'completed_at' | 'start_odometer_km' | 'end_odometer_km' | 'status'
 >;
-export type StopPatch = Pick<Tables['task_stops']['Update'], 'status' | 'arrived_at' | 'done_at' | 'skip_reason' | 'skip_note' | 'auto_detected_at'>;
+export type StopPatch = Pick<
+  Tables['task_stops']['Update'],
+  'status' | 'arrived_at' | 'done_at' | 'skip_reason' | 'skip_note' | 'auto_detected_at' | 'arrival_flag' | 'arrival_distance_m'
+>;
 export type OdometerInsert = Tables['odometer_logs']['Insert'] & { id: string };
 export type FuelInsert = Tables['fuel_logs']['Insert'] & { id: string };
 export type ReportInsert = Pick<
@@ -333,9 +336,15 @@ export interface HeartbeatRow {
   location_restarts?: number;
 }
 
-/** The heartbeat's answer: whether the office is watching this driver right now (the phone then uploads every 10 s while moving). */
+/**
+ * The heartbeat's answer: whether the office is watching this driver right now (the phone then uploads every 10 s while
+ * moving), and (Phase 7) whether the server has the driver on duty, with how the last duty ended when not: the app stops
+ * by itself after a clock-out whose push it missed. on_duty is null from a server that does not say.
+ */
 export interface HeartbeatAnswer {
   watched: boolean;
+  on_duty: boolean | null;
+  duty_end: { at: string; reason: 'driver' | 'auto' | 'admin' } | null;
 }
 
 export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<HeartbeatAnswer> {
@@ -355,8 +364,63 @@ export async function sendHeartbeat(client: Client, row: HeartbeatRow): Promise<
     p_video_bytes_waiting: row.video_bytes_waiting ?? undefined,
   });
   if (res.error) fail(res, 'heartbeat');
-  const data = res.data as { watched?: unknown } | null;
-  return { watched: data?.watched === true };
+  const data = res.data as { watched?: unknown; on_duty?: unknown; duty_end?: { at?: unknown; reason?: unknown } | null } | null;
+  const end = data?.duty_end;
+  return {
+    watched: data?.watched === true,
+    on_duty: typeof data?.on_duty === 'boolean' ? data.on_duty : null,
+    duty_end: end && typeof end.at === 'string' && (end.reason === 'driver' || end.reason === 'auto' || end.reason === 'admin')
+      ? { at: end.at, reason: end.reason }
+      : null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7: the driver's day (vehicle_assignments, my_vehicle_choices, change_vehicle).
+// ---------------------------------------------------------------------------
+
+/** A vehicle in the picker: who holds it now (first name), and whether it is mine now, my last or my regular one. */
+export interface VehicleChoice {
+  id: string;
+  reg_no: string;
+  make_model: string | null;
+  vehicle_type: string | null;
+  seats: number | null;
+  in_garage: boolean;
+  current_odometer_km: number | null;
+  held_by: string | null;
+  held_since: string | null;
+  mine_now: boolean;
+  my_last: boolean;
+  my_regular: boolean;
+}
+
+export async function fetchVehicleChoices(client: Client): Promise<VehicleChoice[]> {
+  const res = await client.rpc('my_vehicle_choices');
+  if (res.error) fail(res, 'vehicles');
+  return Array.isArray(res.data) ? (res.data as unknown as VehicleChoice[]) : [];
+}
+
+/** Change vehicle (null = no vehicle) at the phone's time; the same id twice changes nothing. Answers the vehicle held after. */
+export async function changeVehicle(client: Client, vehicleId: string | null, at: string, clientId: string): Promise<string | null> {
+  const res = await client.rpc('change_vehicle', { p_vehicle: vehicleId as string, p_at: at, p_client: clientId });
+  if (res.error) fail(res, 'vehicle');
+  const data = res.data as { vehicle_id?: unknown } | null;
+  return typeof data?.vehicle_id === 'string' ? data.vehicle_id : null;
+}
+
+export type Assignment = Pick<
+  Tables['vehicle_assignments']['Row'],
+  'id' | 'vehicle_id' | 'from_at' | 'to_at' | 'how' | 'ended_how' | 'ended_by_name'
+>;
+
+/** My latest vehicle rows (newest first): the "taken over" banner reads the newest. */
+export async function fetchMyAssignments(client: Client, limit = 5): Promise<Assignment[]> {
+  return check(
+    await client.from('vehicle_assignments').select('id, vehicle_id, from_at, to_at, how, ended_how, ended_by_name')
+      .order('from_at', { ascending: false }).limit(limit),
+    'vehicle history',
+  );
 }
 
 /** The heartbeat history: a batch of rows into driver_heartbeats; one already there (same time) is ignored. */

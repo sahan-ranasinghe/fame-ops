@@ -58,6 +58,8 @@ export type Op =
   | { kind: 'fuel_log'; row: realApi.FuelInsert }
   | { kind: 'report'; row: realApi.ReportInsert }
   | { kind: 'employee_patch'; id: string; patch: { current_vehicle_id?: string | null; language?: Language } }
+  /** Phase 7: Change vehicle (null = no vehicle) at the phone's time; id = the phone's id, so a resend changes nothing. */
+  | { kind: 'vehicle_change'; id: string; vehicle_id: string | null; at: string }
   /** Only the newest one matters for driver_latest: the store keeps one waiting heartbeat at a time (replaceOp). */
   | { kind: 'heartbeat'; row: realApi.HeartbeatRow }
   /** A fuel video: the file on the phone, its place in the bucket, and how far the upload got (url + offset, kept after every chunk). */
@@ -311,6 +313,9 @@ export function createSync(deps: SyncDeps) {
         return api.patchStop(client, op.id, op.patch);
       case 'employee_patch':
         return api.patchEmployee(client, op.id, op.patch);
+      case 'vehicle_change':
+        await api.changeVehicle(client, op.vehicle_id, op.at, op.id);
+        return;
       case 'photo': {
         await deps.uploadFile(op.local_uri, op.storage_path);
         await api.insertPhoto(client, {
@@ -337,7 +342,7 @@ export function createSync(deps: SyncDeps) {
         return api.insertReport(client, op.row);
       case 'heartbeat': {
         const answer = await api.sendHeartbeat(client, op.row);
-        deps.onHeartbeat?.({ watched: answer?.watched === true });
+        deps.onHeartbeat?.({ watched: answer?.watched === true, on_duty: answer?.on_duty ?? null, duty_end: answer?.duty_end ?? null });
         return;
       }
       case 'video_upload':

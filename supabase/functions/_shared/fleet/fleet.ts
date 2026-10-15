@@ -123,7 +123,7 @@ export type ShareState = "sharing" | "stale" | "not_sharing";
 
 export interface Sharing {
   state: ShareState;
-  /** "Live · 2 min", "Last seen 48 min", "Not sharing" */
+  /** "Live · 2 min", "Last seen 48 min", "Off duty" */
   text: string;
   minutes: number | null;
 }
@@ -131,7 +131,7 @@ export interface Sharing {
 /** Sharing = last point under 15 minutes old; stale = older; not sharing = switched off. */
 export function sharing(latest: Latest | undefined, now: Date): Sharing {
   const minutes = latest?.recorded_at ? minutesSince(latest.recorded_at, now) : null;
-  if (!latest || !latest.sharing) return { state: "not_sharing", text: "Not sharing", minutes };
+  if (!latest || !latest.sharing) return { state: "not_sharing", text: "Off duty", minutes };
   if (!latest.recorded_at || minutes === null) return { state: "stale", text: "Sharing · no location yet", minutes: null };
   if (minutes < STALE_AFTER_MINUTES) return { state: "sharing", text: `Live · ${ago(latest.recorded_at, now)}`, minutes };
   return { state: "stale", text: `Last seen ${ago(latest.recorded_at, now)}`, minutes };
@@ -140,7 +140,7 @@ export function sharing(latest: Latest | undefined, now: Date): Sharing {
 /** The newer status (status.ts) with the fields the tools add to a driver card. The old `state`/`location` fields stay as they were. */
 export interface SignalFields {
   status: StatusResult["status"];
-  /** "Live · 2 min", "Location off since 11:56", "No signal since 11:56", "Not sharing" */
+  /** "Live · 2 min", "Location off since 11:56", "No signal since 11:56", "Off duty" */
   status_text: string;
   /** When the state began (Asia/Colombo), when known. */
   status_since?: string;

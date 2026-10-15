@@ -22,6 +22,9 @@ export interface NavState extends NavItem {
 
 export const LOCK_HINT = "Ask an admin for access";
 
+/** Phase 7: the duty log, the office's clock-out and "Move to vehicle" (duty_log, clock_out_driver, move_driver_vehicle). */
+export const DUTY_NEED: Permission[] = ["assign_tasks", "vehicles"];
+
 /** The issues centre and the bell: everything with issues, the task kinds with assign_tasks. */
 export const ISSUES_NEED: Permission[] = ["issues", "assign_tasks"];
 
@@ -38,6 +41,7 @@ export const NAV: NavItem[] = [
   { key: "fuel", label: "Fuel", need: ["vehicles"], path: "/fuel" },
   { key: "places", label: "Places", need: ["vehicles"], path: "/places" },
   { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
+  { key: "duty", label: "Duty log", need: DUTY_NEED, path: "/drivers/duty" },
   { key: "settings", label: "Settings", need: [], path: "/settings" },
 ];
 

@@ -16,7 +16,9 @@ import * as api from '@/lib/api';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
 import { sendHeartbeat, startHeartbeatLoop } from '@/lib/heartbeat';
 import { checkTracking, getSharing, readiness, type StartResult, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
-import { armShiftNudge, disarmShiftNudge, ensureChannels, notifyNewTask, onNotificationTap } from '@/lib/notifications';
+import { armShiftNudge, disarmShiftNudge, ensureChannels, notifyNewTask, onNotificationTap, onPushReceived } from '@/lib/notifications';
+import { type DutyEnded, onDutyEnded } from '@/lib/duty';
+import { type ArrivalFlag, canMarkDone } from '@/lib/dayRules';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
@@ -33,7 +35,16 @@ import { clearQueue, queueCounts, type QueueCounts, retryFailed, tasksWaiting } 
 export type SignInOutcome = 'ok' | 'wrong' | 'network' | 'switched_off' | 'not_configured';
 /** Why a stop was skipped (task_stops.skip_reason); not_visited = the task was finished with the stop still open. */
 export type SkipReason = 'closed' | 'nobody_there' | 'not_needed' | 'not_visited' | 'other';
-export type SignOutOutcome = 'ok' | 'task' | 'queue';
+export type SignOutOutcome = 'ok' | 'task' | 'duty' | 'queue';
+export type StartWorkOutcome = 'on' | 'no_permission' | 'cancelled';
+/** "{plate} is now with {name}": the vehicle this driver held was taken by another driver (Phase 7, item 2). */
+export interface VehicleTaken {
+  /** The assignment row, so a closed banner stays closed. */
+  id: string;
+  plate: string;
+  name: string;
+  at: string;
+}
 export type LiveStatus = 'connected' | 'connecting' | 'off';
 
 /** The "Turn on Location" cover (components/LocationGate.tsx): why it is up and what for. */
@@ -112,13 +123,30 @@ interface AppValue {
   refresh: () => Promise<void>;
   sendNow: (includeFailed?: boolean) => Promise<void>;
   setSharing: (on: boolean) => Promise<'on' | 'off' | 'no_permission' | 'cancelled'>;
+  /** Phase 7, the driver's day. On duty since (ISO), from this phone's open duty period. */
+  dutySince: string | null;
+  /** Start work with today's vehicle (null = no vehicle today): the duty session carries it, the server records the take. */
+  startWork: (vehicleId: string | null) => Promise<StartWorkOutcome>;
+  /** Change vehicle while on duty (null = no vehicle), at the phone's time. */
+  changeVehicle: (vehicleId: string | null) => void;
+  /** Finish work: not while a task is in progress. */
+  finishWork: () => Promise<'off' | 'task'>;
+  /** The vehicles to choose from with who holds each (null without a connection: the screen falls back to `vehicles`). */
+  loadVehicleChoices: () => Promise<api.VehicleChoice[] | null>;
+  /** The banner when another driver took this driver's vehicle; null when there is none. */
+  vehicleTaken: VehicleTaken | null;
+  dismissVehicleTaken: () => void;
+  /** The server ended the duty (the cut-off or the office): Today shows it once. */
+  dutyEnded: DutyEnded | null;
+  clearDutyEnded: () => void;
   checkTrackingNow: () => Promise<void>;
   checkUpdate: () => Promise<UpdateOutcome>;
   /** Registers this phone for push notifications (after sign-in, and when notifications are allowed). */
   registerPush: () => Promise<boolean>;
   chooseVehicle: (vehicleId: string) => void;
   markSeen: (taskIds: string[]) => void;
-  markStopArrived: (stop: TaskStop) => void;
+  /** Arrived, with how it was marked (item 18: within 300 m = ok; override / no_gps / no_pin) and the distance from the pin. */
+  markStopArrived: (stop: TaskStop, record?: { flag: ArrivalFlag; distanceM: number | null }) => void;
   markStopDone: (stop: TaskStop) => void;
   skipStop: (stop: TaskStop, reason: SkipReason, note: string) => void;
   /** Accept a task (the server keeps the earliest time). */
@@ -175,6 +203,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dataAvailable, setDataAvailable] = useState(true);
   const [gate, setGate] = useState<GateState | null>(null);
   const gateResolve = useRef<((outcome: GateOutcome) => void) | null>(null);
+  const [dutySince, setDutySince] = useState<string | null>(() => getSharing()?.startedAt ?? null);
+  const [vehicleTaken, setVehicleTaken] = useState<VehicleTaken | null>(null);
+  const [dutyEnded, setDutyEnded] = useState<DutyEnded | null>(() => getJson<DutyEnded>(KEYS.dutyEnded));
 
   // The newest values, for callbacks that run later.
   const meRef = useRef(me);
@@ -264,6 +295,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // While something is still waiting on the phone, keep what the driver did rather than the older server copy.
       if (!sent.offline) saveTasks(taskRows);
       setOffline(sent.offline);
+      // Phase 7: another driver took my vehicle while I am on duty → the banner (until I choose or close it).
+      const rows = await api.fetchMyAssignments(supabase, 1).catch(() => null);
+      const last = rows?.[0];
+      if (last && last.ended_how === 'taken_over' && row.current_vehicle_id === null && getSharing() && last.id !== getJson<string>(KEYS.takenSeen)) {
+        const plate = vehicleRows.find((v) => v.id === last.vehicle_id)?.reg_no ?? '';
+        setVehicleTaken({ id: last.id, plate, name: (last.ended_by_name ?? '').split(' ')[0], at: last.to_at ?? last.from_at });
+      } else if (rows) {
+        setVehicleTaken(null);
+      }
     } catch {
       setOffline(true);
     } finally {
@@ -278,6 +318,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const status = await checkTracking(serviceTexts);
       setTracking(status);
       setSharingState(status.sharing);
+      setDutySince(getSharing()?.startedAt ?? null);
     } catch {
       // The screens keep the last status.
     }
@@ -385,11 +426,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(timer);
   }, [signedIn, checkTrackingNow]);
 
-  // The shift nudge ("At work? Switch On duty"): scheduled while the driver is signed in and off duty, gone while on duty.
+  // The shift nudge ("At work? Start work"): scheduled while the driver is signed in and off duty, gone while on duty.
   useEffect(() => {
     if (!signedIn) return;
     if (sharing) void disarmShiftNudge();
-    else void armShiftNudge(shift, { title: t('shift.title'), body: t('shift.body') });
+    else void armShiftNudge(shift, { title: t('shift.titleWork'), body: t('shift.bodyWork') });
   }, [signedIn, sharing, shift, t]);
 
   // While sharing is on: a heartbeat a minute, and one the moment Location or the permission changes.
@@ -416,6 +457,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }, 5_000);
     return () => clearInterval(timer);
   }, [signedIn]);
+
+  // Phase 7: a push about the driver's day while the app runs: the vehicle was taken or moved → refresh;
+  // a clock-out → a heartbeat now (its answer stops location, lib/duty.ts), then refresh.
+  useEffect(() => onPushReceived((kind) => {
+    if (kind === 'vehicle_taken' || kind === 'vehicle_moved' || kind === 'reopened') void refresh();
+    else if (kind === 'duty_auto_out' || kind === 'duty_office_out') void sendHeartbeat().then(() => refresh());
+  }), [refresh]);
+
+  // The server ended the duty (lib/duty.ts stopped location): the screens follow.
+  useEffect(() => onDutyEnded((ended) => {
+    setSharingState(false);
+    setTracking(TRACKING_OFF);
+    setDutySince(null);
+    setDutyEnded(ended);
+    const current = meRef.current;
+    if (current?.current_vehicle_id) saveMe({ ...current, current_vehicle_id: null });
+  }), [saveMe]);
 
   // The driver tapped the "sharing stopped" notification: look again right away.
   useEffect(() => onNotificationTap((data) => {
@@ -499,6 +557,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async (): Promise<SignOutOutcome> => {
     if (tasksRef.current.some((task) => task.status === 'in_progress')) return 'task';
+    // Phase 7: Finish work first (sign-out is disabled on Me while on duty).
+    if (getSharing()) return 'duty';
     await stopSharing('driver');
     setSharingState(false);
     setTracking(TRACKING_OFF);
@@ -526,6 +586,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await stopSharing('driver');
       setSharingState(false);
       setTracking(TRACKING_OFF);
+      setDutySince(null);
       void sendHeartbeat(); // the office hears "not sharing" at once
       return 'off' as const;
     }
@@ -535,17 +596,79 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
     if (!went) return 'cancelled' as const;
     setSharingState(outcome.result === 'on');
+    setDutySince(getSharing()?.startedAt ?? null);
     if (outcome.result === 'on') void checkTrackingNow();
     return outcome.result;
   }, [serviceTexts, checkTrackingNow, requireLocation]);
 
-  const chooseVehicle = useCallback((vehicleId: string) => {
+  // --- Phase 7: the driver's day ------------------------------------------------
+  // Start work = a duty session with today's vehicle (the server records the take, item 2); Change vehicle = an RPC
+  // with the phone's time; Finish work = the session's end (the server gives the vehicle up).
+  const startWork = useCallback(async (vehicleId: string | null): Promise<StartWorkOutcome> => {
+    const current = meRef.current;
+    if (!current) return 'cancelled';
+    // The session picks the vehicle up from the saved me (lib/location.ts startSharing).
+    saveMe({ ...current, current_vehicle_id: vehicleId });
+    const outcome = { result: 'no_permission' as StartResult };
+    const went = await requireLocation('sharing', async () => {
+      outcome.result = await startSharing(serviceTexts);
+    });
+    if (!went) return 'cancelled';
+    setSharingState(outcome.result === 'on');
+    setDutySince(getSharing()?.startedAt ?? null);
+    if (outcome.result === 'on') {
+      setVehicleTaken(null);
+      setDutyEnded(null);
+      remove(KEYS.dutyEnded);
+      void checkTrackingNow();
+    }
+    return outcome.result;
+  }, [saveMe, serviceTexts, checkTrackingNow, requireLocation]);
+
+  const changeVehicle = useCallback((vehicleId: string | null) => {
     const current = meRef.current;
     if (!current || current.current_vehicle_id === vehicleId) return;
     saveMe({ ...current, current_vehicle_id: vehicleId });
-    enqueue({ kind: 'employee_patch', id: current.id, patch: { current_vehicle_id: vehicleId } });
+    enqueue({ kind: 'vehicle_change', id: Crypto.randomUUID(), vehicle_id: vehicleId, at: new Date().toISOString() });
+    setVehicleTaken(null);
     void flushNow();
   }, [saveMe]);
+
+  const finishWork = useCallback(async (): Promise<'off' | 'task'> => {
+    if (tasksRef.current.some((task) => task.status === 'in_progress')) return 'task';
+    await stopSharing('driver');
+    setSharingState(false);
+    setTracking(TRACKING_OFF);
+    setDutySince(null);
+    setVehicleTaken(null);
+    const current = meRef.current;
+    if (current?.current_vehicle_id) saveMe({ ...current, current_vehicle_id: null });
+    void sendHeartbeat(); // the office hears "off duty" at once
+    return 'off';
+  }, [saveMe]);
+
+  const loadVehicleChoices = useCallback(async () => {
+    try {
+      return await api.fetchVehicleChoices(supabase);
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const dismissVehicleTaken = useCallback(() => {
+    setVehicleTaken((banner) => {
+      if (banner) setJson(KEYS.takenSeen, banner.id);
+      return null;
+    });
+  }, []);
+
+  const clearDutyEnded = useCallback(() => {
+    setDutyEnded(null);
+    remove(KEYS.dutyEnded);
+  }, []);
+
+  /** The older picker's entry point: the same as Change vehicle. */
+  const chooseVehicle = useCallback((vehicleId: string) => changeVehicle(vehicleId), [changeVehicle]);
 
   const bumpOdometer = useCallback((vehicleId: string, km: number) => {
     setVehicles((list) => {
@@ -583,13 +706,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void flushNow();
   }, [patchLocalTask]);
 
-  const markStopArrived = useCallback((stop: TaskStop) => {
-    patchStop(stop, { status: 'arrived', arrived_at: new Date().toISOString() });
+  const markStopArrived = useCallback((stop: TaskStop, record?: { flag: ArrivalFlag; distanceM: number | null }) => {
+    patchStop(stop, {
+      status: 'arrived',
+      arrived_at: new Date().toISOString(),
+      arrival_flag: record?.flag ?? 'ok',
+      arrival_distance_m: record?.distanceM ?? null,
+    });
   }, [patchStop]);
 
+  // Done only after Arrived (item 18): the write carries no arrival, so the server refuses one without it.
   const markStopDone = useCallback((stop: TaskStop) => {
-    const now = new Date().toISOString();
-    patchStop(stop, { status: 'done', done_at: now, arrived_at: stop.arrived_at ?? now });
+    if (!canMarkDone(stop)) return;
+    patchStop(stop, { status: 'done', done_at: new Date().toISOString() });
   }, [patchStop]);
 
   const skipStop = useCallback((stop: TaskStop, reason: SkipReason, note: string) => {
@@ -657,14 +786,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void playSound('start');
       beginTaskKm(task.id);
       setGpsKm(kmCounters());
-      // The task's vehicle is now the one being driven.
-      if (current.current_vehicle_id !== task.vehicle_id) {
-        saveMe({ ...current, current_vehicle_id: task.vehicle_id });
-        enqueue({ kind: 'employee_patch', id: current.id, patch: { current_vehicle_id: task.vehicle_id } });
-      }
-      // Starting a task turns location sharing on.
+      // The task's vehicle is now the one being driven: the server records it from the task's start (Phase 7);
+      // the duty session opened below (when off duty) carries it too.
+      if (current.current_vehicle_id !== task.vehicle_id) saveMe({ ...current, current_vehicle_id: task.vehicle_id });
+      // Starting a task turns location sharing on (clocks in when off duty).
       const result = await startSharing(serviceTexts);
       setSharingState(result === 'on');
+      setDutySince(getSharing()?.startedAt ?? null);
       void checkTrackingNow();
       void flushNow();
     }),
@@ -823,6 +951,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, settings: shift, wifiOnly, setWifiOnly, waitingTasks, refreshing, offline, dataAvailable,
     gate, resolveGate, requireLocation,
     signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, skipStop,
+    dutySince, startWork, changeVehicle, finishWork, loadVehicleChoices, vehicleTaken, dismissVehicleTaken, dutyEnded, clearDutyEnded,
     acceptTask, declineTask, notice, clearNotice,
     startTask, completeTask, logOdometer, logFuel, sendReport,
   };

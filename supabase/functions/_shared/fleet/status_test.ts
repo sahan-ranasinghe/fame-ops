@@ -8,7 +8,7 @@ const base = { sharing: true, pointAt: null, heartbeatAt: null, locationOn: null
 Deno.test("not sharing wins over everything", () => {
   const r = driverStatus({ ...base, sharing: false, pointAt: ago(1), heartbeatAt: ago(1), locationOn: false }, now);
   assertEquals(r.status, "not_sharing");
-  assertEquals(statusText(r, now), "Not sharing");
+  assertEquals(statusText(r, now), "Off duty");
 });
 
 Deno.test("a point under 3 minutes old is live, whatever the heartbeat says", () => {

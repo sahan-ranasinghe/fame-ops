@@ -4,8 +4,10 @@
 //
 //   POST /functions/v1/push-task
 //   x-server-key: <SERVER_KEY>            (called by the database trigger tasks_notify_push, through pg_net)
-//   { "task_id": "...", "kind": "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder", "employee_id": "...",
+//   { "task_id": "...", "kind": "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder" | "reopened", "employee_id": "...",
 //     "changes": { "time": "Thu 15 Oct 09:30", "vehicle": "WP KL-1234", "end_by": "12:00", "title": "…", "stops": true, "passengers": 4, "notes": true } }  (changed only)
+//   { "task_id": null, "kind": "vehicle_taken" | "vehicle_moved" | "duty_auto_out" | "duty_office_out", "employee_id": "...",
+//     "plate"?: "WP CAB-4521", "name"?: "Kamal", "time"?: "21:00" }   (Phase 7: the driver's day, no task)
 //   200 { "sent": 1, "failed": 0 }   (also 200 with sent 0 when the driver has no registered phone)
 //
 // The text is in the driver's language (employees.language). Android plays
@@ -15,7 +17,11 @@
 // opens the task (data.taskId). Tokens Expo reports as DeviceNotRegistered
 // are deleted. Every call is written to push_log. leave_30 and leave_now come
 // from the pg_cron job task-reminders (queue_task_reminders), accept_reminder
-// from the accept rule.
+// from the accept rule. Phase 7: reopened (office_reopen_task), and four pushes about
+// the driver's day with no task: vehicle_taken (take_vehicle: another driver took
+// the vehicle), vehicle_moved (office_move_vehicle), duty_auto_out (duty_jobs at the
+// cut-off) and duty_office_out (office_clock_out). data.kind tells the app to refresh
+// (and, for the two clock-outs, to stop location).
 
 import { createClient } from "@supabase/supabase-js";
 
@@ -24,7 +30,12 @@ const COLOMBO_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-type Kind = "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder";
+type TaskKind = "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder" | "reopened";
+/** About the driver's day, with no task (Phase 7). */
+type DayKind = "vehicle_taken" | "vehicle_moved" | "duty_auto_out" | "duty_office_out";
+type Kind = TaskKind | DayKind;
+const TASK_KINDS: TaskKind[] = ["new", "changed", "cancelled", "removed", "leave_30", "leave_now", "accept_reminder", "reopened"];
+const DAY_KINDS: DayKind[] = ["vehicle_taken", "vehicle_moved", "duty_auto_out", "duty_office_out"];
 type Language = "en" | "si";
 
 const CHANNEL: Record<Kind, string> = {
@@ -35,6 +46,11 @@ const CHANNEL: Record<Kind, string> = {
   leave_30: "tasks-changed",
   leave_now: "tasks-new",
   accept_reminder: "tasks-new",
+  reopened: "tasks-changed",
+  vehicle_taken: "general",
+  vehicle_moved: "general",
+  duty_auto_out: "general",
+  duty_office_out: "general",
 };
 
 /** The words for each changed field ("Task changed: new time 09:30 · vehicle WP KL-1234"). */
@@ -78,6 +94,11 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     leave_30: { title: "Leave by {leave}", body: "{title} · leave in 30 minutes · {pickup} → {dropoff}" },
     leave_now: { title: "Time to leave", body: "{title} · leave by {leave} · {pickup} → {dropoff}" },
     accept_reminder: { title: "Please accept your task", body: "{when} · {title} · open Fame Driver and tap Accept" },
+    reopened: { title: "Task reopened", body: "{title} · finish it again in the app" },
+    vehicle_taken: { title: "Your vehicle was taken", body: "{plate} is now with {name} · choose your vehicle" },
+    vehicle_moved: { title: "The office changed your vehicle", body: "Your vehicle is now {plate}" },
+    duty_auto_out: { title: "You were clocked out", body: "Clocked out at {time} (end of the day)." },
+    duty_office_out: { title: "You were clocked out", body: "The office clocked you out at {time}." },
   },
   si: {
     new: { title: "නව කාර්යය {when}", body: "{title} · {pickup} → {dropoff}" },
@@ -87,8 +108,15 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     leave_30: { title: "{leave} ට පිටත් වන්න", body: "{title} · විනාඩි 30 කින් පිටත් වන්න · {pickup} → {dropoff}" },
     leave_now: { title: "පිටත් වීමට වෙලාවයි", body: "{title} · {leave} ට පිටත් වන්න · {pickup} → {dropoff}" },
     accept_reminder: { title: "ඔබේ කාර්යය පිළිගන්න", body: "{when} · {title} · Fame Driver විවෘත කර පිළිගන්න ඔබන්න" },
+    reopened: { title: "කාර්යය නැවත විවෘත කළා", body: "{title} · යෙදුමෙන් නැවත අවසන් කරන්න" },
+    vehicle_taken: { title: "ඔබේ වාහනය වෙනත් අයෙකු ගත්තා", body: "{plate} දැන් {name} ළඟ · ඔබේ වාහනය තෝරන්න" },
+    vehicle_moved: { title: "කාර්යාලය ඔබේ වාහනය වෙනස් කළා", body: "ඔබේ වාහනය දැන් {plate}" },
+    duty_auto_out: { title: "ඔබව රාජකාරියෙන් ඉවත් කළා", body: "{time} ට රාජකාරියෙන් ඉවත් කළා (දවසේ අවසානය)." },
+    duty_office_out: { title: "ඔබව රාජකාරියෙන් ඉවත් කළා", body: "කාර්යාලය {time} ට ඔබව රාජකාරියෙන් ඉවත් කළා." },
   },
 };
+
+const NO_VEHICLE: Record<Language, string> = { en: "You have no vehicle now.", si: "ඔබට දැන් වාහනයක් නැත." };
 
 interface Ticket {
   status: "ok" | "error";
@@ -144,24 +172,27 @@ Deno.serve(async (request) => {
   }
   const taskId = typeof body.task_id === "string" && body.task_id.length === 36 ? body.task_id : null;
   const employeeId = typeof body.employee_id === "string" && body.employee_id.length === 36 ? body.employee_id : null;
-  const kind = (["new", "changed", "cancelled", "removed", "leave_30", "leave_now", "accept_reminder"] as const).find((k) =>
-    k === body.kind
-  ) ?? null;
-  if (!taskId || !employeeId || !kind) return json(400, { error: "bad_request" });
+  const kind: Kind | null = [...TASK_KINDS, ...DAY_KINDS].find((k) => k === body.kind) ?? null;
+  const dayKind = kind !== null && (DAY_KINDS as string[]).includes(kind);
+  if (!employeeId || !kind || (!taskId && !dayKind)) return json(400, { error: "bad_request" });
 
   const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 
   const [taskRes, stopsRes, driverRes, tokensRes] = await Promise.all([
-    admin.from("tasks").select("id, title, start_at, leave_by, status, cancelled_reason").eq("id", taskId).maybeSingle(),
-    admin.from("task_stops").select("seq, place_name").eq("task_id", taskId).neq("status", "removed").order("seq"),
+    taskId
+      ? admin.from("tasks").select("id, title, start_at, leave_by, status, cancelled_reason").eq("id", taskId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    taskId
+      ? admin.from("task_stops").select("seq, place_name").eq("task_id", taskId).neq("status", "removed").order("seq")
+      : Promise.resolve({ data: [] as { seq: number; place_name: string }[] }),
     admin.from("employees").select("id, name, language, active").eq("id", employeeId).maybeSingle(),
     admin.from("device_tokens").select("id, token").eq("employee_id", employeeId),
   ]);
   const task = taskRes.data;
   const driver = driverRes.data;
-  if (!task || !driver) return json(404, { error: "task_or_driver_not_found" });
+  if (!driver || (!dayKind && !task)) return json(404, { error: "task_or_driver_not_found" });
   const stops = stopsRes.data ?? [];
   const tokens = tokensRes.data ?? [];
 
@@ -173,22 +204,28 @@ Deno.serve(async (request) => {
 
   const language: Language = driver.language === "si" ? "si" : "en";
   const route = [stops[0]?.place_name ?? "", stops.length > 1 ? stops[stops.length - 1].place_name : ""].filter(Boolean).join(" → ");
+  const text_ = (v: unknown) => (typeof v === "string" ? v : "");
   const vars = {
-    when: when(task.start_at),
-    leave: clock(task.leave_by ?? task.start_at),
-    title: task.title,
+    when: task ? when(task.start_at) : "",
+    leave: task ? clock(task.leave_by ?? task.start_at) : "",
+    title: task?.title ?? "",
     pickup: stops[0]?.place_name ?? "",
     dropoff: stops.length > 1 ? stops[stops.length - 1].place_name : "",
-    reason: task.cancelled_reason ?? "",
+    reason: task?.cancelled_reason ?? "",
     // A changed task names what changed; with nothing named (an older caller) the route is shown as before.
     changes: changesLine(language, body.changes) || route,
+    // The driver's day (Phase 7).
+    plate: text_(body.plate),
+    name: text_(body.name),
+    time: text_(body.time),
   };
-  const text = TEXT[language][kind];
+  // Moved to no vehicle: say so instead of an empty plate.
+  const text = kind === "vehicle_moved" && !vars.plate ? { ...TEXT[language][kind], body: NO_VEHICLE[language] } : TEXT[language][kind];
   const messages = tokens.map((t) => ({
     to: t.token,
     title: fill(text.title, vars),
     body: fill(text.body, vars).replace(/ · $/, "").replace(/ → $/, ""),
-    data: { taskId, kind },
+    data: taskId ? { taskId, kind } : { kind },
     channelId: CHANNEL[kind],
     priority: "high",
     sound: "default",

@@ -9,7 +9,8 @@
 //   no_signal     sharing is on, but no point and no fresh heartbeat for over
 //                 3 minutes (no coverage, phone off or app closed; points may
 //                 still upload later), or a fresh heartbeat but no GPS fix
-//   not_sharing   the driver turned sharing off
+//   not_sharing   the driver is off duty (turned sharing off, or Finish work since Phase 7);
+//                 the words are "Off duty"
 //
 // A task in progress that has been location_off or no_signal for more than
 // 10 minutes goes into the fleet overview's "needs attention".
@@ -108,7 +109,7 @@ export function statusText(r: StatusResult, now: Date): string {
     case "no_signal":
       return `No signal${r.since ? ` since ${colomboClock(r.since)}` : ""}${refused}`;
     case "not_sharing":
-      return `Not sharing${refused}`;
+      return `Off duty${refused}`;
   }
 }
 

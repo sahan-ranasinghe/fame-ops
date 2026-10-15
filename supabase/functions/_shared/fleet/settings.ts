@@ -35,6 +35,8 @@ export interface Settings {
   /** The driver app's "At work? Switch On duty" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
   shift_start: string;
   shift_days: number[];
+  /** Phase 7: whoever is still on duty after this time (HH:MM Colombo) is clocked out, not while a task runs; "" = off. */
+  duty_cutoff: string;
   /** The steps the driver shows in order while recording a fuel video, ticked one by one (Phase 6, Part 3 and 3b); the last unlocks Stop. */
   fuel_video_checklist: ChecklistItem[];
   /** The recording quality: 480p (about 1.0 Mbps, the default) or 720p (about 1.5 Mbps). */
@@ -102,6 +104,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   map_matching: { provider: "none" },
   shift_start: "08:00",
   shift_days: [1, 2, 3, 4, 5],
+  duty_cutoff: "21:00",
   fuel_video_checklist: [
     { key: "plate", short: "Plate", en: "Number plate", si: "අංක තහඩුව" },
     { key: "zero", short: "Zero", en: "Pump display at zero before pumping", si: "පොම්ප කිරීමට පෙර පොම්ප තිරය බිංදුවේ" },
@@ -143,6 +146,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "Snap to roads under the open package: provider none or osrm (self-hosted, secret OSRM_URL); under the google package Google's Roads API snaps the web's Google map instead (its caps in google_caps.roads, 0 = off) and this setting is not read; km stay from the odometer",
   shift_start: 'The driver app\'s shift nudge ("At work? Switch On duty"): the time of day, HH:MM, shown only to a driver who is off duty',
   shift_days: "… on these days (0 = Sunday … 6 = Saturday); empty = never",
+  duty_cutoff:
+    'The end of the working day, HH:MM: a driver still on duty after it is clocked out by the server ("You were clocked out at 21:00"), but never while a task is in progress (then when it is completed); "" = off',
   fuel_video_checklist:
     "The steps the driver shows in order while recording a fuel video: a list of 1 to 8 { key, en, si, short? }, ticked one by one on the phone (the last unlocks Stop); each tick's second is kept with the entry and shown as a bookmark; short is the word on the office's timeline",
   fuel_video_quality:
@@ -205,6 +210,9 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       return value;
     case "shift_start":
       if (!isTime(value)) throw new ToolError("shift_start: a time of day, HH:MM.");
+      return value as string;
+    case "duty_cutoff":
+      if (value !== "" && !isTime(value)) throw new ToolError('duty_cutoff: a time of day, HH:MM, or "" for off.');
       return value as string;
     case "shift_days": {
       if (!Array.isArray(value) || !value.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) {

@@ -91,6 +91,14 @@ export interface BoardCard {
   eta_next?: string;
   eta_final?: string;
   late_min?: number;
+  /** Phase 7: completed early (the odometer or the time far under the plan). */
+  finish_flag?: FinishFlag;
+}
+
+/** Phase 7 (item 18): set at completion when the odometer km or the time is far under the plan. */
+export interface FinishFlag {
+  kind: "completed_early" | string;
+  text: string;
 }
 
 export interface Board {
@@ -153,6 +161,10 @@ export interface Stop {
   skip_reason?: string;
   skip_note?: string;
   navigate?: string;
+  /** Phase 7 (item 18): how Arrived was marked when not within 300 m: override, no_gps, no_pin, not_arrived; the words and the distance. */
+  arrival_flag?: "override" | "no_gps" | "no_pin" | "not_arrived" | string;
+  arrival_text?: string;
+  arrival_distance_m?: number;
 }
 
 export interface PlanLeg {
@@ -347,6 +359,11 @@ export interface TaskDetail {
     avoid_expressway?: boolean;
     plan_version?: number;
     eta?: TaskEta;
+    /** Phase 7: completed early, the reopen (reopen_task: completed today), and a vehicle taken at Start task. */
+    finish_flag?: FinishFlag;
+    can_reopen?: boolean;
+    /** "WP CAB-4521 taken over from Nuwan 08:40" */
+    vehicle_taken?: string;
   };
   plan?: PlanSummary;
   stops: Stop[];
@@ -660,6 +677,8 @@ export interface FleetSettings {
   /** The driver app's shift nudge: HH:MM on these days (0 = Sunday … 6 = Saturday). */
   shift_start?: string;
   shift_days?: number[];
+  /** Phase 7: drivers still on duty after this time are clocked out (not while a task runs); "" = off. */
+  duty_cutoff?: string;
   /** What the driver shows while recording a fuel video (Phase 6, Part 3). */
   fuel_video_checklist?: ChecklistItem[];
   /** The recording quality on the phone and how long the files are kept (Part 3b). */
@@ -760,13 +779,61 @@ export interface LiveDriver extends StatusFields {
   /** Fuel videos still on the phone, and their bytes (Phase 6, Part 3). */
   video_uploads_waiting?: number;
   video_bytes_waiting?: number;
+  /** Phase 7: every active driver is listed with a duty: on a task, on duty (clocked in), off duty; since HH:MM. */
+  duty?: DutyState;
+  duty_text?: string;
+  duty_since?: string;
+  /** Off duty: "auto at the cut-off", "by the office", "by the driver". */
+  off_duty_how?: string;
+  /** The vehicle held since HH:MM (not shown for a task's vehicle). */
+  vehicle_since?: string;
+  /** Today's hand-over: "WP CAB-4521 taken over from Nuwan 08:40" or "WP CAB-4521 now with Kamal 08:40". */
+  vehicle_note?: string;
+  /** "App stopped by phone 3× today" (heartbeat gaps over 3 minutes on duty). */
+  app_stops_today?: number;
+  app_stops_text?: string;
+  /** The phone's brand and model ("OPPO CPH2119"). */
+  phone?: string;
+  task_id?: string;
 }
+
+export type DutyState = "on_task" | "on_duty" | "off_duty";
 
 export interface LiveDrivers {
   as_of: string;
   counts: { all: number; sharing: number; stale: number; not_sharing: number };
   status_counts?: { live: number; no_signal: number; location_off: number; not_sharing: number };
+  /** Phase 7. */
+  duty_counts?: { on_task: number; on_duty: number; off_duty: number };
   drivers: LiveDriver[];
+}
+
+/** duty_log (Phase 7): one row per duty period, newest first. */
+export interface DutyPeriod {
+  driver?: string;
+  username?: string;
+  day: string;
+  clock_in: string;
+  /** "17:40", "Fri 16 Oct 08:02" (a later day), or "on duty". */
+  clock_out: string;
+  /** "driver", "auto at the cut-off", "office". */
+  out_how?: string;
+  opened_by_server?: boolean;
+  hours: number;
+  vehicles: { vehicle: string; from: string; to?: string; how: string; ended?: string; by: string; ended_by?: string }[];
+  tasks: { task_id: string; title: string; started: string; completed?: string; status: string; km?: number }[];
+  task_km: number;
+  gps_km?: number;
+  phone?: string;
+}
+
+export interface DutyLog {
+  from: string;
+  to: string;
+  driver?: string;
+  periods: DutyPeriod[];
+  totals: { periods: number; hours: number; task_km: number; gps_km?: number };
+  gps_note?: string;
 }
 
 export interface RouteStop {
@@ -1093,6 +1160,8 @@ export interface AvailableDriver {
   licence: { chip: "ok" | "orange" | "red" | "not set"; expiry?: string };
   free: boolean;
   busy_with?: string;
+  /** Phase 7: the vehicle the driver holds today (on duty), else their regular one. */
+  vehicle?: { reg_no: string; source: "on_duty" | "regular" };
 }
 
 export interface Availability {

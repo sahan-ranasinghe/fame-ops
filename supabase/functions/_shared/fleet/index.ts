@@ -14,6 +14,7 @@ import {
   updateOfficeUser,
 } from "./tools/accounts.ts";
 import { createDriver, listDrivers, resetPin, setDriverActive, updateDriver } from "./tools/drivers.ts";
+import { clockOutDriver, dutyLog, moveDriverVehicle } from "./tools/duty.ts";
 import { driverRoute, liveDrivers, watchDrivers } from "./tools/locations.ts";
 import { listFuel } from "./tools/fuel.ts";
 import { listVehicleReports, mileageSummary, updateVehicleReport } from "./tools/mileage.ts";
@@ -49,7 +50,17 @@ import {
 import { issueHistory, listIssues, updateIssue } from "./tools/issues.ts";
 import { myNotificationSettings, registerWebPush, removeWebPush, setMyNotificationSettings } from "./tools/notifications.ts";
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
-import { cancelTask, createTask, planTask, reassignTask, taskBoard, taskDetail, updateTask, updateTaskStops } from "./tools/tasks.ts";
+import {
+  cancelTask,
+  createTask,
+  planTask,
+  reassignTask,
+  reopenTask,
+  taskBoard,
+  taskDetail,
+  updateTask,
+  updateTaskStops,
+} from "./tools/tasks.ts";
 import { addRentalCompany, listVehicles, registerVehicle, updateVehicle } from "./tools/vehicles.ts";
 
 export const TOOLS: AnyTool[] = [
@@ -120,6 +131,10 @@ export const TOOLS: AnyTool[] = [
   redecideRequest,
   updateTask,
   listFuel,
+  dutyLog,
+  clockOutDriver,
+  moveDriverVehicle,
+  reopenTask,
 ];
 
 export const INSTRUCTIONS = [

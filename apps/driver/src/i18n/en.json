@@ -301,12 +301,23 @@
     "liveConnecting": "Connecting…",
     "liveOff": "Off",
     "updateDownloaded": "Update downloaded. It starts when the task is finished and everything is sent.",
-    "wifiOnly": "Upload videos on Wi-Fi only"
+    "wifiOnly": "Upload videos on Wi-Fi only",
+    "finishWorkFirst": "Finish work first"
   },
   "vehicle": {
     "title": "Choose your vehicle",
     "inGarage": "In garage",
-    "none": "The office has not added any vehicles yet."
+    "none": "The office has not added any vehicles yet.",
+    "pickTitle": "Choose today's vehicle",
+    "noVehicleToday": "No vehicle today",
+    "withDriver": "With {name} now",
+    "yourLast": "Your last vehicle",
+    "yourRegular": "Your regular vehicle",
+    "yours": "Yours now",
+    "change": "Change vehicle",
+    "takenBanner": "{plate} is now with {name} · choose your vehicle",
+    "listOffline": "No connection: who has each vehicle is not shown.",
+    "start": "Start"
   },
   "tracking": {
     "locationOff": "Location is switched off on this phone. Trips are not recorded.",
@@ -349,7 +360,9 @@
   },
   "shift": {
     "title": "At work?",
-    "body": "Switch On duty when you start."
+    "body": "Switch On duty when you start.",
+    "titleWork": "At work? Start work",
+    "bodyWork": "Choose today's vehicle and tap Start work."
   },
   "fuel": {
     "title": "Fuel",
@@ -447,5 +460,35 @@
   "arrival": {
     "title": "Arrived at {stop}?",
     "body": "Tap to mark Arrived"
+  },
+  "duty": {
+    "startWork": "Start work",
+    "finishWork": "Finish work",
+    "finishConfirm": "Finish work? Location stops.",
+    "finishConfirmYes": "Finish work",
+    "onDutySince": "On duty since {time}",
+    "officeCanSee": "Office can see you",
+    "offDuty": "Off duty",
+    "offDutyHint": "Start work to record trips and mileage.",
+    "finishTaskFirst": "Finish the task first.",
+    "autoOutTitle": "You were clocked out",
+    "autoOutBody": "Clocked out at {time} (end of the day).",
+    "officeOutBody": "The office clocked you out at {time}.",
+    "noVehicle": "No vehicle"
+  },
+  "arrive": {
+    "far": "You are {distance} from {place}",
+    "override": "I'm here, the pin is wrong",
+    "waitingGps": "Waiting for GPS…",
+    "noPin": "No pin for this stop",
+    "km": "{n} km",
+    "m": "{n} m"
+  },
+  "complete": {
+    "needsLastStop": "Mark the last stop Done or Skip it first.",
+    "checkTitle": "Check the reading",
+    "checkBody": "The trip is {planned} km, the odometer says {km} km.",
+    "correct": "Correct the reading",
+    "goOn": "Go on"
   }
 }

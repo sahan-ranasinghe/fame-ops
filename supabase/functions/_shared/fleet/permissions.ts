@@ -81,6 +81,12 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   plan_task: AA,
   update_task_stops: ["assign_tasks"],
   update_task: ["assign_tasks"],
+  // Phase 7, Part 1: a driver's day. The duty log and the office's clock-out / move belong to who runs the
+  // drivers (dispatch, the fleet); reopening a task to dispatch.
+  duty_log: ["assign_tasks", "vehicles"],
+  clock_out_driver: ["assign_tasks", "vehicles"],
+  move_driver_vehicle: ["assign_tasks", "vehicles"],
+  reopen_task: ["assign_tasks"],
   get_settings: ANY,
   update_settings: USERS,
   routing_usage: USERS,

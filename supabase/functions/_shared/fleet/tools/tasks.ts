@@ -988,6 +988,7 @@ export const taskBoard = tool({
         eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
         eta_final: eta?.final_eta_at ? colomboTime(eta.final_eta_at) : undefined,
         late_min: eta && eta.late_min > 0 ? eta.late_min : undefined,
+        finish_flag: finishFlagText(t.finish_flag),
       };
     };
     const column = async (status: string) => await Promise.all(tasks.filter((t) => t.status === status).map(card));
@@ -1090,6 +1091,19 @@ export const taskDetail = tool({
     ]);
     const projects = new Map(unwrap(projectsRes, "projects").map((p) => [p.id, p]));
     const requestRow = unwrapMaybe(request, "vehicle request");
+    // Phase 7: when Start task took the vehicle from another driver, "WP CAB-4521 taken over from Nuwan 08:40".
+    const startTake = unwrapMaybe(
+      await db.from("vehicle_assignments").select("vehicle_id, from_at").eq("task_id", task.id).eq("how", "task_start").order("from_at")
+        .limit(1).maybeSingle(),
+      "vehicle hand-over",
+    );
+    const takenFrom = startTake
+      ? unwrapMaybe(
+        await db.from("vehicle_assignments").select("employee_id").eq("vehicle_id", startTake.vehicle_id).eq("ended_how", "taken_over")
+          .eq("to_at", startTake.from_at).neq("employee_id", task.employee_id).limit(1).maybeSingle(),
+        "vehicle hand-over",
+      )
+      : null;
     const driver = refs.emp.get(task.employee_id);
     const vehicle = refs.veh.get(task.vehicle_id);
     const when = (at: string | null) => at ? colomboDateTime(at) : undefined;
@@ -1144,6 +1158,14 @@ export const taskDetail = tool({
           gps_km: gps?.km,
           gps_km_note: gps ? GPS_KM_NOTE : undefined,
           eta: etaCard(eta, stops),
+          finish_flag: finishFlagText(task.finish_flag),
+          // Reopen (reopen_task): a task completed today, Colombo time.
+          can_reopen: task.status === "completed" && !!task.completed_at && colomboDate(task.completed_at) === colomboDate(now) ? true : undefined,
+          vehicle_taken: takenFrom && startTake
+            ? `${vehicle?.reg_no ?? "The vehicle"} taken over from ${refs.emp.get(takenFrom.employee_id)?.name ?? "another driver"} ${
+              colomboTime(startTake.from_at)
+            }`
+            : undefined,
         },
         plan: planSummary(task.plan_json as Plan | null, names),
         stops: stops.map((s) => ({
@@ -1156,6 +1178,10 @@ export const taskDetail = tool({
           done: s.done_at ? colomboTime(s.done_at) : undefined,
           skip_reason: s.skip_reason ?? undefined,
           skip_note: s.skip_note ?? undefined,
+          // Phase 7: how Arrived was marked, when not within 300 m (override, no_gps, no_pin, not_arrived).
+          arrival_flag: s.arrival_flag && s.arrival_flag !== "ok" ? s.arrival_flag : undefined,
+          arrival_text: arrivalFlagText(s.arrival_flag, s.arrival_distance_m),
+          arrival_distance_m: s.arrival_distance_m ?? undefined,
           navigate: mapsDirections({ lat: s.lat, lng: s.lng, text: s.address ?? s.place_name }),
           // Where the driver's own phone was when the stop was reached (ours, kept for good).
           arrival: s.arrival_lat != null && s.arrival_lng != null
@@ -1604,6 +1630,60 @@ export const updateTask = tool({
       },
       summary: `task ${task.id} changed (version ${out.plan_version}): ${changesText(out.changes) || "given back after a decline"}` +
         (out.warnings.length > 0 ? ` (${out.warnings.length} warnings)` : ""),
+    };
+  },
+});
+
+/** "Completed early: 3 km on the odometer for a 50 km plan (12 min for 60 min of driving)", or undefined. */
+export function finishFlagText(flag: unknown): { kind: string; text: string } | undefined {
+  const f = flag as { kind?: string; odometer_km?: number; planned_km?: number; minutes?: number; planned_minutes?: number } | null;
+  if (!f?.kind) return undefined;
+  return {
+    kind: f.kind,
+    text: `Completed early: ${f.odometer_km ?? "?"} km on the odometer for a ${f.planned_km ?? "?"} km plan (${f.minutes ?? "?"} min for ${
+      f.planned_minutes ?? "?"
+    } min of driving)`,
+  };
+}
+
+/** How Arrived was marked, in words, when it was not within 300 m of the pin. */
+export function arrivalFlagText(flag: string | null, distanceM: number | null): string | undefined {
+  const far = distanceM == null ? "" : distanceM >= 1000 ? ` ${Math.round(distanceM / 100) / 10} km from the pin` : ` ${distanceM} m from the pin`;
+  switch (flag) {
+    case "override":
+      return `Marked arrived${far} ("I'm here, the pin is wrong")`;
+    case "no_gps":
+      return "Marked arrived with no GPS fix";
+    case "no_pin":
+      return "Arrived (the stop has no pin)";
+    case "not_arrived":
+      return "Done without Arrived (older app)";
+    default:
+      return undefined;
+  }
+}
+
+export const reopenTask = tool({
+  name: "reopen_task",
+  title: "Reopen a task completed today",
+  description: "Sets a task completed today (Colombo) back to in progress, for example after a wrong end reading: the end odometer and " +
+    "the completion time are cleared (the odometer log and the task's history keep them), the stops skipped as not visited at the " +
+    "finish open again, and the driver gets a push to finish it again. Not when the driver has another task running.",
+  readOnly: false,
+  input: z.object({ task_id: zId, reason: zText(300) }),
+  async run({ task_id, reason }, { db, actor }) {
+    const task = await getTask(db, task_id);
+    const { data, error } = await db.rpc("office_reopen_task", { p_task: task.id, p_by: actor.name, p_reason: reason });
+    if (error) throw new Error(`reopen task: ${error.message}`);
+    const answer = (data as { result?: string } | null)?.result;
+    if (answer === "not_completed") throw new ToolError(`This task is ${task.status}, not completed: there is nothing to reopen.`);
+    if (answer === "not_today") throw new ToolError("Only a task completed today can be reopened.");
+    if (answer === "driver_busy") {
+      throw new ToolError("The driver has another task in progress: it must be completed first, then reopen this one.");
+    }
+    return {
+      result: { reopened: task.title, reason, note: "The driver's app shows it in progress again; they finish it with a new end reading." },
+      summary: `reopened task ${task.id} (${task.title}): ${reason}`,
     };
   },
 });

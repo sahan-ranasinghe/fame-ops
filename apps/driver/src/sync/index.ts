@@ -7,7 +7,7 @@ import { EncodingType, readAsStringAsync } from 'expo-file-system/legacy';
 import * as Network from 'expo-network';
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
-import { type AcceptAnswer, ApiError, type HeartbeatRow } from '../lib/api';
+import { type AcceptAnswer, ApiError, type HeartbeatAnswer, type HeartbeatRow } from '../lib/api';
 import { getJson, KEYS, setJson } from '../lib/kv';
 import { supabase } from '../lib/supabase';
 import { currentTrack, setWatched } from '../lib/tracking';
@@ -108,6 +108,17 @@ export function onAnswer(listener: AnswerListener): () => void {
   };
 }
 
+type HeartbeatListener = (answer: HeartbeatAnswer) => void;
+const heartbeatListeners = new Set<HeartbeatListener>();
+
+/** Hears every heartbeat answer (Phase 7: lib/duty.ts stops location when the server has the driver off duty). */
+export function onHeartbeatAnswer(listener: HeartbeatListener): () => void {
+  heartbeatListeners.add(listener);
+  return () => {
+    heartbeatListeners.delete(listener);
+  };
+}
+
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
@@ -146,7 +157,10 @@ const sync = createSync({
   connection: connectionKind,
   onProgress: () => changed(),
   moving: () => currentTrack().moving === true,
-  onHeartbeat: (answer) => setWatched(answer.watched),
+  onHeartbeat: (answer) => {
+    setWatched(answer.watched);
+    for (const listener of heartbeatListeners) listener(answer);
+  },
 });
 
 // The phone says the network is back: the ladder starts again and what waits goes at once (no waiting for a timer).

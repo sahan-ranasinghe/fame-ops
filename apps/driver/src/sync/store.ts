@@ -235,6 +235,12 @@ export function retryVideo(fuelLogId: string): boolean {
   return true;
 }
 
+/** How many ops of a kind are waiting to be sent (not failed). */
+export function opsWaiting(kind: Op['kind']): number {
+  const row = db.getFirstSync<{ n: number }>('SELECT COUNT(*) AS n FROM ops WHERE failed = 0 AND op LIKE ?', `{"kind":"${kind}"%`);
+  return row?.n ?? 0;
+}
+
 /** Ids of tasks that have a change waiting to be sent. */
 export function tasksWaiting(): Set<string> {
   const ids = new Set<string>();

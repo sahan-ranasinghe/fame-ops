@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  48::bigint, 'there are 48 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included, geocode_cache; Part 4b: site_import_presets, place_imports, place_import_changes, api_minute_calls; Part 5: google_calls, google_pins; 5b: route_gap_lines)');
+  49::bigint, 'there are 49 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included, geocode_cache; Part 4b: site_import_presets, place_imports, place_import_changes, api_minute_calls; Part 5: google_calls, google_pins; 5b: route_gap_lines; Phase 7: vehicle_assignments)');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -114,10 +114,10 @@ select is(
   0::bigint, 'anon cannot call any function');
 
 -- 37 since 15 October: driver_heartbeats_select_own (a driver reads their own heartbeat history; the app's
--- upsert needs it, migration phone_health).
+-- upsert needs it, migration phone_health). 38 with Phase 7: vehicle_assignments_select_own.
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  37::bigint, 'there are 37 policies on public tables');
+  38::bigint, 'there are 38 policies on public tables');
 
 select is(
   (select count(*) from pg_policies
