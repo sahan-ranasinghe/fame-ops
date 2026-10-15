@@ -19,6 +19,23 @@ refused (a cap, the counter), the page shows its lists without a map, never Open
 map that is not Google's (the Teams artifact's drawn map, the driver app's OpenFreeMap map), a
 stop that is a Google place is listed, not drawn.
 
+**Google place search is asked for, never the default.** `search_places` answers Google's places
+only when the call passes `google: true` (with an optional `session` token); without it the map layer
+is openrouteservice's, as before Part 5. Who passes it:
+
+- The web app: only a task's stops and its start (the stops editor, New task, a booking's stops). A
+  request's From and To never do: they are kept as text for good, and Google's names may not be kept.
+- Claude through the connector: it can, the same tool and the same rules, nothing is web-only. It
+  passes `google: true` when asked for Google places ("find Kandy City on Google", "use Google's
+  place for the drop"); an ordinary "find Kandy City" searches our places, the places used before
+  and openrouteservice, which costs no Google call. A Google result has `layer: "google"`, a
+  `google_place_id`, no pin and the credit "Google Maps" (Claude must show it with the names);
+  `google_place` gives its pin (kept 30 days), and `create_task`, `plan_task`, `update_task_stops`
+  and `book_vehicle` take the stop as `google_place_id` with the name as `place`. The connector's
+  instructions say so. A Claude chat started before a deploy keeps the tool list it had (the new
+  parameters appear in a new chat).
+- The Teams artifact: never (its person has no Google package; its maps are the drawn one).
+
 Switch it off: Settings → Fleet → Map package → Open (or `update_settings map_package open`).
 Everything works with no Google key set; the package in use is shown in Settings → Fleet.
 
