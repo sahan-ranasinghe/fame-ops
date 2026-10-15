@@ -130,8 +130,15 @@ routes 2, none refused. (search_places google could not be called from that Clau
 connector tool list predates the deploy.) The Teams artifact file and declaration (57 tools) built
 from 9d4475b. **The 1.2.0 build failed** (EAS build 77512e93, "Runtime version mismatch: local
 1.2.0, EAS 1.2.0-gmaps"): app.config.ts took the Google map switch from the secret key, which only
-EAS's workers can read. Fixed on `phase6-android-maps-flag`: the plain-text switch
-`GOOGLE_ANDROID_MAPS=on` (see README); the build waits for that variable and Sahan's go.
+EAS's workers can read. Fixed on `phase6-android-maps-flag` (0a64c3c): the plain-text switch
+`GOOGLE_ANDROID_MAPS=on` (see README), set by Sahan in the preview environment. **The 1.2.0 build
+finished** (EAS build ddc92043, from 0a64c3c): the APK is version 1.2.0 with the runtime
+1.2.0-gmaps and `extra.googleMapsAndroid` true, the Maps key in the Android manifest only (not in the
+JavaScript config), signed with the preview key's SHA-1 BC:78:…:62:E2, build number 1 like 1.1.0's
+(an equal number installs over it). Install link:
+https://expo.dev/artifacts/eas/v8oG_RlEynbAlGqhWJsVm9RpsJlmcL1APPOIwc6fDYc.apk. After the round, as
+asked: `deno fmt` on supabase/functions only (2d752ca; the generated database.types.ts left as
+generated; no migration touched).
 
 Deployed so far (14 October 2026): round 1 at f9bc685 (Part 2); round 2 at 413d820 (Part 3);
 **round 2b at 3cc39d8** (Part 3b, the ordered steps, and the five driver-app items): migrations
