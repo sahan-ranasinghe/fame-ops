@@ -20,6 +20,7 @@ import { translate } from '../i18n';
 import { enqueue, flushNow } from '../sync';
 import { getJson, KEYS, remove, setJson } from './kv';
 import { armWatchdog, disarmWatchdog } from './notifications';
+import { settingsIntents, type SetupBrand } from './phoneSetup';
 import type { Employee, Language } from './types';
 import { colors } from '../theme';
 
@@ -274,6 +275,34 @@ export async function openLocationSettings(): Promise<void> {
 /** This app's own settings page (permissions, battery). */
 export async function openAppSettings(): Promise<void> {
   await Linking.openSettings();
+}
+
+/**
+ * The watchdog's restart: the service is stopped and started again (the phone's battery manager had frozen
+ * it while it still counted as running). Resolves true when it runs again.
+ */
+export async function restartLocationUpdates(texts: ServiceTexts): Promise<boolean> {
+  try {
+    if (await isRunning()) await Location.stopLocationUpdatesAsync(LOCATION_TASK);
+    await beginUpdates(texts);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The brand's battery or startup settings (lib/phoneSetup.ts), else this app's App info page. */
+export async function openBrandSettings(brand: SetupBrand): Promise<void> {
+  const appId = Application.applicationId ?? 'com.fameglobal.driver';
+  for (const intent of settingsIntents(brand, appId, Application.applicationName ?? 'Fame Driver')) {
+    try {
+      await IntentLauncher.startActivityAsync('android.intent.action.MAIN', { packageName: intent.packageName, className: intent.className, extra: intent.extra });
+      return;
+    } catch {
+      // Not on this phone (or not opened to other apps): the next one.
+    }
+  }
+  await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.APPLICATION_DETAILS_SETTINGS, { data: `package:${appId}` }).catch(() => Linking.openSettings());
 }
 
 /** Android's own one-tap question: "Let the app always run in the background?" */

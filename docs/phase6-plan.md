@@ -691,6 +691,25 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
   playback steps through every point of the line in time order (a gap waits at most 1.5 s).
   Round 2c deploys the migration, the three functions and the web; the phone part waits for the
   round 3 eas update.
+- Phone health (branch `phase6-3d-phone-health`, 15 October): (1) driver_heartbeats had never held
+  a row on the live project. The app uploads the history as an upsert that ignores repeats
+  (`ON CONFLICT DO NOTHING`), and Postgres checks that form against the SELECT policies; drivers
+  had an INSERT policy only, so every batch was refused ("new row violates row-level security
+  policy"). The grant fix of 14 October was real but not enough, and every test used a plain
+  insert. Migration `20261015090000_phone_health` adds `driver_heartbeats_select_own`; pgTAP, the
+  connector suite and test:data now upload the way the app does, twice (a repeat is ignored). The
+  phones on 01a13a6e kept each refused batch as rejected and put it back in line on pull to
+  refresh, after an update and once a day, so the rows since 14 October 18:05 arrive once the
+  migration is live. Every other table the app upserts into already lets a driver read their own
+  rows. (2) test.driver2's 15 October 06:12–06:28: the app frozen for 7, 3 and 5 minutes with
+  2–7 m GPS around the gaps and nothing uploaded later, the battery manager. Two defences, shipped
+  with Part 4's eas update: the watchdog (on duty, moving, no position for 90 s: the location
+  service is stopped and started again, at most once every 90 s; `location_restarts` on the next
+  history row, migration column with its grant; `driver_route` answers the sum), and the Phone
+  setup card on Today (a gap of over 3 minutes between two heartbeats of one duty period, kept 7
+  days on the phone, shown for the last 3 days until Done; the brand's settings page through
+  expo-intent-launcher with App info as the fallback; steps for OPPO, realme, Xiaomi, vivo,
+  Samsung and other phones in both languages; `npm run test:setup`).
 
 ## 8. Part 4: site lists and place search
 

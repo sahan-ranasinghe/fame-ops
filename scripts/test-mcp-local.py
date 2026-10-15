@@ -1001,14 +1001,20 @@ check("1 to 8" in r, "the steps need 1 to 8 entries", r)
 tool("update_settings", {"key": "fuel_video_checklist", "value": steps})
 code, _ = app.post("rpc/send_heartbeat", {"p_at": iso(dt.datetime.now(dt.timezone.utc)), "p_sharing": True, "p_location_on": True, "p_permission": "always", "p_queued_points": 0, "p_video_uploads_waiting": 1, "p_video_bytes_waiting": 12000000})
 check(code in (200, 204), "a heartbeat says one video waits on the phone", f"{code}")
-# The history row with every column the app sends (14 October: the two video columns had no insert grant, every batch was refused).
-code, body = app.post("driver_heartbeats", {"employee_id": ME, "at": iso(dt.datetime.now(dt.timezone.utc)), "session_id": None, "sharing": True, "location_on": True,
-                                             "permission": "always", "battery_pct": 80, "app_state": "background", "data_available": True, "fixes_seen": 12,
-                                             "fixes_stored": 12, "dropped_accuracy": 0, "dropped_jump": 0, "dropped_jitter": 0, "dropped_duplicate": 0,
-                                             "last_gps_fix_age_s": 5, "queued_points": 0, "rejected_points": 0, "app_version": "1.1.0",
-                                             "video_uploads_waiting": 1, "video_bytes_waiting": 12000000})
-check(code == 201, "a driver writes a heartbeat history row with every column the app sends (the video columns included)", f"{code} {str(body)[:160]}")
-check(tool("driver_route", {"driver": "nuwan.p"})["heartbeats"] >= 1, "driver_route counts the history row in today's window")
+# The history row with every column the app sends, the way the app sends it: an upsert that ignores a repeat (14 October: the two
+# video columns had no insert grant; 15 October: the upsert form also needs a SELECT policy for the driver, which was missing).
+hb_row = {"employee_id": ME, "at": iso(dt.datetime.now(dt.timezone.utc)), "session_id": None, "sharing": True, "location_on": True,
+          "permission": "always", "battery_pct": 80, "app_state": "background", "data_available": True, "fixes_seen": 12,
+          "fixes_stored": 12, "dropped_accuracy": 0, "dropped_jump": 0, "dropped_jitter": 0, "dropped_duplicate": 0,
+          "last_gps_fix_age_s": 5, "queued_points": 0, "rejected_points": 0, "app_version": "1.1.0",
+          "video_uploads_waiting": 1, "video_bytes_waiting": 12000000, "location_restarts": 2}
+upsert = "return=minimal,resolution=ignore-duplicates"
+code, body = app.post("driver_heartbeats?on_conflict=employee_id,at", [hb_row], prefer=upsert)
+check(code in (200, 201), "a driver uploads heartbeat history as the app does (upsert, every column, the restarts included)", f"{code} {str(body)[:160]}")
+code2, body2 = app.post("driver_heartbeats?on_conflict=employee_id,at", [hb_row], prefer=upsert)
+check(code2 in (200, 201), "the same batch again (a lost answer) is ignored, not refused", f"{code2} {str(body2)[:160]}")
+dr = tool("driver_route", {"driver": "nuwan.p"})
+check(dr["heartbeats"] >= 1 and dr.get("location_restarts") == 2, "driver_route counts the history row and the watchdog's restarts in the window", json.dumps({k: dr.get(k) for k in ("heartbeats", "location_restarts")}))
 # Watched mode: the office watches a driver for 90 s; the phone's next heartbeat hears it.
 w = tool("watch_drivers", {"drivers": ["nuwan.p"]})
 check(len(w["watched"]) == 1 and w["seconds"] == 90 and "until" in w, "watch_drivers: the office watches a driver for 90 s", json.dumps(w))

@@ -328,6 +328,8 @@ export interface HeartbeatRow {
   /** Fuel videos still on the phone, and their bytes still to go (Phase 6, Part 3). */
   video_uploads_waiting?: number;
   video_bytes_waiting?: number;
+  /** How often the watchdog restarted the location service since the previous heartbeat (history only). */
+  location_restarts?: number;
 }
 
 /** The heartbeat's answer: whether the office is watching this driver right now (the phone then uploads every 10 s while moving). */
@@ -376,6 +378,7 @@ export async function insertHeartbeats(client: Client, employeeId: string, rows:
     dropped_duplicate: row.dropped_duplicate ?? null,
     video_uploads_waiting: row.video_uploads_waiting ?? null,
     video_bytes_waiting: row.video_bytes_waiting ?? null,
+    location_restarts: row.location_restarts ?? null,
     last_gps_fix_age_s: row.fix_age_s ?? null,
     queued_points: row.queued_points,
     rejected_points: row.rejected_points ?? null,

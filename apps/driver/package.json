@@ -65,7 +65,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p scripts",
     "test:data": "tsx scripts/test-data-layer.ts",
     "test:track": "tsx scripts/test-track.ts",
-    "test:sync": "tsx scripts/test-sync.ts"
+    "test:sync": "tsx scripts/test-sync.ts",
+    "test:setup": "tsx scripts/test-phone-setup.ts"
   },
   "private": true,
   "expo": {

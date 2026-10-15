@@ -273,6 +273,11 @@ async function main() {
     { kind: 'session_end', id: session, ended_at: at(1), end_reason: 'driver' },
   ];
   queue.add(...day1);
+  // The heartbeat history, the way the phone keeps it (one row a minute) and uploads it (an upsert that ignores repeats).
+  queue.addHeartbeats(Array.from({ length: 3 }, (_, i) => ({
+    at: at(43 - i), sharing: true, location_on: true, permission: 'always' as const, battery_pct: 80, app_version: '1.1.0+test', queued_points: 0,
+    session_id: session, fixes_seen: 12, fixes_stored: 12, video_uploads_waiting: 0, video_bytes_waiting: 0, location_restarts: i === 1 ? 1 : 0,
+  })));
   queue.addPoints(Array.from({ length: 45 }, (_, i) => ({
     session_id: session, recorded_at: at(44 - i), lat: 6.8868 + i * 0.01, lng: 79.8612 + i * 0.01, accuracy_m: 8, speed_mps: 15, heading: 45, battery_pct: 80, is_mock: false,
   })));
@@ -334,6 +339,11 @@ async function main() {
   check(pointCount === 45 && latest.sharing === false && Math.abs((latest.lat ?? 0) - (6.8868 + 44 * 0.01)) < 1e-6, '45 location points stored; the office sees the newest one and "not sharing"', { pointCount, lat: latest.lat });
   check(latest.hb_location_on === false && latest.hb_permission === 'always' && latest.hb_queued_points === 45 && latest.hb_app_version === '1.1.0+test' && latest.hb_location_off_since !== null,
     'the heartbeat reached driver_latest: Location off, 45 points were waiting, app 1.1.0+test', { hb: latest.hb_location_on, since: latest.hb_location_off_since });
+  const beats = must(await admin.from('driver_heartbeats').select('at, location_restarts').eq('employee_id', a.row.id).order('at'), 'heartbeat history');
+  check(beats.length === 3 && queue.heartbeats() === 0 && beats.reduce((s, b) => s + (b.location_restarts ?? 0), 0) === 1,
+    'the heartbeat history reached driver_heartbeats through the app\'s own upload (3 rows, one watchdog restart), and left the phone', { rows: beats.length, left: queue.heartbeats() });
+  const beatAgain = await client.from('driver_heartbeats').upsert([{ employee_id: a.row.id, at: beats[0]!.at, sharing: true, location_on: true, permission: 'always', queued_points: 0 }], { onConflict: 'employee_id,at', ignoreDuplicates: true });
+  check(!beatAgain.error, 'the same row uploaded again (a lost answer) is ignored, not refused', beatAgain.error);
   const meNow = await api.fetchMe(client);
   check(meNow?.language === 'si' && meNow.current_vehicle_id === van.id, 'language and current vehicle were saved');
   const reports = await api.fetchReports(client);

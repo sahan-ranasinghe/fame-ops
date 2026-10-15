@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { DeclineSheet } from '@/components/DeclineSheet';
 import { leaveTime, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
+import { PhoneSetupCard } from '@/components/PhoneSetupCard';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
@@ -133,6 +134,7 @@ export default function TodayScreen() {
             </Pressable>
           )}
           <TrackingNotice />
+          <PhoneSetupCard />
           {app.queue.points > 0 && (!app.dataAvailable || app.offline) && (
             <Txt variant="small" color={colors.amberText}>{t('today.offlineWaiting', { n: app.queue.points })}</Txt>
           )}

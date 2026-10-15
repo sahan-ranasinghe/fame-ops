@@ -53,6 +53,14 @@ export const KEYS = {
   backoff: 'sync.backoff',
   /** The office is watching this driver until here (ms; the heartbeat's answer): uploads every 10 s while moving. */
   watchedUntil: 'tracking.watchedUntil',
+  /** The last heartbeat while on duty ({at, sessionId}): over 3 minutes to the next one means the phone stopped the app. */
+  lastBeat: 'phone.lastBeat',
+  /** Those gaps, the last 7 days (lib/phoneSetup.ts), and when the driver last tapped Done on the Phone setup card. */
+  phoneGaps: 'phone.gaps',
+  phoneSetupDoneAt: 'phone.setupDoneAt',
+  /** The watchdog: when it last restarted the location service (ms), and how often since the last heartbeat. */
+  lastRestartAt: 'tracking.lastRestartAt',
+  locationRestarts: 'tracking.locationRestarts',
   /** When the refused points were last put back in line (ms), and for which app update. */
   rejectedRetryAt: 'sync.rejectedRetryAt',
   rejectedRetryUpdate: 'sync.rejectedRetryUpdate',

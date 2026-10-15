@@ -637,8 +637,18 @@ and the line from the stored points. The heartbeat (every 60 s) carries the fix 
 (seen, stored, dropped by reason), data available, app state, GPS age, queued and rejected
 points; every heartbeat is also logged on the phone (30 days) and uploaded in batches into
 `driver_heartbeats` (the insert grant lists the columns: a column added to the table needs its
-grant too, else every batch is refused; a refused batch is kept as rejected like points and put
-back in line with them, never dropped). A dead location service is
+grant too, else every batch is refused; the app's upload is an upsert that ignores repeats, which
+Postgres also checks against the SELECT policies, so drivers read their own rows
+(`driver_heartbeats_select_own`, 15 October: before it no row had ever arrived); a refused batch
+is kept as rejected like points and put back in line with them, never dropped). A watchdog in the
+heartbeat loop's 10-second look restarts the location service when the driver is on duty, moving
+and no position came for 90 s (`watchLocation`, at most once every 90 s; the next history row
+carries `location_restarts`, `driver_route` sums them). Each heartbeat on duty notes a gap of over
+3 minutes since the previous one of the same duty period (the battery manager froze the app); the
+"Phone setup" card on Today (`components/PhoneSetupCard.tsx`, `lib/phoneSetup.ts`) shows while one
+of the last 3 days is not dismissed: the brand, a button that opens the brand's battery or startup
+page (expo-intent-launcher, App info as the fallback) and the steps for OPPO, realme, Xiaomi, vivo,
+Samsung or any other phone (`phoneSetup.*`, en + si). A dead location service is
 restarted when the app opens, comes to the front, or every minute while on screen; a
 watchdog notification fires 12 min after the last position. Location points are kept 90
 days (pg_cron job `prune-location-points`).

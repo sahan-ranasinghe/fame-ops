@@ -8,7 +8,9 @@
 //
 // Sent about every 60 s while on duty (lib/heartbeat loop, started by the app
 // state), at once when Location or the permission changes, once when duty
-// ends, and whenever the background job runs. Two copies: the newest one feeds
+// ends, and whenever the background job runs. Each one also notes a gap of
+// over 3 minutes since the previous one (the Phone setup card), and the loop's
+// 10-second look runs the watchdog that restarts a frozen location service. Two copies: the newest one feeds
 // driver_latest (queued with replaceOp: only the newest waits), and every one
 // goes into the history (driver_heartbeats) in batches, also after an outage,
 // so the office later knows the app was alive while nothing arrived.
@@ -20,12 +22,17 @@ import * as Updates from 'expo-updates';
 import { AppState } from 'react-native';
 
 import type { HeartbeatRow } from './api';
-import { getSharing, type Readiness, readiness } from './location';
-import { lastFixAgeS, takeCounters } from './tracking';
+import { getJson, KEYS, remove, setJson } from './kv';
+import { getSharing, type Readiness, readiness, restartLocationUpdates, serviceTextsFor } from './location';
+import { type Beat, type Gap, keepGaps, noteBeat } from './phoneSetup';
+import { currentTrack, isMoving, lastFixAgeS, takeCounters } from './tracking';
+import type { Language } from './types';
 import { enqueueLatest, flushNow, logHeartbeat } from '../sync';
 import { queueCounts } from '../sync/store';
 
 export const HEARTBEAT_EVERY_MS = 60_000;
+/** While on duty and moving, no position for this long: the phone froze the location service, which is restarted. */
+export const SILENT_RESTART_MS = 90_000;
 /** How often the phone looks at Location and the permission while sharing (a change is sent at once). */
 export const READINESS_EVERY_MS = 10_000;
 
@@ -54,8 +61,41 @@ export async function dataAvailable(): Promise<boolean | null> {
   }
 }
 
+/** A heartbeat while on duty: over 3 minutes since the one before (same duty period) is a gap the Phone setup card shows. */
+function noteGap(now: number): void {
+  const sessionId = getSharing()?.sessionId ?? null;
+  const gap = noteBeat(getJson<Beat>(KEYS.lastBeat), { at: now, sessionId });
+  if (sessionId) setJson(KEYS.lastBeat, { at: now, sessionId });
+  else remove(KEYS.lastBeat);
+  if (gap) setJson(KEYS.phoneGaps, keepGaps([...(getJson<Gap[]>(KEYS.phoneGaps) ?? []), gap], now));
+}
+
+/** The watchdog's restarts since the previous heartbeat; taking them starts the count again. */
+function takeRestarts(): number {
+  const n = getJson<number>(KEYS.locationRestarts) ?? 0;
+  if (n) setJson(KEYS.locationRestarts, 0);
+  return n;
+}
+
+/**
+ * The watchdog (every 10 s with the readiness look): on duty, moving, and no position for 90 s means the
+ * phone's battery manager froze the location service while it still counts as running. It is stopped and
+ * started again (at most once every 90 s) and the next heartbeat says so (location_restarts).
+ */
+export async function watchLocation(now = Date.now()): Promise<boolean> {
+  if (!getSharing() || !isMoving(currentTrack())) return false;
+  const lastFix = getJson<number>(KEYS.lastFix) ?? now;
+  const lastRestart = getJson<number>(KEYS.lastRestartAt) ?? 0;
+  if (now - lastFix < SILENT_RESTART_MS || now - lastRestart < SILENT_RESTART_MS) return false;
+  setJson(KEYS.lastRestartAt, now);
+  const ok = await restartLocationUpdates(serviceTextsFor(getJson<Language>(KEYS.language) ?? 'en'));
+  if (ok) setJson(KEYS.locationRestarts, (getJson<number>(KEYS.locationRestarts) ?? 0) + 1);
+  return ok;
+}
+
 /** Builds one heartbeat, queues it (newest for driver_latest, every one for the history), then tries to send. Returns what the phone found. */
 export async function sendHeartbeat(): Promise<Readiness> {
+  noteGap(Date.now());
   const ready = await readiness();
   const counts = takeCounters();
   const queue = queueCounts();
@@ -80,6 +120,7 @@ export async function sendHeartbeat(): Promise<Readiness> {
     dropped_duplicate: counts.dropped_duplicate,
     video_uploads_waiting: queue.videos,
     video_bytes_waiting: queue.videoBytes,
+    location_restarts: takeRestarts(),
   };
   enqueueLatest({ kind: 'heartbeat', row });
   logHeartbeat(row);
@@ -106,6 +147,7 @@ export function startHeartbeatLoop(onChange?: (ready: Readiness) => void): () =>
   }, HEARTBEAT_EVERY_MS);
   const look = setInterval(() => {
     if (stopped) return;
+    void watchLocation().catch(() => false);
     void readiness().then((ready) => {
       const now = key(ready);
       if (last !== null && now !== last && getSharing()) void sendHeartbeat();

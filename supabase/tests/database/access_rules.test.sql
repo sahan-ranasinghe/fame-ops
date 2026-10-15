@@ -113,9 +113,11 @@ select is(
     where n.nspname = 'public' and has_function_privilege('anon', p.oid, 'EXECUTE')),
   0::bigint, 'anon cannot call any function');
 
+-- 37 since 15 October: driver_heartbeats_select_own (a driver reads their own heartbeat history; the app's
+-- upsert needs it, migration phone_health).
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  36::bigint, 'there are 36 policies on public tables');
+  37::bigint, 'there are 37 policies on public tables');
 
 select is(
   (select count(*) from pg_policies

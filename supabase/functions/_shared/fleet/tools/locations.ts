@@ -215,7 +215,7 @@ export const driverRoute = tool({
       ),
       fetchAll(
         (a, b) =>
-          db.from("driver_heartbeats").select("at").eq("employee_id", who.id).gte("at", fromIso).lte("at", toIso)
+          db.from("driver_heartbeats").select("at, location_restarts").eq("employee_id", who.id).gte("at", fromIso).lte("at", toIso)
             .order("at").range(a, b),
         "heartbeats",
         5000,
@@ -223,6 +223,8 @@ export const driverRoute = tool({
       loadSettings(db),
     ]);
     const window = { from: colomboDateTime(fromIso), to: colomboDateTime(toIso) };
+    // The phone's watchdog restarted the location service this often in the window (no position for 90 s while moving).
+    const restarts = beats.reduce((s, b) => s + (b.location_restarts ?? 0), 0) || undefined;
     if (rows.length === 0) {
       return {
         result: {
@@ -234,6 +236,7 @@ export const driverRoute = tool({
           points_stored: 0,
           points_shown: 0,
           heartbeats: beats.length,
+          location_restarts: restarts,
           note: beats.length ? "No position was recorded in this time; the phone was on duty with no GPS signal." : "No location was shared in this time.",
         },
         summary: `route ${who.name} ${day}: no points`,
@@ -351,6 +354,7 @@ export const driverRoute = tool({
         repeated_points: route.repeats,
         outlier_points: route.outliers,
         heartbeats: beats.length,
+        location_restarts: restarts,
         first_point: colomboTime(rows[0].recorded_at),
         last_point: colomboTime(last.recorded_at),
         last_position: lastOnLine ? mapsPoint(lastOnLine.lat, lastOnLine.lng) : mapsPoint(last.lat, last.lng),

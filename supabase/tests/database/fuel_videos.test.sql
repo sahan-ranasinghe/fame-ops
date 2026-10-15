@@ -113,15 +113,23 @@ set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f5","
 select is((select public.send_heartbeat(now(), true, true, 'always', 80, '1.1.0', 0)) ->> 'watched', 'true', 'and watched: true once the office set watched_until');
 select throws_ok($$ update public.driver_latest set watched_until = null where employee_id = '10000000-0000-0000-0000-0000000000f5' $$,
   '42501', 'permission denied for table driver_latest', 'a driver cannot change watched_until');
--- The history: a driver writes a row with every column the app sends (the insert grant lists the columns; on 14 October the two
--- video columns had no grant, every batch was refused, and driver_route counted no heartbeats at all).
+-- The history: a driver writes a row with every column the app sends, the way the app sends it: an upsert that ignores
+-- a repeat (ON CONFLICT DO NOTHING). On 14 October the two video columns had no insert grant; on 15 October the upsert
+-- form still failed because it checks the new row against the SELECT policies and drivers had none on this table.
 select lives_ok($$
   insert into public.driver_heartbeats (employee_id, at, session_id, sharing, location_on, permission, battery_pct, app_state, data_available,
     fixes_seen, fixes_stored, dropped_accuracy, dropped_jump, dropped_jitter, dropped_duplicate, last_gps_fix_age_s, queued_points,
-    rejected_points, app_version, video_uploads_waiting, video_bytes_waiting)
-  values ('10000000-0000-0000-0000-0000000000f5', now(), null, true, true, 'always', 80, 'background', true,
-    12, 12, 0, 0, 0, 0, 5, 0, 0, '1.1.0', 1, 12000000)
-$$, 'a driver writes a heartbeat history row with every column the app sends, the video columns included');
+    rejected_points, app_version, video_uploads_waiting, video_bytes_waiting, location_restarts)
+  values ('10000000-0000-0000-0000-0000000000f5', '2026-10-15 06:12:46+05:30', null, true, true, 'always', 80, 'background', true,
+    12, 12, 0, 0, 0, 0, 5, 0, 0, '1.1.0', 1, 12000000, 1)
+  on conflict (employee_id, at) do nothing
+$$, 'a driver writes a heartbeat history row with every column the app sends, as the app sends it (upsert, repeats ignored)');
+select lives_ok($$
+  insert into public.driver_heartbeats (employee_id, at, sharing, location_on, permission, queued_points)
+  values ('10000000-0000-0000-0000-0000000000f5', '2026-10-15 06:12:46+05:30', true, true, 'always', 0)
+  on conflict (employee_id, at) do nothing
+$$, 'the same row again (the answer to the first upload was lost) is ignored, not refused');
+select is((select count(*) from public.driver_heartbeats), 1::bigint, 'the driver reads their own history row, and only their own');
 reset role;
 select is((select count(*) from public.driver_heartbeats where employee_id = '10000000-0000-0000-0000-0000000000f5' and video_uploads_waiting = 1), 1::bigint,
   'the history row is there with its video count');

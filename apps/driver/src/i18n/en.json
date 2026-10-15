@@ -396,5 +396,48 @@
     "noMoreSegments": "No more pieces can be added: use what you have.",
     "uploadingSize": "Uploading {size} · {pct} %",
     "interruptedShort": "interrupted"
+  },
+  "phoneSetup": {
+    "title": "Phone setup",
+    "yourBrand": "Your {brand} phone",
+    "yourPhone": "Your phone",
+    "stoppedOnce": "{phone} stopped Fame Driver for {minutes} min ({when}). No trip is recorded while it is stopped.",
+    "stoppedMany": "{phone} stopped Fame Driver {count} times since {when}, {minutes} min in all. No trip is recorded while it is stopped.",
+    "doOnce": "Change these settings once:",
+    "open": "Open {brand} settings",
+    "openApp": "Open app settings",
+    "done": "Done",
+    "steps": {
+      "oppo": [
+        "Settings → Apps → Fame Driver → Battery usage: turn on \"Allow background activity\" and \"Allow auto launch\".",
+        "Settings → Battery → More settings → Optimise battery use: Fame Driver → \"Don't optimise\".",
+        "Recent apps: pull Fame Driver down (or tap the lock) so it stays locked."
+      ],
+      "realme": [
+        "Settings → Apps → Fame Driver → Battery usage: turn on \"Allow background activity\" and \"Allow auto launch\".",
+        "Settings → Battery → App battery management: Fame Driver → allow running in the background.",
+        "Recent apps: pull Fame Driver down (or tap the lock) so it stays locked."
+      ],
+      "xiaomi": [
+        "Settings → Apps → Fame Driver: turn on \"Autostart\".",
+        "Same page → Battery saver: \"No restrictions\".",
+        "Recent apps: hold Fame Driver and tap the lock."
+      ],
+      "vivo": [
+        "Settings → Battery → Background power consumption management: Fame Driver → \"Allow\".",
+        "i Manager → App manager → Autostart: turn on Fame Driver.",
+        "Recent apps: pull Fame Driver down so it stays locked."
+      ],
+      "samsung": [
+        "Settings → Apps → Fame Driver → Battery: \"Unrestricted\".",
+        "Settings → Battery → Background usage limits: Fame Driver must not be in \"Sleeping apps\" or \"Deep sleeping apps\"; add it to \"Never sleeping apps\".",
+        "Recent apps: tap the Fame Driver icon → \"Keep open\"."
+      ],
+      "other": [
+        "Settings → Apps → Fame Driver → Battery: allow background activity, no restrictions.",
+        "If the phone has \"Autostart\" or \"Auto launch\", turn it on for Fame Driver.",
+        "Recent apps: lock Fame Driver so it stays open."
+      ]
+    }
   }
 }
