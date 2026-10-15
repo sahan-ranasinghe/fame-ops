@@ -152,6 +152,8 @@ export const INSTRUCTIONS = [
   "name as place. Plans and ETAs then use Google's traffic. Every Google call is counted against a daily and a monthly cap; at a cap " +
   "the open package answers and a note says so. Google's terms: never draw a Google stop (google: true) or Google data on a map that " +
   "is not Google's (list it instead).",
+  "Placing a stop: when our places (search_places without google) have no good match, offer to search Google's places " +
+  "(search_places with google: true) instead of guessing a place.",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
