@@ -837,3 +837,114 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   // Back to the four in order (other runs and the driver tests count on them).
   await tool("update_settings", { key: "fuel_video_checklist", value: settings.settings.fuel_video_checklist.filter((i) => i.key !== "fuel_cap_closed") });
 });
+
+test("the location search box: sites by id with their badges, a pasted pin saved as a place, a map result confirmed; the place page; the site import", async ({ page }) => {
+  const email = `e2e.sites.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Sites Admin", email, permissions: ["view", "request", "assign_tasks", "vehicles"] });
+  const S = stamp.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(-5);
+  const pinned = `E2E${S}P`;
+  const bare = `E2E${S}N`;
+  await tool("import_places", { preset: "dialog", rows: [
+    { operator: "dialog", site_id: pinned, name: `Pinned Site ${stamp}`, district: "Kandy", lat: 7.2581, lng: 80.5976 },
+    { operator: "dialog", site_id: bare, name: `Bare Site ${stamp}`, district: "Matale" },
+  ] });
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Sites for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // Assign a task: a site by its id, with its badge; a site without a pin warns under the row.
+  await page.goto("/tasks/new");
+  const pickup = page.getByLabel("Pickup 1", { exact: true });
+  await pickup.fill(pinned.toLowerCase());
+  const option = page.getByRole("option", { name: new RegExp(`Pinned Site ${stamp}`) });
+  await expect(option).toContainText("Site · Dialog");
+  await option.click();
+  await expect(pickup).toHaveValue(`Pinned Site ${stamp}`);
+  const drop = page.getByLabel("Drop-off 1", { exact: true });
+  await drop.fill(bare);
+  await expect(page.getByRole("option", { name: new RegExp(`Bare Site ${stamp}`) })).toContainText("no pin");
+  await page.getByRole("option", { name: new RegExp(`Bare Site ${stamp}`) }).click();
+  await expect(page.getByTestId("no-pin-warning")).toContainText(`Bare Site ${stamp} has no pin`);
+
+  // A pasted "lat, lng": the pin to confirm, named, saved as one of our places.
+  await drop.fill("6.9271, 79.8612");
+  await page.getByRole("option", { name: /This pin/ }).click();
+  const confirm = page.getByTestId("pin-confirm");
+  await expect(confirm.getByTestId("pin-map")).toBeVisible();
+  await confirm.getByLabel("Name").fill(`Pasted pin ${stamp}`);
+  await confirm.getByRole("button", { name: "Save place" }).click();
+  await expect(drop).toHaveValue(`Pasted pin ${stamp}`);
+  await expect(page.getByTestId("no-pin-warning")).toHaveCount(0);
+  const saved = await tool<{ results: { name: string; badge: string }[] }>("search_places", { text: `Pasted pin ${stamp}`, map: false });
+  expect(saved.results[0]).toMatchObject({ name: `Pasted pin ${stamp}`, badge: "Saved" });
+
+  // A Map result (the map search answers through office-api; here its answer is stood in for): confirmed, saved with its credit.
+  await page.route("**/functions/v1/office-api/tools/search_places", async (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as { text?: string };
+    if (!String(body.text).includes("fakemap")) return route.continue();
+    // office-api's envelope: { result: <the tool's answer> }.
+    await route.fulfill({ json: { result: { text: body.text, results: [{ layer: "map", badge: "Map", name: `Map Cafe ${stamp}`, detail: "Map Cafe, Kandy, Central Province", pinned: true, lat: 7.2906, lng: 80.6337, ref: "openstreetmap:node/1", attribution: "© OpenStreetMap contributors · openrouteservice" }], map_cached: false } } });
+  });
+  await page.getByRole("button", { name: "Add stop" }).click();
+  const visit = page.getByLabel("Drop-off 2", { exact: true });
+  await visit.fill("fakemap cafe");
+  const mapRow = page.getByRole("option", { name: new RegExp(`Map Cafe ${stamp}`) });
+  await expect(mapRow).toContainText("Map");
+  await expect(page.locator(".ls-credit")).toContainText("OpenStreetMap");
+  await mapRow.click();
+  await expect(page.getByTestId("pin-confirm")).toContainText("OpenStreetMap");
+  await page.getByTestId("pin-confirm").getByRole("button", { name: "Save place" }).click();
+  await expect(visit).toHaveValue(`Map Cafe ${stamp}`);
+  const cafe = await tool<{ results: { id: string }[] }>("search_places", { text: `Map Cafe ${stamp}`, map: false });
+  const cafeDetail = await tool<{ place: { source: string; attribution: string } }>("place_detail", { id: cafe.results[0].id });
+  expect(cafeDetail.place).toMatchObject({ source: "ors", attribution: "© OpenStreetMap contributors · openrouteservice" });
+  await page.unroute("**/functions/v1/office-api/tools/search_places");
+
+  // The request form's From and To use the same box.
+  await page.goto("/requests/new");
+  await page.getByLabel("From", { exact: true }).fill(pinned);
+  await page.getByRole("option", { name: new RegExp(`Pinned Site ${stamp}`) }).click();
+  await expect(page.getByLabel("From", { exact: true })).toHaveValue(`Pinned Site ${stamp}`);
+
+  // Places: find the bare site, give it a pin by hand; a later import never moves it.
+  await page.goto("/places?who=dialog");
+  await page.getByLabel("Find a place").fill(bare);
+  await page.getByTestId("places-table").getByText(`Bare Site ${stamp}`).click();
+  const placePage = page.getByTestId("place-page");
+  await expect(placePage).toContainText("no pin");
+  await placePage.getByLabel("Pin (lat, lng)").fill("7.4675, 80.6234");
+  await placePage.getByRole("button", { name: "Save" }).click();
+  await expect(placePage).toContainText("Pin from set by hand");
+  await tool("import_places", { preset: "dialog", rows: [{ operator: "dialog", site_id: bare, name: `Bare Site ${stamp}`, lat: 7.1, lng: 80.1 }] });
+  const bareNow = await tool<{ results: { lat: number; site_id: string }[] }>("search_places", { text: bare, map: false });
+  expect(bareNow.results[0]).toMatchObject({ site_id: bare, lat: 7.4675 });
+
+  // Import sites: a spreadsheet shaped like Dialog's, read in the browser, previewed, imported in one batch.
+  const XLSX = await import("xlsx");
+  const sheet = XLSX.utils.json_to_sheet([
+    { "Site ID": `${S}X1`, "Other Site IDS": null, "Site Name": `Import One ${stamp}`, "New Region": "Central", District: "Kandy", Depot: "Kandy", Latitude: 7.29, Longitude: 80.63 },
+    { "Site ID": `${S}X2`, "Other Site IDS": `${S}Y2`, "Site Name": `Import Two ${stamp}`, "New Region": "Central", District: "Kandy", Depot: "Kandy", Latitude: null, Longitude: null },
+    { "Site ID": `${S}X1`, "Site Name": "the same id again" },
+  ]);
+  const book = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book, sheet, "All Operational Sites_DNS Data");
+  const buffer = Buffer.from(XLSX.write(book, { type: "buffer", bookType: "xlsx" }));
+  await page.goto("/settings/import-sites");
+  await page.getByLabel("The spreadsheet").setInputFiles({ name: "dialog.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer });
+  await page.getByRole("button", { name: "Preview" }).click();
+  const preview = page.getByTestId("import-preview");
+  await expect(preview).toContainText("Places2");
+  await expect(preview).toContainText("Without a pin1");
+  await expect(preview).toContainText("Skipped in the file1");
+  await page.getByRole("button", { name: "Import 2 places" }).click();
+  const report = page.getByTestId("import-report");
+  await expect(report).toContainText("Added2");
+  const two = await tool<{ results: { site_id: string; pinned: boolean }[] }>("search_places", { text: `${S}Y2`, map: false });
+  expect(two.results[0]).toMatchObject({ site_id: `${S}X2`, pinned: false });
+});

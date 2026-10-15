@@ -7,13 +7,13 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import { useLists } from "../data/hooks";
 import type { SettingsResult, UpdateRequestResult } from "../data/types";
 import { cap, joinDots, requestTone } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
+import { LocationSearch } from "../ui/LocationSearch";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { useRequest } from "./RequestDetail";
@@ -24,7 +24,6 @@ export function RequestEdit() {
   const { me, store, transport } = useFleet();
   const navigate = useNavigate();
   const toast = useToast();
-  const lists = useLists();
   const { q, err } = useRequest(id);
   const [f, setF, draft] = useFormDraft<RequestFields | null>("request-edit", id, null);
   const [busy, setBusy] = useState(false);
@@ -100,10 +99,9 @@ export function RequestEdit() {
             </div>
           </div>
           <div className="grid2">
-            <div className="field"><label htmlFor="re-from">From</label><input id="re-from" maxLength={160} list="re-places" value={f.from} onChange={(e) => set("from", e.target.value)} /></div>
-            <div className="field"><label htmlFor="re-to">To</label><input id="re-to" maxLength={160} list="re-places" value={f.to} onChange={(e) => set("to", e.target.value)} /></div>
+            <div className="field"><label htmlFor="re-from">From</label><LocationSearch id="re-from" value={f.from} onText={(text) => set("from", text)} onPick={(p) => set("from", p.name)} /></div>
+            <div className="field"><label htmlFor="re-to">To</label><LocationSearch id="re-to" value={f.to} onText={(text) => set("to", text)} onPick={(p) => set("to", p.name)} /></div>
           </div>
-          <datalist id="re-places">{(lists.places ?? []).map((p) => <option key={p.name} value={p.name} />)}</datalist>
           <div className="grid2">
             <div className="field"><label htmlFor="re-pax">Passengers</label><input type="number" id="re-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
             <div className="field" style={{ alignContent: "end", gap: 8 }}>

@@ -36,6 +36,13 @@ Deno.test("the fuel video checklist: 1 to 8 steps in order with a key and texts;
   assertThrows(() => validateSetting("fuel_video_checklist", [{ en: "no key" }]), ToolError, "needs a key");
 });
 
+Deno.test("the map search's daily cap: a whole number, 1000 by default", () => {
+  assertEquals(SETTINGS_DEFAULTS.ors_autocomplete_daily_cap, 1000);
+  assertEquals(validateSetting("ors_autocomplete_daily_cap", 500), 500);
+  assertThrows(() => validateSetting("ors_autocomplete_daily_cap", 1.5), ToolError, "whole number");
+  assertThrows(() => validateSetting("ors_autocomplete_daily_cap", -1), ToolError);
+});
+
 Deno.test("the fuel video quality and the keep months take only their two values", () => {
   assertEquals(SETTINGS_DEFAULTS.fuel_video_quality, "480p");
   assertEquals(SETTINGS_DEFAULTS.fuel_video_keep_months, 12);

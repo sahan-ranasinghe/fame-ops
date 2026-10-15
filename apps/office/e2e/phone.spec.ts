@@ -52,7 +52,7 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   // More lists what is not on the bar, once.
   await tabs(page).filter({ hasText: "More" }).click();
   const more = page.getByTestId("more-list");
-  await expect(more.getByRole("link")).toHaveText(["Issues", "Vehicles", "Projects", "Maintenance", "Mileage", "Fuel", "Drivers", "Settings"]);
+  await expect(more.getByRole("link")).toHaveText(["Issues", "Vehicles", "Projects", "Maintenance", "Mileage", "Fuel", "Places", "Drivers", "Settings"]);
 
   // The big action opens its page; Assign a task is a page of its own, its stops rows numbered within their type.
   await tabs(page).filter({ hasText: "Home" }).click();

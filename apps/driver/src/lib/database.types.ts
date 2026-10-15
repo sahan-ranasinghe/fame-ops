@@ -255,6 +255,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"geocode_cache": {
+                  Row: {
+                    "answer": NonNullable<Json>,"fetched_at": string,"provider": string,"query": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "answer": NonNullable<Json>,"fetched_at"?: string,"provider": string,"query": string
+                  }
+                  Update: {
+                    "answer"?: NonNullable<Json>,"fetched_at"?: string,"provider"?: string,"query"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"issue_events": {
                   Row: {
                     "action": string,"actor": string | null,"actor_employee_id": string | null,"at": string,"from_status": string | null,"id": number,"issue_id": string,"note": string | null,"to_status": string | null
@@ -567,14 +581,14 @@ isOneToOne: false
                   ]
                 },"places": {
                   Row: {
-                    "address": string | null,"created_at": string,"id": string,"kind": string,"lat": number | null,"lng": number | null,"name": string
+                    "address": string | null,"attribution": string | null,"created_at": string,"depot": string | null,"district": string | null,"id": string,"ids_text": string,"imported_at": string | null,"kind": string,"lat": number | null,"lng": number | null,"name": string,"operator": string,"other_ids": (string)[],"pin_source": string | null,"pinned": boolean | null,"provider_ref": string | null,"region": string | null,"site_id": string | null,"source": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"created_at"?: string,"id"?: string,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name": string
+                    "address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name": string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string
                   }
                   Update: {
-                    "address"?: string | null,"created_at"?: string,"id"?: string,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name"?: string
+                    "address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name"?: string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -1015,6 +1029,9 @@ isOneToOne: false
 "get_driver_settings":
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
+"import_place_rows":
+{ Args: { "p_preset": string,"p_rows": Json }; Returns: Json
+                           },
 "issue_visible":
 { Args: { "p_kind": string }; Returns: boolean
                            },
@@ -1060,6 +1077,11 @@ isOneToOne: false
 "queue_task_reminders":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
+"recent_places":
+{ Args: { "p_limit"?: number,"p_since": string,"p_text": string }; Returns: {
+              "address": string,"last_used": string,"lat": number,"lng": number,"name": string,"uses": number
+            }[]
+                           },
 "register_device_token":
 { Args: { "p_app_version"?: string,"p_device_model"?: string,"p_language"?: string,"p_platform"?: string,"p_token": string }; Returns: undefined
                            },
@@ -1068,6 +1090,11 @@ isOneToOne: false
                            },
 "request_event_visible":
 { Args: { "p_request_id": string }; Returns: boolean
+                           },
+"search_places_ranked":
+{ Args: { "p_limit"?: number,"p_text": string }; Returns: {
+              "address": string,"attribution": string,"depot": string,"district": string,"id": string,"kind": string,"lat": number,"lng": number,"name": string,"operator": string,"other_ids": (string)[],"rank": number,"site_id": string,"source": string
+            }[]
                            },
 "send_heartbeat":
 { Args: { "p_app_state"?: string,"p_app_version"?: string,"p_at": string,"p_battery_pct"?: number,"p_data_available"?: boolean,"p_fix_age_s"?: number,"p_location_on": boolean,"p_permission": string,"p_queued_points"?: number,"p_rejected_points"?: number,"p_sharing": boolean,"p_video_bytes_waiting"?: number,"p_video_uploads_waiting"?: number }; Returns: Json

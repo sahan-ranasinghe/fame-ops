@@ -5,7 +5,6 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import { useLists } from "../data/hooks";
 import type { PlanPreview, UpdateStopsResult } from "../data/types";
 import { hhmm, today } from "../lib/format";
 import { errText } from "../transport/errors";
@@ -26,7 +25,6 @@ export function TaskStops() {
   const { store, transport } = useFleet();
   const navigate = useNavigate();
   const toast = useToast();
-  const lists = useLists();
   const { p, err } = useTask(id);
   const back = `/tasks/${id}${useBoardQuery()}`;
   const [list, setList, draft] = useFormDraft<StopDraft[] | null>("task-stops", id, null);
@@ -111,7 +109,7 @@ export function TaskStops() {
       <DraftBanner draft={draft} />
       <div className="page-form">
         <div className="card card-b form">
-          <StopsRows list={list} onChange={setList} places={lists.places ?? []} idPrefix="ts" />
+          <StopsRows list={list} onChange={setList} idPrefix="ts" />
         </div>
         <div className="card card-b form"><b>Plan</b><PlanPanel preview={preview} reasons={reasons} /></div>
         {msg && <Notice tone="bad">{msg}</Notice>}

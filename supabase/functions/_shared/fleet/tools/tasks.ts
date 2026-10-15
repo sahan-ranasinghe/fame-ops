@@ -36,7 +36,7 @@ import type { Actor } from "../roles.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
-import { findPlace } from "./places.ts";
+import { findPlace, placeById } from "./places.ts";
 import { findOneProject } from "./projects.ts";
 
 type TaskStop = Row<"task_stops">;
@@ -102,7 +102,8 @@ const zArriveBy = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$|^\d{4}-\d{2}-\d{2}
 export const zStop = z.object({
   type: zStopType,
   what: zWhat.optional().describe("What is picked up or dropped: people, goods, documents, other"),
-  place: zText(160).optional().describe("A saved place name (list_places), a town, or free text"),
+  place_id: zId.optional().describe("A place picked with search_places (wins over place)"),
+  place: zText(160).optional().describe("A saved place name or site id, a town, or free text"),
   address: zText(240).optional(),
   lat: zLat.optional(),
   lng: zLng.optional(),
@@ -112,6 +113,7 @@ export const zStop = z.object({
 });
 export const zStops = z.array(zStop).min(1).max(12);
 export const zStart = z.object({
+  place_id: zId.optional().describe("A place picked with search_places"),
   place: zText(160).optional(),
   address: zText(240).optional(),
   lat: zLat.optional(),
@@ -179,11 +181,11 @@ export async function resolveStops(
   const out: ResolvedStop[] = [];
   for (const [i, s] of list.entries()) {
     const typed = (s.place ?? s.address ?? "").trim();
-    if (!typed && (s.lat === undefined || s.lng === undefined)) {
+    if (!s.place_id && !typed && (s.lat === undefined || s.lng === undefined)) {
       throw new ToolError(`Stop ${i + 1}: give a place, an address or lat and lng.`);
     }
     if ((s.lat === undefined) !== (s.lng === undefined)) throw new ToolError(`Stop ${i + 1}: give both lat and lng, or neither.`);
-    const place = typed ? await findPlace(db, typed) : null;
+    const place = s.place_id ? await placeById(db, s.place_id) : typed ? await findPlace(db, typed) : null;
     let lat = place?.lat ?? s.lat ?? null;
     let lng = place?.lng ?? s.lng ?? null;
     let pinFrom: ResolvedStop["pin_from"] = place?.lat != null ? "place" : s.lat !== undefined ? "given" : null;
@@ -215,9 +217,9 @@ export async function resolveStops(
 
 /** The start place: the given one (saved place, town or pin), else the base place, else none. */
 export async function resolveStart(db: Db, settings: Settings, start: z.infer<typeof zStart> | undefined): Promise<ResolvedStart | null> {
-  if (start && (start.place || start.address || start.lat !== undefined)) {
+  if (start && (start.place_id || start.place || start.address || start.lat !== undefined)) {
     const typed = (start.place ?? start.address ?? "").trim();
-    const place = typed ? await findPlace(db, typed) : null;
+    const place = start.place_id ? await placeById(db, start.place_id) : typed ? await findPlace(db, typed) : null;
     let lat = place?.lat ?? start.lat ?? null;
     let lng = place?.lng ?? start.lng ?? null;
     if (lat === null && typed) {
@@ -339,6 +341,7 @@ function stopCard(s: ResolvedStop | TaskStop) {
     type: s.type,
     what: s.what ?? undefined,
     place: s.place_name,
+    place_id: s.place_id ?? undefined,
     address: s.address ?? undefined,
     note: s.note ?? undefined,
     dwell_min: s.dwell_min ?? undefined,

@@ -772,6 +772,60 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
   details, the ids, the map with the pin draggable (web) or lat/lng fields (both), Save →
   `update_place`.
 
+### 8.5 Part 4 as built (15 October 2026, branch `phase6-4-sites`)
+
+- Migration `20261015100000_places_sites`: `pg_trgm`; places gain operator, site_id, other_ids,
+  region, district, depot, source, pin_source, attribution, provider_ref, imported_at,
+  updated_at, pinned (generated) and ids_text (trigger: site id and other ids, lower case).
+  Keys: one place per (operator, site_id); one Mobitel place without an id per coordinate at
+  4 decimals. The unique name rule (`places_name_key` on lower(name)) became
+  `places_saved_name_key`: only the office's own places (operator other, source manual or
+  claude) must have unique names; sites repeat names (thousands of towers) and places saved
+  from the map may too (save_place answers the one within 30 m instead). Functions:
+  `search_places_ranked` (exact id, name or id prefix, a word of the name, then trigram
+  similarity; offices first at equal rank), `recent_places` (names typed in task stops,
+  task starts and requests' From / To in the window, not our places' names),
+  `import_place_rows` (the rules of 8.3 in one transaction a call; EP rows attach within
+  100 m; answers added, updated, attached, unchanged, no_pin, skipped with reasons). Table
+  `geocode_cache` (service role, pruned nightly by `prune-geocode-cache`), setting
+  `ors_autocomplete_daily_cap` 1000.
+- The presets (`_shared/fleet/sites.ts`, `@fleet/sites` in the web): Dialog, Mobitel 4G-LTE,
+  Mobitel EP, with repairs reported (latitude and longitude swapped, a space inside a number).
+  On the real files: Dialog 3,791 sites (20 without a pin); Mobitel 4G 5,091 rows with
+  coordinates or text → 4,116 places (40 rows without coordinates skipped; 3,659 carry a
+  code); Mobitel EP 2,457 ids (3 repaired, none lost). Imported into the local stack in about
+  4 s: Dialog 3,789 added (2 skipped: the id is another site's other id), Mobitel 4G 4,116
+  added, EP 159 added, 220 attached within 100 m, 2,078 already there (the 4G site's own code).
+  `apps/office/scripts/site-counts.mts [--local]` repeats the counts and the local import.
+- The location search box (`ui/LocationSearch.tsx`, the addition of 15 October): one box for
+  the stops and the start of Assign a task / Edit stops and for From / To on the request forms.
+  `search_places(text, limit?, map?)` answers our places (badges Office, Site · Dialog,
+  Site · Mobitel, Saved), the places used in the last 90 days (Used before), then the map's
+  public places (Map) from openrouteservice geocode autocomplete (`_shared/fleet/geocode.ts`:
+  boundary.country LK, focus the base place, size 8, from 3 characters, the existing ORS_KEY,
+  cached 30 days per normalised text, counted per day as `ors_autocomplete` in
+  routing_calls; at `ors_autocomplete_daily_cap` only our places show, with "Map search limit
+  reached for today"). 300 ms after the last key; from 2 characters. A pasted "lat, lng" or
+  Google Maps link answers `pin` (`_shared/fleet/pasted.ts`; a maps.app.goo.gl link is
+  resolved on the server, every redirect hop on a Google host). A Map result or a pin opens a
+  small map to confirm (`map/PinMap.tsx`: draggable on the web, the drawn map and the "lat,
+  lng" field in the artifact) and `save_place` keeps it (kind other, source ors / link / pin,
+  the OSM credit and the provider id). The provider sits behind `geocode.ts`, which describes
+  how Google Places Autocomplete replaces it under map_package google (session tokens,
+  `storable: false`: the place id kept, not its coordinates; Google tiles only); not built.
+- Stops and starts take `place_id` (create_task, plan_task, update_task_stops, book_vehicle's
+  stops; task_detail's stops answer it). Typed text: the exact name, else a site id or other
+  id, else, unless the text is a town's name, part of the name of one of the office's own
+  places (never part of a site's name: "Galle" stays the town, "Matara" never becomes a
+  tower). `list_places` leaves the sites out unless asked (operator, kind site or a search)
+  and adds id, operator, site_id, district, pinned.
+- Pages: `/places` and `/places/:id` (vehicles: find by name or id, owner and pin filters; the
+  place with its ids, the pin on the map, Save → `update_place`, a pin set by hand is never
+  moved by an import), `/settings/import-sites` (web: SheetJS 0.20.3 from the SheetJS CDN, a
+  lazy chunk; Preview, Import in batches of 500 with progress, the report and its CSV).
+  Tools: search_places and place_detail (view or request), save_place (request, approve,
+  assign_tasks, vehicles), import_places and update_place (vehicles).
+
 ## 9. Part 5: the Google package with free-cap fallbacks
 
 ### 9.1 The setting and the rule

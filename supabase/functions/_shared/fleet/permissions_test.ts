@@ -91,6 +91,9 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
   const names = TOOLS.map((t) => t.name);
   assertEquals(toolsFor(PRESETS.requester.permissions, names), [
     "list_places",
+    "search_places",
+    "save_place",
+    "place_detail",
     "task_detail",
     "create_request",
     "list_requests",
@@ -109,6 +112,8 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "list_drivers",
     "list_vehicles",
     "list_places",
+    "search_places",
+    "place_detail",
     "list_requests",
     "find_project",
     "get_settings",

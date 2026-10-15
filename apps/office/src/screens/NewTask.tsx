@@ -16,6 +16,7 @@ import type { FleetError } from "../transport/types";
 import { Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { Icon } from "../ui/icons";
+import { LocationSearch } from "../ui/LocationSearch";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { type AssignFields, driverWhatsApp, emptyAssign, planInput, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
@@ -178,9 +179,11 @@ export function NewTask() {
         </div>
 
         <div className="card card-b form">
-          <div className="field"><label htmlFor="af-start">Start from</label><input id="af-start" list="st-places" maxLength={160} placeholder="The base place (Settings → Fleet)" value={f.start} onChange={(e) => set("start", e.target.value)} /></div>
+          <div className="field"><label htmlFor="af-start">Start from</label>
+            <LocationSearch id="af-start" value={f.start} placeholder="The base place (Settings → Fleet)"
+              onText={(text) => setF({ ...f, start: text, startPlaceId: undefined })} onPick={(p) => setF({ ...f, start: p.name, startPlaceId: p.placeId })} /></div>
           <span className="lab">Stops</span>
-          <StopsRows list={f.stops} onChange={(stops) => set("stops", stops)} places={lists.places ?? []} />
+          <StopsRows list={f.stops} onChange={(stops) => set("stops", stops)} />
           <div className="grid2">
             <span className="check"><input type="checkbox" id="af-return" checked={f.returnToBase} onChange={(e) => set("returnToBase", e.target.checked)} /> <label htmlFor="af-return">Return to office</label></span>
             <span className="check"><input type="checkbox" id="af-noexp" checked={f.avoidExpressway} onChange={(e) => set("avoidExpressway", e.target.checked)} /> <label htmlFor="af-noexp">No expressway</label></span>

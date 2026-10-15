@@ -206,6 +206,11 @@
   video_segments / video_interrupted`; `list_fuel(month, vehicle?, driver?)` feeds `/fuel` and
   `/fuel/:id` (the pieces play one after another); `task_detail.fuel[].video`; the live card
   says how many videos wait on the phone (`hb_video_uploads_waiting` / `hb_video_bytes_waiting`).
+- Phase 6 Part 4 (15 October 2026): every place field (stops, the start, a request's From and
+  To) is the location search box `ui/LocationSearch.tsx` (badges, the map's results with their
+  credit, a pasted pin or Google Maps link confirmed on `map/PinMap.tsx` and saved with
+  `save_place`); `/places`, `/places/:id` (vehicles) and `/settings/import-sites` (web, SheetJS
+  in a lazy chunk; the presets are `@fleet/sites`, shared with Deno's tests).
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
   `issues` (the bell), `issuesAll` (the Issues page), `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
   dropped connection is retried twice by itself, then the form shows the error with Try again).
@@ -328,7 +333,13 @@
   drive it themselves: the task's employee is then an office person, with no app behind it, and
   the leave-by / accept reminders and the not-accepted / late-start issue rules skip it).
 - `places`: id, name ("Head office, Colombo 05"), address, lat, lng (nullable),
-  kind ('office'|'store'|'site'|'other').
+  kind ('office'|'store'|'site'|'other'). Since Phase 6 Part 4 also the operators' sites:
+  operator ('dialog'|'mobitel'|'other'), site_id, other_ids, region, district, depot, source
+  (a preset, 'manual', 'claude', 'ors', 'link', 'pin'), pin_source (an import replaces only its
+  own preset's pin, never one set by hand), attribution, provider_ref, imported_at, updated_at,
+  pinned (generated), ids_text (trigger). One place per (operator, site_id); unique names only
+  among the office's own places. Found through `search_places_ranked` (trigram, pg_trgm);
+  `recent_places`; `import_place_rows`; `geocode_cache` (the map search, 30 days).
 - `towns`: id, name, lat, lng. Seed from GeoNames Sri Lanka populated places (CC BY 4.0,
   credit in README). Used for "Near <town>".
 - `projects` (Zoho Books jobs): id, zoho_project_id (unique), job_no ("13021"),
@@ -729,7 +740,13 @@ office_audit.
   not set" | "Booked later today · HH:MM" | "Booked · HH:MM (not started yet)" | "In garage",
   with `back_at`, `back_source`), `register_vehicle(...)`, `update_vehicle(reg_no, ...,
   custodian? name|e-mail|null, custodian_note?)`, `add_rental_company(name, phone?)`.
-- Places: `list_places`, `add_place(name, address?, lat?, lng?, kind?)`.
+- Places: `list_places(search?, kind?, operator?, pinned?, limit?)` (sites only when asked),
+  `add_place(name, address?, lat?, lng?, kind?)`, `search_places(text, limit?, map?)` (the
+  location search box: our places, used before, the map's public places from openrouteservice
+  autocomplete with a daily cap `ors_autocomplete_daily_cap`; a pasted "lat, lng" or Google
+  Maps link answers `pin`), `save_place(name, lat, lng, from map|link|pin, ref?, attribution?)`,
+  `place_detail(id)`, `import_places(preset, rows[≤500])`, `update_place(id, …, lat/lng |
+  clear_pin)`. Stops and starts take `place_id`. As built: `docs/phase6-plan.md` 8.5.
 - Tasks: `create_task(title, date, start_time?, driver, vehicle, pickup, dropoff | stops[{type,
   what?, place?, address?, lat?, lng?, dwell_min?, arrive_by?, note?}], start?, return_to_base?,
   avoid_expressway?, leave_by?, buffer_min?, passengers?, contact_name?, contact_phone?,

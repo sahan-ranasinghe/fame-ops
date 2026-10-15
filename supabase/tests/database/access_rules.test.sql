@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  40::bigint, 'there are 40 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included)');
+  41::bigint, 'there are 41 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included, geocode_cache)');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace

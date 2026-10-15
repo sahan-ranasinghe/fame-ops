@@ -14,7 +14,7 @@ insert into public.vehicles (id, reg_no) values ('20000000-0000-0000-0000-000000
 insert into public.places (id, name, lat, lng, kind) values ('30000000-0000-0000-0000-0000000000d4', 'Plan office', 6.93, 79.84, 'office');
 
 -- The settings are seeded, with no base place.
-select is((select count(*) from public.fleet_settings), 11::bigint, 'eleven settings are seeded (eight dispatch defaults, the fuel video checklist, quality and keep months)');
+select is((select count(*) from public.fleet_settings), 12::bigint, 'twelve settings are seeded (eight dispatch defaults, the fuel video checklist, quality and keep months, the map search''s daily cap)');
 select is((select value from public.fleet_settings where key = 'base_place_id'), 'null'::jsonb, 'no base place is seeded');
 select is((select value -> 'bands' -> 0 ->> 'from' from public.fleet_settings where key = 'rush_hour'), '07:00', 'the rush-hour bands are seeded');
 

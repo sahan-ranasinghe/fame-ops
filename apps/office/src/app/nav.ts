@@ -36,6 +36,7 @@ export const NAV: NavItem[] = [
   { key: "maintenance", label: "Maintenance", need: ["vehicles"], path: "/maintenance" },
   { key: "mileage", label: "Mileage", need: ["vehicles"], path: "/mileage" },
   { key: "fuel", label: "Fuel", need: ["vehicles"], path: "/fuel" },
+  { key: "places", label: "Places", need: ["vehicles"], path: "/places" },
   { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
   { key: "settings", label: "Settings", need: [], path: "/settings" },
 ];
@@ -86,6 +87,7 @@ export const ROUTES_NEED: Permission[] = ["assign_tasks", "vehicles"];
 export const SETTINGS_PAGES: NavItem[] = [
   { key: "users", label: "Users", need: ["users"], path: "/settings/users" },
   { key: "fleet", label: "Fleet", need: ["users"], path: "/settings/fleet" },
+  { key: "import-sites", label: "Import sites", need: ["vehicles"], path: "/settings/import-sites" },
   // Web only (the browser's push subscription); the artifact points to the web app.
   { key: "notifications", label: "Notifications", need: [], path: "/settings/notifications" },
 ];

@@ -7,7 +7,6 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import { useLists } from "../data/hooks";
 import type { BookResult, SettingsResult, Suggestions } from "../data/types";
 import { joinDots, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
@@ -15,6 +14,7 @@ import { can } from "../transport/types";
 import type { FleetError } from "../transport/types";
 import { Empty, Loading, Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
+import { LocationSearch } from "../ui/LocationSearch";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { availabilityArgs } from "./availabilityLogic";
@@ -31,7 +31,6 @@ export function NewRequest() {
   const { me, store, transport } = useFleet();
   const navigate = useNavigate();
   const toast = useToast();
-  const lists = useLists();
   // Someone who can neither approve nor assign asks in their own name (the server does the same).
   const staff = !can(me, "approve", "assign_tasks");
   const books = me.tools.includes("book_vehicle");
@@ -160,10 +159,9 @@ export function NewRequest() {
             </div>
           </div>
           <div className="grid2">
-            <div className="field"><label htmlFor="nr-from">From</label><input id="nr-from" maxLength={160} list="nr-places" value={f.from} onChange={(e) => set("from", e.target.value)} /></div>
-            <div className="field"><label htmlFor="nr-to">To</label><input id="nr-to" maxLength={160} list="nr-places" value={f.to} onChange={(e) => set("to", e.target.value)} /></div>
+            <div className="field"><label htmlFor="nr-from">From</label><LocationSearch id="nr-from" value={f.from} onText={(text) => set("from", text)} onPick={(p) => set("from", p.name)} /></div>
+            <div className="field"><label htmlFor="nr-to">To</label><LocationSearch id="nr-to" value={f.to} onText={(text) => set("to", text)} onPick={(p) => set("to", p.name)} /></div>
           </div>
-          <datalist id="nr-places">{(lists.places ?? []).map((p) => <option key={p.name} value={p.name} />)}</datalist>
           <div className="grid2">
             <div className="field"><label htmlFor="nr-pax">Passengers</label><input type="number" id="nr-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
             <div className="field" style={{ alignContent: "end", gap: 8 }}>

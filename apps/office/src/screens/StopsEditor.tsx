@@ -1,15 +1,20 @@
 // The stops as rows on the page: each with its own type (Pickup / Drop-off /
-// Visit), the place (a saved place, a town or an address; the site picker of
-// Part 4 takes this place), the arrive-by time, and under "Details" what is
+// Visit), the place (the location search box of Part 4: our places and sites,
+// the places used before, the map, a pasted pin; free text still works for a
+// town or an address), the arrive-by time, and under "Details" what is
 // carried, the minutes there, a pin and a note for the driver; add, remove,
 // move up and down. Rows are numbered within their type; a change to one row
 // never changes another row's type.
 import { useState } from "react";
-import type { Place } from "../data/types";
+import { Link } from "react-router";
+import { useFleet } from "../app/FleetContext";
 import { Icon } from "../ui/icons";
+import { LocationSearch } from "../ui/LocationSearch";
+import { pinText } from "../ui/locationLogic";
 import { moveStop, newStop, type StopDraft, type StopType, stopLabel, TYPE_LABEL, type What, WHAT_LABEL } from "./stopsLogic";
 
-export function StopsRows({ list, onChange, places, idPrefix = "st" }: { list: StopDraft[]; onChange: (list: StopDraft[]) => void; places: Place[]; idPrefix?: string }) {
+export function StopsRows({ list, onChange, idPrefix = "st" }: { list: StopDraft[]; onChange: (list: StopDraft[]) => void; idPrefix?: string }) {
+  const { me } = useFleet();
   const [open, setOpen] = useState<Set<string>>(new Set());
   const set = (i: number, patch: Partial<StopDraft>) => onChange(list.map((s, j) => (j === i ? { ...s, ...patch } : s)));
   const toggle = (key: string) => setOpen((o) => {
@@ -39,7 +44,14 @@ export function StopsRows({ list, onChange, places, idPrefix = "st" }: { list: S
             <div className="stop-grid">
               <div className="field">
                 <label htmlFor={`${idPrefix}-place-${s.key}`}>{label}</label>
-                <input id={`${idPrefix}-place-${s.key}`} list={`${idPrefix}-places`} maxLength={160} placeholder={i === 0 ? "Head office, Colombo 05" : "Saved place, town or address"} value={s.place} onChange={(e) => set(i, { place: e.target.value })} />
+                <LocationSearch id={`${idPrefix}-place-${s.key}`} value={s.place} placeholder={i === 0 ? "A place, a site id, a town, a Google Maps link" : "Place, site id, town, address or link"}
+                  onText={(text) => set(i, { place: text, placeId: undefined, placePinned: undefined })}
+                  onPick={(p) => set(i, { place: p.name, placeId: p.placeId, placePinned: p.placeId ? p.pinned : undefined, pin: !p.placeId && p.lat !== undefined && p.lng !== undefined ? pinText({ lat: p.lat, lng: p.lng }) : s.pin })} />
+                {s.placeId && s.placePinned === false && (
+                  <div className="sub bad-text" data-testid="no-pin-warning">
+                    {s.place} has no pin — the plan skips this leg; {me.tools.includes("update_place") ? <Link to={`/places/${s.placeId}`}>set it on the place page</Link> : "ask the fleet admin to set it"}.
+                  </div>
+                )}
               </div>
               <div className="field">
                 <label htmlFor={`${idPrefix}-by-${s.key}`}>Arrive by</label>
@@ -66,7 +78,6 @@ export function StopsRows({ list, onChange, places, idPrefix = "st" }: { list: S
           </div>
         );
       })}
-      <datalist id={`${idPrefix}-places`}>{places.map((p) => <option key={p.name} value={p.name} />)}</datalist>
       <div className="acts">
         <button type="button" className="btn" onClick={() => onChange([...list, newStop(list.length ? "drop" : "pickup")])}><Icon name="plus" />Add stop</button>
       </div>

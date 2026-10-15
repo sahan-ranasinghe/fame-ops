@@ -327,6 +327,53 @@ check(f["matched_by"] == "contains" and f["count"] == 3, "find_project '130' lis
 f = tool("find_project", {"text": "1302_"})
 check(f["count"] == 0, "'_' in the search text is not treated as a wildcard")
 
+print("\n== 1c. Places and sites, the location search box (Phase 6, Part 4) ==")
+imp = tool("import_places", {"preset": "dialog", "rows": [
+    {"operator": "dialog", "site_id": "MT0184", "name": "Inamaluwa Town_Hutch", "district": "Matale", "depot": "Dambulla", "lat": 7.927222, "lng": 80.684722},
+    {"operator": "dialog", "site_id": "KA0197", "other_ids": ["CM0164"], "name": "Hanthana Hutch", "district": "Kandy"},
+    {"operator": "dialog", "site_id": "KA0300", "other_ids": [], "name": "Peradeniya Dialog", "lat": 7.2581, "lng": 80.5976}]})
+check((imp["added"], imp["no_pin"], imp["updated"]) == (3, 1, 0), "import_places (Dialog): three sites added, one without a pin", json.dumps(imp))
+imp = tool("import_places", {"preset": "mobitel_4g", "rows": [{"operator": "mobitel", "site_id": "COBAM1", "name": "Bambalapitiya", "lat": 6.8833, "lng": 79.8814}]})
+ep = tool("import_places", {"preset": "mobitel_ep", "rows": [
+    {"operator": "mobitel", "site_id": "COL018", "name": "COL018", "lat": 6.88335, "lng": 79.88145},
+    {"operator": "mobitel", "site_id": "COL999", "name": "COL999", "lat": 6.95, "lng": 79.95}]})
+check((ep["attached"], ep["added"]) == (1, 1), "import_places (Mobitel EP): one id attached to the site 7 m away, one added", json.dumps(ep))
+bad = tool("import_places", {"preset": "dialog", "rows": [{"operator": "dialog", "site_id": "CM0164", "name": "x"}]})
+check(bad.get("skipped") and "already an other id of KA0197" in bad["skipped"][0]["reason"], "an id that is another site's other id is skipped with the reason", json.dumps(bad))
+s = tool("search_places", {"text": "mt0184"})
+check(s["results"][0]["site_id"] == "MT0184" and s["results"][0]["badge"] == "Site · Dialog" and s["results"][0]["pinned"] is True,
+      "search_places: a site id finds the site first, badge Site · Dialog", json.dumps(s["results"][:2]))
+s = tool("search_places", {"text": "COL018"})
+check(s["results"][0]["site_id"] == "COBAM1" and "COL018" in s["results"][0]["detail"], "an EP id finds the Mobitel site it was attached to", json.dumps(s["results"][:1]))
+s = tool("search_places", {"text": "head office"})
+check(s["results"][0]["badge"] == "Office" and s.get("map_note") == "Map search is not set up", "our office comes first; with no ORS key the map layer says so", json.dumps(s)[:300])
+check("map_note" not in tool("search_places", {"text": "he"}), "under 3 characters the map is not asked")
+hanth = next(r for r in tool("search_places", {"text": "Hanthana"})["results"] if r.get("site_id") == "KA0197")
+check(hanth["pinned"] is False, "a site without a pin says so (the box shows no pin)", json.dumps(hanth))
+pin = tool("search_places", {"text": "6.9271, 79.8612"})
+check(pin["pin"]["from"] == "coordinates" and pin["pin"]["lat"] == 6.9271 and pin["results"] == [], "pasted coordinates answer a pin", json.dumps(pin))
+link = tool("search_places", {"text": "https://www.google.com/maps/place/Galle+Face+Green/@6.9271,79.8450,17z/data=!3m1!4b1!4m6!3m5!8m2!3d6.92708!4d79.84452"})
+check(link["pin"] == {"lat": 6.92708, "lng": 79.84452, "name": "Galle Face Green", "from": "link", "maps": link["pin"]["maps"]}, "a Google Maps link answers the place's own pin and name", json.dumps(link))
+sv = tool("save_place", {"name": "Galle Face Green", "lat": 6.92708, "lng": 79.84452, "from": "link"})
+sv2 = tool("save_place", {"name": "galle face green", "lat": 6.92709, "lng": 79.84451, "from": "map", "ref": "openstreetmap:way/1", "attribution": "© OpenStreetMap contributors · openrouteservice"})
+check(sv["existing"] is False and sv["place"]["source"] == "link" and sv2["existing"] is True and sv2["place"]["id"] == sv["place"]["id"],
+      "save_place saves a pin as our place; the same name within 30 m answers the saved one", json.dumps([sv["place"].get("source"), sv2.get("existing")]))
+check(tool("search_places", {"text": "galle face"})["results"][0]["id"] == sv["place"]["id"], "a saved pin is in our list next time")
+up = tool("update_place", {"id": hanth["id"], "lat": 7.2655, "lng": 80.6191})
+check(up["place"]["pin_source"] == "manual" and up["place"]["pinned"] is True, "update_place sets the pin (by hand)", json.dumps(up["place"])[:200])
+tool("import_places", {"preset": "dialog", "rows": [{"operator": "dialog", "site_id": "KA0197", "name": "Hanthana Hutch", "lat": 7.1, "lng": 80.1}]})
+pd = tool("place_detail", {"id": hanth["id"]})
+check(pd["place"]["lat"] == 7.2655 and pd["place"]["other_ids"] == ["CM0164"], "a re-import never replaces a pin set by hand", json.dumps(pd["place"])[:200])
+lp = tool("list_places")
+check(not any(p.get("kind") == "site" for p in lp["places"]) and tool("list_places", {"operator": "dialog"})["count"] == 3,
+      "list_places leaves the sites out unless asked (operator, kind site or a search)")
+pl = tool("plan_task", {"date": day(1), "leave_by": "09:00", "stops": [{"type": "pickup", "place": "Head office, Colombo 05"}, {"type": "visit", "place_id": hanth["id"]}]})
+check(pl["stops"][1]["place"] == "Hanthana Hutch" and pl["stops"][1]["pin"] == "place", "a stop picked by place_id is that place, with its pin", json.dumps(pl["stops"])[:300])
+pl = tool("plan_task", {"date": day(1), "leave_by": "09:00", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Galle"}, {"type": "visit", "place": "Peradeniya"}]})
+check([s["place"] for s in pl["stops"]] == ["Head office, Colombo 05", "Galle", "Peradeniya"] and pl["stops"][1]["pin"] == "town",
+      "typed text: part of our office's name finds it; a town's name is the town (not \"Galle Face Green\"); part of a site's name is not that site",
+      json.dumps([[s["place"], s.get("pin")] for s in pl["stops"]]))
+
 # ---------------------------------------------------------------------------
 print("\n== 1b. Office accounts and permissions ==")
 REQ_EMAIL = f"requester.{uuid.uuid4().hex[:6]}@fame.test"
@@ -1395,7 +1442,8 @@ if CHANNEL == "api":
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["request"]
           and sorted(me.get("tools", [])) == ["create_request", "find_project", "get_settings", "list_places", "list_requests", "my_notification_settings",
-                                             "register_web_push", "remove_web_push", "set_my_notification_settings", "task_detail", "update_request"],
+                                             "place_detail", "register_web_push", "remove_web_push", "save_place", "search_places",
+                                             "set_my_notification_settings", "task_detail", "update_request"],
           "a requester-only person signs in without a second step and sees only the request tools", f"{code} {str(me)[:200]}")
     code, body = api_call(staff_token, "task_board", {})
     check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")

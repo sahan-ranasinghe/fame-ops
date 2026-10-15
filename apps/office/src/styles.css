@@ -428,3 +428,22 @@ button.avail-row { cursor: pointer }
 button.avail-row:hover { background: var(--bg) }
 .avail-row.picked { background: var(--chip-blue, #e6edf8) }
 .avail-row:first-child { border-top: 0 }
+
+/* The location search box (Part 4) */
+.ls { position: relative }
+.ls > input { width: 100% }
+.ls-list { position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 4px); margin: 0; padding: 4px; list-style: none; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.14); max-height: 360px; overflow-y: auto }
+.ls-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer }
+.ls-row:hover, .ls-row.on { background: var(--surface-2) }
+.ls-main { flex: 1; min-width: 0; display: grid }
+.ls-main b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.ls-main .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.ls-note { padding: 8px 10px; color: var(--muted); font-size: 14px }
+.ls-note.bad, .bad-text { color: var(--bad) }
+.ls-credit { padding: 6px 10px; color: var(--muted); font-size: 12px }
+.ls-confirm { margin-top: 8px; display: grid; gap: 10px }
+.pinmap { height: 220px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line) }
+.pinmap.drawn .mapbox { height: 220px }
+.progress { position: relative; height: 22px; border-radius: 8px; background: var(--surface-2); overflow: hidden; display: flex; align-items: center }
+.progress > div { position: absolute; inset: 0 auto 0 0; background: var(--live-bg) }
+.progress > span { position: relative; padding: 0 10px }

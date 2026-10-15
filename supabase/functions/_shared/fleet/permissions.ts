@@ -95,6 +95,12 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   mileage_summary: VEH,
   list_fuel: VEH,
   add_place: ["vehicles", "assign_tasks"],
+  // Part 4: the location search box (every place field) and the sites.
+  search_places: VR,
+  save_place: ["request", "approve", "assign_tasks", "vehicles"],
+  place_detail: VR,
+  import_places: ["vehicles"],
+  update_place: ["vehicles"],
   list_vehicle_reports: ["issues"],
   update_vehicle_report: ["issues"],
   list_issues: ["issues", "assign_tasks"],

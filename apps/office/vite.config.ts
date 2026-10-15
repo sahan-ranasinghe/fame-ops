@@ -44,6 +44,8 @@ export default defineConfig(({ mode }) => {
         "@fleet/track": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/track.ts", import.meta.url)),
         // The permission table (tool → permission, presets): the menu can never disagree with the server.
         "@fleet/permissions": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/permissions.ts", import.meta.url)),
+        // The site-list presets (Part 4): the import page reads the spreadsheet in the browser with the same rules Deno tests.
+        "@fleet/sites": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/sites.ts", import.meta.url)),
       },
     },
     build: {

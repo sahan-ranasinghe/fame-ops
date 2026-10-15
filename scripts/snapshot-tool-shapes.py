@@ -116,6 +116,9 @@ def main():
         ("list_vehicles", {}),
         ("list_vehicles", {"filter": "documents_expiring"}),
         ("list_places", {}),
+        ("list_places", {"operator": "dialog"}),
+        ("search_places", {"text": "MT0184", "map": False}),
+        ("search_places", {"text": "6.9271, 79.8612"}),
         *([] if skipped else [("task_board", {})]),
         ("task_board", {"date": board.get("date")}),
         ("list_requests", {"status": "all"}),
@@ -136,6 +139,9 @@ def main():
     ]
     if task_id:
         calls.append(("task_detail", {"task_id": task_id}))
+    site_id = (call("list_places", {"operator": "dialog"}).get("places") or [{}])[0].get("id")
+    if site_id:
+        calls.append(("place_detail", {"id": site_id}))
     issue_id = (call("list_issues", {"status": "all"}).get("issues") or [{}])[0].get("id")
     if issue_id:
         calls.append(("issue_history", {"id": issue_id}))

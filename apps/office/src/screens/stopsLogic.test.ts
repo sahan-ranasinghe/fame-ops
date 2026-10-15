@@ -52,3 +52,14 @@ describe("stops editor rules", () => {
     expect(driveText(undefined)).toBe("—");
   });
 });
+
+describe("a stop picked in the search box (Part 4)", () => {
+  it("sends the place's id with the name; a picked site needs no pin; the id comes back for editing", async () => {
+    const { newStop, stopsInput, draftsFromStops } = await import("./stopsLogic");
+    const s = { ...newStop("pickup"), place: "Inamaluwa Town_Hutch", placeId: "p1", placePinned: false };
+    expect(stopsInput([s])).toEqual({ stops: [{ type: "pickup", place_id: "p1", place: "Inamaluwa Town_Hutch" }] });
+    expect(stopsInput([{ ...newStop("drop"), placeId: "p2" }])).toEqual({ stops: [{ type: "drop", place_id: "p2" }] });
+    const back = draftsFromStops([{ type: "pickup", place: "Inamaluwa Town_Hutch", place_id: "p1" }]);
+    expect([back[0].placeId, back[0].placePinned]).toEqual(["p1", false]);
+  });
+});

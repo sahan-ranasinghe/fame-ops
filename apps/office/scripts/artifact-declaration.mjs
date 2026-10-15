@@ -28,8 +28,9 @@ function files(dir) {
 // artifact too and loads the person's settings (my_notification_settings) before it says the rest
 // is on the web app, so that tool is declared; the three actions behind the page's buttons (a
 // toggle, the browser's push subscription on or off, a device removed) are reached only on the
-// web, live in notificationsActions.ts and are left out, with the browser-side push.ts.
-const WEB_ONLY = new Set(["src/screens/settings/notificationsActions.ts", "src/push.ts"]);
+// web, live in notificationsActions.ts and are left out, with the browser-side push.ts. The site
+// import (SheetJS in the browser) is web only too: the artifact's route says so (import_places).
+const WEB_ONLY = new Set(["src/screens/settings/notificationsActions.ts", "src/push.ts", "src/screens/settings/ImportSites.tsx"]);
 const used = new Set();
 for (const file of files(join(root, "src"))) {
   const rel = relative(root, file);

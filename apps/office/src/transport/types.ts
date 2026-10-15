@@ -61,7 +61,7 @@ export const ALL_TOOLS = [
   "watch_drivers",
   "list_drivers", "create_driver", "reset_pin", "set_driver_active", "update_driver",
   "list_vehicles", "register_vehicle", "update_vehicle", "add_rental_company",
-  "list_places", "add_place",
+  "list_places", "add_place", "search_places", "save_place", "place_detail", "import_places", "update_place",
   "create_task", "task_board", "task_detail", "cancel_task", "reassign_task",
   "create_request", "list_requests", "suggest_vehicles", "decide_request", "book_vehicle", "cancel_request",
   "mileage_summary", "list_vehicle_reports", "update_vehicle_report",

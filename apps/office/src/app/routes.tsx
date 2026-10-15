@@ -15,6 +15,8 @@ import { NewRequest } from "../screens/NewRequest";
 import { NewTask } from "../screens/NewTask";
 import { NoAccess } from "../screens/NoAccess";
 import { Overview } from "../screens/Overview";
+import { PlacePage } from "../screens/PlacePage";
+import { Places } from "../screens/Places";
 import { Projects } from "../screens/Projects";
 import { RequestDecide } from "../screens/RequestDecide";
 import { RequestDetail } from "../screens/RequestDetail";
@@ -55,6 +57,12 @@ const SettingsHome = lazy(() => import("../screens/settings/SettingsHome"));
 const Issues = lazy(() => import("../screens/Issues"));
 const IssuePage = lazy(() => import("../screens/IssuePage"));
 const Notifications = lazy(() => import("../screens/settings/Notifications"));
+// The site import reads spreadsheets with SheetJS in the browser: web build, loaded on demand.
+const ImportSites = __BUILD__ === "web" ? lazy(() => import("../screens/settings/ImportSites")) : null;
+function ImportRoute() {
+  if (!ImportSites) return <div className="card card-b">The site import reads a spreadsheet in your browser: open the Fame Fleet web app for it. Claude can import rows with the import_places tool.</div>;
+  return <Suspense fallback={<div className="loading">Opening the import…</div>}><ImportSites /></Suspense>;
+}
 function SettingsRoute() {
   return <Suspense fallback={<div className="loading">Opening settings…</div>}><SettingsHome /></Suspense>;
 }
@@ -107,6 +115,11 @@ export const routes: RouteObject[] = [
         element: <Guard need={["vehicles"]}><Fuel /></Guard>,
         children: [{ path: ":id", element: <FuelDetail /> }],
       },
+      {
+        path: "places",
+        element: <Guard need={["vehicles"]}><Places /></Guard>,
+        children: [{ path: ":id", element: <PlacePage /> }],
+      },
       { path: "drivers", element: <Guard need={["view"]}><Drivers /></Guard> },
       { path: "drivers/new", element: <Guard need={["vehicles"]}><DriverForm /></Guard> },
       { path: "drivers/:username", element: <Guard need={ROUTES_NEED}><DriverPage /></Guard> },
@@ -116,6 +129,7 @@ export const routes: RouteObject[] = [
       { path: "settings/users/new", element: <Guard need={["users"]}><UserForm /></Guard> },
       { path: "settings/users/:email/edit", element: <Guard need={["users"]}><UserManage /></Guard> },
       { path: "settings/fleet", element: <Guard need={["users"]}><FleetSettings /></Guard> },
+      { path: "settings/import-sites", element: <Guard need={["vehicles"]}><ImportRoute /></Guard> },
       { path: "settings/notifications", element: <Suspense fallback={<div className="loading">Opening notifications…</div>}><Notifications /></Suspense> },
       { path: "accounts", element: <Navigate to="/settings/users" replace /> },
       { path: "more", element: <More /> },

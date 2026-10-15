@@ -462,10 +462,77 @@ export interface Vehicle {
 }
 
 export interface Place {
+  /** Since Part 4 (additive). */
+  id?: string;
   name: string;
   address?: string;
   kind?: string;
+  operator?: "dialog" | "mobitel";
+  site_id?: string;
+  district?: string;
+  pinned?: boolean;
   maps?: string;
+}
+
+/** search_places: one row of the location search box (Part 4). */
+export interface SearchResult {
+  layer: "place" | "recent" | "map";
+  badge: string;
+  name: string;
+  detail?: string;
+  id?: string;
+  kind?: string;
+  operator?: string;
+  site_id?: string;
+  pinned: boolean;
+  lat?: number;
+  lng?: number;
+  last_used?: string;
+  ref?: string;
+  attribution?: string;
+}
+
+export interface PastedPin {
+  lat: number;
+  lng: number;
+  name?: string;
+  from: "coordinates" | "link";
+  maps?: string;
+}
+
+export interface SearchAnswer {
+  text: string;
+  results: SearchResult[];
+  pin?: PastedPin;
+  map_note?: string;
+  map_cached?: boolean;
+}
+
+/** place_detail, update_place, save_place: everything about one place. */
+export interface PlaceDetail extends Place {
+  id: string;
+  badge: string;
+  other_ids?: string[];
+  region?: string;
+  depot?: string;
+  lat?: number;
+  lng?: number;
+  source: string;
+  pin_source?: string;
+  attribution?: string;
+  imported_at?: string;
+  updated_at: string;
+}
+
+export interface ImportAnswer {
+  preset: string;
+  rows: number;
+  added: number;
+  updated: number;
+  attached: number;
+  unchanged: number;
+  no_pin: number;
+  skipped?: { row: number; reason: string }[];
 }
 
 export interface PlaceWithId extends Place {
@@ -571,6 +638,8 @@ export interface FleetSettings {
   /** The recording quality on the phone and how long the files are kept (Part 3b). */
   fuel_video_quality?: "480p" | "720p";
   fuel_video_keep_months?: 6 | 12;
+  /** The location search's map calls a day (openrouteservice autocomplete; Part 4). */
+  ors_autocomplete_daily_cap?: number;
 }
 
 export interface ChecklistItem {

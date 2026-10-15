@@ -96,6 +96,7 @@
   "about.fuel_video_keep_months: string",
   "about.fuel_video_quality: string",
   "about.map_matching: string",
+  "about.ors_autocomplete_daily_cap: string",
   "about.road_factor: string",
   "about.rush_hour: string",
   "about.self_drive_allowed: string",
@@ -119,6 +120,7 @@
   "defaults.fuel_video_keep_months: number",
   "defaults.fuel_video_quality: string",
   "defaults.map_matching.provider: string",
+  "defaults.ors_autocomplete_daily_cap: number",
   "defaults.road_factor: number",
   "defaults.rush_hour.bands[].days[]: number",
   "defaults.rush_hour.bands[].from: string",
@@ -150,6 +152,7 @@
   "settings.fuel_video_keep_months: number",
   "settings.fuel_video_quality: string",
   "settings.map_matching.provider: string",
+  "settings.ors_autocomplete_daily_cap: number",
   "settings.road_factor: number",
   "settings.rush_hour.bands[].days[]: number",
   "settings.rush_hour.bands[].from: string",
@@ -328,12 +331,25 @@
   "open: number",
   "status: string"
  ],
+ "list_places {\"operator\": \"dialog\"}": [
+  "count: number",
+  "places[].district: string",
+  "places[].id: string",
+  "places[].kind: string",
+  "places[].maps: string",
+  "places[].name: string",
+  "places[].operator: string",
+  "places[].pinned: bool",
+  "places[].site_id: string"
+ ],
  "list_places {}": [
   "count: number",
   "places[].address: string",
+  "places[].id: string",
   "places[].kind: string",
   "places[].maps: string",
-  "places[].name: string"
+  "places[].name: string",
+  "places[].pinned: bool"
  ],
  "list_requests {\"status\": \"all\"}": [
   "count: number",
@@ -614,6 +630,25 @@
   "vehicles[].tasks: number",
   "vehicles[].vehicle: string"
  ],
+ "place_detail {\"id\": \"<id>\"}": [
+  "place.badge: string",
+  "place.district: string",
+  "place.id: string",
+  "place.imported_at: string",
+  "place.kind: string",
+  "place.lat: number",
+  "place.lng: number",
+  "place.maps: string",
+  "place.name: string",
+  "place.operator: string",
+  "place.other_ids[]: string",
+  "place.pin_source: string",
+  "place.pinned: bool",
+  "place.site_id: string",
+  "place.source: string",
+  "place.updated_at: string",
+  "stops_90_days: number"
+ ],
  "plan_task {\"date\": \"<date>\", \"dropoff\": \"Kurunegala\", \"leave_by\": \"09:00\", \"pickup\": \"Head office\"}": [
   "date: string",
   "leave_by: string",
@@ -652,6 +687,7 @@
   "stops[].lng: number",
   "stops[].pin: string",
   "stops[].place: string",
+  "stops[].place_id: string",
   "stops[].planned_arrive: string",
   "stops[].planned_depart: string",
   "stops[].seq: number",
@@ -662,6 +698,28 @@
   "daily_budget.ors: number",
   "days[]: empty",
   "provider: string"
+ ],
+ "search_places {\"map\": false, \"text\": \"MT0184\"}": [
+  "results[].badge: string",
+  "results[].detail: string",
+  "results[].id: string",
+  "results[].kind: string",
+  "results[].lat: number",
+  "results[].layer: string",
+  "results[].lng: number",
+  "results[].name: string",
+  "results[].operator: string",
+  "results[].pinned: bool",
+  "results[].site_id: string",
+  "text: string"
+ ],
+ "search_places {\"text\": \"6.9271, 79.8612\"}": [
+  "pin.from: string",
+  "pin.lat: number",
+  "pin.lng: number",
+  "pin.maps: string",
+  "results[]: empty",
+  "text: string"
  ],
  "suggest_vehicles {\"request_id\": \"<id>\"}": [
   "drivers[].availability: string",
@@ -832,6 +890,7 @@
   "stops[].navigate: string",
   "stops[].pin: string",
   "stops[].place: string",
+  "stops[].place_id: string",
   "stops[].planned_arrive: string",
   "stops[].planned_depart: string",
   "stops[].seq: number",

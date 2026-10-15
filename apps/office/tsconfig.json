@@ -34,6 +34,9 @@
       ],
       "@fleet/permissions": [
         "../../supabase/functions/_shared/fleet/permissions.ts"
+      ],
+      "@fleet/sites": [
+        "../../supabase/functions/_shared/fleet/sites.ts"
       ]
     },
     "allowImportingTsExtensions": true

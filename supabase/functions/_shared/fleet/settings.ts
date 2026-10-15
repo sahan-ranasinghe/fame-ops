@@ -41,6 +41,8 @@ export interface Settings {
   fuel_video_quality: VideoQuality;
   /** How many months the files stay before the monthly prune removes them: 6 or 12. */
   fuel_video_keep_months: 6 | 12;
+  /** The map search's calls a day (openrouteservice geocode autocomplete), the dashboard's quota; then only our places. */
+  ors_autocomplete_daily_cap: number;
 }
 
 export type VideoQuality = "480p" | "720p";
@@ -82,6 +84,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   ],
   fuel_video_quality: "480p",
   fuel_video_keep_months: 12,
+  ors_autocomplete_daily_cap: 1000,
 };
 
 export type SettingKey = keyof Settings;
@@ -106,6 +109,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "The steps the driver shows in order while recording a fuel video: a list of 1 to 8 { key, en, si, short? }, ticked one by one on the phone (the last unlocks Stop); each tick's second is kept with the entry and shown as a bookmark; short is the word on the office's timeline",
   fuel_video_quality: "The fuel video's quality on the phone: 480p (about 1.0 Mbps, a 5-minute fill is about 38 MB) or 720p (about 1.5 Mbps, about 56 MB)",
   fuel_video_keep_months: "How many months fuel videos are kept before the monthly prune removes the files: 6 or 12",
+  ors_autocomplete_daily_cap:
+    "The location search's map calls a day (openrouteservice geocode autocomplete, the dashboard's quota): after it only our own places show, with \"Map search limit reached for today\"; answers are cached 30 days and never count",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -178,6 +183,8 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
     case "fuel_video_quality":
       if (value !== "480p" && value !== "720p") throw new ToolError("fuel_video_quality: 480p or 720p.");
       return value;
+    case "ors_autocomplete_daily_cap":
+      return number(value, key, 0, 100000, true);
     case "fuel_video_keep_months":
       if (value !== 6 && value !== 12) throw new ToolError("fuel_video_keep_months: 6 or 12.");
       return value;
