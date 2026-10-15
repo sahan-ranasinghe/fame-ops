@@ -20,12 +20,7 @@ export const ORS_AUTOCOMPLETE_URLS = [
 ];
 
 /** The new host, then (on 404 or 410 only) the old one. `query` is appended to each URL. */
-export async function orsFetch(
-  urls: string[],
-  init: RequestInit,
-  query = "",
-  fetcher: typeof fetch = fetch,
-): Promise<Response> {
+export async function orsFetch(urls: string[], init: RequestInit, query = "", fetcher: typeof fetch = fetch): Promise<Response> {
   let last: Response | null = null;
   for (const [i, url] of urls.entries()) {
     const res = await fetcher(url + query, init);

@@ -9,9 +9,7 @@ const HIDDEN_KEYS = new Set(["pin", "password"]);
 const MAX_TEXT = 1000;
 
 function redact(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.length > 5 ? `[${value.length} items]` : value.map(redact);
-  }
+  if (Array.isArray(value)) return value.length > 5 ? `[${value.length} items]` : value.map(redact);
   if (value !== null && typeof value === "object") {
     const out: Record<string, unknown> = {};
     for (const [key, v] of Object.entries(value)) {
@@ -19,9 +17,7 @@ function redact(value: unknown): unknown {
     }
     return out;
   }
-  if (typeof value === "string" && value.length > 200) {
-    return `${value.slice(0, 200)}…`;
-  }
+  if (typeof value === "string" && value.length > 200) return `${value.slice(0, 200)}…`;
   return value;
 }
 
@@ -35,12 +31,7 @@ export function summariseArgs(args: unknown): string {
 }
 
 /** Records the call with the person and the channel. Throws if the row cannot be written: then the tool must not run. */
-export async function auditStart(
-  db: Db,
-  toolName: string,
-  args: unknown,
-  actor: Actor,
-): Promise<number> {
+export async function auditStart(db: Db, toolName: string, args: unknown, actor: Actor): Promise<number> {
   const row = unwrap(
     await db.from("office_audit")
       .insert({
@@ -59,17 +50,7 @@ export async function auditStart(
 }
 
 /** Records how the call ended. Never throws: the tool's own result still goes back. */
-export async function auditFinish(
-  db: Db,
-  id: number,
-  summary: string,
-): Promise<void> {
-  const { error } = await db.from("office_audit").update({
-    result_summary: clip(summary),
-  }).eq("id", id);
-  if (error) {
-    console.error(
-      `audit #${id}: could not record the result: ${error.message}`,
-    );
-  }
+export async function auditFinish(db: Db, id: number, summary: string): Promise<void> {
+  const { error } = await db.from("office_audit").update({ result_summary: clip(summary) }).eq("id", id);
+  if (error) console.error(`audit #${id}: could not record the result: ${error.message}`);
 }

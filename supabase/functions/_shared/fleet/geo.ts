@@ -36,25 +36,15 @@ export const GPS_KM_NOTE =
 const EARTH_KM = 6371;
 const rad = (deg: number) => (deg * Math.PI) / 180;
 
-export function haversineKm(
-  a: { lat: number; lng: number },
-  b: { lat: number; lng: number },
-): number {
+export function haversineKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const dLat = rad(b.lat - a.lat);
   const dLng = rad(b.lng - a.lng);
-  const h = Math.sin(dLat / 2) ** 2 +
-    Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * EARTH_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
 function toFix(p: Point): Fix {
-  return {
-    at: new Date(p.at).getTime(),
-    lat: p.lat,
-    lng: p.lng,
-    accuracyM: p.accuracyM,
-    speedMps: p.speedMps,
-  };
+  return { at: new Date(p.at).getTime(), lat: p.lat, lng: p.lng, accuracyM: p.accuracyM, speedMps: p.speedMps };
 }
 
 /** Km and stops for points in time order. */
@@ -83,10 +73,7 @@ export function thin<T>(points: T[], max = 300): T[] {
 }
 
 /** The closest of some candidate places, or null when there are none. */
-export function closest<T extends { lat: number; lng: number }>(
-  to: { lat: number; lng: number },
-  places: T[],
-): T | null {
+export function closest<T extends { lat: number; lng: number }>(to: { lat: number; lng: number }, places: T[]): T | null {
   let best: T | null = null;
   let bestKm = Infinity;
   for (const place of places) {

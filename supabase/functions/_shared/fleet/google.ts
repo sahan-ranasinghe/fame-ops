@@ -25,14 +25,11 @@ import type { Db } from "./db.ts";
 import type { PlanPoint } from "./plan.ts";
 import type { GoogleCaps, GoogleFeature, Settings } from "./settings.ts";
 
-export const PLACES_AUTOCOMPLETE_URL =
-  "https://places.googleapis.com/v1/places:autocomplete";
+export const PLACES_AUTOCOMPLETE_URL = "https://places.googleapis.com/v1/places:autocomplete";
 export const PLACE_DETAILS_URL = "https://places.googleapis.com/v1/places/";
-export const ROUTES_URL =
-  "https://routes.googleapis.com/directions/v2:computeRoutes";
+export const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 /** Place Details Essentials fields only: displayName would make every call Place Details Pro. */
-export const DETAILS_FIELDS =
-  "location,formattedAddress,shortFormattedAddress,addressComponents";
+export const DETAILS_FIELDS = "location,formattedAddress,shortFormattedAddress,addressComponents";
 export const AUTOCOMPLETE_FIELDS =
   "suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat";
 export const ROUTES_FIELDS = "routes.legs.duration,routes.legs.distanceMeters";
@@ -63,10 +60,7 @@ export interface KeySource {
   get(name: string): string | undefined;
 }
 
-export function googleUse(
-  settings: Pick<Settings, "map_package">,
-  env: KeySource = Deno.env,
-): GoogleUse {
+export function googleUse(settings: Pick<Settings, "map_package">, env: KeySource = Deno.env): GoogleUse {
   const js = !!env.get("GOOGLE_MAPS_JS_KEY");
   const server = !!env.get("GOOGLE_SERVER_KEY");
   const on = settings.map_package === "google";
@@ -100,11 +94,7 @@ export const FEATURE_TEXT: Record<GoogleFeature, string> = {
 };
 
 /** The sentence the office sees when a feature is refused. */
-export function refusedNote(
-  feature: GoogleFeature,
-  reason: RefuseReason | undefined,
-  gate?: Gate,
-): string {
+export function refusedNote(feature: GoogleFeature, reason: RefuseReason | undefined, gate?: Gate): string {
   if (reason !== "counter" && (gate?.day_cap === 0 || gate?.month_cap === 0)) {
     return `${FEATURE_TEXT[feature]} is off: its cap is 0 (Settings → Fleet)`;
   }
@@ -112,12 +102,8 @@ export function refusedNote(
   const after = feature === "map_loads"
     ? ["back on the 1st", "back tomorrow"]
     : ["the open package until the 1st", "the open package until tomorrow"];
-  if (reason === "month") {
-    return `${FEATURE_TEXT[feature]} limit reached for this month: ${after[0]}`;
-  }
-  if (reason === "day") {
-    return `${FEATURE_TEXT[feature]} limit reached for today: ${after[1]}`;
-  }
+  if (reason === "month") return `${FEATURE_TEXT[feature]} limit reached for this month: ${after[0]}`;
+  if (reason === "day") return `${FEATURE_TEXT[feature]} limit reached for today: ${after[1]}`;
   return `${FEATURE_TEXT[feature]} paused: the call counter could not be read`;
 }
 
@@ -125,43 +111,23 @@ export function refusedNote(
  * Records one call of the feature and says whether it may be made. Fail closed: any error,
  * an answer of the wrong shape or a throw refuses it.
  */
-export async function takeGoogleCall(
-  db: Db,
-  feature: GoogleFeature,
-  caps: GoogleCaps,
-): Promise<Gate> {
+export async function takeGoogleCall(db: Db, feature: GoogleFeature, caps: GoogleCaps): Promise<Gate> {
   try {
     const cap = caps[feature];
-    const { data, error } = await db.rpc("google_take", {
-      p_feature: feature,
-      p_day_cap: cap.day,
-      p_month_cap: cap.month,
-    });
+    const { data, error } = await db.rpc("google_take", { p_feature: feature, p_day_cap: cap.day, p_month_cap: cap.month });
     const gate = data as unknown as Gate | null;
-    if (
-      error || !gate || typeof gate !== "object" ||
-      typeof gate.allowed !== "boolean"
-    ) {
+    if (error || !gate || typeof gate !== "object" || typeof gate.allowed !== "boolean") {
       if (error) console.error(`google_take ${feature}: ${error.message}`);
       return { allowed: false, reason: "counter" };
     }
     return gate;
   } catch (error) {
-    console.error(
-      `google_take ${feature}: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-    );
+    console.error(`google_take ${feature}: ${error instanceof Error ? error.message : String(error)}`);
     return { allowed: false, reason: "counter" };
   }
 }
 
-export type Guarded<T> = { ok: true; value: T; gate: Gate } | {
-  ok: false;
-  gate: Gate;
-  note: string;
-  error?: string;
-};
+export type Guarded<T> = { ok: true; value: T; gate: Gate } | { ok: false; gate: Gate; note: string; error?: string };
 
 /** The call runs only after it was recorded and allowed; a failed call stays counted (Google may bill it). */
 export async function guarded<T>(
@@ -171,20 +137,13 @@ export async function guarded<T>(
   call: () => Promise<T>,
 ): Promise<Guarded<T>> {
   const gate = await takeGoogleCall(db, feature, caps);
-  if (!gate.allowed) {
-    return { ok: false, gate, note: refusedNote(feature, gate.reason, gate) };
-  }
+  if (!gate.allowed) return { ok: false, gate, note: refusedNote(feature, gate.reason, gate) };
   try {
     return { ok: true, value: await call(), gate };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`google ${feature}: ${message}`);
-    return {
-      ok: false,
-      gate,
-      note: `${FEATURE_TEXT[feature]} did not answer`,
-      error: message,
-    };
+    return { ok: false, gate, note: `${FEATURE_TEXT[feature]} did not answer`, error: message };
   }
 }
 
@@ -207,11 +166,7 @@ export interface GooglePrediction {
   secondary?: string;
 }
 
-export function autocompleteRequest(
-  text: string,
-  key: string,
-  opts: { session?: string | null; focus?: PlanPoint | null },
-): HttpRequest {
+export function autocompleteRequest(text: string, key: string, opts: { session?: string | null; focus?: PlanPoint | null }): HttpRequest {
   const body: Record<string, unknown> = {
     input: text.trim().slice(0, 100),
     includedRegionCodes: ["lk"],
@@ -219,21 +174,12 @@ export function autocompleteRequest(
   };
   if (opts.session) body.sessionToken = opts.session;
   if (opts.focus) {
-    body.locationBias = {
-      circle: {
-        center: { latitude: opts.focus.lat, longitude: opts.focus.lng },
-        radius: BIAS_RADIUS_M,
-      },
-    };
+    body.locationBias = { circle: { center: { latitude: opts.focus.lat, longitude: opts.focus.lng }, radius: BIAS_RADIUS_M } };
   }
   return {
     url: PLACES_AUTOCOMPLETE_URL,
     method: "POST",
-    headers: {
-      "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask": AUTOCOMPLETE_FIELDS,
-      "Content-Type": "application/json",
-    },
+    headers: { "X-Goog-Api-Key": key, "X-Goog-FieldMask": AUTOCOMPLETE_FIELDS, "Content-Type": "application/json" },
     body,
   };
 }
@@ -247,22 +193,14 @@ export function autocompleteResponse(json: unknown): GooglePrediction[] {
       placePrediction?: {
         placeId?: string;
         text?: { text?: string };
-        structuredFormat?: {
-          mainText?: { text?: string };
-          secondaryText?: { text?: string };
-        };
+        structuredFormat?: { mainText?: { text?: string }; secondaryText?: { text?: string } };
       };
     }).placePrediction;
     if (!p?.placeId) continue;
     const name = p.structuredFormat?.mainText?.text ?? p.text?.text ?? "";
     if (!name) continue;
     const secondary = p.structuredFormat?.secondaryText?.text;
-    out.push({
-      place_id: p.placeId,
-      name,
-      label: p.text?.text ?? name,
-      ...(secondary ? { secondary } : {}),
-    });
+    out.push({ place_id: p.placeId, name, label: p.text?.text ?? name, ...(secondary ? { secondary } : {}) });
   }
   return out;
 }
@@ -277,11 +215,7 @@ export interface GoogleDetails {
   district: string | null;
 }
 
-export function detailsRequest(
-  placeId: string,
-  key: string,
-  session?: string | null,
-): HttpRequest {
+export function detailsRequest(placeId: string, key: string, session?: string | null): HttpRequest {
   const q = new URLSearchParams({ languageCode: "en" });
   if (session) q.set("sessionToken", session);
   return {
@@ -300,13 +234,8 @@ export function detailsResponse(json: unknown): GoogleDetails {
   } | null;
   const lat = p?.location?.latitude;
   const lng = p?.location?.longitude;
-  if (typeof lat !== "number" || typeof lng !== "number") {
-    throw new Error("Place Details: no location in the answer");
-  }
-  const district =
-    p?.addressComponents?.find((c) =>
-      c.types?.includes("administrative_area_level_2")
-    )?.longText ?? null;
+  if (typeof lat !== "number" || typeof lng !== "number") throw new Error("Place Details: no location in the answer");
+  const district = p?.addressComponents?.find((c) => c.types?.includes("administrative_area_level_2"))?.longText ?? null;
   return {
     lat,
     lng,
@@ -332,9 +261,7 @@ export function routesRequest(
   now = new Date(),
 ): HttpRequest {
   if (points.length < 2) throw new Error("A route needs two points");
-  const at = (p: PlanPoint) => ({
-    location: { latLng: { latitude: p.lat, longitude: p.lng } },
-  });
+  const at = (p: PlanPoint) => ({ location: { latLng: { latitude: p.lat, longitude: p.lng } } });
   const body: Record<string, unknown> = {
     origin: at(points[0]),
     destination: at(points[points.length - 1]),
@@ -343,41 +270,24 @@ export function routesRequest(
   };
   if (points.length > 2) body.intermediates = points.slice(1, -1).map(at);
   // Google refuses a departure time in the past; a minute ahead stands for "now".
-  if (new Date(departAt).getTime() > now.getTime() + 60000) {
-    body.departureTime = new Date(departAt).toISOString();
-  }
+  if (new Date(departAt).getTime() > now.getTime() + 60000) body.departureTime = new Date(departAt).toISOString();
   if (opts.avoid_expressway) body.routeModifiers = { avoidHighways: true };
   return {
     url: ROUTES_URL,
     method: "POST",
-    headers: {
-      "X-Goog-Api-Key": key,
-      "X-Goog-FieldMask": ROUTES_FIELDS,
-      "Content-Type": "application/json",
-    },
+    headers: { "X-Goog-Api-Key": key, "X-Goog-FieldMask": ROUTES_FIELDS, "Content-Type": "application/json" },
     body,
   };
 }
 
 export function routesResponse(json: unknown, legs: number): RouteLeg[] {
-  const route = (json as {
-    routes?: { legs?: { duration?: string; distanceMeters?: number }[] }[];
-  } | null)?.routes?.[0];
+  const route = (json as { routes?: { legs?: { duration?: string; distanceMeters?: number }[] }[] } | null)?.routes?.[0];
   const out = (route?.legs ?? []).map((l) => {
-    const seconds = typeof l.duration === "string"
-      ? Number(l.duration.replace(/s$/, ""))
-      : NaN;
-    if (!Number.isFinite(seconds)) {
-      throw new Error("Google Routes: a leg without a duration");
-    }
-    return {
-      km: Math.round((l.distanceMeters ?? 0) / 100) / 10,
-      minutes: Math.round(seconds / 6) / 10,
-    };
+    const seconds = typeof l.duration === "string" ? Number(l.duration.replace(/s$/, "")) : NaN;
+    if (!Number.isFinite(seconds)) throw new Error("Google Routes: a leg without a duration");
+    return { km: Math.round((l.distanceMeters ?? 0) / 100) / 10, minutes: Math.round(seconds / 6) / 10 };
   });
-  if (out.length !== legs) {
-    throw new Error(`Google Routes: ${out.length} legs for ${legs}`);
-  }
+  if (out.length !== legs) throw new Error(`Google Routes: ${out.length} legs for ${legs}`);
   return out;
 }
 
@@ -385,10 +295,7 @@ export function routesResponse(json: unknown, legs: number): RouteLeg[] {
 
 export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
-export async function send(
-  req: HttpRequest,
-  fetchFn: Fetcher = fetch,
-): Promise<unknown> {
+export async function send(req: HttpRequest, fetchFn: Fetcher = fetch): Promise<unknown> {
   const res = await fetchFn(req.url, {
     method: req.method,
     headers: req.headers,
@@ -399,9 +306,7 @@ export async function send(
   if (!res.ok) {
     let message = text.slice(0, 160);
     try {
-      message =
-        (JSON.parse(text) as { error?: { status?: string; message?: string } })
-          .error?.status ?? message;
+      message = (JSON.parse(text) as { error?: { status?: string; message?: string } }).error?.status ?? message;
     } catch { /* not JSON */ }
     throw new Error(`HTTP ${res.status} ${message}`);
   }

@@ -22,29 +22,9 @@ import { createClient } from "@supabase/supabase-js";
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const COLOMBO_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-type Kind =
-  | "new"
-  | "changed"
-  | "cancelled"
-  | "removed"
-  | "leave_30"
-  | "leave_now"
-  | "accept_reminder";
+type Kind = "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder";
 type Language = "en" | "si";
 
 const CHANNEL: Record<Kind, string> = {
@@ -78,23 +58,13 @@ const CHANGE_TEXT: Record<Language, Record<string, string>> = {
     notes: "සටහන වෙනස් විය",
   },
 };
-const CHANGE_ORDER = [
-  "time",
-  "end_by",
-  "vehicle",
-  "stops",
-  "title",
-  "passengers",
-  "notes",
-];
+const CHANGE_ORDER = ["time", "end_by", "vehicle", "stops", "title", "passengers", "notes"];
 
 /** "new time 09:30 · vehicle WP KL-1234", or "" when nothing is named. */
 export function changesLine(language: Language, changes: unknown): string {
   if (!changes || typeof changes !== "object") return "";
   const c = changes as Record<string, unknown>;
-  return CHANGE_ORDER.filter((k) =>
-    c[k] !== undefined && c[k] !== null && c[k] !== false
-  )
+  return CHANGE_ORDER.filter((k) => c[k] !== undefined && c[k] !== null && c[k] !== false)
     .map((k) => fill(CHANGE_TEXT[language][k], { [k]: String(c[k]) }))
     .join(" · ");
 }
@@ -105,39 +75,18 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     changed: { title: "Task changed {when}", body: "{title} · {changes}" },
     cancelled: { title: "Task cancelled", body: "{title} · {reason}" },
     removed: { title: "Task reassigned", body: "{title} is no longer yours." },
-    leave_30: {
-      title: "Leave by {leave}",
-      body: "{title} · leave in 30 minutes · {pickup} → {dropoff}",
-    },
-    leave_now: {
-      title: "Time to leave",
-      body: "{title} · leave by {leave} · {pickup} → {dropoff}",
-    },
-    accept_reminder: {
-      title: "Please accept your task",
-      body: "{when} · {title} · open Fame Driver and tap Accept",
-    },
+    leave_30: { title: "Leave by {leave}", body: "{title} · leave in 30 minutes · {pickup} → {dropoff}" },
+    leave_now: { title: "Time to leave", body: "{title} · leave by {leave} · {pickup} → {dropoff}" },
+    accept_reminder: { title: "Please accept your task", body: "{when} · {title} · open Fame Driver and tap Accept" },
   },
   si: {
     new: { title: "නව කාර්යය {when}", body: "{title} · {pickup} → {dropoff}" },
     changed: { title: "කාර්යය වෙනස් විය {when}", body: "{title} · {changes}" },
     cancelled: { title: "කාර්යය අවලංගු විය", body: "{title} · {reason}" },
-    removed: {
-      title: "කාර්යය වෙනත් අයෙකුට පැවරිණි",
-      body: "{title} තවදුරටත් ඔබගේ නොවේ.",
-    },
-    leave_30: {
-      title: "{leave} ට පිටත් වන්න",
-      body: "{title} · විනාඩි 30 කින් පිටත් වන්න · {pickup} → {dropoff}",
-    },
-    leave_now: {
-      title: "පිටත් වීමට වෙලාවයි",
-      body: "{title} · {leave} ට පිටත් වන්න · {pickup} → {dropoff}",
-    },
-    accept_reminder: {
-      title: "ඔබේ කාර්යය පිළිගන්න",
-      body: "{when} · {title} · Fame Driver විවෘත කර පිළිගන්න ඔබන්න",
-    },
+    removed: { title: "කාර්යය වෙනත් අයෙකුට පැවරිණි", body: "{title} තවදුරටත් ඔබගේ නොවේ." },
+    leave_30: { title: "{leave} ට පිටත් වන්න", body: "{title} · විනාඩි 30 කින් පිටත් වන්න · {pickup} → {dropoff}" },
+    leave_now: { title: "පිටත් වීමට වෙලාවයි", body: "{title} · {leave} ට පිටත් වන්න · {pickup} → {dropoff}" },
+    accept_reminder: { title: "ඔබේ කාර්යය පිළිගන්න", body: "{when} · {title} · Fame Driver විවෘත කර පිළිගන්න ඔබන්න" },
   },
 };
 
@@ -149,10 +98,7 @@ interface Ticket {
 }
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8" },
-  });
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 }
 
 function env(name: string): string {
@@ -172,9 +118,7 @@ function constantTimeEqual(a: string, b: string): boolean {
 function when(iso: string): string {
   const d = new Date(new Date(iso).getTime() + COLOMBO_OFFSET_MS);
   const two = (n: number) => String(n).padStart(2, "0");
-  return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${
-    two(d.getUTCHours())
-  }:${two(d.getUTCMinutes())}`;
+  return `${DAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${two(d.getUTCHours())}:${two(d.getUTCMinutes())}`;
 }
 
 /** "09:00" in Colombo time. */
@@ -187,14 +131,10 @@ function fill(template: string, vars: Record<string, string>): string {
 }
 
 Deno.serve(async (request) => {
-  if (request.method !== "POST") {
-    return json(405, { error: "method_not_allowed" });
-  }
+  if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
   const key = request.headers.get("x-server-key") ?? "";
   const expected = Deno.env.get("SERVER_KEY") ?? "";
-  if (expected.length < 16 || !constantTimeEqual(key, expected)) {
-    return json(401, { error: "bad_server_key" });
-  }
+  if (expected.length < 16 || !constantTimeEqual(key, expected)) return json(401, { error: "bad_server_key" });
 
   let body: Record<string, unknown>;
   try {
@@ -202,52 +142,22 @@ Deno.serve(async (request) => {
   } catch {
     return json(400, { error: "bad_request" });
   }
-  const taskId = typeof body.task_id === "string" && body.task_id.length === 36
-    ? body.task_id
-    : null;
-  const employeeId =
-    typeof body.employee_id === "string" && body.employee_id.length === 36
-      ? body.employee_id
-      : null;
-  const kind = ([
-    "new",
-    "changed",
-    "cancelled",
-    "removed",
-    "leave_30",
-    "leave_now",
-    "accept_reminder",
-  ] as const).find((k) => k === body.kind) ?? null;
-  if (!taskId || !employeeId || !kind) {
-    return json(400, { error: "bad_request" });
-  }
+  const taskId = typeof body.task_id === "string" && body.task_id.length === 36 ? body.task_id : null;
+  const employeeId = typeof body.employee_id === "string" && body.employee_id.length === 36 ? body.employee_id : null;
+  const kind = (["new", "changed", "cancelled", "removed", "leave_30", "leave_now", "accept_reminder"] as const).find((k) =>
+    k === body.kind
+  ) ?? null;
+  if (!taskId || !employeeId || !kind) return json(400, { error: "bad_request" });
 
-  const admin = createClient(
-    env("SUPABASE_URL"),
-    env("SUPABASE_SERVICE_ROLE_KEY"),
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    },
-  );
+  const admin = createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
 
   const [taskRes, stopsRes, driverRes, tokensRes] = await Promise.all([
-    admin.from("tasks").select(
-      "id, title, start_at, leave_by, status, cancelled_reason",
-    ).eq("id", taskId).maybeSingle(),
-    admin.from("task_stops").select("seq, place_name").eq("task_id", taskId)
-      .neq("status", "removed").order("seq"),
-    admin.from("employees").select("id, name, language, active").eq(
-      "id",
-      employeeId,
-    ).maybeSingle(),
-    admin.from("device_tokens").select("id, token").eq(
-      "employee_id",
-      employeeId,
-    ),
+    admin.from("tasks").select("id, title, start_at, leave_by, status, cancelled_reason").eq("id", taskId).maybeSingle(),
+    admin.from("task_stops").select("seq, place_name").eq("task_id", taskId).neq("status", "removed").order("seq"),
+    admin.from("employees").select("id, name, language, active").eq("id", employeeId).maybeSingle(),
+    admin.from("device_tokens").select("id, token").eq("employee_id", employeeId),
   ]);
   const task = taskRes.data;
   const driver = driverRes.data;
@@ -255,31 +165,14 @@ Deno.serve(async (request) => {
   const stops = stopsRes.data ?? [];
   const tokens = tokensRes.data ?? [];
 
-  const log = {
-    task_id: taskId,
-    employee_id: employeeId,
-    kind,
-    tokens: tokens.length,
-  };
+  const log = { task_id: taskId, employee_id: employeeId, kind, tokens: tokens.length };
   if (tokens.length === 0 || !driver.active) {
-    await admin.from("push_log").insert({
-      ...log,
-      sent: 0,
-      failed: 0,
-      errors: driver.active ? null : [{ error: "driver_inactive" }],
-    });
-    return json(200, {
-      sent: 0,
-      failed: 0,
-      reason: driver.active ? "no_token" : "driver_inactive",
-    });
+    await admin.from("push_log").insert({ ...log, sent: 0, failed: 0, errors: driver.active ? null : [{ error: "driver_inactive" }] });
+    return json(200, { sent: 0, failed: 0, reason: driver.active ? "no_token" : "driver_inactive" });
   }
 
   const language: Language = driver.language === "si" ? "si" : "en";
-  const route = [
-    stops[0]?.place_name ?? "",
-    stops.length > 1 ? stops[stops.length - 1].place_name : "",
-  ].filter(Boolean).join(" → ");
+  const route = [stops[0]?.place_name ?? "", stops.length > 1 ? stops[stops.length - 1].place_name : ""].filter(Boolean).join(" → ");
   const vars = {
     when: when(task.start_at),
     leave: clock(task.leave_by ?? task.start_at),
@@ -306,34 +199,19 @@ Deno.serve(async (request) => {
   try {
     const response = await fetch(EXPO_PUSH_URL, {
       method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-      },
+      headers: { accept: "application/json", "content-type": "application/json" },
       signal: AbortSignal.timeout(15_000),
       body: JSON.stringify(messages),
     });
-    const reply = (await response.json()) as {
-      data?: Ticket[];
-      errors?: unknown[];
-    };
+    const reply = (await response.json()) as { data?: Ticket[]; errors?: unknown[] };
     if (!response.ok || !reply.data) {
-      throw new Error(
-        `expo push ${response.status}: ${
-          JSON.stringify(reply.errors ?? reply).slice(0, 300)
-        }`,
-      );
+      throw new Error(`expo push ${response.status}: ${JSON.stringify(reply.errors ?? reply).slice(0, 300)}`);
     }
     tickets = reply.data;
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
     console.error(`push-task: ${message}`);
-    await admin.from("push_log").insert({
-      ...log,
-      sent: 0,
-      failed: tokens.length,
-      errors: [{ error: message.slice(0, 300) }],
-    });
+    await admin.from("push_log").insert({ ...log, sent: 0, failed: tokens.length, errors: [{ error: message.slice(0, 300) }] });
     return json(502, { error: "push_failed" });
   }
 
@@ -346,16 +224,9 @@ Deno.serve(async (request) => {
     errors.push({ token_id: token.id, error: code });
     if (code === "DeviceNotRegistered") gone.push(token.id);
   });
-  if (gone.length > 0) {
-    await admin.from("device_tokens").delete().in("id", gone);
-  }
+  if (gone.length > 0) await admin.from("device_tokens").delete().in("id", gone);
 
   const sent = tokens.length - errors.length;
-  await admin.from("push_log").insert({
-    ...log,
-    sent,
-    failed: errors.length,
-    errors: errors.length > 0 ? errors : null,
-  });
+  await admin.from("push_log").insert({ ...log, sent, failed: errors.length, errors: errors.length > 0 ? errors : null });
   return json(200, { sent, failed: errors.length });
 });

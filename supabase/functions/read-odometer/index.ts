@@ -38,15 +38,7 @@ const ABOVE_EXPECTED_SLACK_KM = 500;
 const PATH_SHAPE = /^[0-9a-f-]{36}\/\d{4}-\d{2}-\d{2}\/[0-9a-f-]{36}\.jpg$/;
 const COLOMBO_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
-const MODEL_STATUSES = [
-  "ok",
-  "no_odometer",
-  "trip_meter_only",
-  "blurry",
-  "covered_or_dark",
-  "not_dashboard",
-  "unsure",
-] as const;
+const MODEL_STATUSES = ["ok", "no_odometer", "trip_meter_only", "blurry", "covered_or_dark", "not_dashboard", "unsure"] as const;
 type ModelStatus = (typeof MODEL_STATUSES)[number];
 type Status = ModelStatus | "out_of_range";
 
@@ -78,10 +70,7 @@ interface Verdict {
 type Admin = SupabaseClient;
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8" },
-  });
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 }
 
 function env(name: string): string {
@@ -93,9 +82,7 @@ function env(name: string): string {
 /** 00:00 today in Colombo, as UTC ISO. */
 function startOfColomboToday(now: Date): string {
   const wall = new Date(now.getTime() + COLOMBO_OFFSET_MS);
-  const midnight =
-    Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate()) -
-    COLOMBO_OFFSET_MS;
+  const midnight = Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate()) - COLOMBO_OFFSET_MS;
   return new Date(midnight).toISOString();
 }
 
@@ -135,66 +122,40 @@ async function askModel(
   imageBase64: string,
   text: string,
 ): Promise<{ answer: ModelAnswer | null; raw: string }> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-    {
-      method: "POST",
-      headers: { "x-goog-api-key": key, "content-type": "application/json" },
-      signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
-      body: JSON.stringify({
-        contents: [{
-          role: "user",
-          parts: [
-            { inlineData: { mimeType: "image/jpeg", data: imageBase64 } },
-            { text },
-          ],
-        }],
-        generationConfig: {
-          temperature: 0,
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              status: { type: "STRING", enum: [...MODEL_STATUSES] },
-              reading_km: { type: "INTEGER", nullable: true },
-              confidence: { type: "NUMBER" },
-              digits_seen: { type: "STRING" },
-              note: { type: "STRING" },
-            },
-            required: ["status", "confidence"],
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    method: "POST",
+    headers: { "x-goog-api-key": key, "content-type": "application/json" },
+    signal: AbortSignal.timeout(MODEL_TIMEOUT_MS),
+    body: JSON.stringify({
+      contents: [{ role: "user", parts: [{ inlineData: { mimeType: "image/jpeg", data: imageBase64 } }, { text }] }],
+      generationConfig: {
+        temperature: 0,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: "OBJECT",
+          properties: {
+            status: { type: "STRING", enum: [...MODEL_STATUSES] },
+            reading_km: { type: "INTEGER", nullable: true },
+            confidence: { type: "NUMBER" },
+            digits_seen: { type: "STRING" },
+            note: { type: "STRING" },
           },
+          required: ["status", "confidence"],
         },
-      }),
-    },
-  );
+      },
+    }),
+  });
   const body = await response.text();
-  if (!response.ok) {
-    throw new Error(`model ${response.status}: ${body.slice(0, 300)}`);
-  }
-  const parsed = JSON.parse(body) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
-  };
-  const raw =
-    parsed.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ??
-      "";
+  if (!response.ok) throw new Error(`model ${response.status}: ${body.slice(0, 300)}`);
+  const parsed = JSON.parse(body) as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  const raw = parsed.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
   try {
     const a = JSON.parse(raw) as Partial<ModelAnswer>;
-    const status =
-      (MODEL_STATUSES as readonly string[]).includes(a.status ?? "")
-        ? (a.status as ModelStatus)
-        : "unsure";
-    const reading = num(a.reading_km) === null
-      ? null
-      : Math.round(a.reading_km as number);
+    const status = (MODEL_STATUSES as readonly string[]).includes(a.status ?? "") ? (a.status as ModelStatus) : "unsure";
+    const reading = num(a.reading_km) === null ? null : Math.round(a.reading_km as number);
     const confidence = Math.min(1, Math.max(0, num(a.confidence) ?? 0));
     return {
-      answer: {
-        status,
-        reading_km: reading,
-        confidence,
-        digits_seen: String(a.digits_seen ?? ""),
-        note: String(a.note ?? ""),
-      },
+      answer: { status, reading_km: reading, confidence, digits_seen: String(a.digits_seen ?? ""), note: String(a.note ?? "") },
       raw,
     };
   } catch {
@@ -203,36 +164,15 @@ async function askModel(
 }
 
 /** Turns the model's answer into the status the app and the office see. */
-function verdict(
-  answer: ModelAnswer | null,
-  rawText: string,
-  expect: Expectation,
-): Verdict {
-  if (!answer) {
-    return {
-      status: "unsure",
-      reading: null,
-      raw: null,
-      confidence: null,
-      digits: "",
-      note: "no answer",
-      rawText,
-    };
-  }
+function verdict(answer: ModelAnswer | null, rawText: string, expect: Expectation): Verdict {
+  if (!answer) return { status: "unsure", reading: null, raw: null, confidence: null, digits: "", note: "no answer", rawText };
   const raw = answer.reading_km;
   let status: Status = answer.status;
   if (status === "ok") {
-    if (
-      raw === null || raw < 100 || raw > 9_999_999 ||
-      answer.confidence < MIN_CONFIDENCE
-    ) status = "unsure";
+    if (raw === null || raw < 100 || raw > 9_999_999 || answer.confidence < MIN_CONFIDENCE) status = "unsure";
     else if (expect.last_km !== null) {
       if (raw < expect.last_km) status = "out_of_range";
-      else if (
-        raw >
-          expect.last_km + Math.max(0, expect.gps_km ?? 0) +
-            ABOVE_EXPECTED_SLACK_KM
-      ) status = "out_of_range";
+      else if (raw > expect.last_km + Math.max(0, expect.gps_km ?? 0) + ABOVE_EXPECTED_SLACK_KM) status = "out_of_range";
     }
   }
   return {
@@ -246,23 +186,12 @@ function verdict(
   };
 }
 
-async function readPhoto(
-  admin: Admin,
-  path: string,
-  expect: Expectation,
-): Promise<Verdict> {
+async function readPhoto(admin: Admin, path: string, expect: Expectation): Promise<Verdict> {
   const { data: file, error } = await admin.storage.from(BUCKET).download(path);
   if (error || !file) throw new PhotoError(404, "photo_not_found");
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (bytes.byteLength > MAX_PHOTO_BYTES) {
-    throw new PhotoError(413, "photo_too_large");
-  }
-  const { answer, raw } = await askModel(
-    env("GEMINI_API_KEY"),
-    model(),
-    encodeBase64(bytes),
-    prompt(expect),
-  );
+  if (bytes.byteLength > MAX_PHOTO_BYTES) throw new PhotoError(413, "photo_too_large");
+  const { answer, raw } = await askModel(env("GEMINI_API_KEY"), model(), encodeBase64(bytes), prompt(expect));
   return verdict(answer, raw, expect);
 }
 
@@ -278,11 +207,7 @@ function model(): string {
 
 function adminClient(): Admin {
   return createClient(env("SUPABASE_URL"), env("SUPABASE_SERVICE_ROLE_KEY"), {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 }
 
@@ -301,15 +226,9 @@ async function record(
     status: v?.status ?? "unsure",
     reading_km: v?.raw ?? null,
     confidence: v?.confidence ?? null,
-    raw: v
-      ? `${v.rawText.slice(0, 400)}${
-        v.note ? ` | ${v.note.slice(0, 100)}` : ""
-      }`
-      : null,
+    raw: v ? `${v.rawText.slice(0, 400)}${v.note ? ` | ${v.note.slice(0, 100)}` : ""}` : null,
   });
-  if (error) {
-    console.error(`read-odometer: could not record the read: ${error.message}`);
-  }
+  if (error) console.error(`read-odometer: could not record the read: ${error.message}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -320,22 +239,14 @@ async function driverMode(request: Request, token: string): Promise<Response> {
   const url = env("SUPABASE_URL");
   const asCaller = createClient(url, env("SUPABASE_ANON_KEY"), {
     global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   const { data: user, error: userError } = await asCaller.auth.getUser(token);
   if (userError || !user.user) return json(401, { error: "not_signed_in" });
 
   // Row Level Security returns the caller's own employee row and nothing else.
-  const { data: me } = await asCaller.from("employees").select(
-    "id, active, role",
-  ).maybeSingle();
-  if (!me || !me.active || me.role !== "driver") {
-    return json(403, { error: "not_a_driver" });
-  }
+  const { data: me } = await asCaller.from("employees").select("id, active, role").maybeSingle();
+  if (!me || !me.active || me.role !== "driver") return json(403, { error: "not_a_driver" });
 
   let body: Record<string, unknown>;
   try {
@@ -343,35 +254,17 @@ async function driverMode(request: Request, token: string): Promise<Response> {
   } catch {
     return json(400, { error: "bad_request" });
   }
-  const path = typeof body.path === "string" && PATH_SHAPE.test(body.path)
-    ? body.path
-    : null;
+  const path = typeof body.path === "string" && PATH_SHAPE.test(body.path) ? body.path : null;
   if (!path) return json(400, { error: "bad_request" });
-  if (!path.startsWith(`${me.id}/`)) {
-    return json(403, { error: "not_your_photo" });
-  }
-  const expect: Expectation = {
-    last_km: num(body.last_km),
-    gps_km: num(body.gps_km),
-  };
-  const vehicleId =
-    typeof body.vehicle_id === "string" && body.vehicle_id.length === 36
-      ? body.vehicle_id
-      : null;
+  if (!path.startsWith(`${me.id}/`)) return json(403, { error: "not_your_photo" });
+  const expect: Expectation = { last_km: num(body.last_km), gps_km: num(body.gps_km) };
+  const vehicleId = typeof body.vehicle_id === "string" && body.vehicle_id.length === 36 ? body.vehicle_id : null;
 
   const admin = adminClient();
   const now = new Date();
-  const { count } = await admin.from("odometer_reads").select("id", {
-    count: "exact",
-    head: true,
-  })
-    .eq("employee_id", me.id).eq("mode", "driver").gte(
-      "created_at",
-      startOfColomboToday(now),
-    );
-  if ((count ?? 0) >= DAILY_LIMIT) {
-    return json(429, { error: "daily_limit", limit: DAILY_LIMIT });
-  }
+  const { count } = await admin.from("odometer_reads").select("id", { count: "exact", head: true })
+    .eq("employee_id", me.id).eq("mode", "driver").gte("created_at", startOfColomboToday(now));
+  if ((count ?? 0) >= DAILY_LIMIT) return json(429, { error: "daily_limit", limit: DAILY_LIMIT });
 
   const row = {
     employee_id: me.id,
@@ -394,9 +287,7 @@ async function driverMode(request: Request, token: string): Promise<Response> {
       last_km: expect.last_km,
     });
   } catch (error) {
-    if (error instanceof PhotoError) {
-      return json(error.status, { error: error.code });
-    }
+    if (error instanceof PhotoError) return json(error.status, { error: error.code });
     const message = error instanceof Error ? error.message : "unknown error";
     console.error(`read-odometer: ${message}`);
     await record(admin, row, { error: message, ms: Date.now() - started });
@@ -415,46 +306,26 @@ async function serverMode(request: Request): Promise<Response> {
   } catch {
     return json(400, { error: "bad_request" });
   }
-  const logId = typeof body.log_id === "string" && body.log_id.length === 36
-    ? body.log_id
-    : null;
+  const logId = typeof body.log_id === "string" && body.log_id.length === 36 ? body.log_id : null;
   if (!logId) return json(400, { error: "bad_request" });
 
   const admin = adminClient();
   const { data: log } = await admin.from("odometer_logs")
-    .select(
-      "id, employee_id, vehicle_id, reading_km, logged_at, photo_id, photos:photo_id (storage_path)",
-    )
+    .select("id, employee_id, vehicle_id, reading_km, logged_at, photo_id, photos:photo_id (storage_path)")
     .eq("id", logId).maybeSingle();
-  const photo = (log?.photos ?? null) as { storage_path: string } | {
-    storage_path: string;
-  }[] | null;
-  const path = Array.isArray(photo)
-    ? photo[0]?.storage_path
-    : photo?.storage_path;
+  const photo = (log?.photos ?? null) as { storage_path: string } | { storage_path: string }[] | null;
+  const path = Array.isArray(photo) ? photo[0]?.storage_path : photo?.storage_path;
   if (!log || !path) return json(404, { error: "log_or_photo_not_found" });
 
   // The vehicle's reading before this log is the only expectation the server has.
-  const { data: previous } = await admin.from("odometer_logs").select(
-    "reading_km",
-  )
-    .eq("vehicle_id", log.vehicle_id).lt("logged_at", log.logged_at).neq(
-      "id",
-      log.id,
-    )
+  const { data: previous } = await admin.from("odometer_logs").select("reading_km")
+    .eq("vehicle_id", log.vehicle_id).lt("logged_at", log.logged_at).neq("id", log.id)
     .order("logged_at", { ascending: false }).limit(1).maybeSingle();
-  const expect: Expectation = {
-    last_km: previous?.reading_km ?? null,
-    gps_km: null,
-  };
+  const expect: Expectation = { last_km: previous?.reading_km ?? null, gps_km: null };
 
   // A photo read while the driver was taking it is reused rather than read again.
-  const { data: earlier } = await admin.from("odometer_reads").select(
-    "status, reading_km, confidence",
-  )
-    .eq("photo_path", path).eq("ok", true).order("created_at", {
-      ascending: false,
-    }).limit(1).maybeSingle();
+  const { data: earlier } = await admin.from("odometer_reads").select("status, reading_km, confidence")
+    .eq("photo_path", path).eq("ok", true).order("created_at", { ascending: false }).limit(1).maybeSingle();
 
   let status: Status;
   let value: number | null;
@@ -478,9 +349,7 @@ async function serverMode(request: Request): Promise<Response> {
       status = v.status;
       value = v.raw;
     } catch (error) {
-      if (error instanceof PhotoError) {
-        return json(error.status, { error: error.code });
-      }
+      if (error instanceof PhotoError) return json(error.status, { error: error.code });
       const message = error instanceof Error ? error.message : "unknown error";
       console.error(`read-odometer (server): ${message}`);
       await record(admin, row, { error: message, ms: Date.now() - started });
@@ -488,20 +357,12 @@ async function serverMode(request: Request): Promise<Response> {
     }
   }
 
-  const { error } = await admin.rpc("set_odometer_ai", {
-    p_log_id: log.id,
-    p_ai_value: value,
-    p_ai_status: status,
-  });
+  const { error } = await admin.rpc("set_odometer_ai", { p_log_id: log.id, p_ai_value: value, p_ai_status: status });
   if (error) {
     console.error(`read-odometer (server): set_odometer_ai: ${error.message}`);
     return json(500, { error: "could_not_save" });
   }
-  return json(200, {
-    status,
-    reading_km: status === "ok" ? value : null,
-    log_id: log.id,
-  });
+  return json(200, { status, reading_km: status === "ok" ? value : null, log_id: log.id });
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -512,23 +373,16 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 
 Deno.serve(async (request) => {
-  if (request.method !== "POST") {
-    return json(405, { error: "method_not_allowed" });
-  }
+  if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   const serverKey = request.headers.get("x-server-key");
   if (serverKey !== null) {
     const expected = Deno.env.get("SERVER_KEY") ?? "";
-    if (expected.length < 16 || !constantTimeEqual(serverKey, expected)) {
-      return json(401, { error: "bad_server_key" });
-    }
+    if (expected.length < 16 || !constantTimeEqual(serverKey, expected)) return json(401, { error: "bad_server_key" });
     return await serverMode(request);
   }
 
-  const token = (request.headers.get("Authorization") ?? "").replace(
-    /^Bearer\s+/i,
-    "",
-  ).trim();
+  const token = (request.headers.get("Authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   if (!token) return json(401, { error: "not_signed_in" });
   return await driverMode(request, token);
 });

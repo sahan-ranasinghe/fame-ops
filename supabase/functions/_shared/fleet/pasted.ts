@@ -24,21 +24,16 @@ export function parseCoordinates(text: string): PastedPin | null {
 }
 
 const validPin = (lat: number, lng: number) =>
-  Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 &&
-  Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
+  Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
 
-const GOOGLE_HOSTS =
-  /^(?:www\.|maps\.)?google\.(?:com|lk|co\.uk|co\.in)$|^maps\.app\.goo\.gl$|^goo\.gl$/i;
+const GOOGLE_HOSTS = /^(?:www\.|maps\.)?google\.(?:com|lk|co\.uk|co\.in)$|^maps\.app\.goo\.gl$|^goo\.gl$/i;
 
 /** Is this a Google Maps link we read (or resolve)? */
 export function isMapsLink(text: string): boolean {
   try {
     const u = new URL(text.trim());
-    return (u.protocol === "https:" || u.protocol === "http:") &&
-      GOOGLE_HOSTS.test(u.hostname) && (u.hostname.endsWith("goo.gl")
-        ? true
-        : u.pathname.startsWith("/maps") || u.searchParams.has("q") ||
-          u.searchParams.has("query"));
+    return (u.protocol === "https:" || u.protocol === "http:") && GOOGLE_HOSTS.test(u.hostname) &&
+      (u.hostname.endsWith("goo.gl") ? true : u.pathname.startsWith("/maps") || u.searchParams.has("q") || u.searchParams.has("query"));
   } catch {
     return false;
   }
@@ -66,19 +61,10 @@ export function parseMapsLink(link: string): PastedPin | null {
   }
   const whole = decodeURIComponent(u.pathname + u.search + u.hash);
   const placeName = u.pathname.match(/\/maps\/place\/([^/@]+)/)?.[1];
-  const name = placeName
-    ? decodeURIComponent(placeName.replace(/\+/g, " ")).trim()
-    : undefined;
-  const pinned = [
-    ...whole.matchAll(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/g),
-  ].pop();
+  const name = placeName ? decodeURIComponent(placeName.replace(/\+/g, " ")).trim() : undefined;
+  const pinned = [...whole.matchAll(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/g)].pop();
   if (pinned && validPin(Number(pinned[1]), Number(pinned[2]))) {
-    return {
-      lat: Number(pinned[1]),
-      lng: Number(pinned[2]),
-      name,
-      from: "link",
-    };
+    return { lat: Number(pinned[1]), lng: Number(pinned[2]), name, from: "link" };
   }
   for (const key of ["q", "query", "ll", "destination", "daddr"]) {
     const v = u.searchParams.get(key);
@@ -87,12 +73,7 @@ export function parseMapsLink(link: string): PastedPin | null {
   }
   const centre = whole.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/);
   if (centre && validPin(Number(centre[1]), Number(centre[2]))) {
-    return {
-      lat: Number(centre[1]),
-      lng: Number(centre[2]),
-      name,
-      from: "link",
-    };
+    return { lat: Number(centre[1]), lng: Number(centre[2]), name, from: "link" };
   }
   return null;
 }
@@ -101,10 +82,7 @@ export function parseMapsLink(link: string): PastedPin | null {
  * Follows a short link's redirects (HEAD, then GET without reading the body) while every hop stays on a
  * Google host, and parses where it lands. Null when it does not lead to a pin.
  */
-export async function resolveMapsLink(
-  link: string,
-  fetcher: typeof fetch = fetch,
-): Promise<PastedPin | null> {
+export async function resolveMapsLink(link: string, fetcher: typeof fetch = fetch): Promise<PastedPin | null> {
   let url = link.trim();
   for (let hop = 0; hop < 5; hop++) {
     // Every hop must be a Google host before anything in it is read.
@@ -130,23 +108,16 @@ export async function resolveMapsLink(
     }
     await res.body?.cancel().catch(() => undefined);
     const next = res.headers.get("location");
-    if (res.status < 300 || res.status >= 400 || !next) {
-      return parseMapsLink(url);
-    }
+    if (res.status < 300 || res.status >= 400 || !next) return parseMapsLink(url);
     url = new URL(next, url).toString();
   }
   return parseMapsLink(url);
 }
 
 /** What the box holds: coordinates, a Maps link (full or short), or nothing pasted. */
-export async function pastedPin(
-  text: string,
-  fetcher: typeof fetch = fetch,
-): Promise<PastedPin | null> {
+export async function pastedPin(text: string, fetcher: typeof fetch = fetch): Promise<PastedPin | null> {
   const coords = parseCoordinates(text);
   if (coords) return coords;
   if (!isMapsLink(text)) return null;
-  return isShortLink(text)
-    ? resolveMapsLink(text, fetcher)
-    : parseMapsLink(text);
+  return isShortLink(text) ? resolveMapsLink(text, fetcher) : parseMapsLink(text);
 }

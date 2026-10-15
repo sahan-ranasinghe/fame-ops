@@ -3,14 +3,7 @@
 import { z } from "zod";
 import type { Db } from "../db.ts";
 import { ToolError, unwrap } from "../db.ts";
-import {
-  docChip,
-  type Employee,
-  findDriver,
-  loadLatest,
-  loadRefs,
-  sharing,
-} from "../fleet.ts";
+import { docChip, type Employee, findDriver, loadLatest, loadRefs, sharing } from "../fleet.ts";
 import { contactLinks } from "../format.ts";
 import { colomboDate, colomboTime, dayRange } from "../time.ts";
 import { realDate, tool, zDate, zText } from "../tool.ts";
@@ -20,16 +13,10 @@ import { realDate, tool, zDate, zText } from "../tool.ts";
 const EMAIL_DOMAIN = "drivers.fame.invalid";
 const emailFor = (username: string) => `${username}@${EMAIL_DOMAIN}`;
 
-const zUsername = z.string().regex(
-  /^[A-Za-z0-9._-]{3,40}$/,
-  "3 to 40 characters: letters, digits, dot, underscore, dash",
-)
+const zUsername = z.string().regex(/^[A-Za-z0-9._-]{3,40}$/, "3 to 40 characters: letters, digits, dot, underscore, dash")
   .describe("Sign-in name the driver types, e.g. nuwan.p");
-const zPin = z.string().regex(/^\d{6}$/, "The PIN is exactly 6 digits")
-  .describe("6-digit PIN, as a string");
-const zDriverRef = zText(80).describe(
-  "The driver's username (employee code or full name also work)",
-);
+const zPin = z.string().regex(/^\d{6}$/, "The PIN is exactly 6 digits").describe("6-digit PIN, as a string");
+const zDriverRef = zText(80).describe("The driver's username (employee code or full name also work)");
 
 function driverCard(e: Employee, plate: string | null, location?: string) {
   return {
@@ -47,15 +34,9 @@ function driverCard(e: Employee, plate: string | null, location?: string) {
 }
 
 /** Finds an Auth user by email. The admin API can only list, so this pages through. */
-async function authUserIdByEmail(
-  db: Db,
-  email: string,
-): Promise<string | null> {
+async function authUserIdByEmail(db: Db, email: string): Promise<string | null> {
   for (let page = 1; page <= 50; page++) {
-    const { data, error } = await db.auth.admin.listUsers({
-      page,
-      perPage: 200,
-    });
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 200 });
     if (error) throw new Error(`Auth: ${error.message}`);
     const found = data.users.find((u) => u.email?.toLowerCase() === email);
     if (found) return found.id;
@@ -71,9 +52,7 @@ export const listDrivers = tool({
     "All drivers with code, username, phone, licence expiry, current vehicle, whether they are sharing their location (on duty since HH:MM, or off duty since), and how many tasks each accepted and declined in the last 30 days.",
   readOnly: true,
   input: z.object({
-    include_inactive: z.boolean().optional().describe(
-      "Also show drivers who have been switched off",
-    ),
+    include_inactive: z.boolean().optional().describe("Also show drivers who have been switched off"),
   }),
   async run({ include_inactive }, { db, now }) {
     const since = new Date(now.getTime() - 30 * 86400000).toISOString();
@@ -81,29 +60,15 @@ export const listDrivers = tool({
     const [refs, latest, eventsRes, openRes, endedRes] = await Promise.all([
       loadRefs(db),
       loadLatest(db),
-      db.from("task_assignment_events").select("employee_id, action").in(
-        "action",
-        ["accepted", "declined"],
-      ).gte("at", since),
-      db.from("duty_sessions").select("employee_id, started_at").is(
-        "ended_at",
-        null,
-      ),
-      db.from("duty_sessions").select("employee_id, ended_at").gte(
-        "ended_at",
-        dayRange(today).from,
-      ).order("ended_at", { ascending: false }).limit(2000),
+      db.from("task_assignment_events").select("employee_id, action").in("action", ["accepted", "declined"]).gte("at", since),
+      db.from("duty_sessions").select("employee_id, started_at").is("ended_at", null),
+      db.from("duty_sessions").select("employee_id, ended_at").gte("ended_at", dayRange(today).from).order("ended_at", { ascending: false })
+        .limit(2000),
     ]);
-    const onDuty = new Map(
-      unwrap(openRes, "duty sessions").map((
-        s,
-      ) => [s.employee_id, s.started_at]),
-    );
+    const onDuty = new Map(unwrap(openRes, "duty sessions").map((s) => [s.employee_id, s.started_at]));
     const offDuty = new Map<string, string>();
     for (const s of unwrap(endedRes, "duty sessions")) {
-      if (s.ended_at && !offDuty.has(s.employee_id)) {
-        offDuty.set(s.employee_id, s.ended_at);
-      }
+      if (s.ended_at && !offDuty.has(s.employee_id)) offDuty.set(s.employee_id, s.ended_at);
     }
     // Accepts and declines per driver in the last 30 days.
     const last30 = new Map<string, { accepted: number; declined: number }>();
@@ -119,27 +84,16 @@ export const listDrivers = tool({
       .map((e) => ({
         ...driverCard(
           e,
-          e.current_vehicle_id
-            ? refs.veh.get(e.current_vehicle_id)?.reg_no ?? null
-            : null,
+          e.current_vehicle_id ? refs.veh.get(e.current_vehicle_id)?.reg_no ?? null : null,
           sharing(latest.get(e.id), now).text,
         ),
-        licence: e.licence_expiry
-          ? docChip(e.licence_expiry, today)
-          : undefined,
+        licence: e.licence_expiry ? docChip(e.licence_expiry, today) : undefined,
         last_30_days: last30.get(e.id) ?? { accepted: 0, declined: 0 },
         // Presence: on duty = sharing location (the open duty session); off duty since = when the last one ended today.
-        on_duty_since: onDuty.has(e.id)
-          ? colomboTime(onDuty.get(e.id)!)
-          : undefined,
-        off_duty_since: !onDuty.has(e.id) && offDuty.has(e.id)
-          ? colomboTime(offDuty.get(e.id)!)
-          : undefined,
+        on_duty_since: onDuty.has(e.id) ? colomboTime(onDuty.get(e.id)!) : undefined,
+        off_duty_since: !onDuty.has(e.id) && offDuty.has(e.id) ? colomboTime(offDuty.get(e.id)!) : undefined,
       }));
-    return {
-      result: { count: drivers.length, drivers },
-      summary: `${drivers.length} drivers`,
-    };
+    return { result: { count: drivers.length, drivers }, summary: `${drivers.length} drivers` };
   },
 });
 
@@ -166,17 +120,9 @@ export const createDriver = tool({
       db.from("employees").select("name").eq("code", code),
     ]);
     const usernameTaken = unwrap(sameUsername, "employees")[0];
-    if (usernameTaken) {
-      throw new ToolError(
-        `Username "${username}" is already used by ${usernameTaken.name}.`,
-      );
-    }
+    if (usernameTaken) throw new ToolError(`Username "${username}" is already used by ${usernameTaken.name}.`);
     const codeTaken = unwrap(sameCode, "employees")[0];
-    if (codeTaken) {
-      throw new ToolError(
-        `Employee code "${code}" is already used by ${codeTaken.name}.`,
-      );
-    }
+    if (codeTaken) throw new ToolError(`Employee code "${code}" is already used by ${codeTaken.name}.`);
 
     // The sign-in. email_confirm: these addresses cannot receive a confirmation mail.
     let authUserId: string;
@@ -192,43 +138,19 @@ export const createDriver = tool({
       // A sign-in with this username is left over from an attempt that did not
       // finish. It belongs to nobody (checked above), so reuse it with the new PIN.
       const existing = await authUserIdByEmail(db, email);
-      if (!existing) {
-        throw new ToolError(
-          `Could not create the sign-in: ${
-            created.error?.message ?? "unknown error"
-          }`,
-        );
-      }
-      const reused = await db.auth.admin.updateUserById(existing, {
-        password: args.pin,
-        email_confirm: true,
-        ban_duration: "none",
-      });
-      if (reused.error) {
-        throw new ToolError(
-          `Could not reuse the existing sign-in: ${reused.error.message}`,
-        );
-      }
+      if (!existing) throw new ToolError(`Could not create the sign-in: ${created.error?.message ?? "unknown error"}`);
+      const reused = await db.auth.admin.updateUserById(existing, { password: args.pin, email_confirm: true, ban_duration: "none" });
+      if (reused.error) throw new ToolError(`Could not reuse the existing sign-in: ${reused.error.message}`);
       authUserId = existing;
     }
 
     const inserted = await db.from("employees")
-      .insert({
-        code,
-        name: args.name,
-        username,
-        phone: args.phone ?? null,
-        role: "driver",
-        permissions: [],
-        auth_user_id: authUserId,
-      })
+      .insert({ code, name: args.name, username, phone: args.phone ?? null, role: "driver", permissions: [], auth_user_id: authUserId })
       .select("*")
       .single();
     if (inserted.error) {
       throw new ToolError(
-        `The sign-in was created, but the driver could not be saved: ${
-          inserted.error.details ?? inserted.error.message
-        } ` +
+        `The sign-in was created, but the driver could not be saved: ${inserted.error.details ?? inserted.error.message} ` +
           `Fix that and run create_driver again with the same username; it will reuse the sign-in.`,
       );
     }
@@ -237,8 +159,7 @@ export const createDriver = tool({
       result: {
         created: driverCard(inserted.data, null),
         sign_in: { username, pin: "set (not shown again)" },
-        next:
-          "Give the driver the username and PIN. They sign in to the Fame Driver app with them.",
+        next: "Give the driver the username and PIN. They sign in to the Fame Driver app with them.",
       },
       summary: `created driver ${args.name} (${code}, ${username})`,
     };
@@ -248,27 +169,16 @@ export const createDriver = tool({
 export const resetPin = tool({
   name: "reset_pin",
   title: "Reset driver PIN",
-  description:
-    "Sets a new 6-digit PIN for a driver. The old PIN stops working at once.",
+  description: "Sets a new 6-digit PIN for a driver. The old PIN stops working at once.",
   readOnly: false,
   input: z.object({ username: zDriverRef, pin: zPin }),
   async run({ username, pin }, { db }) {
     const driver = findDriver(await loadRefs(db), username);
-    if (!driver.auth_user_id) {
-      throw new ToolError(
-        `${driver.name} has no sign-in yet. Use create_driver.`,
-      );
-    }
-    const { error } = await db.auth.admin.updateUserById(driver.auth_user_id, {
-      password: pin,
-    });
+    if (!driver.auth_user_id) throw new ToolError(`${driver.name} has no sign-in yet. Use create_driver.`);
+    const { error } = await db.auth.admin.updateUserById(driver.auth_user_id, { password: pin });
     if (error) throw new ToolError(`Could not set the PIN: ${error.message}`);
     return {
-      result: {
-        driver: driver.name,
-        username: driver.username,
-        pin: "changed (not shown again)",
-      },
+      result: { driver: driver.name, username: driver.username, pin: "changed (not shown again)" },
       summary: `PIN reset for ${driver.name} (${driver.username})`,
     };
   },
@@ -283,57 +193,33 @@ export const setDriverActive = tool({
   input: z.object({ username: zDriverRef, active: z.boolean() }),
   async run({ username, active }, { db, now }) {
     const driver = findDriver(await loadRefs(db), username);
-    unwrap(
-      await db.from("employees").update({ active }).eq("id", driver.id).select(
-        "id",
-      ),
-      "employee",
-    );
+    unwrap(await db.from("employees").update({ active }).eq("id", driver.id).select("id"), "employee");
 
     const notes: string[] = [];
     if (driver.auth_user_id) {
       // Also block (or unblock) the sign-in itself, so existing sessions cannot be renewed.
-      const { error } = await db.auth.admin.updateUserById(
-        driver.auth_user_id,
-        { ban_duration: active ? "none" : "876000h" },
-      );
-      if (error) {
-        notes.push(
-          `The sign-in could not be ${
-            active ? "unblocked" : "blocked"
-          }: ${error.message}`,
-        );
-      }
+      const { error } = await db.auth.admin.updateUserById(driver.auth_user_id, { ban_duration: active ? "none" : "876000h" });
+      if (error) notes.push(`The sign-in could not be ${active ? "unblocked" : "blocked"}: ${error.message}`);
     }
     if (!active) {
       unwrap(
-        await db.from("duty_sessions").update({
-          ended_at: now.toISOString(),
-          end_reason: "admin",
-        })
+        await db.from("duty_sessions").update({ ended_at: now.toISOString(), end_reason: "admin" })
           .eq("employee_id", driver.id).is("ended_at", null).select("id"),
         "location sharing",
       );
       const open = unwrap(
-        await db.from("tasks").select("id, title, status").eq(
-          "employee_id",
-          driver.id,
-        ).in("status", ["assigned", "in_progress"]),
+        await db.from("tasks").select("id, title, status").eq("employee_id", driver.id).in("status", ["assigned", "in_progress"]),
         "tasks",
       );
       if (open.length > 0) {
         notes.push(
-          `${driver.name} still has ${open.length} open task(s): ${
-            open.map((t) => t.title).join("; ")
-          }. Reassign or cancel them.`,
+          `${driver.name} still has ${open.length} open task(s): ${open.map((t) => t.title).join("; ")}. Reassign or cancel them.`,
         );
       }
     }
     return {
       result: { driver: driver.name, username: driver.username, active, notes },
-      summary: `${driver.name} (${driver.username}) set ${
-        active ? "active" : "inactive"
-      }`,
+      summary: `${driver.name} (${driver.username}) set ${active ? "active" : "inactive"}`,
     };
   },
 });
@@ -341,50 +227,30 @@ export const setDriverActive = tool({
 export const updateDriver = tool({
   name: "update_driver",
   title: "Update driver",
-  description:
-    "Changes a driver's phone number and/or driving licence expiry date. Send null to clear a value.",
+  description: "Changes a driver's phone number and/or driving licence expiry date. Send null to clear a value.",
   readOnly: false,
   input: z.object({
     username: zDriverRef,
     phone: zText(30).nullable().optional(),
-    licence_expiry: zDate.nullable().optional().describe(
-      "Driving licence expiry, YYYY-MM-DD",
-    ),
+    licence_expiry: zDate.nullable().optional().describe("Driving licence expiry, YYYY-MM-DD"),
   }),
   async run({ username, phone, licence_expiry }, { db }) {
     const refs = await loadRefs(db);
     const driver = findDriver(refs, username);
-    if (phone === undefined && licence_expiry === undefined) {
-      throw new ToolError(
-        "Nothing to change: give phone and/or licence_expiry.",
-      );
-    }
+    if (phone === undefined && licence_expiry === undefined) throw new ToolError("Nothing to change: give phone and/or licence_expiry.");
     if (licence_expiry) realDate(licence_expiry, "licence_expiry");
 
     const updated = unwrap(
       await db.from("employees")
-        .update({
-          ...(phone !== undefined && { phone }),
-          ...(licence_expiry !== undefined && { licence_expiry }),
-        })
+        .update({ ...(phone !== undefined && { phone }), ...(licence_expiry !== undefined && { licence_expiry }) })
         .eq("id", driver.id).select("*").single(),
       "employee",
     );
-    const plate = updated.current_vehicle_id
-      ? refs.veh.get(updated.current_vehicle_id)?.reg_no ?? null
-      : null;
+    const plate = updated.current_vehicle_id ? refs.veh.get(updated.current_vehicle_id)?.reg_no ?? null : null;
     return {
-      result: {
-        updated: {
-          ...driverCard(updated, plate),
-          licence_expiry: updated.licence_expiry,
-        },
-      },
+      result: { updated: { ...driverCard(updated, plate), licence_expiry: updated.licence_expiry } },
       summary: `updated ${driver.name}: ${
-        [
-          phone !== undefined && "phone",
-          licence_expiry !== undefined && "licence_expiry",
-        ].filter(Boolean).join(", ")
+        [phone !== undefined && "phone", licence_expiry !== undefined && "licence_expiry"].filter(Boolean).join(", ")
       }`,
     };
   },

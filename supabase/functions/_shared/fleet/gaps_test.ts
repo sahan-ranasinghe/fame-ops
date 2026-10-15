@@ -11,14 +11,7 @@ const T1 = "50000000-0000-0000-0000-000000000001";
 const T2 = "50000000-0000-0000-0000-000000000002";
 
 let n = 0;
-function reading(
-  at: string,
-  km: number,
-  kind: Reading["kind"],
-  task: string | null,
-  driver = A,
-  vehicle = V,
-): Reading {
+function reading(at: string, km: number, kind: Reading["kind"], task: string | null, driver = A, vehicle = V): Reading {
   n += 1;
   return {
     id: `r${String(n).padStart(3, "0")}`,
@@ -43,15 +36,12 @@ Deno.test("task km is not a gap; between tasks and overnight are, by Colombo day
     reading("2026-10-09T02:30:00Z", 84651, "manual", null, B), //   Fri 08:00: 1 km overnight
     reading("2026-10-09T03:30:00Z", 84640, "manual", null, B), //   Fri 09:00: a correction downwards: not a gap
   ]);
-  assertEquals(
-    gaps.map((g) => [g.type, g.km, g.from.employee_id === A ? "A" : "B"]),
-    [
-      ["overnight", 12, "A"],
-      ["between_tasks", 7, "A"],
-      ["between_tasks", 50, "B"],
-      ["overnight", 1, "B"],
-    ],
-  );
+  assertEquals(gaps.map((g) => [g.type, g.km, g.from.employee_id === A ? "A" : "B"]), [
+    ["overnight", 12, "A"],
+    ["between_tasks", 7, "A"],
+    ["between_tasks", 50, "B"],
+    ["overnight", 1, "B"],
+  ]);
 });
 
 Deno.test("readings inside one task are never a gap, whatever their kind", () => {
@@ -71,8 +61,5 @@ Deno.test("vehicles are paired separately and out-of-order input is sorted", () 
     reading("2026-10-08T01:30:00Z", 500, "manual", null, B, V),
     reading("2026-10-08T02:30:00Z", 530, "manual", null, B, V),
   ]);
-  assertEquals(
-    gaps.map((g) => [g.vehicle_id === V ? "V1" : "V2", g.km]).sort(),
-    [["V1", 30], ["V2", 10]],
-  );
+  assertEquals(gaps.map((g) => [g.vehicle_id === V ? "V1" : "V2", g.km]).sort(), [["V1", 30], ["V2", 10]]);
 });

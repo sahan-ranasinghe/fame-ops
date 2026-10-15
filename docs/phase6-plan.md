@@ -137,8 +137,11 @@ finished** (EAS build ddc92043, from 0a64c3c): the APK is version 1.2.0 with the
 JavaScript config), signed with the preview key's SHA-1 BC:78:…:62:E2, build number 1 like 1.1.0's
 (an equal number installs over it). Install link:
 https://expo.dev/artifacts/eas/v8oG_RlEynbAlGqhWJsVm9RpsJlmcL1APPOIwc6fDYc.apk. After the round, as
-asked: `deno fmt` on supabase/functions only (2d752ca; the generated database.types.ts left as
-generated; no migration touched).
+asked: `deno fmt` on supabase/functions only, no migration touched. The first try (2d752ca) ran it from
+supabase/functions, which has no config, so it took Deno's 80 columns and also reformatted track.ts
+(which must stay identical to the driver app's: test:track failed); the next commit puts back the
+state before it and formats each folder with its own deno.json (140 columns, track.ts and
+database.types.ts excluded): 39 files, every folder's `deno fmt --check` clean.
 
 Deployed so far (14 October 2026): round 1 at f9bc685 (Part 2); round 2 at 413d820 (Part 3);
 **round 2b at 3cc39d8** (Part 3b, the ordered steps, and the five driver-app items): migrations

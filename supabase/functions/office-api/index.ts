@@ -50,23 +50,13 @@ function env(name: string): string {
 }
 
 function allowedOrigins(): string[] {
-  const configured = (Deno.env.get("OFFICE_WEB_URL") ?? "").split(",").map((
-    s,
-  ) => s.trim().replace(/\/$/, "")).filter(Boolean);
+  const configured = (Deno.env.get("OFFICE_WEB_URL") ?? "").split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean);
   // 5173 = `npm run dev`, 5174 = the end-to-end test's own server.
-  return [
-    ...configured,
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:5174",
-    "http://127.0.0.1:5174",
-  ];
+  return [...configured, "http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"];
 }
 
 function corsHeaders(origin: string | null): Record<string, string> {
-  const allowed = origin && allowedOrigins().includes(origin)
-    ? origin
-    : allowedOrigins()[0] ?? "";
+  const allowed = origin && allowedOrigins().includes(origin) ? origin : allowedOrigins()[0] ?? "";
   return {
     "access-control-allow-origin": allowed,
     "access-control-allow-methods": "GET, POST, OPTIONS",
@@ -76,70 +66,42 @@ function corsHeaders(origin: string | null): Record<string, string> {
   };
 }
 
-function json(
-  status: number,
-  body: unknown,
-  cors: Record<string, string>,
-): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...cors, "content-type": "application/json; charset=utf-8" },
-  });
+function json(status: number, body: unknown, cors: Record<string, string>): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...cors, "content-type": "application/json; charset=utf-8" } });
 }
 
 /** The aal claim of a token Supabase Auth has just verified. */
 function aalOf(token: string): string {
   try {
-    const payload = JSON.parse(
-      atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")),
-    ) as { aal?: string };
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as { aal?: string };
     return payload.aal ?? "aal1";
   } catch {
     return "aal1";
   }
 }
 
-type Resolved = { ok: true; actor: Actor; email: string; mfa: boolean } | {
-  ok: false;
-  status: number;
-  error: string;
-};
+type Resolved = { ok: true; actor: Actor; email: string; mfa: boolean } | { ok: false; status: number; error: string };
 
 async function resolvePerson(request: Request): Promise<Resolved> {
-  const token = (request.headers.get("authorization") ?? "").replace(
-    /^Bearer\s+/i,
-    "",
-  ).trim();
+  const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
   if (!token) return { ok: false, status: 401, error: "not_signed_in" };
   const asCaller = createClient(env("SUPABASE_URL"), env("SUPABASE_ANON_KEY"), {
     global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   const { data, error } = await asCaller.auth.getUser(token);
-  if (error || !data.user) {
-    return { ok: false, status: 401, error: "not_signed_in" };
-  }
+  if (error || !data.user) return { ok: false, status: 401, error: "not_signed_in" };
 
-  const { data: row, error: lookup } = await db.from("employees").select(
-    "id, name, email, role, permissions, active",
-  )
+  const { data: row, error: lookup } = await db.from("employees").select("id, name, email, role, permissions, active")
     .eq("auth_user_id", data.user.id).maybeSingle();
   if (lookup) {
     console.error(`office-api: employee lookup failed: ${lookup.message}`);
     return { ok: false, status: 500, error: "lookup_failed" };
   }
-  if (!row || !isRole(row.role) || !OFFICE_ROLES.includes(row.role)) {
-    return { ok: false, status: 403, error: "not_an_office_user" };
-  }
+  if (!row || !isRole(row.role) || !OFFICE_ROLES.includes(row.role)) return { ok: false, status: 403, error: "not_an_office_user" };
   if (!row.active) return { ok: false, status: 403, error: "switched_off" };
   const mfa = aalOf(token) === "aal2";
-  if (MFA_ROLES.includes(row.role) && !mfa) {
-    return { ok: false, status: 403, error: "mfa_required" };
-  }
+  if (MFA_ROLES.includes(row.role) && !mfa) return { ok: false, status: 403, error: "mfa_required" };
   return {
     ok: true,
     actor: {
@@ -165,12 +127,9 @@ function overLimit(employeeId: string): boolean {
 
 Deno.serve(async (request) => {
   const cors = corsHeaders(request.headers.get("origin"));
-  if (request.method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: cors });
-  }
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
 
-  const path = new URL(request.url).pathname.replace(/^.*?\/office-api/, "")
-    .replace(/\/$/, "");
+  const path = new URL(request.url).pathname.replace(/^.*?\/office-api/, "").replace(/\/$/, "");
   const person = await resolvePerson(request);
   if (!person.ok) return json(person.status, { error: person.error }, cors);
   const { actor } = person;
@@ -186,10 +145,7 @@ Deno.serve(async (request) => {
       mfa: person.mfa,
       mfa_required: MFA_ROLES.includes(actor.role),
       tools: TOOLS.filter((t) => canCall(actor, t.name)).map((t) => t.name),
-      map: {
-        package: use?.map ? "google" : "open",
-        places: use?.places ?? false,
-      },
+      map: { package: use?.map ? "google" : "open", places: use?.places ?? false },
     }, cors);
   }
 
@@ -205,22 +161,14 @@ Deno.serve(async (request) => {
     }, cors);
   }
 
-  const match = request.method === "POST"
-    ? path.match(/^\/tools\/([a-z_]+)$/)
-    : null;
+  const match = request.method === "POST" ? path.match(/^\/tools\/([a-z_]+)$/) : null;
   if (!match) return json(404, { error: "not_found" }, cors);
   const def = TOOLS.find((t) => t.name === match[1]);
   if (!def) return json(404, { error: "no_such_tool" }, cors);
   if (!canCall(actor, def.name)) {
-    return json(403, {
-      error: "forbidden",
-      role: actor.role,
-      needs: TOOL_PERMISSION[def.name] ?? [],
-    }, cors);
+    return json(403, { error: "forbidden", role: actor.role, needs: TOOL_PERMISSION[def.name] ?? [] }, cors);
   }
-  if (actor.employeeId && overLimit(actor.employeeId)) {
-    return json(429, { error: "too_many_calls" }, cors);
-  }
+  if (actor.employeeId && overLimit(actor.employeeId)) return json(429, { error: "too_many_calls" }, cors);
 
   let raw: unknown = {};
   const text = await request.text();
@@ -237,9 +185,7 @@ Deno.serve(async (request) => {
       400,
       {
         error: "bad_input",
-        issues: parsed.error.issues.map((
-          i: { path: PropertyKey[]; message: string },
-        ) => ({ path: i.path.join("."), message: i.message })),
+        issues: parsed.error.issues.map((i: { path: PropertyKey[]; message: string }) => ({ path: i.path.join("."), message: i.message })),
       },
       cors,
     );

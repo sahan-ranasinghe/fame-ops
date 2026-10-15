@@ -493,7 +493,7 @@ on the laptop, so it runs in Docker):
 ```bash
 docker run --rm --cpus 2 --memory 2g -v deno-cache:/deno-dir -v "$PWD/supabase/functions:/fn:ro" \
   -w /fn denoland/deno:alpine \
-  sh -c 'cd /fn/_shared/fleet && deno check index.ts && deno lint && deno fmt --check --ignore=database.types.ts && deno test \
+  sh -c 'cd /fn/_shared/fleet && deno check index.ts && deno lint && deno fmt --check && deno test \
          && cd /fn/office-mcp && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/office-api && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/read-odometer && deno check index.ts && deno lint && deno fmt --check \

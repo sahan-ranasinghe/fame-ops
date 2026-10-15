@@ -48,29 +48,15 @@ export interface PresetResult {
   repaired: { row: number; note: string }[];
 }
 
-export const PRESETS: Record<
-  Preset,
-  { label: string; operator: Operator; sheet: string; hint: string }
-> = {
+export const PRESETS: Record<Preset, { label: string; operator: Operator; sheet: string; hint: string }> = {
   dialog: {
     label: "Dialog site list",
     operator: "dialog",
     sheet: "All Operational Sites_DNS Data",
-    hint:
-      "Site ID, Other Site IDS, Site Name, New Region, District, Depot, Latitude, Longitude",
+    hint: "Site ID, Other Site IDS, Site Name, New Region, District, Depot, Latitude, Longitude",
   },
-  mobitel_4g: {
-    label: "Mobitel 4G-LTE",
-    operator: "mobitel",
-    sheet: "4G-LTE",
-    hint: "SiteName, Longitude, Latitude",
-  },
-  mobitel_ep: {
-    label: "Mobitel EP list",
-    operator: "mobitel",
-    sheet: "EP Issue",
-    hint: "Site ID, Lat. (N), Lon. (E)",
-  },
+  mobitel_4g: { label: "Mobitel 4G-LTE", operator: "mobitel", sheet: "4G-LTE", hint: "SiteName, Longitude, Latitude" },
+  mobitel_ep: { label: "Mobitel EP list", operator: "mobitel", sheet: "EP Issue", hint: "Site ID, Lat. (N), Lon. (E)" },
 };
 
 type Cells = Record<string, unknown>;
@@ -100,38 +86,25 @@ export function cellText(v: unknown): string {
 function cell(row: Cells, header: string): unknown {
   if (header in row) return row[header];
   const want = header.toLowerCase().replace(/\s+/g, "");
-  for (const [k, v] of Object.entries(row)) {
-    if (k.toLowerCase().replace(/\s+/g, "") === want) return v;
-  }
+  for (const [k, v] of Object.entries(row)) if (k.toLowerCase().replace(/\s+/g, "") === want) return v;
   return undefined;
 }
 
 /** A pin when both numbers parse and lie in Sri Lanka; swapped columns are put right (and said so). */
-function pinOf(
-  lat: unknown,
-  lng: unknown,
-): { lat: number; lng: number; note?: string } | null {
+function pinOf(lat: unknown, lng: unknown): { lat: number; lng: number; note?: string } | null {
   const a = cellNumber(lat);
   const b = cellNumber(lng);
   if (a === null || b === null) return null;
   if (inLanka(a, b)) {
-    const spaced = [lat, lng].some((v) =>
-      typeof v === "string" && /\d\s+\d|\.\s+\d/.test(v.trim())
-    );
-    return spaced
-      ? { lat: a, lng: b, note: "a space inside a coordinate removed" }
-      : { lat: a, lng: b };
+    const spaced = [lat, lng].some((v) => typeof v === "string" && /\d\s+\d|\.\s+\d/.test(v.trim()));
+    return spaced ? { lat: a, lng: b, note: "a space inside a coordinate removed" } : { lat: a, lng: b };
   }
-  return inLanka(b, a)
-    ? { lat: b, lng: a, note: "latitude and longitude were swapped" }
-    : null;
+  return inLanka(b, a) ? { lat: b, lng: a, note: "latitude and longitude were swapped" } : null;
 }
 
 /** Other site ids: split on , ; / and spaces, upper case, without the site's own id, no repeats. */
 export function splitIds(v: unknown, own?: string): string[] {
-  const ids = cellText(v).toUpperCase().split(/[,;/\s]+/).filter((x) =>
-    x && x !== own && x !== "-" && x !== "NA" && x !== "N/A"
-  );
+  const ids = cellText(v).toUpperCase().split(/[,;/\s]+/).filter((x) => x && x !== own && x !== "-" && x !== "NA" && x !== "N/A");
   return [...new Set(ids)];
 }
 
@@ -143,9 +116,7 @@ const round4 = (n: number) => Math.round(n * 1e4) / 1e4;
  * words that follow, each with a trailing digit group (and one letter after it) stripped, up to the first word
  * that is then empty, has 3 characters or fewer, or still contains a digit. "_" counts as a space.
  */
-export function parseMobitelName(
-  raw: unknown,
-): { code: string | null; name: string | null } {
+export function parseMobitelName(raw: unknown): { code: string | null; name: string | null } {
   const tokens = cellText(raw).replace(/_/g, " ").split(" ").filter(Boolean);
   if (tokens.length === 0) return { code: null, name: null };
   let code: string | null = null;
@@ -170,9 +141,7 @@ function mostFrequent(values: (string | null)[]): string | null {
   for (const v of values) if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
   let best: string | null = null;
   let n = 0;
-  for (const [v, c] of counts) {
-    if (c > n || (c === n && best !== null && v < best)) [best, n] = [v, c];
-  }
+  for (const [v, c] of counts) if (c > n || (c === n && best !== null && v < best)) [best, n] = [v, c];
   return best;
 }
 
@@ -184,51 +153,27 @@ function result(
   repaired: PresetResult["repaired"] = [],
 ): PresetResult {
   const withPin = rows.filter((r) => r.lat !== undefined).length;
-  return {
-    preset,
-    rows,
-    read,
-    with_pin: withPin,
-    no_pin: rows.length - withPin,
-    skipped,
-    repaired,
-  };
+  return { preset, rows, read, with_pin: withPin, no_pin: rows.length - withPin, skipped, repaired };
 }
 
 /** Dialog's operational site list: one row, one site (the built-in mapping on the engine below). */
 export function dialogRows(cells: Cells[]): PresetResult {
-  return {
-    ...mapTable(objectsToTable(cells), BUILT_IN.dialog.mapping),
-    preset: "dialog",
-  };
+  return { ...mapTable(objectsToTable(cells), BUILT_IN.dialog.mapping), preset: "dialog" };
 }
 
 /** Mobitel's 4G-LTE sector list: one place per coordinate at 4 decimals. */
 export function mobitel4gRows(cells: Cells[]): PresetResult {
-  const groups = new Map<
-    string,
-    {
-      lat: number;
-      lng: number;
-      codes: (string | null)[];
-      names: (string | null)[];
-      first: number;
-    }
-  >();
+  const groups = new Map<string, { lat: number; lng: number; codes: (string | null)[]; names: (string | null)[]; first: number }>();
   const skipped: PresetResult["skipped"] = [];
   const repaired: PresetResult["repaired"] = [];
   cells.forEach((c, i) => {
     const site = cellText(cell(c, "SiteName"));
     const pin = pinOf(cell(c, "Latitude"), cell(c, "Longitude"));
     if (!pin) {
-      if (
-        site || cellText(cell(c, "Latitude")) || cellText(cell(c, "Longitude"))
-      ) skipped.push({ row: i + 2, reason: "no coordinates" });
+      if (site || cellText(cell(c, "Latitude")) || cellText(cell(c, "Longitude"))) skipped.push({ row: i + 2, reason: "no coordinates" });
       return;
     }
-    if (pin.note) {
-      repaired.push({ row: i + 2, note: `${site || "row"}: ${pin.note}` });
-    }
+    if (pin.note) repaired.push({ row: i + 2, note: `${site || "row"}: ${pin.note}` });
     const lat = round4(pin.lat);
     const lng = round4(pin.lng);
     const key = `${lat},${lng}`;
@@ -240,10 +185,7 @@ export function mobitel4gRows(cells: Cells[]): PresetResult {
   });
   // A code belongs to one place: the place with the most rows carrying it keeps it, another place keyed by its coordinates.
   const ordered = [...groups.values()].sort((a, b) => a.first - b.first);
-  const claim = new Map<
-    string,
-    { size: number; place: (typeof ordered)[number] }
-  >();
+  const claim = new Map<string, { size: number; place: (typeof ordered)[number] }>();
   for (const g of ordered) {
     const code = mostFrequent(g.codes);
     if (!code) continue;
@@ -255,12 +197,7 @@ export function mobitel4gRows(cells: Cells[]): PresetResult {
     const code = mostFrequent(g.codes);
     const owns = code !== null && claim.get(code)?.place === g;
     const name = mostFrequent(g.names);
-    const row: SiteRow = {
-      operator: "mobitel",
-      name: name ?? code ?? `Mobitel ${g.lat}, ${g.lng}`,
-      lat: g.lat,
-      lng: g.lng,
-    };
+    const row: SiteRow = { operator: "mobitel", name: name ?? code ?? `Mobitel ${g.lat}, ${g.lng}`, lat: g.lat, lng: g.lng };
     if (owns) row.site_id = code!;
     return row;
   });
@@ -269,10 +206,7 @@ export function mobitel4gRows(cells: Cells[]): PresetResult {
 
 /** Mobitel's EP list: one id per row, attached on import to the Mobitel place within 100 m (the built-in mapping). */
 export function mobitelEpRows(cells: Cells[]): PresetResult {
-  return {
-    ...mapTable(objectsToTable(cells), BUILT_IN.mobitel_ep.mapping),
-    preset: "mobitel_ep",
-  };
+  return { ...mapTable(objectsToTable(cells), BUILT_IN.mobitel_ep.mapping), preset: "mobitel_ep" };
 }
 
 export function presetRows(preset: Preset, cells: Cells[]): PresetResult {
@@ -373,12 +307,7 @@ export const BUILT_IN: Record<Preset, { name: string; mapping: Mapping }> = {
       operator: "mobitel",
       require_id: true,
       attach_within_m: 100,
-      columns: {
-        site_id: "Site ID",
-        name: "Site ID",
-        lat: "Lat. (N)",
-        lng: "Lon. (E)",
-      },
+      columns: { site_id: "Site ID", name: "Site ID", lat: "Lat. (N)", lng: "Lon. (E)" },
     },
   },
 };
@@ -386,9 +315,7 @@ export const BUILT_IN: Record<Preset, { name: string; mapping: Mapping }> = {
 /** Rows of objects (sheet_to_json's default) as a table: the header row first. */
 export function objectsToTable(cells: Cells[]): unknown[][] {
   const header: string[] = [];
-  for (const c of cells) {
-    for (const k of Object.keys(c)) if (!header.includes(k)) header.push(k);
-  }
+  for (const c of cells) for (const k of Object.keys(c)) if (!header.includes(k)) header.push(k);
   return [header, ...cells.map((c) => header.map((h) => c[h] ?? null))];
 }
 
@@ -400,15 +327,10 @@ export function headersAt(table: unknown[][], headerRow: number): string[] {
 }
 
 /** The column index of a header (case and spaces forgiven), or -1. */
-export function columnIndex(
-  headers: string[],
-  header: string | undefined,
-): number {
+export function columnIndex(headers: string[], header: string | undefined): number {
   if (!header) return -1;
   const exact = headers.indexOf(header);
-  return exact >= 0
-    ? exact
-    : headers.findIndex((h) => norm(h) === norm(header));
+  return exact >= 0 ? exact : headers.findIndex((h) => norm(h) === norm(header));
 }
 
 /** "Dialog", "dialog gsm", "MOBITEL" → the operator; anything else → other. */
@@ -420,9 +342,7 @@ export function operatorOf(v: unknown): Operator {
 }
 
 /** "Office", "store", "Site" … → the kind, or null for anything else (the import then keeps "site"). */
-export function kindOf(
-  v: unknown,
-): "office" | "store" | "site" | "other" | null {
+export function kindOf(v: unknown): "office" | "store" | "site" | "other" | null {
   const t = cellText(v).toLowerCase();
   if (t === "office" || t === "head office" || t === "branch") return "office";
   if (t === "store" || t === "stores" || t === "warehouse") return "store";
@@ -433,9 +353,7 @@ export function kindOf(
 
 /** "6.9271, 79.8612" (also with ; or a space). */
 function pinText(v: unknown): [unknown, unknown] {
-  const m = cellText(v).match(
-    /^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$/,
-  );
+  const m = cellText(v).match(/^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$/);
   return m ? [m[1], m[2]] : [null, null];
 }
 
@@ -443,34 +361,20 @@ function pinText(v: unknown): [unknown, unknown] {
 export function mappingProblems(table: unknown[][], m: Mapping): string[] {
   const headers = headersAt(table, m.header_row);
   const out: string[] = [];
-  if (!headers.some(Boolean)) {
-    out.push(`Row ${m.header_row} has no column names.`);
-  }
+  if (!headers.some(Boolean)) out.push(`Row ${m.header_row} has no column names.`);
   if (!m.columns.name) out.push("Choose the column with the name.");
   for (const [field, header] of Object.entries(m.columns)) {
-    if (header && columnIndex(headers, header) < 0) {
-      out.push(`There is no column "${header}" (${field}).`);
-    }
+    if (header && columnIndex(headers, header) < 0) out.push(`There is no column "${header}" (${field}).`);
   }
   if ((m.columns.lat && !m.columns.lng) || (!m.columns.lat && m.columns.lng)) {
-    out.push(
-      'Choose both the latitude and the longitude column (or one "lat, lng" column).',
-    );
+    out.push('Choose both the latitude and the longitude column (or one "lat, lng" column).');
   }
   if (m.columns.latlng && (m.columns.lat || m.columns.lng)) {
-    out.push(
-      'Use either the latitude and longitude columns or one "lat, lng" column, not both.',
-    );
+    out.push('Use either the latitude and longitude columns or one "lat, lng" column, not both.');
   }
-  if (!m.operator && !m.columns.operator) {
-    out.push("Choose the operator: a column, or one value for every row.");
-  }
-  if (m.require_id && !m.columns.site_id) {
-    out.push("This list needs the site id column.");
-  }
-  if (m.attach_within_m && !m.columns.site_id) {
-    out.push("Attaching ids needs the site id column.");
-  }
+  if (!m.operator && !m.columns.operator) out.push("Choose the operator: a column, or one value for every row.");
+  if (m.require_id && !m.columns.site_id) out.push("This list needs the site id column.");
+  if (m.attach_within_m && !m.columns.site_id) out.push("Attaching ids needs the site id column.");
   return out;
 }
 
@@ -482,21 +386,12 @@ export function mappingProblems(table: unknown[][], m: Mapping): string[] {
 export function mapTable(table: unknown[][], m: Mapping): PresetResult {
   const headers = headersAt(table, m.header_row);
   const col = (f: Field) => columnIndex(headers, m.columns[f]);
-  const ix = Object.fromEntries(
-    (FIELDS.map((f) => f.key)).map((f) => [f, col(f)]),
-  ) as Record<Field, number>;
-  const at = (
-    row: unknown[],
-    f: Field,
-  ) => (ix[f] >= 0 ? row[ix[f]] : undefined);
+  const ix = Object.fromEntries((FIELDS.map((f) => f.key)).map((f) => [f, col(f)])) as Record<Field, number>;
+  const at = (row: unknown[], f: Field) => (ix[f] >= 0 ? row[ix[f]] : undefined);
   const body = table.slice(m.header_row);
   const firstRow = m.header_row + 1;
   if (m.special === "mobitel_4g") {
-    const cells = body.map((row) => ({
-      SiteName: at(row, "name"),
-      Latitude: at(row, "lat"),
-      Longitude: at(row, "lng"),
-    }));
+    const cells = body.map((row) => ({ SiteName: at(row, "name"), Latitude: at(row, "lat"), Longitude: at(row, "lng") }));
     const r = mobitel4gRows(cells);
     const shift = (n: number) => n - 2 + firstRow;
     return {
@@ -517,37 +412,16 @@ export function mapTable(table: unknown[][], m: Mapping): PresetResult {
     const id = cellText(at(row, "site_id")).toUpperCase();
     const name = cellText(at(row, "name")) || id;
     const label = id || name || `row ${n}`;
-    if (m.require_id && !id) {
-      return void skipped.push({
-        row: n,
-        reason: `no ${m.columns.site_id ?? "site id"}`,
-      });
-    }
+    if (m.require_id && !id) return void skipped.push({ row: n, reason: `no ${m.columns.site_id ?? "site id"}` });
     if (!name) return void skipped.push({ row: n, reason: "no name" });
-    if (id && seen.has(id)) {
-      return void skipped.push({ row: n, reason: `${id} appears twice` });
-    }
+    if (id && seen.has(id)) return void skipped.push({ row: n, reason: `${id} appears twice` });
     if (id) seen.add(id);
-    const [la, lo] = ix.latlng >= 0
-      ? pinText(at(row, "latlng"))
-      : [at(row, "lat"), at(row, "lng")];
+    const [la, lo] = ix.latlng >= 0 ? pinText(at(row, "latlng")) : [at(row, "lat"), at(row, "lng")];
     const hasNumbers = cellNumber(la) !== null && cellNumber(lo) !== null;
     const pin = pinOf(la, lo);
-    if (hasNumbers && !pin) {
-      return void skipped.push({
-        row: n,
-        reason: `${label}: outside Sri Lanka`,
-      });
-    }
-    if (!pin && m.attach_within_m) {
-      return void skipped.push({
-        row: n,
-        reason: `${label}: no usable coordinates`,
-      });
-    }
-    const operator = m.columns.operator
-      ? operatorOf(at(row, "operator"))
-      : (m.operator ?? "other");
+    if (hasNumbers && !pin) return void skipped.push({ row: n, reason: `${label}: outside Sri Lanka` });
+    if (!pin && m.attach_within_m) return void skipped.push({ row: n, reason: `${label}: no usable coordinates` });
+    const operator = m.columns.operator ? operatorOf(at(row, "operator")) : (m.operator ?? "other");
     const out: SiteRow = { operator, name };
     if (id) out.site_id = id;
     const others = splitIds(at(row, "other_ids"), id || undefined);
@@ -566,13 +440,5 @@ export function mapTable(table: unknown[][], m: Mapping): PresetResult {
     rows.push(out);
   });
   const withPin = rows.filter((r) => r.lat !== undefined).length;
-  return {
-    preset: "dialog",
-    rows,
-    read,
-    with_pin: withPin,
-    no_pin: rows.length - withPin,
-    skipped,
-    repaired,
-  };
+  return { preset: "dialog", rows, read, with_pin: withPin, no_pin: rows.length - withPin, skipped, repaired };
 }

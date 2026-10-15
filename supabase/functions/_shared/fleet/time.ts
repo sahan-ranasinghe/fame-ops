@@ -6,20 +6,7 @@ const OFFSET = "+05:30";
 const OFFSET_MS = 5.5 * 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const two = (n: number) => String(n).padStart(2, "0");
 
@@ -31,9 +18,7 @@ function wall(at: Date | string): Date {
 /** "2026-10-07" */
 export function colomboDate(at: Date | string): string {
   const d = wall(at);
-  return `${d.getUTCFullYear()}-${two(d.getUTCMonth() + 1)}-${
-    two(d.getUTCDate())
-  }`;
+  return `${d.getUTCFullYear()}-${two(d.getUTCMonth() + 1)}-${two(d.getUTCDate())}`;
 }
 
 /** "07:06" */
@@ -76,16 +61,12 @@ export function isRealDate(date: string): boolean {
 }
 
 export function addDays(date: string, days: number): string {
-  return new Date(new Date(`${date}T00:00:00Z`).getTime() + days * DAY_MS)
-    .toISOString().slice(0, 10);
+  return new Date(new Date(`${date}T00:00:00Z`).getTime() + days * DAY_MS).toISOString().slice(0, 10);
 }
 
 /** Whole days from one plain date to another (negative when `to` is earlier). */
 export function daysBetween(from: string, to: string): number {
-  return Math.round(
-    (new Date(`${to}T00:00:00Z`).getTime() -
-      new Date(`${from}T00:00:00Z`).getTime()) / DAY_MS,
-  );
+  return Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / DAY_MS);
 }
 
 /** The UTC range [from, to) covering one Colombo day. */
@@ -94,9 +75,7 @@ export function dayRange(date: string): { from: string; to: string } {
 }
 
 /** The UTC range [from, to) covering one Colombo month, given "YYYY-MM". */
-export function monthRange(
-  month: string,
-): { from: string; to: string; firstDay: string } {
+export function monthRange(month: string): { from: string; to: string; firstDay: string } {
   const [year, m] = month.split("-").map(Number);
   const firstDay = `${month}-01`;
   const next = m === 12 ? `${year + 1}-01-01` : `${year}-${two(m + 1)}-01`;
@@ -104,10 +83,7 @@ export function monthRange(
 }
 
 export function minutesSince(at: string, now: Date): number {
-  return Math.max(
-    0,
-    Math.floor((now.getTime() - new Date(at).getTime()) / 60000),
-  );
+  return Math.max(0, Math.floor((now.getTime() - new Date(at).getTime()) / 60000));
 }
 
 /** "2 min", "3 h", "4 d" */

@@ -6,99 +6,61 @@ import type { Db, Row } from "../db.ts";
 import { ToolError, unwrap } from "../db.ts";
 import { tool, zText } from "../tool.ts";
 
-type Project = Pick<
-  Row<"projects">,
-  "id" | "job_no" | "short_name" | "name" | "customer_name" | "status"
->;
+type Project = Pick<Row<"projects">, "id" | "job_no" | "short_name" | "name" | "customer_name" | "status">;
 const COLUMNS = "id, job_no, short_name, name, customer_name, status";
 
 export type MatchRule = "name" | "short_name" | "job_no" | "contains" | "none";
 
 /** LIKE treats % and _ as wildcards; project names are full of underscores. */
-const likeLiteral = (text: string) =>
-  text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+const likeLiteral = (text: string) => text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 
 /**
  * Finds projects the way the Allowance Desk does (its doc, section 7.2), in order:
  * 1. the full project name, 2. the part after the first "_" (the DU ID / short name),
  * 3. the part before the first "_" (the job number), 4. names containing the text.
  */
-export async function matchProjects(
-  db: Db,
-  typed: string,
-): Promise<{ rule: MatchRule; projects: Project[] }> {
+export async function matchProjects(db: Db, typed: string): Promise<{ rule: MatchRule; projects: Project[] }> {
   const text = typed.trim();
   const lower = text.toLowerCase();
   if (text === "") return { rule: "none", projects: [] };
 
-  const byName = unwrap(
-    await db.from("projects").select(COLUMNS).ilike("name", likeLiteral(text))
-      .limit(50),
-    "projects",
-  )
+  const byName = unwrap(await db.from("projects").select(COLUMNS).ilike("name", likeLiteral(text)).limit(50), "projects")
     .filter((p) => p.name.toLowerCase() === lower);
   if (byName.length > 0) return { rule: "name", projects: byName };
 
-  const byShort = unwrap(
-    await db.from("projects").select(COLUMNS).ilike(
-      "short_name",
-      likeLiteral(text),
-    ).limit(50),
-    "projects",
-  )
+  const byShort = unwrap(await db.from("projects").select(COLUMNS).ilike("short_name", likeLiteral(text)).limit(50), "projects")
     .filter((p) => p.short_name?.toLowerCase() === lower);
   if (byShort.length > 0) return { rule: "short_name", projects: byShort };
 
-  const byJob = unwrap(
-    await db.from("projects").select(COLUMNS).eq("job_no", text).limit(50),
-    "projects",
-  );
+  const byJob = unwrap(await db.from("projects").select(COLUMNS).eq("job_no", text).limit(50), "projects");
   if (byJob.length > 0) return { rule: "job_no", projects: byJob };
 
   const containing = unwrap(
-    await db.from("projects").select(COLUMNS).ilike(
-      "name",
-      `%${likeLiteral(text)}%`,
-    ).order("name").limit(25),
+    await db.from("projects").select(COLUMNS).ilike("name", `%${likeLiteral(text)}%`).order("name").limit(25),
     "projects",
   );
-  return {
-    rule: containing.length > 0 ? "contains" : "none",
-    projects: containing,
-  };
+  return { rule: containing.length > 0 ? "contains" : "none", projects: containing };
 }
 
-const projectLine = (p: Project) =>
-  `${p.job_no ?? "-"} ${p.short_name ?? p.name} (${
-    p.customer_name ?? "no customer"
-  })`;
+const projectLine = (p: Project) => `${p.job_no ?? "-"} ${p.short_name ?? p.name} (${p.customer_name ?? "no customer"})`;
 
 /** Exactly one project for the text, or an error that lists the candidates. */
 export async function findOneProject(db: Db, typed: string): Promise<Project> {
   const { projects } = await matchProjects(db, typed);
   if (projects.length === 1) return projects[0];
   if (projects.length === 0) {
-    throw new ToolError(
-      `No project matches "${typed}". Try find_project, or import the project from Zoho Books first.`,
-    );
+    throw new ToolError(`No project matches "${typed}". Try find_project, or import the project from Zoho Books first.`);
   }
   throw new ToolError(
-    `Several projects match "${typed}": ${
-      projects.slice(0, 8).map(projectLine).join("; ")
-    }. Give the job number or full name.`,
+    `Several projects match "${typed}": ${projects.slice(0, 8).map(projectLine).join("; ")}. Give the job number or full name.`,
   );
 }
 
 /** "13021_TRKAN1" -> job 13021, short name TRKAN1. */
-function splitName(
-  name: string,
-): { job_no: string | null; short_name: string | null } {
+function splitName(name: string): { job_no: string | null; short_name: string | null } {
   const at = name.indexOf("_");
   if (at <= 0) return { job_no: null, short_name: null };
-  return {
-    job_no: name.slice(0, at).trim() || null,
-    short_name: name.slice(at + 1).trim() || null,
-  };
+  return { job_no: name.slice(0, at).trim() || null, short_name: name.slice(at + 1).trim() || null };
 }
 
 const zZohoId = z.string().trim().min(1).max(40);
@@ -131,16 +93,11 @@ export const importProjects = tool({
       status: p.status ?? null,
     }));
     const saved = unwrap(
-      await db.from("projects").upsert(rows, { onConflict: "zoho_project_id" })
-        .select("id"),
+      await db.from("projects").upsert(rows, { onConflict: "zoho_project_id" }).select("id"),
       "projects",
     );
     return {
-      result: {
-        received: projects.length,
-        saved: saved.length,
-        duplicates_in_batch: projects.length - rows.length,
-      },
+      result: { received: projects.length, saved: saved.length, duplicates_in_batch: projects.length - rows.length },
       summary: `imported ${saved.length} projects`,
     };
   },
@@ -149,8 +106,7 @@ export const importProjects = tool({
 export const findProject = tool({
   name: "find_project",
   title: "Find project",
-  description:
-    "Looks up a project by full name, short name (DU ID, e.g. TRKAN1), job number (e.g. 13021) or part of the name. " +
+  description: "Looks up a project by full name, short name (DU ID, e.g. TRKAN1), job number (e.g. 13021) or part of the name. " +
     "Shows which rule matched and up to 25 candidates.",
   readOnly: true,
   input: z.object({ text: zText(200) }),
@@ -160,9 +116,7 @@ export const findProject = tool({
       result: {
         matched_by: rule,
         count: projects.length,
-        note: projects.length > 1
-          ? "Several projects match. Pick one."
-          : undefined,
+        note: projects.length > 1 ? "Several projects match. Pick one." : undefined,
         projects: projects.map(({ id: _id, ...shown }) => shown),
       },
       summary: `${projects.length} projects for "${text}" (${rule})`,

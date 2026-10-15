@@ -2,15 +2,7 @@
 // the status machine, the version check. Pure.
 import { assertEquals, assertThrows } from "@std/assert";
 import { ToolError } from "./db.ts";
-import {
-  canRedecide,
-  checkVersion,
-  diffText,
-  requestDiff,
-  type RequestFields,
-  snapshot,
-  statusAfterEdit,
-} from "./requests_rules.ts";
+import { canRedecide, checkVersion, diffText, requestDiff, type RequestFields, snapshot, statusAfterEdit } from "./requests_rules.ts";
 
 const base: RequestFields = {
   needed_at: "2026-10-15T03:30:00.000Z", // Thu 15 Oct 09:00 Colombo
@@ -53,19 +45,11 @@ Deno.test("nothing changed: an empty diff; a back-by on another day shows its da
   assertEquals(requestDiff(base, { ...base }), {});
   const d = requestDiff(base, { ...base, back_by: "2026-10-16T03:30:00.000Z" });
   assertEquals(d["back by"], { from: "12:00", to: "Fri 16 Oct 09:00" });
-  assertEquals(requestDiff(base, { ...base, need_type: "car" }).vehicle, {
-    from: "Van",
-    to: "Car",
-  });
+  assertEquals(requestDiff(base, { ...base, need_type: "car" }).vehicle, { from: "Van", to: "Car" });
 });
 
 Deno.test("the snapshot keeps only the editable fields", () => {
-  const row = {
-    ...base,
-    id: "x",
-    status: "waiting",
-    extra: 1,
-  } as unknown as RequestFields;
+  const row = { ...base, id: "x", status: "waiting", extra: 1 } as unknown as RequestFields;
   assertEquals(Object.keys(snapshot(row)).sort(), [
     "back_by",
     "driver_required",
@@ -80,21 +64,9 @@ Deno.test("the snapshot keeps only the editable fields", () => {
 });
 
 Deno.test("an edit keeps a waiting request waiting; an approved one becomes changed and needs re-approval", () => {
-  assertEquals(statusAfterEdit("waiting"), {
-    status: "waiting",
-    event: "edited",
-    needs_reapproval: false,
-  });
-  assertEquals(statusAfterEdit("approved"), {
-    status: "changed",
-    event: "changed",
-    needs_reapproval: true,
-  });
-  assertEquals(statusAfterEdit("changed"), {
-    status: "changed",
-    event: "edited",
-    needs_reapproval: true,
-  });
+  assertEquals(statusAfterEdit("waiting"), { status: "waiting", event: "edited", needs_reapproval: false });
+  assertEquals(statusAfterEdit("approved"), { status: "changed", event: "changed", needs_reapproval: true });
+  assertEquals(statusAfterEdit("changed"), { status: "changed", event: "edited", needs_reapproval: true });
   assertThrows(() => statusAfterEdit("declined"), ToolError, "declined");
   assertThrows(() => statusAfterEdit("cancelled"), ToolError, "cancelled");
 });
@@ -108,9 +80,5 @@ Deno.test("redecide works on approved and changed requests only", () => {
   canRedecide("approved");
   canRedecide("changed");
   assertThrows(() => canRedecide("waiting"), ToolError, "decide_request");
-  assertThrows(
-    () => canRedecide("declined"),
-    ToolError,
-    "nothing to decide again",
-  );
+  assertThrows(() => canRedecide("declined"), ToolError, "nothing to decide again");
 });

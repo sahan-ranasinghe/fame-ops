@@ -20,25 +20,14 @@ export interface ToolOutcome {
   auditId?: number;
 }
 
-const messageOf = (
-  error: unknown,
-) => (error instanceof Error ? error.message : String(error));
+const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** Runs one tool call. Arguments are never written to the function log (they can hold a PIN). */
-export async function runTool(
-  db: Db,
-  def: AnyTool,
-  args: unknown,
-  actor: Actor,
-): Promise<ToolOutcome> {
+export async function runTool(db: Db, def: AnyTool, args: unknown, actor: Actor): Promise<ToolOutcome> {
   if (!canCall(actor, def.name)) {
-    const needs = (TOOL_PERMISSION[def.name] ?? []).map((p) =>
-      PERMISSION_TEXT[p].label
-    ).join(" or ");
+    const needs = (TOOL_PERMISSION[def.name] ?? []).map((p) => PERMISSION_TEXT[p].label).join(" or ");
     return {
-      text: `Your account cannot use ${def.name}${
-        needs ? ` (it needs the ${needs} permission)` : ""
-      }. Ask an admin for access.`,
+      text: `Your account cannot use ${def.name}${needs ? ` (it needs the ${needs} permission)` : ""}. Ask an admin for access.`,
       kind: "forbidden",
     };
   }
@@ -48,11 +37,7 @@ export async function runTool(
     auditId = await auditStart(db, def.name, args, actor);
   } catch (error) {
     console.error(`${def.name}: audit log failed: ${messageOf(error)}`);
-    return {
-      text:
-        "The audit log could not be written, so nothing was done. Please try again.",
-      kind: "error",
-    };
+    return { text: "The audit log could not be written, so nothing was done. Please try again.", kind: "error" };
   }
 
   try {
@@ -67,8 +52,7 @@ export async function runTool(
     console.error(`${def.name} (audit #${auditId}): ${messageOf(error)}`);
     await auditFinish(db, auditId, `error: ${messageOf(error)}`);
     return {
-      text:
-        `Something went wrong inside the connector (audit #${auditId}). Check the current state before trying again.`,
+      text: `Something went wrong inside the connector (audit #${auditId}). Check the current state before trying again.`,
       kind: "error",
       auditId,
     };

@@ -1,13 +1,7 @@
 // The map search (Part 4): openrouteservice's answer, the 30-day cache, the daily cap; a fake fetch and a fake database.
 import { assert, assertEquals } from "@std/assert";
 import type { Db } from "./db.ts";
-import {
-  BUSY_NOTE,
-  LIMIT_NOTE,
-  normaliseQuery,
-  orsAutocomplete,
-  orsPlaces,
-} from "./geocode.ts";
+import { BUSY_NOTE, LIMIT_NOTE, normaliseQuery, orsAutocomplete, orsPlaces } from "./geocode.ts";
 
 const ANSWER = {
   features: [
@@ -22,12 +16,7 @@ const ANSWER = {
     },
     {
       geometry: { coordinates: [80.64, 7.29] },
-      properties: {
-        gid: "whosonfirst:locality:1",
-        name: "Kandy",
-        label: "Kandy, Central Province",
-        source: "whosonfirst",
-      },
+      properties: { gid: "whosonfirst:locality:1", name: "Kandy", label: "Kandy, Central Province", source: "whosonfirst" },
     },
     { geometry: { coordinates: [] }, properties: { name: "no point" } },
   ],
@@ -54,10 +43,7 @@ function fakeDb(calls = 0) {
         return Promise.resolve({ data: { calls: state.calls }, error: null });
       },
       upsert: (row: { query: string; answer: unknown; fetched_at: string }) => {
-        cache.set(row.query, {
-          answer: row.answer,
-          fetched_at: row.fetched_at,
-        });
+        cache.set(row.query, { answer: row.answer, fetched_at: row.fetched_at });
         return Promise.resolve({ error: null });
       },
     };
@@ -67,9 +53,7 @@ function fakeDb(calls = 0) {
   const db = {
     from: chain,
     rpc: (name: string) => {
-      if (name === "bump_minute_calls") {
-        return Promise.resolve({ data: ++minutes.n, error: null });
-      }
+      if (name === "bump_minute_calls") return Promise.resolve({ data: ++minutes.n, error: null });
       state.bumped += 1;
       state.calls += 1;
       return Promise.resolve({ error: null });
@@ -99,10 +83,7 @@ Deno.test("one counted call, then the cache for the same text in any spelling; t
   const { db, state } = fakeDb();
   const seen: { url: string; auth: string | null }[] = [];
   const fetcher = ((url: URL, init: RequestInit) => {
-    seen.push({
-      url: String(url),
-      auth: new Headers(init.headers).get("authorization"),
-    });
+    seen.push({ url: String(url), auth: new Headers(init.headers).get("authorization") });
     return Promise.resolve(Response.json(ANSWER));
   }) as unknown as typeof fetch;
   const deps = {
@@ -118,86 +99,34 @@ Deno.test("one counted call, then the cache for the same text in any spelling; t
   assertEquals(first.places.length, 2);
   assertEquals(state.bumped, 1);
   assert(
-    seen[0].url.startsWith("https://api.heigit.org/pelias/v1/autocomplete?") &&
-      seen[0].url.includes("boundary.country=LK") &&
-      seen[0].url.includes("size=8") &&
-      seen[0].url.includes("focus.point.lat=6.97") &&
-      !seen[0].url.includes("KEY"),
+    seen[0].url.startsWith("https://api.heigit.org/pelias/v1/autocomplete?") && seen[0].url.includes("boundary.country=LK") &&
+      seen[0].url.includes("size=8") && seen[0].url.includes("focus.point.lat=6.97") && !seen[0].url.includes("KEY"),
   );
   assertEquals(seen[0].auth, "KEY");
   const again = await orsAutocomplete("  kandy,  CITY ", deps);
-  assertEquals([again.cached, again.places.length, state.bumped, seen.length], [
-    true,
-    2,
-    1,
-    1,
-  ]);
+  assertEquals([again.cached, again.places.length, state.bumped, seen.length], [true, 2, 1, 1]);
 });
 
 Deno.test("the daily cap: no call, the note; under 3 characters: nothing; no key: said so", async () => {
   const { db } = fakeDb(1000);
-  const never = (() =>
-    Promise.reject(
-      new Error("must not be called"),
-    )) as unknown as typeof fetch;
-  const deps = {
-    db,
-    key: "KEY",
-    cap: 1000,
-    perMinute: 90,
-    focus: null,
-    now: new Date(),
-    fetch: never,
-  };
-  assertEquals(await orsAutocomplete("Galle Face", deps), {
-    places: [],
-    note: LIMIT_NOTE,
-  });
+  const never = (() => Promise.reject(new Error("must not be called"))) as unknown as typeof fetch;
+  const deps = { db, key: "KEY", cap: 1000, perMinute: 90, focus: null, now: new Date(), fetch: never };
+  assertEquals(await orsAutocomplete("Galle Face", deps), { places: [], note: LIMIT_NOTE });
   assertEquals(await orsAutocomplete("Ga", deps), { places: [] });
-  assertEquals(
-    (await orsAutocomplete("Galle Face", { ...deps, key: undefined })).note,
-    "Map search is not set up",
-  );
+  assertEquals((await orsAutocomplete("Galle Face", { ...deps, key: undefined })).note, "Map search is not set up");
 });
 
 Deno.test("a refused or slow answer is counted as an error and said in words; nothing cached", async () => {
   const { db, state, cache } = fakeDb();
-  const busy = (() =>
-    Promise.resolve(
-      new Response("{}", { status: 429 }),
-    )) as unknown as typeof fetch;
-  const r = await orsAutocomplete("Matara", {
-    db,
-    key: "KEY",
-    cap: 1000,
-    perMinute: 90,
-    focus: null,
-    now: new Date(),
-    fetch: busy,
-  });
-  assertEquals([r.places.length, r.note, state.bumped, cache.size], [
-    0,
-    "Map search is busy, try again in a minute",
-    1,
-    0,
-  ]);
+  const busy = (() => Promise.resolve(new Response("{}", { status: 429 }))) as unknown as typeof fetch;
+  const r = await orsAutocomplete("Matara", { db, key: "KEY", cap: 1000, perMinute: 90, focus: null, now: new Date(), fetch: busy });
+  assertEquals([r.places.length, r.note, state.bumped, cache.size], [0, "Map search is busy, try again in a minute", 1, 0]);
 });
 
 Deno.test("the throttle: over the calls a minute, no call and the busy note", async () => {
   const { db, minutes } = fakeDb();
   minutes.n = 90; // 90 calls already this minute
-  const never = (() =>
-    Promise.reject(
-      new Error("must not be called"),
-    )) as unknown as typeof fetch;
-  const r = await orsAutocomplete("Galle Face", {
-    db,
-    key: "KEY",
-    cap: 2500,
-    perMinute: 90,
-    focus: null,
-    now: new Date(),
-    fetch: never,
-  });
+  const never = (() => Promise.reject(new Error("must not be called"))) as unknown as typeof fetch;
+  const r = await orsAutocomplete("Galle Face", { db, key: "KEY", cap: 2500, perMinute: 90, focus: null, now: new Date(), fetch: never });
   assertEquals(r, { places: [], note: BUSY_NOTE });
 });

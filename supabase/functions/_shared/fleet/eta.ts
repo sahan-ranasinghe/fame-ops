@@ -10,13 +10,7 @@
 import type { Db, Row } from "./db.ts";
 import { unwrap, unwrapMaybe } from "./db.ts";
 import { googleUse } from "./google.ts";
-import {
-  dwellFor,
-  type LegFn,
-  type PlanPoint,
-  type StopType,
-  type What,
-} from "./plan.ts";
+import { dwellFor, type LegFn, type PlanPoint, type StopType, type What } from "./plan.ts";
 import { googleLegs, legMinutes, memoLegFn } from "./routing.ts";
 import type { Settings } from "./settings.ts";
 
@@ -33,76 +27,35 @@ export interface Eta {
   computed_at: string;
 }
 
-type Task = Pick<
-  Row<"tasks">,
-  "id" | "status" | "return_to_base" | "avoid_expressway"
->;
-type Stop = Pick<
-  Row<"task_stops">,
-  "seq" | "type" | "what" | "status" | "lat" | "lng" | "dwell_min" | "arrive_by"
->;
-type Latest =
-  | Pick<Row<"driver_latest">, "lat" | "lng" | "recorded_at">
-  | undefined;
+type Task = Pick<Row<"tasks">, "id" | "status" | "return_to_base" | "avoid_expressway">;
+type Stop = Pick<Row<"task_stops">, "seq" | "type" | "what" | "status" | "lat" | "lng" | "dwell_min" | "arrive_by">;
+type Latest = Pick<Row<"driver_latest">, "lat" | "lng" | "recorded_at"> | undefined;
 
-const addMin = (iso: string, minutes: number) =>
-  new Date(new Date(iso).getTime() + minutes * 60000).toISOString();
+const addMin = (iso: string, minutes: number) => new Date(new Date(iso).getTime() + minutes * 60000).toISOString();
 
 /** The base place's pin, when a base is set and has one. */
-export async function basePoint(
-  db: Db,
-  settings: Settings,
-): Promise<{ id: string; name: string; point: PlanPoint | null } | null> {
+export async function basePoint(db: Db, settings: Settings): Promise<{ id: string; name: string; point: PlanPoint | null } | null> {
   if (!settings.base_place_id) return null;
   const place = unwrapMaybe(
-    await db.from("places").select("id, name, lat, lng").eq(
-      "id",
-      settings.base_place_id,
-    ).maybeSingle(),
+    await db.from("places").select("id, name, lat, lng").eq("id", settings.base_place_id).maybeSingle(),
     "base place",
   );
   if (!place) return null;
-  return {
-    id: place.id,
-    name: place.name,
-    point: place.lat != null && place.lng != null
-      ? { lat: place.lat, lng: place.lng }
-      : null,
-  };
+  return { id: place.id, name: place.name, point: place.lat != null && place.lng != null ? { lat: place.lat, lng: place.lng } : null };
 }
 
 /**
  * The ETA of a running task, or null when there is nothing to say (not running,
  * no position, no open stop). Reads the cache first.
  */
-export async function taskEta(
-  db: Db,
-  task: Task,
-  stops: Stop[],
-  latest: Latest,
-  settings: Settings,
-  now: Date,
-): Promise<Eta | null> {
-  if (
-    task.status !== "in_progress" || !latest || latest.lat == null ||
-    latest.lng == null
-  ) return null;
-  const open = stops.filter((s) =>
-    s.status === "pending" || s.status === "arrived"
-  ).sort((a, b) => a.seq - b.seq);
+export async function taskEta(db: Db, task: Task, stops: Stop[], latest: Latest, settings: Settings, now: Date): Promise<Eta | null> {
+  if (task.status !== "in_progress" || !latest || latest.lat == null || latest.lng == null) return null;
+  const open = stops.filter((s) => s.status === "pending" || s.status === "arrived").sort((a, b) => a.seq - b.seq);
   if (open.length === 0) return null;
 
-  const cached = unwrapMaybe(
-    await db.from("task_eta").select("*").eq("task_id", task.id).maybeSingle(),
-    "task eta",
-  );
-  const age = cached
-    ? now.getTime() - new Date(cached.computed_at).getTime()
-    : Infinity;
-  if (
-    cached &&
-    (age < ETA_CACHE_MS || (cached.source === "google" && age < GOOGLE_ETA_MS))
-  ) {
+  const cached = unwrapMaybe(await db.from("task_eta").select("*").eq("task_id", task.id).maybeSingle(), "task eta");
+  const age = cached ? now.getTime() - new Date(cached.computed_at).getTime() : Infinity;
+  if (cached && (age < ETA_CACHE_MS || (cached.source === "google" && age < GOOGLE_ETA_MS))) {
     return {
       next_seq: cached.next_seq,
       next_eta_at: cached.next_eta_at,
@@ -120,14 +73,11 @@ export async function taskEta(
   const sources = new Set<string>();
   const opts = { avoid_expressway: task.avoid_expressway };
   const base = task.return_to_base ? await basePoint(db, settings) : null;
-  let legFn: LegFn = (from, to, departAt, o) =>
-    legMinutes(db, from, to, departAt, o, settings);
+  let legFn: LegFn = (from, to, departAt, o) => legMinutes(db, from, to, departAt, o, settings);
   if (googleUse(settings).routes) {
     const points: PlanPoint[] = [prev];
     for (const stop of open) {
-      if (stop.status !== "arrived" && stop.lat != null && stop.lng != null) {
-        points.push({ lat: stop.lat, lng: stop.lng });
-      }
+      if (stop.status !== "arrived" && stop.lat != null && stop.lng != null) points.push({ lat: stop.lat, lng: stop.lng });
     }
     if (base?.point) points.push(base.point);
     if (points.length >= 2) {
@@ -136,12 +86,7 @@ export async function taskEta(
     }
   }
   for (const stop of open) {
-    const dwell = dwellFor(
-      settings,
-      stop.type as StopType,
-      stop.what as What | null,
-      stop.dwell_min,
-    );
+    const dwell = dwellFor(settings, stop.type as StopType, stop.what as What | null, stop.dwell_min);
     let arrive = at;
     if (stop.status !== "arrived" && stop.lat != null && stop.lng != null) {
       const leg = await legFn(prev, { lat: stop.lat, lng: stop.lng }, at, opts);
@@ -150,19 +95,8 @@ export async function taskEta(
       prev = { lat: stop.lat, lng: stop.lng };
     }
     if (nextEta === null) nextEta = arrive;
-    if (stop.arrive_by) {
-      late = Math.max(
-        late,
-        Math.round(
-          (new Date(arrive).getTime() - new Date(stop.arrive_by).getTime()) /
-            60000,
-        ),
-      );
-    }
-    at = addMin(
-      arrive,
-      stop.status === "arrived" ? Math.round(dwell / 2) : dwell,
-    );
+    if (stop.arrive_by) late = Math.max(late, Math.round((new Date(arrive).getTime() - new Date(stop.arrive_by).getTime()) / 60000));
+    at = addMin(arrive, stop.status === "arrived" ? Math.round(dwell / 2) : dwell);
   }
   if (task.return_to_base) {
     if (base?.point) {
@@ -176,9 +110,7 @@ export async function taskEta(
     next_eta_at: nextEta,
     final_eta_at: at,
     late_min: late,
-    source: sources.has("google")
-      ? "google"
-      : [...sources].join("+") || "estimate",
+    source: sources.has("google") ? "google" : [...sources].join("+") || "estimate",
     computed_at: now.toISOString(),
   };
   unwrap(

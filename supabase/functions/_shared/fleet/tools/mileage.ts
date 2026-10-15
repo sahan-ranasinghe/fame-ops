@@ -2,15 +2,7 @@
 
 import { z } from "zod";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
-import {
-  describeGap,
-  findDriver,
-  findVehicle,
-  gapPlaces,
-  loadGaps,
-  loadRefs,
-  odometerCheck,
-} from "../fleet.ts";
+import { describeGap, findDriver, findVehicle, gapPlaces, loadGaps, loadRefs, odometerCheck } from "../fleet.ts";
 import { centsToLkr, contactLinks } from "../format.ts";
 import { syncIssues } from "../issues.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
@@ -23,8 +15,7 @@ const UNLOGGED_KM = 2;
 export const mileageSummary = tool({
   name: "mileage_summary",
   title: "Mileage and fuel for a month",
-  description:
-    "Per vehicle for one month: completed tasks and their km, km by odometer against the allowance, fuel in litres and LKR, " +
+  description: "Per vehicle for one month: completed tasks and their km, km by odometer against the allowance, fuel in litres and LKR, " +
     '"unlogged km" flags (a task started with an odometer more than 2 km away from the last logged reading), and check_odometer: ' +
     "readings the office should look at (number changed after the photo was read, typed because the photo could not be read, " +
     "typed with no connection and the photo disagrees or is not checked yet), with photo links. " +
@@ -44,27 +35,18 @@ export const mileageSummary = tool({
     const refs = await loadRefs(db);
     const onlyVehicle = vehicle ? findVehicle(refs, vehicle) : null;
     const onlyDriver = driver ? findDriver(refs, driver) : null;
-    const vehicleIds = onlyVehicle
-      ? [onlyVehicle.id]
-      : refs.vehicles.map((v) => v.id);
+    const vehicleIds = onlyVehicle ? [onlyVehicle.id] : refs.vehicles.map((v) => v.id);
 
     const [tasks, fuel, logs, before] = await Promise.all([
       fetchAll((a, b) => {
-        let q = db.from("tasks").select(
-          "id, title, vehicle_id, employee_id, km, completed_at",
-        )
-          .eq("status", "completed").gte("completed_at", from).lt(
-            "completed_at",
-            to,
-          );
+        let q = db.from("tasks").select("id, title, vehicle_id, employee_id, km, completed_at")
+          .eq("status", "completed").gte("completed_at", from).lt("completed_at", to);
         if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
         if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
         return q.order("completed_at").order("id").range(a, b);
       }, "tasks"),
       fetchAll((a, b) => {
-        let q = db.from("fuel_logs").select(
-          "id, vehicle_id, employee_id, litres, amount_cents, video_status",
-        )
+        let q = db.from("fuel_logs").select("id, vehicle_id, employee_id, litres, amount_cents, video_status")
           .gte("logged_at", from).lt("logged_at", to);
         if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
         if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
@@ -77,18 +59,12 @@ export const mileageSummary = tool({
           db.from("odometer_logs").select(
             "id, vehicle_id, employee_id, task_id, kind, reading_km, logged_at, entry, ai_value, ai_status, ai_checked_at, flag, photo_id",
           )
-            .in("vehicle_id", vehicleIds).gte("logged_at", from).lt(
-              "logged_at",
-              to,
-            )
+            .in("vehicle_id", vehicleIds).gte("logged_at", from).lt("logged_at", to)
             .order("logged_at").order("id").range(a, b), "odometer logs")
         : [],
       Promise.all(vehicleIds.map(async (id) => {
         const rows = unwrap(
-          await db.from("odometer_logs").select("reading_km").eq(
-            "vehicle_id",
-            id,
-          ).lt("logged_at", from)
+          await db.from("odometer_logs").select("reading_km").eq("vehicle_id", id).lt("logged_at", from)
             .order("logged_at", { ascending: false }).limit(1),
           "odometer logs",
         );
@@ -104,10 +80,7 @@ export const mileageSummary = tool({
     for (const log of logs) {
       const prev = previous.get(log.vehicle_id) ?? null;
       const gap = prev === null ? 0 : log.reading_km - prev;
-      if (
-        log.kind === "task_start" && Math.abs(gap) > UNLOGGED_KM &&
-        (!onlyDriver || log.employee_id === onlyDriver.id)
-      ) {
+      if (log.kind === "task_start" && Math.abs(gap) > UNLOGGED_KM && (!onlyDriver || log.employee_id === onlyDriver.id)) {
         flags.push({
           at: colomboDateTime(log.logged_at),
           vehicle: refs.veh.get(log.vehicle_id)?.reg_no,
@@ -119,9 +92,7 @@ export const mileageSummary = tool({
           unlogged_km: gap,
         });
       }
-      if (!firstReading.has(log.vehicle_id)) {
-        firstReading.set(log.vehicle_id, log.reading_km);
-      }
+      if (!firstReading.has(log.vehicle_id)) firstReading.set(log.vehicle_id, log.reading_km);
       lastReading.set(log.vehicle_id, log.reading_km);
       previous.set(log.vehicle_id, log.reading_km);
     }
@@ -129,30 +100,16 @@ export const mileageSummary = tool({
 
     // Km nobody drove inside a task: between one reading and the next.
     const allGaps = await loadGaps(db, vehicleIds, from, to);
-    const gaps = onlyDriver
-      ? allGaps.filter((g) => g.from.employee_id === onlyDriver.id)
-      : allGaps;
+    const gaps = onlyDriver ? allGaps.filter((g) => g.from.employee_id === onlyDriver.id) : allGaps;
     const gapKm = (vehicleId: string, type: "between_tasks" | "overnight") =>
-      gaps.filter((g) => g.vehicle_id === vehicleId && g.type === type).reduce(
-        (sum, g) => sum + g.km,
-        0,
-      );
-    const biggest = [...gaps].filter((g) => g.km > 0).sort((a, b) =>
-      b.km - a.km
-    ).slice(0, 10);
+      gaps.filter((g) => g.vehicle_id === vehicleId && g.type === type).reduce((sum, g) => sum + g.km, 0);
+    const biggest = [...gaps].filter((g) => g.km > 0).sort((a, b) => b.km - a.km).slice(0, 10);
     const places = await gapPlaces(db, biggest);
-    const biggestGaps = biggest.map((g) =>
-      describeGap(g, refs, places, (id) => id ? taskTitle.get(id) : undefined)
-    );
+    const biggestGaps = biggest.map((g) => describeGap(g, refs, places, (id) => id ? taskTitle.get(id) : undefined));
 
     // Readings the office should look at, with their photos.
-    const checks = logs.filter((l) =>
-      (!onlyDriver || l.employee_id === onlyDriver.id) &&
-      odometerCheck(l) !== null
-    );
-    const checkLinks = await photoLinks(db, {
-      ids: checks.flatMap((l) => l.photo_id ? [l.photo_id] : []),
-    });
+    const checks = logs.filter((l) => (!onlyDriver || l.employee_id === onlyDriver.id) && odometerCheck(l) !== null);
+    const checkLinks = await photoLinks(db, { ids: checks.flatMap((l) => l.photo_id ? [l.photo_id] : []) });
     const checkOdometer = checks.map((l) => ({
       at: colomboDateTime(l.logged_at),
       vehicle: refs.veh.get(l.vehicle_id)?.reg_no,
@@ -175,9 +132,7 @@ export const mileageSummary = tool({
       const taskKm = mine.reduce((sum, t) => sum + (t.km ?? 0), 0);
       const end = lastReading.get(id);
       const start = baseline.get(id) ?? firstReading.get(id);
-      const odometerKm = end != null && start != null
-        ? Math.max(0, end - start)
-        : 0;
+      const odometerKm = end != null && start != null ? Math.max(0, end - start) : 0;
       return {
         vehicle: v.reg_no,
         tasks: mine.length,
@@ -185,32 +140,20 @@ export const mileageSummary = tool({
         // The odometer figures describe the whole vehicle, so they are left out when looking at one driver.
         odometer_km: onlyDriver ? undefined : odometerKm,
         km_allowance: onlyDriver ? undefined : v.monthly_km_allowance,
-        over_allowance: !onlyDriver && v.monthly_km_allowance != null &&
-            odometerKm > v.monthly_km_allowance
-          ? true
-          : undefined,
-        km_outside_tasks: !onlyDriver && odometerKm - taskKm > UNLOGGED_KM
-          ? odometerKm - taskKm
-          : undefined,
+        over_allowance: !onlyDriver && v.monthly_km_allowance != null && odometerKm > v.monthly_km_allowance ? true : undefined,
+        km_outside_tasks: !onlyDriver && odometerKm - taskKm > UNLOGGED_KM ? odometerKm - taskKm : undefined,
         between_tasks_km: gapKm(id, "between_tasks"),
         overnight_km: gapKm(id, "overnight"),
-        fuel_litres: Math.round(
-          myFuel.reduce((sum, f) => sum + Number(f.litres ?? 0), 0) * 100,
-        ) / 100,
-        fuel_lkr: centsToLkr(
-          myFuel.reduce((sum, f) => sum + (f.amount_cents ?? 0), 0),
-        ),
+        fuel_litres: Math.round(myFuel.reduce((sum, f) => sum + Number(f.litres ?? 0), 0) * 100) / 100,
+        fuel_lkr: centsToLkr(myFuel.reduce((sum, f) => sum + (f.amount_cents ?? 0), 0)),
         fuel_entries: myFuel.length,
         fuel_videos: myFuel.filter((f) => f.video_status === "uploaded").length,
       };
     }).filter((row) =>
-      onlyVehicle || row.tasks > 0 || row.fuel_entries > 0 ||
-      (row.odometer_km ?? 0) > 0 || row.between_tasks_km > 0 ||
-      row.overnight_km > 0
+      onlyVehicle || row.tasks > 0 || row.fuel_entries > 0 || (row.odometer_km ?? 0) > 0 || row.between_tasks_km > 0 || row.overnight_km > 0
     );
 
-    const total = (pick: (row: (typeof rows)[number]) => number) =>
-      rows.reduce((sum, row) => sum + pick(row), 0);
+    const total = (pick: (row: (typeof rows)[number]) => number) => rows.reduce((sum, row) => sum + pick(row), 0);
     return {
       result: {
         month: which,
@@ -232,12 +175,8 @@ export const mileageSummary = tool({
         check_odometer: checkOdometer,
         photo_links: checkOdometer.length > 0 ? PHOTO_LINK_NOTE : undefined,
       },
-      summary: `mileage ${which}: ${rows.length} vehicles, ${
-        total((r) => r.task_km)
-      } task km, ` +
-        `${
-          total((r) => r.between_tasks_km)
-        } km between tasks, ${total((r) => r.overnight_km)} km overnight, ` +
+      summary: `mileage ${which}: ${rows.length} vehicles, ${total((r) => r.task_km)} task km, ` +
+        `${total((r) => r.between_tasks_km)} km between tasks, ${total((r) => r.overnight_km)} km overnight, ` +
         `${flags.length} unlogged flags, ${checkOdometer.length} odometer checks`,
     };
   },
@@ -246,13 +185,11 @@ export const mileageSummary = tool({
 export const listVehicleReports = tool({
   name: "list_vehicle_reports",
   title: "Vehicle problem reports",
-  description:
-    "Problems drivers reported (breakdown, accident, tyre, warning light, other) with their photos (links valid 1 hour). " +
+  description: "Problems drivers reported (breakdown, accident, tyre, warning light, other) with their photos (links valid 1 hour). " +
     "By default the ones not closed yet.",
   readOnly: true,
   input: z.object({
-    status: z.enum(["not_closed", "open", "in_garage", "closed", "all"])
-      .optional().describe("Default: not_closed"),
+    status: z.enum(["not_closed", "open", "in_garage", "closed", "all"]).optional().describe("Default: not_closed"),
   }),
   async run({ status = "not_closed" }, { db }) {
     let query = db.from("vehicle_reports").select("*");
@@ -298,8 +235,7 @@ export const listVehicleReports = tool({
 export const updateVehicleReport = tool({
   name: "update_vehicle_report",
   title: "Update a vehicle problem report",
-  description:
-    "Sets a report to open, in_garage or closed, with an optional office note the driver can read. " +
+  description: "Sets a report to open, in_garage or closed, with an optional office note the driver can read. " +
     "This does not change the vehicle itself: use update_vehicle (in_garage) to take the vehicle off the road.",
   readOnly: false,
   input: z.object({
@@ -308,35 +244,20 @@ export const updateVehicleReport = tool({
     office_note: zText(500).optional(),
   }),
   async run({ id, status, office_note }, { db, now }) {
-    const report = unwrapMaybe(
-      await db.from("vehicle_reports").select("*").eq("id", id).maybeSingle(),
-      "vehicle report",
-    );
-    if (!report) {
-      throw new ToolError(
-        `No vehicle report has the id ${id}. Use list_vehicle_reports to find it.`,
-      );
-    }
+    const report = unwrapMaybe(await db.from("vehicle_reports").select("*").eq("id", id).maybeSingle(), "vehicle report");
+    if (!report) throw new ToolError(`No vehicle report has the id ${id}. Use list_vehicle_reports to find it.`);
 
     const updated = unwrap(
       await db.from("vehicle_reports").update({
         status,
-        closed_at: status === "closed"
-          ? report.closed_at ?? now.toISOString()
-          : null,
+        closed_at: status === "closed" ? report.closed_at ?? now.toISOString() : null,
         ...(office_note !== undefined && { office_note }),
       }).eq("id", id).select("*").single(),
       "vehicle report",
     );
     // The issue about this report follows it (open / in the garage / closed).
     await syncIssues(db, now, { report_id: id });
-    const vehicle = unwrapMaybe(
-      await db.from("vehicles").select("reg_no, in_garage").eq(
-        "id",
-        report.vehicle_id,
-      ).maybeSingle(),
-      "vehicle",
-    );
+    const vehicle = unwrapMaybe(await db.from("vehicles").select("reg_no, in_garage").eq("id", report.vehicle_id).maybeSingle(), "vehicle");
     return {
       result: {
         id: updated.id,

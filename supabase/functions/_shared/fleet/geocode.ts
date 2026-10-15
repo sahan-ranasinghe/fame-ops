@@ -66,10 +66,7 @@ export interface Focus {
 
 /** Lower case, accents kept, punctuation to spaces, single spaces: the cache key. */
 export function normaliseQuery(text: string): string {
-  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(
-    /\s+/g,
-    " ",
-  );
+  return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim().replace(/\s+/g, " ");
 }
 
 const SOURCE_CREDIT: Record<string, string> = {
@@ -85,10 +82,7 @@ export function orsPlaces(answer: unknown): PublicPlace[] {
   if (!Array.isArray(features)) return [];
   const out: PublicPlace[] = [];
   for (const f of features) {
-    const feature = f as {
-      geometry?: { coordinates?: unknown[] };
-      properties?: Record<string, unknown>;
-    };
+    const feature = f as { geometry?: { coordinates?: unknown[] }; properties?: Record<string, unknown> };
     const [lng, lat] = (feature.geometry?.coordinates ?? []) as number[];
     const p = feature.properties ?? {};
     const name = typeof p.name === "string" ? p.name : "";
@@ -96,18 +90,12 @@ export function orsPlaces(answer: unknown): PublicPlace[] {
     const source = typeof p.source === "string" ? p.source : "";
     out.push({
       provider: "ors",
-      ref: typeof p.gid === "string"
-        ? p.gid
-        : typeof p.id === "string"
-        ? p.id
-        : `${lat},${lng}`,
+      ref: typeof p.gid === "string" ? p.gid : typeof p.id === "string" ? p.id : `${lat},${lng}`,
       name,
       label: typeof p.label === "string" ? p.label : name,
       lat,
       lng,
-      attribution: `${SOURCE_CREDIT[source] ?? source}${
-        SOURCE_CREDIT[source] || source ? " · " : ""
-      }openrouteservice`,
+      attribution: `${SOURCE_CREDIT[source] ?? source}${SOURCE_CREDIT[source] || source ? " · " : ""}openrouteservice`,
       storable: true,
     });
   }
@@ -125,42 +113,23 @@ export interface OrsDeps {
   fetch?: typeof fetch;
 }
 
-const today = (now: Date) =>
-  new Date(now.getTime() + 5.5 * 3600000).toISOString().slice(0, 10);
+const today = (now: Date) => new Date(now.getTime() + 5.5 * 3600000).toISOString().slice(0, 10);
 
 /** Public places for a text: the cache, else one counted call while under the daily cap. */
-export async function orsAutocomplete(
-  text: string,
-  deps: OrsDeps,
-): Promise<PublicSearch> {
+export async function orsAutocomplete(text: string, deps: OrsDeps): Promise<PublicSearch> {
   const query = normaliseQuery(text);
   if (query.length < PUBLIC_MIN_CHARS) return { places: [] };
   const { db, now } = deps;
   const since = new Date(now.getTime() - CACHE_DAYS * 86400000).toISOString();
-  const hit = await db.from("geocode_cache").select("answer, fetched_at").eq(
-    "provider",
-    "ors",
-  ).eq("query", query).gte("fetched_at", since).maybeSingle();
-  if (!hit.error && hit.data) {
-    return {
-      places: (hit.data.answer as unknown as PublicPlace[]) ?? [],
-      cached: true,
-    };
-  }
+  const hit = await db.from("geocode_cache").select("answer, fetched_at").eq("provider", "ors").eq("query", query).gte("fetched_at", since)
+    .maybeSingle();
+  if (!hit.error && hit.data) return { places: (hit.data.answer as unknown as PublicPlace[]) ?? [], cached: true };
   if (!deps.key) return { places: [], note: "Map search is not set up" };
-  const used = await db.from("routing_calls").select("calls").eq(
-    "day",
-    today(now),
-  ).eq("provider", COUNTER).maybeSingle();
-  if ((used.data?.calls ?? 0) >= deps.cap) {
-    return { places: [], note: LIMIT_NOTE };
-  }
+  const used = await db.from("routing_calls").select("calls").eq("day", today(now)).eq("provider", COUNTER).maybeSingle();
+  if ((used.data?.calls ?? 0) >= deps.cap) return { places: [], note: LIMIT_NOTE };
   // The throttle: this call's number in the current minute (counted whether or not it goes out).
   const minute = await db.rpc("bump_minute_calls", { p_provider: COUNTER });
-  if (
-    !minute.error && typeof minute.data === "number" &&
-    minute.data > deps.perMinute
-  ) return { places: [], note: BUSY_NOTE };
+  if (!minute.error && typeof minute.data === "number" && minute.data > deps.perMinute) return { places: [], note: BUSY_NOTE };
   const params = new URLSearchParams();
   params.set("text", text.trim().slice(0, 100));
   params.set("boundary.country", "LK");
@@ -175,10 +144,7 @@ export async function orsAutocomplete(
   try {
     const res = await orsFetch(
       ORS_AUTOCOMPLETE_URLS,
-      {
-        headers: { Authorization: deps.key, Accept: "application/json" },
-        signal: AbortSignal.timeout(6000),
-      },
+      { headers: { Authorization: deps.key, Accept: "application/json" }, signal: AbortSignal.timeout(6000) },
       `?${params.toString()}`,
       deps.fetch,
     );
@@ -191,17 +157,11 @@ export async function orsAutocomplete(
   } catch {
     note = "Map search did not answer";
   }
-  await db.rpc("bump_routing_calls", { p_provider: COUNTER, p_ok: ok }).then(
-    () => undefined,
-    () => undefined,
-  );
+  await db.rpc("bump_routing_calls", { p_provider: COUNTER, p_ok: ok }).then(() => undefined, () => undefined);
   if (ok) {
-    await db.from("geocode_cache").upsert({
-      provider: "ors",
-      query,
-      answer: places as unknown as never,
-      fetched_at: now.toISOString(),
-    }, { onConflict: "provider,query" })
+    await db.from("geocode_cache").upsert({ provider: "ors", query, answer: places as unknown as never, fetched_at: now.toISOString() }, {
+      onConflict: "provider,query",
+    })
       .then(() => undefined, () => undefined);
   }
   return note ? { places, note } : { places };

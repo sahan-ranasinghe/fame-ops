@@ -19,10 +19,7 @@ import { pruneFuelVideos } from "../_shared/fleet/videos.ts";
 import { googleContentJob } from "../_shared/fleet/googlePlaces.ts";
 
 function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8" },
-  });
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json; charset=utf-8" } });
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
@@ -33,18 +30,13 @@ function constantTimeEqual(a: string, b: string): boolean {
 }
 
 const isUuid = (v: unknown): v is string =>
-  typeof v === "string" &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  typeof v === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
 
 Deno.serve(async (request) => {
-  if (request.method !== "POST") {
-    return json(405, { error: "method_not_allowed" });
-  }
+  if (request.method !== "POST") return json(405, { error: "method_not_allowed" });
   const key = request.headers.get("x-server-key") ?? "";
   const expected = Deno.env.get("SERVER_KEY") ?? "";
-  if (expected.length < 16 || !constantTimeEqual(key, expected)) {
-    return json(401, { error: "bad_server_key" });
-  }
+  if (expected.length < 16 || !constantTimeEqual(key, expected)) return json(401, { error: "bad_server_key" });
 
   let body: Record<string, unknown>;
   try {
@@ -56,41 +48,25 @@ Deno.serve(async (request) => {
     const started = Date.now();
     try {
       const result = await pruneFuelVideos(adminClient(), new Date());
-      return json(200, {
-        job: "prune_fuel_videos",
-        ...result,
-        ms: Date.now() - started,
-      });
+      return json(200, { job: "prune_fuel_videos", ...result, ms: Date.now() - started });
     } catch (error) {
       console.error("fleet-jobs prune_fuel_videos failed", error);
-      return json(500, {
-        error: "prune_failed",
-        message: error instanceof Error ? error.message : String(error),
-      });
+      return json(500, { error: "prune_failed", message: error instanceof Error ? error.message : String(error) });
     }
   }
   if (body.job === "google_content") {
     const started = Date.now();
     try {
       const result = await googleContentJob(adminClient(), new Date());
-      return json(200, {
-        job: "google_content",
-        ...result,
-        ms: Date.now() - started,
-      });
+      return json(200, { job: "google_content", ...result, ms: Date.now() - started });
     } catch (error) {
       console.error("fleet-jobs google_content failed", error);
-      return json(500, {
-        error: "google_content_failed",
-        message: error instanceof Error ? error.message : String(error),
-      });
+      return json(500, { error: "google_content_failed", message: error instanceof Error ? error.message : String(error) });
     }
   }
   if (body.job !== "sync") return json(400, { error: "unknown_job" });
   const scope: SyncScope = {};
-  for (
-    const k of ["task_id", "report_id", "request_id", "vehicle_id"] as const
-  ) {
+  for (const k of ["task_id", "report_id", "request_id", "vehicle_id"] as const) {
     if (body[k] === undefined || body[k] === null) continue;
     if (!isUuid(body[k])) return json(400, { error: "bad_request", field: k });
     scope[k] = body[k];
@@ -99,17 +75,9 @@ Deno.serve(async (request) => {
   const started = Date.now();
   try {
     const result = await syncIssues(adminClient(), new Date(), scope);
-    return json(200, {
-      job: "sync",
-      scope,
-      ...result,
-      ms: Date.now() - started,
-    });
+    return json(200, { job: "sync", scope, ...result, ms: Date.now() - started });
   } catch (error) {
     console.error("fleet-jobs sync failed", error);
-    return json(500, {
-      error: "sync_failed",
-      message: error instanceof Error ? error.message : String(error),
-    });
+    return json(500, { error: "sync_failed", message: error instanceof Error ? error.message : String(error) });
   }
 });

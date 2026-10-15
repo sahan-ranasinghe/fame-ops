@@ -54,19 +54,8 @@ export interface Settings {
 }
 
 export type MapPackage = "google" | "open";
-export type GoogleFeature =
-  | "map_loads"
-  | "places_autocomplete"
-  | "places_details"
-  | "routes"
-  | "roads";
-export const GOOGLE_FEATURES: GoogleFeature[] = [
-  "map_loads",
-  "places_autocomplete",
-  "places_details",
-  "routes",
-  "roads",
-];
+export type GoogleFeature = "map_loads" | "places_autocomplete" | "places_details" | "routes" | "roads";
+export const GOOGLE_FEATURES: GoogleFeature[] = ["map_loads", "places_autocomplete", "places_details", "routes", "roads"];
 export type GoogleCaps = Record<GoogleFeature, { day: number; month: number }>;
 
 /**
@@ -93,22 +82,10 @@ export interface ChecklistItem {
 }
 
 export type MapMatchingProvider = "none" | "google_roads" | "osrm";
-export const MAP_MATCHING_PROVIDERS: MapMatchingProvider[] = [
-  "none",
-  "google_roads",
-  "osrm",
-];
+export const MAP_MATCHING_PROVIDERS: MapMatchingProvider[] = ["none", "google_roads", "osrm"];
 
 export const SETTINGS_DEFAULTS: Settings = {
-  dwell_min: {
-    "pickup.people": 10,
-    "pickup.goods": 15,
-    "drop.people": 5,
-    "drop.goods": 15,
-    visit: 60,
-    documents: 10,
-    default: 10,
-  },
+  dwell_min: { "pickup.people": 10, "pickup.goods": 15, "drop.people": 5, "drop.goods": 15, visit: 60, documents: 10, default: 10 },
   buffer_min: 15,
   base_place_id: null,
   avg_speed_kmh: 35,
@@ -119,11 +96,7 @@ export const SETTINGS_DEFAULTS: Settings = {
     factor: 1.3,
     centre: { lat: 6.9344, lng: 79.8428 },
     radius_km: 25,
-    bands: [{ days: [1, 2, 3, 4, 5], from: "07:00", to: "09:30" }, {
-      days: [1, 2, 3, 4, 5],
-      from: "16:30",
-      to: "19:00",
-    }],
+    bands: [{ days: [1, 2, 3, 4, 5], from: "07:00", to: "09:30" }, { days: [1, 2, 3, 4, 5], from: "16:30", to: "19:00" }],
   },
   self_drive_allowed: true,
   map_matching: { provider: "none" },
@@ -131,19 +104,9 @@ export const SETTINGS_DEFAULTS: Settings = {
   shift_days: [1, 2, 3, 4, 5],
   fuel_video_checklist: [
     { key: "plate", short: "Plate", en: "Number plate", si: "අංක තහඩුව" },
-    {
-      key: "zero",
-      short: "Zero",
-      en: "Pump display at zero before pumping",
-      si: "පොම්ප කිරීමට පෙර පොම්ප තිරය බිංදුවේ",
-    },
+    { key: "zero", short: "Zero", en: "Pump display at zero before pumping", si: "පොම්ප කිරීමට පෙර පොම්ප තිරය බිංදුවේ" },
     { key: "pumping", short: "Pumping", en: "Pumping", si: "පොම්ප කරමින්" },
-    {
-      key: "final",
-      short: "Final",
-      en: "Final pump display: litres and amount",
-      si: "අවසාන පොම්ප තිරය: ලීටර් සහ මුදල",
-    },
+    { key: "final", short: "Final", en: "Final pump display: litres and amount", si: "අවසාන පොම්ප තිරය: ලීටර් සහ මුදල" },
   ],
   fuel_video_quality: "480p",
   fuel_video_keep_months: 12,
@@ -166,32 +129,25 @@ export type SettingKey = keyof Settings;
 export const SETTING_KEYS = Object.keys(SETTINGS_DEFAULTS) as SettingKey[];
 
 export const SETTING_TEXT: Record<SettingKey, string> = {
-  dwell_min:
-    "Minutes at a stop by type and what is carried (pickup.people, drop.goods, visit, documents, default)",
+  dwell_min: "Minutes at a stop by type and what is carried (pickup.people, drop.goods, visit, documents, default)",
   buffer_min: "Arrive this many minutes before a deadline",
-  base_place_id:
-    "The base place (the head office): the start and the return of a trip",
+  base_place_id: "The base place (the head office): the start and the return of a trip",
   avg_speed_kmh: "Average speed for the estimate when no routing key is set",
   road_factor: "Road distance = straight line × this, for the estimate",
-  accept_within_min:
-    "A driver should accept a task within this many minutes of receiving it",
-  accept_before_leave_min:
-    "… and at the latest this many minutes before the leave-by time",
-  rush_hour:
-    "Rush hour: the factor on legs that start or end within the radius of the centre during the bands (weekdays)",
+  accept_within_min: "A driver should accept a task within this many minutes of receiving it",
+  accept_before_leave_min: "… and at the latest this many minutes before the leave-by time",
+  rush_hour: "Rush hour: the factor on legs that start or end within the radius of the centre during the bands (weekdays)",
   self_drive_allowed:
     "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
   map_matching:
     "Snap to roads on the route maps: provider none, google_roads (Roads API, secret GOOGLE_ROADS_KEY) or osrm (self-hosted, secret OSRM_URL); km stay from the odometer",
-  shift_start:
-    'The driver app\'s shift nudge ("At work? Switch On duty"): the time of day, HH:MM, shown only to a driver who is off duty',
+  shift_start: 'The driver app\'s shift nudge ("At work? Switch On duty"): the time of day, HH:MM, shown only to a driver who is off duty',
   shift_days: "… on these days (0 = Sunday … 6 = Saturday); empty = never",
   fuel_video_checklist:
     "The steps the driver shows in order while recording a fuel video: a list of 1 to 8 { key, en, si, short? }, ticked one by one on the phone (the last unlocks Stop); each tick's second is kept with the entry and shown as a bookmark; short is the word on the office's timeline",
   fuel_video_quality:
     "The fuel video's quality on the phone: 480p (about 1.0 Mbps, a 5-minute fill is about 38 MB) or 720p (about 1.5 Mbps, about 56 MB)",
-  fuel_video_keep_months:
-    "How many months fuel videos are kept before the monthly prune removes the files: 6 or 12",
+  fuel_video_keep_months: "How many months fuel videos are kept before the monthly prune removes the files: 6 or 12",
   ors_autocomplete_daily_cap:
     "The location search's map calls a day (openrouteservice geocode autocomplete; the dashboard's Geocoding quota of 3,000 a day is shared with search and reverse): after it only our own places show, with \"Map search limit reached for today\"; answers are cached 30 days and never count",
   ors_autocomplete_per_minute:
@@ -204,68 +160,38 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "Google calls a day and a month per feature (map_loads, places_autocomplete, places_details, routes, roads; Colombo time): each call is counted before it is made (every autocomplete request, since a session ending in a pick still pays for its first 12) and refused at either cap, and the open package takes over until the next day or the 1st; the month at most 95 % of Google's free usage (9,500 for maps, autocomplete and place details; 4,750 for routes and roads)",
 };
 
-const isTime = (s: unknown) =>
-  typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
-const isUuid = (s: unknown) =>
-  typeof s === "string" &&
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+const isUuid = (s: unknown) => typeof s === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
-function number(
-  value: unknown,
-  key: string,
-  min: number,
-  max: number,
-  integer = false,
-): number {
-  if (
-    typeof value !== "number" || !Number.isFinite(value) || value < min ||
-    value > max || (integer && !Number.isInteger(value))
-  ) {
-    throw new ToolError(
-      `${key}: a ${
-        integer ? "whole " : ""
-      }number from ${min} to ${max} is needed.`,
-    );
+function number(value: unknown, key: string, min: number, max: number, integer = false): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max || (integer && !Number.isInteger(value))) {
+    throw new ToolError(`${key}: a ${integer ? "whole " : ""}number from ${min} to ${max} is needed.`);
   }
   return value;
 }
 
 /** The value a key accepts, checked; throws a ToolError that says what is wrong. */
-export function validateSetting(
-  key: SettingKey,
-  value: unknown,
-): Settings[SettingKey] {
+export function validateSetting(key: SettingKey, value: unknown): Settings[SettingKey] {
   switch (key) {
     case "dwell_min": {
       if (!value || typeof value !== "object" || Array.isArray(value)) {
-        throw new ToolError(
-          "dwell_min: an object of minutes by stop kind is needed.",
-        );
+        throw new ToolError("dwell_min: an object of minutes by stop kind is needed.");
       }
       const out: Record<string, number> = {};
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-        if (
-          !/^(pickup|drop|visit)(\.(people|goods|documents|other))?$|^(people|goods|documents|other|default)$/
-            .test(k)
-        ) {
-          throw new ToolError(
-            `dwell_min: "${k}" is not a stop kind (pickup.people, drop.goods, visit, documents, default …).`,
-          );
+        if (!/^(pickup|drop|visit)(\.(people|goods|documents|other))?$|^(people|goods|documents|other|default)$/.test(k)) {
+          throw new ToolError(`dwell_min: "${k}" is not a stop kind (pickup.people, drop.goods, visit, documents, default …).`);
         }
         out[k] = number(v, `dwell_min.${k}`, 0, 1440, true);
       }
-      if (out.default === undefined) {
-        throw new ToolError("dwell_min needs a default.");
-      }
+      if (out.default === undefined) throw new ToolError("dwell_min needs a default.");
       return out;
     }
     case "buffer_min":
       return number(value, key, 0, 600, true);
     case "base_place_id":
       if (value === null) return null;
-      if (!isUuid(value)) {
-        throw new ToolError("base_place_id: the id of a saved place, or null.");
-      }
+      if (!isUuid(value)) throw new ToolError("base_place_id: the id of a saved place, or null.");
       return value as string;
     case "avg_speed_kmh":
       return number(value, key, 5, 120);
@@ -275,68 +201,38 @@ export function validateSetting(
     case "accept_before_leave_min":
       return number(value, key, 1, 1440, true);
     case "self_drive_allowed":
-      if (typeof value !== "boolean") {
-        throw new ToolError("self_drive_allowed: true or false.");
-      }
+      if (typeof value !== "boolean") throw new ToolError("self_drive_allowed: true or false.");
       return value;
     case "shift_start":
-      if (!isTime(value)) {
-        throw new ToolError("shift_start: a time of day, HH:MM.");
-      }
+      if (!isTime(value)) throw new ToolError("shift_start: a time of day, HH:MM.");
       return value as string;
     case "shift_days": {
-      if (
-        !Array.isArray(value) ||
-        !value.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)
-      ) {
-        throw new ToolError(
-          "shift_days: a list of days, 0 = Sunday … 6 = Saturday (for example [1, 2, 3, 4, 5, 6]).",
-        );
+      if (!Array.isArray(value) || !value.every((d) => Number.isInteger(d) && d >= 0 && d <= 6)) {
+        throw new ToolError("shift_days: a list of days, 0 = Sunday … 6 = Saturday (for example [1, 2, 3, 4, 5, 6]).");
       }
       return [...new Set(value as number[])].sort((a, b) => a - b);
     }
     case "fuel_video_checklist": {
       if (!Array.isArray(value) || value.length < 1 || value.length > 8) {
-        throw new ToolError(
-          "fuel_video_checklist: a list of 1 to 8 steps { key, en, si, short? }, in order.",
-        );
+        throw new ToolError("fuel_video_checklist: a list of 1 to 8 steps { key, en, si, short? }, in order.");
       }
       const keys = new Set<string>();
       return value.map((item, i) => {
         const it = (item ?? {}) as Record<string, unknown>;
-        const key = typeof it.key === "string"
-          ? it.key.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(
-            0,
-            30,
-          )
-          : "";
+        const key = typeof it.key === "string" ? it.key.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 30) : "";
         const en = typeof it.en === "string" ? it.en.trim().slice(0, 60) : "";
         const si = typeof it.si === "string" ? it.si.trim().slice(0, 60) : "";
-        const short = typeof it.short === "string"
-          ? it.short.trim().slice(0, 20)
-          : "";
+        const short = typeof it.short === "string" ? it.short.trim().slice(0, 20) : "";
         if (!key || !en) {
-          throw new ToolError(
-            `fuel_video_checklist: step ${
-              i + 1
-            } needs a key and an English text (si may repeat the English).`,
-          );
+          throw new ToolError(`fuel_video_checklist: step ${i + 1} needs a key and an English text (si may repeat the English).`);
         }
-        if (keys.has(key)) {
-          throw new ToolError(
-            `fuel_video_checklist: the key "${key}" is used twice.`,
-          );
-        }
+        if (keys.has(key)) throw new ToolError(`fuel_video_checklist: the key "${key}" is used twice.`);
         keys.add(key);
-        return short
-          ? { key, en, si: si || en, short }
-          : { key, en, si: si || en };
+        return short ? { key, en, si: si || en, short } : { key, en, si: si || en };
       });
     }
     case "fuel_video_quality":
-      if (value !== "480p" && value !== "720p") {
-        throw new ToolError("fuel_video_quality: 480p or 720p.");
-      }
+      if (value !== "480p" && value !== "720p") throw new ToolError("fuel_video_quality: 480p or 720p.");
       return value;
     case "ors_autocomplete_daily_cap":
       return number(value, key, 0, 100000, true);
@@ -345,9 +241,7 @@ export function validateSetting(
     case "ors_gap_daily_cap":
       return number(value, key, 0, 1900, true);
     case "map_package":
-      if (value !== "google" && value !== "open") {
-        throw new ToolError("map_package: google or open.");
-      }
+      if (value !== "google" && value !== "open") throw new ToolError("map_package: google or open.");
       return value;
     case "google_caps": {
       if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -355,76 +249,43 @@ export function validateSetting(
           "google_caps: an object { feature: { day, month } } for map_loads, places_autocomplete, places_details, routes and roads.",
         );
       }
-      const given = value as Record<
-        string,
-        { day?: unknown; month?: unknown } | undefined
-      >;
-      const unknown = Object.keys(given).filter((k) =>
-        !GOOGLE_FEATURES.includes(k as GoogleFeature)
-      );
+      const given = value as Record<string, { day?: unknown; month?: unknown } | undefined>;
+      const unknown = Object.keys(given).filter((k) => !GOOGLE_FEATURES.includes(k as GoogleFeature));
       if (unknown.length) {
         throw new ToolError(
-          `google_caps: "${
-            unknown[0]
-          }" is not a feature (map_loads, places_autocomplete, places_details, routes, roads).`,
+          `google_caps: "${unknown[0]}" is not a feature (map_loads, places_autocomplete, places_details, routes, roads).`,
         );
       }
       const out = {} as GoogleCaps;
       for (const f of GOOGLE_FEATURES) {
         const c = given[f];
-        if (!c) {
-          throw new ToolError(`google_caps.${f}: { day, month } is needed.`);
-        }
-        const month = number(
-          c.month,
-          `google_caps.${f}.month`,
-          0,
-          GOOGLE_HARD_CEILING[f],
-          true,
-        );
-        out[f] = {
-          day: number(c.day, `google_caps.${f}.day`, 0, month, true),
-          month,
-        };
+        if (!c) throw new ToolError(`google_caps.${f}: { day, month } is needed.`);
+        const month = number(c.month, `google_caps.${f}.month`, 0, GOOGLE_HARD_CEILING[f], true);
+        out[f] = { day: number(c.day, `google_caps.${f}.day`, 0, month, true), month };
       }
       return out;
     }
     case "fuel_video_keep_months":
-      if (value !== 6 && value !== 12) {
-        throw new ToolError("fuel_video_keep_months: 6 or 12.");
-      }
+      if (value !== 6 && value !== 12) throw new ToolError("fuel_video_keep_months: 6 or 12.");
       return value;
     case "map_matching": {
       const provider = (value as { provider?: unknown } | null)?.provider;
-      if (
-        !value || typeof value !== "object" ||
-        !MAP_MATCHING_PROVIDERS.includes(provider as MapMatchingProvider)
-      ) {
-        throw new ToolError(
-          "map_matching: an object { provider: none | google_roads | osrm }.",
-        );
+      if (!value || typeof value !== "object" || !MAP_MATCHING_PROVIDERS.includes(provider as MapMatchingProvider)) {
+        throw new ToolError("map_matching: an object { provider: none | google_roads | osrm }.");
       }
       return { provider: provider as MapMatchingProvider };
     }
     case "rush_hour": {
       const r = value as Partial<RushHour> | null;
-      if (!r || typeof r !== "object") {
-        throw new ToolError(
-          "rush_hour: an object with factor, centre, radius_km and bands is needed.",
-        );
-      }
+      if (!r || typeof r !== "object") throw new ToolError("rush_hour: an object with factor, centre, radius_km and bands is needed.");
       const bands = Array.isArray(r.bands) ? r.bands : null;
       if (!bands) throw new ToolError("rush_hour.bands: a list is needed.");
       for (const b of bands) {
         if (
-          !Array.isArray(b.days) || !b.days.every((d) =>
-            Number.isInteger(d) && d >= 0 && d <= 6
-          ) || !isTime(b.from) || !isTime(b.to) ||
+          !Array.isArray(b.days) || !b.days.every((d) => Number.isInteger(d) && d >= 0 && d <= 6) || !isTime(b.from) || !isTime(b.to) ||
           b.from >= b.to
         ) {
-          throw new ToolError(
-            "rush_hour.bands: each band needs days (0 = Sunday … 6 = Saturday), from and to (HH:MM, from before to).",
-          );
+          throw new ToolError("rush_hour.bands: each band needs days (0 = Sunday … 6 = Saturday), from and to (HH:MM, from before to).");
         }
       }
       return {
@@ -434,11 +295,7 @@ export function validateSetting(
           lng: number(r.centre?.lng, "rush_hour.centre.lng", -180, 180),
         },
         radius_km: number(r.radius_km, "rush_hour.radius_km", 1, 500),
-        bands: bands.map((b) => ({
-          days: [...b.days],
-          from: b.from,
-          to: b.to,
-        })),
+        bands: bands.map((b) => ({ days: [...b.days], from: b.from, to: b.to })),
       };
     }
   }
@@ -446,18 +303,12 @@ export function validateSetting(
 
 /** Every setting, the stored value where there is one, the default otherwise. */
 export async function loadSettings(db: Db): Promise<Settings> {
-  const rows = unwrap(
-    await db.from("fleet_settings").select("key, value"),
-    "fleet settings",
-  );
+  const rows = unwrap(await db.from("fleet_settings").select("key, value"), "fleet settings");
   const out: Settings = structuredClone(SETTINGS_DEFAULTS);
   for (const row of rows) {
     if (!SETTING_KEYS.includes(row.key as SettingKey)) continue;
     try {
-      (out as unknown as Record<string, unknown>)[row.key] = validateSetting(
-        row.key as SettingKey,
-        row.value,
-      );
+      (out as unknown as Record<string, unknown>)[row.key] = validateSetting(row.key as SettingKey, row.value);
     } catch {
       // A bad stored value is ignored in favour of the default (update_settings never stores one).
     }
@@ -465,19 +316,9 @@ export async function loadSettings(db: Db): Promise<Settings> {
   return out;
 }
 
-export async function saveSetting(
-  db: Db,
-  key: SettingKey,
-  value: Settings[SettingKey],
-  by: string,
-): Promise<void> {
+export async function saveSetting(db: Db, key: SettingKey, value: Settings[SettingKey], by: string): Promise<void> {
   unwrap(
-    await db.from("fleet_settings").upsert({
-      key,
-      value: value as never,
-      updated_at: new Date().toISOString(),
-      updated_by: by,
-    }, {
+    await db.from("fleet_settings").upsert({ key, value: value as never, updated_at: new Date().toISOString(), updated_by: by }, {
       onConflict: "key",
     }),
     "fleet settings",
