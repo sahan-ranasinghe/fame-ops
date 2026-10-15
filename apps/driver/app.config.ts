@@ -10,14 +10,24 @@
 //
 // A build without the file still builds; push notifications then do not work.
 //
-// The task map's Google key (Phase 6, Part 5): GOOGLE_ANDROID_MAPS_KEY, an EAS
-// environment variable (secret, never in git), restricted in the Google Cloud
-// console to the package com.fameglobal.driver and the signing key's SHA-1. With
-// it the build carries the key (android.config.googleMaps: the manifest's
-// com.google.android.geo.API_KEY) and the task map is Google's; without it the
-// map stays OpenFreeMap (MapLibre). A build with the key gets its own runtime
-// version (1.2.0-gmaps), so an update made with the key never reaches a phone
-// built without it (the Google map would crash there for want of the key).
+// The task map's Google map (Phase 6, Part 5), two EAS environment variables:
+//
+//   - GOOGLE_ANDROID_MAPS=on (plain text): the switch. Read the same on the
+//     laptop (eas build, eas update --environment) and on the EAS worker, so the
+//     runtime version and extra.googleMapsAndroid agree everywhere: on gives the
+//     runtime 1.2.0-gmaps and the Google task map; off (unset) the runtime 1.2.0
+//     and the OpenFreeMap map. An update made with the switch on never reaches a
+//     phone built with it off (the Google map would crash there for want of a key).
+//   - GOOGLE_ANDROID_MAPS_KEY (secret, never in git, readable only on EAS's build
+//     workers): the key, restricted in the Google Cloud console to the package
+//     com.fameglobal.driver and the signing key's SHA-1, written into the
+//     manifest (android.config.googleMaps: com.google.android.geo.API_KEY). An
+//     EAS build with the switch on and no key stops here, rather than make an app
+//     whose map would crash.
+//
+// (The first try, 15 October 2026, took the switch from the secret itself: the
+// laptop could not read it, worked out 1.2.0 against EAS's 1.2.0-gmaps, and EAS
+// stopped the build on the mismatch.)
 
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 import { existsSync } from 'node:fs';
@@ -27,7 +37,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   const fromEnv = process.env.GOOGLE_SERVICES_JSON?.trim();
   const local = join(__dirname, 'google-services.json');
   const googleServicesFile = fromEnv && fromEnv !== '' ? fromEnv : existsSync(local) ? './google-services.json' : undefined;
+  const mapsOn = process.env.GOOGLE_ANDROID_MAPS?.trim() === 'on';
   const mapsKey = process.env.GOOGLE_ANDROID_MAPS_KEY?.trim() || undefined;
+  if (mapsOn && process.env.EAS_BUILD === 'true' && !mapsKey) {
+    throw new Error('GOOGLE_ANDROID_MAPS is on but this EAS build has no GOOGLE_ANDROID_MAPS_KEY: set the secret in its environment');
+  }
   return {
     ...config,
     name: config.name ?? 'Fame Driver',
@@ -37,9 +51,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...(googleServicesFile ? { googleServicesFile } : {}),
       // Expo's own setting (manifest meta-data com.google.android.geo.API_KEY); unlike a plugin's
       // options it is left out of the public config, so it is not in the update manifests.
-      ...(mapsKey ? { config: { ...config.android?.config, googleMaps: { apiKey: mapsKey } } } : {}),
+      ...(mapsOn && mapsKey ? { config: { ...config.android?.config, googleMaps: { apiKey: mapsKey } } } : {}),
     },
-    ...(mapsKey ? { runtimeVersion: `${config.version}-gmaps` } : {}),
-    extra: { ...config.extra, googleMapsAndroid: !!mapsKey },
+    ...(mapsOn ? { runtimeVersion: `${config.version}-gmaps` } : {}),
+    extra: { ...config.extra, googleMapsAndroid: mapsOn },
   };
 };

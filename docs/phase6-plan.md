@@ -116,6 +116,23 @@ secret); all set by Sahan on 15 October 2026.
    keys yes), a plan_task with "road time · Google traffic", search_places google for "Kandy",
    the cron jobs `google-content`, `stop-arrivals`, `prune-gap-lines` present.
 
+**Round 3 as it went (15 October 2026, main at 9d4475b):** the secrets list showed GOOGLE_MAPS_JS_KEY
+and GOOGLE_SERVER_KEY; migrations `google_package` and `stop_arrivals` pushed (3 tables, 7 stop
+columns, the jobs `google-content` 22:00 UTC, `prune-gap-lines` 21:40 UTC, `stop-arrivals` every 5
+minutes); the last 1.1.0 update from d63c838 (group 2c700856, Android update 01a13ef4), confirmed on
+Sahan's phone (`1.1.0+01a13ef4…`) before anything else; Playwright 12/12 again after the "Google
+Maps" tag; office-mcp, office-api and fleet-jobs deployed; web deployment 8a54b631. Read-only checks:
+get_settings google (package Google, both keys yes, roads off at cap 0); a plan to Kandy "road time ·
+Google traffic", 106.4 km, 201 min from 07:24; Place Details answered through a stop's
+google_place_id (Google's example id: "48 Pirrama Rd, Pyrmont"), its impossible route fell back to the
+estimate with "Google road times did not answer"; google_calls then held exactly places_details 1 and
+routes 2, none refused. (search_places google could not be called from that Claude session: its
+connector tool list predates the deploy.) The Teams artifact file and declaration (57 tools) built
+from 9d4475b. **The 1.2.0 build failed** (EAS build 77512e93, "Runtime version mismatch: local
+1.2.0, EAS 1.2.0-gmaps"): app.config.ts took the Google map switch from the secret key, which only
+EAS's workers can read. Fixed on `phase6-android-maps-flag`: the plain-text switch
+`GOOGLE_ANDROID_MAPS=on` (see README); the build waits for that variable and Sahan's go.
+
 Deployed so far (14 October 2026): round 1 at f9bc685 (Part 2); round 2 at 413d820 (Part 3);
 **round 2b at 3cc39d8** (Part 3b, the ordered steps, and the five driver-app items): migrations
 `fuel_video_segments`, `fuel_video_steps`, `heartbeat_video_columns_grant` pushed; office-mcp,

@@ -148,9 +148,11 @@
   committed; builds get it from the EAS file variable GOOGLE_SERVICES_JSON through
   `app.config.ts`. Sounds are made by `scripts/make-sounds.sh` (ffmpeg tones), never
   downloaded. App version 1.1.0 = the first build with push. 1.2.0 (Phase 6 Part 5) adds
-  react-native-maps 1.27.2: the task map is Google's (PROVIDER_GOOGLE, no map id) in a build
-  made with GOOGLE_ANDROID_MAPS_KEY (runtime `1.2.0-gmaps`; without the key runtime `1.2.0` and
-  the OpenFreeMap map); a Google stop is never drawn on the OpenFreeMap map (`lib/mapRule.ts`).
+  react-native-maps 1.27.2: the task map is Google's (PROVIDER_GOOGLE, no map id) when the EAS
+  preview environment has the plain-text switch GOOGLE_ANDROID_MAPS=on (runtime `1.2.0-gmaps`, the
+  same on the laptop and on EAS) and the secret GOOGLE_ANDROID_MAPS_KEY (read only on EAS's build
+  workers; an EAS build with the switch on and no key stops); switch off: runtime `1.2.0` and the
+  OpenFreeMap map. A Google stop is never drawn on the OpenFreeMap map (`lib/mapRule.ts`).
   Phones still on 1.1.0 got their last update from d63c838; updates from later commits target 1.2.0.
 - ALL native modules are installed before the first development build, so the rest of the
   day is live reload (`npx expo start --dev-client`) without new builds.

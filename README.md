@@ -41,11 +41,14 @@ location, the map and the other native modules need it.
   Firebase file for push notifications (on an EAS build from the file
   environment variable `GOOGLE_SERVICES_JSON`; on the laptop from
   `apps/driver/google-services.json`, which is not committed), and the task
-  map's Google key (Phase 6 Part 5): the EAS variable `GOOGLE_ANDROID_MAPS_KEY`
-  (preview environment, secret; restricted in Google Cloud to the package and
-  the preview signing key's SHA-1) goes into the Android manifest through
-  `android.config.googleMaps` and makes the task map Google's. A build with it
-  has the runtime `1.2.0-gmaps`, one without it `1.2.0` and the OpenFreeMap map.
+  map's Google map (Phase 6 Part 5), from two EAS variables in the preview
+  environment: the switch `GOOGLE_ANDROID_MAPS=on` (plain text, so the laptop
+  and EAS work out the same runtime: `1.2.0-gmaps` on, `1.2.0` off) and the key
+  `GOOGLE_ANDROID_MAPS_KEY` (secret, readable only on EAS's build workers;
+  restricted in Google Cloud to the package and the preview signing key's
+  SHA-1), which goes into the Android manifest through `android.config.googleMaps`.
+  An EAS build with the switch on and no key stops instead of making an app
+  whose map would crash.
 
 ```bash
 cd apps/driver
