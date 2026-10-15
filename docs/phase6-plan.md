@@ -89,7 +89,7 @@ stay on the laptop only.
 | 2 Availability, approvals, edits, presence | `phase6-2-approvals` | migration `phase6_requests`, tools, notify | yes | shift nudge, "Task changed" texts | the decide page with the panel, an edit → re-approval → redecide, a postponed task and its push, the shift notification on the OPPO | **Round 1: db push, office-mcp + office-api + fleet-jobs + notify-office, web** |
 | 3 Fuel videos | `phase6-3-fuel` | migration `fuel_videos` (bucket, columns, prune), tools | Fuel page, task detail, Mileage | Fuel tab, recording, TUS upload | a 60-second recording uploaded through a signal loss, the office page playing it, the storage numbers | **Round 2: db push (bucket), functions, web, eas update** |
 | 4 Site lists and search | `phase6-4-sites` | migration `places_sites`, tools | import page, search in the stops editor, place page | — | the presets run against the two files on the local stack with the report counts, the search from 2 characters, the pin page | with round 3 |
-| 5 Google package | `phase6-5-google` | migration `google_package`, routing chain, caps | Google map provider, legend, Settings counts | — | the package switch, the caps hit by a test counter, the fallback, the setup doc | **Round 3: db push, functions, web, the Teams artifact file + message** |
+| 5 Google package | `phase6-5-google` | migration `google_package`, the fail-closed gate, Places / Routes / Roads, caps | Google map (one per tab), Google place search for stops, Settings → Fleet card | Google task map (build 1.2.0); Google stops never on OpenFreeMap (update for 1.1.0) | call 401 refused, a counter error refuses, the field masks, the 30-day clean-up, no keys = open, the setup doc | **Round 3: db push, functions, web, the 1.1.0 update, the 1.2.0 build, the Teams artifact file + message** |
 | 6 Finish | `phase6-6-docs` | — | — | — | CLAUDE.md, docs, README, the test plan, the Sinhala list | — |
 
 Each part: tests pass (section 10) → checkpoint → go → ff-merge. Rounds in the order db push
@@ -198,17 +198,9 @@ The Teams artifact copy is still the Part 2 build: its update is round 3.
 
 ### 3.4 `google_package` (Part 5)
 
-- `fleet_settings` keys (no schema): `map_package` (`google` | `open`; see 9.1 for the
-  default), `google_map_loads_daily_cap` 300, `google_routes_daily_cap` 150,
-  `google_roads_daily_cap` 150.
-- `routing_calls` gains the provider names `google_map_loads`, `google` (exists),
-  `google_roads` (exists since route quality); `bump_routing_calls` is reused. A new RPC
-  `count_call(p_provider, p_cap)` (service role) increments and answers `{ count, allowed }`
-  in one statement so two tabs cannot both pass at the cap.
-- `route_matched`: `prune_route_matched` takes the provider into account: `google_roads`
-  rows after 30 days (17.3), others 90.
-- `route_legs`: the Google branch never writes it (19.3); a one-off `delete from route_legs
-  where provider = 'google'` (there are none on the live project: no key was ever set).
+As built: see 9.1 (`google_calls`, `google_take`, `google_hard_ceiling`, `google_pins`, the marks on
+`task_stops` and `tasks`, `prune_google_content`, the `google-content` job, `recent_places`
+without Google stops). The settings `map_package` and `google_caps` need no schema.
 
 ## 4. Part 1: pages, phone layout, menu, drafts, stops editor
 
@@ -399,20 +391,22 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
 - `create_task` / `plan_task` / `update_task_stops` stops accept `place_id` (a picked
   site) besides `place`.
 
-**Part 5**
-- `register_map_load()` (view; web only): `{ allowed, count, cap, package }` — one call per
-  map initialisation; at the cap `allowed: false` and `package: "open"` until midnight
-  Colombo.
-- `routing_usage(days?)`: rows now carry `google_map_loads`, `google`, `google_roads` with
-  the caps; `today { map_loads: "41/300", routes: "12/150", roads: "30/150", package }`.
-- `get_settings`: `map_package`, the three caps, `map_package_effective` (what the server
-  will use now: the setting, the secrets present, the caps), `google_configured { js, routes,
-  roads }` (booleans, never the keys).
-- `driver_route(snap)`: under `open`, `snap` is ignored (status `off`); under `google` with
-  `GOOGLE_ROADS_KEY`, the provider is `google_roads`. The artifact and Claude never pass
-  `snap`.
-- office-api `GET /me` adds `map { package, google_js_key? }` (the browser key only under
-  `google` and under the cap; the web app re-reads `/me` after a cap answer).
+**Part 5** (as built, 9.1)
+- `register_map_load()` (any office permission; web only): counts one map load, then answers
+  `{ allowed: true, package, map: "google", key, today, day_cap, month, month_cap }`; refused:
+  `{ allowed: false, package, map: "open" | "none", note, reason? }` (no key). On Claude: "web only".
+- `google_place(google_place_id, session?)` (approve, assign_tasks): `{ google_place_id, lat, lng,
+  address?, short_address?, district?, fetched_at, kept_until, attribution: "Google Maps", maps }`.
+- `search_places(…, google?, session?)`: results may be `layer: "google"` (badge Google,
+  `google_place_id`, no pin); `map_note` says why Google did not answer.
+- Stops and starts (`create_task`, `plan_task`, `update_task_stops`, `book_vehicle`) take
+  `google_place_id` with the name as `place`; stop cards carry `pin: "google"`, `google: true`,
+  `google_place_id`; a plan may carry `google_note`.
+- `get_settings.google { package, chosen, configured { js, server }, in_use { map, places,
+  routes, roads }, usage[] }`; `routing_usage.google` = the same usage; settings `map_package`,
+  `google_caps`.
+- `driver_route(snap)`: Google only for the web under the package; Claude gets status `off`.
+- office-api `GET /me` adds `map { package, places }` (never the key).
 
 ## 6. Part 2: availability, approvals, edits and redo, presence
 
@@ -901,77 +895,81 @@ New driver strings (en + si):
 
 ## 9. Part 5: the Google package with free-cap fallbacks
 
-### 9.1 The setting and the rule
+The design below replaced the first one (the old 9.1 to 9.6) after Sahan's Part 5 brief and his
+Google setup notes of 15 October 2026, and after reading Google's current pricing, SKU and terms
+pages the same day. The console steps, the caps, the SKUs and the terms with their quotes are in
+`docs/google-maps-setup.md`.
 
-- `map_package` = `google | open`. Default: `google` when all three secrets exist, else
-  `open`; an admin may force `open`. `get_settings.map_package_effective` is what the server
-  uses now.
-- Never mixed: under `google` the web app shows Google tiles, Google-snapped lines and Google
-  times; under `open` OpenFreeMap tiles, raw lines and OpenRouteService times. The server
-  guards it: `driver_route` answers no Google geometry under `open`; the planner never
-  returns a Google leg under `open`; `plan.source_label` says which. The Teams artifact
-  (drawn map) and the driver app never draw Google geometry: the artifact's transport sends
-  `snap: false` and reads only times as numbers; the driver app receives `leave_by` and
-  nothing of the plan.
+### 9.1 Part 5 as built (15 October 2026, branch `phase6-5-google`)
 
-### 9.2 Map
+- **The package.** Setting `map_package` (`google` by default, `open` to force the open
+  package); `googleUse()` says what is Google's now: the map with `GOOGLE_MAPS_JS_KEY`; place
+  search and road times with `GOOGLE_SERVER_KEY`; snap to roads with both (its lines go on
+  Google's map only). No key: the open package everywhere, as before Part 5. `GET /me` answers
+  `map { package, places }`; `get_settings.google` and `routing_usage.google` the package, the
+  keys set (booleans) and each feature's calls today and this month against its caps.
+- **The gate, fail closed.** Migration `google_package`: `google_calls` (feature, Colombo day,
+  calls, refused) and `google_take(feature, day_cap, month_cap)`: under an advisory lock per
+  feature, refused at the day's cap or the month's ceiling (clamped to `google_hard_ceiling`,
+  95 % of the free usage), else the call is recorded and allowed. `takeGoogleCall` / `guarded`
+  in `google.ts`: every Google HTTP call runs only after an allowed answer; an error, a throw or
+  an answer of the wrong shape refuses it. Setting `google_caps` per feature {day, month}:
+  map_loads 400 / 9,500, places_autocomplete 400 / 9,500, places_details 400 / 9,500, routes
+  200 / 4,750, roads 0 / 0 (off: the asset tracking licence, setup doc 3).
+- **Places.** `search_places(google: true, session)` (the stops editor and the start field only;
+  a request's From and To never ask Google): Places Autocomplete (New), `lk`, biased 50 km
+  around the base, every request counted; results `layer: "google"`, badge Google, credit
+  "Google Maps"; refused or failed, openrouteservice answers with the reason in `map_note`.
+  `google_place(google_place_id, session?)`: one Place Details (New) call with the Essentials
+  mask `location,formattedAddress,shortFormattedAddress,addressComponents` (the name is the
+  suggestion's main text; no `displayName`), kept 30 days in `google_pins` by place id, never a
+  row in `places`. A stop or a start takes `google_place_id` with the name as `place`: the kept
+  pin while it lasts past the task's day, else one counted Details call; refused, the task is
+  refused with the reason (nothing half-made). The triggers `task_stops_google_mark` /
+  `tasks_start_google_mark` mark a stop or a start whose coordinates are a Google pin's
+  (`google_place_id`, `google_fetched_at`) whatever wrote them. `fleet-jobs google_content`
+  (pg_cron `google-content`, 03:30 Colombo): pins of stops still to be driven fetched again from
+  23 days old, then `prune_google_content()`: pins, stops' and starts' coordinates, address and
+  name, and Google-snapped lines over 30 days old removed (the place id stays). `recent_places`
+  ("Used before") leaves Google stops out.
+- **Road times.** A plan: a rough pass on the estimate (no calls) finds when the trip leaves,
+  then one `computeRoutes` call (TRAFFIC_AWARE, the stops as intermediates, departureTime when
+  in the future, avoidHighways when asked) answers every leg (`googleLegs`), and the planner's
+  passes read them (`memoLegFn`; a leg Google did not answer comes from the open chain).
+  Refused or failed: the open chain (ORS, the estimate) and `plan.google_note`. The label "road
+  time · Google traffic". Never in `route_legs` (the old per-leg Google branch and
+  `GOOGLE_ROUTES_KEY` are gone; `ROUTING_PROVIDER=google` now means ors). The live ETA: one call
+  for all the remaining legs, standing 15 minutes per task (`GOOGLE_ETA_MS`).
+- **Snap to roads.** `snapProvider(settings, channel)`: Google for the web only under the
+  package (never Claude or the artifact), OSRM when `map_matching` says osrm, else none. Each
+  100-point call is counted first (`matchPoints`' gate); a leg that grew is matched only from
+  its last matched point (one call, not the whole leg again); a refused or failed new part
+  keeps the matched part.
+- **The office map.** `src/map/google`: `googleMapOnce` calls `register_map_load` (the load
+  counted, then the browser key) once per tab and loads the Maps JavaScript API (weekly, the
+  async loader); one `google.maps.Map` per tab, moved into the page's box and parked off screen
+  between pages (`attachMap` / `detachMap`); `GoogleMap` (the same markers, lines, holes, stops,
+  playback and trails as MapLibre, with HTML overlays: no map id) and `GooglePin` (drag or click
+  to move). `MapView` / `PinMap`: Google's map under the package; refused or failed, `NoMap`
+  ("No map: … The lists show everything."); the open package and the artifact as before.
+- **Settings → Fleet.** The Map package card: the package in use, the keys set, the choice
+  (google / open), each feature's today / this month / caps (editable) / on or why not.
+- **Driver app.** Commit A (runtime 1.1.0, JS only): `lib/mapRule.ts` `drawnDestination`: a
+  Google stop is never drawn on the OpenFreeMap map; a line says Navigate opens it in Google
+  Maps (`task.googleNotOnMap`). Commit B (app 1.2.0, a new build): `react-native-maps` 1.27.2;
+  `app.config.ts` reads the EAS variable `GOOGLE_ANDROID_MAPS_KEY` into
+  `android.config.googleMaps.apiKey` (left out of the public config, so not in update
+  manifests), `extra.googleMapsAndroid`, and the runtime `1.2.0-gmaps` with the key (an update
+  made with the key never reaches a build without it); `GoogleTaskMap` (PROVIDER_GOOGLE, no map
+  id: Android map loads stay free and unlimited) when the build has the key, else MapLibre.
+- **The Teams artifact.** No Google map, no Google place search (its `me` has no `map`), no snap;
+  stops are listed, never drawn, on its drawn map; `register_map_load` answers "web only" there.
 
-- A third `MapProvider` implementation, `src/map/GoogleMap.tsx` (web only, lazy): the Maps
-  JavaScript API loaded through `@googlemaps/js-api-loader` with the key from `/me`,
-  `v=weekly`, Advanced Markers for the gliding, turning markers, polylines by speed and
-  confidence, the holes dashed, the stops, the playback marker. `MapView` picks Google when
-  `me.map.package === "google"` and `register_map_load` answered allowed; otherwise
-  MapLibre; the drawn map stays the artifact's.
-- Map loads: one `register_map_load` per map initialisation (a page with a map, once per
-  mount); at the cap the app switches to the open package for the rest of the Colombo day
-  and shows "Google map limit reached for today" once (a toast and a legend line).
+New driver string (en + si):
 
-### 9.3 Routing
-
-- Chain under `google`: Google Routes `computeRoutes` (TRAFFIC_AWARE, `departureTime` when
-  in the future) → ORS → estimate; under `open`: ORS → estimate. A switch to the next
-  provider on a quota, auth or timeout error, and at `google_routes_daily_cap` (counted with
-  `count_call`). `plan.legs[].source` and the plan panel's source label tell which.
-- No cache for Google route results (9.4): every plan with Google legs is a call; the
-  700 ms debounce on the form, the cap and the ORS fallback keep it in budget.
-
-### 9.4 Caching, as the terms allow (`docs/google-maps-setup.md` cites them)
-
-Google Maps Platform Service Specific Terms, last modified 10 June 2026
-(https://cloud.google.com/maps-platform/terms/maps-service-terms):
-- 19.3 Routes API: "Customer may temporarily cache latitude (lat) and longitude (lng)
-  values from the Routes API for up to 30 consecutive calendar days, after which Customer
-  must delete the cached latitude and longitude values." Durations and distances are not
-  named, so they are not cached: `routing.ts` stops writing `route_legs` for Google.
-- 17.3 Roads API: the same sentence for latitude and longitude values from the Roads API;
-  the snapped line is latitude/longitude only, so `route_matched` rows of `google_roads`
-  live 30 days.
-- 19.2 and 17.2: "Customer must not use Google Maps Content from the Routes API / Roads API
-  in conjunction with a non-Google map" (the "never mixed" rule; the Google Maps Platform
-  Terms 3.2.3(e) say the same for Google Maps Content in general).
-- "Google ID Caching": place ids may be cached (not used here).
-- The Maps JavaScript API section has no caching allowance: tiles are never stored.
-
-### 9.5 Matching
-
-`google_roads` under the google package: snapToRoads, 100 points a call, thinned to 5 m
-before sending (built in route quality); run only when someone opens a route (`snap: true`
-from the web only), cached per leg 30 days, `google_roads_daily_cap` 150 through
-`count_call`; at the cap or on an error the leg is raw and the legend says "raw GPS".
-
-### 9.6 Settings, secrets, setup
-
-- Settings → Fleet: the package (effective and chosen), the three caps, today's counts
-  "Map loads 41/300 · Routes 12/150 · Roads 30/150" (from `routing_usage.today`), and which
-  secrets exist (booleans).
-- Secrets by name: `GOOGLE_MAPS_JS_KEY` (browser key, referrer-restricted to
-  `https://fame-fleet.pages.dev/*` and `http://localhost:5173/*`, served by office-api, never
-  in the bundle), `GOOGLE_ROUTES_KEY`, `GOOGLE_ROADS_KEY` (server keys, may be one key
-  restricted to the two APIs); `ORS_KEY` stays as the fallback.
-- `docs/google-maps-setup.md`: the Cloud console steps (project, billing, enable Maps
-  JavaScript API + Routes API + Roads API, the two keys and their restrictions, per-day
-  quotas 330 / 160 / 160 on the three APIs as a hard stop above our caps, a $1 budget
-  alert), the terms quoted above, and how to switch the package off.
+| Key | English | Sinhala |
+|---|---|---|
+| `task.googleNotOnMap` | A Google place: Navigate shows it in Google Maps | Google ස්ථානයකි: මග පෙන්වන්න එය Google Maps හි පෙන්වයි |
 
 ## 10. Tests and checks, per part
 

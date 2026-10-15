@@ -144,7 +144,7 @@ export function TaskDetail() {
             <div className="row" key={s.seq}>
               <span className={`dot ${s.status === "done" ? "ok" : s.status === "skipped" ? "bad" : s.status === "arrived" ? "live" : "warn"}`} />
               <div className="grow">
-                <div className="name">{TYPE_LABEL[s.type as keyof typeof TYPE_LABEL] ?? cap(s.type)}{s.what ? ` · ${WHAT_LABEL[s.what as keyof typeof WHAT_LABEL] ?? s.what}` : ""} · {s.place || s.address || ""}</div>
+                <div className="name">{TYPE_LABEL[s.type as keyof typeof TYPE_LABEL] ?? cap(s.type)}{s.what ? ` · ${WHAT_LABEL[s.what as keyof typeof WHAT_LABEL] ?? s.what}` : ""} · {s.place || s.address || ""}{s.google && <> <Pill tone="live">Google</Pill></>}</div>
                 <div className="sub">
                   {joinDots([
                     s.planned_arrive ? `planned ${s.planned_arrive}${s.planned_depart && s.planned_depart !== s.planned_arrive ? `–${s.planned_depart}` : ""}` : null,

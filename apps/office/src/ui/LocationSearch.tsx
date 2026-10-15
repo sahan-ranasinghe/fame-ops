@@ -7,9 +7,14 @@
 // Picking a Map result or a pin shows it on a small map to confirm (drag the
 // pin or type the numbers) and saves it as one of our places, so it is in the
 // list next time. Free text stays allowed: the server still reads towns.
+// With `google` (a stop or a task's start, under the google package, Part 5)
+// the map layer is Google's place search: one session token per typing
+// session, the pick asks google_place (one Place Details call with the same
+// token) and the stop keeps the Google place id; the list credits "Google
+// Maps". A Google place is never saved as one of ours (Google's terms).
 import { useEffect, useId, useRef, useState } from "react";
 import { useFleet } from "../app/FleetContext";
-import type { PastedPin, PlaceDetail, SearchAnswer, SearchResult } from "../data/types";
+import type { GooglePlaceAnswer, PastedPin, PlaceDetail, SearchAnswer, SearchResult } from "../data/types";
 import { PinMap } from "../map/PinMap";
 import type { FleetError } from "../transport/types";
 import { errText } from "../transport/errors";
@@ -26,7 +31,7 @@ interface Confirming {
   address?: string;
 }
 
-export function LocationSearch({ id, value, onText, onPick, placeholder, label }: {
+export function LocationSearch({ id, value, onText, onPick, placeholder, label, google = false }: {
   id: string;
   value: string;
   /** Every key: the text (a typed name is free text until a row is picked). */
@@ -36,9 +41,14 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label }
   placeholder?: string;
   /** The accessible name when the field has no visible label. */
   label?: string;
+  /** Offer Google's places when the google package is on (a task's stops and start). */
+  google?: boolean;
 }) {
   const { me, transport } = useFleet();
   const canSearch = me.tools.includes("search_places");
+  const useGoogle = google && !!me.map?.places && me.tools.includes("google_place");
+  /** One token per typing session; a pick ends it (the next key starts another). */
+  const session = useRef<string | null>(null);
   const canSave = me.tools.includes("save_place");
   const listId = useId();
   const [open, setOpen] = useState(false);
@@ -61,7 +71,8 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label }
     const mine = ++seq.current;
     const timer = setTimeout(() => {
       setBusy(true);
-      transport.call<SearchAnswer>("search_places", { text })
+      if (useGoogle && !session.current) session.current = crypto.randomUUID();
+      transport.call<SearchAnswer>("search_places", { text, ...(useGoogle ? { google: true, session: session.current } : {}) })
         .then((a) => {
           if (seq.current !== mine) return;
           setAnswer(a);
@@ -73,11 +84,12 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label }
         .finally(() => { if (seq.current === mine) setBusy(false); });
     }, looksPasted(text) ? 0 : DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [value, canSearch, transport]);
+  }, [value, canSearch, transport, useGoogle]);
 
   const pin = answer?.pin;
   const rows: (SearchResult | { layer: "pin"; pin: PastedPin })[] = [...(pin ? [{ layer: "pin" as const, pin }] : []), ...(answer?.results ?? [])];
   const credits = [...new Set((answer?.results ?? []).filter((r) => r.layer === "map" && r.attribution).map((r) => r.attribution!))];
+  const fromGoogle = (answer?.results ?? []).some((r) => r.layer === "google");
 
   function choose(i: number) {
     const row = rows[i];
@@ -89,11 +101,30 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label }
       setConfirming({ name: row.pin.name ?? (looksLikeText ? value.trim() : ""), lat: row.pin.lat, lng: row.pin.lng, from: row.pin.from === "link" ? "link" : "pin" });
       return;
     }
+    if (row.layer === "google" && row.google_place_id) {
+      void pickGoogle(row.name, row.google_place_id);
+      return;
+    }
     if (row.layer === "map" && row.lat !== undefined && row.lng !== undefined) {
       setConfirming({ name: row.name, lat: row.lat, lng: row.lng, from: "map", ref: row.ref, attribution: row.attribution, address: row.detail });
       return;
     }
     onPick(pickedOf(row));
+  }
+
+  async function pickGoogle(name: string, googlePlaceId: string) {
+    setBusy(true);
+    try {
+      const a = await transport.call<GooglePlaceAnswer>("google_place", { google_place_id: googlePlaceId, ...(session.current ? { session: session.current } : {}) });
+      onPick({ name, googlePlaceId, lat: a.lat, lng: a.lng, pinned: true, badge: "Google" });
+      setErr(null);
+    } catch (e) {
+      setErr(errText(e as FleetError)[0]);
+      setOpen(true);
+    } finally {
+      session.current = null;
+      setBusy(false);
+    }
   }
 
   async function save() {
@@ -183,6 +214,7 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label }
           {answer?.map_note && <li className="ls-note" data-testid="map-note">{answer.map_note}</li>}
           {err && <li className="ls-note bad">{err}</li>}
           {credits.length > 0 && <li className="ls-credit">Map results: {credits.join(" · ")}</li>}
+          {fromGoogle && <li className="ls-credit" data-testid="google-credit"><span translate="no" style={{ fontFamily: "Roboto, Arial, sans-serif" }}>Google Maps</span></li>}
         </ul>
       )}
       {confirming && (

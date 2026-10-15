@@ -21,6 +21,7 @@ export function badgeTone(badge: string): Tone {
   if (badge === "Office") return "ok";
   if (badge.startsWith("Site")) return "live";
   if (badge === "Map") return "warn";
+  if (badge === "Google") return "live";
   if (badge === "Used before") return "muted";
   return "";
 }
@@ -29,6 +30,8 @@ export function badgeTone(badge: string): Tone {
 export interface Picked {
   name: string;
   placeId?: string;
+  /** A Google place (Part 5): the stop is sent with google_place_id; its pin is Google's. */
+  googlePlaceId?: string;
   lat?: number;
   lng?: number;
   pinned: boolean;

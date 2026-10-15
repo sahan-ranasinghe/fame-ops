@@ -22,6 +22,8 @@ export interface Me {
   mfa?: boolean;
   /** office-api requires the second step for this role (secret REQUIRE_MFA_ROLES). */
   mfa_required?: boolean;
+  /** Which map the web shows (Part 5): google = Google's map after register_map_load; places = Google's place search for stops. */
+  map?: { package: "google" | "open"; places: boolean };
 }
 
 /** True when the person holds any one of the permissions (none asked = everyone). */
@@ -62,6 +64,7 @@ export const ALL_TOOLS = [
   "list_drivers", "create_driver", "reset_pin", "set_driver_active", "update_driver",
   "list_vehicles", "register_vehicle", "update_vehicle", "add_rental_company",
   "list_places", "add_place", "search_places", "save_place", "place_detail", "import_places", "update_place", "list_import_presets", "save_import_preset", "list_place_imports", "undo_place_import",
+  "google_place", "register_map_load",
   "create_task", "task_board", "task_detail", "cancel_task", "reassign_task",
   "create_request", "list_requests", "suggest_vehicles", "decide_request", "book_vehicle", "cancel_request",
   "mileage_summary", "list_vehicle_reports", "update_vehicle_report",

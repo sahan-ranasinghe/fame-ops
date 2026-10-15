@@ -1,11 +1,13 @@
 // Snap to roads (map matching) for the office's route maps, behind the fleet
 // setting map_matching.provider: none | google_roads | osrm.
 //
-//   google_roads  Google Roads API snapToRoads (secret GOOGLE_ROADS_KEY): GET
-//                 with up to 100 points per call and interpolate=true. Every
-//                 answer point either belongs to an input point (originalIndex)
-//                 or is a road vertex between two; its time is interpolated by
-//                 distance between the two input points around it.
+//   google_roads  Google Roads API snapToRoads (secret GOOGLE_SERVER_KEY; the google
+//                 package, on the web's Google map only, Part 5): GET with up to 100
+//                 points per call and interpolate=true, each call counted before it is
+//                 made (the roads cap; refused = the leg stays raw). Every answer point
+//                 either belongs to an input point (originalIndex) or is a road vertex
+//                 between two; its time is interpolated by distance between the two
+//                 input points around it. Kept 30 days (Roads terms 17.3).
 //   osrm          a self-hosted OSRM /match (secret OSRM_URL, e.g.
 //                 https://osrm.example.com): GET /match/v1/driving/{lng,lat;…}
 //                 with timestamps, radiuses (the accuracy) and per-leg distance
@@ -17,14 +19,16 @@
 // (it stays dashed), a shorter one is bridged by the matcher. Each piece goes
 // in chunks of 100 points, consecutive chunks sharing one point. The answers
 // are stored per driving leg in route_matched (snapLegs); a leg that is still
-// growing (today) is matched again at most every 2 minutes. Every HTTP call is
-// counted per day and provider in routing_calls, like the road-time providers.
-// On any error the leg is drawn from the raw GPS line and the legend says so.
+// growing (today) is matched again at most every 2 minutes, only its new part
+// (from the last matched point on). Every HTTP call is counted per day and
+// provider in routing_calls, like the road-time providers. On any error the leg
+// is drawn from the raw GPS line and the legend says so.
 
 import type { Db } from "./db.ts";
 import { unwrap } from "./db.ts";
 import { simplifyKeep } from "./route.ts";
-import type { MapMatchingProvider } from "./settings.ts";
+import { refusedNote, takeGoogleCall } from "./google.ts";
+import type { GoogleCaps, MapMatchingProvider } from "./settings.ts";
 import { distanceM } from "./track.ts";
 
 export const MATCH_CHUNK = 100;
@@ -182,11 +186,15 @@ export async function matchPoints(
   env: MatchEnv,
   fetchFn: Fetcher = fetch,
   onCall: (ok: boolean) => Promise<void> | void = () => undefined,
+  /** Asked before each HTTP call (Google's cap); a refusal throws its note and the leg stays raw. */
+  gate: () => Promise<string | null> = () => Promise.resolve(null),
 ): Promise<MatchedPoint[]> {
-  if (provider === "google_roads" && !env.key) throw new Error("GOOGLE_ROADS_KEY is not set");
+  if (provider === "google_roads" && !env.key) throw new Error("GOOGLE_SERVER_KEY is not set");
   if (provider === "osrm" && !env.url) throw new Error("OSRM_URL is not set");
   const out: MatchedPoint[] = [];
   for (const chunk of chunkForMatching(points)) {
+    const refused = await gate();
+    if (refused) throw new Error(refused);
     const url = provider === "google_roads" ? googleRoadsRequest(chunk, env.key!) : osrmRequest(chunk, env.url!);
     let json: unknown;
     try {
@@ -226,8 +234,8 @@ export interface SnapResult {
   legs: SnappedLeg[];
 }
 
-function envFor(provider: MapMatchingProvider): MatchEnv {
-  return { key: Deno.env.get("GOOGLE_ROADS_KEY") ?? undefined, url: Deno.env.get("OSRM_URL") ?? undefined };
+function envFor(): MatchEnv {
+  return { key: Deno.env.get("GOOGLE_SERVER_KEY") ?? undefined, url: Deno.env.get("OSRM_URL") ?? undefined };
 }
 
 /**
@@ -243,8 +251,16 @@ export async function snapLegs(
   legs: SnapLeg[],
   now: Date,
   fetchFn: Fetcher = fetch,
+  /** Google's caps: every snapToRoads call is recorded before it is made. */
+  caps?: GoogleCaps,
 ): Promise<SnapResult> {
-  const env = envFor(provider);
+  const env = envFor();
+  const gate = async (): Promise<string | null> => {
+    if (provider !== "google_roads") return null;
+    if (!caps) return refusedNote("roads", "counter");
+    const g = await takeGoogleCall(db, "roads", caps);
+    return g.allowed ? null : refusedNote("roads", g.reason, g);
+  };
   const stored = unwrap(
     await db.from("route_matched").select("leg_from, leg_to, geometry, matched_at, status")
       .eq("employee_id", employeeId).eq("date", date).eq("provider", provider),
@@ -269,8 +285,13 @@ export async function snapLegs(
       out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });
       continue;
     }
+    // A leg that grew since its last match: only the new part goes out, joined to the stored one.
+    const stored = have && have.status === "ok" && haveTo !== null && haveTo < leg.to ? geometryOf(have.geometry) : [];
     try {
-      const points = await matchPoints(provider, leg.points, env, fetchFn, bump);
+      const tail = stored.length ? leg.points.filter((p) => p.at >= haveTo!) : leg.points;
+      const fresh = tail.length >= 2 ? await matchPoints(provider, tail, env, fetchFn, bump, gate) : [];
+      const lastAt = stored.length ? stored[stored.length - 1].at : -Infinity;
+      const points = [...stored, ...fresh.filter((p) => p.at > lastAt)];
       await db.from("route_matched").upsert({
         employee_id: employeeId,
         date,
@@ -287,6 +308,14 @@ export async function snapLegs(
       failed += 1;
       const message = error instanceof Error ? error.message : String(error);
       console.error(`map matching ${provider}: ${message}`);
+      if (stored.length) {
+        // The part matched before stays; the new part is raw until the next try (2 minutes on).
+        await db.from("route_matched").update({ matched_at: now.toISOString(), error: message.slice(0, 200) })
+          .eq("employee_id", employeeId).eq("date", date).eq("provider", provider).eq("leg_from", new Date(leg.from).toISOString())
+          .then(() => undefined, () => undefined);
+        out.push({ from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: haveTo! });
+        continue;
+      }
       await db.from("route_matched").upsert({
         employee_id: employeeId,
         date,

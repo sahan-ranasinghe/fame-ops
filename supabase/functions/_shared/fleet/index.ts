@@ -18,7 +18,21 @@ import { driverRoute, liveDrivers, watchDrivers } from "./tools/locations.ts";
 import { listFuel } from "./tools/fuel.ts";
 import { listVehicleReports, mileageSummary, updateVehicleReport } from "./tools/mileage.ts";
 import { fleetOverview } from "./tools/overview.ts";
-import { addPlace, importPlaces, listImportPresets, listPlaceImports, listPlaces, placeDetail, saveImportPreset, savePlace, searchPlaces, undoPlaceImport, updatePlace } from "./tools/places.ts";
+import {
+  addPlace,
+  googlePlace,
+  importPlaces,
+  listImportPresets,
+  listPlaceImports,
+  listPlaces,
+  placeDetail,
+  saveImportPreset,
+  savePlace,
+  searchPlaces,
+  undoPlaceImport,
+  updatePlace,
+} from "./tools/places.ts";
+import { registerMapLoad } from "./tools/google.ts";
 import { findProject, importProjects } from "./tools/projects.ts";
 import { availability } from "./tools/availability.ts";
 import { bookVehicle, cancelRequest, createRequest, decideRequest, listRequests, redecideRequest, suggestVehicles, updateRequest } from "./tools/requests.ts";
@@ -53,6 +67,8 @@ export const TOOLS: AnyTool[] = [
   saveImportPreset,
   listPlaceImports,
   undoPlaceImport,
+  googlePlace,
+  registerMapLoad,
   createTask,
   taskBoard,
   taskDetail,
@@ -120,6 +136,11 @@ export const INSTRUCTIONS = [
   "Every fuel fill has a silent video from the driver's phone (list_fuel: the month's entries with 1-hour video links; task_detail " +
   "shows a task's fills, each with marks: the steps the driver ticked and the second of each). Videos are kept 12 months (fuel_video_keep_months). " +
   "The steps the driver shows in order while recording are the setting fuel_video_checklist (plate, zero, pumping, final by default).",
+  "The Google package (get_settings google): search_places with google offers Google's places (credit them \"Google Maps\"); " +
+  "google_place gives a result's pin (kept 30 days, never saved as one of our places) and a stop takes its google_place_id with the " +
+  "name as place. Plans and ETAs then use Google's traffic. Every Google call is counted against a daily and a monthly cap; at a cap " +
+  "the open package answers and a note says so. Google's terms: never draw a Google stop (google: true) or Google data on a map that " +
+  "is not Google's (list it instead).",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
@@ -144,3 +165,5 @@ export {
 export { type Actor, canCall, type Channel, isRole, mfaRequiredRoles, OFFICE_ROLES, type Role, STRONG_ROLES, TOOL_ROLES } from "./roles.ts";
 export { runTool, type ToolOutcome } from "./run.ts";
 export type { AnyTool } from "./tool.ts";
+export { googleUse } from "./google.ts";
+export { loadSettings } from "./settings.ts";

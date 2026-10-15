@@ -10,6 +10,8 @@ import { ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { basePoint } from "../eta.ts";
 import { mapsPoint } from "../format.ts";
 import { orsAutocomplete, PUBLIC_MIN_CHARS, type PublicPlace } from "../geocode.ts";
+import { GOOGLE_ATTRIBUTION, googleUse } from "../google.ts";
+import { GOOGLE_MIN_CHARS, googlePin, googleSuggestions } from "../googlePlaces.ts";
 import { pastedPin } from "../pasted.ts";
 import { BUILT_IN, type Field, FIELDS, type Mapping, type Preset } from "../sites.ts";
 import { loadSettings } from "../settings.ts";
@@ -160,7 +162,8 @@ export const addPlace = tool({
 // --- the search box -------------------------------------------------------------------------
 
 export interface SearchResult {
-  layer: "place" | "recent" | "map";
+  /** google: a Google place search result (the google package): a google_place_id, no pin until google_place. */
+  layer: "place" | "recent" | "map" | "google";
   badge: string;
   name: string;
   /** The second line: the site id and district, the address, the map's longer label. */
@@ -177,6 +180,8 @@ export interface SearchResult {
   /** map: the provider's id and the credit to keep when it is saved. */
   ref?: string;
   attribution?: string;
+  /** google: the place id (kept for good); its pin comes from google_place (kept 30 days). */
+  google_place_id?: string;
 }
 
 type RankedRow = { id: string; name: string; address: string | null; kind: string; operator: string; site_id: string | null; other_ids: string[]; district: string | null; depot: string | null; lat: number | null; lng: number | null };
@@ -210,14 +215,20 @@ export const searchPlaces = tool({
     "tasks or requests in the last 90 days, then public places in Sri Lanka from the map search (from 3 characters; a daily " +
     "limit, after which map_note says so). Each result has a badge: Office, Site · Dialog, Site · Mobitel, Saved, Used before, " +
     "Map. A pasted \"lat, lng\" or Google Maps link (also a maps.app.goo.gl short link) answers `pin` instead. Use a place's " +
-    "id as a stop's place_id; save a Map result or a pin with save_place first.",
+    "id as a stop's place_id; save a Map result or a pin with save_place first. With google (the google package), the map " +
+    "layer is Google's place search instead (badge Google, credit Google Maps): a result has google_place_id and no pin; " +
+    "google_place gives its pin, and a stop takes google_place_id with the name as place. Every Google request is counted; " +
+    "at the cap the map layer is openrouteservice's again and map_note says why.",
   readOnly: true,
   input: z.object({
     text: zText(500).describe("What was typed or pasted: a name, a site id, \"lat, lng\" or a Google Maps link"),
     limit: z.number().int().min(1).max(20).optional().describe("Our places at most (default 8)"),
     map: z.boolean().optional().describe("Also ask the map search (default true)"),
+    google: z.boolean().optional().describe("The map layer from Google's place search when the google package is on (default false)"),
+    session: z.string().regex(/^[A-Za-z0-9_-]{8,36}$/, "a session token: 8 to 36 letters, digits, - or _").optional()
+      .describe("One token per typing session in one box, the same on the google_place call that ends it"),
   }),
-  async run({ text, limit = 8, map = true }, { db, now }) {
+  async run({ text, limit = 8, map = true, google = false, session }, { db, now }) {
     const typed = text.trim();
     const pin = await pastedPin(typed);
     if (pin) {
@@ -247,7 +258,24 @@ export const searchPlaces = tool({
     let mapNote: string | undefined;
     let mapCached: boolean | undefined;
     let mapResults: SearchResult[] = [];
-    if (map && typed.length >= PUBLIC_MIN_CHARS) {
+    let googleAsked = false;
+    if (map && google && googleUse(settings).places && typed.length >= GOOGLE_MIN_CHARS) {
+      googleAsked = true;
+      const base = await basePoint(db, settings);
+      const found = await googleSuggestions(db, settings, typed, { session, focus: base?.point ?? null });
+      mapNote = found.note;
+      mapResults = found.places.map((g) => ({
+        layer: "google" as const,
+        badge: "Google",
+        name: g.name,
+        detail: g.secondary,
+        pinned: false,
+        google_place_id: g.place_id,
+        attribution: GOOGLE_ATTRIBUTION,
+      }));
+    }
+    // The open package's map search: always without google, and when Google refused or failed.
+    if (map && typed.length >= PUBLIC_MIN_CHARS && (!googleAsked || mapNote)) {
       const base = await basePoint(db, settings);
       const found = await orsAutocomplete(typed, {
         db,
@@ -257,7 +285,7 @@ export const searchPlaces = tool({
         focus: base?.point ? { lat: base.point.lat, lng: base.point.lng } : null,
         now,
       });
-      mapNote = found.note;
+      mapNote = [mapNote, found.note].filter(Boolean).join(" · ") || undefined;
       mapCached = found.cached;
       mapResults = found.places
         // A public place that is one of ours (same name, within 50 m) is not shown twice.
@@ -278,6 +306,41 @@ export const searchPlaces = tool({
     return {
       result: { text: typed, results, map_note: mapNote, map_cached: mapCached },
       summary: `search "${typed.slice(0, 40)}": ${ours.length} ours, ${recent.length} used before, ${mapResults.length} map${mapNote ? ` (${mapNote})` : ""}`,
+    };
+  },
+});
+
+export const googlePlace = tool({
+  name: "google_place",
+  title: "A Google place's pin",
+  description: "The pin and address of a Google place search result (search_places with google): one Place Details call with the " +
+    "Essentials fields only (location, address), counted before it is made, ending the typing session (pass its session). The " +
+    "answer is kept 30 days by place id and is never saved as one of our places (Google's terms keep only the place id); a " +
+    "stop takes google_place_id with the result's name as place. Refused at the cap: the note says so.",
+  readOnly: false,
+  input: z.object({
+    google_place_id: zText(300),
+    session: z.string().regex(/^[A-Za-z0-9_-]{8,36}$/, "a session token: 8 to 36 letters, digits, - or _").optional(),
+  }),
+  async run({ google_place_id, session }, { db, now }) {
+    const settings = await loadSettings(db);
+    const got = await googlePin(db, settings, google_place_id, { session, now });
+    if ("note" in got) throw new ToolError(`${got.note}. Pick one of our places, paste a pin or type the address instead.`);
+    const pin = got.pin;
+    return {
+      result: {
+        google_place_id: pin.google_place_id,
+        lat: pin.lat,
+        lng: pin.lng,
+        address: pin.address ?? undefined,
+        short_address: pin.short_address ?? undefined,
+        district: pin.district ?? undefined,
+        fetched_at: colomboDateTime(pin.fetched_at),
+        kept_until: colomboDateTime(new Date(new Date(pin.fetched_at).getTime() + 30 * 86400000).toISOString()),
+        attribution: GOOGLE_ATTRIBUTION,
+        maps: mapsPoint(pin.lat, pin.lng),
+      },
+      summary: `google place ${google_place_id.slice(0, 40)}`,
     };
   },
 });

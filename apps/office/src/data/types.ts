@@ -140,6 +140,9 @@ export interface Stop {
   arrived?: string;
   /** The driver's phone was within 150 m (the arrival nudge), "HH:MM"; beside the driver's own tap. */
   auto_detected?: string;
+  /** A Google place (Part 5): its pin is drawn on Google's map only; the id is kept, the details 30 days. */
+  google?: boolean;
+  google_place_id?: string;
   done?: string;
   skip_reason?: string;
   skip_note?: string;
@@ -478,7 +481,8 @@ export interface Place {
 
 /** search_places: one row of the location search box (Part 4). */
 export interface SearchResult {
-  layer: "place" | "recent" | "map";
+  /** google: Google's place search (the google package): a google_place_id, no pin until google_place. */
+  layer: "place" | "recent" | "map" | "google";
   badge: string;
   name: string;
   detail?: string;
@@ -492,6 +496,20 @@ export interface SearchResult {
   last_used?: string;
   ref?: string;
   attribution?: string;
+  google_place_id?: string;
+}
+
+/** google_place: a Google result's pin (kept 30 days on the server, never one of our places). */
+export interface GooglePlaceAnswer {
+  google_place_id: string;
+  lat: number;
+  lng: number;
+  address?: string;
+  short_address?: string;
+  district?: string;
+  fetched_at: string;
+  kept_until: string;
+  attribution: string;
 }
 
 export interface PastedPin {
@@ -644,6 +662,24 @@ export interface FleetSettings {
   /** The location search's map calls a day and a minute (openrouteservice autocomplete; Part 4, 4b). */
   ors_autocomplete_daily_cap?: number;
   ors_autocomplete_per_minute?: number;
+  /** Part 5: google (Google's map, places, traffic times, snap where keys exist) or open. */
+  map_package?: "google" | "open";
+  /** Google calls a day and a month per feature; the month at most 95 % of the free usage. */
+  google_caps?: Record<GoogleFeature, { day: number; month: number }>;
+}
+
+export type GoogleFeature = "map_loads" | "places_autocomplete" | "places_details" | "routes" | "roads";
+
+export interface GoogleFeatureUsage {
+  feature: GoogleFeature;
+  label: string;
+  today: number;
+  day_cap: number;
+  month: number;
+  month_cap: number;
+  refused_today: number;
+  on: boolean;
+  note?: string;
 }
 
 export interface ChecklistItem {
@@ -660,6 +696,14 @@ export interface SettingsResult {
   about: Record<string, string>;
   base_place: { id: string; name: string; address?: string | null; has_pin: boolean } | null;
   routing_provider: string;
+  /** Part 5: the package in use, the keys set (never the keys), each feature's calls against its caps. */
+  google?: {
+    package: "google" | "open";
+    chosen: "google" | "open";
+    configured: { js: boolean; server: boolean };
+    in_use: { map: boolean; places: boolean; routes: boolean; roads: boolean };
+    usage: GoogleFeatureUsage[];
+  };
   note?: string;
 }
 

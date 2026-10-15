@@ -19,6 +19,7 @@ import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { colomboTime } from '@/lib/time';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
+import { drawnDestination, stopPoint } from '@/lib/mapRule';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -57,7 +58,12 @@ function useMyPosition(enabled: boolean): LngLat | null {
   return position;
 }
 
-function TaskMap({ me, destination, label }: { me: LngLat | null; destination: LngLat | null; label: string }) {
+/**
+ * The task map (OpenFreeMap). A stop that is a Google place (google_place_id: its pin came from Google's
+ * place search) is never drawn here: Google's terms allow its coordinates on Google's map only, so the
+ * map shows the phone and a line under it that says Navigate opens the stop in Google Maps.
+ */
+function TaskMap({ me, destination, label, note }: { me: LngLat | null; destination: LngLat | null; label: string; note?: string | null }) {
   // Re-frame only when a position moves noticeably (about 1 km), not on every GPS update.
   const round = (p: LngLat | null) => (p ? `${p[0].toFixed(2)},${p[1].toFixed(2)}` : '');
   const frameKey = `${round(me)}|${round(destination)}`;
@@ -82,6 +88,7 @@ function TaskMap({ me, destination, label }: { me: LngLat | null; destination: L
   }, [me, destination]);
 
   return (
+    <>
     <Map style={StyleSheet.absoluteFill} mapStyle={MAP_STYLE} logo={false} compass={false} touchPitch={false} touchRotate={false}>
       <Camera {...camera} duration={600} easing="ease" />
       {line && (
@@ -107,6 +114,12 @@ function TaskMap({ me, destination, label }: { me: LngLat | null; destination: L
         </Marker>
       )}
     </Map>
+    {note ? (
+      <View style={styles.mapNote} pointerEvents="none">
+        <Txt variant="strong" size={14} color="#ffffff">{note}</Txt>
+      </View>
+    ) : null}
+    </>
   );
 }
 
@@ -146,7 +159,7 @@ export default function TaskScreen() {
   }
 
   const stop = nextStop(task);
-  const destination: LngLat | null = stop?.lat != null && stop.lng != null ? [stop.lng, stop.lat] : null;
+  const destination: LngLat | null = stopPoint(stop);
   const km = myPosition && destination
     ? distanceKm({ lat: myPosition[1], lng: myPosition[0] }, { lat: destination[1], lng: destination[0] })
     : null;
@@ -189,7 +202,14 @@ export default function TaskScreen() {
     <View style={styles.page}>
       <StatusBar style="dark" />
       <View style={{ height: running ? Math.round(height * 0.4) : insets.top + 76, backgroundColor: colors.mapLand }}>
-        {running && <TaskMap me={myPosition} destination={destination} label={stop?.place_name ?? ''} />}
+        {running && (
+          <TaskMap
+            me={myPosition}
+            destination={drawnDestination(stop, false)}
+            label={stop?.place_name ?? ''}
+            note={stop?.google_place_id ? t('task.googleNotOnMap') : null}
+          />
+        )}
         {overlay}
       </View>
 
@@ -369,6 +389,7 @@ const styles = StyleSheet.create({
   },
   pillDot: { width: 10, height: 10, borderRadius: 5 },
   mapLabel: { backgroundColor: colors.ink, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, maxWidth: 220 },
+  mapNote: { position: 'absolute', left: 16, right: 16, bottom: 16, backgroundColor: colors.ink, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
   destinationDot: { width: 20, height: 20, borderRadius: 5, backgroundColor: colors.ink, borderWidth: 3, borderColor: '#ffffff' },
   meHalo: { width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(30,79,160,0.22)', alignItems: 'center', justifyContent: 'center' },
   meDot: { width: 24, height: 24, borderRadius: 7, backgroundColor: colors.blue, borderWidth: 3, borderColor: '#ffffff' },

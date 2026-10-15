@@ -45,7 +45,29 @@ export interface Settings {
   ors_autocomplete_daily_cap: number;
   /** … and a minute (the throttle, under the dashboard's 100 a minute shared by all geocoding). */
   ors_autocomplete_per_minute: number;
+  /** google: Google's map, place search, road times and snapping where its keys exist; open: OpenFreeMap, openrouteservice, the estimate (Part 5). */
+  map_package: MapPackage;
+  /** Google calls a day and a month per feature (Colombo time); the month never above 95 % of Google's free usage. */
+  google_caps: GoogleCaps;
 }
+
+export type MapPackage = "google" | "open";
+export type GoogleFeature = "map_loads" | "places_autocomplete" | "places_details" | "routes" | "roads";
+export const GOOGLE_FEATURES: GoogleFeature[] = ["map_loads", "places_autocomplete", "places_details", "routes", "roads"];
+export type GoogleCaps = Record<GoogleFeature, { day: number; month: number }>;
+
+/**
+ * 95 % of each feature's free monthly usage (google_hard_ceiling() in the database says the same):
+ * Dynamic Maps, Place Details Essentials and Autocomplete Requests 10,000 a month; Compute Routes Pro
+ * and Roads (snap to roads) 5,000. No setting goes above these.
+ */
+export const GOOGLE_HARD_CEILING: Record<GoogleFeature, number> = {
+  map_loads: 9500,
+  places_autocomplete: 9500,
+  places_details: 9500,
+  routes: 4750,
+  roads: 4750,
+};
 
 export type VideoQuality = "480p" | "720p";
 
@@ -88,6 +110,16 @@ export const SETTINGS_DEFAULTS: Settings = {
   fuel_video_keep_months: 12,
   ors_autocomplete_daily_cap: 2500,
   ors_autocomplete_per_minute: 90,
+  map_package: "google",
+  google_caps: {
+    map_loads: { day: 400, month: 9500 },
+    places_autocomplete: { day: 400, month: 9500 },
+    places_details: { day: 400, month: 9500 },
+    routes: { day: 200, month: 4750 },
+    // Off until the office confirms Google's licence: the Roads policies say an asset tracking
+    // application may need an asset tracking licence (docs/google-maps-setup.md).
+    roads: { day: 0, month: 0 },
+  },
 };
 
 export type SettingKey = keyof Settings;
@@ -115,6 +147,10 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   ors_autocomplete_daily_cap:
     "The location search's map calls a day (openrouteservice geocode autocomplete; the dashboard's Geocoding quota of 3,000 a day is shared with search and reverse): after it only our own places show, with \"Map search limit reached for today\"; answers are cached 30 days and never count",
   ors_autocomplete_per_minute: "… and a minute (the dashboard allows 100 a minute for all geocoding): over it the box says \"Map search is busy, try again in a minute\"",
+  map_package:
+    "The map package: google (Google's map, place search, traffic-aware road times and snap to roads, each where its key is set and under its caps) or open (OpenFreeMap, openrouteservice, the estimate); never mixed on one map",
+  google_caps:
+    "Google calls a day and a month per feature (map_loads, places_autocomplete, places_details, routes, roads; Colombo time): each call is counted before it is made (every autocomplete request, since a session ending in a pick still pays for its first 12) and refused at either cap, and the open package takes over until the next day or the 1st; the month at most 95 % of Google's free usage (9,500 for maps, autocomplete and place details; 4,750 for routes and roads)",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -191,6 +227,25 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       return number(value, key, 0, 100000, true);
     case "ors_autocomplete_per_minute":
       return number(value, key, 1, 100, true);
+    case "map_package":
+      if (value !== "google" && value !== "open") throw new ToolError("map_package: google or open.");
+      return value;
+    case "google_caps": {
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new ToolError("google_caps: an object { feature: { day, month } } for map_loads, places_autocomplete, places_details, routes and roads.");
+      }
+      const given = value as Record<string, { day?: unknown; month?: unknown } | undefined>;
+      const unknown = Object.keys(given).filter((k) => !GOOGLE_FEATURES.includes(k as GoogleFeature));
+      if (unknown.length) throw new ToolError(`google_caps: "${unknown[0]}" is not a feature (map_loads, places_autocomplete, places_details, routes, roads).`);
+      const out = {} as GoogleCaps;
+      for (const f of GOOGLE_FEATURES) {
+        const c = given[f];
+        if (!c) throw new ToolError(`google_caps.${f}: { day, month } is needed.`);
+        const month = number(c.month, `google_caps.${f}.month`, 0, GOOGLE_HARD_CEILING[f], true);
+        out[f] = { day: number(c.day, `google_caps.${f}.day`, 0, month, true), month };
+      }
+      return out;
+    }
     case "fuel_video_keep_months":
       if (value !== 6 && value !== 12) throw new ToolError("fuel_video_keep_months: 6 or 12.");
       return value;

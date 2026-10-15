@@ -20,6 +20,8 @@ export interface AssignFields {
   start: string;
   /** The start picked in the search box (Part 4). */
   startPlaceId?: string;
+  /** The start picked from Google's place search (Part 5). */
+  startGooglePlaceId?: string;
   returnToBase: boolean;
   avoidExpressway: boolean;
   buffer: string;
@@ -49,7 +51,12 @@ export function planInput(f: AssignFields): Record<string, unknown> | null {
   if (!t(f.leaveBy) && !hasDeadline(f.stops)) return null;
   const input: Record<string, unknown> = { date: t(f.date), stops: s.stops };
   if (t(f.leaveBy)) input.leave_by = t(f.leaveBy);
-  if (t(f.start) || f.startPlaceId) input.start = { ...(f.startPlaceId ? { place_id: f.startPlaceId } : {}), ...(t(f.start) ? { place: t(f.start) } : {}) };
+  if (t(f.start) || f.startPlaceId || f.startGooglePlaceId) {
+    input.start = {
+      ...(f.startPlaceId ? { place_id: f.startPlaceId } : f.startGooglePlaceId ? { google_place_id: f.startGooglePlaceId } : {}),
+      ...(t(f.start) ? { place: t(f.start) } : {}),
+    };
+  }
   if (f.returnToBase) input.return_to_base = true;
   if (f.avoidExpressway) input.avoid_expressway = true;
   if (t(f.buffer) !== "") input.buffer_min = Math.max(0, Math.min(600, parseInt(t(f.buffer), 10) || 0));

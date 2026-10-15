@@ -29,13 +29,15 @@ import { centsToLkr, contactLinks, mapsDirections, telLink, waLink } from "../fo
 import { GPS_KM_NOTE, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { videoCard, videoLinks } from "../videos.ts";
-import { type Plan, type PlanPoint, type PlanStop, planTask as runPlanner, type StopType, type What } from "../plan.ts";
-import { legFnFor, providerFromEnv } from "../routing.ts";
+import { legSequence, type Plan, type PlanInput, type PlanPoint, type PlanStop, planTask as runPlanner, type StopType, type What } from "../plan.ts";
+import { estimateLegFn, googleLegs, legFnFor, memoLegFn, providerFromEnv } from "../routing.ts";
+import { googleUse } from "../google.ts";
 import { notifyEvent } from "../notifications.ts";
 import type { Actor } from "../roles.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
+import { endOfDay, type GooglePin, googlePin } from "../googlePlaces.ts";
 import { findPlace, placeById } from "./places.ts";
 import { findOneProject } from "./projects.ts";
 
@@ -103,6 +105,9 @@ export const zStop = z.object({
   type: zStopType,
   what: zWhat.optional().describe("What is picked up or dropped: people, goods, documents, other"),
   place_id: zId.optional().describe("A place picked with search_places (wins over place)"),
+  google_place_id: zText(300).optional().describe(
+    "A Google place picked with search_places (google) and google_place: its pin is Google's (kept 30 days); give its name as place",
+  ),
   place: zText(160).optional().describe("A saved place name or site id, a town, or free text"),
   address: zText(240).optional(),
   lat: zLat.optional(),
@@ -114,6 +119,7 @@ export const zStop = z.object({
 export const zStops = z.array(zStop).min(1).max(12);
 export const zStart = z.object({
   place_id: zId.optional().describe("A place picked with search_places"),
+  google_place_id: zText(300).optional().describe("A Google place picked with search_places (google); give its name as place"),
   place: zText(160).optional(),
   address: zText(240).optional(),
   lat: zLat.optional(),
@@ -132,8 +138,8 @@ export interface ResolvedStop {
   dwell_min: number | null;
   arrive_by: string | null;
   note: string | null;
-  /** Where the pin came from: a saved place, a town centre, the given lat/lng, or none. */
-  pin_from: "place" | "town" | "given" | null;
+  /** Where the pin came from: a saved place, a town centre, the given lat/lng, a Google place, or none. */
+  pin_from: "place" | "town" | "given" | "google" | null;
   planned_arrive_at?: string;
   planned_depart_at?: string;
 }
@@ -181,6 +187,24 @@ export async function resolveStops(
   const out: ResolvedStop[] = [];
   for (const [i, s] of list.entries()) {
     const typed = (s.place ?? s.address ?? "").trim();
+    if (s.google_place_id && !s.place_id) {
+      const pin = await pinForTask(db, s.google_place_id, day);
+      out.push({
+        seq: firstSeq + i,
+        type: s.type,
+        what: s.what ?? null,
+        place_id: null,
+        place_name: typed || pin.short_address || pin.address || `Stop ${i + 1}`,
+        address: pin.address,
+        lat: pin.lat,
+        lng: pin.lng,
+        dwell_min: s.dwell_min ?? null,
+        arrive_by: arriveByIso(day, s.arrive_by),
+        note: s.note ?? null,
+        pin_from: "google",
+      });
+      continue;
+    }
     if (!s.place_id && !typed && (s.lat === undefined || s.lng === undefined)) {
       throw new ToolError(`Stop ${i + 1}: give a place, an address or lat and lng.`);
     }
@@ -215,8 +239,31 @@ export async function resolveStops(
   return out;
 }
 
-/** The start place: the given one (saved place, town or pin), else the base place, else none. */
-export async function resolveStart(db: Db, settings: Settings, start: z.infer<typeof zStart> | undefined): Promise<ResolvedStart | null> {
+/**
+ * A Google place's pin for a task on `day`: the kept one when it lasts past the day, else one counted
+ * Place Details call; refused (a cap, no key) = the stop cannot be placed on Google's pin, said plainly.
+ */
+async function pinForTask(db: Db, googlePlaceId: string, day: string): Promise<GooglePin> {
+  const settings = await loadSettings(db);
+  const now = new Date();
+  const got = await googlePin(db, settings, googlePlaceId, { until: endOfDay(day), now });
+  if ("note" in got) {
+    throw new ToolError(`${got.note}. Pick one of our places, paste a pin or type the address instead.`);
+  }
+  return got.pin;
+}
+
+/** The start place: the given one (saved place, Google place, town or pin), else the base place, else none. */
+export async function resolveStart(
+  db: Db,
+  settings: Settings,
+  start: z.infer<typeof zStart> | undefined,
+  day?: string,
+): Promise<ResolvedStart | null> {
+  if (start?.google_place_id && !start.place_id) {
+    const pin = await pinForTask(db, start.google_place_id, day ?? colomboDate(new Date()));
+    return { place_id: null, name: (start.place ?? "").trim() || pin.short_address || pin.address || "Start", lat: pin.lat, lng: pin.lng };
+  }
   if (start && (start.place_id || start.place || start.address || start.lat !== undefined)) {
     const typed = (start.place ?? start.address ?? "").trim();
     const place = start.place_id ? await placeById(db, start.place_id) : typed ? await findPlace(db, typed) : null;
@@ -266,20 +313,35 @@ export async function makePlan(db: Db, settings: Settings, p: PlanRequest): Prom
     arrive_by: s.arrive_by,
   }));
   const startPoint = p.origin ?? point(p.start);
-  const plan = await runPlanner(
-    {
-      now: p.now.toISOString(),
-      start: startPoint ? { name: p.start?.name ?? "here", point: startPoint } : null,
-      base: base ? { name: base.name, point: base.point } : null,
-      stops,
-      return_to_base: p.returnToBase,
-      avoid_expressway: p.avoidExpressway,
-      leave_at: p.leaveAt,
-      buffer_min: p.bufferMin,
-    },
-    settings,
-    legFnFor(db, settings),
-  );
+  const input: PlanInput = {
+    now: p.now.toISOString(),
+    start: startPoint ? { name: p.start?.name ?? "here", point: startPoint } : null,
+    base: base ? { name: base.name, point: base.point } : null,
+    stops,
+    return_to_base: p.returnToBase,
+    avoid_expressway: p.avoidExpressway,
+    leave_at: p.leaveAt,
+    buffer_min: p.bufferMin,
+  };
+  const open = legFnFor(db, settings);
+  const points = legSequence(input);
+  let plan: Plan;
+  let googleNote: string | undefined;
+  if (googleUse(settings).routes && points.length >= 2) {
+    // A rough pass on the estimate (no calls) finds when the trip leaves; one Google call then
+    // answers every leg at that time, and the planner's passes read those legs.
+    const rough = await runPlanner(input, settings, estimateLegFn(settings));
+    const departAt = new Date(rough.leave_by).getTime() > p.now.getTime() ? rough.leave_by : p.now.toISOString();
+    const got = await googleLegs(db, settings, points, departAt, { avoid_expressway: p.avoidExpressway }, p.now);
+    if ("legs" in got) {
+      plan = await runPlanner(input, settings, memoLegFn(got.legs, open));
+    } else {
+      googleNote = got.note;
+      plan = await runPlanner(input, settings, open);
+    }
+  } else {
+    plan = await runPlanner(input, settings, open);
+  }
   for (const s of p.stops) {
     const planned = plan.stops.find((x) => x.seq === s.seq);
     if (planned) {
@@ -293,14 +355,15 @@ export async function makePlan(db: Db, settings: Settings, p: PlanRequest): Prom
     settings_used: {
       dwell_min: settings.dwell_min,
       buffer_min: plan.buffer_min,
-      provider: providerFromEnv(Deno.env.get("ROUTING_PROVIDER")),
+      provider: plan.legs.some((l) => l.source === "google") ? "google" : providerFromEnv(Deno.env.get("ROUTING_PROVIDER")),
+      ...(googleNote ? { google_note: googleNote } : {}),
     },
   };
 }
 
 const SOURCE_LABEL: Record<string, string> = {
   ors: "road time · OpenRouteService",
-  google: "road time · Google",
+  google: "road time · Google traffic",
   estimate: "estimate — no routing key",
 };
 
@@ -308,7 +371,8 @@ const SOURCE_LABEL: Record<string, string> = {
 export function planSummary(plan: Plan | null | undefined, stopNames: Map<number, string>) {
   if (!plan || !Array.isArray(plan.legs)) return undefined;
   const sources = new Set(plan.legs.map((l) => l.source));
-  const source = sources.has("ors") ? "ors" : sources.has("google") ? "google" : "estimate";
+  const source = sources.has("google") ? "google" : sources.has("ors") ? "ors" : "estimate";
+  const googleNote = (plan as Partial<StoredPlan>).settings_used?.google_note;
   const name = (seq: number) => seq === 0 ? "start" : seq === -1 ? "base" : stopNames.get(seq) ?? `stop ${seq}`;
   return {
     source,
@@ -332,6 +396,7 @@ export function planSummary(plan: Plan | null | undefined, stopNames: Map<number
       factor: l.factor !== 1 ? l.factor : undefined,
     })),
     warnings: (plan.warnings ?? []).map((w) => w.text),
+    google_note: typeof googleNote === "string" ? googleNote : undefined,
   };
 }
 
@@ -351,6 +416,9 @@ function stopCard(s: ResolvedStop | TaskStop) {
     lat: s.lat ?? undefined,
     lng: s.lng ?? undefined,
     pin: "pin_from" in s ? s.pin_from ?? "none" : s.lat != null ? "yes" : "none",
+    // A Google place: its pin is drawn on Google's map only (listed, not drawn, anywhere else).
+    google: ("pin_from" in s && s.pin_from === "google") || ("google_place_id" in s && !!s.google_place_id) ? true : undefined,
+    google_place_id: "google_place_id" in s ? s.google_place_id ?? undefined : undefined,
   };
 }
 
@@ -542,7 +610,7 @@ export async function prepareTask(db: Db, settings: Settings, now: Date, args: {
   buffer_min?: number;
 }) {
   const stops = await resolveStops(db, args.day, args);
-  const start = await resolveStart(db, settings, args.start);
+  const start = await resolveStart(db, settings, args.start, args.day);
   const hasDeadline = stops.some((s) => s.arrive_by);
   if (!args.leaveAt && !hasDeadline) {
     throw new ToolError("Give start_time (or leave_by), or an arrive_by time on a stop so the leave-by time can be planned.");
@@ -798,7 +866,7 @@ export const updateTaskStops = tool({
     const day = colomboDate(task.start_at);
     const stops = await resolveStops(db, day, { stops: args.stops }, nextSeq);
     const start = args.start
-      ? await resolveStart(db, settings, args.start)
+      ? await resolveStart(db, settings, args.start, day)
       : (task.start_name
         ? { place_id: task.start_place_id, name: task.start_name, lat: task.start_lat, lng: task.start_lng }
         : await resolveStart(db, settings, undefined));

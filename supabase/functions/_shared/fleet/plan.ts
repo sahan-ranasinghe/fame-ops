@@ -197,6 +197,20 @@ async function forward(
   return { legs, stops, ends_at: at };
 }
 
+/**
+ * The points the legs of a pass join, in order (the same walk as forward): the start (or the base),
+ * every stop with a pin, the base again when the trip returns there. One routing call can answer
+ * all the legs at once: leg i joins points i and i + 1.
+ */
+export function legSequence(input: Pick<PlanInput, "start" | "base" | "stops" | "return_to_base">): PlanPoint[] {
+  const out: PlanPoint[] = [];
+  const first = input.start?.point ?? input.base?.point ?? null;
+  if (first) out.push(first);
+  for (const stop of input.stops) if (stop.point) out.push(stop.point);
+  if (input.return_to_base && input.base?.point && out.length > 0) out.push(input.base.point);
+  return out;
+}
+
 /** The latest leave time implied by a pass: the tightest deadline minus the buffer minus the time to reach it. */
 function impliedLeave(pass: Pass, leaveAt: string, buffer: number): string | null {
   let best: number | null = null;

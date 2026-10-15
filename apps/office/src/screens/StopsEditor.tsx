@@ -44,9 +44,13 @@ export function StopsRows({ list, onChange, idPrefix = "st" }: { list: StopDraft
             <div className="stop-grid">
               <div className="field">
                 <label htmlFor={`${idPrefix}-place-${s.key}`}>{label}</label>
-                <LocationSearch id={`${idPrefix}-place-${s.key}`} value={s.place} placeholder={i === 0 ? "A place, a site id, a town, a Google Maps link" : "Place, site id, town, address or link"}
-                  onText={(text) => set(i, { place: text, placeId: undefined, placePinned: undefined })}
-                  onPick={(p) => set(i, { place: p.name, placeId: p.placeId, placePinned: p.placeId ? p.pinned : undefined, pin: !p.placeId && p.lat !== undefined && p.lng !== undefined ? pinText({ lat: p.lat, lng: p.lng }) : s.pin })} />
+                <LocationSearch id={`${idPrefix}-place-${s.key}`} value={s.place} google placeholder={i === 0 ? "A place, a site id, a town, a Google Maps link" : "Place, site id, town, address or link"}
+                  onText={(text) => set(i, { place: text, placeId: undefined, placePinned: undefined, googlePlaceId: undefined })}
+                  onPick={(p) => set(i, p.googlePlaceId
+                    // A Google place: its pin stays Google's (the server's, kept 30 days), never typed into the pin field.
+                    ? { place: p.name, placeId: undefined, placePinned: undefined, googlePlaceId: p.googlePlaceId, pin: "" }
+                    : { place: p.name, placeId: p.placeId, placePinned: p.placeId ? p.pinned : undefined, googlePlaceId: undefined, pin: !p.placeId && p.lat !== undefined && p.lng !== undefined ? pinText({ lat: p.lat, lng: p.lng }) : s.pin })} />
+                {s.googlePlaceId && <div className="sub" data-testid="google-stop">Google place: its pin is Google's, kept 30 days</div>}
                 {s.placeId && s.placePinned === false && (
                   <div className="sub bad-text" data-testid="no-pin-warning">
                     {s.place} has no pin — the plan skips this leg; {me.tools.includes("update_place") ? <Link to={`/places/${s.placeId}`}>set it on the place page</Link> : "ask the fleet admin to set it"}.

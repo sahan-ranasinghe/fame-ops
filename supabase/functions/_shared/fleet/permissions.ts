@@ -106,6 +106,10 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   save_import_preset: ["vehicles"],
   list_place_imports: ["vehicles"],
   undo_place_import: ["vehicles"],
+  // Part 5: the Google package. A Google pick for a stop or a start (the forms that place stops: a task's,
+  // a booking's); the map load the web records before Google's map loads (anyone who sees a map or a pin).
+  google_place: AA,
+  register_map_load: ANY,
   list_vehicle_reports: ["issues"],
   update_vehicle_report: ["issues"],
   list_issues: ["issues", "assign_tasks"],

@@ -6,8 +6,19 @@ import { type Employee, findDriver, loadLatest, loadRefs, nearestTown, sharing, 
 import { contactLinks, kmh, mapsPoint } from "../format.ts";
 import { taskEta } from "../eta.ts";
 import { GPS_KM_NOTE } from "../geo.ts";
-import { loadSettings } from "../settings.ts";
+import { googleUse } from "../google.ts";
+import { loadSettings, type MapMatchingProvider, type Settings } from "../settings.ts";
 import { snapLegs, type SnapLeg } from "../matching.ts";
+import type { Channel } from "../roles.ts";
+
+/**
+ * Who snaps a route to roads: Google under the google package for the web (its Google map; never
+ * Claude or the artifact, whose maps are not Google's), else OSRM when the setting names it, else none.
+ */
+export function snapProvider(settings: Settings, channel: Channel): MapMatchingProvider {
+  if (googleUse(settings).roads) return channel === "web" ? "google_roads" : "none";
+  return settings.map_matching.provider === "osrm" ? "osrm" : "none";
+}
 import { buildRoute, type LinePoint, type RouteFix, type Segment, withSpeeds } from "../route.ts";
 import { colomboDate, colomboDateTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
@@ -164,7 +175,7 @@ export const driverRoute = tool({
     max_line_points: z.number().int().min(50).max(10000).optional().describe("At most this many points on the line (default 3000)"),
     snap: z.boolean().optional().describe("Also answer the driving legs snapped to roads (route_snapped) when the map_matching setting names a provider"),
   }),
-  async run({ driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap }, { db, now }) {
+  async run({ driver, date, task_id, from, to, line_tolerance_m, max_line_points, snap }, { db, now, actor }) {
     const refs = await loadRefs(db);
     let who: Employee;
     let fromIso: string;
@@ -305,8 +316,10 @@ export const driverRoute = tool({
     const iso = (ms: number) => new Date(ms).toISOString();
     const linePoint = (p: LinePoint) => [t(p.at), p.lat, p.lng, p.kmh, iso(p.at), p.acc ?? null];
 
-    // Snap to roads: the driving legs through the provider the setting names (stored per leg, re-matched at most every 2 minutes).
-    const provider = settings.map_matching.provider;
+    // Snap to roads: the driving legs through Google (the google package, for the web's Google map only: the
+    // Roads terms forbid its lines on any other map) or OSRM when the setting names it (stored per leg,
+    // the new part of a growing leg matched at most every 2 minutes).
+    const provider = snapProvider(settings, actor.channel);
     let snapped: { provider: string; status: string; legs?: number; matched?: number } = { provider, status: "off" };
     let routeSnapped: { columns: string[]; points: (string | number | null)[][] } | undefined;
     if (snap && provider !== "none" && route.line.length > 1) {
@@ -319,7 +332,9 @@ export const driverRoute = tool({
       }
       for (const leg of legs) leg.points = route.line.filter((p) => p.at >= leg.from && p.at <= leg.to).map((p) => ({ at: p.at, lat: p.lat, lng: p.lng, acc: p.acc }));
       const usable = legs.filter((l) => l.points.length >= 2);
-      const result = usable.length ? await snapLegs(db, who.id, day, provider, usable, now) : { status: "ok" as const, legs: [] };
+      const result = usable.length
+        ? await snapLegs(db, who.id, day, provider, usable, now, fetch, settings.google_caps)
+        : { status: "ok" as const, legs: [] };
       // The drawn line with every matched leg replaced by its road geometry; the rest raw.
       const out: (LinePoint & { snapped: boolean })[] = [];
       let i = 0;

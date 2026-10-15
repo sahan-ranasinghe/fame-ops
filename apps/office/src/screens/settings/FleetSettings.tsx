@@ -240,6 +240,53 @@ export function FleetSettings() {
           </div>
         </form>
 
+        {data.google && draft.google_caps && (
+          <form className="card card-b form" data-testid="google-settings" onSubmit={(ev) => { ev.preventDefault(); void save("google_caps", draft.google_caps); }}>
+            <div className="row" style={{ padding: 0 }}>
+              <div className="grow">
+                <h2>Map package</h2>
+                <p className="muted small" style={{ margin: "4px 0 0" }}>
+                  Every Google call is counted before it is made and refused at its daily cap or its month's cap (Colombo time, at most 95 % of
+                  Google's free usage); the open package then takes over until tomorrow or the 1st, and a refused map means no map. Keys set:
+                  map {data.google.configured.js ? "yes" : "no"}, server {data.google.configured.server ? "yes" : "no"}.
+                </p>
+              </div>
+              <Pill tone={data.google.package === "google" ? "ok" : "muted"}>{data.google.package === "google" ? "Google" : "Open"}</Pill>
+            </div>
+            <div className="field">
+              <label htmlFor="fs-package">The package</label>
+              <select id="fs-package" value={draft.map_package ?? "google"} disabled={busy !== null}
+                onChange={(e) => { const v = e.target.value as "google" | "open"; setDraft({ ...draft, map_package: v }); void save("map_package", v); }}>
+                <option value="google">Google, where its keys are set</option>
+                <option value="open">Open: OpenFreeMap, openrouteservice, the estimate</option>
+              </select>
+            </div>
+            <div className="tbl-wrap">
+              <table data-testid="google-usage">
+                <thead><tr><th>Feature</th><th className="r">Today</th><th className="r">This month</th><th className="r">A day at most</th><th className="r">A month at most</th><th>Now</th></tr></thead>
+                <tbody>
+                  {data.google.usage.map((u) => {
+                    const cap = draft.google_caps![u.feature];
+                    const setCap = (k: "day" | "month", v: string) =>
+                      setDraft({ ...draft, google_caps: { ...draft.google_caps!, [u.feature]: { ...cap, [k]: v === "" ? 0 : parseInt(v, 10) } } });
+                    return (
+                      <tr key={u.feature}>
+                        <td>{u.label}</td>
+                        <td className="r num">{u.today}{u.refused_today ? ` (${u.refused_today} refused)` : ""}</td>
+                        <td className="r num">{u.month}</td>
+                        <td className="r"><input aria-label={`${u.label}: a day at most`} type="number" min={0} inputMode="numeric" style={{ width: 90 }} value={cap.day} onChange={(e) => setCap("day", e.target.value)} /></td>
+                        <td className="r"><input aria-label={`${u.label}: a month at most`} type="number" min={0} inputMode="numeric" style={{ width: 90 }} value={cap.month} onChange={(e) => setCap("month", e.target.value)} /></td>
+                        <td>{u.on ? <Pill tone="ok">on</Pill> : <span className="sub">{u.note}</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="acts"><button className="btn dark" type="submit" disabled={busy !== null || !changed("google_caps")}>Save caps</button></div>
+          </form>
+        )}
+
         <div className="card card-b" style={{ display: "grid", gap: 10 }}>
           <div className="row" style={{ padding: 0 }}>
             <div className="grow"><h2>Routing</h2><p className="muted small" style={{ margin: "4px 0 0" }}>Road times come from the provider set in the Edge Function secret ROUTING_PROVIDER (with its key); without one every leg is an estimate.</p></div>

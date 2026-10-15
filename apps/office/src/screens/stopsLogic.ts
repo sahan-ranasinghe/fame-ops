@@ -14,6 +14,8 @@ export interface StopDraft {
   placeId?: string;
   /** Whether the picked place has a pin (a site without one: the plan skips the leg). */
   placePinned?: boolean;
+  /** A Google place picked in the search box (Part 5): sent as google_place_id with the name as place. */
+  googlePlaceId?: string;
   /** "6.93, 79.84" typed by hand; empty = the saved place's pin or the town centre. */
   pin: string;
   dwell: string;
@@ -60,21 +62,22 @@ const isTime = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 
 /** The stops[] argument, or what is wrong with them. Empty rows at the end are dropped. */
 export function stopsInput(list: StopDraft[]): { error: string } | { stops: Record<string, unknown>[] } {
-  const rows = list.filter((s) => s.place.trim() || s.placeId || s.pin.trim() || s.arriveBy || s.note.trim());
+  const rows = list.filter((s) => s.place.trim() || s.placeId || s.googlePlaceId || s.pin.trim() || s.arriveBy || s.note.trim());
   if (!rows.length) return { error: "Add at least one stop." };
   const out: Record<string, unknown>[] = [];
   for (const [i, s] of rows.entries()) {
     const pin = parsePin(s.pin);
     if (pin === "bad") return { error: `Stop ${i + 1}: the pin must be "lat, lng", e.g. 6.9344, 79.8428.` };
-    if (!s.place.trim() && !pin && !s.placeId) return { error: `Stop ${i + 1}: add a place name (a saved place, a town, or an address) or a pin.` };
+    if (!s.place.trim() && !pin && !s.placeId && !s.googlePlaceId) return { error: `Stop ${i + 1}: add a place name (a saved place, a town, or an address) or a pin.` };
     if (s.arriveBy && !isTime(s.arriveBy)) return { error: `Stop ${i + 1}: the arrive-by time must be HH:MM.` };
     const dwell = s.dwell.trim() === "" ? undefined : parseInt(s.dwell, 10);
     if (dwell !== undefined && (Number.isNaN(dwell) || dwell < 0 || dwell > 1440)) return { error: `Stop ${i + 1}: minutes at the stop must be 0 to 1440.` };
     const row: Record<string, unknown> = { type: s.type };
     if (s.what) row.what = s.what;
     if (s.placeId) row.place_id = s.placeId;
+    else if (s.googlePlaceId) row.google_place_id = s.googlePlaceId;
     if (s.place.trim()) row.place = s.place.trim();
-    if (pin) {
+    if (pin && !s.googlePlaceId) {
       row.lat = pin.lat;
       row.lng = pin.lng;
     }
@@ -89,13 +92,14 @@ export function stopsInput(list: StopDraft[]): { error: string } | { stops: Reco
 export const hasDeadline = (list: StopDraft[]) => list.some((s) => isTime(s.arriveBy));
 
 /** Drafts from a task's stops (task_detail), for editing. */
-export function draftsFromStops(stops: { type: string; what?: string; place?: string; place_id?: string; lat?: number; lng?: number; dwell_min?: number; arrive_by?: string; note?: string; pin?: string }[]): StopDraft[] {
+export function draftsFromStops(stops: { type: string; what?: string; place?: string; place_id?: string; google_place_id?: string; lat?: number; lng?: number; dwell_min?: number; arrive_by?: string; note?: string; pin?: string }[]): StopDraft[] {
   return stops.map((s) => ({
     ...newStop((["pickup", "drop", "visit"].includes(s.type) ? s.type : "visit") as StopType),
     what: (s.what ?? "") as What,
     place: s.place ?? "",
     placeId: s.place_id,
     placePinned: s.place_id ? s.lat != null : undefined,
+    googlePlaceId: s.place_id ? undefined : s.google_place_id,
     pin: s.pin === "given" && s.lat != null && s.lng != null ? `${s.lat}, ${s.lng}` : "",
     dwell: s.dwell_min != null ? String(s.dwell_min) : "",
     arriveBy: s.arrive_by ?? "",

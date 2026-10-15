@@ -2,15 +2,20 @@
 // current stop (road time from routing.ts), then the remaining stops with
 // their dwell, then the base when the task returns there. Kept in task_eta
 // and recomputed at most every 2 minutes per task, so the board, the task
-// drawer and the live map can all ask for it.
+// drawer and the live map can all ask for it. Under the google package one
+// Routes call answers every remaining leg (traffic now); that ETA stands 15
+// minutes, so a Live page refreshing every 30 seconds costs at most 4 calls an
+// hour per running task; refused or failed, the open chain answers.
 
 import type { Db, Row } from "./db.ts";
 import { unwrap, unwrapMaybe } from "./db.ts";
-import { dwellFor, type PlanPoint, type StopType, type What } from "./plan.ts";
-import { legMinutes } from "./routing.ts";
+import { googleUse } from "./google.ts";
+import { dwellFor, type LegFn, type PlanPoint, type StopType, type What } from "./plan.ts";
+import { googleLegs, legMinutes, memoLegFn } from "./routing.ts";
 import type { Settings } from "./settings.ts";
 
 export const ETA_CACHE_MS = 2 * 60000;
+export const GOOGLE_ETA_MS = 15 * 60000;
 
 export interface Eta {
   next_seq: number | null;
@@ -49,7 +54,8 @@ export async function taskEta(db: Db, task: Task, stops: Stop[], latest: Latest,
   if (open.length === 0) return null;
 
   const cached = unwrapMaybe(await db.from("task_eta").select("*").eq("task_id", task.id).maybeSingle(), "task eta");
-  if (cached && now.getTime() - new Date(cached.computed_at).getTime() < ETA_CACHE_MS) {
+  const age = cached ? now.getTime() - new Date(cached.computed_at).getTime() : Infinity;
+  if (cached && (age < ETA_CACHE_MS || (cached.source === "google" && age < GOOGLE_ETA_MS))) {
     return {
       next_seq: cached.next_seq,
       next_eta_at: cached.next_eta_at,
@@ -66,11 +72,22 @@ export async function taskEta(db: Db, task: Task, stops: Stop[], latest: Latest,
   let late = 0;
   const sources = new Set<string>();
   const opts = { avoid_expressway: task.avoid_expressway };
+  const base = task.return_to_base ? await basePoint(db, settings) : null;
+  let legFn: LegFn = (from, to, departAt, o) => legMinutes(db, from, to, departAt, o, settings);
+  if (googleUse(settings).routes) {
+    const points: PlanPoint[] = [prev];
+    for (const stop of open) if (stop.status !== "arrived" && stop.lat != null && stop.lng != null) points.push({ lat: stop.lat, lng: stop.lng });
+    if (base?.point) points.push(base.point);
+    if (points.length >= 2) {
+      const got = await googleLegs(db, settings, points, at, opts, now);
+      if ("legs" in got) legFn = memoLegFn(got.legs, legFn);
+    }
+  }
   for (const stop of open) {
     const dwell = dwellFor(settings, stop.type as StopType, stop.what as What | null, stop.dwell_min);
     let arrive = at;
     if (stop.status !== "arrived" && stop.lat != null && stop.lng != null) {
-      const leg = await legMinutes(db, prev, { lat: stop.lat, lng: stop.lng }, at, opts, settings);
+      const leg = await legFn(prev, { lat: stop.lat, lng: stop.lng }, at, opts);
       sources.add(leg.source);
       arrive = addMin(at, leg.minutes);
       prev = { lat: stop.lat, lng: stop.lng };
@@ -80,9 +97,8 @@ export async function taskEta(db: Db, task: Task, stops: Stop[], latest: Latest,
     at = addMin(arrive, stop.status === "arrived" ? Math.round(dwell / 2) : dwell);
   }
   if (task.return_to_base) {
-    const base = await basePoint(db, settings);
     if (base?.point) {
-      const leg = await legMinutes(db, prev, base.point, at, opts, settings);
+      const leg = await legFn(prev, base.point, at, opts);
       sources.add(leg.source);
       at = addMin(at, leg.minutes);
     }
@@ -92,7 +108,7 @@ export async function taskEta(db: Db, task: Task, stops: Stop[], latest: Latest,
     next_eta_at: nextEta,
     final_eta_at: at,
     late_min: late,
-    source: [...sources].join("+") || "estimate",
+    source: sources.has("google") ? "google" : [...sources].join("+") || "estimate",
     computed_at: now.toISOString(),
   };
   unwrap(

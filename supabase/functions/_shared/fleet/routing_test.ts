@@ -2,8 +2,6 @@ import { assertEquals, assertThrows } from "@std/assert";
 import {
   cacheKey,
   estimateLeg,
-  googleRequest,
-  googleResponse,
   minuteLimiter,
   orsRequest,
   orsResponse,
@@ -18,9 +16,9 @@ const GALLE = { lat: 6.0329, lng: 80.2168 };
 const MATARA = { lat: 5.9549, lng: 80.555 };
 const at = (day: string, hhmm: string) => new Date(`${day}T${hhmm}:00+05:30`).toISOString();
 
-Deno.test("the provider comes from ROUTING_PROVIDER; anything else is the estimate", () => {
+Deno.test("the provider comes from ROUTING_PROVIDER; an old google means ors (Google is the map package's now); anything else is the estimate", () => {
   assertEquals(providerFromEnv("ors"), "ors");
-  assertEquals(providerFromEnv(" Google "), "google");
+  assertEquals(providerFromEnv(" Google "), "ors");
   assertEquals(providerFromEnv(undefined), "estimate");
   assertEquals(providerFromEnv("mapbox"), "estimate");
 });
@@ -47,21 +45,6 @@ Deno.test("openrouteservice: metres and seconds become km and minutes; the highw
   const noHighway = { routes: [{ summary: { distance: 42000, duration: 3600 }, extras: { waycategory: { values: [[0, 12, 0]] } } }] };
   assertEquals(orsResponse(noHighway), { km: 42, minutes: 60, via_expressway: false });
   assertThrows(() => orsResponse({ routes: [] }));
-});
-
-Deno.test("google: latitude/longitude objects, traffic aware, the departure time only when in the future, '842s' parsed", () => {
-  const now = new Date("2026-10-20T01:00:00Z");
-  const req = googleRequest(COLOMBO, GALLE, "2026-10-20T03:00:00.000Z", { avoid_expressway: true }, "g", now);
-  const body = req.body as Record<string, unknown>;
-  assertEquals(body.origin, { location: { latLng: { latitude: 6.9344, longitude: 79.8428 } } });
-  assertEquals(body.routingPreference, "TRAFFIC_AWARE");
-  assertEquals(body.departureTime, "2026-10-20T03:00:00.000Z");
-  assertEquals(body.routeModifiers, { avoidHighways: true });
-  assertEquals(req.headers["X-Goog-Api-Key"], "g");
-  const past = googleRequest(COLOMBO, GALLE, "2026-10-20T00:00:00.000Z", { avoid_expressway: false }, "g", now);
-  assertEquals((past.body as Record<string, unknown>).departureTime, undefined);
-  assertEquals(googleResponse({ routes: [{ duration: "842s", distanceMeters: 12345 }] }), { km: 12.3, minutes: 14, via_expressway: null });
-  assertThrows(() => googleResponse({ routes: [{ duration: "soon" }] }));
 });
 
 Deno.test("the estimate: straight line × 1.3 at 35 km/h", () => {

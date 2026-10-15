@@ -1,7 +1,8 @@
 // Edge Function office-api: the office web app's way to the same tools the
 // connector offers, with the same inputs and the same JSON answers.
 //
-//   GET  /office-api/me                 who is signed in, their permissions and role, whether the second step is done, the tools they may call
+//   GET  /office-api/me                 who is signed in, their permissions and role, whether the second step is done, the tools they may call,
+//                                       and map { package, places } (google: load Google's map after register_map_load; open: OpenFreeMap)
 //   GET  /office-api/tools              the tools with their input schemas (for the forms)
 //   POST /office-api/tools/<name>       body = the tool's arguments; 200 { result } exactly as the connector returns it
 //                                       400 { error: "bad_input", issues } · 403 { error } · 404 · 409 { error } (the tool said no)
@@ -25,7 +26,9 @@ import {
   type Actor,
   adminClient,
   canCall,
+  googleUse,
   isRole,
+  loadSettings,
   mfaRequiredRoles,
   normalisePermissions,
   OFFICE_ROLES,
@@ -132,6 +135,8 @@ Deno.serve(async (request) => {
   const { actor } = person;
 
   if (request.method === "GET" && path === "/me") {
+    // Which map the web shows (never the key: register_map_load hands it out after counting the load).
+    const use = await loadSettings(db).then(googleUse, () => null);
     return json(200, {
       name: actor.name,
       email: person.email,
@@ -140,6 +145,7 @@ Deno.serve(async (request) => {
       mfa: person.mfa,
       mfa_required: MFA_ROLES.includes(actor.role),
       tools: TOOLS.filter((t) => canCall(actor, t.name)).map((t) => t.name),
+      map: { package: use?.map ? "google" : "open", places: use?.places ?? false },
     }, cors);
   }
 

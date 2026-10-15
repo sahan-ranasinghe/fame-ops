@@ -63,3 +63,15 @@ describe("a stop picked in the search box (Part 4)", () => {
     expect([back[0].placeId, back[0].placePinned]).toEqual(["p1", false]);
   });
 });
+
+describe("a Google place picked in the search box (Part 5)", () => {
+  it("sends google_place_id with the name and never the pin (the server keeps Google's); the id comes back for editing", () => {
+    const s = { ...newStop("drop"), place: "Kandy City Centre", googlePlaceId: "ChIJ-kcc", pin: "7.2931, 80.635" };
+    expect(stopsInput([s])).toEqual({ stops: [{ type: "drop", google_place_id: "ChIJ-kcc", place: "Kandy City Centre" }] });
+    const ours = { ...newStop("pickup"), place: "Head office", placeId: "p-1", googlePlaceId: "ChIJ-old" };
+    expect(stopsInput([ours])).toEqual({ stops: [{ type: "pickup", place_id: "p-1", place: "Head office" }] });
+    const [d] = draftsFromStops([{ type: "drop", place: "Kandy City Centre", google_place_id: "ChIJ-kcc", lat: 7.2931, lng: 80.635, pin: "google" }]);
+    expect([d.googlePlaceId, d.pin, d.placeId]).toEqual(["ChIJ-kcc", "", undefined]);
+    expect(stopsInput([d])).toEqual({ stops: [{ type: "drop", google_place_id: "ChIJ-kcc", place: "Kandy City Centre" }] });
+  });
+});

@@ -181,7 +181,8 @@ export function NewTask() {
         <div className="card card-b form">
           <div className="field"><label htmlFor="af-start">Start from</label>
             <LocationSearch id="af-start" value={f.start} placeholder="The base place (Settings → Fleet)"
-              onText={(text) => setF({ ...f, start: text, startPlaceId: undefined })} onPick={(p) => setF({ ...f, start: p.name, startPlaceId: p.placeId })} /></div>
+              onText={(text) => setF({ ...f, start: text, startPlaceId: undefined, startGooglePlaceId: undefined })} google
+              onPick={(p) => setF({ ...f, start: p.name, startPlaceId: p.placeId, startGooglePlaceId: p.googlePlaceId })} /></div>
           <span className="lab">Stops</span>
           <StopsRows list={f.stops} onChange={(stops) => set("stops", stops)} />
           <div className="grid2">

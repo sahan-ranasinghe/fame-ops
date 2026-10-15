@@ -528,6 +528,46 @@ check(c5["stops_count"] == 4 and c5["leave_by"] == us["leave_by"][-5:] and c5["t
 ru = tool("routing_usage", {"days": 7})
 check(ru["provider"] == "estimate" and ru["daily_budget"]["ors"] == 1900 and ru["days"] == [], "routing_usage: estimate provider, no provider calls recorded", json.dumps(ru))
 
+print("\n== 2b-5. Part 5: the Google package with no keys set (the open package), the caps, a Google stop ==")
+gs = tool("get_settings")
+g = gs["google"]
+check(gs["settings"]["map_package"] == "google" and g["package"] == "open" and g["configured"] == {"js": False, "server": False}
+      and g["in_use"] == {"map": False, "places": False, "routes": False, "roads": False},
+      "get_settings: the google package is chosen, but with no keys everything is the open package", json.dumps(g)[:300])
+check([u["feature"] for u in g["usage"]] == ["map_loads", "places_autocomplete", "places_details", "routes", "roads"]
+      and all(u["today"] == 0 and not u["on"] and u["note"] == "No key set" for u in g["usage"])
+      and [u["month_cap"] for u in g["usage"]] == [9500, 9500, 9500, 4750, 0],
+      "get_settings: the five features, none used, the month caps (Roads 0: off until the licence is confirmed)", json.dumps(g["usage"])[:400])
+check(len(tool("routing_usage", {"days": 7})["google"]) == 5, "routing_usage carries the same Google usage")
+ml = tool("register_map_load")
+check(ml["allowed"] is False and "key" not in ml and (ml.get("note") == "Google's map loads in the web app only" if CHANNEL == "mcp" else ml.get("map") == "open"),
+      "register_map_load: no key handed out (Claude: web only; the web: the open package, no map key)", json.dumps(ml))
+check(psql("select count(*) from google_calls") == "0", "nothing was counted: no Google call was made or refused")
+sg = tool("search_places", {"text": "Kandy City Centre", "google": True, "session": "suite-session-0001"})
+check(not any(r["layer"] == "google" for r in sg["results"]) and sg.get("map_note") == "Map search is not set up",
+      "search_places with google and no key: no Google layer, the open map search answers (here not set up either)", json.dumps(sg)[:300])
+r = tool("google_place", {"google_place_id": "ChIJ-suite-none"}, expect_error=True)
+check("Google place search is not set up" in r, "google_place with no key: refused with the reason", r)
+r = tool("update_settings", {"key": "google_caps", "value": {**gs["settings"]["google_caps"], "routes": {"day": 200, "month": 5000}}}, expect_error=True)
+check("google_caps.routes.month: a whole number from 0 to 4750" in r, "update_settings: a month cap above 95 % of the free usage is refused", r)
+caps = {**gs["settings"]["google_caps"], "roads": {"day": 50, "month": 1000}}
+check(tool("update_settings", {"key": "google_caps", "value": caps})["value"]["roads"] == {"day": 50, "month": 1000}, "update_settings: the caps saved")
+tool("update_settings", {"key": "google_caps", "value": gs["settings"]["google_caps"]})
+# A Google place picked earlier (its pin kept by place id): a stop takes it with the name; the stop is marked by the trigger.
+GPID = f"ChIJ-suite-{uuid.uuid4().hex[:8]}"
+psql(f"insert into google_pins (google_place_id, lat, lng, address) values ('{GPID}', 7.2931, 80.635, 'Kandy City Centre, Kandy')")
+pg = tool("plan_task", {"date": day(6), "leave_by": "08:00",
+                        "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "google_place_id": GPID, "place": "Kandy City Centre"}]})
+check(pg["stops"][1]["pin"] == "google" and pg["stops"][1]["google"] is True and pg["stops"][1]["place"] == "Kandy City Centre"
+      and pg["stops"][1]["lat"] == 7.2931 and pg["stops"][1]["address"] == "Kandy City Centre, Kandy",
+      "plan_task: a stop with google_place_id takes the kept pin and the address, marked google (the stop row's mark: pgTAP)", json.dumps(pg["stops"][1]))
+check(pg["plan"]["source"] != "google" and "google_note" not in pg["plan"], "with no key the plan is the open package's, with no Google note", json.dumps(pg["plan"])[:200])
+r = tool("plan_task", {"date": day(6), "leave_by": "09:00", "stops": [{"type": "drop", "google_place_id": "ChIJ-suite-unknown", "place": "Somewhere"}]}, expect_error=True)
+check("Google place search is not set up" in r, "a Google place with no kept pin and no key: refused with the reason", r)
+code, gj = fleet_jobs(job="google_content")
+check(code == 200 and gj.get("places") == 0 and gj.get("pruned") == {"pins": 0, "stops": 0, "starts": 0, "matched": 0},
+      "fleet-jobs google_content: nothing to refresh or remove yet", json.dumps(gj))
+
 # Two days ahead: in the evening the tasks above are already on tomorrow, and the approved request's task must not join their day.
 re1 = tool("create_request", {"requested_by": "Dilini Rajapaksha", "project": "13036", "date": day(2), "time": "06:30", "back_by": "18:00",
                               "route_from": "Head office", "route_to": "Matara sites", "need_type": "van", "pax": 6, "tools": True})
@@ -1476,9 +1516,10 @@ if CHANNEL == "api":
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["request"]
           and sorted(me.get("tools", [])) == ["create_request", "find_project", "get_settings", "list_places", "list_requests", "my_notification_settings",
-                                             "place_detail", "register_web_push", "remove_web_push", "save_place", "search_places",
-                                             "set_my_notification_settings", "task_detail", "update_request"],
-          "a requester-only person signs in without a second step and sees only the request tools", f"{code} {str(me)[:200]}")
+                                             "place_detail", "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
+                                             "set_my_notification_settings", "task_detail", "update_request"]
+          and me.get("map") == {"package": "open", "places": False},
+          "a requester-only person signs in without a second step and sees only the request tools (and the map: open with no keys)", f"{code} {str(me)[:200]}")
     code, body = api_call(staff_token, "task_board", {})
     check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
     code, body = api_call(staff_token, "get_settings", {})

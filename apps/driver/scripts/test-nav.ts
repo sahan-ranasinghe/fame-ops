@@ -4,6 +4,7 @@
 
 import { arrivalDue } from '../src/lib/arrivalRule';
 import { allStopsLink, navigateLink } from '../src/lib/format';
+import { drawnDestination } from '../src/lib/mapRule';
 import type { TaskStop, TaskWithStops } from '../src/lib/types';
 
 let failures = 0;
@@ -42,6 +43,12 @@ check(arrivalDue([task([stop(1, { status: 'arrived' }), stop(2)])], near, []) ==
 check(arrivalDue([task([stop(1, { status: 'done' }), stop(2)])], { lat: 7.02, lng: 80, accuracyM: 5 }, [])?.stop.id === 's2', 'after Done the next stop is the current one');
 check(arrivalDue([task([stop(1, { lat: null, lng: null })])], near, []) === null, 'a stop without a pin: no nudge');
 check(arrivalDue([task([stop(1)], 'assigned')], near, []) === null, 'no task running: no nudge');
+
+console.log('\nThe task map and Google places (Part 5):');
+check(JSON.stringify(drawnDestination({ lat: 7.29, lng: 80.63, google_place_id: null }, false)) === '[80.63,7.29]', 'our own stop: drawn on the OpenFreeMap map');
+check(drawnDestination({ lat: 7.29, lng: 80.63, google_place_id: 'ChIJ-x' }, false) === null, 'a Google place: never drawn on the OpenFreeMap map (Google\'s terms)');
+check(JSON.stringify(drawnDestination({ lat: 7.29, lng: 80.63, google_place_id: 'ChIJ-x' }, true)) === '[80.63,7.29]', 'a Google place on Google\'s map: drawn');
+check(drawnDestination({ lat: null, lng: null, google_place_id: null }, false) === null, 'a stop without a pin: nothing drawn');
 
 console.log(failures === 0 ? '\nAll navigation tests passed.' : `\n${failures} navigation test(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);
