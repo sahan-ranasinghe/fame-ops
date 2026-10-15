@@ -105,7 +105,15 @@ group 435a33d9 (Android update 01a13a6e, runtime 1.1.0, channel preview). **Roun
 a6610c0** (every route view at tolerance 0 with merging refetches, playback by point, watched
 mode): migration `watched_drivers` pushed; office-mcp, office-api and fleet-jobs deployed; web
 deployment 3bab9784. No eas update: the phones' watched-mode uploads and the heartbeat answer
-wait for round 3. The Teams artifact copy is still the Part 2 build: its update is round 3.
+wait for round 3. **Part 4 round at 9b98b87** (15 October, phone health and Part 4 together):
+migrations `phone_health` and `places_sites` pushed; office-mcp, office-api and fleet-jobs
+deployed; web deployment dcdcca05; EAS update group 58879074 (Android update 01a13d66, runtime
+1.1.0, channel preview) with the watchdog, the Phone setup card and watched mode. Within minutes
+the phones' kept heartbeat history arrived (test.driver 98 rows, test.driver2 124 from 14 October
+18:13 on), and test.driver2's 06:12–06:28 holes read "App not running · 7 min" (the app frozen),
+then "Stopped · no GPS signal" 3 and 5 min (the app alive, location silent: the watchdog's case).
+The site import on the live project is yours through Settings → Import sites. The Teams artifact
+copy is still the Part 2 build: its update is round 3.
 
 ## 3. Data model: four migrations, all additive
 
