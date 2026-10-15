@@ -12,7 +12,7 @@
 // this import" (added places switched off, updated ones put back, nothing
 // deleted). "Save this mapping as a preset" keeps it for the next file.
 import { FIELDS, type Field, headersAt, type Mapping, mappingProblems, mapTable, type Operator, type PresetResult } from "@fleet/sites";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../../app/FleetContext";
 import type { ImportAnswer, ImportPreset, PlaceImport, UndoAnswer } from "../../data/types";
@@ -67,14 +67,18 @@ export default function ImportSites() {
   const [err, setErr] = useState<string | null>(null);
   const [saveName, setSaveName] = useState("");
   const [busy, setBusy] = useState(false);
+  // The presets as they arrive: a file picked before they have is matched once they are here.
+  const presetsLoad = useRef<Promise<ImportPreset[]> | null>(null);
 
   async function loadLists() {
+    const load = transport.call<{ presets: ImportPreset[] }>("list_import_presets", {}).then((r) => r.presets);
+    presetsLoad.current = load;
     try {
       const [p, i] = await Promise.all([
-        transport.call<{ presets: ImportPreset[] }>("list_import_presets", {}),
+        load,
         transport.call<{ imports: PlaceImport[] }>("list_place_imports", { limit: 20 }),
       ]);
-      setPresets(p.presets);
+      setPresets(p);
       setImports(i.imports);
     } catch (e) {
       setErr(errText(e as FleetError)[0]);
@@ -88,11 +92,11 @@ export default function ImportSites() {
   const problems = book ? mappingProblems(table, mapping) : [];
   const keyNow = presetKeyFor(preset, mapping);
 
-  function applyPreset(key: string, wb: Workbook | null = book) {
+  function applyPreset(key: string, wb: Workbook | null = book, list: ImportPreset[] = presets) {
     setPresetKey(key);
     setPreview(null);
     setReport(null);
-    const p = presets.find((x) => x.key === key);
+    const p = list.find((x) => x.key === key);
     if (p) {
       setMapping(p.mapping);
       if (wb && p.mapping.sheet && wb.SheetNames.includes(p.mapping.sheet)) setSheet(p.mapping.sheet);
@@ -120,11 +124,12 @@ export default function ImportSites() {
       const tables: Record<string, unknown[][]> = {};
       for (const name of wb.SheetNames) tables[name] = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, defval: null, raw: true, blankrows: true });
       const loaded = { SheetNames: wb.SheetNames, tables };
-      setBook(loaded);
       // A preset whose sheet is in this file is chosen for it; else the first sheet, mapped by guess.
-      const match = presets.find((p) => p.mapping.sheet && wb.SheetNames.includes(p.mapping.sheet));
+      const list = await (presetsLoad.current ?? Promise.resolve(presets)).catch(() => presets);
+      setBook(loaded);
+      const match = list.find((p) => p.mapping.sheet && wb.SheetNames.includes(p.mapping.sheet));
       setSheet(match?.mapping.sheet ?? wb.SheetNames[0]);
-      applyPreset(match ? match.key : CUSTOM, loaded);
+      applyPreset(match ? match.key : CUSTOM, loaded, list);
     } catch (e) {
       setErr(`The file could not be read: ${e instanceof Error ? e.message : String(e)}`);
     }

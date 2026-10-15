@@ -257,6 +257,8 @@ async function main() {
     photoOp(pStart, 'odometer'),
     { kind: 'odometer_log', row: { id: logStart, vehicle_id: van.id, employee_id: a.row.id, task_id: task1, reading_km: 84512, ocr_value: 84512, photo_id: pStart, kind: 'task_start', logged_at: at(44) } },
     { kind: 'task_patch', id: task1, patch: { status: 'in_progress', start_odometer_km: 84512, started_at: at(44) } },
+    // The arrival nudge first (the phone saw the driver within 150 m), then the driver's own tap: the app's own queue and patchStop.
+    { kind: 'stop_patch', id: stops[0]!.id, patch: { auto_detected_at: at(43) } },
     { kind: 'stop_patch', id: stops[0]!.id, patch: { status: 'arrived', arrived_at: at(42) } },
     { kind: 'stop_patch', id: stops[0]!.id, patch: { status: 'done', done_at: at(40) } },
     { kind: 'stop_patch', id: stops[1]!.id, patch: { status: 'skipped', skip_reason: 'closed', skip_note: 'Shutter down', done_at: at(30) } },
@@ -294,7 +296,9 @@ async function main() {
   const row = must(await admin.from('tasks').select('*').eq('id', task1).single(), 'task');
   check(row.status === 'completed' && row.km === 51 && row.start_odometer_km === 84512 && row.seen_at !== null, 'the task is completed on the server with 51 km', { status: row.status, km: row.km });
   check(row.started_at !== null && row.completed_at !== null && Math.abs(new Date(row.started_at).getTime() - (now - 44 * 60000)) < 2000, 'start and finish keep the times from the phone, not the time of sending', { started: row.started_at });
-  const stopRows = must(await admin.from('task_stops').select('seq, status, arrived_at, skip_reason, skip_note').eq('task_id', task1).order('seq'), 'stops');
+  const stopRows = must(await admin.from('task_stops').select('seq, status, arrived_at, auto_detected_at, skip_reason, skip_note').eq('task_id', task1).order('seq'), 'stops');
+  check(stopRows[0]?.auto_detected_at !== null && Date.parse(stopRows[0]!.auto_detected_at!) < Date.parse(stopRows[0]!.arrived_at!),
+    'the arrival nudge\'s time reached the stop through the app\'s own queue, before the driver\'s tap', { auto: stopRows[0]?.auto_detected_at, tap: stopRows[0]?.arrived_at });
   check(stopRows.map((s) => s.status).join(',') === 'done,skipped,done,removed', 'the stops are done, skipped, done; the removed one stays removed', stopRows.map((s) => s.status));
   check(stopRows[0]?.arrived_at !== null && stopRows[1]?.skip_reason === 'closed' && stopRows[1]?.skip_note === 'Shutter down', 'the pickup keeps its arrival time; the skipped stop keeps the reason and the note', stopRows.slice(0, 2));
 

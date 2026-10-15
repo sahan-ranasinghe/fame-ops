@@ -1,6 +1,6 @@
 // Settings → Fleet (the users permission): the dispatch defaults
 // (docs/dispatch-plan.md, section 6) and the routing provider's usage.
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useFleet } from "../../app/FleetContext";
 import { useLists } from "../../data/hooks";
 import type { FleetSettings as Values, PlaceWithId, RoutingUsage, SettingsResult } from "../../data/types";
@@ -31,12 +31,25 @@ export function FleetSettings() {
   const [err, setErr] = useState<string | null>(null);
   const [draft, setDraft] = useState<Values | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // The settings as the server last answered: a draft key that differs from them is being edited.
+  const server = useRef<Values | null>(null);
 
-  async function load() {
+  async function load(saved?: keyof Values) {
     try {
       const [s, u] = await Promise.all([transport.call<SettingsResult>("get_settings", {}), transport.call<RoutingUsage>("routing_usage", { days: 14 })]);
+      const before = server.current;
+      server.current = s.settings;
       setData(s);
-      setDraft(s.settings);
+      // An answer that lands later (a slow line, a save on another card) never wipes what the
+      // person is editing: it replaces only the keys they have not changed, and the one just saved.
+      setDraft((d) => {
+        if (!d || !before) return s.settings;
+        const next = { ...s.settings };
+        for (const k of Object.keys(d) as (keyof Values)[]) {
+          if (k !== saved && JSON.stringify(d[k]) !== JSON.stringify(before[k])) Object.assign(next, { [k]: d[k] });
+        }
+        return next;
+      });
       setUsage(u);
       setErr(null);
     } catch (e) {
@@ -50,7 +63,7 @@ export function FleetSettings() {
     try {
       await transport.call("update_settings", { key, value });
       toast("Setting saved");
-      await load();
+      await load(key);
     } catch (e) {
       setErr(errText(e as FleetError)[0]);
     }

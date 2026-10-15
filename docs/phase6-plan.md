@@ -842,7 +842,9 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
   depot, address, kind; the operator as a column or one value; optionally "attach each id to a
   site within N m"). One engine (`mapTable` in `_shared/fleet/sites.ts`, `@fleet/sites` in the
   web) with the built-in Dialog and Mobitel EP lists as mappings on it (Mobitel 4G keeps its
-  name rule; the real files give the same counts as before). Preview: counts and the first 20
+  name rule; the real files give the same counts as before). A preset whose sheet is in the file
+  is chosen for it, also when the file is picked before the presets have loaded (the page waits
+  for them; found by the e2e on a busy laptop, `ImportSites.test.tsx`). Preview: counts and the first 20
   problem rows (outside Sri Lanka, an id twice, no name: skipped, never fatal; swapped
   coordinates and a space inside a number repaired and said). "Save this mapping as a preset"
   (`save_import_preset`, `site_import_presets`; a saved name again replaces it; built-in names
@@ -874,6 +876,10 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
   HH:MM (phone)" beside "arrived HH:MM"). No new native module (`npm run test:nav`).
 - The shift nudge's default days are Monday to Friday (settings, `get_driver_settings()`, the
   app's default); the live setting had no row, so the default applies there.
+- Fleet settings keeps what the person is editing when the settings load again (a slow answer,
+  the dev server's second mount, a save on another card replaced every card's draft before):
+  only the keys they have not changed and the one just saved take the server's values
+  (`FleetSettings.test.tsx`; found by the e2e on a busy laptop).
 
 New driver strings (en + si):
 
@@ -881,7 +887,7 @@ New driver strings (en + si):
 |---|---|---|
 | `task.allStops` | All stops in Google Maps | සියලු නැවතුම් Google Maps හි |
 | `task.allStopsLeftTitle` | Google Maps takes 10 stops at a time | Google Maps එක වරකට නැවතුම් 10 ක් ගනී |
-| `task.allStopsLeftBody` | The first 10 stops are in; {n} more come after them. Open All stops again when you reach the tenth. | පළමු නැවතුම් 10 ඇතුළත් ය; ඉන් පසු තවත් {n} ක් ඇත. දහවැනි නැවතුමට ළඟා වූ විට සියලු නැවතුම් නැවත විවෘත කරන්න. |
+| `task.allStopsLeftBody` | The first 10 stops are in; {n} more come after them. Open All stops again when you reach stop 10. | පළමු නැවතුම් 10 ඇතුළත් ය; ඉන් පසු තවත් {n} ක් ඇත. 10 වැනි නැවතුමට ළඟා වූ විට සියලු නැවතුම් නැවත විවෘත කරන්න. |
 | `arrival.title` | Arrived at {stop}? | {stop} වෙත ළඟා වුණාද? |
 | `arrival.body` | Tap to mark Arrived | ළඟා විය ලෙස සටහන් කිරීමට තට්ටු කරන්න |
 

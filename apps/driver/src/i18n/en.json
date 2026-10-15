@@ -167,7 +167,7 @@
     "declinedBody": "The office will give this task to another driver.",
     "allStops": "All stops in Google Maps",
     "allStopsLeftTitle": "Google Maps takes 10 stops at a time",
-    "allStopsLeftBody": "The first 10 stops are in; {n} more come after them. Open All stops again when you reach the tenth."
+    "allStopsLeftBody": "The first 10 stops are in; {n} more come after them. Open All stops again when you reach stop 10."
   },
   "log": {
     "title": "Log mileage",
