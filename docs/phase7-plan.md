@@ -32,6 +32,13 @@ exist, so item 13's "project costs" part is done in mileage and the task data, r
   contract only grows. The Teams artifact file is regenerated at the end (Part 5).
 - All new UI text in `en.json` and `si.json`; numbers in Latin digits; the new Sinhala in §Sinhala.
 - CLAUDE.md is updated where rules change: rule 9 becomes "Location is recorded while on duty".
+- **Subagents** (Sahan, 15 October): only in their own worktrees, at most 3 at a time, each with one
+  separated piece and the exact files it may edit. The main session owns this plan, every migration,
+  the shared types, the i18n files, the connector's tool list and the merging. Subagents run no full
+  suite (the main session runs them once after merging), and never deploy, push, set secrets or run
+  eas. At every checkpoint a fresh reviewer subagent checks the diff (grants and policies for what the
+  phone writes, hard-coded strings, numbers spelled out in Sinhala, behaviour that differs from this
+  plan). Each checkpoint says what was delegated and what the reviewer found.
 
 ## 1. Clock in / clock out (item 1)
 
@@ -813,9 +820,12 @@ at most 1.5 s, nothing interpolated. It is rewritten:
   Traveled, 5,000 free a month).
 - We call only `snapToRoads`, never Speed Limits.
 
-**Caps.** `google_caps.roads` becomes 150 a day and 4,750 a month (95 % of 5,000; 150 × 31 = 4,650
-stays under).
-- Fail closed, counted before each call (`google_take`, as built).
+**Caps.** `google_caps.roads` becomes 200 a day (Sahan, 15 October) and 4,750 a month (95 % of
+5,000).
+- 200 × 31 = 6,200 is above the month, so in a heavy month the monthly ceiling stops it first.
+- Both fail closed, counted before each call (`google_take`, as built).
+- The half day between our month and Google's (Pacific time) stays covered: 4,750 + 200 = 4,950,
+  under 5,000.
 - The counter is the Settings → Fleet Map package card (built).
 - The live database has no `google_caps` row, so the new default is what applies.
 
@@ -846,11 +856,11 @@ estimates and are never sent.
 | test.driver2 | 13, 14, 15 Oct | 40.8–48.8 | 3–9 | 13, 14, 10 |
 
 - A call is spent only the first time a leg is opened. Later views are free for 30 days.
-- 12 drivers driving like test.driver2, every day opened once: about 12 × 12 = 145 calls a day, at
-  the 150 cap.
-- A full field day of 150–200 km in about 8 legs is about 38–48 calls. The cap covers 3–4 such days
+- 12 drivers driving like test.driver2, every day opened once: about 12 × 12 = 145 calls a day,
+  under the 200 cap.
+- A full field day of 150–200 km in about 8 legs is about 38–48 calls. The cap covers 4–5 such days
   opened in full; the rest of the day shows the raw line.
-- The month (4,750, about 215 a working day) never binds before the day does.
+- The month (4,750, about 215 a working day of 22) binds only after a run of days near 200.
 
 ## 27. App size: the native build (item 27, Part 6, at Round B; added 15 October)
 
@@ -890,7 +900,7 @@ What the measurement shows:
 
 | Change | Expected saving on the arm64 APK (MB) |
 |---|---|
-| arm64-v8a only (a `drivers-v7a` profile is kept for a 32-bit phone, if one appears) | 28.6 |
+| arm64-v8a only. A ready `drivers-32` profile (armeabi-v7a) is kept in eas.json, built only when Sahan asks | 28.6 |
 | MapLibre out of the Google-map build: excluded from autolinking when `GOOGLE_ANDROID_MAPS=on`, and the OpenFreeMap map loaded only when the switch is off. A switch-off build keeps it, so the no-Google fallback is not lost | 10.8, plus its dex |
 | expo-dev-client out of the drivers build (dev launcher and dev menu) | dex, measured |
 | R8 and resource shrinking really on, with keep rules tested for ML Kit text recognition, react-native-maps, the camera and the fuel video, expo-updates, notifications and SQLite | part of the 9.7 dex |
@@ -904,6 +914,9 @@ What the measurement shows:
     download, but the libraries are extracted on install.
   - Each change is measured on its own. The report gives before and after, and what each change
     saved.
+- **A 32-bit phone.** The test plan gets a line on how to tell: installing the arm64 APK ends with
+  "App not installed" on a 32-bit Android (typically an Android Go phone); Settings → About phone
+  or a CPU-info app shows armeabi-v7a only. Then Sahan asks for a `drivers-32` build.
 - **Nothing lost.** Every 1.2.0 function is checked on the OPPO with 1.3.0: Today, the task map, the
   fuel video, odometer OCR, photos, push and sounds, background location, and updates.
 - **At Round B:**
@@ -1088,7 +1101,7 @@ Every checkpoint runs the whole set, each on a fresh database where it needs one
 
 ## 32. Questions with my defaults
 
-1–8 were accepted at checkpoint 0 (15 October). 9–15 are new with items 19–28; change any.
+All accepted (1–8 at checkpoint 0; 9–15 with Part 1's go, 15 October, 11 and 15 as changed there).
 
 1. A driver with a task in progress at the cut-off is not clocked out until the task is done (1).
 2. Existing drivers without a photo get the photo step at their next app start (5).
@@ -1105,14 +1118,15 @@ Every checkpoint runs the whole set, each on a fresh database where it needs one
     already went; the issue's history records who was told and when (19).
 11. Snap to roads is on by default when a route opens, under the google package, with a "Recorded
     points" toggle. Live's growing leg is snapped in whole 5 km pieces, with the tail raw
-    meanwhile (26).
+    meanwhile. Changed: the daily cap is 200; the monthly ceiling stays 4,750, fail closed (26).
 12. Required documents: revenue licence, insurance, emission test and CR for every active vehicle,
     and the rent or lease agreement for a rented one. Missing ones are one reminder row per vehicle,
     not an issue each (28).
 13. The driver's documents open online only (1-hour links), with no copy kept on the phone (28).
 14. Reading the document files (`vehicle_documents`) needs the vehicles permission; the expiry chips
     stay visible with view, as now (28).
-15. The 1.3.0 APK is arm64 only; a 32-bit build is made only if a driver's phone needs it (27).
+15. The 1.3.0 APK is arm64 only. Changed: a ready `drivers-32` profile (armeabi-v7a) and a test-plan
+    line on how to tell a phone needs it; no 32-bit build unless Sahan asks (27).
 
 ## Sinhala
 
