@@ -973,6 +973,38 @@ from the web only), cached per leg 30 days, `google_roads_daily_cap` 150 through
 
 The push texts live in `push-task` (en + si) and are listed again at the Part 2 checkpoint.
 
+The Phone setup card (15 October, ships with Part 4's eas update; menu names stay in English, as the phones show them):
+
+| Key | English | Sinhala |
+|---|---|---|
+| `phoneSetup.title` | Phone setup | දුරකථන සැකසුම |
+| `phoneSetup.yourBrand` | Your {brand} phone | ඔබගේ {brand} දුරකථනය |
+| `phoneSetup.yourPhone` | Your phone | ඔබගේ දුරකථනය |
+| `phoneSetup.stoppedOnce` | {phone} stopped Fame Driver for {minutes} min ({when}). No trip is recorded while it is stopped. | {phone} Fame Driver විනාඩි {minutes} ක් නවත්වා තැබුවා ({when}). එය නවතා ඇති විට ගමන සටහන් නොවේ. |
+| `phoneSetup.stoppedMany` | {phone} stopped Fame Driver {count} times since {when}, {minutes} min in all. No trip is recorded while it is stopped. | {phone} {when} සිට Fame Driver {count} වතාවක් නවත්වා තැබුවා, මුළු විනාඩි {minutes}. එය නවතා ඇති විට ගමන සටහන් නොවේ. |
+| `phoneSetup.doOnce` | Change these settings once: | මේ සැකසුම් එක් වරක් වෙනස් කරන්න: |
+| `phoneSetup.open` | Open {brand} settings | {brand} සැකසුම් විවෘත කරන්න |
+| `phoneSetup.openApp` | Open app settings | යෙදුමේ සැකසුම් විවෘත කරන්න |
+| `phoneSetup.done` | Done | කළා |
+| `phoneSetup.steps.oppo` 1 | Settings → Apps → Fame Driver → Battery usage: turn on "Allow background activity" and "Allow auto launch". | Settings → Apps → Fame Driver → Battery usage: "Allow background activity" සහ "Allow auto launch" ක්‍රියාත්මක කරන්න. |
+| `phoneSetup.steps.oppo` 2 | Settings → Battery → More settings → Optimise battery use: Fame Driver → "Don't optimise". | Settings → Battery → More settings → Optimise battery use: Fame Driver → "Don't optimise" තෝරන්න. |
+| `phoneSetup.steps.oppo` 3 | Recent apps: pull Fame Driver down (or tap the lock) so it stays locked. | Recent apps තුළ Fame Driver පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ. |
+| `phoneSetup.steps.realme` 1 | Settings → Apps → Fame Driver → Battery usage: turn on "Allow background activity" and "Allow auto launch". | Settings → Apps → Fame Driver → Battery usage: "Allow background activity" සහ "Allow auto launch" ක්‍රියාත්මක කරන්න. |
+| `phoneSetup.steps.realme` 2 | Settings → Battery → App battery management: Fame Driver → allow running in the background. | Settings → Battery → App battery management: Fame Driver පසුබිමේ ක්‍රියාත්මක වීමට ඉඩ දෙන්න. |
+| `phoneSetup.steps.realme` 3 | Recent apps: pull Fame Driver down (or tap the lock) so it stays locked. | Recent apps තුළ Fame Driver පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ. |
+| `phoneSetup.steps.xiaomi` 1 | Settings → Apps → Fame Driver: turn on "Autostart". | Settings → Apps → Fame Driver: "Autostart" ක්‍රියාත්මක කරන්න. |
+| `phoneSetup.steps.xiaomi` 2 | Same page → Battery saver: "No restrictions". | එම පිටුවේම → Battery saver: "No restrictions" තෝරන්න. |
+| `phoneSetup.steps.xiaomi` 3 | Recent apps: hold Fame Driver and tap the lock. | Recent apps තුළ Fame Driver ඔබාගෙන සිට අගුල තට්ටු කරන්න. |
+| `phoneSetup.steps.vivo` 1 | Settings → Battery → Background power consumption management: Fame Driver → "Allow". | Settings → Battery → Background power consumption management: Fame Driver → "Allow" තෝරන්න. |
+| `phoneSetup.steps.vivo` 2 | i Manager → App manager → Autostart: turn on Fame Driver. | i Manager → App manager → Autostart: Fame Driver ක්‍රියාත්මක කරන්න. |
+| `phoneSetup.steps.vivo` 3 | Recent apps: pull Fame Driver down so it stays locked. | Recent apps තුළ Fame Driver පහළට අදින්න, එවිට එය අගුළු වී තිබේ. |
+| `phoneSetup.steps.samsung` 1 | Settings → Apps → Fame Driver → Battery: "Unrestricted". | Settings → Apps → Fame Driver → Battery: "Unrestricted" තෝරන්න. |
+| `phoneSetup.steps.samsung` 2 | Settings → Battery → Background usage limits: Fame Driver must not be in "Sleeping apps" or "Deep sleeping apps"; add it to "Never sleeping apps". | Settings → Battery → Background usage limits: Fame Driver "Sleeping apps" හෝ "Deep sleeping apps" තුළ නොතිබිය යුතුයි; එය "Never sleeping apps" වලට එක් කරන්න. |
+| `phoneSetup.steps.samsung` 3 | Recent apps: tap the Fame Driver icon → "Keep open". | Recent apps තුළ Fame Driver අයිකනය තට්ටු කර → "Keep open" තෝරන්න. |
+| `phoneSetup.steps.other` 1 | Settings → Apps → Fame Driver → Battery: allow background activity, no restrictions. | Settings → Apps → Fame Driver → Battery: පසුබිම් ක්‍රියාකාරිත්වයට ඉඩ දෙන්න, සීමා නැතිව. |
+| `phoneSetup.steps.other` 2 | If the phone has "Autostart" or "Auto launch", turn it on for Fame Driver. | දුරකථනයේ "Autostart" හෝ "Auto launch" ඇත්නම්, Fame Driver සඳහා එය ක්‍රියාත්මක කරන්න. |
+| `phoneSetup.steps.other` 3 | Recent apps: lock Fame Driver so it stays open. | Recent apps තුළ Fame Driver අගුළු දමන්න, එවිට එය විවෘතව පවතී. |
+
 ## 12. Documents at the end (Part 6)
 
 CLAUDE.md (phases, stack, data model, tools, the phone layout, the Google rule), this plan
