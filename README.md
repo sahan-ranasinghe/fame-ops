@@ -37,10 +37,15 @@ location, the map and the other native modules need it.
 - `.easignore` (at the top of the repository) limits what a build uploads to
   Expo to `apps/`. Without it the whole repository would be uploaded,
   including `docs/` and the git history.
-- `app.config.ts` adds to `app.json` the one thing that depends on the
-  machine: the Firebase file for push notifications. On an EAS build it comes
-  from the file environment variable `GOOGLE_SERVICES_JSON`; on the laptop
-  from `apps/driver/google-services.json`, which is not committed.
+- `app.config.ts` adds to `app.json` what depends on the machine: the
+  Firebase file for push notifications (on an EAS build from the file
+  environment variable `GOOGLE_SERVICES_JSON`; on the laptop from
+  `apps/driver/google-services.json`, which is not committed), and the task
+  map's Google key (Phase 6 Part 5): the EAS variable `GOOGLE_ANDROID_MAPS_KEY`
+  (preview environment, secret; restricted in Google Cloud to the package and
+  the preview signing key's SHA-1) goes into the Android manifest through
+  `android.config.googleMaps` and makes the task map Google's. A build with it
+  has the runtime `1.2.0-gmaps`, one without it `1.2.0` and the OpenFreeMap map.
 
 ```bash
 cd apps/driver
@@ -89,9 +94,12 @@ eas update --channel preview --environment preview --message "What changed"
 - An update can change screens, text and logic (everything under `src/`). It
   cannot add a native module or change `app.json` settings such as
   permissions: that needs a new build.
-- Updates only reach builds with the same app version (`version` in
-  `app.json`, now 1.0.0). When a new build is needed for a native change, raise
-  the version first, so older builds do not receive code they cannot run.
+- Updates only reach builds with the same runtime (`version` in `app.json`,
+  now 1.2.0; `1.2.0-gmaps` when built with the Google key). When a new build is
+  needed for a native change, raise the version first, so older builds do not
+  receive code they cannot run. Phones on 1.1.0 got their last update from
+  commit d63c838 (Google stops kept off their OpenFreeMap map); the 1.2.0 build
+  adds react-native-maps.
 - `eas update` does not read `apps/driver/.env`. The app therefore also takes
   the Supabase URL and publishable key from `extra` in `app.json`.
 - The app also looks for an update each time it comes back to the front, at
@@ -456,7 +464,8 @@ source ~/.nvm/nvm.sh && nvm use
 npx supabase start
 
 # 1. Database rules, pgTAP (needs an empty local database): access rules, permissions, the
-#    task plan, accept/decline, issues, notifications, custodians and booking
+#    task plan, accept/decline, issues, notifications, custodians and booking, Phase 6's
+#    requests, fuel videos, sites and imports, the Google call counter and the arrival points
 npx supabase db reset --local
 npx supabase test db                 # last line: Result: PASS
 
@@ -501,3 +510,16 @@ geographical database, licensed under
 - Kept: feature class P (populated places), 17,837 rows. Left out: 18 places
   marked abandoned (feature code PPLQ) and one entry that is a private house.
 - Columns used: geonameid, name, latitude, longitude, population.
+
+The map search's public places and the dashed "estimated" lines over GPS gaps
+come from [openrouteservice](https://openrouteservice.org) (HeiGIT) on
+[OpenStreetMap](https://www.openstreetmap.org/copyright) data (© OpenStreetMap
+contributors, ODbL); the office map under the open package is
+[OpenFreeMap](https://openfreemap.org) on OpenStreetMap data. The operators'
+site lists (Dialog, Mobitel) are the company's own files.
+
+Under the Google package (Phase 6 Part 5) the maps are Google's (Google's own
+credit on the map) and the location search credits Google's results as
+"Google Maps". Google's content is never shown on another map, a Google place
+is never saved as one of ours, and every Google call is counted against a cap
+before it is made: `docs/google-maps-setup.md`.

@@ -90,12 +90,31 @@ stay on the laptop only.
 | 3 Fuel videos | `phase6-3-fuel` | migration `fuel_videos` (bucket, columns, prune), tools | Fuel page, task detail, Mileage | Fuel tab, recording, TUS upload | a 60-second recording uploaded through a signal loss, the office page playing it, the storage numbers | **Round 2: db push (bucket), functions, web, eas update** |
 | 4 Site lists and search | `phase6-4-sites` | migration `places_sites`, tools | import page, search in the stops editor, place page | — | the presets run against the two files on the local stack with the report counts, the search from 2 characters, the pin page | with round 3 |
 | 5 Google package | `phase6-5-google` | migration `google_package`, the fail-closed gate, Places / Routes / Roads, caps | Google map (one per tab), Google place search for stops, Settings → Fleet card | Google task map (build 1.2.0); Google stops never on OpenFreeMap (update for 1.1.0) | call 401 refused, a counter error refuses, the field masks, the 30-day clean-up, no keys = open, the setup doc | **Round 3: db push, functions, web, the 1.1.0 update, the 1.2.0 build, the Teams artifact file + message** |
-| 6 Finish | `phase6-6-docs` | — | — | — | CLAUDE.md, docs, README, the test plan, the Sinhala list | — |
+| 5b Arrivals and gap lines | `phase6-5b-arrivals` | migration `stop_arrivals`, `save_arrival_place`, `driver_route(estimate_gaps)` | arrival line and Save as our place, estimated lines on all maps | — (server only) | the arrival point and the 30-day text, ORS calls a normal day | with round 3 |
+| 6 Finish | `phase6-6-finish` | — | "Google Maps" on a Google stop | "Google Maps" under a Google stop's name (1.2.0) | CLAUDE.md, docs, README, the test plan, the Sinhala list, the Teams artifact file and message | **Round 3** (one checkpoint for 5b and 6) |
 
 Each part: tests pass (section 10) → checkpoint → go → ff-merge. Rounds in the order db push
 → functions → web → (round 2) eas update, as in Phase 5. The site import on the live project
-is yours to run through the page after round 3. Secrets by name only: `GOOGLE_MAPS_JS_KEY`,
-`GOOGLE_ROUTES_KEY`, `GOOGLE_ROADS_KEY` (round 3, optional), nothing else.
+is yours to run through the page after round 3. Secrets by name only (Part 5 as built):
+`GOOGLE_MAPS_JS_KEY` and `GOOGLE_SERVER_KEY` (Supabase), `GOOGLE_ANDROID_MAPS_KEY` (EAS, preview,
+secret); all set by Sahan on 15 October 2026.
+
+**Round 3, in this order (each on Sahan's go; from main at the final commit):**
+1. `npx supabase secrets list` (names only): GOOGLE_MAPS_JS_KEY and GOOGLE_SERVER_KEY are there.
+2. `npx supabase db push --linked --yes`: migrations `google_package` and `stop_arrivals`.
+3. The last update for phones on 1.1.0, from commit d63c838 (detached checkout, then back):
+   `eas update --channel preview --environment preview` from `apps/driver`. It hides Google
+   stops on their OpenFreeMap map; it goes out before step 4, because Google place search is live
+   as soon as the functions are.
+4. `npx supabase functions deploy office-mcp office-api fleet-jobs --no-verify-jwt`.
+5. The web: `npm run build:web` and `wrangler pages deploy --branch main` from `apps/office`.
+6. The 1.2.0 build: `eas build --platform android --profile preview --non-interactive` from
+   `apps/driver` (GOOGLE_ANDROID_MAPS_KEY in the preview environment makes it `1.2.0-gmaps`), then
+   the install link to the OPPO.
+7. The Teams artifact file and the message (`docs/teams-artifact-update.md`); Sahan updates it.
+8. Read-only checks through the connector and SQL: get_settings google (package Google, both
+   keys yes), a plan_task with "road time · Google traffic", search_places google for "Kandy",
+   the cron jobs `google-content`, `stop-arrivals`, `prune-gap-lines` present.
 
 Deployed so far (14 October 2026): round 1 at f9bc685 (Part 2); round 2 at 413d820 (Part 3);
 **round 2b at 3cc39d8** (Part 3b, the ordered steps, and the five driver-app items): migrations
@@ -1111,13 +1130,18 @@ The Phone setup card (15 October, ships with Part 4's eas update; menu names sta
 | `phoneSetup.steps.other` 2 | If the phone has "Autostart" or "Auto launch", turn it on for Fame Driver. | දුරකථනයේ "Autostart" හෝ "Auto launch" ඇත්නම්, Fame Driver සඳහා එය ක්‍රියාත්මක කරන්න. |
 | `phoneSetup.steps.other` 3 | Recent apps: lock Fame Driver so it stays open. | Recent apps තුළ Fame Driver අගුළු දමන්න, එවිට එය විවෘතව පවතී. |
 
-## 12. Documents at the end (Part 6)
+## 12. Documents at the end (Part 6, as built 15 October 2026, branch `phase6-6-finish`)
 
-CLAUDE.md (phases, stack, data model, tools, the phone layout, the Google rule), this plan
-with "as built" notes per part, `docs/google-maps-setup.md`, README (site data credit:
-the operators' lists are the company's own files; GeoNames stays), the Teams artifact file
-and the message for the Teams chat, `docs/phase6-test-plan.md` per role on a phone and on a
-desktop, the Sinhala list.
+Done: CLAUDE.md (Phase 6 in the phases, hard rule 10 for Google, the secrets, the driver's 1.2.0
+runtime, the office's Google parts, the new columns, tables, jobs and tools, "Not now"), this plan
+with "as built" notes per part (4.5, 6.1, 7.4, 7.5, 8.5, 8.6, 9.1, 9.2), `docs/google-maps-setup.md`,
+the README (the 1.2.0 build and its key, the credits: GeoNames, openrouteservice and OpenStreetMap,
+OpenFreeMap, the operators' own lists, Google's), `docs/teams-artifact-update.md` (the file, 57
+tools, the message for the chat), `docs/phase6-test-plan.md` (per role, phone and desktop, the
+driver on 1.1.0 then 1.2.0, the caps), `docs/phase6-sinhala-strings.md` (83 new driver keys).
+Also in Part 6: Google's attribution where its place names show off its map: the web task
+detail's tag reads "Google Maps", and the driver app (1.2.0) shows "Google Maps" under a Google
+stop's name.
 
 ## 13. Questions for Sahan, and the answers (14 October 2026)
 

@@ -14,6 +14,7 @@ import { Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions,
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DeclineSheet } from '@/components/DeclineSheet';
+import { GoogleCredit } from '@/components/GoogleCredit';
 import { SkipSheet } from '@/components/SkipSheet';
 import { leaveTime, nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { TrackingNotice } from '@/components/tracking';
@@ -281,6 +282,7 @@ export default function TaskScreen() {
 
         <View>
           <Txt variant="title" size={28}>{running ? stop?.place_name ?? task.title : task.title}</Txt>
+          {running && <GoogleCredit show={!!stop?.google_place_id} />}
           {running && <Txt variant="muted" size={18}>{[task.title, people].filter(Boolean).join(' · ')}</Txt>}
         </View>
 
@@ -322,6 +324,7 @@ export default function TaskScreen() {
                         {current ? `${t('task.currentStop')} · ` : ''}{t(item.type === 'pickup' ? 'today.pickup' : item.type === 'drop' ? 'today.dropoff' : 'today.visit')}
                       </Txt>
                       <Txt variant="strong">{item.place_name}</Txt>
+                      <GoogleCredit show={!!item.google_place_id} />
                       {detail !== '' && <Txt variant="small">{detail}</Txt>}
                       {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
                     </View>

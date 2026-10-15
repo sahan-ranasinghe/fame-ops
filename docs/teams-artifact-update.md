@@ -1,27 +1,27 @@
-# Updating the Teams copy of the Fame Fleet artifact (Phase 6, Part 2)
+# Updating the Teams copy of the Fame Fleet artifact (Phase 6, round 3)
 
-14 October 2026 (Phase 6 Part 2, deploy round 1, commit f9bc685). Sahan updates the Teams
-artifact (`RsGzozM5V4qCv4UeAECatu`, made in his Teams chat) himself from the file below;
-Claude Code never publishes to it, and nobody else gets access yet.
+15 October 2026 (Phase 6 Parts 3 to 5b, deploy round 3). Sahan updates the Teams artifact
+(`RsGzozM5V4qCv4UeAECatu`, made in his Teams chat) himself from the file below; Claude Code never
+publishes to it, and nobody else gets access yet. Build the file from main at the round's commit
+(the one recorded in `docs/phase6-plan.md`, deploy rounds) with `npm run build:artifact`.
 
 ## The file
 
-- `apps/office/dist-artifact/index.html`, built with `npm run build:artifact` from main at
-  f9bc685 (one self-contained file; no Supabase code, no key inside).
-- `apps/office/dist-artifact/capabilities.json`, the declaration to paste unchanged when
-  publishing: the connector named exactly **Fame Fleet** (as claude.ai shows it) and exactly
-  the tools the artifact build calls, derived by `scripts/artifact-declaration.mjs` from the
-  page's source. The Settings → Notifications route is bundled in the artifact too and loads
-  the person's settings (`my_notification_settings`) before it says the rest is on the web
-  app, so that tool is declared; the three actions behind its buttons
-  (`set_my_notification_settings`, `register_web_push`, `remove_web_push`) are reached only on
-  the web and are not, nor are `add_place` and `import_projects`, which no screen calls.
+- `apps/office/dist-artifact/index.html` (one self-contained file; no Supabase code, no key, no
+  Google script inside: the artifact keeps its drawn map and never asks Google).
+- `apps/office/dist-artifact/capabilities.json`, the declaration to paste unchanged: the connector
+  named exactly **Fame Fleet** and exactly the tools the artifact build's source calls
+  (`scripts/artifact-declaration.mjs`). `google_place` and `register_map_load` are declared because
+  the shared source names them; the artifact never calls them (its person has no Google package:
+  its search box never asks Google and its maps are the drawn one). `save_arrival_place` is used
+  ("Save as our place" on a reached Google stop: one of our places at the driver's arrival point).
 
-The declared tools, 48 in the connector's order (claude.ai derives the same set from the page):
+The declared tools, 57 in the connector's order:
 
 - `fleet_overview`
 - `live_drivers`
 - `driver_route`
+- `watch_drivers`
 - `list_drivers`
 - `create_driver`
 - `reset_pin`
@@ -32,6 +32,13 @@ The declared tools, 48 in the connector's order (claude.ai derives the same set 
 - `update_vehicle`
 - `add_rental_company`
 - `list_places`
+- `search_places`
+- `save_place`
+- `place_detail`
+- `update_place`
+- `google_place`
+- `register_map_load`
+- `save_arrival_place`
 - `create_task`
 - `task_board`
 - `task_detail`
@@ -67,6 +74,7 @@ The declared tools, 48 in the connector's order (claude.ai derives the same set 
 - `update_request`
 - `redecide_request`
 - `update_task`
+- `list_fuel`
 
 If claude.ai shows a different count when the Teams copy is updated, the page and the
 declaration have drifted: rebuild with `npm run build:artifact` and compare.
@@ -76,11 +84,33 @@ declaration have drifted: rebuild with `npm run build:artifact` and compare.
 1. Open the artifact, choose Update, give it the file, keep the declaration as in
    `capabilities.json` (the server name must read "Fame Fleet": the `mcp__…` segment is not
    resolved for you).
-2. Open it once: the Overview loads after the connector's permission prompt; the Issues
-   item is in the menu; Settings lists Users and Fleet.
+2. Open it once: the Overview loads after the connector's permission prompt; Fuel and Places are
+   in the menu; a task's route shows dashed slate lines where the phone had a gap.
 3. Do not share it with anyone new yet.
 
-## The message for the Teams chat (Phase 6, Part 2)
+## The message for the Teams chat (Phase 6, round 3)
+
+> Fame Fleet is updated. What is new for the office:
+>
+> - Fuel: every fill has a short silent video from the driver's phone (number plate, pump at
+>   zero, pumping, the final display). The Fuel page lists the month's fills; each video opens
+>   at the step you pick.
+> - Places: one search box for every place field finds our offices, saved places and the Dialog
+>   and Mobitel sites (by name or site id), the places used before and public places on the map.
+>   A Google Maps link or "lat, lng" can be pasted. Settings → Import sites takes any site list.
+> - Road times: plans and arrival times use Google's live traffic when the Google package is on
+>   (the plan says "road time · Google traffic"). In the web app a stop can also be a Google
+>   place; this artifact lists such stops but does not draw them (Google's rule).
+> - Drivers: Navigate opens Google Maps turn by turn; near a stop the phone asks "Arrived?". Each
+>   reached stop shows where the driver arrived; a reached Google stop can be saved as one of our
+>   places under your own name ("Save as our place").
+> - Route maps: where the phone lost GPS for a while, a dashed slate line follows the likely road,
+>   marked "estimated". It is never counted in the km.
+>
+> The web app at fame-fleet.pages.dev has the same screens on Google's map, plus the live map,
+> the driver pages with playback, and notifications.
+
+## The earlier message (Phase 6, Part 2), kept for reference
 
 > Fame Fleet is updated. What is new for the office:
 >

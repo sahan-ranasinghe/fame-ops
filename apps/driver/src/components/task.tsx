@@ -2,6 +2,7 @@
 
 import { StyleSheet, View } from 'react-native';
 
+import { GoogleCredit } from '@/components/GoogleCredit';
 import { Txt } from '@/components/ui';
 import { colomboParts, colomboTime } from '@/lib/time';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
@@ -33,6 +34,7 @@ export function StopTimeline({ stops, compact = false }: { stops: TaskStop[]; co
             <View style={{ flex: 1, paddingBottom: last ? 0 : 14 }}>
               <Txt variant="muted" size={15}>{t(STOP_LABEL[stop.type] ?? 'today.visit')}{stop.arrive_by ? ` · ${t('task.arriveBy', { time: colomboTime(stop.arrive_by) })}` : ''}</Txt>
               <Txt variant="strong" size={18}>{stop.place_name}</Txt>
+              <GoogleCredit show={!!stop.google_place_id} />
             </View>
           </View>
         );

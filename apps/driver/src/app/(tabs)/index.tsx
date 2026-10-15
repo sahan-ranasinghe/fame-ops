@@ -2,6 +2,7 @@
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { GoogleCredit } from '@/components/GoogleCredit';
 import { Check, ChevronRight, Play, Van } from '@/components/icons';
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
@@ -209,6 +210,7 @@ function TaskList({ title, tasks, showDate = false }: { title: string; tasks: Ta
             <View style={{ flex: 1 }}>
               <Txt variant="strong" size={18}>{task.title}</Txt>
               {task.task_stops[0] && <Txt variant="muted">{t('today.from', { place: task.task_stops[0].place_name })}</Txt>}
+              <GoogleCredit show={task.task_stops.some((s) => !!s.google_place_id)} />
               {task.status === 'assigned' && (
                 <Txt variant="small" color={task.accepted_at ? colors.blue : colors.amberText}>{t(task.accepted_at ? 'today.accepted' : 'today.notAccepted')}</Txt>
               )}

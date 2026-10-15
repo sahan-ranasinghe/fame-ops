@@ -55,6 +55,13 @@
   later"; full-resolution line for the web, Realtime on `location_points`; smoothing,
   confidence drawing, labelled holes, headed gliding markers; snap to roads behind the
   `map_matching` setting. As built and the phone test steps: `docs/route-quality-plan.md`.
+- **Phase 6 (done 15 October 2026, branches `phase6-*`)**: office pages and the phone layout
+  (Part 1), approvals, request edits and task changes (2), fuel videos (3, 3b), site lists and
+  the location search (4, 4b), the Google package with fail-closed caps (5) and the driver's
+  arrival points and estimated lines over GPS gaps (5b). Plan and as built:
+  `docs/phase6-plan.md`; Google set-up, caps and terms: `docs/google-maps-setup.md`; test plan:
+  `docs/phase6-test-plan.md`; the driver strings for the Sinhala check:
+  `docs/phase6-sinhala-strings.md`; the Teams artifact: `docs/teams-artifact-update.md`.
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
@@ -85,9 +92,13 @@
 5. Secrets never go in the app, in the browser or in git. The driver app and the web app
    only get the Supabase URL and the publishable (anon) key and are protected by Row Level
    Security; office writes go through `office-api`, which alone runs as service role. The
-   service_role key, OFFICE_MCP_KEY, SERVER_KEY and the VAPID keys live only in Edge Function
-   secrets (the VAPID public key reaches the browser through `my_notification_settings`).
-   `.env*` files are gitignored.
+   service_role key, OFFICE_MCP_KEY, SERVER_KEY, the VAPID keys and GOOGLE_SERVER_KEY live only
+   in Edge Function secrets (the VAPID public key reaches the browser through
+   `my_notification_settings`; the referrer-restricted browser key GOOGLE_MAPS_JS_KEY only through
+   `register_map_load`, after the map load is counted, never in the web build). The driver
+   app's Android Maps key GOOGLE_ANDROID_MAPS_KEY is an EAS environment variable (secret),
+   restricted to the package and the signing SHA-1, built into the APK, never in git or in the
+   update manifests. `.env*` files are gitignored.
 6. Times stored as timestamptz (UTC), shown in Asia/Colombo.
 7. Money: LKR stored as integer cents (bigint).
 8. No Zoho calls from our code. The office's existing Zoho connector in Claude reads Zoho
@@ -95,6 +106,14 @@
 9. Location is recorded only while "On duty" is on (the app's wording since Phase 5; the
    code and the tables still say sharing). Starting a task turns it on automatically; the
    driver can turn it off when not working.
+10. Google (Phase 6 Part 5; `docs/google-maps-setup.md`): every Google call is counted in the
+   database before it is made and refused at its daily cap, its monthly ceiling (95 % of the
+   free usage) or on any counter error (`google_take`, fail closed); Google's content (Places,
+   Routes, Roads) is never shown on a map that is not Google's (listed instead); a Google pick
+   is never saved as one of our places (its pin and address are kept 30 days by place id; a
+   stop on it loses them after 30 days, only the place id stays). Place Details asks for the
+   Essentials fields only (no `displayName`). Everything works with no Google key (the open
+   package: OpenFreeMap, openrouteservice, the estimate).
 
 ## Environment notes (Sahan's laptop)
 - Ubuntu, Node managed by nvm. The default Node (v22) belongs to another project: never
@@ -128,7 +147,11 @@
 - `apps/driver/google-services.json` (Firebase, package com.fameglobal.driver) is NOT
   committed; builds get it from the EAS file variable GOOGLE_SERVICES_JSON through
   `app.config.ts`. Sounds are made by `scripts/make-sounds.sh` (ffmpeg tones), never
-  downloaded. App version 1.1.0 = the first build with push; updates target that runtime.
+  downloaded. App version 1.1.0 = the first build with push. 1.2.0 (Phase 6 Part 5) adds
+  react-native-maps 1.27.2: the task map is Google's (PROVIDER_GOOGLE, no map id) in a build
+  made with GOOGLE_ANDROID_MAPS_KEY (runtime `1.2.0-gmaps`; without the key runtime `1.2.0` and
+  the OpenFreeMap map); a Google stop is never drawn on the OpenFreeMap map (`lib/mapRule.ts`).
+  Phones still on 1.1.0 got their last update from d63c838; updates from later commits target 1.2.0.
 - ALL native modules are installed before the first development build, so the rest of the
   day is live reload (`npx expo start --dev-client`) without new builds.
 - Background location does not work properly in Expo Go: always use the dev build.
@@ -217,6 +240,19 @@
   in a lazy chunk; the presets are `@fleet/sites`, shared with Deno's tests). Part 4b: the import
   takes any sheet with a column mapping (`mapTable`, `screens/settings/importLogic.ts`), saved
   mappings, the import history and "Undo this import".
+- Phase 6 Part 5 (15 October 2026): `GET /me` answers `map { package, places }`. Under the google
+  package the web shows Google's map (`src/map/google`: `googleMapOnce` counts the tab's one map
+  load through `register_map_load`, which hands out the browser key, then loads the Maps
+  JavaScript API; one `google.maps.Map` per tab moved between pages; HTML overlays, no map id;
+  `GoogleMap`, `GooglePin`); a refused load shows `NoMap` (the lists, never OpenFreeMap). The
+  stops' and the start's search box (`LocationSearch google`) adds Google's results (badge
+  Google, the credit "Google Maps", one session token per typing session; a pick calls
+  `google_place`); a request's From and To never ask Google. Settings → Fleet has the Map package
+  card (the package, the keys set, each feature's calls today and this month, the caps).
+  Part 5b: each reached stop shows where the driver arrived and a reached Google stop has "Save as
+  our place" (`screens/StopArrival.tsx`); the route views (the driver page, a task's route, Live's
+  shown route) ask `driver_route(estimate_gaps)` and draw gaps as dashed slate "estimated" road
+  lines (all three maps; `estimatedLegend`), never km.
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
   `issues` (the bell), `issuesAll` (the Issues page), `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
   dropped connection is retried twice by itself, then the form shows the error with Try again).
@@ -341,7 +377,7 @@
 - `places`: id, name ("Head office, Colombo 05"), address, lat, lng (nullable),
   kind ('office'|'store'|'site'|'other'). Since Phase 6 Part 4 also the operators' sites:
   operator ('dialog'|'mobitel'|'other'), site_id, other_ids, region, district, depot, source
-  (a preset, 'manual', 'claude', 'ors', 'link', 'pin'), pin_source (an import replaces only its
+  (a preset, 'manual', 'claude', 'ors', 'link', 'pin', 'arrival' = saved from a stop's arrival point), pin_source (an import replaces only its
   own preset's pin, never one set by hand), attribution, provider_ref, imported_at, updated_at,
   pinned (generated), ids_text (trigger). One place per (operator, site_id); unique names only
   among the office's own places. Found through `search_places_ranked` (trigram, pg_trgm);
@@ -378,11 +414,14 @@
   (`queue_accept_reminders`, in the task-reminders minute job).
   Planner: `_shared/fleet/plan.ts` (pure; leave-by from the deadlines
   minus the buffer, dwell per stop kind); road times: `routing.ts` (ROUTING_PROVIDER
-  secret: ors with ORS_KEY, google with GOOGLE_ROUTES_KEY, or estimate = straight line ×
-  road_factor ÷ avg_speed_kmh when unset; openrouteservice on api.heigit.org, the deprecated
+  secret: ors with ORS_KEY, or estimate = straight line × road_factor ÷ avg_speed_kmh when unset
+  (an old "google" means ors); under the google package with GOOGLE_SERVER_KEY a plan first asks
+  Google's Routes API once for all its legs (`googleLegs`, TRAFFIC_AWARE, never cached, counted)
+  and the planner's passes read them (`memoLegFn`); openrouteservice on api.heigit.org, the deprecated
   api.openrouteservice.org only on a 404 or 410 (`orsHosts.ts`, also for the map search's
   autocomplete); `route_legs` cache 30 days, `routing_calls` per
-  day, rush-hour factor from settings); `eta.ts` (`task_eta`, 2-minute cache) for the
+  day, rush-hour factor from settings); `eta.ts` (`task_eta`, 2-minute cache; a Google ETA, one
+  call for all the remaining legs, stands 15 minutes) for the
   running task's ETA and "late by N min". `fleet_settings` (key, value jsonb, updated_by):
   dwell_min, buffer_min, base_place_id (null until an admin picks a real place: no seeded
   sample place), avg_speed_kmh, road_factor, accept_within_min, accept_before_leave_min,
@@ -397,7 +436,19 @@
   ('closed'|'nobody_there'|'not_needed'|'not_visited'|'other'), skip_note, removed_at.
   The design shows one pickup and one drop-off; up to 12 stops allowed. A stop the office
   edits out is marked 'removed' (never deleted) and shown nowhere; the driver's unfinished
-  stops at Save & finish become skipped · not_visited.
+  stops at Save & finish become skipped · not_visited. auto_detected_at (the arrival nudge,
+  Part 4b). Part 5: google_place_id, google_fetched_at (set by trigger when the coordinates are a
+  `google_pins` pin; the coordinates, address and name go 30 days after the fetch,
+  `prune_google_content`, "Google place · arrived near <town> HH:MM" when it was reached). Part
+  5b: arrival_lat / arrival_lng / arrival_at / arrival_accuracy_m (the driver's location point
+  nearest the moment the stop was reached, `fill_stop_arrivals` every 5 min; ours, kept for good),
+  saved_place_id (`save_arrival_place`). tasks: start_google_place_id, start_google_fetched_at.
+- Google package (Part 5): `google_calls` (feature, Colombo day, calls, refused; `google_take` /
+  `google_hard_ceiling`), `google_pins` (a pick's Place Details answer by place id, 30 days),
+  `route_gap_lines` (Part 5b: a gap's estimated road line from openrouteservice, cached 30 days).
+  All service role only. Jobs: `google-content` (03:30 Colombo, fleet-jobs `google_content`: pins
+  of stops still to be driven fetched again at 23 days, then the 30-day clean-up), `stop-arrivals`
+  (every 5 min), `prune-gap-lines` (nightly).
 - `task_projects`: task_id, project_id (null = Fame internal), percent. Sum = 100 per task.
 - `odometer_logs`: id, vehicle_id, employee_id, task_id (nullable), reading_km,
   ocr_value (nullable), photo_id, kind ('task_start'|'task_end'|'manual'), logged_at,
@@ -723,7 +774,7 @@ office_audit.
   driver page, the selected driver on Live locations, every sharing driver with the trails on;
   `send_heartbeat()` answers `{watched}` and the phone uploads every 10 s while moving),
   `driver_route(driver?, date?, task_id?, from?, to?,
-  line_tolerance_m?, max_line_points?, snap?)` (a day, a task's own window from Start task to
+  line_tolerance_m?, max_line_points?, snap?, estimate_gaps?)` (a day, a task's own window from Start task to
   Save & finish, or two times of a day: drift-filtered km from the raw points, driving and
   stopped minutes, stops > 10 min near a town, gaps > 10 min with their kind (no_gps = heartbeats
   but no fix, "Stopped · no GPS signal"; no_data = nothing, "App not running"), a timeline of
@@ -733,10 +784,13 @@ office_audit.
   `line_tolerance_m` default 12 for Claude; 0, which every web map passes, removes nothing up to
   `max_line_points` 3000 and above that uses the smallest tolerance that fits) with km/h,
   the ISO time and the accuracy per point, points_stored / points_shown, and with `snap` the
-  driving legs snapped to roads (`route_snapped`, `snapped.status`) when the `map_matching`
-  setting names a provider (google_roads: GOOGLE_ROADS_KEY, osrm: OSRM_URL; results cached per
-  leg in `route_matched`, a live leg re-matched at most every 2 min, calls counted in
-  routing_calls). Two rules learnt from test.driver's real
+  driving legs snapped to roads (`route_snapped`, `snapped.status`): Google's Roads API under the
+  google package for the web only (GOOGLE_SERVER_KEY, each call counted, its cap 0 for now), else
+  OSRM when `map_matching` says osrm (OSRM_URL); results cached per leg in `route_matched` (Google's
+  30 days), a growing leg matched again from its last point at most every 2 min; with
+  `estimate_gaps` (Part 5b) `jumps` and `estimated[]`: each gap of over 300 m and 60 s as the
+  likely road from openrouteservice (cached per gap in `route_gap_lines`, `ors_gap_daily_cap`
+  inside the 1,900 directions budget, at most 25 new a view; never km). Two rules learnt from test.driver's real
   12 October: stops with under 100 m of accepted movement between them are ONE stay (the
   filter only corrected where the parked phone is; never a "Driving · 0 km" row), and the
   line gets a wait (two points at one place) only for a pause of 60 s or more, so slow
@@ -759,7 +813,15 @@ office_audit.
   `place_detail(id)`, `import_places(preset, rows[≤500], import_id?, file_name?, preset_label?,
   attach_within_m?)` (every import recorded; the first batch answers `import_id`),
   `update_place(id, …, lat/lng | clear_pin)`, `list_import_presets`, `save_import_preset(name,
-  mapping)`, `list_place_imports(limit?)`, `undo_place_import(import_id)`. Stops and starts take
+  mapping)`, `list_place_imports(limit?)`, `undo_place_import(import_id)`. Part 5:
+  `search_places(…, google?, session?)` (the map layer from Google's Places Autocomplete under the
+  google package, every request counted; at a cap or an error openrouteservice with `map_note`),
+  `google_place(google_place_id, session?)` (approve, assign_tasks: one Place Details Essentials
+  call, the pin kept 30 days in `google_pins`; stops and starts take `google_place_id` with the
+  name as `place`), `register_map_load()` (any permission, web only: counts the tab's Google map
+  load, then answers the browser key), `save_arrival_place(stop_id, name, kind?)` (Part 5b,
+  vehicles and assign_tasks: a reached Google stop as one of our places at the driver's arrival
+  point; Google's name refused). Stops and starts take
   `place_id`. As built: `docs/phase6-plan.md` 8.5 and 8.6.
 - Tasks: `create_task(title, date, start_time?, driver, vehicle, pickup, dropoff | stops[{type,
   what?, place?, address?, lat?, lng?, dwell_min?, arrive_by?, note?}], start?, return_to_base?,
@@ -779,8 +841,10 @@ office_audit.
   leave_by and the planned times; a declined task goes back to assigned, the decline cleared,
   result `was: "declined"`). `list_drivers` adds `last_30_days {accepted, declined}`.
 - Settings: `get_settings` (any office permission: the request form reads
-  `self_drive_allowed`), `update_settings(key, value)` (also `map_matching {provider}`) and
-  `routing_usage(days?)` (users).
+  `self_drive_allowed`; `google`: the package, the keys set, each feature's calls today and this
+  month against its caps), `update_settings(key, value)` (also `map_matching {provider}`,
+  `map_package` google | open, `google_caps` {feature: {day, month}}, `ors_gap_daily_cap`) and
+  `routing_usage(days?)` (users; also `google`).
   Tool answers never carry null fields (run.ts prunes them): a null setting such as
   base_place_id is simply absent.
 - Requests: `create_request(..., driver_required?)` (a staff member asks in their own name;
@@ -820,8 +884,9 @@ office_audit.
 ## Not now
 Project costs, WhatsApp as a location source or automated WhatsApp sending (use wa.me links),
 Zoho cost push, allowance claims UI (Phase C); an audit page; the e-mail channel for office
-notifications (designed, `dead: email_not_implemented`); Google routing (code path present, no
-key); a Claude Teams OAuth connector; road snapping of GPS lines; HR; iOS; Play Store.
+notifications (designed, `dead: email_not_implemented`); a Claude Teams OAuth connector; Google
+snap to roads (built, its cap 0 until Google's asset tracking licence question is settled); HR;
+iOS; Play Store.
 
 ## Working rules for Claude Code
 - Explain each command before running anything that changes Supabase (migrations,
