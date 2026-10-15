@@ -1,7 +1,7 @@
 // The map search (Part 4): openrouteservice's answer, the 30-day cache, the daily cap; a fake fetch and a fake database.
 import { assert, assertEquals } from "@std/assert";
 import type { Db } from "./db.ts";
-import { LIMIT_NOTE, normaliseQuery, orsAutocomplete, orsPlaces } from "./geocode.ts";
+import { BUSY_NOTE, LIMIT_NOTE, normaliseQuery, orsAutocomplete, orsPlaces } from "./geocode.ts";
 
 const ANSWER = {
   features: [
@@ -32,8 +32,17 @@ function fakeDb(calls = 0) {
     };
     return q;
   };
-  const db = { from: chain, rpc: () => { state.bumped += 1; state.calls += 1; return Promise.resolve({ error: null }); } } as unknown as Db;
-  return { db, state, cache };
+  const minutes = { n: 0 };
+  const db = {
+    from: chain,
+    rpc: (name: string) => {
+      if (name === "bump_minute_calls") return Promise.resolve({ data: ++minutes.n, error: null });
+      state.bumped += 1;
+      state.calls += 1;
+      return Promise.resolve({ error: null });
+    },
+  } as unknown as Db;
+  return { db, state, cache, minutes };
 }
 
 Deno.test("the answer: name, label, point and the credit per source; features without a point are left out", () => {
@@ -51,11 +60,11 @@ Deno.test("one counted call, then the cache for the same text in any spelling; t
     seen.push({ url: String(url), auth: new Headers(init.headers).get("authorization") });
     return Promise.resolve(Response.json(ANSWER));
   }) as unknown as typeof fetch;
-  const deps = { db, key: "KEY", cap: 1000, focus: { lat: 6.97, lng: 79.92 }, now: new Date("2026-10-15T01:00:00Z"), fetch: fetcher };
+  const deps = { db, key: "KEY", cap: 1000, perMinute: 90, focus: { lat: 6.97, lng: 79.92 }, now: new Date("2026-10-15T01:00:00Z"), fetch: fetcher };
   const first = await orsAutocomplete("Kandy City", deps);
   assertEquals(first.places.length, 2);
   assertEquals(state.bumped, 1);
-  assert(seen[0].url.includes("boundary.country=LK") && seen[0].url.includes("size=8") && seen[0].url.includes("focus.point.lat=6.97") && !seen[0].url.includes("KEY"));
+  assert(seen[0].url.startsWith("https://api.heigit.org/pelias/v1/autocomplete?") && seen[0].url.includes("boundary.country=LK") && seen[0].url.includes("size=8") && seen[0].url.includes("focus.point.lat=6.97") && !seen[0].url.includes("KEY"));
   assertEquals(seen[0].auth, "KEY");
   const again = await orsAutocomplete("  kandy,  CITY ", deps);
   assertEquals([again.cached, again.places.length, state.bumped, seen.length], [true, 2, 1, 1]);
@@ -64,7 +73,7 @@ Deno.test("one counted call, then the cache for the same text in any spelling; t
 Deno.test("the daily cap: no call, the note; under 3 characters: nothing; no key: said so", async () => {
   const { db } = fakeDb(1000);
   const never = (() => Promise.reject(new Error("must not be called"))) as unknown as typeof fetch;
-  const deps = { db, key: "KEY", cap: 1000, focus: null, now: new Date(), fetch: never };
+  const deps = { db, key: "KEY", cap: 1000, perMinute: 90, focus: null, now: new Date(), fetch: never };
   assertEquals(await orsAutocomplete("Galle Face", deps), { places: [], note: LIMIT_NOTE });
   assertEquals(await orsAutocomplete("Ga", deps), { places: [] });
   assertEquals((await orsAutocomplete("Galle Face", { ...deps, key: undefined })).note, "Map search is not set up");
@@ -73,6 +82,15 @@ Deno.test("the daily cap: no call, the note; under 3 characters: nothing; no key
 Deno.test("a refused or slow answer is counted as an error and said in words; nothing cached", async () => {
   const { db, state, cache } = fakeDb();
   const busy = (() => Promise.resolve(new Response("{}", { status: 429 }))) as unknown as typeof fetch;
-  const r = await orsAutocomplete("Matara", { db, key: "KEY", cap: 1000, focus: null, now: new Date(), fetch: busy });
+  const r = await orsAutocomplete("Matara", { db, key: "KEY", cap: 1000, perMinute: 90, focus: null, now: new Date(), fetch: busy });
   assertEquals([r.places.length, r.note, state.bumped, cache.size], [0, "Map search is busy, try again in a minute", 1, 0]);
 });
+
+Deno.test("the throttle: over the calls a minute, no call and the busy note", async () => {
+  const { db, minutes } = fakeDb();
+  minutes.n = 90; // 90 calls already this minute
+  const never = (() => Promise.reject(new Error("must not be called"))) as unknown as typeof fetch;
+  const r = await orsAutocomplete("Galle Face", { db, key: "KEY", cap: 2500, perMinute: 90, focus: null, now: new Date(), fetch: never });
+  assertEquals(r, { places: [], note: BUSY_NOTE });
+});
+

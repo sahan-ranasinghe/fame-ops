@@ -4,13 +4,17 @@
 // ORS_KEY) can later be replaced by Google Places Autocomplete under
 // map_package google.
 //
-//   ors     GET /geocode/autocomplete, boundary.country=LK, focus.point = the
-//           base place, size 8, from 3 characters. Answers are cached 30 days per
-//           normalised text (geocode_cache) and counted per day in routing_calls
-//           (provider ors_autocomplete); the cache never counts. At the daily cap
-//           (fleet setting ors_autocomplete_daily_cap, the dashboard's quota) the
-//           layer is skipped and the box says "Map search limit reached for
-//           today". Results carry their attribution (OpenStreetMap contributors,
+//   ors     GET api.heigit.org/pelias/v1/autocomplete (the deprecated
+//           api.openrouteservice.org/geocode/autocomplete only on a 404 or 410:
+//           orsHosts.ts), boundary.country=LK, focus.point = the base place, size
+//           8, from 3 characters. Answers are cached 30 days per normalised text
+//           (geocode_cache) and counted per day in routing_calls (provider
+//           ors_autocomplete) and per minute in api_minute_calls; the cache never
+//           counts. The dashboard's Geocoding quota (3,000 a day, 100 a minute) is
+//           shared by autocomplete, search and reverse, so the box stops at
+//           ors_autocomplete_daily_cap (2,500) with "Map search limit reached for
+//           today", and at ors_autocomplete_per_minute (90) with "Map search is
+//           busy, try again in a minute". Results carry their attribution (OpenStreetMap contributors,
 //           and so on) and may be saved as places (storable).
 //   google  (not built) Places Autocomplete (New) with a session token per typing
 //           session; predictions carry no coordinates, the pick asks Place
@@ -22,11 +26,13 @@
 //           only the place ids (allowed), never the coordinates.
 
 import type { Db } from "./db.ts";
+import { ORS_AUTOCOMPLETE_URLS, orsFetch } from "./orsHosts.ts";
 
 export const PUBLIC_MIN_CHARS = 3;
 export const PUBLIC_SIZE = 8;
 export const CACHE_DAYS = 30;
-export const ORS_AUTOCOMPLETE_URL = "https://api.openrouteservice.org/geocode/autocomplete";
+export const ORS_AUTOCOMPLETE_URL = ORS_AUTOCOMPLETE_URLS[0];
+export const BUSY_NOTE = "Map search is busy, try again in a minute";
 export const COUNTER = "ors_autocomplete";
 export const LIMIT_NOTE = "Map search limit reached for today";
 
@@ -100,6 +106,8 @@ export interface OrsDeps {
   db: Db;
   key: string | undefined;
   cap: number;
+  /** Calls a minute at most (the throttle). */
+  perMinute: number;
   focus: Focus | null;
   now: Date;
   fetch?: typeof fetch;
@@ -118,20 +126,23 @@ export async function orsAutocomplete(text: string, deps: OrsDeps): Promise<Publ
   if (!deps.key) return { places: [], note: "Map search is not set up" };
   const used = await db.from("routing_calls").select("calls").eq("day", today(now)).eq("provider", COUNTER).maybeSingle();
   if ((used.data?.calls ?? 0) >= deps.cap) return { places: [], note: LIMIT_NOTE };
-  const url = new URL(ORS_AUTOCOMPLETE_URL);
-  url.searchParams.set("text", text.trim().slice(0, 100));
-  url.searchParams.set("boundary.country", "LK");
-  url.searchParams.set("size", String(PUBLIC_SIZE));
+  // The throttle: this call's number in the current minute (counted whether or not it goes out).
+  const minute = await db.rpc("bump_minute_calls", { p_provider: COUNTER });
+  if (!minute.error && typeof minute.data === "number" && minute.data > deps.perMinute) return { places: [], note: BUSY_NOTE };
+  const params = new URLSearchParams();
+  params.set("text", text.trim().slice(0, 100));
+  params.set("boundary.country", "LK");
+  params.set("size", String(PUBLIC_SIZE));
   if (deps.focus) {
-    url.searchParams.set("focus.point.lat", String(deps.focus.lat));
-    url.searchParams.set("focus.point.lon", String(deps.focus.lng));
+    params.set("focus.point.lat", String(deps.focus.lat));
+    params.set("focus.point.lon", String(deps.focus.lng));
   }
   let ok = false;
   let places: PublicPlace[] = [];
   let note: string | undefined;
   try {
-    const res = await (deps.fetch ?? fetch)(url, { headers: { Authorization: deps.key, Accept: "application/json" }, signal: AbortSignal.timeout(6000) });
-    if (res.status === 429) note = "Map search is busy, try again in a minute";
+    const res = await orsFetch(ORS_AUTOCOMPLETE_URLS, { headers: { Authorization: deps.key, Accept: "application/json" }, signal: AbortSignal.timeout(6000) }, `?${params.toString()}`, deps.fetch);
+    if (res.status === 429) note = BUSY_NOTE;
     else if (!res.ok) note = "Map search did not answer";
     else {
       places = orsPlaces(await res.json());

@@ -31,7 +31,7 @@ describe("the location search box", () => {
 describe("the import report", () => {
   it("lists the file's skipped and repaired rows and the import's skipped rows as CSV", () => {
     const preview = { preset: "mobitel_ep" as const, rows: [], read: 3, with_pin: 0, no_pin: 0, skipped: [{ row: 5, reason: 'BAD1: no usable "coordinates"' }], repaired: [{ row: 3, note: "ZBAT44: latitude and longitude were swapped" }] };
-    const csv = reportCsv(preview, { added: 1, updated: 0, attached: 0, unchanged: 0, no_pin: 0, skipped: [{ row: "12", reason: "CM0164 is already an other id of MT0184" }] });
+    const csv = reportCsv(preview, { skipped: [{ row: "12", reason: "CM0164 is already an other id of MT0184" }] });
     expect(csv).toBe('what,row,reason\nskipped in the file,5,"BAD1: no usable ""coordinates"""\nrepaired,3,"ZBAT44: latitude and longitude were swapped"\nskipped on import,12,"CM0164 is already an other id of MT0184"\n');
   });
 });

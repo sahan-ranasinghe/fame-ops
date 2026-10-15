@@ -17,7 +17,8 @@ const NUMBERS: [keyof Values, string, string][] = [
   ["road_factor", "Estimate: road factor (× straight line)", "×"],
   ["accept_within_min", "Accept within (min of receiving)", "min"],
   ["accept_before_leave_min", "Accept at the latest (min before leave-by)", "min"],
-  ["ors_autocomplete_daily_cap", "Map search calls a day (the openrouteservice dashboard's autocomplete quota)", "calls"],
+  ["ors_autocomplete_daily_cap", "Map search calls a day (under the openrouteservice Geocoding quota, shared with search and reverse)", "calls"],
+  ["ors_autocomplete_per_minute", "Map search calls a minute (the dashboard allows 100)", "calls"],
 ];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

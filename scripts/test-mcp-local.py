@@ -374,6 +374,36 @@ check([s["place"] for s in pl["stops"]] == ["Head office, Colombo 05", "Galle", 
       "typed text: part of our office's name finds it; a town's name is the town (not \"Galle Face Green\"); part of a site's name is not that site",
       json.dumps([[s["place"], s.get("pin")] for s in pl["stops"]]))
 
+print("\n== 1d. Part 4b: a custom mapping, the import record, undo, the map search's settings ==")
+presets = tool("list_import_presets")
+check([p["key"] for p in presets["presets"]][:3] == ["dialog", "mobitel_4g", "mobitel_ep"] and presets["presets"][2]["mapping"]["attach_within_m"] == 100,
+      "list_import_presets: the three built-in presets on one engine (EP attaches within 100 m)", json.dumps([p["key"] for p in presets["presets"]]))
+sp = tool("save_import_preset", {"name": "Hutch sites", "mapping": {"header_row": 3, "columns": {"site_id": "Code", "name": "Location name", "latlng": "GPS", "operator": "Owner"}}})
+sp2 = tool("save_import_preset", {"name": "hutch SITES", "mapping": {"header_row": 2, "columns": {"name": "Name"}, "operator": "other"}})
+r = tool("save_import_preset", {"name": "Dialog site list", "mapping": {"header_row": 1, "columns": {"name": "N"}}}, expect_error=True)
+check(sp["replaced"] is False and sp2["replaced"] is True and sp2["key"] == sp["key"] and "built-in" in r,
+      "save_import_preset: saved by name, saved again under the same name replaces it, a built-in name is refused", r)
+first = tool("import_places", {"preset": sp["key"], "file_name": "hutch.xlsx", "preset_label": "Hutch sites", "rows": [
+    {"operator": "other", "site_id": "HT0001", "name": "Hutch Kandy", "lat": 7.29, "lng": 80.63, "address": "Peradeniya Road", "kind": "store"},
+    {"operator": "other", "site_id": "HT0002", "name": "Hutch Galle"}]})
+second = tool("import_places", {"preset": sp["key"], "import_id": first["import_id"], "rows": [{"operator": "other", "site_id": "HT0003", "name": "Hutch Matara", "lat": 5.95, "lng": 80.54}]})
+hist = tool("list_place_imports")
+mine = next(i for i in hist["imports"] if i["id"] == first["import_id"])
+check(second["import_id"] == first["import_id"] and mine["added"] == 3 and mine["rows"] == 3 and mine["file"] == "hutch.xlsx" and mine["preset"] == "Hutch sites" and mine["by"],
+      "an import in two batches is one record: who, the file, the preset, 3 added", json.dumps(mine))
+pd = tool("place_detail", {"id": tool("search_places", {"text": "HT0001", "map": False})["results"][0]["id"]})
+check(pd["place"]["kind"] == "store" and pd["place"]["address"] == "Peradeniya Road", "a custom row's kind and address are kept", json.dumps(pd["place"])[:200])
+undo = tool("undo_place_import", {"import_id": first["import_id"]})
+check(undo["switched_off"] == 3 and undo["left_as_is"] == 0 and not any(r.get("site_id") == "HT0001" for r in tool("search_places", {"text": "HT0001", "map": False})["results"]),
+      "undo_place_import: its three places switched off, out of the search", json.dumps(undo))
+check("already undone" in tool("undo_place_import", {"import_id": first["import_id"]}, expect_error=True), "an import is undone once")
+check(next(i for i in tool("list_place_imports")["imports"] if i["id"] == first["import_id"])["undone"]["switched_off"] == 3, "the history shows the undo")
+att = tool("import_places", {"preset": "custom", "attach_within_m": 50, "rows": [{"operator": "mobitel", "site_id": "COL777", "name": "COL777", "lat": 6.88334, "lng": 79.88144}]})
+check(att["attached"] == 1, "a custom import may attach ids within a distance (here to Bambalapitiya, 5 m away)", json.dumps(att))
+st = tool("get_settings")["settings"]
+check(st["ors_autocomplete_daily_cap"] == 2500 and st["ors_autocomplete_per_minute"] == 90 and st["shift_days"] == [1, 2, 3, 4, 5],
+      "settings: the map search at 2,500 a day and 90 a minute; the shift nudge Monday to Friday", json.dumps({k: st.get(k) for k in ("ors_autocomplete_daily_cap", "ors_autocomplete_per_minute", "shift_days")}))
+
 # ---------------------------------------------------------------------------
 print("\n== 1b. Office accounts and permissions ==")
 REQ_EMAIL = f"requester.{uuid.uuid4().hex[:6]}@fame.test"
@@ -775,7 +805,7 @@ check(av["window"]["until"] == "12:00" and av["window"]["day"] == day(2) and kas
       "availability: Kasun busy with the Matara trip, Nuwan off duty but free with today's counts, the vehicle groups, free first", json.dumps(av)[:600])
 r = tool("availability", {"at": "yesterday"}, expect_error=True)
 check("not a time" in r, "availability refuses a time it cannot read", r)
-check(tool("get_settings")["settings"]["shift_start"] == "08:00" and tool("get_settings")["settings"]["shift_days"] == [1, 2, 3, 4, 5, 6], "get_settings: the shift nudge defaults")
+check(tool("get_settings")["settings"]["shift_start"] == "08:00" and tool("get_settings")["settings"]["shift_days"] == [1, 2, 3, 4, 5], "get_settings: the shift nudge defaults (Monday to Friday since Part 4b)")
 tool("update_settings", {"key": "shift_start", "value": "07:30"})
 tool("update_settings", {"key": "shift_days", "value": [5, 1, 1, 3]})
 code, ds = app.post("rpc/get_driver_settings", {})
@@ -849,8 +879,12 @@ code, other = app.upload(f"{uuid.uuid4()}/{iso(today)}/x.jpg", TINY_JPEG)
 check(code in (400, 403), "uploading into another employee's folder is refused", f"{code} {str(other)[:120]}")
 
 code, stops = app.get(f"task_stops?select=id,seq&task_id=eq.{T1}&order=seq")
-code, _ = app.patch("task_stops?id=eq." + stops[0]["id"], {"status": "done", "arrived_at": iso(now - dt.timedelta(minutes=61)), "done_at": iso(now - dt.timedelta(minutes=60))})
-check(code == 200, "driver marks the pickup stop done")
+code, _ = app.patch("task_stops?id=eq." + stops[0]["id"], {"status": "done", "arrived_at": iso(now - dt.timedelta(minutes=61)), "done_at": iso(now - dt.timedelta(minutes=60)),
+                                                       "auto_detected_at": iso(now - dt.timedelta(minutes=62))})
+check(code == 200, "driver marks the pickup stop done (the phone saw them near it a minute before their tap)")
+td_auto = tool("task_detail", {"task_id": T1})
+check(td_auto["stops"][0].get("auto_detected") and td_auto["stops"][0]["arrived"] and td_auto["stops"][0]["auto_detected"] != td_auto["stops"][0]["arrived"],
+      "task_detail: the arrival nudge's time beside the driver's own tap", json.dumps(td_auto["stops"][0])[:300])
 
 board = tool("task_board", {"date": task_day})
 running = {c["id"]: c for c in board["in_progress"]}

@@ -133,8 +133,11 @@
   day is live reload (`npx expo start --dev-client`) without new builds.
 - Background location does not work properly in Expo Go: always use the dev build.
 - i18n: all UI text in `src/i18n/en.json` and `src/i18n/si.json`. No hard-coded strings.
-- Links: Navigate = `https://www.google.com/maps/dir/?api=1&destination=<lat,lng or address>`,
-  call = `tel:`, WhatsApp = `https://wa.me/<number>`.
+- Links: Navigate = `https://www.google.com/maps/dir/?api=1&destination=<lat,lng or address>&travelmode=driving&dir_action=navigate`
+  (turn by turn to the current stop; "All stops in Google Maps" adds the stops still to do as
+  `waypoints`, at most 9), call = `tel:`, WhatsApp = `https://wa.me/<number>`. During a task the
+  arrival nudge ("Arrived at <stop>? Tap to mark Arrived", once per stop within 150 m) records
+  `task_stops.auto_detected_at` (`lib/arrival.ts`).
 
 ## Stack (office app, `apps/office`)
 - Vite 7 + React 19 + TypeScript + react-router 7, no UI library; the artifact's CSS is
@@ -185,8 +188,9 @@
   a history event with its diff and the driver's push names the fields. `availability(at, until)`
   feeds the "Who's available" panel (decide, new request, new task, task edit): on duty since /
   off duty / on a task until, the day's counts, the licence, free or busy. Presence
-  (`on_duty_since`) on the driver cards. Fleet settings `shift_start` / `shift_days` drive the
-  driver app's "At work? Switch On duty" local notification (`get_driver_settings()`).
+  (`on_duty_since`) on the driver cards. Fleet settings `shift_start` / `shift_days` (Monday to
+  Friday by default since Part 4b) drive the driver app's "At work? Switch On duty" local
+  notification (`get_driver_settings()`).
 - Phase 6 Part 3 (14 October 2026): every fuel fill has a silent video. The driver app's fifth
   tab, Fuel, lists the month's fills with each video's state; the fuel form needs a recording
   (`record-video`: `CameraView`, the whole fill, 480p / 1.0 Mbps by default or 720p when the
@@ -210,7 +214,9 @@
   To) is the location search box `ui/LocationSearch.tsx` (badges, the map's results with their
   credit, a pasted pin or Google Maps link confirmed on `map/PinMap.tsx` and saved with
   `save_place`); `/places`, `/places/:id` (vehicles) and `/settings/import-sites` (web, SheetJS
-  in a lazy chunk; the presets are `@fleet/sites`, shared with Deno's tests).
+  in a lazy chunk; the presets are `@fleet/sites`, shared with Deno's tests). Part 4b: the import
+  takes any sheet with a column mapping (`mapTable`, `screens/settings/importLogic.ts`), saved
+  mappings, the import history and "Undo this import".
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
   `issues` (the bell), `issuesAll` (the Issues page), `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
   dropped connection is retried twice by itself, then the form shows the error with Try again).
@@ -339,7 +345,10 @@
   own preset's pin, never one set by hand), attribution, provider_ref, imported_at, updated_at,
   pinned (generated), ids_text (trigger). One place per (operator, site_id); unique names only
   among the office's own places. Found through `search_places_ranked` (trigram, pg_trgm);
-  `recent_places`; `import_place_rows`; `geocode_cache` (the map search, 30 days).
+  `recent_places`; `import_place_rows`; `geocode_cache` (the map search, 30 days). Part 4b:
+  `active` (off = left out of every search and list, kept for old stops), `site_import_presets`
+  (mappings saved by name), `place_imports` + `place_import_changes` (every import and what it did,
+  for `undo_place_import`), `api_minute_calls` (the map search's 90 a minute).
 - `towns`: id, name, lat, lng. Seed from GeoNames Sri Lanka populated places (CC BY 4.0,
   credit in README). Used for "Near <town>".
 - `projects` (Zoho Books jobs): id, zoho_project_id (unique), job_no ("13021"),
@@ -370,7 +379,9 @@
   Planner: `_shared/fleet/plan.ts` (pure; leave-by from the deadlines
   minus the buffer, dwell per stop kind); road times: `routing.ts` (ROUTING_PROVIDER
   secret: ors with ORS_KEY, google with GOOGLE_ROUTES_KEY, or estimate = straight line ×
-  road_factor ÷ avg_speed_kmh when unset; `route_legs` cache 30 days, `routing_calls` per
+  road_factor ÷ avg_speed_kmh when unset; openrouteservice on api.heigit.org, the deprecated
+  api.openrouteservice.org only on a 404 or 410 (`orsHosts.ts`, also for the map search's
+  autocomplete); `route_legs` cache 30 days, `routing_calls` per
   day, rush-hour factor from settings); `eta.ts` (`task_eta`, 2-minute cache) for the
   running task's ETA and "late by N min". `fleet_settings` (key, value jsonb, updated_by):
   dwell_min, buffer_min, base_place_id (null until an admin picks a real place: no seeded
@@ -745,8 +756,11 @@ office_audit.
   location search box: our places, used before, the map's public places from openrouteservice
   autocomplete with a daily cap `ors_autocomplete_daily_cap`; a pasted "lat, lng" or Google
   Maps link answers `pin`), `save_place(name, lat, lng, from map|link|pin, ref?, attribution?)`,
-  `place_detail(id)`, `import_places(preset, rows[≤500])`, `update_place(id, …, lat/lng |
-  clear_pin)`. Stops and starts take `place_id`. As built: `docs/phase6-plan.md` 8.5.
+  `place_detail(id)`, `import_places(preset, rows[≤500], import_id?, file_name?, preset_label?,
+  attach_within_m?)` (every import recorded; the first batch answers `import_id`),
+  `update_place(id, …, lat/lng | clear_pin)`, `list_import_presets`, `save_import_preset(name,
+  mapping)`, `list_place_imports(limit?)`, `undo_place_import(import_id)`. Stops and starts take
+  `place_id`. As built: `docs/phase6-plan.md` 8.5 and 8.6.
 - Tasks: `create_task(title, date, start_time?, driver, vehicle, pickup, dropoff | stops[{type,
   what?, place?, address?, lat?, lng?, dwell_min?, arrive_by?, note?}], start?, return_to_base?,
   avoid_expressway?, leave_by?, buffer_min?, passengers?, contact_name?, contact_phone?,

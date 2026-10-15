@@ -58,6 +58,8 @@ export const KEYS = {
   /** Those gaps, the last 7 days (lib/phoneSetup.ts), and when the driver last tapped Done on the Phone setup card. */
   phoneGaps: 'phone.gaps',
   phoneSetupDoneAt: 'phone.setupDoneAt',
+  /** The stops the arrival nudge already spoke about (lib/arrival.ts). */
+  arrivalNudged: 'arrival.nudged',
   /** The watchdog: when it last restarted the location service (ms), and how often since the last heartbeat. */
   lastRestartAt: 'tracking.lastRestartAt',
   locationRestarts: 'tracking.locationRestarts',

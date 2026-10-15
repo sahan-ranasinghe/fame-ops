@@ -1,6 +1,7 @@
 // Road time and distance for one leg, from one of three providers:
-//   ors       openrouteservice Directions v2 (secret ORS_KEY; free plan: 2,000 a
-//             day, 40 a minute); coordinates are [lng, lat] in the request and
+//   ors       openrouteservice Directions v2 on api.heigit.org, the deprecated
+//             api.openrouteservice.org only on a 404 or 410 (orsHosts.ts; secret
+//             ORS_KEY; free plan: 2,000 a day, 40 a minute); coordinates are [lng, lat] in the request and
 //             the response; avoid_features ["highways"] when the task avoids the
 //             expressway; waycategory tells whether the leg uses one
 //   google    Routes API computeRoutes, TRAFFIC_AWARE with the departure time
@@ -18,10 +19,12 @@ import { unwrap, unwrapMaybe } from "./db.ts";
 import { haversineKm } from "./geo.ts";
 import type { LegResult, LegSource, PlanPoint } from "./plan.ts";
 import type { RushHour, Settings } from "./settings.ts";
+import { ORS_DIRECTIONS_URLS, orsFetch } from "./orsHosts.ts";
 
 export type Provider = LegSource;
 
-export const ORS_URL = "https://api.openrouteservice.org/v2/directions/driving-car/json";
+/** The new host's directions URL (orsHosts.ts has the fallback). */
+export const ORS_URL = ORS_DIRECTIONS_URLS[0];
 export const GOOGLE_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 export const ORS_DAILY_BUDGET = 1900;
 export const ORS_PER_MINUTE = 40;
@@ -205,12 +208,8 @@ async function callProvider(
   }
   const req = provider === "ors" ? orsRequest(from, to, opts, key) : googleRequest(from, to, departAt, opts, key);
   try {
-    const res = await fetch(req.url, {
-      method: "POST",
-      headers: req.headers,
-      body: JSON.stringify(req.body),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
+    const init = { method: "POST", headers: req.headers, body: JSON.stringify(req.body), signal: AbortSignal.timeout(TIMEOUT_MS) };
+    const res = provider === "ors" ? await orsFetch(ORS_DIRECTIONS_URLS, init) : await fetch(req.url, init);
     const json = await res.json();
     if (!res.ok) throw new Error(`${provider} ${res.status}`);
     const leg = provider === "ors" ? orsResponse(json) : googleResponse(json);

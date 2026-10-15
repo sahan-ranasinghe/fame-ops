@@ -109,6 +109,20 @@ export async function notifyNewTask(title: string, body: string, taskId: string)
   }
 }
 
+/** "Arrived at <stop>? Tap to mark Arrived": the tap opens the task (the task id travels with it). */
+export async function notifyArrival(title: string, body: string, taskId: string): Promise<void> {
+  try {
+    if (!(await notificationsAllowed())) return;
+    await ensureChannels();
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body, data: { taskId, kind: 'arrival' } },
+      trigger: { channelId: CHANNELS.tasksChanged },
+    });
+  } catch {
+    // The stop's Arrived button is on the task screen either way.
+  }
+}
+
 /** Plays the new-task ring once, so the driver can check the volume. */
 export async function showTestNotification(title: string, body: string): Promise<void> {
   try {

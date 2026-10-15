@@ -24,6 +24,7 @@ import { addPoints, queueCounts } from '../sync/store';
 import { getJson, KEYS, setJson } from './kv';
 import { getSharing, LOCATION_TASK } from './location';
 import { armWatchdog } from './notifications';
+import { checkArrival } from './arrival';
 import { isMoving, isWatched, loadTrack, recordable, saveTrack, toPhoneFix } from './tracking';
 import type { Language } from './types';
 
@@ -78,6 +79,10 @@ TaskManager.defineTask<{ locations?: Location.LocationObject[] }>(LOCATION_TASK,
 
   const language = getJson<Language>(KEYS.language) ?? 'en';
   await armWatchdog(translate(language, 'tracking.stoppedTitle'), translate(language, 'tracking.stoppedBody'));
+
+  // Near the current stop? The arrival nudge (once per stop), from the newest position of the delivery.
+  const newest = locations.map(toPhoneFix).sort((a, b) => b.at - a.at)[0];
+  if (newest) await checkArrival(newest).catch(() => false);
 
   const sinceLast = Date.now() - (getJson<number>(KEYS.lastFlush) ?? 0);
   const waiting = queueCounts().points;

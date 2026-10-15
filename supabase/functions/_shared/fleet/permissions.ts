@@ -101,6 +101,11 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   place_detail: VR,
   import_places: ["vehicles"],
   update_place: ["vehicles"],
+  // Part 4b: the custom import's saved mappings, the record of every import, the undo.
+  list_import_presets: ["vehicles"],
+  save_import_preset: ["vehicles"],
+  list_place_imports: ["vehicles"],
+  undo_place_import: ["vehicles"],
   list_vehicle_reports: ["issues"],
   update_vehicle_report: ["issues"],
   list_issues: ["issues", "assign_tasks"],

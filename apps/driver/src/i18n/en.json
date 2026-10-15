@@ -164,7 +164,10 @@
     "declined": "Declined",
     "alreadyReassigned": "This task was already given to another driver.",
     "alreadyStarted": "This task was already started.",
-    "declinedBody": "The office will give this task to another driver."
+    "declinedBody": "The office will give this task to another driver.",
+    "allStops": "All stops in Google Maps",
+    "allStopsLeftTitle": "Google Maps takes 10 stops at a time",
+    "allStopsLeftBody": "The first 10 stops are in; {n} more come after them. Open All stops again when you reach the tenth."
   },
   "log": {
     "title": "Log mileage",
@@ -439,5 +442,9 @@
         "Recent apps: lock Fame Driver so it stays open."
       ]
     }
+  },
+  "arrival": {
+    "title": "Arrived at {stop}?",
+    "body": "Tap to mark Arrived"
   }
 }

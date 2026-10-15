@@ -1061,6 +1061,8 @@ export const taskDetail = tool({
           ...stopCard(s),
           status: s.status,
           arrived: s.arrived_at ? colomboTime(s.arrived_at) : undefined,
+          // The driver's phone saw them within 150 m (the arrival nudge), beside their own tap above.
+          auto_detected: s.auto_detected_at ? colomboTime(s.auto_detected_at) : undefined,
           done: s.done_at ? colomboTime(s.done_at) : undefined,
           skip_reason: s.skip_reason ?? undefined,
           skip_note: s.skip_note ?? undefined,

@@ -11,6 +11,7 @@ import { basePoint } from "../eta.ts";
 import { mapsPoint } from "../format.ts";
 import { orsAutocomplete, PUBLIC_MIN_CHARS, type PublicPlace } from "../geocode.ts";
 import { pastedPin } from "../pasted.ts";
+import { BUILT_IN, type Field, FIELDS, type Mapping, type Preset } from "../sites.ts";
 import { loadSettings } from "../settings.ts";
 import { colomboDateTime } from "../time.ts";
 import { tool, zId, zText } from "../tool.ts";
@@ -33,20 +34,20 @@ export async function findPlace(db: Db, typed: string): Promise<Place | null> {
   const text = typed.trim();
   if (text === "") return null;
   // Several places may share a name (sites): the office's own place first, then an office, then the oldest.
-  const exact = unwrap(await db.from("places").select("*").ilike("name", escapeLike(text)).order("created_at").limit(20), "places");
+  const exact = unwrap(await db.from("places").select("*").eq("active", true).ilike("name", escapeLike(text)).order("created_at").limit(20), "places");
   if (exact.length > 0) {
     const rank = (p: Place) => (p.operator === "other" ? 0 : 2) + (p.kind === "office" ? 0 : 1);
     return [...exact].sort((a, b) => rank(a) - rank(b))[0];
   }
   const id = text.toUpperCase();
   if (/^[A-Z0-9-]{3,20}$/.test(id)) {
-    const byId = unwrap(await db.from("places").select("*").or(`site_id.eq.${id},other_ids.cs.{${id}}`).limit(2), "places");
+    const byId = unwrap(await db.from("places").select("*").eq("active", true).or(`site_id.eq.${id},other_ids.cs.{${id}}`).limit(2), "places");
     if (byId.length === 1) return byId[0];
   }
   const town = unwrap(await db.from("towns").select("id").ilike("name", escapeLike(text)).limit(1), "towns");
   if (town.length > 0) return null;
   const partial = unwrap(
-    await db.from("places").select("*").eq("operator", "other").neq("kind", "site").ilike("name", `%${escapeLike(text)}%`).limit(2),
+    await db.from("places").select("*").eq("active", true).eq("operator", "other").neq("kind", "site").ilike("name", `%${escapeLike(text)}%`).limit(2),
     "places",
   );
   return partial.length === 1 ? partial[0] : null;
@@ -98,6 +99,7 @@ function detailCard(p: Place) {
     attribution: p.attribution ?? undefined,
     imported_at: p.imported_at ? colomboDateTime(p.imported_at) : undefined,
     updated_at: colomboDateTime(p.updated_at),
+    active: p.active ? undefined : false,
   };
 }
 
@@ -115,7 +117,7 @@ export const listPlaces = tool({
     limit: z.number().int().min(1).max(1000).optional().describe("Default 200"),
   }),
   async run({ search, kind, operator, pinned, limit = 200 }, { db }) {
-    let q = db.from("places").select("*").order("name").limit(limit);
+    let q = db.from("places").select("*").eq("active", true).order("name").limit(limit);
     if (kind) q = q.eq("kind", kind);
     if (operator) q = q.eq("operator", operator);
     if (!kind && !operator && !search) q = q.neq("kind", "site");
@@ -251,6 +253,7 @@ export const searchPlaces = tool({
         db,
         key: Deno.env.get("ORS_KEY"),
         cap: settings.ors_autocomplete_daily_cap,
+        perMinute: settings.ors_autocomplete_per_minute,
         focus: base?.point ? { lat: base.point.lat, lng: base.point.lng } : null,
         now,
       });
@@ -297,7 +300,7 @@ export const savePlace = tool({
   async run({ name, lat, lng, address, from, ref, attribution }, { db }) {
     const d = 0.0003; // about 33 m
     const same = unwrap(
-      await db.from("places").select("*").ilike("name", escapeLike(name)).gte("lat", lat - d).lte("lat", lat + d).gte("lng", lng - d).lte("lng", lng + d).limit(1),
+      await db.from("places").select("*").eq("active", true).ilike("name", escapeLike(name)).gte("lat", lat - d).lte("lat", lat + d).gte("lng", lng - d).lte("lng", lng + d).limit(1),
       "places",
     );
     if (same[0]) return { result: { place: detailCard(same[0]), existing: true }, summary: `save place: ${same[0].name} was already saved` };
@@ -323,29 +326,149 @@ const zSiteRow = z.object({
   region: zText(80).optional(),
   district: zText(80).optional(),
   depot: zText(80).optional(),
+  address: zText(240).optional(),
+  kind: z.enum(["office", "store", "site", "other"]).optional(),
 });
+
+/** A preset key: a built-in one, "custom:<saved mapping id>", "custom" or "claude" (the pin rule compares it). */
+const zPresetKey = z.string().trim().min(1).max(80).regex(/^[a-z0-9_:-]+$/, "a preset key: letters, digits, _ : -");
 
 export const importPlaces = tool({
   name: "import_places",
   title: "Import sites",
-  description: "Adds or updates the operators' sites, at most 500 rows a call, in one transaction: a row matches a place by " +
-    "its site id (else, for Mobitel, by its coordinates at 4 decimals); a match gets the name, region, district, depot and the " +
-    "other ids, and the pin when it had none or the pin came from the same preset (a pin set by hand is never replaced). " +
-    "preset mobitel_ep attaches each id to the Mobitel place within 100 m, else adds a place. The web page's presets read the " +
-    "operators' spreadsheets; Claude may send rows itself (preset claude).",
+  description: "Adds or updates places from a list, at most 500 rows a call, in one transaction: a row matches a place by " +
+    "its operator and site id (else by its coordinates at 4 decimals, else by its name); a match gets the name, region, district, " +
+    "depot, address, kind and the other ids, and the pin when it had none or the pin came from the same preset (a pin set by hand " +
+    "is never replaced); a switched-off place matched again is switched on. preset mobitel_ep (or attach_within_m) attaches each " +
+    "id to the same operator's place within that many metres, else adds a place. Every import is recorded (who, when, the file, " +
+    "the counts): the first call answers import_id, pass it with the next batches of the same file; undo_place_import takes it back.",
   readOnly: false,
   input: z.object({
-    preset: z.enum(["dialog", "mobitel_4g", "mobitel_ep", "claude"]).optional().describe("Default claude"),
+    preset: zPresetKey.optional().describe("dialog, mobitel_4g, mobitel_ep, custom:<id> (a saved mapping), custom or claude (default)"),
     rows: z.array(zSiteRow).min(1).max(500),
+    import_id: zId.optional().describe("The import this batch belongs to (from the first batch's answer)"),
+    file_name: zText(200).optional().describe("The file the rows came from (recorded with the first batch)"),
+    preset_label: zText(120).optional().describe("The preset's name as people read it"),
+    attach_within_m: z.number().int().min(1).max(1000).optional().describe("Attach each id to a place within this many metres"),
   }),
-  async run({ preset = "claude", rows }, { db }) {
-    const answer = unwrap(await db.rpc("import_place_rows", { p_rows: rows as unknown as never, p_preset: preset }), "import") as {
-      added: number; updated: number; attached: number; unchanged: number; no_pin: number; skipped: { row: number; reason: string }[];
-    };
+  async run({ preset = "claude", rows, import_id, file_name, preset_label, attach_within_m }, { db, actor }) {
+    let importId = import_id;
+    if (importId) {
+      const known = unwrapMaybe(await db.from("place_imports").select("id, undone_at").eq("id", importId).maybeSingle(), "import");
+      if (!known) throw new ToolError(`No import with id ${importId}.`);
+      if (known.undone_at) throw new ToolError("That import was undone: start a new one.");
+    } else {
+      const made = unwrap(
+        await db.from("place_imports").insert({
+          by_employee_id: actor.employeeId ?? null, by_name: actor.name, file_name: file_name ?? null, preset_key: preset, preset_label: preset_label ?? null,
+        }).select("id").single(),
+        "import",
+      );
+      importId = made.id;
+    }
+    const answer = unwrap(
+      await db.rpc("import_place_rows", { p_rows: rows as unknown as never, p_preset: preset, p_import_id: importId, p_attach_m: attach_within_m ?? undefined }),
+      "import",
+    ) as { added: number; updated: number; attached: number; unchanged: number; no_pin: number; skipped: { row: number; reason: string }[] };
     return {
-      result: { preset, rows: rows.length, ...answer, skipped: answer.skipped.length ? answer.skipped : undefined },
+      result: { import_id: importId, preset, rows: rows.length, ...answer, skipped: answer.skipped.length ? answer.skipped : undefined },
       summary: `import ${preset}: ${rows.length} rows, ${answer.added} added, ${answer.updated} updated, ${answer.attached} attached, ${answer.unchanged} unchanged, ${answer.skipped.length} skipped`,
     };
+  },
+});
+
+function importCard(i: Row<"place_imports">) {
+  return {
+    id: i.id,
+    at: colomboDateTime(i.at),
+    by: i.by_name,
+    file: i.file_name ?? undefined,
+    preset: i.preset_label ?? i.preset_key,
+    rows: i.rows,
+    added: i.added,
+    updated: i.updated,
+    attached: i.attached || undefined,
+    unchanged: i.unchanged || undefined,
+    no_pin: i.no_pin || undefined,
+    skipped: i.skipped || undefined,
+    undone: i.undone_at ? { at: colomboDateTime(i.undone_at), by: i.undone_by ?? undefined, ...(i.undo_result as Record<string, unknown> ?? {}) } : undefined,
+  };
+}
+
+export const listPlaceImports = tool({
+  name: "list_place_imports",
+  title: "Site imports",
+  description: "The site imports, newest first: who, when, the file, the preset, the counts, and whether and when one was undone.",
+  readOnly: true,
+  input: z.object({ limit: z.number().int().min(1).max(100).optional().describe("Default 20") }),
+  async run({ limit = 20 }, { db }) {
+    const rows = unwrap(await db.from("place_imports").select("*").order("at", { ascending: false }).limit(limit), "imports");
+    return { result: { imports: rows.map(importCard) }, summary: `${rows.length} imports` };
+  },
+});
+
+export const undoPlaceImport = tool({
+  name: "undo_place_import",
+  title: "Undo a site import",
+  description: "Takes an import back: the places it added are switched off (kept for the stops that used them, left out of every " +
+    "search), the places it updated or attached ids to are put back as they were. A place changed since the import (by hand or by " +
+    "a later import) is left as it is and named. Nothing is deleted. Once per import.",
+  readOnly: false,
+  input: z.object({ import_id: zId }),
+  async run({ import_id }, { db, actor }) {
+    const answer = unwrap(await db.rpc("undo_place_import", { p_import_id: import_id, p_by: actor.name }), "undo") as {
+      switched_off: number; restored: number; left_as_is: number; left_names: string[];
+    };
+    return {
+      result: { import_id, ...answer, left_names: answer.left_names.length ? answer.left_names : undefined },
+      summary: `undo import ${import_id.slice(0, 8)}: ${answer.switched_off} switched off, ${answer.restored} restored, ${answer.left_as_is} left as they were`,
+    };
+  },
+});
+
+const zMapping = z.object({
+  sheet: zText(120).optional(),
+  header_row: z.number().int().min(1).max(100),
+  columns: z.object(Object.fromEntries(FIELDS.map((f) => [f.key, zText(120).optional()])) as Record<Field, z.ZodOptional<z.ZodString>>)
+    .refine((c) => !!c.name, "the name column is needed"),
+  operator: z.enum(["dialog", "mobitel", "other"]).optional(),
+  require_id: z.boolean().optional(),
+  attach_within_m: z.number().int().min(1).max(1000).optional(),
+});
+
+export const listImportPresets = tool({
+  name: "list_import_presets",
+  title: "Site import presets",
+  description: "The presets the site import offers: the built-in ones (Dialog site list, Mobitel 4G-LTE with its name rule, " +
+    "Mobitel EP list attaching within 100 m) and the mappings saved by name, each with its sheet, header row and columns.",
+  readOnly: true,
+  input: z.object({}),
+  async run(_input, { db }) {
+    const saved = unwrap(await db.from("site_import_presets").select("*").order("name"), "presets");
+    const presets = [
+      ...(Object.keys(BUILT_IN) as Preset[]).map((key) => ({ key, name: BUILT_IN[key].name, built_in: true, mapping: BUILT_IN[key].mapping })),
+      ...saved.map((p) => ({ key: `custom:${p.id}`, id: p.id, name: p.name, built_in: false, mapping: p.mapping as unknown as Mapping, saved_by: p.updated_by ?? p.created_by, saved_at: colomboDateTime(p.updated_at) })),
+    ];
+    return { result: { presets }, summary: `${presets.length} import presets` };
+  },
+});
+
+export const saveImportPreset = tool({
+  name: "save_import_preset",
+  title: "Save a site import mapping",
+  description: "Saves a column mapping under a name (saving again under the same name replaces it), so the next file of that " +
+    "kind is imported with one choice. The built-in presets keep their names.",
+  readOnly: false,
+  input: z.object({ name: zText(80), mapping: zMapping }),
+  async run({ name, mapping }, { db, actor }) {
+    if ((Object.keys(BUILT_IN) as Preset[]).some((k) => BUILT_IN[k].name.toLowerCase() === name.trim().toLowerCase())) {
+      throw new ToolError(`"${name}" is a built-in preset: choose another name.`);
+    }
+    const existing = unwrapMaybe(await db.from("site_import_presets").select("id").ilike("name", escapeLike(name.trim())).maybeSingle(), "preset");
+    const saved = existing
+      ? unwrap(await db.from("site_import_presets").update({ mapping: mapping as unknown as never, updated_by: actor.name, updated_at: new Date().toISOString() }).eq("id", existing.id).select("*").single(), "preset")
+      : unwrap(await db.from("site_import_presets").insert({ name: name.trim(), mapping: mapping as unknown as never, created_by: actor.name, updated_by: actor.name }).select("*").single(), "preset");
+    return { result: { key: `custom:${saved.id}`, id: saved.id, name: saved.name, replaced: !!existing }, summary: `${existing ? "replaced" : "saved"} import preset ${saved.name}` };
   },
 });
 

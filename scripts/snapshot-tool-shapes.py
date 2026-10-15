@@ -119,6 +119,8 @@ def main():
         ("list_places", {"operator": "dialog"}),
         ("search_places", {"text": "MT0184", "map": False}),
         ("search_places", {"text": "6.9271, 79.8612"}),
+        ("list_import_presets", {}),
+        ("list_place_imports", {}),
         *([] if skipped else [("task_board", {})]),
         ("task_board", {"date": board.get("date")}),
         ("list_requests", {"status": "all"}),

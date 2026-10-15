@@ -19,6 +19,20 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"api_minute_calls": {
+                  Row: {
+                    "calls": number,"minute": string,"provider": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "calls"?: number,"minute": string,"provider": string
+                  }
+                  Update: {
+                    "calls"?: number,"minute"?: string,"provider"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"claim_lines": {
                   Row: {
                     "allowance_type_id": string,"amount_cents": number,"claim_id": string,"id": string
@@ -579,16 +593,62 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"places": {
+                },"place_import_changes": {
                   Row: {
-                    "address": string | null,"attribution": string | null,"created_at": string,"depot": string | null,"district": string | null,"id": string,"ids_text": string,"imported_at": string | null,"kind": string,"lat": number | null,"lng": number | null,"name": string,"operator": string,"other_ids": (string)[],"pin_source": string | null,"pinned": boolean | null,"provider_ref": string | null,"region": string | null,"site_id": string | null,"source": string,"updated_at": string
+                    "action": string,"after_at": string,"before": Json | null,"id": number,"import_id": string,"place_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name": string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string
+                    "action": string,"after_at": string,"before"?: Json | null,"id"?: never,"import_id": string,"place_id": string
                   }
                   Update: {
-                    "address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name"?: string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string
+                    "action"?: string,"after_at"?: string,"before"?: Json | null,"id"?: never,"import_id"?: string,"place_id"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "place_import_changes_import_id_fkey"
+      columns: ["import_id"]
+isOneToOne: false
+      referencedRelation: "place_imports"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "place_import_changes_place_id_fkey"
+      columns: ["place_id"]
+isOneToOne: false
+      referencedRelation: "places"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"place_imports": {
+                  Row: {
+                    "added": number,"at": string,"attached": number,"by_employee_id": string | null,"by_name": string,"file_name": string | null,"id": string,"no_pin": number,"preset_key": string,"preset_label": string | null,"rows": number,"skipped": number,"unchanged": number,"undo_result": Json | null,"undone_at": string | null,"undone_by": string | null,"updated": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "added"?: number,"at"?: string,"attached"?: number,"by_employee_id"?: string | null,"by_name": string,"file_name"?: string | null,"id"?: string,"no_pin"?: number,"preset_key": string,"preset_label"?: string | null,"rows"?: number,"skipped"?: number,"unchanged"?: number,"undo_result"?: Json | null,"undone_at"?: string | null,"undone_by"?: string | null,"updated"?: number
+                  }
+                  Update: {
+                    "added"?: number,"at"?: string,"attached"?: number,"by_employee_id"?: string | null,"by_name"?: string,"file_name"?: string | null,"id"?: string,"no_pin"?: number,"preset_key"?: string,"preset_label"?: string | null,"rows"?: number,"skipped"?: number,"unchanged"?: number,"undo_result"?: Json | null,"undone_at"?: string | null,"undone_by"?: string | null,"updated"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "place_imports_by_employee_id_fkey"
+      columns: ["by_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"places": {
+                  Row: {
+                    "active": boolean,"address": string | null,"attribution": string | null,"created_at": string,"depot": string | null,"district": string | null,"id": string,"ids_text": string,"imported_at": string | null,"kind": string,"lat": number | null,"lng": number | null,"name": string,"operator": string,"other_ids": (string)[],"pin_source": string | null,"pinned": boolean | null,"provider_ref": string | null,"region": string | null,"site_id": string | null,"source": string,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "active"?: boolean,"address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name": string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string
+                  }
+                  Update: {
+                    "active"?: boolean,"address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name"?: string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     
@@ -715,6 +775,20 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"site_import_presets": {
+                  Row: {
+                    "created_at": string,"created_by": string,"id": string,"mapping": NonNullable<Json>,"name": string,"updated_at": string,"updated_by": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "created_at"?: string,"created_by": string,"id"?: string,"mapping": NonNullable<Json>,"name": string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Update: {
+                    "created_at"?: string,"created_by"?: string,"id"?: string,"mapping"?: NonNullable<Json>,"name"?: string,"updated_at"?: string,"updated_by"?: string | null
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"task_assignment_events": {
                   Row: {
                     "action": string,"actor": string | null,"at": string,"changes": Json | null,"employee_id": string | null,"id": number,"note": string | null,"task_id": string,"vehicle_id": string | null
@@ -795,14 +869,14 @@ isOneToOne: false
                   ]
                 },"task_stops": {
                   Row: {
-                    "address": string | null,"arrive_by": string | null,"arrived_at": string | null,"done_at": string | null,"dwell_min": number | null,"id": string,"lat": number | null,"lng": number | null,"note": string | null,"place_id": string | null,"place_name": string,"planned_arrive_at": string | null,"planned_depart_at": string | null,"removed_at": string | null,"seq": number,"skip_note": string | null,"skip_reason": string | null,"status": string,"task_id": string,"type": string,"what": string | null
+                    "address": string | null,"arrive_by": string | null,"arrived_at": string | null,"auto_detected_at": string | null,"done_at": string | null,"dwell_min": number | null,"id": string,"lat": number | null,"lng": number | null,"note": string | null,"place_id": string | null,"place_name": string,"planned_arrive_at": string | null,"planned_depart_at": string | null,"removed_at": string | null,"seq": number,"skip_note": string | null,"skip_reason": string | null,"status": string,"task_id": string,"type": string,"what": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name": string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"seq": number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id": string,"type": string,"what"?: string | null
+                    "address"?: string | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name": string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"seq": number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id": string,"type": string,"what"?: string | null
                   }
                   Update: {
-                    "address"?: string | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name"?: string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"seq"?: number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id"?: string,"type"?: string,"what"?: string | null
+                    "address"?: string | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name"?: string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"seq"?: number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id"?: string,"type"?: string,"what"?: string | null
                   }
                   Relationships: [
                     {
@@ -1002,6 +1076,9 @@ isOneToOne: false
             "accept_task":
 { Args: { "p_at"?: string,"p_task_id": string }; Returns: string
                            },
+"bump_minute_calls":
+{ Args: { "p_provider": string }; Returns: number
+                           },
 "bump_routing_calls":
 { Args: { "p_ok": boolean,"p_provider": string }; Returns: undefined
                            },
@@ -1030,7 +1107,7 @@ isOneToOne: false
 { Args: Record<PropertyKey, never>; Returns: Json
                            },
 "import_place_rows":
-{ Args: { "p_preset": string,"p_rows": Json }; Returns: Json
+{ Args: { "p_attach_m"?: number,"p_import_id"?: string,"p_preset": string,"p_rows": Json }; Returns: Json
                            },
 "issue_visible":
 { Args: { "p_kind": string }; Returns: boolean
@@ -1104,6 +1181,9 @@ isOneToOne: false
                            },
 "set_odometer_ai":
 { Args: { "p_ai_status": string,"p_ai_value": number,"p_log_id": string }; Returns: undefined
+                           },
+"undo_place_import":
+{ Args: { "p_by": string,"p_import_id": string }; Returns: Json
                            }
           }
           Enums: {

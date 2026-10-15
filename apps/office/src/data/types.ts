@@ -138,6 +138,8 @@ export interface Stop {
   pin?: string;
   status: string;
   arrived?: string;
+  /** The driver's phone was within 150 m (the arrival nudge), "HH:MM"; beside the driver's own tap. */
+  auto_detected?: string;
   done?: string;
   skip_reason?: string;
   skip_note?: string;
@@ -525,6 +527,7 @@ export interface PlaceDetail extends Place {
 }
 
 export interface ImportAnswer {
+  import_id: string;
   preset: string;
   rows: number;
   added: number;
@@ -638,8 +641,9 @@ export interface FleetSettings {
   /** The recording quality on the phone and how long the files are kept (Part 3b). */
   fuel_video_quality?: "480p" | "720p";
   fuel_video_keep_months?: 6 | 12;
-  /** The location search's map calls a day (openrouteservice autocomplete; Part 4). */
+  /** The location search's map calls a day and a minute (openrouteservice autocomplete; Part 4, 4b). */
   ors_autocomplete_daily_cap?: number;
+  ors_autocomplete_per_minute?: number;
 }
 
 export interface ChecklistItem {
@@ -1042,4 +1046,40 @@ export interface Availability {
   drivers: AvailableDriver[];
   counts: { free: number; on_duty: number; all: number };
   vehicles: { groups: NonNullable<Suggestions["groups"]>; drivers_free: { name: string; username: string }[]; self_drive_allowed?: boolean };
+}
+
+/** list_import_presets: the built-in presets and the mappings saved by name (Part 4b). */
+export interface ImportPreset {
+  key: string;
+  id?: string;
+  name: string;
+  built_in: boolean;
+  mapping: import("@fleet/sites").Mapping;
+  saved_by?: string;
+  saved_at?: string;
+}
+
+/** list_place_imports: one import with its counts and its undo. */
+export interface PlaceImport {
+  id: string;
+  at: string;
+  by: string;
+  file?: string;
+  preset: string;
+  rows: number;
+  added: number;
+  updated: number;
+  attached?: number;
+  unchanged?: number;
+  no_pin?: number;
+  skipped?: number;
+  undone?: { at: string; by?: string; switched_off?: number; restored?: number; left_as_is?: number; left_names?: string[] };
+}
+
+export interface UndoAnswer {
+  import_id: string;
+  switched_off: number;
+  restored: number;
+  left_as_is: number;
+  left_names?: string[];
 }

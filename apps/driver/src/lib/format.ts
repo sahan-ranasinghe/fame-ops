@@ -33,10 +33,31 @@ export function telLink(phone: string | null | undefined): string | null {
   return digits ? `tel:+${digits}` : null;
 }
 
-/** Google Maps directions to coordinates or, failing that, to an address or place name. */
+const DIRECTIONS = 'https://www.google.com/maps/dir/?api=1';
+const DRIVE = '&travelmode=driving&dir_action=navigate';
+
+/** Google Maps turn by turn, driving, to coordinates or, failing that, to an address or place name. */
 export function navigateLink(to: { lat?: number | null; lng?: number | null; text?: string | null }): string | null {
   const destination = to.lat != null && to.lng != null ? `${to.lat},${to.lng}` : to.text?.trim();
-  return destination ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}` : null;
+  return destination ? `${DIRECTIONS}&destination=${encodeURIComponent(destination)}${DRIVE}` : null;
+}
+
+/** Google Maps takes the destination and at most this many stops on the way. */
+export const MAX_WAYPOINTS = 9;
+
+/**
+ * Google Maps with the stops still to do, in order: the last one as the destination, the others as waypoints
+ * (a pin, else the address, else the name). Over ten stops the first ten go and `left` says how many did not.
+ */
+export function allStopsLink(stops: { lat?: number | null; lng?: number | null; address?: string | null; place_name?: string | null }[]): { url: string; shown: number; left: number } | null {
+  const places = stops
+    .map((s) => (s.lat != null && s.lng != null ? `${s.lat},${s.lng}` : s.address?.trim() || s.place_name?.trim() || null))
+    .filter((p): p is string => !!p);
+  if (places.length === 0) return null;
+  const take = places.slice(0, MAX_WAYPOINTS + 1);
+  const waypoints = take.slice(0, -1);
+  const url = `${DIRECTIONS}&destination=${encodeURIComponent(take[take.length - 1])}${DRIVE}${waypoints.length ? `&waypoints=${waypoints.map(encodeURIComponent).join('%7C')}` : ''}`;
+  return { url, shown: take.length, left: places.length - take.length };
 }
 
 const rad = (deg: number) => (deg * Math.PI) / 180;

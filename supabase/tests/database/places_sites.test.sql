@@ -21,7 +21,7 @@ select has_column('public', 'places', 'site_id', 'places.site_id');
 select has_column('public', 'places', 'other_ids', 'places.other_ids');
 select has_column('public', 'places', 'pin_source', 'places.pin_source');
 select has_column('public', 'places', 'pinned', 'places.pinned (generated)');
-select is((select value from public.fleet_settings where key = 'ors_autocomplete_daily_cap'), '1000'::jsonb, 'the map search''s daily cap is seeded: 1000');
+select is((select value from public.fleet_settings where key = 'ors_autocomplete_daily_cap'), '2500'::jsonb, 'the map search''s daily cap is seeded: 2500 (Part 4b; 1000 before)');
 
 -- 2. Keys: one place per operator and site id; one Mobitel place without an id per coordinate; saved names unique.
 insert into public.places (name, kind, operator, site_id, other_ids, lat, lng, source, pin_source)
@@ -74,7 +74,7 @@ select is((select public.import_place_rows('[
   '{"added": 1, "updated": 0, "attached": 1, "unchanged": 1, "no_pin": 0}'::jsonb,
   'EP: one id attached to the place 7 m away, one far away added, one already known');
 select is((select array_to_string(other_ids, ',') from public.places where site_id = 'COBAM1'), 'COL018', 'the attached id is an other id of the nearby place');
-select throws_ok($$ select public.import_place_rows('[]'::jsonb, 'nonsense') $$, 'P0001', 'Unknown preset nonsense', 'an unknown preset is refused');
+select throws_ok($$ select public.import_place_rows('[]'::jsonb, '') $$, 'P0001', 'A preset key of 1 to 80 characters is needed', 'an empty preset key is refused');
 
 -- 4. The ranked search and its indexes.
 select is((select site_id from public.search_places_ranked('mt0184', 5) limit 1), 'MT0184', 'an exact id comes first, whatever the case');

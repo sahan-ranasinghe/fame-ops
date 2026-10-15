@@ -18,7 +18,7 @@ import { driverRoute, liveDrivers, watchDrivers } from "./tools/locations.ts";
 import { listFuel } from "./tools/fuel.ts";
 import { listVehicleReports, mileageSummary, updateVehicleReport } from "./tools/mileage.ts";
 import { fleetOverview } from "./tools/overview.ts";
-import { addPlace, importPlaces, listPlaces, placeDetail, savePlace, searchPlaces, updatePlace } from "./tools/places.ts";
+import { addPlace, importPlaces, listImportPresets, listPlaceImports, listPlaces, placeDetail, saveImportPreset, savePlace, searchPlaces, undoPlaceImport, updatePlace } from "./tools/places.ts";
 import { findProject, importProjects } from "./tools/projects.ts";
 import { availability } from "./tools/availability.ts";
 import { bookVehicle, cancelRequest, createRequest, decideRequest, listRequests, redecideRequest, suggestVehicles, updateRequest } from "./tools/requests.ts";
@@ -49,6 +49,10 @@ export const TOOLS: AnyTool[] = [
   placeDetail,
   importPlaces,
   updatePlace,
+  listImportPresets,
+  saveImportPreset,
+  listPlaceImports,
+  undoPlaceImport,
   createTask,
   taskBoard,
   taskDetail,

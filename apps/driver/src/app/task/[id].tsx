@@ -6,7 +6,7 @@ import { Camera, GeoJSONSource, Layer, Map, Marker } from '@maplibre/maplibre-re
 import * as Location from 'expo-location';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronLeft, Navigation, Phone, Play } from '@/components/icons';
+import { Check, ChevronLeft, MapPin, Navigation, Phone, Play } from '@/components/icons';
 import { useEffect, useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,7 @@ import { SkipSheet } from '@/components/SkipSheet';
 import { leaveTime, nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
-import { distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
+import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { colomboTime } from '@/lib/time';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
@@ -151,6 +151,18 @@ export default function TaskScreen() {
     ? distanceKm({ lat: myPosition[1], lng: myPosition[0] }, { lat: destination[1], lng: destination[0] })
     : null;
   const navigate = stop ? navigateLink({ lat: stop.lat, lng: stop.lng, text: stop.address ?? stop.place_name }) : null;
+  // Every stop still to do, in order, for Google Maps (the first ten; the screen says when some are left out).
+  const remaining = [...task.task_stops].sort((a, b) => a.seq - b.seq).filter((s) => s.status === 'pending' || s.status === 'arrived');
+  const allStops = remaining.length > 1 ? allStopsLink(remaining) : null;
+  const openAllStops = () => {
+    if (!allStops) return;
+    if (allStops.left > 0) {
+      Alert.alert(t('task.allStopsLeftTitle'), t('task.allStopsLeftBody', { n: allStops.left }), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('task.allStops'), onPress: () => void Linking.openURL(allStops.url) },
+      ]);
+    } else void Linking.openURL(allStops.url);
+  };
   const call = telLink(task.contact_phone);
   const people = peopleLine(task);
   const otherRunning = tasks.some((item) => item.status === 'in_progress' && item.id !== task.id);
@@ -266,6 +278,7 @@ export default function TaskScreen() {
               <Button kind="outline" icon={Navigation} label={t('task.navigate')} disabled={!navigate} onPress={() => navigate && Linking.openURL(navigate)} style={{ flex: 1 }} />
               <Button kind="outline" icon={Phone} label={t('task.callContact')} disabled={!call} onPress={() => call && Linking.openURL(call)} style={{ flex: 1 }} />
             </View>
+            {allStops && <Button kind="outline" icon={MapPin} label={t('task.allStops')} onPress={openAllStops} />}
             <Button
               kind="dark"
               icon={Check}

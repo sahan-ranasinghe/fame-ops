@@ -834,6 +834,57 @@ All additive; new tools at the end of `TOOLS` and `ALL_TOOLS`; `SHAPES=write` on
   Tools: search_places and place_detail (view or request), save_place (request, approve,
   assign_tasks, vehicles), import_places and update_place (vehicles).
 
+### 8.6 Part 4b as built (15 October 2026, branch `phase6-4b`)
+
+- Custom site import (migration `20261015120000_phase6_4b`): Settings → Import sites takes any
+  .xlsx, .xls or .csv; the sheet, the row with the column names and a drop-down per field (name
+  required; latitude + longitude or one "lat, lng" column; site id, other ids, district, region,
+  depot, address, kind; the operator as a column or one value; optionally "attach each id to a
+  site within N m"). One engine (`mapTable` in `_shared/fleet/sites.ts`, `@fleet/sites` in the
+  web) with the built-in Dialog and Mobitel EP lists as mappings on it (Mobitel 4G keeps its
+  name rule; the real files give the same counts as before). Preview: counts and the first 20
+  problem rows (outside Sri Lanka, an id twice, no name: skipped, never fatal; swapped
+  coordinates and a space inside a number repaired and said). "Save this mapping as a preset"
+  (`save_import_preset`, `site_import_presets`; a saved name again replaces it; built-in names
+  refused). Every import is recorded (`place_imports`: who, when, the file, the preset, the
+  counts; `place_import_changes`: each place added, updated or attached with how it was before);
+  "Undo this import" (`undo_place_import`): added places switched off (`places.active`; left out
+  of every search and list, kept for the stops that used them, switched on again by a later
+  import that matches them), updated and attached ones put back; a place changed since (by hand,
+  by a later import) is left as it is and named. Nothing is deleted. The preset key an import
+  records is the preset's own while its mapping is unchanged (`dialog`, `custom:<id>`), else
+  `custom`; an import replaces only pins from the same key.
+- openrouteservice on api.heigit.org (`_shared/fleet/orsHosts.ts`): directions at
+  `/openrouteservice/v2/directions/driving-car/json`, autocomplete at `/pelias/v1/autocomplete`
+  (the announcement maps `/geocode` to `/pelias/v1`; both answer 401 without a key, unknown
+  paths 404), the same key in the Authorization header; the deprecated api.openrouteservice.org
+  (a tenth of the quota since 27 August, shut down 2–6 November 2026) only on a 404 or 410. The
+  dashboard's Geocoding quota (3,000 a day, 100 a minute, shared by autocomplete, search and
+  reverse): `ors_autocomplete_daily_cap` 2,500 (the seeded 1,000 replaced where nobody changed
+  it), `ors_autocomplete_per_minute` 90 (`api_minute_calls`, `bump_minute_calls`; over it "Map
+  search is busy, try again in a minute").
+- Driver navigation: Navigate opens Google Maps turn by turn (`travelmode=driving&dir_action=
+  navigate`) to the current stop's pin, else its address; after Done or Skip it points to the
+  next stop. "All stops in Google Maps" opens the stops still to do in order (the last as the
+  destination, at most 9 waypoints; with more, a dialog says how many are left out). Arrival
+  nudge (`lib/arrival.ts`, `lib/arrivalRule.ts`, from the background location task): a position
+  of 75 m or better within 150 m of the current stop during a task → once per stop "Arrived at
+  <stop>? Tap to mark Arrived" (opens the task) and `task_stops.auto_detected_at` (the phone's
+  queue; the driver's column grant), shown in task_detail as `auto_detected` ("near the stop
+  HH:MM (phone)" beside "arrived HH:MM"). No new native module (`npm run test:nav`).
+- The shift nudge's default days are Monday to Friday (settings, `get_driver_settings()`, the
+  app's default); the live setting had no row, so the default applies there.
+
+New driver strings (en + si):
+
+| Key | English | Sinhala |
+|---|---|---|
+| `task.allStops` | All stops in Google Maps | සියලු නැවතුම් Google Maps හි |
+| `task.allStopsLeftTitle` | Google Maps takes 10 stops at a time | Google Maps එක වරකට නැවතුම් 10 ක් ගනී |
+| `task.allStopsLeftBody` | The first 10 stops are in; {n} more come after them. Open All stops again when you reach the tenth. | පළමු නැවතුම් 10 ඇතුළත් ය; ඉන් පසු තවත් {n} ක් ඇත. දහවැනි නැවතුමට ළඟා වූ විට සියලු නැවතුම් නැවත විවෘත කරන්න. |
+| `arrival.title` | Arrived at {stop}? | {stop} වෙත ළඟා වුණාද? |
+| `arrival.body` | Tap to mark Arrived | ළඟා විය ලෙස සටහන් කිරීමට තට්ටු කරන්න |
+
 ## 9. Part 5: the Google package with free-cap fallbacks
 
 ### 9.1 The setting and the rule

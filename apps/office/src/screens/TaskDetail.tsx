@@ -152,6 +152,7 @@ export function TaskDetail() {
                     s.dwell_min != null ? `${s.dwell_min} min there` : null,
                     s.status === "pending" ? null : cap(s.status),
                     s.arrived ? `arrived ${s.arrived}` : null,
+                    s.auto_detected ? `near the stop ${s.auto_detected} (phone)` : null,
                     s.done ? `done ${s.done}` : null,
                     s.skip_reason ? `skipped: ${SKIP_TEXT[s.skip_reason] ?? s.skip_reason}${s.skip_note ? ` (${s.skip_note})` : ""}` : null,
                     s.pin === "none" ? "no map pin" : null,

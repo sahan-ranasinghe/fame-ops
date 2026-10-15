@@ -99,7 +99,8 @@ export const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { key: 'pumping', en: 'Pumping', si: 'පොම්ප කරමින්' },
   { key: 'final', en: 'Final pump display: litres and amount', si: 'අවසාන පොම්ප තිරය: ලීටර් සහ මුදල' },
 ];
-export const DEFAULT_DRIVER_SETTINGS: DriverSettings = { shift_start: '08:00', shift_days: [1, 2, 3, 4, 5, 6], fuel_video_checklist: DEFAULT_CHECKLIST, fuel_video_quality: '480p' };
+/** Monday to Friday by default (the office is closed on Saturday and Sunday). */
+export const DEFAULT_DRIVER_SETTINGS: DriverSettings = { shift_start: '08:00', shift_days: [1, 2, 3, 4, 5], fuel_video_checklist: DEFAULT_CHECKLIST, fuel_video_quality: '480p' };
 
 export async function fetchDriverSettings(client: Client): Promise<DriverSettings> {
   const res = await client.rpc('get_driver_settings');
@@ -194,7 +195,7 @@ export type TaskPatch = Pick<
   Tables['tasks']['Update'],
   'seen_at' | 'started_at' | 'completed_at' | 'start_odometer_km' | 'end_odometer_km' | 'status'
 >;
-export type StopPatch = Pick<Tables['task_stops']['Update'], 'status' | 'arrived_at' | 'done_at' | 'skip_reason' | 'skip_note'>;
+export type StopPatch = Pick<Tables['task_stops']['Update'], 'status' | 'arrived_at' | 'done_at' | 'skip_reason' | 'skip_note' | 'auto_detected_at'>;
 export type OdometerInsert = Tables['odometer_logs']['Insert'] & { id: string };
 export type FuelInsert = Tables['fuel_logs']['Insert'] & { id: string };
 export type ReportInsert = Pick<

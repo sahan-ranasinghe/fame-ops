@@ -77,7 +77,7 @@ reset role;
 -- 3. The driver's settings: the defaults, then the stored values, nothing else.
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000000f1","role":"authenticated"}';
-select is(public.get_driver_settings() - 'fuel_video_checklist' - 'fuel_video_quality', '{"shift_start": "08:00", "shift_days": [1, 2, 3, 4, 5, 6]}'::jsonb, 'get_driver_settings: the defaults');
+select is(public.get_driver_settings() - 'fuel_video_checklist' - 'fuel_video_quality', '{"shift_start": "08:00", "shift_days": [1, 2, 3, 4, 5]}'::jsonb, 'get_driver_settings: the defaults (Monday to Friday since Part 4b)');
 select throws_ok($$ select * from public.fleet_settings $$, '42501', null, 'a driver cannot read fleet_settings itself');
 reset role;
 insert into public.fleet_settings (key, value) values ('shift_start', '"07:30"'::jsonb), ('shift_days', '[1, 2, 3, 4, 5]'::jsonb)

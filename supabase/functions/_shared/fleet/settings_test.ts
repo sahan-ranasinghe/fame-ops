@@ -36,8 +36,12 @@ Deno.test("the fuel video checklist: 1 to 8 steps in order with a key and texts;
   assertThrows(() => validateSetting("fuel_video_checklist", [{ en: "no key" }]), ToolError, "needs a key");
 });
 
-Deno.test("the map search's daily cap: a whole number, 1000 by default", () => {
-  assertEquals(SETTINGS_DEFAULTS.ors_autocomplete_daily_cap, 1000);
+Deno.test("the map search's daily cap and throttle: 2,500 a day and 90 a minute by default (the dashboard's shared Geocoding quota)", () => {
+  assertEquals(SETTINGS_DEFAULTS.ors_autocomplete_daily_cap, 2500);
+  assertEquals(SETTINGS_DEFAULTS.ors_autocomplete_per_minute, 90);
+  assertEquals(validateSetting("ors_autocomplete_per_minute", 60), 60);
+  assertThrows(() => validateSetting("ors_autocomplete_per_minute", 150), ToolError, "1 to 100");
+  assertEquals(SETTINGS_DEFAULTS.shift_days, [1, 2, 3, 4, 5]);
   assertEquals(validateSetting("ors_autocomplete_daily_cap", 500), 500);
   assertThrows(() => validateSetting("ors_autocomplete_daily_cap", 1.5), ToolError, "whole number");
   assertThrows(() => validateSetting("ors_autocomplete_daily_cap", -1), ToolError);

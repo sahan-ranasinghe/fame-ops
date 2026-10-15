@@ -41,8 +41,10 @@ export interface Settings {
   fuel_video_quality: VideoQuality;
   /** How many months the files stay before the monthly prune removes them: 6 or 12. */
   fuel_video_keep_months: 6 | 12;
-  /** The map search's calls a day (openrouteservice geocode autocomplete), the dashboard's quota; then only our places. */
+  /** The map search's calls a day (openrouteservice geocode autocomplete), under the dashboard's quota; then only our places. */
   ors_autocomplete_daily_cap: number;
+  /** … and a minute (the throttle, under the dashboard's 100 a minute shared by all geocoding). */
+  ors_autocomplete_per_minute: number;
 }
 
 export type VideoQuality = "480p" | "720p";
@@ -75,7 +77,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   self_drive_allowed: true,
   map_matching: { provider: "none" },
   shift_start: "08:00",
-  shift_days: [1, 2, 3, 4, 5, 6],
+  shift_days: [1, 2, 3, 4, 5],
   fuel_video_checklist: [
     { key: "plate", short: "Plate", en: "Number plate", si: "අංක තහඩුව" },
     { key: "zero", short: "Zero", en: "Pump display at zero before pumping", si: "පොම්ප කිරීමට පෙර පොම්ප තිරය බිංදුවේ" },
@@ -84,7 +86,8 @@ export const SETTINGS_DEFAULTS: Settings = {
   ],
   fuel_video_quality: "480p",
   fuel_video_keep_months: 12,
-  ors_autocomplete_daily_cap: 1000,
+  ors_autocomplete_daily_cap: 2500,
+  ors_autocomplete_per_minute: 90,
 };
 
 export type SettingKey = keyof Settings;
@@ -110,7 +113,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   fuel_video_quality: "The fuel video's quality on the phone: 480p (about 1.0 Mbps, a 5-minute fill is about 38 MB) or 720p (about 1.5 Mbps, about 56 MB)",
   fuel_video_keep_months: "How many months fuel videos are kept before the monthly prune removes the files: 6 or 12",
   ors_autocomplete_daily_cap:
-    "The location search's map calls a day (openrouteservice geocode autocomplete, the dashboard's quota): after it only our own places show, with \"Map search limit reached for today\"; answers are cached 30 days and never count",
+    "The location search's map calls a day (openrouteservice geocode autocomplete; the dashboard's Geocoding quota of 3,000 a day is shared with search and reverse): after it only our own places show, with \"Map search limit reached for today\"; answers are cached 30 days and never count",
+  ors_autocomplete_per_minute: "… and a minute (the dashboard allows 100 a minute for all geocoding): over it the box says \"Map search is busy, try again in a minute\"",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
@@ -185,6 +189,8 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       return value;
     case "ors_autocomplete_daily_cap":
       return number(value, key, 0, 100000, true);
+    case "ors_autocomplete_per_minute":
+      return number(value, key, 1, 100, true);
     case "fuel_video_keep_months":
       if (value !== 6 && value !== 12) throw new ToolError("fuel_video_keep_months: 6 or 12.");
       return value;

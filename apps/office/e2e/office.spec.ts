@@ -936,15 +936,61 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   XLSX.utils.book_append_sheet(book, sheet, "All Operational Sites_DNS Data");
   const buffer = Buffer.from(XLSX.write(book, { type: "buffer", bookType: "xlsx" }));
   await page.goto("/settings/import-sites");
-  await page.getByLabel("The spreadsheet").setInputFiles({ name: "dialog.xlsx", mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", buffer });
+  const xlsxType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+  await page.getByLabel("The spreadsheet").setInputFiles({ name: "dialog.xlsx", mimeType: xlsxType, buffer });
+  // The file's sheet names its preset: Dialog's, with its mapping filled in.
+  await expect(page.getByLabel("The preset")).toHaveValue("dialog");
+  await expect(page.getByLabel("Site id", { exact: true })).toHaveValue("Site ID");
   await page.getByRole("button", { name: "Preview" }).click();
   const preview = page.getByTestId("import-preview");
   await expect(preview).toContainText("Places2");
   await expect(preview).toContainText("Without a pin1");
-  await expect(preview).toContainText("Skipped in the file1");
+  await expect(preview).toContainText("Problem rows (skipped)1");
+  await expect(page.getByTestId("problem-rows")).toContainText(`${S}X1 appears twice`);
   await page.getByRole("button", { name: "Import 2 places" }).click();
   const report = page.getByTestId("import-report");
   await expect(report).toContainText("Added2");
   const two = await tool<{ results: { site_id: string; pinned: boolean }[] }>("search_places", { text: `${S}Y2`, map: false });
   expect(two.results[0]).toMatchObject({ site_id: `${S}X2`, pinned: false });
+
+  // A custom list (Part 4b): a title row above the column names, "lat, lng" in one column, the operator in a column.
+  const custom = XLSX.utils.aoa_to_sheet([
+    ["Hutch towers, October"],
+    ["Code", "Location name", "GPS", "Owner"],
+    [`${S}H1`, `Hutch One ${stamp}`, "7.2906, 80.6337", "Dialog"],
+    [`${S}H2`, `Hutch Two ${stamp}`, "80.0791, 6.6209", "Mobitel"],
+    [`${S}H3`, `Far Away ${stamp}`, "3.139, 101.6869", "Dialog"],
+  ]);
+  const book2 = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(book2, custom, "Towers");
+  await page.getByLabel("The spreadsheet").setInputFiles({ name: `hutch-${stamp}.xlsx`, mimeType: xlsxType, buffer: Buffer.from(XLSX.write(book2, { type: "buffer", bookType: "xlsx" })) });
+  await expect(page.getByLabel("The preset")).toHaveValue("__custom__");
+  await page.getByLabel("Row with the column names").fill("2");
+  await page.getByLabel("Name (required)").selectOption("Location name");
+  await page.getByLabel("Site id", { exact: true }).selectOption("Code");
+  await page.getByLabel('One "lat, lng" column').check();
+  await page.getByLabel('"lat, lng" in one column').selectOption("GPS");
+  await page.getByLabel("From a column").check();
+  await page.getByLabel("Operator column").selectOption("Owner");
+  await page.getByRole("button", { name: "Preview" }).click();
+  await expect(preview).toContainText("Places2");
+  await expect(preview).toContainText("Repaired1");
+  await expect(page.getByTestId("problem-rows")).toContainText(`${S}H3: outside Sri Lanka`);
+  await expect(page.getByTestId("problem-rows")).toContainText("latitude and longitude were swapped");
+  // Saved as a preset for the next file of this kind.
+  await page.getByLabel("Name for this mapping").fill(`Hutch ${stamp}`);
+  await page.getByRole("button", { name: "Save this mapping as a preset" }).click();
+  await expect(page.getByLabel("The preset").locator("option", { hasText: `Hutch ${stamp} (saved mapping)` })).toHaveCount(1);
+  await page.getByRole("button", { name: "Import 2 places" }).click();
+  await expect(report).toContainText("Added2");
+  const h2 = await tool<{ results: { site_id: string; operator: string; lat: number }[] }>("search_places", { text: `${S}H2`, map: false });
+  expect(h2.results[0]).toMatchObject({ site_id: `${S}H2`, operator: "mobitel", lat: 6.6209 });
+  // The import is in the history; Undo takes it back: its places switched off, out of the search.
+  const row = page.getByTestId("import-row").filter({ hasText: `hutch-${stamp}.xlsx` });
+  await expect(row).toContainText(`Hutch ${stamp}`);
+  page.once("dialog", (d) => void d.accept());
+  await row.getByRole("button", { name: "Undo this import" }).click();
+  await expect(row).toContainText("Undone");
+  const gone = await tool<{ results: { site_id?: string }[] }>("search_places", { text: `${S}H1`, map: false });
+  expect(gone.results.some((r) => r.site_id === `${S}H1`)).toBe(false);
 });
