@@ -30,7 +30,7 @@ export interface Settings {
   rush_hour: RushHour;
   /** Off = every booking needs a driver: the "A driver is needed" box and the custodian-drives path are hidden. */
   self_drive_allowed: boolean;
-  /** Snap to roads on the route maps: none, google_roads (secret GOOGLE_ROADS_KEY) or osrm (secret OSRM_URL). */
+  /** Snap to roads under the open package: none or osrm (secret OSRM_URL); under the google package Google's Roads API is used (google_caps.roads; 0 = off) and this is not read. */
   map_matching: { provider: MapMatchingProvider };
   /** The driver app's "At work? Switch On duty" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
   shift_start: string;
@@ -140,7 +140,7 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   self_drive_allowed:
     "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
   map_matching:
-    "Snap to roads on the route maps: provider none, google_roads (Roads API, secret GOOGLE_ROADS_KEY) or osrm (self-hosted, secret OSRM_URL); km stay from the odometer",
+    "Snap to roads under the open package: provider none or osrm (self-hosted, secret OSRM_URL); under the google package Google's Roads API snaps the web's Google map instead (its caps in google_caps.roads, 0 = off) and this setting is not read; km stay from the odometer",
   shift_start: 'The driver app\'s shift nudge ("At work? Switch On duty"): the time of day, HH:MM, shown only to a driver who is off duty',
   shift_days: "… on these days (0 = Sunday … 6 = Saturday); empty = never",
   fuel_video_checklist:
