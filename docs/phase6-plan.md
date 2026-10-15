@@ -112,8 +112,16 @@ deployed; web deployment dcdcca05; EAS update group 58879074 (Android update 01a
 the phones' kept heartbeat history arrived (test.driver 98 rows, test.driver2 124 from 14 October
 18:13 on), and test.driver2's 06:12–06:28 holes read "App not running · 7 min" (the app frozen),
 then "Stopped · no GPS signal" 3 and 5 min (the app alive, location silent: the watchdog's case).
-The site import on the live project is yours through Settings → Import sites. The Teams artifact
-copy is still the Part 2 build: its update is round 3.
+The site import on the live project is yours through Settings → Import sites. **Part 4b round at
+4466aa0** (15 October): migration `phase6_4b` pushed (on live: 8,066 places, all active; map
+search cap 2,500 a day and 90 a minute; no `shift_days` row, so Monday to Friday applies; the
+driver's UPDATE grant on `task_stops.auto_detected_at`); office-mcp, office-api and fleet-jobs
+deployed; web deployment c0efd490; EAS update group 05e19a7f (Android update 01a13e95, runtime
+1.1.0, channel preview). openrouteservice now answers from api.heigit.org: a fresh `plan_task`
+(Colombo Fort → Kurunegala) had both legs from ORS (108.5 km, 143 min) and two fresh map
+searches were answered and cached, 0 errors in the day's counters; both heigit paths answer 401
+without a key (an unknown path 404), so the old host's 404/410 fallback cannot have answered.
+The Teams artifact copy is still the Part 2 build: its update is round 3.
 
 ## 3. Data model: four migrations, all additive
 
