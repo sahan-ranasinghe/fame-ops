@@ -3,11 +3,13 @@
 // Complete task. Before it starts it shows the details and "Start task".
 
 import { Camera, GeoJSONSource, Layer, Map, Marker } from '@maplibre/maplibre-react-native';
+import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Check, ChevronLeft, MapPin, Navigation, Phone, Play } from '@/components/icons';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import GoogleMapView, { Marker as GoogleMarker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -25,6 +27,8 @@ import { colors } from '@/theme';
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const SRI_LANKA: [number, number] = [80.7, 7.75];
+/** The build carries the Google key (app.config.ts): the task map is Google's (Part 5). */
+const GOOGLE_MAP = (Constants.expoConfig?.extra as { googleMapsAndroid?: boolean } | undefined)?.googleMapsAndroid === true;
 
 type LngLat = [number, number];
 
@@ -123,6 +127,54 @@ function TaskMap({ me, destination, label, note }: { me: LngLat | null; destinat
   );
 }
 
+/**
+ * The task map on Google's map (a build with the key, Part 5): the phone, the stop (a Google place
+ * too) and the straight line between them. No map id, so Android's map loads stay free.
+ */
+function GoogleTaskMap({ me, destination, label }: { me: LngLat | null; destination: LngLat | null; label: string }) {
+  const map = useRef<GoogleMapView>(null);
+  const round = (p: LngLat | null) => (p ? `${p[0].toFixed(2)},${p[1].toFixed(2)}` : '');
+  const frameKey = `${round(me)}|${round(destination)}`;
+  const at = (p: LngLat) => ({ latitude: p[1], longitude: p[0] });
+  useEffect(() => {
+    const points = [me, destination].filter((p): p is LngLat => p !== null).map(at);
+    if (points.length === 2) map.current?.fitToCoordinates(points, { edgePadding: { top: 110, right: 70, bottom: 70, left: 70 }, animated: true });
+    else if (points.length === 1) map.current?.animateCamera({ center: points[0], zoom: 12 }, { duration: 600 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [frameKey]);
+  return (
+    <GoogleMapView
+      ref={map}
+      provider={PROVIDER_GOOGLE}
+      style={StyleSheet.absoluteFill}
+      initialRegion={{ latitude: SRI_LANKA[1], longitude: SRI_LANKA[0], latitudeDelta: 3.5, longitudeDelta: 3.5 }}
+      toolbarEnabled={false}
+      rotateEnabled={false}
+      pitchEnabled={false}
+      showsCompass={false}
+    >
+      {me && destination && <Polyline coordinates={[at(me), at(destination)]} strokeColor={colors.blue} strokeWidth={6} lineCap="round" />}
+      {destination && (
+        <GoogleMarker coordinate={at(destination)} anchor={{ x: 0.5, y: 1 }} tracksViewChanges={false}>
+          <View style={{ alignItems: 'center', gap: 6 }}>
+            <View style={styles.mapLabel}>
+              <Txt variant="strong" size={14} color="#ffffff" numberOfLines={1}>{label}</Txt>
+            </View>
+            <View style={styles.destinationDot} />
+          </View>
+        </GoogleMarker>
+      )}
+      {me && (
+        <GoogleMarker coordinate={at(me)} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false}>
+          <View style={styles.meHalo}>
+            <View style={styles.meDot} />
+          </View>
+        </GoogleMarker>
+      )}
+    </GoogleMapView>
+  );
+}
+
 export default function TaskScreen() {
   const app = useApp();
   const { t, tasks, sharing, gpsKm } = app;
@@ -202,14 +254,16 @@ export default function TaskScreen() {
     <View style={styles.page}>
       <StatusBar style="dark" />
       <View style={{ height: running ? Math.round(height * 0.4) : insets.top + 76, backgroundColor: colors.mapLand }}>
-        {running && (
-          <TaskMap
-            me={myPosition}
-            destination={drawnDestination(stop, false)}
-            label={stop?.place_name ?? ''}
-            note={stop?.google_place_id ? t('task.googleNotOnMap') : null}
-          />
-        )}
+        {running && (GOOGLE_MAP
+          ? <GoogleTaskMap me={myPosition} destination={drawnDestination(stop, true)} label={stop?.place_name ?? ''} />
+          : (
+            <TaskMap
+              me={myPosition}
+              destination={drawnDestination(stop, false)}
+              label={stop?.place_name ?? ''}
+              note={stop?.google_place_id ? t('task.googleNotOnMap') : null}
+            />
+          ))}
         {overlay}
       </View>
 

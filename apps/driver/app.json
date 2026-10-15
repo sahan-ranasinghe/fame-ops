@@ -3,7 +3,7 @@
     "name": "Fame Driver",
     "slug": "fame-driver",
     "owner": "fame-global",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "scheme": "famedriver",
     "platforms": [
       "android"
