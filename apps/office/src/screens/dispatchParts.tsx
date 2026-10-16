@@ -22,10 +22,14 @@ export function useFleetSettings(): Query<SettingsResult> {
   return useQuery<SettingsResult>("settings", "get_settings", {}, { enabled: me.tools.includes("get_settings"), onWrite: false });
 }
 
-/** plan_task for the form as it stands, 1.5 s after the last edit; the plan shown stays while the next one comes. */
+/**
+ * plan_task for the form as it stands, 1.5 s after the last edit; the plan shown stays while the next one comes. The web
+ * asks for each leg's Google road line too (with_line, for the plan map on Google's map: §20); the artifact has no such map.
+ */
 export function usePlanPreview(input: Record<string, unknown> | null): Query<PlanPreview> {
   const { me } = useFleet();
-  return useQuery<PlanPreview>("plan", "plan_task", input, { debounce: PLAN_DEBOUNCE_MS, keep: true, enabled: me.tools.includes("plan_task"), onWrite: false });
+  const args = input && __BUILD__ === "web" ? { ...input, with_line: true } : input;
+  return useQuery<PlanPreview>("plan", "plan_task", args, { debounce: PLAN_DEBOUNCE_MS, keep: true, enabled: me.tools.includes("plan_task"), onWrite: false });
 }
 
 /** The base place as Start from's default: its name and id (null until the settings answer, or when none is set). */
@@ -82,23 +86,34 @@ export function VehicleSelect({ id, value, def, vehicles, onChange, emptyLabel =
   );
 }
 
-/** The departure check beside a field: red or amber with Use 07:24 (and Move arrive-by), or "Arrives 25 min early". */
-export function DepartureNote({ check, onUse, onMove, testId = "departure-check" }: {
+/**
+ * The departure check beside a field: red or amber with Use 07:24 (and Move arrive-by), or "Arrives 25 min early"; for a
+ * late return (§20) Use 07:40 and, second, Move back by to 18:20 (`onMoveBack`, where the form holds the back-by; its
+ * field's name in `backLabel`).
+ */
+export function DepartureNote({ check, onUse, onMove, onMoveBack, backLabel = "back by", testId = "departure-check" }: {
   check: DepartureCheck | null;
   onUse?: (time: string) => void;
   /** Moves the late stop's arrive-by (where the form holds it). */
   onMove?: (n: number, time: string) => void;
+  /** Moves the form's back-by (or end) time. */
+  onMoveBack?: (time: string) => void;
+  backLabel?: string;
   testId?: string;
 }) {
   if (!check || check.kind === "fill") return null;
   if (check.kind === "early") return <span className="hint" data-testid={testId}>{check.text}</span>;
+  const buttons = !!(onUse || (onMove && check.moveTo) || (onMoveBack && check.moveBackTo));
   return (
     <div className="field" data-testid={testId} role="status" style={{ gap: 6 }}>
       <span style={{ color: check.tone === "bad" ? "var(--bad)" : "var(--warn)", fontWeight: 600, fontSize: 14 }}>{check.text}</span>
-      <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        {onUse && <button type="button" className="btn small" onClick={() => onUse(check.leaveBy)}>Use {check.leaveBy}</button>}
-        {onMove && check.moveTo && <button type="button" className="btn small" onClick={() => onMove(check.n, check.moveTo!)}>Move arrive-by to {check.moveTo}</button>}
-      </span>
+      {buttons && (
+        <span style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {onUse && <button type="button" className="btn small" onClick={() => onUse(check.leaveBy)}>Use {check.leaveBy}</button>}
+          {onMove && check.moveTo && <button type="button" className="btn small" onClick={() => onMove(check.n, check.moveTo!)}>Move arrive-by to {check.moveTo}</button>}
+          {onMoveBack && check.moveBackTo && <button type="button" className="btn small" onClick={() => onMoveBack(check.moveBackTo!)}>Move {backLabel} to {check.moveBackTo}</button>}
+        </span>
+      )}
     </div>
   );
 }

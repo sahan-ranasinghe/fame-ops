@@ -25,10 +25,11 @@ import { useToast } from "../ui/Toast";
 import { availabilityArgs, driverVehicle } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
-import { basePlace, useFleetSettings, usePlanPreview } from "./dispatchParts";
+import { checkDeparture, departurePlan } from "./departureLogic";
+import { basePlace, DepartureNote, useFleetSettings, usePlanPreview } from "./dispatchParts";
 import { DwellPicker } from "./DwellPicker";
 import { dwellFallbacks, planReasons } from "./planLogic";
-import { PlanTimeline } from "./PlanTimeline";
+import { PlanWithMap } from "./PlanMap";
 import { RequestDetailCard } from "./RequestDetailCard";
 import { useRequest } from "./RequestDetail";
 import { decisionInput, dwellChanges, redecideInput } from "./requestLogic";
@@ -133,6 +134,8 @@ export function RequestDecide() {
   const plan = usePlanPreview(planArgs);
   const preview = plan.err ? null : plan.data ?? null;
   const fallbacks = dwellFallbacks(rows, preview?.stops, settings.data?.settings.dwell_min);
+  // Leaving at the time asked for, is the vehicle back by the time asked for (§20)? Said in the plan card; the requester's times stay.
+  const backCheck = fields?.back_by ? checkDeparture(fields.time ?? "", departurePlan(preview?.timeline, preview?.plan?.buffer_min, fields.back_by)) : null;
 
   async function decide(decision: "approve" | "decline") {
     if (!q) return;
@@ -351,7 +354,9 @@ export function RequestDecide() {
               <b className="grow">Plan</b>
               <button type="button" className="btn small" onClick={plan.refetch} disabled={plan.fetching}>{plan.fetching ? "Planning…" : "Plan now"}</button>
             </div>
-            <PlanTimeline timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating} leaveNote="the time asked for" />
+            {backCheck?.kind === "late" && backCheck.back && <DepartureNote check={backCheck} testId="departure-check-back" />}
+            <PlanWithMap timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating} leaveNote="the time asked for"
+              stops={preview?.stops} start={preview?.start} />
             <ConflictCards conflicts={preview?.conflicts} onPickVehicle={scrollToVehicles} onPickDriver={scrollToAvailability} />
           </div>
         )}

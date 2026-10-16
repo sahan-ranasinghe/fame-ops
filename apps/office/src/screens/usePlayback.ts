@@ -1,82 +1,85 @@
-// Playback of a route (web build): the marker steps through every point of the
-// line in time order at ×10, ×60 or ×300 of real time (a long gap between two
-// points is waited out in at most 1.5 s), paused or seeked with a slider that
-// jumps to the last point at or before the chosen time. The marker sits on the
-// stored points themselves: nothing is interpolated between them.
-import { useEffect, useRef, useState } from "react";
+// Playback of a route (web build; Phase 7, §22): the clock runs in recorded
+// time at 1×, 5×, 20× or 60× on animation frames, and the marker sits at the
+// position for that time on the path (playbackLogic: interpolated along the
+// drawn line, along a gap's estimated line or its straight dashed hole over the
+// gap's whole duration, still at a stop, turned to the path). A scrubber goes
+// to any moment, playing or paused. Today's line may grow while it plays: the
+// clock keeps going to the new end.
+import { useEffect, useMemo, useRef, useState } from "react";
+import { advance, type GapWindow, type PathPoint, type PlaybackSpeed, type Position, positionOn, SPEEDS } from "./playbackLogic";
 
-export const SPEEDS = [10, 60, 300] as const;
-export type PlaybackSpeed = (typeof SPEEDS)[number];
-/** A step never waits less than this (a frame) nor more than this (a long gap). */
-const MIN_STEP_MS = 16;
-const MAX_STEP_MS = 1500;
+export { SPEEDS, type PlaybackSpeed };
 
 export interface Playback {
-  /** The clock: the time of the point the marker is on, Unix ms. */
+  /** The recorded time the marker is at, Unix ms. */
   t: number;
   start: number;
   end: number;
-  /** The point the marker is on. */
-  index: number;
   playing: boolean;
+  /** Playing, or moved away from the start: the marker is shown. */
+  active: boolean;
   speed: PlaybackSpeed;
+  /** Where the marker is at t (null without a path). */
+  position: Position | null;
   toggle: () => void;
-  /** To a time: the marker goes to the last point at or before it. */
+  /** To any moment (clamped to the route). */
   seek: (t: number) => void;
   setSpeed: (s: PlaybackSpeed) => void;
 }
 
-export function usePlayback(points: { at: number }[]): Playback {
-  const start = points[0]?.at ?? 0;
-  const end = points[points.length - 1]?.at ?? 0;
-  const [index, setIndex] = useState(0);
-  const indexRef = useRef(0);
+export function usePlayback(path: PathPoint[], windows: GapWindow[] = []): Playback {
+  const start = path[0]?.at ?? 0;
+  const end = path[path.length - 1]?.at ?? 0;
+  const [t, setT] = useState(start);
+  const tRef = useRef(start);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState<PlaybackSpeed>(60);
+  const [speed, setSpeedState] = useState<PlaybackSpeed>(60);
+  const speedRef = useRef<PlaybackSpeed>(60);
+  const endRef = useRef(end);
+  endRef.current = end;
 
-  // A new route (another day, another driver): back to its start, paused. New points on the same route leave the marker alone.
+  // A new route (another day, another driver): back to its start, paused. New points on the same route leave the clock alone.
   useEffect(() => {
-    indexRef.current = 0;
-    setIndex(0);
+    tRef.current = start;
+    setT(start);
     setPlaying(false);
   }, [start]);
 
+  // The clock: each animation frame moves the recorded time on by the frame's real time × the speed.
   useEffect(() => {
     if (!playing) return;
-    let timer = 0;
-    const stepNext = () => {
-      const i = indexRef.current;
-      if (i >= points.length - 1) {
+    let raf = 0;
+    let last: number | null = null;
+    const frame = (now: number) => {
+      const dt = last === null ? 0 : now - last;
+      last = now;
+      const next = advance(tRef.current, dt, speedRef.current, endRef.current);
+      tRef.current = next;
+      setT(next);
+      if (next >= endRef.current) {
         setPlaying(false);
         return;
       }
-      const wait = Math.min(MAX_STEP_MS, Math.max(MIN_STEP_MS, (points[i + 1].at - points[i].at) / speed));
-      timer = window.setTimeout(() => {
-        indexRef.current = i + 1;
-        setIndex(i + 1);
-        stepNext();
-      }, wait);
+      raf = requestAnimationFrame(frame);
     };
-    stepNext();
-    return () => clearTimeout(timer);
-  }, [playing, speed, points]);
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
 
   const seek = (v: number) => {
     const clamped = Math.max(start, Math.min(end, v));
-    let lo = 0;
-    let hi = points.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if (points[mid].at <= clamped) lo = mid;
-      else hi = mid - 1;
-    }
-    indexRef.current = Math.max(0, lo);
-    setIndex(Math.max(0, lo));
+    tRef.current = clamped;
+    setT(clamped);
   };
   const toggle = () => {
-    if (!playing && indexRef.current >= points.length - 1) seek(start);
+    if (!playing && tRef.current >= end) seek(start);
     setPlaying((p) => !p);
   };
-  const safeIndex = Math.min(index, Math.max(0, points.length - 1));
-  return { t: points[safeIndex]?.at ?? start, start, end, index: safeIndex, playing, speed, toggle, seek, setSpeed };
+  const setSpeed = (s: PlaybackSpeed) => {
+    speedRef.current = s;
+    setSpeedState(s);
+  };
+  const shown = Math.max(start, Math.min(end, t));
+  const position = useMemo(() => positionOn(path, shown, windows), [path, shown, windows]);
+  return { t: shown, start, end, playing, active: playing || shown > start, speed, position, toggle, seek, setSpeed };
 }
