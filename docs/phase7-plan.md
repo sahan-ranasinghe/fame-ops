@@ -1264,6 +1264,57 @@ the build differs from the text above (the behaviour is the same):
 - **The start stop on the phone** is arrived at Start task locally too (no Arrived button, no arrival nudge for it).
 - `duty_log` and the office task page read `tasks.km` (the stretches added up after a swap), never end − start.
 
+### Part 2b (branch `phase7-2b`)
+
+Migration `20261016180000_phase7_maps.sql`; tests `supabase/tests/database/phase7_maps.test.sql`, the connector
+suite's section 6f, Vitest (the maps, the plan map, the gaps, playback on test.driver2's 15 October, kept as
+`apps/office/src/screens/__fixtures__/route-driver2-2026-10-15.json` under the name "Fixture Driver Two"), the e2e (the
+plan map, the gaps list, playback at 60×, the Live cluster at phone width), `test:rules` (the task map). Where the build
+differs from the text above:
+
+- **The plan's line** comes from the Routes call of the road times (field mask
+  `routes.legs.polyline.encodedPolyline`; a plain polyline triggers no SKU, so the call stays Compute Routes Pro, checked
+  16 October). It is kept as `plan_json.legs[].line` with `plan_json.line_fetched_at`; `prune_google_content` removes
+  both after 30 days and the plan's pins, times and km stay; that write sends the driver no "Task changed" push
+  (`fleet.quiet`). `plan_task` and `task_detail` give the lines only with `with_line: true` (the web), as each timeline
+  leg's `line`; `plan_task`'s `start` and `task_detail`'s `start_lat/lng` give the start's pin (a Google start marked
+  Google's).
+- **Snap to roads stays off (the caps 0).** The Roads API overview limits only Speed Limits to Asset Tracking licence
+  holders, but the Roads API policies still say, for the whole API, "If you intend to use the Roads API as part of an
+  asset tracking application, you may be required to purchase an asset tracking license". The planned caps (200 a day,
+  4,750 a month) are ready (`ROADS_CAPS_PLANNED`) and accepted by `update_settings`; turning them on is Sahan's call.
+  Everything else of §26 is built: about one point per 50 m, requests of 100 points sharing one, a growing leg sent only
+  when 100 new thinned points have collected or the leg ends (its tail drawn raw meanwhile), a window inside a leg
+  already snapped reuses it clipped, and a failed leg tried again after 2 minutes. The route views ask `snap: true` by
+  default with a "Recorded points" toggle; the all-driver trails never ask.
+- **Gap markers** carry the gap's words in a card (hover or tap; a Gaps list row opens it and zooms there); the dashed
+  holes and estimated lines stay; no map draws a gap's text. Stops of 10 minutes or more keep their time labels.
+- **Playback** keeps its clock in recorded time on animation frames (a stalled frame counts as at most 250 ms); points
+  that share a time are spread so the marker never jumps; the maps redraw the line only when it changes, the marker
+  alone each frame.
+- **The control cluster** (zoom in, zoom out, the compass while rotated or tilted, today's trails, fit) serves all
+  three maps and the two pin maps; the drawn map has no compass (it never rotates). Google's own zoom, camera and rotate
+  controls and MapLibre's navigation control are off.
+- **The plan map** sits beside the timeline on a desktop (360 px) and above it on a phone (260 px); a pin and its
+  timeline row highlight each other; the "decide again" page has no plan preview and so no map. A Google place is listed
+  under the map ("Google place, not drawn") wherever Google's map is not the one in use.
+- **The back-by check** (§20 wording) is on Assign a task (beside Leave by and "Vehicle free by", with Use and Move free
+  by), on Task stops (Use only) and on the decide page (the words only: the times are the requester's).
+- **The driver's task map**: every stop by its number with its arrive-by or planned time, the start, the driver, and on
+  the gmaps build Google's line per leg (legs already driven grey); fitted on open, on the first position and when the
+  stops change. The map can now be rotated and tilted (it could not before), so the compass can show. Distance left by
+  road as planned; with no plan the straight-line figure stays.
+- **App stops (Sahan, the Part 2b go):** 10 minutes or more with neither a location point nor a heartbeat (the phone's
+  own times, so a stretch uploaded later still counts as running), inside a duty period and before its day's cut-off;
+  a gap across an app version change is not one. test.driver's 15 October under this rule: 4 stops before 21:00
+  (10:36–12:33, 12:48–13:01, 17:22–17:32, 18:03–18:17).
+- **Why the heartbeat paused while points kept arriving:** React Native pauses JS timers when the app leaves the front
+  (`JavaTimerManager.onHostPause` clears the timers' frame callback) and runs them again only while a headless task is
+  active; Android keeps delivering positions to the background location task. The heartbeat loop's `setInterval` was
+  frozen. The location task now sends the heartbeat itself when the last one is a minute old (`heartbeatDue`), so a
+  heartbeat gap means the app really stopped. JS only.
+- **Odometer in Sinhala** (Sahan): one word family, see the Sinhala section.
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
