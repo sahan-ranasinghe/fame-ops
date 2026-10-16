@@ -1537,7 +1537,7 @@ if CHANNEL == "api":
     shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
                             env={**os.environ, "CHANNEL": "api", "API_TOKEN": API_TOKEN}, capture_output=True, text=True)
     check(shapes.returncode == 0, "every read tool's JSON through office-api has the same shape as the connector's contract (scripts/tool-shapes.json)",
-          shapes.stdout[-600:] + shapes.stderr[-300:])
+          "\n".join(l for l in shapes.stdout.splitlines() if "FAIL" in l or "missing:" in l or "new:" in l)[:1500] + shapes.stderr[-300:])
 
     print("\n== 8. Roles: a staff member on office-api ==")
     staff_email = f"staff.{uuid.uuid4().hex[:6]}@fame.test"

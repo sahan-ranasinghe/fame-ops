@@ -1029,6 +1029,8 @@
   "assigned[].vehicle: string",
   "completed[].accepted: string",
   "completed[].driver: string",
+  "completed[].finish_flag.kind: string",
+  "completed[].finish_flag.text: string",
   "completed[].from: string",
   "completed[].id: string",
   "completed[].label: string",
