@@ -23,6 +23,20 @@ import {
 } from '../src/lib/dayRules';
 import type { TaskSegment, TaskStop } from '../src/lib/types';
 import { shownTaskKm, splitAtPlate, stopLabel, stopTimeAt, stretches, swapCard, type Translate } from '../src/components/taskLines';
+import {
+  currentStop,
+  fitKey,
+  frameOf,
+  hasRouteLine,
+  isTurned,
+  kmText,
+  mapStops,
+  planLegs,
+  roadKmLeft,
+  routeLines,
+  startPoint,
+} from '../src/components/taskMapLogic';
+import { encodePolyline } from '../src/lib/polyline';
 import en from '../src/i18n/en.json';
 import si from '../src/i18n/si.json';
 
@@ -233,6 +247,107 @@ check(JSON.stringify(splitAtPlate(tEn('swap.oldEnd'))) === JSON.stringify({ befo
 check(splitAtPlate(tSi('swap.stretches', { km: '40' }))?.before === '' && splitAtPlate(tEn('swap.stretches', { km: '40' }))?.before === '40 km in ',
   'the plate goes where each language puts it');
 check(splitAtPlate(tEn('swap.logTitle')) === null, 'a sentence with no plate is shown as it is');
+
+// 7. The task map (Phase 7 Part 2b, §20): distance left by road, the stops and Google's line, the framing, the compass.
+// Points due north of A (1° of latitude ≈ 111.195 km): A the start, B 10 km on, C 20 km past B.
+const A = { lat: 7, lng: 80 };
+const northOf = (p: { lat: number; lng: number }, km: number) => ({ lat: p.lat + km / 111.195, lng: p.lng });
+const B = northOf(A, 10);
+const C = northOf(B, 20);
+const D = northOf(C, 5);
+const lineAB = encodePolyline([A, northOf(A, 4), B]);
+const lineBC = encodePolyline([B, C]);
+const lineCD = encodePolyline([C, D]);
+const mapTask = (stops: Partial<TaskStop>[], legs: unknown, start: { lat: number; lng: number } | null = A) => ({
+  task_stops: stops.map((f, i) => stop({ id: `m${i + 1}`, seq: i + 1, ...f })),
+  plan_json: (legs === null ? null : { legs }) as never,
+  start_lat: start?.lat ?? null,
+  start_lng: start?.lng ?? null,
+  start_google_place_id: null as string | null,
+});
+const LEGS = [
+  { from_seq: 0, to_seq: 1, km: 14, minutes: 20, source: 'google', line: lineAB },
+  { from_seq: 1, to_seq: 2, km: 26, minutes: 30, source: 'google', line: lineBC },
+  { from_seq: 2, to_seq: 3, km: 6, minutes: 8, source: 'google', line: lineCD },
+  { from_seq: 3, to_seq: -1, km: 40, minutes: 50, source: 'google' },
+];
+const ROUTE = [{ ...B }, { ...C }, { ...D }];
+const nearKm = (a: number | null, b: number) => a !== null && Math.abs(a - b) < 0.05;
+
+const halfwayKm = roadKmLeft(mapTask(ROUTE, LEGS), northOf(A, 5));
+check(nearKm(halfwayKm, 14 * 0.5 + 26 + 6), 'halfway to Stop 1: half its 14 road km, plus the later legs (26 + 6), never the 40 km back to base', halfwayKm);
+const beforeStart = roadKmLeft(mapTask(ROUTE, LEGS), { lat: A.lat - 0.05, lng: A.lng });
+check(nearKm(beforeStart, 14 + 26 + 6), 'farther from Stop 1 than the start is: the proportion stops at 1 (the whole leg)', beforeStart);
+const atStop = roadKmLeft(mapTask(ROUTE, LEGS), B);
+check(nearKm(atStop, 26 + 6), 'at Stop 1: nothing left of its leg', atStop);
+const arrived = roadKmLeft(mapTask([{ ...B, status: 'arrived', arrived_at: STARTED }, { ...C }, { ...D }], LEGS), northOf(A, 3));
+check(nearKm(arrived, 26 + 6), 'Stop 1 reached (Arrived, not Done yet): its leg counts nothing, wherever the phone is', arrived);
+const second = roadKmLeft(mapTask([{ ...B, status: 'done' }, { ...C }, { ...D }], LEGS), northOf(B, 15));
+check(nearKm(second, 26 * 0.25 + 6), 'Stop 1 done, 15 of 20 km towards Stop 2: a quarter of its 26 road km, plus the 6 after it', second);
+const skippedLater = roadKmLeft(mapTask([{ ...B }, { ...C, status: 'skipped' }, { ...D }], LEGS), northOf(A, 5));
+check(nearKm(skippedLater, 7 + 6), 'a later stop skipped: its leg is not counted', skippedLater);
+check(roadKmLeft(mapTask([{ ...B, status: 'done' }, { ...C, status: 'done' }, { ...D, status: 'skipped' }], LEGS), C) === 0,
+  'every stop done or skipped: 0 km left (the drive back to base is not counted)');
+check(roadKmLeft(mapTask(ROUTE, null), northOf(A, 5)) === null, 'no plan: null (the screen keeps the straight line)');
+check(roadKmLeft(mapTask(ROUTE, LEGS.map(({ km: _km, ...leg }) => leg)), northOf(A, 5)) === null, 'a plan without km for the legs: null');
+check(roadKmLeft(mapTask(ROUTE, LEGS), null) === null, 'no position yet: null');
+check(roadKmLeft(mapTask([{ lat: null, lng: null }, { ...C }], LEGS), northOf(A, 5)) === null, 'the current stop has no pin: null');
+const fromLine = roadKmLeft(mapTask(ROUTE, LEGS, null), northOf(A, 5));
+check(nearKm(fromLine, 7 + 32), "the start's pin unknown (the base was used): the leg starts at its own line's first point", fromLine);
+check(roadKmLeft(mapTask(ROUTE, LEGS.map(({ line: _line, ...leg }) => leg), null), northOf(A, 5)) === null,
+  'no start pin and no line: the proportion cannot be said, null');
+check(planLegs({ legs: [{ from_seq: 0, to_seq: 1, km: 'x' }, null, { to_seq: 2 }] }).length === 1 && planLegs(null).length === 0 && planLegs({ legs: 3 }).length === 0,
+  'the stored plan is read defensively (a leg without its seqs is dropped, a bad km is null)');
+check(kmText(4.24) === '4.2' && kmText(9.96) === '10' && kmText(42.4) === '42', 'km shown with one decimal under 10 km ("4.2", "10", "42")',
+  [kmText(4.24), kmText(9.96), kmText(42.4)]);
+
+// The stops on the map: numbered by order, the time there, the state; a Google place only on Google's map (rule 10).
+const shown = mapTask([
+  { ...A, is_start: true, type: 'pickup', planned_arrive_at: '2026-10-16T02:30:00Z', status: 'arrived', arrived_at: STARTED },
+  { ...B, status: 'removed' },
+  { ...B, arrive_by: '2026-10-16T04:00:00Z', planned_arrive_at: '2026-10-16T03:40:00Z' },
+  { ...C, google_place_id: 'gp1', planned_arrive_at: '2026-10-16T05:00:00Z' },
+  { lat: null, lng: null },
+  { ...D },
+], LEGS);
+const googleStops = mapStops(shown, true);
+check(googleStops.map((s) => `${s.n}:${s.state}:${s.time ?? '-'}${s.isStart ? ':start' : ''}`).join(' ') === '1:current:08:00:start 2:todo:09:30 3:todo:10:30 5:todo:-',
+  'Google map: Stop 1 the start (marked), removed stops not counted, the arrive-by before the planned time, a stop with no pin left out',
+  googleStops.map((s) => `${s.n}:${s.state}:${s.time ?? '-'}${s.isStart ? ':start' : ''}`).join(' '));
+check(mapStops(shown, false).every((s) => s.id !== 'm4') && mapStops(shown, false).length === 3, 'OpenFreeMap map: the Google place is not drawn');
+const doneFirst = mapTask([{ ...B, status: 'done' }, { ...C, status: 'skipped' }, { ...D }], LEGS);
+check(mapStops(doneFirst, true).map((s) => s.state).join(',') === 'done,done,current' && currentStop(doneFirst)?.id === 'm3',
+  'done and skipped stops look done, the first one still to do is the current stop');
+
+const lines = routeLines(mapTask([{ ...B, status: 'done' }, { ...C }, { ...D }], LEGS), true);
+check(lines.length === 3 && lines[0].done && !lines[1].done && !lines[2].done && lines[0].points.length === 3,
+  "Google's line, leg by leg: the driven leg muted, the base leg without a line left out", lines.map((l) => [l.key, l.done, l.points.length]));
+check(routeLines(mapTask(ROUTE, LEGS), false).length === 0, "the OpenFreeMap map never gets Google's line (rule 10)");
+check(routeLines(mapTask([{ ...B }, { ...C }], LEGS), true).length === 2, 'a leg to a stop no longer on the task is not drawn');
+check(hasRouteLine(mapTask(ROUTE, LEGS)) && !hasRouteLine(mapTask(ROUTE, LEGS.map(({ line: _line, ...leg }) => leg))) && !hasRouteLine(mapTask(ROUTE, null))
+  && !hasRouteLine(mapTask(ROUTE, [{ ...LEGS[0], line: '~' }])),
+  'a stored line, none (the open package, the estimate, after 30 days), no plan, a broken line: "Stops only"');
+
+const startTask = mapTask(ROUTE, LEGS);
+check(startPoint(startTask, false)?.lat === A.lat, "the trip's start is drawn when it is not a stop");
+check(startPoint({ ...startTask, start_google_place_id: 'gp0' }, false) === null && startPoint({ ...startTask, start_google_place_id: 'gp0' }, true) !== null,
+  "a start from Google's search: on Google's map only");
+check(startPoint(shown, true) === null, 'passengers get in at the start: the start is Stop 1, no separate start pin');
+
+// The framing: again when the stops, the line or the start change, or the first position comes; never on a status or a move.
+const keyOf = (task: ReturnType<typeof mapTask>, hasMe: boolean) => fitKey(mapStops(task, true), routeLines(task, true), startPoint(task, true), hasMe);
+const k0 = keyOf(mapTask(ROUTE, LEGS), true);
+check(keyOf(mapTask([{ ...B, status: 'done' }, { ...C }, { ...D }], LEGS), true) === k0, 'a stop done: the map does not jump');
+check(keyOf(mapTask([{ ...B }, { ...northOf(C, 1) }, { ...D }], LEGS), true) !== k0, 'the office moved a stop: the map frames the route again');
+check(keyOf(mapTask(ROUTE, LEGS), false) !== k0, 'the first position: the map frames again with the phone');
+const one = frameOf([B, northOf(B, 0.05)]);
+const box = frameOf([A, B, C]);
+check(frameOf([]).kind === 'none' && one.kind === 'point' && box.kind === 'box' && box.sw.lat === A.lat && box.ne.lat === C.lat,
+  'framing: nothing, one place (a zoom), or the box around the route', [one, box]);
+
+// The compass: only while the map is turned or tilted.
+check(!isTurned(0, 0) && !isTurned(359.5, 0) && !isTurned(-0.4, 0.2) && !isTurned(null, undefined), 'north-up and flat: no compass');
+check(isTurned(12, 0) && isTurned(350, 0) && isTurned(0, 30), 'turned or tilted: the compass shows');
 
 console.log(failures === 0 ? '\nAll day rules tests passed.' : `\n${failures} day rules test(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);
