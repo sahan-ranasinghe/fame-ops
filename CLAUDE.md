@@ -902,8 +902,7 @@ office_audit.
 ## Not now
 Project costs, WhatsApp as a location source or automated WhatsApp sending (use wa.me links),
 Zoho cost push, allowance claims UI (Phase C); an audit page; the e-mail channel for office
-notifications (designed, `dead: email_not_implemented`); a Claude Teams OAuth connector; Google
-snap to roads (built, its cap 0 until Google's asset tracking licence question is settled); HR;
+notifications (designed, `dead: email_not_implemented`); a Claude Teams OAuth connector; HR;
 iOS; Play Store.
 
 ## Working rules for Claude Code

@@ -539,8 +539,8 @@ check(gs["settings"]["map_package"] == "google" and g["package"] == "open" and g
       "get_settings: the google package is chosen, but with no keys everything is the open package", json.dumps(g)[:300])
 check([u["feature"] for u in g["usage"]] == ["map_loads", "places_autocomplete", "places_details", "routes", "roads"]
       and all(u["today"] == 0 and not u["on"] and u["note"] == "No key set" for u in g["usage"])
-      and [u["month_cap"] for u in g["usage"]] == [9500, 9500, 9500, 4750, 0],
-      "get_settings: the five features, none used, the month caps (Roads 0: off until the licence is confirmed)", json.dumps(g["usage"])[:400])
+      and [u["month_cap"] for u in g["usage"]] == [9500, 9500, 9500, 4750, 4750],
+      "get_settings: the five features, none used, the month caps (Roads 4,750: on within the free usage, Fame's decision)", json.dumps(g["usage"])[:400])
 check(len(tool("routing_usage", {"days": 7})["google"]) == 5, "routing_usage carries the same Google usage")
 ml = tool("register_map_load")
 check(ml["allowed"] is False and "key" not in ml and (ml.get("note") == "Google's map loads in the web app only" if CHANNEL == "mcp" else ml.get("map") == "open"),
@@ -1909,9 +1909,9 @@ check(pv.get("start", {}).get("lat") is not None and pv["start"].get("lng") is n
       "plan_task with_line on the open package: the start's pin for the plan map, no Google line (only Google's road times bring one)",
       json.dumps({"start": pv.get("start"), "legs": legs})[:300])
 st = tool("get_settings")["settings"]
-check(st["google_caps"]["roads"] == {"day": 0, "month": 0}, "snap to roads stays off by default (the asset tracking licence question)", json.dumps(st["google_caps"]["roads"]))
-tool("update_settings", {"key": "google_caps", "value": {**st["google_caps"], "roads": {"day": 200, "month": 4750}}})
-check(tool("get_settings")["settings"]["google_caps"]["roads"] == {"day": 200, "month": 4750}, "the planned caps (200 a day, 4,750 a month) are accepted")
+check(st["google_caps"]["roads"] == {"day": 200, "month": 4750}, "snap to roads is on within the free usage: 200 a day, 4,750 a month", json.dumps(st["google_caps"]["roads"]))
+tool("update_settings", {"key": "google_caps", "value": {**st["google_caps"], "roads": {"day": 0, "month": 0}}})
+check(tool("get_settings")["settings"]["google_caps"]["roads"] == {"day": 0, "month": 0}, "a cap of 0 turns it off (if Google asks)")
 r = tool("update_settings", {"key": "google_caps", "value": {**st["google_caps"], "roads": {"day": 200, "month": 5000}}}, expect_error=True)
 check("4750" in r or "4,750" in r, "a month above 95 % of the free 5,000 is refused", r)
 tool("update_settings", {"key": "google_caps", "value": st["google_caps"]})

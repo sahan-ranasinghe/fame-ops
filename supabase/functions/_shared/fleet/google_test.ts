@@ -158,7 +158,7 @@ Deno.test("the month's ceiling refuses too, and a cap of 0 means off; every feat
   const month = await takeGoogleCall(db, "routes", settings.google_caps);
   assertEquals([month.allowed, month.reason], [false, "month"]);
   let ran = 0;
-  const roads = await guarded(db, "roads", settingsWith().google_caps, () => Promise.resolve(++ran));
+  const roads = await guarded(db, "roads", { ...settingsWith().google_caps, roads: { day: 0, month: 0 } }, () => Promise.resolve(++ran));
   assertEquals(roads, {
     ok: false,
     gate: { allowed: false, reason: "month", day: 0, day_cap: 0, month: 0, month_cap: 0 },
@@ -318,7 +318,8 @@ Deno.test("snap to roads: Google for the web only while its caps are above 0, ne
     const on = { ...settingsWith(), google_caps: { ...settingsWith().google_caps, roads: { ...ROADS_CAPS_PLANNED } } };
     assertEquals(snapProvider(on, "web"), "google_roads");
     assertEquals(snapProvider(on, "claude"), "none");
-    assertEquals(snapProvider(settingsWith(), "web"), "none", "caps at 0 (the licence question): nothing is asked or refused");
+    const off = { ...settingsWith(), google_caps: { ...settingsWith().google_caps, roads: { day: 0, month: 0 } } };
+    assertEquals(snapProvider(off, "web"), "none", "a cap of 0 turns it off: nothing is asked or refused");
     const open = { ...settingsWith({}, "open"), map_matching: { provider: "google_roads" as const } };
     assertEquals(snapProvider(open, "web"), "none", "Google's lines never go on the open package's map");
     assertEquals(snapProvider({ ...open, map_matching: { provider: "osrm" } }, "web"), "osrm");
@@ -353,8 +354,8 @@ Deno.test("a refused Roads call is never sent: the gate is asked before each 100
 Deno.test("google_caps: every feature, the month never above 95 % of the free usage, the day never above the month", () => {
   const caps = validateSetting("google_caps", SETTINGS_DEFAULTS.google_caps);
   assertEquals(caps, SETTINGS_DEFAULTS.google_caps);
-  // Off until the asset tracking licence is settled (the Roads API policies); the planned caps pass validation.
-  assertEquals(SETTINGS_DEFAULTS.google_caps.roads, { day: 0, month: 0 }, "snap to roads starts off (the asset tracking licence)");
+  // On within the free usage (Sahan, 16 October 2026): 200 a day, 4,750 a month; a cap of 0 turns it off.
+  assertEquals(SETTINGS_DEFAULTS.google_caps.roads, { day: 200, month: 4750 }, "snap to roads: 200 a day, 4,750 a month");
   const planned = validateSetting("google_caps", { ...SETTINGS_DEFAULTS.google_caps, roads: ROADS_CAPS_PLANNED }) as GoogleCaps;
   assertEquals(planned.roads, { day: 200, month: 4750 });
   const tooBig = { ...SETTINGS_DEFAULTS.google_caps, routes: { day: 200, month: 5000 } };

@@ -1279,12 +1279,12 @@ differs from the text above:
   (`fleet.quiet`). `plan_task` and `task_detail` give the lines only with `with_line: true` (the web), as each timeline
   leg's `line`; `plan_task`'s `start` and `task_detail`'s `start_lat/lng` give the start's pin (a Google start marked
   Google's).
-- **Snap to roads stays off (the caps 0).** The Roads API overview limits only Speed Limits to Asset Tracking licence
-  holders, but the Roads API policies still say, for the whole API, "If you intend to use the Roads API as part of an
-  asset tracking application, you may be required to purchase an asset tracking license". The planned caps (200 a day,
-  4,750 a month) are ready (`ROADS_CAPS_PLANNED`) and accepted by `update_settings`; turning them on is Sahan's call.
-  While the caps are 0 nothing is asked, refused or counted: the server names no snap provider, so the route views show
-  no toggle. Everything else of §26 is built: about one point per 50 m, requests of 100 points sharing one, a growing
+- **Snap to roads is on within the free usage** (Sahan, the go of checkpoint 2b): 200 a day, 4,750 a month, fail
+  closed. The Roads API overview limits only Speed Limits to Asset Tracking licence holders, but the Roads API policies
+  say, for the whole API, "If you intend to use the Roads API as part of an asset tracking application, you may be
+  required to purchase an asset tracking license"; Fame decided to use it within the free usage, and a cap of 0 in
+  Settings → Fleet turns it off if Google asks (docs/google-maps-setup.md). While the caps are 0 nothing is asked,
+  refused or counted: the server names no snap provider, so the route views show no toggle. Everything else of §26 is built: about one point per 50 m, requests of 100 points sharing one, a growing
   leg sending only whole chunks (up to the last point of the last whole one; its tail drawn raw meanwhile) or all of it
   when the leg ends, a window inside a leg already snapped reusing it clipped, and a failed leg tried again after 2
   minutes. The route views ask `snap: true` by default with a "Recorded points" toggle; the all-driver trails and

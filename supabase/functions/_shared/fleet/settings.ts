@@ -75,7 +75,7 @@ export const GOOGLE_HARD_CEILING: Record<GoogleFeature, number> = {
   roads: 4750,
 };
 
-/** Phase 7 (§26): snap to roads at 200 a day and 95 % of the 5,000 free a month, once the licence question is settled. */
+/** Phase 7 (§26): snap to roads at 200 a day and 95 % of the 5,000 free a month (the default since Round A). */
 export const ROADS_CAPS_PLANNED = { day: 200, month: 4750 } as const;
 
 export type VideoQuality = "480p" | "720p";
@@ -129,11 +129,11 @@ export const SETTINGS_DEFAULTS: Settings = {
     places_autocomplete: { day: 400, month: 9500 },
     places_details: { day: 400, month: 9500 },
     routes: { day: 200, month: 4750 },
-    // Off until the licence is settled: the Roads API policies (checked 16 October 2026) say "If you intend to
-    // use the Roads API as part of an asset tracking application, you may be required to purchase an asset
-    // tracking license" (the whole Roads API, snap to roads included; docs/google-maps-setup.md). Once settled,
-    // the planned caps (Phase 7, §26) are ROADS_CAPS_PLANNED: 200 a day, 4,750 a month.
-    roads: { day: 0, month: 0 },
+    // On within the free usage (Sahan, 16 October 2026, Phase 7 §26): 200 a day, 4,750 a month, fail closed. The
+    // Roads API policies say an asset tracking application "may be required to purchase an asset tracking license";
+    // Fame decided to use snap to roads within the free usage, and a cap of 0 in Settings → Fleet turns it off if
+    // Google asks (docs/google-maps-setup.md).
+    roads: { ...ROADS_CAPS_PLANNED },
   },
 };
 
