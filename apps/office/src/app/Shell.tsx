@@ -68,6 +68,38 @@ function Bell() {
   );
 }
 
+/**
+ * Phase 7 (§19): "2 tasks need a driver · Show" on every Tasks page (board, detail, history, the forms) while any does.
+ * It reads the overview (watched every 30 s); on the web a change on the issues table (the bell's channel) reloads it
+ * within a second, since declining and the end of the accept window open an issue.
+ */
+function NeedsDriverBanner() {
+  const { me, store, noConnector } = useFleet();
+  const overview = useEntry<Overview>("overview");
+  const { pathname } = useLocation();
+  const show = !noConnector && can(me, "approve", "assign_tasks");
+  useEffect(() => {
+    if (!show) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    return subscribeIssues(() => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        void store.load("overview", "fleet_overview", {});
+      }, 1000);
+    });
+  }, [store, show]);
+  const count = overview.data?.needs_driver?.count ?? 0;
+  if (!show || count === 0 || !(pathname === "/tasks" || pathname.startsWith("/tasks/"))) return null;
+  return (
+    <div style={{ marginBottom: 16 }} data-testid="needs-driver-banner">
+      <Notice tone="bad" action={<Link className="btn small" to="/tasks?filter=needs_driver">Show</Link>}>
+        <b>{count === 1 ? "1 task needs a driver" : `${count} tasks need a driver`}</b>
+      </Notice>
+    </div>
+  );
+}
+
 function Banner() {
   const { noConnector, store, managePermissions } = useFleet();
   const overview = useEntry<Overview>("overview");
@@ -150,6 +182,7 @@ export function Shell() {
           <Bell />
         </div>
         <Banner />
+        <NeedsDriverBanner />
         <PullToRefresh><Outlet /></PullToRefresh>
       </main>
 
