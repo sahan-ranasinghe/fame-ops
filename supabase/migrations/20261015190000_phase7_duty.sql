@@ -310,7 +310,7 @@ begin
   -- (the BEFORE INSERT swap, or the app closing it first as an old open session).
   if old.ended_at is null and new.ended_at is not null
      and coalesce(current_setting('fleet.replacing_session', true), '') <> 'on'
-     and not (old.device_info ->> 'opened_by' = 'server' and new.end_reason = 'auto'
+     and not (coalesce(old.device_info ->> 'opened_by', '') = 'server' and new.end_reason = 'auto'
               and coalesce(current_setting('fleet.by', true), '') <> 'system') then
     perform public.release_vehicle(
       new.employee_id, new.ended_at,
@@ -365,8 +365,9 @@ begin
   if v_me is null or not exists (select 1 from public.employees e where e.id = v_me and e.role = 'driver') then
     raise exception 'Only a signed-in driver can list the vehicles to choose from';
   end if;
+  -- Two rows can start in the same millisecond (Start work, then Change vehicle at once): the later insert wins.
   select a.vehicle_id into v_last from public.vehicle_assignments a
-  where a.employee_id = v_me order by a.from_at desc limit 1;
+  where a.employee_id = v_me order by a.from_at desc, a.created_at desc limit 1;
   return coalesce((
     select jsonb_agg(jsonb_build_object(
              'id', v.id,

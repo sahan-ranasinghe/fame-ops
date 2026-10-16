@@ -418,7 +418,7 @@ export type Assignment = Pick<
 export async function fetchMyAssignments(client: Client, limit = 5): Promise<Assignment[]> {
   return check(
     await client.from('vehicle_assignments').select('id, vehicle_id, from_at, to_at, how, ended_how, ended_by_name')
-      .order('from_at', { ascending: false }).limit(limit),
+      .order('from_at', { ascending: false }).order('created_at', { ascending: false }).limit(limit),
     'vehicle history',
   );
 }

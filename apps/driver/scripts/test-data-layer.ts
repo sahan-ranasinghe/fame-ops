@@ -353,8 +353,10 @@ async function main() {
   const meNow = await api.fetchMe(client);
   // Phase 7: Finish work (the session's end) gives the vehicle up; the history keeps the clock-in and the clock-out.
   const heldA = must(await admin.from('vehicle_assignments').select('vehicle_id, how, ended_how').eq('employee_id', a.row.id).order('from_at'), 'vehicle rows');
-  check(meNow?.language === 'si' && meNow.current_vehicle_id === null && heldA.at(-1)?.how === 'clock_in' && heldA.at(-1)?.ended_how === 'clock_out'
-    && heldA.at(-1)?.vehicle_id === van.id, 'language saved; Start work held the van, Finish work gave it up', heldA);
+  // (The older app's vehicle pick carries no time: it is recorded when it reaches the server, here after the day.)
+  const clockIn = heldA.find((r) => r.how === 'clock_in');
+  check(meNow?.language === 'si' && meNow.current_vehicle_id === null && clockIn?.ended_how === 'clock_out' && clockIn.vehicle_id === van.id
+    && !heldA.some((r) => r.ended_how === null), 'language saved; Start work held the van, Finish work gave it up', heldA);
   const arrivedRow = must(await admin.from('task_stops').select('arrival_flag, arrival_distance_m').eq('id', stops[2]!.id).single(), 'stop');
   check(arrivedRow.arrival_flag === 'ok' && arrivedRow.arrival_distance_m === 35, 'Arrived keeps how it was marked and the distance (the driver\'s update grant)', arrivedRow);
   const reports = await api.fetchReports(client);
