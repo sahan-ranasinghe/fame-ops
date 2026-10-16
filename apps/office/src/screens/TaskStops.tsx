@@ -69,7 +69,21 @@ export function TaskStops() {
   const startPax = !!form?.startPax && !running;
   const offset = reached + (startPax ? 1 : 0);
 
-  const startArg = (): Record<string, unknown> | undefined => (startPax ? { ...(t?.start_place ? { place: t.start_place } : {}), passengers: true } : undefined);
+  // The start for "Passengers get in here": the start stop's own place and pin when the task has one (task_detail gives the
+  // task's start by name only), else the start's name, else the base place.
+  const startRow = p?.stops.find((s) => s.is_start) as (NonNullable<typeof p>["stops"][number] & { place_id?: string }) | undefined;
+  const startArg = (): Record<string, unknown> | undefined => {
+    if (!startPax) return undefined;
+    if (startRow) {
+      return {
+        ...(startRow.place_id ? { place_id: startRow.place_id } : startRow.google_place_id ? { google_place_id: startRow.google_place_id } : {}),
+        ...(startRow.place ? { place: startRow.place } : {}),
+        ...(!startRow.place_id && startRow.lat != null && startRow.lng != null && !startRow.google ? { lat: startRow.lat, lng: startRow.lng } : {}),
+        passengers: true,
+      };
+    }
+    return { ...(t?.start_place ? { place: t.start_place } : {}), passengers: true };
+  };
   function planArgs(): Record<string, unknown> | null {
     if (!form || !t) return null;
     const s = stopsInput(form.list);

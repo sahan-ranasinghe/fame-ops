@@ -96,8 +96,12 @@ export function NewTask() {
   const startStop = preview?.stops.find((s) => s.is_start);
   const stay = startStop?.dwell_min != null ? `${dwellText(startStop.dwell_min)} there${startStop.dwell_source === "place" ? " (usual here)" : ""}` : undefined;
 
-  /** Picking a driver: the vehicle follows them again (their vehicle today, else their regular one). */
+  /** Picking a driver: the vehicle follows them (their vehicle today, else their regular one) unless one was picked. */
   function pickDriver(username: string) {
+    setF((x) => ({ ...x, driver: username }));
+  }
+  /** Use suggestion: the best match and the vehicle they bring. */
+  function takeSuggestion(username: string) {
     setF((x) => ({ ...x, driver: username, vehicle: "" }));
   }
   function onTickStart(i: number) {
@@ -228,7 +232,7 @@ export function NewTask() {
           </div>
           {lists.error && (!lists.drivers || !lists.vehicles) && <Notice>Couldn’t load the {!lists.drivers && !lists.vehicles ? "drivers and vehicles" : !lists.drivers ? "drivers" : "vehicles"}: {lists.error} <button type="button" className="btn small" onClick={lists.reload}>Try again</button></Notice>}
           <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) pickDriver(d.username); }}
-            onUse={(b) => { if (b.username) pickDriver(b.username); }} />
+            onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
           <div className="grid2">
             <div className="field"><label htmlFor="af-end">Vehicle free by</label><input type="time" id="af-end" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
             <div className="field"><label htmlFor="af-pax">Passengers</label><input type="number" id="af-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>

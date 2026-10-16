@@ -82,7 +82,9 @@ export function NewRequest() {
     : freeDrivers;
   const start = startPoint(f, base);
   const fromIsStart = !!f.from.trim() && sameAsStart(start, fromStop);
-  const pickDriver = (username: string) => setF((x) => ({ ...x, pickedDriver: username, vehicle: "" }));
+  // A driver pick keeps a vehicle picked by hand; Use suggestion takes the best match with the vehicle they bring.
+  const pickDriver = (username: string) => setF((x) => ({ ...x, pickedDriver: username }));
+  const takeSuggestion = (username: string) => setF((x) => ({ ...x, pickedDriver: username, vehicle: "" }));
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
@@ -234,7 +236,7 @@ export function NewRequest() {
         )}
         {books && !custodianDrives && (
           <AvailabilityPanel args={availArgs} picked={f.pickedDriver} onPick={(d) => { if (d.username) pickDriver(d.username); }}
-            onUse={(b) => { if (b.username) pickDriver(b.username); }} />
+            onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
         )}
         {err && <Notice tone="bad">{err}</Notice>}
         <StickyActions>

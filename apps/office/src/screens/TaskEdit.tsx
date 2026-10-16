@@ -138,7 +138,9 @@ export function TaskEdit() {
   const reason = needsDriverText(t);
   // The leave-by checked at once against the stops' arrive-by times (the task's plan shifted).
   const check = running ? null : checkDeparture(f.time, departurePlan(p.timeline, p.plan?.buffer_min));
-  const pickDriver = (username: string) => setF((x) => ({ ...x, driver: username, vehicle: "" }));
+  // A driver pick keeps a vehicle picked by hand; Use suggestion takes the best match with the vehicle they bring.
+  const pickDriver = (username: string) => setF((x) => ({ ...x, driver: username }));
+  const takeSuggestion = (username: string) => setF((x) => ({ ...x, driver: username, vehicle: "" }));
 
   async function save(ev: FormEvent) {
     ev.preventDefault();
@@ -229,7 +231,7 @@ export function TaskEdit() {
         )}
         {canChange && !running && (
           <AvailabilityPanel args={availArgs} picked={pickedDriver} onPick={(d) => { if (d.username) pickDriver(d.username); }}
-            onUse={(b) => { if (b.username) pickDriver(b.username); }} />
+            onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
         )}
         {p.suggestions && canChange && (
           <div className="card card-b" data-testid="suggestions" style={{ display: "grid", gap: 8 }}>

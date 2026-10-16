@@ -109,7 +109,9 @@ export function RequestDecide() {
   const vehicle = f.vehicle || (again ? "" : def?.reg_no ?? "");
   const picked = allOptions.find((v) => v.reg_no === vehicle);
   const custodianDrives = !again && noDriverNeeded && !!picked?.assigned_to && sug?.self_drive_allowed !== false;
-  const pickDriver = (username: string) => setF((x) => ({ ...x, driver: username, vehicle: "" }));
+  // A driver pick keeps a vehicle picked by hand; Use suggestion takes the best match with the vehicle they bring.
+  const pickDriver = (username: string) => setF((x) => ({ ...x, driver: username }));
+  const takeSuggestion = (username: string) => setF((x) => ({ ...x, driver: username, vehicle: "" }));
 
   // The stops and their times: From and To with the time at each (as the request says until changed here).
   const fromDwell = f.fromDwell ?? (fields?.from_dwell_min == null ? "" : String(fields.from_dwell_min));
@@ -266,7 +268,7 @@ export function RequestDecide() {
             </div>
             <p className="hint" style={{ margin: 0 }}>Now {q.when}{q.back_by ? ` · back by ${q.back_by}` : ""}. A new time alone postpones the booking.</p>
           </div>
-          <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) pickDriver(d.username); }} onUse={(b) => { if (b.username) pickDriver(b.username); }} />
+          <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) pickDriver(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
           <div className="confirm" style={{ borderColor: "var(--line)" }}>
             <div className="field">
               <label htmlFor="rq-reason">Decline with a reason</label>
@@ -304,7 +306,11 @@ export function RequestDecide() {
                   {drivers.map((d) => <option key={d.username} value={d.username}>{d.name}{d.label ? ` · ${d.label}` : ""}</option>)}
                 </select>
               )}
-            {!f.driver && defaultDriver && <span className="hint" data-testid="driver-default">The best match. Pick another to change it.</span>}
+            {!f.driver && defaultDriver && (
+              <span className="hint" data-testid="driver-default">
+                {defaultDriver === avail.data?.best?.username ? "The best match" : "The first free driver"}. Pick another to change it.
+              </span>
+            )}
           </div>
           <div className="lab" id="rq-vehicles">Vehicle</div>
           {driver && !custodianDrives && (
@@ -324,7 +330,7 @@ export function RequestDecide() {
             </>
           )}
         </div>
-        {!custodianDrives && <AvailabilityPanel args={availArgs} picked={driver} onPick={(d) => { if (d.username) pickDriver(d.username); }} onUse={(b) => { if (b.username) pickDriver(b.username); }} />}
+        {!custodianDrives && <AvailabilityPanel args={availArgs} picked={driver} onPick={(d) => { if (d.username) pickDriver(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />}
         <div className="card card-b form" data-testid="decide-stops">
           <div className="section-t" style={{ marginBottom: 2 }}>Stops</div>
           <p className="muted small" style={{ margin: 0 }}>Start from {base ? base.name : "the base place"} (the base place). Passengers get in at Stop 1.</p>
