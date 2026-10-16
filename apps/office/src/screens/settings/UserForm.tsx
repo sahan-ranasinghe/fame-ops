@@ -61,7 +61,7 @@ export function UserForm() {
             <div className="field"><label htmlFor="nu-phone">Mobile</label><input id="nu-phone" maxLength={30} inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
           </div>
           <PermissionPicker value={f.permissions} onChange={(permissions) => setF({ ...f, permissions })} idPrefix="nu" />
-          <p className="hint" style={{ margin: 0 }}>Every office user sees the fleet (View) unless you untick it. Fleet admin = everything but Users; Dispatcher assigns tasks; Requester only asks for vehicles; Viewer only reads.</p>
+          <p className="hint" style={{ margin: 0 }}>Every other permission brings View with it. Fleet admin = everything but Users; Dispatcher assigns tasks; Requester asks for vehicles and sees what a viewer sees; Viewer only reads.</p>
           {err && <Notice tone="bad">{err}</Notice>}
         </div>
         <StickyActions><button className="btn primary" type="submit" disabled={busy}>Create account</button></StickyActions>

@@ -1,7 +1,8 @@
 // The Users page's rules (Settings → Users): the permission tick boxes, the four
 // presets, what create_office_user and update_office_user are sent, and the
-// one thing an admin may not do to themselves.
-import { normalisePermissions, type Permission, PERMISSIONS, PRESETS } from "@fleet/permissions";
+// one thing an admin may not do to themselves. Phase 7 (§12): any other
+// permission implies view, so view is ticked with it and locked while one is.
+import { IMPLIES_VIEW, normalisePermissions, type Permission, PERMISSIONS, PRESETS } from "@fleet/permissions";
 
 export type Preset = keyof typeof PRESETS;
 
@@ -14,11 +15,22 @@ export interface UserFields {
 
 export const emptyUser = (): UserFields => ({ name: "", email: "", phone: "", permissions: [...PRESETS.viewer.permissions] });
 
-/** Adds or removes one permission, keeping the table's order. */
+/** True while a permission that needs view is ticked: the view box is then ticked and locked. */
+export const viewLocked = (list: readonly Permission[]) => list.some((p) => IMPLIES_VIEW.includes(p));
+
+/** The hint beside the locked view box. */
+export const VIEW_LOCKED_HINT = "Needed by the other permissions";
+
+/**
+ * Adds or removes one permission, keeping the table's order. Ticking one that needs view ticks
+ * view too; view can't be unticked while one of them is ticked (unticking them all frees it).
+ */
 export function togglePermission(list: readonly Permission[], p: Permission): Permission[] {
   const set = new Set(list);
-  if (set.has(p)) set.delete(p);
+  if (p === "view" && viewLocked(list)) set.add("view");
+  else if (set.has(p)) set.delete(p);
   else set.add(p);
+  if (viewLocked([...set])) set.add("view");
   return PERMISSIONS.filter((x) => set.has(x));
 }
 
