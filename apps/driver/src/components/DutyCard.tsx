@@ -108,7 +108,7 @@ export function DutyNotices() {
               {t('vehicle.takenBanner', { plate: vehicleTaken.plate, name: vehicleTaken.name })}
             </Txt>
           </Pressable>
-          <Close label={t('common.ok')} onPress={dismissVehicleTaken} />
+          <Close label={t('common.close')} onPress={dismissVehicleTaken} />
         </View>
       )}
       {ended && (
@@ -119,7 +119,7 @@ export function DutyNotices() {
               {t(ended.reason === 'admin' ? 'duty.officeOutBody' : 'duty.autoOutBody', { time: colomboTime(ended.at) })}
             </Txt>
           </View>
-          <Close label={t('common.ok')} onPress={clearDutyEnded} />
+          <Close label={t('common.close')} onPress={clearDutyEnded} />
         </View>
       )}
     </>

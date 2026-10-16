@@ -1231,6 +1231,7 @@ Added in Part 1 (as built; the push texts are the server's, `push-task`):
 | `shift.bodyWork` | Choose today's vehicle and tap Start work. | අද වාහනය තෝරා වැඩ ආරම්භ කරන්න ඔබන්න. |
 | `arrive.km` | {n} km | කි.මී. {n} |
 | `arrive.m` | {n} m | මී. {n} |
+| `common.close` | Close | වසන්න |
 | push `vehicle_taken` | Your vehicle was taken · {plate} is now with {name} · choose your vehicle | ඔබේ වාහනය වෙනත් අයෙකු ගත්තා · {plate} දැන් {name} ළඟ · ඔබේ වාහනය තෝරන්න |
 | push `vehicle_moved` | The office changed your vehicle · Your vehicle is now {plate} / You have no vehicle now. | කාර්යාලය ඔබේ වාහනය වෙනස් කළා · ඔබේ වාහනය දැන් {plate} / ඔබට දැන් වාහනයක් නැත. |
 | push `duty_auto_out` | You were clocked out · Clocked out at {time} (end of the day). | ඔබව රාජකාරියෙන් ඉවත් කළා · {time} ට රාජකාරියෙන් ඉවත් කළා (දවසේ අවසානය). |

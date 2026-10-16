@@ -12,7 +12,8 @@
     "cameraDenied": "Allow the camera for Fame Driver in the phone's settings.",
     "discardTitle": "Discard changes?",
     "discardBody": "What you entered on this screen will be lost.",
-    "discard": "Discard"
+    "discard": "Discard",
+    "close": "Close"
   },
   "days": [
     "Sun",
