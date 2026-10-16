@@ -2,10 +2,12 @@
 // (supabase/functions/_shared/fleet/status.ts, imported as @fleet/status):
 // how a Realtime row from driver_latest updates a driver card, and how the
 // cards age as the clock ticks. The older state/location fields (15 min
-// rule) are kept for the published Teams artifact.
+// rule) are kept for the published Teams artifact. Phase 7: every active
+// driver is listed with a duty (on a task, on duty, off duty); the signal
+// states only matter for drivers on duty.
 import { colomboClock, colomboClockS, driverStatus, statusText } from "@fleet/status";
-import { latLng } from "../lib/format";
-import type { DriverStatus, LiveDriver, ShareState, Signal } from "./types";
+import { hhmm, joinDots, latLng, type Tone } from "../lib/format";
+import type { DriverStatus, DutyState, LiveDriver, ShareState, Signal } from "./types";
 
 export const STALE_AFTER_MINUTES = 15;
 
@@ -43,7 +45,7 @@ export function ago(at: string, now: Date): string {
 
 /** The old 15-minute rule, kept for the fields the Teams artifact reads. */
 export function shareOf(sharing: boolean, recordedAt: string | null | undefined, now: Date): { state: ShareState; text: string } {
-  if (!sharing) return { state: "not_sharing", text: "Not sharing" };
+  if (!sharing) return { state: "not_sharing", text: "Off duty" };
   if (!recordedAt) return { state: "stale", text: "Sharing · no location yet" };
   if (minutesSince(recordedAt, now) < STALE_AFTER_MINUTES) return { state: "sharing", text: `Live · ${ago(recordedAt, now)}` };
   return { state: "stale", text: `Last seen ${ago(recordedAt, now)}` };
@@ -106,6 +108,7 @@ export function applyLatest(drivers: LiveDriver[], row: LatestRow, now: Date): L
     return {
       ...d,
       ...status,
+      ...dutyAfter(d, row.sharing),
       signal,
       state: share.state,
       location: share.text,
@@ -151,7 +154,81 @@ export const statusTone = (status: DriverStatus | undefined, fallback: ShareStat
 
 /** The sentence for a card: the new status when the tool gave one, else the old text. */
 export const statusLine = (d: Pick<LiveDriver, "status_text" | "location"> & { state?: ShareState }) =>
-  d.status_text ?? (d.state === "not_sharing" ? "Not sharing" : d.location ?? "—");
+  d.status_text ?? (d.state === "not_sharing" ? "Off duty" : d.location ?? "—");
+
+// ---- Phase 7: duty ----
+
+/** The card's duty; an answer from before Phase 7 has none: a task = on a task, sharing = on duty, else off duty. */
+export function dutyOf(d: Pick<LiveDriver, "duty" | "task" | "state" | "signal">): DutyState {
+  if (d.duty) return d.duty;
+  if (d.task) return "on_task";
+  return (d.signal ? d.signal.sharing : d.state !== "not_sharing") ? "on_duty" : "off_duty";
+}
+
+/**
+ * A Realtime row moves the duty on at once: sharing off = off duty, sharing on = on duty
+ * (a card on a task keeps it). The since times, how it ended and the vehicle come with the
+ * tool's next answer (clocking out gives the vehicle up, so the old one is not shown meanwhile).
+ */
+function dutyAfter(d: LiveDriver, sharing: boolean): Partial<LiveDriver> {
+  if (!d.duty || d.duty === "on_task") return {};
+  if (!sharing && d.duty === "on_duty") {
+    return { duty: "off_duty", duty_text: "Off duty", duty_since: undefined, on_duty_since: undefined, off_duty_how: undefined, vehicle: undefined, vehicle_since: undefined };
+  }
+  if (sharing && d.duty === "off_duty") return { duty: "on_duty", duty_text: "On duty", duty_since: undefined, off_duty_how: undefined };
+  return {};
+}
+
+const DUTY_TEXT: Record<DutyState, string> = { on_task: "On a task", on_duty: "On duty", off_duty: "Off duty" };
+
+/** The duty chip: "On a task · since 08:12", "On duty · since 08:02", "Off duty · since 17:40 · auto at the cut-off". */
+export function dutyLine(d: Pick<LiveDriver, "duty" | "duty_text" | "duty_since" | "off_duty_how" | "task" | "state" | "signal">): string {
+  const duty = dutyOf(d);
+  return joinDots([d.duty_text ?? DUTY_TEXT[duty], d.duty_since && `since ${d.duty_since}`, duty === "off_duty" && d.off_duty_how]);
+}
+
+/** The dot and the pill of a card: the signal's colour while on duty, grey off duty (off duty is not a problem). */
+export const liveTone = (d: LiveDriver): Tone => (dutyOf(d) === "off_duty" ? "muted" : statusTone(d.status, d.state));
+
+/** No signal or Location off while on duty (the Problems chip). */
+export function hasProblem(d: LiveDriver): boolean {
+  const s = d.status ?? (d.state === "sharing" ? "live" : d.state === "stale" ? "no_signal" : "not_sharing");
+  return dutyOf(d) !== "off_duty" && (s === "no_signal" || s === "location_off");
+}
+
+export type LiveFilter = "all" | "on_task" | "on_duty" | "off_duty" | "problems";
+export const LIVE_FILTERS: [LiveFilter, string][] = [["all", "All"], ["on_task", "On a task"], ["on_duty", "On duty"], ["off_duty", "Off duty"], ["problems", "Problems"]];
+
+/** A chip matches the cards' own duty chip: On duty is clocked in without a task, so the three duties add up to All. */
+export const inFilter = (d: LiveDriver, f: LiveFilter) => f === "all" || (f === "problems" ? hasProblem(d) : dutyOf(d) === f);
+
+/** Counted on the cards (not the answer's counts), so a Realtime change moves a driver between the chips at once. */
+export function filterCounts(drivers: LiveDriver[]): Record<LiveFilter, number> {
+  const out: Record<LiveFilter, number> = { all: 0, on_task: 0, on_duty: 0, off_duty: 0, problems: 0 };
+  for (const d of drivers) for (const [f] of LIVE_FILTERS) if (inFilter(d, f)) out[f] += 1;
+  return out;
+}
+
+/** Only drivers on duty or on a task are drawn on the map; off duty is the list only. */
+export const onMap = (d: LiveDriver) => dutyOf(d) !== "off_duty";
+
+/** Clock out and Move to vehicle: only for a driver on duty without a task (the server checks again). */
+export const canClockOut = (d: LiveDriver) => dutyOf(d) === "on_duty";
+export const canMoveVehicle = canClockOut;
+
+/** clock_out_driver's answer. */
+export interface ClockOutResult {
+  clocked_out: string | false;
+  at?: string;
+  reason?: string;
+  note?: string;
+}
+
+/** The line after Clock out: "Kamal Perera is off duty since 17:40. The driver's phone gets a push…", or the tool's note. */
+export function clockOutLine(r: ClockOutResult): string {
+  if (r.clocked_out === false) return r.note ?? "Already off duty.";
+  return `${r.clocked_out} is off duty${r.at ? ` since ${hhmm(r.at)}` : ""}.${r.note ? ` ${r.note}` : ""}`;
+}
 
 /** Kept for older callers. */
 export const stateTone = (state: ShareState) => statusTone(undefined, state);

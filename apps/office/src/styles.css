@@ -447,3 +447,13 @@ button.avail-row:hover { background: var(--bg) }
 .progress { position: relative; height: 22px; border-radius: 8px; background: var(--surface-2); overflow: hidden; display: flex; align-items: center }
 .progress > div { position: absolute; inset: 0 auto 0 0; background: var(--live-bg) }
 .progress > span { position: relative; padding: 0 10px }
+
+/* Phase 7: duty */
+.duty { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; line-height: 1.5; padding: 1px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted) }
+.duty.on_task { background: var(--live-bg); color: var(--live); border-color: transparent }
+.duty.on_duty { background: var(--surface); color: var(--ink); border-color: var(--line-strong) }
+.duty-lines { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px }
+.duty-lines .duty-note { flex-basis: 100% }
+.app-stops { color: var(--warn); font-weight: 600 }
+.move-list { display: grid; gap: 8px }
+.move-list .opt.off { opacity: .55; cursor: not-allowed }
