@@ -69,7 +69,8 @@ export const liveDrivers = tool({
     "links. The older state (sharing / stale / not_sharing, 15 min rule) is still answered too.",
   readOnly: true,
   input: z.object({
-    filter: z.enum(["all", "sharing", "stale", "not_sharing", "live", "no_signal", "location_off", "on_task", "on_duty", "off_duty"]).optional()
+    filter: z.enum(["all", "sharing", "stale", "not_sharing", "live", "no_signal", "location_off", "on_task", "on_duty", "off_duty"])
+      .optional()
       .describe("Default: all. on_task / on_duty / off_duty filter by duty (on_duty includes on_task)"),
   }),
   async run({ filter = "all" }, { db, now }) {
@@ -78,12 +79,18 @@ export const liveDrivers = tool({
       loadRefs(db),
       loadLatest(db),
       loadSettings(db),
-      db.from("tasks").select("id, title, employee_id, vehicle_id, status, started_at, return_to_base, avoid_expressway").eq("status", "in_progress"),
+      db.from("tasks").select("id, title, employee_id, vehicle_id, status, started_at, return_to_base, avoid_expressway").eq(
+        "status",
+        "in_progress",
+      ),
       db.from("duty_sessions").select("employee_id, vehicle_id, started_at, device_info").is("ended_at", null),
       db.from("duty_sessions").select("employee_id, ended_at, end_reason, device_info").gte("ended_at", dayStart).order("ended_at", {
         ascending: false,
       }),
-      db.from("vehicle_assignments").select("employee_id, vehicle_id, to_at, ended_by_name").eq("ended_how", "taken_over").gte("to_at", dayStart)
+      db.from("vehicle_assignments").select("employee_id, vehicle_id, to_at, ended_by_name").eq("ended_how", "taken_over").gte(
+        "to_at",
+        dayStart,
+      )
         .order("to_at", { ascending: false }),
       db.rpc("app_stops", { p_from: dayStart, p_to: now.toISOString() }),
     ]);
@@ -127,11 +134,13 @@ export const liveDrivers = tool({
       const lostTo = taken.find((a) => a.employee_id === e.id);
       const tookFrom = vehicleId ? taken.find((a) => a.vehicle_id === vehicleId && a.ended_by_name === e.name) : undefined;
       const handover = tookFrom
-        ? `${vehicleLabel(refs.veh.get(tookFrom.vehicle_id))} taken over from ${refs.emp.get(tookFrom.employee_id)?.name ?? "another driver"} ${
-          colomboTime(tookFrom.to_at!)
-        }`
+        ? `${vehicleLabel(refs.veh.get(tookFrom.vehicle_id))} taken over from ${
+          refs.emp.get(tookFrom.employee_id)?.name ?? "another driver"
+        } ${colomboTime(tookFrom.to_at!)}`
         : lostTo && lostTo.vehicle_id !== vehicleId
-        ? `${vehicleLabel(refs.veh.get(lostTo.vehicle_id))} now with ${lostTo.ended_by_name ?? "another driver"} ${colomboTime(lostTo.to_at!)}`
+        ? `${vehicleLabel(refs.veh.get(lostTo.vehicle_id))} now with ${lostTo.ended_by_name ?? "another driver"} ${
+          colomboTime(lostTo.to_at!)
+        }`
         : undefined;
       return {
         driver: e.name,

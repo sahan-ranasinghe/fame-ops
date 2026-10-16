@@ -1160,7 +1160,9 @@ export const taskDetail = tool({
           eta: etaCard(eta, stops),
           finish_flag: finishFlagText(task.finish_flag),
           // Reopen (reopen_task): a task completed today, Colombo time.
-          can_reopen: task.status === "completed" && !!task.completed_at && colomboDate(task.completed_at) === colomboDate(now) ? true : undefined,
+          can_reopen: task.status === "completed" && !!task.completed_at && colomboDate(task.completed_at) === colomboDate(now)
+            ? true
+            : undefined,
           vehicle_taken: takenFrom && startTake
             ? `${vehicle?.reg_no ?? "The vehicle"} taken over from ${refs.emp.get(takenFrom.employee_id)?.name ?? "another driver"} ${
               colomboTime(startTake.from_at)
@@ -1648,7 +1650,11 @@ export function finishFlagText(flag: unknown): { kind: string; text: string } | 
 
 /** How Arrived was marked, in words, when it was not within 300 m of the pin. */
 export function arrivalFlagText(flag: string | null, distanceM: number | null): string | undefined {
-  const far = distanceM == null ? "" : distanceM >= 1000 ? ` ${Math.round(distanceM / 100) / 10} km from the pin` : ` ${distanceM} m from the pin`;
+  const far = distanceM == null
+    ? ""
+    : distanceM >= 1000
+    ? ` ${Math.round(distanceM / 100) / 10} km from the pin`
+    : ` ${distanceM} m from the pin`;
   switch (flag) {
     case "override":
       return `Marked arrived${far} ("I'm here, the pin is wrong")`;

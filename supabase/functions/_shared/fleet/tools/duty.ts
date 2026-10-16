@@ -107,7 +107,9 @@ export const dutyLog = tool({
         username: refs.emp.get(s.employee_id)?.username,
         day: colomboDate(s.started_at),
         clock_in: colomboDayTime(s.started_at),
-        clock_out: s.ended_at ? (colomboDate(s.ended_at) === colomboDate(s.started_at) ? colomboTime(s.ended_at) : colomboDayTime(s.ended_at)) : "on duty",
+        clock_out: s.ended_at
+          ? (colomboDate(s.ended_at) === colomboDate(s.started_at) ? colomboTime(s.ended_at) : colomboDayTime(s.ended_at))
+          : "on duty",
         out_how: s.ended_at ? END_TEXT[s.end_reason ?? ""] ?? s.end_reason ?? undefined : undefined,
         opened_by_server: device.opened_by === "server" ? true : undefined,
         hours: Math.round(minutes / 6) / 10,
@@ -145,7 +147,9 @@ export const dutyLog = tool({
           task_km: rows.reduce((k, r) => k + r.task_km, 0),
           gps_km: withGps ? Math.round(rows.reduce((k, r) => k + (r.gps_km ?? 0), 0) * 10) / 10 : undefined,
         },
-        gps_note: withGps ? undefined : `GPS km are shown for ranges of up to ${DUTY_LOG_GPS_DAYS} days; the odometer km of the tasks are always shown.`,
+        gps_note: withGps
+          ? undefined
+          : `GPS km are shown for ranges of up to ${DUTY_LOG_GPS_DAYS} days; the odometer km of the tasks are always shown.`,
       },
       summary: `duty log ${first}${last !== first ? `..${last}` : ""}${who ? ` ${who.name}` : ""}: ${rows.length} periods`,
     };
@@ -168,10 +172,18 @@ export const clockOutDriver = tool({
       throw new ToolError(`${who.name} has a task in progress: it must be completed or cancelled first.`);
     }
     if (answer === "off_duty") {
-      return { result: { clocked_out: false, note: `${who.name} is already off duty.` }, summary: `clock out ${who.name}: already off duty` };
+      return {
+        result: { clocked_out: false, note: `${who.name} is already off duty.` },
+        summary: `clock out ${who.name}: already off duty`,
+      };
     }
     return {
-      result: { clocked_out: who.name, at: colomboDateTime(now), reason, note: "The driver's phone gets a push and stops recording location." },
+      result: {
+        clocked_out: who.name,
+        at: colomboDateTime(now),
+        reason,
+        note: "The driver's phone gets a push and stops recording location.",
+      },
       summary: `clocked out ${who.name}${reason ? `: ${reason}` : ""}`,
     };
   },
@@ -193,7 +205,11 @@ export const moveDriverVehicle = tool({
     const who = findDriver(refs, driver);
     const target = vehicle === null || vehicle.toLowerCase() === "none" ? null : findVehicle(refs, vehicle);
     // null = no vehicle: sent as null (the function has no default for it).
-    const { data, error } = await db.rpc("office_move_vehicle", { p_employee: who.id, p_vehicle: (target?.id ?? null) as string, p_by: actor.name });
+    const { data, error } = await db.rpc("office_move_vehicle", {
+      p_employee: who.id,
+      p_vehicle: (target?.id ?? null) as string,
+      p_by: actor.name,
+    });
     if (error) throw new Error(`move driver: ${error.message}`);
     const answer = data as { result?: string; taken_from?: string | null } | null;
     switch (answer?.result) {

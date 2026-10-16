@@ -168,7 +168,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(live).toContainText("Location off since", { timeout: 8000 });
   await expect(page.getByTestId("phone-line")).toContainText("Location off");
   await expect(page.getByTestId("phone-line")).toContainText("2 points waiting");
-  await expect(page.getByRole("button", { name: /^Location off · \d+$/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Problems · \d+$/ })).toBeVisible();
   // A fresh point: live again at once, the marker moves, the speed shows.
   expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(2), lat: 6.9, lng: 79.95, accuracy_m: 8, speed_mps: 20, battery_pct: 76 }])).toBe(201);
   await expect(live).toContainText(/Live · \d+ min/, { timeout: 8000 });
@@ -315,6 +315,74 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
 
   const users = await tool<{ users: { email: string; role: string }[] }>("list_office_users", {});
   expect(users.users.find((u) => u.email === email)?.role).toBe("admin");
+});
+
+test("a driver's day in the office (Phase 7): on duty on Live, moved to another vehicle, clocked out on the card, the duty log with its dates", async ({ page }) => {
+  const email = `e2e.duty.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Duty Desk", email, permissions: ["view", "assign_tasks"] });
+  const driver = { name: `E2E Dutyman ${stamp}`, code: `E2U-${stamp}`, username: `e2u.${stamp}`, pin: "246813" };
+  await tool("create_driver", driver);
+  const plateA = `WP E2U-${stamp.slice(-4).toUpperCase()}`;
+  const plateB = `WP E2V-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plateA, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12 });
+  await tool("register_vehicle", { reg_no: plateB, make_model: "Toyota Axio", vehicle_type: "car", seats: 4 });
+  // The phone: Start work with today's vehicle (a duty session carrying it).
+  const app = await driverRest(driver.username, driver.pin);
+  const [me] = await app.get<{ id: string }[]>("employees?select=id");
+  const vehicles = await app.get<{ id: string; reg_no: string }[]>(`vehicles?select=id,reg_no&reg_no=eq.${encodeURIComponent(plateA)}`);
+  expect(await app.post("duty_sessions", { id: randomUUID(), employee_id: me.id, vehicle_id: vehicles[0].id, device_info: { brand: "OPPO", model: "CPH2119" } })).toBe(201);
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Duty desk for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // Live: every driver with a duty; this one on duty with the van, the phone named.
+  await page.goto("/live");
+  const row = page.locator(".lrow", { hasText: driver.name });
+  await expect(row).toBeVisible();
+  await row.click();
+  const live = page.getByTestId("live-detail");
+  await expect(live.getByTestId("duty-chip")).toContainText("On duty");
+  await expect(live).toContainText(plateA);
+  await expect(live).toContainText("OPPO CPH2119");
+  await expect(page.getByRole("button", { name: /^Off duty · \d+$/ })).toBeVisible();
+
+  // Move to vehicle: a full page, the car picked, Move.
+  await live.getByRole("link", { name: "Move to vehicle" }).click();
+  await expect(page).toHaveURL(new RegExp(`/drivers/${driver.username.replace(".", "\\.")}/vehicle$`));
+  await expect(page.getByRole("heading", { name: `Move ${driver.name} to a vehicle` })).toBeVisible();
+  await page.getByTestId("move-vehicle").locator("label", { hasText: plateB }).click();
+  await page.getByRole("button", { name: "Move", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText(`is now on ${plateB}`);
+  await expect(page).toHaveURL(/\/live/);
+
+  // Clock out: a second step on the card, then Off duty by the office.
+  await page.locator(".lrow", { hasText: driver.name }).click();
+  await expect(live).toContainText(plateB);
+  await live.getByRole("button", { name: "Clock out" }).click();
+  await expect(live.getByTestId("clock-out-confirm")).toContainText("Clock out E2E?");
+  await live.getByTestId("clock-out-confirm").getByRole("button", { name: "Clock out" }).click();
+  await expect(live.getByTestId("duty-chip")).toContainText("Off duty", { timeout: 15000 });
+  await expect(live.getByTestId("duty-chip")).toContainText("by the office");
+
+  // The duty log: the period with both vehicles and how it ended; Yesterday and back to Today through the URL.
+  await page.goto("/drivers");
+  await page.getByRole("link", { name: "Duty log" }).first().click();
+  await expect(page).toHaveURL(/\/drivers\/duty/);
+  const period = page.getByTestId("duty-row").filter({ hasText: driver.name });
+  await expect(period).toContainText(plateA);
+  await expect(period).toContainText(plateB);
+  await expect(period).toContainText("office");
+  await page.getByTestId("date-range").getByRole("button", { name: "Yesterday" }).click();
+  await expect(page).toHaveURL(/range=yesterday/);
+  await expect(page.getByTestId("duty-row").filter({ hasText: driver.name })).toHaveCount(0);
+  await page.getByTestId("date-range").getByRole("button", { name: "Today" }).click();
+  await expect(page.getByTestId("duty-row").filter({ hasText: driver.name })).toBeVisible();
 });
 
 test("a wrong password is refused", async ({ page }) => {

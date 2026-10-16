@@ -467,7 +467,9 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       .gte("start_at", dayStart).lt("start_at", dayEnd);
     let flaggedQ = db.from("tasks").select("id, title, employee_id, vehicle_id, completed_at, finish_flag").not("finish_flag", "is", null)
       .gte("completed_at", keepFrom);
-    let stopsQ = db.from("task_stops").select("id, task_id, seq, place_name, arrival_flag, arrival_distance_m, arrived_at, arrival_lat, arrival_lng")
+    let stopsQ = db.from("task_stops").select(
+      "id, task_id, seq, place_name, arrival_flag, arrival_distance_m, arrived_at, arrival_lat, arrival_lng",
+    )
       .in("arrival_flag", ["override", "no_gps"]).gte("arrived_at", keepFrom);
     if (scope.task_id) {
       laterQ = laterQ.eq("id", scope.task_id);
@@ -476,7 +478,10 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     }
     const [laterRes, takenRes, holdersRes, flaggedRes, stopsRes] = await Promise.all([
       laterQ,
-      db.from("vehicle_assignments").select("employee_id, vehicle_id, to_at, ended_by_name").eq("ended_how", "taken_over").gte("to_at", dayStart),
+      db.from("vehicle_assignments").select("employee_id, vehicle_id, to_at, ended_by_name").eq("ended_how", "taken_over").gte(
+        "to_at",
+        dayStart,
+      ),
       db.from("vehicle_assignments").select("employee_id, vehicle_id").is("to_at", null),
       flaggedQ,
       stopsQ,
@@ -486,10 +491,12 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     for (const t of unwrap(laterRes, "tasks")) {
       if (new Date(t.leave_by ?? t.start_at).getTime() < now.getTime()) continue;
       const holder = holders.get(t.vehicle_id);
-      const lost = taken.filter((a) => a.employee_id === t.employee_id && a.vehicle_id === t.vehicle_id).sort((a, b) =>
-        (b.to_at ?? "").localeCompare(a.to_at ?? "")
-      )[0];
-      if (!lost || !holder || holder === t.employee_id) continue;
+      const lost = taken.filter((a) =>
+        a.employee_id === t.employee_id && a.vehicle_id === t.vehicle_id
+      ).sort((a, b) => (b.to_at ?? "").localeCompare(a.to_at ?? ""))[0];
+      if (!lost || !holder || holder === t.employee_id) {
+        continue;
+      }
       const plate = vehicleLabel(refs.veh.get(t.vehicle_id));
       wanted.push({
         kind: "vehicle_conflict",
@@ -540,7 +547,8 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       if (!t) continue;
       const n = order.filter((o) => o.task_id === st.task_id && o.seq <= st.seq).length;
       const far = st.arrival_distance_m != null
-        ? (st.arrival_distance_m >= 1000 ? `${Math.round(st.arrival_distance_m / 100) / 10} km` : `${st.arrival_distance_m} m`) + " from the pin"
+        ? (st.arrival_distance_m >= 1000 ? `${Math.round(st.arrival_distance_m / 100) / 10} km` : `${st.arrival_distance_m} m`) +
+          " from the pin"
         : null;
       wanted.push({
         kind: "arrival_override",
@@ -588,7 +596,10 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         kind: "app_stopped",
         ref_key: `app_stopped:${e.id}:${today}`,
         severity: "warning",
-        title: [count >= APP_STOPS_PER_DAY ? `App stopped by the phone ${count}× today` : null, noFix ? `no GPS fix for ${noFixMin} min on duty` : null]
+        title: [
+          count >= APP_STOPS_PER_DAY ? `App stopped by the phone ${count}× today` : null,
+          noFix ? `no GPS fix for ${noFixMin} min on duty` : null,
+        ]
           .filter(Boolean).join(" · ").replace(/^n/, "N"),
         detail: `${e.name}${phone ? ` · ${phone}` : ""} · the phone's settings: Me → Phone setup in the app`,
         due: "today",
