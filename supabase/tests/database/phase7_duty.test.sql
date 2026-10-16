@@ -47,6 +47,13 @@ select ok(has_function_privilege('authenticated', 'public.change_vehicle(uuid, t
 select ok(has_column_privilege('authenticated', 'public.task_stops', 'arrival_flag', 'UPDATE')
           and has_column_privilege('authenticated', 'public.task_stops', 'arrival_distance_m', 'UPDATE'), 'drivers set the arrival flag and distance');
 select ok(not has_column_privilege('authenticated', 'public.tasks', 'finish_flag', 'UPDATE'), 'the finish flag is the server''s');
+select ok(not has_function_privilege('authenticated', 'public.office_clock_out(uuid, text, text)', 'EXECUTE')
+          and not has_function_privilege('authenticated', 'public.office_move_vehicle(uuid, uuid, text)', 'EXECUTE')
+          and not has_function_privilege('authenticated', 'public.office_reopen_task(uuid, text, text)', 'EXECUTE')
+          and not has_function_privilege('authenticated', 'public.duty_jobs()', 'EXECUTE')
+          and not has_function_privilege('authenticated', 'public.app_stops(timestamptz, timestamptz)', 'EXECUTE')
+          and not has_function_privilege('authenticated', 'public.release_vehicle(uuid, timestamptz, text, text)', 'EXECUTE'),
+  'the office''s functions, the jobs and release_vehicle are not callable by drivers');
 
 -- 2. Clock in with a vehicle (Kamal's phone writes a duty session) --------------------------------
 set local role authenticated;
@@ -149,16 +156,22 @@ select is((select ended_how || '|' || ended_by_name from public.vehicle_assignme
            where employee_id = '10000000-0000-0000-0000-0000000007b1' and vehicle_id = '20000000-0000-0000-0000-0000000007a1'),
   'clock_out|Nuwan Silva', 'his row ends clock_out');
 select is((select current_vehicle_id from public.employees where id = '10000000-0000-0000-0000-0000000007b1'), null::uuid, 'and he holds none');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000007b1","role":"authenticated"}';
+select is(public.change_vehicle('20000000-0000-0000-0000-0000000007a3', now(), '70000000-0000-0000-0000-0000000007c9') ->> 'refused', 'off_duty',
+  'Change vehicle off duty changes nothing (a change queued after a clock-out)');
+reset role;
+select is((select current_vehicle_id from public.employees where id = '10000000-0000-0000-0000-0000000007b1'), null::uuid, '… he still holds none');
 
 -- 10. A task start takes the task's vehicle (Saman, off duty, starts on Kamal's P7-0002) -----------
 insert into public.tasks (id, title, employee_id, vehicle_id, start_at, status, created_by, plan_json) values
   ('30000000-0000-0000-0000-0000000007c1', 'Team drop', '10000000-0000-0000-0000-0000000007c1', '20000000-0000-0000-0000-0000000007a2',
-   now(), 'assigned', 'test', '{"total_km": 50, "total_drive_min": 60}');
+   now(), 'assigned', 'test', '{"legs": [{"km": 50, "minutes": 60, "to_seq": 2}, {"km": 50, "minutes": 60, "to_seq": -1}]}');
 -- Two finished tasks (inserted finished: no start trigger runs for them).
 insert into public.tasks (id, title, employee_id, vehicle_id, start_at, status, created_by, plan_json,
                           started_at, start_odometer_km, end_odometer_km, completed_at) values
   ('30000000-0000-0000-0000-0000000007c2', 'Goods run', '10000000-0000-0000-0000-0000000007c1', '20000000-0000-0000-0000-0000000007a2',
-   now() - interval '3 hours', 'completed', 'test', '{"total_km": 50, "total_drive_min": 60}',
+   now() - interval '3 hours', 'completed', 'test', '{"legs": [{"km": 50, "minutes": 60, "to_seq": 2}, {"km": 50, "minutes": 60, "to_seq": -1}]}',
    now() - interval '3 hours', 900, 950, now() - interval '2 hours'),
   ('30000000-0000-0000-0000-0000000007c3', 'Yesterday''s run', '10000000-0000-0000-0000-0000000007c1', '20000000-0000-0000-0000-0000000007a2',
    now() - interval '1 day', 'completed', 'test', null,
@@ -166,7 +179,8 @@ insert into public.tasks (id, title, employee_id, vehicle_id, start_at, status, 
 insert into public.task_stops (id, task_id, seq, type, place_name, lat, lng) values
   ('50000000-0000-0000-0000-0000000007c1', '30000000-0000-0000-0000-0000000007c1', 1, 'pickup', 'Head office', 6.90, 79.85),
   ('50000000-0000-0000-0000-0000000007c2', '30000000-0000-0000-0000-0000000007c1', 2, 'drop', 'Kurunegala site', 7.48, 80.36),
-  ('50000000-0000-0000-0000-0000000007c3', '30000000-0000-0000-0000-0000000007c1', 3, 'drop', 'Kurunegala store', 7.49, 80.37);
+  ('50000000-0000-0000-0000-0000000007c3', '30000000-0000-0000-0000-0000000007c1', 3, 'drop', 'Kurunegala store', 7.49, 80.37),
+  ('50000000-0000-0000-0000-0000000007c4', '30000000-0000-0000-0000-0000000007c1', 4, 'visit', 'Wariyapola office', 7.62, 80.24);
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000007c1","role":"authenticated"}';
 select lives_ok($$ update public.tasks set status = 'in_progress', start_odometer_km = 1000
@@ -216,8 +230,22 @@ select throws_ok($$ update public.task_stops set arrival_flag = 'maybe' where id
   '23514', null, 'an unknown flag is refused');
 select lives_ok($$ update public.task_stops set status = 'arrived', arrived_at = now(), arrival_flag = 'override', arrival_distance_m = 42000
   where id = '50000000-0000-0000-0000-0000000007c3' $$, '"I''m here, the pin is wrong" 42 km away');
+select lives_ok($$ update public.task_stops set arrival_flag = 'ok', arrival_distance_m = 10 where id = '50000000-0000-0000-0000-0000000007c3' $$,
+  'a later write of the flag …');
+select is((select arrival_flag || '|' || arrival_distance_m from public.task_stops where id = '50000000-0000-0000-0000-0000000007c3'), 'override|42000',
+  '… does not change how Arrived was marked');
+select is(public.change_vehicle('20000000-0000-0000-0000-0000000007a3', now(), '70000000-0000-0000-0000-0000000007ca') ->> 'refused', 'task_running',
+  'no Change vehicle while a task runs (the task holds its vehicle)');
+select lives_ok($$ update public.task_stops set status = 'skipped', skip_reason = 'closed', skip_note = 'Gate locked', done_at = now()
+  where id = '50000000-0000-0000-0000-0000000007c4' $$, 'the driver skips the visit: Closed');
 
--- 13. Completed early: 3 km on the odometer for a 50 km plan -----------------------------------------
+reset role;
+select is((select actor || '|' || note from public.task_assignment_events where task_id = '30000000-0000-0000-0000-0000000007c1' and action = 'stop_skipped'),
+  'Saman Kumara|Stop 4 · Wariyapola office: Closed · Gate locked', 'the skip is a line in the task''s history, with the reason');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000007c1","role":"authenticated"}';
+
+-- 13. Completed early: 3 km on the odometer for a 50 km plan (the drive back to base not counted) ---------
 select lives_ok($$ update public.tasks set status = 'completed', end_odometer_km = 1003, completed_at = now()
   where id = '30000000-0000-0000-0000-0000000007c1' $$, 'Saman completes the task');
 reset role;
@@ -231,8 +259,15 @@ update public.task_stops set status = 'skipped', skip_reason = 'not_visited', do
   where id = '50000000-0000-0000-0000-0000000007c3';
 select is((public.office_reopen_task('30000000-0000-0000-0000-0000000007c3', 'Palitha', 'check')) ->> 'result', 'not_today',
   'a task completed yesterday is not reopened');
+-- Saman had finished work after the task.
+update public.duty_sessions set ended_at = now(), end_reason = 'driver' where id = '60000000-0000-0000-0000-0000000007c1';
 select is((public.office_reopen_task('30000000-0000-0000-0000-0000000007c1', 'Palitha', 'wrong reading')) ->> 'result', 'reopened',
   'today''s task is reopened');
+select is((select device_info ->> 'opened_by' from public.duty_sessions where employee_id = '10000000-0000-0000-0000-0000000007c1' and ended_at is null),
+  'server', 'the driver is on duty again for it (a session the server opened)');
+select is((select how || '|' || (from_at > now() - interval '1 minute')::text from public.vehicle_assignments
+           where employee_id = '10000000-0000-0000-0000-0000000007c1' and to_at is null), 'task_start|true',
+  'the vehicle is taken at the reopen, not back-dated to the first start');
 select is((select status || '|' || coalesce(completed_at::text, 'none') || '|' || coalesce(end_odometer_km::text, 'none') || '|' || coalesce(finish_flag::text, 'none')
            from public.tasks where id = '30000000-0000-0000-0000-0000000007c1'), 'in_progress|none|none|none', 'in progress again, end and flag cleared');
 select is((select status from public.task_stops where id = '50000000-0000-0000-0000-0000000007c3'), 'pending', 'the stop skipped at the finish is open again');

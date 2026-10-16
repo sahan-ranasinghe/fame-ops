@@ -34,6 +34,10 @@ Deno.test("a critical issue goes to the issues permission; an assigned issue to 
   assertEquals(recipientsFor("issue.assigned", people, { assignee: "fleet", actor: "fleet" }), []);
 });
 
+Deno.test("a skipped stop goes to the dispatchers (assign_tasks)", () => {
+  assertEquals(recipientsFor("task.stop_skipped", people), people.filter((p) => p.permissions.includes("assign_tasks")).map((p) => p.id));
+});
+
 Deno.test("a booking goes to the custodian, not when they booked it", () => {
   assertEquals(recipientsFor("vehicle.booked", people, { custodian: "staff", actor: "fleet" }), ["staff"]);
   assertEquals(recipientsFor("vehicle.booking_cancelled", people, { custodian: "staff", actor: "staff" }), []);
@@ -53,6 +57,7 @@ Deno.test("the Settings page shows a person the events their permissions can bri
     "request.decided",
     "task.declined",
     "task.not_accepted",
+    "task.stop_skipped",
     "vehicle.booked",
     "vehicle.booking_cancelled",
     "request.redecided",

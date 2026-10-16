@@ -336,7 +336,9 @@ as $$
 begin
   if new.status = 'in_progress' and old.status is distinct from 'in_progress'
      and exists (select 1 from public.employees e where e.id = new.employee_id and e.role = 'driver') then
-    perform public.take_vehicle(new.employee_id, new.vehicle_id, 'task_start', coalesce(new.started_at, now()),
+    -- A reopened task (completed → in progress) takes the vehicle now, not at its first start.
+    perform public.take_vehicle(new.employee_id, new.vehicle_id, 'task_start',
+                                case when old.status = 'completed' then now() else coalesce(new.started_at, now()) end,
                                 (select e.name from public.employees e where e.id = new.employee_id), new.id);
   end if;
   return null;
@@ -393,7 +395,9 @@ revoke all on function public.my_vehicle_choices() from public, anon;
 grant execute on function public.my_vehicle_choices() to authenticated;
 
 -- Change vehicle (or "No vehicle", p_vehicle null) with the phone's time; the same p_client twice
--- changes nothing. Answers the vehicle the driver holds afterwards.
+-- changes nothing. Only on duty and never while a task runs (the task holds its vehicle; the office's
+-- move follows the same rule): then nothing changes, and the answer says why. Answers the vehicle the
+-- driver holds afterwards.
 create function public.change_vehicle(p_vehicle uuid, p_at timestamptz, p_client uuid)
 returns jsonb
 language plpgsql
@@ -410,6 +414,12 @@ begin
   end if;
   if p_vehicle is not null and not exists (select 1 from public.vehicles v where v.id = p_vehicle and v.active) then
     raise exception 'That vehicle is not in use';
+  end if;
+  if not exists (select 1 from public.duty_sessions s where s.employee_id = v_me and s.ended_at is null) then
+    return jsonb_build_object('vehicle_id', (select e.current_vehicle_id from public.employees e where e.id = v_me), 'refused', 'off_duty');
+  end if;
+  if exists (select 1 from public.tasks t where t.employee_id = v_me and t.status = 'in_progress') then
+    return jsonb_build_object('vehicle_id', (select e.current_vehicle_id from public.employees e where e.id = v_me), 'refused', 'task_running');
   end if;
   perform public.take_vehicle(v_me, p_vehicle, 'change', p_at, v_name, null, p_client);
   return jsonb_build_object('vehicle_id', (select e.current_vehicle_id from public.employees e where e.id = v_me));
@@ -617,6 +627,11 @@ begin
   if current_user <> 'authenticated' then
     return new;
   end if;
+  -- How Arrived was marked stands once recorded (an override cannot be turned into ok later).
+  if old.arrival_flag is not null then
+    new.arrival_flag := old.arrival_flag;
+    new.arrival_distance_m := old.arrival_distance_m;
+  end if;
   if new.status = 'done' and old.status is distinct from 'done' and old.arrived_at is null then
     if new.arrived_at is null then
       raise exception 'Mark Arrived first: a stop is Done only after Arrived';
@@ -634,7 +649,7 @@ create trigger task_stops_driver_rules
 
 alter table public.tasks add column finish_flag jsonb;
 comment on column public.tasks.finish_flag is
-  'Set at completion when the odometer km is under 70 % of the planned km or the time under half the planned drive time: {kind: completed_early, odometer_km, planned_km, minutes, planned_minutes}. Cleared by a reopen.';
+  'Set at completion when the odometer km is under 70 % of the planned km or the time under half the planned drive time, both up to the last stop (not the drive back to base): {kind: completed_early, odometer_km, planned_km, minutes, planned_minutes}. Cleared by a reopen.';
 
 -- The check at completion, for every app version (the new app asks the driver first). Plans under
 -- 3 km are not checked (an odometer counts whole km).
@@ -644,8 +659,11 @@ language plpgsql
 set search_path = ''
 as $$
 declare
-  v_plan_km  numeric := nullif(new.plan_json ->> 'total_km', '')::numeric;
-  v_plan_min numeric := nullif(new.plan_json ->> 'total_drive_min', '')::numeric;
+  -- The plan up to the last stop: a driver completes there, before any drive back to base (to_seq -1).
+  v_plan_km  numeric := (select sum((l ->> 'km')::numeric) from jsonb_array_elements(coalesce(new.plan_json -> 'legs', '[]'::jsonb)) l
+                         where coalesce((l ->> 'to_seq')::integer, 0) <> -1);
+  v_plan_min numeric := (select sum((l ->> 'minutes')::numeric) from jsonb_array_elements(coalesce(new.plan_json -> 'legs', '[]'::jsonb)) l
+                         where coalesce((l ->> 'to_seq')::integer, 0) <> -1);
   v_km       numeric;
   v_min      numeric;
 begin
@@ -681,7 +699,7 @@ create trigger tasks_finish_check
 -- the finish open again. Answers {result: reopened | not_completed | not_today | driver_busy}.
 alter table public.task_assignment_events drop constraint task_assignment_events_action_check;
 alter table public.task_assignment_events add constraint task_assignment_events_action_check
-  check (action in ('assigned', 'accepted', 'declined', 'reassigned', 'cancelled', 'changed', 'reopened'));
+  check (action in ('assigned', 'accepted', 'declined', 'reassigned', 'cancelled', 'changed', 'reopened', 'stop_skipped'));
 
 create function public.office_reopen_task(p_task uuid, p_by text, p_reason text)
 returns jsonb
@@ -703,6 +721,10 @@ begin
     return jsonb_build_object('result', 'driver_busy');
   end if;
   update public.tasks set status = 'in_progress', completed_at = null, end_odometer_km = null where id = p_task;
+  -- A driver who had finished work is on duty again for the task (the server's session; the phone's own replaces it).
+  insert into public.duty_sessions (employee_id, vehicle_id, started_at, device_info)
+  select v_task.employee_id, v_task.vehicle_id, now(), jsonb_build_object('opened_by', 'server', 'task_id', p_task)
+  where not exists (select 1 from public.duty_sessions s where s.employee_id = v_task.employee_id and s.ended_at is null);
   update public.task_stops
   set status = 'pending', done_at = null, skip_reason = null, skip_note = null
   where task_id = p_task and status = 'skipped' and skip_reason = 'not_visited'
@@ -718,6 +740,51 @@ end;
 $$;
 revoke all on function public.office_reopen_task(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.office_reopen_task(uuid, text, text) to service_role;
+
+-- A stop the driver skips (with a reason; not the "not visited" ones at the finish): a line in the task's
+-- history and a web push to the dispatchers (event task.stop_skipped, assign_tasks).
+create function public.task_stops_skipped()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_task   record;
+  v_n      integer;
+  v_reason text := case new.skip_reason when 'closed' then 'Closed' when 'nobody_there' then 'Nobody there'
+                                        when 'not_needed' then 'Not needed' else 'Other' end;
+  v_line   text;
+begin
+  if coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') <> 'authenticated'
+     or new.status <> 'skipped' or old.status = 'skipped' or coalesce(new.skip_reason, '') = 'not_visited' then
+    return null;
+  end if;
+  select t.id, t.title, t.employee_id, t.vehicle_id into v_task from public.tasks t where t.id = new.task_id;
+  select count(*) into v_n from public.task_stops s where s.task_id = new.task_id and s.status <> 'removed' and s.seq <= new.seq;
+  v_line := 'Stop ' || v_n || ' · ' || new.place_name || ': ' || v_reason || coalesce(' · ' || nullif(new.skip_note, ''), '');
+  insert into public.task_assignment_events (task_id, action, employee_id, vehicle_id, actor, note)
+  values (v_task.id, 'stop_skipped', v_task.employee_id, v_task.vehicle_id,
+          (select e.name from public.employees e where e.id = v_task.employee_id), v_line);
+  perform public.queue_notification(
+    'task.stop_skipped',
+    jsonb_build_object(
+      'title', 'Stop skipped · ' || v_task.title,
+      'body', coalesce((select e.name from public.employees e where e.id = v_task.employee_id), 'The driver') || ' · ' || v_line,
+      'url', '/tasks?task=' || v_task.id::text,
+      'tag', 'task:' || v_task.id::text || ':skip:' || new.id::text,
+      'task_id', v_task.id),
+    (select coalesce(array_agg(e.id), '{}'::uuid[]) from public.employees e
+     where e.active and e.role in ('admin', 'fleet_admin', 'office', 'staff', 'viewer')
+       and 'assign_tasks' = any(e.permissions)));
+  return null;
+end;
+$$;
+revoke all on function public.task_stops_skipped() from public, anon, authenticated;
+
+create trigger task_stops_skipped
+  after update of status on public.task_stops
+  for each row execute function public.task_stops_skipped();
 
 -- 6. Pushes, the heartbeat's answer, the issue kinds ----------------------------------------------
 alter table public.push_log drop constraint push_log_kind_check;

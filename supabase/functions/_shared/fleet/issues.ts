@@ -488,8 +488,8 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     ]);
     const holders = new Map(unwrap(holdersRes, "vehicle holders").map((a) => [a.vehicle_id, a.employee_id]));
     const taken = unwrap(takenRes, "vehicle hand-overs");
+    // Today's tasks still to start (the conflict stands past the leave-by too, until the task starts, changes or the day ends).
     for (const t of unwrap(laterRes, "tasks")) {
-      if (new Date(t.leave_by ?? t.start_at).getTime() < now.getTime()) continue;
       const holder = holders.get(t.vehicle_id);
       const lost = taken.filter((a) =>
         a.employee_id === t.employee_id && a.vehicle_id === t.vehicle_id
@@ -585,10 +585,15 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     for (const e of drivers) {
       const count = stops.get(e.id) ?? 0;
       const open = sessions.find((x) => x.employee_id === e.id && x.ended_at === null);
-      const lastFix = latest.get(e.id)?.recorded_at ?? null;
+      const pos = latest.get(e.id);
+      const lastFix = pos?.recorded_at ?? null;
       const since = open ? (lastFix && lastFix > open.started_at ? lastFix : open.started_at) : null;
       const noFixMin = since ? Math.floor((now.getTime() - new Date(since).getTime()) / 60000) : 0;
-      const noFix = open !== undefined && noFixMin >= NO_FIX_MIN;
+      // A fresh heartbeat that says the phone has a recent fix means the points are only waiting (queued or
+      // refused), not missing: that is not "no GPS fix".
+      const beatFresh = pos?.hb_at != null && now.getTime() - new Date(pos.hb_at).getTime() < 3 * 60000;
+      const phoneHasFix = beatFresh && pos?.hb_fix_age_s != null && pos.hb_fix_age_s < NO_FIX_MIN * 60;
+      const noFix = open !== undefined && noFixMin >= NO_FIX_MIN && !phoneHasFix;
       if (count < APP_STOPS_PER_DAY && !noFix) continue;
       const device = (sessions.find((x) => x.employee_id === e.id)?.device_info ?? {}) as { brand?: string; model?: string };
       const phone = [device.brand, device.model].filter(Boolean).join(" ");

@@ -303,6 +303,9 @@ async function main() {
     'the arrival nudge\'s time reached the stop through the app\'s own queue, before the driver\'s tap', { auto: stopRows[0]?.auto_detected_at, tap: stopRows[0]?.arrived_at });
   check(stopRows.map((s) => s.status).join(',') === 'done,skipped,done,removed', 'the stops are done, skipped, done; the removed one stays removed', stopRows.map((s) => s.status));
   check(stopRows[0]?.arrived_at !== null && stopRows[1]?.skip_reason === 'closed' && stopRows[1]?.skip_note === 'Shutter down', 'the pickup keeps its arrival time; the skipped stop keeps the reason and the note', stopRows.slice(0, 2));
+  // Phase 7: the driver's skip (with a reason) is a line in the task's history (and a push to the dispatchers).
+  const skipLine = must(await client.from('task_assignment_events').select('action, note').eq('task_id', task1).eq('action', 'stop_skipped'), 'history');
+  check(skipLine.length === 1 && skipLine[0]?.note === 'Stop 2 · Kurunegala hardware store: Closed · Shutter down', 'the skipped stop is in the task\'s history, which the driver reads', skipLine);
 
   console.log('\n== Accept and decline ==');
   const task5 = await makeTask(`Accept twice ${run}`, a.row.id, van.id, 400);

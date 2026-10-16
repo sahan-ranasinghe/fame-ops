@@ -76,12 +76,15 @@ export function DutyHeader() {
       </View>
       {vehicle?.make_model && <Txt variant="muted" color="#b9bec4">{vehicle.make_model}</Txt>}
       <View style={styles.buttons}>
-        <Button
-          kind="dark"
-          label={t('vehicle.change')}
-          onPress={() => router.push({ pathname: '/vehicle', params: { mode: 'change' } })}
-          style={styles.ghost}
-        />
+        {/* The task holds its vehicle: no change while it runs (the server refuses it too, like the office's move). */}
+        {!taskRunning && (
+          <Button
+            kind="dark"
+            label={t('vehicle.change')}
+            onPress={() => router.push({ pathname: '/vehicle', params: { mode: 'change' } })}
+            style={styles.ghost}
+          />
+        )}
         {!taskRunning && <Button kind="dark" label={t('duty.finishWork')} busy={busy} onPress={confirmFinish} style={styles.ghost} />}
       </View>
       {(taskRunning || taskFirst) && <Txt variant="muted" color="#b9bec4">{t('duty.finishTaskFirst')}</Txt>}

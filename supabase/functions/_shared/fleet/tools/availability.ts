@@ -118,7 +118,9 @@ export const availability = tool({
         : regular
         ? { reg_no: regular.reg_no, source: "regular" as const }
         : undefined;
-      return { ...driverAvailability(d, w, today), vehicle };
+      const row = driverAvailability(d, w, today);
+      // Phase 7: `duty` names the same thing as `state` (on_task | on_duty | off_duty), in the words of live_drivers.
+      return { ...row, duty: row.state, vehicle };
     }));
 
     const vehicles = await availabilityFor(db, refs, {

@@ -23,9 +23,13 @@ type Mode = 'start' | 'change';
 /** The vehicle picked: an id, null = "No vehicle today", undefined = nothing picked yet. */
 type Picked = string | null | undefined;
 
-/** The vehicle to preselect: the one I hold now, else my last one, else my regular one. */
+/**
+ * The vehicle to preselect: the one I hold now, else my last one, else my regular one; never one another driver
+ * holds now (one tap on Start would take it from them; picking it stays possible).
+ */
 function preselect(list: VehicleChoice[]): Picked {
-  return (list.find((v) => v.mine_now) ?? list.find((v) => v.my_last) ?? list.find((v) => v.my_regular))?.id;
+  const free = (v: VehicleChoice) => !v.held_by;
+  return (list.find((v) => v.mine_now) ?? list.find((v) => v.my_last && free(v)) ?? list.find((v) => v.my_regular && free(v)))?.id;
 }
 
 export default function VehicleScreen() {
@@ -56,7 +60,7 @@ export default function VehicleScreen() {
 
   useEffect(() => {
     void load().then((rows) => {
-      const list = rows ?? offlineChoices(vehicles, current);
+      const list = rows ?? offlineChoices(vehicles, current, app.workVehicle?.id ?? null);
       setPicked((old) => (old === undefined ? preselect(list) : old));
     });
     // Once, when the screen opens; pull to refresh loads again.
@@ -71,7 +75,7 @@ export default function VehicleScreen() {
 
   if (!me) return <Redirect href="/login" />;
 
-  const list = choices ?? offlineChoices(vehicles, current);
+  const list = choices ?? offlineChoices(vehicles, current, app.workVehicle?.id ?? null);
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/'));
 
   async function confirm() {
@@ -188,7 +192,8 @@ const TAG = {
 } as const;
 
 /** The saved vehicles as choices (no connection): who holds each is not known, mine is the phone's own record. */
-function offlineChoices(vehicles: Vehicle[], current: string | null): VehicleChoice[] {
+/** Without a connection: the vehicles saved on the phone; the last vehicle held is known on the phone too. */
+function offlineChoices(vehicles: Vehicle[], current: string | null, last: string | null): VehicleChoice[] {
   return vehicles.map((v) => ({
     id: v.id,
     reg_no: v.reg_no,
@@ -200,7 +205,7 @@ function offlineChoices(vehicles: Vehicle[], current: string | null): VehicleCho
     held_by: null,
     held_since: null,
     mine_now: v.id === current,
-    my_last: false,
+    my_last: v.id === last,
     my_regular: false,
   }));
 }

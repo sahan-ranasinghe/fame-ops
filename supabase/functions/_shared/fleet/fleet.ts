@@ -123,7 +123,7 @@ export type ShareState = "sharing" | "stale" | "not_sharing";
 
 export interface Sharing {
   state: ShareState;
-  /** "Live · 2 min", "Last seen 48 min", "Off duty" */
+  /** "Live · 2 min", "Last seen 48 min", "Not sharing" (the old field, kept as it was for the artifact; status_text says "Off duty") */
   text: string;
   minutes: number | null;
 }
@@ -131,7 +131,7 @@ export interface Sharing {
 /** Sharing = last point under 15 minutes old; stale = older; not sharing = switched off. */
 export function sharing(latest: Latest | undefined, now: Date): Sharing {
   const minutes = latest?.recorded_at ? minutesSince(latest.recorded_at, now) : null;
-  if (!latest || !latest.sharing) return { state: "not_sharing", text: "Off duty", minutes };
+  if (!latest || !latest.sharing) return { state: "not_sharing", text: "Not sharing", minutes };
   if (!latest.recorded_at || minutes === null) return { state: "stale", text: "Sharing · no location yet", minutes: null };
   if (minutes < STALE_AFTER_MINUTES) return { state: "sharing", text: `Live · ${ago(latest.recorded_at, now)}`, minutes };
   return { state: "stale", text: `Last seen ${ago(latest.recorded_at, now)}`, minutes };

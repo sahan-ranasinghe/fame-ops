@@ -1532,128 +1532,8 @@ tool("update_vehicle", {"reg_no": "WP PH-2087", "custodian": None})
 sink.shutdown()
 
 
-if CHANNEL == "api":
-    print("\n== 7. The same answers through office-api as through the connector ==")
-    shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
-                            env={**os.environ, "CHANNEL": "api", "API_TOKEN": API_TOKEN}, capture_output=True, text=True)
-    check(shapes.returncode == 0, "every read tool's JSON through office-api has the same shape as the connector's contract (scripts/tool-shapes.json)",
-          "\n".join(l for l in shapes.stdout.splitlines() if "FAIL" in l or "missing:" in l or "new:" in l)[:1500] + shapes.stderr[-300:])
-
-    print("\n== 8. Roles: a staff member on office-api ==")
-    staff_email = f"staff.{uuid.uuid4().hex[:6]}@fame.test"
-    created = tool("create_office_user", {"name": "Test Staff", "email": staff_email, "permissions": ["request"]})
-    check(created["created"]["role"] == "staff" and created["set_password_link"].startswith("http") and "token" in created["set_password_link"],
-          "create_office_user returns a one-time set-password link (no password typed anywhere)", str(created)[:200])
-    # The person would open the link; the test sets the password through the admin API instead.
-    staff_uid = psql(f"select auth_user_id from employees where email = '{staff_email}'")
-    staff_pw = "St4ff-" + uuid.uuid4().hex[:10]
-    code, _ = http("PUT", f"{API}/auth/v1/admin/users/{staff_uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": staff_pw})
-    staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
-    code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
-    check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["request"]
-          and sorted(me.get("tools", [])) == ["create_request", "find_project", "get_settings", "list_places", "list_requests", "my_notification_settings",
-                                             "place_detail", "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
-                                             "set_my_notification_settings", "task_detail", "update_request"]
-          and me.get("map") == {"package": "open", "places": False},
-          "a requester-only person signs in without a second step and sees only the request tools (and the map: open with no keys)", f"{code} {str(me)[:200]}")
-    code, body = api_call(staff_token, "task_board", {})
-    check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
-    code, body = api_call(staff_token, "get_settings", {})
-    check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True, "a requester reads the fleet settings (the request form needs the self-drive switch)", f"{code} {str(body)[:160]}")
-    code, body = api_call(staff_token, "my_notification_settings", {})
-    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "vehicle.booked", "vehicle.booking_cancelled", "request.redecided", "booking.changed"],
-          "a requester's notification settings hold their request events and the three booking events", f"{code} {str(body)[:200]}")
-    code, body = api_call(staff_token, "list_requests", {"status": "all"})
-    check(code == 200 and body["result"]["count"] == 0, "staff see none of the office's requests", f"{code} {str(body)[:160]}")
-    code, body = api_call(staff_token, "create_request", {"requested_by": "Somebody Else", "date": day(3), "time": "09:00", "route_to": "Galle", "pax": 2})
-    check(code == 200 and body["result"]["request"]["requested_by"] == "Test Staff" and body["result"]["next"].startswith("Sent to the fleet admin")
-          and body["result"]["request"]["timeline"]["sent"] and psql(f"select requested_by_user_id = '{staff_uid}' from vehicle_requests where requested_by_name = 'Test Staff'") == "t",
-          "a staff request is always in their own name, says it was sent to the fleet admin, and records the account that sent it", f"{code} {str(body)[:200]}")
-    code, body = api_call(staff_token, "list_requests", {"status": "all"})
-    check(code == 200 and body["result"]["count"] == 1, "and they see that one request", f"{code} {str(body)[:160]}")
-    code, body = api_call(staff_token, "update_office_user", {"email": staff_email, "permissions": ["view", "request", "users"]})
-    check(code == 403 and "users" in str(body.get("needs", [])), "they cannot give themselves permissions (403 names what it needs)", f"{code} {body}")
-    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request"]})
-    code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
-    check(code == 200 and me.get("permissions") == ["view", "request"] and "live_drivers" in me.get("tools", []) and "task_board" not in me.get("tools", []),
-          "given view by the admin: the next /me lists the fleet's lists, not the tasks board", f"{code} {str(me)[:200]}")
-    code, body = api_call(staff_token, "fleet_overview", {})
-    check(code == 200 and body["result"]["needs_attention"] == [] and body["result"]["reminders"]["count"] == 0 and body["result"]["vehicles"]["total"] == 3,
-          "with view the overview has the counts and no needs-attention items", f"{code} {str(body)[:200]}")
-    code, body = api_call(staff_token, "task_board", {})
-    check(code == 403, "view alone cannot see the task board (403)", f"{code} {str(body)[:120]}")
-    code, body = api_call(staff_token, "list_requests", {"status": "all"})
-    check(code == 200 and body["result"]["count"] == 1, "with view they still see only their own requests", f"{code} {str(body)[:160]}")
-    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "approve"]})
-    code, body = api_call(staff_token, "list_requests", {"status": "all"})
-    check(code == 200 and body["result"]["count"] > 1, "with approve they see the whole requests queue", f"{code} {str(body)[:160]}")
-    code, body = api_call(staff_token, "task_detail", {"task_id": T4})
-    check(code == 200 and body["result"]["from_request"]["id"] == R1, "with approve they open a request's task", f"{code} {str(body)[:160]}")
-    code, body = api_call(staff_token, "task_detail", {"task_id": T1})
-    check(code == 409 and "vehicle request" in body.get("error", ""), "but not a task that came from no request (409)", f"{code} {body}")
-    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "assign_tasks"]})
-    code, body = api_call(staff_token, "task_board", {})
-    check(code == 200, "with assign_tasks the task board answers (200)", f"{code} {str(body)[:120]}")
-    code, body = api_call(staff_token, "task_detail", {"task_id": T1})
-    check(code == 200, "and any task opens", f"{code} {str(body)[:120]}")
-    code, body = api_call(staff_token, "fleet_overview", {})
-    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early") for a in body["result"]["needs_attention"]),
-          "with assign_tasks the overview's needs-attention holds task items only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
-    code, body = api_call(staff_token, "mileage_summary", {})
-    check(code == 403, "mileage needs the vehicles permission (403)", f"{code} {str(body)[:120]}")
-    code, body = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})
-    check(code == 200 and body["result"]["leave_by_source"] == "manual", "with assign_tasks they can plan a task", f"{code} {str(body)[:160]}")
-    code, body = api_call(staff_token, "update_settings", {"key": "buffer_min", "value": 10})
-    check(code == 403 and "users" in str(body.get("needs", [])), "but not change the fleet settings (403, needs users)", f"{code} {body}")
-    code, body = api_call(staff_token, "get_settings", {})
-    check(code == 200 and body["result"]["settings"]["buffer_min"] == 15, "get_settings answers a dispatcher (read-only)", f"{code} {str(body)[:160]}")
-    code, body = api_call(staff_token, "list_issues", {})
-    check(code == 200 and all(i["scope"] == "task" for i in body["result"]["issues"]) and body["result"]["count"] >= 1,
-          "with assign_tasks list_issues shows the task issues only", f"{code} {str(body['result'].get('issues'))[:200]}")
-    code, body = api_call(staff_token, "update_issue", {"id": body["result"]["issues"][0]["id"], "status": "dismissed"})
-    check(code == 403 and "issues" in str(body.get("needs", [])), "but cannot change one (403, needs issues)", f"{code} {body}")
-    code, body = api_call(staff_token, "fleet_overview", {})
-    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early") for a in body["result"]["needs_attention"]),
-          "and the overview's needs-attention holds task issues only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
-    tool("update_office_user", {"email": staff_email, "permissions": ["request"]})
-    code, body = api_call(staff_token, "get_settings", {})
-    code2, body2 = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})
-    check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True and code2 == 403,
-          "a requester reads the settings (the request form needs the self-drive switch) but cannot plan a task (403)", f"{code} {code2}")
-    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "assign_tasks"]})
-    code, body = api_call(API_TOKEN, "update_office_user", {"email": admin_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
-    check(code == 409 and "own users permission" in body.get("error", ""), "an admin cannot remove their own users permission (409)", f"{code} {body}")
-    off = tool("set_office_user_active", {"email": staff_email, "active": False})
-    code, body = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
-    check(off["active"] is False and code in (401, 403), "switched off: the same session is refused at once (the sign-in is banned)", f"{code} {body}")
-    key = tool("create_office_key", {"email": admin_email, "label": "test"})
-    # The function builds the URL from its own SUPABASE_URL; locally that is the docker-internal host, so point it at the stack.
-    key_url = API + "/functions/v1" + key["connector_url"].split("/functions/v1", 1)[1]
-    check("/office-mcp/" in key_url and key_url.endswith("/mcp"), "the connector URL has the connector's shape", key["connector_url"])
-    def mcp_tools_list(url):
-        code, lst = http("POST", url,
-                         {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-06-18"},
-                         {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}, raw=True)
-        text = lst.decode()
-        if text.lstrip().startswith(("event:", "data:")):
-            text = [l[6:] for l in text.replace("\r", "").split("\n") if l.startswith("data: ")][-1]
-        try:
-            message = json.loads(text)
-        except json.JSONDecodeError:
-            return code, [], text[:200]
-        tools = message.get("result", {}).get("tools", []) if isinstance(message, dict) else []
-        return code, [t["name"] for t in tools], text[:200]
-    code, names, raw_text = mcp_tools_list(key_url)
-    check(code == 200 and "create_office_user" in names, "a personal connector key opens the connector as that person (admin tools listed)", f"{code} {names[:3] or raw_text}")
-    row = psql("select actor_name || '|' || channel from office_audit where tool = 'create_office_key' order by id desc limit 1")
-    check(row == "Test Admin|web", "the key was made by Test Admin through the web channel (audit)", row)
-    code, _ = api_call(API_TOKEN, "revoke_office_key", {"key_id": key["key_id"]})
-    code, names, raw_text = mcp_tools_list(key_url)
-    check(code == 404, "a revoked key answers 404 like any wrong key", f"{code} {raw_text}")
-
-
 # ---------------------------------------------------------------------------
-print("\n== 7. Phase 7, Part 1: a driver's day (clock in, hand-over, move, clock out, duty log, arrival and finish rules) ==")
+print("\n== 6d. Phase 7, Part 1: a driver's day (clock in, hand-over, move, clock out, duty log, arrival and finish rules) ==")
 PIN7A, PIN7B = "614203", "730518"
 tool("create_driver", {"name": "Ruwan Jaya", "code": "E171", "username": "ruwan.j", "pin": PIN7A, "phone": "0771717171"})
 tool("create_driver", {"name": "Saman Kumara", "code": "E172", "username": "saman.k", "pin": PIN7B, "phone": "0771727272"})
@@ -1796,6 +1676,126 @@ check(jobs["clocked_out"] >= 1 and end == f"auto|{iso(today - dt.timedelta(days=
 tool("update_settings", {"key": "duty_cutoff", "value": ""})
 check(psql("select count(*) from employees e where e.current_vehicle_id is distinct from (select a.vehicle_id from vehicle_assignments a where a.employee_id = e.id and a.to_at is null)") == "0",
       "every employee's current_vehicle_id equals their open vehicle row")
+
+if CHANNEL == "api":
+    print("\n== 7. The same answers through office-api as through the connector ==")
+    shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
+                            env={**os.environ, "CHANNEL": "api", "API_TOKEN": API_TOKEN}, capture_output=True, text=True)
+    check(shapes.returncode == 0, "every read tool's JSON through office-api has the same shape as the connector's contract (scripts/tool-shapes.json)",
+          "\n".join(l for l in shapes.stdout.splitlines() if "FAIL" in l or "missing:" in l or "new:" in l)[:1500] + shapes.stderr[-300:])
+
+    print("\n== 8. Roles: a staff member on office-api ==")
+    staff_email = f"staff.{uuid.uuid4().hex[:6]}@fame.test"
+    created = tool("create_office_user", {"name": "Test Staff", "email": staff_email, "permissions": ["request"]})
+    check(created["created"]["role"] == "staff" and created["set_password_link"].startswith("http") and "token" in created["set_password_link"],
+          "create_office_user returns a one-time set-password link (no password typed anywhere)", str(created)[:200])
+    # The person would open the link; the test sets the password through the admin API instead.
+    staff_uid = psql(f"select auth_user_id from employees where email = '{staff_email}'")
+    staff_pw = "St4ff-" + uuid.uuid4().hex[:10]
+    code, _ = http("PUT", f"{API}/auth/v1/admin/users/{staff_uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": staff_pw})
+    staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
+    code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
+    check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["request"]
+          and sorted(me.get("tools", [])) == ["create_request", "find_project", "get_settings", "list_places", "list_requests", "my_notification_settings",
+                                             "place_detail", "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
+                                             "set_my_notification_settings", "task_detail", "update_request"]
+          and me.get("map") == {"package": "open", "places": False},
+          "a requester-only person signs in without a second step and sees only the request tools (and the map: open with no keys)", f"{code} {str(me)[:200]}")
+    code, body = api_call(staff_token, "task_board", {})
+    check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
+    code, body = api_call(staff_token, "get_settings", {})
+    check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True, "a requester reads the fleet settings (the request form needs the self-drive switch)", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "my_notification_settings", {})
+    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "vehicle.booked", "vehicle.booking_cancelled", "request.redecided", "booking.changed"],
+          "a requester's notification settings hold their request events and the three booking events", f"{code} {str(body)[:200]}")
+    code, body = api_call(staff_token, "list_requests", {"status": "all"})
+    check(code == 200 and body["result"]["count"] == 0, "staff see none of the office's requests", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "create_request", {"requested_by": "Somebody Else", "date": day(3), "time": "09:00", "route_to": "Galle", "pax": 2})
+    check(code == 200 and body["result"]["request"]["requested_by"] == "Test Staff" and body["result"]["next"].startswith("Sent to the fleet admin")
+          and body["result"]["request"]["timeline"]["sent"] and psql(f"select requested_by_user_id = '{staff_uid}' from vehicle_requests where requested_by_name = 'Test Staff'") == "t",
+          "a staff request is always in their own name, says it was sent to the fleet admin, and records the account that sent it", f"{code} {str(body)[:200]}")
+    code, body = api_call(staff_token, "list_requests", {"status": "all"})
+    check(code == 200 and body["result"]["count"] == 1, "and they see that one request", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "update_office_user", {"email": staff_email, "permissions": ["view", "request", "users"]})
+    check(code == 403 and "users" in str(body.get("needs", [])), "they cannot give themselves permissions (403 names what it needs)", f"{code} {body}")
+    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request"]})
+    code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
+    check(code == 200 and me.get("permissions") == ["view", "request"] and "live_drivers" in me.get("tools", []) and "task_board" not in me.get("tools", []),
+          "given view by the admin: the next /me lists the fleet's lists, not the tasks board", f"{code} {str(me)[:200]}")
+    code, body = api_call(staff_token, "fleet_overview", {})
+    check(code == 200 and body["result"]["needs_attention"] == [] and body["result"]["reminders"]["count"] == 0 and body["result"]["vehicles"]["total"] == 3,
+          "with view the overview has the counts and no needs-attention items", f"{code} {str(body)[:200]}")
+    code, body = api_call(staff_token, "task_board", {})
+    check(code == 403, "view alone cannot see the task board (403)", f"{code} {str(body)[:120]}")
+    code, body = api_call(staff_token, "list_requests", {"status": "all"})
+    check(code == 200 and body["result"]["count"] == 1, "with view they still see only their own requests", f"{code} {str(body)[:160]}")
+    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "approve"]})
+    code, body = api_call(staff_token, "list_requests", {"status": "all"})
+    check(code == 200 and body["result"]["count"] > 1, "with approve they see the whole requests queue", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "task_detail", {"task_id": T4})
+    check(code == 200 and body["result"]["from_request"]["id"] == R1, "with approve they open a request's task", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "task_detail", {"task_id": T1})
+    check(code == 409 and "vehicle request" in body.get("error", ""), "but not a task that came from no request (409)", f"{code} {body}")
+    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "assign_tasks"]})
+    code, body = api_call(staff_token, "task_board", {})
+    check(code == 200, "with assign_tasks the task board answers (200)", f"{code} {str(body)[:120]}")
+    code, body = api_call(staff_token, "task_detail", {"task_id": T1})
+    check(code == 200, "and any task opens", f"{code} {str(body)[:120]}")
+    code, body = api_call(staff_token, "fleet_overview", {})
+    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early") for a in body["result"]["needs_attention"]),
+          "with assign_tasks the overview's needs-attention holds task items only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
+    code, body = api_call(staff_token, "mileage_summary", {})
+    check(code == 403, "mileage needs the vehicles permission (403)", f"{code} {str(body)[:120]}")
+    code, body = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})
+    check(code == 200 and body["result"]["leave_by_source"] == "manual", "with assign_tasks they can plan a task", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "update_settings", {"key": "buffer_min", "value": 10})
+    check(code == 403 and "users" in str(body.get("needs", [])), "but not change the fleet settings (403, needs users)", f"{code} {body}")
+    code, body = api_call(staff_token, "get_settings", {})
+    check(code == 200 and body["result"]["settings"]["buffer_min"] == 15, "get_settings answers a dispatcher (read-only)", f"{code} {str(body)[:160]}")
+    code, body = api_call(staff_token, "list_issues", {})
+    check(code == 200 and all(i["scope"] == "task" for i in body["result"]["issues"]) and body["result"]["count"] >= 1,
+          "with assign_tasks list_issues shows the task issues only", f"{code} {str(body['result'].get('issues'))[:200]}")
+    code, body = api_call(staff_token, "update_issue", {"id": body["result"]["issues"][0]["id"], "status": "dismissed"})
+    check(code == 403 and "issues" in str(body.get("needs", [])), "but cannot change one (403, needs issues)", f"{code} {body}")
+    code, body = api_call(staff_token, "fleet_overview", {})
+    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early") for a in body["result"]["needs_attention"]),
+          "and the overview's needs-attention holds task issues only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
+    tool("update_office_user", {"email": staff_email, "permissions": ["request"]})
+    code, body = api_call(staff_token, "get_settings", {})
+    code2, body2 = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})
+    check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True and code2 == 403,
+          "a requester reads the settings (the request form needs the self-drive switch) but cannot plan a task (403)", f"{code} {code2}")
+    tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "assign_tasks"]})
+    code, body = api_call(API_TOKEN, "update_office_user", {"email": admin_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
+    check(code == 409 and "own users permission" in body.get("error", ""), "an admin cannot remove their own users permission (409)", f"{code} {body}")
+    off = tool("set_office_user_active", {"email": staff_email, "active": False})
+    code, body = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
+    check(off["active"] is False and code in (401, 403), "switched off: the same session is refused at once (the sign-in is banned)", f"{code} {body}")
+    key = tool("create_office_key", {"email": admin_email, "label": "test"})
+    # The function builds the URL from its own SUPABASE_URL; locally that is the docker-internal host, so point it at the stack.
+    key_url = API + "/functions/v1" + key["connector_url"].split("/functions/v1", 1)[1]
+    check("/office-mcp/" in key_url and key_url.endswith("/mcp"), "the connector URL has the connector's shape", key["connector_url"])
+    def mcp_tools_list(url):
+        code, lst = http("POST", url,
+                         {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-06-18"},
+                         {"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}, raw=True)
+        text = lst.decode()
+        if text.lstrip().startswith(("event:", "data:")):
+            text = [l[6:] for l in text.replace("\r", "").split("\n") if l.startswith("data: ")][-1]
+        try:
+            message = json.loads(text)
+        except json.JSONDecodeError:
+            return code, [], text[:200]
+        tools = message.get("result", {}).get("tools", []) if isinstance(message, dict) else []
+        return code, [t["name"] for t in tools], text[:200]
+    code, names, raw_text = mcp_tools_list(key_url)
+    check(code == 200 and "create_office_user" in names, "a personal connector key opens the connector as that person (admin tools listed)", f"{code} {names[:3] or raw_text}")
+    row = psql("select actor_name || '|' || channel from office_audit where tool = 'create_office_key' order by id desc limit 1")
+    check(row == "Test Admin|web", "the key was made by Test Admin through the web channel (audit)", row)
+    code, _ = api_call(API_TOKEN, "revoke_office_key", {"key_id": key["key_id"]})
+    code, names, raw_text = mcp_tools_list(key_url)
+    check(code == 404, "a revoked key answers 404 like any wrong key", f"{code} {raw_text}")
+
 
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:

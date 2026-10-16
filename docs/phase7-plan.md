@@ -1162,6 +1162,24 @@ behaviour is the same):
   and on the server.
 - `list_vehicles` gains `held_by` / `held_since` (the Move to vehicle page and, in Part 2, the assign forms).
 - `duty_log`: up to 62 days; GPS km only for ranges of up to 7 days (the odometer km of the tasks always).
+- **Change vehicle needs duty and no running task** (a new default, from the checkpoint review): the app offers it
+  only on duty with no task in progress, and the server answers `refused: off_duty | task_running` and changes
+  nothing otherwise (a change queued offline after a clock-out cannot take a vehicle from someone on duty; the task
+  keeps its vehicle, as the office's move already does). An older app's bare vehicle pick still goes through.
+- **How Arrived was marked stands**: once a stop has its `arrival_flag`, a later driver write cannot change it.
+- **Completed early** compares with the plan up to the last stop: the drive back to base (the leg to `-1`) is left
+  out, since the driver completes at the last stop.
+- **Skip a stop** (§18): a line in the task's history (`task_assignment_events` action `stop_skipped`, "Stop 2 ·
+  Kurunegala site: Closed · note") and a web push to the dispatchers (event `task.stop_skipped`, assign_tasks; the
+  assigner alone with item 19), both from a trigger, so every app version.
+- **Reopen** takes the vehicle at the reopen (not back-dated) and, when the driver had finished work, opens a duty
+  session for the task (the server's; the phone's own replaces it).
+- **App stopped, no fix**: a fresh heartbeat that reports a recent fix means the points are only waiting, so that is
+  not "no GPS fix". **Vehicle conflict** stands past the leave-by, until the task starts or changes or the day ends.
+- The old `location` field keeps "Not sharing" (the Teams artifact reads it); `status_text` says "Off duty".
+  `availability` rows carry `duty` (the same as `state`) and `vehicle`.
+- **Off duty, the logs still have a vehicle**: Finish work gives the vehicle up, so manual odometer readings, fuel
+  and problem reports off duty go to the vehicle held last (kept on the phone).
 
 ## Sinhala
 

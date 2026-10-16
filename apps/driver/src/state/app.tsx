@@ -622,15 +622,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!current) return 'cancelled';
     // The session picks the vehicle up from the saved me (lib/location.ts startSharing).
     saveMe({ ...current, current_vehicle_id: vehicleId });
-    if (vehicleId) setLastVehicleId(vehicleId);
     const outcome = { result: 'no_permission' as StartResult };
     const went = await requireLocation('sharing', async () => {
       outcome.result = await startSharing(serviceTexts);
     });
-    if (!went) return 'cancelled';
+    if (!went || outcome.result !== 'on') {
+      // Not on duty after all (Location stayed off, or no permission): the phone holds what it held before.
+      const now = meRef.current;
+      if (now) saveMe({ ...now, current_vehicle_id: current.current_vehicle_id });
+      if (!went) return 'cancelled';
+    }
     setSharingState(outcome.result === 'on');
     setDutySince(getSharing()?.startedAt ?? null);
     if (outcome.result === 'on') {
+      if (vehicleId) setLastVehicleId(vehicleId);
       setVehicleTaken(null);
       setDutyEnded(null);
       remove(KEYS.dutyEnded);

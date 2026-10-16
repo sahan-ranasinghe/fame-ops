@@ -22,6 +22,7 @@ export type NotifyEvent =
   | "request.decided"
   | "task.declined"
   | "task.not_accepted"
+  | "task.stop_skipped"
   | "issue.opened"
   | "issue.assigned"
   | "vehicle.booked"
@@ -59,6 +60,13 @@ export const EVENTS: readonly EventInfo[] = [
     label: "A task is not accepted in time",
     text: "The driver has not accepted a task that leaves soon",
     needs: ["approve", "assign_tasks"],
+  },
+  // Phase 7: written in SQL by the trigger task_stops_skipped (a driver's skip, with the reason).
+  {
+    event: "task.stop_skipped",
+    label: "A driver skips a stop",
+    text: "A driver skips a stop of a task, with the reason",
+    needs: ["assign_tasks"],
   },
   {
     event: "issue.opened",
@@ -138,6 +146,9 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
     case "task.declined":
     case "task.not_accepted":
       ids = holders("approve", "assign_tasks");
+      break;
+    case "task.stop_skipped":
+      ids = holders("assign_tasks");
       break;
     case "issue.opened":
       ids = holders("issues");

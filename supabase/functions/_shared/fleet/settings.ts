@@ -32,7 +32,7 @@ export interface Settings {
   self_drive_allowed: boolean;
   /** Snap to roads under the open package: none or osrm (secret OSRM_URL); under the google package Google's Roads API is used (google_caps.roads; 0 = off) and this is not read. */
   map_matching: { provider: MapMatchingProvider };
-  /** The driver app's "At work? Switch On duty" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
+  /** The driver app's "At work? Start work" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
   shift_start: string;
   shift_days: number[];
   /** Phase 7: whoever is still on duty after this time (HH:MM Colombo) is clocked out, not while a task runs; "" = off. */
@@ -144,7 +144,7 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
   map_matching:
     "Snap to roads under the open package: provider none or osrm (self-hosted, secret OSRM_URL); under the google package Google's Roads API snaps the web's Google map instead (its caps in google_caps.roads, 0 = off) and this setting is not read; km stay from the odometer",
-  shift_start: 'The driver app\'s shift nudge ("At work? Switch On duty"): the time of day, HH:MM, shown only to a driver who is off duty',
+  shift_start: 'The driver app\'s shift nudge ("At work? Start work"): the time of day, HH:MM, shown only to a driver who is off duty',
   shift_days: "… on these days (0 = Sunday … 6 = Saturday); empty = never",
   duty_cutoff:
     'The end of the working day, HH:MM: a driver still on duty after it is clocked out by the server ("You were clocked out at 21:00"), but never while a task is in progress (then when it is completed); "" = off',

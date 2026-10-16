@@ -5,8 +5,8 @@
 //     distance); with no usable fix for 60 s, the same (flag no_gps); a stop with no pin: no_pin.
 //   - Done only after Arrived.
 //   - Complete task only once the last stop is Done or Skipped.
-//   - At Complete, the odometer against the plan: under 70 % of the planned km, or under half the
-//     planned drive time, asks "Check the reading" (the server flags it the same way).
+//   - At Complete, the odometer against the plan up to the last stop: under 70 % of the planned km,
+//     or under half the planned drive time, asks "Check the reading" (the server flags it the same way).
 
 import { distanceKm } from './format';
 import type { TaskStop, TaskWithStops } from './types';
@@ -82,9 +82,12 @@ export function earlyFinish(
   endKm: number,
   now: number,
 ): EarlyFinish | null {
-  const plan = task.plan_json as { total_km?: unknown; total_drive_min?: unknown } | null;
-  const plannedKm = typeof plan?.total_km === 'number' ? plan.total_km : null;
-  const plannedMinutes = typeof plan?.total_drive_min === 'number' ? plan.total_drive_min : 0;
+  // The plan up to the last stop: the driver completes there, before any drive back to base (to_seq -1); the server does the same.
+  const legs = (task.plan_json as { legs?: { km?: unknown; minutes?: unknown; to_seq?: unknown }[] } | null)?.legs;
+  const toStops = Array.isArray(legs) ? legs.filter((l) => l.to_seq !== -1) : [];
+  const kms = toStops.map((l) => l.km).filter((km): km is number => typeof km === 'number');
+  const plannedKm = kms.length > 0 ? kms.reduce((a, b) => a + b, 0) : null;
+  const plannedMinutes = toStops.reduce((sum, l) => sum + (typeof l.minutes === 'number' ? l.minutes : 0), 0);
   if (plannedKm === null || plannedKm < EARLY_MIN_PLANNED_KM || task.start_odometer_km == null || !task.started_at) return null;
   const km = endKm - task.start_odometer_km;
   const minutes = Math.round((now - new Date(task.started_at).getTime()) / 60000);

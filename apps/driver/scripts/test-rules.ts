@@ -88,7 +88,11 @@ check(lastStopOpen({ task_stops: [] }) === null, 'a task with no stops: Complete
 // 5. The odometer against the plan at Complete.
 const STARTED = '2026-10-15T03:00:00Z';
 const at = (minutes: number) => Date.parse(STARTED) + minutes * 60_000;
-const planned = (plan: unknown, start: number | null = 84_000) => ({ plan_json: plan as never, start_odometer_km: start, started_at: STARTED });
+// The plan as the server stores it: legs, the drive back to base (to_seq -1) left out of the check.
+const asLegs = (plan: { total_km?: number; total_drive_min?: number } | null) =>
+  plan === null ? null : { legs: [{ km: plan.total_km, minutes: plan.total_drive_min ?? 0, to_seq: 1 }] };
+const planned = (plan: { total_km?: number; total_drive_min?: number } | null, start: number | null = 84_000) =>
+  ({ plan_json: asLegs(plan) as never, start_odometer_km: start, started_at: STARTED });
 const trip = { total_km: 95, total_drive_min: 120 };
 const early = earlyFinish(planned(trip), 84_003, at(130));
 check(early !== null && early.km === 3 && early.plannedKm === 95, 'planned 95 km, the odometer says 3: ask', early);
@@ -102,6 +106,9 @@ check(earlyFinish(planned({ total_km: 3, total_drive_min: 0 }), 84_000, at(1)) !
 check(earlyFinish(planned(null), 84_000, at(1)) === null, 'no plan (a self trip): no question');
 check(earlyFinish(planned({ total_drive_min: 120 }), 84_000, at(1)) === null, 'a plan without km: no question');
 check(earlyFinish(planned(trip, null), 84_003, at(130)) === null, 'no start reading: no question');
+const withReturn = { plan_json: { legs: [{ km: 50, minutes: 60, to_seq: 1 }, { km: 50, minutes: 60, to_seq: -1 }] } as never, start_odometer_km: 84_000, started_at: STARTED };
+check(earlyFinish(withReturn, 84_048, at(70)) === null, 'completed at the last stop: the drive back to base is not counted (48 of 50 km)');
+check(earlyFinish(withReturn, 84_030, at(70))?.plannedKm === 50, 'and the line is 70 % of the km up to the last stop');
 const rounded = earlyFinish(planned({ total_km: 12.345, total_drive_min: 30.6 }), 84_001, at(40));
 check(rounded !== null && rounded.plannedKm === 12.3 && rounded.plannedMinutes === 31, 'the planned numbers are rounded for the question', rounded);
 
