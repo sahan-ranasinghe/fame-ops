@@ -137,7 +137,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+(\?date=.*)?$/);
   await expect(detail.getByRole("heading", { name: title })).toBeVisible();
   await expect(detail.getByText("Fame internal")).toBeVisible();
-  await expect(detail.getByTestId("plan-panel")).toContainText("estimate");
+  await expect(detail.getByTestId("plan-timeline")).toContainText("estimate");
   await detail.getByRole("link", { name: "Cancel task" }).click();
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+\/edit/);
   await page.getByLabel("Cancel this task").fill("E2E test over");
@@ -294,7 +294,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByTestId("notifications")).toContainText(/in this browser|not switched on for the office/);
   const requestBox = page.getByRole("checkbox", { name: "A vehicle request comes in" });
   await expect(requestBox).toBeChecked();
-  await expect(page.getByRole("checkbox")).toHaveCount(12); // Phase 7: "A driver skips a stop"
+  await expect(page.getByRole("checkbox")).toHaveCount(13); // Phase 7: "A driver skips a stop", "A driver needs another vehicle"
   await requestBox.uncheck();
   await expect(page.getByRole("status")).toHaveText("Saved");
   await page.reload();
@@ -394,12 +394,12 @@ test("a wrong password is refused", async ({ page }) => {
   await expect(page.getByText("Wrong e-mail or password.")).toBeVisible();
 });
 
-test("a requester-only user sees only their own screens in the menu, a No access page on a direct URL, and asks in their own name", async ({ page }) => {
+test("a requester (request brings view, Phase 7 §12) sees what a viewer sees plus their own requests, a No access page on a direct URL, and asks in their own name", async ({ page }) => {
   const email = `e2e.req.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string; created: { permissions: string[]; role: string } }>(
     "create_office_user", { name: "E2E Requester", email, permissions: ["request"] },
   );
-  expect(user.created.permissions).toEqual(["request"]);
+  expect(user.created.permissions).toEqual(["view", "request"]);
   expect(user.created.role).toBe("staff");
   const verify = await fetch(user.set_password_link, { redirect: "manual" });
   const landing = verify.headers.get("location") ?? "";
@@ -409,21 +409,23 @@ test("a requester-only user sees only their own screens in the menu, a No access
   await page.getByLabel("Again").fill(password);
   await page.getByRole("button", { name: "Save password" }).click();
 
-  // Home for a requester is their own requests; the fleet screens are not in the menu at all.
-  await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Overview" })).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Live locations" })).toHaveCount(0);
+  // Request brings view: the viewer's screens (Overview, Live, Vehicles) and their own requests; nothing more.
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Live locations" }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Requests" }).first()).toBeVisible();
   await page.goto("/vehicles");
+  await expect(page.getByRole("heading", { name: "Vehicles" })).toBeVisible();
+  await page.goto("/maintenance");
   await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
-  await expect(page.getByTestId("no-access")).toContainText("View");
   await page.goto("/settings/users");
   await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
-  // Their notifications: the one event a requester can get.
+  await page.goto("/requests");
+  await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
+  // Their notifications: their decided and redecided request events, a task of theirs that needs a driver (declined, not
+  // accepted), plus the three booking events everyone can get.
   await page.goto("/settings/notifications");
   await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
-  // Their decided and redecided request events, plus the three booking events everyone can get.
-  await expect(page.getByRole("checkbox")).toHaveCount(5);
+  await expect(page.getByRole("checkbox")).toHaveCount(7);
   await expect(page.getByRole("checkbox", { name: "Your request is decided" })).toBeChecked();
 
   // A new request (its own page) is in their own name; "On behalf of" is for someone else.
@@ -537,7 +539,7 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await page.getByTestId("suggestions").getByRole("button", { name: d2.name }).click();
   await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(d2.username);
   await page.getByRole("button", { name: "Reassign" }).click();
-  await expect(page.getByRole("status")).toHaveText("Task sent to the driver");
+  await expect(page.getByRole("status")).toHaveText(`Task sent to ${d2.name}`);
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+(\?date=.*)?$/);
   await expect(detail.getByTestId("history")).toContainText("Declined");
   await expect(detail.getByTestId("history")).toContainText("Reassigned");
@@ -787,7 +789,7 @@ test("a requester changes an approved booking; the approver sees who is availabl
 
   // 1. The requester asks, on behalf of a visitor.
   await setPassword(requester.set_password_link, requesterPassword);
-  await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await page.goto("/requests/new");
   await page.getByLabel("On behalf of").fill(visitor);
   await page.getByLabel("Day").fill(day);
