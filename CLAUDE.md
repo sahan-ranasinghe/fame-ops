@@ -66,7 +66,11 @@
   `docs/phase7-plan.md` (28 items, Parts 1–6, rounds A and B). Part 1: clock in / out with today's vehicle,
   one vehicle one driver (`vehicle_assignments`), the cut-off, the office's clock-out / move / reopen, the duty
   log, a task can't be finished before it is driven (Arrived within 300 m or flagged, Done after Arrived,
-  completed early).
+  completed early). Part 2: dispatch (the vehicle fills itself, best match, the plan as a timeline with the time at
+  each stop, overlap cards, stops named by order, any permission brings view, needs a driver, the vehicle swap during
+  a task, "I need another vehicle"). Part 2b: the maps (the plan's Google line, gap markers, playback 1–60×, one
+  control cluster, the compass, snap to roads on within the free usage), app stops = 10 min with no point and no
+  heartbeat, the heartbeat also from the background location task. Round A (Parts 1–2b) deployed 16 October 2026.
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).

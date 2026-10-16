@@ -1475,4 +1475,19 @@ stays ට්‍රිප් මීටරය.
 
 ## Deployment log
 
-Nothing deployed yet.
+**Round A, 16 October 2026** (Parts 1, 2 and 2b; main at `21b1d9a`), in the plan's order, with Sahan's go:
+1. `npx supabase secrets list`: 18 names, all present (both Google keys, ORS_KEY, SERVER_KEY, the VAPID keys,
+   OFFICE_WEB_URL, OFFICE_MCP_KEY); none new needed.
+2. `npx supabase db push --linked --yes`: `20261015190000_phase7_duty.sql`, `20261016090000_phase7_dispatch.sql`,
+   `20261016180000_phase7_maps.sql`. Checked after: the settings rows (accept 15 / 30, the stop times pickup 5, drop 5,
+   visit 60, default 5), the cron jobs (`duty-jobs` every 15 minutes), every employee's vehicle equal to their open
+   assignment, nobody with a permission but no view. No unaccepted task was waiting, so no burst of needs-a-driver
+   pushes. The first `duty-jobs` run (23:45) closed test.driver2's session open since 15 October at 15 October 21:00,
+   end reason auto, with no push.
+3. `npx supabase functions deploy office-mcp office-api fleet-jobs push-task` (notify-office and read-odometer
+   unchanged). `get_settings` through the live connector: snap to roads on at 200 a day / 4,750 a month (Sahan's
+   decision at the go, docs/google-maps-setup.md), both Google keys configured.
+4. Web: `npm run build:web`, `npx wrangler pages deploy --branch main` (https://fame-fleet.pages.dev).
+5. EAS update, channel preview, `--environment preview`: runtime `1.2.0-gmaps`, update group
+   `ca6db3fe-2a07-4598-a9e3-ba3e9a9d3776` (Android update id `01a145ef…`, so phones show `1.2.0+01a145ef`). No
+   native change since the 1.2.0 build (only a test script line in package.json).
