@@ -111,16 +111,18 @@ reset role;
 select is((select count(*) from public.notifications where event = 'task.declined'), 1::bigint, 'one task.declined row: the approver (the dispatcher has no device, one is switched off, one device is gone)');
 select is(
   (select payload ->> 'title' || ' | ' || (payload ->> 'body') || ' | ' || (payload ->> 'url') from public.notifications where event = 'task.declined'),
-  'Notify Driver can''t do Team drop · Galle | Vehicle problem: Flat tyre · leave by ' || public.colombo_when(now() + interval '3 hours') || ' | /tasks?task=50000000-0000-0000-0000-0000000000d1',
-  'with the driver, the title, the reason and note, the leave-by time and the task link');
-select is((select payload ->> 'tag' from public.notifications where event = 'task.declined'), 'task:50000000-0000-0000-0000-0000000000d1', 'tagged by task');
+  'Notify declined ''Team drop · Galle'' ' || to_char((now() + interval '3 hours') at time zone 'Asia/Colombo', 'HH24:MI')
+    || ' | Vehicle problem: Flat tyre · needs a driver | /tasks/50000000-0000-0000-0000-0000000000d1/edit?driver=1',
+  'Phase 7: "Kamal declined ''<task>'' 09:00" / the reason · needs a driver, opening the task''s change page');
+select is((select payload ->> 'tag' from public.notifications where event = 'task.declined'), 'needs-driver:50000000-0000-0000-0000-0000000000d1', 'tagged by task');
 
 -- task.not_accepted: the accept reminder (sent 2 hours after the task) tells the office too.
 update public.tasks set status = 'assigned', declined_at = null, declined_by = null, declined_reason = null, declined_note = null where id = '50000000-0000-0000-0000-0000000000d1';
-select is(public.queue_accept_reminders(), 1, 'the accept reminder goes out (sent two hours ago, not accepted)');
+select is(public.queue_accept_reminders(), 2, 'the accept reminder goes out and the window has passed (sent two hours ago, not accepted)');
 select is((select count(*) from public.notifications where event = 'task.not_accepted'), 1::bigint, 'and one task.not_accepted row for the approver');
 select is((select payload ->> 'title' || ' | ' || (payload ->> 'body') from public.notifications where event = 'task.not_accepted'),
-  'Not accepted yet · Team drop · Galle | Notify Driver · leave by ' || public.colombo_when(now() + interval '3 hours'), 'with the title, the driver and the leave-by time');
+  'Notify hasn''t accepted ''Team drop · Galle'' ' || to_char((now() + interval '3 hours') at time zone 'Asia/Colombo', 'HH24:MI') || ' | needs a driver',
+  'with the driver, the title and the leave-by time');
 select is(public.queue_accept_reminders(), 0, 'a reminder is sent once');
 
 -- colombo_when: the time alone today, the day with it otherwise.

@@ -85,11 +85,20 @@ $$, 'a declined task goes back to assigned with a new driver');
 select lives_ok($$ update public.tasks set status = 'cancelled', cancelled_reason = 'nobody free' where id = '50000000-0000-0000-0000-0000000000a1' $$,
   'a declined task can be cancelled');
 
--- "Please accept your task": once, 30 minutes after it was sent or 60 minutes before leave-by.
-select is(public.queue_accept_reminders(), 2, 'two reminders: one sent 31 minutes ago, one leaving in 50 minutes');
-select is((select count(*) from public.tasks where accept_reminder_sent_at is not null), 2::bigint, 'the reminder is recorded on both');
+-- The accept window (Phase 7): the reminder 5 minutes after sending; "needs a driver" 15 minutes after sending or
+-- 30 minutes before leaving, whichever comes first.
+select is(public.queue_accept_reminders(), 2, 'the task sent 31 minutes ago: its reminder and, past its window, needs a driver');
+select is((select count(*) from public.tasks where accept_reminder_sent_at is not null), 1::bigint, 'one reminder (the others were sent just now)');
+select is((select needs_driver_reason from public.tasks where id = '50000000-0000-0000-0000-0000000000a5'), 'not_accepted', 'it needs a driver: not accepted');
+select ok((select needs_driver_since is null from public.tasks where id = '50000000-0000-0000-0000-0000000000a6'),
+  'the one leaving in 50 minutes is still inside its window (30 minutes before)');
 select ok((select accept_reminder_sent_at is null from public.tasks where id = '50000000-0000-0000-0000-0000000000a2'), 'the task just reassigned (sent now) is not reminded yet');
 select is(public.queue_accept_reminders(), 0, 'the next minute sends nothing again');
+update public.tasks set leave_by = now() + interval '25 minutes' where id = '50000000-0000-0000-0000-0000000000a6';
+select is(public.queue_accept_reminders(), 1, '25 minutes before leaving: it needs a driver too');
+select lives_ok($$ update public.tasks set accepted_at = now() where id = '50000000-0000-0000-0000-0000000000a6' $$, 'the driver accepts late …');
+select ok((select needs_driver_since is null and needs_driver_reason is null from public.tasks where id = '50000000-0000-0000-0000-0000000000a6'),
+  '… and it no longer needs a driver');
 select is((select command from cron.job where jobname = 'task-reminders'), 'select public.queue_task_reminders(), public.queue_accept_reminders()', 'the minute job runs both reminder functions');
 
 -- Service role only for the rest.

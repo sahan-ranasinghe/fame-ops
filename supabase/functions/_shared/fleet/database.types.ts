@@ -669,14 +669,14 @@ isOneToOne: false
                   ]
                 },"places": {
                   Row: {
-                    "active": boolean,"address": string | null,"attribution": string | null,"created_at": string,"depot": string | null,"district": string | null,"id": string,"ids_text": string,"imported_at": string | null,"kind": string,"lat": number | null,"lng": number | null,"name": string,"operator": string,"other_ids": (string)[],"pin_source": string | null,"pinned": boolean | null,"provider_ref": string | null,"region": string | null,"site_id": string | null,"source": string,"updated_at": string
+                    "active": boolean,"address": string | null,"attribution": string | null,"created_at": string,"depot": string | null,"district": string | null,"id": string,"ids_text": string,"imported_at": string | null,"kind": string,"lat": number | null,"lng": number | null,"name": string,"operator": string,"other_ids": (string)[],"pin_source": string | null,"pinned": boolean | null,"provider_ref": string | null,"region": string | null,"site_id": string | null,"source": string,"updated_at": string,"usual_dwell_at": string | null,"usual_dwell_min": number | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "active"?: boolean,"address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name": string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string
+                    "active"?: boolean,"address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name": string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string,"usual_dwell_at"?: string | null,"usual_dwell_min"?: number | null
                   }
                   Update: {
-                    "active"?: boolean,"address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name"?: string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string
+                    "active"?: boolean,"address"?: string | null,"attribution"?: string | null,"created_at"?: string,"depot"?: string | null,"district"?: string | null,"id"?: string,"ids_text"?: string,"imported_at"?: string | null,"kind"?: string,"lat"?: number | null,"lng"?: number | null,"name"?: string,"operator"?: string,"other_ids"?: (string)[],"pin_source"?: string | null,"pinned"?: never,"provider_ref"?: string | null,"region"?: string | null,"site_id"?: string | null,"source"?: string,"updated_at"?: string,"usual_dwell_at"?: string | null,"usual_dwell_min"?: number | null
                   }
                   Relationships: [
                     
@@ -911,14 +911,14 @@ isOneToOne: false
                   ]
                 },"task_stops": {
                   Row: {
-                    "address": string | null,"arrival_accuracy_m": number | null,"arrival_at": string | null,"arrival_distance_m": number | null,"arrival_flag": string | null,"arrival_lat": number | null,"arrival_lng": number | null,"arrive_by": string | null,"arrived_at": string | null,"auto_detected_at": string | null,"done_at": string | null,"dwell_min": number | null,"google_fetched_at": string | null,"google_place_id": string | null,"id": string,"lat": number | null,"lng": number | null,"note": string | null,"place_id": string | null,"place_name": string,"planned_arrive_at": string | null,"planned_depart_at": string | null,"removed_at": string | null,"saved_place_id": string | null,"seq": number,"skip_note": string | null,"skip_reason": string | null,"status": string,"task_id": string,"type": string,"what": string | null
+                    "address": string | null,"arrival_accuracy_m": number | null,"arrival_at": string | null,"arrival_distance_m": number | null,"arrival_flag": string | null,"arrival_lat": number | null,"arrival_lng": number | null,"arrive_by": string | null,"arrived_at": string | null,"auto_detected_at": string | null,"done_at": string | null,"dwell_min": number | null,"dwell_source": string | null,"google_fetched_at": string | null,"google_place_id": string | null,"id": string,"is_start": boolean,"lat": number | null,"lng": number | null,"note": string | null,"place_id": string | null,"place_name": string,"planned_arrive_at": string | null,"planned_depart_at": string | null,"removed_at": string | null,"saved_place_id": string | null,"seq": number,"skip_note": string | null,"skip_reason": string | null,"status": string,"task_id": string,"type": string,"what": string | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "address"?: string | null,"arrival_accuracy_m"?: number | null,"arrival_at"?: string | null,"arrival_distance_m"?: number | null,"arrival_flag"?: string | null,"arrival_lat"?: number | null,"arrival_lng"?: number | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name": string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"saved_place_id"?: string | null,"seq": number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id": string,"type": string,"what"?: string | null
+                    "address"?: string | null,"arrival_accuracy_m"?: number | null,"arrival_at"?: string | null,"arrival_distance_m"?: number | null,"arrival_flag"?: string | null,"arrival_lat"?: number | null,"arrival_lng"?: number | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"dwell_source"?: string | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"is_start"?: boolean,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name": string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"saved_place_id"?: string | null,"seq": number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id": string,"type": string,"what"?: string | null
                   }
                   Update: {
-                    "address"?: string | null,"arrival_accuracy_m"?: number | null,"arrival_at"?: string | null,"arrival_distance_m"?: number | null,"arrival_flag"?: string | null,"arrival_lat"?: number | null,"arrival_lng"?: number | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name"?: string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"saved_place_id"?: string | null,"seq"?: number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id"?: string,"type"?: string,"what"?: string | null
+                    "address"?: string | null,"arrival_accuracy_m"?: number | null,"arrival_at"?: string | null,"arrival_distance_m"?: number | null,"arrival_flag"?: string | null,"arrival_lat"?: number | null,"arrival_lng"?: number | null,"arrive_by"?: string | null,"arrived_at"?: string | null,"auto_detected_at"?: string | null,"done_at"?: string | null,"dwell_min"?: number | null,"dwell_source"?: string | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"is_start"?: boolean,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name"?: string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"saved_place_id"?: string | null,"seq"?: number,"skip_note"?: string | null,"skip_reason"?: string | null,"status"?: string,"task_id"?: string,"type"?: string,"what"?: string | null
                   }
                   Relationships: [
                     {
@@ -941,19 +941,51 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
-                },"tasks": {
+                },"task_vehicle_segments": {
                   Row: {
-                    "accept_reminder_sent_at": string | null,"accepted_at": string | null,"avoid_expressway": boolean,"buffer_min": number | null,"cancelled_reason": string | null,"completed_at": string | null,"contact_name": string | null,"contact_phone": string | null,"created_at": string,"created_by": string | null,"declined_after_accept": boolean,"declined_at": string | null,"declined_by": string | null,"declined_note": string | null,"declined_reason": string | null,"employee_id": string,"end_by": string | null,"end_odometer_km": number | null,"finish_flag": Json | null,"id": string,"km": number | null,"label": string | null,"leave_by": string | null,"leave_by_source": string | null,"notes": string | null,"passengers": number | null,"plan_json": Json | null,"plan_version": number,"reminder_0_sent_at": string | null,"reminder_30_sent_at": string | null,"request_id": string | null,"return_to_base": boolean,"seen_at": string | null,"sent_at": string,"start_at": string,"start_google_fetched_at": string | null,"start_google_place_id": string | null,"start_lat": number | null,"start_lng": number | null,"start_name": string | null,"start_odometer_km": number | null,"start_place_id": string | null,"started_at": string | null,"status": string,"title": string,"updated_at": string,"vehicle_id": string
+                    "by_name": string | null,"created_at": string,"end_odometer_km": number | null,"from_at": string,"id": string,"reason": string | null,"seq": number,"start_odometer_km": number | null,"task_id": string,"to_at": string | null,"vehicle_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id": string,"end_by"?: string | null,"end_odometer_km"?: number | null,"finish_flag"?: Json | null,"id"?: string,"km"?: never,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at": string,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title": string,"updated_at"?: string,"vehicle_id": string
+                    "by_name"?: string | null,"created_at"?: string,"end_odometer_km"?: number | null,"from_at": string,"id"?: string,"reason"?: string | null,"seq": number,"start_odometer_km"?: number | null,"task_id": string,"to_at"?: string | null,"vehicle_id": string
                   }
                   Update: {
-                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id"?: string,"end_by"?: string | null,"end_odometer_km"?: number | null,"finish_flag"?: Json | null,"id"?: string,"km"?: never,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at"?: string,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string,"vehicle_id"?: string
+                    "by_name"?: string | null,"created_at"?: string,"end_odometer_km"?: number | null,"from_at"?: string,"id"?: string,"reason"?: string | null,"seq"?: number,"start_odometer_km"?: number | null,"task_id"?: string,"to_at"?: string | null,"vehicle_id"?: string
                   }
                   Relationships: [
                     {
+      foreignKeyName: "task_vehicle_segments_task_id_fkey"
+      columns: ["task_id"]
+isOneToOne: false
+      referencedRelation: "tasks"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "task_vehicle_segments_vehicle_id_fkey"
+      columns: ["vehicle_id"]
+isOneToOne: false
+      referencedRelation: "vehicles"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"tasks": {
+                  Row: {
+                    "accept_reminder_sent_at": string | null,"accepted_at": string | null,"assigned_by_employee_id": string | null,"avoid_expressway": boolean,"buffer_min": number | null,"cancelled_reason": string | null,"completed_at": string | null,"contact_name": string | null,"contact_phone": string | null,"created_at": string,"created_by": string | null,"declined_after_accept": boolean,"declined_at": string | null,"declined_by": string | null,"declined_note": string | null,"declined_reason": string | null,"employee_id": string,"end_by": string | null,"end_odometer_km": number | null,"finish_flag": Json | null,"id": string,"km": number | null,"label": string | null,"leave_by": string | null,"leave_by_source": string | null,"needs_driver_reason": string | null,"needs_driver_since": string | null,"notes": string | null,"passengers": number | null,"plan_json": Json | null,"plan_version": number,"reminder_0_sent_at": string | null,"reminder_30_sent_at": string | null,"request_id": string | null,"return_to_base": boolean,"seen_at": string | null,"sent_at": string,"start_at": string,"start_google_fetched_at": string | null,"start_google_place_id": string | null,"start_lat": number | null,"start_lng": number | null,"start_name": string | null,"start_odometer_km": number | null,"start_place_id": string | null,"started_at": string | null,"status": string,"title": string,"updated_at": string,"vehicle_choice": Json | null,"vehicle_id": string,"warnings": Json | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"assigned_by_employee_id"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id": string,"end_by"?: string | null,"end_odometer_km"?: number | null,"finish_flag"?: Json | null,"id"?: string,"km"?: number | null,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"needs_driver_reason"?: string | null,"needs_driver_since"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at": string,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title": string,"updated_at"?: string,"vehicle_choice"?: Json | null,"vehicle_id": string,"warnings"?: Json | null
+                  }
+                  Update: {
+                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"assigned_by_employee_id"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id"?: string,"end_by"?: string | null,"end_odometer_km"?: number | null,"finish_flag"?: Json | null,"id"?: string,"km"?: number | null,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"needs_driver_reason"?: string | null,"needs_driver_since"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at"?: string,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string,"vehicle_choice"?: Json | null,"vehicle_id"?: string,"warnings"?: Json | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "tasks_assigned_by_employee_id_fkey"
+      columns: ["assigned_by_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "tasks_declined_by_fkey"
       columns: ["declined_by"]
 isOneToOne: false
@@ -1033,14 +1065,14 @@ isOneToOne: false
                   ]
                 },"vehicle_reports": {
                   Row: {
-                    "category": string,"closed_at": string | null,"created_at": string,"employee_id": string,"id": string,"note": string | null,"office_note": string | null,"status": string,"task_id": string | null,"vehicle_id": string
+                    "category": string,"closed_at": string | null,"created_at": string,"employee_id": string,"id": string,"needs_vehicle": boolean,"note": string | null,"office_note": string | null,"status": string,"task_id": string | null,"vehicle_id": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "category": string,"closed_at"?: string | null,"created_at"?: string,"employee_id": string,"id"?: string,"note"?: string | null,"office_note"?: string | null,"status"?: string,"task_id"?: string | null,"vehicle_id": string
+                    "category": string,"closed_at"?: string | null,"created_at"?: string,"employee_id": string,"id"?: string,"needs_vehicle"?: boolean,"note"?: string | null,"office_note"?: string | null,"status"?: string,"task_id"?: string | null,"vehicle_id": string
                   }
                   Update: {
-                    "category"?: string,"closed_at"?: string | null,"created_at"?: string,"employee_id"?: string,"id"?: string,"note"?: string | null,"office_note"?: string | null,"status"?: string,"task_id"?: string | null,"vehicle_id"?: string
+                    "category"?: string,"closed_at"?: string | null,"created_at"?: string,"employee_id"?: string,"id"?: string,"needs_vehicle"?: boolean,"note"?: string | null,"office_note"?: string | null,"status"?: string,"task_id"?: string | null,"vehicle_id"?: string
                   }
                   Relationships: [
                     {
@@ -1065,14 +1097,14 @@ isOneToOne: false
                   ]
                 },"vehicle_requests": {
                   Row: {
-                    "back_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"change_note": string | null,"changed_at": string | null,"changed_by": string | null,"created_at": string,"decided_at": string | null,"decided_by": string | null,"decline_reason": string | null,"driver_required": boolean,"id": string,"need_type": string | null,"needed_at": string,"note": string | null,"on_behalf_of": string | null,"one_step": boolean,"pax": number | null,"previous": Json | null,"project_id": string | null,"project_label": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"requested_by_user_id": string | null,"route_from": string | null,"route_to": string | null,"seen_at": string | null,"seen_by": string | null,"status": string,"task_id": string | null,"tools": boolean,"version": number
+                    "back_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"change_note": string | null,"changed_at": string | null,"changed_by": string | null,"created_at": string,"decided_at": string | null,"decided_by": string | null,"decline_reason": string | null,"driver_required": boolean,"from_dwell_min": number | null,"id": string,"need_type": string | null,"needed_at": string,"note": string | null,"on_behalf_of": string | null,"one_step": boolean,"pax": number | null,"previous": Json | null,"project_id": string | null,"project_label": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"requested_by_user_id": string | null,"route_from": string | null,"route_to": string | null,"seen_at": string | null,"seen_by": string | null,"status": string,"task_id": string | null,"to_dwell_min": number | null,"tools": boolean,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"id"?: string,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean,"version"?: number
+                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"version"?: number
                   }
                   Update: {
-                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"id"?: string,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"tools"?: boolean,"version"?: number
+                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"version"?: number
                   }
                   Relationships: [
                     {
@@ -1221,6 +1253,9 @@ isOneToOne: false
 "nearest_town_name":
 { Args: { "p_lat": number,"p_lng": number }; Returns: string
                            },
+"notify_needs_driver":
+{ Args: { "p_body": string,"p_task": string,"p_title": string }; Returns: undefined
+                           },
 "notify_retry":
 { Args: Record<PropertyKey, never>; Returns: undefined
                            },
@@ -1244,6 +1279,9 @@ isOneToOne: false
                            },
 "office_reopen_task":
 { Args: { "p_by": string,"p_reason": string,"p_task": string }; Returns: Json
+                           },
+"office_swap_vehicle":
+{ Args: { "p_by": string,"p_new_start"?: number,"p_old_end"?: number,"p_reason"?: string,"p_task": string,"p_vehicle": string }; Returns: Json
                            },
 "office_update_task_stops":
 { Args: { "p_stops": Json,"p_task": Json,"p_task_id": string,"p_version": number }; Returns: number
@@ -1308,6 +1346,9 @@ isOneToOne: false
                            },
 "take_vehicle":
 { Args: { "p_at": string,"p_by": string,"p_client"?: string,"p_employee": string,"p_how": string,"p_task"?: string,"p_vehicle": string }; Returns: string
+                           },
+"task_km":
+{ Args: { "p_end": number,"p_start": number,"p_task": string }; Returns: number
                            },
 "undo_place_import":
 { Args: { "p_by": string,"p_import_id": string }; Returns: Json

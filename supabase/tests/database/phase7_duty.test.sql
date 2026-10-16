@@ -315,7 +315,7 @@ select is(public.duty_cutoff_after(((now() at time zone 'Asia/Colombo')::date + 
 select is(public.duty_cutoff_after(now(), ''), null, 'an empty cut-off is off');
 select is((public.duty_jobs() ->> 'clocked_out')::integer, 0, 'with the cut-off off, nobody is clocked out');
 update public.fleet_settings set value = '"21:00"' where key = 'duty_cutoff';
-select is((public.duty_jobs() ->> 'clocked_out')::integer, 1, 'Ruwan is clocked out; Saman (a task running) is not');
+select is((public.duty_jobs() ->> 'closed_silently')::integer, 1, 'Ruwan''s period from yesterday closes, silently (Part 2 go); Saman (a task running) is not touched');
 select is((select end_reason || '|' || to_char(ended_at at time zone 'Asia/Colombo', 'HH24:MI') from public.duty_sessions
            where id = '60000000-0000-0000-0000-0000000007d1'), 'auto|21:00', 'at the cut-off, end reason auto');
 select is((select ended_how || '|' || ended_by_name from public.vehicle_assignments where employee_id = '10000000-0000-0000-0000-0000000007d1'),

@@ -71,7 +71,9 @@ insert into public.tasks (id, title, employee_id, vehicle_id, start_at, leave_by
    now() + interval '20 minutes', now() + interval '20 minutes', now() - interval '2 hours', 'test');
 select is(public.queue_task_reminders(), 1, 'the leave-in-30-minutes reminder goes to the driver only');
 select is((select reminder_30_sent_at is null from public.tasks where id = '50000000-0000-0000-0000-0000000000e1'), true, 'the custodian task is left alone');
-select is(public.queue_accept_reminders(), 1, 'the accept reminder goes to the driver only');
+select is(public.queue_accept_reminders(), 2, 'the accept reminder and, past its window, "needs a driver" go to the driver''s task only');
+select ok((select accept_reminder_sent_at is null and needs_driver_since is null from public.tasks where id = '50000000-0000-0000-0000-0000000000e1'),
+  'the custodian task gets neither');
 select is((select accept_reminder_sent_at is null from public.tasks where id = '50000000-0000-0000-0000-0000000000e1'), true, 'the custodian task is never asked to accept');
 
 select * from finish();
