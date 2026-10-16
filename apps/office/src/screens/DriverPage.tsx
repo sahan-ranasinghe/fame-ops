@@ -74,7 +74,7 @@ export function DriverPage() {
   const call = card?.links?.call ?? info?.call ?? (phone ? `tel:${phone}` : undefined);
   const whatsapp = card?.links?.whatsapp ?? info?.whatsapp ?? (phone ? waLink(phone) : undefined);
   const tone = card ? statusTone(card.status, card.state) : "bad";
-  const status = card ? statusLine(card) : info?.location ?? "Not sharing";
+  const status = card ? statusLine(card) : info?.location ?? "Off duty";
 
   const playback = usePlayback(route?.points ?? []);
   const webPlayback = __BUILD__ === "web" && !!route && route.points.length > 1;
