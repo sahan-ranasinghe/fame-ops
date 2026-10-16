@@ -1176,11 +1176,14 @@ test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps 
   await page.goto(`/drivers/${driver.username}`);
   const timeline = page.getByTestId("timeline");
   await expect(timeline).toContainText("Driving", { timeout: 15000 });
+  // The points went up together just now, so the stretches before the gap also show as "uploaded later" rows.
   const gaps = page.getByTestId("gaps-list");
-  await expect(gaps.getByTestId("gap-row").first()).toContainText("App not running", { timeout: 15000 });
-  await gaps.getByTestId("gap-row").first().click();
-  await expect(gaps.getByTestId("gap-row").first()).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator(".gap-mk").first()).toHaveAttribute("aria-expanded", "true");
+  const noApp = gaps.getByTestId("gap-row").filter({ hasText: "App not running" }).first();
+  await expect(noApp).toBeVisible({ timeout: 15000 });
+  await expect(gaps.getByTestId("gap-row").filter({ hasText: "Offline here · uploaded" }).first()).toBeVisible();
+  await noApp.click();
+  await expect(noApp).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator('.gap-mk[aria-expanded="true"]')).toHaveCount(1);
   // No map draws a gap's words permanently: they are in the marker's card only.
   await expect(page.locator(".maplibregl-canvas, svg").first()).toBeVisible();
 
