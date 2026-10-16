@@ -249,7 +249,9 @@ export default function GoogleMap({
       fittedRoute.current = key;
       fitTo(m, maps, route.points.map(ll));
     }
-  }, [route, maps]);
+    // Not on `route` itself: during playback only the cursor changes every frame (the line's arrays stay the same).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route?.points, route?.holes, route?.estimated, route?.stops, route?.bySpeed, maps]);
 
   // The playback marker: hollow while it crosses a gap, turned to the path (§22).
   useEffect(() => {

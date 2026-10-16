@@ -1478,11 +1478,12 @@ export const taskDetail = tool({
           leave_by_source: task.leave_by_source ?? undefined,
           buffer_min: task.buffer_min ?? undefined,
           start_place: task.start_name ?? undefined,
-          // Phase 7: the start as the stops form sends it back (a Google start by its id: its pin is Google's).
+          // Phase 7: the start for the plan map and the stops form. A Google start is named by its id (the form sends
+          // that back, never the pin); its pin (kept 30 days) is drawn on Google's map only (rule 10).
           start_place_id: task.start_place_id ?? undefined,
           start_google_place_id: task.start_google_place_id ?? undefined,
-          start_lat: task.start_google_place_id ? undefined : task.start_lat ?? undefined,
-          start_lng: task.start_google_place_id ? undefined : task.start_lng ?? undefined,
+          start_lat: task.start_lat ?? undefined,
+          start_lng: task.start_lng ?? undefined,
           return_to_base: task.return_to_base,
           avoid_expressway: task.avoid_expressway,
           plan_version: task.plan_version,

@@ -201,8 +201,9 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByRole("link", { name: "Live locations" }).first().click();
   await expect(page.getByRole("heading", { name: "Live locations" })).toBeVisible();
   // Trails: every sharing driver's line today on the live map.
-  await page.getByRole("button", { name: "Show today’s trails" }).click();
-  await expect(page.getByRole("button", { name: "Show today’s trails" })).toHaveAttribute("aria-pressed", "true");
+  // Phase 7 (§25): the trails are a button of the map's control cluster.
+  await page.getByRole("button", { name: "Today’s trails" }).click();
+  await expect(page.getByRole("button", { name: "Today’s trails" })).toHaveAttribute("aria-pressed", "true");
 
   // 5. The fleet pages (phase 4): vehicles, drivers, maintenance, mileage, projects, accounts.
   await page.getByRole("link", { name: "Vehicles" }).first().click();
@@ -1130,4 +1131,68 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   await expect(row).toContainText("Undone");
   const gone = await tool<{ results: { site_id?: string }[] }>("search_places", { text: `${S}H1`, map: false });
   expect(gone.results.some((r) => r.site_id === `${S}H1`)).toBe(false);
+});
+
+test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps as markers with a list; playback at 60×", async ({ page }) => {
+  test.setTimeout(180_000);
+  const email = `e2e.maps.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Maps", email, permissions: ["view", "assign_tasks"] });
+  const driver = { name: `E2E Mapper ${stamp}`, code: `E2M-${stamp}`, username: `e2m.${stamp}`, pin: "864201" };
+  await tool("create_driver", driver);
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Maps for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // The plan map (§20): two towns as stops, planned 1.5 s after the last edit; our map draws the pins with straight
+  // connectors marked "not the road" (no Google line on the open package); a pin highlights its timeline row.
+  await page.goto("/tasks/new");
+  await page.getByLabel("Leave by", { exact: true }).fill("09:30");
+  await page.getByLabel("Stop 1", { exact: true }).fill("Kandy");
+  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+  const planMap = page.getByTestId("plan-map");
+  await expect(planMap).toBeVisible({ timeout: 15000 });
+  await expect(planMap.locator(".plan-pin")).toHaveCount(2, { timeout: 15000 });
+  await expect(planMap).toContainText("not the road");
+  await planMap.locator(".plan-pin").nth(1).click();
+  await expect(planMap.locator(".plan-pin").nth(1)).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("plan-timeline").locator('[aria-pressed="true"]')).toContainText("Galle");
+
+  // A day with a gap (§21, §22): 14 minutes of driving, 12 minutes with nothing, 8 minutes of driving.
+  const app = await driverRest(driver.username, driver.pin);
+  const [me] = await app.get<{ id: string }[]>("employees?select=id");
+  const session = randomUUID();
+  const ago = (min: number) => new Date(Date.now() - min * 60000).toISOString();
+  expect(await app.post("duty_sessions", { id: session, employee_id: me.id, started_at: ago(40) })).toBe(201);
+  const point = (min: number, i: number) => ({ employee_id: me.id, session_id: session, recorded_at: ago(min), lat: 6.90 + i * 0.002, lng: 79.95, accuracy_m: 8, speed_mps: 7, battery_pct: 70 });
+  const first = Array.from({ length: 29 }, (_, i) => point(34 - i * 0.5, i));
+  const second = Array.from({ length: 17 }, (_, i) => point(8 - i * 0.5, 40 + i));
+  expect(await app.post("location_points", [...first, ...second])).toBe(201);
+
+  await page.goto(`/drivers/${driver.username}`);
+  const timeline = page.getByTestId("timeline");
+  await expect(timeline).toContainText("Driving", { timeout: 15000 });
+  const gaps = page.getByTestId("gaps-list");
+  await expect(gaps.getByTestId("gap-row").first()).toContainText("App not running", { timeout: 15000 });
+  await gaps.getByTestId("gap-row").first().click();
+  await expect(gaps.getByTestId("gap-row").first()).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".gap-mk").first()).toHaveAttribute("aria-expanded", "true");
+  // No map draws a gap's words permanently: they are in the marker's card only.
+  await expect(page.locator(".maplibregl-canvas, svg").first()).toBeVisible();
+
+  // Playback at 60×: the recorded clock moves about a minute per second.
+  const playback = page.getByTestId("playback");
+  await playback.getByRole("button", { name: "60×" }).click();
+  const seconds = (t: string) => { const [h, m, sec] = t.slice(0, 8).split(":").map(Number); return h * 3600 + m * 60 + sec; };
+  await playback.getByRole("button", { name: "Play" }).click();
+  const t0 = seconds((await page.getByTestId("playback-clock").textContent()) ?? "");
+  await page.waitForTimeout(3000);
+  const t1 = seconds((await page.getByTestId("playback-clock").textContent()) ?? "");
+  expect(t1 - t0).toBeGreaterThan(100);
+  expect(t1 - t0).toBeLessThan(260);
+  await playback.getByRole("button", { name: "Pause" }).click();
 });

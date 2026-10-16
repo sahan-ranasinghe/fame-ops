@@ -239,6 +239,8 @@ export type TimelineItem =
     source: string;
     rush_factor?: number;
     via_expressway?: boolean;
+    /** Phase 7 (§20): Google's road line (encoded polyline), only with with_line; drawn on Google's map only. */
+    line?: string;
   };
 
 export interface PlanTimeline {
@@ -313,6 +315,10 @@ export interface PlanSummary {
 
 export interface PlannedStop {
   seq: number;
+  /** Phase 7 (§20): the stop's pin for the plan map; `google`: a Google place (drawn on Google's map only). */
+  lat?: number;
+  lng?: number;
+  google?: boolean;
   /** Phase 7 (§11, §17): the stop's place in the order, its label, the start stop, the time at the stop's source. */
   n?: number;
   label?: string;
@@ -334,7 +340,8 @@ export interface PlanPreview {
   leave_by: string;
   leave_by_at?: string;
   leave_by_source: string;
-  start?: { name: string; has_pin: boolean };
+  /** Phase 7 (§20): the start's pin for the plan map (a Google start's is Google's: `google`). */
+  start?: { name: string; has_pin: boolean; lat?: number; lng?: number; google?: boolean };
   stops: PlannedStop[];
   plan?: PlanSummary;
   warnings: string[];

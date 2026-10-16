@@ -37,8 +37,8 @@ export interface PlanMapStart {
   google?: boolean;
 }
 
-/** A leg with Google's road line (with_line: true); `line` is not in data/types' TimelineItem yet. */
-export type LegWithLine = Extract<TimelineItem, { kind: "leg" }> & { line?: string };
+/** A leg with Google's road line (with_line: true). */
+export type LegWithLine = Extract<TimelineItem, { kind: "leg" }>;
 
 export const START_PIN = "start";
 export const stopPin = (n: number) => `stop-${n}`;

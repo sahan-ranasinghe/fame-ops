@@ -289,7 +289,10 @@ export default function MapLibreMap({
       fittedRoute.current = key;
       fitTo(m, coords);
     }
-  }, [route, ready]);
+    // Not on `route` itself: during playback only the cursor changes every frame and the line's arrays stay the same
+    // objects, so the line and the stops are redrawn only when they change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route?.points, route?.holes, route?.estimated, route?.stops, route?.bySpeed, ready]);
 
   // The playback marker: hollow while it crosses a gap, turned to the path (§22).
   useEffect(() => {

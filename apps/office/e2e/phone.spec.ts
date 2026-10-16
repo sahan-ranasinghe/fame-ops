@@ -168,3 +168,23 @@ test("a requester on a phone: four tabs, New request as the big action, the requ
   await page.getByRole("button", { name: "Back" }).click();
   await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
 });
+
+test("Live on a phone (Phase 7, §25): one control cluster on the right edge, 40 px buttons, no corner covered", async ({ page }) => {
+  await signIn(page, "Phone Live", `phone.live.${stamp}@fame.test`, ["view", "assign_tasks"]);
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  await page.goto("/live");
+  const cluster = page.getByTestId("map-controls");
+  await expect(cluster).toBeVisible({ timeout: 15000 });
+  for (const name of ["Zoom in", "Zoom out", "Today’s trails"]) {
+    const box = await cluster.getByRole("button", { name }).boundingBox();
+    expect(box && Math.round(box.width) === 40 && Math.round(box.height) === 40).toBe(true);
+  }
+  const map = await cluster.locator("xpath=..").boundingBox();
+  const c = await cluster.boundingBox();
+  expect(map && c).toBeTruthy();
+  if (map && c) {
+    expect(map.x + map.width - (c.x + c.width)).toBeLessThan(24); // on the right edge
+    expect(c.y - map.y).toBeGreaterThan(40); // clear of the top corner
+    expect(map.y + map.height - (c.y + c.height)).toBeGreaterThan(40); // and of the bottom corner
+  }
+});
