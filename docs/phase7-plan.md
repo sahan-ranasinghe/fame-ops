@@ -84,6 +84,9 @@ every open session older than today's cut-off: end_reason `auto`, assignment `au
   local notification.
 - **Default: a driver with a task in progress is not clocked out;** the next run after that task is
   completed does it.
+- **Earlier days close silently** (Sahan, 16 October): a duty period still open from an earlier day is closed at
+  its own day's cut-off with end_reason auto and no push (the app shows no notice for it either). "You were
+  clocked out" is only for a clock-out on the same day.
 
 **Office clock-out.** Tool `clock_out_driver(driver, reason?)` (assign_tasks or vehicles): end_reason
 `admin`, assignment `office`, a push to the driver.
@@ -149,6 +152,21 @@ starting a task clocks in)".
 - Live → driver card → **Move to vehicle** (a page: the vehicles with who holds each, "No
   vehicle"). It calls `move_driver_vehicle(driver, vehicle | null)` (assign_tasks or vehicles; how
   `office`); the driver gets a push.
+
+**Addition at the Part 2 go (16 October): a vehicle swap during a task (a breakdown), built in Part 2.**
+- The driver's Change vehicle stays refused during a task. The office's **Move to vehicle** works during a task
+  as a **swap**:
+  - It asks for the old vehicle's end odometer and the new vehicle's start odometer. Either the office types
+    them, or the driver's phone asks for them (the usual odometer photo flow) and they come from there.
+  - The task keeps both **segments** (`task_vehicle_segments`: vehicle, start and end odometer, from, to). The task
+    moves to the new vehicle; the new holder is the driver (`take_vehicle` how office) and the old vehicle is free.
+  - **Task km = the sum of the segments.** The odometer readings carry the task and their own vehicle, so mileage
+    and the allowance count each vehicle's own km; fuel logged after the swap goes to the new vehicle.
+  - The task detail shows both segments; the driver's push says "Task changed: vehicle WP KL-1234".
+- **"I need another vehicle"**: on the driver's Report a problem during a task, with the category breakdown or
+  accident, a tick "I need another vehicle". It opens a **critical** issue (`vehicle_needed`, the task's kind,
+  auto-resolved when the task's vehicle changes or the task ends) and pushes the fleet admins (event
+  `task.vehicle_needed`, approve and assign_tasks).
 
 ## 3. Requests and assignment use the clocked-in vehicle (item 3)
 
@@ -282,6 +300,10 @@ once when the notification is shown.
 - Its detail names the phone's brand and model (from `duty_sessions.device_info`) and points to Me →
   Phone setup on the phone. ref_key `app_stopped:<employee>:<day>`. Auto-resolves the next day, or
   when a fix comes back for the no-fix case.
+- **What is not an app stop** (Sahan, 16 October): a restart after an update or a new install (the app version or
+  the update id differs on the two sides of the gap), a sign-out and Finish work (they end the duty period, and
+  gaps are counted only inside one). The breakdown of test.driver's 15 stops on 15 October under this rule is
+  shown at checkpoint 2 before the count goes into the issue.
 
 ## 8. Dates everywhere: one date-range control (item 8)
 
@@ -998,7 +1020,7 @@ Sahan's split, with these changes:
 | Part | Branch | Items | Why here |
 |---|---|---|---|
 | 1 | `phase7-1` | 1, 2, 7 (office), 18, the date-range control | the driver's day and its data model first; everything else reads the assignment |
-| 2 | `phase7-2` | 3, 10, 11 (with the pickup at the start), 12, 17 (with the time at each stop), 19 | the dispatch screens, rebuilt once on the no-flicker pattern; needs-a-driver uses the best match (3) |
+| 2 | `phase7-2` | 3, 10, 11 (with the pickup at the start), 12, 17 (with the time at each stop), 19; the mid-task vehicle swap (§2 addition) | the dispatch screens, rebuilt once on the no-flicker pattern; needs-a-driver uses the best match (3) |
 | 2b | `phase7-2b` | 20, 21, 22, 23, 24, 25, 26 | the maps: the plan map draws Part 2's timeline; the route views, playback and controls change together |
 | 3 | `phase7-3` | 4, 5, 6, 28 | photos, documents and requester updates use the screens of Part 2 and the signed-upload tools together |
 | 4 | `phase7-4` | 7 (app), 8 (everywhere), 9, 13, 15, 16 | the trips build on 11 and 18; the rest is the office's reading screens |
