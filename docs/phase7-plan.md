@@ -1203,6 +1203,57 @@ behaviour is the same):
 - **Off duty, the logs still have a vehicle**: Finish work gives the vehicle up, so manual odometer readings, fuel
   and problem reports off duty go to the vehicle held last (kept on the phone).
 
+### Part 2 (branch `phase7-2`)
+
+Migration `20261016090000_phase7_dispatch.sql`; tests `supabase/tests/database/phase7_dispatch.test.sql`, the connector
+suite's section 6e, `test:data`'s Part 2 block, `test:rules` (the swap's km, stop numbers, the silent cut-off). Where
+the build differs from the text above (the behaviour is the same):
+
+- **The vehicle fills itself** in `create_task`, `plan_task`, `decide_request`, `book_vehicle` and `redecide_request`
+  (a new driver): the driver's vehicle today (the open assignment), else the regular one; the answer's
+  `vehicle_used {reg_no, why}` says which. A vehicle other than that default is kept in `tasks.vehicle_choice` and
+  shown as `vehicle_changed` ("Vehicle changed by Palitha: WP X instead of Kamal's regular vehicle WP Y"). With
+  neither a driver's default nor a vehicle the tool says "Pick a vehicle".
+- **Best match** is `availability`'s `best` and each row's `rank` (no separate `best_drivers` tool): drivers on duty
+  and free first, nearest to the first stop (`first_stop` or `lat`/`lng`) by straight line, then the fewest tasks
+  today; the needs-a-driver list carries the same `best` per task.
+- **Overlaps compare the trips**: a task with no end time counts until its plan's end (`ends_at`), so two tasks
+  of one vehicle at 10:00 and 10:15 are a conflict card, not only "the same day".
+- **Time at each stop**: `task_stops.dwell_source` (chosen | place | default); a chosen or place time becomes the
+  place's `usual_dwell_min` (trigger `task_stops_usual_dwell`). `task_detail` stops answer `planned_stay {arrive,
+  leave, minutes}` and `actual_stay {arrived, done, minutes}` (the plan's `planned` / `actual`).
+- **The start stop** is `task_stops.is_start` (Stop 1, a pickup); the trigger `tasks_start_stop_arrived` marks it
+  arrived when the task starts, for every app version. A pickup at the start without the tick is a warning
+  (create_task, plan_task) and a note on update_task_stops; the server changes nothing by itself.
+- **Needs a driver**: `tasks.needs_driver_since` / `needs_driver_reason` (declined | not_accepted) are set in SQL by
+  `decline_task` and by `queue_accept_reminders` (the minute job: the driver's reminder at `accept_reminder_min`,
+  then needs a driver at `accept_within_min` 15 after sending or `accept_before_leave_min` 30 before leaving) and
+  cleared by the trigger `tasks_needs_driver_clear` (accept, reassign, cancel, start). `notify_needs_driver` writes
+  one push per person: the dispatchers (approve or assign_tasks) and the assigner (`tasks.assigned_by_employee_id`)
+  open `/tasks/<id>/edit?driver=1`, the requester `/requests/<id>`. The issues `declined` / `not_accepted` are
+  critical and do not send the "critical issue" push (told at the source); their history gets a `notified` line
+  ("Told by web push 09:12: Palitha, Dilini") from the outbox. The office's red banner on every Tasks page lives in
+  the shell and reads the overview (reloaded by the issues channel within a second).
+- **The swap during a task** is `move_driver_vehicle` for a driver on a running task (RPC `office_swap_vehicle`):
+  `task_vehicle_segments` (vehicle, start and end odometer, from, to, reason, by); the office's typed readings are
+  odometer logs with entry `office`; the phone's are its usual task_end (old vehicle) and task_start (new vehicle)
+  logs on the task, put on the right stretch by the trigger `odometer_logs_swap_reading`. `tasks.km` is now kept by
+  a trigger (`task_km()`: the stretches added up, else end − start). `mileage_summary` gives each vehicle its own
+  stretch and counts the task once. The phone: a "Vehicle changed" card with one button per owed reading (Log
+  mileage modes `swap_end` / `swap_start`); Save & finish checks the end against the last stretch's start. Finishing
+  with a reading still owed is allowed (a towed vehicle: the office types it).
+- **"I need another vehicle"** is `vehicle_reports.needs_vehicle` (insert grant for drivers): the trigger
+  `vehicle_reports_need_vehicle` pushes `task.vehicle_needed` to the dispatchers at once; the issue
+  `vehicle_needed` (critical, the task's kind) resolves itself when the task's vehicle changes or the task ends.
+  Offline, the phone says it is saved and offers Call office.
+- **The first cut-off run** closes earlier days' duty sessions at their own day's cut-off silently (`duty_jobs`
+  answers `closed_silently`; no push); the phone also stays silent for an earlier day (`dutyEndIsToday`).
+- **App stops** skip a gap where the app version changed on the two sides (an update or a new install); sign-out
+  and Finish work end the session, so no gap spans them.
+- **Any permission implies view**: `normalisePermissions` adds view; the migration's backfill found nobody to change
+  on the live project (0 of 4 office people). The Requester preset is view + request.
+- **The accept reminder push** reads "Accept or decline: {title} {leave}" (Sinhala with the app's own Accept word).
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with

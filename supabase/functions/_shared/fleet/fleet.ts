@@ -487,11 +487,17 @@ export function taskWindow(t: Pick<Task, "start_at" | "end_by">): string {
   return t.end_by ? `${colomboTime(t.start_at)}–${colomboTime(t.end_by)}` : `from ${colomboTime(t.start_at)}`;
 }
 
-function overlaps(aStart: string, aEnd: string | null, b: Pick<Task, "start_at" | "end_by">): boolean {
+/** A task's end for an overlap: its end time, else the plan's end (Phase 7: a task with no end time still takes its trip). */
+function taskEnd(t: Pick<Task, "end_by"> & { plan_json?: unknown }): string | null {
+  return t.end_by ?? (t.plan_json as { ends_at?: string } | null)?.ends_at ?? null;
+}
+
+function overlaps(aStart: string, aEnd: string | null, b: Pick<Task, "start_at" | "end_by"> & { plan_json?: unknown }): boolean {
   const a0 = new Date(aStart).getTime();
   const a1 = aEnd ? new Date(aEnd).getTime() : a0;
   const b0 = new Date(b.start_at).getTime();
-  const b1 = b.end_by ? new Date(b.end_by).getTime() : b0;
+  const bEnd = taskEnd(b);
+  const b1 = bEnd ? new Date(bEnd).getTime() : b0;
   return a0 <= b1 && b0 <= a1;
 }
 
@@ -502,6 +508,8 @@ export interface AssignCheck {
   endBy: string | null;
   /** The task being changed, so it is not compared with itself. */
   ignoreTaskId?: string;
+  /** With no end time, the plan's end: the overlap cards compare the trips (Phase 7, §17). */
+  plannedEnd?: string | null;
 }
 
 /**
@@ -535,7 +543,8 @@ export interface Conflict {
 
 /** The warnings (words, as always) and the overlaps as structured cards. */
 export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warnings: string[]; conflicts: Conflict[] }> {
-  const { driver, vehicle, startAt, endBy } = check;
+  const { driver, vehicle, startAt } = check;
+  const endBy = check.endBy ?? check.plannedEnd ?? null;
   const date = colomboDate(startAt);
   const warnings: string[] = [];
   const conflicts: Conflict[] = [];
@@ -575,6 +584,11 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
     return { name, phone: e?.phone ?? undefined, call: links.call ?? undefined, whatsapp: links.whatsapp ?? undefined };
   };
 
+  // "08:00–11:00", the planned end when the task has no end time.
+  const windowText = (t: Task) => {
+    const end = taskEnd(t);
+    return end ? `${colomboTime(t.start_at)}–${colomboTime(end)}` : taskWindow(t);
+  };
   for (const other of sameDay) {
     if (other.id === check.ignoreTaskId) continue;
     const atSameTime = overlaps(startAt, endBy, other);
@@ -584,10 +598,10 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
     const otherDriver = person(other.employee_id);
     const card = (kind: Conflict["kind"], what: string): Conflict => ({
       kind,
-      text: `${what} ${other.title} ${taskWindow(other)}${requester ? ` for ${requester.name.split(" ")[0]}` : ""}${
+      text: `${what} ${other.title} ${windowText(other)}${requester ? ` for ${requester.name.split(" ")[0]}` : ""}${
         otherDriver ? ` (driver ${otherDriver.name.split(" ")[0]})` : ""
       }`,
-      task: { id: other.id, title: other.title, window: taskWindow(other) },
+      task: { id: other.id, title: other.title, window: windowText(other) },
       requester,
       driver: otherDriver,
     });

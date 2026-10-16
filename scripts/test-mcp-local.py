@@ -588,7 +588,7 @@ check(by_plate["WP CAR-1182"]["availability"] == "in garage" and by_plate["WP CA
       and by_plate["WP PH-2087"]["availability"] == "free all day" and sv["vehicles"][0]["pick"] == "good",
       "suggest_vehicles: car in garage = no; vans free all day, best first", json.dumps(sv["vehicles"])[:400])
 r = tool("decide_request", {"request_id": R1, "decision": "approve"}, expect_error=True)
-check("give a vehicle" in r, "approve without vehicle/driver is refused", r)
+check("give a driver" in r, "approve without vehicle/driver is refused (a driver alone is enough: the vehicle fills itself)", r)
 ap = tool("decide_request", {"request_id": R1, "decision": "approve", "vehicle": "WP PH-2087", "driver": "kasun.s", "decided_by": "Charuka W."})
 T4 = ap["task_id"]
 check(ap["request"] == "approved" and ap["driver"] == "Kasun Silva" and ap["title"] == "Trip · Matara sites", "decide_request approve creates the task", json.dumps(ap)[:300])
@@ -1345,7 +1345,8 @@ check(len(cab) >= 1 and all(i["vehicle"] == "WP CAB-4521" for i in cab) and all(
 # A request waiting over 30 minutes and a task not accepted after the reminder.
 re3 = tool("create_request", {"requested_by": "Late Asker", "date": day(3), "time": "10:00", "route_to": "Jaffna", "need_type": "van", "pax": 3})
 psql(f"update vehicle_requests set created_at = now() - interval '45 minutes' where id = '{re3['request']['id']}'")
-psql(f"update tasks set accept_reminder_sent_at = now() where id = '{T2}' and accepted_at is null")
+# Phase 7 (§19): the accept window's end marks it as needing a driver (queue_accept_reminders does this every minute).
+psql(f"update tasks set accept_reminder_sent_at = now(), needs_driver_since = now(), needs_driver_reason = 'not_accepted' where id = '{T2}' and accepted_at is null")
 code, body = fleet_jobs({"request_id": re3["request"]["id"]})
 check(code == 200 and body["opened"] == 1 and body["scope"] == {"request_id": re3["request"]["id"]}, "a scoped sync opens the request-waiting issue only", f"{code} {str(body)[:200]}")
 code, body = fleet_jobs({"task_id": T2})
@@ -1697,9 +1698,10 @@ st = tool("get_settings")["settings"]
 check(st["dwell_min"] == {"pickup": 5, "drop": 5, "visit": 60, "default": 5} and st["accept_within_min"] == 15 and st["accept_before_leave_min"] == 30
       and st.get("accept_reminder_min") == 5, "settings: the time at a stop by type (5, 5, 60) and the accept window 15 / 30 with the reminder at 5",
       json.dumps({k: st.get(k) for k in ("dwell_min", "accept_within_min", "accept_before_leave_min", "accept_reminder_min")}))
-pv = tool("plan_task", {"date": day(5), "leave_by": "08:00", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "Kurunegala tower site"}]})
+tool("add_place", {"name": "P7 depot Kegalle", "lat": 7.2513, "lng": 80.3464, "kind": "store"})
+pv = tool("plan_task", {"date": day(5), "leave_by": "08:00", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "P7 depot Kegalle"}]})
 s1, s2 = pv["stops"][0], pv["stops"][1]
-check(s1["label"] == "Stop 1 · Pickup · Head office, Colombo 05" and s2["label"] == "Stop 2 · Visit · Kurunegala tower site"
+check(s1["label"] == "Stop 1 · Pickup · Head office, Colombo 05" and s2["label"] == "Stop 2 · Visit · P7 depot Kegalle"
       and s2["dwell_min"] == 60 and s2["dwell_source"] == "default" and s2.get("planned_leave"),
       "plan_task: stops named by their place in the order, a visit's default 60 min, its planned leave", json.dumps([s1, s2])[:400])
 items = pv["timeline"]["items"]
@@ -1709,11 +1711,11 @@ check(items[0]["kind"] == "leave" and items[0]["at"] == "08:00"
       and {"drive_min", "km", "ends"} <= set(pv["timeline"]["totals"]),
       "plan_task: the timeline (leave, stop, leg, stop) and its totals", json.dumps(pv["timeline"])[:400])
 cv = tool("create_task", {"title": "P7b usual time", "date": day(5), "start_time": "08:00", "driver": "ruwan.j", "vehicle": "WP P7-1001",
-                          "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "Kurunegala tower site", "dwell_min": 90}]})
-check(psql("select usual_dwell_min from places where name = 'Kurunegala tower site'") == "90"
+                          "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "P7 depot Kegalle", "dwell_min": 90}]})
+check(psql("select usual_dwell_min from places where name = 'P7 depot Kegalle'") == "90"
       and psql(f"select dwell_source from task_stops where task_id = '{cv['task_id']}' and seq = 2") == "chosen",
       "a chosen time is saved on the stop (chosen) and becomes the place's usual time")
-pv = tool("plan_task", {"date": day(6), "leave_by": "08:00", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "Kurunegala tower site"}]})
+pv = tool("plan_task", {"date": day(6), "leave_by": "08:00", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "P7 depot Kegalle"}]})
 check(pv["stops"][1]["dwell_min"] == 90 and pv["stops"][1]["dwell_source"] == "place", "the next plan at that place takes its usual time (place)", json.dumps(pv["stops"][1])[:200])
 tool("cancel_task", {"task_id": cv["task_id"], "reason": "suite: usual time checked"})
 
@@ -1850,7 +1852,7 @@ check(code == 201 and "|Another vehicle needed · WP P7-1002|Saman Kumara · Bre
       "'I need another vehicle' (the driver's report): the dispatchers' push at once", row)
 fleet_jobs()
 vn = [i for i in tool("list_issues", {"status": "active", "kind": "vehicle_needed"})["issues"] if i.get("task_id") == TW2]
-check(vn and vn[0]["severity"] == "critical" and vn[0]["title"] == "Another vehicle needed: WP P7-1002", "a critical vehicle_needed issue", json.dumps(vn[:1])[:300])
+check(vn and vn[0]["severity"] == "critical" and vn[0]["title"] == "Another vehicle needed: WP P7-1002 · Toyota Axio", "a critical vehicle_needed issue", json.dumps(vn[:1])[:300])
 mv = tool("move_driver_vehicle", {"driver": "saman.k", "vehicle": "WP P7-1001"})
 check(mv["readings"] == {"old_end": "the driver enters it on the phone", "new_start": "the driver enters it on the phone"}, "a swap without readings: the phone is asked",
       json.dumps(mv["readings"]))

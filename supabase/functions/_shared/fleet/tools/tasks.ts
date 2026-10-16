@@ -971,7 +971,7 @@ export const createTask = tool({
     if (endBy && endBy <= startAt) throw new ToolError("end_time must be later than the leave-by time on the same day.");
 
     const split = await resolveSplit(db, args.projects);
-    const { warnings, conflicts } = await assignCheck(db, { driver, vehicle, startAt, endBy });
+    const { warnings, conflicts } = await assignCheck(db, { driver, vehicle, startAt, endBy, plannedEnd: prepared.plan.ends_at });
     warnings.push(...prepared.plan.warnings.map((w) => w.text), ...prepared.notes);
     if (new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
 
@@ -1043,6 +1043,7 @@ export const planTask = tool({
           vehicle,
           startAt: prepared.leaveBy,
           endBy: args.end_time ? utcIso(args.date, args.end_time) : null,
+          plannedEnd: prepared.plan.ends_at,
         });
         warnings.push(...check.warnings);
         conflicts = check.conflicts;
