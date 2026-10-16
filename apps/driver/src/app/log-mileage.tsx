@@ -11,6 +11,10 @@
 // failed photos in a row, or when there is no connection (the server checks
 // the photo later). What the driver did goes with the log (entry, number of
 // photos) so the office sees what was checked.
+//
+// Phase 7 (item 18): at Save & finish, a trip much shorter than its plan (under 70 % of the
+// planned km, or under half the planned drive time) asks "Check the reading" first: Correct
+// it (back to the reading, nothing saved) or Go on (saved as it is; the server flags it too).
 
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -21,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
 import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/ui';
+import { earlyFinish } from '@/lib/dayRules';
 import { parseDecimal, parseWhole, thousands } from '@/lib/format';
 import { readOdometerPhoto, type ReadStatus } from '@/lib/odometerAi';
 import { discardPhoto, type LocalPhoto, takePhoto } from '@/lib/photos';
@@ -183,6 +188,19 @@ export default function LogMileageScreen() {
     });
   }
 
+  /** The odometer says the trip was much shorter than planned: ask once; false = correct the reading. */
+  function confirmEarly(km: number): Promise<boolean> {
+    const early = task ? earlyFinish(task, km, Date.now()) : null;
+    if (!early) return Promise.resolve(true);
+    const planned = early.plannedKm >= 10 ? thousands(early.plannedKm) : String(early.plannedKm);
+    return new Promise((resolve) => {
+      Alert.alert(t('complete.checkTitle'), t('complete.checkBody', { planned, km: thousands(early.km) }), [
+        { text: t('complete.correct'), style: 'cancel', onPress: () => resolve(false) },
+        { text: t('complete.goOn'), onPress: () => resolve(true) },
+      ]);
+    });
+  }
+
   async function save() {
     if (saving) return;
     if ((mode === 'manual' || mode === 'fuel') && !vehicle) return setProblem(t('log.needVehicle'));
@@ -208,6 +226,7 @@ export default function LogMileageScreen() {
     if (!reading) return setProblem(t('log.needPhoto'));
     if (mode === 'finish' && startKm !== null && reading.km < startKm) return setProblem(t('log.lowerThanStart', { km: thousands(startKm) }));
     if (step.kind === 'typing' && step.entry === 'photo_changed' && !(await confirmChange(step.aiKm))) return;
+    if (mode === 'finish' && !(await confirmEarly(reading.km))) return;
 
     setSaving(true);
     if (mode === 'start' && task) {

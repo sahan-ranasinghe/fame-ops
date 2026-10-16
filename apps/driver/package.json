@@ -68,7 +68,8 @@
     "test:track": "tsx scripts/test-track.ts",
     "test:sync": "tsx scripts/test-sync.ts",
     "test:setup": "tsx scripts/test-phone-setup.ts",
-    "test:nav": "tsx scripts/test-nav.ts"
+    "test:nav": "tsx scripts/test-nav.ts",
+    "test:rules": "tsx scripts/test-rules.ts"
   },
   "private": true,
   "expo": {

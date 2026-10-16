@@ -3,13 +3,14 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleCredit } from '@/components/GoogleCredit';
-import { Check, ChevronRight, Play, Van } from '@/components/icons';
+import { Check, ChevronRight, Play } from '@/components/icons';
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { DeclineSheet } from '@/components/DeclineSheet';
+import { DutyHeader, DutyNotices } from '@/components/DutyCard';
 import { leaveTime, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { PhoneSetupCard } from '@/components/PhoneSetupCard';
 import { TrackingNotice } from '@/components/tracking';
@@ -27,13 +28,11 @@ function greetingKey(): string {
 
 export default function TodayScreen() {
   const app = useApp();
-  const { t, me, vehicle, tasks, sharing, waitingTasks } = app;
+  const { t, me, tasks, waitingTasks } = app;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const dateLabel = useDateLabel();
   const peopleLine = usePeopleLine();
-  const [sharingBusy, setSharingBusy] = useState(false);
-  const [needLocation, setNeedLocation] = useState(false);
 
   const today = colomboDate();
   const [declining, setDeclining] = useState<TaskWithStops | null>(null);
@@ -54,15 +53,6 @@ export default function TodayScreen() {
       if (unseen !== '') markSeen(unseen.split(','));
     }, [unseen, markSeen]),
   );
-
-  async function toggleSharing() {
-    if (sharingBusy) return;
-    setSharingBusy(true);
-    const result = await app.setSharing(!sharing);
-    setNeedLocation(result === 'no_permission');
-    setSharingBusy(false);
-    if (result === 'no_permission') router.push('/permissions');
-  }
 
   function openNext() {
     if (!next) return;
@@ -95,40 +85,13 @@ export default function TodayScreen() {
             <LanguagePill />
           </View>
 
-          <Pressable accessibilityRole="button" onPress={() => router.push('/vehicle')} style={styles.vehicle}>
-            <Van size={28} color={colors.amber} />
-            <View style={{ flex: 1 }}>
-              {vehicle ? (
-                <>
-                  <Mono size={19} bold color="#ffffff">{vehicle.reg_no}</Mono>
-                  {vehicle.make_model && <Txt variant="muted" color="#b9bec4">{vehicle.make_model}</Txt>}
-                </>
-              ) : (
-                <Txt variant="strong" color="#ffffff">{t('today.noVehicle')}</Txt>
-              )}
-            </View>
-            <Txt variant="strong" color={colors.amber}>{t(vehicle ? 'today.change' : 'today.choose')}</Txt>
-          </Pressable>
+          {/* Phase 7: the duty state in place of the "On duty" switch (Start work / Change vehicle / Finish work). */}
+          <DutyHeader />
         </View>
 
         <View style={{ padding: 16, gap: 16 }}>
           {app.offline && <Notice tone="warn" text={t('common.savedOffline')} />}
-
-          <Pressable accessibilityRole="switch" accessibilityState={{ checked: sharing }} onPress={toggleSharing}>
-            <Card style={styles.sharing}>
-              <View style={[styles.halo, !sharing && { backgroundColor: '#eceae4' }]}>
-                <View style={[styles.liveDot, !sharing && { backgroundColor: '#9aa0a6' }]} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Txt variant="big">{t('today.sharing')}</Txt>
-                <Txt variant="muted">{t(sharing ? 'today.sharingOn' : 'today.sharingOff')}</Txt>
-              </View>
-              <View style={[styles.check, sharing ? { backgroundColor: colors.blue, borderColor: colors.blue } : null]}>
-                {sharing && <Check size={24} color="#ffffff" strokeWidth={3.5} />}
-              </View>
-            </Card>
-          </Pressable>
-          {needLocation && <Notice tone="warn" text={t('today.needLocation')} />}
+          <DutyNotices />
           {app.notice && (
             <Pressable accessibilityRole="button" onPress={app.clearNotice}>
               <Notice tone="info" text={t(app.notice)} />
@@ -227,27 +190,6 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.page },
   header: { backgroundColor: colors.ink, paddingHorizontal: 20, paddingBottom: 22, gap: 18 },
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  vehicle: {
-    backgroundColor: colors.darkSurface,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  sharing: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  halo: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.blueChip, alignItems: 'center', justifyContent: 'center' },
-  liveDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: colors.blue },
-  check: {
-    width: 34,
-    height: 34,
-    borderRadius: 4,
-    borderWidth: 2,
-    borderColor: '#8b9198',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   nextCard: { backgroundColor: colors.card, borderWidth: 2.5, borderColor: colors.ink, borderRadius: 22, padding: 20 },
   nextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16, minHeight: 72 },

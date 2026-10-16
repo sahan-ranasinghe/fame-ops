@@ -1,10 +1,11 @@
 // One task. In progress it is the designed screen (design/png/Driver · Task in
 // progress.png): map, destination, distance left, Navigate, Call contact,
 // Complete task. Before it starts it shows the details and "Start task".
+// Phase 7 (item 18): Arrived needs the phone near the stop (components/ArrivalButton.tsx),
+// Done only after Arrived, Complete task only once the last stop is Done or Skipped.
 
 import { Camera, GeoJSONSource, Layer, Map, Marker } from '@maplibre/maplibre-react-native';
 import Constants from 'expo-constants';
-import * as Location from 'expo-location';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Check, ChevronLeft, MapPin, Navigation, Phone, Play } from '@/components/icons';
@@ -13,12 +14,14 @@ import GoogleMapView, { Marker as GoogleMarker, Polyline, PROVIDER_GOOGLE } from
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ArrivalButton, useHere } from '@/components/ArrivalButton';
 import { DeclineSheet } from '@/components/DeclineSheet';
 import { GoogleCredit } from '@/components/GoogleCredit';
 import { SkipSheet } from '@/components/SkipSheet';
 import { leaveTime, nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
+import { arrivalCheck, arrivalRecord, canMarkDone, lastStopOpen } from '@/lib/dayRules';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { colomboTime } from '@/lib/time';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
@@ -32,36 +35,6 @@ const SRI_LANKA: [number, number] = [80.7, 7.75];
 const GOOGLE_MAP = (Constants.expoConfig?.extra as { googleMapsAndroid?: boolean } | undefined)?.googleMapsAndroid === true;
 
 type LngLat = [number, number];
-
-/** The phone's position while this screen is open (for the map only; nothing is recorded here). */
-function useMyPosition(enabled: boolean): LngLat | null {
-  const [position, setPosition] = useState<LngLat | null>(null);
-  useEffect(() => {
-    if (!enabled) return;
-    let subscription: Location.LocationSubscription | null = null;
-    let cancelled = false;
-    (async () => {
-      try {
-        if (!(await Location.getForegroundPermissionsAsync()).granted) return;
-        const last = await Location.getLastKnownPositionAsync();
-        if (last && !cancelled) setPosition([last.coords.longitude, last.coords.latitude]);
-        const watcher = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.Balanced, timeInterval: 10_000, distanceInterval: 25 },
-          (update) => setPosition([update.coords.longitude, update.coords.latitude]),
-        );
-        if (cancelled) watcher.remove();
-        else subscription = watcher;
-      } catch {
-        // No position: the map simply shows the destination.
-      }
-    })();
-    return () => {
-      cancelled = true;
-      subscription?.remove();
-    };
-  }, [enabled]);
-  return position;
-}
 
 /**
  * The task map (OpenFreeMap). A stop that is a Google place (google_place_id: its pin came from Google's
@@ -188,7 +161,11 @@ export default function TaskScreen() {
 
   const task: TaskWithStops | undefined = tasks.find((item) => item.id === id);
   const running = task?.status === 'in_progress';
-  const myPosition = useMyPosition(running);
+  // The phone's position while this screen is open: the map and the Arrived rule (nothing is recorded here).
+  const here = useHere(running);
+  const hereLat = here.fix?.lat;
+  const hereLng = here.fix?.lng;
+  const myPosition = useMemo((): LngLat | null => (hereLat != null && hereLng != null ? [hereLng, hereLat] : null), [hereLat, hereLng]);
   const [skipping, setSkipping] = useState<TaskStop | null>(null);
   const [declining, setDeclining] = useState(false);
 
@@ -232,6 +209,8 @@ export default function TaskScreen() {
   const call = telLink(task.contact_phone);
   const people = peopleLine(task);
   const otherRunning = tasks.some((item) => item.status === 'in_progress' && item.id !== task.id);
+  // Complete task waits for the last stop (Done or Skipped); open stops before it become "not visited".
+  const lastOpen = running ? lastStopOpen(task) : null;
 
   const overlay = (
     <>
@@ -241,7 +220,7 @@ export default function TaskScreen() {
       {running && (
         <Pressable
           accessibilityRole="button"
-          onPress={() => { if (!sharing) void app.setSharing(true).then((r) => { if (r === 'no_permission') router.push('/permissions'); }); }}
+          onPress={() => { if (!sharing) void app.startWork(task.vehicle_id).then((r) => { if (r === 'no_permission') router.push('/permissions'); }); }}
           style={[styles.sharingPill, { top: insets.top + 16 }]}
         >
           <View style={[styles.pillDot, { backgroundColor: sharing ? colors.blue : colors.red }]} />
@@ -317,35 +296,42 @@ export default function TaskScreen() {
                   item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min }) : null,
                   item.status === 'skipped' ? t('task.skipped') : item.status === 'arrived' && item.arrived_at ? `${t('task.arrived')} ${colomboTime(item.arrived_at)}` : null,
                 ].filter(Boolean).join(' · ');
+                // A stop further down (visited out of order): Done once arrived, Arrived only when the phone is there.
+                const nearHere = !done && !current && !canMarkDone(item) ? arrivalCheck(item, here.fix) : null;
                 return (
-                  <View key={item.id} style={[styles.stopRow, current && styles.stopRowCurrent, done && { opacity: 0.6 }]}>
-                    <View style={{ flex: 1 }}>
-                      <Txt variant="muted" size={14}>
-                        {current ? `${t('task.currentStop')} · ` : ''}{t(item.type === 'pickup' ? 'today.pickup' : item.type === 'drop' ? 'today.dropoff' : 'today.visit')}
-                      </Txt>
-                      <Txt variant="strong">{item.place_name}</Txt>
-                      <GoogleCredit show={!!item.google_place_id} />
-                      {detail !== '' && <Txt variant="small">{detail}</Txt>}
-                      {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
-                    </View>
-                    {done ? (
-                      <View style={styles.doneBadge}><Check size={18} color={colors.blue} strokeWidth={3} /></View>
-                    ) : (
-                      <View style={{ gap: 6, alignItems: 'flex-end' }}>
-                        {item.status === 'pending' ? (
-                          <Pressable accessibilityRole="button" onPress={() => app.markStopArrived(item)} style={styles.doneButton}>
-                            <Txt variant="strong" size={15}>{t('task.arrived')}</Txt>
-                          </Pressable>
-                        ) : (
-                          <Pressable accessibilityRole="button" onPress={() => app.markStopDone(item)} style={[styles.doneButton, { backgroundColor: colors.ink }]}>
-                            <Txt variant="strong" size={15} color="#ffffff">{t('task.done')}</Txt>
-                          </Pressable>
-                        )}
-                        <Pressable accessibilityRole="button" onPress={() => setSkipping(item)} hitSlop={8}>
-                          <Txt variant="small" color={colors.red}>{t('task.skip')}</Txt>
-                        </Pressable>
+                  <View key={item.id} style={[styles.stopCard, current && styles.stopRowCurrent, done && { opacity: 0.6 }]}>
+                    <View style={styles.stopRow}>
+                      <View style={{ flex: 1 }}>
+                        <Txt variant="muted" size={14}>
+                          {current ? `${t('task.currentStop')} · ` : ''}{t(item.type === 'pickup' ? 'today.pickup' : item.type === 'drop' ? 'today.dropoff' : 'today.visit')}
+                        </Txt>
+                        <Txt variant="strong">{item.place_name}</Txt>
+                        <GoogleCredit show={!!item.google_place_id} />
+                        {detail !== '' && <Txt variant="small">{detail}</Txt>}
+                        {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
                       </View>
-                    )}
+                      {done ? (
+                        <View style={styles.doneBadge}><Check size={18} color={colors.blue} strokeWidth={3} /></View>
+                      ) : (
+                        <View style={{ gap: 6, alignItems: 'flex-end' }}>
+                          {!current && canMarkDone(item) && (
+                            <Pressable accessibilityRole="button" onPress={() => app.markStopDone(item)} style={[styles.doneButton, { backgroundColor: colors.ink }]}>
+                              <Txt variant="strong" size={15} color="#ffffff">{t('task.done')}</Txt>
+                            </Pressable>
+                          )}
+                          {nearHere?.state === 'ok' && (
+                            <Pressable accessibilityRole="button" onPress={() => app.markStopArrived(item, arrivalRecord(nearHere))} style={styles.doneButton}>
+                              <Txt variant="strong" size={15}>{t('task.arrived')}</Txt>
+                            </Pressable>
+                          )}
+                          <Pressable accessibilityRole="button" onPress={() => setSkipping(item)} hitSlop={8} style={styles.skip}>
+                            <Txt variant="small" color={colors.red}>{t('task.skip')}</Txt>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+                    {/* The current stop: Arrived by the distance rule, then Done (keyed by stop: the GPS wait starts again per stop). */}
+                    {!done && current && <ArrivalButton key={item.id} stop={item} here={here} />}
                   </View>
                 );
               })}
@@ -356,10 +342,12 @@ export default function TaskScreen() {
               <Button kind="outline" icon={Phone} label={t('task.callContact')} disabled={!call} onPress={() => call && Linking.openURL(call)} style={{ flex: 1 }} />
             </View>
             {allStops && <Button kind="outline" icon={MapPin} label={t('task.allStops')} onPress={openAllStops} />}
+            {lastOpen && <Notice tone="warn" text={t('complete.needsLastStop')} />}
             <Button
               kind="dark"
               icon={Check}
               label={t('task.complete')}
+              disabled={lastOpen !== null}
               onPress={() => {
                 const open = task.task_stops.filter((item) => item.status === 'pending' || item.status === 'arrived').length;
                 const finish = () => router.push({ pathname: '/log-mileage', params: { mode: 'finish', taskId: task.id } });
@@ -455,7 +443,9 @@ const styles = StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   stats: { backgroundColor: colors.page, borderRadius: 14, padding: 16, flexDirection: 'row', gap: 12 },
   gpsLine: { flexDirection: 'row', alignItems: 'baseline', gap: 10, paddingHorizontal: 4, marginTop: -6 },
-  stopRow: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 12 },
+  stopCard: { gap: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 12 },
+  stopRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  skip: { minHeight: 32, justifyContent: 'center' },
   stopRowCurrent: { borderColor: colors.blue, borderWidth: 2, backgroundColor: colors.blueChip },
   doneButton: { minHeight: 44, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   doneBadge: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.blueChip, alignItems: 'center', justifyContent: 'center' },

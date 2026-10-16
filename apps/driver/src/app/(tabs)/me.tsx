@@ -1,5 +1,6 @@
 // Me tab: who is signed in, language, current vehicle, what is still waiting
-// to be sent, permissions, app version, sign out.
+// to be sent, permissions, app version, sign out (not while on duty: Finish work
+// first, Phase 7).
 
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -20,7 +21,7 @@ import { colors } from '@/theme';
 
 export default function MeScreen() {
   const app = useApp();
-  const { t, me, vehicle, queue, live } = app;
+  const { t, me, vehicle, queue, live, sharing } = app;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
@@ -58,6 +59,7 @@ export default function MeScreen() {
           const outcome = await app.signOut();
           setBusy(false);
           if (outcome === 'task') setProblem(t('me.signOutTask'));
+          if (outcome === 'duty') setProblem(t('me.finishWorkFirst'));
           if (outcome === 'queue') setProblem(t('me.signOutQueue'));
         },
       },
@@ -65,6 +67,8 @@ export default function MeScreen() {
   }
 
   const taskRunning = app.tasks.some((task) => task.status === 'in_progress');
+  // Sign out waits for the task to be finished, then for Finish work.
+  const signOutBlocked = taskRunning ? 'me.signOutTask' : sharing ? 'me.finishWorkFirst' : null;
 
   return (
     <View style={styles.page}>
@@ -76,9 +80,10 @@ export default function MeScreen() {
           <Line label={t('me.code')}><Mono size={17} bold>{me?.code}</Mono></Line>
           {me?.phone && <Line label={t('me.phone')}><Mono size={17}>{me.phone}</Mono></Line>}
           <Line label={t('me.vehicle')}>
-            {vehicle ? <Plate regNo={vehicle.reg_no} /> : <Txt variant="muted">{t('today.noVehicle')}</Txt>}
+            {vehicle ? <Plate regNo={vehicle.reg_no} /> : <Txt variant="muted">{t(sharing ? 'duty.noVehicle' : 'duty.offDuty')}</Txt>}
           </Line>
-          <Button kind="outline" label={t(vehicle ? 'today.change' : 'today.choose')} onPress={() => router.push('/vehicle')} />
+          {/* The vehicle changes only while on duty; off duty, Start work on Today picks it. */}
+          {sharing && <Button kind="outline" label={t('vehicle.change')} onPress={() => router.push({ pathname: '/vehicle', params: { mode: 'change' } })} />}
         </Card>
 
         <Card style={{ gap: 12 }}>
@@ -136,8 +141,8 @@ export default function MeScreen() {
         </Card>
 
         {problem && <Notice tone="danger" text={problem} />}
-        {taskRunning && <Txt variant="muted" style={{ textAlign: 'center' }}>{t('me.signOutTask')}</Txt>}
-        <Button kind="outline" icon={LogOut} label={t('me.signOut')} disabled={taskRunning} busy={busy} onPress={confirmSignOut} />
+        {signOutBlocked && <Txt variant="muted" style={{ textAlign: 'center' }}>{t(signOutBlocked)}</Txt>}
+        <Button kind="outline" icon={LogOut} label={t('me.signOut')} disabled={signOutBlocked !== null} busy={busy} onPress={confirmSignOut} />
       </ScrollView>
     </View>
   );
