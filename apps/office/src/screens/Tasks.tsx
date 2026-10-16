@@ -5,7 +5,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { Board, BoardCard } from "../data/types";
-import { addDays, longDate, statusTone, today } from "../lib/format";
+import { addDays, cap, longDate, statusTone, today } from "../lib/format";
 import { Avatar, Dot, ErrBox, Loading, Plate, StaleNote, Updated } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { ListWithDetail } from "../ui/Page";
@@ -27,6 +27,8 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
       )}
       <span className="who"><Avatar name={t.driver} small /><span className="grow">{t.driver || ""}</span><Plate v={t.vehicle} /></span>
       <span className={`status ${statusTone(col, t.status)}`}>{t.status || ""}</span>
+      {/* Phase 7: finished far under the plan (the odometer or the time); the words on hover and on the task. */}
+      {t.finish_flag && <span><span className="pill warn" title={t.finish_flag.text}>{t.finish_flag.kind === "completed_early" ? "Completed early" : cap(t.finish_flag.kind)}</span></span>}
     </button>
   );
 }

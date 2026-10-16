@@ -132,6 +132,21 @@ export function FleetSettings() {
           <div className="acts"><button className="btn dark" type="submit" disabled={busy !== null || (!changed("shift_start") && !changed("shift_days"))}>Save</button></div>
         </form>
 
+        {/* Phase 7: the server's auto clock-out ("" = off). */}
+        <form className="card card-b form" data-testid="cutoff-settings" onSubmit={(ev) => { ev.preventDefault(); void save("duty_cutoff", draft.duty_cutoff ?? ""); }}>
+          <h2>End of the working day</h2>
+          <p className="muted small" style={{ margin: 0 }}>Drivers still on duty after this time are clocked out (not while a task is running). Leave empty for none.</p>
+          <div className="grid2" style={{ alignItems: "end" }}>
+            <div className="field">
+              <label htmlFor="fs-duty-cutoff">End of the working day</label>
+              <input id="fs-duty-cutoff" type="time" value={draft.duty_cutoff ?? "21:00"} onChange={(e) => setDraft({ ...draft, duty_cutoff: e.target.value })} />
+              <span className="hint">{(draft.duty_cutoff ?? "21:00") === "" ? "Empty: nobody is clocked out by the server." : `Clocked out at ${draft.duty_cutoff ?? "21:00"} (Colombo time).`}</span>
+            </div>
+            <div><button type="button" className="btn" disabled={busy !== null || draft.duty_cutoff === ""} onClick={() => setDraft({ ...draft, duty_cutoff: "" })}>Leave empty</button></div>
+          </div>
+          <div className="acts"><button className="btn dark" type="submit" disabled={busy !== null || !changed("duty_cutoff")}>Save</button></div>
+        </form>
+
         <form className="card card-b form" data-testid="checklist-settings" onSubmit={(ev) => { ev.preventDefault(); void save("fuel_video_checklist", draft.fuel_video_checklist ?? []); }}>
           <h2>Fuel video steps</h2>
           <p className="muted small" style={{ margin: 0 }}>{data.about.fuel_video_checklist}. The driver shows them in this order, ticking each to move on; Stop opens after the last one. The short word names the bookmark on the Fuel page.</p>

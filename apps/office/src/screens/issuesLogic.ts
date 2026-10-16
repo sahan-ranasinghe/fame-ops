@@ -23,6 +23,11 @@ export const KIND_TEXT: Record<string, string> = {
   request_waiting: "Request waiting",
   push_failed: "Push failed",
   routing_failed: "Routing failed",
+  // Phase 7.
+  vehicle_conflict: "Vehicle taken",
+  app_stopped: "App stopped",
+  arrival_override: "Arrived away from the stop",
+  completed_early: "Completed early",
 };
 
 export const kindText = (i: Pick<Issue, "kind" | "kind_text">) => i.kind_text ?? KIND_TEXT[i.kind] ?? i.kind;
