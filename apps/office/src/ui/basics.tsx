@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import type { Entry } from "../data/store";
 import { clock, initials, plateOf, type Tone } from "../lib/format";
 import { AUTHZ, errText, type Fix } from "../transport/errors";
@@ -65,7 +65,18 @@ export function StaleNote({ entry }: { entry: Entry }) {
   return <div className="stale">Showing data from {entry.at ? clock(entry.at) : "earlier"}. {errText(e)[0]}</div>;
 }
 
-export const Updated = ({ entry }: { entry: Entry }) => entry.at ? <span className="updated">Updated {clock(entry.at)}</span> : null;
+/**
+ * "Updated 10:42". A refresh with the same answer re-renders nothing (the store keeps the object and notes the time in
+ * place), so the line looks at the entry's time again every 15 seconds by itself.
+ */
+export function Updated({ entry }: { entry: Entry }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => tick((n) => n + 1), 15000);
+    return () => clearInterval(timer);
+  }, []);
+  return entry.at ? <span className="updated">Updated {clock(entry.at)}</span> : null;
+}
 
 export function Chips<K extends string>({ options, value, onChange, counts }: { options: [K, string][]; value: K; onChange: (k: K) => void; counts?: Partial<Record<K, number>> }) {
   return (

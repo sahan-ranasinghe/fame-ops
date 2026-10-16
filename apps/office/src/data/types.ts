@@ -166,6 +166,7 @@ export interface FreeAt {
 export interface Stop {
   /** task_detail's stops carry their id (Part 5b: save_arrival_place). */
   id?: string;
+  place_id?: string;
   seq: number;
   type: string;
   what?: string;
@@ -481,6 +482,11 @@ export interface TaskDetail {
     leave_by_source?: string;
     buffer_min?: number;
     start_place?: string;
+    /** Phase 7: the start as the stops form sends it back (a Google start by its id; its pin is Google's). */
+    start_place_id?: string;
+    start_google_place_id?: string;
+    start_lat?: number;
+    start_lng?: number;
     return_to_base?: boolean;
     avoid_expressway?: boolean;
     plan_version?: number;
@@ -764,6 +770,9 @@ export interface BookResult {
   driver?: string;
   vehicle?: string;
   warnings?: string[];
+  /** Phase 7 (§3). */
+  vehicle_used?: VehicleUsed;
+  vehicle_changed?: string;
 }
 
 export interface ProjectMatch {
@@ -895,6 +904,11 @@ export interface DecideResult {
   requested_by?: string;
   task_id?: string;
   warnings?: string[];
+  /** Phase 7 (§3): the vehicle the task took, why, and a choice against the driver's default. */
+  vehicle?: string;
+  vehicle_used?: VehicleUsed;
+  vehicle_changed?: string;
+  leave_by?: string;
 }
 
 export type ShareState = "sharing" | "stale" | "not_sharing";

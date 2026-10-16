@@ -13,7 +13,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
-import type { DecideResult, RedecideResult, SuggestedVehicle, Suggestions, UpdateRequestResult, VehicleUsed } from "../data/types";
+import type { DecideResult, RedecideResult, SuggestedVehicle, Suggestions } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { cap, joinDots, requestTone, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
@@ -50,8 +50,7 @@ interface Decision {
   toDwell?: string;
 }
 
-/** decide_request's answer with the task's Phase 7 fields (the vehicle the driver brought). */
-type Decided = DecideResult & { vehicle?: string; vehicle_used?: VehicleUsed; vehicle_changed?: string; leave_by?: string };
+type Decided = DecideResult;
 
 /** The From and To as rows, for the stops' first times (the plan preview answers them in this order). */
 const routeRows = (from: string, to: string): StopDraft[] => [
@@ -151,9 +150,9 @@ export function RequestDecide() {
     }
     setBusy(true);
     try {
-      // decide_request copies the request's times at From and To onto the stops: a change here goes onto the request first.
-      if (times) setQ((await transport.call<UpdateRequestResult>("update_request", { request_id: id, version: q.version ?? 0, ...times })).request);
-      const p = await transport.call<Decided>("decide_request", v.input);
+      // The times at From and To set here go onto the task's stops (the request keeps its own); a cleared one uses the request's.
+      const stopTimes = Object.fromEntries(Object.entries(times ?? {}).filter(([, n]) => n !== null));
+      const p = await transport.call<Decided>("decide_request", { ...v.input, ...stopTimes });
       draft.clear();
       void store.invalidate();
       if (decision === "approve") {

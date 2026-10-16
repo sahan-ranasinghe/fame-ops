@@ -224,13 +224,16 @@ export function firstStopOf(list: StopDraft[], start?: { name: string; lat?: num
 }
 
 /**
- * Tick it: the pickup at the start goes, and "Passengers get in here" takes its place. What the row carried that
- * the start stop cannot (its note) is handed back for the task's notes. A task keeps at least one row.
+ * Tick it: the pickup at the start goes, and "Passengers get in here" takes its place; what the row carried (what,
+ * the note, the time at the stop) moves to the start stop. A task keeps at least one row.
  */
-export function tickStart(list: StopDraft[], i: number): { list: StopDraft[]; note: string } {
+export function tickStart(list: StopDraft[], i: number): { list: StopDraft[]; carried: Pick<StartFields, "startWhat" | "startNote" | "startDwell"> } {
   const row = list[i];
   const rest = list.filter((_, j) => j !== i);
-  return { list: rest.length ? rest : [newStop("drop")], note: row?.note.trim() ?? "" };
+  return {
+    list: rest.length ? rest : [newStop("drop")],
+    carried: { startWhat: row?.what ?? "", startNote: row?.note.trim() ?? "", startDwell: row?.dwell.trim() ?? "" },
+  };
 }
 
 /** Where the trip starts, as the forms hold it. */
@@ -243,6 +246,20 @@ export interface StartFields {
   startLng?: number;
   /** Passengers get in here: the start becomes Stop 1, a pickup. */
   startPax: boolean;
+  /** The start stop's own fields while passengers get in there (Tick it moves them from the pickup); "" = the defaults. */
+  startWhat?: What;
+  startNote?: string;
+  startDwell?: string;
+}
+
+/** The start stop's what, note and time there, for a call (only with passengers). */
+export function startExtras(f: Pick<StartFields, "startWhat" | "startNote" | "startDwell">): Record<string, unknown> {
+  const dwell = parseDwell(f.startDwell ?? "");
+  return {
+    ...(f.startWhat ? { what: f.startWhat } : {}),
+    ...(f.startNote?.trim() ? { note: f.startNote.trim() } : {}),
+    ...(typeof dwell === "number" ? { dwell_min: dwell } : {}),
+  };
 }
 
 /** The start for a call: the picked or typed one, else the base place (as the server would take it); passengers when ticked. */
@@ -252,9 +269,9 @@ export function startInput(f: StartFields, base: { id: string; name: string } | 
     return {
       ...(f.startPlaceId ? { place_id: f.startPlaceId } : f.startGooglePlaceId ? { google_place_id: f.startGooglePlaceId } : {}),
       ...(t ? { place: t } : {}),
-      ...(f.startPax ? { passengers: true } : {}),
+      ...(f.startPax ? { passengers: true, ...startExtras(f) } : {}),
     };
   }
-  if (f.startPax) return base ? { place_id: base.id, place: base.name, passengers: true } : { passengers: true };
+  if (f.startPax) return base ? { place_id: base.id, place: base.name, passengers: true, ...startExtras(f) } : { passengers: true, ...startExtras(f) };
   return undefined;
 }

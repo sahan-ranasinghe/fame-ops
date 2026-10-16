@@ -69,19 +69,22 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   await expect(page.getByRole("heading", { name: "Assign a task" })).toBeVisible();
   const rows = page.getByTestId("stop-row");
   await expect(rows).toHaveCount(2);
-  await expect(rows.nth(0)).toContainText("Pickup 1");
-  await expect(rows.nth(1)).toContainText("Drop-off 1");
+  // Stops are named by their place in the order (Phase 7, §11): "Stop 2 · Drop · …".
+  await expect(rows.nth(0)).toContainText("Stop 1 · Pickup");
+  await expect(rows.nth(1)).toContainText("Stop 2 · Drop");
   await page.getByRole("button", { name: "Add stop" }).click();
-  await expect(rows.nth(2)).toContainText("Drop-off 2");
+  await expect(rows.nth(2)).toContainText("Stop 3 · Drop");
   // Changing one row's type never changes another's.
-  await rows.nth(1).getByLabel("Drop-off 1: type").selectOption("visit");
-  await expect(rows.nth(0)).toContainText("Pickup 1");
-  await expect(rows.nth(1)).toContainText("Visit 1");
-  await expect(rows.nth(2)).toContainText("Drop-off 1");
+  await rows.nth(1).getByLabel("Stop 2: type").selectOption("visit");
+  await expect(rows.nth(0)).toContainText("Stop 1 · Pickup");
+  await expect(rows.nth(1)).toContainText("Stop 2 · Visit");
+  await expect(rows.nth(2)).toContainText("Stop 3 · Drop");
+  // Every row shows its time at the stop.
+  await expect(rows.nth(1).getByText("Time at this stop")).toBeVisible();
   // Every row has its own arrive-by field.
   await expect(rows.nth(2).getByLabel("Arrive by")).toBeVisible();
   // The plan says what is missing, in words that say what to do.
-  await page.getByLabel("Pickup 1", { exact: true }).fill("Head office");
+  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await expect(page.getByTestId("plan-reasons")).toContainText("Add a leave-by time, or an arrive-by time on a stop");
   // The primary button is sticky above the tab bar (its box sits within the viewport while the page scrolls).
   const save = page.getByRole("button", { name: "Assign & send" });

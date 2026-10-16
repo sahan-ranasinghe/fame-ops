@@ -10,7 +10,7 @@ import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import type { BookResult, Suggestions, VehicleUsed } from "../data/types";
+import type { BookResult, Suggestions } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { joinDots, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
@@ -40,7 +40,7 @@ interface Form extends RequestFields, StartFields {
 }
 
 /** book_vehicle's answer with the Phase 7 fields (the vehicle the driver brought). */
-type Booked = BookResult & { vehicle_used?: VehicleUsed; vehicle_changed?: string };
+type Booked = BookResult;
 
 export function NewRequest() {
   const { me, store, transport } = useFleet();

@@ -132,10 +132,12 @@ describe("Start from and Passengers get in here (Phase 7, §11)", () => {
     expect(pickupAtStart([drop, head], { placeId: "p-head" }, false)).toBe(-1);
     expect(pickupAtStart([newStop("drop"), head, drop], { placeId: "p-head" }, false)).toBe(1); // an empty row first does not count
   });
-  it("Tick it removes the pickup and hands back its note; a task keeps one row", () => {
-    const withNote = { ...head, note: "Gate 2" };
+  it("Tick it removes the pickup and moves what it carried to the start; a task keeps one row", () => {
+    const withNote = { ...head, what: "goods" as const, note: "Gate 2", dwell: "15" };
     const drop = { ...newStop("drop"), place: "Galle" };
-    expect(tickStart([withNote, drop], 0)).toEqual({ list: [drop], note: "Gate 2" });
+    expect(tickStart([withNote, drop], 0)).toEqual({ list: [drop], carried: { startWhat: "goods", startNote: "Gate 2", startDwell: "15" } });
+    expect(startInput({ start: "", startPax: true, startWhat: "goods", startNote: "Gate 2", startDwell: "15" }, { id: "p-base", name: "Head office" }))
+      .toEqual({ place_id: "p-base", place: "Head office", passengers: true, what: "goods", note: "Gate 2", dwell_min: 15 });
     const only = tickStart([head], 0);
     expect(only.list).toHaveLength(1);
     expect(only.list[0].type).toBe("drop");

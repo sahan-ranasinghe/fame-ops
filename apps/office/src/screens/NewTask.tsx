@@ -107,7 +107,7 @@ export function NewTask() {
   function onTickStart(i: number) {
     setF((x) => {
       const t = tickStart(x.stops, i);
-      return { ...x, stops: t.list, startPax: true, notes: t.note ? [x.notes.trim(), `At the start: ${t.note}`].filter(Boolean).join("\n") : x.notes };
+      return { ...x, stops: t.list, startPax: true, ...t.carried };
     });
   }
   function setRow(i: number, patch: Partial<ProjectRow>) {
@@ -164,7 +164,7 @@ export function NewTask() {
           </>
         ),
       });
-      setState({ f: { ...f, title: "", notes: "", cname: "", cphone: "", pax: "", end: "", leaveBy: "", startPax: false, stops: defaultStops() }, rows: [] });
+      setState({ f: { ...f, title: "", notes: "", cname: "", cphone: "", pax: "", end: "", leaveBy: "", startPax: false, startWhat: "", startNote: "", startDwell: "", stops: defaultStops() }, rows: [] });
       toast("Task sent");
       void store.invalidate();
     } catch (e) {

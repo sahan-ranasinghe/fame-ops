@@ -119,8 +119,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByLabel("Task", { exact: true }).fill(title);
   await page.getByLabel("Leave by", { exact: true }).fill("09:30");
   // The stops are rows with their own type; the labels are numbered within the type.
-  await page.getByLabel("Pickup 1", { exact: true }).fill("Head office");
-  await page.getByLabel("Drop-off 1", { exact: true }).fill("Nugegoda");
+  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await page.getByLabel("Stop 2", { exact: true }).fill("Nugegoda");
   await page.getByLabel("Driver", { exact: true }).selectOption(driver.username);
   await page.getByLabel("Vehicle", { exact: true }).selectOption(plate);
   // The plan follows the form in one line (1.5 s after the last change): "Leave by 09:30 · … · estimated times".
@@ -522,7 +522,9 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await page.goto(`/tasks?date=${day}`);
   const accepted = page.locator(".tcard", { hasText: `E2E accept ${stamp}` });
   await expect(accepted).toContainText(/Accepted \d\d:\d\d/);
-  await expect(page.getByText("Needs a driver")).toBeVisible();
+  await expect(page.locator(".col", { hasText: "Needs a driver" }).first()).toBeVisible();
+  // Phase 7 (§19): the red banner on every Tasks page.
+  await expect(page.getByTestId("needs-driver-banner")).toContainText(/need(s)? a driver/);
   const card = page.locator(".tcard", { hasText: `E2E decline ${stamp}` });
   await expect(card).toContainText("Declined (Vehicle problem) · Flat tyre");
 
@@ -552,6 +554,71 @@ test("a driver accepts one task and declines another; the office gives it to a f
   const row = page.locator("tr", { hasText: d1.name });
   await expect(row).toContainText("1 accepted");
   await expect(row).toContainText("1 declined");
+});
+
+test("a task that needs a driver can't be missed; the decide page stays still for 30 seconds while the data refreshes (Phase 7, Part 2)", async ({ page }) => {
+  test.setTimeout(240_000);
+  const email = `e2e.needs.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Needs Driver", email, permissions: ["view", "request", "approve", "assign_tasks"] });
+  const d1 = { name: `E2E Nope ${stamp}`, code: `E2N-${stamp}`, username: `e2n.${stamp}`, pin: "246801" };
+  const d2 = { name: `E2E Ready ${stamp}`, code: `E2Y-${stamp}`, username: `e2y.${stamp}`, pin: "246802" };
+  await tool("create_driver", d1);
+  await tool("create_driver", d2);
+  const plate = `WP E2N-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
+  await tool("update_vehicle", { reg_no: plate, regular_driver: d2.username });
+  const day = new Date(Date.now() + 5.5 * 3600000 + 86400000).toISOString().slice(0, 10); // tomorrow in Colombo
+  const title = `E2E needs ${stamp}`;
+  const t = await tool<{ task_id: string }>("create_task", { title, date: day, start_time: "08:00", driver: d1.username, vehicle: plate, pickup: "Head office", dropoff: "Nugegoda" });
+  const app = await driverRest(d1.username, d1.pin);
+  expect(await app.post("rpc/decline_task", { p_task_id: t.task_id, p_reason: "unwell", p_note: "Fever" })).toBe(200);
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Needs a driver for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // Overview: the red block first, the row opens the task's change page with the reason and the driver first.
+  const row = page.getByTestId("needs-driver-row").filter({ hasText: title });
+  await expect(row).toContainText("declined");
+  await row.click();
+  await expect(page).toHaveURL(new RegExp(`/tasks/${t.task_id}/edit\\?driver=1`));
+  await expect(page.getByText(/Fever/).first()).toBeVisible();
+  await expect(page.getByTestId("needs-driver-banner")).toBeVisible();
+
+  // The decide page: the driver first, the vehicle fills itself (their regular one); then 30 seconds of refreshes.
+  const rq = await tool<{ request: { id: string } }>("create_request", { requested_by: "E2E Needs Driver", date: day, time: "13:00", route_from: "Head office", route_to: "Galle", need_type: "van", pax: 3 });
+  await page.goto(`/requests/${rq.request.id}/decide`);
+  await page.getByLabel("Driver", { exact: true }).selectOption(d2.username);
+  await expect(page.getByTestId("vehicle-default")).toContainText(plate);
+  await expect(page.getByTestId("plan-card")).toContainText("Leave by", { timeout: 15000 });
+  await page.waitForTimeout(2000);
+  await page.evaluate(() => {
+    const w = window as unknown as { __shift: number };
+    w.__shift = 0;
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) if (!e.hadRecentInput) w.__shift += e.value;
+    }).observe({ type: "layout-shift", buffered: false });
+  });
+  // Meanwhile the fleet changes elsewhere: a driver's heartbeat (Realtime), new tasks the day after (the overview's next
+  // answers differ), and the page's own watches answer again.
+  const other = await driverRest(d2.username, d2.pin);
+  const spare = `WP E2C-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: spare, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 500 });
+  const after = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000).toISOString().slice(0, 10);
+  for (let i = 0; i < 6; i++) {
+    await other.post("rpc/send_heartbeat", { p_at: new Date().toISOString(), p_sharing: false, p_location_on: true, p_permission: "always" });
+    await tool("create_task", { title: `E2E churn ${stamp} ${i}`, date: after, start_time: `1${i}:30`, driver: d1.username, vehicle: spare, pickup: "Head office", dropoff: "Kandy" });
+    await page.waitForTimeout(5000);
+  }
+  const shift = await page.evaluate(() => (window as unknown as { __shift: number }).__shift);
+  expect(shift).toBeLessThan(0.01);
+  await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(d2.username);
+  await expect(page.getByTestId("vehicle-default")).toContainText(plate);
 });
 
 test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note, Resolve closes the driver's report", async ({ page }) => {
@@ -928,13 +995,13 @@ test("the location search box: sites by id with their badges, a pasted pin saved
 
   // Assign a task: a site by its id, with its badge; a site without a pin warns under the row.
   await page.goto("/tasks/new");
-  const pickup = page.getByLabel("Pickup 1", { exact: true });
+  const pickup = page.getByLabel("Stop 1", { exact: true });
   await pickup.fill(pinned.toLowerCase());
   const option = page.getByRole("option", { name: new RegExp(`Pinned Site ${stamp}`) });
   await expect(option).toContainText("Site · Dialog");
   await option.click();
   await expect(pickup).toHaveValue(`Pinned Site ${stamp}`);
-  const drop = page.getByLabel("Drop-off 1", { exact: true });
+  const drop = page.getByLabel("Stop 2", { exact: true });
   await drop.fill(bare);
   await expect(page.getByRole("option", { name: new RegExp(`Bare Site ${stamp}`) })).toContainText("no pin");
   await page.getByRole("option", { name: new RegExp(`Bare Site ${stamp}`) }).click();
@@ -960,7 +1027,7 @@ test("the location search box: sites by id with their badges, a pasted pin saved
     await route.fulfill({ json: { result: { text: body.text, results: [{ layer: "map", badge: "Map", name: `Map Cafe ${stamp}`, detail: "Map Cafe, Kandy, Central Province", pinned: true, lat: 7.2906, lng: 80.6337, ref: "openstreetmap:node/1", attribution: "© OpenStreetMap contributors · openrouteservice" }], map_cached: false } } });
   });
   await page.getByRole("button", { name: "Add stop" }).click();
-  const visit = page.getByLabel("Drop-off 2", { exact: true });
+  const visit = page.getByLabel("Stop 3", { exact: true });
   await visit.fill("fakemap cafe");
   const mapRow = page.getByRole("option", { name: new RegExp(`Map Cafe ${stamp}`) });
   await expect(mapRow).toContainText("Map");

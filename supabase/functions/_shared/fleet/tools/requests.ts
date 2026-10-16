@@ -528,8 +528,9 @@ export const decideRequest = tool({
   name: "decide_request",
   title: "Approve or decline a request",
   description:
-    "approve: needs a vehicle and a driver (no driver when the request says driver_required false and the vehicle has a custodian: the " +
-    "custodian drives); creates the task and sends it to the driver, and returns the same warnings as create_task. " +
+    "approve: needs a driver (the vehicle fills itself: the one they hold today, else their regular one; or name it), or a vehicle " +
+    "alone when the request says driver_required false and the vehicle has a custodian (the custodian drives); start and the minutes " +
+    "at From and To are optional; creates the task and sends it to the driver, and returns the same warnings as create_task. " +
     "decline: needs a reason. A request can be decided only once.",
   readOnly: false,
   input: z.object({
@@ -540,6 +541,10 @@ export const decideRequest = tool({
     reason: zText(300).optional().describe("Why it is declined (decline)"),
     title: zText(120).optional().describe("Task title. Default: built from the route"),
     decided_by: zText(80).optional().describe("Name of the office user deciding, if known"),
+    // Phase 7 (§11, §17): the approver may set where the trip starts and the times at From and To (the request keeps its own).
+    start: zStart.optional(),
+    from_dwell_min: z.number().int().min(0).max(720).optional().describe("Approve: minutes at the From place. Default: the request's"),
+    to_dwell_min: z.number().int().min(0).max(720).optional().describe("Approve: minutes at the To place. Default: the request's"),
   }),
   async run(args, { db, now, actor }) {
     let request = await getRequest(db, args.request_id);
@@ -598,11 +603,17 @@ export const decideRequest = tool({
       day: colomboDate(request.needed_at),
       // The request's From and To, with the times the requester gave there (Phase 7, §17).
       stops: [
-        { type: "pickup", place: request.route_from ?? "To be confirmed", dwell_min: request.from_dwell_min ?? undefined },
-        { type: "drop", place: request.route_to ?? "To be confirmed", dwell_min: request.to_dwell_min ?? undefined },
+        {
+          type: "pickup",
+          place: request.route_from ?? "To be confirmed",
+          dwell_min: args.from_dwell_min ?? request.from_dwell_min ?? undefined,
+        },
+        { type: "drop", place: request.route_to ?? "To be confirmed", dwell_min: args.to_dwell_min ?? request.to_dwell_min ?? undefined },
       ],
+      start: args.start,
       leaveAt: request.needed_at,
     });
+    warnings.push(...prepared.notes);
     warnings.push(...prepared.plan.warnings.map((w) => w.text));
 
     const saved = await saveTask(db, {

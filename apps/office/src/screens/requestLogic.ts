@@ -96,6 +96,9 @@ export function bookInput(
   if (pick.vehicle) input.vehicle = pick.vehicle;
   if (pick.driver && !custodianDrives) input.driver = pick.driver;
   const s = start ? startInput(start.fields, start.base) : undefined;
+  // From is the start (Passengers get in here): its time there is the start stop's, unless one was set at the start.
+  const fromDwell = dwellOf(f.fromDwell);
+  if (s && start?.fields.startPax && start.fromIsStart && typeof fromDwell === "number" && s.dwell_min === undefined) s.dwell_min = fromDwell;
   if (s) input.start = s;
   if (start?.fields.startPax) {
     // The start is Stop 1 (a pickup); From is a second pickup only when it is somewhere else.

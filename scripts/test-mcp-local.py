@@ -1720,8 +1720,10 @@ check(pv["stops"][1]["dwell_min"] == 90 and pv["stops"][1]["dwell_source"] == "p
 tool("cancel_task", {"task_id": cv["task_id"], "reason": "suite: usual time checked"})
 
 # The start stop (§11): passengers get in at the start; a pickup at the start says so.
-pv = tool("plan_task", {"date": day(5), "leave_by": "08:00", "start": {"place": "Head office", "passengers": True},
+pv = tool("plan_task", {"date": day(5), "leave_by": "08:00", "start": {"place": "Head office", "passengers": True, "what": "goods", "note": "Gate 2", "dwell_min": 20},
                         "stops": [{"type": "drop", "place": "Kurunegala tower site"}]})
+check(pv["stops"][0].get("what") == "goods" and pv["stops"][0].get("note") == "Gate 2" and pv["stops"][0]["dwell_min"] == 20
+      and pv["stops"][0]["dwell_source"] == "chosen", "the start stop takes its own what, note and time there (Tick it moves them)", json.dumps(pv["stops"][0])[:300])
 check(pv["stops"][0].get("is_start") is True and pv["stops"][0]["label"] == "Stop 1 · Pickup · Head office, Colombo 05"
       and pv["stops"][1]["label"] == "Stop 2 · Drop · Kurunegala tower site"
       and not any(i["kind"] == "leg" and i["to_n"] == 1 for i in pv["timeline"]["items"]),
@@ -1791,12 +1793,12 @@ tool("cancel_task", {"task_id": TD, "reason": "suite: needs a driver checked"})
 # The requester hears it too, on their own request's page.
 rq = tool("create_request", {"requested_by": "Need Requester", "date": day(5), "time": "13:00", "route_from": "Head office", "route_to": "Galle",
                              "from_dwell_min": 15, "to_dwell_min": 30})
-dr = tool("decide_request", {"request_id": rq["request"]["id"], "decision": "approve", "driver": "saman.k"})
+dr = tool("decide_request", {"request_id": rq["request"]["id"], "decision": "approve", "driver": "saman.k", "to_dwell_min": 45})
 TR = dr["task_id"]
 stops_r = tool("task_detail", {"task_id": TR})["stops"]
-check(dr.get("vehicle_used", {}).get("reg_no") == "WP P7-1001" and [s.get("dwell_min") for s in stops_r] == [15, 30]
+check(dr.get("vehicle_used", {}).get("reg_no") == "WP P7-1001" and [s.get("dwell_min") for s in stops_r] == [15, 45]
       and [s.get("dwell_source") for s in stops_r] == ["chosen", "chosen"],
-      "decide_request with a driver only: the vehicle fills itself; the request's times at From and To reach the stops", json.dumps([dr.get("vehicle_used"), stops_r])[:300])
+      "decide_request with a driver only: the vehicle fills itself; the request's time at From and the approver's at To reach the stops", json.dumps([dr.get("vehicle_used"), stops_r])[:300])
 saman.post("rpc/decline_task", {"p_task_id": TR, "p_reason": "unwell"})
 row = outbox(f"event = 'task.declined' and recipient_employee_id = '{NEED_REQ}'")
 check(f"|Unwell · needs a driver|/requests/{rq['request']['id']}" in row, "the requester's push opens their request", row)

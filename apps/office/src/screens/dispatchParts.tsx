@@ -10,7 +10,8 @@ import { LocationSearch } from "../ui/LocationSearch";
 import type { Picked } from "../ui/locationLogic";
 import type { DefaultVehicle } from "./availabilityLogic";
 import type { DepartureCheck } from "./departureLogic";
-import type { StartFields } from "./stopsLogic";
+import { DwellPicker } from "./DwellPicker";
+import { type StartFields, WHAT_LABEL } from "./stopsLogic";
 
 /** The plan preview is computed this long after the last edit (or at once with Plan now): every call may count against a daily cap. */
 export const PLAN_DEBOUNCE_MS = 1500;
@@ -130,7 +131,26 @@ export function StartFrom({ id, value, base, onChange, google = true, stay, note
         <label htmlFor={`${id}-pax`}>Passengers get in here</label>
       </span>
       {value.startPax
-        ? <span className="hint" data-testid="start-stop">Stop 1 · Pickup · {name || "the start"} · {stay ?? "the place’s usual time there"}. The next stop is Stop 2.</span>
+        ? (
+          <>
+            <span className="hint" data-testid="start-stop">Stop 1 · Pickup · {name || "the start"} · {stay ?? "the place’s usual time there"}. The next stop is Stop 2.</span>
+            {/* The start stop's own fields (Tick it moves them here from the pickup). */}
+            <div className="grid2">
+              <div className="field">
+                <label htmlFor={`${id}-what`}>What gets in</label>
+                <select id={`${id}-what`} value={value.startWhat ?? ""} onChange={(e) => onChange({ startWhat: e.target.value as StartFields["startWhat"] })}>
+                  <option value="">People</option>
+                  {Object.entries(WHAT_LABEL).filter(([k]) => k !== "people").map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor={`${id}-note`}>Note at the start</label>
+                <input id={`${id}-note`} maxLength={300} value={value.startNote ?? ""} onChange={(e) => onChange({ startNote: e.target.value })} />
+              </div>
+            </div>
+            <DwellPicker id={`${id}-dwell`} value={value.startDwell ?? ""} fallback={null} onChange={(text) => onChange({ startDwell: text })} />
+          </>
+        )
         : note ? <span className="hint">{note}</span> : null}
     </div>
   );

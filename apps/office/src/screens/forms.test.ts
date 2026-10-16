@@ -87,7 +87,12 @@ describe("Vehicle requests (Part 6: custodians and one-step booking)", () => {
     expect(bookInput({ ...f, driver: false }, { vehicle: "WP CAR-1182", driver: "", hasCustodian: true })).toEqual({
       input: { date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", route_to: "Rajagiriya", pax: 2, driver_required: false, vehicle: "WP CAR-1182" },
     });
-    expect(bookInput(f, { vehicle: "WP PH-2087", driver: "kasun.s", hasCustodian: false })).toMatchObject({ input: { vehicle: "WP PH-2087", driver: "kasun.s" } });
+    expect(bookInput(f, { vehicle: "WP PH-2087", driver: "kasun.s", hasCustodian: false })).toMatchObject({ input: { vehicle: "WP PH-2087", driver: "kasun.s" } });    // From is the start and passengers get in there: From's time there goes to the start stop (Phase 7, §11).
+    const atStart = { ...f, from: "Head office", fromDwell: "15" };
+    const start = { fields: { start: "", startPax: true }, base: { id: "p-base", name: "Head office" }, fromIsStart: true };
+    expect(bookInput(atStart, { vehicle: "WP PH-2087", driver: "kasun.s", hasCustodian: false }, start)).toMatchObject({
+      input: { start: { place_id: "p-base", passengers: true, dwell_min: 15 }, stops: [{ type: "drop", place: "Rajagiriya" }] },
+    });
   });
   it("approves without a driver only when the custodian drives", () => {
     expect(decisionInput({ id: "r1", decision: "approve", vehicle: "WP CAR-1182" })).toEqual({ error: "Pick a driver: the vehicle fills itself." });

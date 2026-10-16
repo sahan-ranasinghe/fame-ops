@@ -23,7 +23,7 @@ import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
-import { PlanPanel } from "./PlanPanel";
+import { PlanTimeline } from "./PlanTimeline";
 import { videoWords } from "./fuelLogic";
 import { driveText } from "./stopsLogic";
 import { dwellNote, needsDriverText, segmentRows, segmentsTotal, stayLine, stopTitle, whatOf } from "./taskDetailLogic";
@@ -222,7 +222,7 @@ export function TaskDetail() {
       {p.plan && (
         <>
           <div className="section-t">Plan</div>
-          <PlanPanel plan={p.plan} stops={p.stops.map((s) => ({ seq: s.seq, type: s.type, place: s.place, arrive_by: s.arrive_by, planned_arrive: s.planned_arrive, planned_depart: s.planned_depart, pin: s.pin }))} />
+          <PlanTimeline timeline={p.timeline} plan={p.plan} startName={p.task.start_place} />
           <p className="muted small" style={{ margin: 0 }}>{driveText(p.plan.total_drive_min)} driving in {p.plan.legs.length} leg{p.plan.legs.length === 1 ? "" : "s"} · computed {p.plan.computed_at}</p>
         </>
       )}

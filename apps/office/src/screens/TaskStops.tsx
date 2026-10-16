@@ -21,10 +21,11 @@ import { DepartureNote, useFleetSettings, usePlanPreview } from "./dispatchParts
 import { dwellFallbacks, planReasons, rowStopNumbers } from "./planLogic";
 import { PlanTimeline } from "./PlanTimeline";
 import { StopsRows } from "./StopsEditor";
-import { draftsFromStops, dwellText, type StopDraft, stopsInput, tickStart } from "./stopsLogic";
+import { DwellPicker } from "./DwellPicker";
+import { draftsFromStops, dwellText, type StartFields, startExtras, type StopDraft, stopsInput, tickStart, WHAT_LABEL } from "./stopsLogic";
 import { useBoardQuery, useTask } from "./TaskDetail";
 
-interface StopsForm {
+interface StopsForm extends Pick<StartFields, "startWhat" | "startNote" | "startDwell"> {
   list: StopDraft[];
   /** Passengers get in at the start: it is Stop 1 (a task not under way). */
   startPax: boolean;
@@ -50,9 +51,13 @@ export function TaskStops() {
     if (!p || form !== null) return;
     version.current = p.task.plan_version ?? 0;
     const pending = p.stops.filter((s) => s.status === "pending");
+    const own = pending.find((s) => s.is_start);
     draft.reset({
       list: draftsFromStops(pending.filter((s) => !s.is_start)),
-      startPax: pending.some((s) => s.is_start),
+      startPax: !!own,
+      startWhat: own?.what && own.what !== "people" ? own.what as StartFields["startWhat"] : "",
+      startNote: own?.note ?? "",
+      startDwell: own?.dwell_source === "chosen" && own.dwell_min != null ? String(own.dwell_min) : "",
       leaveBy: p.task.leave_by_source === "manual" && p.task.status === "assigned" ? hhmm(p.task.leave_by) : "",
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -69,20 +74,17 @@ export function TaskStops() {
   const startPax = !!form?.startPax && !running;
   const offset = reached + (startPax ? 1 : 0);
 
-  // The start for "Passengers get in here": the start stop's own place and pin when the task has one (task_detail gives the
-  // task's start by name only), else the start's name, else the base place.
-  const startRow = p?.stops.find((s) => s.is_start) as (NonNullable<typeof p>["stops"][number] & { place_id?: string }) | undefined;
+  // The start for "Passengers get in here": the task's start as task_detail gives it (its place, a Google start by its id,
+  // else its pin), with the start stop's own what, note and time there.
   const startArg = (): Record<string, unknown> | undefined => {
-    if (!startPax) return undefined;
-    if (startRow) {
-      return {
-        ...(startRow.place_id ? { place_id: startRow.place_id } : startRow.google_place_id ? { google_place_id: startRow.google_place_id } : {}),
-        ...(startRow.place ? { place: startRow.place } : {}),
-        ...(!startRow.place_id && startRow.lat != null && startRow.lng != null && !startRow.google ? { lat: startRow.lat, lng: startRow.lng } : {}),
-        passengers: true,
-      };
-    }
-    return { ...(t?.start_place ? { place: t.start_place } : {}), passengers: true };
+    if (!startPax || !form) return undefined;
+    return {
+      ...(t?.start_place_id ? { place_id: t.start_place_id } : t?.start_google_place_id ? { google_place_id: t.start_google_place_id } : {}),
+      ...(t?.start_place ? { place: t.start_place } : {}),
+      ...(!t?.start_place_id && !t?.start_google_place_id && t?.start_lat != null && t?.start_lng != null ? { lat: t.start_lat, lng: t.start_lng } : {}),
+      passengers: true,
+      ...startExtras(form),
+    };
   };
   function planArgs(): Record<string, unknown> | null {
     if (!form || !t) return null;
@@ -163,9 +165,25 @@ export function TaskStops() {
                   <label htmlFor="ts-start-pax">Passengers get in here</label>
                 </span>
                 {form.startPax && (
-                  <span className="hint" data-testid="start-stop">
-                    Stop 1 · Pickup · {t.start_place ?? "the start"}{startStop?.dwell_min != null ? ` · ${dwellText(startStop.dwell_min)} there` : ""}. The next stop is Stop 2.
-                  </span>
+                  <>
+                    <span className="hint" data-testid="start-stop">
+                      Stop 1 · Pickup · {t.start_place ?? "the start"}{startStop?.dwell_min != null ? ` · ${dwellText(startStop.dwell_min)} there` : ""}. The next stop is Stop 2.
+                    </span>
+                    <div className="grid2">
+                      <div className="field">
+                        <label htmlFor="ts-start-what">What gets in</label>
+                        <select id="ts-start-what" value={form.startWhat ?? ""} onChange={(e) => set({ startWhat: e.target.value as StartFields["startWhat"] })}>
+                          <option value="">People</option>
+                          {Object.entries(WHAT_LABEL).filter(([k]) => k !== "people").map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+                        </select>
+                      </div>
+                      <div className="field">
+                        <label htmlFor="ts-start-note">Note at the start</label>
+                        <input id="ts-start-note" maxLength={300} value={form.startNote ?? ""} onChange={(e) => set({ startNote: e.target.value })} />
+                      </div>
+                    </div>
+                    <DwellPicker id="ts-start-dwell" value={form.startDwell ?? ""} fallback={null} onChange={(text) => set({ startDwell: text })} />
+                  </>
                 )}
               </div>
               <div className="field">
@@ -182,8 +200,7 @@ export function TaskStops() {
             start={!running && t.start_place ? { name: t.start_place } : null} startIsStop={startPax}
             onTickStart={running ? undefined : (i) => {
               const r = tickStart(form.list, i);
-              set({ list: r.list, startPax: true });
-              if (r.note) setMsg(`The pickup's note “${r.note}” is not kept on the start stop. Put it in the task's notes (Change the task).`);
+              set({ list: r.list, startPax: true, ...r.carried });
             }}
             note={(s) => (s.key === lateKey ? <DepartureNote check={check} onUse={(time) => set({ leaveBy: time })} onMove={moveArriveBy} testId="departure-check-stop" /> : null)} />
         </div>

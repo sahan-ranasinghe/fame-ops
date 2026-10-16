@@ -192,6 +192,12 @@ export const zStart = z.object({
   passengers: z.boolean().optional().describe(
     "Passengers get in at the start: it becomes Stop 1, a pickup there (no leg to it; marked arrived when the task starts)",
   ),
+  // With passengers: the start stop's own fields (the "Tick it" of a pickup at the start moves them here).
+  what: zWhat.optional().describe("With passengers: what is picked up at the start (default people)"),
+  note: zText(300).optional().describe("With passengers: a note for the driver at the start"),
+  dwell_min: z.number().int().min(0).max(720).optional().describe(
+    "With passengers: minutes at the start (default: the place's usual time)",
+  ),
 }).describe("Where the driver leaves from. Default: the base place (fleet settings)");
 
 export interface ResolvedStop {
@@ -223,6 +229,10 @@ export interface ResolvedStart {
   name: string;
   lat: number | null;
   lng: number | null;
+  /** The start stop's own fields when passengers get in there (Phase 7, §11). */
+  what?: z.infer<typeof zWhat> | null;
+  note?: string | null;
+  dwell_min?: number | null;
 }
 
 /** A town's centre by its exact name (case does not matter), for a stop typed as a town. */
@@ -796,7 +806,10 @@ export async function prepareTask(db: Db, settings: Settings, now: Date, args: {
   buffer_min?: number;
 }) {
   let stops = await resolveStops(db, args.day, args);
-  const start = await resolveStart(db, settings, args.start, args.day);
+  const resolved = await resolveStart(db, settings, args.start, args.day);
+  const start = resolved && args.start?.passengers
+    ? { ...resolved, what: args.start.what ?? null, note: args.start.note ?? null, dwell_min: args.start.dwell_min ?? null }
+    : resolved;
   const notes: string[] = [];
   if (args.start?.passengers) {
     // "Passengers get in here": the start becomes Stop 1, a pickup there (no leg to it).
@@ -832,18 +845,18 @@ export async function startStop(db: Db, start: ResolvedStart, seq = 1): Promise<
   return {
     seq,
     type: "pickup",
-    what: "people",
+    what: start.what ?? "people",
     place_id: start.place_id,
     place_name: start.name,
     address: place?.address ?? null,
     lat: start.lat,
     lng: start.lng,
-    dwell_min: usual,
+    dwell_min: start.dwell_min ?? usual,
     arrive_by: null,
-    note: null,
+    note: start.note ?? null,
     pin_from: start.lat != null ? "place" : null,
     is_start: true,
-    dwell_source: usual != null ? "place" : "default",
+    dwell_source: start.dwell_min != null ? "chosen" : usual != null ? "place" : "default",
   };
 }
 
@@ -1119,7 +1132,8 @@ export const updateTaskStops = tool({
     const notes: string[] = [];
     // "Passengers get in here" on a task not under way: the start becomes the first stop (no arrived stop before it).
     if (args.start?.passengers && start && kept.length === 0 && !running) {
-      stops = [await startStop(db, start, nextSeq), ...stops.map((st) => ({ ...st, seq: st.seq + 1 }))];
+      const own = { what: args.start.what ?? null, note: args.start.note ?? null, dwell_min: args.start.dwell_min ?? null };
+      stops = [await startStop(db, { ...start, ...own }, nextSeq), ...stops.map((st) => ({ ...st, seq: st.seq + 1 }))];
     } else if (args.start?.passengers) {
       notes.push("Passengers get in at the start only on a task not under way: the stops were saved without it.");
     } else if (start && kept.length === 0 && stops[0]?.type === "pickup" && samePlace(start, stops[0])) {
@@ -1428,6 +1442,11 @@ export const taskDetail = tool({
           leave_by_source: task.leave_by_source ?? undefined,
           buffer_min: task.buffer_min ?? undefined,
           start_place: task.start_name ?? undefined,
+          // Phase 7: the start as the stops form sends it back (a Google start by its id: its pin is Google's).
+          start_place_id: task.start_place_id ?? undefined,
+          start_google_place_id: task.start_google_place_id ?? undefined,
+          start_lat: task.start_google_place_id ? undefined : task.start_lat ?? undefined,
+          start_lng: task.start_google_place_id ? undefined : task.start_lng ?? undefined,
           return_to_base: task.return_to_base,
           avoid_expressway: task.avoid_expressway,
           plan_version: task.plan_version,
