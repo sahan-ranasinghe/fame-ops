@@ -1,6 +1,9 @@
 // Live locations: every driver's marker (driver_latest over Realtime, the
-// tool every 30 s), the selected driver's route today, and "Show today's
-// trails". A trail is loaded once from driver_route and then grows point by
+// tool every 30 s), the selected driver's route today (snapped to roads by
+// default where the server allows it, "Recorded points" for the raw line; its
+// gaps as markers with the Gaps list in the card: Phase 7, §21, §26), and
+// today's trails, a button in the map's control cluster (§25; never snapped).
+// A trail is loaded once from driver_route and then grows point by
 // point from ONE Realtime channel on location_points filtered to the drivers
 // currently sharing (each point put in by its time, so a backlog lands in its
 // place); every 60 s the trails and the shown route are fetched again (at
@@ -12,7 +15,7 @@
 // on the card itself). Part 2: a driver on a task gets "Swap vehicle" (the
 // same page, as a swap during the task), and "declined the 09:00 task" /
 // "hasn't accepted the 09:00 task" in red while that task needs a driver.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import {
@@ -35,13 +38,14 @@ import {
 } from "../data/live";
 import { megabytes } from "./fuelLogic";
 import { moveMode } from "./moveLogic";
-import { insertPoint, mapRouteOf, mergeRoute, type Route, routeOf, trailOf } from "../data/route";
+import { insertPoint, mapRouteOf, mergeRoute, type Route, routeOf, snapControl, trailOf } from "../data/route";
 import { useWatchDrivers } from "../data/watchDrivers";
 import type { DriverRoute, LiveDriver } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { joinDots, num, plateOf } from "../lib/format";
 import { MapView } from "../map/MapView";
-import type { MapMarker, MapRoute } from "../map/types";
+import type { MapMarker, MapRoute, RoutePoint } from "../map/types";
+import { GapsList, useGaps } from "./GapsList";
 import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
@@ -50,11 +54,13 @@ import { Icon } from "../ui/icons";
 
 /** The trails and the shown route are fetched again this often (the fallback when Realtime is not delivering). */
 const TRAIL_REFRESH_MS = 60000;
-/** The shown route of one driver: every point the tool kept with a 3 m tolerance. */
-/** The line the maps draw: every stored point up to 3,000 (tolerance 0); above that the tool picks the smallest tolerance that fits. */
-const ROUTE_ARGS = { line_tolerance_m: 0, max_line_points: 3000 };
-/** The shown route also asks for its gaps' estimated road lines (Part 5b); the light trails do not. */
-const SHOWN_ARGS = { ...ROUTE_ARGS, estimate_gaps: true };
+/**
+ * The line the maps draw: every stored point up to 3,000 (tolerance 0); above that the tool picks the smallest tolerance
+ * that fits. The all-driver trails never ask for snap to roads (§26: only a route a person opens is snapped).
+ */
+export const ROUTE_ARGS = { line_tolerance_m: 0, max_line_points: 3000 } as const;
+/** The shown route also asks for its gaps' estimated road lines (Part 5b) and, by default, snap to roads (§26); the light trails do not. */
+export const shownArgs = (snap: boolean) => ({ ...ROUTE_ARGS, estimate_gaps: true, snap });
 
 const sharingNow = (x: LiveDriver) => (x.signal ? x.signal.sharing : x.state !== "not_sharing");
 
@@ -66,7 +72,12 @@ export function Live() {
   const [route, setRoute] = useState<Route | null>(null);
   const [routeBusy, setRouteBusy] = useState(false);
   const [routeErr, setRouteErr] = useState<string | null>(null);
-  // "Show today's trails": every sharing driver's line today, loaded once each, then grown from the Realtime rows.
+  // The shown route is snapped to roads by default where the server allows it; "Recorded points" asks for the raw line.
+  const [shownSnap, setShownSnap] = useState(true);
+  const shownSnapRef = useRef(shownSnap);
+  shownSnapRef.current = shownSnap;
+  const [focus, setFocus] = useState<RoutePoint[] | null>(null);
+  // Today's trails (the map's trails button): every sharing driver's line today, loaded once each, then grown from the Realtime rows.
   const [trails, setTrails] = useState(false);
   const [trailMap, setTrailMap] = useState<Map<string, Route>>(new Map());
   const [pointsRt, setPointsRt] = useState<"none" | "connecting" | "live" | "error">("none");
@@ -124,8 +135,9 @@ export function Live() {
       }
       const shown = routeRef.current;
       if (shown) {
-        void transport.call<DriverRoute>("driver_route", { driver: shown.username, ...SHOWN_ARGS })
-          .then((p) => setRoute((r) => (r && r.username === shown.username ? mergeRoute(r, routeOf(shown.username, p)) : r)))
+        const snap = shownSnapRef.current;
+        void transport.call<DriverRoute>("driver_route", { driver: shown.username, ...shownArgs(snap) })
+          .then((p) => setRoute((r) => (r && r.username === shown.username && shownSnapRef.current === snap ? mergeRoute(r, routeOf(shown.username, p)) : r)))
           .catch(() => undefined);
       }
     }, TRAIL_REFRESH_MS);
@@ -157,20 +169,28 @@ export function Live() {
     const at = recordedAtOf(x);
     return [{ id: x.username, label: plateOf(x.vehicle) || x.driver, sub: x.last_position_time ? `position ${x.last_position_time}` : undefined, title: x.driver, lat: pos.lat, lng: pos.lng, tone: statusTone(x.status, x.state), selected: x.username === sel?.username, heading: x.heading ?? null, at: at ? Date.parse(at) : null }];
   }), [all, sel?.username]);
-  const mapRoute = useMemo<MapRoute | null>(() => (route && route.username === sel?.username ? mapRouteOf(route) : null), [route, sel?.username]);
+  const shownRoute = route && route.username === sel?.username ? route : null;
+  const mapRoute = useMemo<MapRoute | null>(() => mapRouteOf(shownRoute, null, shownSnap), [shownRoute, shownSnap]);
   const mapTrails = useMemo<MapRoute[]>(() => (trails ? [...trailMap.values()].filter((r) => !(mapRoute && r.username === sel?.username)).map(trailOf) : []), [trails, trailMap, mapRoute, sel?.username]);
+  // The shown route's gaps: markers on the map, the list in the driver's card (§21).
+  const gaps = useGaps(shownRoute, shownSnap, setFocus);
 
-  async function showRoute(username: string) {
+  async function showRoute(username: string, snap = shownSnap) {
     setRouteBusy(true);
     setRouteErr(null);
     try {
-      const p = await transport.call<DriverRoute>("driver_route", { driver: username, ...SHOWN_ARGS });
+      const p = await transport.call<DriverRoute>("driver_route", { driver: username, ...shownArgs(snap) });
       setRoute(routeOf(username, p));
     } catch (e) {
       setRouteErr(errText(e as FleetError)[0]);
       setRoute(null);
     }
     setRouteBusy(false);
+  }
+  /** "Recorded points" on the shown route: asked again with or without snap to roads, the line drawn kept meanwhile. */
+  function setRecorded(raw: boolean) {
+    setShownSnap(!raw);
+    if (route) void showRoute(route.username, !raw);
   }
 
   const counts = useMemo(() => (d ? filterCounts(all) : undefined), [d, all]);
@@ -188,7 +208,6 @@ export function Live() {
         {d && (
           <div className="ph-actions">
             <Chips options={LIVE_FILTERS} value={filter} onChange={setFilter} counts={counts} />
-            {routes && <button type="button" className="chip" aria-pressed={trails} onClick={() => setTrails((t) => !t)}><Icon name="route" />Show today’s trails</button>}
           </div>
         )}
       </div>
@@ -222,11 +241,29 @@ export function Live() {
           }) : <Empty>{all.length ? "Nobody in this group right now." : "No active driver yet."}</Empty>)}
         </div>
         <div className="stack live-map">
-          <MapView markers={markers} route={mapRoute} trails={mapTrails} onPick={(id) => setSelected(id)} />
-          {sel && <Detail key={sel.username} x={sel} routes={routes} route={route && route.username === sel.username ? route : null} busy={routeBusy} err={routeErr} onRoute={() => void showRoute(sel.username)} onHide={() => setRoute(null)} />}
+          <MapView markers={markers} route={mapRoute} trails={mapTrails} focus={focus} onPick={(id) => setSelected(id)}
+            trailsToggle={routes ? { on: trails, toggle: () => setTrails((t) => !t) } : undefined}
+            gaps={gaps.markers} openGap={gaps.open} onGap={gaps.setOpen} />
+          {sel && (
+            <Detail key={sel.username} x={sel} routes={routes} route={shownRoute} busy={routeBusy} err={routeErr} onRoute={() => void showRoute(sel.username)}
+              onHide={() => { setRoute(null); setFocus(null); }}
+              snap={shownSnap} onRecorded={setRecorded} gaps={<GapsList rows={gaps.rows} open={gaps.open} onOpen={gaps.pick} bare />} />
+          )}
         </div>
       </div>
     </section>
+  );
+}
+
+/** The shown route's line: "Recorded points" (ticked = the raw line) where snapping is possible, and what the line is. */
+function RouteSnap({ route, snap, busy, onRecorded }: { route: Route; snap: boolean; busy: boolean; onRecorded: (raw: boolean) => void }) {
+  const ui = snapControl(route, snap);
+  if (!ui.toggle && !ui.note) return null;
+  return (
+    <div className="legend" data-testid="snap-legend">
+      {ui.toggle && <label><input type="checkbox" checked={!snap} disabled={busy} onChange={(e) => onRecorded(e.target.checked)} /> Recorded points</label>}
+      {ui.note && <span>{ui.note}</span>}
+    </div>
   );
 }
 
@@ -235,7 +272,20 @@ function DutyChip({ x }: { x: LiveDriver }) {
   return <span className={`duty ${dutyOf(x)}`} data-testid="duty-chip">{dutyLine(x)}</span>;
 }
 
-function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDriver; routes: boolean; route: Route | null; busy: boolean; err: string | null; onRoute: () => void; onHide: () => void }) {
+function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded, gaps }: {
+  x: LiveDriver;
+  routes: boolean;
+  route: Route | null;
+  busy: boolean;
+  err: string | null;
+  onRoute: () => void;
+  onHide: () => void;
+  /** The shown route is asked snapped to roads (§26); onRecorded(true) asks for the recorded points instead. */
+  snap: boolean;
+  onRecorded: (raw: boolean) => void;
+  /** The shown route's Gaps list (§21). */
+  gaps: ReactNode;
+}) {
   const { me, store, transport } = useFleet();
   const links = x.links ?? {};
   const working = dutyOf(x) !== "off_duty";
@@ -322,7 +372,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
       )}
       {msg && <div style={{ marginTop: 14 }}><Notice tone={msg.tone}>{msg.text}</Notice></div>}
       {(busy || err || route) && (
-        <div style={{ marginTop: 14 }}>
+        <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
           {busy && <Loading>Loading today’s route…</Loading>}
           {!busy && err && <Notice>{err}</Notice>}
           {!busy && !err && route && (
@@ -330,6 +380,8 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
               <b>Today: {num(route.km)} km</b> from {route.count} points{route.first ? `, ${route.first}–${route.last}` : ""}. {route.stops.length ? "Stops over 10 min: " + route.stops.map((s) => s.text).join("; ") : "No stops over 10 minutes."}
             </Notice>
           )}
+          {!err && route && <RouteSnap route={route} snap={snap} busy={busy} onRecorded={onRecorded} />}
+          {!busy && !err && route && gaps}
         </div>
       )}
     </div>

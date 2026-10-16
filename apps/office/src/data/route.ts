@@ -56,6 +56,16 @@ export interface HoleView {
   text: string;
 }
 
+/** A stretch recorded while the phone was offline, uploaded later (driver_route's uploaded_later): "HH:MM" and the times. */
+export interface LateView {
+  fromAt: number;
+  toAt: number;
+  from: string;
+  to: string;
+  /** "HH:MM": when its points landed. */
+  uploaded: string;
+}
+
 export interface Route {
   username: string;
   date: string;
@@ -77,6 +87,8 @@ export interface Route {
   stops: StopView[];
   gaps: { from: string; to: string; minutes: number; kind?: GapKind }[];
   holes: HoleView[];
+  /** Stretches uploaded late (Phase 7, §21: a marker each, "Offline here · uploaded 07:06"). */
+  late: LateView[];
   /** The time of the last point of the line the tool drew (points after it came from Realtime). */
   lineEndAt: number | null;
   timeline: TimelineRow[];
@@ -120,12 +132,14 @@ export function routeOf(username: string, p: DriverRoute): Route {
     uploaded: s.uploaded, text: s.text,
   }));
   const holes: HoleView[] = (p.holes ?? []).map((h) => ({ fromAt: Date.parse(h.from_at), toAt: Date.parse(h.to_at), minutes: h.minutes, kind: h.kind, text: h.text }));
+  const late: LateView[] = (p.uploaded_later ?? []).map((w) => ({ fromAt: Date.parse(w.from_at), toAt: Date.parse(w.to_at), from: w.from, to: w.to, uploaded: w.uploaded }))
+    .filter((w) => isFinite(w.fromAt) && isFinite(w.toAt));
   return {
     username, date: p.date, km: p.km, count: p.recorded_points ?? points.length, usable: p.usable_points, shown: p.points_shown, first: p.first_point, last: p.last_point,
     points, snappedPoints: p.route_snapped ? pointsOf(p.date, p.route_snapped) : undefined, snapped: p.snapped,
     estimated: p.estimated?.map((e) => ({ fromAt: Date.parse(e.from_at), toAt: Date.parse(e.to_at), km: e.km_road, points: e.points.map(([lat, lng]) => ({ lat, lng })) })),
     estimatedNote: p.estimated_note,
-    stops, gaps: p.gaps ?? [], holes, lineEndAt: points.length ? points[points.length - 1].at : null, timeline,
+    stops, gaps: p.gaps ?? [], holes, late, lineEndAt: points.length ? points[points.length - 1].at : null, timeline,
     drivingMinutes: p.driving_minutes, stoppedMinutes: p.stopped_minutes, stopsCount: p.stops_count,
     note: p.note, task: p.task, window: p.window,
   };
@@ -232,10 +246,30 @@ export function holesOf(route: Route, points: RoutePoint[]): { from: MapPoint; t
   return out;
 }
 
-/** What the map draws for a route: the line by speed (snapped to roads when asked and available), the stops, the holes dashed, the playback marker. */
-export function mapRouteOf(route: Route | null, cursor?: { lat: number; lng: number; label: string } | null, snap = false): MapRoute | null {
+/**
+ * The line the map draws: the snapped line when asked and the tool answered one (its legs on the roads, the rest
+ * raw), followed by the raw points that came after it (today's Realtime tail, drawn raw until the next answer);
+ * else the recorded points.
+ */
+export function drawnLine(route: Route, snap = false): (RoutePoint & { snapped?: boolean })[] {
+  const snapped = route.snappedPoints;
+  if (!snap || !snapped || snapped.length < 2) return route.points;
+  const end = snapped[snapped.length - 1].at;
+  const tail = route.points.filter((p) => p.at > end);
+  return tail.length ? [...snapped, ...tail] : snapped;
+}
+
+/** The playback marker (Phase 7, §22): where, the recorded time, hollow while estimated, turned to the path. */
+export type Cursor = NonNullable<MapRoute["cursor"]>;
+
+/**
+ * What the map draws for a route: the line by speed (snapped to roads when asked and available), the stops, the holes
+ * dashed, the playback marker. During playback only the cursor changes: callers keep this answer and spread a new cursor
+ * into it, so the line's arrays stay the same objects frame after frame.
+ */
+export function mapRouteOf(route: Route | null, cursor?: Cursor | null, snap = false): MapRoute | null {
   if (!route || !route.points.length) return null;
-  const line = snap && route.snappedPoints && route.snappedPoints.length > 1 ? route.snappedPoints : route.points;
+  const line = drawnLine(route, snap);
   // A gap with an estimated road line (Part 5b) is drawn dashed along the road: its straight step and its straight hole go.
   const est = route.estimated ?? [];
   const byEnds = new Map(est.map((e) => [`${e.fromAt}|${e.toAt}`, e]));
@@ -272,4 +306,17 @@ export function snapLegend(route: Route | null, snap: boolean): string | null {
   if (!snap) return "Raw GPS line";
   if (route.snapped.status === "failed" || !route.snappedPoints?.length) return "Raw GPS (snapping to roads failed)";
   return `Snapped to roads · km from odometer${route.snapped.status === "partial" ? " · some legs raw GPS" : ""}`;
+}
+
+/**
+ * Snap to roads on a route view (Phase 7, §26): asked by default; the toggle "Recorded points" (ticked = the raw line)
+ * shows whenever the server has a snapping provider for this person (it names the provider even when asked without
+ * snap), and the legend keeps saying what the line is: snapped, partly raw, raw because snapping failed or hit its
+ * limit, or the recorded points. No provider (the open package, Google's roads cap at 0): no toggle, no note.
+ */
+export function snapControl(route: Route | null, snap: boolean): { toggle: boolean; note: string | null } {
+  const provider = route?.snapped?.provider;
+  if (!provider || provider === "none") return { toggle: false, note: null };
+  if (!snap) return { toggle: true, note: "Recorded points: the raw GPS line" };
+  return { toggle: true, note: snapLegend(route, true) ?? "Raw GPS (not snapped to roads)" };
 }

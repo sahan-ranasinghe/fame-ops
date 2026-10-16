@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { estimatedLegend, focusOf, insertPoint, mapRouteOf, mergeRoute, minutesText, routeOf } from "./route";
+import { drawnLine, estimatedLegend, focusOf, insertPoint, mapRouteOf, mergeRoute, minutesText, routeOf, snapControl } from "./route";
 import type { DriverRoute } from "./types";
 
 const day = "2026-10-12";
@@ -101,9 +101,36 @@ describe("the map and the timeline rows", () => {
       route_snapped: { columns: ["time", "lat", "lng", "km/h", "at", "acc", "snapped"], points: [["08:01", 6.88, 79.86, 0, iso("08:01"), 8, 0], ["08:30", 6.9, 79.87, 30, iso("08:30"), null, 1], ["09:55", 6.96, 79.89, 38, iso("09:55"), 8, 0]] },
       snapped: { provider: "osrm", status: "ok", legs: 1, matched: 1 },
     });
-    expect(mapRouteOf(snapped, null, true)!.points).toHaveLength(3);
+    // The snapped line (to 09:55), then the recorded points after it (drawn raw until the next answer snaps them).
+    expect(mapRouteOf(snapped, null, true)!.points).toHaveLength(3 + 4);
     expect(mapRouteOf(snapped, null, true)!.points[1].snapped).toBe(true);
+    expect(drawnLine(snapped, true).slice(3).map((p) => p.at)).toEqual([ms("14:00"), ms("14:56"), ms("15:38"), ms("16:31")]);
     expect(mapRouteOf(snapped, null, false)!.points).toHaveLength(6);
+    // A point Realtime adds today after the snapped line is drawn at once, raw.
+    const grown = insertPoint(snapped, { employee_id: "e1", recorded_at: iso("16:36"), lat: 6.94, lng: 79.85, accuracy_m: 8, speed_mps: 10, heading: null });
+    expect(drawnLine(grown, true).at(-1)).toMatchObject({ at: ms("16:36"), lat: 6.94 });
+    expect(drawnLine(grown, false)).toBe(grown.points);
+  });
+  it("snap to roads: the toggle where a provider is set, and the legend's words (§26)", () => {
+    const withProvider = (status: "off" | "ok" | "partial" | "failed", line = true) => routeOf("nuwan.p", {
+      ...answer,
+      snapped: { provider: "google_roads", status },
+      ...(line ? { route_snapped: { columns: ["time", "lat", "lng", "km/h", "at", "acc", "snapped"], points: [["08:01", 6.88, 79.86, 0, iso("08:01"), 8, 0], ["09:55", 6.96, 79.89, 38, iso("09:55"), 8, 1]] } } : {}),
+    });
+    expect(snapControl(withProvider("ok"), true)).toEqual({ toggle: true, note: "Snapped to roads · km from odometer" });
+    expect(snapControl(withProvider("partial"), true).note).toBe("Snapped to roads · km from odometer · some legs raw GPS");
+    expect(snapControl(withProvider("failed"), true).note).toBe("Raw GPS (snapping to roads failed)");
+    // Asked without snap the server answers status off with the provider: the toggle stays so it can be unticked.
+    expect(snapControl(withProvider("off", false), false)).toEqual({ toggle: true, note: "Recorded points: the raw GPS line" });
+    // No provider (the open package, the roads cap at 0): no toggle, no note.
+    expect(snapControl(routeOf("nuwan.p", { ...answer, snapped: { provider: "none", status: "off" } }), true)).toEqual({ toggle: false, note: null });
+    expect(snapControl(routeOf("nuwan.p", answer), true)).toEqual({ toggle: false, note: null });
+    expect(snapControl(null, true)).toEqual({ toggle: false, note: null });
+  });
+  it("reads the stretches uploaded late", () => {
+    const r = routeOf("nuwan.p", { ...answer, uploaded_later: [{ from: "15:38", to: "16:31", uploaded: "16:40", from_at: iso("15:38"), to_at: iso("16:31") }] });
+    expect(r.late).toEqual([{ fromAt: ms("15:38"), toAt: ms("16:31"), from: "15:38", to: "16:31", uploaded: "16:40" }]);
+    expect(routeOf("nuwan.p", answer).late).toEqual([]);
   });
   it("writes minutes the way the office reads them", () => {
     expect(minutesText(45)).toBe("45 min");

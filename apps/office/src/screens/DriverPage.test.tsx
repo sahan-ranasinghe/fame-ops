@@ -1,19 +1,32 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
 import type { DriverRoute } from "../data/types";
 import { addDays, today } from "../lib/format";
+import type { MapProps } from "../map/types";
 import type { Me, Transport, WatchEvent } from "../transport/types";
 import { DriverPage } from "./DriverPage";
 
-// The map is not under test here (the drawn map is covered by live.test.ts, the real one needs a browser).
-vi.mock("../map/MapView", () => ({ MapView: (p: { route: { points: unknown[] } | null }) => <div data-testid="map">{p.route ? `${p.route.points.length} points` : "no route"}</div> }));
+// The map is not under test here (the drawn map is covered by live.test.ts, the real one needs a browser): the mock shows
+// what the page gives it (the line's points, the gap markers, the open one, the playback marker) and closes a card like a tap.
+const seen: { props: MapProps | null } = { props: null };
+vi.mock("../map/MapView", () => ({
+  MapView: (p: MapProps) => {
+    seen.props = p;
+    return (
+      <div data-testid="map" data-gaps={p.gaps?.length ?? 0} data-open={p.openGap ?? ""} data-cursor={p.route?.cursor?.label ?? ""}>
+        {p.route ? `${p.route.points.length} points` : "no route"}
+        <button type="button" data-testid="map-close" onClick={() => p.onGap?.(null)} />
+      </div>
+    );
+  },
+}));
 
 const day = today();
 const iso = (hhmm: string) => `${day}T${hhmm}:00+05:30`;
-const route: DriverRoute = {
+const base: DriverRoute = {
   driver: "Nuwan Perera", date: day, recorded_points: 830, first_point: "08:01", last_point: "16:31", km: 41.2, driving_minutes: 95, stopped_minutes: 343, stops_count: 1,
   stops_over_10_min: [{ from: "09:55", to: "15:38", minutes: 343, near: "Peliyagoda", lat: 6.96, lng: 79.89 }],
   gaps: [{ from: "14:00", to: "14:56", minutes: 56 }],
@@ -24,6 +37,7 @@ const route: DriverRoute = {
   ],
   route: { columns: ["time", "lat", "lng", "km/h", "at"], points: [["08:01", 6.88, 79.86, 0, iso("08:01")], ["09:55", 6.96, 79.89, 38, iso("09:55")], ["14:00", 6.96, 79.89, 0, iso("14:00")]] },
 };
+let route: DriverRoute = base;
 const live = {
   as_of: `${day} 16:40`, counts: { all: 1, sharing: 1, stale: 0, not_sharing: 0 },
   drivers: [{ driver: "Nuwan Perera", username: "nuwan.p", employee_id: "e1", state: "sharing" as const, location: "Live · 1 min", status: "live" as const, status_text: "Live · 1 min", last_position_at: "16:39", vehicle: "WP CAB-4521 · Toyota HiAce", task: "Team drop", near: "Kelaniya", lat: 6.96, lng: 79.89, links: { call: "tel:0771234567", whatsapp: "https://wa.me/94771234567", maps: "https://maps" } }],
@@ -69,6 +83,12 @@ async function mount() {
   return transport;
 }
 
+afterEach(() => {
+  route = base;
+  seen.props = null;
+  vi.useRealTimers();
+});
+
 describe("DriverPage", () => {
   it("shows who, the status, today's numbers, the timeline and the playback", async () => {
     await mount();
@@ -95,5 +115,99 @@ describe("DriverPage", () => {
     expect(transport.calls.some((c) => c.tool === "driver_route" && c.args.date === addDays(day, -1))).toBe(true);
     expect(await screen.findByText("No location was shared on this day.")).toBeTruthy();
     expect(screen.getByTestId("map").textContent).toBe("no route");
+  });
+});
+
+describe("the gaps on the driver page (§21)", () => {
+  it("a marker per gap on the map and a row per gap beside it; a row opens its card and zooms to it, the map closes it", async () => {
+    route = {
+      ...base,
+      route: { columns: ["time", "lat", "lng", "km/h", "at"], points: [["08:01", 6.88, 79.86, 0, iso("08:01")], ["09:55", 6.96, 79.89, 38, iso("09:55")], ["14:00", 6.96, 79.89, 0, iso("14:00")], ["14:56", 6.93, 79.86, 0, iso("14:56")]] },
+      holes: [{ from_at: iso("14:00"), to_at: iso("14:56"), minutes: 56, kind: "no_data", text: "App not running · 56 min" }],
+      uploaded_later: [{ from: "09:55", to: "09:55", uploaded: "10:20", from_at: iso("09:55"), to_at: iso("09:55") }],
+    };
+    await mount();
+    const map = screen.getByTestId("map");
+    expect(map.dataset.gaps).toBe("2");
+    const rows = screen.getAllByTestId("gap-row");
+    expect(rows.map((r) => r.textContent)).toEqual([
+      "09:55Offline here · uploaded 10:20under 1 min",
+      "14:00–14:56App not running56 min",
+    ]);
+    // The rows are not part of the timeline.
+    expect(screen.getByTestId("timeline").querySelectorAll(".tl-row")).toHaveLength(3);
+    fireEvent.click(rows[1]);
+    expect(screen.getByTestId("map").dataset.open).toMatch(/^no_data-/);
+    expect(rows[1].className).toContain("sel");
+    expect(seen.props?.focus).toEqual([{ lat: 6.96, lng: 79.89 }, { lat: 6.93, lng: 79.86 }]);
+    expect(seen.props?.gaps?.[1].text).toBe("App not running · 14:00–14:56 · 56 min");
+    fireEvent.click(screen.getByTestId("map-close"));
+    expect(screen.getByTestId("map").dataset.open).toBe("");
+    expect(rows[1].className).not.toContain("sel");
+  });
+  it("no gaps: no list", async () => {
+    await mount();
+    expect(screen.queryByTestId("gaps-list")).toBeNull();
+  });
+});
+
+describe("snap to roads on the driver page (§26)", () => {
+  it("asks snapped by default; Recorded points asks for the raw line, and the legend says which", async () => {
+    route = { ...base, snapped: { provider: "google_roads", status: "failed" } };
+    const transport = await mount();
+    expect(transport.calls.filter((c) => c.tool === "driver_route").every((c) => c.args.snap === true)).toBe(true);
+    expect(screen.getByTestId("snap-legend").textContent).toContain("Raw GPS (snapping to roads failed)");
+    const box = screen.getByLabelText("Recorded points") as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    route = { ...base, snapped: { provider: "google_roads", status: "off" } };
+    fireEvent.click(box);
+    await act(async () => { await Promise.resolve(); });
+    expect(transport.calls.some((c) => c.tool === "driver_route" && c.args.snap === false)).toBe(true);
+    expect((screen.getByLabelText("Recorded points") as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByTestId("snap-legend").textContent).toContain("Recorded points: the raw GPS line");
+  });
+  it("no snapping provider: no toggle", async () => {
+    route = { ...base, snapped: { provider: "none", status: "off" } };
+    await mount();
+    expect(screen.queryByLabelText("Recorded points")).toBeNull();
+  });
+});
+
+describe("playback on the driver page (§22)", () => {
+  it("1×, 5×, 20×, 60×; the clock runs in recorded time on animation frames; the scrubber goes to any moment", async () => {
+    vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
+    await mount();
+    const chips = screen.getByTestId("playback").querySelectorAll(".chip");
+    expect([...chips].map((c) => c.textContent)).toEqual(["1×", "5×", "20×", "60×"]);
+    expect(screen.getByTestId("playback-clock").textContent).toBe("08:01:00");
+    expect(screen.getByTestId("map").dataset.cursor).toBe(""); // no marker before playing
+    fireEvent.click(screen.getByRole("button", { name: "Play" }));
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    const slider = screen.getByLabelText("Time") as HTMLInputElement;
+    const moved = Number(slider.value) - Date.parse(iso("08:01"));
+    expect(moved).toBeGreaterThan(55000); // about a minute of the day in a second at 60×
+    expect(moved).toBeLessThanOrEqual(61000);
+    expect(screen.getByTestId("map").dataset.cursor).toMatch(/^08:0[12]:\d\d$/);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    // The scrubber: to any moment; at a stop the marker is real and still.
+    fireEvent.change(slider, { target: { value: String(Date.parse(iso("12:00"))) } });
+    expect(screen.getByTestId("playback-clock").textContent).toBe("12:00:00");
+    expect(seen.props?.route?.cursor).toMatchObject({ lat: 6.96, lng: 79.89, estimated: false, label: "12:00:00" });
+  });
+  it("across a gap the marker is estimated (hollow) and the clock says so", async () => {
+    route = {
+      ...base,
+      route: { columns: ["time", "lat", "lng", "km/h", "at"], points: [["08:01", 6.88, 79.86, 0, iso("08:01")], ["09:55", 6.96, 79.89, 38, iso("09:55")], ["14:00", 6.96, 79.89, 0, iso("14:00")], ["14:56", 6.93, 79.86, 0, iso("14:56")]] },
+      holes: [{ from_at: iso("14:00"), to_at: iso("14:56"), minutes: 56, kind: "no_data", text: "App not running · 56 min" }],
+    };
+    await mount();
+    fireEvent.change(screen.getByLabelText("Time"), { target: { value: String(Date.parse(iso("14:28"))) } });
+    expect(screen.getByTestId("playback-clock").textContent).toBe("14:28:00 · estimated");
+    const c = seen.props?.route?.cursor;
+    expect(c).toMatchObject({ estimated: true, label: "14:28:00 · estimated" });
+    // Halfway through the gap, halfway along its dashed line.
+    expect(c?.lat).toBeCloseTo(6.945, 6);
+    expect(c?.lng).toBeCloseTo(79.875, 6);
+    expect(c?.heading).not.toBeNull();
   });
 });

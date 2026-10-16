@@ -1,18 +1,22 @@
-// The plan as a timeline (Phase 7, §17), on Approve, Assign a task and Task
-// stops (and the task detail once wired): "Leave by 07:24" big at the top; one
-// row per stop ("Stop 2 · Drop · Kurunegala site", then "arrive 09:00 · 1 h 30
-// · leave 10:30", the arrive-by red when missed, "usual here" for the place's
-// usual time); one row per leg between them (km, drive time and where the road
-// time came from), the rush-hour factor and "via expressway" on lines of their
-// own; the totals at the bottom. Above it, the exact reason when there is no
-// plan (planLogic), and the server's warnings as today.
+// The plan as a timeline (Phase 7, §17), on Approve, Assign a task, Task stops
+// and the task detail: "Leave by 07:24" big at the top; one row per stop ("Stop
+// 2 · Drop · Kurunegala site", then "arrive 09:00 · 1 h 30 · leave 10:30", the
+// arrive-by red when missed, "usual here" for the place's usual time); one row
+// per leg between them (km, drive time and where the road time came from), the
+// rush-hour factor and "via expressway" on lines of their own; the totals at the
+// bottom. Above it, the exact reason when there is no plan (planLogic), and the
+// server's warnings as today. With the plan map (§20) a stop row and its pin
+// highlight each other: hovering or tapping a row selects its pin (`onHover`,
+// `onSelect`), a pin tapped on the map highlights its row (`selected`).
+import type { KeyboardEvent } from "react";
 import type { PlanSummary, PlanTimeline as Timeline } from "../data/types";
 import { num } from "../lib/format";
 import { Notice } from "../ui/basics";
 import { legText, type PlanReason, shiftLabel, stopTimes } from "./planLogic";
+import { START_PIN, stopPin } from "./planMapLogic";
 import { driveText } from "./stopsLogic";
 
-export function PlanTimeline({ timeline, plan, startName, reasons = [], warnings = [], offset = 0, updating, compact, leaveNote }: {
+export interface PlanTimelineProps {
   timeline?: Timeline | null;
   /** The plan summary: where the road times came from, the buffer. */
   plan?: PlanSummary | null;
@@ -30,13 +34,42 @@ export function PlanTimeline({ timeline, plan, startName, reasons = [], warnings
   compact?: boolean;
   /** Where a leave time given by hand came from ("as typed" by default; "the time asked for" on a request). */
   leaveNote?: string;
-}) {
+  /** The pin highlighted on the plan map ("start", "stop-2"): its row is highlighted too. */
+  selected?: string | null;
+  /** A row tapped: its pin (tapped again: none). */
+  onSelect?: (id: string | null) => void;
+  /** The pointer over a row (desktop): its pin, null when it leaves. */
+  onHover?: (id: string | null) => void;
+}
+
+const SELECTED = { background: "var(--warn-bg)", borderRadius: 8, boxShadow: "0 0 0 6px var(--warn-bg)" } as const;
+
+export function PlanTimeline({ timeline, plan, startName, reasons = [], warnings = [], offset = 0, updating, compact, leaveNote, selected, onSelect, onHover }: PlanTimelineProps) {
   const missing = reasons.filter((r) => !r.note);
   const notes = reasons.filter((r) => r.note);
   if (!timeline && !reasons.length) return null;
   const leave = timeline?.items.find((x) => x.kind === "leave");
   const estimate = plan?.source === "estimate" || timeline?.items.some((x) => x.kind === "leg" && x.source === "estimate");
   const name = (n: number | "start" | "base") => n === "start" ? (startName ? `${startName} (start)` : "the start") : n === "base" ? "the base" : `Stop ${n + offset}`;
+  const linked = !!(onSelect || onHover);
+  // A row that selects its pin: tap (or Enter) toggles it, the pointer over it shows it.
+  const rowProps = (id: string) => linked
+    ? {
+      role: "button" as const,
+      tabIndex: 0,
+      "aria-pressed": selected === id,
+      "data-pin": id,
+      onClick: () => onSelect?.(selected === id ? null : id),
+      onKeyDown: (e: KeyboardEvent) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect?.(selected === id ? null : id);
+        }
+      },
+      onMouseEnter: () => onHover?.(id),
+      onMouseLeave: () => onHover?.(null),
+    }
+    : {};
   return (
     <div className="plan" data-testid="plan-timeline" aria-busy={updating || undefined}>
       {missing.length > 0 && (
@@ -58,8 +91,10 @@ export function PlanTimeline({ timeline, plan, startName, reasons = [], warnings
           {timeline.items.map((x, i) => {
             if (x.kind === "stop") {
               const late = x.late_min != null && x.late_min > 0;
+              const id = stopPin(x.n);
               return (
-                <li key={`s${x.n}`} className="plan-stop" data-testid="plan-stop" style={{ display: "grid", gap: 2, padding: "6px 0" }}>
+                <li key={`s${x.n}`} className="plan-stop" data-testid="plan-stop" {...rowProps(id)}
+                  style={{ display: "grid", gap: 2, padding: "6px 0", ...(linked ? { cursor: "pointer" } : {}), ...(selected === id ? SELECTED : {}) }}>
                   <b>{shiftLabel(x.label, x.n, offset)}</b>
                   <span className="num small">
                     {stopTimes(x)}
@@ -71,9 +106,12 @@ export function PlanTimeline({ timeline, plan, startName, reasons = [], warnings
               );
             }
             if (x.kind === "leg") {
+              // The first leg is the start's row on the map ("S").
+              const fromStart = x.from_n === "start";
               return (
-                <li key={`l${i}`} className="muted small" data-testid="plan-leg" style={{ paddingLeft: 14, borderLeft: "2px solid var(--line-strong)", display: "grid", gap: 2 }}>
-                  <span>{x.from_n === "start" ? `From ${name("start")} · ` : x.to_n === "base" ? "Back to the base · " : ""}{legText(x)}</span>
+                <li key={`l${i}`} className="muted small" data-testid="plan-leg" {...(fromStart ? rowProps(START_PIN) : {})}
+                  style={{ paddingLeft: 14, borderLeft: "2px solid var(--line-strong)", display: "grid", gap: 2, ...(fromStart && linked ? { cursor: "pointer" } : {}), ...(fromStart && selected === START_PIN ? SELECTED : {}) }}>
+                  <span>{fromStart ? `From ${name("start")} · ` : x.to_n === "base" ? "Back to the base · " : ""}{legText(x)}</span>
                   {x.rush_factor && x.rush_factor !== 1 && <span>Rush hour ×{x.rush_factor}</span>}
                   {x.via_expressway && <span>Via expressway</span>}
                 </li>

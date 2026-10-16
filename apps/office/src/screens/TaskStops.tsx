@@ -19,7 +19,7 @@ import { useToast } from "../ui/Toast";
 import { checkDeparture, departurePlan } from "./departureLogic";
 import { DepartureNote, useFleetSettings, usePlanPreview } from "./dispatchParts";
 import { dwellFallbacks, planReasons, rowStopNumbers } from "./planLogic";
-import { PlanTimeline } from "./PlanTimeline";
+import { PlanWithMap } from "./PlanMap";
 import { StopsRows } from "./StopsEditor";
 import { DwellPicker } from "./DwellPicker";
 import { draftsFromStops, dwellText, type StartFields, startExtras, type StopDraft, stopsInput, tickStart, WHAT_LABEL } from "./stopsLogic";
@@ -104,7 +104,8 @@ export function TaskStops() {
   const preview = plan.err ? null : plan.data ?? null;
   const previewErr = plan.err ? errText(plan.err)[0] : null;
 
-  const dPlan = running ? null : departurePlan(preview?.timeline, preview?.plan?.buffer_min);
+  // The task's end time is its back-by: a plan that ends after it says so beside Leave by (§20; it is changed on the task's edit page).
+  const dPlan = running ? null : departurePlan(preview?.timeline, preview?.plan?.buffer_min, t?.end_by);
   const check = form ? checkDeparture(form.leaveBy, dPlan) : null;
   const fillTo = check?.kind === "fill" && !plan.stale && !plan.updating ? check.leaveBy : null;
   useEffect(() => {
@@ -142,7 +143,7 @@ export function TaskStops() {
   const set = (patch: Partial<StopsForm>) => setForm((x) => (x ? { ...x, ...patch } : x));
   const numbers = rowStopNumbers(form.list, offset);
   const keyOf = (n: number) => [...numbers].find(([, m]) => m === n + reached)?.[0];
-  const lateKey = check?.kind === "late" ? keyOf(check.n) : undefined;
+  const lateKey = check?.kind === "late" && !check.back ? keyOf(check.n) : undefined;
   const moveArriveBy = (n: number, time: string) => {
     const key = keyOf(n);
     if (key) set({ list: form.list.map((s) => (s.key === key ? { ...s, arriveBy: time } : s)) });
@@ -209,7 +210,8 @@ export function TaskStops() {
             <b className="grow">Plan</b>
             <button type="button" className="btn small" onClick={plan.refetch} disabled={plan.fetching || !planArgs()}>{plan.fetching ? "Planning…" : "Plan now"}</button>
           </div>
-          <PlanTimeline timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating} offset={reached} />
+          <PlanWithMap timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating} offset={reached}
+            stops={preview?.stops} start={preview?.start} />
         </div>
         {msg && <Notice tone="bad">{msg}</Notice>}
         <StickyActions>

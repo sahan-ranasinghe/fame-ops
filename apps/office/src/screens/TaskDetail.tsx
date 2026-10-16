@@ -8,22 +8,24 @@
 // ("Stop 2 · Drop · Kurunegala site") with the time there planned against what
 // happened, the vehicle swap's stretches and their total, the vehicle chosen
 // against the default, the warnings saved past, and "Needs a driver" at the top.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
-import { estimatedLegend, type Route, mapRouteOf, minutesText, routeOf, snapLegend } from "../data/route";
+import { estimatedLegend, type Route, mapRouteOf, minutesText, routeOf, snapControl } from "../data/route";
 import type { DriverRoute, TaskDetail as TaskDetailData } from "../data/types";
 import { cap, hhmm, joinDots, num, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { MapView } from "../map/MapView";
+import type { RoutePoint } from "../map/types";
+import { GapsList, useGaps } from "./GapsList";
 import { StopArrival } from "./StopArrival";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
-import { PlanTimeline } from "./PlanTimeline";
+import { PlanWithMap } from "./PlanMap";
 import { videoWords } from "./fuelLogic";
 import { driveText } from "./stopsLogic";
 import { dwellNote, needsDriverText, segmentRows, segmentsTotal, stayLine, stopTitle, whatOf } from "./taskDetailLogic";
@@ -33,15 +35,19 @@ export const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: 
 const ARRIVAL_WARN = new Set(["override", "no_gps", "not_arrived"]);
 const SKIP_TEXT: Record<string, string> = { closed: "closed", nobody_there: "nobody there", not_needed: "not needed", not_visited: "not visited (task finished)", other: "other" };
 
-/** Loads one task; loads again when the page is returned to (after an edit). */
-export function useTask(id: string): { p: TaskDetailData | null; err: string | null; reload: () => Promise<void> } {
+/**
+ * Loads one task; loads again when the page is returned to (after an edit). `withLine`: the task page's plan map also
+ * asks for each leg's Google road line (web only: Google's map is never in the artifact).
+ */
+export function useTask(id: string, opts: { withLine?: boolean } = {}): { p: TaskDetailData | null; err: string | null; reload: () => Promise<void> } {
   const { transport } = useFleet();
   const { key } = useLocation();
   const [p, setP] = useState<TaskDetailData | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const withLine = !!opts.withLine && __BUILD__ === "web";
   const reload = async () => {
     try {
-      setP(await transport.call<TaskDetailData>("task_detail", { task_id: id }));
+      setP(await transport.call<TaskDetailData>("task_detail", withLine ? { task_id: id, with_line: true } : { task_id: id }));
       setErr(null);
     } catch (e) {
       setErr(errText(e as FleetError)[0]);
@@ -66,7 +72,7 @@ export function useBoardBack(): string {
 export function TaskDetail() {
   const { id = "" } = useParams();
   const { me } = useFleet();
-  const { p, err, reload } = useTask(id);
+  const { p, err, reload } = useTask(id, { withLine: true });
   const backTo = useBoardBack();
   const q = useBoardQuery();
   // The warnings of a change just made on /tasks/:id/edit (passed in the navigation state).
@@ -223,7 +229,8 @@ export function TaskDetail() {
       {p.plan && (
         <>
           <div className="section-t">Plan</div>
-          <PlanTimeline timeline={p.timeline} plan={p.plan} startName={p.task.start_place} />
+          <PlanWithMap timeline={p.timeline} plan={p.plan} startName={p.task.start_place} stops={p.stops}
+            start={{ name: t.start_place, lat: t.start_lat, lng: t.start_lng, google: !!t.start_google_place_id }} />
           <p className="muted small" style={{ margin: 0 }}>{driveText(p.plan.total_drive_min)} driving in {p.plan.legs.length} leg{p.plan.legs.length === 1 ? "" : "s"} · computed {p.plan.computed_at}</p>
         </>
       )}
@@ -446,35 +453,52 @@ function ReopenTask({ id, onDone }: { id: string; onDone: () => Promise<void> })
   );
 }
 
-/** The route between Start task and Save & finish (or now), on the same map as the driver page, with GPS km next to the odometer. */
+/**
+ * The route between Start task and Save & finish (or now), on the same map as the driver page, with GPS km next to the
+ * odometer. Snapped to roads by default where the server allows it (§26), "Recorded points" shows the raw line; the gaps
+ * as markers with the Gaps list under the map (§21).
+ */
 function TaskRoute({ id, started }: { id: string; started?: string | null }) {
   const { transport } = useFleet();
   const [route, setRoute] = useState<Route | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [snap, setSnap] = useState(true);
+  const [focus, setFocus] = useState<RoutePoint[] | null>(null);
   useEffect(() => {
     if (!started) return;
     let alive = true;
     setBusy(true);
-    transport.call<DriverRoute>("driver_route", { task_id: id, line_tolerance_m: 0, max_line_points: 3000, snap: true, estimate_gaps: true })
-      .then((p) => { if (alive) setRoute(routeOf("", p)); })
+    transport.call<DriverRoute>("driver_route", { task_id: id, line_tolerance_m: 0, max_line_points: 3000, snap, estimate_gaps: true })
+      .then((p) => { if (alive) { setRoute(routeOf("", p)); setErr(null); } })
       .catch((e) => { if (alive) setErr(errText(e as FleetError)[0]); })
       .finally(() => { if (alive) setBusy(false); });
     return () => { alive = false; };
-  }, [id, started, transport]);
+  }, [id, started, transport, snap]);
+  const mapRoute = useMemo(() => mapRouteOf(route, null, snap), [route, snap]);
+  const gaps = useGaps(route, snap, setFocus);
   if (!started) return null;
   const line = route && !route.note
     ? joinDots([`GPS ${num(route.km)} km`, `driving ${minutesText(route.drivingMinutes)}`, `stopped ${minutesText(route.stoppedMinutes)}`, route.stopsCount ? `${route.stopsCount} stop${route.stopsCount > 1 ? "s" : ""} of 10 min or more` : "no stops of 10 min or more"])
     : route?.note;
+  const snapUi = snapControl(route, snap);
   return (
     <>
       <div className="section-t">Route</div>
       <div className="card card-b stack" data-testid="task-route">
-        {busy && <Loading>Loading the route…</Loading>}
+        {busy && !route && <Loading>Loading the route…</Loading>}
         {err && <Notice tone="bad">{err}</Notice>}
-        {route && route.points.length > 0 && <MapView markers={[]} route={mapRouteOf(route, null, true)} onPick={() => undefined} />}
-        {line && <p className="muted small" style={{ margin: 0 }}>{line}{snapLegend(route, true) ? ` · ${snapLegend(route, true)}` : ""}</p>}
+        {route && route.points.length > 0 && (
+          <MapView markers={[]} route={mapRoute} focus={focus} onPick={() => undefined} gaps={gaps.markers} openGap={gaps.open} onGap={gaps.setOpen} />
+        )}
+        {line && <p className="muted small" style={{ margin: 0 }}>{line}{snapUi.note ? ` · ${snapUi.note}` : ""}</p>}
+        {snapUi.toggle && (
+          <label className="muted small" data-testid="recorded-points">
+            <input type="checkbox" checked={!snap} disabled={busy} onChange={(e) => setSnap(!e.target.checked)} /> Recorded points
+          </label>
+        )}
         {estimatedLegend(route) && <p className="muted small" style={{ margin: 0 }} data-testid="estimated-legend">{estimatedLegend(route)}</p>}
+        <GapsList rows={gaps.rows} open={gaps.open} onOpen={gaps.pick} bare />
       </div>
     </>
   );

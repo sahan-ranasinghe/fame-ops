@@ -29,7 +29,7 @@ import { ConflictCards } from "./ConflictCards";
 import { checkDeparture, departurePlan } from "./departureLogic";
 import { basePlace, DepartureNote, DriverSelect, StartFrom, startPoint, useFleetSettings, usePlanPreview, VehicleSelect } from "./dispatchParts";
 import { dwellFallbacks, planReasons, rowStopNumbers } from "./planLogic";
-import { PlanTimeline } from "./PlanTimeline";
+import { PlanWithMap } from "./PlanMap";
 import { StopsRows } from "./StopsEditor";
 import { defaultStops, dwellText, firstStopOf, tickStart } from "./stopsLogic";
 
@@ -79,8 +79,10 @@ export function NewTask() {
   const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), pickedDriver) : null;
 
   // The departure check, at once from the latest plan: fill an empty leave-by, else say what a typed one does.
-  const dPlan = departurePlan(preview?.timeline, preview?.plan?.buffer_min);
+  // The "Vehicle free by" time is the back-by: a plan that ends after it says so beside both fields (§20).
+  const dPlan = departurePlan(preview?.timeline, preview?.plan?.buffer_min, f.end);
   const check = checkDeparture(f.leaveBy, dPlan);
+  const lateBack = check?.kind === "late" && check.back;
   const fillTo = check?.kind === "fill" && !plan.stale && !plan.updating ? check.leaveBy : null;
   useEffect(() => {
     if (fillTo) setF((x) => (x.leaveBy ? x : { ...x, leaveBy: fillTo }));
@@ -88,7 +90,7 @@ export function NewTask() {
   }, [fillTo]);
   const offset = f.startPax ? 1 : 0;
   const numbers = rowStopNumbers(f.stops, offset);
-  const lateKey = check?.kind === "late" ? [...numbers].find(([, n]) => n === check.n)?.[0] : undefined;
+  const lateKey = check?.kind === "late" && !check.back ? [...numbers].find(([, n]) => n === check.n)?.[0] : undefined;
   const moveArriveBy = (n: number, time: string) => {
     const key = [...numbers].find(([, m]) => m === n)?.[0];
     if (key) setF((x) => ({ ...x, stops: x.stops.map((s) => (s.key === key ? { ...s, arriveBy: time } : s)) }));
@@ -194,7 +196,7 @@ export function NewTask() {
               <label htmlFor="af-leave">Leave by</label>
               <input type="time" id="af-leave" value={f.leaveBy} onChange={(e) => set("leaveBy", e.target.value)} />
               {check && check.kind !== "fill"
-                ? <DepartureNote check={check} onUse={(t) => set("leaveBy", t)} onMove={moveArriveBy} />
+                ? <DepartureNote check={check} onUse={(t) => set("leaveBy", t)} onMove={moveArriveBy} onMoveBack={(t) => set("end", t)} backLabel="free by" />
                 : <span className="hint">Empty: planned from the stops’ arrive-by times.</span>}
             </div>
           </div>
@@ -218,7 +220,8 @@ export function NewTask() {
             <b className="grow">Plan</b>
             <button type="button" className="btn small" onClick={plan.refetch} disabled={plan.fetching || !pInput}>{plan.fetching ? "Planning…" : "Plan now"}</button>
           </div>
-          <PlanTimeline timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating} />
+          <PlanWithMap timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating}
+            stops={preview?.stops} start={preview?.start} />
           <ConflictCards conflicts={preview?.conflicts} onPickVehicle={focusVehicle} onPickDriver={scrollToAvailability} />
         </div>
 
@@ -234,7 +237,11 @@ export function NewTask() {
           <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) pickDriver(d.username); }}
             onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
           <div className="grid2">
-            <div className="field"><label htmlFor="af-end">Vehicle free by</label><input type="time" id="af-end" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
+            <div className="field">
+              <label htmlFor="af-end">Vehicle free by</label>
+              <input type="time" id="af-end" value={f.end} onChange={(e) => set("end", e.target.value)} />
+              {lateBack && <DepartureNote check={check} onUse={(t) => set("leaveBy", t)} onMoveBack={(t) => set("end", t)} backLabel="free by" testId="departure-check-back" />}
+            </div>
             <div className="field"><label htmlFor="af-pax">Passengers</label><input type="number" id="af-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
           </div>
           <div className="grid2">
