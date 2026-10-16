@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import { fixedHeight } from "./controlsLogic";
 import DrawnMap from "./DrawnMap";
 import { NoMap } from "./NoMap";
 import type { MapProps } from "./types";
@@ -9,15 +10,18 @@ import { useGoogleMap } from "./google/useGoogleMap";
 const MapLibre = __BUILD__ === "web" ? lazy(() => import("./MapLibreMap")) : null;
 const GoogleMap = __BUILD__ === "web" ? lazy(() => import("./google/GoogleMap")) : null;
 
-const loading = <div className="mapbox ml"><div className="loading" style={{ padding: 24 }}>Loading the map…</div></div>;
+const Loading = ({ height }: { height?: number }) => (
+  <div className="mapbox ml" style={fixedHeight(height)}><div className="loading" style={{ padding: 24 }}>Loading the map…</div></div>
+);
 
 export function MapView(props: MapProps) {
   const [failed, setFailed] = useState(false);
   const choice = useGoogleMap();
+  const loading = <Loading height={props.height} />;
   if (choice.kind === "loading") return loading;
   if (choice.kind === "google") {
     // The google package: Google's map, or no map with the reason (never another map: Google's terms).
-    if (choice.state !== "ready" || !GoogleMap) return <NoMap note={choice.state === "ready" ? "Google's map is web only" : choice.note} />;
+    if (choice.state !== "ready" || !GoogleMap) return <NoMap height={props.height} note={choice.state === "ready" ? "Google's map is web only" : choice.note} />;
     return <Suspense fallback={loading}><GoogleMap {...props} maps={choice.maps} /></Suspense>;
   }
   if (!MapLibre || failed) return <DrawnMap {...props} />;

@@ -2,7 +2,8 @@
 // server counted the load (register_map_load answers the browser key when the map loads cap
 // allows it). One google.maps.Map is made per tab and moved between the pages that show a map
 // (the Live map, a driver's page, a task's route, a pin), so moving around the app is never a
-// second load (Google bills one map load per map; reusing one map is its own advice).
+// second load (Google bills one map load per map; reusing one map is its own advice). Phase 7:
+// greedy gestures (§23) and none of Google's buttons (our control cluster instead, §25).
 import type { Transport } from "../../transport/types";
 
 export type GoogleMapsApi = typeof google.maps;
@@ -88,8 +89,13 @@ export function attachMap(box: HTMLElement, maps: GoogleMapsApi): google.maps.Ma
       mapTypeControl: false,
       streetViewControl: false,
       fullscreenControl: false,
+      // Phase 7 (§24, §25): our one control cluster (zoom, the compass, fit) replaces Google's own buttons.
+      zoomControl: false,
+      cameraControl: false,
+      rotateControl: false,
       clickableIcons: false,
-      gestureHandling: "cooperative",
+      // Phase 7 (§23): one finger moves the map and the wheel zooms; never "Use ctrl + scroll to zoom".
+      gestureHandling: "greedy",
     });
   }
   box.appendChild(holder);
