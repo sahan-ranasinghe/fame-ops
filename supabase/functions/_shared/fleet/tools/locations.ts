@@ -407,8 +407,8 @@ export const driverRoute = tool({
     const linePoint = (p: LinePoint) => [t(p.at), p.lat, p.lng, p.kmh, iso(p.at), p.acc ?? null];
 
     // Snap to roads: the driving legs through Google (the google package, for the web's Google map only: the
-    // Roads terms forbid its lines on any other map) or OSRM when the setting names it (stored per leg,
-    // the new part of a growing leg matched at most every 2 minutes).
+    // Roads terms forbid its lines on any other map) or OSRM when the setting names it (stored per leg; a leg
+    // still growing goes in whole 5 km chunks, its tail raw meanwhile; Phase 7, §26).
     const provider = snapProvider(settings, actor.channel);
     let snapped: { provider: string; status: string; legs?: number; matched?: number } = { provider, status: "off" };
     let routeSnapped: { columns: string[]; points: (string | number | null)[][] } | undefined;
@@ -420,6 +420,10 @@ export const driverRoute = tool({
         if (prev && prev.to === s.from) prev.to = s.to; // the pieces of one leg (cut for gaps or late uploads) are one road
         else legs.push({ from: s.from, to: s.to, points: [] });
       }
+      // Today's last leg while the driver is still driving is open: its new part goes only in whole chunks.
+      const lastSeg = route.segments[route.segments.length - 1];
+      const lastLeg = legs[legs.length - 1];
+      if (lastLeg && day === colomboDate(now) && lastSeg?.kind === "driving" && lastLeg.to === lastSeg.to) lastLeg.open = true;
       for (const leg of legs) {
         leg.points = route.line.filter((p) => p.at >= leg.from && p.at <= leg.to).map((p) => ({
           at: p.at,

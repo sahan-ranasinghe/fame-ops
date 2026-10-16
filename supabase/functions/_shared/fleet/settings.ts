@@ -75,6 +75,9 @@ export const GOOGLE_HARD_CEILING: Record<GoogleFeature, number> = {
   roads: 4750,
 };
 
+/** Phase 7 (§26): snap to roads at 200 a day and 95 % of the 5,000 free a month, once the licence question is settled. */
+export const ROADS_CAPS_PLANNED = { day: 200, month: 4750 } as const;
+
 export type VideoQuality = "480p" | "720p";
 
 export interface ChecklistItem {
@@ -126,8 +129,10 @@ export const SETTINGS_DEFAULTS: Settings = {
     places_autocomplete: { day: 400, month: 9500 },
     places_details: { day: 400, month: 9500 },
     routes: { day: 200, month: 4750 },
-    // Off until the office confirms Google's licence: the Roads policies say an asset tracking
-    // application may need an asset tracking licence (docs/google-maps-setup.md).
+    // Off until the licence is settled: the Roads API policies (checked 16 October 2026) say "If you intend to
+    // use the Roads API as part of an asset tracking application, you may be required to purchase an asset
+    // tracking license" (the whole Roads API, snap to roads included; docs/google-maps-setup.md). Once settled,
+    // the planned caps (Phase 7, §26) are ROADS_CAPS_PLANNED: 200 a day, 4,750 a month.
     roads: { day: 0, month: 0 },
   },
 };

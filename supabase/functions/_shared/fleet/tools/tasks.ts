@@ -230,6 +230,8 @@ export interface ResolvedStart {
   name: string;
   lat: number | null;
   lng: number | null;
+  /** A Google place: its pin is Google's (drawn on Google's map only). */
+  google?: boolean;
   /** The start stop's own fields when passengers get in there (Phase 7, §11). */
   what?: z.infer<typeof zWhat> | null;
   note?: string | null;
@@ -352,7 +354,13 @@ export async function resolveStart(
 ): Promise<ResolvedStart | null> {
   if (start?.google_place_id && !start.place_id) {
     const pin = await pinForTask(db, start.google_place_id, day ?? colomboDate(new Date()));
-    return { place_id: null, name: (start.place ?? "").trim() || pin.short_address || pin.address || "Start", lat: pin.lat, lng: pin.lng };
+    return {
+      place_id: null,
+      name: (start.place ?? "").trim() || pin.short_address || pin.address || "Start",
+      lat: pin.lat,
+      lng: pin.lng,
+      google: true,
+    };
   }
   if (start && (start.place_id || start.place || start.address || start.lat !== undefined)) {
     const typed = (start.place ?? start.address ?? "").trim();
@@ -426,6 +434,8 @@ export async function makePlan(db: Db, settings: Settings, p: PlanRequest): Prom
     const got = await googleLegs(db, settings, points, departAt, { avoid_expressway: p.avoidExpressway }, p.now);
     if ("legs" in got) {
       plan = await runPlanner(input, settings, memoLegFn(got.legs, open));
+      // The legs carry Google's road lines (the same call as the road times): kept 30 days from now.
+      if (plan.legs.some((l) => l.line)) plan = { ...plan, line_fetched_at: p.now.toISOString() };
     } else {
       googleNote = got.note;
       plan = await runPlanner(input, settings, open);
@@ -518,12 +528,16 @@ export type TimelineItem =
     source: string;
     rush_factor?: number;
     via_expressway?: boolean;
+    /** Google's road line (encoded polyline), only with with_line: drawn on Google's map only (rule 10). */
+    line?: string;
   };
 
 /** The plan as a timeline: leave, then each leg and stop in order, then the totals. */
 export function planTimeline(
   plan: Plan | null | undefined,
   stops: { seq: number; type: string; place_name: string; dwell_source?: string | null; is_start?: boolean }[],
+  /** The web's plan map asks for each leg's road line (with_line); Claude's answers stay small without them. */
+  withLine = false,
 ) {
   if (!plan || !Array.isArray(plan.legs)) return undefined;
   const order = new Map(stops.map((st, i) => [st.seq, i + 1]));
@@ -538,6 +552,7 @@ export function planTimeline(
     source: l.source,
     rush_factor: l.factor !== 1 ? l.factor : undefined,
     via_expressway: l.via_expressway ?? undefined,
+    line: withLine && l.line ? l.line : undefined,
   });
   for (const st of stops) {
     const planned = plan.stops.find((x) => x.seq === st.seq);
@@ -1033,6 +1048,7 @@ export const planTask = tool({
     driver: zText(80).optional(),
     vehicle: zText(20).optional(),
     end_time: zTime.optional(),
+    with_line: z.boolean().optional().describe("The web's plan map: each leg's Google road line in the timeline (encoded polyline)"),
   }),
   async run(args, { db, now, actor }) {
     realDate(args.date);
@@ -1071,10 +1087,19 @@ export const planTask = tool({
         leave_by: colomboDayTime(prepared.leaveBy),
         leave_by_at: prepared.leaveBy,
         leave_by_source: prepared.leaveBySource,
-        start: prepared.start ? { name: prepared.start.name, has_pin: prepared.start.lat != null } : undefined,
+        // The start's pin for the plan map (a Google start's pin is Google's: drawn on Google's map only).
+        start: prepared.start
+          ? {
+            name: prepared.start.name,
+            has_pin: prepared.start.lat != null,
+            lat: prepared.start.lat ?? undefined,
+            lng: prepared.start.lng ?? undefined,
+            google: prepared.start.google ? true : undefined,
+          }
+          : undefined,
         stops: prepared.stops.map(stopCard),
         plan: planSummary(prepared.plan, names),
-        timeline: planTimeline(prepared.plan, prepared.stops),
+        timeline: planTimeline(prepared.plan, prepared.stops, args.with_line === true),
         warnings,
         conflicts: conflicts.length ? conflicts : undefined,
         vehicle_used: vehicleUsed,
@@ -1348,8 +1373,11 @@ export const taskDetail = tool({
     "entered, what the photo shows, flags) and fuel with photo links (valid 1 hour), vehicle problems reported during it, and " +
     "whether km were driven that nobody logged before it started. plan_version is what update_task_stops needs.",
   readOnly: true,
-  input: z.object({ task_id: zId }),
-  async run({ task_id }, { db, now, actor }) {
+  input: z.object({
+    task_id: zId,
+    with_line: z.boolean().optional().describe("The web's plan map: each leg's Google road line in the timeline (encoded polyline)"),
+  }),
+  async run({ task_id, with_line }, { db, now, actor }) {
     const task = await getTask(db, task_id);
     // Without assign_tasks a person sees a request's task only: any request's with approve, their own request's otherwise.
     if (!actor.permissions.includes("assign_tasks")) {
@@ -1513,7 +1541,7 @@ export const taskDetail = tool({
             : undefined,
         },
         plan: planSummary(task.plan_json as Plan | null, names),
-        timeline: planTimeline(task.plan_json as Plan | null, stops),
+        timeline: planTimeline(task.plan_json as Plan | null, stops, with_line === true),
         // Phase 7: a vehicle swap during the task keeps each vehicle's stretch; task km = their sum.
         segments: segments.length
           ? segments.map((g) => ({

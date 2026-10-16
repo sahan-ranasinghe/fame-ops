@@ -9,6 +9,8 @@ import {
   matchPoints,
   osrmRequest,
   osrmResponse,
+  sendTailNow,
+  thinBySpacing,
 } from "./matching.ts";
 
 const T0 = Date.parse("2026-10-14T03:00:00Z");
@@ -23,16 +25,18 @@ const SAMPLE: MatchInput[] = [
   { at: sec(20), lat: 6.9035, lng: 79.8533, acc: 8 },
 ];
 
-Deno.test("chunking: thinned, cut at a gap of 2 minutes, chunks of 100 sharing a point", () => {
-  const straight: MatchInput[] = [];
-  for (let i = 0; i < 250; i++) straight.push({ at: sec(i * 5), lat: 6.9 + i * 0.0004, lng: 79.85, acc: 8 });
-  const chunks = chunkForMatching(straight);
-  assertEquals(chunks.length, 1, "a straight run thins to its ends: one chunk");
-  assertEquals(chunks[0].length, 2);
-  const wiggly = straight.map((p, i) => ({ ...p, lng: p.lng + ((i % 2) * 20) / 111320 })); // 20 m zigzag: every point stays
-  const many = chunkForMatching(wiggly);
-  assertEquals(many.length, 3, "250 points: 100 + 100 + 52, sharing one point at each join");
-  assertEquals(many[0][many[0].length - 1], many[1][0]);
+Deno.test("chunking: about one point per 50 m, cut at a gap of 2 minutes, chunks of 100 sharing a point (Phase 7, §26)", () => {
+  // 250 fixes 5 s and 28 m apart (20 km/h): every other one is kept (56 m), and the last: 126 points.
+  const slow: MatchInput[] = [];
+  for (let i = 0; i < 250; i++) slow.push({ at: sec(i * 5), lat: 6.9 + i * 0.00025, lng: 79.85, acc: 8 });
+  const thinned = thinBySpacing(slow);
+  assertEquals(thinned.length, 126, "the first, every 56 m after it, and the last");
+  const chunks = chunkForMatching(slow);
+  assertEquals(chunks.map((c) => c.length), [100, 27], "100 + 27, sharing one point at the join (about 5 km a call)");
+  assertEquals(chunks[0][chunks[0].length - 1], chunks[1][0]);
+  // 250 fixes 55 m apart (40 km/h): all kept: 100 + 100 + 52.
+  const fast = slow.map((p, i) => ({ ...p, lat: 6.9 + i * 0.0005 }));
+  assertEquals(chunkForMatching(fast).map((c) => c.length), [100, 100, 52]);
   const gap = chunkForMatching([...SAMPLE, { at: sec(20 + 130), lat: 6.90, lng: 79.8535, acc: 8 }, {
     at: sec(20 + 135),
     lat: 6.8995,
@@ -141,4 +145,12 @@ Deno.test("matchPoints: every chunk is one counted call; a failed call counts, t
   );
   assertEquals(counted, [true, false]);
   await assertRejects(() => matchPoints("osrm", SAMPLE, {}, fake({}), () => undefined), Error, "OSRM_URL");
+});
+
+Deno.test("a growing leg goes in whole chunks: 100 new thinned points, or the leg's end (Phase 7, §26)", () => {
+  const run = (n: number) => Array.from({ length: n }, (_, i) => ({ at: sec(i * 5), lat: 6.9 + i * 0.0005, lng: 79.85, acc: 8 }));
+  assertEquals(sendTailNow(run(99), true), false, "99 new points while driving: the tail stays raw");
+  assertEquals(sendTailNow(run(100), true), true, "100: one whole chunk goes");
+  assertEquals(sendTailNow(run(20), false), true, "the leg ended: the rest goes");
+  assertEquals(sendTailNow(run(1), false), false, "one point is nothing to send");
 });

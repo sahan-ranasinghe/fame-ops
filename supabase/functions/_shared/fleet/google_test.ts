@@ -20,7 +20,15 @@ import { fetchPin, googlePin } from "./googlePlaces.ts";
 import { matchPoints } from "./matching.ts";
 import { legSequence } from "./plan.ts";
 import { googleLegs, legKey, memoLegFn } from "./routing.ts";
-import { GOOGLE_HARD_CEILING, type GoogleCaps, type GoogleFeature, type Settings, SETTINGS_DEFAULTS, validateSetting } from "./settings.ts";
+import {
+  GOOGLE_HARD_CEILING,
+  type GoogleCaps,
+  type GoogleFeature,
+  ROADS_CAPS_PLANNED,
+  type Settings,
+  SETTINGS_DEFAULTS,
+  validateSetting,
+} from "./settings.ts";
 import { snapProvider } from "./tools/locations.ts";
 
 const NOW = new Date("2026-10-16T04:30:00Z"); // 10:00 Colombo
@@ -251,7 +259,8 @@ Deno.test("Routes: one call answers every leg of a plan (TRAFFIC_AWARE, the stop
       "2026-10-16T05:00:00.000Z",
       2,
     ]);
-    assertEquals(req.headers["X-Goog-FieldMask"], "routes.legs.duration,routes.legs.distanceMeters");
+    // Phase 7 (§20): the leg lines come from the same call (a basic field: still Compute Routes Pro).
+    assertEquals(req.headers["X-Goog-FieldMask"], "routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline");
     const past = routesRequest(points, "2026-10-16T04:00:00Z", "k", { avoid_expressway: true }, NOW).body as Record<string, unknown>;
     assertEquals([past.departureTime, past.routeModifiers], [undefined, { avoidHighways: true }]);
 
@@ -341,7 +350,10 @@ Deno.test("a refused Roads call is never sent: the gate is asked before each 100
 Deno.test("google_caps: every feature, the month never above 95 % of the free usage, the day never above the month", () => {
   const caps = validateSetting("google_caps", SETTINGS_DEFAULTS.google_caps);
   assertEquals(caps, SETTINGS_DEFAULTS.google_caps);
+  // Off until the asset tracking licence is settled (the Roads API policies); the planned caps pass validation.
   assertEquals(SETTINGS_DEFAULTS.google_caps.roads, { day: 0, month: 0 }, "snap to roads starts off (the asset tracking licence)");
+  const planned = validateSetting("google_caps", { ...SETTINGS_DEFAULTS.google_caps, roads: ROADS_CAPS_PLANNED }) as GoogleCaps;
+  assertEquals(planned.roads, { day: 200, month: 4750 });
   const tooBig = { ...SETTINGS_DEFAULTS.google_caps, routes: { day: 200, month: 5000 } };
   let message = "";
   try {
@@ -356,4 +368,19 @@ Deno.test("google_caps: every feature, the month never above 95 % of the free us
     message = (e as Error).message;
   }
   assertEquals(message, "google_caps.map_loads.day: a whole number from 0 to 400 is needed.");
+});
+
+Deno.test("Routes: each leg's line comes from the same answer (Phase 7, §20); a leg without one has none", () => {
+  const answer = {
+    routes: [{
+      legs: [
+        { duration: "600s", distanceMeters: 5000, polyline: { encodedPolyline: "_p~iF~ps|U_ulLnnqC" } },
+        { duration: "300s", distanceMeters: 2000 },
+      ],
+    }],
+  };
+  assertEquals(routesResponse(answer, 2), [
+    { km: 5, minutes: 10, line: "_p~iF~ps|U_ulLnnqC" },
+    { km: 2, minutes: 5 },
+  ]);
 });

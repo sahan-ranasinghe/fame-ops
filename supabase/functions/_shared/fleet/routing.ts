@@ -256,7 +256,14 @@ export async function googleLegs(
   if (!r.ok) return { note: r.note };
   const legs = new Map<string, LegResult>();
   r.value.forEach((leg, i) => {
-    legs.set(legKey(points[i], points[i + 1]), { km: leg.km, minutes: leg.minutes, source: "google", via_expressway: null, factor: 1 });
+    legs.set(legKey(points[i], points[i + 1]), {
+      km: leg.km,
+      minutes: leg.minutes,
+      source: "google",
+      via_expressway: null,
+      factor: 1,
+      ...(leg.line ? { line: leg.line } : {}),
+    });
   });
   return { legs };
 }

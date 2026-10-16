@@ -36,6 +36,9 @@
       "@fleet/permissions": [
         "../../supabase/functions/_shared/fleet/permissions.ts"
       ],
+      "@fleet/polyline": [
+        "../../supabase/functions/_shared/fleet/polyline.ts"
+      ],
       "@fleet/sites": [
         "../../supabase/functions/_shared/fleet/sites.ts"
       ]

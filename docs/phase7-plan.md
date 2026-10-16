@@ -1370,19 +1370,52 @@ Added in Part 2 (16 October: stop labels by order, the time at each stop, the ve
 | `stop.visit` | Visit | ගොඩවීම |
 | `stop.start` | Start · passengers get in here | ආරම්භය · මගීන් මෙතැනින් නගී |
 | `swap.title` | Vehicle changed: {plate} | වාහනය වෙනස් විය: {plate} |
-| `swap.body` | The office moved this task to {plate}. Log both odometers. | කාර්යාලය මෙම කාර්යය {plate} වෙත මාරු කළා. ඕඩෝමීටර දෙකම සටහන් කරන්න. |
-| `swap.oldEnd` | {plate}: end reading | {plate}: අවසාන කියවීම |
-| `swap.newStart` | {plate}: start reading | {plate}: ආරම්භක කියවීම |
+| `swap.body` | The office moved this task to {plate}. Log both odometers. | කාර්යාලය මෙම කාර්යය {plate} වෙත මාරු කළා. වාහන දෙකේම මීටර් කියවීම සටහන් කරන්න. |
+| `swap.oldEnd` | {plate}: end reading | {plate}: අවසන් මීටරය |
+| `swap.newStart` | {plate}: start reading | {plate}: ආරම්භක මීටරය |
 | `swap.logged` | Logged ✓ {km} km | සටහන් කළා ✓ කි.මී. {km} |
-| `swap.logTitle` | Odometer at the vehicle change | වාහනය මාරු කිරීමේදී ඕඩෝමීටරය |
+| `swap.logTitle` | Odometer at the vehicle change | වාහනය මාරු කිරීමේදී මීටරය |
 | `swap.stretches` | {km} km in {plate} | {plate} හි කි.මී. {km} |
 | `report.needVehicle` | I need another vehicle | මට වෙනත් වාහනයක් අවශ්‍යයි |
 | `report.needVehicleHint` | The fleet admins are told at once. | වාහන කළමනාකරුවන්ට වහාම දැනුම් දෙයි. |
 | `report.needVehicleSent` | The office knows you need another vehicle. | ඔබට වෙනත් වාහනයක් අවශ්‍ය බව කාර්යාලය දනී. |
 | push `changed`, a stop | Stop {n} added / removed / moved / changed: {place} · {more} more | නැවතුම {n} එක් කළා / ඉවත් කළා / අනුපිළිවෙල වෙනස් විය / වෙනස් විය: {place} · තවත් {more} |
 
-Note for the Sinhala check: "odometer" is written three ways in the app (ඔඩෝමීටරය in `complete.checkBody`, ඕඩෝමීටර /
-ඕඩෝමීටරය elsewhere): pick one with the boss or a driver.
+**Odometer words (Sahan, 16 October, the Part 2b go):** one word family everywhere, replacing the three spellings
+(ඔඩෝමීටරය, ඕඩෝමීටර, මීටර කියවීම): odometer = **මීටරය**, odometer reading = **මීටර් කියවීම**, start odo =
+**ආරම්භක මීටරය**, end odo = **අවසන් මීටරය**. The driver strings changed to it:
+
+| key | English | Sinhala |
+|---|---|---|
+| `task.startOdo` | Start odo | ආරම්භක මීටරය |
+| `log.reading` | odometer reading | මීටර් කියවීම |
+| `log.odometerNow` | Odometer now (km) | දැන් මීටර් කියවීම (කි.මී.) |
+| `log.odometerOptional` | Odometer now (km, if you know it) | දැන් මීටර් කියවීම (කි.මී., දන්නේ නම්) |
+| `log.needOdometer` | Enter the odometer reading. | මීටර් කියවීම ඇතුළත් කරන්න. |
+| `log.displayBroken` | Odometer display broken? Report a problem | මීටරයේ තිරය කැඩිලාද? ගැටලුවක් වාර්තා කරන්න |
+| `log.photo.noOdometer` | No odometer reading in this photo. Take a photo of the odometer (total km). | මෙම ඡායාරූපයේ මීටර් කියවීමක් නැත. මීටරයේ (මුළු km) ඡායාරූපයක් ගන්න. |
+| `log.lastReading` | Last reading: {km} | අවසන් මීටර් කියවීම: {km} |
+| `log.saveReading` | Save reading | මීටර් කියවීම සුරකින්න |
+| `log.lowerThanStart` | This is lower than the start reading ({km}). | මෙය ආරම්භක මීටරයට ({km}) වඩා අඩුයි. |
+| `log.lowerThanLast` | This is lower than the last reading ({km}). Check it. | මෙය අවසන් මීටර් කියවීමට ({km}) වඩා අඩුයි. එය පරීක්ෂා කරන්න. |
+| `log.moreThanLast` | This is {km} km more than the last reading. The office will see that. | මෙය අවසන් මීටර් කියවීමට වඩා කි.මී. {km} ක් වැඩියි. එය කාර්යාලයට පෙනේ. |
+| `log.gpsSinceLast` | GPS ≈ {km} km since the last reading | අවසන් මීටර් කියවීමෙන් පසු GPS ≈ {km} km |
+| `log.photoReading` | Photo reading | ඡායාරූපයේ මීටර් කියවීම |
+| `log.correctSave` | Correct · Save reading | නිවැරදියි · මීටර් කියවීම සුරකින්න |
+| `log.typeInstead` | Still can't read it? Type the reading | තවමත් කියවිය නොහැකිද? මීටර් කියවීම ටයිප් කරන්න |
+| `log.changeTitle` | Change the reading? | මීටර් කියවීම වෙනස් කරනවාද? |
+| `log.changeWarning` | The office will see the photo reading ({km} km) and your number. Save anyway? | ඡායාරූපයේ මීටර් කියවීම ({km} km) සහ ඔබේ අංකය කාර්යාලයට පෙනේ. කෙසේ වෙතත් සුරකින්නද? |
+| `log.photo.outOfRange` | This number doesn't fit this vehicle (last reading {km} km). Retake the photo. | මෙම අංකය මෙම වාහනයට ගැලපෙන්නේ නැත (අවසන් මීටර් කියවීම {km} km). නැවත ඡායාරූපයක් ගන්න. |
+| `log.typing.changed` | Photo reading: {km} km. The office will see the photo reading and your number. | ඡායාරූපයේ මීටර් කියවීම: {km} km. ඡායාරූපයේ මීටර් කියවීම සහ ඔබේ අංකය කාර්යාලයට පෙනේ. |
+| `log.typing.offline` | No connection. Type the reading; the photo will be checked later. | සම්බන්ධතාවයක් නැත. මීටර් කියවීම ටයිප් කරන්න; ඡායාරූපය පසුව පරීක්ෂා කෙරේ. |
+| `mileage.fromYourReadings` | Counted from your own odometer readings. | ඔබේම මීටර් කියවීම් අනුව ගණනය කර ඇත. |
+| `complete.checkTitle` | Check the reading | මීටර් කියවීම පරීක්ෂා කරන්න |
+| `complete.checkBody` | The trip is {planned} km, the odometer says {km} km. | ගමන කි.මී. {planned} යි, මීටරය කි.මී. {km} ක් පෙන්වයි. |
+| `complete.correct` | Correct the reading | මීටර් කියවීම නිවැරදි කරන්න |
+
+Unchanged, already in the family: `log.photoTitle` (මීටරයේ ඡායාරූපය), `log.needPhoto`, `log.photo.covered`,
+`log.photo.notDashboard`, `mileage.logOdometer` (මීටරය සටහන් කරන්න), `mileage.odometer` (මීටරය). The trip meter
+stays ට්‍රිප් මීටරය.
 
 ## Deployment log
 

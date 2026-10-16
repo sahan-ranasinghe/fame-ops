@@ -157,13 +157,15 @@ select ok(public.issue_visible('vehicle_needed'), 'assign_tasks reads vehicle_ne
 reset role;
 
 -- 9. App stops: a restart after an update is not one --------------------------------------------------------------------
-insert into public.duty_sessions (id, employee_id, started_at) values
-  ('80000000-0000-0000-0000-0000000008a1', '10000000-0000-0000-0000-0000000008b1', now() - interval '1 hour');
-insert into public.driver_heartbeats (employee_id, at, session_id, sharing, app_version) values
-  ('10000000-0000-0000-0000-0000000008b1', now() - interval '40 minutes', '80000000-0000-0000-0000-0000000008a1', true, '1.2.0+aaaa'),
-  ('10000000-0000-0000-0000-0000000008b1', now() - interval '30 minutes', '80000000-0000-0000-0000-0000000008a1', true, '1.2.0+bbbb'),
-  ('10000000-0000-0000-0000-0000000008b1', now() - interval '20 minutes', '80000000-0000-0000-0000-0000000008a1', true, '1.2.0+bbbb');
-select is((select stops from public.app_stops(now() - interval '1 day', now()) where employee_id = '10000000-0000-0000-0000-0000000008b1'), 1,
+insert into public.duty_sessions (id, employee_id, started_at, ended_at, end_reason) values
+  ('80000000-0000-0000-0000-0000000008a1', '10000000-0000-0000-0000-0000000008b1', '2026-10-08 08:00+05:30', '2026-10-08 09:00+05:30', 'driver');
+-- A heartbeat every minute but two 10-minute holes: 08:20–08:30 across the update (aaaa → bbbb), 08:40–08:50 not.
+insert into public.driver_heartbeats (employee_id, at, session_id, sharing, app_version)
+select '10000000-0000-0000-0000-0000000008b1', m, '80000000-0000-0000-0000-0000000008a1', true,
+       case when m <= '2026-10-08 08:20+05:30' then '1.2.0+aaaa' else '1.2.0+bbbb' end
+from generate_series('2026-10-08 08:00+05:30'::timestamptz, '2026-10-08 09:00+05:30'::timestamptz, interval '1 minute') m
+where not (m > '2026-10-08 08:20+05:30' and m < '2026-10-08 08:30+05:30') and not (m > '2026-10-08 08:40+05:30' and m < '2026-10-08 08:50+05:30');
+select is((select stops from public.app_stops('2026-10-08 00:00+05:30', '2026-10-09 00:00+05:30') where employee_id = '10000000-0000-0000-0000-0000000008b1'), 1,
   'two 10-minute gaps: the one across an update (aaaa → bbbb) is not counted');
 
 -- 10. From the checkpoint review: a reading still owed, ownership, the accept window's bound, a re-send -------------------

@@ -95,10 +95,17 @@ Pro $10.00, Roads $10.00 per 1,000. Maps SDK for Android: unlimited and free (wi
 - Our month runs on Colombo time; Google's resets at midnight Pacific time on the 1st (about
   13:30 Colombo). The half day in between is covered by the 5 % margin: at most one day's cap
   (400 or 200) on top of 9,500 or 4,750 is still under the free 10,000 or 5,000.
-- `roads` starts at 0 (off): Google's Roads policies say "If you intend to use the Roads API as
-  part of an asset tracking application, you may be required to purchase an asset tracking
-  license" (https://developers.google.com/maps/documentation/roads/policies). Raise its caps in
-  Settings → Fleet only once that is settled with Google.
+- `roads` starts at 0 (off). Checked again on 16 October 2026 (Phase 7, §26):
+  - The Roads API overview (https://developers.google.com/maps/documentation/roads/overview) says
+    "The Speed Limit service is available to all customers with an Asset Tracking license". We
+    call only `snapToRoads`, never Speed Limits.
+  - But the Roads API policies (https://developers.google.com/maps/documentation/roads/policies)
+    still say, for the whole Roads API (snap to roads included): "If you intend to use the Roads
+    API as part of an asset tracking application, you may be required to purchase an asset
+    tracking license". Drawing the routes of a fleet's drivers is asset tracking.
+  - So the cap stays 0 until that is settled with Google. Then set `google_caps.roads` to the
+    planned 200 a day and 4,750 a month (95 % of the 5,000 free; `ROADS_CAPS_PLANNED` in
+    `settings.ts`) in Settings → Fleet or with `update_settings`.
 - What one action costs: a plan (Plan now, saving a task, changing its stops) = 1 Routes call
   for all its legs; a running task's ETA = 1 Routes call at most every 15 minutes while someone
   looks at it (the ETA stands 15 minutes so the Live page's 30-second refresh does not use the

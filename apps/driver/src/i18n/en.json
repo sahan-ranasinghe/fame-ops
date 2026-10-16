@@ -169,7 +169,9 @@
     "allStops": "All stops in Google Maps",
     "googleNotOnMap": "A Google place: Navigate shows it in Google Maps",
     "allStopsLeftTitle": "Google Maps takes 10 stops at a time",
-    "allStopsLeftBody": "The first 10 stops are in; {n} more come after them. Open All stops again when you reach stop 10."
+    "allStopsLeftBody": "The first 10 stops are in; {n} more come after them. Open All stops again when you reach stop 10.",
+    "distanceLeftRoad": "Distance left by road",
+    "noRouteLine": "Stops only: no planned road line for this task"
   },
   "log": {
     "title": "Log mileage",
@@ -512,5 +514,8 @@
     "logged": "Logged ✓ {km} km",
     "logTitle": "Odometer at the vehicle change",
     "stretches": "{km} km in {plate}"
+  },
+  "map": {
+    "northUp": "North up"
   }
 }

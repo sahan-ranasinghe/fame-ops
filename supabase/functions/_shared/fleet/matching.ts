@@ -14,26 +14,27 @@
 //                 annotations; a matching's legs carry the road geometry between
 //                 consecutive matched input points, timed the same way.
 //
-// Before a call a leg is thinned (Douglas–Peucker 5 m) and cut where two fixes
-// are 2 minutes or more apart: a longer gap is never bridged along the road
-// (it stays dashed), a shorter one is bridged by the matcher. Each piece goes
-// in chunks of 100 points, consecutive chunks sharing one point. The answers
-// are stored per driving leg in route_matched (snapLegs); a leg that is still
-// growing (today) is matched again at most every 2 minutes, only its new part
-// (from the last matched point on). Every HTTP call is counted per day and
-// provider in routing_calls, like the road-time providers. On any error the leg
-// is drawn from the raw GPS line and the legend says so.
+// Before a call a leg is thinned to about one point per 50 m (Phase 7, §26) and cut where two fixes are 2 minutes
+// or more apart: a longer gap is never bridged along the road (it stays dashed), a shorter one is bridged by the
+// matcher. Each piece goes in chunks of 100 points (about 5 km), consecutive chunks sharing one point. The answers
+// are stored per driving leg in route_matched (snapLegs). A leg that is still growing (today's last, while the
+// driver drives) is sent only in whole chunks: once 100 new thinned points have collected since the last snapped
+// one, or when the leg ends; until then the tail since the last snap is drawn raw. A window inside a leg already
+// snapped (a task's route, playback) reuses that leg, clipped, so the same road is never paid for twice. Every HTTP
+// call is counted per day and provider in routing_calls, like the road-time providers. On any error the leg is
+// drawn from the raw GPS line and the legend says so.
 
 import type { Db } from "./db.ts";
 import { unwrap } from "./db.ts";
-import { simplifyKeep } from "./route.ts";
 import { refusedNote, takeGoogleCall } from "./google.ts";
 import type { GoogleCaps, MapMatchingProvider } from "./settings.ts";
 import { distanceM } from "./track.ts";
 
 export const MATCH_CHUNK = 100;
-export const MATCH_SIMPLIFY_M = 5;
+/** About one point per 50 m: a chunk of 100 covers about 5 km of road. */
+export const MATCH_SPACING_M = 50;
 export const MATCH_GAP_MS = 2 * 60000;
+/** A leg whose match failed is tried again at most this often (a cap refusal costs no call). */
 export const MATCH_DEBOUNCE_MS = 2 * 60000;
 export const MATCH_TIMEOUT_MS = 8000;
 export const GOOGLE_ROADS_URL = "https://roads.googleapis.com/v1/snapToRoads";
@@ -55,7 +56,19 @@ export type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 const r6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
-/** The pieces to send: cut at gaps of 2 minutes or more (on the raw points), each thinned to 5 m, in chunks of 100 sharing one point. */
+/** About one point per `spacingM` along the line: the first, then each at least that far from the last kept, and the last. */
+export function thinBySpacing(points: MatchInput[], spacingM = MATCH_SPACING_M): MatchInput[] {
+  if (points.length <= 2) return [...points];
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    const last = out[out.length - 1];
+    if (distanceM(last, points[i]) >= spacingM) out.push(points[i]);
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
+/** The pieces to send: cut at gaps of 2 minutes or more (on the raw points), each thinned to about 50 m, in chunks of 100 sharing one point. */
 export function chunkForMatching(points: MatchInput[]): MatchInput[][] {
   const sorted = [...points].sort((a, b) => a.at - b.at);
   const pieces: MatchInput[][] = [];
@@ -71,11 +84,19 @@ export function chunkForMatching(points: MatchInput[]): MatchInput[][] {
   if (piece.length >= 2) pieces.push(piece);
   const chunks: MatchInput[][] = [];
   for (const raw of pieces) {
-    const keep = simplifyKeep(raw, MATCH_SIMPLIFY_M);
-    const part = raw.filter((_, i) => keep[i]);
+    const part = thinBySpacing(raw);
     for (let i = 0; i < part.length - 1; i += MATCH_CHUNK - 1) chunks.push(part.slice(i, i + MATCH_CHUNK));
   }
   return chunks;
+}
+
+/**
+ * Whether a growing leg's new part is sent now (Phase 7, §26): only in whole chunks, once 100 thinned points have
+ * collected since the last snapped one, or when the leg has ended. Pure.
+ */
+export function sendTailNow(tail: MatchInput[], legOpen: boolean): boolean {
+  if (tail.length < 2) return false;
+  return !legOpen || thinBySpacing(tail).length >= MATCH_CHUNK;
 }
 
 /** Times for a run of road vertices between two timed anchors, by cumulative distance. */
@@ -219,6 +240,8 @@ export interface SnapLeg {
   from: number;
   to: number;
   points: MatchInput[];
+  /** Still growing (today's last leg while the driver drives): its new part goes only in whole chunks. */
+  open?: boolean;
 }
 
 export interface SnappedLeg {
@@ -227,7 +250,7 @@ export interface SnappedLeg {
   /** matched: the road geometry; raw: the provider failed (or had nothing), draw the GPS line. */
   source: "matched" | "raw";
   points: MatchedPoint[];
-  /** matched: up to when the stored answer covers the leg (a growing leg is matched again at most every 2 minutes). */
+  /** matched: up to when the stored answer covers the leg (the tail of a growing leg after it is drawn raw). */
   matchedTo?: number;
 }
 
@@ -241,9 +264,9 @@ function envFor(): MatchEnv {
 }
 
 /**
- * The driving legs of a day matched to roads, through the route_matched store: a leg matched before with
- * the same end is reused; a leg that grew is matched again only when its last match is over 2 minutes old
- * (until then the stored part is used and the rest is raw); a failed leg stays raw.
+ * The driving legs of a day matched to roads, through the route_matched store: a leg matched before with the same
+ * end is reused, and a window inside a stored leg is that leg clipped; a leg that grew sends only its new part, in
+ * whole chunks while it is still growing (the rest raw meanwhile); a failed leg stays raw (tried again after 2 min).
  */
 export async function snapLegs(
   db: Db,
@@ -263,22 +286,34 @@ export async function snapLegs(
     const g = await takeGoogleCall(db, "roads", caps);
     return g.allowed ? null : refusedNote("roads", g.reason, g);
   };
-  const stored = unwrap(
+  const rows = unwrap(
     await db.from("route_matched").select("leg_from, leg_to, geometry, matched_at, status")
       .eq("employee_id", employeeId).eq("date", date).eq("provider", provider),
     "matched routes",
   );
-  const byFrom = new Map(stored.map((r) => [new Date(r.leg_from).getTime(), r]));
+  const byFrom = new Map(rows.map((r) => [new Date(r.leg_from).getTime(), r]));
   const bump = async (ok: boolean): Promise<void> => {
     await db.rpc("bump_routing_calls", { p_provider: provider, p_ok: ok }).then(() => undefined, () => undefined);
   };
   const out: SnappedLeg[] = [];
   let failed = 0;
   for (const leg of legs) {
+    // A window inside a leg snapped before (a task's route, playback): that leg's road, clipped. Never paid twice.
+    const covering = rows.find((r) =>
+      r.status === "ok" && new Date(r.leg_from).getTime() <= leg.from && new Date(r.leg_to).getTime() >= leg.to &&
+      new Date(r.leg_from).getTime() !== leg.from
+    );
+    if (covering) {
+      const clipped = geometryOf(covering.geometry).filter((p) => p.at >= leg.from && p.at <= leg.to);
+      if (clipped.length >= 2) {
+        out.push({ from: leg.from, to: leg.to, source: "matched", points: clipped, matchedTo: leg.to });
+        continue;
+      }
+    }
     const have = byFrom.get(leg.from);
     const haveTo = have ? new Date(have.leg_to).getTime() : null;
     const recent = have ? now.getTime() - new Date(have.matched_at).getTime() < MATCH_DEBOUNCE_MS : false;
-    if (have && have.status === "ok" && haveTo !== null && (haveTo >= leg.to || recent)) {
+    if (have && have.status === "ok" && haveTo !== null && haveTo >= leg.to) {
       out.push({ from: leg.from, to: leg.to, source: "matched", points: geometryOf(have.geometry), matchedTo: Math.min(haveTo, leg.to) });
       continue;
     }
@@ -287,11 +322,17 @@ export async function snapLegs(
       out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });
       continue;
     }
-    // A leg that grew since its last match: only the new part goes out, joined to the stored one.
+    // A leg that grew since its last match: only the new part goes out, joined to the stored one, and while the leg
+    // is still growing only in whole chunks (the tail is drawn raw meanwhile).
     const stored = have && have.status === "ok" && haveTo !== null && haveTo < leg.to ? geometryOf(have.geometry) : [];
+    const tail = stored.length ? leg.points.filter((p) => p.at >= haveTo!) : leg.points;
+    if (!sendTailNow(tail, leg.open === true)) {
+      if (stored.length) out.push({ from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: haveTo! });
+      else out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });
+      continue;
+    }
     try {
-      const tail = stored.length ? leg.points.filter((p) => p.at >= haveTo!) : leg.points;
-      const fresh = tail.length >= 2 ? await matchPoints(provider, tail, env, fetchFn, bump, gate) : [];
+      const fresh = await matchPoints(provider, tail, env, fetchFn, bump, gate);
       const lastAt = stored.length ? stored[stored.length - 1].at : -Infinity;
       const points = [...stored, ...fresh.filter((p) => p.at > lastAt)];
       await db.from("route_matched").upsert({
@@ -311,7 +352,7 @@ export async function snapLegs(
       const message = error instanceof Error ? error.message : String(error);
       console.error(`map matching ${provider}: ${message}`);
       if (stored.length) {
-        // The part matched before stays; the new part is raw until the next try (2 minutes on).
+        // The part matched before stays; the new part is raw until the next try.
         await db.from("route_matched").update({ matched_at: now.toISOString(), error: message.slice(0, 200) })
           .eq("employee_id", employeeId).eq("date", date).eq("provider", provider).eq("leg_from", new Date(leg.from).toISOString())
           .then(() => undefined, () => undefined);

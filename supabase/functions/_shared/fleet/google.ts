@@ -32,7 +32,8 @@ export const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRo
 export const DETAILS_FIELDS = "location,formattedAddress,shortFormattedAddress,addressComponents";
 export const AUTOCOMPLETE_FIELDS =
   "suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat";
-export const ROUTES_FIELDS = "routes.legs.duration,routes.legs.distanceMeters";
+// Phase 7 (§20): each leg's line (a basic field: the SKU stays Compute Routes Pro), drawn on Google's maps only.
+export const ROUTES_FIELDS = "routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline";
 /** computeRoutes takes up to 25 intermediates (11 to 25 is Pro, which TRAFFIC_AWARE is anyway). */
 export const GOOGLE_MAX_INTERMEDIATES = 25;
 /** Google's terms let us keep Places and Routes coordinates for 30 consecutive days. */
@@ -250,6 +251,8 @@ export function detailsResponse(json: unknown): GoogleDetails {
 export interface RouteLeg {
   km: number;
   minutes: number;
+  /** The leg's road line, Google's encoded polyline (kept 30 days with the plan). */
+  line?: string;
 }
 
 /** One call for a whole sequence: the start, the stops in order (intermediates), the last one. */
@@ -281,11 +284,14 @@ export function routesRequest(
 }
 
 export function routesResponse(json: unknown, legs: number): RouteLeg[] {
-  const route = (json as { routes?: { legs?: { duration?: string; distanceMeters?: number }[] }[] } | null)?.routes?.[0];
+  const route = (json as {
+    routes?: { legs?: { duration?: string; distanceMeters?: number; polyline?: { encodedPolyline?: string } }[] }[];
+  } | null)?.routes?.[0];
   const out = (route?.legs ?? []).map((l) => {
     const seconds = typeof l.duration === "string" ? Number(l.duration.replace(/s$/, "")) : NaN;
     if (!Number.isFinite(seconds)) throw new Error("Google Routes: a leg without a duration");
-    return { km: Math.round((l.distanceMeters ?? 0) / 100) / 10, minutes: Math.round(seconds / 6) / 10 };
+    const line = typeof l.polyline?.encodedPolyline === "string" && l.polyline.encodedPolyline ? l.polyline.encodedPolyline : undefined;
+    return { km: Math.round((l.distanceMeters ?? 0) / 100) / 10, minutes: Math.round(seconds / 6) / 10, ...(line ? { line } : {}) };
   });
   if (out.length !== legs) throw new Error(`Google Routes: ${out.length} legs for ${legs}`);
   return out;

@@ -36,12 +36,56 @@ export interface MapRoute {
   bySpeed?: boolean;
   /** Stops of 10 minutes or more, with the label to show (the times). */
   stops?: { lat: number; lng: number; label: string }[];
-  /** Over 2 minutes between two line points: drawn dashed between them, with the label (what kind of hole, how long). */
-  holes?: { from: RoutePoint; to: RoutePoint; label: string }[];
-  /** A moving marker (playback) and its label. */
-  cursor?: { lat: number; lng: number; label: string } | null;
-  /** Gaps of over 300 m and 60 s drawn as the likely road (openrouteservice), dashed and labelled; never km (Part 5b). */
-  estimated?: { points: { lat: number; lng: number }[]; label: string }[];
+  /**
+   * Over 2 minutes between two line points: drawn dashed between them. Phase 7 (§21): no map draws the label any more;
+   * the words are on the gap's marker (MapProps.gaps), shown on hover or tap.
+   */
+  holes?: { from: RoutePoint; to: RoutePoint; label?: string }[];
+  /**
+   * A moving marker (playback) and its label (the recorded time). Phase 7 (§22): `estimated` while it crosses a gap
+   * (drawn hollow), `heading` the path's direction (the marker turns with it).
+   */
+  cursor?: { lat: number; lng: number; label: string; estimated?: boolean; heading?: number | null } | null;
+  /** Gaps of over 300 m and 60 s drawn as the likely road (openrouteservice), dashed; never km (Part 5b). No label drawn (§21). */
+  estimated?: { points: { lat: number; lng: number }[]; label?: string }[];
+}
+
+/** What a gap was (Phase 7, §21): the app not running, no GPS signal, or recorded but uploaded late. */
+export type GapMarkerKind = "no_data" | "no_gps" | "late";
+
+/** A gap's marker (Phase 7, §21): one small grey marker at the middle of its dashed line; its words on hover or tap. */
+export interface GapMarker {
+  id: string;
+  kind: GapMarkerKind;
+  lat: number;
+  lng: number;
+  /** "App not running · 14:02–14:44 · 42 min · about 21.3 km by road" */
+  text: string;
+}
+
+/** A pin of the plan (Phase 7, §20): the start ("S") or a stop by its number, labelled "2 · Kurunegala site · 09:00–10:30". */
+export interface PlanPin {
+  id: string;
+  n: number | "S";
+  lat: number;
+  lng: number;
+  label: string;
+  /** A missed arrive-by: drawn red. */
+  late?: boolean;
+  /** A Google place: its pin is Google's, drawn on Google's map only (rule 10); other maps leave it out. */
+  google?: boolean;
+}
+
+/** The plan on the map (Phase 7, §20). */
+export interface MapPlan {
+  pins: PlanPin[];
+  /**
+   * Google's road line of each leg (decoded from the Routes call's polyline): drawn on Google's map only. Every other
+   * map draws thin straight dashed connectors between the pins instead, with the note "not the road".
+   */
+  lines?: { lat: number; lng: number }[][];
+  /** The pin highlighted from the timeline (a row under the pointer or tapped). */
+  selected?: string | null;
 }
 
 /** The estimated lines' colour: a quiet slate, dashed, so they never read as a driven line. */
@@ -55,6 +99,17 @@ export interface MapProps {
   /** Zoom to these points when they change (a timeline row); null leaves the view alone. */
   focus?: RoutePoint[] | null;
   onPick: (id: string) => void;
+  /** Phase 7 (§21): the gaps' markers; the open one shows its card (a Gaps list row opens it, a tap or hover too). */
+  gaps?: GapMarker[];
+  openGap?: string | null;
+  onGap?: (id: string | null) => void;
+  /** Phase 7 (§20): the plan (pins, Google's line) instead of a route; tapping a pin calls onPin with its id. */
+  plan?: MapPlan | null;
+  onPin?: (id: string) => void;
+  /** Phase 7 (§25): today's trails as the control cluster's toggle (Live), drawn filled while on. */
+  trailsToggle?: { on: boolean; toggle: () => void };
+  /** A fixed height in px (a map inside a form: the plan map); default: the map's usual height. */
+  height?: number;
 }
 
 /** The colours of the speed classes: standing grey, slow amber, normal blue, fast red. */

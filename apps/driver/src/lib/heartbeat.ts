@@ -8,7 +8,12 @@
 //
 // Sent about every 60 s while on duty (lib/heartbeat loop, started by the app
 // state), at once when Location or the permission changes, once when duty
-// ends, and whenever the background job runs. Each one also notes a gap of
+// ends, and whenever the background job runs. In the background the loop's
+// timers do not run: React Native pauses JS timers when the app leaves the
+// front (JavaTimerManager.onHostPause) and runs them only while a headless
+// task is active, so the background location task sends the heartbeat too
+// (heartbeatDue, at most once a minute): a gap in the heartbeats then means
+// the app really stopped. Each one also notes a gap of
 // over 3 minutes since the previous one (the Phone setup card), and the loop's
 // 10-second look runs the watchdog that restarts a frozen location service. Two copies: the newest one feeds
 // driver_latest (queued with replaceOp: only the newest waits), and every one
@@ -95,6 +100,7 @@ export async function watchLocation(now = Date.now()): Promise<boolean> {
 
 /** Builds one heartbeat, queues it (newest for driver_latest, every one for the history), then tries to send. Returns what the phone found. */
 export async function sendHeartbeat(): Promise<Readiness> {
+  setJson(KEYS.lastHeartbeatAt, Date.now());
   noteGap(Date.now());
   const ready = await readiness();
   const counts = takeCounters();
@@ -126,6 +132,11 @@ export async function sendHeartbeat(): Promise<Readiness> {
   logHeartbeat(row);
   void flushNow();
   return ready;
+}
+
+/** The location task's turn: a heartbeat once a minute while positions keep arriving and the loop's timers are frozen. */
+export function heartbeatDue(now = Date.now()): boolean {
+  return getSharing() !== null && now - (getJson<number>(KEYS.lastHeartbeatAt) ?? 0) >= HEARTBEAT_EVERY_MS - 5_000;
 }
 
 const key = (r: Readiness) => `${r.servicesOn}/${r.permission}`;

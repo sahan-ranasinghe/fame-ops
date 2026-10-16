@@ -73,6 +73,8 @@ export interface LegResult {
   via_expressway: boolean | null;
   /** The rush-hour factor applied (1 when none). */
   factor: number;
+  /** Google's road line for the leg (encoded polyline, the Routes call of the road times): kept 30 days, drawn on Google's maps only. */
+  line?: string;
 }
 
 export type LegFn = (from: PlanPoint, to: PlanPoint, departAt: string, opts: { avoid_expressway: boolean }) => Promise<LegResult>;
@@ -115,6 +117,8 @@ export interface Plan {
   warnings: PlanWarning[];
   buffer_min: number;
   computed_at: string;
+  /** When Google's leg lines were fetched (Phase 7, §20): the nightly google_content job removes them 30 days on. */
+  line_fetched_at?: string;
 }
 
 export const LONG_DAY_HOURS = 12;

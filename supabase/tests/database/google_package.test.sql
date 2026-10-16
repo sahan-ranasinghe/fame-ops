@@ -69,7 +69,7 @@ select is((select count(*) from public.recent_places('Our office', now() - inter
 insert into public.route_matched (employee_id, date, provider, leg_from, leg_to, geometry, matched_at, status) values
   ('10000000-0000-0000-0000-0000000000c5', current_date - 40, 'google_roads', now() - interval '40 days', now() - interval '40 days' + interval '10 minutes', '[]', now() - interval '40 days', 'ok'),
   ('10000000-0000-0000-0000-0000000000c5', current_date - 40, 'osrm', now() - interval '40 days', now() - interval '40 days' + interval '10 minutes', '[]', now() - interval '40 days', 'ok');
-select is(public.prune_google_content(), '{"pins": 1, "stops": 1, "starts": 1, "matched": 1}'::jsonb, 'one pin, one stop, one start and one snapped leg over 30 days old');
+select is(public.prune_google_content(), '{"pins": 1, "stops": 1, "starts": 1, "matched": 1, "lines": 0}'::jsonb, 'one pin, one stop, one start and one snapped leg over 30 days old');
 select is((select coalesce(lat::text, 'none') || '|' || coalesce(address, 'none') || '|' || place_name || '|' || google_place_id
   from public.task_stops where id = '50000000-0000-0000-0000-0000000000c2'),
   'none|none|Google place (details removed after 30 days)|g-old', 'the old stop keeps only the Google place id');

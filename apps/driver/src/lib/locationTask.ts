@@ -25,6 +25,7 @@ import { getJson, KEYS, setJson } from './kv';
 import { getSharing, LOCATION_TASK } from './location';
 import { armWatchdog } from './notifications';
 import { checkArrival } from './arrival';
+import { heartbeatDue, sendHeartbeat } from './heartbeat';
 import { isMoving, isWatched, loadTrack, recordable, saveTrack, toPhoneFix } from './tracking';
 import type { Language } from './types';
 
@@ -83,6 +84,10 @@ TaskManager.defineTask<{ locations?: Location.LocationObject[] }>(LOCATION_TASK,
   // Near the current stop? The arrival nudge (once per stop), from the newest position of the delivery.
   const newest = locations.map(toPhoneFix).sort((a, b) => b.at - a.at)[0];
   if (newest) await checkArrival(newest).catch(() => false);
+
+  // The heartbeat loop's timers are frozen while the app is in the background (React Native runs JS timers only in
+  // front or during a headless task), but positions keep coming here: the heartbeat goes from here too, once a minute.
+  if (heartbeatDue()) await sendHeartbeat().catch(() => undefined);
 
   const sinceLast = Date.now() - (getJson<number>(KEYS.lastFlush) ?? 0);
   const waiting = queueCounts().points;

@@ -323,15 +323,16 @@ select is((select ended_how || '|' || ended_by_name from public.vehicle_assignme
 select ok(exists (select 1 from public.duty_sessions where employee_id = '10000000-0000-0000-0000-0000000007c1' and ended_at is null),
   'Saman stays on duty while his task runs');
 
--- 17. App stops: heartbeat gaps of over 3 minutes inside one duty period --------------------------------
-insert into public.driver_heartbeats (employee_id, at, session_id, sharing) values
-  ('10000000-0000-0000-0000-0000000007c1', now() - interval '20 minutes', '60000000-0000-0000-0000-0000000007c1', true),
-  ('10000000-0000-0000-0000-0000000007c1', now() - interval '19 minutes', '60000000-0000-0000-0000-0000000007c1', true),
-  ('10000000-0000-0000-0000-0000000007c1', now() - interval '12 minutes', '60000000-0000-0000-0000-0000000007c1', true),
-  ('10000000-0000-0000-0000-0000000007c1', now() - interval '11 minutes', '60000000-0000-0000-0000-0000000007c1', true),
-  ('10000000-0000-0000-0000-0000000007c1', now() - interval '2 minutes', '60000000-0000-0000-0000-0000000007c1', true);
-select is((select stops from public.app_stops(now() - interval '1 day', now()) where employee_id = '10000000-0000-0000-0000-0000000007c1'),
-  2, 'two gaps of over 3 minutes: the app was stopped twice');
+-- 17. App stops (the rule of the Part 2b go): 10 minutes or more with no heartbeat and no point, inside a duty period --
+insert into public.duty_sessions (id, employee_id, started_at, ended_at, end_reason) values
+  ('60000000-0000-0000-0000-0000000007c9', '10000000-0000-0000-0000-0000000007c1', '2026-10-09 08:00+05:30', '2026-10-09 09:00+05:30', 'driver');
+insert into public.driver_heartbeats (employee_id, at, session_id, sharing)
+select '10000000-0000-0000-0000-0000000007c1', m, '60000000-0000-0000-0000-0000000007c9', true
+from generate_series('2026-10-09 08:00+05:30'::timestamptz, '2026-10-09 09:00+05:30'::timestamptz, interval '1 minute') m
+where not (m > '2026-10-09 08:10+05:30' and m < '2026-10-09 08:21+05:30')   -- 11 minutes: a stop
+  and not (m > '2026-10-09 08:40+05:30' and m < '2026-10-09 08:49+05:30');  -- 9 minutes: not one
+select is((select stops from public.app_stops('2026-10-09 00:00+05:30', '2026-10-10 00:00+05:30') where employee_id = '10000000-0000-0000-0000-0000000007c1'),
+  1, 'an 11-minute gap is an app stop, a 9-minute one is not');
 
 -- 18. The new task issue kinds are the dispatcher's ----------------------------------------------------
 set local role authenticated;

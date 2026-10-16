@@ -55,6 +55,8 @@ export const KEYS = {
   watchedUntil: 'tracking.watchedUntil',
   /** The last heartbeat while on duty ({at, sessionId}): over 3 minutes to the next one means the phone stopped the app. */
   lastBeat: 'phone.lastBeat',
+  /** When the last heartbeat was built (the location task sends one when the JS timers are frozen in the background). */
+  lastHeartbeatAt: 'heartbeat.lastAt',
   /** Those gaps, the last 7 days (lib/phoneSetup.ts), and when the driver last tapped Done on the Phone setup card. */
   phoneGaps: 'phone.gaps',
   phoneSetupDoneAt: 'phone.setupDoneAt',

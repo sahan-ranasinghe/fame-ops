@@ -159,7 +159,7 @@ export default function GoogleMap({ markers, route, trails = [], focus = null, o
       const label = document.createElement("div");
       label.className = "mk-stop";
       label.innerHTML = `<span class="mk-stop-label"></span>`;
-      (label.firstChild as HTMLElement).textContent = h.label;
+      (label.firstChild as HTMLElement).textContent = h.label ?? "";
       const mid = htmlMarker(maps, label, { lat: (h.from.lat + h.to.lat) / 2, lng: (h.from.lng + h.to.lng) / 2 }, "center");
       mid.setMap(m);
       marks.push(mid);
@@ -176,7 +176,7 @@ export default function GoogleMap({ markers, route, trails = [], focus = null, o
       const label = document.createElement("div");
       label.className = "mk-stop";
       label.innerHTML = `<span class="mk-stop-label"></span>`;
-      (label.firstChild as HTMLElement).textContent = e.label;
+      (label.firstChild as HTMLElement).textContent = e.label ?? "";
       (label.firstChild as HTMLElement).style.color = ESTIMATED_COLOR;
       const mid = htmlMarker(maps, label, e.points[Math.floor(e.points.length / 2)], "center");
       mid.setMap(m);
