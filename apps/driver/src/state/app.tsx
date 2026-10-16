@@ -820,7 +820,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         },
         { kind: 'task_patch', id: task.id, patch: { status: 'in_progress', start_odometer_km: odometerKm, started_at: now } },
       );
-      patchLocalTask(task.id, (item) => ({ ...item, status: 'in_progress', start_odometer_km: odometerKm, started_at: now }));
+      // The start stop (passengers get in where the trip starts) is arrived with the start, as the server marks it
+      // (trigger tasks_start_stop_arrived): no Arrived button and no arrival nudge for it.
+      patchLocalTask(task.id, (item) => ({
+        ...item,
+        status: 'in_progress',
+        start_odometer_km: odometerKm,
+        started_at: now,
+        task_stops: item.task_stops.map((stop) => (stop.is_start && stop.status === 'pending' ? { ...stop, status: 'arrived', arrived_at: now } : stop)),
+      }));
       bumpOdometer(task.vehicle_id, odometerKm);
       void playSound('start');
       beginTaskKm(task.id);

@@ -7,7 +7,7 @@ import { type Db, fetchAll, ToolError, unwrap } from "../db.ts";
 import { findDriver, findVehicle, loadRefs, vehicleLabel } from "../fleet.ts";
 import { buildRoute } from "../route.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange } from "../time.ts";
-import { realDate, tool, zDate, zText } from "../tool.ts";
+import { realDate, tool, zDate, zId, zText } from "../tool.ts";
 
 /** GPS km come from the route builder; over a longer range the log leaves them out (the odometer km stay). */
 export const DUTY_LOG_GPS_DAYS = 7;
@@ -60,7 +60,9 @@ export const dutyLog = tool({
       ? await Promise.all([
         db.from("vehicle_assignments").select("employee_id, vehicle_id, from_at, to_at, how, ended_how, by_name, ended_by_name")
           .in("employee_id", ids).lt("from_at", toIso).or(`to_at.is.null,to_at.gte.${earliest}`).order("from_at"),
-        db.from("tasks").select("id, title, employee_id, vehicle_id, started_at, completed_at, status, start_odometer_km, end_odometer_km")
+        db.from("tasks").select(
+          "id, title, employee_id, vehicle_id, started_at, completed_at, status, start_odometer_km, end_odometer_km, km",
+        )
           .in("employee_id", ids).not("started_at", "is", null).lt("started_at", toIso).gte("started_at", earliest).order("started_at"),
       ])
       : [{ data: [], error: null }, { data: [], error: null }];
@@ -76,7 +78,8 @@ export const dutyLog = tool({
       );
       const mine = tasks.filter((t) => t.employee_id === s.employee_id && t.started_at && inside(t.started_at));
       const taskKm = mine.reduce(
-        (sum, t) => sum + (t.end_odometer_km != null && t.start_odometer_km != null ? t.end_odometer_km - t.start_odometer_km : 0),
+        // tasks.km: end − start, or after a vehicle swap the stretches added up (Phase 7).
+        (sum, t) => sum + (t.km ?? 0),
         0,
       );
       let gpsKm: number | undefined;
@@ -128,7 +131,7 @@ export const dutyLog = tool({
           started: colomboTime(t.started_at!),
           completed: t.completed_at ? colomboTime(t.completed_at) : undefined,
           status: t.status,
-          km: t.end_odometer_km != null && t.start_odometer_km != null ? t.end_odometer_km - t.start_odometer_km : undefined,
+          km: t.km ?? undefined,
         })),
         task_km: taskKm,
         gps_km: gpsKm,
@@ -304,3 +307,54 @@ async function swapDuringTask(
     summary: `swapped ${driverName}'s task "${task.title}" ${answer?.from} → ${answer?.to}`,
   };
 }
+
+/** A swap reading still owed, typed by the office afterwards (Phase 7, §2 addition). */
+export const swapReading = tool({
+  name: "swap_reading",
+  title: "Type a reading after a vehicle swap",
+  description: "After a vehicle swap during a task (move_driver_vehicle), a reading the driver's phone has not sent: the old vehicle's " +
+    "odometer at the swap (end_km) or the new vehicle's at the swap (start_km). For a towed vehicle, or a phone that never sent it; " +
+    "also after the task is completed. task_detail's segments say which readings are still to come. The task km is then the " +
+    "stretches added up.",
+  readOnly: false,
+  input: z.object({
+    task_id: zId,
+    vehicle: zText(40).describe("The plate of the vehicle the reading is for"),
+    end_km: z.number().int().min(0).max(9_999_999).optional().describe("The old vehicle's odometer when it was swapped out"),
+    start_km: z.number().int().min(0).max(9_999_999).optional().describe("The new vehicle's odometer when it was swapped in"),
+  }),
+  async run({ task_id, vehicle, end_km, start_km }, { db, actor }) {
+    if ((end_km === undefined) === (start_km === undefined)) throw new ToolError("Give end_km or start_km (one reading at a time).");
+    const refs = await loadRefs(db);
+    const v = findVehicle(refs, vehicle);
+    const kind = end_km !== undefined ? "end" : "start";
+    const km = (end_km ?? start_km) as number;
+    const { data, error } = await db.rpc("office_swap_reading", {
+      p_task: task_id,
+      p_vehicle: v.id,
+      p_kind: kind,
+      p_km: km,
+      p_by: actor.name,
+    });
+    if (error) throw new Error(`swap reading: ${error.message}`);
+    const answer = data as { result?: string; start_km?: number; task_km?: number | null } | null;
+    switch (answer?.result) {
+      case "no_task":
+        throw new ToolError(`No task has the id ${task_id}.`);
+      case "not_owed":
+        throw new ToolError(`No ${kind} reading of ${v.reg_no} is still to come on this task (task_detail's segments show the stretches).`);
+      case "below_start":
+        throw new ToolError(`${km} km is below ${v.reg_no}'s start reading for this task (${answer.start_km} km). Check the number.`);
+    }
+    return {
+      result: {
+        task_id,
+        vehicle: v.reg_no,
+        reading: `${kind === "end" ? "end" : "start"} ${km} km`,
+        task_km: answer?.task_km ?? undefined,
+        note: answer?.task_km != null ? `Task km now ${answer.task_km} (the stretches added up).` : "Another reading is still to come.",
+      },
+      summary: `swap reading ${v.reg_no} ${kind} ${km} km on task ${task_id}`,
+    };
+  },
+});

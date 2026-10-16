@@ -50,7 +50,7 @@ type Base = { id: string; name: string } | null;
 export function planInput(f: AssignFields, base: Base = null): Record<string, unknown> | null {
   const t = (s: string) => s.trim();
   if (!t(f.date)) return null;
-  const s = stopsInput(f.stops);
+  const s = stopsInput(f.stops, f.startPax ? 1 : 0);
   if ("error" in s) return null;
   if (!t(f.leaveBy) && !hasDeadline(f.stops)) return null;
   const input: Record<string, unknown> = { date: t(f.date), stops: s.stops };
@@ -83,7 +83,7 @@ export function validateAssign(
   const need: [string, string][] = [[t(f.title), "the task"], [t(f.date), "the date"], [t(f.driver), "a driver"], [t(f.vehicle) || (fills ? "filled" : ""), "a vehicle"]];
   const miss = need.filter(([v]) => !v).map((n) => n[1]);
   if (miss.length) return { error: `Add ${miss.join(", ")}.` };
-  const s = stopsInput(f.stops);
+  const s = stopsInput(f.stops, f.startPax ? 1 : 0);
   if ("error" in s) return s;
   if (!t(f.leaveBy) && !hasDeadline(f.stops)) return { error: "Add a leave-by time, or an arrive-by time on a stop so it can be planned." };
   const used = rows.filter((r) => r.project.trim());

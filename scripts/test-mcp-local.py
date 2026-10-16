@@ -1868,6 +1868,24 @@ vn = [i for i in tool("list_issues", {"status": "active", "kind": "vehicle_neede
 check(not vn, "the vehicle_needed issue resolves itself when the task's vehicle changes", json.dumps(vn[:1])[:200])
 tool("cancel_task", {"task_id": TW2, "reason": "suite: swap checked"})
 
+# A reading the phone never sent (a towed vehicle): the task completes anyway; the office types it afterwards (swap_reading).
+tw3 = tool("create_task", {"title": "P7b swap towed", "date": day(0) if can_today else day(1), "start_time": start, "driver": "saman.k", "vehicle": "WP P7-1001",
+                           "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+TW3 = tw3["task_id"]
+saman.patch(f"tasks?id=eq.{TW3}", {"status": "in_progress", "start_odometer_km": 5090})
+tool("move_driver_vehicle", {"driver": "saman.k", "vehicle": "WP P7-1002", "old_end_km": 5120})
+for sid in psql(f"select id from task_stops where task_id = '{TW3}' order by seq").split("\n"):
+    saman.patch(f"task_stops?id=eq.{sid}", {"status": "arrived", "arrived_at": iso(dt.datetime.now(dt.timezone.utc)), "arrival_flag": "ok", "arrival_distance_m": 30})
+    saman.patch(f"task_stops?id=eq.{sid}", {"status": "done", "done_at": iso(dt.datetime.now(dt.timezone.utc))})
+code, _ = saman.patch(f"tasks?id=eq.{TW3}", {"status": "completed", "end_odometer_km": 9100})
+td = tool("task_detail", {"task_id": TW3})
+check(code == 200 and "km" not in td["task"] and any(g.get("readings_waiting") for g in td["segments"]),
+      "completed with the new vehicle's start still owed: no km yet, the stretch waits for its reading", json.dumps({"km": td["task"].get("km"), "segments": td["segments"]})[:300])
+sr = tool("swap_reading", {"task_id": TW3, "vehicle": "WP P7-1002", "start_km": 9070})
+check(sr.get("task_km") == 60 and tool("task_detail", {"task_id": TW3})["task"]["km"] == 60, "swap_reading: the office types it; task km = 30 + 30", json.dumps(sr))
+r = tool("swap_reading", {"task_id": TW3, "vehicle": "WP P7-1002", "start_km": 9071}, expect_error=True)
+check("still to come" in r, "a reading that is not owed is refused", r)
+
 # App stops (addition 3): a gap where the app version changed (an update or a new install) is not an app stop.
 nowp = dt.datetime.now(dt.timezone.utc)
 for mins, ver in ((40, "1.2.0+a"), (39, "1.2.0+a"), (30, "1.2.0+b"), (29, "1.2.0+b"), (20, "1.2.0+b")):

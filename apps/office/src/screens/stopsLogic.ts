@@ -108,12 +108,16 @@ export function typeDwell(type: StopType, setting?: Record<string, number> | nul
 /** A row the person has put something in (empty rows at the end are dropped). */
 export const usedRow = (s: StopDraft) => !!(s.place.trim() || s.placeId || s.googlePlaceId || s.pin.trim() || s.arriveBy || s.note.trim());
 
-/** The stops[] argument, or what is wrong with them. Empty rows are dropped. */
-export function stopsInput(list: StopDraft[]): { error: string } | { stops: Record<string, unknown>[] } {
+/**
+ * The stops[] argument, or what is wrong with them. Empty rows are dropped. `offset`: the stops before these rows (the
+ * start stop, stops already reached), so an error names the row as its label does ("Stop 3: add a place name").
+ */
+export function stopsInput(list: StopDraft[], offset = 0): { error: string } | { stops: Record<string, unknown>[] } {
   const rows = list.filter(usedRow);
   if (!rows.length) return { error: "Add at least one stop." };
   const out: Record<string, unknown>[] = [];
-  for (const [i, s] of rows.entries()) {
+  for (const s of rows) {
+    const i = list.indexOf(s) + offset;
     const pin = parsePin(s.pin);
     if (pin === "bad") return { error: `Stop ${i + 1}: the pin must be "lat, lng", e.g. 6.9344, 79.8428.` };
     if (!s.place.trim() && !pin && !s.placeId && !s.googlePlaceId) return { error: `Stop ${i + 1}: add a place name (a saved place, a town, or an address) or a pin.` };

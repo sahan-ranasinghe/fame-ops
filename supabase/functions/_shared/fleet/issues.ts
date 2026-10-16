@@ -718,11 +718,16 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
 async function noteWhoWasTold(db: Db, issueId: string, w: Wanted, now: Date): Promise<void> {
   const event = TOLD_EVENT[w.kind];
   if (!event || !w.task_id) return;
-  const rows = unwrap(
-    await db.from("notifications").select("recipient_employee_id, created_at").eq("event", event).eq("payload->>task_id", w.task_id)
-      .order("created_at"),
-    "notifications",
-  );
+  // This time's pushes only: a vehicle request by its report's tag; a task that needs a driver from the moment it did
+  // (a task declined, given back and declined again has two rounds).
+  let query = db.from("notifications").select("recipient_employee_id, created_at").eq("event", event).eq("payload->>task_id", w.task_id);
+  if (w.kind === "vehicle_needed" && w.vehicle_report_id) query = query.eq("payload->>tag", `vehicle-needed:${w.vehicle_report_id}`);
+  else {
+    const since = unwrapMaybe(await db.from("tasks").select("needs_driver_since").eq("id", w.task_id).maybeSingle(), "task")
+      ?.needs_driver_since;
+    if (since) query = query.gte("created_at", since);
+  }
+  const rows = unwrap(await query.order("created_at"), "notifications");
   const names = [...new Set(rows.map((r) => r.recipient_employee_id))].filter(Boolean);
   const people = names.length ? unwrap(await db.from("employees").select("id, name").in("id", names), "employees").map((e) => e.name) : [];
   await writeEvent(db, issueId, "notified", {

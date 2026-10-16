@@ -39,6 +39,8 @@ export interface PlanFields {
   leaveBy: string;
   start: string;
   returnToBase: boolean;
+  /** Stops before the rows (the start stop, stops already reached): errors name the rows as their labels do. */
+  offset?: number;
 }
 
 /**
@@ -48,7 +50,7 @@ export interface PlanFields {
 export function planReasons(f: PlanFields, preview: PlanPreview | null | undefined, err: string | null | undefined): PlanReason[] {
   const out: PlanReason[] = [];
   if (!f.date.trim()) out.push({ text: "Add a date." });
-  const stops = stopsInput(f.stops);
+  const stops = stopsInput(f.stops, f.offset ?? 0);
   if ("error" in stops) out.push({ text: stops.error === "Add at least one stop." ? "Add at least one stop with a place." : stops.error });
   if (!f.leaveBy.trim() && !hasDeadline(f.stops)) out.push({ text: "Add a leave-by time, or an arrive-by time on a stop, so it can be planned." });
   if (out.length) return out;

@@ -166,5 +166,57 @@ insert into public.driver_heartbeats (employee_id, at, session_id, sharing, app_
 select is((select stops from public.app_stops(now() - interval '1 day', now()) where employee_id = '10000000-0000-0000-0000-0000000008b1'), 1,
   'two 10-minute gaps: the one across an update (aaaa → bbbb) is not counted');
 
+-- 10. From the checkpoint review: a reading still owed, ownership, the accept window's bound, a re-send -------------------
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000008e1', 'p72.sunil@drivers.fame.invalid');
+insert into public.employees (id, code, name, username, role, permissions, active, auth_user_id) values
+  ('10000000-0000-0000-0000-0000000008e1', 'P72E', 'Sunil Silva', 'p72.sunil', 'driver', '{}', true, '00000000-0000-0000-0000-0000000008e1');
+insert into public.vehicles (id, reg_no, current_odometer_km) values ('20000000-0000-0000-0000-0000000008a3', 'WP P72-0003', 7000);
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, status, started_at, start_odometer_km, created_by, plan_json) values
+  ('30000000-0000-0000-0000-0000000008a4', 'Tow run', '10000000-0000-0000-0000-0000000008e1', '20000000-0000-0000-0000-0000000008a1',
+   now() - interval '3 hours', 'in_progress', now() - interval '3 hours', 10070, 'test',
+   '{"legs": [{"km": 100, "minutes": 120, "to_seq": 1}]}'::jsonb);
+select is((public.office_swap_vehicle('30000000-0000-0000-0000-0000000008a4', '20000000-0000-0000-0000-0000000008a3', 'Palitha Assigner', 10120, null))
+          ->> 'result', 'swapped', 'a swap with the old vehicle''s end typed, the new one''s start owed');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000008a1","role":"authenticated"}';
+select lives_ok($$ insert into public.odometer_logs (vehicle_id, employee_id, task_id, reading_km, kind, entry) values
+  ('20000000-0000-0000-0000-0000000008a3', '10000000-0000-0000-0000-0000000008a1', '30000000-0000-0000-0000-0000000008a4', 9999, 'task_start', 'photo') $$,
+  'Kamal logs a reading naming Sunil''s task (his own row: the policy lets it in)');
+select lives_ok($$ insert into public.vehicle_reports (vehicle_id, employee_id, task_id, category, needs_vehicle) values
+  ('20000000-0000-0000-0000-0000000008a1', '10000000-0000-0000-0000-0000000008a1', '30000000-0000-0000-0000-0000000008a3', 'breakdown', true) $$,
+  'Kamal asks for another vehicle on a task that is not running');
+reset role;
+select is((select s.start_odometer_km from public.task_vehicle_segments s where s.task_id = '30000000-0000-0000-0000-0000000008a4' and s.seq = 2), null::integer,
+  'another driver''s reading does not fill the stretch');
+select is((select count(*) from public.notifications where event = 'task.vehicle_needed'), 1::bigint,
+  'and no push for a task that is not running (only the earlier one)');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000008e1","role":"authenticated"}';
+select lives_ok($$ update public.tasks set status = 'completed', end_odometer_km = 7050, completed_at = now() where id = '30000000-0000-0000-0000-0000000008a4' $$,
+  'Sunil completes in the new vehicle with its start reading still owed (not refused)');
+reset role;
+select is((select coalesce(km::text, 'none') || '|' || coalesce(finish_flag ->> 'kind', 'none') from public.tasks where id = '30000000-0000-0000-0000-0000000008a4'),
+  'none|none', 'no km yet and no completed-early question while a reading is owed');
+select is((public.office_swap_reading('30000000-0000-0000-0000-0000000008a4', '20000000-0000-0000-0000-0000000008a3', 'start', 7000, 'Palitha Assigner')) ->> 'result',
+  'saved', 'the office types the owed start afterwards');
+select is((select km from public.tasks where id = '30000000-0000-0000-0000-0000000008a4'), 100, 'task km = 50 + 50');
+select is((public.office_swap_reading('30000000-0000-0000-0000-0000000008a4', '20000000-0000-0000-0000-0000000008a3', 'start', 7001, 'Palitha')) ->> 'result',
+  'not_owed', 'a reading that is not owed is refused');
+
+-- The accept window: today's and later tasks only; a re-send starts it again.
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, leave_by, sent_at, created_by) values
+  ('30000000-0000-0000-0000-0000000008a5', 'Old unaccepted', '10000000-0000-0000-0000-0000000008e1', '20000000-0000-0000-0000-0000000008a3',
+   now() - interval '2 days', now() - interval '2 days', now() - interval '3 days', 'test'),
+  ('30000000-0000-0000-0000-0000000008a6', 'Late accept', '10000000-0000-0000-0000-0000000008e1', '20000000-0000-0000-0000-0000000008a3',
+   now() + interval '5 hours', now() + interval '5 hours', now() - interval '20 minutes', 'test');
+select ok(public.queue_accept_reminders() >= 1, 'the minute job runs');
+select is((select string_agg(title || ':' || coalesce(needs_driver_reason, '-'), ' ' order by title) from public.tasks
+           where id in ('30000000-0000-0000-0000-0000000008a5', '30000000-0000-0000-0000-0000000008a6')),
+  'Late accept:not_accepted Old unaccepted:-', 'not accepted 20 minutes after sending: needs a driver; a task from 2 days ago is left alone');
+select lives_ok($$ update public.tasks set sent_at = now(), accept_reminder_sent_at = null where id = '30000000-0000-0000-0000-0000000008a6' $$,
+  'the office gives it back to the same driver (sent again)');
+select is((select coalesce(needs_driver_reason, 'cleared') from public.tasks where id = '30000000-0000-0000-0000-0000000008a6'), 'cleared',
+  'sending again clears it');
+
 select * from finish();
 rollback;

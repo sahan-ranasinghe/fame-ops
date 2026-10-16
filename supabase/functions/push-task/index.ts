@@ -76,12 +76,42 @@ const CHANGE_TEXT: Record<Language, Record<string, string>> = {
 };
 const CHANGE_ORDER = ["time", "end_by", "vehicle", "stops", "title", "passengers", "notes"];
 
+/** Phase 7 (§11): a stop that changed, by its place in the order ("Stop 2 added: Kurunegala site"). */
+const STOP_CHANGE_TEXT: Record<Language, { line: string; more: string; change: Record<string, string> }> = {
+  en: {
+    line: "Stop {n} {change}: {place}",
+    more: "{more} more",
+    change: { added: "added", removed: "removed", moved: "moved", changed: "changed" },
+  },
+  si: {
+    line: "නැවතුම {n} {change}: {place}",
+    more: "තවත් {more}",
+    change: { added: "එක් කළා", removed: "ඉවත් කළා", moved: "අනුපිළිවෙල වෙනස් විය", changed: "වෙනස් විය" },
+  },
+};
+
+/** update_task_stops' list of changed stops in the driver's language; null when the stops were not named. */
+function stopsText(language: Language, value: unknown): string | null {
+  const v = value as { list?: { n?: unknown; place?: unknown; change?: unknown }[]; more?: unknown } | null;
+  if (!v || typeof v !== "object" || !Array.isArray(v.list) || v.list.length === 0) return null;
+  const words = STOP_CHANGE_TEXT[language];
+  const lines = v.list.map((x) =>
+    fill(words.line, {
+      n: String(x.n ?? ""),
+      change: words.change[String(x.change)] ?? String(x.change ?? ""),
+      place: String(x.place ?? ""),
+    })
+  );
+  if (typeof v.more === "number" && v.more > 0) lines.push(fill(words.more, { more: String(v.more) }));
+  return lines.join(" · ");
+}
+
 /** "new time 09:30 · vehicle WP KL-1234", or "" when nothing is named. */
 export function changesLine(language: Language, changes: unknown): string {
   if (!changes || typeof changes !== "object") return "";
   const c = changes as Record<string, unknown>;
   return CHANGE_ORDER.filter((k) => c[k] !== undefined && c[k] !== null && c[k] !== false)
-    .map((k) => fill(CHANGE_TEXT[language][k], { [k]: String(c[k]) }))
+    .map((k) => (k === "stops" ? stopsText(language, c[k]) : null) ?? fill(CHANGE_TEXT[language][k], { [k]: String(c[k]) }))
     .join(" · ");
 }
 

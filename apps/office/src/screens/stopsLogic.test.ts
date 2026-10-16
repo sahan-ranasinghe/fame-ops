@@ -47,6 +47,8 @@ describe("stops editor rules", () => {
     expect(hasDeadline(stops)).toBe(true);
     stops[1].arriveBy = "25:00";
     expect(stopsInput(stops)).toEqual({ error: "Stop 2: the arrive-by time must be HH:MM." });
+    // With the start as Stop 1 (passengers get in there), the same row is Stop 3, as its label says.
+    expect(stopsInput(stops, 1)).toEqual({ error: "Stop 3: the arrive-by time must be HH:MM." });
     stops[1].arriveBy = "";
     stops[1].pin = "6.03, 80.22";
     stops[1].place = "";

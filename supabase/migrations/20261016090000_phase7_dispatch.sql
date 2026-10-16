@@ -386,6 +386,8 @@ begin
     where t.status = 'assigned'
       and t.accepted_at is null
       and t.needs_driver_since is null
+      -- Today's and later tasks only (the list the office sees): no burst of pushes for old unaccepted tasks.
+      and coalesce(t.leave_by, t.start_at) >= (date_trunc('day', now() at time zone 'Asia/Colombo') at time zone 'Asia/Colombo')
       and (t.sent_at + make_interval(mins => v_within) < now()
            or coalesce(t.leave_by, t.start_at) - make_interval(mins => v_before) < now())
       and exists (select 1 from public.employees e where e.id = t.employee_id and e.role = 'driver')
@@ -402,7 +404,7 @@ begin
 end;
 $$;
 
--- Accepting late, a reassignment (another driver, or back to the same one) and a cancel clear it.
+-- Accepting late, a reassignment (another driver, or back to the same one: the task is sent again) and a cancel clear it.
 create function public.tasks_needs_driver_clear()
 returns trigger
 language plpgsql
@@ -413,6 +415,7 @@ begin
        (new.accepted_at is not null and old.accepted_at is null)
        or new.employee_id <> old.employee_id
        or (old.status = 'declined' and new.status = 'assigned')
+       or new.sent_at is distinct from old.sent_at
        or new.status in ('cancelled', 'in_progress', 'completed')) then
     new.needs_driver_since := null;
     new.needs_driver_reason := null;
@@ -468,6 +471,10 @@ create policy task_vehicle_segments_select_own on public.task_vehicle_segments
 -- Task km: the sum of the segments when there are any, else end − start (as before; the column stops being
 -- generated and is kept by a trigger).
 alter table public.tasks alter column km drop expression;
+-- After a swap the end reading is the new vehicle's (it may be lower than the first vehicle's start): the rule is now on
+-- the km themselves (the stretches have their own end ≥ start check).
+alter table public.tasks drop constraint tasks_km_not_negative;
+alter table public.tasks add constraint tasks_km_not_negative check (km is null or km >= 0);
 
 create function public.task_km(p_task uuid, p_start integer, p_end integer)
 returns integer
@@ -551,6 +558,10 @@ begin
   if new.task_id is null or new.kind not in ('task_start', 'task_end') then
     return null;
   end if;
+  -- Only a reading of the task's own driver fills its stretches.
+  if not exists (select 1 from public.tasks t where t.id = new.task_id and t.employee_id = new.employee_id) then
+    return null;
+  end if;
   if new.kind = 'task_end' then
     update public.task_vehicle_segments s
     set end_odometer_km = new.reading_km
@@ -578,6 +589,7 @@ set search_path = ''
 as $$
 declare
   v_last_start integer;
+  v_segments   integer;
 begin
   -- The office connector (service_role) and SQL run by an admin are not
   -- restricted here.
@@ -621,12 +633,14 @@ begin
     if new.end_odometer_km is null then
       raise exception 'End odometer is required to complete a task';
     end if;
-    -- After a swap, the end reading belongs to the last vehicle: checked against its own start.
-    select s.start_odometer_km into v_last_start from public.task_vehicle_segments s
-    where s.task_id = new.id order by s.seq desc limit 1;
-    if new.end_odometer_km < coalesce(v_last_start, new.start_odometer_km) then
-      raise exception 'End odometer (%) is lower than start odometer (%)',
-        new.end_odometer_km, coalesce(v_last_start, new.start_odometer_km);
+    -- After a swap, the end reading belongs to the last vehicle: checked against its own start, and not checked while
+    -- that start is still to come (the office may type it later).
+    select count(*)::integer, (array_agg(s.start_odometer_km order by s.seq desc))[1] into v_segments, v_last_start
+    from public.task_vehicle_segments s where s.task_id = new.id;
+    if v_segments = 0 and new.end_odometer_km < new.start_odometer_km then
+      raise exception 'End odometer (%) is lower than start odometer (%)', new.end_odometer_km, new.start_odometer_km;
+    elsif v_segments > 0 and v_last_start is not null and new.end_odometer_km < v_last_start then
+      raise exception 'End odometer (%) is lower than start odometer (%)', new.end_odometer_km, v_last_start;
     end if;
     -- Kept between the start time and now.
     new.completed_at := greatest(least(coalesce(new.completed_at, now()), now()), new.started_at);
@@ -653,10 +667,16 @@ declare
                          where coalesce((l ->> 'to_seq')::integer, 0) <> -1);
   v_km       numeric;
   v_min      numeric;
+  -- After a swap: a stretch whose start (or, before the last, end) reading is still owed leaves the km unknown.
+  v_owed     boolean := exists (
+    select 1 from public.task_vehicle_segments s
+    where s.task_id = new.id
+      and (s.start_odometer_km is null
+           or (s.end_odometer_km is null and s.seq < (select max(x.seq) from public.task_vehicle_segments x where x.task_id = new.id))));
 begin
   if new.status = 'completed' and old.status = 'in_progress' then
     new.finish_flag := null;
-    if v_plan_km >= 3 and new.start_odometer_km is not null and new.end_odometer_km is not null
+    if v_plan_km >= 3 and new.start_odometer_km is not null and new.end_odometer_km is not null and not v_owed
        and new.started_at is not null and new.completed_at is not null then
       v_km := coalesce(
         (select sum(coalesce(case when s.seq = (select max(x.seq) from public.task_vehicle_segments x where x.task_id = new.id)
@@ -754,6 +774,54 @@ $$;
 revoke all on function public.office_swap_vehicle(uuid, uuid, text, integer, integer, text) from public, anon, authenticated;
 grant execute on function public.office_swap_vehicle(uuid, uuid, text, integer, integer, text) to service_role;
 
+-- A swap reading still owed, typed by the office afterwards (a towed vehicle; the phone never sent it): the old vehicle's
+-- end (`end`) or the new vehicle's start (`start`), logged at the swap's own time so the vehicle's readings stay in order.
+create function public.office_swap_reading(p_task uuid, p_vehicle uuid, p_kind text, p_km integer, p_by text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_task record;
+  v_seg  record;
+  v_reg  text;
+begin
+  if p_kind is null or p_kind not in ('end', 'start') then
+    raise exception 'kind must be end or start' using errcode = '22023';
+  end if;
+  select t.id, t.employee_id into v_task from public.tasks t where t.id = p_task;
+  if v_task.id is null then
+    return jsonb_build_object('result', 'no_task');
+  end if;
+  if p_kind = 'end' then
+    select s.* into v_seg from public.task_vehicle_segments s
+    where s.task_id = p_task and s.vehicle_id = p_vehicle and s.to_at is not null and s.end_odometer_km is null
+    order by s.seq limit 1;
+  else
+    select s.* into v_seg from public.task_vehicle_segments s
+    where s.task_id = p_task and s.vehicle_id = p_vehicle and s.seq > 1 and s.start_odometer_km is null
+    order by s.seq limit 1;
+  end if;
+  if v_seg.id is null then
+    return jsonb_build_object('result', 'not_owed');
+  end if;
+  if p_kind = 'end' and v_seg.start_odometer_km is not null and p_km < v_seg.start_odometer_km then
+    return jsonb_build_object('result', 'below_start', 'start_km', v_seg.start_odometer_km);
+  end if;
+  insert into public.odometer_logs (vehicle_id, employee_id, task_id, reading_km, kind, logged_at, entry)
+  values (p_vehicle, v_task.employee_id, p_task, p_km, case p_kind when 'end' then 'task_end' else 'task_start' end,
+          case p_kind when 'end' then v_seg.to_at else v_seg.from_at end, 'office');
+  select reg_no into v_reg from public.vehicles where id = p_vehicle;
+  insert into public.task_assignment_events (task_id, action, employee_id, vehicle_id, actor, note)
+  values (p_task, 'changed', v_task.employee_id, p_vehicle, p_by,
+          'odometer typed by the office: ' || v_reg || ' ' || case p_kind when 'end' then 'end' else 'start' end || ' ' || p_km || ' km');
+  return jsonb_build_object('result', 'saved', 'task_km', (select km from public.tasks where id = p_task));
+end;
+$$;
+revoke all on function public.office_swap_reading(uuid, uuid, text, integer, text) from public, anon, authenticated;
+grant execute on function public.office_swap_reading(uuid, uuid, text, integer, text) to service_role;
+
 -- "I need another vehicle": on a breakdown or accident report during a task.
 alter table public.vehicle_reports add column needs_vehicle boolean not null default false;
 comment on column public.vehicle_reports.needs_vehicle is
@@ -774,7 +842,12 @@ begin
   if not new.needs_vehicle then
     return null;
   end if;
-  select t.id, t.title into v_task from public.tasks t where t.id = new.task_id;
+  -- Only during the reporting driver's own running task (the issue is opened for the same).
+  select t.id, t.title into v_task from public.tasks t
+  where t.id = new.task_id and t.employee_id = new.employee_id and t.status = 'in_progress';
+  if v_task.id is null then
+    return null;
+  end if;
   select v.reg_no into v_plate from public.vehicles v where v.id = new.vehicle_id;
   select e.name into v_name from public.employees e where e.id = new.employee_id;
   perform public.queue_notification(
@@ -932,5 +1005,77 @@ begin
 
   v_task_id := public.office_create_task(p_task, p_stops, p_projects, v_request_id, p_decided_by);
   return jsonb_build_object('request_id', v_request_id, 'task_id', v_task_id);
+end;
+$$;
+
+-- The driver's "Task changed" push names the stops that changed (Phase 7, §11: "Stop 2 added: Kurunegala site").
+create or replace function public.tasks_notify_push()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_changes jsonb := '{}'::jsonb;
+begin
+  -- The driver's own app (seen, accepted, declined, started, completed) never pushes.
+  if coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') = 'authenticated' then
+    return null;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.status in ('assigned', 'in_progress') then
+      perform public.send_push(new.id, 'new', new.employee_id);
+    end if;
+    return null;
+  end if;
+
+  if new.employee_id <> old.employee_id then
+    -- The previous driver hears that the task is gone only if he had accepted it
+    -- (a task he never accepted simply leaves his list) and did not decline it himself.
+    if old.status <> 'declined' and old.accepted_at is not null then
+      perform public.send_push(new.id, 'removed', old.employee_id);
+    end if;
+    if new.status in ('assigned', 'in_progress') then
+      perform public.send_push(new.id, 'new', new.employee_id);
+    end if;
+  elsif new.status = 'cancelled' and old.status <> 'cancelled' then
+    if old.status <> 'declined' then
+      perform public.send_push(new.id, 'cancelled', new.employee_id);
+    end if;
+  elsif old.status = 'declined' and new.status = 'assigned' then
+    -- The same driver gets a declined task back (the office talked to him): as a new task.
+    perform public.send_push(new.id, 'new', new.employee_id);
+  elsif new.status in ('assigned', 'in_progress')
+    and (new.start_at, new.end_by, new.vehicle_id, new.title, new.plan_version, new.notes, new.passengers, new.contact_name, new.contact_phone)
+        is distinct from
+        (old.start_at, old.end_by, old.vehicle_id, old.title, old.plan_version, old.notes, old.passengers, old.contact_name, old.contact_phone) then
+    -- What changed, in the words the push shows ("Task changed: new time 09:30 · vehicle WP KL-1234").
+    if new.start_at is distinct from old.start_at then
+      v_changes := v_changes || jsonb_build_object('time', public.colombo_when(new.start_at));
+    end if;
+    if new.end_by is distinct from old.end_by then
+      v_changes := v_changes || jsonb_build_object('end_by',
+        case when new.end_by is null then 'none' else to_char(new.end_by at time zone 'Asia/Colombo', 'HH24:MI') end);
+    end if;
+    if new.vehicle_id is distinct from old.vehicle_id then
+      v_changes := v_changes || jsonb_build_object('vehicle', (select v.reg_no from public.vehicles v where v.id = new.vehicle_id));
+    end if;
+    if new.title is distinct from old.title then
+      v_changes := v_changes || jsonb_build_object('title', new.title);
+    end if;
+    if new.plan_json is distinct from old.plan_json then
+      -- Phase 7 (§11): which stops changed, by their place in the order, when update_task_stops said so.
+      v_changes := v_changes || jsonb_build_object('stops', coalesce(new.plan_json -> 'stop_changes', 'true'::jsonb));
+    end if;
+    if new.passengers is distinct from old.passengers then
+      v_changes := v_changes || jsonb_build_object('passengers', new.passengers);
+    end if;
+    if (new.notes, new.contact_name, new.contact_phone) is distinct from (old.notes, old.contact_name, old.contact_phone) then
+      v_changes := v_changes || jsonb_build_object('notes', true);
+    end if;
+    perform public.send_push(new.id, 'changed', new.employee_id, jsonb_build_object('changes', v_changes));
+  end if;
+  return null;
 end;
 $$;

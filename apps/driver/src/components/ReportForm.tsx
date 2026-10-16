@@ -35,8 +35,9 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   const [needVehicle, setNeedVehicle] = useState(false);
-  // Only during a task, and only for a breakdown or an accident.
-  const canAskVehicle = taskId !== null && category !== null && VEHICLE_STOPPED.includes(category);
+  // Only during a task under way (the office's issue is for a running task), and only for a breakdown or an accident.
+  const running = taskId !== null && app.tasks.some((task) => task.id === taskId && task.status === 'in_progress');
+  const canAskVehicle = running && category !== null && VEHICLE_STOPPED.includes(category);
 
   const dirty = category !== null || note.trim() !== '' || photos.length > 0;
   useEffect(() => {

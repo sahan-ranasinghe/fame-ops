@@ -14,7 +14,7 @@ import {
   updateOfficeUser,
 } from "./tools/accounts.ts";
 import { createDriver, listDrivers, resetPin, setDriverActive, updateDriver } from "./tools/drivers.ts";
-import { clockOutDriver, dutyLog, moveDriverVehicle } from "./tools/duty.ts";
+import { clockOutDriver, dutyLog, moveDriverVehicle, swapReading } from "./tools/duty.ts";
 import { driverRoute, liveDrivers, watchDrivers } from "./tools/locations.ts";
 import { listFuel } from "./tools/fuel.ts";
 import { listVehicleReports, mileageSummary, updateVehicleReport } from "./tools/mileage.ts";
@@ -134,6 +134,7 @@ export const TOOLS: AnyTool[] = [
   dutyLog,
   clockOutDriver,
   moveDriverVehicle,
+  swapReading,
   reopenTask,
 ];
 
@@ -181,7 +182,7 @@ export const INSTRUCTIONS = [
   "who holds each; duty_log the periods with the vehicles held and the tasks. clock_out_driver (not while a task runs) and " +
   "move_driver_vehicle are the office's. move_driver_vehicle for a driver on a task is a swap (a breakdown): the task goes on in the new vehicle with both " +
   "stretches kept (old_end_km and new_start_km, or the driver enters them on the phone); task km = the stretches added up, each " +
-  "vehicle's mileage gets its own. A driver can ask for another vehicle on a breakdown or accident report: a critical issue. " +
+  "vehicle's mileage gets its own; swap_reading types a reading still owed afterwards (a towed vehicle). A driver can ask for another vehicle on a breakdown or accident report: a critical issue. " +
   "A task completed with far fewer km than planned is flagged completed early; reopen_task sets a " +
   "task completed today back to in progress.",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",

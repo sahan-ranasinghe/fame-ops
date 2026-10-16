@@ -1280,6 +1280,9 @@ isOneToOne: false
 "office_reopen_task":
 { Args: { "p_by": string,"p_reason": string,"p_task": string }; Returns: Json
                            },
+"office_swap_reading":
+{ Args: { "p_by": string,"p_kind": string,"p_km": number,"p_task": string,"p_vehicle": string }; Returns: Json
+                           },
 "office_swap_vehicle":
 { Args: { "p_by": string,"p_new_start"?: number,"p_old_end"?: number,"p_reason"?: string,"p_task": string,"p_vehicle": string }; Returns: Json
                            },

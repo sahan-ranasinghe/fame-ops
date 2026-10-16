@@ -174,7 +174,7 @@ export function NewTask() {
   }
 
   const total = splitTotal(rows);
-  const reasons = planReasons({ date: f.date, stops: f.stops, leaveBy: f.leaveBy, start: f.start || base?.name || "", returnToBase: f.returnToBase }, preview, previewErr);
+  const reasons = planReasons({ date: f.date, stops: f.stops, leaveBy: f.leaveBy, start: f.start || base?.name || "", returnToBase: f.returnToBase, offset: f.startPax ? 1 : 0 }, preview, previewErr);
   const backTo = `/tasks${date !== today() ? `?date=${date}` : ""}`;
   const focusVehicle = () => document.getElementById("af-vehicle")?.focus();
 

@@ -46,6 +46,7 @@ import {
 import { estimateLegFn, googleLegs, legFnFor, memoLegFn, providerFromEnv } from "../routing.ts";
 import { googleUse } from "../google.ts";
 import { notifyEvent } from "../notifications.ts";
+import { stopChanges, stopForChange } from "../stopChanges.ts";
 import type { Actor } from "../roles.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
@@ -1174,7 +1175,14 @@ export const updateTaskStops = tool({
           avoid_expressway: avoidExpressway,
           ...(!running && { leave_by: plan.leave_by, leave_by_source: plan.leave_by_source, start_at: plan.leave_by }),
           buffer_min: args.buffer_min ?? task.buffer_min,
-          plan_json: plan as unknown as Json,
+          // What changed in the stops, for the driver's push ("Stop 2 added: Kurunegala site"; Phase 7, §11).
+          plan_json: {
+            ...plan,
+            stop_changes: stopChanges(
+              existing.filter((s) => s.status !== "removed").map(stopForChange),
+              [...kept, ...stops].map(stopForChange),
+            ),
+          } as unknown as Json,
         },
         p_stops: stops.map(stopRow),
       }),
@@ -2142,8 +2150,9 @@ export const reassignTask = tool({
     // Keep the planned length of the task when it moves.
     const endBy = shift(task.end_by);
     const driverChanged = newDriver.id !== task.employee_id;
-    // A new driver (or a driver who declined and gets it back) starts afresh: not seen, not accepted, no reminder yet.
-    const fresh = driverChanged || wasDeclined;
+    // A new driver (or a driver who declined, or never accepted it, and gets it back) starts afresh: not seen, not accepted,
+    // no reminder yet, a new accept window (Phase 7, §19: a reassignment clears "needs a driver").
+    const fresh = driverChanged || wasDeclined || task.needs_driver_reason === "not_accepted";
 
     const changed = unwrap(
       await db.from("tasks").update({

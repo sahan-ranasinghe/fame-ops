@@ -77,7 +77,8 @@ export function TaskDetail() {
 
   const t = p.task;
   const c = t.contact ?? {};
-  const km = t.km ?? (t.end_odometer_km != null && t.start_odometer_km != null ? t.end_odometer_km - t.start_odometer_km : null);
+  // After a vehicle swap the km are the stretches added up (none while a reading is still to come); never end − start.
+  const km = t.km ?? (!p.segments?.length && t.end_odometer_km != null && t.start_odometer_km != null ? t.end_odometer_km - t.start_odometer_km : null);
   const projects = typeof p.projects === "string" ? p.projects : p.projects.map((x) => joinDots([x.project, x.percent != null ? `${x.percent}%` : ""])).join(", ");
   const declined = t.status === "declined";
   const canChange = (t.status === "assigned" || t.status === "in_progress" || declined) && (me.tools.includes("update_task") || me.tools.includes("reassign_task"));
@@ -239,6 +240,10 @@ export function TaskDetail() {
                     <div className="name"><span className="mono">{g.window}</span></div>
                     <div className="sub num">{g.readings}</div>
                     {g.waiting && <div className="status warn">Reading to come from the driver</div>}
+                    {g.waiting && me.tools.includes("swap_reading") && p.segments?.[i] && (
+                      <SwapReadingForm taskId={id} vehicle={p.segments[i].vehicle ?? ""} needEnd={!!p.segments[i].to && p.segments[i].end_km == null}
+                        needStart={i > 0 && p.segments[i].start_km == null} onDone={reload} />
+                    )}
                     {g.why && <div className="sub">{g.why}</div>}
                   </div>
                   <span className="num" style={{ fontWeight: 700 }}>{g.km || "—"}</span>
@@ -324,6 +329,56 @@ export function TaskDetail() {
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * A swap reading the driver's phone has not sent, typed by the office (swap_reading): the old vehicle's end or the new
+ * vehicle's start (a towed vehicle). The task is loaded again after it.
+ */
+function SwapReadingForm({ taskId, vehicle, needEnd, needStart, onDone }: {
+  taskId: string;
+  vehicle: string;
+  needEnd: boolean;
+  needStart: boolean;
+  onDone: () => Promise<void>;
+}) {
+  const { transport, store } = useFleet();
+  const toast = useToast();
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const kind = needStart ? "start" : needEnd ? "end" : null;
+  if (!kind || !vehicle) return null;
+  const id = `swap-${kind}-${vehicle.replace(/\W/g, "")}`;
+  async function save() {
+    const km = Number(value.replace(/[,\s]/g, ""));
+    if (!Number.isInteger(km) || km < 0) {
+      setMsg("Type the odometer in whole km.");
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      await transport.call("swap_reading", { task_id: taskId, vehicle, ...(kind === "end" ? { end_km: km } : { start_km: km }) });
+      toast("Reading saved");
+      setValue("");
+      void store.invalidate();
+      await onDone();
+    } catch (e) {
+      setMsg(errText(e as FleetError)[0]);
+    }
+    setBusy(false);
+  }
+  return (
+    <div className="field" style={{ marginTop: 6 }} data-testid="swap-reading">
+      <label htmlFor={id}>{kind === "end" ? `${vehicle}'s odometer when it was swapped out (km)` : `${vehicle}'s odometer when it was swapped in (km)`}</label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input id={id} inputMode="numeric" value={value} onChange={(e) => setValue(e.target.value)} />
+        <button type="button" className="btn small" disabled={busy || !value.trim()} onClick={() => void save()}>{busy ? "Saving…" : "Save"}</button>
+      </div>
+      {msg && <span className="hint" style={{ color: "var(--bad)" }}>{msg}</span>}
     </div>
   );
 }

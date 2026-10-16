@@ -1228,7 +1228,8 @@ the build differs from the text above (the behaviour is the same):
 - **Needs a driver**: `tasks.needs_driver_since` / `needs_driver_reason` (declined | not_accepted) are set in SQL by
   `decline_task` and by `queue_accept_reminders` (the minute job: the driver's reminder at `accept_reminder_min`,
   then needs a driver at `accept_within_min` 15 after sending or `accept_before_leave_min` 30 before leaving) and
-  cleared by the trigger `tasks_needs_driver_clear` (accept, reassign, cancel, start). `notify_needs_driver` writes
+  cleared by the trigger `tasks_needs_driver_clear` (accept, reassign, a re-send to the same driver, cancel, start). The
+  minute job looks only at tasks leaving today or later (no burst of pushes for old unaccepted tasks after the deploy). `notify_needs_driver` writes
   one push per person: the dispatchers (approve or assign_tasks) and the assigner (`tasks.assigned_by_employee_id`)
   open `/tasks/<id>/edit?driver=1` when they hold assign_tasks (the page needs it), else the Overview with its Needs a
   driver block; the requester opens `/requests/<id>`. The issues `declined` / `not_accepted` are
@@ -1242,10 +1243,14 @@ the build differs from the text above (the behaviour is the same):
   a trigger (`task_km()`: the stretches added up, else end − start). `mileage_summary` gives each vehicle its own
   stretch and counts the task once. The phone: a "Vehicle changed" card with one button per owed reading (Log
   mileage modes `swap_end` / `swap_start`); Save & finish checks the end against the last stretch's start. Finishing
-  with a reading still owed is allowed (a towed vehicle: the office types it).
+  with a reading still owed is allowed (a towed vehicle): no km and no completed-early question until it is in; the
+  office types it on the task page or with `swap_reading(task_id, vehicle, end_km | start_km)` (RPC
+  `office_swap_reading`, logged at the swap's own time). Only the task's own driver's readings fill its stretches. The
+  old rule "end reading ≥ start reading" on `tasks` became "task km ≥ 0" (a swap to a vehicle with a lower odometer).
 - **"I need another vehicle"** is `vehicle_reports.needs_vehicle` (insert grant for drivers): the trigger
   `vehicle_reports_need_vehicle` pushes `task.vehicle_needed` to the dispatchers at once; the issue
-  `vehicle_needed` (critical, the task's kind) resolves itself when the task's vehicle changes or the task ends.
+  `vehicle_needed` (critical, the task's kind) resolves itself when the task's vehicle changes or the task ends. Only
+  for the reporting driver's own running task (the phone offers the tick only then).
   Offline, the phone says it is saved and offers Call office.
 - **The first cut-off run** closes earlier days' duty sessions at their own day's cut-off silently (`duty_jobs`
   answers `closed_silently`; no push); the phone also stays silent for an earlier day (`dutyEndIsToday`).
@@ -1254,6 +1259,10 @@ the build differs from the text above (the behaviour is the same):
 - **Any permission implies view**: `normalisePermissions` adds view; the migration's backfill found nobody to change
   on the live project (0 of 4 office people). The Requester preset is view + request.
 - **The accept reminder push** reads "Accept or decline: {title} {leave}" (Sinhala with the app's own Accept word).
+- **"Task changed" names the stops**: `update_task_stops` keeps what changed in `plan_json.stop_changes` (at most three,
+  by their place in the order: added, removed, moved, changed) and the push says "Stop 2 added: Kurunegala site".
+- **The start stop on the phone** is arrived at Start task locally too (no Arrived button, no arrival nudge for it).
+- `duty_log` and the office task page read `tasks.km` (the stretches added up after a swap), never end − start.
 
 ## Sinhala
 
@@ -1370,6 +1379,10 @@ Added in Part 2 (16 October: stop labels by order, the time at each stop, the ve
 | `report.needVehicle` | I need another vehicle | මට වෙනත් වාහනයක් අවශ්‍යයි |
 | `report.needVehicleHint` | The fleet admins are told at once. | වාහන කළමනාකරුවන්ට වහාම දැනුම් දෙයි. |
 | `report.needVehicleSent` | The office knows you need another vehicle. | ඔබට වෙනත් වාහනයක් අවශ්‍ය බව කාර්යාලය දනී. |
+| push `changed`, a stop | Stop {n} added / removed / moved / changed: {place} · {more} more | නැවතුම {n} එක් කළා / ඉවත් කළා / අනුපිළිවෙල වෙනස් විය / වෙනස් විය: {place} · තවත් {more} |
+
+Note for the Sinhala check: "odometer" is written three ways in the app (ඔඩෝමීටරය in `complete.checkBody`, ඕඩෝමීටර /
+ඕඩෝමීටරය elsewhere): pick one with the boss or a driver.
 
 ## Deployment log
 

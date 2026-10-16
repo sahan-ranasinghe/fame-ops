@@ -86,6 +86,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   duty_log: ["assign_tasks", "vehicles"],
   clock_out_driver: ["assign_tasks", "vehicles"],
   move_driver_vehicle: ["assign_tasks", "vehicles"],
+  swap_reading: ["assign_tasks", "vehicles"],
   reopen_task: ["assign_tasks"],
   get_settings: ANY,
   update_settings: USERS,

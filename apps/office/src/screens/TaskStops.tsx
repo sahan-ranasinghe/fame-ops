@@ -88,7 +88,7 @@ export function TaskStops() {
   };
   function planArgs(): Record<string, unknown> | null {
     if (!form || !t) return null;
-    const s = stopsInput(form.list);
+    const s = stopsInput(form.list, offset);
     if ("error" in s) return null;
     const input: Record<string, unknown> = { date, stops: s.stops };
     if (!running && form.leaveBy) input.leave_by = form.leaveBy;
@@ -114,7 +114,7 @@ export function TaskStops() {
 
   async function save() {
     if (!form) return;
-    const v = stopsInput(form.list);
+    const v = stopsInput(form.list, offset);
     if ("error" in v) {
       setMsg(v.error);
       return;
@@ -148,7 +148,7 @@ export function TaskStops() {
     if (key) set({ list: form.list.map((s) => (s.key === key ? { ...s, arriveBy: time } : s)) });
   };
   const startStop = preview?.stops.find((s) => s.is_start);
-  const reasons = planReasons({ date, stops: form.list, leaveBy: form.leaveBy || (t.leave_by ? hhmm(t.leave_by) : ""), start: t.start_place ?? "", returnToBase: !!t.return_to_base }, preview, previewErr);
+  const reasons = planReasons({ date, stops: form.list, leaveBy: form.leaveBy || (t.leave_by ? hhmm(t.leave_by) : ""), start: t.start_place ?? "", returnToBase: !!t.return_to_base, offset }, preview, previewErr);
   return (
     <section className="view" data-testid="task-stops">
       <PageTop title={`Stops · ${t.title}`} sub="In the order the driver visits them" backTo={back} />
