@@ -18,7 +18,7 @@ import { sendHeartbeat, startHeartbeatLoop } from '@/lib/heartbeat';
 import { checkTracking, getSharing, readiness, type StartResult, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
 import { armShiftNudge, disarmShiftNudge, ensureChannels, notifyNewTask, onNotificationTap, onPushReceived } from '@/lib/notifications';
 import { type DutyEnded, onDutyEnded } from '@/lib/duty';
-import { type ArrivalFlag, canMarkDone, withSwapReading } from '@/lib/dayRules';
+import { type ArrivalFlag, canMarkDone, taskKmSoFar, withSwapReading } from '@/lib/dayRules';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
@@ -909,7 +909,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
         status: 'completed',
         end_odometer_km: odometerKm,
         completed_at: now,
-        km: item.start_odometer_km === null ? null : odometerKm - item.start_odometer_km,
+        // After a vehicle swap the km are the stretches added up (null while a reading is owed); the last stretch ends here.
+        km: taskKmSoFar(item, odometerKm),
+        task_vehicle_segments: item.task_vehicle_segments?.map((g, i, all) =>
+          i === all.length - 1 ? { ...g, end_odometer_km: odometerKm, to_at: now } : g
+        ),
         task_stops: item.task_stops.map((stop) => (open.includes(stop) ? { ...stop, ...skipped } : stop)),
       }));
       bumpOdometer(task.vehicle_id, odometerKm);
