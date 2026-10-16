@@ -1283,10 +1283,12 @@ differs from the text above:
   holders, but the Roads API policies still say, for the whole API, "If you intend to use the Roads API as part of an
   asset tracking application, you may be required to purchase an asset tracking license". The planned caps (200 a day,
   4,750 a month) are ready (`ROADS_CAPS_PLANNED`) and accepted by `update_settings`; turning them on is Sahan's call.
-  Everything else of §26 is built: about one point per 50 m, requests of 100 points sharing one, a growing leg sent only
-  when 100 new thinned points have collected or the leg ends (its tail drawn raw meanwhile), a window inside a leg
-  already snapped reuses it clipped, and a failed leg tried again after 2 minutes. The route views ask `snap: true` by
-  default with a "Recorded points" toggle; the all-driver trails never ask.
+  While the caps are 0 nothing is asked, refused or counted: the server names no snap provider, so the route views show
+  no toggle. Everything else of §26 is built: about one point per 50 m, requests of 100 points sharing one, a growing
+  leg sending only whole chunks (up to the last point of the last whole one; its tail drawn raw meanwhile) or all of it
+  when the leg ends, a window inside a leg already snapped reusing it clipped, and a failed leg tried again after 2
+  minutes. The route views ask `snap: true` by default with a "Recorded points" toggle; the all-driver trails and
+  Claude never snap (OSRM included).
 - **Gap markers** carry the gap's words in a card (hover or tap; a Gaps list row opens it and zooms there); the dashed
   holes and estimated lines stay; no map draws a gap's text. Stops of 10 minutes or more keep their time labels.
 - **Playback** keeps its clock in recorded time on animation frames (a stalled frame counts as at most 250 ms); points
@@ -1306,7 +1308,10 @@ differs from the text above:
   road as planned; with no plan the straight-line figure stays.
 - **App stops (Sahan, the Part 2b go):** 10 minutes or more with neither a location point nor a heartbeat (the phone's
   own times, so a stretch uploaded later still counts as running), inside a duty period and before its day's cut-off;
-  a gap across an app version change is not one. test.driver's 15 October under this rule: 4 stops before 21:00
+  a gap across an app version change (the heartbeats at its two edges, within 5 minutes) is not one. A silence still
+  going on is counted once the phone is heard again or the period ends (Finish work, the cut-off): a phone offline
+  with its points queued would otherwise count until it uploads; Live's "No signal" and the 30-minute no-fix rule
+  cover the present. test.driver's 15 October under this rule: 4 stops before 21:00
   (10:36–12:33, 12:48–13:01, 17:22–17:32, 18:03–18:17).
 - **Why the heartbeat paused while points kept arriving:** React Native pauses JS timers when the app leaves the front
   (`JavaTimerManager.onHostPause` clears the timers' frame callback) and runs them again only while a headless task is

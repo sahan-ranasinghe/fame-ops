@@ -1,7 +1,9 @@
 -- Phase 7, Part 2b (docs/phase7-plan.md §20–26, and the Part 2 go's additions):
 --   1. App stops (Sahan, 16 October): a stop is 10 minutes or more with neither a location point nor a heartbeat
 --      (the phone's own times), while on duty and before the cut-off. Gaps where points kept arriving don't count; a
---      gap across an app update (the version changed) is not one either.
+--      gap across an app update (the version changed) is not one either. A silence still going on is not counted
+--      yet: a phone offline with its points queued would otherwise count until it uploads (Live's "No signal" and the
+--      30-minute no-fix rule cover the present).
 --   2. Google's leg lines kept with a plan (plan_json.legs[].line, from the Routes call of the road times) go 30 days
 --      after they were fetched, in the nightly google_content job; that write sends the driver no push.
 
@@ -16,13 +18,17 @@ as $$
   with cut as (
     select coalesce((select s.value #>> '{}' from public.fleet_settings s where s.key = 'duty_cutoff'), '21:00') as v
   ),
-  -- Each duty period inside the window, up to the cut-off of its day (or now, or Finish work).
+  -- Each duty period inside the window, up to the cut-off of its day (or Finish work); `closed`: that end is past,
+  -- so a silence up to it is over (an open period's end is now: a silence still going on is not an app stop yet).
   periods as (
-    select d.id, d.employee_id, greatest(d.started_at, p_from) as from_at,
-           least(coalesce(d.ended_at, now()), now(), p_to,
-                 coalesce(public.duty_cutoff_after(d.started_at, (select v from cut)), 'infinity'::timestamptz)) as to_at
-    from public.duty_sessions d
-    where d.started_at < p_to and coalesce(d.ended_at, now()) > p_from
+    select x.id, x.employee_id, x.from_at, least(x.end_at, now(), p_to) as to_at, x.end_at <= now() as closed
+    from (
+      select d.id, d.employee_id, greatest(d.started_at, p_from) as from_at,
+             least(coalesce(d.ended_at, 'infinity'::timestamptz),
+                   coalesce(public.duty_cutoff_after(d.started_at, (select v from cut)), 'infinity'::timestamptz)) as end_at
+      from public.duty_sessions d
+      where d.started_at < p_to and coalesce(d.ended_at, now()) > p_from
+    ) x
   ),
   -- What the phone produced while on duty: its heartbeats and its location points (the phone's own times, so a
   -- stretch uploaded later still counts as the app running), with the period's start and end as the edges.
@@ -30,12 +36,12 @@ as $$
     select pr.id as period_id, pr.employee_id, pr.from_at as at from periods pr
     union all
     select pr.id, pr.employee_id, h.at from periods pr
-      join public.driver_heartbeats h on h.employee_id = pr.employee_id and h.at > pr.from_at and h.at < pr.to_at
+      join public.driver_heartbeats h on h.employee_id = pr.employee_id and h.at > pr.from_at and h.at <= pr.to_at
     union all
     select pr.id, pr.employee_id, p.recorded_at from periods pr
-      join public.location_points p on p.employee_id = pr.employee_id and p.recorded_at > pr.from_at and p.recorded_at < pr.to_at
+      join public.location_points p on p.employee_id = pr.employee_id and p.recorded_at > pr.from_at and p.recorded_at <= pr.to_at
     union all
-    select pr.id, pr.employee_id, pr.to_at from periods pr where pr.to_at > pr.from_at
+    select pr.id, pr.employee_id, pr.to_at from periods pr where pr.to_at > pr.from_at and pr.closed
   ),
   steps as (
     select e.period_id, e.employee_id, e.at, lag(e.at) over (partition by e.period_id order by e.at) as prev_at
@@ -47,13 +53,14 @@ as $$
   )
   select g.employee_id, count(*)::integer, max(g.at)
   from gaps g
-  -- An update or a new install (the app version on the two sides differs) is not an app stop.
+  -- An update or a new install (the app version on the two sides differs) is not an app stop: the heartbeats right
+  -- at the gap's two edges (within 5 minutes), so an update the next morning does not excuse last night's silence.
   where not coalesce((
     select (b.app_version is not null and a.app_version is not null and b.app_version <> a.app_version)
     from (select h.app_version from public.driver_heartbeats h where h.employee_id = g.employee_id and h.at <= g.prev_at
-          order by h.at desc limit 1) b,
+            and h.at >= g.prev_at - interval '5 minutes' order by h.at desc limit 1) b,
          (select h.app_version from public.driver_heartbeats h where h.employee_id = g.employee_id and h.at >= g.at
-          order by h.at limit 1) a), false)
+            and h.at <= g.at + interval '5 minutes' order by h.at limit 1) a), false)
   group by g.employee_id
 $$;
 revoke all on function public.app_stops(timestamptz, timestamptz) from public, anon, authenticated;

@@ -1484,6 +1484,7 @@ export const taskDetail = tool({
           start_google_place_id: task.start_google_place_id ?? undefined,
           start_lat: task.start_lat ?? undefined,
           start_lng: task.start_lng ?? undefined,
+          start_google: task.start_google_place_id ? true : undefined,
           return_to_base: task.return_to_base,
           avoid_expressway: task.avoid_expressway,
           plan_version: task.plan_version,

@@ -313,13 +313,16 @@ Deno.test("which parts use Google: the package, then each key; snap only with bo
   assertEquals(googleUse(settingsWith({}, "open"), env({ GOOGLE_SERVER_KEY: "s", GOOGLE_MAPS_JS_KEY: "j" })).package, "open");
 });
 
-Deno.test("snap to roads: Google for the web only, never for Claude; OSRM when set; none otherwise", async () => {
+Deno.test("snap to roads: Google for the web only while its caps are above 0, never for Claude; OSRM when set (web only)", async () => {
   await withKeys({ GOOGLE_SERVER_KEY: "s", GOOGLE_MAPS_JS_KEY: "j" }, () => {
-    assertEquals(snapProvider(settingsWith(), "web"), "google_roads");
-    assertEquals(snapProvider(settingsWith(), "claude"), "none");
+    const on = { ...settingsWith(), google_caps: { ...settingsWith().google_caps, roads: { ...ROADS_CAPS_PLANNED } } };
+    assertEquals(snapProvider(on, "web"), "google_roads");
+    assertEquals(snapProvider(on, "claude"), "none");
+    assertEquals(snapProvider(settingsWith(), "web"), "none", "caps at 0 (the licence question): nothing is asked or refused");
     const open = { ...settingsWith({}, "open"), map_matching: { provider: "google_roads" as const } };
     assertEquals(snapProvider(open, "web"), "none", "Google's lines never go on the open package's map");
     assertEquals(snapProvider({ ...open, map_matching: { provider: "osrm" } }, "web"), "osrm");
+    assertEquals(snapProvider({ ...open, map_matching: { provider: "osrm" } }, "claude"), "none", "snapping stays web only (§26)");
     return Promise.resolve();
   });
 });

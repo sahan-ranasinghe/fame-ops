@@ -153,8 +153,10 @@ export function startHeartbeatLoop(onChange?: (ready: Readiness) => void): () =>
     last = key(ready);
     onChange?.(ready);
   });
+  // At most one a minute, whichever sends it: the location task sends one too (heartbeatDue), and in the
+  // background this interval fires late, next to the task's.
   const beat = setInterval(() => {
-    if (!stopped && getSharing()) void sendHeartbeat();
+    if (!stopped && heartbeatDue()) void sendHeartbeat();
   }, HEARTBEAT_EVERY_MS);
   const look = setInterval(() => {
     if (stopped) return;

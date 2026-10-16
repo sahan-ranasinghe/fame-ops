@@ -16,7 +16,7 @@ import { cardPlacement, gapCardLines, useGapOpen } from "./gapLogic";
 import { MapControls } from "./MapControls";
 import { GAP_ICONS } from "./mapIcons";
 import { pinChip, planFitKey, planFor } from "./planDraw";
-import { ESTIMATED_COLOR, type GapMarker, type MapProps, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
+import { ESTIMATED_COLOR, type GapMarker, type MapProps, type MapRoute, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
 
 const LK: [number, number][] = [[80.04, 9.81], [80.24, 9.83], [80.45, 9.62], [80.6, 9.42], [80.82, 9.25], [81.05, 8.92], [81.23, 8.58], [81.38, 8.4], [81.5, 8.05], [81.7, 7.72], [81.85, 7.25], [81.85, 6.88], [81.7, 6.5], [81.4, 6.25], [81.12, 6.12], [80.8, 6.0], [80.59, 5.92], [80.4, 5.96], [80.22, 6.03], [80.05, 6.25], [79.96, 6.57], [79.86, 6.9], [79.84, 7.2], [79.8, 7.6], [79.82, 8.0], [79.76, 8.25], [79.9, 8.6], [79.92, 8.95], [80.1, 9.3], [80.2, 9.48], [80.0, 9.62], [79.88, 9.75]];
 const KX = Math.cos(7.8 * Math.PI / 180);
@@ -104,10 +104,13 @@ function GapCard({ x, y, text }: { x: number; y: number; text: string }) {
   );
 }
 
+/** One empty list for every render: a new `[]` each time would redraw the trails on every playback frame. */
+const NO_TRAILS: MapRoute[] = [];
+
 export default function DrawnMap({
   markers,
   route,
-  trails = [],
+  trails = NO_TRAILS,
   focus = null,
   onPick,
   gaps = [],
@@ -143,7 +146,9 @@ export default function DrawnMap({
     for (const t of trails) all.push(...t.points.map((p): [number, number] => [p.lng, p.lat]));
     all.push(...drawnPlan.pins.map((p): [number, number] => [p.lng, p.lat]));
     return all;
-  }, [markers, route, trails, view, drawnPlan]);
+    // On the route's points, not the route: during playback only the cursor changes every frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [markers, route?.points, trails, view, drawnPlan]);
   const { pr, sx, sy, x0, y1 } = useMemo(() => projection(pts, zoom), [pts, zoom]);
   const prRef = useRef(pr);
   prRef.current = pr;

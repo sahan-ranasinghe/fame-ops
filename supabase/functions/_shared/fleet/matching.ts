@@ -91,12 +91,18 @@ export function chunkForMatching(points: MatchInput[]): MatchInput[][] {
 }
 
 /**
- * Whether a growing leg's new part is sent now (Phase 7, §26): only in whole chunks, once 100 thinned points have
- * collected since the last snapped one, or when the leg has ended. Pure.
+ * What of a leg's new part goes now (Phase 7, §26): an ended leg sends it all; a leg still growing sends only whole
+ * chunks (100 thinned points each, sharing one), up to the time of the last point of the last whole chunk, so watching
+ * a driver costs no more than opening the day later. null = wait (the tail is drawn raw meanwhile). Pure.
  */
-export function sendTailNow(tail: MatchInput[], legOpen: boolean): boolean {
-  if (tail.length < 2) return false;
-  return !legOpen || thinBySpacing(tail).length >= MATCH_CHUNK;
+export function tailToSend(tail: MatchInput[], legOpen: boolean): { points: MatchInput[]; upTo: number } | null {
+  if (tail.length < 2) return null;
+  if (!legOpen) return { points: tail, upTo: tail[tail.length - 1].at };
+  const thinned = thinBySpacing(tail);
+  const whole = Math.floor((thinned.length - 1) / (MATCH_CHUNK - 1));
+  if (whole < 1) return null;
+  const upTo = thinned[whole * (MATCH_CHUNK - 1)].at;
+  return { points: tail.filter((p) => p.at <= upTo), upTo };
 }
 
 /** Times for a run of road vertices between two timed anchors, by cumulative distance. */
@@ -326,13 +332,14 @@ export async function snapLegs(
     // is still growing only in whole chunks (the tail is drawn raw meanwhile).
     const stored = have && have.status === "ok" && haveTo !== null && haveTo < leg.to ? geometryOf(have.geometry) : [];
     const tail = stored.length ? leg.points.filter((p) => p.at >= haveTo!) : leg.points;
-    if (!sendTailNow(tail, leg.open === true)) {
+    const send = tailToSend(tail, leg.open === true);
+    if (!send) {
       if (stored.length) out.push({ from: leg.from, to: leg.to, source: "matched", points: stored, matchedTo: haveTo! });
       else out.push({ from: leg.from, to: leg.to, source: "raw", points: leg.points });
       continue;
     }
     try {
-      const fresh = await matchPoints(provider, tail, env, fetchFn, bump, gate);
+      const fresh = await matchPoints(provider, send.points, env, fetchFn, bump, gate);
       const lastAt = stored.length ? stored[stored.length - 1].at : -Infinity;
       const points = [...stored, ...fresh.filter((p) => p.at > lastAt)];
       await db.from("route_matched").upsert({
@@ -340,13 +347,14 @@ export async function snapLegs(
         date,
         provider,
         leg_from: new Date(leg.from).toISOString(),
-        leg_to: new Date(leg.to).toISOString(),
+        // Up to the last point sent: a growing leg's tail after it waits for its next whole chunk.
+        leg_to: new Date(send.upTo).toISOString(),
         geometry: points.map((p) => [p.at, r6(p.lat), r6(p.lng)]),
         matched_at: now.toISOString(),
         status: "ok",
         error: null,
       }, { onConflict: "employee_id,date,provider,leg_from" });
-      out.push({ from: leg.from, to: leg.to, source: "matched", points, matchedTo: leg.to });
+      out.push({ from: leg.from, to: leg.to, source: "matched", points, matchedTo: send.upTo });
     } catch (error) {
       failed += 1;
       const message = error instanceof Error ? error.message : String(error);

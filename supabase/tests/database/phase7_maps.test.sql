@@ -53,6 +53,31 @@ select is((select to_char(last_stop_at at time zone 'Asia/Colombo', 'HH24:MI') f
 select is((select count(*) from public.app_stops('2026-10-11 00:00+05:30', '2026-10-12 00:00+05:30')
            where employee_id = '10000000-0000-0000-0000-0000000009a1'), 0::bigint, 'another day: none');
 
+-- From the checkpoint review: a silence still going on is not an app stop yet; an update excuses only a gap at its edges.
+insert into auth.users (id, email) values ('00000000-0000-0000-0000-0000000009a2', 'p7m.kamal@drivers.fame.invalid');
+insert into public.employees (id, code, name, username, role, permissions, active, auth_user_id) values
+  ('10000000-0000-0000-0000-0000000009a2', 'P7MB', 'Kamal Silva', 'p7m.kamal', 'driver', '{}', true, '00000000-0000-0000-0000-0000000009a2');
+insert into public.duty_sessions (id, employee_id, started_at) values
+  ('80000000-0000-0000-0000-0000000009a2', '10000000-0000-0000-0000-0000000009a2', now() - interval '40 minutes');
+insert into public.driver_heartbeats (employee_id, at, session_id, sharing, app_version)
+select '10000000-0000-0000-0000-0000000009a2', now() - make_interval(mins => m), '80000000-0000-0000-0000-0000000009a2', true, '1.2.0+aaaa'
+from generate_series(15, 40) m;
+select is((select count(*) from public.app_stops(now() - interval '1 day', now()) where employee_id = '10000000-0000-0000-0000-0000000009a2'), 0::bigint,
+  'on duty and silent for 15 minutes, still going on: not counted yet (the phone may be offline with its points queued)');
+insert into public.driver_heartbeats (employee_id, at, session_id, sharing, app_version) values
+  ('10000000-0000-0000-0000-0000000009a2', now(), '80000000-0000-0000-0000-0000000009a2', true, '1.2.0+aaaa');
+select is((select stops from public.app_stops(now() - interval '1 day', now()) where employee_id = '10000000-0000-0000-0000-0000000009a2'), 1,
+  'once the phone is heard again, the 15 minutes count');
+-- Last night's silence up to the cut-off is not excused by an update the next morning.
+insert into public.duty_sessions (id, employee_id, started_at, ended_at, end_reason) values
+  ('80000000-0000-0000-0000-0000000009a3', '10000000-0000-0000-0000-0000000009a2', '2026-10-11 08:00+05:30', '2026-10-11 18:00+05:30', 'auto');
+insert into public.driver_heartbeats (employee_id, at, session_id, sharing, app_version) values
+  ('10000000-0000-0000-0000-0000000009a2', '2026-10-11 08:00+05:30', '80000000-0000-0000-0000-0000000009a3', true, '1.2.0+aaaa'),
+  ('10000000-0000-0000-0000-0000000009a2', '2026-10-11 17:00+05:30', '80000000-0000-0000-0000-0000000009a3', true, '1.2.0+aaaa'),
+  ('10000000-0000-0000-0000-0000000009a2', '2026-10-12 07:30+05:30', null, true, '1.2.0+bbbb');
+select is((select stops from public.app_stops('2026-10-11 00:00+05:30', '2026-10-12 00:00+05:30') where employee_id = '10000000-0000-0000-0000-0000000009a2'), 2,
+  '08:00–17:00 and 17:00 to the 18:00 end both count (the next morning''s update is no excuse)');
+
 -- 2. Google's leg lines go after 30 days, quietly ---------------------------------------------------------------------
 select vault.create_secret('http://127.0.0.1:54321/functions/v1', 'functions_url');
 select vault.create_secret('local-test-server-key-0123456789', 'server_key');

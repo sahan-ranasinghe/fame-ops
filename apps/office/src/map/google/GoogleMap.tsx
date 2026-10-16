@@ -15,7 +15,7 @@ import { plainRuns } from "../DrawnMap";
 import { needsCentre, useGapOpen } from "../gapLogic";
 import { MapControls } from "../MapControls";
 import { planFitKey, planFor, planPoints } from "../planDraw";
-import { ESTIMATED_COLOR, type MapProps, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "../types";
+import { ESTIMATED_COLOR, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "../types";
 import { attachMap, detachMap, fitTo, type GoogleMapsApi, type HtmlMarker, htmlMarker } from "./googleMaps";
 
 interface Live {
@@ -72,10 +72,13 @@ function dashed(maps: GoogleMapsApi, m: google.maps.Map, path: google.maps.LatLn
   });
 }
 
+/** One empty list for every render: a new `[]` each time would redraw the trails on every playback frame. */
+const NO_TRAILS: MapRoute[] = [];
+
 export default function GoogleMap({
   markers,
   route,
-  trails = [],
+  trails = NO_TRAILS,
   focus = null,
   onPick,
   gaps = [],

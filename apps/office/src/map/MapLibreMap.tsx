@@ -20,7 +20,7 @@ import { plainRuns } from "./DrawnMap";
 import { needsCentre, useGapOpen } from "./gapLogic";
 import { MapControls } from "./MapControls";
 import { planFitKey, planFor, planPoints } from "./planDraw";
-import { ESTIMATED_COLOR, type MapProps, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
+import { ESTIMATED_COLOR, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
 
 export const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 const SRI_LANKA: [number, number] = [80.7, 7.8];
@@ -73,10 +73,13 @@ function stepFeatures(points: RoutePoint[], bySpeed: boolean): Feature[] {
   return out;
 }
 
+/** One empty list for every render: a new `[]` each time would redraw the trails on every playback frame. */
+const NO_TRAILS: MapRoute[] = [];
+
 export default function MapLibreMap({
   markers,
   route,
-  trails = [],
+  trails = NO_TRAILS,
   focus = null,
   onPick,
   gaps = [],

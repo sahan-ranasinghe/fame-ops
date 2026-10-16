@@ -13,11 +13,17 @@ import { estimatedLines } from "../gapRoutes.ts";
 import type { Channel } from "../roles.ts";
 
 /**
- * Who snaps a route to roads: Google under the google package for the web (its Google map; never
- * Claude or the artifact, whose maps are not Google's), else OSRM when the setting names it, else none.
+ * Who snaps a route to roads: only for the web (a person opening a route; never Claude or the artifact,
+ * Phase 7, §26). Google under the google package while its roads caps are above 0 (off until the asset
+ * tracking licence is settled: then nothing is asked, refused or counted), else OSRM when the setting names
+ * it, else none.
  */
 export function snapProvider(settings: Settings, channel: Channel): MapMatchingProvider {
-  if (googleUse(settings).roads) return channel === "web" ? "google_roads" : "none";
+  if (channel !== "web") return "none";
+  if (googleUse(settings).roads) {
+    const caps = settings.google_caps.roads;
+    return caps.day > 0 && caps.month > 0 ? "google_roads" : "none";
+  }
   return settings.map_matching.provider === "osrm" ? "osrm" : "none";
 }
 import { buildRoute, type LinePoint, type RouteFix, type Segment, withSpeeds } from "../route.ts";
