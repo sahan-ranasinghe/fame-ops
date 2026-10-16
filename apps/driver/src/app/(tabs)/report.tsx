@@ -24,7 +24,8 @@ const STATUS_COLOR: Record<string, { text: string; background: string }> = {
 
 export default function ReportScreen() {
   const app = useApp();
-  const { t, vehicle, reports } = app;
+  // Off duty, the vehicle held last (Phase 7).
+  const { t, workVehicle: vehicle, reports } = app;
   const insets = useSafeAreaInsets();
   const dateLabel = useDateLabel();
   const [sent, setSent] = useState(false);

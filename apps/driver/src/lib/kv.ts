@@ -65,6 +65,8 @@ export const KEYS = {
   locationRestarts: 'tracking.locationRestarts',
   /** Phase 7: the server ended this driver's duty (the cut-off or the office): {at, reason}, for the notice on Today. */
   dutyEnded: 'duty.ended',
+  /** Phase 7: the vehicle the driver held last (off duty the logs, fuel and reports still go to it). */
+  lastVehicle: 'duty.lastVehicle',
   /** Phase 7: the newest "taken over" banner the driver closed (the assignment id), so it does not come back. */
   takenSeen: 'duty.takenSeen',
   /** When the refused points were last put back in line (ms), and for which app update. */

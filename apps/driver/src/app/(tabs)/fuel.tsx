@@ -36,7 +36,8 @@ interface Row {
 
 export default function FuelScreen() {
   const app = useApp();
-  const { t, vehicle, queue, wifiOnly } = app;
+  // Off duty, the vehicle held last (Phase 7).
+  const { t, workVehicle: vehicle, queue, wifiOnly } = app;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const dateLabel = useDateLabel();

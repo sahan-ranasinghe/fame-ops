@@ -22,7 +22,8 @@ const CACHE_KEY = 'cache.mileage';
 
 export default function MileageScreen() {
   const app = useApp();
-  const { t, vehicle, tasks } = app;
+  // Off duty, the vehicle held last (Phase 7).
+  const { t, workVehicle: vehicle, tasks } = app;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const dateLabel = useDateLabel();

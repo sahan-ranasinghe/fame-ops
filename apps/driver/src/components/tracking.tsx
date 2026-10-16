@@ -20,9 +20,10 @@ const TONE: Record<Tone, { text: string; background: string }> = {
 };
 
 export function TrackingNotice() {
-  const { t, sharing, tracking, tasks, setSharing } = useApp();
+  const { t, sharing, tracking, tasks, startWork } = useApp();
   const router = useRouter();
-  const taskRunning = tasks.some((task) => task.status === 'in_progress');
+  const running = tasks.find((task) => task.status === 'in_progress');
+  const taskRunning = running !== undefined;
 
   let tone: Tone;
   let text: string;
@@ -34,7 +35,8 @@ export function TrackingNotice() {
     text = t('tracking.taskNotSharing');
     action = {
       label: t('tracking.shareNow'),
-      onPress: () => void setSharing(true).then((result) => result === 'no_permission' && router.push('/permissions')),
+      // Phase 7: back on duty with the task's vehicle (a duty session; the server already holds it from the task's start).
+      onPress: () => void startWork(running?.vehicle_id ?? null).then((result) => result === 'no_permission' && router.push('/permissions')),
     };
   } else if (tracking.problem === 'location_off') {
     tone = 'danger';

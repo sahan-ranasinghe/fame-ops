@@ -73,7 +73,7 @@ export default function LogMileageScreen() {
   const insets = useSafeAreaInsets();
 
   const task = params.taskId ? tasks.find((item) => item.id === params.taskId) : undefined;
-  const vehicle = task ? vehicles.find((item) => item.id === task.vehicle_id) ?? null : app.vehicle;
+  const vehicle = task ? vehicles.find((item) => item.id === task.vehicle_id) ?? null : app.workVehicle;
   const lastKm = vehicle?.current_odometer_km ?? null;
   const startKm = task?.start_odometer_km ?? null;
   // Km by GPS since the reading this one follows (the task's start when finishing a task).

@@ -87,8 +87,10 @@ interface AppValue {
   setLanguage: (language: Language) => void;
 
   vehicles: Vehicle[];
-  /** The driver's current vehicle. */
+  /** The driver's current vehicle (the one held on duty). */
   vehicle: Vehicle | null;
+  /** The vehicle manual readings, fuel and reports go to: the current one, else (off duty) the one held last. */
+  workVehicle: Vehicle | null;
   tasks: TaskWithStops[];
   reports: VehicleReport[];
   sharing: boolean;
@@ -206,6 +208,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [dutySince, setDutySince] = useState<string | null>(() => getSharing()?.startedAt ?? null);
   const [vehicleTaken, setVehicleTaken] = useState<VehicleTaken | null>(null);
   const [dutyEnded, setDutyEnded] = useState<DutyEnded | null>(() => getJson<DutyEnded>(KEYS.dutyEnded));
+  const [lastVehicleId, setLastVehicleIdState] = useState<string | null>(() => getJson<string>(KEYS.lastVehicle));
+  const lastVehicleRef = useRef(lastVehicleId);
+  const setLastVehicleId = useCallback((id: string) => {
+    lastVehicleRef.current = id;
+    setLastVehicleIdState(id);
+    setJson(KEYS.lastVehicle, id);
+  }, []);
 
   // The newest values, for callbacks that run later.
   const meRef = useRef(me);
@@ -251,6 +260,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     remove(KEYS.reports);
     remove(KEYS.permissionsSeen);
     remove(KEYS.track);
+    remove(KEYS.lastVehicle);
+    lastVehicleRef.current = null;
+    setLastVehicleIdState(null);
     clearQueue();
     seenQueued.current.clear();
   }, [saveMe, saveTasks]);
@@ -298,6 +310,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Phase 7: another driver took my vehicle while I am on duty → the banner (until I choose or close it).
       const rows = await api.fetchMyAssignments(supabase, 1).catch(() => null);
       const last = rows?.[0];
+      if (last) setLastVehicleId(last.vehicle_id);
       if (last && last.ended_how === 'taken_over' && row.current_vehicle_id === null && getSharing() && last.id !== getJson<string>(KEYS.takenSeen)) {
         const plate = vehicleRows.find((v) => v.id === last.vehicle_id)?.reg_no ?? '';
         setVehicleTaken({ id: last.id, plate, name: (last.ended_by_name ?? '').split(' ')[0], at: last.to_at ?? last.from_at });
@@ -309,7 +322,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setRefreshing(false);
     }
-  }, [forgetEverything, saveMe, saveTasks]);
+  }, [forgetEverything, saveMe, saveTasks, setLastVehicleId]);
 
   /** Looks at the location service and tells the screens what it found. */
   const checkTrackingNow = useCallback(async () => {
@@ -609,6 +622,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (!current) return 'cancelled';
     // The session picks the vehicle up from the saved me (lib/location.ts startSharing).
     saveMe({ ...current, current_vehicle_id: vehicleId });
+    if (vehicleId) setLastVehicleId(vehicleId);
     const outcome = { result: 'no_permission' as StartResult };
     const went = await requireLocation('sharing', async () => {
       outcome.result = await startSharing(serviceTexts);
@@ -623,16 +637,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       void checkTrackingNow();
     }
     return outcome.result;
-  }, [saveMe, serviceTexts, checkTrackingNow, requireLocation]);
+  }, [saveMe, serviceTexts, checkTrackingNow, requireLocation, setLastVehicleId]);
 
   const changeVehicle = useCallback((vehicleId: string | null) => {
     const current = meRef.current;
     if (!current || current.current_vehicle_id === vehicleId) return;
     saveMe({ ...current, current_vehicle_id: vehicleId });
+    if (vehicleId) setLastVehicleId(vehicleId);
     enqueue({ kind: 'vehicle_change', id: Crypto.randomUUID(), vehicle_id: vehicleId, at: new Date().toISOString() });
     setVehicleTaken(null);
     void flushNow();
-  }, [saveMe]);
+  }, [saveMe, setLastVehicleId]);
 
   const finishWork = useCallback(async (): Promise<'off' | 'task'> => {
     if (tasksRef.current.some((task) => task.status === 'in_progress')) return 'task';
@@ -885,13 +900,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // --- logs and reports outside a task ---------------------------------------
   const logOdometer = useCallback((reading: OdometerEntry) => {
     const current = meRef.current;
-    if (!current?.current_vehicle_id) return;
+    // Off duty (Phase 7) the reading goes to the vehicle held last.
+    const vehicleId = current?.current_vehicle_id ?? lastVehicleRef.current;
+    if (!current || !vehicleId) return;
     queuePhoto(reading.photo, 'odometer', current.id);
     enqueue({
       kind: 'odometer_log',
       row: {
         id: Crypto.randomUUID(),
-        vehicle_id: current.current_vehicle_id,
+        vehicle_id: vehicleId,
         employee_id: current.id,
         task_id: null,
         reading_km: reading.km,
@@ -903,21 +920,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
         photo_attempts: reading.attempts,
       },
     });
-    bumpOdometer(current.current_vehicle_id, reading.km);
+    bumpOdometer(vehicleId, reading.km);
     void flushNow();
   }, [bumpOdometer]);
 
   const logFuel = useCallback((fuel: FuelEntry, odometerKm: number | null) => {
     const current = meRef.current;
-    if (!current?.current_vehicle_id) return;
+    const vehicleId = current?.current_vehicle_id ?? lastVehicleRef.current;
+    if (!current || !vehicleId) return;
     const running = tasksRef.current.find((task) => task.status === 'in_progress');
-    queueFuel(fuel, running?.vehicle_id ?? current.current_vehicle_id, running?.id ?? null, odometerKm, new Date().toISOString());
+    queueFuel(fuel, running?.vehicle_id ?? vehicleId, running?.id ?? null, odometerKm, new Date().toISOString());
     void flushNow();
   }, [queueFuel]);
 
   const sendReport = useCallback((category: ReportCategory, note: string, photos: LocalPhoto[], taskId: string | null, vehicleId?: string) => {
     const current = meRef.current;
-    const vehicle = vehicleId ?? current?.current_vehicle_id;
+    const vehicle = vehicleId ?? current?.current_vehicle_id ?? lastVehicleRef.current;
     if (!current || !vehicle) return;
     const id = Crypto.randomUUID();
     const now = new Date().toISOString();
@@ -945,10 +963,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => vehicles.find((item) => item.id === me?.current_vehicle_id) ?? null,
     [vehicles, me?.current_vehicle_id],
   );
+  const workVehicle = useMemo(
+    () => vehicle ?? vehicles.find((item) => item.id === lastVehicleId) ?? null,
+    [vehicle, vehicles, lastVehicleId],
+  );
 
   const value: AppValue = {
     booted, me, language, t, tList, setLanguage,
-    vehicles, vehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, settings: shift, wifiOnly, setWifiOnly, waitingTasks, refreshing, offline, dataAvailable,
+    vehicles, vehicle, workVehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, settings: shift, wifiOnly, setWifiOnly, waitingTasks, refreshing, offline, dataAvailable,
     gate, resolveGate, requireLocation,
     signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, skipStop,
     dutySince, startWork, changeVehicle, finishWork, loadVehicleChoices, vehicleTaken, dismissVehicleTaken, dutyEnded, clearDutyEnded,

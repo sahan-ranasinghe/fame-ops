@@ -27,7 +27,7 @@ export default function ReportProblemScreen() {
   const { allowLeave } = useLeaveGuard(dirty, false);
 
   const task = taskId ? tasks.find((item) => item.id === taskId) : undefined;
-  const vehicle = vehicles.find((item) => item.id === (vehicleId ?? task?.vehicle_id)) ?? app.vehicle;
+  const vehicle = vehicles.find((item) => item.id === (vehicleId ?? task?.vehicle_id)) ?? app.workVehicle;
   const onDirtyChange = useCallback((next: boolean) => setDirty(next), []);
 
   if (!app.me) return <Redirect href="/login" />;
