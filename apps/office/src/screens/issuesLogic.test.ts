@@ -46,6 +46,10 @@ describe("issues centre rules", () => {
     expect(bellCount(undefined)).toBe(0);
     expect(kindText({ kind: "km_gap" })).toBe("Km outside tasks");
     expect(kindText({ kind: "something_new" })).toBe("something_new");
+    expect(kindText({ kind: "vehicle_conflict" })).toBe("Vehicle taken");
+    expect(kindText({ kind: "app_stopped" })).toBe("App stopped");
+    expect(kindText({ kind: "arrival_override" })).toBe("Arrived away from the stop");
+    expect(kindText({ kind: "completed_early" })).toBe("Completed early");
     expect(kindText({ kind: "x", kind_text: "From the server" })).toBe("From the server");
     expect(severityTone("critical")).toBe("bad");
     expect(severityTone("info")).toBe("");

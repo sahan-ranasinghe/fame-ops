@@ -33,6 +33,7 @@ export function Drivers() {
         <div><div className="eyebrow">Fame Driver sign-ins</div><h1>Drivers</h1></div>
         <div className="ph-actions">
           <span className="check"><input type="checkbox" id="drv-inactive" checked={inactive} onChange={(e) => setInactive(e.target.checked)} /> <label htmlFor="drv-inactive">Show switched-off drivers</label></span>
+          {me.tools.includes("duty_log") && <Link className="btn" to="/drivers/duty">Duty log</Link>}
           {me.tools.includes("create_driver") && <Link className="btn primary" to="/drivers/new">Add driver</Link>}
         </div>
       </div>

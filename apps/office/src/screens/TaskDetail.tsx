@@ -2,6 +2,9 @@
 // full screen on a phone. The facts, the route, the stops with planned and
 // actual times, the plan, odometer and fuel, problems, the decline, the
 // history; Change and Cancel open /tasks/:id/edit, Edit stops /tasks/:id/stops.
+// Phase 7: the finish flag (completed early), the vehicle taken at Start task,
+// each stop's arrival flag, and Reopen (a task completed today) as a second
+// step on the page with the reason.
 import { useEffect, useState } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -16,11 +19,14 @@ import { StopArrival } from "./StopArrival";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { PageTop } from "../ui/Page";
+import { useToast } from "../ui/Toast";
 import { PlanPanel } from "./PlanPanel";
 import { videoWords } from "./fuelLogic";
 import { driveText, TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
 
 export const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
+/** The arrival flags shown in amber (an override, no GPS fix, Done without Arrived); "no pin" is plain. */
+const ARRIVAL_WARN = new Set(["override", "no_gps", "not_arrived"]);
 const SKIP_TEXT: Record<string, string> = { closed: "closed", nobody_there: "nobody there", not_needed: "not needed", not_visited: "not visited (task finished)", other: "other" };
 
 /** Loads one task; loads again when the page is returned to (after an edit). */
@@ -85,10 +91,11 @@ export function TaskDetail() {
         actions={(canChange || canCancel) ? <Link className="btn small" to={`/tasks/${id}/edit${q}`}>{declined ? "Give it to a driver" : "Change"}</Link> : undefined}
       />
       <WarningsNote warnings={flash} />
+      {t.finish_flag && <Notice>{t.finish_flag.text}</Notice>}
       <div className="card card-b">
         <dl className="kv">
           <div><dt>Driver</dt><dd>{t.driver || "—"}</dd></div>
-          <div><dt>Vehicle</dt><dd>{t.vehicle || "—"}</dd></div>
+          <div><dt>Vehicle</dt><dd>{t.vehicle || "—"}{t.vehicle_taken && <div className="sub" style={{ fontWeight: 400 }}>{t.vehicle_taken}</div>}</dd></div>
           <div><dt>Status</dt><dd>{t.status_line || cap(t.status)}</dd></div>
           {t.accepted && <div><dt>Accepted</dt><dd>{t.accepted}</dd></div>}
           <div><dt>Leave by</dt><dd className="mono">{t.leave_by ? `${hhmm(t.leave_by)} (${t.leave_by_source === "plan" ? "planned" : "typed"})` : "—"}</dd></div>
@@ -125,6 +132,7 @@ export function TaskDetail() {
           {t.notes && <div style={{ gridColumn: "1/-1" }}><dt>Notes</dt><dd style={{ fontWeight: 400 }}>{t.notes}</dd></div>}
         </dl>
       </div>
+      {t.can_reopen && me.tools.includes("reopen_task") && <ReopenTask id={id} onDone={reload} />}
       {p.unlogged_km && (
         <Notice>
           {num(p.unlogged_km.km)} km were driven before this task that nobody logged (last reading {num(p.unlogged_km.last_logged_km)} km at {p.unlogged_km.last_logged_at}, this task started at {num(p.unlogged_km.start_km)} km).
@@ -159,6 +167,7 @@ export function TaskDetail() {
                     s.pin === "none" ? "no map pin" : null,
                   ])}
                 </div>
+                {s.arrival_text && <div className={ARRIVAL_WARN.has(s.arrival_flag ?? "") ? "status warn" : "sub"} data-testid="arrival-flag">{s.arrival_text}</div>}
                 {s.note && <div className="sub">Note: {s.note}</div>}
                 <StopArrival stop={s} onSaved={() => void reload()} />
               </div>
@@ -240,7 +249,10 @@ export function TaskDetail() {
                 <div key={i} style={{ gridColumn: "1/-1" }}>
                   <dt>{e.at}</dt>
                   <dd>
-                    {[cap(e.action), e.driver, e.vehicle, e.actor ? `by ${e.actor}` : null, e.changes ? null : e.note].filter(Boolean).join(" · ")}
+                    {e.action === "reopened"
+                      // "Reopened by Sahan: wrong reading · was completed 14:20 · end odometer 1003 km"
+                      ? `Reopened${e.actor ? ` by ${e.actor}` : ""}${e.note ? `: ${e.note}` : ""}`
+                      : [cap(e.action), e.driver, e.vehicle, e.actor ? `by ${e.actor}` : null, e.changes ? null : e.note].filter(Boolean).join(" · ")}
                     {e.changes && <ul className="changes">{Object.entries(e.changes).map(([k, c]) => <li key={k}>{k} {c.from ?? "—"} → {c.to ?? "—"}</li>)}</ul>}
                   </dd>
                 </div>
@@ -249,6 +261,69 @@ export function TaskDetail() {
           </div>
         </>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Reopen (reopen_task, a task completed today): a second step on the page, never
+ * a dialog: Reopen task → the reason → Reopen task / Keep completed. The task is
+ * loaded again after it, and every watch (the board) fetches again.
+ */
+function ReopenTask({ id, onDone }: { id: string; onDone: () => Promise<void> }) {
+  const { transport, store } = useFleet();
+  const toast = useToast();
+  const [armed, setArmed] = useState(false);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const keep = () => {
+    setArmed(false);
+    setReason("");
+    setMsg(null);
+  };
+  async function reopen() {
+    if (!reason.trim()) {
+      setMsg("Say why the task is reopened: the history keeps it.");
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    try {
+      await transport.call("reopen_task", { task_id: id, reason: reason.trim() });
+      toast("Task reopened: the driver finishes it again");
+      keep();
+      void store.invalidate();
+      await onDone();
+    } catch (e) {
+      setMsg(errText(e as FleetError)[0]);
+    }
+    setBusy(false);
+  }
+  return (
+    <div className="confirm" style={armed ? undefined : { borderColor: "var(--line)" }} data-testid="reopen">
+      <div>
+        <b>Reopen this task</b>
+        <p className="muted small" style={{ margin: "4px 0 0" }}>
+          For a wrong end reading or a task finished too soon: it goes back to in progress on the driver's phone, the end odometer and the
+          finish time are cleared (the history keeps them) and the driver finishes it again. Only on the day it was completed.
+        </p>
+      </div>
+      {!armed ? (
+        <div><button type="button" className="btn" onClick={() => setArmed(true)}>Reopen task</button></div>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor="reopen-reason">Why is it reopened?</label>
+            <textarea id="reopen-reason" required maxLength={300} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Wrong end reading" />
+          </div>
+          {msg && <Notice tone="bad">{msg}</Notice>}
+          <div className="acts">
+            <button type="button" className="btn dark" disabled={busy || !reason.trim()} onClick={() => void reopen()}>Reopen task</button>
+            <button type="button" className="btn" disabled={busy} onClick={keep}>Keep completed</button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
