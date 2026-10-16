@@ -11,11 +11,15 @@ import {
   arrivalCheck,
   arrivalRecord,
   canMarkDone,
+  dutyEndIsToday,
   earlyFinish,
   lastStopOpen,
   NO_GPS_OVERRIDE_AFTER_MS,
+  stretchStartKm,
+  swapReadingsWaiting,
+  taskKmSoFar,
 } from '../src/lib/dayRules';
-import type { TaskStop } from '../src/lib/types';
+import type { TaskSegment, TaskStop } from '../src/lib/types';
 
 let failures = 0;
 function check(ok: boolean, label: string, detail?: unknown): void {
@@ -27,8 +31,8 @@ function check(ok: boolean, label: string, detail?: unknown): void {
 function stop(fields: Partial<TaskStop>): TaskStop {
   return {
     address: null, arrival_accuracy_m: null, arrival_at: null, arrival_distance_m: null, arrival_flag: null, arrival_lat: null,
-    arrival_lng: null, arrive_by: null, arrived_at: null, auto_detected_at: null, done_at: null, dwell_min: null,
-    google_fetched_at: null, google_place_id: null, id: 's', lat: null, lng: null, note: null, place_id: null,
+    arrival_lng: null, arrive_by: null, arrived_at: null, auto_detected_at: null, done_at: null, dwell_min: null, dwell_source: null,
+    google_fetched_at: null, google_place_id: null, id: 's', is_start: false, lat: null, lng: null, note: null, place_id: null,
     place_name: 'Kurunegala site', planned_arrive_at: null, planned_depart_at: null, removed_at: null, saved_place_id: null,
     seq: 1, skip_note: null, skip_reason: null, status: 'pending', task_id: 't', type: 'drop', what: null,
     ...fields,
@@ -111,6 +115,43 @@ check(earlyFinish(withReturn, 84_048, at(70)) === null, 'completed at the last s
 check(earlyFinish(withReturn, 84_030, at(70))?.plannedKm === 50, 'and the line is 70 % of the km up to the last stop');
 const rounded = earlyFinish(planned({ total_km: 12.345, total_drive_min: 30.6 }), 84_001, at(40));
 check(rounded !== null && rounded.plannedKm === 12.3 && rounded.plannedMinutes === 31, 'the planned numbers are rounded for the question', rounded);
+
+// 6. A vehicle swap during the task (Phase 7, §2 addition): km = the stretches added up.
+const iso = (minutes: number) => new Date(at(minutes)).toISOString();
+const seg = (fields: Partial<TaskSegment>): TaskSegment => ({
+  by_name: null, created_at: STARTED, end_odometer_km: null, from_at: STARTED, id: 'g', reason: null, seq: 1,
+  start_odometer_km: null, task_id: 't', to_at: null, vehicle_id: 'A', ...fields,
+});
+const swapped = {
+  start_odometer_km: 10_000,
+  task_vehicle_segments: [
+    seg({ seq: 2, vehicle_id: 'B', start_odometer_km: 5_000, from_at: iso(60) }),
+    seg({ seq: 1, vehicle_id: 'A', start_odometer_km: 10_000, end_odometer_km: 10_040, to_at: iso(60) }),
+  ],
+};
+check(taskKmSoFar({ start_odometer_km: 84_000 }, 84_095) === 95, 'no swap: end − start');
+check(taskKmSoFar(swapped, 5_055) === 95, 'a swap: 40 km in A and 55 in B make 95', taskKmSoFar(swapped, 5_055));
+check(stretchStartKm(swapped) === 5_000 && stretchStartKm({ start_odometer_km: 84_000 }) === 84_000,
+  'the end reading is checked against the start of the stretch in the vehicle now');
+const owed = {
+  task_vehicle_segments: [
+    seg({ seq: 1, vehicle_id: 'A', start_odometer_km: 10_000, to_at: iso(60) }),
+    seg({ seq: 2, vehicle_id: 'B', from_at: iso(60) }),
+  ],
+};
+const waiting = swapReadingsWaiting(owed);
+check(waiting.oldEnd?.vehicleId === 'A' && waiting.oldEnd.startKm === 10_000 && waiting.newStart?.vehicleId === 'B',
+  "after the office's swap the driver owes A's end and B's start", waiting);
+check(taskKmSoFar({ start_odometer_km: 10_000, ...owed }, 5_055) === null, 'a reading still owed: no km yet');
+check(earlyFinish({ ...planned(trip, 10_000), ...owed }, 5_055, at(130)) === null, 'and no early-finish question while one is owed');
+check(earlyFinish({ ...planned(trip, 10_000), ...swapped }, 5_055, at(130)) === null, 'the swapped task drove 95 of 95 km: no question');
+check(earlyFinish({ ...planned(trip, 10_000), ...swapped }, 5_010, at(130))?.km === 50, 'but 40 + 10 km is early (50 of 95)');
+const none = swapReadingsWaiting({ task_vehicle_segments: [] });
+check(none.oldEnd === null && none.newStart === null, 'no swap: nothing owed');
+
+// 7. A duty from an earlier day closes silently (the first cut-off run); today's says so.
+check(dutyEndIsToday('2026-10-16T15:30:00Z', Date.parse('2026-10-16T16:00:00Z')), '21:00 Colombo today: the notice');
+check(!dutyEndIsToday('2026-10-15T15:30:00Z', Date.parse('2026-10-16T03:00:00Z')), "yesterday's 21:00, run this morning: silent");
 
 console.log(failures === 0 ? '\nAll day rules tests passed.' : `\n${failures} day rules test(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

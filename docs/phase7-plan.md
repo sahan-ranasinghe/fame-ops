@@ -1283,7 +1283,7 @@ Added 15 October (items 17, 19, 20, 24, 28):
 | key | English | Sinhala (draft) |
 |---|---|---|
 | `stop.timeAt` | {from}–{to} at {place} | {place} හි {from}–{to} |
-| `push.acceptReminder` | Accept or decline: {title} {time} | භාරගන්න හෝ ප්‍රතික්ෂේප කරන්න: {title} {time} |
+| push `accept_reminder` | Accept or decline: {title} {leave} · {pickup} → {dropoff} · open Fame Driver | පිළිගන්න හෝ ප්‍රතික්ෂේප කරන්න: {title} {leave} · {pickup} → {dropoff} · Fame Driver විවෘත කරන්න (පිළිගන්න = the app's Accept button) |
 | `task.distanceLeftRoad` | Distance left by road | මාර්ගයේ ඉතිරි දුර |
 | `task.noRouteLine` | Stops only: no planned road line for this task | නැවතුම් පමණි: මෙම කාර්යයට සැලසුම් කළ මාර්ග රේඛාවක් නැත |
 | `map.northUp` | North up | උතුර ඉහළට |
@@ -1297,6 +1297,27 @@ Added 15 October (items 17, 19, 20, 24, 28):
 | `docs.none` | No document yet | තවම ලේඛනයක් නැත |
 | `docs.needsConnection` | Needs a connection to open. | විවෘත කිරීමට සම්බන්ධතාවක් අවශ්‍යයි. |
 | `docs.noVehicle` | Start work with a vehicle to see its documents. | එහි ලේඛන බැලීමට වාහනයක් සමඟ වැඩ ආරම්භ කරන්න. |
+
+Added in Part 2 (16 October: stop labels by order, the time at each stop, the vehicle swap, "I need another vehicle"):
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `stop.label` | Stop {n} · {type} | නැවතුම {n} · {type} |
+| `stop.short` | Stop {n} · {place} (the arrival nudge: "Arrived at Stop 2 · Kurunegala site?") | නැවතුම {n} · {place} |
+| `stop.pickup` | Pickup | නංවාගැනීම |
+| `stop.drop` | Drop | බැස්සවීම |
+| `stop.visit` | Visit | ගොඩවීම |
+| `stop.start` | Start · passengers get in here | ආරම්භය · මගීන් මෙතැනින් නගී |
+| `swap.title` | Vehicle changed: {plate} | වාහනය වෙනස් විය: {plate} |
+| `swap.body` | The office moved this task to {plate}. Log both odometers. | කාර්යාලය මෙම කාර්යය {plate} වෙත මාරු කළා. ඕඩෝමීටර දෙකම සටහන් කරන්න. |
+| `swap.oldEnd` | {plate}: end reading | {plate}: අවසාන කියවීම |
+| `swap.newStart` | {plate}: start reading | {plate}: ආරම්භක කියවීම |
+| `swap.logged` | Logged ✓ {km} km | සටහන් කළා ✓ කි.මී. {km} |
+| `swap.logTitle` | Odometer at the vehicle change | වාහනය මාරු කිරීමේදී ඕඩෝමීටරය |
+| `swap.stretches` | {km} km in {plate} | {plate} හි කි.මී. {km} |
+| `report.needVehicle` | I need another vehicle | මට වෙනත් වාහනයක් අවශ්‍යයි |
+| `report.needVehicleHint` | The fleet admins are told at once. | වාහන කළමනාකරුවන්ට වහාම දැනුම් දෙයි. |
+| `report.needVehicleSent` | The office knows you need another vehicle. | ඔබට වෙනත් වාහනයක් අවශ්‍ය බව කාර්යාලය දනී. |
 
 ## Deployment log
 

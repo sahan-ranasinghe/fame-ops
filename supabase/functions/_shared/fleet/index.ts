@@ -144,13 +144,19 @@ export const INSTRUCTIONS = [
   "create_task, reassign_task and decide_request return warnings. They never block: read them to the user.",
   "A task has stops (pickup, drop, visit; what: people, goods, documents) with a dwell time and an optional arrive_by deadline. " +
   "The leave-by time is planned from the deadlines (plan_task previews it); update_task_stops changes the stops of a task with its plan_version.",
-  "A driver accepts or declines a task in the app. A declined task waits in task_board's declined column (needs a driver): " +
-  "reassign_task gives it to another driver or back to the same one; cancel_task closes it. task_detail shows the reason and who is free.",
+  "A driver accepts or declines a task in the app. A declined task, or one not accepted within the accept window (accept_within_min " +
+  "after sending or accept_before_leave_min before leaving, whichever comes first), needs a driver: task_board's needs_driver list " +
+  "and fleet_overview's needs_driver come first, with the best match. reassign_task gives it to another driver or back to the same " +
+  "one; cancel_task closes it. task_detail shows the reason and who is free.",
+  "Requests and tasks never need a vehicle named: create_task, decide_request and book_vehicle take the driver's vehicle today, else " +
+  "their regular one, and say which (vehicle_used, with the reason). Their answers carry the plan as a timeline (leave, each leg, " +
+  "each stop with its time at the stop) and conflicts (the vehicle or the driver busy then) with the other task's people to call.",
   "Issues (list_issues): everything that needs attention, opened and auto-resolved by the system (fleet_overview's needs_attention " +
   "is the same list). update_issue takes, notes, resolves or dismisses one; a vehicle problem issue mirrors onto the driver's report.",
   "Notifications (web push in the office web app): my_notification_settings and set_my_notification_settings are a person's own " +
   "(a signed-in person or a personal key; the shared key has no person). Events: a request comes in, your request is decided, a task " +
-  "declined or not accepted, a critical issue, an issue given to you.",
+  "declined or not accepted (also to the person who assigned it and the requester), a driver who needs another vehicle, a critical " +
+  "issue, an issue given to you.",
   "A vehicle can have a custodian (update_vehicle custodian): list_vehicles shows who it is assigned to and whether it is free, on a " +
   "task or booked; suggest_vehicles groups the free pool, the assigned ones (ask the custodian first), the busy and the in-garage ones. " +
   "book_vehicle makes a request and its task in one go (the custodian drives when driver_required is false); cancel_request cancels " +
@@ -172,8 +178,11 @@ export const INSTRUCTIONS = [
   "A driver's day: the driver clocks in with Start work and today's vehicle and out with Finish work (the server also clocks out at " +
   "the cut-off, duty_cutoff, never while a task runs). One vehicle, one driver: a driver who takes a vehicle takes it from whoever " +
   "held it (they are told). live_drivers shows each driver on a task, on duty or off duty with the vehicle they hold; list_vehicles " +
-  "who holds each; duty_log the periods with the vehicles held and the tasks. clock_out_driver and move_driver_vehicle are the " +
-  "office's (not while a task runs). A task completed with far fewer km than planned is flagged completed early; reopen_task sets a " +
+  "who holds each; duty_log the periods with the vehicles held and the tasks. clock_out_driver (not while a task runs) and " +
+  "move_driver_vehicle are the office's. move_driver_vehicle for a driver on a task is a swap (a breakdown): the task goes on in the new vehicle with both " +
+  "stretches kept (old_end_km and new_start_km, or the driver enters them on the phone); task km = the stretches added up, each " +
+  "vehicle's mileage gets its own. A driver can ask for another vehicle on a breakdown or accident report: a critical issue. " +
+  "A task completed with far fewer km than planned is flagged completed early; reopen_task sets a " +
   "task completed today back to in progress.",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",

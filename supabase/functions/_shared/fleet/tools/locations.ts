@@ -94,6 +94,12 @@ export const liveDrivers = tool({
         .order("to_at", { ascending: false }),
       db.rpc("app_stops", { p_from: dayStart, p_to: now.toISOString() }),
     ]);
+    // Phase 7 (§19): a task this driver declined, or has not accepted in time, that still needs a driver.
+    const needing = unwrap(
+      await db.from("tasks").select("employee_id, start_at, leave_by, needs_driver_reason").not("needs_driver_since", "is", null)
+        .in("status", ["assigned", "declined"]).gte("start_at", dayStart).order("start_at"),
+      "tasks",
+    );
     const tasks = unwrap(running, "tasks");
     const sessions = unwrap(openSessions, "sharing periods");
     const ended = unwrap(todaySessions, "sharing periods");
@@ -166,6 +172,12 @@ export const liveDrivers = tool({
         vehicle: vehicleId ? vehicleLabel(refs.veh.get(vehicleId)) : undefined,
         vehicle_since: !task && e.current_vehicle_id && holderSince.get(e.id) ? colomboTime(holderSince.get(e.id)!) : undefined,
         vehicle_note: handover,
+        task_note: (() => {
+          const t = needing.find((x) => x.employee_id === e.id);
+          if (!t) return undefined;
+          const at = colomboTime(t.leave_by ?? t.start_at);
+          return t.needs_driver_reason === "declined" ? `declined the ${at} task` : `hasn't accepted the ${at} task`;
+        })(),
         app_stops_today: stopsCount > 0 ? stopsCount : undefined,
         app_stops_text: stopsCount > 0 ? `App stopped by phone ${stopsCount}× today` : undefined,
         phone: [device.brand, device.model].filter(Boolean).join(" ") || undefined,

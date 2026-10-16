@@ -183,3 +183,48 @@ export function rankAvailability<T extends DriverAvailability>(rows: T[]): T[] {
   const order: Record<DriverState, number> = { on_duty: 0, on_task: 1, off_duty: 2 };
   return [...rows].sort((a, b) => Number(b.free) - Number(a.free) || order[a.state] - order[b.state] || a.name.localeCompare(b.name));
 }
+
+/** A driver as the best-match ranking sees them (Phase 7, §3). */
+export interface MatchInput {
+  name: string;
+  username: string | null;
+  state: DriverState;
+  free: boolean;
+  /** Straight-line km from the last position to the first stop; null when either is unknown. */
+  km_to_first: number | null;
+  tasks_today: number;
+}
+
+export interface BestMatch {
+  name: string;
+  username: string | null;
+  rank: number;
+  /** "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today" */
+  why: string;
+}
+
+/**
+ * The best match for a task: drivers on duty with no task overlapping the window, nearest to the first stop by straight
+ * line from their last position (those with no position after those with one), then the fewest tasks today. Pure.
+ */
+export function rankMatches(rows: MatchInput[], windowText: string, firstStopWord = "the first stop"): BestMatch[] {
+  return rows
+    .filter((r) => r.state === "on_duty" && r.free)
+    .sort((a, b) =>
+      (a.km_to_first === null ? 1 : 0) - (b.km_to_first === null ? 1 : 0) ||
+      (a.km_to_first ?? 0) - (b.km_to_first ?? 0) ||
+      a.tasks_today - b.tasks_today ||
+      a.name.localeCompare(b.name)
+    )
+    .map((r, i) => ({
+      name: r.name,
+      username: r.username,
+      rank: i + 1,
+      why: [
+        "On duty",
+        `free ${windowText}`,
+        r.km_to_first !== null ? `${Math.round(r.km_to_first * 10) / 10} km from ${firstStopWord}` : null,
+        `${r.tasks_today} task${r.tasks_today === 1 ? "" : "s"} today`,
+      ].filter(Boolean).join(" · "),
+    }));
+}

@@ -37,6 +37,8 @@ export interface PlanStop {
   dwell_min?: number | null;
   /** ISO: the deadline, if any. */
   arrive_by?: string | null;
+  /** Phase 7 (§11): the pickup at the start ("Passengers get in here"): no leg to it. */
+  at_start?: boolean;
 }
 
 export interface PlanPlace {
@@ -166,7 +168,8 @@ async function forward(
         seq: stop.seq,
       });
     }
-    if (prev && stop.point) {
+    // The pickup at the start is where the trip begins: no leg to it.
+    if (prev && stop.point && !stop.at_start) {
       const leg = await legFn(prev, stop.point, at, { avoid_expressway: input.avoid_expressway });
       const arrive = addMin(at, leg.minutes);
       legs.push({ ...leg, from_seq: prevSeq, to_seq: stop.seq, depart_at: at, arrive_at: arrive });
@@ -206,7 +209,7 @@ export function legSequence(input: Pick<PlanInput, "start" | "base" | "stops" | 
   const out: PlanPoint[] = [];
   const first = input.start?.point ?? input.base?.point ?? null;
   if (first) out.push(first);
-  for (const stop of input.stops) if (stop.point) out.push(stop.point);
+  for (const stop of input.stops) if (stop.point && !(stop.at_start && first)) out.push(stop.point);
   if (input.return_to_base && input.base?.point && out.length > 0) out.push(input.base.point);
   return out;
 }
@@ -256,7 +259,7 @@ export async function planTask(input: PlanInput, settings: PlanSettings, legFn: 
     warnings.push({
       code: "not_reachable",
       text: binding
-        ? `Leaving now, the earliest arrival at stop ${binding.seq} is ${
+        ? `Leaving now, the earliest arrival at Stop ${input.stops.findIndex((s) => s.seq === binding.seq) + 1} is ${
           binding.planned_arrive_at.slice(11, 16)
         } UTC; the deadline cannot be met with the buffer.`
         : "The leave-by time is already past.",

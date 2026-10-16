@@ -3,7 +3,7 @@
 // these tools name the driver and the vehicle, call them and say the outcome in words.
 
 import { z } from "zod";
-import { fetchAll, ToolError, unwrap } from "../db.ts";
+import { type Db, fetchAll, ToolError, unwrap } from "../db.ts";
 import { findDriver, findVehicle, loadRefs, vehicleLabel } from "../fleet.ts";
 import { buildRoute } from "../route.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange } from "../time.ts";
@@ -193,17 +193,33 @@ export const moveDriverVehicle = tool({
   name: "move_driver_vehicle",
   title: "Move a driver to a vehicle",
   description: "Gives a driver who is on duty another vehicle (or none): whoever held that vehicle no longer does and is told (one " +
-    "vehicle, one driver), and the driver gets a push. Not for a driver on a task (change the task's vehicle with update_task) " +
-    "and not onto a vehicle on someone's running task.",
+    "vehicle, one driver), and the driver gets a push. For a driver on a task it is a swap (a breakdown): the task goes on in the " +
+    "new vehicle and keeps both stretches; the old vehicle's end reading and the new one's start reading are typed here " +
+    "(old_end_km, new_start_km) or the driver enters them on the phone when asked. Never onto a vehicle on someone's running task.",
   readOnly: false,
   input: z.object({
     driver: zText(80).describe("Username, code or name"),
     vehicle: zText(40).nullable().describe('Number plate, or null (or "none") for no vehicle'),
+    old_end_km: z.number().int().min(0).max(9_999_999).optional().describe(
+      "On a task: the old vehicle's odometer at the swap. Leave out to let the driver enter it",
+    ),
+    new_start_km: z.number().int().min(0).max(9_999_999).optional().describe(
+      "On a task: the new vehicle's odometer at the swap. Leave out to let the driver enter it",
+    ),
+    reason: zText(200).optional().describe('On a task: why ("Breakdown near Kurunegala")'),
   }),
-  async run({ driver, vehicle }, { db, actor }) {
+  async run({ driver, vehicle, old_end_km, new_start_km, reason }, { db, actor }) {
     const refs = await loadRefs(db);
     const who = findDriver(refs, driver);
     const target = vehicle === null || vehicle.toLowerCase() === "none" ? null : findVehicle(refs, vehicle);
+    const running = unwrap(
+      await db.from("tasks").select("id, title, vehicle_id").eq("employee_id", who.id).eq("status", "in_progress").limit(1),
+      "tasks",
+    )[0];
+    if (running) return await swapDuringTask(db, actor.name, who.name, running, target, { old_end_km, new_start_km, reason });
+    if (old_end_km !== undefined || new_start_km !== undefined) {
+      throw new ToolError(`${who.name} is not on a task: the readings are only for a swap during a task.`);
+    }
     // null = no vehicle: sent as null (the function has no default for it).
     const { data, error } = await db.rpc("office_move_vehicle", {
       p_employee: who.id,
@@ -216,7 +232,7 @@ export const moveDriverVehicle = tool({
       case "off_duty":
         throw new ToolError(`${who.name} is off duty: the vehicle is chosen at Start work.`);
       case "task_in_progress":
-        throw new ToolError(`${who.name} is on a task: change the task's vehicle instead (update_task).`);
+        throw new ToolError(`${who.name} has just started a task: try again (it becomes a swap during the task).`);
       case "vehicle_on_task":
         throw new ToolError(`${target?.reg_no ?? "That vehicle"} is on another driver's running task.`);
     }
@@ -231,3 +247,60 @@ export const moveDriverVehicle = tool({
     };
   },
 });
+
+/** The swap during a task (Phase 7, §2 addition): office_swap_vehicle ends the stretch so far and starts the next. */
+async function swapDuringTask(
+  db: Db,
+  by: string,
+  driverName: string,
+  task: { id: string; title: string; vehicle_id: string },
+  target: ReturnType<typeof findVehicle> | null,
+  r: { old_end_km?: number; new_start_km?: number; reason?: string },
+) {
+  if (!target) throw new ToolError(`${driverName} is on a task: the task needs a vehicle. Name the vehicle to swap to.`);
+  const { data, error } = await db.rpc("office_swap_vehicle", {
+    p_task: task.id,
+    p_vehicle: target.id,
+    p_by: by,
+    p_old_end: r.old_end_km,
+    p_new_start: r.new_start_km,
+    p_reason: r.reason,
+  });
+  if (error) {
+    if (/below its start reading/.test(error.message)) {
+      throw new ToolError(`old_end_km ${r.old_end_km} is below the old vehicle's start reading for this task. Check the number.`);
+    }
+    throw new Error(`swap vehicle: ${error.message}`);
+  }
+  const answer = data as { result?: string; segment?: number; from?: string; to?: string } | null;
+  switch (answer?.result) {
+    case "not_running":
+      throw new ToolError(`${driverName}'s task has just ended: move the driver again (no swap needed).`);
+    case "same_vehicle":
+      throw new ToolError(`${driverName}'s task is already in ${target.reg_no}.`);
+    case "vehicle_on_task":
+      throw new ToolError(`${target.reg_no} is on another driver's running task.`);
+  }
+  const asked = [
+    r.old_end_km === undefined ? `${answer?.from}'s end reading` : null,
+    r.new_start_km === undefined ? `${target.reg_no}'s start reading` : null,
+  ]
+    .filter(Boolean);
+  return {
+    result: {
+      driver: driverName,
+      task: task.title,
+      task_id: task.id,
+      swapped: { from: answer?.from, to: answer?.to, segment: answer?.segment },
+      vehicle: vehicleLabel(target),
+      readings: {
+        old_end: r.old_end_km !== undefined ? `typed: ${r.old_end_km} km` : "the driver enters it on the phone",
+        new_start: r.new_start_km !== undefined ? `typed: ${r.new_start_km} km` : "the driver enters it on the phone",
+      },
+      note: asked.length
+        ? `The task goes on in ${target.reg_no}. ${driverName} is asked on the phone for ${asked.join(" and ")}.`
+        : `The task goes on in ${target.reg_no}; both readings are logged. Task km = the two stretches added up.`,
+    },
+    summary: `swapped ${driverName}'s task "${task.title}" ${answer?.from} → ${answer?.to}`,
+  };
+}

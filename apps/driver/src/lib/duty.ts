@@ -3,7 +3,7 @@
 // it still finds out from the next heartbeat's answer (on_duty false, with how the duty ended). Then
 // it stops recording location here, without a screen (the heartbeat may run in the background
 // location task), clears the vehicle it holds, keeps the reason for Today's notice and tells the
-// driver once. Loaded by the app's entry (index.ts), so it listens from the start.
+// driver once; a duty from an earlier day ends silently (no notice, no notification). Loaded by the app's entry (index.ts), so it listens from the start.
 
 import { translate } from '../i18n';
 import { onHeartbeatAnswer } from '../sync';
@@ -12,6 +12,7 @@ import type { HeartbeatAnswer } from './api';
 import { getJson, KEYS, setJson } from './kv';
 import { getSharing, type SharingState, stopSharing } from './location';
 import { notifyDutyEnded } from './notifications';
+import { dutyEndIsToday } from './dayRules';
 import { colomboTime } from './time';
 import type { Employee, Language } from './types';
 
@@ -43,7 +44,8 @@ export function dutyEndedText(language: Language, ended: DutyEnded): { title: st
   };
 }
 
-type Listener = (ended: DutyEnded) => void;
+/** silent: a duty from an earlier day (no notice on Today). */
+type Listener = (ended: DutyEnded, silent: boolean) => void;
 const listeners = new Set<Listener>();
 
 /** The screens hear when the server ended the duty (Today shows the notice, the switch goes off). */
@@ -65,12 +67,17 @@ export async function handleDutyAnswer(answer: HeartbeatAnswer, now = Date.now()
     const me = getJson<Employee>(KEYS.me);
     if (me && me.current_vehicle_id !== null) setJson(KEYS.me, { ...me, current_vehicle_id: null });
     const ended: DutyEnded = answer.duty_end ?? { at: new Date(now).toISOString(), reason: 'auto' };
+    // A duty left open from an earlier day closes at that day's cut-off without a word (Phase 7, §1).
+    if (!dutyEndIsToday(ended.at, now)) {
+      for (const listener of listeners) listener(ended, true);
+      return true;
+    }
     setJson(KEYS.dutyEnded, ended);
     if (ended.reason !== 'driver') {
       const text = dutyEndedText(getJson<Language>(KEYS.language) ?? 'en', ended);
       await notifyDutyEnded(text.title, text.body);
     }
-    for (const listener of listeners) listener(ended);
+    for (const listener of listeners) listener(ended, false);
     return true;
   } finally {
     stopping = false;

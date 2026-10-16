@@ -5,7 +5,10 @@ type Tables = Database['public']['Tables'];
 export type Employee = Tables['employees']['Row'];
 export type Task = Tables['tasks']['Row'];
 export type TaskStop = Tables['task_stops']['Row'];
-export type TaskWithStops = Task & { task_stops: TaskStop[] };
+/** One vehicle's stretch of a task when the office swapped the vehicle during it (Phase 7; none without a swap). */
+export type TaskSegment = Tables['task_vehicle_segments']['Row'];
+/** task_vehicle_segments is absent on a task cached by an older version of the app. */
+export type TaskWithStops = Task & { task_stops: TaskStop[]; task_vehicle_segments?: TaskSegment[] };
 export type VehicleReport = Tables['vehicle_reports']['Row'];
 export type OdometerLog = Tables['odometer_logs']['Row'];
 export type FuelLog = Tables['fuel_logs']['Row'];

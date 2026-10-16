@@ -138,13 +138,18 @@ export async function fetchTasks(client: Client, since: Date): Promise<TaskWithS
   const tasks = check(
     await client
       .from('tasks')
-      .select('*, task_stops(*)')
+      .select('*, task_stops(*), task_vehicle_segments(*)')
       .or(`status.in.(assigned,in_progress),start_at.gte."${since.toISOString()}"`)
       .order('start_at'),
     'tasks',
   );
   // A stop the office edited out stays in the table as 'removed' and is shown nowhere.
-  return tasks.map((task) => ({ ...task, task_stops: task.task_stops.filter((stop) => stop.status !== 'removed').sort((a, b) => a.seq - b.seq) }));
+  // A vehicle swap during the task (Phase 7) keeps each vehicle's stretch, in order.
+  return tasks.map((task) => ({
+    ...task,
+    task_stops: task.task_stops.filter((stop) => stop.status !== 'removed').sort((a, b) => a.seq - b.seq),
+    task_vehicle_segments: [...(task.task_vehicle_segments ?? [])].sort((a, b) => a.seq - b.seq),
+  }));
 }
 
 export async function fetchTaskStatus(client: Client, id: string): Promise<string | null> {
@@ -203,7 +208,7 @@ export type OdometerInsert = Tables['odometer_logs']['Insert'] & { id: string };
 export type FuelInsert = Tables['fuel_logs']['Insert'] & { id: string };
 export type ReportInsert = Pick<
   Tables['vehicle_reports']['Insert'],
-  'vehicle_id' | 'employee_id' | 'task_id' | 'category' | 'note' | 'created_at'
+  'vehicle_id' | 'employee_id' | 'task_id' | 'category' | 'note' | 'created_at' | 'needs_vehicle'
 > & { id: string };
 export type PhotoInsert = Pick<
   Tables['photos']['Insert'],

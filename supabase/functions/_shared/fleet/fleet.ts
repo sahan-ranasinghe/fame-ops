@@ -5,7 +5,7 @@
 import type { Db, Row } from "./db.ts";
 import { fetchAll, ToolError, unwrap } from "./db.ts";
 import { closest } from "./geo.ts";
-import { plain, thousands } from "./format.ts";
+import { contactLinks, plain, thousands } from "./format.ts";
 import { colomboClockS, driverStatus, type StatusResult, statusText } from "./status.ts";
 import {
   ago,
@@ -510,27 +510,101 @@ export interface AssignCheck {
  * its monthly km allowance or in the garage, or a document has expired.
  */
 export async function assignWarnings(db: Db, check: AssignCheck): Promise<string[]> {
+  return (await assignCheck(db, check)).warnings;
+}
+
+/** A person on a conflict card, with the call and WhatsApp links. */
+export interface ConflictPerson {
+  name: string;
+  phone?: string;
+  call?: string;
+  whatsapp?: string;
+}
+
+/**
+ * An overlap as a card (Phase 7, §17): "WP CAB-4521 is on task Team drop 08:00–11:00 for Dilini (driver Kamal)", with the
+ * other task, its requester and its driver, so the office can open it, call either, or pick another vehicle or driver.
+ */
+export interface Conflict {
+  kind: "vehicle" | "driver" | "garage";
+  text: string;
+  task?: { id: string; title: string; window: string };
+  requester?: ConflictPerson;
+  driver?: ConflictPerson;
+}
+
+/** The warnings (words, as always) and the overlaps as structured cards. */
+export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warnings: string[]; conflicts: Conflict[] }> {
   const { driver, vehicle, startAt, endBy } = check;
   const date = colomboDate(startAt);
   const warnings: string[] = [];
+  const conflicts: Conflict[] = [];
 
   const [sameDay, km] = await Promise.all([
     openTasksOn(db, date),
     monthKm(db, [vehicle.id], date.slice(0, 7)),
   ]);
 
+  // The people behind an overlapping task: who asked for it (its request) and who drives it.
+  const clashing = sameDay.filter((o) =>
+    o.id !== check.ignoreTaskId && overlaps(startAt, endBy, o) && (o.vehicle_id === vehicle.id || o.employee_id === driver.id)
+  );
+  const requestIds = [...new Set(clashing.flatMap((o) => o.request_id ? [o.request_id] : []))];
+  const requests = new Map(
+    requestIds.length
+      ? unwrap(
+        await db.from("vehicle_requests").select("id, requested_by_name, requested_by_employee_id").in("id", requestIds),
+        "vehicle requests",
+      ).map((r) => [r.id, r])
+      : [],
+  );
+  const peopleIds = [
+    ...new Set(clashing.flatMap((o) => [o.employee_id, requests.get(o.request_id ?? "")?.requested_by_employee_id ?? null])),
+  ]
+    .filter((id): id is string => !!id);
+  const people = new Map(
+    peopleIds.length
+      ? unwrap(await db.from("employees").select("id, name, phone").in("id", peopleIds), "employees").map((e) => [e.id, e])
+      : [],
+  );
+  const person = (id: string | null | undefined, fallbackName?: string | null): ConflictPerson | undefined => {
+    const e = id ? people.get(id) : undefined;
+    const name = e?.name ?? fallbackName ?? undefined;
+    if (!name) return undefined;
+    const links = contactLinks(e?.phone ?? null);
+    return { name, phone: e?.phone ?? undefined, call: links.call ?? undefined, whatsapp: links.whatsapp ?? undefined };
+  };
+
   for (const other of sameDay) {
     if (other.id === check.ignoreTaskId) continue;
-    const clash = overlaps(startAt, endBy, other) ? "at the same time" : "the same day";
+    const atSameTime = overlaps(startAt, endBy, other);
+    const clash = atSameTime ? "at the same time" : "the same day";
+    const request = other.request_id ? requests.get(other.request_id) : undefined;
+    const requester = request ? person(request.requested_by_employee_id, request.requested_by_name) : undefined;
+    const otherDriver = person(other.employee_id);
+    const card = (kind: Conflict["kind"], what: string): Conflict => ({
+      kind,
+      text: `${what} ${other.title} ${taskWindow(other)}${requester ? ` for ${requester.name.split(" ")[0]}` : ""}${
+        otherDriver ? ` (driver ${otherDriver.name.split(" ")[0]})` : ""
+      }`,
+      task: { id: other.id, title: other.title, window: taskWindow(other) },
+      requester,
+      driver: otherDriver,
+    });
     if (other.vehicle_id === vehicle.id) {
       warnings.push(`${vehicle.reg_no} is booked ${taskWindow(other)} ${clash} (${other.title}).`);
+      if (atSameTime) conflicts.push(card("vehicle", `${vehicle.reg_no} is on task`));
     }
     if (other.employee_id === driver.id) {
       warnings.push(`${driver.name} has another task ${taskWindow(other)} ${clash} (${other.title}).`);
+      if (atSameTime) conflicts.push(card("driver", `${driver.name.split(" ")[0]} is on task`));
     }
   }
 
-  if (vehicle.in_garage) warnings.push(`${vehicle.reg_no} is marked as in the garage.`);
+  if (vehicle.in_garage) {
+    warnings.push(`${vehicle.reg_no} is marked as in the garage.`);
+    conflicts.push({ kind: "garage", text: `${vehicle.reg_no} is in the garage` });
+  }
 
   const used = km.get(vehicle.id) ?? 0;
   if (vehicle.monthly_km_allowance != null && used > vehicle.monthly_km_allowance) {
@@ -546,5 +620,5 @@ export async function assignWarnings(db: Db, check: AssignCheck): Promise<string
   if (driver.licence_expiry && driver.licence_expiry < date) {
     warnings.push(`${driver.name}'s driving licence expired on ${driver.licence_expiry}.`);
   }
-  return warnings;
+  return { warnings, conflicts };
 }

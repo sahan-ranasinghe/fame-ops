@@ -6,6 +6,7 @@ import { describeGap, findDriver, findVehicle, gapPlaces, loadGaps, loadRefs, od
 import { centsToLkr, contactLinks } from "../format.ts";
 import { syncIssues } from "../issues.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
+import { taskPieces } from "../segments.ts";
 import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
 import { tool, zId, zMonth, zText } from "../tool.ts";
 
@@ -39,9 +40,9 @@ export const mileageSummary = tool({
 
     const [tasks, fuel, logs, before] = await Promise.all([
       fetchAll((a, b) => {
+        // Every vehicle's tasks even for one vehicle: a task swapped off it during the trip ends on another (Phase 7).
         let q = db.from("tasks").select("id, title, vehicle_id, employee_id, km, completed_at")
           .eq("status", "completed").gte("completed_at", from).lt("completed_at", to);
-        if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
         if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
         return q.order("completed_at").order("id").range(a, b);
       }, "tasks"),
@@ -72,6 +73,15 @@ export const mileageSummary = tool({
       })),
     ]);
 
+    // A task's km per vehicle: one piece, or one per stretch when the vehicle was swapped during the task.
+    const segments = tasks.length
+      ? unwrap(
+        await db.from("task_vehicle_segments").select("task_id, seq, vehicle_id, start_odometer_km, end_odometer_km")
+          .in("task_id", tasks.map((t) => t.id)),
+        "vehicle segments",
+      )
+      : [];
+    const pieces = taskPieces(tasks, segments);
     const taskTitle = new Map(tasks.map((t) => [t.id, t.title]));
     const previous = new Map<string, number | null>(before);
     const firstReading = new Map<string, number>();
@@ -127,9 +137,9 @@ export const mileageSummary = tool({
 
     const rows = vehicleIds.map((id) => {
       const v = refs.veh.get(id)!;
-      const mine = tasks.filter((t) => t.vehicle_id === id);
+      const mine = pieces.filter((p) => p.vehicle_id === id);
       const myFuel = fuel.filter((f) => f.vehicle_id === id);
-      const taskKm = mine.reduce((sum, t) => sum + (t.km ?? 0), 0);
+      const taskKm = mine.reduce((sum, p) => sum + p.km, 0);
       const end = lastReading.get(id);
       const start = baseline.get(id) ?? firstReading.get(id);
       const odometerKm = end != null && start != null ? Math.max(0, end - start) : 0;
@@ -160,7 +170,8 @@ export const mileageSummary = tool({
         vehicle: onlyVehicle?.reg_no,
         driver: onlyDriver?.name,
         totals: {
-          tasks: total((r) => r.tasks),
+          // A task swapped between two vehicles counts on each vehicle's row but once here.
+          tasks: new Set(pieces.filter((p) => vehicleIds.includes(p.vehicle_id)).map((p) => p.task_id)).size,
           task_km: total((r) => r.task_km),
           fuel_litres: Math.round(total((r) => r.fuel_litres) * 100) / 100,
           fuel_lkr: total((r) => r.fuel_lkr ?? 0),

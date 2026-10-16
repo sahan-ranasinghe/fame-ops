@@ -9,6 +9,7 @@
 //     or under half the planned drive time, asks "Check the reading" (the server flags it the same way).
 
 import { distanceKm } from './format';
+import { colomboDate } from './time';
 import type { TaskStop, TaskWithStops } from './types';
 
 export const ARRIVE_WITHIN_M = 300;
@@ -77,8 +78,53 @@ export interface EarlyFinish {
 }
 
 /** The odometer against the plan at Complete: the numbers to ask about, or null when it looks right. */
+/**
+ * The reading the end is checked against: the task's start, or after a vehicle swap (Phase 7) the start of the
+ * stretch in the vehicle the driver has now. Null while that start reading is still to be entered.
+ */
+export function stretchStartKm(task: Pick<TaskWithStops, 'start_odometer_km' | 'task_vehicle_segments'>): number | null {
+  const segments = task.task_vehicle_segments ?? [];
+  if (segments.length === 0) return task.start_odometer_km;
+  return [...segments].sort((a, b) => a.seq - b.seq)[segments.length - 1].start_odometer_km;
+}
+
+/**
+ * The task's km with this end reading: end − start, or after a swap the earlier stretches added to the one in the
+ * vehicle now (the server's task_km does the same). Null when a reading of an earlier stretch is still missing.
+ */
+export function taskKmSoFar(task: Pick<TaskWithStops, 'start_odometer_km' | 'task_vehicle_segments'>, endKm: number): number | null {
+  const segments = [...(task.task_vehicle_segments ?? [])].sort((a, b) => a.seq - b.seq);
+  if (segments.length === 0) return task.start_odometer_km == null ? null : endKm - task.start_odometer_km;
+  let km = 0;
+  for (const [i, s] of segments.entries()) {
+    const end = i === segments.length - 1 ? endKm : s.end_odometer_km;
+    if (s.start_odometer_km == null || end == null) return null;
+    km += end - s.start_odometer_km;
+  }
+  return km;
+}
+
+/** The swap's readings the driver still owes: the old vehicle's end, the new one's start (Phase 7). */
+export function swapReadingsWaiting(task: Pick<TaskWithStops, 'task_vehicle_segments'>): {
+  oldEnd: { vehicleId: string; startKm: number | null } | null;
+  newStart: { vehicleId: string } | null;
+} {
+  const segments = [...(task.task_vehicle_segments ?? [])].sort((a, b) => a.seq - b.seq);
+  const closed = segments.filter((s) => s.to_at !== null && s.end_odometer_km === null);
+  const last = segments[segments.length - 1];
+  return {
+    oldEnd: closed.length > 0 ? { vehicleId: closed[closed.length - 1].vehicle_id, startKm: closed[closed.length - 1].start_odometer_km } : null,
+    newStart: last && last.seq > 1 && last.start_odometer_km === null ? { vehicleId: last.vehicle_id } : null,
+  };
+}
+
+/** A clock-out the server made on an earlier day (the first cut-off run) is silent: no notice, no notification. */
+export function dutyEndIsToday(endedAt: string, now: number): boolean {
+  return colomboDate(endedAt) === colomboDate(now);
+}
+
 export function earlyFinish(
-  task: Pick<TaskWithStops, 'plan_json' | 'start_odometer_km' | 'started_at'>,
+  task: Pick<TaskWithStops, 'plan_json' | 'start_odometer_km' | 'started_at' | 'task_vehicle_segments'>,
   endKm: number,
   now: number,
 ): EarlyFinish | null {
@@ -89,7 +135,9 @@ export function earlyFinish(
   const plannedKm = kms.length > 0 ? kms.reduce((a, b) => a + b, 0) : null;
   const plannedMinutes = toStops.reduce((sum, l) => sum + (typeof l.minutes === 'number' ? l.minutes : 0), 0);
   if (plannedKm === null || plannedKm < EARLY_MIN_PLANNED_KM || task.start_odometer_km == null || !task.started_at) return null;
-  const km = endKm - task.start_odometer_km;
+  // After a vehicle swap the km are the stretches added up; a reading still missing means no question.
+  const km = taskKmSoFar(task, endKm);
+  if (km === null) return null;
   const minutes = Math.round((now - new Date(task.started_at).getTime()) / 60000);
   const early = km < 0.7 * plannedKm || (plannedMinutes > 0 && minutes < 0.5 * plannedMinutes);
   return early ? { km, plannedKm: Math.round(plannedKm * 10) / 10, minutes, plannedMinutes: Math.round(plannedMinutes) } : null;

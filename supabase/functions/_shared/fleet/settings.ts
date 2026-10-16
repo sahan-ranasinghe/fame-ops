@@ -27,6 +27,8 @@ export interface Settings {
   road_factor: number;
   accept_within_min: number;
   accept_before_leave_min: number;
+  /** Phase 7 (§19): the driver's one "Accept or decline" reminder, this many minutes after the task was sent. */
+  accept_reminder_min: number;
   rush_hour: RushHour;
   /** Off = every booking needs a driver: the "A driver is needed" box and the custodian-drives path are hidden. */
   self_drive_allowed: boolean;
@@ -87,13 +89,15 @@ export type MapMatchingProvider = "none" | "google_roads" | "osrm";
 export const MAP_MATCHING_PROVIDERS: MapMatchingProvider[] = ["none", "google_roads", "osrm"];
 
 export const SETTINGS_DEFAULTS: Settings = {
-  dwell_min: { "pickup.people": 10, "pickup.goods": 15, "drop.people": 5, "drop.goods": 15, visit: 60, documents: 10, default: 10 },
+  // Phase 7 (§17): pickup and drop 5 minutes, a visit 1 hour; a place's usual time comes first.
+  dwell_min: { pickup: 5, drop: 5, visit: 60, default: 5 },
   buffer_min: 15,
   base_place_id: null,
   avg_speed_kmh: 35,
   road_factor: 1.3,
-  accept_within_min: 30,
-  accept_before_leave_min: 60,
+  accept_within_min: 15,
+  accept_before_leave_min: 30,
+  accept_reminder_min: 5,
   rush_hour: {
     factor: 1.3,
     centre: { lat: 6.9344, lng: 79.8428 },
@@ -137,8 +141,10 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   base_place_id: "The base place (the head office): the start and the return of a trip",
   avg_speed_kmh: "Average speed for the estimate when no routing key is set",
   road_factor: "Road distance = straight line × this, for the estimate",
-  accept_within_min: "A driver should accept a task within this many minutes of receiving it",
-  accept_before_leave_min: "… and at the latest this many minutes before the leave-by time",
+  accept_within_min: "The accept window: a driver accepts a task within this many minutes of receiving it",
+  accept_before_leave_min:
+    "… and at the latest this many minutes before the leave-by time; after either, the task needs a driver (the office is told)",
+  accept_reminder_min: "The driver's one reminder to accept or decline, this many minutes after the task was sent",
   rush_hour: "Rush hour: the factor on legs that start or end within the radius of the centre during the bands (weekdays)",
   self_drive_allowed:
     "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
@@ -204,6 +210,7 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       return number(value, key, 1, 3);
     case "accept_within_min":
     case "accept_before_leave_min":
+    case "accept_reminder_min":
       return number(value, key, 1, 1440, true);
     case "self_drive_allowed":
       if (typeof value !== "boolean") throw new ToolError("self_drive_allowed: true or false.");

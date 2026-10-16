@@ -9,6 +9,8 @@ import { contactLinks, mapsPoint } from "../format.ts";
 import { ACTIVE, scopeOf, syncIssuesIfStale } from "../issues.ts";
 import { ago, colomboDate, colomboDateTime, dayRange } from "../time.ts";
 import { realDate, tool, zDate } from "../tool.ts";
+import { hasAny } from "../permissions.ts";
+import { needsDriverList } from "./tasks.ts";
 
 const REMINDER_DAYS = 14;
 
@@ -20,7 +22,8 @@ export const fleetOverview = tool({
     "outside tasks, service and documents due, licences, km allowance, rental ends, garage bookings, a running task's signal, late " +
     "starts, running late, tasks not accepted or declined, requests waiting, failed pushes or routing calls), each with its issue_id for " +
     "update_issue. The task counts follow `date`; everything else describes now. needs_attention is answered in full with the issues " +
-    "permission, with the task items only with assign_tasks, and empty otherwise.",
+    "permission, with the task items only with assign_tasks, and empty otherwise. First, for approve or assign_tasks, needs_driver: the " +
+    "tasks declined or not accepted in time, with the reason, the minutes to the start and the best free driver.",
   readOnly: true,
   input: z.object({ date: zDate.optional().describe("Day for the task counts. Default: today") }),
   async run({ date }, { db, now, actor }) {
@@ -111,8 +114,10 @@ export const fleetOverview = tool({
       on_the_road: onTheRoad,
       needs_attention: shown.map(({ scope: _scope, ...item }) => item),
     };
+    // Phase 7 (§19): the tasks that need a driver, for the people who can give them one (the red block at the top).
+    const needsDriver = hasAny(actor.permissions, ["approve", "assign_tasks"]) ? await needsDriverList(db, refs, now) : [];
     return {
-      result,
+      result: needsDriver.length ? { needs_driver: { count: needsDriver.length, tasks: needsDriver }, ...result } : result,
       summary:
         `${onRoadVehicles}/${vehicles.length} on the road, ${result.tasks.total} tasks, ${waiting.length} requests waiting, ${shown.length} reminders` +
         (shown.length !== attention.length ? ` shown of ${attention.length}` : ""),

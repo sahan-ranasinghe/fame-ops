@@ -23,6 +23,7 @@ export type NotifyEvent =
   | "task.declined"
   | "task.not_accepted"
   | "task.stop_skipped"
+  | "task.vehicle_needed"
   | "issue.opened"
   | "issue.assigned"
   | "vehicle.booked"
@@ -49,16 +50,24 @@ export const EVENTS: readonly EventInfo[] = [
     needs: ["approve"],
   },
   { event: "request.decided", label: "Your request is decided", text: "A request you made is approved or declined", needs: ["request"] },
+  // Phase 7 (§19): the dispatchers, the person who assigned the task and the requester (on their own request's link).
   {
     event: "task.declined",
     label: "A driver can't do a task",
     text: "A driver declines a task: it needs another driver",
-    needs: ["approve", "assign_tasks"],
+    needs: ["approve", "assign_tasks", "request"],
   },
   {
     event: "task.not_accepted",
     label: "A task is not accepted in time",
-    text: "The driver has not accepted a task that leaves soon",
+    text: "The driver has not accepted a task within the accept window: it needs a driver",
+    needs: ["approve", "assign_tasks", "request"],
+  },
+  // Phase 7: written in SQL by the trigger vehicle_reports_need_vehicle ("I need another vehicle" on a breakdown or accident).
+  {
+    event: "task.vehicle_needed",
+    label: "A driver needs another vehicle",
+    text: "A breakdown or an accident during a task: the driver asks for another vehicle",
     needs: ["approve", "assign_tasks"],
   },
   // Phase 7: written in SQL by the trigger task_stops_skipped (a driver's skip, with the reason).
@@ -124,8 +133,10 @@ export interface Person {
 export interface RecipientContext {
   /** The person who caused the event: never told about their own action. */
   actor?: string | null;
-  /** request.decided: who asked. */
+  /** request.decided, task.declined / task.not_accepted: who asked. */
   requester?: string | null;
+  /** task.declined / task.not_accepted: who assigned the task. */
+  assigner?: string | null;
   /** issue.assigned: who got it. */
   assignee?: string | null;
   /** vehicle.* and booking.changed: who looks after the vehicle. */
@@ -145,6 +156,10 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
       break;
     case "task.declined":
     case "task.not_accepted":
+      // The dispatchers, plus the person who assigned it and the requester (the SQL writes them; listed here for the rule).
+      ids = [...holders("approve", "assign_tasks"), ...[ctx.assigner, ctx.requester].flatMap((id) => id ? [id] : [])];
+      break;
+    case "task.vehicle_needed":
       ids = holders("approve", "assign_tasks");
       break;
     case "task.stop_skipped":

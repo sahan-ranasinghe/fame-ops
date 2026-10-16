@@ -7,11 +7,14 @@ import type { Json } from "../database.types.ts";
 import type { Db, Row } from "../db.ts";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { freeAt } from "../availability.ts";
+import { driverRows } from "./driverRows.ts";
 import { DECLINE_TEXT } from "../decline.ts";
 export { DECLINE_TEXT };
 import { basePoint, type Eta, taskEta } from "../eta.ts";
 import {
+  assignCheck,
   assignWarnings,
+  type Conflict,
   type Employee,
   findDriver,
   findVehicle,
@@ -27,7 +30,7 @@ import {
   type Vehicle,
 } from "../fleet.ts";
 import { centsToLkr, contactLinks, mapsDirections, mapsPoint, telLink, waLink } from "../format.ts";
-import { GPS_KM_NOTE, type Point, summariseRoute } from "../geo.ts";
+import { GPS_KM_NOTE, haversineKm, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { videoCard, videoLinks } from "../videos.ts";
 import {
@@ -94,6 +97,58 @@ export function activeDriver(refs: Refs, typed: string): Employee {
   return driver;
 }
 
+/** The vehicle a task gets when only the driver is named (Phase 7, §3): the one they hold today, else their regular one. */
+export function defaultVehicleFor(refs: Refs, driver: Employee): { vehicle: Vehicle; why: string } | null {
+  const first = driver.name.split(" ")[0];
+  const today = driver.current_vehicle_id ? refs.veh.get(driver.current_vehicle_id) : undefined;
+  if (today?.active) return { vehicle: today, why: `${first}'s vehicle today` };
+  const regular = refs.vehicles.find((v) => v.active && v.regular_driver_id === driver.id);
+  return regular ? { vehicle: regular, why: `${first}'s regular vehicle` } : null;
+}
+
+/** What the office chose against the default, kept on the task: "Vehicle changed by Palitha: WP X instead of Kamal's Axio". */
+export interface VehicleChoice {
+  default_vehicle_id: string;
+  default_reg_no: string;
+  why: string;
+  chosen_vehicle_id: string;
+  chosen_reg_no: string;
+  by: string;
+  at: string;
+}
+
+/** The vehicle for a driver: as typed, else the default; and the choice when it differs from the default. */
+export function pickVehicle(refs: Refs, driver: Employee, typed: string | undefined, by: string, now: Date) {
+  const fallback = defaultVehicleFor(refs, driver);
+  if (!typed) {
+    if (!fallback) {
+      throw new ToolError(`Pick a vehicle: ${driver.name} holds none today and has no regular vehicle.`);
+    }
+    return { vehicle: fallback.vehicle, why: fallback.why, choice: null as VehicleChoice | null };
+  }
+  const vehicle = activeVehicle(refs, typed);
+  const choice: VehicleChoice | null = fallback && fallback.vehicle.id !== vehicle.id
+    ? {
+      default_vehicle_id: fallback.vehicle.id,
+      default_reg_no: fallback.vehicle.reg_no,
+      why: fallback.why,
+      chosen_vehicle_id: vehicle.id,
+      chosen_reg_no: vehicle.reg_no,
+      by,
+      at: now.toISOString(),
+    }
+    : null;
+  return { vehicle, why: fallback?.vehicle.id === vehicle.id ? fallback.why : "chosen", choice };
+}
+
+/** "Vehicle changed by Palitha: WP CAB-4521 instead of Kamal's regular vehicle WP KL-1234". */
+export function vehicleChoiceText(choice: unknown): string | undefined {
+  const c = choice as Partial<VehicleChoice> | null;
+  if (!c?.chosen_reg_no) return undefined;
+  return `Vehicle changed by ${c.by ?? "the office"}: ${c.chosen_reg_no} instead of ${c.why ?? "the default"} ${c.default_reg_no ?? ""}`
+    .trim();
+}
+
 export function activeVehicle(refs: Refs, typed: string): Vehicle {
   const vehicle = findVehicle(refs, typed);
   if (!vehicle.active) throw new ToolError(`${vehicle.reg_no} is not active. Use update_vehicle first.`);
@@ -134,6 +189,9 @@ export const zStart = z.object({
   address: zText(240).optional(),
   lat: zLat.optional(),
   lng: zLng.optional(),
+  passengers: z.boolean().optional().describe(
+    "Passengers get in at the start: it becomes Stop 1, a pickup there (no leg to it; marked arrived when the task starts)",
+  ),
 }).describe("Where the driver leaves from. Default: the base place (fleet settings)");
 
 export interface ResolvedStop {
@@ -152,7 +210,13 @@ export interface ResolvedStop {
   pin_from: "place" | "town" | "given" | "google" | null;
   planned_arrive_at?: string;
   planned_depart_at?: string;
+  /** Phase 7 (§11): the pickup at the start ("Passengers get in here"). */
+  is_start: boolean;
+  /** Phase 7 (§17): where the time at the stop came from: chosen, the place's usual time, or the default by type. */
+  dwell_source: DwellSource;
 }
+
+export type DwellSource = "chosen" | "place" | "default";
 
 export interface ResolvedStart {
   place_id: string | null;
@@ -212,6 +276,8 @@ export async function resolveStops(
         arrive_by: arriveByIso(day, s.arrive_by),
         note: s.note ?? null,
         pin_from: "google",
+        is_start: false,
+        dwell_source: s.dwell_min != null ? "chosen" : "default",
       });
       continue;
     }
@@ -240,10 +306,13 @@ export async function resolveStops(
       address: place?.address ?? s.address ?? null,
       lat,
       lng,
-      dwell_min: s.dwell_min ?? null,
+      // The time at the stop: as given, else the place's usual time (the last one used there), else the default.
+      dwell_min: s.dwell_min ?? place?.usual_dwell_min ?? null,
       arrive_by: arriveByIso(day, s.arrive_by),
       note: s.note ?? null,
       pin_from: pinFrom,
+      is_start: false,
+      dwell_source: s.dwell_min != null ? "chosen" : place?.usual_dwell_min != null ? "place" : "default",
     });
   }
   return out;
@@ -321,6 +390,7 @@ export async function makePlan(db: Db, settings: Settings, p: PlanRequest): Prom
     point: point(s),
     dwell_min: s.dwell_min,
     arrive_by: s.arrive_by,
+    at_start: s.is_start,
   }));
   const startPoint = p.origin ?? point(p.start);
   const input: PlanInput = {
@@ -410,8 +480,94 @@ export function planSummary(plan: Plan | null | undefined, stopNames: Map<number
   };
 }
 
-function stopCard(s: ResolvedStop | TaskStop) {
+const STOP_TYPE: Record<string, string> = { pickup: "Pickup", drop: "Drop", visit: "Visit" };
+
+/** One item of the plan as a timeline (Phase 7, §17): the leave time, each stop with its time there, each leg. */
+export type TimelineItem =
+  | { kind: "leave"; at: string; source: string }
+  | {
+    kind: "stop";
+    n: number;
+    label: string;
+    place: string;
+    planned_arrive: string;
+    planned_leave: string;
+    arrive_by?: string;
+    late_min?: number;
+    dwell_min: number;
+    dwell_source?: string;
+    is_start?: boolean;
+  }
+  | {
+    kind: "leg";
+    from_n: number | "start";
+    to_n: number | "base";
+    km: number;
+    minutes: number;
+    source: string;
+    rush_factor?: number;
+    via_expressway?: boolean;
+  };
+
+/** The plan as a timeline: leave, then each leg and stop in order, then the totals. */
+export function planTimeline(
+  plan: Plan | null | undefined,
+  stops: { seq: number; type: string; place_name: string; dwell_source?: string | null; is_start?: boolean }[],
+) {
+  if (!plan || !Array.isArray(plan.legs)) return undefined;
+  const order = new Map(stops.map((st, i) => [st.seq, i + 1]));
+  const items: TimelineItem[] = [{ kind: "leave", at: colomboTime(plan.leave_by), source: plan.leave_by_source }];
+  const legTo = new Map(plan.legs.filter((l) => l.to_seq !== -1).map((l) => [l.to_seq, l]));
+  const legItem = (l: Plan["legs"][number]): TimelineItem => ({
+    kind: "leg",
+    from_n: l.from_seq === 0 ? "start" : order.get(l.from_seq) ?? l.from_seq,
+    to_n: l.to_seq === -1 ? "base" : order.get(l.to_seq) ?? l.to_seq,
+    km: l.km,
+    minutes: Math.round(l.minutes),
+    source: l.source,
+    rush_factor: l.factor !== 1 ? l.factor : undefined,
+    via_expressway: l.via_expressway ?? undefined,
+  });
+  for (const st of stops) {
+    const planned = plan.stops.find((x) => x.seq === st.seq);
+    const leg = legTo.get(st.seq);
+    if (leg) items.push(legItem(leg));
+    if (!planned) continue;
+    const n = order.get(st.seq)!;
+    items.push({
+      kind: "stop",
+      n,
+      label: stopLabel(n, st),
+      place: st.place_name,
+      planned_arrive: colomboTime(planned.planned_arrive_at),
+      planned_leave: colomboTime(planned.planned_depart_at),
+      arrive_by: planned.arrive_by ? colomboTime(planned.arrive_by) : undefined,
+      late_min: planned.slack_min !== null && planned.slack_min < 0 ? -planned.slack_min : undefined,
+      dwell_min: planned.dwell_min,
+      dwell_source: st.dwell_source ?? undefined,
+      is_start: st.is_start ? true : undefined,
+    });
+  }
+  const back = plan.legs.find((l) => l.to_seq === -1);
+  if (back) items.push(legItem(back));
   return {
+    items,
+    totals: { drive_min: plan.total_drive_min, km: plan.total_km, ends: colomboTime(plan.ends_at) },
+  };
+}
+
+/** "Stop 2 · Drop · Kurunegala site": stops are named by their place in the order (Phase 7, §11), never by seq. */
+export function stopLabel(n: number, s: { type: string; place_name: string }): string {
+  return `Stop ${n} · ${STOP_TYPE[s.type] ?? s.type} · ${s.place_name}`;
+}
+
+function stopCard(s: ResolvedStop | TaskStop, i?: number) {
+  return {
+    n: i !== undefined ? i + 1 : undefined,
+    label: i !== undefined ? stopLabel(i + 1, s) : undefined,
+    is_start: s.is_start ? true : undefined,
+    dwell_source: s.dwell_source ?? undefined,
+    planned_leave: s.planned_depart_at ? colomboTime(s.planned_depart_at) : undefined,
     seq: s.seq,
     type: s.type,
     what: s.what ?? undefined,
@@ -461,6 +617,12 @@ export interface NewTask {
   request?: { id: string; decidedBy: string | null } | { create: BookingRequest; decidedBy: string | null };
   /** The person booking (employee id), so a custodian is not told about their own booking. */
   bookedBy?: string | null;
+  /** Phase 7: the vehicle chosen against the default, the warnings saved past, who assigned it (told when it needs a driver). */
+  vehicleChoice?: VehicleChoice | null;
+  savedWarnings?: string[];
+  assignedBy?: string | null;
+  /** The vehicle used and why ("Kamal's vehicle today", "chosen"). */
+  vehicleWhy?: string;
 }
 
 /** The vehicle_requests row office_book_vehicle inserts before the task (one transaction). */
@@ -480,9 +642,14 @@ export interface BookingRequest {
   note: string | null;
   driver_required: boolean;
   on_behalf_of: string | null;
+  /** Phase 7 (§17): the times at From and To. */
+  from_dwell_min: number | null;
+  to_dwell_min: number | null;
 }
 
 const stopRow = (s: ResolvedStop) => ({
+  is_start: s.is_start,
+  dwell_source: s.dwell_source,
   seq: s.seq,
   type: s.type,
   place_id: s.place_id,
@@ -524,6 +691,12 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
     leave_by_source: t.leaveBySource,
     buffer_min: t.bufferMin,
     plan_json: t.plan as unknown as Json,
+    vehicle_choice: (t.vehicleChoice ?? null) as unknown as Json,
+    warnings:
+      (t.savedWarnings?.length
+        ? t.savedWarnings.map((text) => ({ text, by: t.createdBy ?? "the office", at: new Date().toISOString() }))
+        : null) as unknown as Json,
+    assigned_by_employee_id: t.assignedBy ?? null,
   };
   let taskId: string;
   let requestId: string | undefined;
@@ -590,10 +763,13 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
       leave_by_source: t.leaveBySource,
       driver: t.driver.name,
       vehicle: t.vehicle.reg_no,
+      vehicle_used: t.vehicleWhy ? { reg_no: t.vehicle.reg_no, why: t.vehicleWhy } : undefined,
+      vehicle_changed: vehicleChoiceText(t.vehicleChoice),
       pickup: first.place_name,
       dropoff: t.stops.length > 1 ? last.place_name : undefined,
       stops: t.stops.map(stopCard),
       plan: planSummary(t.plan, names),
+      timeline: planTimeline(t.plan, t.stops),
       projects: t.split.shown.length > 0 ? t.split.shown : "Fame internal (no project)",
       sent: "Sent to the driver's Fame Driver app.",
       warnings,
@@ -619,8 +795,20 @@ export async function prepareTask(db: Db, settings: Settings, now: Date, args: {
   leaveAt: string | null;
   buffer_min?: number;
 }) {
-  const stops = await resolveStops(db, args.day, args);
+  let stops = await resolveStops(db, args.day, args);
   const start = await resolveStart(db, settings, args.start, args.day);
+  const notes: string[] = [];
+  if (args.start?.passengers) {
+    // "Passengers get in here": the start becomes Stop 1, a pickup there (no leg to it).
+    if (!start) throw new ToolError("Passengers get in at the start: give a start place (or set the base place in Settings).");
+    stops = [await startStop(db, start), ...stops.map((st) => ({ ...st, seq: st.seq + 1 }))];
+  } else if (start && stops[0]?.type === "pickup" && samePlace(start, stops[0])) {
+    notes.push(
+      `Same as the start: Stop 1 (${
+        stops[0].place_name
+      }) is a pickup where the trip starts. Tick "Passengers get in here" instead (start.passengers: true).`,
+    );
+  }
   const hasDeadline = stops.some((s) => s.arrive_by);
   if (!args.leaveAt && !hasDeadline) {
     throw new ToolError("Give start_time (or leave_by), or an arrive_by time on a stop so the leave-by time can be planned.");
@@ -634,7 +822,36 @@ export async function prepareTask(db: Db, settings: Settings, now: Date, args: {
     leaveAt: args.leaveAt,
     bufferMin: args.buffer_min ?? null,
   });
-  return { stops, start, plan, leaveBy: plan.leave_by, leaveBySource: plan.leave_by_source };
+  return { stops, start, plan, leaveBy: plan.leave_by, leaveBySource: plan.leave_by_source, notes };
+}
+
+/** Stop 1 at the start place: a pickup of people, with the place's usual time. */
+export async function startStop(db: Db, start: ResolvedStart, seq = 1): Promise<ResolvedStop> {
+  const place = start.place_id ? await placeById(db, start.place_id) : null;
+  const usual = place?.usual_dwell_min ?? null;
+  return {
+    seq,
+    type: "pickup",
+    what: "people",
+    place_id: start.place_id,
+    place_name: start.name,
+    address: place?.address ?? null,
+    lat: start.lat,
+    lng: start.lng,
+    dwell_min: usual,
+    arrive_by: null,
+    note: null,
+    pin_from: start.lat != null ? "place" : null,
+    is_start: true,
+    dwell_source: usual != null ? "place" : "default",
+  };
+}
+
+/** The same place: the same saved place, or pins within 50 m (cars kept in the office basement). */
+export function samePlace(a: { place_id: string | null; lat: number | null; lng: number | null }, b: ResolvedStop): boolean {
+  if (a.place_id && a.place_id === b.place_id) return true;
+  if (a.lat == null || a.lng == null || b.lat == null || b.lng == null) return false;
+  return haversineKm({ lat: a.lat, lng: a.lng }, { lat: b.lat, lng: b.lng }) * 1000 <= 50;
 }
 
 // ---------------------------------------------------------------------------
@@ -731,7 +948,7 @@ export const createTask = tool({
     ),
     end_time: zTime.optional().describe("When the vehicle should be free again, HH:MM the same day"),
     driver: zText(80).describe("Driver's username, code or name"),
-    vehicle: zText(20).describe("Vehicle plate"),
+    vehicle: zText(20).optional().describe("Vehicle plate. Default: the vehicle the driver holds today, else their regular vehicle"),
     ...planFields,
     passengers: z.number().int().min(0).max(80).optional(),
     contact_name: zText(120).optional().describe("Person the driver can call"),
@@ -745,7 +962,8 @@ export const createTask = tool({
     realDate(args.date);
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     const driver = activeDriver(refs, args.driver);
-    const vehicle = activeVehicle(refs, args.vehicle);
+    const picked = pickVehicle(refs, driver, args.vehicle, args.created_by ?? actor.name, now);
+    const vehicle = picked.vehicle;
     const typed = args.leave_by ?? args.start_time;
     const prepared = await prepareTask(db, settings, now, { day: args.date, ...args, leaveAt: typed ? utcIso(args.date, typed) : null });
     const startAt = prepared.leaveBy;
@@ -753,11 +971,11 @@ export const createTask = tool({
     if (endBy && endBy <= startAt) throw new ToolError("end_time must be later than the leave-by time on the same day.");
 
     const split = await resolveSplit(db, args.projects);
-    const warnings = await assignWarnings(db, { driver, vehicle, startAt, endBy });
-    warnings.push(...prepared.plan.warnings.map((w) => w.text));
+    const { warnings, conflicts } = await assignCheck(db, { driver, vehicle, startAt, endBy });
+    warnings.push(...prepared.plan.warnings.map((w) => w.text), ...prepared.notes);
     if (new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
 
-    return await saveTask(db, {
+    const saved = await saveTask(db, {
       title: args.title,
       label: args.label ?? split.label,
       driver,
@@ -779,7 +997,12 @@ export const createTask = tool({
       split,
       createdBy: args.created_by ?? actor.name,
       bookedBy: actor.employeeId,
+      vehicleChoice: picked.choice,
+      savedWarnings: warnings,
+      assignedBy: actor.employeeId,
+      vehicleWhy: picked.why,
     }, warnings);
+    return { ...saved, result: { ...saved.result, conflicts: conflicts.length ? conflicts : undefined } };
   },
 });
 
@@ -797,7 +1020,7 @@ export const planTask = tool({
     vehicle: zText(20).optional(),
     end_time: zTime.optional(),
   }),
-  async run(args, { db, now }) {
+  async run(args, { db, now, actor }) {
     realDate(args.date);
     const settings = await loadSettings(db);
     const prepared = await prepareTask(db, settings, now, {
@@ -805,19 +1028,25 @@ export const planTask = tool({
       ...args,
       leaveAt: args.leave_by ? utcIso(args.date, args.leave_by) : null,
     });
-    const warnings = prepared.plan.warnings.map((w) => w.text);
-    if (args.driver && args.vehicle) {
+    const warnings = [...prepared.plan.warnings.map((w) => w.text), ...prepared.notes];
+    let conflicts: Conflict[] = [];
+    let vehicleUsed: { reg_no: string; why: string } | undefined;
+    if (args.driver) {
       const refs = await loadRefs(db);
       const driver = activeDriver(refs, args.driver);
-      const vehicle = activeVehicle(refs, args.vehicle);
-      warnings.push(
-        ...await assignWarnings(db, {
+      // With a driver and no vehicle, the default one (the driver's today, else the regular one), as saving would use.
+      const vehicle = args.vehicle ? activeVehicle(refs, args.vehicle) : defaultVehicleFor(refs, driver)?.vehicle;
+      if (vehicle) {
+        vehicleUsed = { reg_no: vehicle.reg_no, why: pickVehicle(refs, driver, vehicle.reg_no, actor.name, now).why };
+        const check = await assignCheck(db, {
           driver,
           vehicle,
           startAt: prepared.leaveBy,
           endBy: args.end_time ? utcIso(args.date, args.end_time) : null,
-        }),
-      );
+        });
+        warnings.push(...check.warnings);
+        conflicts = check.conflicts;
+      }
     }
     if (new Date(prepared.leaveBy) < now) warnings.push("The leave-by time is already in the past.");
     const names = new Map(prepared.stops.map((s) => [s.seq, s.place_name]));
@@ -830,7 +1059,10 @@ export const planTask = tool({
         start: prepared.start ? { name: prepared.start.name, has_pin: prepared.start.lat != null } : undefined,
         stops: prepared.stops.map(stopCard),
         plan: planSummary(prepared.plan, names),
+        timeline: planTimeline(prepared.plan, prepared.stops),
         warnings,
+        conflicts: conflicts.length ? conflicts : undefined,
+        vehicle_used: vehicleUsed,
         settings_used: prepared.plan.settings_used,
       },
       summary:
@@ -874,7 +1106,7 @@ export const updateTaskStops = tool({
     const kept = existing.filter((s) => s.status === "arrived" || s.status === "done" || s.status === "skipped");
     const nextSeq = existing.reduce((m, s) => Math.max(m, s.seq), 0) + 1;
     const day = colomboDate(task.start_at);
-    const stops = await resolveStops(db, day, { stops: args.stops }, nextSeq);
+    let stops = await resolveStops(db, day, { stops: args.stops }, nextSeq);
     const start = args.start
       ? await resolveStart(db, settings, args.start, day)
       : (task.start_name
@@ -883,6 +1115,17 @@ export const updateTaskStops = tool({
     const returnToBase = args.return_to_base ?? task.return_to_base;
     const avoidExpressway = args.avoid_expressway ?? task.avoid_expressway;
     const running = task.status === "in_progress";
+    const notes: string[] = [];
+    // "Passengers get in here" on a task not under way: the start becomes the first stop (no arrived stop before it).
+    if (args.start?.passengers && start && kept.length === 0 && !running) {
+      stops = [await startStop(db, start, nextSeq), ...stops.map((st) => ({ ...st, seq: st.seq + 1 }))];
+    } else if (args.start?.passengers) {
+      notes.push("Passengers get in at the start only on a task not under way: the stops were saved without it.");
+    } else if (start && kept.length === 0 && stops[0]?.type === "pickup" && samePlace(start, stops[0])) {
+      notes.push(
+        `Same as the start: Stop 1 (${stops[0].place_name}) is a pickup where the trip starts. Tick "Passengers get in here" instead.`,
+      );
+    }
 
     let origin: PlanPoint | null = null;
     let leaveAt: string | null;
@@ -932,9 +1175,10 @@ export const updateTaskStops = tool({
         plan_version: version,
         leave_by: colomboDayTime(running ? task.leave_by ?? task.start_at : plan.leave_by),
         leave_by_source: running ? task.leave_by_source ?? "manual" : plan.leave_by_source,
-        stops: [...kept.map(stopCard), ...stops.map(stopCard)],
+        stops: [...kept, ...stops].map((st, i) => stopCard(st, i)),
         plan: planSummary(plan, names),
-        warnings: plan.warnings.map((w) => w.text),
+        timeline: planTimeline(plan, [...kept, ...stops]),
+        warnings: [...plan.warnings.map((w) => w.text), ...notes],
         sent: "The driver's app shows the new stops (Task changed).",
       },
       summary: `task ${task.id}: stops replaced (version ${version}), ${stops.length} new, ${kept.length} kept`,
@@ -942,10 +1186,62 @@ export const updateTaskStops = tool({
   },
 });
 
+/**
+ * Tasks that need a driver (Phase 7, §19): declined, or not accepted within the accept window, today and later, the
+ * soonest first, each with the best match for its time and first stop. task_board and fleet_overview list them first.
+ */
+export async function needsDriverList(db: Db, refs: Refs, now: Date) {
+  const rows = unwrap(
+    await db.from("tasks").select("*").not("needs_driver_since", "is", null).in("status", ["assigned", "declined"])
+      .gte("start_at", dayRange(colomboDate(now)).from).order("start_at"),
+    "tasks",
+  );
+  const firstStops = rows.length
+    ? unwrap(
+      await db.from("task_stops").select("task_id, seq, lat, lng, place_name").in("task_id", rows.map((t) => t.id)).neq("status", "removed")
+        .order("seq"),
+      "stops",
+    )
+    : [];
+  return await Promise.all(rows.map(async (t) => {
+    const leave = t.leave_by ?? t.start_at;
+    const minutes = Math.round((new Date(leave).getTime() - now.getTime()) / 60000);
+    const who = refs.emp.get(t.employee_id)?.name ?? "The driver";
+    const declined = t.needs_driver_reason === "declined";
+    const reason = declined ? DECLINE_TEXT[t.declined_reason ?? ""] ?? t.declined_reason ?? "no reason given" : "not accepted in time";
+    const first = firstStops.find((st) => st.task_id === t.id && st.lat != null && st.lng != null);
+    const day = colomboDate(leave);
+    const { best } = await driverRows(
+      db,
+      refs,
+      { from: leave, to: t.end_by, day_end: dayRange(day).to },
+      now,
+      first ? { lat: first.lat!, lng: first.lng! } : null,
+      t.employee_id,
+    );
+    return {
+      task_id: t.id,
+      start: day === colomboDate(now) ? colomboTime(leave) : colomboDayTime(leave),
+      title: t.title,
+      driver: who,
+      kind: t.needs_driver_reason as "declined" | "not_accepted",
+      reason_text: declined ? reason : "Not accepted in time",
+      note: t.declined_note ?? undefined,
+      line: `${who.split(" ")[0]} ${declined ? "declined" : "hasn't accepted"} · ${declined ? reason : "needs a driver"}`,
+      since: t.needs_driver_since ? colomboTime(t.needs_driver_since) : undefined,
+      minutes_to_start: minutes,
+      when: minutes >= 0 ? `in ${minutes} min` : `${-minutes} min late`,
+      best,
+    };
+  }));
+}
+
 export const taskBoard = tool({
   name: "task_board",
   title: "Task board",
-  description: "The day's tasks in four columns (assigned, in progress, completed, declined = needs a driver) with status lines such as " +
+  description: "Tasks that need a driver first (needs_driver: declined, or not accepted within the accept window, today and later, " +
+    "with the reason, minutes to the start and the best free driver), then the day's tasks in four columns (assigned, in progress, " +
+    "completed, declined = needs a driver) with status lines such as " +
     '"Seen by driver 10:42", "Accepted 10:50", "Sent · not opened yet", "Declined (Vehicle problem)", "Started 07:06 · sharing location", ' +
     '"Done 07:55 · 62 km logged", ' +
     'the leave-by time ("Leave by HH:MM"), the number of stops, and for a task under way the live ETA and how late it runs.',
@@ -999,9 +1295,12 @@ export const taskBoard = tool({
       declined: await column("declined"),
     };
     const cancelled = tasks.filter((t) => t.status === "cancelled").length;
+    const needsDriver = await needsDriverList(db, refs, now);
 
     return {
       result: {
+        // Phase 7 (§19): first, the tasks that need a driver (today and later, not only this day).
+        needs_driver: needsDriver.length ? needsDriver : undefined,
         date: day,
         counts: {
           assigned: board.assigned.length,
@@ -1041,7 +1340,7 @@ export const taskDetail = tool({
         if (!own) throw new ToolError("This task did not come from one of your requests.");
       }
     }
-    const [refs, latest, settings, stopsRes, splitRes, odoRes, fuelRes, reportsRes, eventsRes] = await Promise.all([
+    const [refs, latest, settings, stopsRes, splitRes, odoRes, fuelRes, reportsRes, eventsRes, segmentsRes] = await Promise.all([
       loadRefs(db),
       loadLatest(db),
       loadSettings(db),
@@ -1051,8 +1350,10 @@ export const taskDetail = tool({
       db.from("fuel_logs").select("*").eq("task_id", task.id).order("logged_at"),
       db.from("vehicle_reports").select("*").eq("task_id", task.id).order("created_at"),
       db.from("task_assignment_events").select("*").eq("task_id", task.id).order("at").order("id"),
+      db.from("task_vehicle_segments").select("*").eq("task_id", task.id).order("seq"),
     ]);
     const events = unwrap(eventsRes, "assignment history");
+    const segments = unwrap(segmentsRes, "vehicle segments");
     const allStops = unwrap(stopsRes, "stops");
     const stops = live(allStops);
     const removed = allStops.filter((s) => s.status === "removed");
@@ -1159,6 +1460,20 @@ export const taskDetail = tool({
           gps_km_note: gps ? GPS_KM_NOTE : undefined,
           eta: etaCard(eta, stops),
           finish_flag: finishFlagText(task.finish_flag),
+          // Phase 7: the vehicle chosen against the default, the warnings saved past, and whether it needs a driver.
+          vehicle_changed: vehicleChoiceText(task.vehicle_choice),
+          warnings_saved: Array.isArray(task.warnings)
+            ? (task.warnings as { text?: string; by?: string }[]).map((w) => w.by ? `${w.text} (saved by ${w.by})` : w.text ?? "")
+            : undefined,
+          needs_driver: task.needs_driver_since
+            ? {
+              since: colomboDateTime(task.needs_driver_since),
+              reason: task.needs_driver_reason ?? undefined,
+              reason_text: task.needs_driver_reason === "declined"
+                ? DECLINE_TEXT[task.declined_reason ?? ""] ?? task.declined_reason ?? undefined
+                : "Not accepted in time",
+            }
+            : undefined,
           // Reopen (reopen_task): a task completed today, Colombo time.
           can_reopen: task.status === "completed" && !!task.completed_at && colomboDate(task.completed_at) === colomboDate(now)
             ? true
@@ -1170,9 +1485,39 @@ export const taskDetail = tool({
             : undefined,
         },
         plan: planSummary(task.plan_json as Plan | null, names),
-        stops: stops.map((s) => ({
+        timeline: planTimeline(task.plan_json as Plan | null, stops),
+        // Phase 7: a vehicle swap during the task keeps each vehicle's stretch; task km = their sum.
+        segments: segments.length
+          ? segments.map((g) => ({
+            vehicle: refs.veh.get(g.vehicle_id)?.reg_no,
+            from: colomboTime(g.from_at),
+            to: g.to_at ? colomboTime(g.to_at) : undefined,
+            start_km: g.start_odometer_km ?? undefined,
+            end_km: g.end_odometer_km ?? undefined,
+            km: g.start_odometer_km != null && g.end_odometer_km != null ? g.end_odometer_km - g.start_odometer_km : undefined,
+            readings_waiting: g.start_odometer_km == null || (g.to_at != null && g.end_odometer_km == null) ? true : undefined,
+            reason: g.reason ?? undefined,
+            by: g.by_name ?? undefined,
+          }))
+          : undefined,
+        stops: stops.map((s, i) => ({
           id: s.id,
-          ...stopCard(s),
+          ...stopCard(s, i),
+          // Phase 7 (§17): the time at the stop, planned against what happened (Arrived → Done).
+          planned_stay: s.planned_arrive_at && s.planned_depart_at
+            ? {
+              arrive: colomboTime(s.planned_arrive_at),
+              leave: colomboTime(s.planned_depart_at),
+              minutes: Math.round((new Date(s.planned_depart_at).getTime() - new Date(s.planned_arrive_at).getTime()) / 60000),
+            }
+            : undefined,
+          actual_stay: s.arrived_at
+            ? {
+              arrived: colomboTime(s.arrived_at),
+              done: s.done_at ? colomboTime(s.done_at) : undefined,
+              minutes: s.done_at ? Math.round((new Date(s.done_at).getTime() - new Date(s.arrived_at).getTime()) / 60000) : undefined,
+            }
+            : undefined,
           status: s.status,
           arrived: s.arrived_at ? colomboTime(s.arrived_at) : undefined,
           // The driver's phone saw them within 150 m (the arrival nudge), beside their own tap above.

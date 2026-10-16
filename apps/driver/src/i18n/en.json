@@ -275,7 +275,10 @@
     "closed": "Closed",
     "office": "Office: {note}",
     "sentTitle": "Report sent",
-    "sentBody": "The office will see it."
+    "sentBody": "The office will see it.",
+    "needVehicle": "I need another vehicle",
+    "needVehicleHint": "The fleet admins are told at once.",
+    "needVehicleSent": "The office knows you need another vehicle."
   },
   "me": {
     "code": "Employee no.",
@@ -491,5 +494,23 @@
     "checkBody": "The trip is {planned} km, the odometer says {km} km.",
     "correct": "Correct the reading",
     "goOn": "Go on"
+  },
+  "stop": {
+    "label": "Stop {n} · {type}",
+    "short": "Stop {n} · {place}",
+    "pickup": "Pickup",
+    "drop": "Drop",
+    "visit": "Visit",
+    "timeAt": "{from}–{to} at {place}",
+    "start": "Start · passengers get in here"
+  },
+  "swap": {
+    "title": "Vehicle changed: {plate}",
+    "body": "The office moved this task to {plate}. Log both odometers.",
+    "oldEnd": "{plate}: end reading",
+    "newStart": "{plate}: start reading",
+    "logged": "Logged ✓ {km} km",
+    "logTitle": "Odometer at the vehicle change",
+    "stretches": "{km} km in {plate}"
   }
 }

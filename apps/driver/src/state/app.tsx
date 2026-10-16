@@ -163,7 +163,15 @@ interface AppValue {
   completeTask: (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => void;
   logOdometer: (reading: OdometerEntry) => void;
   logFuel: (fuel: FuelEntry, odometerKm: number | null) => void;
-  sendReport: (category: ReportCategory, note: string, photos: LocalPhoto[], taskId: string | null, vehicleId?: string) => void;
+  /** needsVehicle: "I need another vehicle" (a breakdown or accident during a task, Phase 7). */
+  sendReport: (
+    category: ReportCategory,
+    note: string,
+    photos: LocalPhoto[],
+    taskId: string | null,
+    vehicleId?: string,
+    needsVehicle?: boolean,
+  ) => void;
 }
 
 const AppContext = createContext<AppValue | null>(null);
@@ -479,11 +487,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }), [refresh]);
 
   // The server ended the duty (lib/duty.ts stopped location): the screens follow.
-  useEffect(() => onDutyEnded((ended) => {
+  useEffect(() => onDutyEnded((ended, silent) => {
     setSharingState(false);
     setTracking(TRACKING_OFF);
     setDutySince(null);
-    setDutyEnded(ended);
+    if (!silent) setDutyEnded(ended);
     const current = meRef.current;
     if (current?.current_vehicle_id) saveMe({ ...current, current_vehicle_id: null });
   }), [saveMe]);
@@ -938,7 +946,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void flushNow();
   }, [queueFuel]);
 
-  const sendReport = useCallback((category: ReportCategory, note: string, photos: LocalPhoto[], taskId: string | null, vehicleId?: string) => {
+  const sendReport = useCallback((
+    category: ReportCategory,
+    note: string,
+    photos: LocalPhoto[],
+    taskId: string | null,
+    vehicleId?: string,
+    needsVehicle = false,
+  ) => {
     const current = meRef.current;
     const vehicle = vehicleId ?? current?.current_vehicle_id ?? lastVehicleRef.current;
     if (!current || !vehicle) return;
@@ -952,12 +967,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       category,
       note: note.trim() === '' ? null : note.trim(),
       created_at: now,
+      // Sent only when ticked, so a report is the same row as before otherwise.
+      ...(needsVehicle ? { needs_vehicle: true } : {}),
     };
     // The report first, then its photos: a photo may only point at a report that exists.
     enqueue({ kind: 'report', row });
     for (const photo of photos) queuePhoto(photo, 'vehicle_report', current.id, id);
     setReports((list) => {
-      const next = [{ ...row, status: 'open', closed_at: null, office_note: null }, ...list];
+      const next = [{ ...row, needs_vehicle: needsVehicle, status: 'open', closed_at: null, office_note: null }, ...list];
       setJson(KEYS.reports, next);
       return next;
     });

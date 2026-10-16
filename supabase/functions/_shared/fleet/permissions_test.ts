@@ -40,7 +40,8 @@ Deno.test("the backfill map: what each role became, and the labels round-trip", 
 Deno.test("the presets", () => {
   assertEquals(PRESETS.fleet_admin.permissions, PERMISSIONS.filter((p) => p !== "users"));
   assertEquals(PRESETS.dispatcher.permissions, ["view", "request", "assign_tasks"]);
-  assertEquals(PRESETS.requester.permissions, ["request"]);
+  // Phase 7 (§12): any permission brings view with it.
+  assertEquals(PRESETS.requester.permissions, ["view", "request"]);
   assertEquals(PRESETS.viewer.permissions, ["view"]);
 });
 
@@ -51,7 +52,7 @@ Deno.test("who may call what", () => {
   assertEquals(allows(requester, "task_detail"), true);
   assertEquals(allows(requester, "list_places"), true);
   assertEquals(allows(requester, "task_board"), false);
-  assertEquals(allows(requester, "fleet_overview"), false);
+  assertEquals(allows(requester, "fleet_overview"), true); // view, implied (Phase 7, §12)
   const viewer = PRESETS.viewer.permissions;
   assertEquals(allows(viewer, "fleet_overview"), true);
   assertEquals(allows(viewer, "live_drivers"), true);
@@ -79,7 +80,8 @@ Deno.test("who may call what", () => {
   assertEquals(allows(["vehicles"], "mileage_summary"), true);
   assertEquals(allows(["vehicles"], "driver_route"), true);
   assertEquals(allows(["users"], "list_office_users"), true);
-  assertEquals(allows(["users"], "fleet_overview"), false);
+  assertEquals(allows(["users"], "fleet_overview"), false); // the raw list; stored lists are normalised
+  assertEquals(allows(normalisePermissions(["users"]), "fleet_overview"), true);
   assertEquals(allows(["issues"], "list_vehicle_reports"), true);
   assertEquals(allows(["issues"], "update_vehicle_report"), true);
   assertEquals(allows([...PERMISSIONS], "no_such_tool"), false);
@@ -90,6 +92,11 @@ Deno.test("who may call what", () => {
 Deno.test("toolsFor keeps the connector's order; normalise drops unknown words and duplicates", () => {
   const names = TOOLS.map((t) => t.name);
   assertEquals(toolsFor(PRESETS.requester.permissions, names), [
+    "fleet_overview",
+    "live_drivers",
+    "watch_drivers",
+    "list_drivers",
+    "list_vehicles",
     "list_places",
     "search_places",
     "save_place",
@@ -139,6 +146,8 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
   assertEquals(allows(PRESETS.viewer.permissions, "availability"), false);
   assertEquals(toolsFor([...PERMISSIONS], names), names);
   assertEquals(normalisePermissions(["users", "view", "boss", "view", 3]), ["view", "users"]);
+  assertEquals(normalisePermissions(["approve", "boss"]), ["view", "approve"]);
+  assertEquals(normalisePermissions(["boss"]), []);
   assertEquals(normalisePermissions(undefined), []);
 });
 

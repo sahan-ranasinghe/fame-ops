@@ -894,3 +894,37 @@ as $$
     and x.app_version is not distinct from x.prev_version
   group by x.employee_id
 $$;
+
+-- The one-step booking keeps the request's times at From and To too.
+create or replace function public.office_book_vehicle(
+  p_request    jsonb,
+  p_task       jsonb,
+  p_stops      jsonb,
+  p_projects   jsonb default '[]'::jsonb,
+  p_decided_by text default null
+)
+returns jsonb
+language plpgsql
+set search_path = ''
+as $$
+declare
+  v_request_id uuid;
+  v_task_id    uuid;
+begin
+  insert into public.vehicle_requests
+    (requested_by_name, requested_by_employee_id, requested_by_user_id, project_id, project_label,
+     needed_at, back_by, route_from, route_to, need_type, pax, tools, note,
+     driver_required, one_step, seen_at, seen_by, on_behalf_of, from_dwell_min, to_dwell_min)
+  select r.requested_by_name, r.requested_by_employee_id, r.requested_by_user_id, r.project_id, r.project_label,
+         r.needed_at, r.back_by, r.route_from, r.route_to, r.need_type, r.pax, coalesce(r.tools, false), r.note,
+         coalesce(r.driver_required, true), true, now(), p_decided_by, r.on_behalf_of, r.from_dwell_min, r.to_dwell_min
+  from jsonb_to_record(p_request) as r(
+    requested_by_name text, requested_by_employee_id uuid, requested_by_user_id uuid, project_id uuid, project_label text,
+    needed_at timestamptz, back_by timestamptz, route_from text, route_to text, need_type text, pax integer, tools boolean,
+    note text, driver_required boolean, on_behalf_of text, from_dwell_min integer, to_dwell_min integer)
+  returning id into v_request_id;
+
+  v_task_id := public.office_create_task(p_task, p_stops, p_projects, v_request_id, p_decided_by);
+  return jsonb_build_object('request_id', v_request_id, 'task_id', v_task_id);
+end;
+$$;

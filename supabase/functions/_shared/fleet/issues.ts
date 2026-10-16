@@ -48,7 +48,16 @@ export const TASK_KINDS = new Set([
   "vehicle_conflict",
   "arrival_override",
   "completed_early",
+  "vehicle_needed",
 ]);
+
+/** Kinds whose own push already went to a wider group when they happened (Phase 7, §19): no second "critical issue" push. */
+export const TOLD_AT_SOURCE = new Set(["declined", "not_accepted", "vehicle_needed"]);
+const TOLD_EVENT: Record<string, string> = {
+  declined: "task.declined",
+  not_accepted: "task.not_accepted",
+  vehicle_needed: "task.vehicle_needed",
+};
 export const scopeOf = (kind: string): "task" | "fleet" => TASK_KINDS.has(kind) ? "task" : "fleet";
 
 export const KIND_TEXT: Record<string, string> = {
@@ -71,6 +80,7 @@ export const KIND_TEXT: Record<string, string> = {
   app_stopped: "App stopped",
   arrival_override: "Arrived away from the stop",
   completed_early: "Completed early",
+  vehicle_needed: "Another vehicle needed",
   push_failed: "Push failed",
   routing_failed: "Routing failed",
 };
@@ -422,12 +432,13 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           task_id: t.id,
         });
       }
-      if (!t.accepted_at && t.accept_reminder_sent_at) {
+      // Phase 7 (§19): not accepted within the accept window: the task needs a driver (critical, one per task).
+      if (!t.accepted_at && t.needs_driver_reason === "not_accepted") {
         wanted.push({
           kind: "not_accepted",
           ref_key: `accept:${t.id}`,
-          severity: "warning",
-          title: "Not accepted yet",
+          severity: "critical",
+          title: "Not accepted in time · needs a driver",
           detail: `${who(t)} · sent ${ago(t.sent_at, now)} ago`,
           due: `leave by ${colomboDayTime(leaveBy)}`,
           sort_key: -1,
@@ -444,7 +455,8 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
       wanted.push({
         kind: "declined",
         ref_key: `declined:${t.id}`,
-        severity: soonLeave ? "critical" : "warning",
+        // Phase 7 (§19): a task that needs a driver is critical, whenever it leaves.
+        severity: "critical",
         title: `Task declined${t.declined_after_accept ? " after accepting" : ""}: ${reason}`,
         detail: [who(t), t.declined_note].filter(Boolean).join(" · "),
         due: `leave by ${colomboDayTime(leaveBy)} · needs a driver`,
@@ -571,6 +583,35 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     }
   }
 
+  // --- Phase 7: "I need another vehicle" (a breakdown or accident during a task) ------------------------
+  if (taskScope) {
+    let q = db.from("vehicle_reports").select("id, vehicle_id, employee_id, task_id, category, note, created_at").eq("needs_vehicle", true)
+      .not("task_id", "is", null).gte("created_at", new Date(now.getTime() - ms(2)).toISOString());
+    if (scope.task_id) q = q.eq("task_id", scope.task_id);
+    const asks = unwrap(await q, "vehicle reports");
+    const asked = asks.length
+      ? unwrap(await db.from("tasks").select("id, title, status, vehicle_id, employee_id").in("id", asks.map((a) => a.task_id!)), "tasks")
+      : [];
+    for (const a of asks) {
+      const t = asked.find((x) => x.id === a.task_id);
+      // Until the task has another vehicle (the swap) or is no longer running.
+      if (!t || t.status !== "in_progress" || t.vehicle_id !== a.vehicle_id) continue;
+      wanted.push({
+        kind: "vehicle_needed",
+        ref_key: `vehicle_needed:${a.id}`,
+        severity: "critical",
+        title: `Another vehicle needed: ${vehicleLabel(refs.veh.get(a.vehicle_id))}`,
+        detail: [refs.emp.get(a.employee_id)?.name, t.title, a.category.replace("_", " "), a.note].filter(Boolean).join(" · "),
+        due: `since ${colomboTime(a.created_at)}`,
+        sort_key: -4,
+        vehicle_id: a.vehicle_id,
+        employee_id: a.employee_id,
+        task_id: t.id,
+        vehicle_report_id: a.id,
+      });
+    }
+  }
+
   // --- Phase 7: the app stopped by the phone (drivers on duty) ------------------------------------
   if (full) {
     const dayStart = new Date(`${today}T00:00:00+05:30`).toISOString();
@@ -673,6 +714,26 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   return wanted;
 }
 
+/** The "notified" line of an issue told at its source: who got the push (the outbox) and when. */
+async function noteWhoWasTold(db: Db, issueId: string, w: Wanted, now: Date): Promise<void> {
+  const event = TOLD_EVENT[w.kind];
+  if (!event || !w.task_id) return;
+  const rows = unwrap(
+    await db.from("notifications").select("recipient_employee_id, created_at").eq("event", event).eq("payload->>task_id", w.task_id)
+      .order("created_at"),
+    "notifications",
+  );
+  const names = [...new Set(rows.map((r) => r.recipient_employee_id))].filter(Boolean);
+  const people = names.length ? unwrap(await db.from("employees").select("id, name").in("id", names), "employees").map((e) => e.name) : [];
+  await writeEvent(db, issueId, "notified", {
+    actor: "system",
+    note: people.length
+      ? `Told by web push ${colomboTime(rows[0].created_at)}: ${people.join(", ")}`
+      : "Nobody with a browser for notifications to tell (the issue and the board show it)",
+    at: now,
+  });
+}
+
 export interface SyncResult {
   opened: number;
   updated: number;
@@ -764,11 +825,16 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
     }
     await writeEvent(db, data.id, "opened", { actor: "system", to_status: w.status ?? "open", at: now });
     opened += 1;
-    if (w.severity === "critical") critical.push({ id: data.id, title: w.title, detail: w.detail ?? null });
+    if (TOLD_AT_SOURCE.has(w.kind)) {
+      // Phase 7 (§19): the push went out when it happened; the issue's history says who was told and when.
+      await noteWhoWasTold(db, data.id, w, now);
+    } else if (w.severity === "critical") critical.push({ id: data.id, title: w.title, detail: w.detail ?? null });
   }
   for (const { row, patch } of plan.update) {
     unwrap(await db.from("issues").update({ ...patch, updated_at: nowIso }).eq("id", row.id), "issues");
-    if (patch.severity === "critical") critical.push({ id: row.id, title: patch.title ?? row.title, detail: patch.detail ?? row.detail });
+    if (patch.severity === "critical" && !TOLD_AT_SOURCE.has(row.kind)) {
+      critical.push({ id: row.id, title: patch.title ?? row.title, detail: patch.detail ?? row.detail });
+    }
     if (patch.status) {
       await writeEvent(db, row.id, "status", {
         actor: "system",

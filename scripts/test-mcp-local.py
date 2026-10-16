@@ -411,7 +411,7 @@ check(st["ors_autocomplete_daily_cap"] == 2500 and st["ors_autocomplete_per_minu
 print("\n== 1b. Office accounts and permissions ==")
 REQ_EMAIL = f"requester.{uuid.uuid4().hex[:6]}@fame.test"
 cu = tool("create_office_user", {"name": "Test Requester", "email": REQ_EMAIL, "permissions": ["request"]})
-check(cu["created"]["permissions"] == ["request"] and cu["created"]["role"] == "staff" and cu["set_password_link"].startswith("http"),
+check(cu["created"]["permissions"] == ["view", "request"] and cu["created"]["role"] == "staff" and cu["set_password_link"].startswith("http"),
       "create_office_user with permissions ['request']: the role label is derived (staff), a set-password link comes back", json.dumps(cu["created"]))
 cv = tool("create_office_user", {"name": "Test Viewer", "email": f"viewer.{uuid.uuid4().hex[:6]}@fame.test", "role": "viewer"})
 check(cv["created"]["permissions"] == ["view"], "create_office_user with a role only: the role's permissions", json.dumps(cv["created"]))
@@ -1466,8 +1466,8 @@ check(code == 200 and body["processed"] >= 1 and body["sent"] + body["dead"] >= 
 t7 = tool("create_task", {"title": "Airport run · notify", "date": day(2), "start_time": "10:00", "driver": "nuwan.p", "vehicle": "cab4521", "pickup": "Head office", "dropoff": "Airport"})
 code, ans = app.post("rpc/decline_task", {"p_task_id": t7["task_id"], "p_reason": "unwell"})
 row = outbox(f"event = 'task.declined' and recipient_employee_id = '{APPROVER}'")
-check(ans == "declined" and "|queued|Nuwan Perera can't do Airport run · notify|Unwell · leave by " in row and row.endswith(f"|/tasks?task={t7['task_id']}"),
-      "a declined task queues a row for the approver with the driver, the reason, the leave-by time and the task link", row)
+check(ans == "declined" and "|queued|Nuwan declined 'Airport run · notify' " in row and "|Unwell · needs a driver|" in row and row.endswith(f"|/tasks/{t7['task_id']}/edit?driver=1"),
+      "a declined task queues a row for the approver: who declined what and when, the reason, 'needs a driver' and the task's change page", row)
 
 # issue.opened (critical only) → the issues permission; issue.assigned → the assignee.
 rep3 = str(uuid.uuid4())
@@ -1496,7 +1496,7 @@ check(code == 200 and f3 > f1, "the job's own sync runs regardless and records i
 if CHANNEL == "api":
     # The admin's own settings and devices through office-api (what Settings → Notifications does).
     ms = tool("my_notification_settings")
-    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.stop_skipped", "issue.opened", "issue.assigned",
+    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.vehicle_needed", "task.stop_skipped", "issue.opened", "issue.assigned",
                                                  "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed"]
           and all(e["enabled"] for e in ms["events"]) and ms["devices"] == [] and ms["push"]["configured"] is VAPID and (("public_key" in ms["push"]) is VAPID),
           "my_notification_settings: every event on (the admin holds every permission), no devices, push.configured says whether the server has the keys", json.dumps(ms)[:300])
@@ -1695,19 +1695,22 @@ if CHANNEL == "api":
     code, _ = http("PUT", f"{API}/auth/v1/admin/users/{staff_uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": staff_pw})
     staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
-    check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["request"]
-          and sorted(me.get("tools", [])) == ["create_request", "find_project", "get_settings", "list_places", "list_requests", "my_notification_settings",
+    check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["view", "request"]
+          and sorted(me.get("tools", [])) == ["create_request", "find_project", "fleet_overview", "get_settings", "list_drivers", "list_places", "list_requests",
+                                             "list_vehicles", "live_drivers", "my_notification_settings",
                                              "place_detail", "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
-                                             "set_my_notification_settings", "task_detail", "update_request"]
+                                             "set_my_notification_settings", "task_detail", "update_request", "watch_drivers"]
           and me.get("map") == {"package": "open", "places": False},
-          "a requester-only person signs in without a second step and sees only the request tools (and the map: open with no keys)", f"{code} {str(me)[:200]}")
+          "a requester signs in without a second step and sees the request tools plus view's (any permission implies view, Phase 7 §12; the map: open with no keys)",
+          f"{code} {str(me)[:200]}")
     code, body = api_call(staff_token, "task_board", {})
     check(code == 403, "staff cannot see the task board (403)", f"{code} {body}")
     code, body = api_call(staff_token, "get_settings", {})
     check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True, "a requester reads the fleet settings (the request form needs the self-drive switch)", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "my_notification_settings", {})
-    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "vehicle.booked", "vehicle.booking_cancelled", "request.redecided", "booking.changed"],
-          "a requester's notification settings hold their request events and the three booking events", f"{code} {str(body)[:200]}")
+    check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "task.declined", "task.not_accepted", "vehicle.booked", "vehicle.booking_cancelled",
+                                                                          "request.redecided", "booking.changed"],
+          "a requester's notification settings hold their request events (with a task of theirs that needs a driver) and the three booking events", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})
     check(code == 200 and body["result"]["count"] == 0, "staff see none of the office's requests", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "create_request", {"requested_by": "Somebody Else", "date": day(3), "time": "09:00", "route_to": "Galle", "pax": 2})
@@ -1743,7 +1746,7 @@ if CHANNEL == "api":
     code, body = api_call(staff_token, "task_detail", {"task_id": T1})
     check(code == 200, "and any task opens", f"{code} {str(body)[:120]}")
     code, body = api_call(staff_token, "fleet_overview", {})
-    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early") for a in body["result"]["needs_attention"]),
+    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early", "vehicle_needed") for a in body["result"]["needs_attention"]),
           "with assign_tasks the overview's needs-attention holds task items only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
     code, body = api_call(staff_token, "mileage_summary", {})
     check(code == 403, "mileage needs the vehicles permission (403)", f"{code} {str(body)[:120]}")
@@ -1759,7 +1762,7 @@ if CHANNEL == "api":
     code, body = api_call(staff_token, "update_issue", {"id": body["result"]["issues"][0]["id"], "status": "dismissed"})
     check(code == 403 and "issues" in str(body.get("needs", [])), "but cannot change one (403, needs issues)", f"{code} {body}")
     code, body = api_call(staff_token, "fleet_overview", {})
-    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early") for a in body["result"]["needs_attention"]),
+    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early", "vehicle_needed") for a in body["result"]["needs_attention"]),
           "and the overview's needs-attention holds task issues only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
     tool("update_office_user", {"email": staff_email, "permissions": ["request"]})
     code, body = api_call(staff_token, "get_settings", {})

@@ -23,9 +23,15 @@ Deno.test("a decided request goes to the requester only, unless they decided it 
   assertEquals(recipientsFor("request.decided", people, { requester: "someone-else" }), []);
 });
 
-Deno.test("a declined or unaccepted task goes to approve and assign_tasks holders, once each", () => {
+Deno.test("a declined or unaccepted task goes to approve and assign_tasks holders, the assigner and the requester, once each", () => {
   assertEquals(recipientsFor("task.declined", people), ["boss", "fleet", "dispatcher"]);
   assertEquals(recipientsFor("task.not_accepted", people), ["boss", "fleet", "dispatcher"]);
+  assertEquals(recipientsFor("task.declined", people, { assigner: "fleet", requester: "staff" }), ["boss", "fleet", "dispatcher", "staff"]);
+  assertEquals(recipientsFor("task.not_accepted", people, { requester: "staff", actor: "staff" }), ["boss", "fleet", "dispatcher"]);
+});
+
+Deno.test("'I need another vehicle' goes to approve and assign_tasks holders", () => {
+  assertEquals(recipientsFor("task.vehicle_needed", people), ["boss", "fleet", "dispatcher"]);
 });
 
 Deno.test("a critical issue goes to the issues permission; an assigned issue to the assignee, not when they took it themselves", () => {
@@ -48,6 +54,8 @@ Deno.test("the Settings page shows a person the events their permissions can bri
   assertEquals(relevantEvents(["view"]).map((e) => e.event), ["vehicle.booked", "vehicle.booking_cancelled", "booking.changed"]);
   assertEquals(relevantEvents(["request"]).map((e) => e.event), [
     "request.decided",
+    "task.declined",
+    "task.not_accepted",
     "vehicle.booked",
     "vehicle.booking_cancelled",
     "request.redecided",
@@ -57,6 +65,7 @@ Deno.test("the Settings page shows a person the events their permissions can bri
     "request.decided",
     "task.declined",
     "task.not_accepted",
+    "task.vehicle_needed",
     "task.stop_skipped",
     "vehicle.booked",
     "vehicle.booking_cancelled",

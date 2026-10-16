@@ -4,15 +4,13 @@
 // page, the request form's "Assign now" and the task form read it.
 
 import { z } from "zod";
-import { type AvailabilityWindow, driverAvailability, type DriverDay, rankAvailability, type TaskLite } from "../availability.ts";
-import { unwrap } from "../db.ts";
+import type { AvailabilityWindow } from "../availability.ts";
 import { ToolError } from "../db.ts";
-import { taskEta } from "../eta.ts";
-import { loadLatest, loadRefs } from "../fleet.ts";
-import type { Plan } from "../plan.ts";
-import { loadSettings } from "../settings.ts";
+import { loadRefs } from "../fleet.ts";
+import { findPlace } from "./places.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
-import { realDate, tool, zVehicleType } from "../tool.ts";
+import { realDate, tool, zText, zVehicleType } from "../tool.ts";
+import { driverRows } from "./driverRows.ts";
 import { availabilityFor } from "./requests.ts";
 
 /** "YYYY-MM-DD HH:MM" (Colombo) or an ISO time. */
@@ -41,6 +39,9 @@ export const availability = tool({
     until: z.string().optional().describe("Until when: HH:MM the same day, or an ISO time. Default: the rest of the day"),
     need_type: zVehicleType.optional(),
     pax: z.number().int().min(0).max(80).optional(),
+    first_stop: zText(160).optional().describe("The first stop (a saved place or site id): the best match is the nearest free driver"),
+    lat: z.number().min(-90).max(90).optional().describe("Or the first stop's pin"),
+    lng: z.number().min(-180).max(180).optional(),
   }),
   async run(args, { db, now }) {
     const from = parseAt(args.at);
@@ -50,78 +51,14 @@ export const availability = tool({
       : null;
     if (to && to <= from) throw new ToolError("until must be later than at.");
     const w: AvailabilityWindow = { from, to, day_end: dayRange(day).to };
-    const today = colomboDate(now);
-    const todayStart = dayRange(today).from;
 
-    const [refs, latest, settings] = await Promise.all([loadRefs(db), loadLatest(db), loadSettings(db)]);
-    const drivers = refs.employees.filter((e) => e.role === "driver" && e.active);
-    const ids = drivers.map((d) => d.id);
-    const [dayTasksRes, runningRes, openRes, endedRes, eventsRes] = await Promise.all([
-      db.from("tasks").select("*").in("employee_id", ids).in("status", ["assigned", "in_progress"]).gte(
-        "start_at",
-        w.day_end < w.from ? w.from : dayRange(day).from,
-      ).lt("start_at", w.day_end),
-      db.from("tasks").select("*").in("employee_id", ids).eq("status", "in_progress"),
-      db.from("duty_sessions").select("employee_id, started_at").in("employee_id", ids).is("ended_at", null),
-      db.from("duty_sessions").select("employee_id, ended_at").in("employee_id", ids).gte("ended_at", todayStart).order("ended_at", {
-        ascending: false,
-      }).limit(2000),
-      db.from("task_assignment_events").select("employee_id, action").in("employee_id", ids).in("action", ["accepted", "declined"]).gte(
-        "at",
-        todayStart,
-      ),
-    ]);
-    const dayTasks = unwrap(dayTasksRes, "tasks");
-    const running = unwrap(runningRes, "tasks");
-    const open = unwrap(openRes, "duty sessions");
-    const ended = unwrap(endedRes, "duty sessions");
-    const events = unwrap(eventsRes, "assignment history");
-    const runningStops = running.length
-      ? unwrap(
-        await db.from("task_stops").select(
-          "task_id, seq, place_name, type, what, status, lat, lng, dwell_min, arrive_by, planned_depart_at, planned_arrive_at",
-        )
-          .in("task_id", running.map((t) => t.id)).neq("status", "removed").order("seq"),
-        "stops",
-      )
-      : [];
-
-    const lite = (t: typeof dayTasks[number]): TaskLite => {
-      const plan = t.plan_json as Plan | null;
-      return { title: t.title, status: t.status, start_at: t.start_at, end_by: t.end_by, ends_planned: plan?.ends_at ?? null };
-    };
-    const rows = await Promise.all(drivers.map(async (e) => {
-      const run = running.find((t) => t.employee_id === e.id);
-      let current: TaskLite | null = null;
-      if (run) {
-        const stops = runningStops.filter((s) => s.task_id === run.id);
-        const eta = await taskEta(db, run, stops, latest.get(e.id), settings, now);
-        current = { ...lite(run), ends_live: eta?.final_eta_at ?? null };
-      }
-      const counts = events.filter((ev) => ev.employee_id === e.id);
-      const d: DriverDay = {
-        name: e.name,
-        username: e.username,
-        licence_expiry: e.licence_expiry,
-        on_duty_since: open.find((s) => s.employee_id === e.id)?.started_at ?? null,
-        off_duty_since: ended.find((s) => s.employee_id === e.id)?.ended_at ?? null,
-        tasks: dayTasks.filter((t) => t.employee_id === e.id).map(lite),
-        running: current,
-        accepted_today: counts.filter((ev) => ev.action === "accepted").length,
-        declined_today: counts.filter((ev) => ev.action === "declined").length,
-      };
-      // Phase 7: the vehicle the driver holds today (on duty), else their regular one.
-      const held = d.on_duty_since && e.current_vehicle_id ? refs.veh.get(e.current_vehicle_id) : undefined;
-      const regular = held ? undefined : refs.vehicles.find((v) => v.active && v.regular_driver_id === e.id);
-      const vehicle = held
-        ? { reg_no: held.reg_no, source: "on_duty" as const }
-        : regular
-        ? { reg_no: regular.reg_no, source: "regular" as const }
-        : undefined;
-      const row = driverAvailability(d, w, today);
-      // Phase 7: `duty` names the same thing as `state` (on_task | on_duty | off_duty), in the words of live_drivers.
-      return { ...row, duty: row.state, vehicle };
-    }));
+    const refs = await loadRefs(db);
+    const place = args.lat !== undefined && args.lng !== undefined
+      ? { lat: args.lat, lng: args.lng }
+      : args.first_stop
+      ? await findPlace(db, args.first_stop).then((p) => (p?.lat != null && p?.lng != null ? { lat: p.lat, lng: p.lng } : null))
+      : null;
+    const { rows: ranked, best } = await driverRows(db, refs, w, now, place);
 
     const vehicles = await availabilityFor(db, refs, {
       neededAt: from,
@@ -129,12 +66,13 @@ export const availability = tool({
       need_type: args.need_type ?? null,
       pax: args.pax ?? null,
     });
-    const ranked = rankAvailability(rows);
     return {
       result: {
         as_of: colomboDateTime(now),
         window: { from: colomboDayTime(from), until: to ? colomboTime(to) : "end of the day", day },
         drivers: ranked,
+        // Phase 7 (§3): the best match (drivers on duty and free, nearest to the first stop, then the fewest tasks today).
+        best,
         counts: {
           free: ranked.filter((r) => r.free).length,
           on_duty: ranked.filter((r) => r.state !== "off_duty").length,

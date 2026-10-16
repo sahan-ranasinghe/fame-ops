@@ -72,6 +72,37 @@ export interface Overview {
   reminders: { count: number; red?: number; window_days?: number };
   on_the_road: RoadDriver[];
   needs_attention: Attention[];
+  /** Phase 7 (§19): tasks that need a driver (approve or assign_tasks), first on the page. */
+  needs_driver?: { count: number; tasks: NeedsDriverTask[] };
+}
+
+/** A task declined, or not accepted within the accept window (Phase 7, §19): it needs a driver now. */
+export interface NeedsDriverTask {
+  task_id: string;
+  /** "09:00" today, else "Fri 17 Oct 09:00". */
+  start: string;
+  title: string;
+  driver: string;
+  kind: "declined" | "not_accepted";
+  reason_text: string;
+  note?: string;
+  /** "Kamal declined · Vehicle problem" or "Kamal hasn't accepted · needs a driver". */
+  line: string;
+  since?: string;
+  minutes_to_start: number;
+  /** "in 40 min" or "5 min late". */
+  when: string;
+  /** The best free driver for it, with the vehicle they would take. */
+  best?: BestMatch;
+}
+
+/** The best match (Phase 7, §3): on duty and free, nearest to the first stop, then the fewest tasks today. */
+export interface BestMatch {
+  name: string;
+  username?: string | null;
+  vehicle?: { reg_no: string; source: "on_duty" | "regular" };
+  /** "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today" */
+  why: string;
 }
 
 export interface BoardCard {
@@ -109,6 +140,8 @@ export interface Board {
   completed: BoardCard[];
   /** Needs a driver (Phase 5): declined by the driver, not yet reassigned. */
   declined?: BoardCard[];
+  /** Phase 7 (§19): every task that needs a driver, today and later (declined or not accepted in time). */
+  needs_driver?: NeedsDriverTask[];
 }
 
 export interface AssignmentEvent {
@@ -165,6 +198,89 @@ export interface Stop {
   arrival_flag?: "override" | "no_gps" | "no_pin" | "not_arrived" | string;
   arrival_text?: string;
   arrival_distance_m?: number;
+  /** Phase 7 (§11): the stop's place in the order (removed stops not counted) and "Stop 2 · Drop · Kurunegala site". */
+  n?: number;
+  label?: string;
+  /** The start, ticked "Passengers get in here": Stop 1, a pickup with no leg to it. */
+  is_start?: boolean;
+  /** Phase 7 (§17): where the time at the stop came from: chosen, the place's usual time, or the default. */
+  dwell_source?: DwellSource;
+  planned_leave?: string;
+  /** task_detail: the time at the stop planned and as it happened (Arrived → Done). */
+  planned_stay?: { arrive: string; leave: string; minutes: number };
+  actual_stay?: { arrived: string; done?: string; minutes?: number };
+}
+
+export type DwellSource = "chosen" | "place" | "default";
+
+/** The plan as a timeline (Phase 7, §17): leave, then each leg and stop in order, then the drive back. */
+export type TimelineItem =
+  | { kind: "leave"; at: string; source: string }
+  | {
+    kind: "stop";
+    n: number;
+    label: string;
+    place: string;
+    planned_arrive: string;
+    planned_leave: string;
+    arrive_by?: string;
+    late_min?: number;
+    dwell_min: number;
+    dwell_source?: DwellSource;
+    is_start?: boolean;
+  }
+  | {
+    kind: "leg";
+    from_n: number | "start";
+    to_n: number | "base";
+    km: number;
+    minutes: number;
+    source: string;
+    rush_factor?: number;
+    via_expressway?: boolean;
+  };
+
+export interface PlanTimeline {
+  items: TimelineItem[];
+  totals: { drive_min: number; km: number; ends: string };
+}
+
+/** Someone behind an overlapping task, with the links to reach them. */
+export interface ConflictPerson {
+  name: string;
+  phone?: string;
+  call?: string;
+  whatsapp?: string;
+}
+
+/** An overlap as a card (Phase 7, §17): the vehicle or the driver busy then, or the vehicle in the garage. */
+export interface Conflict {
+  kind: "vehicle" | "driver" | "garage";
+  text: string;
+  task?: { id: string; title: string; window: string };
+  requester?: ConflictPerson;
+  driver?: ConflictPerson;
+}
+
+/** The vehicle a task took when none was named (Phase 7, §3): the driver's vehicle today, else their regular one. */
+export interface VehicleUsed {
+  reg_no: string;
+  /** "Kamal's vehicle today", "Kamal's regular vehicle", or "chosen". */
+  why: string;
+}
+
+/** One vehicle's stretch of a task when the office swapped the vehicle during it (Phase 7, §2 addition). */
+export interface TaskSegment {
+  vehicle?: string;
+  from: string;
+  to?: string;
+  start_km?: number;
+  end_km?: number;
+  km?: number;
+  /** A reading still to come from the driver's phone. */
+  readings_waiting?: boolean;
+  reason?: string;
+  by?: string;
 }
 
 export interface PlanLeg {
@@ -196,6 +312,12 @@ export interface PlanSummary {
 
 export interface PlannedStop {
   seq: number;
+  /** Phase 7 (§11, §17): the stop's place in the order, its label, the start stop, the time at the stop's source. */
+  n?: number;
+  label?: string;
+  is_start?: boolean;
+  dwell_source?: DwellSource;
+  planned_leave?: string;
   type: string;
   what?: string;
   place?: string;
@@ -215,6 +337,10 @@ export interface PlanPreview {
   stops: PlannedStop[];
   plan?: PlanSummary;
   warnings: string[];
+  /** Phase 7 (§17). */
+  timeline?: PlanTimeline;
+  conflicts?: Conflict[];
+  vehicle_used?: VehicleUsed;
 }
 
 export interface TaskEta {
@@ -364,8 +490,18 @@ export interface TaskDetail {
     can_reopen?: boolean;
     /** "WP CAB-4521 taken over from Nuwan 08:40" */
     vehicle_taken?: string;
+    /** Phase 7: "Vehicle changed by Palitha: WP CAB-4521 instead of Kamal's regular vehicle WP KL-1234". */
+    vehicle_changed?: string;
+    /** The warnings the person saved past ("… (saved by Palitha)"). */
+    warnings_saved?: string[];
+    /** Declined, or not accepted within the accept window (§19). */
+    needs_driver?: { since: string; reason?: "declined" | "not_accepted" | string; reason_text?: string };
   };
   plan?: PlanSummary;
+  /** Phase 7 (§17): the plan as a timeline. */
+  timeline?: PlanTimeline;
+  /** Phase 7: a vehicle swap during the task keeps each vehicle's stretch; task km = their sum. */
+  segments?: TaskSegment[];
   stops: Stop[];
   removed_stops?: { seq: number; place: string; removed?: string }[];
   projects: string | ProjectShare[];
@@ -412,6 +548,9 @@ export interface RequestEditFields {
   note?: string;
   driver_required?: boolean;
   on_behalf_of?: string;
+  /** Phase 7 (§17): minutes at the From and To places (empty = the place's usual time, else the default). */
+  from_dwell_min?: number;
+  to_dwell_min?: number;
 }
 
 export interface RequestCard {
@@ -653,6 +792,12 @@ export interface CreateTaskResult {
   plan?: PlanSummary;
   warnings?: string[];
   notes?: string[];
+  /** Phase 7. */
+  stops?: PlannedStop[];
+  timeline?: PlanTimeline;
+  conflicts?: Conflict[];
+  vehicle_used?: VehicleUsed;
+  vehicle_changed?: string;
 }
 
 export interface UpdateStopsResult {
@@ -661,6 +806,9 @@ export interface UpdateStopsResult {
   leave_by?: string;
   plan?: PlanSummary;
   warnings?: string[];
+  /** Phase 7 (§17): the stops in order with their labels, and the plan as a timeline. */
+  stops?: PlannedStop[];
+  timeline?: PlanTimeline;
 }
 
 export interface FleetSettings {
@@ -671,6 +819,8 @@ export interface FleetSettings {
   road_factor: number;
   accept_within_min: number;
   accept_before_leave_min: number;
+  /** Phase 7 (§19): the driver's one reminder, minutes after the task was sent. */
+  accept_reminder_min?: number;
   rush_hour: { factor: number; centre: { lat: number; lng: number }; radius_km: number; bands: { days: number[]; from: string; to: string }[] };
   /** Off = every booking needs a driver (Part 7). */
   self_drive_allowed?: boolean;
@@ -795,6 +945,8 @@ export interface LiveDriver extends StatusFields {
   /** The phone's brand and model ("OPPO CPH2119"). */
   phone?: string;
   task_id?: string;
+  /** Phase 7 (§19): "declined the 09:00 task" or "hasn't accepted the 09:00 task". */
+  task_note?: string;
 }
 
 export type DutyState = "on_task" | "on_duty" | "off_duty";
@@ -1165,12 +1317,16 @@ export interface AvailableDriver {
   busy_with?: string;
   /** Phase 7: the vehicle the driver holds today (on duty), else their regular one. */
   vehicle?: { reg_no: string; source: "on_duty" | "regular" };
+  /** Phase 7 (§3): the place in the best-match ranking (1 = best). */
+  rank?: number;
 }
 
 export interface Availability {
   as_of: string;
   window: { from: string; until: string; day: string };
   drivers: AvailableDriver[];
+  /** Phase 7 (§3): the best match for the window (and the first stop, when given). */
+  best?: BestMatch;
   counts: { free: number; on_duty: number; all: number };
   vehicles: { groups: NonNullable<Suggestions["groups"]>; drivers_free: { name: string; username: string }[]; self_drive_allowed?: boolean };
 }

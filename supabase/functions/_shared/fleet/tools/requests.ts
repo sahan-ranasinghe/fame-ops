@@ -39,9 +39,12 @@ import {
   type BookingRequest,
   changesText,
   changeTask,
+  defaultVehicleFor,
+  pickVehicle,
   prepareTask,
   saveTask,
   type Split,
+  type VehicleChoice,
   zStart,
   zStops,
 } from "./tasks.ts";
@@ -108,6 +111,8 @@ function requestCard(r: VehicleRequest, now: Date, events: RequestEvent[] = []) 
       note: r.note ?? undefined,
       driver_required: r.driver_required,
       on_behalf_of: r.on_behalf_of ?? undefined,
+      from_dwell_min: r.from_dwell_min ?? undefined,
+      to_dwell_min: r.to_dwell_min ?? undefined,
     },
     // An approved booking the requester edited: what changed since it was approved, until it is decided again.
     changed: r.changed_at
@@ -242,6 +247,10 @@ const requestFields = {
   tools: z.boolean().optional().describe("true if tools or equipment travel too"),
   note: zText(1000).optional(),
   driver_required: z.boolean().optional().describe("false when no driver is needed: the vehicle's custodian drives. Default true"),
+  from_dwell_min: z.number().int().min(0).max(1440).optional().describe(
+    "Minutes at the From place (the pickup). Default: its usual time, else 5",
+  ),
+  to_dwell_min: z.number().int().min(0).max(1440).optional().describe("Minutes at the To place. Default: its usual time, else 5 (a drop)"),
 };
 
 export const createRequest = tool({
@@ -289,6 +298,8 @@ export const createRequest = tool({
         note: args.note ?? null,
         driver_required: args.driver_required ?? true,
         on_behalf_of: args.on_behalf_of ?? null,
+        from_dwell_min: args.from_dwell_min ?? null,
+        to_dwell_min: args.to_dwell_min ?? null,
       }).select("*").single(),
       "vehicle request",
     );
@@ -562,11 +573,15 @@ export const decideRequest = tool({
       return { result: { request: await requestCardOf(db, changed[0], now) }, summary: `declined request ${request.id}: ${args.reason}` };
     }
 
-    if (!args.vehicle) {
-      throw new ToolError("To approve, give a vehicle (and a driver, unless the custodian drives). suggest_vehicles shows who is free.");
+    if (!args.vehicle && !args.driver) {
+      throw new ToolError(
+        "To approve, give a driver (the vehicle fills itself: the one they hold today, else their regular one) or a vehicle. " +
+          "suggest_vehicles and availability show who is free.",
+      );
     }
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
-    const vehicle = activeVehicle(refs, args.vehicle);
+    const chosen = chooseVehicle(refs, args.vehicle, args.driver, decidedBy, now);
+    const vehicle = chosen.vehicle;
     const driver = pickDriver(refs, args.driver, request.driver_required, vehicle, settings.self_drive_allowed);
     const warnings = await assignWarnings(db, { driver, vehicle, startAt: request.needed_at, endBy: request.back_by });
     warnings.push(...fitWarnings(vehicle, request));
@@ -581,8 +596,11 @@ export const decideRequest = tool({
     const requesterRow = request.requested_by_employee_id ? refs.emp.get(request.requested_by_employee_id) : undefined;
     const prepared = await prepareTask(db, settings, now, {
       day: colomboDate(request.needed_at),
-      pickup: request.route_from ?? "To be confirmed",
-      dropoff: request.route_to ?? "To be confirmed",
+      // The request's From and To, with the times the requester gave there (Phase 7, §17).
+      stops: [
+        { type: "pickup", place: request.route_from ?? "To be confirmed", dwell_min: request.from_dwell_min ?? undefined },
+        { type: "drop", place: request.route_to ?? "To be confirmed", dwell_min: request.to_dwell_min ?? undefined },
+      ],
       leaveAt: request.needed_at,
     });
     warnings.push(...prepared.plan.warnings.map((w) => w.text));
@@ -611,6 +629,10 @@ export const decideRequest = tool({
       createdBy: decidedBy,
       request: { id: request.id, decidedBy },
       bookedBy: actor.employeeId,
+      vehicleChoice: isDriver(driver) ? chosen.choice : null,
+      savedWarnings: warnings,
+      assignedBy: actor.employeeId,
+      vehicleWhy: chosen.why,
     }, warnings);
     // Every decision bumps the version (the approval itself is written by office_create_task).
     unwrap(await db.from("vehicle_requests").update({ version: request.version + 1 }).eq("id", request.id).select("id"), "vehicle request");
@@ -631,6 +653,30 @@ export const decideRequest = tool({
   },
 });
 
+/**
+ * The vehicle for an approval or a booking (Phase 7, §3): as typed, else the driver's vehicle today or their regular one;
+ * when the office picks another than the driver's default, the choice is kept on the task.
+ */
+function chooseVehicle(refs: Refs, typedVehicle: string | undefined, typedDriver: string | undefined, by: string, now: Date) {
+  if (typedVehicle) {
+    const vehicle = activeVehicle(refs, typedVehicle);
+    const driver = typedDriver ? refs.employees.find((e) => e.role === "driver" && e.active && sameDriver(e, typedDriver)) : undefined;
+    if (driver) {
+      const picked = pickVehicle(refs, driver, typedVehicle, by, now);
+      return { vehicle, why: picked.why as string | undefined, choice: picked.choice };
+    }
+    return { vehicle, why: undefined as string | undefined, choice: null as VehicleChoice | null };
+  }
+  const driver = activeDriver(refs, typedDriver ?? "");
+  const picked = pickVehicle(refs, driver, undefined, by, now);
+  return { vehicle: picked.vehicle, why: picked.why as string | undefined, choice: null as VehicleChoice | null };
+}
+
+const sameDriver = (e: { username: string | null; code: string; name: string }, typed: string) => {
+  const t = typed.trim().toLowerCase();
+  return e.username === t || e.code.toLowerCase() === t || e.name.toLowerCase() === t;
+};
+
 export const bookVehicle = tool({
   name: "book_vehicle",
   title: "Book a vehicle in one step",
@@ -644,7 +690,7 @@ export const bookVehicle = tool({
     requested_by: zText(120).optional().describe("Who asks. Default: you"),
     on_behalf_of: zText(120).optional().describe("The person the vehicle is for, when it is not the asker"),
     ...requestFields,
-    vehicle: zText(20).describe("Plate"),
+    vehicle: zText(20).optional().describe("Plate. Default: the driver's vehicle today, else their regular one"),
     driver: zText(80).optional().describe("Username, code or name; not needed when the custodian drives"),
     title: zText(120).optional().describe("Task title. Default: built from the route"),
     stops: zStops.optional().describe("The task's stops; default: route_from → route_to"),
@@ -662,16 +708,19 @@ export const bookVehicle = tool({
     const who = await requester(db, actor, args.requested_by);
 
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
-    const vehicle = activeVehicle(refs, args.vehicle);
+    if (!args.vehicle && !args.driver) throw new ToolError("Give a driver (the vehicle fills itself) or a vehicle.");
+    const chosen = chooseVehicle(refs, args.vehicle, args.driver, actor.name, now);
+    const vehicle = chosen.vehicle;
     const driverRequired = args.driver_required ?? true;
     const driver = pickDriver(refs, args.driver, driverRequired, vehicle, settings.self_drive_allowed);
     const warnings = await assignWarnings(db, { driver, vehicle, startAt: neededAt, endBy: backBy });
     warnings.push(...fitWarnings(vehicle, args));
     const prepared = await prepareTask(db, settings, now, {
       day: args.date,
-      stops: args.stops,
-      pickup: args.route_from ?? "To be confirmed",
-      dropoff: args.route_to ?? "To be confirmed",
+      stops: args.stops ?? [
+        { type: "pickup", place: args.route_from ?? "To be confirmed", dwell_min: args.from_dwell_min },
+        { type: "drop", place: args.route_to ?? "To be confirmed", dwell_min: args.to_dwell_min },
+      ],
       start: args.start,
       return_to_base: args.return_to_base,
       avoid_expressway: args.avoid_expressway,
@@ -700,6 +749,8 @@ export const bookVehicle = tool({
       note: args.note ?? null,
       driver_required: driverRequired,
       on_behalf_of: args.on_behalf_of ?? null,
+      from_dwell_min: args.from_dwell_min ?? null,
+      to_dwell_min: args.to_dwell_min ?? null,
     };
     const saved = await saveTask(db, {
       title: args.title ?? (args.route_to ? `Trip · ${args.route_to}` : `Trip for ${who.name}`),
@@ -723,6 +774,10 @@ export const bookVehicle = tool({
       plan: prepared.plan,
       split,
       createdBy: actor.name,
+      vehicleChoice: chosen.choice,
+      savedWarnings: warnings,
+      assignedBy: actor.employeeId,
+      vehicleWhy: chosen.why,
       request: { create, decidedBy: actor.name },
       bookedBy: actor.employeeId,
     }, warnings);
@@ -857,6 +912,8 @@ export const updateRequest = tool({
     note: z.string().trim().max(1000).nullable().optional().describe("The note; empty or null clears it"),
     driver_required: z.boolean().optional(),
     on_behalf_of: z.string().trim().max(120).nullable().optional(),
+    from_dwell_min: z.number().int().min(0).max(1440).nullable().optional().describe("Minutes at From; null = the default"),
+    to_dwell_min: z.number().int().min(0).max(1440).nullable().optional().describe("Minutes at To; null = the default"),
   }),
   async run(args, { db, now, actor }) {
     if (args.date) realDate(args.date);
@@ -895,6 +952,12 @@ export const updateRequest = tool({
     const changes = requestDiff(before, after);
     const onBehalfOf = args.on_behalf_of === undefined ? request.on_behalf_of : (args.on_behalf_of || null);
     if (onBehalfOf !== request.on_behalf_of) changes["for"] = { from: request.on_behalf_of, to: onBehalfOf };
+    // Phase 7 (§17): the times at From and To.
+    const fromDwell = args.from_dwell_min === undefined ? request.from_dwell_min : args.from_dwell_min;
+    const toDwell = args.to_dwell_min === undefined ? request.to_dwell_min : args.to_dwell_min;
+    const minText = (m: number | null) => (m == null ? null : `${m} min`);
+    if (fromDwell !== request.from_dwell_min) changes["time at From"] = { from: minText(request.from_dwell_min), to: minText(fromDwell) };
+    if (toDwell !== request.to_dwell_min) changes["time at To"] = { from: minText(request.to_dwell_min), to: minText(toDwell) };
     if (Object.keys(changes).length === 0) throw new ToolError("Nothing to change.");
 
     const nowIso = now.toISOString();
@@ -902,6 +965,8 @@ export const updateRequest = tool({
       await db.from("vehicle_requests").update({
         ...after,
         on_behalf_of: onBehalfOf,
+        from_dwell_min: fromDwell,
+        to_dwell_min: toDwell,
         status: next.status,
         version: request.version + 1,
         previous: before as unknown as Json,
@@ -1044,7 +1109,12 @@ export const redecideRequest = tool({
       ? utcIso(day, colomboTime(request.back_by))
       : null;
     if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
-    const vehicle = change && args.vehicle ? activeVehicle(refs, args.vehicle) : refs.veh.get(task.vehicle_id);
+    // A new driver with no vehicle named takes the vehicle they hold today, else their regular one (Phase 7, §3).
+    const vehicle = change && args.vehicle
+      ? activeVehicle(refs, args.vehicle)
+      : change && args.driver
+      ? defaultVehicleFor(refs, activeDriver(refs, args.driver))?.vehicle ?? refs.veh.get(task.vehicle_id)
+      : refs.veh.get(task.vehicle_id);
     if (!vehicle) throw new ToolError("The task's vehicle no longer exists.");
     const driver = change && args.driver
       ? activeDriver(refs, args.driver)

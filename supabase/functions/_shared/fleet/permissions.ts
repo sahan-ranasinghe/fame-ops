@@ -140,7 +140,8 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
 export const PRESETS: Record<"fleet_admin" | "dispatcher" | "requester" | "viewer", { label: string; permissions: Permission[] }> = {
   fleet_admin: { label: "Fleet admin", permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues"] },
   dispatcher: { label: "Dispatcher", permissions: ["view", "request", "assign_tasks"] },
-  requester: { label: "Requester", permissions: ["request"] },
+  // Phase 7 (§12): any permission implies view, so the Requester preset carries it (view = what a viewer sees).
+  requester: { label: "Requester", permissions: ["view", "request"] },
   viewer: { label: "Viewer", permissions: ["view"] },
 };
 
@@ -176,11 +177,18 @@ export function isPermission(value: unknown): value is Permission {
   return typeof value === "string" && (PERMISSIONS as readonly string[]).includes(value);
 }
 
-/** Known permissions only, each once, in the table's order. */
+/**
+ * Known permissions only, each once, in the table's order. Any permission implies view (Phase 7, §12): view is
+ * exactly what a viewer sees, and every other permission works on top of it.
+ */
 export function normalisePermissions(list: readonly unknown[] | null | undefined): Permission[] {
   const set = new Set((list ?? []).filter(isPermission));
+  if (set.size > 0) set.add("view");
   return PERMISSIONS.filter((p) => set.has(p));
 }
+
+/** The permissions that bring view with them: the form locks the view box while any of these is ticked. */
+export const IMPLIES_VIEW: readonly Permission[] = ["request", "approve", "assign_tasks", "vehicles", "issues", "users"];
 
 /** True when the permissions allow the tool. An unknown tool is allowed to nobody. */
 export function allows(permissions: readonly string[], tool: string): boolean {
