@@ -1,13 +1,17 @@
 // The new-request page (/requests/new): everyone asks in their own name, "On
 // behalf of" names the person it is for when that is someone else (Phase 6);
-// for someone who approves the "Assign now" section (the free vehicles for that
-// day and time in four groups, who's available, one call that makes the request
-// and its task together). Kept as a draft.
-import { type FormEvent, useEffect, useState } from "react";
+// the time at From and at To (Phase 7, §17). For someone who books, the
+// "Assign now" section: the driver first and the vehicle they bring (or one
+// picked from the free vehicles for that day and time in four groups), Start
+// from (the base place, "Passengers get in here"), who's available with the
+// best match, one call that makes the request and its task together. Kept as a
+// draft; a refresh never resets a pick (§10).
+import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import type { BookResult, SettingsResult, Suggestions } from "../data/types";
+import type { BookResult, Suggestions, VehicleUsed } from "../data/types";
+import { useQuery } from "../data/useQuery";
 import { joinDots, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can } from "../transport/types";
@@ -18,14 +22,25 @@ import { LocationSearch } from "../ui/LocationSearch";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { availabilityArgs } from "./availabilityLogic";
-import { AvailabilityPanel } from "./AvailabilityPanel";
+import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
+import { basePlace, StartFrom, startPoint, useFleetSettings } from "./dispatchParts";
+import { DwellPicker } from "./DwellPicker";
 import { bookInput, emptyRequest, type RequestFields, suggestInput, validateNewRequest } from "./requestLogic";
 import { VehicleGroups } from "./requestParts";
+import { newStop, sameAsStart, type StartFields, typeDwell } from "./stopsLogic";
 
-interface Form extends RequestFields {
+interface Form extends RequestFields, StartFields {
+  /** The vehicle picked; "" = the one the driver brings. */
   vehicle: string;
   pickedDriver: string;
+  /** From as picked in the search box (the same-as-start check). */
+  fromPlaceId?: string;
+  fromLat?: number;
+  fromLng?: number;
 }
+
+/** book_vehicle's answer with the Phase 7 fields (the vehicle the driver brought). */
+type Booked = BookResult & { vehicle_used?: VehicleUsed; vehicle_changed?: string };
 
 export function NewRequest() {
   const { me, store, transport } = useFleet();
@@ -34,59 +49,46 @@ export function NewRequest() {
   // Someone who can neither approve nor assign asks in their own name (the server does the same).
   const staff = !can(me, "approve", "assign_tasks");
   const books = me.tools.includes("book_vehicle");
-  const [f, setF, draft] = useFormDraft<Form>("request-new", null, () => ({ ...emptyRequest(today()), vehicle: "", pickedDriver: "" }));
+  const [f, setF, draft] = useFormDraft<Form>("request-new", null, () => ({ ...emptyRequest(today()), vehicle: "", pickedDriver: "", start: "", startPax: false }));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [sug, setSug] = useState<Suggestions | null>(null);
-  const [sugErr, setSugErr] = useState<string | null>(null);
-  const [booked, setBooked] = useState<BookResult | null>(null);
+  const [booked, setBooked] = useState<Booked | null>(null);
+  const settings = useFleetSettings();
   // The fleet switch: with self-drive off every booking needs a driver, and the box is not shown.
-  const [selfDrive, setSelfDrive] = useState(true);
+  const selfDrive = settings.data?.settings.self_drive_allowed !== false;
+  const base = basePlace(settings.data);
+  const dwellSetting = settings.data?.settings.dwell_min;
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
-  useEffect(() => {
-    if (!me.tools.includes("get_settings")) return;
-    let alive = true;
-    void transport.call<SettingsResult>("get_settings", {}).then((s) => {
-      if (!alive || s.settings.self_drive_allowed !== false) return;
-      setSelfDrive(false);
-      setF((x) => ({ ...x, driver: true }));
-    }).catch(() => {});
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transport]);
+  const fields: Form = selfDrive ? f : { ...f, driver: true };
 
-  // The free vehicles for that day and time, fetched a moment after the fields settle.
+  // The free vehicles for that day and time, a moment after the fields settle; the groups stay while new ones come.
   const sugArgs = books ? suggestInput(f) : null;
-  const sugKey = JSON.stringify(sugArgs);
-  useEffect(() => {
-    if (!sugArgs) {
-      setSug(null);
-      return;
-    }
-    let alive = true;
-    const timer = setTimeout(() => {
-      void (async () => {
-        try {
-          const p = await transport.call<Suggestions>("suggest_vehicles", sugArgs);
-          if (!alive) return;
-          setSug(p);
-          setSugErr(null);
-        } catch (e) {
-          if (alive) setSugErr(errText(e as FleetError)[0]);
-        }
-      })();
-    }, 400);
-    return () => { alive = false; clearTimeout(timer); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sugKey, transport]);
+  const sugQ = useQuery<Suggestions>("suggest", "suggest_vehicles", sugArgs, { debounce: 400, keep: true, every: 60_000 });
+  const sug = sugQ.data;
+  const sugErr = sugQ.err ? errText(sugQ.err)[0] : null;
+  const fromStop = { ...newStop("pickup"), place: f.from, placeId: f.fromPlaceId, lat: f.fromLat, lng: f.fromLng };
+  const availArgs = books ? availabilityArgs(f.date, f.time, f.back, f.need, f.pax, f.startPax ? null : f.fromLat !== undefined && f.fromLng !== undefined ? { lat: f.fromLat, lng: f.fromLng } : f.fromPlaceId ? { place: f.from } : null) : null;
+  const avail = useAvailability(availArgs);
 
-  const picked = sug ? [...(sug.groups ? Object.values(sug.groups).flat() : sug.vehicles)].find((v) => v.reg_no === f.vehicle) : undefined;
+  const def = f.pickedDriver ? vehicleFor(avail.data, f.pickedDriver) : null;
+  const vehicle = f.vehicle || def?.reg_no || "";
+  const all = sug ? (sug.groups ? Object.values(sug.groups).flat() : sug.vehicles) : [];
+  const picked = all.find((v) => v.reg_no === vehicle);
   const custodianDrives = selfDrive && !f.driver && !!picked?.assigned_to;
   const freeDrivers = sug?.drivers_free ?? sug?.drivers.filter((d) => /free/.test(d.availability)).map((d) => ({ name: d.name, username: d.username })) ?? [];
+  const pickedName = avail.data?.drivers.find((d) => d.username === f.pickedDriver)?.name;
+  const driverOptions = f.pickedDriver && !freeDrivers.some((d) => d.username === f.pickedDriver)
+    ? [...freeDrivers, { username: f.pickedDriver, name: pickedName ?? f.pickedDriver }]
+    : freeDrivers;
+  const start = startPoint(f, base);
+  const fromIsStart = !!f.from.trim() && sameAsStart(start, fromStop);
+  // A driver pick keeps a vehicle picked by hand; Use suggestion takes the best match with the vehicle they bring.
+  const pickDriver = (username: string) => setF((x) => ({ ...x, pickedDriver: username }));
+  const takeSuggestion = (username: string) => setF((x) => ({ ...x, pickedDriver: username, vehicle: "" }));
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
-    const v = validateNewRequest(f);
+    const v = validateNewRequest(fields);
     if ("error" in v) {
       setErr(v.error);
       return;
@@ -105,7 +107,8 @@ export function NewRequest() {
   }
 
   async function book() {
-    const v = bookInput(f, { vehicle: f.vehicle, driver: f.pickedDriver, hasCustodian: !!picked?.assigned_to });
+    const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
+    const v = bookInput(fields, { vehicle: f.vehicle, driver: custodianDrives ? "" : f.pickedDriver, hasCustodian: !!picked?.assigned_to, defaultVehicle: known }, { fields: f, base, fromIsStart });
     if ("error" in v) {
       setErr(v.error);
       return;
@@ -113,7 +116,7 @@ export function NewRequest() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await transport.call<BookResult>("book_vehicle", v.input);
+      const r = await transport.call<Booked>("book_vehicle", v.input);
       draft.clear();
       setBooked(r);
       toast("Booked");
@@ -130,6 +133,11 @@ export function NewRequest() {
         <PageTop title="Booked" sub={joinDots([booked.vehicle, booked.driver])} backTo="/requests" />
         <div className="card card-b" style={{ display: "grid", gap: 12, maxWidth: 720 }} data-testid="booked">
           <Notice tone="ok"><b>Booked.</b> {booked.request.on_behalf_of ?? booked.request.requested_by} has {booked.vehicle} on {booked.when}{booked.leave_by ? ` · leave by ${booked.leave_by}` : ""}.</Notice>
+          {(booked.vehicle_changed || booked.vehicle_used) && (
+            <p className="muted small" style={{ margin: 0 }} data-testid="vehicle-used">
+              {booked.vehicle_changed ?? `${booked.vehicle_used!.reg_no} · ${booked.vehicle_used!.why === "chosen" ? "as picked" : booked.vehicle_used!.why}`}
+            </p>
+          )}
           <WarningsNote warnings={warnList(booked)} />
           <div className="acts">
             {booked.task_id && me.tools.includes("task_detail") && <Link className="btn" to={`/tasks/${booked.task_id}`}>Open task</Link>}
@@ -159,8 +167,23 @@ export function NewRequest() {
             </div>
           </div>
           <div className="grid2">
-            <div className="field"><label htmlFor="nr-from">From</label><LocationSearch id="nr-from" value={f.from} onText={(text) => set("from", text)} onPick={(p) => set("from", p.name)} /></div>
-            <div className="field"><label htmlFor="nr-to">To</label><LocationSearch id="nr-to" value={f.to} onText={(text) => set("to", text)} onPick={(p) => set("to", p.name)} /></div>
+            <div className="field">
+              <label htmlFor="nr-from">From</label>
+              <LocationSearch id="nr-from" value={f.from} onText={(text) => setF((x) => ({ ...x, from: text, fromPlaceId: undefined, fromLat: undefined, fromLng: undefined }))}
+                onPick={(p) => setF((x) => ({ ...x, from: p.name, fromPlaceId: p.placeId, fromLat: p.lat, fromLng: p.lng }))} />
+              {books && fromIsStart && !f.startPax && (
+                <div className="sub" data-testid="same-as-start" style={{ color: "var(--warn)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <span>Same as the start. Tick ‘Passengers get in here’ instead.</span>
+                  <button type="button" className="btn small" onClick={() => set("startPax", true)}>Tick it</button>
+                </div>
+              )}
+              <DwellPicker id="nr-from-dwell" value={f.fromDwell ?? ""} onChange={(v) => set("fromDwell", v)} fallback={{ min: typeDwell("pickup", dwellSetting), source: "either" }} />
+            </div>
+            <div className="field">
+              <label htmlFor="nr-to">To</label>
+              <LocationSearch id="nr-to" value={f.to} onText={(text) => set("to", text)} onPick={(p) => set("to", p.name)} />
+              <DwellPicker id="nr-to-dwell" value={f.toDwell ?? ""} onChange={(v) => set("toDwell", v)} fallback={{ min: typeDwell("drop", dwellSetting), source: "either" }} />
+            </div>
           </div>
           <div className="grid2">
             <div className="field"><label htmlFor="nr-pax">Passengers</label><input type="number" id="nr-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
@@ -175,31 +198,45 @@ export function NewRequest() {
 
         {books && (
           <div className="card card-b form" data-testid="assign-now">
-            <div className="section-t" style={{ marginBottom: 10 }}>Assign now</div>
+            <div className="section-t" style={{ marginBottom: 10 }}>
+              Assign now{sugQ.updating ? <span className="updated" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}> · Updating…</span> : null}
+            </div>
             {!sugArgs && <p className="muted small" style={{ margin: 0 }}>Fill in the day and the time to see which vehicles are free.</p>}
-            {sugArgs && !sug && !sugErr && <Loading>Finding free vehicles…</Loading>}
+            {sugArgs && sugQ.loading && <Loading>Finding free vehicles…</Loading>}
             {sugErr && <Notice tone="bad">{sugErr}</Notice>}
             {sug && (
               <div className="form">
-                <VehicleGroups sug={sug} name="nr-veh" vehicle={f.vehicle} onPick={(reg) => set("vehicle", reg)} greyGarage />
-                {sug.vehicles.length === 0 && <Empty>No vehicles registered yet.</Empty>}
                 <div className="field">
                   <label htmlFor="nr-driver-pick">Driver</label>
                   {custodianDrives
                     ? <p className="muted small" style={{ margin: 0 }} id="nr-driver-pick">{picked?.assigned_to} drives it (no driver needed).</p>
                     : (
-                      <select id="nr-driver-pick" value={f.pickedDriver} onChange={(e) => set("pickedDriver", e.target.value)}>
+                      <select id="nr-driver-pick" value={f.pickedDriver} onChange={(e) => pickDriver(e.target.value)}>
                         <option value="">Pick a free driver</option>
-                        {freeDrivers.map((d) => <option key={d.username} value={d.username}>{d.name}</option>)}
+                        {driverOptions.map((d) => <option key={d.username} value={d.username}>{d.name}</option>)}
                       </select>
                     )}
                 </div>
+                <div className="lab" id="nr-vehicles">Vehicle</div>
+                {f.pickedDriver && !custodianDrives && (
+                  <p className="hint" style={{ margin: 0 }} data-testid="vehicle-default">
+                    {f.vehicle && def && f.vehicle !== def.reg_no
+                      ? <>Instead of {def.why} {def.reg_no}. <button type="button" className="linkish" onClick={() => set("vehicle", "")}>Use {def.reg_no}</button></>
+                      : def ? <>{def.reg_no} · {def.why}. Pick another below to change it.</>
+                      : <>This driver holds no vehicle today and has no regular one: pick one below.</>}
+                  </p>
+                )}
+                <VehicleGroups sug={sug} name="nr-veh" vehicle={vehicle} onPick={(reg) => set("vehicle", reg)} greyGarage />
+                {sug.vehicles.length === 0 && <Empty>No vehicles registered yet.</Empty>}
+                <StartFrom id="nr-start" value={f} base={base} onChange={(patch) => setF((x) => ({ ...x, ...patch }))}
+                  note={f.startPax ? undefined : "Where the vehicle leaves from."} />
               </div>
             )}
           </div>
         )}
         {books && !custodianDrives && (
-          <AvailabilityPanel args={availabilityArgs(f.date, f.time, f.back, f.need, f.pax)} picked={f.pickedDriver} onPick={(d) => { if (d.username) set("pickedDriver", d.username); }} />
+          <AvailabilityPanel args={availArgs} picked={f.pickedDriver} onPick={(d) => { if (d.username) pickDriver(d.username); }}
+            onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
         )}
         {err && <Notice tone="bad">{err}</Notice>}
         <StickyActions>

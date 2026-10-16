@@ -1,13 +1,14 @@
 // Change a request (/requests/:id/edit, Phase 6): the person who asked (or an
-// approver) changes the day and time, back-by, route, kind of vehicle,
-// passengers, tools, note, whether a driver is needed and who it is for. A
-// waiting request stays waiting; an approved booking becomes "changed" and
-// needs re-approval (the approvers are told). Kept as a draft for this request.
+// approver) changes the day and time, back-by, route and the time at From and
+// To (Phase 7, §17), kind of vehicle, passengers, tools, note, whether a driver
+// is needed and who it is for. A waiting request stays waiting; an approved
+// booking becomes "changed" and needs re-approval (the approvers are told).
+// Kept as a draft for this request.
 import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import type { SettingsResult, UpdateRequestResult } from "../data/types";
+import type { UpdateRequestResult } from "../data/types";
 import { cap, joinDots, requestTone } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
@@ -16,8 +17,11 @@ import { DraftBanner } from "../ui/DraftBanner";
 import { LocationSearch } from "../ui/LocationSearch";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { useFleetSettings } from "./dispatchParts";
+import { DwellPicker } from "./DwellPicker";
 import { useRequest } from "./RequestDetail";
 import { editFields, type RequestFields, updateRequestInput } from "./requestLogic";
+import { typeDwell } from "./stopsLogic";
 
 export function RequestEdit() {
   const { id = "" } = useParams();
@@ -28,7 +32,9 @@ export function RequestEdit() {
   const [f, setF, draft] = useFormDraft<RequestFields | null>("request-edit", id, null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [selfDrive, setSelfDrive] = useState(true);
+  const settings = useFleetSettings();
+  const selfDrive = settings.data?.settings.self_drive_allowed !== false;
+  const dwellSetting = settings.data?.settings.dwell_min;
   const set = <K extends keyof RequestFields>(k: K, v: RequestFields[K]) => setF((x) => (x ? { ...x, [k]: v } : x));
   const was = q ? editFields(q) : null;
 
@@ -37,13 +43,6 @@ export function RequestEdit() {
     if (q && !f) draft.reset(editFields(q));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q?.id, q?.version]);
-  useEffect(() => {
-    if (!me.tools.includes("get_settings")) return;
-    let alive = true;
-    void transport.call<SettingsResult>("get_settings", {}).then((s) => { if (alive && s.settings.self_drive_allowed === false) setSelfDrive(false); }).catch(() => {});
-    return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transport]);
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
@@ -99,8 +98,14 @@ export function RequestEdit() {
             </div>
           </div>
           <div className="grid2">
-            <div className="field"><label htmlFor="re-from">From</label><LocationSearch id="re-from" value={f.from} onText={(text) => set("from", text)} onPick={(p) => set("from", p.name)} /></div>
-            <div className="field"><label htmlFor="re-to">To</label><LocationSearch id="re-to" value={f.to} onText={(text) => set("to", text)} onPick={(p) => set("to", p.name)} /></div>
+            <div className="field">
+              <label htmlFor="re-from">From</label><LocationSearch id="re-from" value={f.from} onText={(text) => set("from", text)} onPick={(p) => set("from", p.name)} />
+              <DwellPicker id="re-from-dwell" value={f.fromDwell ?? ""} onChange={(v) => set("fromDwell", v)} fallback={{ min: typeDwell("pickup", dwellSetting), source: "either" }} />
+            </div>
+            <div className="field">
+              <label htmlFor="re-to">To</label><LocationSearch id="re-to" value={f.to} onText={(text) => set("to", text)} onPick={(p) => set("to", p.name)} />
+              <DwellPicker id="re-to-dwell" value={f.toDwell ?? ""} onChange={(v) => set("toDwell", v)} fallback={{ min: typeDwell("drop", dwellSetting), source: "either" }} />
+            </div>
           </div>
           <div className="grid2">
             <div className="field"><label htmlFor="re-pax">Passengers</label><input type="number" id="re-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>

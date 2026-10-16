@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PlanPreview } from "../data/types";
-import { planLine, planReasons } from "./planLogic";
+import { dwellFallbacks, legText, planLine, planReasons, rowStopNumbers, shiftLabel, stopTimes } from "./planLogic";
 import { newStop, type StopDraft } from "./stopsLogic";
 
 const stop = (place: string, arriveBy = ""): StopDraft => ({ ...newStop("drop"), place, arriveBy });
@@ -46,5 +46,41 @@ describe("why there is no plan", () => {
     expect(r[1].note).toBe(true);
     expect(planReasons(f, null, "The server is busy").map((r) => r.text)).toEqual(["The server is busy"]);
     expect(planReasons(f, preview, null)).toEqual([]);
+  });
+  it("leaves the same-as-start note to the stop row (it has Tick it)", () => {
+    const p = { ...preview, warnings: ['Same as the start: Stop 1 (Head office) is a pickup where the trip starts. Tick "Passengers get in here" instead.'] };
+    expect(planReasons(f, p, null)).toEqual([]);
+  });
+});
+
+describe("the plan as a timeline (Phase 7, §17)", () => {
+  it("a stop: arrive, the time there (usual here), leave; the start stop: leave and passengers", () => {
+    expect(stopTimes({ kind: "stop", n: 2, label: "Stop 2 · Drop · Kurunegala site", place: "Kurunegala site", planned_arrive: "09:00", planned_leave: "10:30", dwell_min: 90, dwell_source: "place" }))
+      .toBe("arrive 09:00 · 1 h 30 (usual here) · leave 10:30");
+    expect(stopTimes({ kind: "stop", n: 1, label: "Stop 1 · Pickup · Head office", place: "Head office", planned_arrive: "07:24", planned_leave: "07:29", dwell_min: 5, is_start: true }))
+      .toBe("leave 07:29 · passengers get in here");
+  });
+  it("a leg: km, drive time and where the road time came from", () => {
+    expect(legText({ kind: "leg", from_n: 1, to_n: 2, km: 94.26, minutes: 75, source: "google" })).toBe("94.3 km · 1 h 15 min · Google traffic");
+    expect(legText({ kind: "leg", from_n: "start", to_n: 1, km: 3, minutes: 9, source: "ors" })).toBe("3 km · 9 min · openrouteservice");
+    expect(legText({ kind: "leg", from_n: 2, to_n: "base", km: 3, minutes: 9, source: "estimate" })).toBe("3 km · 9 min · estimate");
+  });
+  it("numbers follow the stops before the list", () => {
+    expect(shiftLabel("Stop 1 · Drop · Galle", 1, 2)).toBe("Stop 3 · Drop · Galle");
+    expect(shiftLabel("Stop 1 · Drop · Galle", 1, 0)).toBe("Stop 1 · Drop · Galle");
+    const rows = [{ ...newStop("drop"), place: "A" }, newStop("drop"), { ...newStop("visit"), place: "B" }];
+    expect([...rowStopNumbers(rows, 1).values()]).toEqual([2, 3]);
+  });
+  it("each row's first time at the stop: the plan's usual time or default, else the type's default from the setting", () => {
+    const rows = [{ ...newStop("pickup"), place: "Head office" }, { ...newStop("visit"), place: "Kurunegala site", dwell: "30" }, newStop("drop")];
+    const planned = [
+      { seq: 1, type: "pickup", place: "Head office", is_start: true, dwell_min: 5, dwell_source: "default" as const },
+      { seq: 2, type: "pickup", place: "Head office", dwell_min: 12, dwell_source: "place" as const },
+      { seq: 3, type: "visit", place: "Kurunegala site", dwell_min: 30, dwell_source: "chosen" as const },
+    ];
+    const fb = dwellFallbacks(rows, planned, { pickup: 5, drop: 5, visit: 60, default: 5 });
+    expect(fb.get(rows[0].key)).toEqual({ min: 12, source: "place" });
+    expect(fb.get(rows[1].key)).toEqual({ min: 60, source: "default" });
+    expect(fb.get(rows[2].key)).toEqual({ min: 5, source: "default" });
   });
 });

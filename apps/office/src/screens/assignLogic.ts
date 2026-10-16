@@ -1,8 +1,11 @@
 // The Assign-a-task form's rules, kept apart from the screen so they can be
 // tested: what is required, how the project split must add up, and the exact
-// create_task / plan_task arguments (the connector contract).
+// create_task / plan_task arguments (the connector contract). Phase 7: the
+// driver first and the vehicle they bring when none is picked (the call then
+// names no vehicle and the server takes the same one); Start from with
+// "Passengers get in here".
 import { waLink } from "../lib/format";
-import { defaultStops, hasDeadline, type StopDraft, stopsInput } from "./stopsLogic";
+import { defaultStops, hasDeadline, type StartFields, startInput, type StopDraft, stopsInput } from "./stopsLogic";
 
 export interface ProjectRow {
   project: string;
@@ -11,21 +14,17 @@ export interface ProjectRow {
   bad?: boolean;
 }
 
-export interface AssignFields {
+export interface AssignFields extends StartFields {
   title: string;
   date: string;
   /** The leave-by time typed by hand; empty = planned from the stops' deadlines. */
   leaveBy: string;
   stops: StopDraft[];
-  start: string;
-  /** The start picked in the search box (Part 4). */
-  startPlaceId?: string;
-  /** The start picked from Google's place search (Part 5). */
-  startGooglePlaceId?: string;
   returnToBase: boolean;
   avoidExpressway: boolean;
   buffer: string;
   driver: string;
+  /** The vehicle picked; "" = the one the driver brings (their vehicle today, else their regular one). */
   vehicle: string;
   end: string;
   pax: string;
@@ -36,14 +35,19 @@ export interface AssignFields {
 }
 
 export const emptyAssign = (date: string): AssignFields => ({
-  title: "", date, leaveBy: "", stops: defaultStops(), start: "", returnToBase: false, avoidExpressway: false, buffer: "",
+  title: "", date, leaveBy: "", stops: defaultStops(), start: "", startPax: false, returnToBase: false, avoidExpressway: false, buffer: "",
   driver: "", vehicle: "", end: "", pax: "", cname: "", cphone: "", notes: "", whatsapp: false,
 });
 
 export const splitTotal = (rows: ProjectRow[]) => rows.reduce((a, r) => a + (Number(r.percent) || 0), 0);
 
-/** The part of the form the planner needs, as plan_task takes it; null when it cannot be planned yet. */
-export function planInput(f: AssignFields): Record<string, unknown> | null {
+type Base = { id: string; name: string } | null;
+
+/**
+ * The part of the form the planner needs, as plan_task takes it; null when it cannot be planned yet.
+ * `base`: the base place, named only when passengers get in there (otherwise the server takes it by itself).
+ */
+export function planInput(f: AssignFields, base: Base = null): Record<string, unknown> | null {
   const t = (s: string) => s.trim();
   if (!t(f.date)) return null;
   const s = stopsInput(f.stops);
@@ -51,12 +55,8 @@ export function planInput(f: AssignFields): Record<string, unknown> | null {
   if (!t(f.leaveBy) && !hasDeadline(f.stops)) return null;
   const input: Record<string, unknown> = { date: t(f.date), stops: s.stops };
   if (t(f.leaveBy)) input.leave_by = t(f.leaveBy);
-  if (t(f.start) || f.startPlaceId || f.startGooglePlaceId) {
-    input.start = {
-      ...(f.startPlaceId ? { place_id: f.startPlaceId } : f.startGooglePlaceId ? { google_place_id: f.startGooglePlaceId } : {}),
-      ...(t(f.start) ? { place: t(f.start) } : {}),
-    };
-  }
+  const start = startInput(f, base);
+  if (start) input.start = start;
   if (f.returnToBase) input.return_to_base = true;
   if (f.avoidExpressway) input.avoid_expressway = true;
   if (t(f.buffer) !== "") input.buffer_min = Math.max(0, Math.min(600, parseInt(t(f.buffer), 10) || 0));
@@ -66,9 +66,21 @@ export function planInput(f: AssignFields): Record<string, unknown> | null {
   return input;
 }
 
-export function validateAssign(f: AssignFields, rows: ProjectRow[], createdBy?: string): { error: string } | { input: Record<string, unknown> } {
+/**
+ * create_task's arguments, or what is missing. `opts.defaultVehicle`: the vehicle the driver brings (Who's
+ * available); with it no vehicle needs picking and the call names none (the server takes the same one).
+ * null = known to bring none (a vehicle must be picked); undefined = not known yet (the server decides).
+ */
+export function validateAssign(
+  f: AssignFields,
+  rows: ProjectRow[],
+  createdBy?: string,
+  opts: { defaultVehicle?: string | null; base?: Base } = {},
+): { error: string } | { input: Record<string, unknown> } {
   const t = (s: string) => s.trim();
-  const need: [string, string][] = [[t(f.title), "the task"], [t(f.date), "the date"], [t(f.driver), "a driver"], [t(f.vehicle), "a vehicle"]];
+  // The vehicle fills itself when the driver brings one, or when that is not known yet (the server then decides).
+  const fills = !!t(f.driver) && "defaultVehicle" in opts && opts.defaultVehicle !== null;
+  const need: [string, string][] = [[t(f.title), "the task"], [t(f.date), "the date"], [t(f.driver), "a driver"], [t(f.vehicle) || (fills ? "filled" : ""), "a vehicle"]];
   const miss = need.filter(([v]) => !v).map((n) => n[1]);
   if (miss.length) return { error: `Add ${miss.join(", ")}.` };
   const s = stopsInput(f.stops);
@@ -79,7 +91,8 @@ export function validateAssign(f: AssignFields, rows: ProjectRow[], createdBy?: 
   if (used.length && Math.abs(total - 100) > 0.01) {
     return { error: `Project percentages add up to ${total}%. They must total 100%.` };
   }
-  const input: Record<string, unknown> = { ...planInput(f), title: t(f.title), driver: t(f.driver), vehicle: t(f.vehicle) };
+  const input: Record<string, unknown> = { ...planInput(f, opts.base ?? null), title: t(f.title), driver: t(f.driver) };
+  if (t(f.vehicle)) input.vehicle = t(f.vehicle);
   if (t(f.pax) !== "") input.passengers = Math.max(0, Math.min(80, parseInt(t(f.pax), 10) || 0));
   if (t(f.cname)) input.contact_name = t(f.cname);
   if (t(f.cphone)) input.contact_phone = t(f.cphone);

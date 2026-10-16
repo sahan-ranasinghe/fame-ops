@@ -1,7 +1,10 @@
 // Vehicle requests: the new-request form, the one-step booking, the decision,
 // the requester's edit and the decision on a changed booking, and the
-// timeline in words, as the connector expects them.
+// timeline in words, as the connector expects them. Phase 7: the time at the
+// From and To places (§17), the driver first with the vehicle they bring (§3),
+// and the one-step booking's Start from with "Passengers get in here" (§11).
 import type { FieldChanges, RequestEditFields, RequestEvent, RequestTimeline } from "../data/types";
+import { parseDwell, type StartFields, startInput } from "./stopsLogic";
 
 export interface RequestFields {
   /** The person the vehicle is for, when it is not the asker (the request is always in the asker's name). */
@@ -18,11 +21,18 @@ export interface RequestFields {
   note: string;
   /** Unticked = the vehicle's custodian drives (no driver needed). */
   driver: boolean;
+  /** The time at From and at To (minutes or h:mm); "" = the place's usual time, else the default. */
+  fromDwell?: string;
+  toDwell?: string;
 }
 
 export const emptyRequest = (date: string): RequestFields => ({
-  behalf: "", project: "", date, time: "", back: "", need: "", from: "", to: "", pax: "", tools: false, note: "", driver: true,
+  behalf: "", project: "", date, time: "", back: "", need: "", from: "", to: "", pax: "", tools: false, note: "", driver: true, fromDwell: "", toDwell: "",
 });
+
+/** The time at From / To as sent: minutes, null = not chosen, "bad" = not minutes or h:mm up to 12 h. */
+const dwellOf = (s?: string) => parseDwell(s ?? "");
+const DWELL_ERROR = "The time at a stop must be minutes or h:mm, up to 12 h.";
 
 /** The fields both create_request and book_vehicle take. */
 function requestInput(f: RequestFields): Record<string, unknown> {
@@ -38,12 +48,16 @@ function requestInput(f: RequestFields): Record<string, unknown> {
   if (f.tools) input.tools = true;
   if (t(f.note)) input.note = t(f.note);
   if (!f.driver) input.driver_required = false;
+  const fd = dwellOf(f.fromDwell), td = dwellOf(f.toDwell);
+  if (typeof fd === "number") input.from_dwell_min = fd;
+  if (typeof td === "number") input.to_dwell_min = td;
   return input;
 }
 
 export function validateNewRequest(f: RequestFields): { error: string } | { input: Record<string, unknown> } {
   const t = (s: string) => s.trim();
   if (!t(f.date) || !t(f.time)) return { error: "Add the day and the time." };
+  if (dwellOf(f.fromDwell) === "bad" || dwellOf(f.toDwell) === "bad") return { error: DWELL_ERROR };
   return { input: requestInput(f) };
 }
 
@@ -58,25 +72,47 @@ export function suggestInput(f: RequestFields): Record<string, unknown> | null {
   return input;
 }
 
-/** book_vehicle: the request fields plus the pick. A driver is needed unless the custodian drives (driver unticked, vehicle assigned). */
+/**
+ * book_vehicle: the request fields plus the pick. The driver first: their vehicle fills itself (`defaultVehicle`;
+ * the call then names none and the server takes the same one) unless one is picked. No driver only when the
+ * custodian drives (driver unticked, vehicle assigned). `start`: Start from with "Passengers get in here" (the From
+ * pickup then goes when it is the same place as the start).
+ */
 export function bookInput(
   f: RequestFields,
-  pick: { vehicle: string; driver: string; hasCustodian: boolean },
+  pick: { vehicle: string; driver: string; hasCustodian: boolean; defaultVehicle?: string | null },
+  start?: { fields: StartFields; base: { id: string; name: string } | null; fromIsStart?: boolean },
 ): { error: string } | { input: Record<string, unknown> } {
   const t = (s: string) => s.trim();
   if (!t(f.date) || !t(f.time)) return { error: "Add the day and the time." };
-  if (!pick.vehicle) return { error: "Pick a vehicle." };
-  const custodianDrives = !f.driver && pick.hasCustodian;
+  if (dwellOf(f.fromDwell) === "bad" || dwellOf(f.toDwell) === "bad") return { error: DWELL_ERROR };
+  const custodianDrives = !f.driver && pick.hasCustodian && !!pick.vehicle;
   if (!pick.driver && !custodianDrives) {
     return { error: pick.hasCustodian ? 'Pick a driver, or untick "A driver is needed" so the custodian drives.' : "Pick a driver." };
   }
-  const input: Record<string, unknown> = { ...requestInput(f), vehicle: pick.vehicle };
+  // The driver's vehicle known to be none (undefined = not known yet: the server decides).
+  if (!pick.vehicle && pick.defaultVehicle === null) return { error: "Pick a vehicle: this driver holds none today and has no regular one." };
+  const input: Record<string, unknown> = { ...requestInput(f) };
+  if (pick.vehicle) input.vehicle = pick.vehicle;
   if (pick.driver && !custodianDrives) input.driver = pick.driver;
+  const s = start ? startInput(start.fields, start.base) : undefined;
+  if (s) input.start = s;
+  if (start?.fields.startPax) {
+    // The start is Stop 1 (a pickup); From is a second pickup only when it is somewhere else.
+    const stops: Record<string, unknown>[] = [];
+    if (t(f.from) && !start.fromIsStart) stops.push({ type: "pickup", place: t(f.from), ...(typeof dwellOf(f.fromDwell) === "number" ? { dwell_min: dwellOf(f.fromDwell) } : {}) });
+    stops.push({ type: "drop", place: t(f.to) || "To be confirmed", ...(typeof dwellOf(f.toDwell) === "number" ? { dwell_min: dwellOf(f.toDwell) } : {}) });
+    input.stops = stops;
+  }
   return { input };
 }
 
+/**
+ * decide_request: decline with a reason, or approve with a driver (the vehicle fills itself unless one is
+ * picked) or, when the custodian drives, the custodian's vehicle.
+ */
 export function decisionInput(
-  d: { id: string; decision: "approve" | "decline"; reason?: string; vehicle?: string; driver?: string; decidedBy?: string; custodianDrives?: boolean },
+  d: { id: string; decision: "approve" | "decline"; reason?: string; vehicle?: string; driver?: string; decidedBy?: string; custodianDrives?: boolean; defaultVehicle?: string | null },
 ): { error: string } | { input: Record<string, unknown> } {
   const input: Record<string, unknown> = { request_id: d.id, decision: d.decision };
   if (d.decidedBy) input.decided_by = d.decidedBy.slice(0, 80);
@@ -85,9 +121,15 @@ export function decisionInput(
     if (!r) return { error: "Write the reason first. The person who asked will see it." };
     input.reason = r;
   } else {
-    if (!d.vehicle || (!d.driver && !d.custodianDrives)) return { error: "Pick a vehicle and a driver." };
-    input.vehicle = d.vehicle;
-    if (d.driver && !d.custodianDrives) input.driver = d.driver;
+    if (d.custodianDrives) {
+      if (!d.vehicle) return { error: "Pick the vehicle." };
+      input.vehicle = d.vehicle;
+      return { input };
+    }
+    if (!d.driver) return { error: "Pick a driver: the vehicle fills itself." };
+    if (!d.vehicle && d.defaultVehicle === null) return { error: "Pick a vehicle: this driver holds none today and has no regular one." };
+    if (d.vehicle) input.vehicle = d.vehicle;
+    input.driver = d.driver;
   }
   return { input };
 }
@@ -169,7 +211,22 @@ export function editFields(q: { fields?: RequestEditFields; note?: string }): Re
     tools: !!f?.tools,
     note: f?.note ?? q.note ?? "",
     driver: f?.driver_required !== false,
+    fromDwell: f?.from_dwell_min == null ? "" : String(f.from_dwell_min),
+    toDwell: f?.to_dwell_min == null ? "" : String(f.to_dwell_min),
   };
+}
+
+/**
+ * The times at From and To as update_request takes them, when they differ from the request's: minutes, or
+ * null to go back to the usual time / the default. Null when nothing differs; "bad" when one is not a time.
+ */
+export function dwellChanges(f: Pick<RequestFields, "fromDwell" | "toDwell">, was: { from_dwell_min?: number; to_dwell_min?: number } | undefined): Record<string, number | null> | null | "bad" {
+  const fd = dwellOf(f.fromDwell), td = dwellOf(f.toDwell);
+  if (fd === "bad" || td === "bad") return "bad";
+  const out: Record<string, number | null> = {};
+  if ((fd ?? null) !== (was?.from_dwell_min ?? null)) out.from_dwell_min = fd;
+  if ((td ?? null) !== (was?.to_dwell_min ?? null)) out.to_dwell_min = td;
+  return Object.keys(out).length ? out : null;
 }
 
 /** update_request: only the fields that differ from the loaded ones, with the version. */
@@ -188,6 +245,10 @@ export function updateRequestInput(id: string, version: number, f: RequestFields
   if (t(f.note) !== t(was.note)) input.note = t(f.note) || null;
   if (f.driver !== was.driver) input.driver_required = f.driver;
   if (t(f.behalf) !== t(was.behalf)) input.on_behalf_of = t(f.behalf) || null;
+  const fd = dwellOf(f.fromDwell), td = dwellOf(f.toDwell);
+  if (fd === "bad" || td === "bad") return { error: DWELL_ERROR };
+  if ((fd ?? null) !== (dwellOf(was.fromDwell) ?? null)) input.from_dwell_min = fd;
+  if ((td ?? null) !== (dwellOf(was.toDwell) ?? null)) input.to_dwell_min = td;
   if (Object.keys(input).length === 2) return { error: "Nothing changed." };
   return { input };
 }
