@@ -18,7 +18,7 @@ import { sendHeartbeat, startHeartbeatLoop } from '@/lib/heartbeat';
 import { checkTracking, getSharing, readiness, type StartResult, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
 import { armShiftNudge, disarmShiftNudge, ensureChannels, notifyNewTask, onNotificationTap, onPushReceived } from '@/lib/notifications';
 import { type DutyEnded, onDutyEnded } from '@/lib/duty';
-import { type ArrivalFlag, canMarkDone } from '@/lib/dayRules';
+import { type ArrivalFlag, canMarkDone, withSwapReading } from '@/lib/dayRules';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
@@ -65,6 +65,13 @@ export interface FuelEntry {
 
 /** How an odometer reading was arrived at (see app/log-mileage.tsx). The server adds what it read. */
 export type OdometerEntryKind = 'photo' | 'photo_changed' | 'typed_unreadable' | 'typed_offline';
+
+/** Which swap reading a log is (Phase 7): the server's trigger puts it on the task's stretch of that vehicle. */
+export interface SwapReading {
+  kind: 'task_end' | 'task_start';
+  vehicleId: string;
+  taskId: string;
+}
 
 export interface OdometerEntry {
   km: number;
@@ -161,7 +168,11 @@ interface AppValue {
   /** false when Location stayed off and the driver chose "Not now": nothing was started. */
   startTask: (task: TaskWithStops, reading: OdometerEntry) => Promise<boolean>;
   completeTask: (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => void;
-  logOdometer: (reading: OdometerEntry) => void;
+  /**
+   * A manual reading for the vehicle held (or held last); with `swap`, one of the two readings of a vehicle swap during
+   * a task (Phase 7): the old vehicle's end (task_end) or the new vehicle's start (task_start), on that task.
+   */
+  logOdometer: (reading: OdometerEntry, swap?: SwapReading) => void;
   logFuel: (fuel: FuelEntry, odometerKm: number | null) => void;
   /** needsVehicle: "I need another vehicle" (a breakdown or accident during a task, Phase 7). */
   sendReport: (
@@ -911,10 +922,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   // --- logs and reports outside a task ---------------------------------------
-  const logOdometer = useCallback((reading: OdometerEntry) => {
+  const logOdometer = useCallback((reading: OdometerEntry, swap?: SwapReading) => {
     const current = meRef.current;
-    // Off duty (Phase 7) the reading goes to the vehicle held last.
-    const vehicleId = current?.current_vehicle_id ?? lastVehicleRef.current;
+    // Off duty (Phase 7) the reading goes to the vehicle held last; a swap reading to its own vehicle.
+    const vehicleId = swap?.vehicleId ?? current?.current_vehicle_id ?? lastVehicleRef.current;
     if (!current || !vehicleId) return;
     queuePhoto(reading.photo, 'odometer', current.id);
     enqueue({
@@ -923,19 +934,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
         id: Crypto.randomUUID(),
         vehicle_id: vehicleId,
         employee_id: current.id,
-        task_id: null,
+        task_id: swap?.taskId ?? null,
         reading_km: reading.km,
         ocr_value: reading.ocrKm,
         photo_id: reading.photo.id,
-        kind: 'manual',
+        kind: swap?.kind ?? 'manual',
         logged_at: new Date().toISOString(),
         entry: reading.entry,
         photo_attempts: reading.attempts,
       },
     });
     bumpOdometer(vehicleId, reading.km);
+    // The swap card follows at once (offline too): the stretch gets the reading the server's trigger will give it.
+    if (swap) {
+      saveTasks(tasksRef.current.map((task) => task.id !== swap.taskId ? task : {
+        ...task,
+        task_vehicle_segments: withSwapReading(task.task_vehicle_segments ?? [], swap, reading.km),
+      }));
+    }
     void flushNow();
-  }, [bumpOdometer]);
+  }, [bumpOdometer, saveTasks]);
 
   const logFuel = useCallback((fuel: FuelEntry, odometerKm: number | null) => {
     const current = meRef.current;

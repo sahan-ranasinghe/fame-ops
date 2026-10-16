@@ -15,9 +15,11 @@ import {
   earlyFinish,
   lastStopOpen,
   NO_GPS_OVERRIDE_AFTER_MS,
+  stopNumber,
   stretchStartKm,
   swapReadingsWaiting,
   taskKmSoFar,
+  withSwapReading,
 } from '../src/lib/dayRules';
 import type { TaskSegment, TaskStop } from '../src/lib/types';
 
@@ -146,8 +148,18 @@ check(taskKmSoFar({ start_odometer_km: 10_000, ...owed }, 5_055) === null, 'a re
 check(earlyFinish({ ...planned(trip, 10_000), ...owed }, 5_055, at(130)) === null, 'and no early-finish question while one is owed');
 check(earlyFinish({ ...planned(trip, 10_000), ...swapped }, 5_055, at(130)) === null, 'the swapped task drove 95 of 95 km: no question');
 check(earlyFinish({ ...planned(trip, 10_000), ...swapped }, 5_010, at(130))?.km === 50, 'but 40 + 10 km is early (50 of 95)');
+const filled = withSwapReading(withSwapReading(owed.task_vehicle_segments, { kind: 'task_end', vehicleId: 'A' }, 10_040), { kind: 'task_start', vehicleId: 'B' }, 5_000);
+check(filled[0].end_odometer_km === 10_040 && filled[1].start_odometer_km === 5_000 && taskKmSoFar({ start_odometer_km: 10_000, task_vehicle_segments: filled }, 5_055) === 95,
+  "the phone fills the stretches as the server's trigger does (A's end, B's start)", filled);
+const twice = withSwapReading(filled, { kind: 'task_end', vehicleId: 'A' }, 10_099);
+check(twice[0].end_odometer_km === 10_040, 'a stretch that has its reading keeps it');
 const none = swapReadingsWaiting({ task_vehicle_segments: [] });
 check(none.oldEnd === null && none.newStart === null, 'no swap: nothing owed');
+
+// 8. Stops are named by their place in the order (Phase 7, §11).
+const ordered = { task_stops: [stop({ id: 'c', seq: 7 }), stop({ id: 'a', seq: 2 }), stop({ id: 'x', seq: 3, status: 'removed' }), stop({ id: 'b', seq: 5 })] };
+check(stopNumber(ordered, 'a') === 1 && stopNumber(ordered, 'b') === 2 && stopNumber(ordered, 'c') === 3 && stopNumber(ordered, 'x') === 0,
+  'Stop 1, 2, 3 by seq order; a removed stop has no number');
 
 // 7. A duty from an earlier day closes silently (the first cut-off run); today's says so.
 check(dutyEndIsToday('2026-10-16T15:30:00Z', Date.parse('2026-10-16T16:00:00Z')), '21:00 Colombo today: the notice');

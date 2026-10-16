@@ -10,7 +10,7 @@
 
 import { distanceKm } from './format';
 import { colomboDate } from './time';
-import type { TaskStop, TaskWithStops } from './types';
+import type { TaskSegment, TaskStop, TaskWithStops } from './types';
 
 export const ARRIVE_WITHIN_M = 300;
 export const ARRIVE_MAX_ACCURACY_M = 100;
@@ -116,6 +116,32 @@ export function swapReadingsWaiting(task: Pick<TaskWithStops, 'task_vehicle_segm
     oldEnd: closed.length > 0 ? { vehicleId: closed[closed.length - 1].vehicle_id, startKm: closed[closed.length - 1].start_odometer_km } : null,
     newStart: last && last.seq > 1 && last.start_odometer_km === null ? { vehicleId: last.vehicle_id } : null,
   };
+}
+
+/**
+ * A stop's number by its place in the order (Phase 7, §11): "Stop 2 · Drop · Kurunegala site". Removed stops are not
+ * counted (the app never holds them); the seq in the database is not renumbered. 0 when the stop is not on the task.
+ */
+export function stopNumber(task: Pick<TaskWithStops, 'task_stops'>, stopId: string): number {
+  const order = task.task_stops.filter((s) => s.status !== 'removed').sort((a, b) => a.seq - b.seq);
+  return order.findIndex((s) => s.id === stopId) + 1;
+}
+
+/** The stretches after a swap reading, as the server's trigger odometer_logs_swap_reading fills them. Pure. */
+export function withSwapReading(
+  segments: readonly TaskSegment[],
+  swap: { kind: 'task_end' | 'task_start'; vehicleId: string },
+  km: number,
+): TaskSegment[] {
+  return segments.map((s) =>
+    s.vehicle_id !== swap.vehicleId
+      ? s
+      : swap.kind === 'task_end' && s.to_at !== null && s.end_odometer_km === null
+      ? { ...s, end_odometer_km: km }
+      : swap.kind === 'task_start' && s.seq > 1 && s.start_odometer_km === null
+      ? { ...s, start_odometer_km: km }
+      : s
+  );
 }
 
 /** A clock-out the server made on an earlier day (the first cut-off run) is silent: no notice, no notification. */

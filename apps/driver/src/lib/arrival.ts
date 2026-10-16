@@ -9,6 +9,7 @@
 import { translate } from '../i18n';
 import { enqueue } from '../sync';
 import { arrivalDue } from './arrivalRule';
+import { stopNumber } from './dayRules';
 import { getJson, KEYS, setJson } from './kv';
 import { notifyArrival } from './notifications';
 import type { Language, TaskWithStops } from './types';
@@ -30,6 +31,8 @@ export async function checkArrival(fix: { lat: number; lng: number; accuracyM?: 
     ? { ...t, task_stops: t.task_stops.map((s) => (s.id === due.stop.id ? { ...s, auto_detected_at: at } : s)) }
     : t)));
   const language = getJson<Language>(KEYS.language) ?? 'en';
-  await notifyArrival(translate(language, 'arrival.title', { stop: due.stop.place_name }), translate(language, 'arrival.body'), due.task.id);
+  // "Arrived at Stop 2 · Kurunegala site?" (Phase 7, §11: stops are named by their place in the order).
+  const stop = translate(language, 'stop.short', { n: stopNumber(due.task, due.stop.id), place: due.stop.place_name });
+  await notifyArrival(translate(language, 'arrival.title', { stop }), translate(language, 'arrival.body'), due.task.id);
   return true;
 }
