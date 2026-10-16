@@ -1,8 +1,12 @@
-// Log mileage (designed: design/png/Driver · Log mileage.png). One screen, four uses:
-//   finish  end of a task: odometer photo, fuel yes/no, "Save & finish task"
-//   start   start of a task: odometer photo, "Start task"
-//   manual  a reading outside a task (from the Mileage tab)
-//   fuel    fuel outside the end-of-task flow (from the Mileage tab)
+// Log mileage (designed: design/png/Driver · Log mileage.png). One screen, six uses:
+//   finish      end of a task: odometer photo, fuel yes/no, "Save & finish task"
+//   start       start of a task: odometer photo, "Start task"
+//   manual      a reading outside a task (from the Mileage tab)
+//   fuel        fuel outside the end-of-task flow (from the Mileage tab)
+//   swap_end    the office moved the running task to another vehicle (Phase 7 Part 2): the old vehicle's
+//               end reading (its stretch's start is the lowest allowed); opened from the task screen's card
+//   swap_start  the same swap: the new vehicle's start reading
+// The swap readings go on the task with their own vehicle (vehicleId param) and come back to the task screen.
 //
 // The odometer number comes from the photo, read by the server
 // (lib/odometerAi.ts). The driver confirms it ("Correct") or, after a
@@ -15,6 +19,8 @@
 // Phase 7 (item 18): at Save & finish, a trip much shorter than its plan (under 70 % of the
 // planned km, or under half the planned drive time) asks "Check the reading" first: Correct
 // it (back to the reading, nothing saved) or Go on (saved as it is; the server flags it too).
+// After a swap, Save & finish checks the end against the start of the stretch in the vehicle now,
+// and "N km this task" adds the stretches up.
 
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -24,8 +30,9 @@ import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Pressable, Scrol
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
+import { PlateText } from '@/components/PlateText';
 import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/ui';
-import { earlyFinish } from '@/lib/dayRules';
+import { earlyFinish, stretchStartKm, swapReadingsWaiting, taskKmSoFar } from '@/lib/dayRules';
 import { parseDecimal, parseWhole, thousands } from '@/lib/format';
 import { readOdometerPhoto, type ReadStatus } from '@/lib/odometerAi';
 import { discardPhoto, type LocalPhoto, takePhoto } from '@/lib/photos';
@@ -33,7 +40,8 @@ import { clockOf, discardVideo, megabytes, type RecordedVideo, takePendingVideo 
 import { type FuelEntry, type OdometerEntry, type OdometerEntryKind, useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
-type Mode = 'finish' | 'start' | 'manual' | 'fuel';
+type Mode = 'finish' | 'start' | 'manual' | 'fuel' | 'swap_end' | 'swap_start';
+const OTHER_MODES: Mode[] = ['start', 'manual', 'fuel', 'swap_end', 'swap_start'];
 
 type Step =
   | { kind: 'none' }
@@ -44,10 +52,19 @@ type Step =
 
 const MAX_FAILED_PHOTOS = 3;
 
-const TITLE: Record<Mode, string> = { finish: 'log.title', start: 'log.titleStart', manual: 'log.title', fuel: 'log.titleFuel' };
-const SUBTITLE: Record<Mode, string> = { finish: 'log.endOfTask', start: 'log.startOfTask', manual: 'log.reading', fuel: 'log.fuelEntry' };
-const SAVE: Record<Mode, string> = { finish: 'log.saveFinish', start: 'log.startTask', manual: 'log.saveReading', fuel: 'log.saveFuel' };
-const CORRECT: Record<Mode, string> = { finish: 'log.correctFinish', start: 'log.correctStart', manual: 'log.correctSave', fuel: 'log.saveFuel' };
+const TITLE: Record<Mode, string> = {
+  finish: 'log.title', start: 'log.titleStart', manual: 'log.title', fuel: 'log.titleFuel', swap_end: 'swap.logTitle', swap_start: 'swap.logTitle',
+};
+/** Under the title; the swap modes' text has {plate} in it ("{plate}: end reading"), drawn in its chip. */
+const SUBTITLE: Record<Mode, string> = {
+  finish: 'log.endOfTask', start: 'log.startOfTask', manual: 'log.reading', fuel: 'log.fuelEntry', swap_end: 'swap.oldEnd', swap_start: 'swap.newStart',
+};
+const SAVE: Record<Mode, string> = {
+  finish: 'log.saveFinish', start: 'log.startTask', manual: 'log.saveReading', fuel: 'log.saveFuel', swap_end: 'log.saveReading', swap_start: 'log.saveReading',
+};
+const CORRECT: Record<Mode, string> = {
+  finish: 'log.correctFinish', start: 'log.correctStart', manual: 'log.correctSave', fuel: 'log.saveFuel', swap_end: 'log.correctSave', swap_start: 'log.correctSave',
+};
 const FAILED: Record<ReadStatus, string> = {
   ok: 'log.couldNotRead',
   no_odometer: 'log.photo.noOdometer',
@@ -67,18 +84,31 @@ const WHY_TYPING: Record<Exclude<OdometerEntryKind, 'photo'>, string> = {
 export default function LogMileageScreen() {
   const app = useApp();
   const { t, tasks, vehicles, gpsKm } = app;
-  const params = useLocalSearchParams<{ mode?: string; taskId?: string; from?: string }>();
-  const mode: Mode = params.mode === 'start' || params.mode === 'manual' || params.mode === 'fuel' ? params.mode : 'finish';
+  const params = useLocalSearchParams<{ mode?: string; taskId?: string; from?: string; vehicleId?: string }>();
+  const mode: Mode = OTHER_MODES.find((item) => item === params.mode) ?? 'finish';
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const swapMode = mode === 'swap_end' || mode === 'swap_start';
+  // A swap reading belongs to its own vehicle (the old one's end, the new one's start), not the task's.
+  const swapVehicleId = swapMode ? params.vehicleId ?? null : null;
   const task = params.taskId ? tasks.find((item) => item.id === params.taskId) : undefined;
-  const vehicle = task ? vehicles.find((item) => item.id === task.vehicle_id) ?? null : app.workVehicle;
+  const vehicle = swapMode
+    ? vehicles.find((item) => item.id === swapVehicleId) ?? null
+    : task ? vehicles.find((item) => item.id === task.vehicle_id) ?? null : app.workVehicle;
   const lastKm = vehicle?.current_odometer_km ?? null;
-  const startKm = task?.start_odometer_km ?? null;
-  // Km by GPS since the reading this one follows (the task's start when finishing a task).
-  const gpsSinceLast = mode === 'finish' && task && gpsKm.taskId === task.id ? gpsKm.taskKm : gpsKm.odometerKm;
-  const baseKm = mode === 'finish' ? startKm ?? lastKm : lastKm;
+  // The reading the end is checked against: the task's start, or after a swap the start of the stretch in the
+  // vehicle now; for the old vehicle's end at a swap, the start of its stretch.
+  const startKm = mode === 'finish' && task
+    ? stretchStartKm(task)
+    : mode === 'swap_end' && task
+    ? swapReadingsWaiting(task).oldEnd?.startKm ?? null
+    : null;
+  const endsStretch = mode === 'finish' || mode === 'swap_end';
+  // Km by GPS since the reading this one follows (the task's start when finishing a task or leaving its vehicle).
+  // The new vehicle at a swap: unknown (this phone did not drive it).
+  const gpsSinceLast = mode === 'swap_start' ? null : endsStretch && task && gpsKm.taskId === task.id ? gpsKm.taskKm : gpsKm.odometerKm;
+  const baseKm = endsStretch ? startKm ?? lastKm : lastKm;
 
   const [step, setStep] = useState<Step>({ kind: 'none' });
   const [attempts, setAttempts] = useState(0);
@@ -111,7 +141,8 @@ export default function LogMileageScreen() {
   );
 
   if (!app.me) return <Redirect href="/login" />;
-  if ((mode === 'finish' || mode === 'start') && !task) return <Redirect href="/" />;
+  if ((mode === 'finish' || mode === 'start' || swapMode) && !task) return <Redirect href="/" />;
+  if (swapMode && !swapVehicleId) return <Redirect href="/" />;
 
   const needsOdometer = mode !== 'fuel';
   const showFuel = mode === 'finish' || mode === 'fuel';
@@ -129,9 +160,9 @@ export default function LogMileageScreen() {
 
     const read = await readOdometerPhoto(shot, {
       employeeId: app.me?.id ?? '',
-      vehicleId: vehicle?.id ?? null,
+      vehicleId: vehicle?.id ?? swapVehicleId,
       lastKm: baseKm,
-      gpsKm: Math.round(gpsSinceLast),
+      gpsKm: gpsSinceLast === null ? null : Math.round(gpsSinceLast),
     });
     if (read.kind === 'offline') {
       setFailures(0);
@@ -224,7 +255,7 @@ export default function LogMileageScreen() {
       : null;
     if (step.kind === 'typing' && typedKm === null) return setProblem(t('log.needOdometer'));
     if (!reading) return setProblem(t('log.needPhoto'));
-    if (mode === 'finish' && startKm !== null && reading.km < startKm) return setProblem(t('log.lowerThanStart', { km: thousands(startKm) }));
+    if (endsStretch && startKm !== null && reading.km < startKm) return setProblem(t('log.lowerThanStart', { km: thousands(startKm) }));
     if (step.kind === 'typing' && step.entry === 'photo_changed' && !(await confirmChange(step.aiKm))) return;
     if (mode === 'finish' && !(await confirmEarly(reading.km))) return;
 
@@ -243,6 +274,11 @@ export default function LogMileageScreen() {
       allowLeave();
       app.completeTask(task, reading, fuel);
       router.back();
+    } else if (swapMode && task && swapVehicleId) {
+      // On the task, with its own vehicle; the card on the task screen says "Logged ✓" at once.
+      allowLeave();
+      app.logOdometer(reading, { kind: mode === 'swap_end' ? 'task_end' : 'task_start', vehicleId: swapVehicleId, taskId: task.id });
+      router.back();
     } else {
       allowLeave();
       app.logOdometer(reading);
@@ -251,7 +287,20 @@ export default function LogMileageScreen() {
   }
 
   // A typed reading that does not match the last one is allowed, but the driver is told the office will see it.
-  const gap = step.kind === 'typing' && mode !== 'finish' && typedKm !== null && lastKm !== null ? typedKm - lastKm : 0;
+  // (Not at the end of a task or of a stretch: the vehicle has driven since its last reading.)
+  const gap = step.kind === 'typing' && !endsStretch && typedKm !== null && lastKm !== null ? typedKm - lastKm : 0;
+  /** Under the reading: "Start: 195,049" and "51 km this task" (or "40 km in WP CAB-4521" at a swap), else the last reading. */
+  const under = (km: number | null) => {
+    const counted = km !== null && startKm !== null && km >= startKm;
+    return {
+      left: endsStretch
+        ? startKm === null ? null : t('log.start', { km: thousands(startKm) })
+        : lastKm === null ? null : t('log.lastReading', { km: thousands(lastKm) }),
+      thisTask: mode === 'finish' && counted && task ? taskKmSoFar(task, km) : null,
+      stretchKm: mode === 'swap_end' && counted ? km - startKm : null,
+    };
+  };
+  const plate = vehicle?.reg_no ?? '–';
   const bottomButton = mode === 'fuel' || step.kind === 'ok' || step.kind === 'typing';
 
   return (
@@ -264,10 +313,14 @@ export default function LogMileageScreen() {
           </Pressable>
           <View style={{ flex: 1 }}>
             <Txt variant="title" size={28}>{t(TITLE[mode])}</Txt>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              {vehicle && <Mono size={16} bold>{vehicle.reg_no}</Mono>}
-              <Txt variant="muted">{`${vehicle ? '· ' : ''}${t(SUBTITLE[mode])}`}</Txt>
-            </View>
+            {swapMode ? (
+              <PlateText text={t(SUBTITLE[mode])} plate={plate} />
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                {vehicle && <Mono size={16} bold>{vehicle.reg_no}</Mono>}
+                <Txt variant="muted">{`${vehicle ? '· ' : ''}${t(SUBTITLE[mode])}`}</Txt>
+              </View>
+            )}
           </View>
         </View>
 
@@ -305,7 +358,7 @@ export default function LogMileageScreen() {
                 <Mono size={40} bold>{thousands(step.km)}</Mono>
               </View>
             </View>
-            <UnderReading mode={mode} km={step.km} startKm={startKm} lastKm={lastKm} />
+            <UnderReading {...under(step.km)} plate={plate} />
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Button kind="outline" label={t('log.change')} onPress={change} style={{ flex: 1 }} />
               <Button kind="outline" label={t('log.retake')} onPress={photographOdometer} style={{ flex: 1 }} />
@@ -324,7 +377,10 @@ export default function LogMileageScreen() {
                 <Button
                   kind="danger-text"
                   label={t('log.displayBroken')}
-                  onPress={() => router.push({ pathname: '/report-problem', params: { ...(task ? { taskId: task.id } : {}), ...(vehicle ? { vehicleId: vehicle.id } : {}) } })}
+                  onPress={() => {
+                    const vehicleId = swapVehicleId ?? vehicle?.id;
+                    router.push({ pathname: '/report-problem', params: { ...(task ? { taskId: task.id } : {}), ...(vehicleId ? { vehicleId } : {}) } });
+                  }}
                 />
               </>
             )}
@@ -353,13 +409,13 @@ export default function LogMileageScreen() {
               placeholderTextColor="#c4c0b8"
               style={styles.odometer}
             />
-            <UnderReading mode={mode} km={typedKm} startKm={startKm} lastKm={lastKm} />
+            <UnderReading {...under(typedKm)} plate={plate} />
             {gap > 2 && <Notice tone="warn" text={t('log.moreThanLast', { km: thousands(gap) })} />}
             {gap < -2 && lastKm !== null && <Notice tone="warn" text={t('log.lowerThanLast', { km: thousands(lastKm) })} />}
           </Card>
         )}
 
-        {needsOdometer && (step.kind === 'ok' || step.kind === 'typing') && gpsSinceLast >= 0.5 && (
+        {needsOdometer && !swapMode && (step.kind === 'ok' || step.kind === 'typing') && gpsSinceLast !== null && gpsSinceLast >= 0.5 && (
           <Txt variant="small">{t(mode === 'finish' ? 'log.gpsThisTask' : 'log.gpsSinceLast', { km: thousands(gpsSinceLast) })}</Txt>
         )}
 
@@ -432,16 +488,14 @@ export default function LogMileageScreen() {
   );
 }
 
-/** "Start: 195,049 · 51 km this task" or "Last reading: 195,049". */
-function UnderReading({ mode, km, startKm, lastKm }: { mode: Mode; km: number | null; startKm: number | null; lastKm: number | null }) {
+/** "Start: 195,049 · 51 km this task", "Start: 10,000 · 40 km in WP CAB-4521" (a swap) or "Last reading: 195,049". */
+function UnderReading({ left, thisTask, stretchKm, plate }: { left: string | null; thisTask: number | null; stretchKm: number | null; plate: string }) {
   const { t } = useApp();
   return (
     <View style={styles.underOdometer}>
-      {mode === 'finish' && startKm !== null && <Txt variant="muted">{t('log.start', { km: thousands(startKm) })}</Txt>}
-      {mode !== 'finish' && lastKm !== null && <Txt variant="muted">{t('log.lastReading', { km: thousands(lastKm) })}</Txt>}
-      {mode === 'finish' && km !== null && startKm !== null && km >= startKm && (
-        <Txt variant="strong" color={colors.blue}>{t('log.thisTask', { km: thousands(km - startKm) })}</Txt>
-      )}
+      {left !== null && <Txt variant="muted">{left}</Txt>}
+      {thisTask !== null && <Txt variant="strong" color={colors.blue}>{t('log.thisTask', { km: thousands(thisTask) })}</Txt>}
+      {stretchKm !== null && <PlateText text={t('swap.stretches', { km: thousands(stretchKm) })} plate={plate} variant="strong" color={colors.blue} />}
     </View>
   );
 }

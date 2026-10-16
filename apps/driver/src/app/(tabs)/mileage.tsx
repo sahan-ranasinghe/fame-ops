@@ -1,5 +1,6 @@
 // Mileage tab: this month's km for my vehicle against its allowance, today's
 // tasks with their km, and the two buttons to log a reading or fuel.
+// A task the office moved to another vehicle (Phase 7 Part 2) shows each vehicle's km under its title.
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -8,7 +9,9 @@ import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Stretches } from '@/components/SwapCard';
 import { useDateLabel } from '@/components/task';
+import { shownTaskKm } from '@/components/taskLines';
 import { Button, Card, Mono, Plate, Txt } from '@/components/ui';
 import { fetchMileage, type Mileage } from '@/lib/api';
 import { thousands } from '@/lib/format';
@@ -109,21 +112,27 @@ export default function MileageScreen() {
           <Txt variant="heading" style={{ marginLeft: 6 }}>{t('mileage.todayTasks')}</Txt>
           <Card style={{ padding: 0 }}>
             {todayTasks.length === 0 && <Txt variant="muted" style={{ padding: 18 }}>{t('mileage.noTasksToday')}</Txt>}
-            {todayTasks.map((task, index) => (
-              <Pressable
-                key={task.id}
-                accessibilityRole="button"
-                onPress={() => router.push({ pathname: '/task/[id]', params: { id: task.id } })}
-                style={[styles.row, index > 0 && styles.divider]}
-              >
-                <Mono size={17} bold style={{ width: 58 }}>{colomboTime(task.start_at)}</Mono>
-                <Txt variant="strong" style={{ flex: 1 }} numberOfLines={2}>{task.title}</Txt>
-                {task.status === 'completed' && task.km !== null
-                  ? <Mono size={17} bold color={colors.blue}>{`${thousands(task.km)} ${t('common.km')}`}</Mono>
-                  : <Txt variant="muted" size={15}>{t(task.status === 'in_progress' ? 'mileage.inProgress' : task.status === 'cancelled' ? 'mileage.cancelled' : 'mileage.notStarted')}</Txt>}
-                <ChevronRight size={20} color={colors.muted} />
-              </Pressable>
-            ))}
+            {todayTasks.map((task, index) => {
+              const km = task.status === 'completed' ? shownTaskKm(task) : null;
+              return (
+                <Pressable
+                  key={task.id}
+                  accessibilityRole="button"
+                  onPress={() => router.push({ pathname: '/task/[id]', params: { id: task.id } })}
+                  style={[styles.row, index > 0 && styles.divider]}
+                >
+                  <Mono size={17} bold style={{ width: 58 }}>{colomboTime(task.start_at)}</Mono>
+                  <View style={{ flex: 1, gap: 4 }}>
+                    <Txt variant="strong" numberOfLines={2}>{task.title}</Txt>
+                    {km !== null && <Stretches task={task} size={14} />}
+                  </View>
+                  {km !== null
+                    ? <Mono size={17} bold color={colors.blue}>{`${thousands(km)} ${t('common.km')}`}</Mono>
+                    : <Txt variant="muted" size={15}>{t(task.status === 'in_progress' ? 'mileage.inProgress' : task.status === 'cancelled' ? 'mileage.cancelled' : 'mileage.notStarted')}</Txt>}
+                  <ChevronRight size={20} color={colors.muted} />
+                </Pressable>
+              );
+            })}
           </Card>
         </View>
 

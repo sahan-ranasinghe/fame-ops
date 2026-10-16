@@ -3,22 +3,25 @@
 import { StyleSheet, View } from 'react-native';
 
 import { GoogleCredit } from '@/components/GoogleCredit';
+import { stopLabel, stopTimeAt } from '@/components/taskLines';
 import { Txt } from '@/components/ui';
 import { colomboParts, colomboTime } from '@/lib/time';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
-const STOP_LABEL: Record<string, string> = { pickup: 'today.pickup', drop: 'today.dropoff', visit: 'today.visit' };
 /** On the Today card: the first two stops, then "+N more". */
 const COMPACT_STOPS = 2;
 
 /**
  * Pickup (hollow dot) down to drop-off (filled dot), as on the Today card.
  * compact: the first two stops and "+N more"; a stop with a deadline shows it.
+ * Each stop is named by its place in the order ("Stop 2 · Drop", Phase 7 §11) and, when the plan has the times,
+ * reads "09:00–10:30 at Kurunegala site" (§17); the start reads "Start · passengers get in here".
  */
 export function StopTimeline({ stops, compact = false }: { stops: TaskStop[]; compact?: boolean }) {
   const { t } = useApp();
+  const order = { task_stops: stops };
   const shown = compact ? stops.slice(0, COMPACT_STOPS) : stops;
   const more = stops.length - shown.length;
   return (
@@ -32,9 +35,10 @@ export function StopTimeline({ stops, compact = false }: { stops: TaskStop[]; co
               {!last && <View style={styles.line} />}
             </View>
             <View style={{ flex: 1, paddingBottom: last ? 0 : 14 }}>
-              <Txt variant="muted" size={15}>{t(STOP_LABEL[stop.type] ?? 'today.visit')}{stop.arrive_by ? ` · ${t('task.arriveBy', { time: colomboTime(stop.arrive_by) })}` : ''}</Txt>
-              <Txt variant="strong" size={18}>{stop.place_name}</Txt>
+              <Txt variant="muted" size={15}>{stopLabel(t, order, stop)}{stop.arrive_by ? ` · ${t('task.arriveBy', { time: colomboTime(stop.arrive_by) })}` : ''}</Txt>
+              <Txt variant="strong" size={18}>{stopTimeAt(t, stop) ?? stop.place_name}</Txt>
               <GoogleCredit show={!!stop.google_place_id} />
+              {stop.is_start && <Txt variant="small">{t('stop.start')}</Txt>}
             </View>
           </View>
         );

@@ -1,8 +1,10 @@
 // The "Report a problem" form: what happened, a note, 1 to 3 photos. Used by
 // the Report tab (problems outside a task) and by the report-problem screen
 // pushed from a task or from Log mileage (vehicle and task filled in).
+// Phase 7 Part 2: during a task, a breakdown or an accident offers the tick "I need another vehicle"
+// (the fleet admins are told at once); it is cleared when the category changes.
 
-import { Camera, X } from '@/components/icons';
+import { Camera, Check, X } from '@/components/icons';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -13,13 +15,16 @@ import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
 const CATEGORIES: ReportCategory[] = ['breakdown', 'accident', 'tyre', 'warning_light', 'other'];
+/** The categories that may stop the vehicle: during a task they offer "I need another vehicle". */
+const VEHICLE_STOPPED: ReportCategory[] = ['breakdown', 'accident'];
 const MAX_PHOTOS = 3;
 
 export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
   vehicle: Vehicle | null;
   /** The task the problem belongs to, if any. */
   taskId: string | null;
-  onSent: () => void;
+  /** needsVehicle: the report asked for another vehicle. */
+  onSent: (sent: { needsVehicle: boolean }) => void;
   /** Told whenever the form gains or loses unsaved input. */
   onDirtyChange?: (dirty: boolean) => void;
 }) {
@@ -29,6 +34,9 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
   const [note, setNote] = useState('');
   const [photos, setPhotos] = useState<LocalPhoto[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
+  const [needVehicle, setNeedVehicle] = useState(false);
+  // Only during a task, and only for a breakdown or an accident.
+  const canAskVehicle = taskId !== null && category !== null && VEHICLE_STOPPED.includes(category);
 
   const dirty = category !== null || note.trim() !== '' || photos.length > 0;
   useEffect(() => {
@@ -50,12 +58,14 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
     if (!vehicle) return setProblem(t('log.needVehicle'));
     if (!category) return setProblem(t('report.needCategory'));
     if (photos.length === 0) return setProblem(t('report.needPhoto'));
-    app.sendReport(category, note, photos, taskId, vehicle.id);
+    const needsVehicle = canAskVehicle && needVehicle;
+    app.sendReport(category, note, photos, taskId, vehicle.id, needsVehicle);
     setCategory(null);
     setNote('');
     setPhotos([]);
     setProblem(null);
-    onSent();
+    setNeedVehicle(false);
+    onSent({ needsVehicle });
   }
 
   return (
@@ -75,7 +85,11 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
                 key={item}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
-                onPress={() => { setCategory(item); setProblem(null); }}
+                onPress={() => {
+                  if (item !== category) setNeedVehicle(false);
+                  setCategory(item);
+                  setProblem(null);
+                }}
                 style={[styles.chip, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}
               >
                 <Txt variant="strong" color={on ? '#ffffff' : colors.ink}>{t(`report.${item}`)}</Txt>
@@ -84,6 +98,23 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
           })}
         </View>
       </View>
+
+      {canAskVehicle && (
+        <Pressable
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: needVehicle }}
+          onPress={() => setNeedVehicle((on) => !on)}
+          style={[styles.tick, needVehicle && styles.tickOn]}
+        >
+          <View style={[styles.box, needVehicle && { backgroundColor: colors.red, borderColor: colors.red }]}>
+            {needVehicle && <Check size={22} color="#ffffff" strokeWidth={3.2} />}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Txt variant="big" color={needVehicle ? colors.red : colors.ink}>{t('report.needVehicle')}</Txt>
+            <Txt variant="small">{t('report.needVehicleHint')}</Txt>
+          </View>
+        </Pressable>
+      )}
 
       <View style={{ gap: 8 }}>
         <Txt variant="strong">{t('report.note')}</Txt>
@@ -127,6 +158,9 @@ const styles = StyleSheet.create({
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   chip: { minHeight: 52, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center' },
+  tick: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 14, borderWidth: 2, borderColor: colors.line },
+  tickOn: { borderColor: colors.red, backgroundColor: '#fbeceb' },
+  box: { width: 32, height: 32, borderRadius: 8, borderWidth: 2.5, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
   note: {
     minHeight: 96,
     borderWidth: 1.5,

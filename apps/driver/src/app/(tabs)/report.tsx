@@ -2,16 +2,17 @@
 // a note, 1 to 3 photos), and see the status of earlier reports. A problem
 // found during a task is reported from the task screen or from Log mileage
 // instead (app/report-problem.tsx), with the task filled in; here the task in
-// progress, if any, is attached.
+// progress, if any, is attached (so a breakdown or accident offers "I need another vehicle").
 
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ReportForm } from '@/components/ReportForm';
 import { useDateLabel } from '@/components/task';
-import { Card, Notice, Txt } from '@/components/ui';
+import { Button, Card, Notice, Txt } from '@/components/ui';
+import { OFFICE_PHONE } from '@/config';
 import { colomboTime } from '@/lib/time';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -28,7 +29,8 @@ export default function ReportScreen() {
   const { t, workVehicle: vehicle, reports } = app;
   const insets = useSafeAreaInsets();
   const dateLabel = useDateLabel();
-  const [sent, setSent] = useState(false);
+  // What was sent last: a report, or a report asking for another vehicle.
+  const [sent, setSent] = useState<'report' | 'vehicle' | null>(null);
   const running = app.tasks.find((task) => task.status === 'in_progress');
 
   return (
@@ -37,8 +39,15 @@ export default function ReportScreen() {
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingTop: insets.top + 18, paddingBottom: 28, gap: 16 }}>
         <Txt variant="title">{t('report.title')}</Txt>
 
-        <ReportForm vehicle={running ? app.vehicles.find((v) => v.id === running.vehicle_id) ?? vehicle : vehicle} taskId={running?.id ?? null} onSent={() => setSent(true)} />
-        {sent && <Notice tone="info" text={t(app.offline ? 'common.savedOffline' : 'report.sent')} />}
+        <ReportForm
+          vehicle={running ? app.vehicles.find((v) => v.id === running.vehicle_id) ?? vehicle : vehicle}
+          taskId={running?.id ?? null}
+          onSent={({ needsVehicle }) => setSent(needsVehicle ? 'vehicle' : 'report')}
+        />
+        {sent && <Notice tone="info" text={t(app.offline ? 'common.savedOffline' : sent === 'vehicle' ? 'report.needVehicleSent' : 'report.sent')} />}
+        {sent === 'vehicle' && app.offline && OFFICE_PHONE !== '' && (
+          <Button kind="outline" label={t('gate.callOffice')} onPress={() => void Linking.openURL(`tel:${OFFICE_PHONE}`)} />
+        )}
 
         <View style={{ gap: 10 }}>
           <Txt variant="heading" style={{ marginLeft: 6 }}>{t('report.myReports')}</Txt>
@@ -55,6 +64,7 @@ export default function ReportScreen() {
                     </View>
                   </View>
                   <Txt variant="small">{`${dateLabel(report.created_at)} ${colomboTime(report.created_at)}`}</Txt>
+                  {report.needs_vehicle && <Txt variant="strong" size={15} color={colors.red}>{t('report.needVehicle')}</Txt>}
                   {report.note && <Txt variant="muted">{report.note}</Txt>}
                   {report.office_note && <Txt variant="strong" size={15} color={colors.blue}>{t('report.office', { note: report.office_note })}</Txt>}
                 </View>

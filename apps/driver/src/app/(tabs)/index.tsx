@@ -1,4 +1,7 @@
 // Today (designed: design/png/Driver · Today.png).
+// Phase 7 Part 2: the card's stops are named by their place in the order with the time there
+// (components/task.tsx), and a running task the office moved to another vehicle says so
+// ("Vehicle changed: WP KL-1234") until both odometers are logged on the task screen.
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -13,6 +16,9 @@ import { DeclineSheet } from '@/components/DeclineSheet';
 import { DutyHeader, DutyNotices } from '@/components/DutyCard';
 import { leaveTime, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { PhoneSetupCard } from '@/components/PhoneSetupCard';
+import { PlateText } from '@/components/PlateText';
+import { plateOf } from '@/components/SwapCard';
+import { swapCard } from '@/components/taskLines';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
@@ -66,6 +72,8 @@ export default function TodayScreen() {
   }
 
   const people = next ? peopleLine(next) : null;
+  // The office swapped the running task's vehicle: the readings wait on the task screen (Open task).
+  const swap = next?.status === 'in_progress' ? swapCard(next) : null;
 
   return (
     <View style={styles.page}>
@@ -116,6 +124,11 @@ export default function TodayScreen() {
               <StopTimeline stops={next.task_stops} compact />
               {people && <Txt variant="muted" style={{ marginTop: 14 }}>{people}</Txt>}
               {waitingTasks.has(next.id) && <Txt variant="small" color={colors.amberText} style={{ marginTop: 8 }}>{t('today.notSentYet')}</Txt>}
+              {swap && (
+                <View style={{ marginTop: 14 }}>
+                  <PlateText text={t('swap.title')} plate={plateOf(app.vehicles, swap.newVehicleId)} variant="strong" color={colors.amberText} />
+                </View>
+              )}
               {next.status === 'assigned' && next.accepted_at && (
                 <Txt variant="strong" color={colors.blue} style={{ marginTop: 14 }}>{t('task.accepted', { time: colomboTime(next.accepted_at) })}</Txt>
               )}
