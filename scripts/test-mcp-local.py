@@ -568,7 +568,7 @@ check(pg["plan"]["source"] != "google" and "google_note" not in pg["plan"], "wit
 r = tool("plan_task", {"date": day(6), "leave_by": "09:00", "stops": [{"type": "drop", "google_place_id": "ChIJ-suite-unknown", "place": "Somewhere"}]}, expect_error=True)
 check("Google place search is not set up" in r, "a Google place with no kept pin and no key: refused with the reason", r)
 code, gj = fleet_jobs(job="google_content")
-check(code == 200 and gj.get("places") == 0 and gj.get("pruned") == {"pins": 0, "stops": 0, "starts": 0, "matched": 0},
+check(code == 200 and gj.get("places") == 0 and gj.get("pruned") == {"pins": 0, "stops": 0, "starts": 0, "matched": 0, "lines": 0},
       "fleet-jobs google_content: nothing to refresh or remove yet", json.dumps(gj))
 
 # Two days ahead: in the evening the tasks above are already on tomorrow, and the approved request's task must not join their day.
@@ -1653,9 +1653,11 @@ r = tool("clock_out_driver", {"driver": "ruwan.j"}, expect_error=True)
 check("task in progress" in r, "no clock-out while a task is running", r)
 tool("cancel_task", {"task_id": T7, "reason": "suite: Phase 7 checked"})
 
-# App stopped by the phone: two heartbeat gaps of over 3 minutes in Ruwan's duty period today.
+# App stopped by the phone (the rule of the Part 2b go): 10 minutes or more with neither a point nor a heartbeat, on duty.
+# Ruwan's duty period from 40 minutes ago, a heartbeat every minute but two holes: 35–23 (12 min) and 20–9 (11 min).
 nowp = dt.datetime.now(dt.timezone.utc)
-for mins in (20, 19, 12, 11, 2):
+psql(f"update duty_sessions set started_at = '{iso(nowp - dt.timedelta(minutes=40))}' where id = '{S7A}'")
+for mins in [m for m in range(40, -1, -1) if not (23 < m < 35) and not (9 < m < 20)]:
     psql(f"insert into driver_heartbeats (employee_id, at, session_id, sharing) values ('{RU}', '{iso(nowp - dt.timedelta(minutes=mins))}', '{S7A}', true) on conflict do nothing")
 card = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "ruwan.j")
 check(card.get("app_stops_today") == 2 and card.get("app_stops_text") == "App stopped by phone 2× today", "live_drivers: 'App stopped by phone 2× today'", json.dumps({k: card.get(k) for k in ("app_stops_today", "app_stops_text")}))
@@ -1886,14 +1888,33 @@ check(sr.get("task_km") == 60 and tool("task_detail", {"task_id": TW3})["task"][
 r = tool("swap_reading", {"task_id": TW3, "vehicle": "WP P7-1002", "start_km": 9071}, expect_error=True)
 check("still to come" in r, "a reading that is not owed is refused", r)
 
-# App stops (addition 3): a gap where the app version changed (an update or a new install) is not an app stop.
+# App stops: a gap where the app version changed (an update or a new install) is not one; points keep the app alive.
+# Saman's period from 45 minutes ago, a heartbeat every minute but two holes: 30–18 across an update (a → b), 15–4 (b).
 nowp = dt.datetime.now(dt.timezone.utc)
-for mins, ver in ((40, "1.2.0+a"), (39, "1.2.0+a"), (30, "1.2.0+b"), (29, "1.2.0+b"), (20, "1.2.0+b")):
+psql(f"update duty_sessions set started_at = '{iso(nowp - dt.timedelta(minutes=45))}' where id = '{S7B}'")
+for mins in [m for m in range(45, -1, -1) if not (18 < m < 30) and not (4 < m < 15)]:
+    ver = "1.2.0+a" if mins >= 30 else "1.2.0+b"
     psql(f"insert into driver_heartbeats (employee_id, at, session_id, sharing, app_version) values ('{SA}', '{iso(nowp - dt.timedelta(minutes=mins))}', '{S7B}', true, '{ver}')"
          " on conflict do nothing")
 card = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "saman.k")
-check(card.get("app_stops_today") == 1, "two gaps over 3 minutes, one across an update: 1 app stop", json.dumps({k: card.get(k) for k in ("app_stops_today", "app_stops_text")}))
+check(card.get("app_stops_today") == 1, "two 10-minute holes, one across an update: 1 app stop", json.dumps({k: card.get(k) for k in ("app_stops_today", "app_stops_text")}))
 tool("clock_out_driver", {"driver": "saman.k", "reason": "suite: Part 2 checked"})
+
+# ---------------------------------------------------------------------------
+print("\n== 6f. Phase 7, Part 2b: the plan's lines and the start's pin, the Roads caps ==")
+pv = tool("plan_task", {"date": day(5), "leave_by": "08:00", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kurunegala tower site"}],
+                        "start": {"place": "Head office"}, "with_line": True})
+legs = [i for i in pv["timeline"]["items"] if i["kind"] == "leg"]
+check(pv.get("start", {}).get("lat") is not None and pv["start"].get("lng") is not None and legs and not any("line" in l for l in legs),
+      "plan_task with_line on the open package: the start's pin for the plan map, no Google line (only Google's road times bring one)",
+      json.dumps({"start": pv.get("start"), "legs": legs})[:300])
+st = tool("get_settings")["settings"]
+check(st["google_caps"]["roads"] == {"day": 0, "month": 0}, "snap to roads stays off by default (the asset tracking licence question)", json.dumps(st["google_caps"]["roads"]))
+tool("update_settings", {"key": "google_caps", "value": {**st["google_caps"], "roads": {"day": 200, "month": 4750}}})
+check(tool("get_settings")["settings"]["google_caps"]["roads"] == {"day": 200, "month": 4750}, "the planned caps (200 a day, 4,750 a month) are accepted")
+r = tool("update_settings", {"key": "google_caps", "value": {**st["google_caps"], "roads": {"day": 200, "month": 5000}}}, expect_error=True)
+check("4750" in r or "4,750" in r, "a month above 95 % of the free 5,000 is refused", r)
+tool("update_settings", {"key": "google_caps", "value": st["google_caps"]})
 
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")
