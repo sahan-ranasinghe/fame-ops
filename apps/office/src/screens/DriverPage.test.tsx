@@ -107,7 +107,7 @@ describe("DriverPage", () => {
     expect(screen.getByRole("button", { name: "Play" })).toBeTruthy();
     fireEvent.click(rows[1]);
     expect(rows[1].className).toContain("sel");
-  });
+  }, 20_000); // the file's first test pays for importing the page (over 5 s while every test file runs at once)
   it("Yesterday asks the tool for that day and says when nothing was shared", async () => {
     const transport = await mount();
     fireEvent.click(screen.getByRole("button", { name: "Yesterday" }));
