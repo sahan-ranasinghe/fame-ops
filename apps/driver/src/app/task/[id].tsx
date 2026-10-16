@@ -3,6 +3,10 @@
 // Complete task. Before it starts it shows the details and "Start task".
 // Phase 7 (item 18): Arrived needs the phone near the stop (components/ArrivalButton.tsx),
 // Done only after Arrived, Complete task only once the last stop is Done or Skipped.
+// Phase 7 Part 2: stops named by their place in the order ("Stop 2 · Drop") with the time there
+// ("09:00–10:30 at Kurunegala site"); after the office's vehicle swap the card asking for both
+// odometers (components/SwapCard.tsx), the start odo of the stretch in the vehicle now, and on the
+// finished task each vehicle's km.
 
 import { Camera, GeoJSONSource, Layer, Map, Marker } from '@maplibre/maplibre-react-native';
 import Constants from 'expo-constants';
@@ -18,10 +22,12 @@ import { ArrivalButton, useHere } from '@/components/ArrivalButton';
 import { DeclineSheet } from '@/components/DeclineSheet';
 import { GoogleCredit } from '@/components/GoogleCredit';
 import { SkipSheet } from '@/components/SkipSheet';
+import { Stretches, SwapCard } from '@/components/SwapCard';
 import { leaveTime, nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
+import { shownTaskKm, stopLabel, stopTimeAt } from '@/components/taskLines';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
-import { arrivalCheck, arrivalRecord, canMarkDone, lastStopOpen } from '@/lib/dayRules';
+import { arrivalCheck, arrivalRecord, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/dayRules';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { colomboTime } from '@/lib/time';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
@@ -211,6 +217,9 @@ export default function TaskScreen() {
   const otherRunning = tasks.some((item) => item.status === 'in_progress' && item.id !== task.id);
   // Complete task waits for the last stop (Done or Skipped); open stops before it become "not visited".
   const lastOpen = running ? lastStopOpen(task) : null;
+  // After a vehicle swap: the start of the stretch in the vehicle now (null until its start reading is logged).
+  const startOdo = stretchStartKm(task);
+  const finishedKm = shownTaskKm(task);
 
   const overlay = (
     <>
@@ -268,6 +277,7 @@ export default function TaskScreen() {
         {running ? (
           <>
             <TrackingNotice />
+            <SwapCard task={task} />
             <View style={styles.stats}>
               <View style={{ flex: 1 }}>
                 <Txt variant="muted" size={15}>{t('task.distanceLeft')}</Txt>
@@ -276,7 +286,7 @@ export default function TaskScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Txt variant="muted" size={15}>{t('task.startOdo')}</Txt>
-                <Mono size={23} bold>{task.start_odometer_km === null ? '–' : thousands(task.start_odometer_km)}</Mono>
+                <Mono size={23} bold>{startOdo === null ? '–' : thousands(startOdo)}</Mono>
               </View>
             </View>
             {gpsKm.taskId === task.id && (
@@ -291,9 +301,11 @@ export default function TaskScreen() {
               {task.task_stops.map((item) => {
                 const done = item.status === 'done' || item.status === 'skipped';
                 const current = stop?.id === item.id;
+                // "09:00–10:30 at Kurunegala site" when the plan has the times; else the place and "15 min there".
+                const timeAt = stopTimeAt(t, item);
                 const detail = [
                   item.arrive_by ? t('task.arriveBy', { time: colomboTime(item.arrive_by) }) : null,
-                  item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min }) : null,
+                  timeAt === null && item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min }) : null,
                   item.status === 'skipped' ? t('task.skipped') : item.status === 'arrived' && item.arrived_at ? `${t('task.arrived')} ${colomboTime(item.arrived_at)}` : null,
                 ].filter(Boolean).join(' · ');
                 // A stop further down (visited out of order): Done once arrived, Arrived only when the phone is there.
@@ -303,10 +315,11 @@ export default function TaskScreen() {
                     <View style={styles.stopRow}>
                       <View style={{ flex: 1 }}>
                         <Txt variant="muted" size={14}>
-                          {current ? `${t('task.currentStop')} · ` : ''}{t(item.type === 'pickup' ? 'today.pickup' : item.type === 'drop' ? 'today.dropoff' : 'today.visit')}
+                          {current ? `${t('task.currentStop')} · ` : ''}{stopLabel(t, task, item)}
                         </Txt>
-                        <Txt variant="strong">{item.place_name}</Txt>
+                        <Txt variant="strong">{timeAt ?? item.place_name}</Txt>
                         <GoogleCredit show={!!item.google_place_id} />
+                        {item.is_start && <Txt variant="small">{t('stop.start')}</Txt>}
                         {detail !== '' && <Txt variant="small">{detail}</Txt>}
                         {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
                       </View>
@@ -371,8 +384,11 @@ export default function TaskScreen() {
             <StopTimeline stops={task.task_stops} />
             {people && <Txt variant="muted">{people}</Txt>}
             {task.notes && <Txt variant="body">{task.notes}</Txt>}
-            {task.status === 'completed' && task.km !== null && (
-              <Mono size={20} bold>{`${thousands(task.km)} ${t('common.km')}`}</Mono>
+            {task.status === 'completed' && finishedKm !== null && (
+              <View style={{ gap: 6 }}>
+                <Mono size={20} bold>{`${thousands(finishedKm)} ${t('common.km')}`}</Mono>
+                <Stretches task={task} />
+              </View>
             )}
             {task.status === 'cancelled' && task.cancelled_reason && <Notice tone="warn" text={task.cancelled_reason} />}
             {task.status === 'declined' && <Notice tone="warn" text={t('task.declinedBody')} />}

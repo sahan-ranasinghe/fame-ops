@@ -3,17 +3,20 @@
 // filled in. Back returns to where it was opened, with that screen's state
 // kept; after Send, "Report sent" and the same return. Unsaved input asks
 // "Discard changes?" on back.
+// Phase 7 Part 2: with "I need another vehicle" ticked the message says the office knows; with no
+// connection it says the report waits on the phone and offers Call office.
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ChevronLeft } from '@/components/icons';
 import { useCallback, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, type AlertButton, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
 import { ReportForm } from '@/components/ReportForm';
 import { Txt } from '@/components/ui';
+import { OFFICE_PHONE } from '@/config';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -32,11 +35,24 @@ export default function ReportProblemScreen() {
 
   if (!app.me) return <Redirect href="/login" />;
 
-  function sent() {
+  function sent({ needsVehicle }: { needsVehicle: boolean }) {
     allowLeave();
-    Alert.alert(t('report.sentTitle'), t(app.offline ? 'common.savedOffline' : 'report.sentBody'), [
-      { text: t('common.ok'), onPress: () => router.back() },
-    ]);
+    const buttons: AlertButton[] = [{ text: t('common.ok'), onPress: () => router.back() }];
+    // Another vehicle is needed and the report only waits on the phone: the office can be called instead.
+    if (needsVehicle && app.offline && OFFICE_PHONE !== '') {
+      buttons.unshift({
+        text: t('gate.callOffice'),
+        onPress: () => {
+          void Linking.openURL(`tel:${OFFICE_PHONE}`);
+          router.back();
+        },
+      });
+    }
+    Alert.alert(
+      t('report.sentTitle'),
+      t(app.offline ? 'common.savedOffline' : needsVehicle ? 'report.needVehicleSent' : 'report.sentBody'),
+      buttons,
+    );
   }
 
   return (
