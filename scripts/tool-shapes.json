@@ -7,6 +7,7 @@
   "drivers[].accepted_today: number",
   "drivers[].busy_with: string",
   "drivers[].declined_today: number",
+  "drivers[].duty: string",
   "drivers[].free: bool",
   "drivers[].licence.chip: string",
   "drivers[].licence.expiry: string",
