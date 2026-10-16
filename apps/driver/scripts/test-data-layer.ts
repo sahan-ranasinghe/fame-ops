@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
 import * as api from '../src/lib/api';
+import { swapReadingsWaiting, taskKmSoFar } from '../src/lib/dayRules';
 import { ApiError, type HeartbeatRow, VEHICLE_COLUMNS } from '../src/lib/api';
 import type { Database } from '../src/lib/database.types';
 import { base64Decode, SupabaseTusStore } from '../src/lib/videoStore';
@@ -465,6 +466,26 @@ async function main() {
     'Arrived far from the pin is kept with its flag; Done without Arrived is refused and set aside', { result, failed: queue.failed().slice(-1), s2rows });
   const holder = must(await admin.from('vehicle_assignments').select('employee_id, how').eq('vehicle_id', van.id).is('to_at', null).single(), 'van holder');
   check(holder.employee_id === a.row.id && holder.how === 'task_start', 'starting the task on the van took it back from driver B (task_start)', holder);
+
+  console.log('\n== Phase 7, Part 2: the office swaps the vehicle during the task; the phone sends both readings; I need another vehicle ==');
+  const swap = must(await admin.rpc('office_swap_vehicle', { p_task: task2, p_vehicle: car.id, p_by: 'test' }), 'swap') as { result?: string };
+  const swapped = (await api.fetchTasks(client, since)).find((t) => t.id === task2)!;
+  const owed = swapReadingsWaiting(swapped);
+  check(swap.result === 'swapped' && swapped.vehicle_id === car.id && swapped.task_vehicle_segments?.length === 2
+    && owed.oldEnd?.vehicleId === van.id && owed.oldEnd.startKm === 84570 && owed.newStart?.vehicleId === car.id,
+    "fetchTasks reads the stretches; the phone owes the van's end and the car's start", { swap, segments: swapped.task_vehicle_segments, owed });
+  queue.add(
+    { kind: 'odometer_log', row: { id: randomUUID(), vehicle_id: van.id, employee_id: a.row.id, task_id: task2, reading_km: 84610, ocr_value: 84610, photo_id: null, kind: 'task_end', logged_at: new Date().toISOString(), entry: 'photo', photo_attempts: 1 } },
+    { kind: 'odometer_log', row: { id: randomUUID(), vehicle_id: car.id, employee_id: a.row.id, task_id: task2, reading_km: 12000, ocr_value: 12000, photo_id: null, kind: 'task_start', logged_at: new Date().toISOString(), entry: 'photo', photo_attempts: 1 } },
+  );
+  const needId = randomUUID();
+  queue.add({ kind: 'report', row: { id: needId, vehicle_id: car.id, employee_id: a.row.id, task_id: task2, category: 'breakdown', note: 'Clutch gone', created_at: new Date().toISOString(), needs_vehicle: true } });
+  result = await sync.flush();
+  const afterSwap = (await api.fetchTasks(client, since)).find((t) => t.id === task2)!;
+  const need = must(await admin.from('vehicle_reports').select('needs_vehicle, task_id').eq('id', needId).single(), 'report');
+  check(result.failed === 0 && swapReadingsWaiting(afterSwap).oldEnd === null && swapReadingsWaiting(afterSwap).newStart === null
+    && taskKmSoFar(afterSwap, 12025) === 65 && need.needs_vehicle === true,
+    'through the real queue: both readings fill the stretches (40 + 25 km), and the report asks for another vehicle', { result, failed: queue.failed(), segments: afterSwap.task_vehicle_segments, need });
 
   console.log('\n== The other driver ==');
   const clientB = driverClient({ value: true });

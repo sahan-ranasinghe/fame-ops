@@ -1672,10 +1672,206 @@ check("duty_cutoff" in r, "a cut-off that is not HH:MM is refused", r)
 tool("update_settings", {"key": "duty_cutoff", "value": "21:00"})
 jobs = json.loads(psql("select duty_jobs()"))
 end = psql(f"select end_reason || '|' || to_char(ended_at at time zone 'Asia/Colombo', 'YYYY-MM-DD HH24:MI') from duty_sessions where id = '{S7A}'")
-check(jobs["clocked_out"] >= 1 and end == f"auto|{iso(today - dt.timedelta(days=1))} 21:00", "duty_jobs: clocked out at yesterday's 21:00 (auto)", f"{jobs} {end}")
+check(jobs["closed_silently"] >= 1 and end == f"auto|{iso(today - dt.timedelta(days=1))} 21:00",
+      "duty_jobs: clocked out at yesterday's 21:00 (auto), silently (an earlier day: no push)", f"{jobs} {end}")
 tool("update_settings", {"key": "duty_cutoff", "value": ""})
 check(psql("select count(*) from employees e where e.current_vehicle_id is distinct from (select a.vehicle_id from vehicle_assignments a where a.employee_id = e.id and a.to_at is null)") == "0",
       "every employee's current_vehicle_id equals their open vehicle row")
+
+# ---------------------------------------------------------------------------
+print("\n== 6e. Phase 7, Part 2: time at each stop, the start stop, the vehicle fills itself, conflicts, needs a driver, the swap ==")
+tool("update_settings", {"key": "duty_cutoff", "value": ""})
+# Any permission brings view (§12).
+nr_email = f"needreq.{uuid.uuid4().hex[:6]}@fame.test"
+cu = tool("create_office_user", {"name": "Need Requester", "email": nr_email, "permissions": ["request"]})
+up = tool("update_office_user", {"email": nr_email, "permissions": ["issues"]})
+check(cu["created"]["permissions"] == ["view", "request"] and up["updated"]["permissions"] == ["view", "issues"],
+      "any permission brings view (create_office_user and update_office_user)", f"{cu['created']['permissions']} {up['updated']['permissions']}")
+tool("update_office_user", {"email": nr_email, "permissions": ["request"]})
+NEED_REQ = psql(f"select id from employees where email = '{nr_email}'")
+p4, a4 = browser_keys()
+psql(f"insert into web_push_subscriptions (employee_id, endpoint, p256dh, auth) values ('{NEED_REQ}', '{SINK}/push/needreq', '{p4}', '{a4}')")
+
+# Time at each stop (§17): the defaults, a chosen time, the place's usual time.
+st = tool("get_settings")["settings"]
+check(st["dwell_min"] == {"pickup": 5, "drop": 5, "visit": 60, "default": 5} and st["accept_within_min"] == 15 and st["accept_before_leave_min"] == 30
+      and st.get("accept_reminder_min") == 5, "settings: the time at a stop by type (5, 5, 60) and the accept window 15 / 30 with the reminder at 5",
+      json.dumps({k: st.get(k) for k in ("dwell_min", "accept_within_min", "accept_before_leave_min", "accept_reminder_min")}))
+pv = tool("plan_task", {"date": day(5), "leave_by": "08:00", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "Kurunegala tower site"}]})
+s1, s2 = pv["stops"][0], pv["stops"][1]
+check(s1["label"] == "Stop 1 · Pickup · Head office, Colombo 05" and s2["label"] == "Stop 2 · Visit · Kurunegala tower site"
+      and s2["dwell_min"] == 60 and s2["dwell_source"] == "default" and s2.get("planned_leave"),
+      "plan_task: stops named by their place in the order, a visit's default 60 min, its planned leave", json.dumps([s1, s2])[:400])
+items = pv["timeline"]["items"]
+check(items[0]["kind"] == "leave" and items[0]["at"] == "08:00"
+      and any(i["kind"] == "leg" and i["from_n"] == 1 and i["to_n"] == 2 for i in items)
+      and [i["label"] for i in items if i["kind"] == "stop"] == [s1["label"], s2["label"]]
+      and {"drive_min", "km", "ends"} <= set(pv["timeline"]["totals"]),
+      "plan_task: the timeline (leave, stop, leg, stop) and its totals", json.dumps(pv["timeline"])[:400])
+cv = tool("create_task", {"title": "P7b usual time", "date": day(5), "start_time": "08:00", "driver": "ruwan.j", "vehicle": "WP P7-1001",
+                          "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "Kurunegala tower site", "dwell_min": 90}]})
+check(psql("select usual_dwell_min from places where name = 'Kurunegala tower site'") == "90"
+      and psql(f"select dwell_source from task_stops where task_id = '{cv['task_id']}' and seq = 2") == "chosen",
+      "a chosen time is saved on the stop (chosen) and becomes the place's usual time")
+pv = tool("plan_task", {"date": day(6), "leave_by": "08:00", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "Kurunegala tower site"}]})
+check(pv["stops"][1]["dwell_min"] == 90 and pv["stops"][1]["dwell_source"] == "place", "the next plan at that place takes its usual time (place)", json.dumps(pv["stops"][1])[:200])
+tool("cancel_task", {"task_id": cv["task_id"], "reason": "suite: usual time checked"})
+
+# The start stop (§11): passengers get in at the start; a pickup at the start says so.
+pv = tool("plan_task", {"date": day(5), "leave_by": "08:00", "start": {"place": "Head office", "passengers": True},
+                        "stops": [{"type": "drop", "place": "Kurunegala tower site"}]})
+check(pv["stops"][0].get("is_start") is True and pv["stops"][0]["label"] == "Stop 1 · Pickup · Head office, Colombo 05"
+      and pv["stops"][1]["label"] == "Stop 2 · Drop · Kurunegala tower site"
+      and not any(i["kind"] == "leg" and i["to_n"] == 1 for i in pv["timeline"]["items"]),
+      "start.passengers: the start is Stop 1 (a pickup, no leg to it) and the drop is Stop 2", json.dumps(pv["stops"])[:300])
+pv = tool("plan_task", {"date": day(5), "leave_by": "08:00", "start": {"place": "Head office"},
+                        "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kurunegala tower site"}]})
+check(any(w.startswith("Same as the start: Stop 1 (Head office, Colombo 05) is a pickup") for w in pv["warnings"]),
+      "a first pickup at the start without the tick: the warning says to tick 'Passengers get in here'", json.dumps(pv["warnings"]))
+
+# The vehicle fills itself (§3): the driver's regular vehicle, then the one held today; another one is recorded.
+tool("update_vehicle", {"reg_no": "WP P7-1002", "regular_driver": "saman.k"})
+ct = tool("create_task", {"title": "P7b regular", "date": day(5), "start_time": "09:00", "driver": "saman.k", "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+check(ct["vehicle"] == "WP P7-1002" and ct.get("vehicle_used") == {"reg_no": "WP P7-1002", "why": "Saman's regular vehicle"},
+      "create_task with no vehicle: Saman's regular vehicle, said so", json.dumps({k: ct.get(k) for k in ("vehicle", "vehicle_used")}))
+tool("cancel_task", {"task_id": ct["task_id"], "reason": "suite: regular vehicle checked"})
+S7B = str(uuid.uuid4())
+code, _ = saman.post("duty_sessions", {"id": S7B, "employee_id": SA, "vehicle_id": VA, "device_info": {"brand": "samsung", "model": "SM-A226B"}})
+ct = tool("create_task", {"title": "P7b today", "date": day(5), "start_time": "10:00", "driver": "saman.k", "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+TD = ct["task_id"]
+check(code == 201 and ct.get("vehicle_used") == {"reg_no": "WP P7-1001", "why": "Saman's vehicle today"} and ct.get("timeline", {}).get("items"),
+      "on duty with WP P7-1001: that one (Saman's vehicle today), with the timeline", json.dumps(ct.get("vehicle_used")))
+ch = tool("create_task", {"title": "P7b other vehicle", "date": day(6), "start_time": "10:00", "driver": "saman.k", "vehicle": "WP P7-1002",
+                          "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+td = tool("task_detail", {"task_id": ch["task_id"]})
+check(ch.get("vehicle_changed") == f"Vehicle changed by {ACTOR_NAME}: WP P7-1002 instead of Saman's vehicle today WP P7-1001"
+      and td["task"].get("vehicle_changed") == ch["vehicle_changed"],
+      "another vehicle than the default: recorded on the task and shown", json.dumps(ch.get("vehicle_changed")))
+tool("cancel_task", {"task_id": ch["task_id"], "reason": "suite: vehicle choice checked"})
+
+# Overlaps as cards (§17): the vehicle and the driver busy then, with the other task and its people.
+ov = tool("create_task", {"title": "P7b overlap", "date": day(5), "start_time": "10:15", "driver": "ruwan.j", "vehicle": "WP P7-1001",
+                          "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+cf = (ov.get("conflicts") or [{}])[0]
+check(cf.get("kind") == "vehicle" and cf.get("task", {}).get("id") == TD and cf["text"].startswith("WP P7-1001 is on task P7b today")
+      and "(driver Saman)" in cf["text"] and cf.get("driver", {}).get("call", "").startswith("tel:"),
+      "a vehicle overlap comes as a card: the other task, its driver with a call link", json.dumps(cf)[:300])
+tool("cancel_task", {"task_id": ov["task_id"], "reason": "suite: overlap checked"})
+pt = tool("plan_task", {"date": day(5), "leave_by": "10:15", "driver": "saman.k", "vehicle": "WP P7-1002", "pickup": "Head office", "dropoff": "Galle"})
+check(any(c["kind"] == "driver" and c.get("task", {}).get("id") == TD for c in pt.get("conflicts", [])), "plan_task: the driver busy then, as a card",
+      json.dumps(pt.get("conflicts"))[:300])
+
+# Needs a driver (§19): a decline goes to the dispatchers at once with the change page; the board, the overview and Live list it.
+code, ans = saman.post("rpc/decline_task", {"p_task_id": TD, "p_reason": "vehicle_problem", "p_note": "Brakes"}, prefer="return=representation")
+nd = next((n for n in tool("task_board", {"date": day(5)}).get("needs_driver", []) if n["task_id"] == TD), {})
+check(ans == "declined" and nd.get("kind") == "declined" and nd.get("line") == "Saman declined · Vehicle problem" and nd.get("note") == "Brakes"
+      and nd.get("when", "").startswith("in "), "task_board.needs_driver: declined, the reason, the time to the start", json.dumps(nd)[:300])
+ovw = tool("fleet_overview")
+check(ovw.get("needs_driver", {}).get("count", 0) >= 1 and any(n["task_id"] == TD for n in ovw["needs_driver"]["tasks"]),
+      "fleet_overview.needs_driver lists it", json.dumps(ovw.get("needs_driver"))[:300])
+card = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "saman.k")
+check((card.get("task_note") or "").startswith("declined the ") and card["task_note"].endswith(" 10:00 task"), "live_drivers: 'declined the … 10:00 task'", card.get("task_note"))
+row = outbox(f"event = 'task.declined' and recipient_employee_id = '{APPROVER}' and payload->>'task_id' = '{TD}'")
+check(f"|Saman declined 'P7b today' 10:00|Vehicle problem: Brakes · needs a driver|/tasks/{TD}/edit?driver=1" in row,
+      "the approver's push: who declined what, the reason, 'needs a driver', the change page", row)
+fleet_jobs()
+iss = next((i for i in tool("list_issues", {"status": "active", "kind": "declined"})["issues"] if i.get("task_id") == TD), None)
+hist = tool("issue_history", {"id": iss["id"]}) if iss else {"events": []}
+check(iss is not None and iss["severity"] == "critical" and any(e["action"] == "notified" and (e.get("note") or "").startswith("Told by web push") for e in hist["events"]),
+      "the declined issue is critical and its history says who was told and when", json.dumps(hist["events"])[:300])
+check(outbox(f"event = 'issue.opened' and payload->>'url' = '/issues/{iss['id'] if iss else 'x'}'") == "", "no second 'critical issue' push for it")
+tool("reassign_task", {"task_id": TD, "driver": "ruwan.j", "vehicle": "WP P7-1002"})
+td = tool("task_detail", {"task_id": TD})
+check("needs_driver" not in td["task"] and not any(n["task_id"] == TD for n in tool("task_board", {"date": day(5)}).get("needs_driver", [])),
+      "reassigning clears it", json.dumps(td["task"].get("needs_driver")))
+tool("cancel_task", {"task_id": TD, "reason": "suite: needs a driver checked"})
+
+# The requester hears it too, on their own request's page.
+rq = tool("create_request", {"requested_by": "Need Requester", "date": day(5), "time": "13:00", "route_from": "Head office", "route_to": "Galle",
+                             "from_dwell_min": 15, "to_dwell_min": 30})
+dr = tool("decide_request", {"request_id": rq["request"]["id"], "decision": "approve", "driver": "saman.k"})
+TR = dr["task_id"]
+stops_r = tool("task_detail", {"task_id": TR})["stops"]
+check(dr.get("vehicle_used", {}).get("reg_no") == "WP P7-1001" and [s.get("dwell_min") for s in stops_r] == [15, 30]
+      and [s.get("dwell_source") for s in stops_r] == ["chosen", "chosen"],
+      "decide_request with a driver only: the vehicle fills itself; the request's times at From and To reach the stops", json.dumps([dr.get("vehicle_used"), stops_r])[:300])
+saman.post("rpc/decline_task", {"p_task_id": TR, "p_reason": "unwell"})
+row = outbox(f"event = 'task.declined' and recipient_employee_id = '{NEED_REQ}'")
+check(f"|Unwell · needs a driver|/requests/{rq['request']['id']}" in row, "the requester's push opens their request", row)
+tool("cancel_request", {"request_id": rq["request"]["id"], "reason": "suite: requester told"})
+
+# Not accepted in time: the reminder at 5 minutes, needs a driver at 15; accepting late clears it.
+tn = tool("create_task", {"title": "P7b not accepted", "date": day(5), "start_time": "11:00", "driver": "ruwan.j", "vehicle": "WP P7-1002",
+                          "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+TN = tn["task_id"]
+psql(f"update tasks set sent_at = now() - interval '6 minutes' where id = '{TN}'")
+psql("select queue_accept_reminders()")
+check(psql(f"select (accept_reminder_sent_at is not null)::text || '|' || coalesce(needs_driver_reason, '-') from tasks where id = '{TN}'") == "true|-",
+      "6 minutes after sending: the driver's reminder, not yet the office")
+psql(f"update tasks set sent_at = now() - interval '16 minutes' where id = '{TN}'")
+psql("select queue_accept_reminders()")
+row = outbox(f"event = 'task.not_accepted' and recipient_employee_id = '{APPROVER}' and payload->>'task_id' = '{TN}'")
+check(psql(f"select needs_driver_reason from tasks where id = '{TN}'") == "not_accepted" and "|Ruwan hasn't accepted 'P7b not accepted' 11:00|needs a driver|" in row,
+      "16 minutes: needs a driver (not accepted), the approver told", row)
+code, ans = ruwan.post("rpc/accept_task", {"p_task_id": TN, "p_at": iso(dt.datetime.now(dt.timezone.utc))}, prefer="return=representation")
+check(ans == "accepted" and psql(f"select coalesce(needs_driver_reason, 'cleared') from tasks where id = '{TN}'") == "cleared", "accepting late clears it", str(ans))
+tool("cancel_task", {"task_id": TN, "reason": "suite: accept window checked"})
+
+# The swap during a task (§2 addition): readings typed by the office, km per stretch, mileage per vehicle.
+tw = tool("create_task", {"title": "P7b swap", "date": day(0) if can_today else day(1), "start_time": start, "driver": "saman.k",
+                          "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+TW = tw["task_id"]
+code, _ = saman.patch(f"tasks?id=eq.{TW}", {"status": "in_progress", "start_odometer_km": 5002})
+mv = tool("move_driver_vehicle", {"driver": "saman.k", "vehicle": "WP P7-1002", "old_end_km": 5082, "new_start_km": 9000, "reason": "Breakdown at Kegalle"})
+check(code == 200 and mv.get("swapped", {}).get("from") == "WP P7-1001" and mv["swapped"]["to"] == "WP P7-1002" and mv["readings"]["old_end"] == "typed: 5082 km",
+      "move_driver_vehicle on a task: a swap with both readings typed", json.dumps(mv)[:300])
+for sid in psql(f"select id from task_stops where task_id = '{TW}' order by seq").split("\n"):
+    saman.patch(f"task_stops?id=eq.{sid}", {"status": "arrived", "arrived_at": iso(dt.datetime.now(dt.timezone.utc)), "arrival_flag": "ok", "arrival_distance_m": 30})
+    saman.patch(f"task_stops?id=eq.{sid}", {"status": "done", "done_at": iso(dt.datetime.now(dt.timezone.utc))})
+code, row = saman.patch(f"tasks?id=eq.{TW}", {"status": "completed", "end_odometer_km": 9050})
+td = tool("task_detail", {"task_id": TW})
+check(code == 200 and td["task"]["km"] == 130 and [(g["vehicle"], g.get("km")) for g in td.get("segments", [])] == [("WP P7-1001", 80), ("WP P7-1002", 50)],
+      "completed in the second vehicle: task km 130 = 80 + 50, both stretches in task_detail", json.dumps({"km": td["task"].get("km"), "segments": td.get("segments")})[:300])
+ms = tool("mileage_summary", {"driver": "saman.k"})
+rows = {r["vehicle"]: r for r in ms["vehicles"]}
+check(rows.get("WP P7-1001", {}).get("task_km") == 80 and rows.get("WP P7-1002", {}).get("task_km") == 50 and ms["totals"]["tasks"] == 1,
+      "mileage: each vehicle gets its own stretch, the task counted once", json.dumps({k: v.get("task_km") for k, v in rows.items()}))
+
+# A swap with the readings from the phone; then "I need another vehicle".
+tw2 = tool("create_task", {"title": "P7b swap phone", "date": day(0) if can_today else day(1), "start_time": start, "driver": "saman.k",
+                           "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+TW2 = tw2["task_id"]
+saman.patch(f"tasks?id=eq.{TW2}", {"status": "in_progress", "start_odometer_km": 9050})
+rep4 = str(uuid.uuid4())
+code, _ = saman.post("vehicle_reports", {"id": rep4, "vehicle_id": VB, "employee_id": SA, "task_id": TW2, "category": "breakdown", "note": "Engine stopped",
+                                         "needs_vehicle": True})
+row = outbox(f"event = 'task.vehicle_needed' and recipient_employee_id = '{APPROVER}'")
+check(code == 201 and "|Another vehicle needed · WP P7-1002|Saman Kumara · Breakdown · P7b swap phone · Engine stopped|" in row,
+      "'I need another vehicle' (the driver's report): the dispatchers' push at once", row)
+fleet_jobs()
+vn = [i for i in tool("list_issues", {"status": "active", "kind": "vehicle_needed"})["issues"] if i.get("task_id") == TW2]
+check(vn and vn[0]["severity"] == "critical" and vn[0]["title"] == "Another vehicle needed: WP P7-1002", "a critical vehicle_needed issue", json.dumps(vn[:1])[:300])
+mv = tool("move_driver_vehicle", {"driver": "saman.k", "vehicle": "WP P7-1001"})
+check(mv["readings"] == {"old_end": "the driver enters it on the phone", "new_start": "the driver enters it on the phone"}, "a swap without readings: the phone is asked",
+      json.dumps(mv["readings"]))
+code1, _ = saman.post("odometer_logs", {"vehicle_id": VB, "employee_id": SA, "task_id": TW2, "kind": "task_end", "reading_km": 9070})
+code2, _ = saman.post("odometer_logs", {"vehicle_id": VA, "employee_id": SA, "task_id": TW2, "kind": "task_start", "reading_km": 5082})
+segs = psql(f"select string_agg(seq || ':' || coalesce(start_odometer_km::text, '-') || '-' || coalesce(end_odometer_km::text, '-'), ',' order by seq) "
+            f"from task_vehicle_segments where task_id = '{TW2}'")
+check((code1, code2) == (201, 201) and segs == "1:9050-9070,2:5082--", "the phone's two readings fill the stretches (old end, new start)", segs)
+fleet_jobs()
+vn = [i for i in tool("list_issues", {"status": "active", "kind": "vehicle_needed"})["issues"] if i.get("task_id") == TW2]
+check(not vn, "the vehicle_needed issue resolves itself when the task's vehicle changes", json.dumps(vn[:1])[:200])
+tool("cancel_task", {"task_id": TW2, "reason": "suite: swap checked"})
+
+# App stops (addition 3): a gap where the app version changed (an update or a new install) is not an app stop.
+nowp = dt.datetime.now(dt.timezone.utc)
+for mins, ver in ((40, "1.2.0+a"), (39, "1.2.0+a"), (30, "1.2.0+b"), (29, "1.2.0+b"), (20, "1.2.0+b")):
+    psql(f"insert into driver_heartbeats (employee_id, at, session_id, sharing, app_version) values ('{SA}', '{iso(nowp - dt.timedelta(minutes=mins))}', '{S7B}', true, '{ver}')"
+         " on conflict do nothing")
+card = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "saman.k")
+check(card.get("app_stops_today") == 1, "two gaps over 3 minutes, one across an update: 1 app stop", json.dumps({k: card.get(k) for k in ("app_stops_today", "app_stops_text")}))
+tool("clock_out_driver", {"driver": "saman.k", "reason": "suite: Part 2 checked"})
 
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")

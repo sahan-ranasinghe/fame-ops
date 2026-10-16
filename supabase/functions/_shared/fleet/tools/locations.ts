@@ -21,7 +21,7 @@ export function snapProvider(settings: Settings, channel: Channel): MapMatchingP
   return settings.map_matching.provider === "osrm" ? "osrm" : "none";
 }
 import { buildRoute, type LinePoint, type RouteFix, type Segment, withSpeeds } from "../route.ts";
-import { colomboDate, colomboDateTime, colomboTime, dayRange, utcIso } from "../time.ts";
+import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
 
 /** watch_drivers keeps a driver watched this long; the web calls it again every 30 s while the page is open. */
@@ -175,7 +175,9 @@ export const liveDrivers = tool({
         task_note: (() => {
           const t = needing.find((x) => x.employee_id === e.id);
           if (!t) return undefined;
-          const at = colomboTime(t.leave_by ?? t.start_at);
+          // "the 09:00 task" today; a later day names it ("the Fri 17 Oct 09:00 task").
+          const leave = t.leave_by ?? t.start_at;
+          const at = colomboDate(leave) === colomboDate(now) ? colomboTime(leave) : colomboDayTime(leave);
           return t.needs_driver_reason === "declined" ? `declined the ${at} task` : `hasn't accepted the ${at} task`;
         })(),
         app_stops_today: stopsCount > 0 ? stopsCount : undefined,
