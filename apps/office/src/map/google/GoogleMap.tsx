@@ -1,13 +1,20 @@
 // The real map under the google package (web build, Part 5): Google's tiles with the same
-// markers, lines and labels as the MapLibre map: a marker per driver (plate chip over a dot with
-// an arrow that turns with the heading), moves glided over the real time between two positions,
-// routes coloured by speed and thin where the fix was poor, stops with their times, holes dashed
-// with a label, the playback marker, other drivers' trails lighter, a focus zooms in. The map
-// itself is the tab's one Google map (googleMaps.ts), moved in and out of this page's box.
+// markers and lines as the MapLibre map: a marker per driver (plate chip over a dot with an arrow
+// that turns with the heading), moves glided over the real time between two positions, routes
+// coloured by speed and thin where the fix was poor, stops with their times, holes dashed, the
+// playback marker (hollow while it crosses a gap, turned to the path), other drivers' trails
+// lighter, a focus zooms in. Phase 7 (Part 2b): gap markers with their card instead of labels
+// (§21), the plan's pins (Google's pins too: this is Google's map) and Google's road line of each
+// leg (§20), and the one control cluster with the compass (§24, §25). The map itself is the tab's
+// one Google map (googleMaps.ts), moved in and out of this page's box.
 import { speedClass } from "@fleet/route";
-import { useEffect, useRef } from "react";
-import { Icon } from "../../ui/icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { compassShown, fixedHeight } from "../controlsLogic";
+import { cursorEl, gapKey, gapMarkEl, placeCard, planPinEl, setCursor, setGapOpen, setPlanPin } from "../domMarks";
 import { plainRuns } from "../DrawnMap";
+import { needsCentre, useGapOpen } from "../gapLogic";
+import { MapControls } from "../MapControls";
+import { planFitKey, planFor, planPoints } from "../planDraw";
 import { ESTIMATED_COLOR, type MapProps, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "../types";
 import { attachMap, detachMap, fitTo, type GoogleMapsApi, type HtmlMarker, htmlMarker } from "./googleMaps";
 
@@ -20,6 +27,15 @@ interface Live {
   duration: number;
   at: number | null;
 }
+
+interface Placed {
+  marker: HtmlMarker;
+  el: HTMLButtonElement;
+  key: string;
+}
+
+/** Google's road line of a plan's leg (§20): solid, dark, under the pins. */
+const PLAN_LINE_COLOR = "#15181c";
 
 const ll = (p: RoutePoint): google.maps.LatLngLiteral => ({ lat: p.lat, lng: p.lng });
 
@@ -45,35 +61,95 @@ function runs(points: RoutePoint[], bySpeed: boolean): { color: string; poor: bo
   return out;
 }
 
-export default function GoogleMap({ markers, route, trails = [], focus = null, onPick, maps }: MapProps & { maps: GoogleMapsApi }) {
+/** A dashed line drawn with repeated dash symbols (Google's polylines have no dash style of their own). */
+function dashed(maps: GoogleMapsApi, m: google.maps.Map, path: google.maps.LatLngLiteral[], color: string, weight: number, scale: number, repeat: string, opacity = 1) {
+  return new maps.Polyline({
+    map: m,
+    path,
+    strokeOpacity: 0,
+    clickable: false,
+    icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: opacity, strokeColor: color, strokeWeight: weight, scale }, offset: "0", repeat }],
+  });
+}
+
+export default function GoogleMap({
+  markers,
+  route,
+  trails = [],
+  focus = null,
+  onPick,
+  gaps = [],
+  openGap,
+  onGap,
+  plan = null,
+  onPin,
+  trailsToggle,
+  height,
+  maps,
+}: MapProps & { maps: GoogleMapsApi }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<google.maps.Map | null>(null);
   const live = useRef(new Map<string, Live>());
   const routeParts = useRef<{ lines: google.maps.Polyline[]; marks: HtmlMarker[] }>({ lines: [], marks: [] });
   const trailLines = useRef<google.maps.Polyline[]>([]);
+  const planLines = useRef<google.maps.Polyline[]>([]);
   const cursor = useRef<HtmlMarker | null>(null);
+  const gapEls = useRef(new Map<string, Placed>());
+  const pinEls = useRef(new Map<string, Placed>());
   const pick = useRef(onPick);
+  const pinTap = useRef(onPin);
   const fitted = useRef(false);
   const fittedRoute = useRef("");
+  const fittedPlan = useRef("");
+  const [camera, setCamera] = useState({ heading: 0, tilt: 0 });
+  const [open, setOpen] = useGapOpen(openGap, onGap);
+  const openRef = useRef(open);
   pick.current = onPick;
+  pinTap.current = onPin;
+  openRef.current = open;
+  // Google's own map: every pin of the plan and Google's road lines.
+  const drawnPlan = useMemo(() => planFor(plan, true), [plan]);
 
   useEffect(() => {
     if (!box.current) return;
-    map.current = attachMap(box.current, maps);
+    const m = attachMap(box.current, maps);
+    map.current = m;
+    // §24: the compass shows while the map is turned or tilted (on a raster map: the 45° imagery only).
+    const turned = () => {
+      const heading = Math.round((m.getHeading() ?? 0) * 10) / 10, tilt = Math.round((m.getTilt() ?? 0) * 10) / 10;
+      setCamera((c) => (c.heading === heading && c.tilt === tilt ? c : { heading, tilt }));
+    };
+    turned();
+    const listeners = [
+      m.addListener("heading_changed", turned),
+      m.addListener("tilt_changed", turned),
+      // A tap on the map closes an open gap card.
+      m.addListener("click", () => {
+        if (openRef.current) setOpen(null);
+      }),
+    ];
     return () => {
+      listeners.forEach((l) => l.remove());
       live.current.forEach((l) => l.marker.setMap(null));
       live.current.clear();
       routeParts.current.lines.forEach((l) => l.setMap(null));
-      routeParts.current.marks.forEach((m) => m.setMap(null));
+      routeParts.current.marks.forEach((x) => x.setMap(null));
       routeParts.current = { lines: [], marks: [] };
       trailLines.current.forEach((l) => l.setMap(null));
       trailLines.current = [];
+      planLines.current.forEach((l) => l.setMap(null));
+      planLines.current = [];
       cursor.current?.setMap(null);
       cursor.current = null;
+      gapEls.current.forEach((g) => g.marker.setMap(null));
+      gapEls.current.clear();
+      pinEls.current.forEach((p) => p.marker.setMap(null));
+      pinEls.current.clear();
+      fittedPlan.current = "";
       detachMap();
       map.current = null;
     };
-  }, [maps]);
+  }, [maps, setOpen]);
 
   // Markers: add, glide, turn, restyle, remove.
   useEffect(() => {
@@ -132,7 +208,7 @@ export default function GoogleMap({ markers, route, trails = [], focus = null, o
     }
   }, [markers, maps]);
 
-  // The route: lines by speed and confidence, the start, holes dashed with labels, the stops.
+  // The route: lines by speed and confidence, the start, holes and estimated lines dashed (no labels, §21), the stops.
   useEffect(() => {
     const m = map.current;
     if (!m) return;
@@ -148,39 +224,9 @@ export default function GoogleMap({ markers, route, trails = [], focus = null, o
     for (const r of runs(route.points, !!route.bySpeed)) {
       lines.push(new maps.Polyline({ map: m, path: r.path, strokeColor: r.color, strokeWeight: r.poor ? 2.5 : 5, strokeOpacity: r.poor ? 0.45 : 0.9, clickable: false }));
     }
-    for (const h of route.holes ?? []) {
-      lines.push(new maps.Polyline({
-        map: m,
-        path: [ll(h.from), ll(h.to)],
-        strokeOpacity: 0,
-        clickable: false,
-        icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: "#8d9096", strokeWeight: 3, scale: 2 }, offset: "0", repeat: "10px" }],
-      }));
-      const label = document.createElement("div");
-      label.className = "mk-stop";
-      label.innerHTML = `<span class="mk-stop-label"></span>`;
-      (label.firstChild as HTMLElement).textContent = h.label ?? "";
-      const mid = htmlMarker(maps, label, { lat: (h.from.lat + h.to.lat) / 2, lng: (h.from.lng + h.to.lng) / 2 }, "center");
-      mid.setMap(m);
-      marks.push(mid);
-    }
+    for (const h of route.holes ?? []) lines.push(dashed(maps, m, [ll(h.from), ll(h.to)], "#8d9096", 3, 2, "10px"));
     for (const e of route.estimated ?? []) {
-      if (e.points.length < 2) continue;
-      lines.push(new maps.Polyline({
-        map: m,
-        path: e.points,
-        strokeOpacity: 0,
-        clickable: false,
-        icons: [{ icon: { path: "M 0,-1 0,1", strokeOpacity: 1, strokeColor: ESTIMATED_COLOR, strokeWeight: 3, scale: 1.5 }, offset: "0", repeat: "8px" }],
-      }));
-      const label = document.createElement("div");
-      label.className = "mk-stop";
-      label.innerHTML = `<span class="mk-stop-label"></span>`;
-      (label.firstChild as HTMLElement).textContent = e.label ?? "";
-      (label.firstChild as HTMLElement).style.color = ESTIMATED_COLOR;
-      const mid = htmlMarker(maps, label, e.points[Math.floor(e.points.length / 2)], "center");
-      mid.setMap(m);
-      marks.push(mid);
+      if (e.points.length > 1) lines.push(dashed(maps, m, e.points, ESTIMATED_COLOR, 3, 1.5, "8px"));
     }
     const start = document.createElement("div");
     start.style.cssText = "width:14px;height:14px;border-radius:50%;background:#ffffff;border:4px solid #1e4fa0;pointer-events:none";
@@ -205,7 +251,7 @@ export default function GoogleMap({ markers, route, trails = [], focus = null, o
     }
   }, [route, maps]);
 
-  // The playback marker.
+  // The playback marker: hollow while it crosses a gap, turned to the path (§22).
   useEffect(() => {
     const m = map.current;
     if (!m) return;
@@ -216,14 +262,11 @@ export default function GoogleMap({ markers, route, trails = [], focus = null, o
       return;
     }
     if (!cursor.current) {
-      const el = document.createElement("div");
-      el.className = "mk-cursor";
-      el.innerHTML = `<span class="mk-cursor-label"></span><span class="mk-cursor-dot"></span>`;
-      cursor.current = htmlMarker(maps, el, { lat: c.lat, lng: c.lng }, "bottom");
+      cursor.current = htmlMarker(maps, cursorEl(), { lat: c.lat, lng: c.lng }, "bottom");
       cursor.current.setMap(m);
     }
     cursor.current.setPosition({ lat: c.lat, lng: c.lng });
-    (cursor.current.el.firstChild as HTMLElement).textContent = c.label;
+    setCursor(cursor.current.el, c);
   }, [route?.cursor, maps]);
 
   // Other drivers' trails.
@@ -243,22 +286,138 @@ export default function GoogleMap({ markers, route, trails = [], focus = null, o
     fitTo(m, maps, focus.map(ll), 16);
   }, [focus, maps]);
 
+  // The gaps' markers (§21): made again only when a gap changes, so an open card stays open across refreshes.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const seen = new Set<string>();
+    for (const g of gaps) {
+      seen.add(g.id);
+      const key = gapKey(g);
+      const had = gapEls.current.get(g.id);
+      if (had && had.key === key) continue;
+      had?.marker.setMap(null);
+      const el = gapMarkEl(g, {
+        toggle: (id) => setOpen(openRef.current === id ? null : id),
+        close: () => setOpen(null),
+        container: () => map.current?.getDiv() ?? null,
+      });
+      // A tap on the marker is the marker's, not the map's (no map click, no drag from it).
+      maps.OverlayView.preventMapHitsAndGesturesFrom(el);
+      setGapOpen(el, openRef.current === g.id);
+      const marker = htmlMarker(maps, el, { lat: g.lat, lng: g.lng }, "center");
+      marker.setMap(m);
+      gapEls.current.set(g.id, { marker, el, key });
+    }
+    for (const [id, g] of gapEls.current) {
+      if (!seen.has(id)) {
+        g.marker.setMap(null);
+        gapEls.current.delete(id);
+      }
+    }
+  }, [gaps, maps, setOpen]);
+
+  // The open card (a Gaps list row or a tap): shown, and centred gently when its marker sits near the edge.
+  useEffect(() => {
+    gapEls.current.forEach((g, id) => setGapOpen(g.el, id === open));
+    const m = map.current;
+    const g = open ? gapEls.current.get(open) : undefined;
+    if (!m || !g) return;
+    // A Gaps list row may zoom the map to the gap at the same moment: look once that has settled.
+    const t = window.setTimeout(() => {
+      const div = m.getDiv();
+      const p = g.marker.getProjection()?.fromLatLngToContainerPixel(new maps.LatLng(g.marker.getPosition()));
+      if (p && needsCentre(p.x, p.y, div.clientWidth, div.clientHeight)) {
+        maps.event.addListenerOnce(m, "idle", () => placeCard(g.el, div));
+        m.panTo(g.marker.getPosition());
+      } else placeCard(g.el, div);
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [open, maps]);
+
+  // The plan (§20): every pin (Google's too: this is Google's map), numbered, late in red, the selected one
+  // highlighted; Google's road line of each leg (straight dashed connectors only when there is none); fitted when
+  // the pins or lines change, not on a highlight.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const seen = new Set<string>();
+    for (const p of drawnPlan.pins) {
+      seen.add(p.id);
+      const key = `${p.lat},${p.lng}`;
+      let placed = pinEls.current.get(p.id);
+      if (placed && placed.key !== key) {
+        placed.marker.setPosition({ lat: p.lat, lng: p.lng });
+        placed.key = key;
+      }
+      if (!placed) {
+        const el = planPinEl(p, (id) => pinTap.current?.(id));
+        maps.OverlayView.preventMapHitsAndGesturesFrom(el);
+        const marker = htmlMarker(maps, el, { lat: p.lat, lng: p.lng }, "center");
+        marker.setMap(m);
+        placed = { marker, el, key };
+        pinEls.current.set(p.id, placed);
+      }
+      setPlanPin(placed.el, p, plan?.selected === p.id);
+    }
+    for (const [id, p] of pinEls.current) {
+      if (!seen.has(id)) {
+        p.marker.setMap(null);
+        pinEls.current.delete(id);
+      }
+    }
+    const fitKey = planFitKey(drawnPlan);
+    if (fitKey && fittedPlan.current !== fitKey) {
+      fittedPlan.current = fitKey;
+      fitTo(m, maps, planPoints(drawnPlan));
+    } else if (!fitKey) fittedPlan.current = "";
+  }, [drawnPlan, plan?.selected, maps]);
+
+  // The plan's lines: Google's road line per leg, or the straight dashed connectors.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    planLines.current.forEach((l) => l.setMap(null));
+    planLines.current = [
+      ...drawnPlan.lines.map((path) => new maps.Polyline({ map: m, path, strokeColor: PLAN_LINE_COLOR, strokeWeight: 4, strokeOpacity: 0.75, clickable: false })),
+      ...drawnPlan.links.map(([a, b]) => dashed(maps, m, [{ lat: a.lat, lng: a.lng }, { lat: b.lat, lng: b.lng }], PLAN_LINE_COLOR, 2, 2, "12px", 0.55)),
+    ];
+  }, [drawnPlan, maps]);
+
+  const fitAll = () => {
+    const m = map.current;
+    if (!m) return;
+    const pts = markers.map((mk) => ({ lat: mk.lat, lng: mk.lng }));
+    if (route) pts.push(...route.points.map(ll));
+    pts.push(...planPoints(drawnPlan));
+    fitTo(m, maps, pts);
+  };
+
   return (
-    <div className="mapbox ml" data-testid="google-map">
+    <div className="mapbox ml" data-testid="google-map" style={fixedHeight(height)}>
       <div ref={box} className="ml-canvas" />
-      <div className="zoom ml-fit">
-        <button
-          type="button"
-          aria-label="Fit everyone on the map"
-          onClick={() => {
-            const m = map.current;
-            if (!m) return;
-            const pts = markers.map((mk) => ({ lat: mk.lat, lng: mk.lng }));
-            if (route) pts.push(...route.points.map(ll));
-            fitTo(m, maps, pts);
-          }}
-        ><Icon name="fit" /></button>
-      </div>
+      {drawnPlan.note && <div className="map-note" data-testid="map-note"><i className="map-note-dash" />{drawnPlan.note}</div>}
+      <MapControls
+        onZoomIn={() => {
+          const m = map.current;
+          if (m) m.setZoom((m.getZoom() ?? 7) + 1);
+        }}
+        onZoomOut={() => {
+          const m = map.current;
+          if (m) m.setZoom((m.getZoom() ?? 7) - 1);
+        }}
+        compass={{
+          shown: compassShown(camera),
+          bearing: camera.heading,
+          reset: () => {
+            map.current?.setHeading(0);
+            map.current?.setTilt(0);
+          },
+        }}
+        trails={trailsToggle}
+        onFit={fitAll}
+        fitLabel={!markers.length && drawnPlan.pins.length ? "Fit the plan on the map" : undefined}
+      />
     </div>
   );
 }

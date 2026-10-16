@@ -3,20 +3,30 @@
 // arrow that turns with the heading, blue live / amber stale / red not
 // sharing), moves animated over the real time between two positions (0.3 to
 // 10 s); routes as lines coloured by speed, thin and lighter where the fix was
-// poor (over 30 m), stops as small circles with their times, holes dashed with
-// a label, a playback marker, other drivers' trails drawn lighter; a focus (a
-// timeline row) zooms to those points.
+// poor (over 30 m), stops as small circles with their times, holes dashed, a
+// playback marker (hollow while it crosses a gap, turned to the path), other
+// drivers' trails drawn lighter; a focus (a timeline row) zooms to those points.
+// Phase 7 (Part 2b): gap markers with their card instead of labels (§21), the
+// plan's pins with straight connectors, never a Google pin or line (§20, rule
+// 10), and the one control cluster with the compass (§24, §25).
 import { speedClass } from "@fleet/route";
 import type { Feature, FeatureCollection } from "geojson";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useEffect, useRef, useState } from "react";
-import { Icon } from "../ui/icons";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { compassShown, fixedHeight } from "./controlsLogic";
+import { cursorEl, gapKey, gapMarkEl, placeCard, planPinEl, setCursor, setGapOpen, setPlanPin } from "./domMarks";
 import { plainRuns } from "./DrawnMap";
+import { needsCentre, useGapOpen } from "./gapLogic";
+import { MapControls } from "./MapControls";
+import { planFitKey, planFor, planPoints } from "./planDraw";
 import { ESTIMATED_COLOR, type MapProps, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
 
 export const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 const SRI_LANKA: [number, number] = [80.7, 7.8];
+
+/** The plan's connectors: thin, dashed, never read as a road (§20). */
+const PLAN_LINK_COLOR = "#15181c";
 
 interface Live {
   marker: maplibregl.Marker;
@@ -26,6 +36,12 @@ interface Live {
   started: number;
   duration: number;
   at: number | null;
+}
+
+interface Placed {
+  marker: maplibregl.Marker;
+  el: HTMLButtonElement;
+  key: string;
 }
 
 function fitTo(map: maplibregl.Map, points: [number, number][], maxZoom = 14) {
@@ -57,50 +73,82 @@ function stepFeatures(points: RoutePoint[], bySpeed: boolean): Feature[] {
   return out;
 }
 
-export default function MapLibreMap({ markers, route, trails = [], focus = null, onPick, onFail }: MapProps & { onFail: () => void }) {
+export default function MapLibreMap({
+  markers,
+  route,
+  trails = [],
+  focus = null,
+  onPick,
+  gaps = [],
+  openGap,
+  onGap,
+  plan = null,
+  onPin,
+  trailsToggle,
+  height,
+  onFail,
+}: MapProps & { onFail: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const live = useRef(new Map<string, Live>());
   const stopEls = useRef<maplibregl.Marker[]>([]);
-  const cursorEl = useRef<maplibregl.Marker | null>(null);
+  const cursorMark = useRef<maplibregl.Marker | null>(null);
+  const gapEls = useRef(new Map<string, Placed>());
+  const pinEls = useRef(new Map<string, Placed>());
   const pick = useRef(onPick);
+  const pinTap = useRef(onPin);
   const fitted = useRef(false);
   const fittedRoute = useRef<string>("");
+  const fittedPlan = useRef<string>("");
   const [ready, setReady] = useState(false);
+  const [camera, setCamera] = useState({ bearing: 0, pitch: 0 });
+  const [open, setOpen] = useGapOpen(openGap, onGap);
+  const openRef = useRef(open);
   pick.current = onPick;
+  pinTap.current = onPin;
+  openRef.current = open;
+  // Rule 10: this map never draws a Google pin or Google's line.
+  const drawnPlan = useMemo(() => planFor(plan, false), [plan]);
 
   useEffect(() => {
     if (!box.current) return;
     let m: maplibregl.Map;
     try {
-      m = new maplibregl.Map({ container: box.current, style: STYLE_URL, center: SRI_LANKA, zoom: 6.6, attributionControl: { compact: true } });
+      // §23: no cooperative gestures (one finger moves the map, the wheel zooms).
+      m = new maplibregl.Map({ container: box.current, style: STYLE_URL, center: SRI_LANKA, zoom: 6.6, attributionControl: { compact: true }, cooperativeGestures: false });
     } catch {
       onFail();
       return;
     }
-    m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+    // §24: the compass (in the cluster) shows while the map is rotated or tilted.
+    const turned = () => {
+      const bearing = Math.round(m.getBearing() * 10) / 10, pitch = Math.round(m.getPitch() * 10) / 10;
+      setCamera((c) => (c.bearing === bearing && c.pitch === pitch ? c : { bearing, pitch }));
+    };
+    m.on("rotate", turned);
+    m.on("pitch", turned);
+    m.on("moveend", turned);
+    // A tap on the map closes an open gap card.
+    m.on("click", () => {
+      if (openRef.current) setOpen(null);
+    });
     m.on("load", () => {
       const empty = (): FeatureCollection => ({ type: "FeatureCollection", features: [] });
       m.addSource("trails", { type: "geojson", data: empty() });
       m.addLayer({ id: "trails-line", type: "line", source: "trails", paint: { "line-color": "#1e4fa0", "line-width": 3, "line-opacity": 0.45 }, layout: { "line-join": "round", "line-cap": "round" } });
+      m.addSource("plan-links", { type: "geojson", data: empty() });
+      m.addLayer({
+        id: "plan-links-line",
+        type: "line",
+        source: "plan-links",
+        paint: { "line-color": PLAN_LINK_COLOR, "line-width": 2, "line-opacity": 0.55, "line-dasharray": [3, 3] },
+        layout: { "line-cap": "round" },
+      });
+      // The gaps (§21): dashed lines only; their words are on the gap markers, never on the map.
       m.addSource("holes", { type: "geojson", data: empty() });
       m.addLayer({ id: "holes-line", type: "line", source: "holes", paint: { "line-color": "#8d9096", "line-width": 3, "line-dasharray": [2, 2] }, layout: { "line-cap": "round" } });
-      m.addLayer({
-        id: "holes-label",
-        type: "symbol",
-        source: "holes",
-        layout: { "symbol-placement": "line-center", "text-field": ["get", "label"], "text-size": 11, "text-font": ["Noto Sans Regular"], "text-offset": [0, -0.9], "text-allow-overlap": false },
-        paint: { "text-color": "#5a5e63", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
-      });
       m.addSource("estimated", { type: "geojson", data: empty() });
       m.addLayer({ id: "estimated-line", type: "line", source: "estimated", paint: { "line-color": ESTIMATED_COLOR, "line-width": 3.5, "line-dasharray": [1, 2] }, layout: { "line-cap": "round", "line-join": "round" } });
-      m.addLayer({
-        id: "estimated-label",
-        type: "symbol",
-        source: "estimated",
-        layout: { "symbol-placement": "line-center", "text-field": ["get", "label"], "text-size": 11, "text-font": ["Noto Sans Regular"], "text-offset": [0, -0.9], "text-allow-overlap": false },
-        paint: { "text-color": ESTIMATED_COLOR, "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
-      });
       m.addSource("route", { type: "geojson", data: empty() });
       m.addLayer({
         id: "route-line",
@@ -128,8 +176,12 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
       live.current.clear();
       stopEls.current.forEach((s) => s.remove());
       stopEls.current = [];
-      cursorEl.current?.remove();
-      cursorEl.current = null;
+      cursorMark.current?.remove();
+      cursorMark.current = null;
+      gapEls.current.forEach((g) => g.marker.remove());
+      gapEls.current.clear();
+      pinEls.current.forEach((p) => p.marker.remove());
+      pinEls.current.clear();
       m.remove();
       map.current = null;
     };
@@ -190,7 +242,8 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
     }
   }, [markers]);
 
-  // The route: the line (by speed and confidence), the start, the holes with their labels, the stops; fitted once per route, not on every new point.
+  // The route: the line (by speed and confidence), the start, the holes and estimated lines dashed (no labels, §21),
+  // the stops; fitted once per route, not on every new point.
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
@@ -202,7 +255,7 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
       type: "FeatureCollection",
       features: (route?.estimated ?? []).filter((e) => e.points.length > 1).map((e) => ({
         type: "Feature",
-        properties: { label: e.label },
+        properties: {},
         geometry: { type: "LineString", coordinates: e.points.map((p): [number, number] => [p.lng, p.lat]) },
       })),
     });
@@ -221,7 +274,7 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
     });
     holeSrc.setData({
       type: "FeatureCollection",
-      features: (route.holes ?? []).map((h) => ({ type: "Feature", properties: { label: h.label }, geometry: { type: "LineString", coordinates: [lngLat(h.from), lngLat(h.to)] } })),
+      features: (route.holes ?? []).map((h) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [lngLat(h.from), lngLat(h.to)] } })),
     });
     for (const s of route.stops ?? []) {
       const el = document.createElement("div");
@@ -238,24 +291,19 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
     }
   }, [route, ready]);
 
-  // The playback marker.
+  // The playback marker: hollow while it crosses a gap, turned to the path (§22).
   useEffect(() => {
     const m = map.current;
     if (!m) return;
     const c = route?.cursor;
     if (!c) {
-      cursorEl.current?.remove();
-      cursorEl.current = null;
+      cursorMark.current?.remove();
+      cursorMark.current = null;
       return;
     }
-    if (!cursorEl.current) {
-      const el = document.createElement("div");
-      el.className = "mk-cursor";
-      el.innerHTML = `<span class="mk-cursor-label"></span><span class="mk-cursor-dot"></span>`;
-      cursorEl.current = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([c.lng, c.lat]).addTo(m);
-    }
-    cursorEl.current.setLngLat([c.lng, c.lat]);
-    (cursorEl.current.getElement().firstChild as HTMLElement).textContent = c.label;
+    if (!cursorMark.current) cursorMark.current = new maplibregl.Marker({ element: cursorEl(), anchor: "bottom" }).setLngLat([c.lng, c.lat]).addTo(m);
+    cursorMark.current.setLngLat([c.lng, c.lat]);
+    setCursor(cursorMark.current.getElement(), c);
   }, [route?.cursor]);
 
   // Other drivers' trails.
@@ -277,22 +325,122 @@ export default function MapLibreMap({ markers, route, trails = [], focus = null,
     fitTo(m, focus.map(lngLat), 16);
   }, [focus]);
 
+  // The gaps' markers (§21): made again only when a gap changes, so an open card stays open across refreshes.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const seen = new Set<string>();
+    for (const g of gaps) {
+      seen.add(g.id);
+      const key = gapKey(g);
+      const had = gapEls.current.get(g.id);
+      if (had && had.key === key) continue;
+      had?.marker.remove();
+      const el = gapMarkEl(g, {
+        toggle: (id) => setOpen(openRef.current === id ? null : id),
+        close: () => setOpen(null),
+        container: () => map.current?.getContainer() ?? null,
+      });
+      setGapOpen(el, openRef.current === g.id);
+      gapEls.current.set(g.id, { marker: new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([g.lng, g.lat]).addTo(m), el, key });
+    }
+    for (const [id, g] of gapEls.current) {
+      if (!seen.has(id)) {
+        g.marker.remove();
+        gapEls.current.delete(id);
+      }
+    }
+  }, [gaps, setOpen]);
+
+  // The open card (a Gaps list row or a tap): shown, and centred gently when its marker sits near the edge.
+  useEffect(() => {
+    gapEls.current.forEach((g, id) => setGapOpen(g.el, id === open));
+    const m = map.current;
+    const g = open ? gapEls.current.get(open) : undefined;
+    if (!m || !g) return;
+    let alive = true;
+    const settle = () => {
+      if (!alive) return;
+      const c = m.getContainer();
+      const p = m.project(g.marker.getLngLat());
+      if (needsCentre(p.x, p.y, c.clientWidth, c.clientHeight)) {
+        m.once("moveend", () => placeCard(g.el, c));
+        m.easeTo({ center: g.marker.getLngLat(), duration: 500 });
+      } else placeCard(g.el, c);
+    };
+    // A Gaps list row may zoom the map to the gap at the same moment: look once that move has ended.
+    if (m.isMoving()) m.once("moveend", settle);
+    else settle();
+    return () => {
+      alive = false;
+    };
+  }, [open]);
+
+  // The plan (§20): our pins (never Google's), numbered, late in red, the selected one highlighted; fitted when the
+  // pins change, not on a highlight.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const seen = new Set<string>();
+    for (const p of drawnPlan.pins) {
+      seen.add(p.id);
+      const key = `${p.lat},${p.lng}`;
+      let placed = pinEls.current.get(p.id);
+      if (placed && placed.key !== key) {
+        placed.marker.setLngLat([p.lng, p.lat]);
+        placed.key = key;
+      }
+      if (!placed) {
+        const el = planPinEl(p, (id) => pinTap.current?.(id));
+        placed = { marker: new maplibregl.Marker({ element: el, anchor: "center" }).setLngLat([p.lng, p.lat]).addTo(m), el, key };
+        pinEls.current.set(p.id, placed);
+      }
+      setPlanPin(placed.el, p, plan?.selected === p.id);
+    }
+    for (const [id, p] of pinEls.current) {
+      if (!seen.has(id)) {
+        p.marker.remove();
+        pinEls.current.delete(id);
+      }
+    }
+    const fitKey = planFitKey(drawnPlan);
+    if (fitKey && fittedPlan.current !== fitKey) {
+      fittedPlan.current = fitKey;
+      fitTo(m, planPoints(drawnPlan).map((q): [number, number] => [q.lng, q.lat]));
+    } else if (!fitKey) fittedPlan.current = "";
+  }, [drawnPlan, plan?.selected]);
+
+  // The plan's straight dashed connectors (never Google's line on this map).
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    (m.getSource("plan-links") as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: drawnPlan.links.map(([a, b]) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [[a.lng, a.lat], [b.lng, b.lat]] } })),
+    });
+  }, [drawnPlan, ready]);
+
+  const fitAll = () => {
+    const m = map.current;
+    if (!m) return;
+    const pts: [number, number][] = markers.map((mk) => [mk.lng, mk.lat]);
+    if (route) pts.push(...route.points.map(lngLat));
+    pts.push(...planPoints(drawnPlan).map((q): [number, number] => [q.lng, q.lat]));
+    fitTo(m, pts);
+  };
+
   return (
-    <div className="mapbox ml">
+    <div className="mapbox ml" style={fixedHeight(height)}>
       <div ref={box} className="ml-canvas" />
-      <div className="zoom ml-fit">
-        <button
-          type="button"
-          aria-label="Fit everyone on the map"
-          onClick={() => {
-            const m = map.current;
-            if (!m) return;
-            const pts: [number, number][] = markers.map((mk) => [mk.lng, mk.lat]);
-            if (route) pts.push(...route.points.map(lngLat));
-            fitTo(m, pts);
-          }}
-        ><Icon name="fit" /></button>
-      </div>
+      {drawnPlan.note && <div className="map-note" data-testid="map-note"><i className="map-note-dash" />{drawnPlan.note}</div>}
+      <MapControls
+        onZoomIn={() => map.current?.zoomIn()}
+        onZoomOut={() => map.current?.zoomOut()}
+        compass={{ shown: compassShown(camera), bearing: camera.bearing, reset: () => map.current?.easeTo({ bearing: 0, pitch: 0, duration: 400 }) }}
+        trails={trailsToggle}
+        onFit={fitAll}
+        fitLabel={!markers.length && drawnPlan.pins.length ? "Fit the plan on the map" : undefined}
+      />
     </div>
   );
 }
