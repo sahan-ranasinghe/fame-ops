@@ -133,7 +133,13 @@ Pro $10.00, Roads $10.00 per 1,000. Maps SDK for Android: unlimited and free (wi
 - **Routes:** TRAFFIC_AWARE makes every request Compute Routes Pro ("Set routingPreference to
   TRAFFIC_AWARE or TRAFFIC_AWARE_OPTIMAL", https://developers.google.com/maps/billing-and-pricing/sku-details);
   one request carries all of a plan's legs (the stops as intermediates, at most 25), with the
-  field mask `routes.legs.duration,routes.legs.distanceMeters`.
+  field mask `routes.legs.duration,routes.legs.distanceMeters,routes.legs.polyline.encodedPolyline`.
+  Phase 7 (§20, checked 16 October 2026): the leg lines come from the same request. A plain encoded
+  polyline is not a trigger for any SKU on the SKU page; its Enterprise triggers are "Two-wheeled
+  vehicle routing", "Toll calculation", "Traffic information on polylines" and "Large vehicle
+  routing", and we never ask for traffic on polylines (`extraComputations` stays unset). So the
+  request stays Compute Routes Pro. The line is kept with the plan for 30 days, then removed by the
+  nightly `google_content` job, and drawn on Google's map only.
 - **Map loads:** "A single map load is charged when… A web page or application displays a map
   using the Maps JavaScript API"; interactions "don't generate additional map loads"
   (https://developers.google.com/maps/faq). The web app makes one map per tab and moves it
