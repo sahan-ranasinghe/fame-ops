@@ -1128,6 +1128,41 @@ All accepted (1–8 at checkpoint 0; 9–15 with Part 1's go, 15 October, 11 and
 15. The 1.3.0 APK is arm64 only. Changed: a ready `drivers-32` profile (armeabi-v7a) and a test-plan
     line on how to tell a phone needs it; no 32-bit build unless Sahan asks (27).
 
+## As built
+
+### Part 1 (branch `phase7-1`)
+
+Migration `20261015190000_phase7_duty.sql`; tests `supabase/tests/database/phase7_duty.test.sql`, the connector
+suite's section 7, `test:data`'s Phase 7 block, `test:rules`. Where the build differs from the text above (the
+behaviour is the same):
+
+- **Start work and Finish work are the duty session itself.** The new app writes what every app already writes:
+  a duty session with today's vehicle (Start work) and its end (Finish work). The triggers turn them into the
+  clock-in and the clock-out, so one path serves every app version; there is no separate `start_work` /
+  `finish_work` RPC. **Change vehicle** is the RPC `change_vehicle(vehicle, at, client_id)` (the phone's time,
+  idempotent by the phone's id), and the picker reads `my_vehicle_choices()`.
+- **`current_vehicle_id` = the open assignment** is kept by `take_vehicle` / `release_vehicle` and by triggers on
+  every other write path (a driver's own update, SQL by an admin or a test), and a deferred constraint trigger
+  refuses any commit where they differ.
+- **The later take wins** for every take, a task start included: a write older than the vehicle's current holder
+  is recorded as a closed stretch, and a write older than the driver's own current row (an office move came after
+  it) changes nothing.
+- **The cut-off runs in SQL**: `duty_jobs()` by pg_cron every 15 minutes (`duty-jobs`), not through fleet-jobs.
+  It also gives up a vehicle still held off duty (an older app's pick) at the cut-off, and opens a duty session
+  for a task running with none (the phone's own replaces it without splitting the vehicle's record). The
+  heartbeat's answer carries `on_duty` and `duty_end {at, reason}`, so an app that missed the push stops by
+  itself (`lib/duty.ts`, loaded by the app's entry, also with no screen open).
+- **The office's clock-out and move are refused** while the driver has a task running; a move is also refused
+  for a driver off duty, and onto a vehicle on another driver's running task. `duty_log`, `clock_out_driver`
+  and `move_driver_vehicle` need assign_tasks or vehicles; `reopen_task` needs assign_tasks.
+- **Done needs Arrived** on the server: the new app sends Done on its own after Arrived, and a Done write with
+  no arrival is refused; an older app sends `arrived_at` with its Done, which passes and is flagged
+  `not_arrived`.
+- **Completed early** is not checked for plans under 3 km (an odometer counts whole km), the same in the app
+  and on the server.
+- `list_vehicles` gains `held_by` / `held_since` (the Move to vehicle page and, in Part 2, the assign forms).
+- `duty_log`: up to 62 days; GPS km only for ranges of up to 7 days (the odometer km of the tasks always).
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
@@ -1182,6 +1217,25 @@ the boss or a driver). The table is completed with every key as built at each ch
 | `trip.go` | Start | ආරම්භ කරන්න |
 | `trip.addStop` | Add a stop | නැවතුමක් එක් කරන්න |
 | `trip.offlineOnly` | No connection: type the place or pick one of the list. | සම්බන්ධතාවක් නැත: ස්ථානය ටයිප් කරන්න හෝ ලැයිස්තුවෙන් තෝරන්න. |
+
+Added in Part 1 (as built; the push texts are the server's, `push-task`):
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `duty.finishConfirmYes` | Finish work | වැඩ අවසන් කරන්න |
+| `duty.offDutyHint` | Start work to record trips and mileage. | ගමන් සහ කිලෝමීටර සටහන් කිරීමට වැඩ ආරම්භ කරන්න. |
+| `duty.noVehicle` | No vehicle | වාහනයක් නැත |
+| `vehicle.yours` | Yours now | දැන් ඔබ ළඟ |
+| `vehicle.listOffline` | No connection: who has each vehicle is not shown. | සම්බන්ධතාවක් නැත: එක් එක් වාහනය කා ළඟදැයි පෙන්වන්නේ නැත. |
+| `vehicle.start` | Start | ආරම්භ කරන්න |
+| `shift.bodyWork` | Choose today's vehicle and tap Start work. | අද වාහනය තෝරා වැඩ ආරම්භ කරන්න ඔබන්න. |
+| `arrive.km` | {n} km | කි.මී. {n} |
+| `arrive.m` | {n} m | මී. {n} |
+| push `vehicle_taken` | Your vehicle was taken · {plate} is now with {name} · choose your vehicle | ඔබේ වාහනය වෙනත් අයෙකු ගත්තා · {plate} දැන් {name} ළඟ · ඔබේ වාහනය තෝරන්න |
+| push `vehicle_moved` | The office changed your vehicle · Your vehicle is now {plate} / You have no vehicle now. | කාර්යාලය ඔබේ වාහනය වෙනස් කළා · ඔබේ වාහනය දැන් {plate} / ඔබට දැන් වාහනයක් නැත. |
+| push `duty_auto_out` | You were clocked out · Clocked out at {time} (end of the day). | ඔබව රාජකාරියෙන් ඉවත් කළා · {time} ට රාජකාරියෙන් ඉවත් කළා (දවසේ අවසානය). |
+| push `duty_office_out` | You were clocked out · The office clocked you out at {time}. | ඔබව රාජකාරියෙන් ඉවත් කළා · කාර්යාලය {time} ට ඔබව රාජකාරියෙන් ඉවත් කළා. |
+| push `reopened` | Task reopened · {title} · finish it again in the app | කාර්යය නැවත විවෘත කළා · {title} · යෙදුමෙන් නැවත අවසන් කරන්න |
 
 Added 15 October (items 17, 19, 20, 24, 28):
 

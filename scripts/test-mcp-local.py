@@ -266,6 +266,9 @@ if CHANNEL == "api":
           "/tools lists the tools with their input schemas", f"{code}")
 
 print("\n== 1. Set up the fleet through the tools ==")
+# Phase 7: pg_cron runs duty_jobs every 15 minutes on the local stack too; the cut-off stays off until section 7 tests it,
+# so the time of day the suite runs cannot clock anyone out half-way.
+psql("""insert into fleet_settings (key, value) values ('duty_cutoff', '""') on conflict (key) do update set value = excluded.value""")
 tool("add_rental_company", {"name": "Lanka Rent-a-Car", "phone": "0112345678"})
 tool("add_rental_company", {"name": "City Wheels"})
 r = tool("add_rental_company", {"name": "lanka rent-a-car"}, expect_error=True)
@@ -862,8 +865,9 @@ SESSION = str(uuid.uuid4())
 code, _ = app.post("duty_sessions", {"id": SESSION, "employee_id": ME, "vehicle_id": V1, "device_info": {"model": "test phone"}})
 check(code == 201, "driver starts sharing (duty session)", f"{code}")
 ld = tool("live_drivers")
-check(ld["counts"]["all"] == 1 and ld["drivers"][0]["location"] == "Sharing · no location yet" and ld["drivers"][0]["state"] == "stale",
-      "live_drivers right after switching on: 'Sharing · no location yet'", json.dumps(ld)[:300])
+check(ld["duty_counts"]["on_duty"] == 1 and ld["drivers"][0]["location"] == "Sharing · no location yet" and ld["drivers"][0]["state"] == "stale"
+      and ld["drivers"][0]["duty"] == "on_duty" and ld["counts"]["all"] == len([d for d in tool("list_drivers")["drivers"]]),
+      "live_drivers right after switching on: 'Sharing · no location yet', on duty first; every active driver listed (Phase 7)", json.dumps(ld)[:300])
 # Presence (Phase 6): the open duty session is "On duty since HH:MM" on every card.
 avp = tool("availability", {"at": f"{day(2)} 10:30", "until": "12:00"})
 nuwp = next(d for d in avp["drivers"] if d["username"] == "nuwan.p")
@@ -1173,7 +1177,7 @@ w = tool("watch_drivers", {"drivers": ["nuwan.p"]})
 check(len(w["watched"]) == 1 and w["seconds"] == 90 and "until" in w, "watch_drivers: the office watches a driver for 90 s", json.dumps(w))
 code, hb = app.post("rpc/send_heartbeat", {"p_at": iso(dt.datetime.now(dt.timezone.utc)), "p_sharing": True, "p_location_on": True, "p_permission": "always", "p_queued_points": 0,
                                            "p_video_uploads_waiting": 1, "p_video_bytes_waiting": 12000000})
-check(code == 200 and hb == {"watched": True}, "the phone's next heartbeat answers watched: true", f"{code} {hb}")
+check(code == 200 and hb.get("watched") is True and hb.get("on_duty") is True, "the phone's next heartbeat answers watched: true (and on_duty, Phase 7)", f"{code} {hb}")
 ldv = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "nuwan.p")
 check(ldv.get("video_uploads_waiting") == 1 and ldv.get("video_bytes_waiting") == 12000000, "live_drivers: the card carries the waiting video and its size", json.dumps({k: ldv.get(k) for k in ("video_uploads_waiting", "video_bytes_waiting")}))
 
@@ -1593,7 +1597,7 @@ if CHANNEL == "api":
     code, body = api_call(staff_token, "task_detail", {"task_id": T1})
     check(code == 200, "and any task opens", f"{code} {str(body)[:120]}")
     code, body = api_call(staff_token, "fleet_overview", {})
-    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined") for a in body["result"]["needs_attention"]),
+    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early") for a in body["result"]["needs_attention"]),
           "with assign_tasks the overview's needs-attention holds task items only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
     code, body = api_call(staff_token, "mileage_summary", {})
     check(code == 403, "mileage needs the vehicles permission (403)", f"{code} {str(body)[:120]}")
@@ -1609,7 +1613,7 @@ if CHANNEL == "api":
     code, body = api_call(staff_token, "update_issue", {"id": body["result"]["issues"][0]["id"], "status": "dismissed"})
     check(code == 403 and "issues" in str(body.get("needs", [])), "but cannot change one (403, needs issues)", f"{code} {body}")
     code, body = api_call(staff_token, "fleet_overview", {})
-    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined") for a in body["result"]["needs_attention"]),
+    check(code == 200 and all(a["kind"] in ("signal", "late_start", "running_late", "not_accepted", "declined", "vehicle_conflict", "arrival_override", "completed_early") for a in body["result"]["needs_attention"]),
           "and the overview's needs-attention holds task issues only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
     tool("update_office_user", {"email": staff_email, "permissions": ["request"]})
     code, body = api_call(staff_token, "get_settings", {})
@@ -1647,6 +1651,151 @@ if CHANNEL == "api":
     code, names, raw_text = mcp_tools_list(key_url)
     check(code == 404, "a revoked key answers 404 like any wrong key", f"{code} {raw_text}")
 
+
+# ---------------------------------------------------------------------------
+print("\n== 7. Phase 7, Part 1: a driver's day (clock in, hand-over, move, clock out, duty log, arrival and finish rules) ==")
+PIN7A, PIN7B = "614203", "730518"
+tool("create_driver", {"name": "Ruwan Jaya", "code": "E171", "username": "ruwan.j", "pin": PIN7A, "phone": "0771717171"})
+tool("create_driver", {"name": "Saman Kumara", "code": "E172", "username": "saman.k", "pin": PIN7B, "phone": "0771727272"})
+tool("register_vehicle", {"reg_no": "WP P7-1001", "make_model": "Toyota HiAce", "vehicle_type": "van", "seats": 14, "current_odometer_km": 5000})
+tool("register_vehicle", {"reg_no": "WP P7-1002", "make_model": "Toyota Axio", "vehicle_type": "car", "seats": 4, "current_odometer_km": 9000})
+VA = psql("select id from vehicles where reg_no = 'WP P7-1001'")
+VB = psql("select id from vehicles where reg_no = 'WP P7-1002'")
+code, ses = sign_in("ruwan.j", PIN7A)
+ruwan = Driver(ses["access_token"])
+RU = ruwan.get("employees?select=id")[1][0]["id"]
+code, ses = sign_in("saman.k", PIN7B)
+saman = Driver(ses["access_token"])
+SA = saman.get("employees?select=id")[1][0]["id"]
+
+# The picker, then Start work with a vehicle (the app's duty session carries it).
+code, choices = ruwan.post("rpc/my_vehicle_choices", {}, prefer="return=representation")
+p7a = next((c for c in choices if c["reg_no"] == "WP P7-1001"), None) if code == 200 else None
+check(p7a is not None and p7a["held_by"] is None and p7a["mine_now"] is False, "my_vehicle_choices: the picker's list, nobody holds WP P7-1001", f"{code} {str(choices)[:200]}")
+S7A = str(uuid.uuid4())
+code, _ = ruwan.post("duty_sessions", {"id": S7A, "employee_id": RU, "vehicle_id": VA, "device_info": {"brand": "OPPO", "model": "CPH2119"}})
+card = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "ruwan.j")
+check(code == 201 and card["duty"] == "on_duty" and card["vehicle"].startswith("WP P7-1001") and card.get("vehicle_since") and card.get("phone") == "OPPO CPH2119",
+      "Start work: on duty with WP P7-1001 since HH:MM, the phone named (live_drivers)", json.dumps({k: card.get(k) for k in ("duty", "vehicle", "vehicle_since", "phone")}))
+check(psql(f"select how from vehicle_assignments where employee_id = '{RU}' and to_at is null") == "clock_in", "the server recorded the take: how clock_in")
+
+# Change vehicle through the RPC, sent twice by the queue: one change.
+CL = str(uuid.uuid4())
+for _ in range(2):
+    code, ans = ruwan.post("rpc/change_vehicle", {"p_vehicle": VB, "p_at": iso(dt.datetime.now(dt.timezone.utc)), "p_client": CL}, prefer="return=representation")
+held = next(v for v in tool("list_vehicles")["vehicles"] if v["reg_no"] == "WP P7-1002")
+check(code == 200 and ans["vehicle_id"] == VB and held.get("held_by") == "Ruwan Jaya" and held.get("held_since")
+      and psql(f"select count(*) from vehicle_assignments where vehicle_id = '{VB}'") == "1",
+      "change_vehicle twice with one id: one change; list_vehicles says Ruwan holds WP P7-1002", f"{ans} {held.get('held_by')}")
+
+# One vehicle, one driver: Saman starts work on WP P7-1002.
+code, _ = saman.post("duty_sessions", {"id": str(uuid.uuid4()), "employee_id": SA, "vehicle_id": VB, "device_info": {"brand": "samsung", "model": "SM-A226B"}})
+cards = {d["username"]: d for d in tool("live_drivers")["drivers"]}
+check(code == 201 and cards["ruwan.j"].get("vehicle") is None and "now with Saman Kumara" in (cards["ruwan.j"].get("vehicle_note") or "")
+      and "taken over from Ruwan Jaya" in (cards["saman.k"].get("vehicle_note") or "") and cards["ruwan.j"]["duty"] == "on_duty",
+      "hand-over: Ruwan holds none (still on duty), both cards name it", json.dumps({u: cards[u].get("vehicle_note") for u in ("ruwan.j", "saman.k")}))
+code, rows = ruwan.get("vehicle_assignments?select=ended_how,ended_by_name&order=from_at.desc&limit=1")
+check(code == 200 and rows[0]["ended_how"] == "taken_over" and rows[0]["ended_by_name"] == "Saman Kumara", "Ruwan's app reads 'taken over by Saman' (the banner)", str(rows))
+code, rows = ruwan.get("vehicle_assignments?select=id")
+check(code == 200 and str(len(rows)) == psql(f"select count(*) from vehicle_assignments where employee_id = '{RU}'")
+      and psql(f"select count(*) from vehicle_assignments where employee_id <> '{RU}'") != "0", "a driver reads only their own rows (other drivers have rows too)")
+
+# The office moves Ruwan to WP P7-1001; Kasun (off duty) cannot be moved.
+mv = tool("move_driver_vehicle", {"driver": "ruwan.j", "vehicle": "WP P7-1001"})
+check(mv["vehicle"].startswith("WP P7-1001") and psql(f"select how || '|' || by_name from vehicle_assignments where employee_id = '{RU}' and to_at is null") == f"office|{ACTOR_NAME}",
+      "move_driver_vehicle: how office, by the office person", json.dumps(mv))
+r = tool("move_driver_vehicle", {"driver": "kasun.s", "vehicle": "WP P7-1002"}, expect_error=True)
+check("off duty" in r, "an off-duty driver is not moved", r)
+
+# The office clocks Saman out; a second time says so.
+co = tool("clock_out_driver", {"driver": "saman.k", "reason": "Went home"})
+card = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "saman.k")
+check(co["clocked_out"] == "Saman Kumara" and card["duty"] == "off_duty" and card.get("off_duty_how") == "by the office"
+      and psql(f"select ended_how from vehicle_assignments where employee_id = '{SA}' order by from_at desc limit 1") == "office",
+      "clock_out_driver: off duty by the office, the vehicle given up", json.dumps({k: card.get(k) for k in ("duty", "off_duty_how", "status_text")}))
+check(card["status_text"] == "Off duty", "an off-duty card reads 'Off duty'", card["status_text"])
+co2 = tool("clock_out_driver", {"driver": "saman.k"})
+check(co2["clocked_out"] is False and "already off duty" in co2["note"], "a second clock-out says the driver is already off duty", json.dumps(co2))
+code, hb = saman.post("rpc/send_heartbeat", {"p_at": iso(dt.datetime.now(dt.timezone.utc)), "p_sharing": True, "p_location_on": True, "p_permission": "always"},
+                      prefer="return=representation")
+check(code == 200 and hb["on_duty"] is False and hb["duty_end"]["reason"] == "admin", "Saman's phone hears it from the heartbeat: on_duty false, ended by the office", str(hb))
+
+# The duty log.
+dl = tool("duty_log", {"driver": "ruwan.j"})
+per = dl["periods"][0] if dl["periods"] else {}
+check(len(dl["periods"]) == 1 and per["clock_out"] == "on duty" and [v["how"] for v in per["vehicles"]] == ["clocked in", "changed", "office"]
+      and per["vehicles"][1]["ended"] == "taken over" and per["vehicles"][1].get("ended_by") == "Saman Kumara",
+      "duty_log: Ruwan's period with the vehicles held (clocked in, changed → taken over by Saman, office)", json.dumps(per)[:400])
+dla = tool("duty_log", {})
+check(len(dla["periods"]) >= 2 and any(p["driver"] == "Saman Kumara" and p["out_how"] == "office" for p in dla["periods"]) and dla["totals"]["periods"] == len(dla["periods"]),
+      "duty_log for everyone today: Saman's period clocked out by the office", json.dumps(dla["totals"]))
+r = tool("duty_log", {"from": day(-70), "to": day(0)}, expect_error=True)
+check("62 days" in r, "a range over 62 days is refused", r)
+
+# A task: arrival flags, Done needs Arrived, completed early, reopen.
+t7 = tool("create_task", {"title": "P7 site run", "date": day(0) if can_today else day(1), "start_time": start, "driver": "ruwan.j", "vehicle": "WP P7-1001",
+                          "pickup": "Head office", "dropoff": "Kurunegala tower site"})
+T7 = t7["task_id"]
+code, _ = ruwan.patch(f"tasks?id=eq.{T7}", {"status": "in_progress", "start_odometer_km": 5000})
+S1, S2 = psql(f"select id from task_stops where task_id = '{T7}' order by seq").split("\n")
+code1, _ = ruwan.patch(f"task_stops?id=eq.{S1}", {"status": "arrived", "arrived_at": iso(dt.datetime.now(dt.timezone.utc)), "arrival_flag": "override", "arrival_distance_m": 42000})
+code2, _ = ruwan.patch(f"task_stops?id=eq.{S1}", {"status": "done", "done_at": iso(dt.datetime.now(dt.timezone.utc))})
+code3, err3 = ruwan.patch(f"task_stops?id=eq.{S2}", {"status": "done", "done_at": iso(dt.datetime.now(dt.timezone.utc))})
+check(code == 200 and code1 == 200 and code2 == 200 and code3 >= 400 and "Mark Arrived first" in json.dumps(err3),
+      "the driver's writes: Arrived with the override flag and distance, Done after it; Done without Arrived refused", f"{code} {code1} {code2} {code3} {str(err3)[:120]}")
+ruwan.patch(f"task_stops?id=eq.{S2}", {"status": "arrived", "arrived_at": iso(dt.datetime.now(dt.timezone.utc)), "arrival_flag": "ok", "arrival_distance_m": 40})
+ruwan.patch(f"task_stops?id=eq.{S2}", {"status": "done", "done_at": iso(dt.datetime.now(dt.timezone.utc))})
+code, _ = ruwan.patch(f"tasks?id=eq.{T7}", {"status": "completed", "end_odometer_km": 5002})
+td7 = tool("task_detail", {"task_id": T7})
+check(code == 200 and td7["task"]["finish_flag"]["kind"] == "completed_early" and td7["task"]["finish_flag"]["text"].startswith("Completed early: 2 km on the odometer")
+      and td7["task"].get("can_reopen") is True,
+      "completed early: 2 km for the planned trip, flagged by the server; reopen offered", json.dumps(td7["task"].get("finish_flag")))
+s1 = next(x for x in td7["stops"] if x["id"] == S1)
+check(s1.get("arrival_flag") == "override" and "42 km from the pin" in (s1.get("arrival_text") or ""), "task_detail: the stop marked away from its pin, in words", json.dumps({k: s1.get(k) for k in ("arrival_flag", "arrival_text")}))
+board7 = tool("task_board", {"date": day(0) if can_today else day(1)})
+card7 = next((c for c in board7["completed"] if c["id"] == T7), {})
+check(card7.get("finish_flag", {}).get("kind") == "completed_early", "task_board: the card carries the flag", json.dumps(card7.get("finish_flag")))
+fleet_jobs()
+kinds = {i["kind"] for i in tool("list_issues", {"status": "active"})["issues"]}
+check({"arrival_override", "completed_early"} <= kinds, "issues: arrival_override and completed_early opened", str(sorted(kinds)))
+ro = tool("reopen_task", {"task_id": T7, "reason": "Wrong end reading"})
+td7 = tool("task_detail", {"task_id": T7})
+check(ro["reopened"] == "P7 site run" and td7["task"]["status"] == "in_progress" and "finish_flag" not in td7["task"]
+      and td7["assignment_history"][-1]["action"] == "reopened" and td7["assignment_history"][-1]["note"].startswith("Wrong end reading · was completed "),
+      "reopen_task: in progress again, the flag cleared, the history says why", json.dumps(td7["assignment_history"][-1]))
+r = tool("reopen_task", {"task_id": T7, "reason": "again"}, expect_error=True)
+check("not completed" in r, "a task in progress is not reopened", r)
+fleet_jobs()
+early = [i for i in tool("list_issues", {"status": "active", "kind": "completed_early"})["issues"] if i.get("task_id") == T7]
+check(not early, "the completed_early issue resolves itself after the reopen", json.dumps(early)[:300])
+r = tool("clock_out_driver", {"driver": "ruwan.j"}, expect_error=True)
+check("task in progress" in r, "no clock-out while a task is running", r)
+tool("cancel_task", {"task_id": T7, "reason": "suite: Phase 7 checked"})
+
+# App stopped by the phone: two heartbeat gaps of over 3 minutes in Ruwan's duty period today.
+nowp = dt.datetime.now(dt.timezone.utc)
+for mins in (20, 19, 12, 11, 2):
+    psql(f"insert into driver_heartbeats (employee_id, at, session_id, sharing) values ('{RU}', '{iso(nowp - dt.timedelta(minutes=mins))}', '{S7A}', true) on conflict do nothing")
+card = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "ruwan.j")
+check(card.get("app_stops_today") == 2 and card.get("app_stops_text") == "App stopped by phone 2× today", "live_drivers: 'App stopped by phone 2× today'", json.dumps({k: card.get(k) for k in ("app_stops_today", "app_stops_text")}))
+fleet_jobs()
+app_issue = [i for i in tool("list_issues", {"status": "active", "kind": "app_stopped"})["issues"] if "Ruwan" in (i.get("detail") or "")]
+check(app_issue and "OPPO CPH2119" in app_issue[0]["detail"] and app_issue[0]["title"].startswith("App stopped by the phone 2× today"),
+      "issue app_stopped with the phone's brand and model", json.dumps(app_issue[:1])[:300])
+
+# The cut-off: a duty period left open since yesterday 08:00 is clocked out at yesterday's 21:00.
+yday = dt.datetime.combine(today - dt.timedelta(days=1), dt.time(8, 0), tzinfo=colombo)
+psql(f"update duty_sessions set started_at = '{iso(yday)}' where id = '{S7A}'")
+check(tool("get_settings")["settings"].get("duty_cutoff") == "", "get_settings: duty_cutoff (off for the suite)")
+r = tool("update_settings", {"key": "duty_cutoff", "value": "25:00"}, expect_error=True)
+check("duty_cutoff" in r, "a cut-off that is not HH:MM is refused", r)
+tool("update_settings", {"key": "duty_cutoff", "value": "21:00"})
+jobs = json.loads(psql("select duty_jobs()"))
+end = psql(f"select end_reason || '|' || to_char(ended_at at time zone 'Asia/Colombo', 'YYYY-MM-DD HH24:MI') from duty_sessions where id = '{S7A}'")
+check(jobs["clocked_out"] >= 1 and end == f"auto|{iso(today - dt.timedelta(days=1))} 21:00", "duty_jobs: clocked out at yesterday's 21:00 (auto)", f"{jobs} {end}")
+tool("update_settings", {"key": "duty_cutoff", "value": ""})
+check(psql("select count(*) from employees e where e.current_vehicle_id is distinct from (select a.vehicle_id from vehicle_assignments a where a.employee_id = e.id and a.to_at is null)") == "0",
+      "every employee's current_vehicle_id equals their open vehicle row")
 
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:

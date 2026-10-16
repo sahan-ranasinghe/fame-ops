@@ -111,6 +111,8 @@ def main():
         ("fleet_overview", {}),
         ("live_drivers", {}),
         ("driver_route", {"driver": driver}),
+        ("duty_log", {}),
+        ("duty_log", {"driver": driver}),
         ("list_drivers", {}),
         ("list_drivers", {"include_inactive": True}),
         ("list_vehicles", {}),

@@ -270,6 +270,8 @@ async function main() {
     { kind: 'fuel_log', row: { id: fuelId, vehicle_id: van.id, employee_id: a.row.id, task_id: task1, litres: 32, amount_cents: 1184000, receipt_photo_id: pFuel, odometer_km: 84563, logged_at: at(3) ,
       video_path: videoPath, video_status: 'recorded', video_duration_s: 5, video_bytes: TINY_MP4.length, video_checklist: [{ key: 'plate', at_s: 1 }, { key: 'final', at_s: 4 }] } },
     { kind: 'video_upload', fuel_log_id: fuelId, bucket: 'fuel-videos', path: videoPath, local_uri: videoFile, bytes: TINY_MP4.length, url: null, offset: 0, content_type: 'video/mp4' },
+    // Phase 7: Done only after Arrived (the app's Arrived carries how it was marked and the distance from the pin).
+    { kind: 'stop_patch', id: stops[2]!.id, patch: { status: 'arrived', arrived_at: at(4), arrival_flag: 'ok', arrival_distance_m: 35 } },
     { kind: 'stop_patch', id: stops[2]!.id, patch: { status: 'done', done_at: at(3) } },
     { kind: 'task_patch', id: task1, patch: { status: 'completed', end_odometer_km: 84563, completed_at: at(3) } },
     { kind: 'session_end', id: session, ended_at: at(1), end_reason: 'driver' },
@@ -349,7 +351,12 @@ async function main() {
   const beatAgain = await client.from('driver_heartbeats').upsert([{ employee_id: a.row.id, at: beats[0]!.at, sharing: true, location_on: true, permission: 'always', queued_points: 0 }], { onConflict: 'employee_id,at', ignoreDuplicates: true });
   check(!beatAgain.error, 'the same row uploaded again (a lost answer) is ignored, not refused', beatAgain.error);
   const meNow = await api.fetchMe(client);
-  check(meNow?.language === 'si' && meNow.current_vehicle_id === van.id, 'language and current vehicle were saved');
+  // Phase 7: Finish work (the session's end) gives the vehicle up; the history keeps the clock-in and the clock-out.
+  const heldA = must(await admin.from('vehicle_assignments').select('vehicle_id, how, ended_how').eq('employee_id', a.row.id).order('from_at'), 'vehicle rows');
+  check(meNow?.language === 'si' && meNow.current_vehicle_id === null && heldA.at(-1)?.how === 'clock_in' && heldA.at(-1)?.ended_how === 'clock_out'
+    && heldA.at(-1)?.vehicle_id === van.id, 'language saved; Start work held the van, Finish work gave it up', heldA);
+  const arrivedRow = must(await admin.from('task_stops').select('arrival_flag, arrival_distance_m').eq('id', stops[2]!.id).single(), 'stop');
+  check(arrivedRow.arrival_flag === 'ok' && arrivedRow.arrival_distance_m === 35, 'Arrived keeps how it was marked and the distance (the driver\'s update grant)', arrivedRow);
   const reports = await api.fetchReports(client);
   check(reports.length === 1 && reports[0]?.status === 'open' && reports[0].category === 'tyre', 'fetchReports shows my report as open');
   const mileage = await api.fetchMileage(client, van.id, new Date(now - 30 * 86400000));
@@ -415,6 +422,44 @@ async function main() {
     `the whole backlog went up in batches of 200 without a point lost (${Math.round((Date.now() - t0) / 100) / 10} s)`, { result, backlog });
   check(latestAfter.recorded_at !== null && Math.abs(new Date(latestAfter.recorded_at).getTime() - (now + 5000)) < 2000 && Math.abs((latestAfter.lat ?? 0) - (6.9 + 449 * 0.0001)) < 1e-6,
     'driver_latest ends on the newest point of the backlog', latestAfter);
+
+  console.log('\n== Phase 7: Start work with a vehicle, Change vehicle sent twice, taken over, Done needs Arrived ==');
+  const s7 = randomUUID();
+  const c7 = randomUUID();
+  queue.add(
+    { kind: 'session_start', id: s7, employee_id: a.row.id, vehicle_id: car.id, started_at: new Date().toISOString(), device_info: { model: 'test phone' } },
+    { kind: 'vehicle_change', id: c7, vehicle_id: van.id, at: new Date().toISOString() },
+    { kind: 'vehicle_change', id: c7, vehicle_id: van.id, at: new Date().toISOString() },
+  );
+  result = await sync.flush();
+  const rows7 = must(await admin.from('vehicle_assignments').select('vehicle_id, how, ended_how, client_id').eq('employee_id', a.row.id).order('from_at'), 'vehicle rows');
+  check(result.failed === 0 && rows7.at(-2)?.how === 'clock_in' && rows7.at(-2)?.vehicle_id === car.id && rows7.at(-2)?.ended_how === 'change'
+    && rows7.at(-1)?.how === 'change' && rows7.at(-1)?.vehicle_id === van.id && rows7.filter((r) => r.client_id === c7).length === 1,
+    'Start work took the car (clock_in), Change vehicle the van; the resent change counted once', { result, rows: rows7.slice(-2) });
+  const beat7 = await api.sendHeartbeat(client, { at: new Date().toISOString(), sharing: true, location_on: true, permission: 'always', battery_pct: 80, app_version: '1.2.0+test', queued_points: 0 });
+  check(beat7.on_duty === true && beat7.duty_end === null, 'the heartbeat answers on_duty while the duty period is open', beat7);
+  // Driver B starts work on the same van: one vehicle, one driver.
+  must(await admin.from('duty_sessions').insert({ employee_id: b.row.id, vehicle_id: van.id }).select('id').single(), 'B session');
+  const myRows = await api.fetchMyAssignments(client, 1);
+  const choices = await api.fetchVehicleChoices(client);
+  check(myRows[0]?.ended_how === 'taken_over' && myRows[0]?.ended_by_name === 'Test Driver 2' && choices.find((c) => c.id === van.id)?.held_by === 'Test'
+    && choices.find((c) => c.id === van.id)?.my_last === true && (await api.fetchMe(client))?.current_vehicle_id === null,
+    'taken over: my newest row says by whom (the banner), the picker shows "With Test now", I hold none', { myRows, van: choices.find((c) => c.id === van.id) });
+  // Task 2 on the van: the start takes it back (the later take wins); Arrived with the override, Done after it, Done without Arrived refused.
+  const stops2 = (await api.fetchTasks(client, since)).find((t) => t.id === task2)!.task_stops;
+  queue.add(
+    { kind: 'task_patch', id: task2, patch: { status: 'in_progress', start_odometer_km: 84570, started_at: new Date().toISOString() } },
+    { kind: 'stop_patch', id: stops2[0]!.id, patch: { status: 'arrived', arrived_at: new Date().toISOString(), arrival_flag: 'override', arrival_distance_m: 42000 } },
+    { kind: 'stop_patch', id: stops2[0]!.id, patch: { status: 'done', done_at: new Date().toISOString() } },
+    { kind: 'stop_patch', id: stops2[1]!.id, patch: { status: 'done', done_at: new Date().toISOString() } },
+  );
+  result = await sync.flush();
+  const s2rows = must(await admin.from('task_stops').select('id, status, arrival_flag, arrival_distance_m').in('id', [stops2[0]!.id, stops2[1]!.id]).order('seq'), 'stops');
+  check(result.failed === 1 && queue.failed().some((f) => f.includes('Mark Arrived first')) && s2rows[0]?.status === 'done' && s2rows[0]?.arrival_flag === 'override'
+    && s2rows[0]?.arrival_distance_m === 42000 && s2rows[1]?.status === 'pending',
+    'Arrived far from the pin is kept with its flag; Done without Arrived is refused and set aside', { result, failed: queue.failed().slice(-1), s2rows });
+  const holder = must(await admin.from('vehicle_assignments').select('employee_id, how').eq('vehicle_id', van.id).is('to_at', null).single(), 'van holder');
+  check(holder.employee_id === a.row.id && holder.how === 'task_start', 'starting the task on the van took it back from driver B (task_start)', holder);
 
   console.log('\n== The other driver ==');
   const clientB = driverClient({ value: true });

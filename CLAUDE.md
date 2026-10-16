@@ -62,6 +62,11 @@
   `docs/phase6-plan.md`; Google set-up, caps and terms: `docs/google-maps-setup.md`; test plan:
   `docs/phase6-test-plan.md`; the driver strings for the Sinhala check:
   `docs/phase6-sinhala-strings.md`; the Teams artifact: `docs/teams-artifact-update.md`.
+- **Phase 7 (from 15 October 2026, branches `phase7-*`)**: a driver's day. Plan, defaults and as built:
+  `docs/phase7-plan.md` (28 items, Parts 1–6, rounds A and B). Part 1: clock in / out with today's vehicle,
+  one vehicle one driver (`vehicle_assignments`), the cut-off, the office's clock-out / move / reopen, the duty
+  log, a task can't be finished before it is driven (Arrived within 300 m or flagged, Done after Arrived,
+  completed early).
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
@@ -103,9 +108,10 @@
 7. Money: LKR stored as integer cents (bigint).
 8. No Zoho calls from our code. The office's existing Zoho connector in Claude reads Zoho
    and sends us projects through `import_projects`.
-9. Location is recorded only while "On duty" is on (the app's wording since Phase 5; the
-   code and the tables still say sharing). Starting a task turns it on automatically; the
-   driver can turn it off when not working.
+9. Location is recorded while on duty: **Start work** (with today's vehicle) → **Finish work** (Phase 7;
+   the code and the tables still say sharing / `duty_sessions`). Starting a task clocks in; the server
+   clocks out at the day's cut-off (`duty_cutoff`, 21:00) or the office does (`clock_out_driver`), never
+   while a task runs.
 10. Google (Phase 6 Part 5; `docs/google-maps-setup.md`): every Google call is counted in the
    database before it is made and refused at its daily cap, its monthly ceiling (95 % of the
    free usage) or on any counter error (`google_take`, fail closed); Google's content (Places,
@@ -478,6 +484,16 @@
   vehicle_id, started_at, ended_at, end_reason ('driver'|'auto'|'admin'), device_info.
   At most one open session per employee. (Odometer columns, if they exist from an earlier
   migration, are unused: odometer is per task now.)
+- `vehicle_assignments` (Phase 7): who held which vehicle when: employee_id, vehicle_id, from_at, to_at (null =
+  open), how (clock_in | change | task_start | office), ended_how (change | taken_over | clock_out | office | auto),
+  by_name, ended_by_name, task_id, client_id. One open row per driver and per vehicle; `employees.current_vehicle_id`
+  always equals the open row (`take_vehicle` / `release_vehicle`, triggers on every write path, a deferred check).
+  A duty session with a vehicle = clock in; its end = clock out; a driver's own current_vehicle_id update = change;
+  a task going in progress = task_start; the later take wins. Drivers read their own rows; the RPCs
+  `my_vehicle_choices()` and `change_vehicle(vehicle, at, client_id)`. `duty_jobs()` (pg_cron every 15 min): the
+  cut-off and a session for a running task with none. `send_heartbeat()` answers `on_duty` and `duty_end`.
+  task_stops gains `arrival_flag` (ok | override | no_gps | no_pin | not_arrived) and `arrival_distance_m`;
+  tasks gains `finish_flag` (completed_early).
 - `location_points`: id bigint identity, employee_id, session_id, recorded_at, lat, lng,
   accuracy_m, speed_mps, heading, battery_pct, is_mock, source ('app'), received_at.
   Unique (employee_id, recorded_at); uploads use on conflict do nothing.

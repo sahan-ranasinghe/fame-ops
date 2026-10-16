@@ -169,6 +169,12 @@ export const INSTRUCTIONS = [
   "is not Google's (list it instead).",
   "Placing a stop: when our places (search_places without google) have no good match, offer to search Google's places " +
   "(search_places with google: true) instead of guessing a place.",
+  "A driver's day: the driver clocks in with Start work and today's vehicle and out with Finish work (the server also clocks out at " +
+  "the cut-off, duty_cutoff, never while a task runs). One vehicle, one driver: a driver who takes a vehicle takes it from whoever " +
+  "held it (they are told). live_drivers shows each driver on a task, on duty or off duty with the vehicle they hold; list_vehicles " +
+  "who holds each; duty_log the periods with the vehicles held and the tasks. clock_out_driver and move_driver_vehicle are the " +
+  "office's (not while a task runs). A task completed with far fewer km than planned is flagged completed early; reopen_task sets a " +
+  "task completed today back to in progress.",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
