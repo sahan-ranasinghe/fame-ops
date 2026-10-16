@@ -294,7 +294,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByTestId("notifications")).toContainText(/in this browser|not switched on for the office/);
   const requestBox = page.getByRole("checkbox", { name: "A vehicle request comes in" });
   await expect(requestBox).toBeChecked();
-  await expect(page.getByRole("checkbox")).toHaveCount(11);
+  await expect(page.getByRole("checkbox")).toHaveCount(12); // Phase 7: "A driver skips a stop"
   await requestBox.uncheck();
   await expect(page.getByRole("status")).toHaveText("Saved");
   await page.reload();

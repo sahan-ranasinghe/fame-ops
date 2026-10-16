@@ -1496,7 +1496,7 @@ check(code == 200 and f3 > f1, "the job's own sync runs regardless and records i
 if CHANNEL == "api":
     # The admin's own settings and devices through office-api (what Settings → Notifications does).
     ms = tool("my_notification_settings")
-    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "issue.opened", "issue.assigned",
+    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.stop_skipped", "issue.opened", "issue.assigned",
                                                  "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed"]
           and all(e["enabled"] for e in ms["events"]) and ms["devices"] == [] and ms["push"]["configured"] is VAPID and (("public_key" in ms["push"]) is VAPID),
           "my_notification_settings: every event on (the admin holds every permission), no devices, push.configured says whether the server has the keys", json.dumps(ms)[:300])
@@ -1723,7 +1723,8 @@ if CHANNEL == "api":
     check(code == 200 and me.get("permissions") == ["view", "request"] and "live_drivers" in me.get("tools", []) and "task_board" not in me.get("tools", []),
           "given view by the admin: the next /me lists the fleet's lists, not the tasks board", f"{code} {str(me)[:200]}")
     code, body = api_call(staff_token, "fleet_overview", {})
-    check(code == 200 and body["result"]["needs_attention"] == [] and body["result"]["reminders"]["count"] == 0 and body["result"]["vehicles"]["total"] == 3,
+    check(code == 200 and body["result"]["needs_attention"] == [] and body["result"]["reminders"]["count"] == 0
+          and body["result"]["vehicles"]["total"] == tool("list_vehicles")["counts"]["all"],
           "with view the overview has the counts and no needs-attention items", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "task_board", {})
     check(code == 403, "view alone cannot see the task board (403)", f"{code} {str(body)[:120]}")
