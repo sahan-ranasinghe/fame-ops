@@ -9,7 +9,9 @@
 // Phase 7: the list has every active driver with a duty chip (on a task, on
 // duty, off duty); the map draws the drivers on duty. From the detail card the
 // office moves a driver to another vehicle or clocks them out (a second step
-// on the card itself).
+// on the card itself). Part 2: a driver on a task gets "Swap vehicle" (the
+// same page, as a swap during the task), and "declined the 09:00 task" /
+// "hasn't accepted the 09:00 task" in red while that task needs a driver.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -32,6 +34,7 @@ import {
   statusTone,
 } from "../data/live";
 import { megabytes } from "./fuelLogic";
+import { moveMode } from "./moveLogic";
 import { insertPoint, mapRouteOf, mergeRoute, type Route, routeOf, trailOf } from "../data/route";
 import { useWatchDrivers } from "../data/watchDrivers";
 import type { DriverRoute, LiveDriver } from "../data/types";
@@ -209,6 +212,7 @@ export function Live() {
                     <DutyChip x={x} />
                     {working && <span className="sub">{joinDots([x.task, x.near && "near " + x.near]) || "No task"}</span>}
                   </span>
+                  {x.task_note && <span className="status bad" style={{ display: "block" }} data-testid="task-note">{x.task_note}</span>}
                   {x.vehicle_note && <span className="sub" style={{ display: "block" }}>{x.vehicle_note}</span>}
                   {x.app_stops_text && <span className="small" style={{ display: "block" }}><span className="app-stops">{x.app_stops_text}</span>{x.phone && <span className="muted"> · {x.phone}</span>}</span>}
                 </span>
@@ -241,7 +245,9 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "bad" | "info"; text: string } | null>(null);
   const clockOut = me.tools.includes("clock_out_driver") && canClockOut(x);
-  const move = me.tools.includes("move_driver_vehicle") && canMoveVehicle(x);
+  // On duty: Move to vehicle; on a task: the same page as a swap during the task (Part 2).
+  const swap = moveMode(x) === "swap";
+  const move = me.tools.includes("move_driver_vehicle") && (canMoveVehicle(x) || swap);
 
   async function doClockOut() {
     setSaving(true);
@@ -269,6 +275,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
       </div>
       <div className="duty-lines" style={{ marginTop: 12 }}>
         <DutyChip x={x} />
+        {x.task_note && <span className="status bad duty-note" data-testid="task-note">{x.task_note}</span>}
         {x.vehicle_note && <span className="sub duty-note" data-testid="vehicle-note">{x.vehicle_note}</span>}
         {x.app_stops_text && <span className="small app-stops duty-note" data-testid="app-stops">{x.app_stops_text}</span>}
         {x.phone && <span className="muted small duty-note">{x.phone}</span>}
@@ -298,7 +305,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
         {links.whatsapp && <a className="btn" href={links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}
         {links.call && <a className="btn" href={links.call}>Call</a>}
         {routes && <button type="button" className="btn" onClick={onRoute} disabled={busy}>Today’s route</button>}
-        {move && <Link className="btn" to={`/drivers/${x.username}/vehicle`}>Move to vehicle</Link>}
+        {move && <Link className="btn" to={`/drivers/${x.username}/vehicle`}>{swap ? "Swap vehicle" : "Move to vehicle"}</Link>}
         {clockOut && !armed && <button type="button" className="btn" disabled={saving} onClick={() => { setArmed(true); setMsg(null); }}>Clock out</button>}
       </div>
       {clockOut && armed && (
