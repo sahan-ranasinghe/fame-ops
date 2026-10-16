@@ -60,8 +60,8 @@ describe("Vehicle requests", () => {
     expect(v).toEqual({ input: { date: "2026-10-12", time: "08:00", project: "HR", need_type: "van", route_to: "Matara", pax: 6, tools: true } });
     expect(validateNewRequest({ ...emptyRequest("2026-10-12"), time: "08:00", behalf: " A visitor " })).toEqual({ input: { date: "2026-10-12", time: "08:00", on_behalf_of: "A visitor" } });
   });
-  it("decides with a vehicle and driver, or a reason", () => {
-    expect(decisionInput({ id: "r1", decision: "approve" })).toEqual({ error: "Pick a vehicle and a driver." });
+  it("decides with a driver (and a vehicle when one is picked), or a reason", () => {
+    expect(decisionInput({ id: "r1", decision: "approve" })).toEqual({ error: "Pick a driver: the vehicle fills itself." });
     expect(decisionInput({ id: "r1", decision: "decline", reason: " " })).toEqual({ error: "Write the reason first. The person who asked will see it." });
     expect(decisionInput({ id: "r1", decision: "approve", vehicle: "WP CAB-4521", driver: "kasun.s", decidedBy: "Sahan" })).toEqual({
       input: { request_id: "r1", decision: "approve", decided_by: "Sahan", vehicle: "WP CAB-4521", driver: "kasun.s" },
@@ -81,7 +81,7 @@ describe("Vehicle requests (Part 6: custodians and one-step booking)", () => {
     expect(suggestInput(f)).toEqual({ date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", pax: 2 });
   });
   it("books in one step: a driver, or the custodian when no driver is needed", () => {
-    expect(bookInput(f, { vehicle: "", driver: "", hasCustodian: false })).toEqual({ error: "Pick a vehicle." });
+    expect(bookInput(f, { vehicle: "", driver: "", hasCustodian: false })).toEqual({ error: "Pick a driver." });
     expect(bookInput(f, { vehicle: "WP CAR-1182", driver: "", hasCustodian: false })).toEqual({ error: "Pick a driver." });
     expect(bookInput(f, { vehicle: "WP CAR-1182", driver: "", hasCustodian: true })).toEqual({ error: 'Pick a driver, or untick "A driver is needed" so the custodian drives.' });
     expect(bookInput({ ...f, driver: false }, { vehicle: "WP CAR-1182", driver: "", hasCustodian: true })).toEqual({
@@ -90,8 +90,67 @@ describe("Vehicle requests (Part 6: custodians and one-step booking)", () => {
     expect(bookInput(f, { vehicle: "WP PH-2087", driver: "kasun.s", hasCustodian: false })).toMatchObject({ input: { vehicle: "WP PH-2087", driver: "kasun.s" } });
   });
   it("approves without a driver only when the custodian drives", () => {
-    expect(decisionInput({ id: "r1", decision: "approve", vehicle: "WP CAR-1182" })).toEqual({ error: "Pick a vehicle and a driver." });
+    expect(decisionInput({ id: "r1", decision: "approve", vehicle: "WP CAR-1182" })).toEqual({ error: "Pick a driver: the vehicle fills itself." });
     expect(decisionInput({ id: "r1", decision: "approve", vehicle: "WP CAR-1182", custodianDrives: true })).toEqual({ input: { request_id: "r1", decision: "approve", vehicle: "WP CAR-1182" } });
+    expect(decisionInput({ id: "r1", decision: "approve", custodianDrives: true })).toEqual({ error: "Pick the vehicle." });
+  });
+});
+
+describe("Driver first, the vehicle fills itself (Phase 7, §3)", () => {
+  const f = { ...emptyRequest("2026-10-17"), time: "09:00", from: "Head office", to: "Kurunegala site" };
+  it("approves with the driver alone when they bring a vehicle (or it is not known yet); the server takes the same one", () => {
+    expect(decisionInput({ id: "r1", decision: "approve", driver: "kamal.p", defaultVehicle: "WP CAB-4521" })).toEqual({ input: { request_id: "r1", decision: "approve", driver: "kamal.p" } });
+    expect(decisionInput({ id: "r1", decision: "approve", driver: "kamal.p" })).toEqual({ input: { request_id: "r1", decision: "approve", driver: "kamal.p" } });
+    expect(decisionInput({ id: "r1", decision: "approve", driver: "kamal.p", defaultVehicle: null })).toEqual({ error: "Pick a vehicle: this driver holds none today and has no regular one." });
+    expect(decisionInput({ id: "r1", decision: "approve", driver: "kamal.p", vehicle: "WP KL-1234", defaultVehicle: "WP CAB-4521" })).toMatchObject({ input: { vehicle: "WP KL-1234", driver: "kamal.p" } });
+  });
+  it("books with the driver alone, the same way", () => {
+    expect(bookInput(f, { vehicle: "", driver: "kamal.p", hasCustodian: false, defaultVehicle: "WP CAB-4521" })).toEqual({
+      input: { date: "2026-10-17", time: "09:00", route_from: "Head office", route_to: "Kurunegala site", driver: "kamal.p" },
+    });
+    expect(bookInput(f, { vehicle: "", driver: "kamal.p", hasCustodian: false, defaultVehicle: null })).toEqual({ error: "Pick a vehicle: this driver holds none today and has no regular one." });
+  });
+  it("assigns a task with the driver alone when they bring a vehicle; the call names none", () => {
+    const a = { ...emptyAssign("2026-10-17"), title: "Team drop", leaveBy: "08:00", driver: "kamal.p" };
+    a.stops[0].place = "Head office";
+    a.stops[1].place = "Kurunegala site";
+    const v = validateAssign(a, [], undefined, { defaultVehicle: "WP CAB-4521" });
+    expect("input" in v && "vehicle" in v.input).toBe(false);
+    expect("input" in v && v.input.driver).toBe("kamal.p");
+    expect(validateAssign(a, [], undefined, { defaultVehicle: null })).toEqual({ error: "Add a vehicle." });
+    expect("input" in validateAssign(a, [], undefined, { defaultVehicle: undefined })).toBe(true);
+  });
+});
+
+describe("The time at From and To, Start from on the one-step booking (Phase 7, §11, §17)", () => {
+  const f = { ...emptyRequest("2026-10-17"), time: "09:00", from: "Head office", to: "Kurunegala site", fromDwell: "15", toDwell: "1:30" };
+  it("sends the times at From and To when chosen", () => {
+    expect(validateNewRequest(f)).toMatchObject({ input: { from_dwell_min: 15, to_dwell_min: 90 } });
+    expect(validateNewRequest({ ...f, toDwell: "13:00" })).toEqual({ error: "The time at a stop must be minutes or h:mm, up to 12 h." });
+    const was = editFields({ fields: { date: "2026-10-17", time: "09:00", route_from: "Head office", route_to: "Kurunegala site", from_dwell_min: 15 } });
+    expect([was.fromDwell, was.toDwell]).toEqual(["15", ""]);
+    expect(updateRequestInput("r1", 4, { ...was, fromDwell: "", toDwell: "30" }, was)).toEqual({ input: { request_id: "r1", version: 4, from_dwell_min: null, to_dwell_min: 30 } });
+  });
+  it("Passengers get in at the start: the start becomes Stop 1, the From pickup goes when it is the same place", () => {
+    const base = { id: "p-base", name: "Head office" };
+    const pick = { vehicle: "", driver: "kamal.p", hasCustodian: false, defaultVehicle: "WP CAB-4521" };
+    const ticked = { start: "", startPax: true };
+    expect(bookInput(f, pick, { fields: ticked, base, fromIsStart: true })).toMatchObject({
+      input: { start: { place_id: "p-base", place: "Head office", passengers: true }, stops: [{ type: "drop", place: "Kurunegala site", dwell_min: 90 }] },
+    });
+    expect(bookInput(f, pick, { fields: ticked, base, fromIsStart: false })).toMatchObject({
+      input: { stops: [{ type: "pickup", place: "Head office", dwell_min: 15 }, { type: "drop", place: "Kurunegala site", dwell_min: 90 }] },
+    });
+    const plain = bookInput(f, pick, { fields: { start: "", startPax: false }, base });
+    expect("input" in plain && "stops" in plain.input).toBe(false);
+    expect("input" in plain && "start" in plain.input).toBe(false);
+  });
+  it("the decide page's times go onto the request only when they differ from it", async () => {
+    const { dwellChanges } = await import("./requestLogic");
+    expect(dwellChanges({ fromDwell: "15", toDwell: "" }, { from_dwell_min: 15 })).toBeNull();
+    expect(dwellChanges({ fromDwell: "30", toDwell: "" }, { from_dwell_min: 15 })).toEqual({ from_dwell_min: 30 });
+    expect(dwellChanges({ fromDwell: "", toDwell: "2:00" }, { from_dwell_min: 15 })).toEqual({ from_dwell_min: null, to_dwell_min: 120 });
+    expect(dwellChanges({ fromDwell: "x", toDwell: "" }, undefined)).toBe("bad");
   });
   it("tells the requester's timeline in steps", () => {
     expect(timelineSteps({ status: "waiting", timeline: { sent: "14 Oct 09:00" } }).map((s) => `${s.label}:${s.done}`)).toEqual(["Sent:true", "Seen by the office:false", "Decision:false"]);

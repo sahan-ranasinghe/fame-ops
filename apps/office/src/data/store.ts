@@ -1,22 +1,61 @@
 // What the screens show: one entry per key (overview, board, reqs…), filled
 // by a one-off load or a watch (the connector's watchTool in the artifact,
 // polling through office-api on the web). Screens subscribe with useEntry.
+// An answer deep-equal to the one already held keeps the old object and
+// notifies nobody (Phase 7, §10: a refresh with the same data re-renders
+// nothing). useQuery's entries (one per tool and arguments) are fetched with
+// `fetch`, kept while someone shows them (`retain` / `release`) and fetched
+// again quietly after a write (`invalidate`).
 import type { FleetError, Transport } from "../transport/types";
 import { AUTHZ } from "../transport/errors";
 
 export interface Entry<T = unknown> {
   data?: T;
   err?: FleetError;
+  /** When the answer shown was fetched (a refresh with the same answer moves it without a re-render). */
   at?: number;
   loading: boolean;
 }
 
 const EMPTY: Entry = { loading: false };
 
+/** Deep equality for JSON answers (objects, arrays, strings, numbers, booleans, null). */
+export function deepEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a)) {
+    const bb = b as unknown[];
+    if (a.length !== bb.length) return false;
+    for (let i = 0; i < a.length; i++) if (!deepEqual(a[i], bb[i])) return false;
+    return true;
+  }
+  const ka = Object.keys(a as object).filter((k) => (a as Record<string, unknown>)[k] !== undefined);
+  const kb = Object.keys(b as object).filter((k) => (b as Record<string, unknown>)[k] !== undefined);
+  if (ka.length !== kb.length) return false;
+  for (const k of ka) {
+    if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+    if (!deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k])) return false;
+  }
+  return true;
+}
+
+interface ActiveQuery {
+  tool: string;
+  args: Record<string, unknown>;
+  users: number;
+  /** Fetched again after a write. */
+  onWrite: boolean;
+}
+
 export class FleetStore {
   private entries = new Map<string, Entry>();
   private listeners = new Set<() => void>();
   private watches = new Map<string, () => void>();
+  /** useQuery's entries on screen: who shows them, and how to fetch them again. */
+  private queries = new Map<string, ActiveQuery>();
+  /** One fetch per key at a time (two panels showing the same answer share it). */
+  private inflight = new Map<string, Promise<unknown>>();
 
   constructor(public readonly transport: Transport) {}
 
@@ -30,7 +69,18 @@ export class FleetStore {
   }
 
   private set(key: string, patch: Partial<Entry>) {
-    this.entries.set(key, { ...this.get(key), ...patch });
+    const prev = this.get(key);
+    const next: Entry = { ...prev, ...patch };
+    // The same answer again: keep the object the screens already hold.
+    if ("data" in patch && prev.data !== undefined && deepEqual(prev.data, patch.data)) next.data = prev.data;
+    if ("err" in patch && prev.err && patch.err && deepEqual(prev.err, patch.err)) next.err = prev.err;
+    const same = this.entries.has(key) && next.data === prev.data && next.err === prev.err && next.loading === prev.loading;
+    if (same) {
+      // Nothing a screen shows changed: note the time in place and re-render nobody.
+      if (next.at !== undefined) (prev as Entry).at = next.at;
+      return;
+    }
+    this.entries.set(key, next);
     this.listeners.forEach((l) => l());
   }
 
@@ -49,6 +99,52 @@ export class FleetStore {
       this.fail(key, e as FleetError);
       return undefined;
     }
+  }
+
+  /**
+   * Fetches into an entry and keeps what it shows until the answer comes (useQuery). `quiet`: a
+   * background refresh, the entry is not marked loading (no "Updating…"). A fetch already running
+   * for the key is shared.
+   */
+  fetch<T>(key: string, tool: string, args: Record<string, unknown>, quiet = false): Promise<T | undefined> {
+    const running = this.inflight.get(key);
+    if (running) {
+      if (!quiet && !this.get(key).loading) this.set(key, { loading: true });
+      return running as Promise<T | undefined>;
+    }
+    if (!quiet) this.set(key, { loading: true });
+    const p = (async () => {
+      try {
+        const data = await this.transport.call<T>(tool, args);
+        this.set(key, { data, at: Date.now(), err: undefined, loading: false });
+        return data;
+      } catch (e) {
+        this.fail(key, e as FleetError);
+        return undefined;
+      } finally {
+        this.inflight.delete(key);
+      }
+    })();
+    this.inflight.set(key, p);
+    return p;
+  }
+
+  /** A screen shows this query's entry: it is fetched again after a write (invalidate) unless `onWrite` is false. */
+  retain(key: string, tool: string, args: Record<string, unknown>, onWrite = true): void {
+    const q = this.queries.get(key);
+    if (q) {
+      q.users++;
+      q.onWrite ||= onWrite;
+    } else this.queries.set(key, { tool, args, users: 1, onWrite });
+  }
+
+  /** Nobody shows it any more: the entry is forgotten (a query entry is never read by key elsewhere). */
+  release(key: string): void {
+    const q = this.queries.get(key);
+    if (!q) return;
+    if (--q.users > 0) return;
+    this.queries.delete(key);
+    this.entries.delete(key);
   }
 
   /** Fetches now and every intervalMs until unwatch(key). A second watch on the same key is ignored. */
@@ -91,8 +187,9 @@ export class FleetStore {
     if (next !== e.data) this.set(key, { data: next });
   }
 
-  /** After a write: everything watched fetches again. */
+  /** After a write: everything watched fetches again, and every query on screen (quietly). */
   invalidate(): Promise<void> {
+    for (const [key, q] of this.queries) if (q.onWrite) void this.fetch(key, q.tool, q.args, true);
     return this.transport.invalidate();
   }
 }

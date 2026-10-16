@@ -1,35 +1,40 @@
-// Assign a task, as a page (/tasks/new): the stops as rows (type, place,
-// arrive-by on each; numbered within the type), the start place, Return to
-// office and No expressway, the date and the leave-by time (typed, or planned
-// from the stops' deadlines), the plan in one line above Save with the exact
-// reason when there is none (1.5 s after the last edit, or Plan now), the
-// driver and vehicle, the project split. Everything typed is kept as a draft.
+// Assign a task, as a page (/tasks/new): Start from (the base place by
+// default, "Passengers get in here" makes it Stop 1), the stops as rows (type,
+// place, arrive-by and the time at each stop; named by their place in the
+// order), Return to office and No expressway, the date and the leave-by time
+// (typed, or filled in from the plan, checked at once against the arrive-by
+// times), the plan as a timeline with the exact reason when there is none
+// (1.5 s after the last edit, or Plan now) and the overlaps as cards, then the
+// driver first and the vehicle they bring (changeable), Who's available with
+// the best match, the project split. Everything typed is kept as a draft; a
+// refresh never resets a choice (Phase 7, §3, §10, §11, §17).
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
-import type { CreateTaskResult, FindProject, PlanPreview } from "../data/types";
-import { num, plateOf, splitEqually, today, warnList } from "../lib/format";
+import type { Conflict, CreateTaskResult, FindProject } from "../data/types";
+import { hhmm, num, splitEqually, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { Icon } from "../ui/icons";
-import { LocationSearch } from "../ui/LocationSearch";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { type AssignFields, driverWhatsApp, emptyAssign, planInput, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
-import { availabilityArgs } from "./availabilityLogic";
-import { AvailabilityPanel } from "./AvailabilityPanel";
-import { PlanPanel } from "./PlanPanel";
-import { planReasons } from "./planLogic";
+import { availabilityArgs, driverVehicle, floorTo5 } from "./availabilityLogic";
+import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
+import { ConflictCards } from "./ConflictCards";
+import { checkDeparture, departurePlan } from "./departureLogic";
+import { basePlace, DepartureNote, DriverSelect, StartFrom, startPoint, useFleetSettings, usePlanPreview, VehicleSelect } from "./dispatchParts";
+import { dwellFallbacks, planReasons, rowStopNumbers } from "./planLogic";
+import { PlanTimeline } from "./PlanTimeline";
 import { StopsRows } from "./StopsEditor";
-import { defaultStops } from "./stopsLogic";
+import { defaultStops, dwellText, firstStopOf, tickStart } from "./stopsLogic";
 
 const SPLIT_COLORS = ["var(--accent)", "var(--live)", "var(--ok)", "var(--bad)", "var(--muted)"];
-/** The plan preview is computed this long after the last edit (or at once with Plan now): every call may count against a daily cap. */
-export const PLAN_DEBOUNCE_MS = 1500;
+export { PLAN_DEBOUNCE_MS } from "./dispatchParts";
 
 interface Form {
   f: AssignFields;
@@ -42,6 +47,8 @@ export function NewTask() {
   const { me, store, transport } = useFleet();
   const toast = useToast();
   const lists = useLists();
+  const settings = useFleetSettings();
+  const base = basePlace(settings.data);
   const [params] = useSearchParams();
   const date = isDate(params.get("date")) ? params.get("date")! : today();
   const [state, setState, draft] = useFormDraft<Form>("task-new", null, () => ({ f: emptyAssign(date), rows: [] }));
@@ -50,55 +57,54 @@ export function NewTask() {
     setState((s) => ({ ...s, f: typeof patch === "function" ? patch(s.f) : { ...s.f, ...patch } }));
   const setRows = (fn: (rs: ProjectRow[]) => ProjectRow[]) => setState((s) => ({ ...s, rows: fn(s.rows) }));
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ tone: "" | "bad" | "ok"; text: React.ReactNode; warnings?: string[] } | null>(null);
-  const [preview, setPreview] = useState<PlanPreview | null>(null);
-  const [previewErr, setPreviewErr] = useState<string | null>(null);
-  const [planning, setPlanning] = useState(false);
+  const [msg, setMsg] = useState<{ tone: "" | "bad" | "ok"; text: React.ReactNode; warnings?: string[]; conflicts?: Conflict[] } | null>(null);
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const planTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // The plan preview follows the form, 1.5 s after the last change; Plan now skips the wait.
-  const planKey = JSON.stringify(planInput(f));
-  const runPlan = async (key: string) => {
-    const input = JSON.parse(key) as Record<string, unknown> | null;
-    if (!input) {
-      setPreview(null);
-      setPreviewErr(null);
-      return;
-    }
-    setPlanning(true);
-    try {
-      const p = await transport.call<PlanPreview>("plan_task", input);
-      setPreview(p);
-      setPreviewErr(null);
-    } catch (e) {
-      setPreviewErr(errText(e as FleetError)[0]);
-    }
-    setPlanning(false);
-  };
-  useEffect(() => {
-    if (planTimer.current) clearTimeout(planTimer.current);
-    if (!JSON.parse(planKey)) {
-      setPreview(null);
-      setPreviewErr(null);
-      return;
-    }
-    planTimer.current = setTimeout(() => void runPlan(planKey), PLAN_DEBOUNCE_MS);
-    return () => { if (planTimer.current) clearTimeout(planTimer.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planKey, transport]);
-  const planNow = () => {
-    if (planTimer.current) clearTimeout(planTimer.current);
-    void runPlan(planKey);
-  };
+  // The plan follows the form, 1.5 s after the last change; Plan now skips the wait. The plan shown stays while the next comes.
+  const pInput = planInput(f, base);
+  const plan = usePlanPreview(pInput);
+  const preview = plan.err ? null : plan.data ?? null;
+  const previewErr = plan.err ? errText(plan.err)[0] : null;
 
   const drivers = (lists.drivers ?? []).filter((d) => d.active !== false);
   const vehicles = lists.vehicles ?? [];
   const set = <K extends keyof AssignFields>(k: K, v: AssignFields[K]) => setF({ [k]: v } as Partial<AssignFields>);
 
+  // Who's available from the leave-by rounded down to 5 minutes (a plan moving by a minute does not ask again), near the first stop.
+  const leave = f.leaveBy || hhmm(preview?.leave_by);
+  const first = firstStopOf(f.stops, f.startPax ? { name: f.start || base?.name || "", lat: f.startLat, lng: f.startLng } : null);
+  const availArgs = availabilityArgs(f.date, leave ? floorTo5(leave) : "", f.end, undefined, undefined, first);
+  const avail = useAvailability(availArgs);
+  const pickedDriver = drivers.find((d) => d.username === f.driver);
+  const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), pickedDriver) : null;
+
+  // The departure check, at once from the latest plan: fill an empty leave-by, else say what a typed one does.
+  const dPlan = departurePlan(preview?.timeline, preview?.plan?.buffer_min);
+  const check = checkDeparture(f.leaveBy, dPlan);
+  const fillTo = check?.kind === "fill" && !plan.stale && !plan.updating ? check.leaveBy : null;
+  useEffect(() => {
+    if (fillTo) setF((x) => (x.leaveBy ? x : { ...x, leaveBy: fillTo }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fillTo]);
+  const offset = f.startPax ? 1 : 0;
+  const numbers = rowStopNumbers(f.stops, offset);
+  const lateKey = check?.kind === "late" ? [...numbers].find(([, n]) => n === check.n)?.[0] : undefined;
+  const moveArriveBy = (n: number, time: string) => {
+    const key = [...numbers].find(([, m]) => m === n)?.[0];
+    if (key) setF((x) => ({ ...x, stops: x.stops.map((s) => (s.key === key ? { ...s, arriveBy: time } : s)) }));
+  };
+  const startStop = preview?.stops.find((s) => s.is_start);
+  const stay = startStop?.dwell_min != null ? `${dwellText(startStop.dwell_min)} there${startStop.dwell_source === "place" ? " (usual here)" : ""}` : undefined;
+
+  /** Picking a driver: the vehicle follows them again (their vehicle today, else their regular one). */
   function pickDriver(username: string) {
-    const d = drivers.find((x) => x.username === username);
-    setF((x) => ({ ...x, driver: username, vehicle: d?.current_vehicle && !x.vehicle ? plateOf(d.current_vehicle) : x.vehicle }));
+    setF((x) => ({ ...x, driver: username, vehicle: "" }));
+  }
+  function onTickStart(i: number) {
+    setF((x) => {
+      const t = tickStart(x.stops, i);
+      return { ...x, stops: t.list, startPax: true, notes: t.note ? [x.notes.trim(), `At the start: ${t.note}`].filter(Boolean).join("\n") : x.notes };
+    });
   }
   function setRow(i: number, patch: Partial<ProjectRow>) {
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -124,7 +130,9 @@ export function NewTask() {
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();
-    const v = validateAssign(f, rows, me.name);
+    // The driver's vehicle: known (Who's available, else the driver list), known to be none, or not known yet (the server decides).
+    const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
+    const v = validateAssign(f, rows, me.name, { defaultVehicle: known, base });
     if ("error" in v) {
       setMsg({ tone: "bad", text: v.error });
       return;
@@ -138,9 +146,13 @@ export function NewTask() {
       setMsg({
         tone: "ok",
         warnings: warnList(p),
+        conflicts: p.conflicts,
         text: (
           <>
             <b>Sent to {drv ? drv.name : String(v.input.driver)}.</b> Leave by {p.leave_by?.slice(-5) ?? "—"}. The task is in their Fame Driver app.{" "}
+            {p.vehicle_changed ? <span data-testid="vehicle-used">{p.vehicle_changed}. </span>
+              : p.vehicle_used ? <span data-testid="vehicle-used">Vehicle: {p.vehicle_used.reg_no} · {p.vehicle_used.why === "chosen" ? "as picked" : p.vehicle_used.why}. </span>
+              : p.vehicle ? <span data-testid="vehicle-used">Vehicle: {p.vehicle}. </span> : null}
             {p.task_id && <Link className="btn small" to={`/tasks/${p.task_id}`}>Open task</Link>}{" "}
             <Link className="btn small" to={`/tasks${v.input.date !== today() ? `?date=${v.input.date}` : ""}`}>The board</Link>{" "}
             {wa ? <a className="btn small" href={wa} target="_blank" rel="noopener">WhatsApp the driver</a>
@@ -148,8 +160,7 @@ export function NewTask() {
           </>
         ),
       });
-      setState({ f: { ...f, title: "", notes: "", cname: "", cphone: "", pax: "", end: "", leaveBy: "", stops: defaultStops() }, rows: [] });
-      setPreview(null);
+      setState({ f: { ...f, title: "", notes: "", cname: "", cphone: "", pax: "", end: "", leaveBy: "", startPax: false, stops: defaultStops() }, rows: [] });
       toast("Task sent");
       void store.invalidate();
     } catch (e) {
@@ -159,8 +170,9 @@ export function NewTask() {
   }
 
   const total = splitTotal(rows);
-  const reasons = planReasons({ date: f.date, stops: f.stops, leaveBy: f.leaveBy, start: f.start, returnToBase: f.returnToBase }, preview, previewErr);
+  const reasons = planReasons({ date: f.date, stops: f.stops, leaveBy: f.leaveBy, start: f.start || base?.name || "", returnToBase: f.returnToBase }, preview, previewErr);
   const backTo = `/tasks${date !== today() ? `?date=${date}` : ""}`;
+  const focusVehicle = () => document.getElementById("af-vehicle")?.focus();
 
   return (
     <section className="view" data-testid="new-task">
@@ -174,17 +186,23 @@ export function NewTask() {
           </div>
           <div className="grid2">
             <div className="field"><label htmlFor="af-date">Date</label><input type="date" id="af-date" value={f.date} onChange={(e) => set("date", e.target.value)} /></div>
-            <div className="field"><label htmlFor="af-leave">Leave by</label><input type="time" id="af-leave" value={f.leaveBy} onChange={(e) => set("leaveBy", e.target.value)} /><span className="hint">Empty: planned from the stops’ arrive-by times.</span></div>
+            <div className="field">
+              <label htmlFor="af-leave">Leave by</label>
+              <input type="time" id="af-leave" value={f.leaveBy} onChange={(e) => set("leaveBy", e.target.value)} />
+              {check && check.kind !== "fill"
+                ? <DepartureNote check={check} onUse={(t) => set("leaveBy", t)} onMove={moveArriveBy} />
+                : <span className="hint">Empty: planned from the stops’ arrive-by times.</span>}
+            </div>
           </div>
         </div>
 
         <div className="card card-b form">
-          <div className="field"><label htmlFor="af-start">Start from</label>
-            <LocationSearch id="af-start" value={f.start} placeholder="The base place (Settings → Fleet)"
-              onText={(text) => setF({ ...f, start: text, startPlaceId: undefined, startGooglePlaceId: undefined })} google
-              onPick={(p) => setF({ ...f, start: p.name, startPlaceId: p.placeId, startGooglePlaceId: p.googlePlaceId })} /></div>
+          <StartFrom id="af-start" value={f} base={base} stay={stay} onChange={(patch) => setF((x) => ({ ...x, ...patch }))} />
           <span className="lab">Stops</span>
-          <StopsRows list={f.stops} onChange={(stops) => set("stops", stops)} />
+          <StopsRows list={f.stops} onChange={(stops) => set("stops", stops)} offset={offset}
+            fallbacks={dwellFallbacks(f.stops, preview?.stops, settings.data?.settings.dwell_min)}
+            start={startPoint(f, base)} startIsStop={f.startPax} onTickStart={onTickStart}
+            note={(s) => (s.key === lateKey ? <DepartureNote check={check} onUse={(t) => set("leaveBy", t)} onMove={moveArriveBy} testId="departure-check-stop" /> : null)} />
           <div className="grid2">
             <span className="check"><input type="checkbox" id="af-return" checked={f.returnToBase} onChange={(e) => set("returnToBase", e.target.checked)} /> <label htmlFor="af-return">Return to office</label></span>
             <span className="check"><input type="checkbox" id="af-noexp" checked={f.avoidExpressway} onChange={(e) => set("avoidExpressway", e.target.checked)} /> <label htmlFor="af-noexp">No expressway</label></span>
@@ -194,30 +212,23 @@ export function NewTask() {
         <div className="card card-b form" data-testid="plan-card">
           <div className="row" style={{ padding: 0 }}>
             <b className="grow">Plan</b>
-            <button type="button" className="btn small" onClick={planNow} disabled={planning || !JSON.parse(planKey)}>{planning ? "Planning…" : "Plan now"}</button>
+            <button type="button" className="btn small" onClick={plan.refetch} disabled={plan.fetching || !pInput}>{plan.fetching ? "Planning…" : "Plan now"}</button>
           </div>
-          <PlanPanel preview={preview} reasons={reasons} />
+          <PlanTimeline timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating} />
+          <ConflictCards conflicts={preview?.conflicts} onPickVehicle={focusVehicle} onPickDriver={scrollToAvailability} />
         </div>
 
         <div className="card card-b form">
           <div className="grid2">
-            <div className="field">
-              <label htmlFor="af-driver">Driver</label>
-              <select id="af-driver" value={f.driver} onChange={(e) => pickDriver(e.target.value)}>
-                <option value="">{lists.drivers ? "Choose a driver" : lists.error ? "Couldn’t load" : "Loading…"}</option>
-                {drivers.map((d) => <option key={d.username} value={d.username}>{d.name}{d.current_vehicle ? ` · ${d.current_vehicle}` : ""}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label htmlFor="af-vehicle">Vehicle</label>
-              <select id="af-vehicle" value={f.vehicle} onChange={(e) => set("vehicle", e.target.value)}>
-                <option value="">{lists.vehicles ? "Choose a vehicle" : lists.error ? "Couldn’t load" : "Loading…"}</option>
-                {vehicles.map((v) => <option key={v.reg_no} value={v.reg_no}>{v.reg_no}{v.make_model ? ` · ${v.make_model}` : ""}{v.status ? ` · ${v.status}` : ""}</option>)}
-              </select>
-            </div>
+            <DriverSelect id="af-driver" value={f.driver} drivers={drivers} onChange={pickDriver} loading={!lists.drivers && !lists.error}
+              emptyLabel={lists.error && !lists.drivers ? "Couldn’t load" : "Choose a driver"} />
+            <VehicleSelect id="af-vehicle" value={f.vehicle} def={def} vehicles={vehicles} onChange={(reg) => set("vehicle", reg)}
+              emptyLabel={!lists.vehicles && lists.error ? "Couldn’t load" : f.driver ? "Pick a vehicle" : "Choose the driver first"}
+              hint={f.driver && !def ? "This driver holds no vehicle today and has no regular one." : undefined} />
           </div>
           {lists.error && (!lists.drivers || !lists.vehicles) && <Notice>Couldn’t load the {!lists.drivers && !lists.vehicles ? "drivers and vehicles" : !lists.drivers ? "drivers" : "vehicles"}: {lists.error} <button type="button" className="btn small" onClick={lists.reload}>Try again</button></Notice>}
-          <AvailabilityPanel args={availabilityArgs(f.date, f.leaveBy || preview?.leave_by?.slice(-5) || "", f.end)} picked={f.driver} onPick={(d) => { if (d.username) pickDriver(d.username); }} />
+          <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) pickDriver(d.username); }}
+            onUse={(b) => { if (b.username) pickDriver(b.username); }} />
           <div className="grid2">
             <div className="field"><label htmlFor="af-end">Vehicle free by</label><input type="time" id="af-end" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
             <div className="field"><label htmlFor="af-pax">Passengers</label><input type="number" id="af-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
@@ -264,9 +275,10 @@ export function NewTask() {
         </div>
 
         {msg && (
-          <div>
+          <div style={{ display: "grid", gap: 10 }}>
             <Notice tone={msg.tone}>{msg.text}</Notice>
             {msg.warnings && <WarningsNote warnings={msg.warnings} />}
+            <ConflictCards conflicts={msg.conflicts} />
           </div>
         )}
         <StickyActions>
