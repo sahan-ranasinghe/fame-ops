@@ -247,7 +247,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide }: { x: LiveDrive
   const clockOut = me.tools.includes("clock_out_driver") && canClockOut(x);
   // On duty: Move to vehicle; on a task: the same page as a swap during the task (Part 2).
   const swap = moveMode(x) === "swap";
-  const move = me.tools.includes("move_driver_vehicle") && (canMoveVehicle(x) || swap);
+  const move = me.tools.includes("move_driver_vehicle") && canMoveVehicle(x);
 
   async function doClockOut() {
     setSaving(true);

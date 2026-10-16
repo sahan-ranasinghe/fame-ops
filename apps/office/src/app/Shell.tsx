@@ -76,7 +76,7 @@ function Bell() {
 function NeedsDriverBanner() {
   const { me, store, noConnector } = useFleet();
   const overview = useEntry<Overview>("overview");
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const show = !noConnector && can(me, "approve", "assign_tasks");
   useEffect(() => {
     if (!show) return;
@@ -90,7 +90,9 @@ function NeedsDriverBanner() {
     });
   }, [store, show]);
   const count = overview.data?.needs_driver?.count ?? 0;
+  // Not on the needs-a-driver list itself (it is the list the banner opens).
   if (!show || count === 0 || !(pathname === "/tasks" || pathname.startsWith("/tasks/"))) return null;
+  if (pathname === "/tasks" && new URLSearchParams(search).get("filter") === "needs_driver") return null;
   return (
     <div style={{ marginBottom: 16 }} data-testid="needs-driver-banner">
       <Notice tone="bad" action={<Link className="btn small" to="/tasks?filter=needs_driver">Show</Link>}>

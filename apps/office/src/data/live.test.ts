@@ -148,12 +148,13 @@ describe("duty (Phase 7)", () => {
   it("the map draws drivers on duty or on a task, never off duty", () => {
     expect([onDuty, offDuty, onTask].filter(onMap).map((d) => d.username)).toEqual(["nuwan.p", "sunil"]);
   });
-  it("Clock out and Move to vehicle only for a driver on duty without a task", () => {
+  it("Clock out only for a driver on duty without a task; Move to vehicle on duty, or on a task as a swap", () => {
     expect(canClockOut(onDuty)).toBe(true);
     expect(canClockOut(onTask)).toBe(false);
     expect(canClockOut(offDuty)).toBe(false);
     expect(canMoveVehicle(onDuty)).toBe(true);
-    expect(canMoveVehicle(onTask)).toBe(false);
+    expect(canMoveVehicle(onTask)).toBe(true);
+    expect(canMoveVehicle(offDuty)).toBe(false);
   });
   it("the line after Clock out", () => {
     expect(clockOutLine({ clocked_out: "Kamal Perera", at: "2026-10-15 17:40", note: "The driver's phone gets a push and stops recording location." }))

@@ -136,7 +136,7 @@ export type SettingKey = keyof Settings;
 export const SETTING_KEYS = Object.keys(SETTINGS_DEFAULTS) as SettingKey[];
 
 export const SETTING_TEXT: Record<SettingKey, string> = {
-  dwell_min: "Minutes at a stop by type and what is carried (pickup.people, drop.goods, visit, documents, default)",
+  dwell_min: "Minutes at a stop by type (pickup, drop, visit, default); a place's usual time and a stop's own time come first",
   buffer_min: "Arrive this many minutes before a deadline",
   base_place_id: "The base place (the head office): the start and the return of a trip",
   avg_speed_kmh: "Average speed for the estimate when no routing key is set",
@@ -191,7 +191,7 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       const out: Record<string, number> = {};
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
         if (!/^(pickup|drop|visit)(\.(people|goods|documents|other))?$|^(people|goods|documents|other|default)$/.test(k)) {
-          throw new ToolError(`dwell_min: "${k}" is not a stop kind (pickup.people, drop.goods, visit, documents, default …).`);
+          throw new ToolError(`dwell_min: "${k}" is not a stop kind (pickup, drop, visit, default; or pickup.people, drop.goods …).`);
         }
         out[k] = number(v, `dwell_min.${k}`, 0, 1440, true);
       }

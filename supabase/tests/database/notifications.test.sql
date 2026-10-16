@@ -112,8 +112,8 @@ select is((select count(*) from public.notifications where event = 'task.decline
 select is(
   (select payload ->> 'title' || ' | ' || (payload ->> 'body') || ' | ' || (payload ->> 'url') from public.notifications where event = 'task.declined'),
   'Notify declined ''Team drop · Galle'' ' || to_char((now() + interval '3 hours') at time zone 'Asia/Colombo', 'HH24:MI')
-    || ' | Vehicle problem: Flat tyre · needs a driver | /tasks/50000000-0000-0000-0000-0000000000d1/edit?driver=1',
-  'Phase 7: "Kamal declined ''<task>'' 09:00" / the reason · needs a driver, opening the task''s change page');
+    || ' | Vehicle problem: Flat tyre · needs a driver | /',
+  'Phase 7: "Kamal declined ''<task>'' 09:00" / the reason · needs a driver; an approver without assign_tasks opens the Overview''s block');
 select is((select payload ->> 'tag' from public.notifications where event = 'task.declined'), 'needs-driver:50000000-0000-0000-0000-0000000000d1', 'tagged by task');
 
 -- task.not_accepted: the accept reminder (sent 2 hours after the task) tells the office too.

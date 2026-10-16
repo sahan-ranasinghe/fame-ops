@@ -269,11 +269,17 @@ begin
      and exists (select 1 from public.employees e where e.id = v_task.assigned_by_employee_id and e.active) then
     v_dispatch := v_dispatch || v_task.assigned_by_employee_id;
   end if;
+  -- The change page needs assign_tasks; someone who only approves opens the Overview's Needs a driver block.
   perform public.queue_notification(
     (select case when needs_driver_reason = 'not_accepted' then 'task.not_accepted' else 'task.declined' end from public.tasks where id = p_task),
     jsonb_build_object('title', p_title, 'body', p_body, 'url', '/tasks/' || p_task::text || '/edit?driver=1',
                        'tag', 'needs-driver:' || p_task::text, 'task_id', p_task),
-    v_dispatch);
+    array(select e.id from public.employees e where e.id = any(v_dispatch) and 'assign_tasks' = any(e.permissions)));
+  perform public.queue_notification(
+    (select case when needs_driver_reason = 'not_accepted' then 'task.not_accepted' else 'task.declined' end from public.tasks where id = p_task),
+    jsonb_build_object('title', p_title, 'body', p_body, 'url', '/',
+                       'tag', 'needs-driver:' || p_task::text, 'task_id', p_task),
+    array(select e.id from public.employees e where e.id = any(v_dispatch) and not ('assign_tasks' = any(e.permissions))));
   v_requester := v_task.requested_by_employee_id;
   if v_requester is not null and not (v_requester = any(v_dispatch)) then
     perform public.queue_notification(

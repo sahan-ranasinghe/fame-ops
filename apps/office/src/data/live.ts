@@ -214,7 +214,8 @@ export const onMap = (d: LiveDriver) => dutyOf(d) !== "off_duty";
 
 /** Clock out and Move to vehicle: only for a driver on duty without a task (the server checks again). */
 export const canClockOut = (d: LiveDriver) => dutyOf(d) === "on_duty";
-export const canMoveVehicle = canClockOut;
+/** Move to vehicle: on duty; on a task it is a swap during the task (Phase 7, §2 addition). */
+export const canMoveVehicle = (d: LiveDriver) => dutyOf(d) === "on_duty" || dutyOf(d) === "on_task";
 
 /** clock_out_driver's answer. */
 export interface ClockOutResult {

@@ -139,8 +139,8 @@ select is((select needs_driver_reason || '|' || (needs_driver_since is not null)
   'declined|true', 'the task needs a driver: declined');
 select is((select string_agg(e.name || '→' || (n.payload ->> 'url'), ' ' order by e.name) from public.notifications n
            join public.employees e on e.id = n.recipient_employee_id where n.event = 'task.declined'),
-  'Dilini Dispatch→/tasks/30000000-0000-0000-0000-0000000008a3/edit?driver=1 Palitha Assigner→/tasks/30000000-0000-0000-0000-0000000008a3/edit?driver=1 Ruwani Requester→/requests/70000000-0000-0000-0000-0000000008a1',
-  'the dispatcher and the assigner get the change page, the requester their request');
+  'Dilini Dispatch→/tasks/30000000-0000-0000-0000-0000000008a3/edit?driver=1 Palitha Assigner→/ Ruwani Requester→/requests/70000000-0000-0000-0000-0000000008a1',
+  'the dispatcher gets the change page, the assigner without assign_tasks the Overview, the requester their request');
 select matches((select payload ->> 'title' || ' | ' || (payload ->> 'body') from public.notifications where event = 'task.declined' limit 1),
   '^Kamal declined ''Site visit'' \d\d:\d\d \| Unwell · needs a driver$', '"Kamal declined ''Site visit'' 09:00" · "Unwell · needs a driver"');
 select lives_ok($$ update public.tasks set status = 'assigned', declined_at = null, declined_by = null, declined_reason = null, declined_note = null

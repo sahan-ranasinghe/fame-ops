@@ -1467,8 +1467,8 @@ check(code == 200 and body["processed"] >= 1 and body["sent"] + body["dead"] >= 
 t7 = tool("create_task", {"title": "Airport run · notify", "date": day(2), "start_time": "10:00", "driver": "nuwan.p", "vehicle": "cab4521", "pickup": "Head office", "dropoff": "Airport"})
 code, ans = app.post("rpc/decline_task", {"p_task_id": t7["task_id"], "p_reason": "unwell"})
 row = outbox(f"event = 'task.declined' and recipient_employee_id = '{APPROVER}'")
-check(ans == "declined" and "|queued|Nuwan declined 'Airport run · notify' " in row and "|Unwell · needs a driver|" in row and row.endswith(f"|/tasks/{t7['task_id']}/edit?driver=1"),
-      "a declined task queues a row for the approver: who declined what and when, the reason, 'needs a driver' and the task's change page", row)
+check(ans == "declined" and "|queued|Nuwan declined 'Airport run · notify' " in row and "|Unwell · needs a driver|" in row and row.endswith("|/"),
+      "a declined task queues a row for the approver: who declined what and when, the reason, 'needs a driver' (approve without assign_tasks: the Overview)", row)
 
 # issue.opened (critical only) → the issues permission; issue.assigned → the assignee.
 rep3 = str(uuid.uuid4())
@@ -1774,8 +1774,8 @@ check(ovw.get("needs_driver", {}).get("count", 0) >= 1 and any(n["task_id"] == T
 card = next(d for d in tool("live_drivers")["drivers"] if d["username"] == "saman.k")
 check((card.get("task_note") or "").startswith("declined the ") and card["task_note"].endswith(" 10:00 task"), "live_drivers: 'declined the … 10:00 task'", card.get("task_note"))
 row = outbox(f"event = 'task.declined' and recipient_employee_id = '{APPROVER}' and payload->>'task_id' = '{TD}'")
-check(f"|Saman declined 'P7b today' 10:00|Vehicle problem: Brakes · needs a driver|/tasks/{TD}/edit?driver=1" in row,
-      "the approver's push: who declined what, the reason, 'needs a driver', the change page", row)
+check(f"|Saman declined 'P7b today' 10:00|Vehicle problem: Brakes · needs a driver|/" in row,
+      "the approver's push: who declined what, the reason, 'needs a driver' (the Overview: no assign_tasks)", row)
 fleet_jobs()
 iss = next((i for i in tool("list_issues", {"status": "active", "kind": "declined"})["issues"] if i.get("task_id") == TD), None)
 hist = tool("issue_history", {"id": iss["id"]}) if iss else {"events": []}
