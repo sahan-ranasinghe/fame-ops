@@ -1230,7 +1230,8 @@ the build differs from the text above (the behaviour is the same):
   then needs a driver at `accept_within_min` 15 after sending or `accept_before_leave_min` 30 before leaving) and
   cleared by the trigger `tasks_needs_driver_clear` (accept, reassign, cancel, start). `notify_needs_driver` writes
   one push per person: the dispatchers (approve or assign_tasks) and the assigner (`tasks.assigned_by_employee_id`)
-  open `/tasks/<id>/edit?driver=1`, the requester `/requests/<id>`. The issues `declined` / `not_accepted` are
+  open `/tasks/<id>/edit?driver=1` when they hold assign_tasks (the page needs it), else the Overview with its Needs a
+  driver block; the requester opens `/requests/<id>`. The issues `declined` / `not_accepted` are
   critical and do not send the "critical issue" push (told at the source); their history gets a `notified` line
   ("Told by web push 09:12: Palitha, Dilini") from the outbox. The office's red banner on every Tasks page lives in
   the shell and reads the overview (reloaded by the issues channel within a second).
