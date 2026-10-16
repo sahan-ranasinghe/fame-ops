@@ -2,7 +2,8 @@
 // tasks today) and who is on the road. The requests queue belongs to approve,
 // the needs-attention list to issues (everything) and assign_tasks (the task
 // items; the server already filters), the driver links to assign_tasks or
-// vehicles.
+// vehicles. Phase 7 (§19): the red "Needs a driver" block first, for approve or
+// assign_tasks, while any task needs a driver.
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { homeAction, ROUTES_NEED } from "../app/nav";
@@ -13,6 +14,7 @@ import { attIcon, joinDots, levelTone, longDate, today } from "../lib/format";
 import { can } from "../transport/types";
 import { Avatar, Empty, ErrBox, IconLink, Loading, Notice, Pill, Plate, StaleNote, Tile } from "../ui/basics";
 import { Icon } from "../ui/icons";
+import { NeedsDriverList } from "./NeedsDriverList";
 
 export function Overview() {
   const { me, store, noConnector, managePermissions } = useFleet();
@@ -20,6 +22,7 @@ export function Overview() {
   const approves = can(me, "approve");
   const attention = can(me, "issues", "assign_tasks");
   const routes = can(me, ...ROUTES_NEED);
+  const dispatch = can(me, "approve", "assign_tasks");
   const rq = useWatch<RequestsList>("reqWaiting", "list_requests", { status: "waiting" }, 60000, approves && !noConnector);
   const o = ov.data;
   const free = o ? Math.max(0, (o.vehicles.parked ?? 0) - (o.vehicles.in_garage ?? 0)) : 0;
@@ -52,6 +55,7 @@ export function Overview() {
       {o && (
         <div className="stack">
           <StaleNote entry={ov} />
+          {dispatch && (o.needs_driver?.count ?? 0) > 0 && <NeedsDriverList tasks={o.needs_driver?.tasks ?? []} linked={can(me, "assign_tasks")} />}
           <div className="tiles">
             <Tile label="Vehicles on the road" value={o.vehicles.on_the_road ?? 0} unit={`of ${o.vehicles.total ?? 0}`} sub={`${o.tasks.in_progress ?? 0} task${o.tasks.in_progress === 1 ? "" : "s"} in progress`} />
             <Tile label="Free now" value={free} unit="vehicles" sub="not on a task, not in the garage" />

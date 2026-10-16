@@ -3,7 +3,7 @@
 import { normalisePermissions, type Permission, PERMISSION_TEXT, PERMISSIONS, PRESETS } from "@fleet/permissions";
 import { waLink } from "../../lib/format";
 import { useToast } from "../../ui/Toast";
-import { type Preset, presetOf, togglePermission } from "./usersLogic";
+import { type Preset, presetOf, togglePermission, VIEW_LOCKED_HINT, viewLocked } from "./usersLogic";
 
 const PRESET_KEYS = Object.keys(PRESETS) as Preset[];
 
@@ -29,9 +29,13 @@ export function PermissionChips({ permissions }: { permissions?: string[] }) {
   return <>{list.map((p) => <span key={p} className="perm">{PERMISSION_TEXT[p].label}</span>)}</>;
 }
 
-/** The preset buttons and the tick boxes, shared by the create and the edit forms. */
+/**
+ * The preset buttons and the tick boxes, shared by the create and the edit forms. View is greyed
+ * and locked while another permission is ticked (any of them implies view, §12).
+ */
 export function PermissionPicker({ value, onChange, idPrefix }: { value: Permission[]; onChange: (p: Permission[]) => void; idPrefix: string }) {
   const current = presetOf(value);
+  const locked = viewLocked(value);
   return (
     <div className="field">
       <span className="lab">Permissions</span>
@@ -42,12 +46,19 @@ export function PermissionPicker({ value, onChange, idPrefix }: { value: Permiss
         <button type="button" className="chip" aria-pressed={current === "admin"} onClick={() => onChange([...PERMISSIONS])}>Admin (everything)</button>
       </div>
       <div className="perm-list">
-        {PERMISSIONS.map((p) => (
-          <label key={p} htmlFor={`${idPrefix}-${p}`}>
-            <input type="checkbox" id={`${idPrefix}-${p}`} checked={value.includes(p)} onChange={() => onChange(togglePermission(value, p))} />
-            <span className="grow"><b>{PERMISSION_TEXT[p].label}</b><span>{PERMISSION_TEXT[p].text}</span></span>
-          </label>
-        ))}
+        {PERMISSIONS.map((p) => {
+          const lock = p === "view" && locked;
+          return (
+            <label key={p} htmlFor={`${idPrefix}-${p}`} style={lock ? { opacity: 0.6, cursor: "not-allowed" } : undefined} title={lock ? VIEW_LOCKED_HINT : undefined}>
+              <input type="checkbox" id={`${idPrefix}-${p}`} checked={value.includes(p) || lock} disabled={lock} onChange={() => onChange(togglePermission(value, p))} />
+              <span className="grow">
+                <b>{PERMISSION_TEXT[p].label}</b>
+                <span>{PERMISSION_TEXT[p].text}</span>
+                {lock && <span style={{ display: "block", fontWeight: 600 }} data-testid="view-locked">{VIEW_LOCKED_HINT}</span>}
+              </span>
+            </label>
+          );
+        })}
       </div>
     </div>
   );

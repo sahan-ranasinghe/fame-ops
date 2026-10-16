@@ -1,5 +1,7 @@
 // The day's board (/tasks), the detail beside it (/tasks/:id: a panel on a
 // desktop, a full screen on a phone), Assign a task at /tasks/new.
+// Phase 7 (§19): the tasks that need a driver (today and later) above the
+// columns; /tasks?filter=needs_driver shows only them, with the way back.
 import { useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -9,6 +11,7 @@ import { addDays, cap, longDate, statusTone, today } from "../lib/format";
 import { Avatar, Dot, ErrBox, Loading, Plate, StaleNote, Updated } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { ListWithDetail } from "../ui/Page";
+import { NeedsDriverList } from "./NeedsDriverList";
 
 const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
@@ -39,9 +42,13 @@ export function Tasks() {
   const [params, setParams] = useSearchParams();
   const date = isDate(params.get("date")) ? params.get("date")! : today();
   const q = date === today() ? "" : `?date=${date}`;
+  // Only the tasks that need a driver (the banner's and the Overview block's link).
+  const onlyNeeds = params.get("filter") === "needs_driver";
   const setDate = (d: string) => setParams(d === today() ? {} : { date: d }, { replace: true });
   const board = useEntry<Board>("board");
   const canAssign = me.tools.includes("create_task");
+  // A needs-a-driver row opens the task's change page.
+  const canChange = me.tools.includes("update_task") || me.tools.includes("reassign_task");
 
   useEffect(() => {
     if (noConnector) return;
@@ -51,6 +58,8 @@ export function Tasks() {
   }, [store, date, noConnector]);
 
   const b = board.data && board.data.date === date ? board.data : undefined;
+  // needs_driver covers today and later whatever the day: any answer will do.
+  const needs = board.data?.needs_driver ?? [];
   const cols: [keyof Pick<Board, "assigned" | "in_progress" | "completed" | "declined">, string, "warn" | "live" | "bad" | ""][] = [
     ["assigned", "Assigned", "warn"], ["in_progress", "In progress", "live"], ["completed", "Completed", ""],
     // Declined by the driver, waiting for the office (Phase 5): shown only when there is one.
@@ -65,6 +74,35 @@ export function Tasks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linked]);
 
+  if (onlyNeeds) {
+    return (
+      <section className="view">
+        <ListWithDetail>
+          <div className="ph">
+            <div><div className="eyebrow">Today and later</div><h1>Tasks that need a driver</h1></div>
+            <div className="ph-actions"><Link className="btn" to={`/tasks${q}`}>Back to the board</Link></div>
+          </div>
+          {!board.data && !noConnector && (
+            <>
+              <ErrBox entry={board} onRetry={() => void store.load("board", "task_board", { date })} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
+              {!board.err && <Loading>Loading tasks…</Loading>}
+            </>
+          )}
+          {board.data && board.err && <StaleNote entry={board} />}
+          {board.data && (
+            <div className="stack">
+              <NeedsDriverList tasks={needs} linked={canChange} headerLink={false} />
+              <p className="muted small" style={{ margin: 0 }}>
+                Declined by the driver, or not accepted within the accept window. Open one to give it to a driver; the best match is offered there.{" "}
+                <Updated entry={board} />
+              </p>
+            </div>
+          )}
+        </ListWithDetail>
+      </section>
+    );
+  }
+
   return (
     <section className="view">
       <ListWithDetail>
@@ -74,6 +112,11 @@ export function Tasks() {
             {canAssign && <Link className="btn primary" to={`/tasks/new${q}`}><Icon name="plus" />Assign a task</Link>}
           </div>
         </div>
+        {needs.length > 0 && (
+          <div style={{ marginBottom: 18 }}>
+            <NeedsDriverList tasks={needs} linked={canChange} />
+          </div>
+        )}
         <div className="daynav" style={{ marginBottom: 18 }}>
           <button type="button" className="btn" onClick={() => setDate(addDays(date, -1))}>‹ Yesterday</button>
           <button type="button" className="btn dark" onClick={() => setDate(today())}>Today</button>

@@ -1,6 +1,23 @@
 import { describe, expect, it } from "vitest";
 import type { LiveDriver, VehicleCard } from "../data/types";
-import { canMove, currentChoice, moveHint, moveInput, moveRows, moveSentence, NO_VEHICLE, notMovable, samePlate } from "./moveLogic";
+import {
+  canMove,
+  canSwap,
+  currentChoice,
+  moveHint,
+  moveInput,
+  moveMode,
+  moveRows,
+  moveSentence,
+  NO_VEHICLE,
+  notMovable,
+  parseKm,
+  samePlate,
+  swapHint,
+  swapInput,
+  swapReadings,
+  swapRows,
+} from "./moveLogic";
 
 const v = (reg_no: string, extra: Partial<VehicleCard> = {}): VehicleCard => ({ reg_no, make_model: "Toyota HiAce", seats: 14, status: "Available", availability: "Free", ...extra });
 const vehicles: VehicleCard[] = [
@@ -74,9 +91,62 @@ describe("Move: only a change, never onto a running task", () => {
 });
 
 describe("who can be moved", () => {
-  it("off duty or on a task: a short explanation instead of the form", () => {
+  it("off duty: a short explanation instead of the form; on duty a move, on a task a swap", () => {
+    const ruwan: LiveDriver = { driver: "Ruwan", username: "ruwan", state: "not_sharing", duty: "off_duty" };
     expect(notMovable(live[1])).toBeUndefined();
-    expect(notMovable(live[0])).toBe("Nuwan Perera is on a task with WP CAB-1111. A driver can't be moved while a task is in progress.");
-    expect(notMovable({ driver: "Ruwan", username: "ruwan", state: "not_sharing", duty: "off_duty" })).toBe("Ruwan is off duty. The vehicle is chosen on the phone at Start work.");
+    expect(notMovable(live[0])).toBeUndefined();
+    expect(notMovable(ruwan)).toBe("Ruwan is off duty. The vehicle is chosen on the phone at Start work.");
+    expect(moveMode(live[1])).toBe("move");
+    expect(moveMode(live[0])).toBe("swap");
+    expect(moveMode(ruwan)).toBe("none");
+    // An older card with no duty: a task means on a task.
+    expect(moveMode({ state: "sharing", task: "Team drop" })).toBe("swap");
+  });
+});
+
+describe("the swap during a task", () => {
+  const nuwan = { name: "Nuwan Perera", vehicle: "WP CAB-1111 · Toyota HiAce" };
+  const rows = swapRows(moveRows(vehicles, nuwan, live));
+  it("shows the task's vehicle without offering it; another running task's vehicle is not offered either", () => {
+    expect(rows[0]).toMatchObject({ reg_no: "WP CAB-1111", note: "The task's vehicle now", disabled: true, current: true });
+    expect(canSwap(rows, "WP CAB-1111")).toBe(false);
+    expect(canSwap(rows, "WP CAB-3333")).toBe(true);
+    expect(canSwap(rows, NO_VEHICLE)).toBe(false);
+    expect(canSwap(rows, null)).toBe(false);
+    expect(canSwap(swapRows(moveRows(vehicles, kamal, live)), "WP CAB-1111")).toBe(false);
+  });
+  it("says what Swap will do", () => {
+    expect(swapHint(rows, null)).toBe("Pick the vehicle the task goes on in.");
+    expect(swapHint(rows, "WP CAB-1111")).toBe("Pick the vehicle the task goes on in.");
+    expect(swapHint(rows, "WP CAB-3333")).toBe("The task goes on in WP CAB-3333; Sunil Fernando no longer holds it and is told. The old vehicle is free.");
+    expect(swapHint(rows, "WP CAB-5555")).toBe("The task goes on in WP CAB-5555. The old vehicle is free.");
+  });
+  it("the odometer fields: empty for the phone, else whole km, not negative", () => {
+    expect(parseKm("")).toEqual({});
+    expect(parseKm("  ")).toEqual({});
+    expect(parseKm("45262")).toEqual({ km: 45262 });
+    expect(parseKm("45,262")).toEqual({ km: 45262 });
+    expect(parseKm("0")).toEqual({ km: 0 });
+    expect(parseKm("-5")).toEqual({ error: "can't be negative" });
+    expect(parseKm("45262.5")).toEqual({ error: "whole km only" });
+    expect(parseKm("abc")).toEqual({ error: "a number of km" });
+    expect(parseKm("10000000")).toEqual({ error: "too big for an odometer" });
+  });
+  it("sends the plate, the readings typed and the reason; nothing typed is left out", () => {
+    expect(swapInput("nuwan", "WP CAB-3333", { oldKm: "45262", newKm: "80,100", reason: " Breakdown near Kurunegala " })).toEqual({
+      input: { driver: "nuwan", vehicle: "WP CAB-3333", old_end_km: 45262, new_start_km: 80100, reason: "Breakdown near Kurunegala" },
+    });
+    expect(swapInput("nuwan", "WP CAB-3333", { oldKm: "", newKm: "", reason: "" })).toEqual({ input: { driver: "nuwan", vehicle: "WP CAB-3333" } });
+    expect(swapInput("nuwan", null, { oldKm: "", newKm: "", reason: "" })).toEqual({ error: "Pick the vehicle the task goes on in." });
+    expect(swapInput("nuwan", "WP CAB-3333", { oldKm: "-1", newKm: "", reason: "" })).toEqual({ error: "Old vehicle's odometer: can't be negative." });
+    expect(swapInput("nuwan", "WP CAB-3333", { oldKm: "", newKm: "12.5", reason: "" })).toEqual({ error: "New vehicle's odometer: whole km only." });
+  });
+  it("the readings after the swap", () => {
+    expect(swapReadings({
+      driver: "Nuwan Perera", vehicle: "WP CAB-3333 · Toyota HiAce", swapped: { from: "WP CAB-1111", to: "WP CAB-3333", segment: 2 },
+      readings: { old_end: "typed: 45262 km", new_start: "the driver enters it on the phone" },
+    })).toEqual(["End of WP CAB-1111: 45,262 km (typed)", "Start of WP CAB-3333: the driver enters it on the phone"]);
+    expect(swapReadings({ driver: "Nuwan Perera", vehicle: "WP CAB-3333 · Toyota HiAce" }))
+      .toEqual(["End of the old vehicle: the driver enters it on the phone", "Start of WP CAB-3333: the driver enters it on the phone"]);
   });
 });

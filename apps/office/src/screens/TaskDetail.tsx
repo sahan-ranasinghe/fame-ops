@@ -4,7 +4,10 @@
 // history; Change and Cancel open /tasks/:id/edit, Edit stops /tasks/:id/stops.
 // Phase 7: the finish flag (completed early), the vehicle taken at Start task,
 // each stop's arrival flag, and Reopen (a task completed today) as a second
-// step on the page with the reason.
+// step on the page with the reason. Part 2: the stops named by their order
+// ("Stop 2 · Drop · Kurunegala site") with the time there planned against what
+// happened, the vehicle swap's stretches and their total, the vehicle chosen
+// against the default, the warnings saved past, and "Needs a driver" at the top.
 import { useEffect, useState } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -22,7 +25,8 @@ import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { PlanPanel } from "./PlanPanel";
 import { videoWords } from "./fuelLogic";
-import { driveText, TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
+import { driveText } from "./stopsLogic";
+import { dwellNote, needsDriverText, segmentRows, segmentsTotal, stayLine, stopTitle, whatOf } from "./taskDetailLogic";
 
 export const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
 /** The arrival flags shown in amber (an override, no GPS fix, Done without Arrived); "no pin" is plain. */
@@ -81,6 +85,10 @@ export function TaskDetail() {
   const canStops = (t.status === "assigned" || t.status === "in_progress") && me.tools.includes("update_task_stops");
   const ext = { target: "_blank", rel: "noopener" } as const;
   const eta = t.eta;
+  // Needs a driver (§19): the change page with the driver field first; the edit pages need assign_tasks.
+  const findDriver = !!t.needs_driver && can(me, "assign_tasks") && (me.tools.includes("update_task") || me.tools.includes("reassign_task"));
+  const segments = segmentRows(p.segments);
+  const segTotal = segmentsTotal(p.segments);
 
   return (
     <div data-testid="task-detail">
@@ -90,12 +98,25 @@ export function TaskDetail() {
         backTo={backTo}
         actions={(canChange || canCancel) ? <Link className="btn small" to={`/tasks/${id}/edit${q}`}>{declined ? "Give it to a driver" : "Change"}</Link> : undefined}
       />
+      {t.needs_driver && (
+        <Notice tone="bad" action={findDriver ? <Link className="btn small" to={`/tasks/${id}/edit?driver=1`}>Find a driver</Link> : undefined}>
+          <b data-testid="needs-driver-line">{needsDriverText(t)}</b>
+        </Notice>
+      )}
       <WarningsNote warnings={flash} />
       {t.finish_flag && <Notice>{t.finish_flag.text}</Notice>}
       <div className="card card-b">
         <dl className="kv">
           <div><dt>Driver</dt><dd>{t.driver || "—"}</dd></div>
-          <div><dt>Vehicle</dt><dd>{t.vehicle || "—"}{t.vehicle_taken && <div className="sub" style={{ fontWeight: 400 }}>{t.vehicle_taken}</div>}</dd></div>
+          <div>
+            <dt>Vehicle</dt>
+            <dd>
+              {t.vehicle || "—"}
+              {t.vehicle_taken && <div className="sub" style={{ fontWeight: 400 }}>{t.vehicle_taken}</div>}
+              {t.vehicle_changed && <div className="sub" style={{ fontWeight: 400 }} data-testid="vehicle-changed">{t.vehicle_changed}</div>}
+              {segments.length > 1 && <div className="sub" style={{ fontWeight: 400 }}>Swapped during the task: {segments.map((g) => g.vehicle).join(" → ")}</div>}
+            </dd>
+          </div>
           <div><dt>Status</dt><dd>{t.status_line || cap(t.status)}</dd></div>
           {t.accepted && <div><dt>Accepted</dt><dd>{t.accepted}</dd></div>}
           <div><dt>Leave by</dt><dd className="mono">{t.leave_by ? `${hhmm(t.leave_by)} (${t.leave_by_source === "plan" ? "planned" : "typed"})` : "—"}</dd></div>
@@ -126,7 +147,7 @@ export function TaskDetail() {
           <div><dt>Sent · seen</dt><dd className="mono">{joinDots([hhmm(t.sent), t.seen === "not opened yet" ? "not opened yet" : hhmm(t.seen)]) || "—"}</dd></div>
           <div><dt>Started · done</dt><dd className="mono">{joinDots([hhmm(t.started), hhmm(t.completed)]) || "—"}</dd></div>
           <div><dt>Odometer</dt><dd className="num">{t.start_odometer_km != null ? num(t.start_odometer_km) : "—"}{t.end_odometer_km != null ? " → " + num(t.end_odometer_km) : ""}</dd></div>
-          <div><dt>Km this task</dt><dd className="num">{km != null ? num(km) + " km" : "—"}{t.gps_km != null ? <span className="muted"> · GPS {num(t.gps_km)} km</span> : null}</dd></div>
+          <div><dt>Km this task</dt><dd className="num">{km != null ? num(km) + " km" : "—"}{segments.length > 1 ? <span className="muted"> · {segments.length} vehicles</span> : null}{t.gps_km != null ? <span className="muted"> · GPS {num(t.gps_km)} km</span> : null}</dd></div>
           {t.created_by && <div><dt>Assigned by</dt><dd>{t.created_by}</dd></div>}
           {t.cancelled_reason && <div><dt>Cancelled because</dt><dd>{t.cancelled_reason}</dd></div>}
           {t.notes && <div style={{ gridColumn: "1/-1" }}><dt>Notes</dt><dd style={{ fontWeight: 400 }}>{t.notes}</dd></div>}
@@ -141,28 +162,44 @@ export function TaskDetail() {
       {t.declined && (
         <Notice tone="bad">
           Declined{t.declined.after_accept ? " after accepting" : ""}{t.declined.at ? ` at ${t.declined.at}` : ""}: {t.declined.reason_text ?? t.declined.reason ?? "no reason given"}
-          {t.declined.note ? ` · “${t.declined.note}”` : ""}. {canChange ? <Link to={`/tasks/${id}/edit${q}`}>Give it to another driver</Link> : null}
+          {t.declined.note ? ` · “${t.declined.note}”` : ""}. {canChange && !findDriver ? <Link to={`/tasks/${id}/edit${q}`}>Give it to another driver</Link> : null}
         </Notice>
       )}
+      {t.warnings_saved?.length ? (
+        <div className="notice" data-testid="warnings-saved">
+          <p>
+            <b>Saved past these warnings:</b>
+            {t.warnings_saved.map((w, i) => <span key={i}><br />{w}</span>)}
+          </p>
+        </div>
+      ) : null}
       {can(me, ...ROUTES_NEED) && <TaskRoute id={id} started={t.started} />}
 
       <div className="section-t">Stops{t.start_place ? ` · from ${t.start_place}` : ""}{t.return_to_base ? " · back to the office" : ""}{t.avoid_expressway ? " · no expressway" : ""}</div>
       <div className="card">
         <div className="rows">
           {p.stops.length ? p.stops.map((s) => (
-            <div className="row" key={s.seq}>
+            <div className="row" key={s.seq} data-testid="task-stop">
               <span className={`dot ${s.status === "done" ? "ok" : s.status === "skipped" ? "bad" : s.status === "arrived" ? "live" : "warn"}`} />
               <div className="grow">
-                <div className="name">{TYPE_LABEL[s.type as keyof typeof TYPE_LABEL] ?? cap(s.type)}{s.what ? ` · ${WHAT_LABEL[s.what as keyof typeof WHAT_LABEL] ?? s.what}` : ""} · {s.place || s.address || ""}{s.google && <> <span translate="no"><Pill tone="live">Google Maps</Pill></span></>}</div>
+                <div className="name">
+                  {stopTitle(s)}
+                  {s.is_start && <Pill tone="live">Start · passengers get in here</Pill>}
+                  {s.google && <span translate="no"><Pill tone="live">Google Maps</Pill></span>}
+                </div>
+                {stayLine(s) && <div className="sub" data-testid="stop-stay">{stayLine(s)}</div>}
                 <div className="sub">
                   {joinDots([
-                    s.planned_arrive ? `planned ${s.planned_arrive}${s.planned_depart && s.planned_depart !== s.planned_arrive ? `–${s.planned_depart}` : ""}` : null,
+                    whatOf(s),
                     s.arrive_by ? `by ${s.arrive_by}` : null,
-                    s.dwell_min != null ? `${s.dwell_min} min there` : null,
+                    // The time there: in the planned line already when the answer has it.
+                    !s.planned_stay && s.dwell_min != null ? `${s.dwell_min} min there` : null,
+                    dwellNote(s),
                     s.status === "pending" ? null : cap(s.status),
-                    s.arrived ? `arrived ${s.arrived}` : null,
+                    // Arrived and Done are in the actual line when the answer has it.
+                    !s.actual_stay && s.arrived ? `arrived ${s.arrived}` : null,
                     s.auto_detected ? `near the stop ${s.auto_detected} (phone)` : null,
-                    s.done ? `done ${s.done}` : null,
+                    !s.actual_stay && s.done ? `done ${s.done}` : null,
                     s.skip_reason ? `skipped: ${SKIP_TEXT[s.skip_reason] ?? s.skip_reason}${s.skip_note ? ` (${s.skip_note})` : ""}` : null,
                     s.pin === "none" ? "no map pin" : null,
                   ])}
@@ -187,6 +224,32 @@ export function TaskDetail() {
           <div className="section-t">Plan</div>
           <PlanPanel plan={p.plan} stops={p.stops.map((s) => ({ seq: s.seq, type: s.type, place: s.place, arrive_by: s.arrive_by, planned_arrive: s.planned_arrive, planned_depart: s.planned_depart, pin: s.pin }))} />
           <p className="muted small" style={{ margin: 0 }}>{driveText(p.plan.total_drive_min)} driving in {p.plan.legs.length} leg{p.plan.legs.length === 1 ? "" : "s"} · computed {p.plan.computed_at}</p>
+        </>
+      )}
+
+      {segments.length > 0 && (
+        <>
+          <div className="section-t">Vehicle swap</div>
+          <div className="card" data-testid="segments">
+            <div className="rows">
+              {segments.map((g, i) => (
+                <div className="row" key={i} data-testid="segment">
+                  <span className="plate">{g.vehicle}</span>
+                  <div className="grow">
+                    <div className="name"><span className="mono">{g.window}</span></div>
+                    <div className="sub num">{g.readings}</div>
+                    {g.waiting && <div className="status warn">Reading to come from the driver</div>}
+                    {g.why && <div className="sub">{g.why}</div>}
+                  </div>
+                  <span className="num" style={{ fontWeight: 700 }}>{g.km || "—"}</span>
+                </div>
+              ))}
+            </div>
+            <div className="card-b" style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", justifyContent: "space-between", borderTop: "1px solid var(--line)" }}>
+              <b className="num" data-testid="segments-total">{segTotal.line}</b>
+              <span className="muted small">Task km = the stretches added up{km != null ? ` · this task ${num(km)} km` : ""}</span>
+            </div>
+          </div>
         </>
       )}
 

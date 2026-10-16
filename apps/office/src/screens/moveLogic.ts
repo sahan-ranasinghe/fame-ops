@@ -2,6 +2,9 @@
 // on duty can be moved to and what each row says (one vehicle, one driver:
 // taking a held vehicle takes it from its holder, who is told), the input of
 // move_driver_vehicle and the sentence after it. Pure; the page is MoveVehicle.tsx.
+// Part 2 (§2 addition): for a driver on a running task the page is a swap (a
+// breakdown): the task goes on in the new vehicle, the odometer readings at the
+// swap typed here or asked on the driver's phone.
 import { dutyOf } from "../data/live";
 import type { LiveDriver, VehicleCard } from "../data/types";
 import { joinDots, plateOf } from "../lib/format";
@@ -105,10 +108,99 @@ export function moveSentence(r: MoveResult): string {
   return r.taken_from ? `${s} ${r.taken_from} was told.` : s;
 }
 
-/** Why the form is not shown (off duty, or on a task); undefined = the driver can be moved. */
+/** Why the form is not shown (off duty); undefined = the driver can be moved (on duty) or the vehicle swapped (on a task). */
 export function notMovable(d: LiveDriver): string | undefined {
-  const duty = dutyOf(d);
-  if (duty === "off_duty") return `${d.driver} is off duty. The vehicle is chosen on the phone at Start work.`;
-  if (duty === "on_task") return `${d.driver} is on a task${d.vehicle ? ` with ${plateOf(d.vehicle)}` : ""}. A driver can't be moved while a task is in progress.`;
+  if (dutyOf(d) === "off_duty") return `${d.driver} is off duty. The vehicle is chosen on the phone at Start work.`;
   return undefined;
+}
+
+/** What the page does: move a driver on duty, swap the vehicle of a running task, or nothing (off duty). */
+export type MoveMode = "move" | "swap" | "none";
+export function moveMode(d: Pick<LiveDriver, "duty" | "task" | "state" | "signal">): MoveMode {
+  const duty = dutyOf(d);
+  return duty === "on_task" ? "swap" : duty === "on_duty" ? "move" : "none";
+}
+
+// ---------------------------------------------------------------------------
+// The swap during a task (Part 2, §2 addition)
+// ---------------------------------------------------------------------------
+
+/** The swap's rows: the task's vehicle now is shown, not offered; the rest as for a move. */
+export function swapRows(rows: MoveRow[]): MoveRow[] {
+  return rows.map((r) => (r.current ? { ...r, note: "The task's vehicle now", tone: "", disabled: true } : r));
+}
+
+/** Swap is offered for another vehicle that is not on someone else's running task; never "no vehicle". */
+export function canSwap(rows: MoveRow[], choice: string | null): boolean {
+  if (!choice) return false;
+  const r = rows.find((x) => x.reg_no === choice);
+  return !!r && !r.disabled && !r.current;
+}
+
+/** The line under the list: what Swap will do, or what is missing. */
+export function swapHint(rows: MoveRow[], choice: string | null): string {
+  const r = choice ? rows.find((x) => x.reg_no === choice) : undefined;
+  if (!r || r.current) return "Pick the vehicle the task goes on in.";
+  if (r.disabled) return `${r.reg_no} is on another driver's running task.`;
+  return `The task goes on in ${r.reg_no}${r.held_by ? `; ${r.held_by} no longer holds it and is told` : ""}. The old vehicle is free.`;
+}
+
+/** The highest odometer reading the server takes. */
+export const MAX_KM = 9_999_999;
+
+/** An odometer field: empty = the driver enters it on the phone; else whole km, not negative. Spaces and commas are ignored. */
+export function parseKm(text: string): { km?: number } | { error: string } {
+  const t = text.replace(/[\s,]/g, "");
+  if (t === "") return {};
+  if (t.startsWith("-")) return { error: "can't be negative" };
+  if (/^\d+\.\d*$/.test(t)) return { error: "whole km only" };
+  if (!/^\d+$/.test(t)) return { error: "a number of km" };
+  const km = Number(t);
+  if (km > MAX_KM) return { error: "too big for an odometer" };
+  return { km };
+}
+
+export interface SwapFields {
+  oldKm: string;
+  newKm: string;
+  reason: string;
+}
+
+/** move_driver_vehicle's input for a swap: the plate, the readings typed, the reason; or what is wrong. */
+export function swapInput(username: string, choice: string | null, f: SwapFields): { error: string } | { input: Record<string, unknown> } {
+  if (!choice) return { error: "Pick the vehicle the task goes on in." };
+  const oldKm = parseKm(f.oldKm);
+  if ("error" in oldKm) return { error: `Old vehicle's odometer: ${oldKm.error}.` };
+  const newKm = parseKm(f.newKm);
+  if ("error" in newKm) return { error: `New vehicle's odometer: ${newKm.error}.` };
+  const input: Record<string, unknown> = { driver: username, vehicle: choice };
+  if (oldKm.km !== undefined) input.old_end_km = oldKm.km;
+  if (newKm.km !== undefined) input.new_start_km = newKm.km;
+  const reason = f.reason.trim().slice(0, 200);
+  if (reason) input.reason = reason;
+  return { input };
+}
+
+/** move_driver_vehicle's answer for a swap. */
+export interface SwapResult {
+  driver: string;
+  task?: string;
+  task_id?: string;
+  swapped?: { from?: string; to?: string; segment?: number };
+  vehicle: string;
+  /** "typed: 45262 km" or "the driver enters it on the phone". */
+  readings?: { old_end?: string; new_start?: string };
+  note?: string;
+}
+
+const readingText = (r?: string) => {
+  const m = /^typed: (\d+) km$/.exec(r ?? "");
+  return m ? `${Number(m[1]).toLocaleString("en-US")} km (typed)` : r || "the driver enters it on the phone";
+};
+
+/** The two readings after a swap: "End of WP CAB-4521: 45,262 km (typed)", "Start of WP KL-1234: the driver enters it on the phone". */
+export function swapReadings(r: SwapResult): string[] {
+  const from = r.swapped?.from ? plateOf(r.swapped.from) : "the old vehicle";
+  const to = r.swapped?.to ? plateOf(r.swapped.to) : plateOf(r.vehicle) || "the new vehicle";
+  return [`End of ${from}: ${readingText(r.readings?.old_end)}`, `Start of ${to}: ${readingText(r.readings?.new_start)}`];
 }

@@ -1,5 +1,7 @@
 // Settings → Fleet (the users permission): the dispatch defaults
 // (docs/dispatch-plan.md, section 6) and the routing provider's usage.
+// Phase 7: the time at a stop by type (pickup, drop, visit, any other) and the
+// accept window with the driver's reminder (when it ends, the task needs a driver).
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useFleet } from "../../app/FleetContext";
 import { useLists } from "../../data/hooks";
@@ -10,13 +12,21 @@ import { Loading, Notice, Pill } from "../../ui/basics";
 import { GenericTable } from "../../ui/GenericTable";
 import { useToast } from "../../ui/Toast";
 
-const DWELL_KEYS = ["pickup.people", "pickup.goods", "drop.people", "drop.goods", "visit", "documents", "default"];
-const NUMBERS: [keyof Values, string, string][] = [
+/** The time at a stop by its type (Phase 7, §17); "default" is any other. */
+const DWELL_KEYS: [string, string][] = [["pickup", "Pickup"], ["drop", "Drop"], ["visit", "Visit"], ["default", "Any other"]];
+type NumberRow = [keyof Values, string, string];
+/** The accept window (Phase 7, §19) and the driver's one reminder. */
+const ACCEPT: NumberRow[] = [
+  ["accept_within_min", "Accept within (min after sending)", "min"],
+  ["accept_before_leave_min", "Accept at the latest (min before leaving)", "min"],
+  ["accept_reminder_min", "Reminder to the driver (min after sending)", "min"],
+];
+/** Used when an older server sends no default for a key. */
+const FALLBACK: Partial<Record<keyof Values, number>> = { accept_within_min: 15, accept_before_leave_min: 30, accept_reminder_min: 5 };
+const NUMBERS: NumberRow[] = [
   ["buffer_min", "Buffer before a deadline (min)", "min"],
   ["avg_speed_kmh", "Estimate: average speed", "km/h"],
   ["road_factor", "Estimate: road factor (× straight line)", "×"],
-  ["accept_within_min", "Accept within (min of receiving)", "min"],
-  ["accept_before_leave_min", "Accept at the latest (min before leave-by)", "min"],
   ["ors_autocomplete_daily_cap", "Map search calls a day (under the openrouteservice Geocoding quota, shared with search and reverse)", "calls"],
   ["ors_autocomplete_per_minute", "Map search calls a minute (the dashboard allows 100)", "calls"],
   ["ors_gap_daily_cap", "Estimated lines over GPS gaps: new ones a day (openrouteservice, inside the 1,900 road-time calls)", "calls"],
@@ -79,6 +89,21 @@ export function FleetSettings() {
     ev.preventDefault();
     void save(key, draft[key]);
   };
+  const numberRow = ([key, label, unit]: NumberRow) => (
+    <form key={key} className="grid2" style={{ alignItems: "end" }} onSubmit={num(key)}>
+      <div className="field">
+        <label htmlFor={`fs-${key}`}>{label}</label>
+        <input id={`fs-${key}`} type="number" step={key === "road_factor" ? 0.05 : 1} inputMode="decimal" value={(draft[key] as number | undefined) ?? ""} onChange={(e) => setDraft({ ...draft, [key]: Number(e.target.value) })} />
+        <span className="hint">{data.about[key] ? `${data.about[key]} (` : "("}{unit}; default {String(data.defaults[key] ?? FALLBACK[key] ?? "—")})</span>
+      </div>
+      <div><button className="btn dark" type="submit" disabled={busy !== null || !changed(key)}>Save</button></div>
+    </form>
+  );
+  // The accept window as saved: the help text says when a task needs a driver.
+  const within = data.settings.accept_within_min ?? FALLBACK.accept_within_min;
+  const beforeLeave = data.settings.accept_before_leave_min ?? FALLBACK.accept_before_leave_min;
+  // Stored keys the card does not show (the old "pickup.people" kind, set before Phase 7 or through Claude): they come before the type.
+  const otherDwell = Object.entries(draft.dwell_min ?? {}).filter(([k]) => !DWELL_KEYS.some(([d]) => d === k));
 
   return (
     <section className="view" data-testid="fleet-settings">
@@ -102,19 +127,32 @@ export function FleetSettings() {
           <div><button className="btn dark" type="submit" disabled={busy !== null || !changed("base_place_id")}>Save</button></div>
         </form>
 
-        <form className="card card-b form" onSubmit={(ev) => { ev.preventDefault(); void save("dwell_min", draft.dwell_min); }}>
-          <h2>Minutes at a stop</h2>
-          <p className="muted small" style={{ margin: 0 }}>{data.about.dwell_min}. A stop's own minutes override these.</p>
+        <form className="card card-b form" data-testid="dwell-settings" onSubmit={(ev) => { ev.preventDefault(); void save("dwell_min", draft.dwell_min); }}>
+          <h2>Time at a stop</h2>
+          <p className="muted small" style={{ margin: 0 }}>The minutes a stop takes by its type, when nothing else says. A place's usual time and a stop's own time come first.</p>
           <div className="settings-grid">
-            {DWELL_KEYS.map((k) => (
+            {DWELL_KEYS.map(([k, label]) => (
               <div className="field" key={k}>
-                <label htmlFor={`fs-dwell-${k}`}>{k}</label>
-                <input id={`fs-dwell-${k}`} type="number" min={0} max={1440} inputMode="numeric" value={draft.dwell_min[k] ?? ""} onChange={(e) => setDraft({ ...draft, dwell_min: { ...draft.dwell_min, [k]: e.target.value === "" ? 0 : parseInt(e.target.value, 10) } })} />
+                <label htmlFor={`fs-dwell-${k}`}>{label} (min)</label>
+                <input id={`fs-dwell-${k}`} type="number" min={0} max={1440} inputMode="numeric" placeholder={data.defaults.dwell_min?.[k] != null ? String(data.defaults.dwell_min[k]) : undefined} value={draft.dwell_min[k] ?? ""} onChange={(e) => setDraft({ ...draft, dwell_min: { ...draft.dwell_min, [k]: e.target.value === "" ? 0 : parseInt(e.target.value, 10) } })} />
               </div>
             ))}
           </div>
+          {otherDwell.length > 0 && (
+            <span className="hint" data-testid="dwell-other">Also stored, and used before the type: {otherDwell.map(([k, v]) => `${k} ${v} min`).join(", ")}.</span>
+          )}
           <div><button className="btn dark" type="submit" disabled={busy !== null || !changed("dwell_min")}>Save</button></div>
         </form>
+
+        <div className="card card-b form" data-testid="accept-settings">
+          <h2>Accept window</h2>
+          <p className="muted small" style={{ margin: 0 }}>
+            A driver accepts or declines each task in the app and gets one reminder. When the window ends ({within} min after sending or {beforeLeave} min before
+            leaving, whichever comes first) with no answer, the task needs a driver: it shows in red on Overview and Tasks, and the fleet admins, whoever
+            assigned it and the requester are told. It stays with its driver until someone gives it to another.
+          </p>
+          {ACCEPT.map(numberRow)}
+        </div>
 
         <form className="card card-b form" data-testid="shift-settings" onSubmit={(ev) => { ev.preventDefault(); void save("shift_start", draft.shift_start ?? "08:00").then(() => (JSON.stringify(draft.shift_days) !== JSON.stringify(data.settings.shift_days) ? save("shift_days", draft.shift_days ?? []) : undefined)); }}>
           <h2>Shift nudge in the driver app</h2>
@@ -216,16 +254,7 @@ export function FleetSettings() {
 
         <div className="card card-b form">
           <h2>Numbers</h2>
-          {NUMBERS.map(([key, label, unit]) => (
-            <form key={key} className="grid2" style={{ alignItems: "end" }} onSubmit={num(key)}>
-              <div className="field">
-                <label htmlFor={`fs-${key}`}>{label}</label>
-                <input id={`fs-${key}`} type="number" step={key === "road_factor" ? 0.05 : 1} inputMode="decimal" value={draft[key] as number} onChange={(e) => setDraft({ ...draft, [key]: Number(e.target.value) })} />
-                <span className="hint">{data.about[key]} ({unit}; default {String(data.defaults[key])})</span>
-              </div>
-              <div><button className="btn dark" type="submit" disabled={busy !== null || !changed(key)}>Save</button></div>
-            </form>
-          ))}
+          {NUMBERS.map(numberRow)}
         </div>
 
         <form className="card card-b form" onSubmit={(ev) => { ev.preventDefault(); void save("rush_hour", draft.rush_hour); }}>
