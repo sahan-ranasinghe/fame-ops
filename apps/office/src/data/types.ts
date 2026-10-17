@@ -124,6 +124,9 @@ export interface BoardCard {
   late_min?: number;
   /** Phase 7: completed early (the odometer or the time far under the plan). */
   finish_flag?: FinishFlag;
+  /** Phase 7 (§5, §6): the driver's photo and the vehicle's thumbnail (links that work for at least an hour). */
+  driver_photo_url?: string;
+  vehicle_thumb_url?: string;
 }
 
 /** Phase 7 (item 18): set at completion when the odometer km or the time is far under the plan. */
@@ -491,6 +494,10 @@ export interface TaskDetail {
     end_by?: string;
     driver?: string;
     vehicle?: string;
+    /** Phase 7 (§5, §6). */
+    driver_photo_url?: string;
+    vehicle_photo_url?: string;
+    vehicle_thumb_url?: string;
     passengers?: number | null;
     contact?: { name?: string | null; phone?: string | null; call?: string; whatsapp?: string };
     notes?: string | null;
@@ -691,6 +698,23 @@ export interface RequestCard {
   stops_count?: number;
   /** Phase 7 (§34): the trip, when the request was planned with its stops. */
   trip?: RequestTrip;
+  /** Phase 7 (§4): the phone of a person who asked without an office account. */
+  requester_phone?: string;
+  /** Once approved (§4, §35 19): who drives, in what, with their photos. */
+  assigned?: {
+    driver: string;
+    phone?: string;
+    call?: string | null;
+    whatsapp?: string | null;
+    photo_url?: string;
+    vehicle: string;
+    make_model?: string;
+    vehicle_photo_url?: string;
+    vehicle_thumb_url?: string;
+    task_status?: string;
+  };
+  /** For a person without an office account: the message for the trip's current moment and its WhatsApp link. */
+  tell_requester?: { moment: "approved" | "driver_changed" | "on_the_way" | "arrived" | "cancelled"; message: string; whatsapp: string };
 }
 
 export interface RequestsList {
@@ -716,6 +740,8 @@ export interface Driver {
   /** Presence (Phase 6): sharing since HH:MM, or when the last sharing ended today. */
   on_duty_since?: string;
   off_duty_since?: string;
+  /** Phase 7 (§5): the profile photo (a link that works for at least an hour). */
+  photo_url?: string;
 }
 
 export interface Vehicle {
@@ -734,6 +760,50 @@ export interface Vehicle {
   availability?: string;
   back_at?: string;
   back_source?: "planned" | "live";
+  /** Phase 7 (§6): the vehicle's photo and its thumbnail. */
+  photo_url?: string;
+  thumb_url?: string;
+  /** Phase 7 (§28): the current document of each kind (no links: vehicle_documents has them) and what is missing. */
+  document_files?: { kind: DocKind; name?: string; expiry?: string; has_file: boolean }[];
+  documents_missing?: DocKind[];
+  /** "3 documents missing: insurance, emission test, CR" */
+  documents_missing_text?: string;
+}
+
+/** Phase 7 (§28): a vehicle's document kinds. */
+export type DocKind = "revenue_licence" | "insurance" | "emission" | "registration" | "lease" | "other";
+
+/** vehicle_documents: one document with its link (at least an hour). */
+export interface VehicleDocument {
+  id: string;
+  kind: DocKind;
+  /** "Insurance", or an Other's own name. */
+  kind_name: string;
+  name?: string;
+  content_type: "image/jpeg" | "image/png" | "application/pdf";
+  bytes?: number;
+  expiry?: string;
+  /** "17 Oct 2026 10:05 by Palitha" */
+  uploaded: string;
+  url?: string;
+  removed?: string;
+  removed_reason?: "removed" | "replaced";
+}
+
+export interface VehicleDocuments {
+  vehicle: string;
+  documents: VehicleDocument[];
+  missing?: DocKind[];
+  missing_text?: string;
+  /** With removed: true, the removed and replaced ones. */
+  removed?: VehicleDocument[];
+}
+
+/** photo_upload_url / vehicle_document_upload_url: a one-time signed upload (the browser sends the file itself). */
+export interface UploadTicket {
+  bucket: "driver-photos" | "vehicle-photos" | "vehicle-docs";
+  path: string;
+  token: string;
 }
 
 export interface Place {
@@ -1030,6 +1100,9 @@ export interface LiveDriver extends StatusFields {
   driver: string;
   username: string;
   employee_id?: string;
+  /** Phase 7 (§5, §6). */
+  photo_url?: string;
+  vehicle_thumb_url?: string;
   state: ShareState;
   location?: string;
   updated?: string;
@@ -1450,6 +1523,8 @@ export interface AvailableDriver {
   km_to_first?: number;
   /** A ranked row: its best-match reasons ("On duty · free 09:00–end of day · 0.4 km from the pickup · 1 task today"). */
   match_why?: string;
+  /** Phase 7 (§5). */
+  photo_url?: string;
 }
 
 export interface Availability {
