@@ -76,7 +76,7 @@ export function NewTask() {
   const availArgs = availabilityArgs(f.date, leave ? floorTo5(leave) : "", f.end, undefined, undefined, first);
   const avail = useAvailability(availArgs);
   const pickedDriver = drivers.find((d) => d.username === f.driver);
-  const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), pickedDriver) : null;
+  const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), pickedDriver, drivers.map((d) => d.name)) : null;
 
   // The departure check, at once from the latest plan: fill an empty leave-by, else say what a typed one does.
   // The "Vehicle free by" time is the back-by: a plan that ends after it says so beside both fields (§20).
@@ -98,11 +98,11 @@ export function NewTask() {
   const startStop = preview?.stops.find((s) => s.is_start);
   const stay = startStop?.dwell_min != null ? `${dwellText(startStop.dwell_min)} there${startStop.dwell_source === "place" ? " (usual here)" : ""}` : undefined;
 
-  /** Picking a driver: the vehicle follows them (their vehicle today, else their regular one) unless one was picked. */
+  /** Picking a driver in the list: the vehicle follows them (their vehicle today, else their regular one) unless one was picked. */
   function pickDriver(username: string) {
     setF((x) => ({ ...x, driver: username }));
   }
-  /** Use suggestion: the best match and the vehicle they bring. */
+  /** Use suggestion, or a row of Who's available: that driver and the vehicle they bring. */
   function takeSuggestion(username: string) {
     setF((x) => ({ ...x, driver: username, vehicle: "" }));
   }
@@ -234,7 +234,7 @@ export function NewTask() {
               hint={f.driver && !def ? "This driver holds no vehicle today and has no regular one." : undefined} />
           </div>
           {lists.error && (!lists.drivers || !lists.vehicles) && <Notice>Couldn’t load the {!lists.drivers && !lists.vehicles ? "drivers and vehicles" : !lists.drivers ? "drivers" : "vehicles"}: {lists.error} <button type="button" className="btn small" onClick={lists.reload}>Try again</button></Notice>}
-          <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) pickDriver(d.username); }}
+          <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }}
             onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
           <div className="grid2">
             <div className="field">

@@ -82,7 +82,8 @@ export function NewRequest() {
     : freeDrivers;
   const start = startPoint(f, base);
   const fromIsStart = !!f.from.trim() && sameAsStart(start, fromStop);
-  // A driver pick keeps a vehicle picked by hand; Use suggestion takes the best match with the vehicle they bring.
+  // A driver picked in the list keeps a vehicle picked by hand; Use suggestion and a row of Who's available take the
+  // driver with the vehicle they bring.
   const pickDriver = (username: string) => setF((x) => ({ ...x, pickedDriver: username }));
   const takeSuggestion = (username: string) => setF((x) => ({ ...x, pickedDriver: username, vehicle: "" }));
 
@@ -235,7 +236,7 @@ export function NewRequest() {
           </div>
         )}
         {books && !custodianDrives && (
-          <AvailabilityPanel args={availArgs} picked={f.pickedDriver} onPick={(d) => { if (d.username) pickDriver(d.username); }}
+          <AvailabilityPanel args={availArgs} picked={f.pickedDriver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }}
             onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
         )}
         {err && <Notice tone="bad">{err}</Notice>}

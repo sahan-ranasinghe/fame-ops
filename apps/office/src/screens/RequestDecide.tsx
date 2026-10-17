@@ -103,13 +103,17 @@ export function RequestDecide() {
 
   // Defaults, only while the person has not chosen: the best match (or the first free driver), and the vehicle they bring.
   const noDriverNeeded = q?.driver_required === false;
-  const defaultDriver = again || noDriverNeeded ? "" : avail.data?.best?.username ?? sug?.drivers_free?.[0]?.username ?? "";
+  // Who's available decides it once it answers (its best match holds while the day and time stay), so the default does
+  // not start as the first free driver and then jump.
+  const availDefault = avail.data ? avail.data.best?.username ?? avail.data.vehicles.drivers_free[0]?.username : undefined;
+  const defaultDriver = again || noDriverNeeded ? "" : availDefault ?? (avail.loading ? "" : sug?.drivers_free?.[0]?.username) ?? "";
   const driver = f.driver || defaultDriver;
-  const def = driver ? driverVehicle(vehicleFor(avail.data, driver), lists.drivers?.find((d) => d.username === driver)) : null;
+  const def = driver ? driverVehicle(vehicleFor(avail.data, driver), lists.drivers?.find((d) => d.username === driver), (lists.drivers ?? []).filter((d) => d.active !== false).map((d) => d.name)) : null;
   const vehicle = f.vehicle || (again ? "" : def?.reg_no ?? "");
   const picked = allOptions.find((v) => v.reg_no === vehicle);
   const custodianDrives = !again && noDriverNeeded && !!picked?.assigned_to && sug?.self_drive_allowed !== false;
-  // A driver pick keeps a vehicle picked by hand; Use suggestion takes the best match with the vehicle they bring.
+  // A driver picked in the list keeps a vehicle picked by hand; Use suggestion and a row of Who's available take the
+  // driver with the vehicle they bring.
   const pickDriver = (username: string) => setF((x) => ({ ...x, driver: username }));
   const takeSuggestion = (username: string) => setF((x) => ({ ...x, driver: username, vehicle: "" }));
 
@@ -270,7 +274,7 @@ export function RequestDecide() {
             </div>
             <p className="hint" style={{ margin: 0 }}>Now {q.when}{q.back_by ? ` · back by ${q.back_by}` : ""}. A new time alone postpones the booking.</p>
           </div>
-          <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) pickDriver(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
+          <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
           <div className="confirm" style={{ borderColor: "var(--line)" }}>
             <div className="field">
               <label htmlFor="rq-reason">Decline with a reason</label>
@@ -332,7 +336,7 @@ export function RequestDecide() {
             </>
           )}
         </div>
-        {!custodianDrives && <AvailabilityPanel args={availArgs} picked={driver} onPick={(d) => { if (d.username) pickDriver(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />}
+        {!custodianDrives && <AvailabilityPanel args={availArgs} picked={driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />}
         <div className="card card-b form" data-testid="decide-stops">
           <div className="section-t" style={{ marginBottom: 2 }}>Stops</div>
           <p className="muted small" style={{ margin: 0 }}>Start from {base ? base.name : "the base place"} (the base place). Passengers get in at Stop 1.</p>

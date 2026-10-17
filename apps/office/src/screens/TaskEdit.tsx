@@ -133,12 +133,13 @@ export function TaskEdit() {
   const pickedDriver = f.driver || currentDriver?.username || "";
   const currentPlate = t.vehicle ? plateOf(t.vehicle) : "";
   // A new driver brings their vehicle (today's, else the regular one) unless one is picked.
-  const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), drivers.find((d) => d.username === f.driver)) : null;
+  const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), drivers.find((d) => d.username === f.driver), drivers.map((d) => d.name)) : null;
   const vehicleToSend = f.vehicle || (def && def.reg_no !== currentPlate ? def.reg_no : "");
   const reason = needsDriverText(t);
   // The leave-by checked at once against the stops' arrive-by times (the task's plan shifted).
   const check = running ? null : checkDeparture(f.time, departurePlan(p.timeline, p.plan?.buffer_min));
-  // A driver pick keeps a vehicle picked by hand; Use suggestion takes the best match with the vehicle they bring.
+  // A driver picked in the list keeps a vehicle picked by hand; Use suggestion and a row of Who's available take the
+  // driver with the vehicle they bring.
   const pickDriver = (username: string) => setF((x) => ({ ...x, driver: username }));
   const takeSuggestion = (username: string) => setF((x) => ({ ...x, driver: username, vehicle: "" }));
 
@@ -230,7 +231,7 @@ export function TaskEdit() {
           </form>
         )}
         {canChange && !running && (
-          <AvailabilityPanel args={availArgs} picked={pickedDriver} onPick={(d) => { if (d.username) pickDriver(d.username); }}
+          <AvailabilityPanel args={availArgs} picked={pickedDriver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }}
             onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
         )}
         {p.suggestions && canChange && (

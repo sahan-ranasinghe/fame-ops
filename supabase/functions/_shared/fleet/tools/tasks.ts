@@ -46,6 +46,7 @@ import {
 import { estimateLegFn, googleLegs, legFnFor, memoLegFn, providerFromEnv } from "../routing.ts";
 import { googleUse } from "../google.ts";
 import { notifyEvent } from "../notifications.ts";
+import { shortName } from "../names.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
 import type { Actor } from "../roles.ts";
 import { loadSettings, type Settings } from "../settings.ts";
@@ -100,7 +101,8 @@ export function activeDriver(refs: Refs, typed: string): Employee {
 
 /** The vehicle a task gets when only the driver is named (Phase 7, §3): the one they hold today, else their regular one. */
 export function defaultVehicleFor(refs: Refs, driver: Employee): { vehicle: Vehicle; why: string } | null {
-  const first = driver.name.split(" ")[0];
+  // The full name when another active driver has the same first name (hotfix, 17 October 2026).
+  const first = shortName(driver.name, refs.employees.filter((e) => e.role === "driver" && e.active).map((e) => e.name));
   const today = driver.current_vehicle_id ? refs.veh.get(driver.current_vehicle_id) : undefined;
   if (today?.active) return { vehicle: today, why: `${first}'s vehicle today` };
   const regular = refs.vehicles.find((v) => v.active && v.regular_driver_id === driver.id);

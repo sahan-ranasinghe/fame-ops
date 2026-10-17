@@ -71,6 +71,16 @@ const availability = (_args: Record<string, unknown>, n: number): Availability =
 });
 
 describe("the store keeps an answer that did not change", () => {
+  it("folds a later answer for the same arguments into the one shown when the query has a merge", async () => {
+    let n = 0;
+    const transport = new FakeTransport({ count: () => ({ n: ++n, kept: n }) }, ["count"]);
+    const store = new FleetStore(transport);
+    store.retain("q:count:{}", "count", {}, true, (prev, next) => ({ ...(next as object), kept: (prev as { kept: number }).kept }));
+    await store.fetch("q:count:{}", "count", {});
+    await store.fetch("q:count:{}", "count", {}, true);
+    expect(store.get("q:count:{}").data).toEqual({ n: 2, kept: 1 });
+  });
+
   it("compares answers deep-equal", () => {
     expect(deepEqual({ a: [1, { b: "x" }], c: undefined }, { a: [1, { b: "x" }] })).toBe(true);
     expect(deepEqual({ a: [1, 2] }, { a: [2, 1] })).toBe(false);
@@ -213,6 +223,60 @@ describe("Who's available: a refresh keeps the nodes and the choices", () => {
     await settle(400);
     expect(screen.queryByTestId("avail-updating")).toBeNull();
     expect(screen.getAllByTestId("avail-row")[0]).toBe(rows[0]);
+  });
+});
+
+describe("Who's available: two drivers side by side (hotfix, 17 October 2026)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Kamal and Nuwan parked together: each answer ranks the other one first, as their GPS wanders. */
+  const swapping = (_args: Record<string, unknown>, n: number): Availability => {
+    const kamalFirst = n % 2 === 1;
+    const kamal = driver("Kamal Perera", "kamal.p", { rank: kamalFirst ? 1 : 2, vehicle: { reg_no: "WP CAB-4521", source: "on_duty" } });
+    const nuwan = driver("Nuwan Perera", "nuwan.p", { rank: kamalFirst ? 2 : 1, vehicle: { reg_no: "WP KL-1234", source: "regular" } });
+    const top = kamalFirst ? kamal : nuwan;
+    return {
+      as_of: "17 Oct 08:00",
+      window: { from: "Sat 17 Oct 09:00", until: "end of the day", day: "2026-10-17" },
+      drivers: [kamal, nuwan, driver("Kamal Silva", "kamal.s", { state: "off_duty", status_text: "Off duty", vehicle: { reg_no: "WP PH-2087", source: "regular" } })],
+      best: { name: top.name, username: top.username, vehicle: top.vehicle, why: `On duty · ${kamalFirst ? "0.4" : "0.3"} km from the pickup` },
+      counts: { free: 3, on_duty: 2, all: 3 },
+      vehicles: { groups: { free_pool: [], free_assigned: [], busy: [], in_garage: [] }, drivers_free: [] },
+    };
+  };
+
+  it("the rows and the best match stay put through refreshes; a click picks a row with the vehicle they bring", async () => {
+    const transport = new FakeTransport({ availability: swapping }, ["availability"]);
+    const { wrap } = await setup(transport);
+    const picks: string[] = [];
+    function Form() {
+      const [picked, setPicked] = useState("");
+      return <AvailabilityPanel args={{ at: "2026-10-17 09:00" }} picked={picked} onPick={(d, v) => { picks.push(`${d.username} ${v?.reg_no} ${v?.why}`); setPicked(d.username ?? ""); }} onUse={() => {}} />;
+    }
+    render(wrap(<Form />));
+    await settle(400);
+    const rows = screen.getAllByTestId("avail-row");
+    const names = () => screen.getAllByTestId("avail-row").map((r) => r.querySelector(".name")?.textContent);
+    expect(names()).toEqual(["Kamal Perera", "Nuwan Perera", "Kamal Silva"]);
+    expect(screen.getByTestId("best-match").textContent).toContain("Kamal Perera");
+    // Two drivers called Kamal: their full names; Nuwan Perera is the only Nuwan.
+    expect(rows[0].textContent).toContain("WP CAB-4521 Kamal Perera's vehicle today");
+    expect(rows[1].textContent).toContain("WP KL-1234 Nuwan's regular vehicle");
+    expect(rows[2].textContent).toContain("WP PH-2087 Kamal Silva's regular vehicle");
+
+    fireEvent.click(rows[1]);
+    expect(picks).toEqual(["nuwan.p WP KL-1234 Nuwan's regular vehicle"]);
+    expect(rows[1].getAttribute("aria-selected")).toBe("true");
+    expect(rows[1].className).toContain("picked");
+    expect(rows[0].getAttribute("aria-selected")).toBe("false");
+
+    for (let i = 0; i < 3; i++) await settle(60_000); // three refreshes, each ranking the other first
+    expect(transport.count("availability")).toBe(4);
+    expect(screen.getAllByTestId("avail-row")).toEqual(rows); // the same nodes in the same order
+    expect(names()).toEqual(["Kamal Perera", "Nuwan Perera", "Kamal Silva"]);
+    expect(screen.getByTestId("best-match").textContent).toContain("Kamal Perera");
+    expect(rows[1].getAttribute("aria-selected")).toBe("true");
   });
 });
 

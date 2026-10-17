@@ -1909,7 +1909,9 @@ check(pv.get("start", {}).get("lat") is not None and pv["start"].get("lng") is n
       "plan_task with_line on the open package: the start's pin for the plan map, no Google line (only Google's road times bring one)",
       json.dumps({"start": pv.get("start"), "legs": legs})[:300])
 st = tool("get_settings")["settings"]
-check(st["google_caps"]["roads"] == {"day": 200, "month": 4750}, "snap to roads is on within the free usage: 200 a day, 4,750 a month", json.dumps(st["google_caps"]["roads"]))
+check(st["google_caps"]["roads"] == {"day": 215, "month": 4750}, "snap to roads is on within the free usage: 215 a day, 4,750 a month", json.dumps(st["google_caps"]["roads"]))
+check([st["google_caps"][f]["day"] for f in ("map_loads", "places_autocomplete", "places_details", "routes", "roads")] == [430, 430, 430, 215, 215],
+      "each day's cap is the month ÷ 22 working days: 430, 430, 430, 215, 215 (hotfix, 17 October 2026)", json.dumps(st["google_caps"]))
 tool("update_settings", {"key": "google_caps", "value": {**st["google_caps"], "roads": {"day": 0, "month": 0}}})
 check(tool("get_settings")["settings"]["google_caps"]["roads"] == {"day": 0, "month": 0}, "a cap of 0 turns it off (if Google asks)")
 r = tool("update_settings", {"key": "google_caps", "value": {**st["google_caps"], "roads": {"day": 200, "month": 5000}}}, expect_error=True)

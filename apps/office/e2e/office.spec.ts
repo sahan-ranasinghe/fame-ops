@@ -559,7 +559,7 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await expect(row).toContainText("1 declined");
 });
 
-test("a task that needs a driver can't be missed; the decide page stays still for 30 seconds while the data refreshes (Phase 7, Part 2)", async ({ page }) => {
+test("a task that needs a driver can't be missed; the decide page fills the vehicle from the driver (Phase 7, Part 2)", async ({ page }) => {
   test.setTimeout(240_000);
   const email = `e2e.needs.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Needs Driver", email, permissions: ["view", "request", "approve", "assign_tasks"] });
@@ -593,36 +593,184 @@ test("a task that needs a driver can't be missed; the decide page stays still fo
   await expect(page.getByText(/Fever/).first()).toBeVisible();
   await expect(page.getByTestId("needs-driver-banner")).toBeVisible();
 
-  // The decide page: the driver first, the vehicle fills itself (their regular one); then 30 seconds of refreshes.
+  // The decide page: the driver first, the vehicle fills itself (their regular one). (The 30 seconds of refreshes are
+  // the test of two drivers side by side, below, in both colour schemes.)
   const rq = await tool<{ request: { id: string } }>("create_request", { requested_by: "E2E Needs Driver", date: day, time: "13:00", route_from: "Head office", route_to: "Galle", need_type: "van", pax: 3 });
   await page.goto(`/requests/${rq.request.id}/decide`);
   await page.getByLabel("Driver", { exact: true }).selectOption(d2.username);
   await expect(page.getByTestId("vehicle-default")).toContainText(plate);
   await expect(page.getByTestId("plan-card")).toContainText("Leave by", { timeout: 15000 });
-  await page.waitForTimeout(2000);
-  await page.evaluate(() => {
-    const w = window as unknown as { __shift: number };
-    w.__shift = 0;
-    new PerformanceObserver((list) => {
-      for (const e of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) if (!e.hadRecentInput) w.__shift += e.value;
-    }).observe({ type: "layout-shift", buffered: false });
-  });
-  // Meanwhile the fleet changes elsewhere: a driver's heartbeat (Realtime), new tasks the day after (the overview's next
-  // answers differ), and the page's own watches answer again.
-  const other = await driverRest(d2.username, d2.pin);
-  const spare = `WP E2C-${stamp.slice(-4).toUpperCase()}`;
-  await tool("register_vehicle", { reg_no: spare, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 500 });
-  const after = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000).toISOString().slice(0, 10);
-  for (let i = 0; i < 6; i++) {
-    await other.post("rpc/send_heartbeat", { p_at: new Date().toISOString(), p_sharing: false, p_location_on: true, p_permission: "always" });
-    await tool("create_task", { title: `E2E churn ${stamp} ${i}`, date: after, start_time: `1${i}:30`, driver: d1.username, vehicle: spare, pickup: "Head office", dropoff: "Kandy" });
-    await page.waitForTimeout(5000);
-  }
-  const shift = await page.evaluate(() => (window as unknown as { __shift: number }).__shift);
-  expect(shift).toBeLessThan(0.01);
-  await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(d2.username);
-  await expect(page.getByTestId("vehicle-default")).toContainText(plate);
 });
+
+/** WCAG contrast of an element's text on its own background (the first one that is not transparent, walking up). */
+async function contrastOf(el: import("@playwright/test").Locator): Promise<number> {
+  return el.evaluate((node) => {
+    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
+    const lum = ([r, g, b]: number[]) => {
+      const f = (v: number) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    let bgEl: Element | null = node;
+    let bg = "rgba(0, 0, 0, 0)";
+    while (bgEl) {
+      bg = getComputedStyle(bgEl).backgroundColor;
+      const a = rgb(bg)[3];
+      if (!(a === 0)) break;
+      bgEl = bgEl.parentElement;
+    }
+    const [l1, l2] = [lum(rgb(getComputedStyle(node).color)), lum(rgb(bg))].sort((a, b) => b - a);
+    return (l1 + 0.05) / (l2 + 0.05);
+  });
+}
+
+for (const scheme of ["light", "dark"] as const) {
+  test(`Who's available stays still for 30 seconds with two drivers side by side; a row click or Enter picks the driver and the vehicle (${scheme}; hotfix 17 Oct 2026)`, async ({ page }) => {
+    test.setTimeout(240_000);
+    await page.emulateMedia({ colorScheme: scheme });
+    const tag = `${scheme}${stamp}`;
+    const email = `e2e.twins.${tag}@fame.test`;
+    const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Twins Desk", email, permissions: ["view", "request", "approve", "assign_tasks"] });
+    // A place of this run's own (drivers another run left on duty are far from it), and two drivers called Twin, both on
+    // duty with today's vehicle, parked side by side near it.
+    const depot = { name: `Twins depot ${tag}`, lat: 7.1 + (parseInt(stamp.slice(-3), 36) % 1000) / 5000 + (scheme === "dark" ? 0.3 : 0), lng: 80.2 };
+    await tool("add_place", { ...depot, kind: "office" });
+    const a = { name: `Twin ${tag}`, code: `TWA-${tag}`, username: `twa.${tag}`, pin: "135791" };
+    const b = { name: `Twin ${tag} Two`, code: `TWB-${tag}`, username: `twb.${tag}`, pin: "135792" };
+    const plateA = `WP TWA-${scheme[0].toUpperCase()}${stamp.slice(-4).toUpperCase()}`;
+    const plateB = `WP TWB-${scheme[0].toUpperCase()}${stamp.slice(-4).toUpperCase()}`;
+    const phones: { app: Awaited<ReturnType<typeof driverRest>>; id: string; session: string }[] = [];
+    for (const [d, plate] of [[a, plateA], [b, plateB]] as const) {
+      await tool("create_driver", d);
+      await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
+      const app = await driverRest(d.username, d.pin);
+      const [me] = await app.get<{ id: string }[]>("employees?select=id");
+      const [veh] = await app.get<{ id: string }[]>(`vehicles?select=id&reg_no=eq.${encodeURIComponent(plate)}`);
+      const session = randomUUID();
+      expect(await app.post("duty_sessions", { id: session, employee_id: me.id, vehicle_id: veh.id, device_info: { model: "e2e" } })).toBe(201);
+      phones.push({ app, id: me.id, session });
+    }
+    // Each phone's fix: about 100 m from the depot, the nearer one swapping each time (their GPS wanders).
+    let tick = 0; // keeps two fixes in the same millisecond apart
+    const wander = async (aNearer: boolean) => {
+      const at = new Date(Date.now() - 1000 + tick++).toISOString();
+      for (const [i, p] of phones.entries()) {
+        const near = (i === 0) === aNearer;
+        expect(await p.app.post("location_points", [{ employee_id: p.id, session_id: p.session, recorded_at: at, lat: depot.lat + (near ? 0.0009 : 0.0011), lng: depot.lng, accuracy_m: 8, speed_mps: 0, battery_pct: 80 }])).toBe(201);
+      }
+    };
+    await wander(true);
+
+    const verify = await fetch(user.set_password_link, { redirect: "manual" });
+    const landing = verify.headers.get("location") ?? "";
+    await page.goto("/" + landing.slice(landing.indexOf("#")));
+    const password = `Twins desk for ${tag}!`;
+    await page.getByLabel("New password").fill(password);
+    await page.getByLabel("Again").fill(password);
+    await page.getByRole("button", { name: "Save password" }).click();
+    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+    // The decide page with nothing chosen: the best match (Twin A, nearer) is the default and its row is picked. The
+    // page's clock is ours from here, so a minute's refresh can be brought forward.
+    const day = new Date(Date.now() + 5.5 * 3600000 + 86400000).toISOString().slice(0, 10); // tomorrow in Colombo
+    const rq = await tool<{ request: { id: string } }>("create_request", { requested_by: "E2E Twins Desk", date: day, time: "13:00", route_from: depot.name, route_to: "Galle", need_type: "van", pax: 3 });
+    await page.clock.install();
+    await page.goto(`/requests/${rq.request.id}/decide`);
+    const panel = page.getByTestId("availability");
+    const rowOf = (scope: import("@playwright/test").Locator, name: string) =>
+      scope.getByTestId("avail-row").filter({ has: page.locator(".name", { hasText: new RegExp(`^${name}$`) }) });
+    const rowA = rowOf(panel, a.name);
+    const rowB = rowOf(panel, b.name);
+    await expect(rowA).toHaveAttribute("aria-selected", "true");
+    await expect(rowB).toHaveAttribute("aria-selected", "false");
+    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(a.username);
+    await expect(panel.getByTestId("best-match")).toContainText(a.name);
+    // Two drivers called Twin: the full name in the vehicle's words.
+    await expect(rowA).toContainText(`${plateA} ${a.name}'s vehicle today`);
+    await expect(rowB).toContainText(`${plateB} ${b.name}'s vehicle today`);
+    await expect(page.getByTestId("vehicle-default")).toContainText(`${plateA} · ${a.name}'s vehicle today`);
+    await expect(page.getByTestId("plan-card")).toContainText("Leave by", { timeout: 15000 });
+    // The picked row and a hovered row are readable in this colour scheme.
+    expect(await contrastOf(rowA.locator(".name"))).toBeGreaterThan(4.5);
+    await rowB.hover();
+    expect(await contrastOf(rowB.locator(".name"))).toBeGreaterThan(4.5);
+    await page.mouse.move(0, 0);
+    await page.waitForTimeout(1000);
+
+    // 30 seconds: the drivers swap places by GPS, a heartbeat, new tasks elsewhere, and two of the page's minute
+    // refreshes (Who's available, the free vehicles). Nothing moves: no layout shift, the same rows in the same order,
+    // the same row picked, the same best match.
+    await page.evaluate(() => {
+      const w = window as unknown as { __shift: number; __orders: string[]; __picked: string[] };
+      w.__shift = 0;
+      w.__orders = [];
+      w.__picked = [];
+      new PerformanceObserver((list) => {
+        for (const e of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) if (!e.hadRecentInput) w.__shift += e.value;
+      }).observe({ type: "layout-shift", buffered: false });
+      const root = document.querySelector('[data-testid="availability"]')!;
+      const note = () => {
+        const rows = [...root.querySelectorAll('[data-testid="avail-row"]')];
+        w.__orders.push(rows.map((r) => r.querySelector(".name")?.textContent ?? "").join(" | "));
+        w.__picked.push(rows.filter((r) => r.getAttribute("aria-selected") === "true").map((r) => r.querySelector(".name")?.textContent ?? "").join(","));
+      };
+      note();
+      new MutationObserver(note).observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
+    });
+    const spare = `WP TWC-${scheme[0].toUpperCase()}${stamp.slice(-4).toUpperCase()}`;
+    await tool("register_vehicle", { reg_no: spare, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 500 });
+    const after = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000).toISOString().slice(0, 10);
+    for (let i = 0; i < 6; i++) {
+      await wander(i % 2 === 1); // B nearer, then A, then B…
+      await phones[1].app.post("rpc/send_heartbeat", { p_at: new Date().toISOString(), p_sharing: true, p_location_on: true, p_permission: "always" });
+      await tool("create_task", { title: `E2E twins churn ${tag} ${i}`, date: after, start_time: `1${i}:30`, driver: a.username, vehicle: spare, pickup: "Head office", dropoff: "Kandy" });
+      if (i === 1 || i === 4) await page.clock.fastForward(61_000);
+      await page.waitForTimeout(5000);
+    }
+    const seen = await page.evaluate(() => {
+      const w = window as unknown as { __shift: number; __orders: string[]; __picked: string[] };
+      return { shift: w.__shift, orders: [...new Set(w.__orders)], picked: [...new Set(w.__picked)] };
+    });
+    expect(seen.shift).toBeLessThan(0.01);
+    expect(seen.orders).toHaveLength(1);
+    expect(seen.picked).toEqual([a.name]);
+    await expect(panel.getByTestId("best-match")).toContainText(a.name);
+    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(a.username);
+    await expect(page.getByTestId("vehicle-default")).toContainText(plateA);
+
+    // A click on Twin B's row picks B with the vehicle B brings, and the pick stays through the next refresh.
+    await rowB.click();
+    await expect(rowB).toHaveAttribute("aria-selected", "true");
+    await expect(rowA).toHaveAttribute("aria-selected", "false");
+    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(b.username);
+    await expect(page.getByTestId("vehicle-default")).toContainText(`${plateB} · ${b.name}'s vehicle today`);
+    expect(await contrastOf(rowB.locator(".name"))).toBeGreaterThan(4.5);
+    await wander(true);
+    await page.clock.fastForward(61_000);
+    await page.waitForTimeout(3000);
+    await expect(rowB).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(b.username);
+    // Enter on Twin A's row picks A again.
+    await rowA.focus();
+    await page.keyboard.press("Enter");
+    await expect(rowA).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(a.username);
+    await expect(page.getByTestId("vehicle-default")).toContainText(`${plateA} · ${a.name}'s vehicle today`);
+
+    // Assign a task: a row click fills the driver and leaves the vehicle to them (their vehicle today).
+    await page.goto("/tasks/new");
+    await page.getByLabel("Date", { exact: true }).fill(day);
+    await page.getByLabel("Leave by", { exact: true }).fill("13:00");
+    await page.getByLabel("Stop 1", { exact: true }).fill(depot.name);
+    await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+    const rowBNew = rowOf(page.getByTestId("availability"), b.name);
+    await rowBNew.click();
+    await expect(rowBNew).toHaveAttribute("aria-selected", "true");
+    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(b.username);
+    await expect(page.getByLabel("Vehicle", { exact: true }).locator("option:checked")).toContainText(plateB);
+    // Finish work on both phones: nobody this test put on duty stays for the next run.
+    for (const p of phones) expect(await p.app.patch(`duty_sessions?id=eq.${p.session}&ended_at=is.null`, { ended_at: new Date().toISOString(), end_reason: "driver" })).toBe(200);
+  });
+}
 
 test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note, Resolve closes the driver's report", async ({ page }) => {
   const email = `e2e.issues.${stamp}@fame.test`;

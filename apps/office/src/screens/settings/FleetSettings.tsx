@@ -292,7 +292,8 @@ export function FleetSettings() {
                 <h2>Map package</h2>
                 <p className="muted small" style={{ margin: "4px 0 0" }}>
                   Every Google call is counted before it is made and refused at its daily cap or its month's cap (Colombo time, at most 95 % of
-                  Google's free usage); the open package then takes over until tomorrow or the 1st, and a refused map means no map. Keys set:
+                  Google's free usage); the open package then takes over until tomorrow or the 1st, and a refused map means no map. A day's cap
+                  is the month's spread over 22 working days (430 and 215 by default), weekends the same; the month's cap is the hard stop. Keys set:
                   map {data.google.configured.js ? "yes" : "no"}, server {data.google.configured.server ? "yes" : "no"}.
                 </p>
               </div>

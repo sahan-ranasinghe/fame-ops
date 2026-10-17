@@ -354,10 +354,24 @@ Deno.test("a refused Roads call is never sent: the gate is asked before each 100
 Deno.test("google_caps: every feature, the month never above 95 % of the free usage, the day never above the month", () => {
   const caps = validateSetting("google_caps", SETTINGS_DEFAULTS.google_caps);
   assertEquals(caps, SETTINGS_DEFAULTS.google_caps);
-  // On within the free usage (Sahan, 16 October 2026): 200 a day, 4,750 a month; a cap of 0 turns it off.
-  assertEquals(SETTINGS_DEFAULTS.google_caps.roads, { day: 200, month: 4750 }, "snap to roads: 200 a day, 4,750 a month");
+  // On within the free usage (Sahan, 16 October 2026): 4,750 a month; a cap of 0 turns it off.
+  assertEquals(SETTINGS_DEFAULTS.google_caps.roads, { day: 215, month: 4750 }, "snap to roads: 215 a day, 4,750 a month");
   const planned = validateSetting("google_caps", { ...SETTINGS_DEFAULTS.google_caps, roads: ROADS_CAPS_PLANNED }) as GoogleCaps;
-  assertEquals(planned.roads, { day: 200, month: 4750 });
+  assertEquals(planned.roads, { day: 215, month: 4750 });
+  // Each day is the month ÷ 22 working days (Sahan, 17 October 2026), weekends the same; the month is the hard stop.
+  const days = Object.fromEntries(Object.entries(SETTINGS_DEFAULTS.google_caps).map(([f, c]) => [f, [c.day, c.month]]));
+  assertEquals(days, {
+    map_loads: [430, 9500],
+    places_autocomplete: [430, 9500],
+    places_details: [430, 9500],
+    routes: [215, 4750],
+    roads: [215, 4750],
+  });
+  // The half day between our month (Colombo) and Google's (Pacific): one day's cap on top of the month stays under the
+  // free usage (10,000 and 5,000).
+  for (const [f, c] of Object.entries(SETTINGS_DEFAULTS.google_caps)) {
+    assert(c.day + c.month < (c.month === 9500 ? 10000 : 5000), `${f}: a day on top of the month is still free`);
+  }
   const tooBig = { ...SETTINGS_DEFAULTS.google_caps, routes: { day: 200, month: 5000 } };
   let message = "";
   try {

@@ -423,10 +423,14 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 
 /* Phase 6 Part 2: what changed, who's available */
 .changes { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 2px }
-.avail-row { width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); font: inherit; color: inherit; cursor: default; padding: 10px 0 }
+/* Who's available: hover and picked from the theme's own tokens (readable in light and dark); picked also has a bar and a tick, not colour alone. */
+.avail-row { width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid var(--line); font: inherit; color: var(--ink); cursor: default; padding: 10px }
 button.avail-row { cursor: pointer }
-button.avail-row:hover { background: var(--bg) }
-.avail-row.picked { background: var(--chip-blue, #e6edf8) }
+button.avail-row:hover { background: var(--surface-2) }
+.avail-row.picked, button.avail-row.picked:hover { background: var(--live-bg); box-shadow: inset 4px 0 0 var(--live) }
+.avail-row.picked .pill.live { box-shadow: inset 0 0 0 1px var(--live) }
+.avail-tick { color: var(--live); font-weight: 700 }
+button.avail-row:focus-visible { outline-offset: -3px }
 .avail-row:first-child { border-top: 0 }
 
 /* The location search box (Part 4) */

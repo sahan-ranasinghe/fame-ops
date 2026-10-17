@@ -1,6 +1,7 @@
 // "Who's available" in words and tones, from an availability row; the vehicle a
 // driver brings (Phase 7, §3) and the best-match order. Pure.
-import type { AvailableDriver, BestMatch } from "../data/types";
+import { shortName } from "@fleet/names";
+import type { Availability, AvailableDriver, BestMatch } from "../data/types";
 import { plateOf, type Tone } from "../lib/format";
 
 /** The chip's tone: on duty = blue, on a task = amber, off duty = grey; busy with a task = red. */
@@ -57,23 +58,26 @@ export function floorTo5(time: string): string {
   return `${m[1]}:${String(min).padStart(2, "0")}`;
 }
 
-/** The vehicle a driver brings, in words: "Kamal's vehicle today" (on duty), "Kamal's regular vehicle", or none. */
+/**
+ * The vehicle a driver brings, in words: "Kamal's vehicle today" (on duty), "Kamal's regular vehicle", or none; the full
+ * name when another driver in `names` has the same first name ("Test Driver's" beside "Test Driver 2's").
+ */
 export interface DefaultVehicle {
   reg_no: string;
   why: string;
 }
 
-export function defaultVehicle(d: { name: string; vehicle?: { reg_no: string; source: "on_duty" | "regular" } } | null | undefined): DefaultVehicle | null {
+export function defaultVehicle(d: { name: string; vehicle?: { reg_no: string; source: "on_duty" | "regular" } } | null | undefined, names: readonly string[] = []): DefaultVehicle | null {
   if (!d?.vehicle?.reg_no) return null;
-  const first = d.name.split(" ")[0];
-  return { reg_no: d.vehicle.reg_no, why: d.vehicle.source === "on_duty" ? `${first}'s vehicle today` : `${first}'s regular vehicle` };
+  const who = shortName(d.name, names);
+  return { reg_no: d.vehicle.reg_no, why: d.vehicle.source === "on_duty" ? `${who}'s vehicle today` : `${who}'s regular vehicle` };
 }
 
 /** The vehicle the picked driver brings: Who's available's row, else the driver list's vehicle today. */
-export function driverVehicle(avail: DefaultVehicle | null, driver: { name: string; current_vehicle?: string } | undefined): DefaultVehicle | null {
+export function driverVehicle(avail: DefaultVehicle | null, driver: { name: string; current_vehicle?: string } | undefined, names: readonly string[] = []): DefaultVehicle | null {
   if (avail) return avail;
   if (!driver?.current_vehicle) return null;
-  return { reg_no: plateOf(driver.current_vehicle), why: `${driver.name.split(" ")[0]}'s vehicle today` };
+  return { reg_no: plateOf(driver.current_vehicle), why: `${shortName(driver.name, names)}'s vehicle today` };
 }
 
 /** The rows in the best-match order (1, 2, 3… the free drivers on duty), then the others as the server sorted them. */
@@ -86,4 +90,23 @@ export function rankedRows(rows: AvailableDriver[]): AvailableDriver[] {
 export function bestRow(best: BestMatch | undefined, rows: AvailableDriver[] | undefined): AvailableDriver | undefined {
   if (!best || !rows) return undefined;
   return rows.find((r) => (best.username ? r.username === best.username : r.name === best.name));
+}
+
+const driverKey = (r: { username?: string | null; name: string }) => r.username ?? r.name;
+
+/**
+ * A refresh of Who's available for the same day and time (useQuery's merge; hotfix, 17 October 2026). While the same
+ * drivers are in the best-match ranking (on duty and free), the ranking and the best match stay as they were: two
+ * drivers parked side by side would otherwise swap places, and the best match with them, on every refresh, as their
+ * GPS wanders. Everything else (the status words, the counts, the vehicles) is the fresh answer. A driver joining or
+ * leaving the ranking (on or off duty, a task taken) ranks them all again.
+ */
+export function steadyAvailability(prev: Availability, next: Availability): Availability {
+  const ranked = (a: Availability) => a.drivers.filter((r) => r.rank != null).map(driverKey).sort().join("\n");
+  if (ranked(prev) !== ranked(next)) return next;
+  const rankOf = new Map(prev.drivers.map((r) => [driverKey(r), r.rank]));
+  const drivers = next.drivers.map((r) => (r.rank === rankOf.get(driverKey(r)) ? r : { ...r, rank: rankOf.get(driverKey(r)) }));
+  const held = prev.best && next.best && driverKey(prev.best) !== driverKey(next.best) ? prev.best : undefined;
+  const best = held ? { ...held, vehicle: next.drivers.find((r) => driverKey(r) === driverKey(held))?.vehicle ?? held.vehicle } : next.best;
+  return { ...next, drivers, best };
 }

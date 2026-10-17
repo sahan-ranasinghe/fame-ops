@@ -46,6 +46,8 @@ interface ActiveQuery {
   users: number;
   /** Fetched again after a write. */
   onWrite: boolean;
+  /** Folds a fresh answer into the one shown (Who's available keeps its order while the arguments stay). */
+  merge?: (prev: unknown, next: unknown) => unknown;
 }
 
 export class FleetStore {
@@ -115,7 +117,10 @@ export class FleetStore {
     if (!quiet) this.set(key, { loading: true });
     const p = (async () => {
       try {
-        const data = await this.transport.call<T>(tool, args);
+        const fresh = await this.transport.call<T>(tool, args);
+        const prev = this.get<T>(key).data;
+        const merge = this.queries.get(key)?.merge;
+        const data = merge && prev !== undefined ? merge(prev, fresh) as T : fresh;
         this.set(key, { data, at: Date.now(), err: undefined, loading: false });
         return data;
       } catch (e) {
@@ -129,13 +134,17 @@ export class FleetStore {
     return p;
   }
 
-  /** A screen shows this query's entry: it is fetched again after a write (invalidate) unless `onWrite` is false. */
-  retain(key: string, tool: string, args: Record<string, unknown>, onWrite = true): void {
+  /**
+   * A screen shows this query's entry: it is fetched again after a write (invalidate) unless `onWrite` is false;
+   * `merge` folds each later answer into the one shown.
+   */
+  retain(key: string, tool: string, args: Record<string, unknown>, onWrite = true, merge?: (prev: unknown, next: unknown) => unknown): void {
     const q = this.queries.get(key);
     if (q) {
       q.users++;
       q.onWrite ||= onWrite;
-    } else this.queries.set(key, { tool, args, users: 1, onWrite });
+      q.merge ??= merge;
+    } else this.queries.set(key, { tool, args, users: 1, onWrite, merge });
   }
 
   /** Nobody shows it any more: the entry is forgotten (a query entry is never read by key elsewhere). */

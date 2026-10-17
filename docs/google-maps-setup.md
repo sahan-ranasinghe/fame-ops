@@ -81,11 +81,16 @@ today and this month against its caps, and the calls refused today.
 
 | Feature (`google_caps`) | Google SKU | Free a month | Our day cap | Our month cap (95 %) |
 |---|---|---|---|---|
-| `map_loads` | Dynamic Maps | 10,000 | 400 | 9,500 |
-| `places_autocomplete` | Autocomplete Requests | 10,000 | 400 | 9,500 |
-| `places_details` | Place Details Essentials | 10,000 | 400 | 9,500 |
-| `routes` | Compute Routes Pro (TRAFFIC_AWARE) | 5,000 | 200 | 4,750 |
-| `roads` | Roads – Route Traveled (Snap to Roads) | 5,000 | 0 (off) | 0 (off) |
+| `map_loads` | Dynamic Maps | 10,000 | 430 | 9,500 |
+| `places_autocomplete` | Autocomplete Requests | 10,000 | 430 | 9,500 |
+| `places_details` | Place Details Essentials | 10,000 | 430 | 9,500 |
+| `routes` | Compute Routes Pro (TRAFFIC_AWARE) | 5,000 | 215 | 4,750 |
+| `roads` | Roads – Route Traveled (Snap to Roads) | 5,000 | 215 | 4,750 |
+
+**The daily caps (Sahan, 17 October 2026):** each day's cap is the month's cap spread over 22
+working days (9,500 ÷ 22 and 4,750 ÷ 22, rounded down to 430 and 215). Weekends get the same daily
+cap. The month's cap stays the hard stop: a month with more than 22 busy days stops at the month's
+cap, never above it.
 
 Prices after the free usage (https://developers.google.com/maps/billing-and-pricing/pricing):
 Dynamic Maps $7.00, Autocomplete Requests $2.83, Place Details Essentials $5.00, Compute Routes
@@ -94,8 +99,8 @@ Pro $10.00, Roads $10.00 per 1,000. Maps SDK for Android: unlimited and free (wi
 - No setting goes above the 95 % ceilings (`update_settings` refuses it and the counter clamps it).
 - Our month runs on Colombo time; Google's resets at midnight Pacific time on the 1st (about
   13:30 Colombo). The half day in between is covered by the 5 % margin: at most one day's cap
-  (400 or 200) on top of 9,500 or 4,750 is still under the free 10,000 or 5,000.
-- `roads` (snap to roads) is on within the free usage since Round A of Phase 7: 200 a day and 4,750 a
+  (430 or 215) on top of 9,500 or 4,750 (9,930 or 4,965) is still under the free 10,000 or 5,000.
+- `roads` (snap to roads) is on within the free usage since Round A of Phase 7: 215 a day and 4,750 a
   month (95 % of the 5,000 free), counted before each call and refused at either cap or on a counter
   error (fail closed).
   - The Roads API overview (https://developers.google.com/maps/documentation/roads/overview) says

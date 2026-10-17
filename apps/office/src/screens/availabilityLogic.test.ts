@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { AvailableDriver } from "../data/types";
-import { availabilityArgs, defaultVehicle, driverLine, driverTone, driverVehicle, floorTo5, licenceTone, rankedRows } from "./availabilityLogic";
+import type { Availability, AvailableDriver } from "../data/types";
+import { availabilityArgs, defaultVehicle, driverLine, driverTone, driverVehicle, floorTo5, licenceTone, rankedRows, steadyAvailability } from "./availabilityLogic";
 
 const base: AvailableDriver = { name: "Nuwan", username: "nuwan.p", state: "on_duty", status_text: "On duty since 07:12", on_duty_since: "07:12", accepted_today: 0, declined_today: 0, licence: { chip: "ok" }, free: true };
 
@@ -48,5 +48,51 @@ describe("Who's available, Phase 7 (§3, §10)", () => {
   it("puts the ranked drivers first in their order, then the rest as the server sorted them", () => {
     const rows = [{ ...base, name: "A" }, { ...base, name: "B", rank: 2 }, { ...base, name: "C", free: false }, { ...base, name: "D", rank: 1 }];
     expect(rankedRows(rows).map((r) => r.name)).toEqual(["D", "B", "A", "C"]);
+  });
+});
+
+describe("Who's available, hotfix (17 October 2026)", () => {
+  it("says the full name when two drivers share a first name", () => {
+    const names = ["Test Driver", "Test Driver 2", "Kanishka"];
+    expect(defaultVehicle({ name: "Test Driver", vehicle: { reg_no: "CAP-2207", source: "on_duty" } }, names)).toEqual({ reg_no: "CAP-2207", why: "Test Driver's vehicle today" });
+    expect(defaultVehicle({ name: "Test Driver 2", vehicle: { reg_no: "TEST-0002", source: "regular" } }, names)).toEqual({ reg_no: "TEST-0002", why: "Test Driver 2's regular vehicle" });
+    expect(defaultVehicle({ name: "Kanishka", vehicle: { reg_no: "TEST-0001", source: "regular" } }, names)).toEqual({ reg_no: "TEST-0001", why: "Kanishka's regular vehicle" });
+    expect(driverVehicle(null, { name: "Test Driver", current_vehicle: "CAP-2207 · Suzuki Alto" }, names)).toEqual({ reg_no: "CAP-2207", why: "Test Driver's vehicle today" });
+  });
+
+  const answer = (first: "kamal" | "nuwan", extra: Partial<Availability> = {}): Availability => {
+    const kamal = { ...base, name: "Kamal Perera", username: "kamal", rank: first === "kamal" ? 1 : 2, vehicle: { reg_no: "WP CAB-4521", source: "on_duty" as const } };
+    const nuwan = { ...base, name: "Nuwan Silva", username: "nuwan", rank: first === "nuwan" ? 1 : 2, status_text: first === "nuwan" ? "On duty since 07:15" : "On duty since 07:12" };
+    const top = first === "kamal" ? kamal : nuwan;
+    return {
+      as_of: "17 Oct 09:00",
+      window: { from: "Sat 17 Oct 10:00", until: "end of the day", day: "2026-10-17" },
+      drivers: [kamal, nuwan, { ...base, name: "Sunil", username: "sunil", state: "off_duty", status_text: "Off duty" }],
+      best: { name: top.name, username: top.username, vehicle: top.vehicle, why: `On duty · ${first === "kamal" ? "0.4" : "0.3"} km from the pickup` },
+      counts: { free: 3, on_duty: 2, all: 3 },
+      vehicles: { groups: { free_pool: [], free_assigned: [], busy: [], in_garage: [] }, drivers_free: [] },
+      ...extra,
+    };
+  };
+
+  it("a refresh with the same drivers in the ranking keeps the order and the best match; the words are fresh", () => {
+    const shown = answer("kamal");
+    const next = steadyAvailability(shown, answer("nuwan"));
+    expect(rankedRows(next.drivers).map((r) => r.username)).toEqual(["kamal", "nuwan", "sunil"]);
+    expect(next.best?.username).toBe("kamal");
+    expect(next.best?.vehicle?.reg_no).toBe("WP CAB-4521");
+    expect(next.drivers.find((r) => r.username === "nuwan")?.status_text).toBe("On duty since 07:15");
+    // The same answer again keeps its rows' objects (the store then keeps the whole answer).
+    const again = answer("kamal");
+    expect(steadyAvailability(shown, again).drivers[0]).toBe(again.drivers[0]);
+  });
+
+  it("a driver joining or leaving the ranking ranks them all again", () => {
+    const shown = answer("kamal");
+    const busy = answer("nuwan");
+    busy.drivers = busy.drivers.map((r) => (r.username === "kamal" ? { ...r, rank: undefined, free: false, busy_with: "Team drop 10:00–12:00" } : { ...r, rank: r.username === "nuwan" ? 1 : r.rank }));
+    const next = steadyAvailability(shown, busy);
+    expect(next).toBe(busy);
+    expect(next.best?.username).toBe("nuwan");
   });
 });

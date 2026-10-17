@@ -7,13 +7,14 @@
 // - `updating` is true while a fetch the person asked for runs (new arguments,
 //   a refetch): a small "Updating…" beside the title. Background refreshes
 //   (`every`) are quiet, and an answer deep-equal to the last one re-renders
-//   nothing (the store keeps the old object).
+//   nothing (the store keeps the old object); `merge` folds a later answer for
+//   the same arguments into the one shown (Who's available keeps its order).
 // - `debounce` waits for typed input to settle before fetching.
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useFleet } from "../app/FleetContext";
 import type { FleetError } from "../transport/types";
 
-export interface QueryOptions {
+export interface QueryOptions<T = unknown> {
   /** Fetch again (quietly) this often while on screen, ms. */
   every?: number;
   /** Wait this long after the arguments last changed, ms. */
@@ -24,6 +25,8 @@ export interface QueryOptions {
   keep?: boolean;
   /** false = not fetched again after a write (a plan preview: every call may count against a cap). Default true. */
   onWrite?: boolean;
+  /** Folds a later answer for the same arguments into the one shown (a module-level function: it is not a dependency). */
+  merge?: (prev: T, next: T) => T;
 }
 
 export interface Query<T> {
@@ -52,9 +55,9 @@ export function argsKey(args: unknown): string {
 export const queryKey = (key: string, args: unknown) => `q:${key}:${argsKey(args)}`;
 
 /** A tool's answer for `args` (null = not known yet, nothing is fetched). */
-export function useQuery<T>(key: string, tool: string, args: Record<string, unknown> | null, opts: QueryOptions = {}): Query<T> {
+export function useQuery<T>(key: string, tool: string, args: Record<string, unknown> | null, opts: QueryOptions<T> = {}): Query<T> {
   const { store } = useFleet();
-  const { every, debounce = 0, enabled = true, keep = false, onWrite = true } = opts;
+  const { every, debounce = 0, enabled = true, keep = false, onWrite = true, merge } = opts;
   const on = enabled && args !== null;
   const ak = argsKey(args);
   const sk = on ? queryKey(key, args) : "";
@@ -70,7 +73,7 @@ export function useQuery<T>(key: string, tool: string, args: Record<string, unkn
   useEffect(() => {
     if (!on) return;
     const a = JSON.parse(ak) as Record<string, unknown>;
-    store.retain(sk, tool, a, onWrite);
+    store.retain(sk, tool, a, onWrite, merge as ((prev: unknown, next: unknown) => unknown) | undefined);
     const has = store.get(sk).data !== undefined;
     if (debounce > 0 && !has) {
       setPending(sk);

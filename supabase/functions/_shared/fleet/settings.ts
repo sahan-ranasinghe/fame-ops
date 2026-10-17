@@ -75,8 +75,14 @@ export const GOOGLE_HARD_CEILING: Record<GoogleFeature, number> = {
   roads: 4750,
 };
 
-/** Phase 7 (§26): snap to roads at 200 a day and 95 % of the 5,000 free a month (the default since Round A). */
-export const ROADS_CAPS_PLANNED = { day: 200, month: 4750 } as const;
+/** Working days in a month: a feature's daily cap is its month's ceiling ÷ this (Sahan, 17 October 2026). */
+export const WORKING_DAYS_A_MONTH = 22;
+
+/** The daily cap for a monthly ceiling: the ceiling spread over 22 working days, rounded down to a multiple of 5. */
+export const dayCapFor = (month: number) => Math.floor(month / WORKING_DAYS_A_MONTH / 5) * 5;
+
+/** Phase 7 (§26): snap to roads at 4,750 a month (95 % of the 5,000 free) ÷ 22 working days = 215 a day. */
+export const ROADS_CAPS_PLANNED = { day: dayCapFor(4750), month: 4750 } as const;
 
 export type VideoQuality = "480p" | "720p";
 
@@ -124,12 +130,14 @@ export const SETTINGS_DEFAULTS: Settings = {
   ors_autocomplete_per_minute: 90,
   ors_gap_daily_cap: 300,
   map_package: "google",
+  // Each daily cap is the month's ceiling ÷ 22 working days (Sahan, 17 October 2026): 430 and 215. Weekends get the same
+  // daily cap; the month's ceiling stays the hard stop.
   google_caps: {
-    map_loads: { day: 400, month: 9500 },
-    places_autocomplete: { day: 400, month: 9500 },
-    places_details: { day: 400, month: 9500 },
-    routes: { day: 200, month: 4750 },
-    // On within the free usage (Sahan, 16 October 2026, Phase 7 §26): 200 a day, 4,750 a month, fail closed. The
+    map_loads: { day: dayCapFor(9500), month: 9500 },
+    places_autocomplete: { day: dayCapFor(9500), month: 9500 },
+    places_details: { day: dayCapFor(9500), month: 9500 },
+    routes: { day: dayCapFor(4750), month: 4750 },
+    // On within the free usage (Sahan, 16 October 2026, Phase 7 §26): 215 a day, 4,750 a month, fail closed. The
     // Roads API policies say an asset tracking application "may be required to purchase an asset tracking license";
     // Fame decided to use snap to roads within the free usage, and a cap of 0 in Settings → Fleet turns it off if
     // Google asks (docs/google-maps-setup.md).
@@ -173,7 +181,7 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   map_package:
     "The map package: google (Google's map, place search, traffic-aware road times and snap to roads, each where its key is set and under its caps) or open (OpenFreeMap, openrouteservice, the estimate); never mixed on one map",
   google_caps:
-    "Google calls a day and a month per feature (map_loads, places_autocomplete, places_details, routes, roads; Colombo time): each call is counted before it is made (every autocomplete request, since a session ending in a pick still pays for its first 12) and refused at either cap, and the open package takes over until the next day or the 1st; the month at most 95 % of Google's free usage (9,500 for maps, autocomplete and place details; 4,750 for routes and roads)",
+    "Google calls a day and a month per feature (map_loads, places_autocomplete, places_details, routes, roads; Colombo time): each call is counted before it is made (every autocomplete request, since a session ending in a pick still pays for its first 12) and refused at either cap, and the open package takes over until the next day or the 1st; the month at most 95 % of Google's free usage (9,500 for maps, autocomplete and place details; 4,750 for routes and roads); by default a day is the month ÷ 22 working days (430; 215), weekends the same",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
