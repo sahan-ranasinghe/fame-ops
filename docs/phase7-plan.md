@@ -1150,6 +1150,141 @@ All accepted (1–8 at checkpoint 0; 9–15 with Part 1's go, 15 October, 11 and
 15. The 1.3.0 APK is arm64 only. Changed: a ready `drivers-32` profile (armeabi-v7a) and a test-plan
     line on how to tell a phone needs it; no 32-bit build unless Sahan asks (27).
 
+## 33. Tasks go to the fleet admin first (item 29, added 17 October)
+
+Sahan's items of 17 October are numbered 29 and 30 in his list; their sections are §33 and §34 so that
+§29–§32 keep the numbers the rest of this plan refers to.
+
+**The setting.** `tasks_need_approval`, default on. Settings → Fleet: "New tasks need the fleet
+admin's OK".
+- On: a task made by someone **without** the approve permission is not sent to the driver. It waits in
+  the approval queue.
+- A task made by someone **with** approve goes straight to the driver, as now. Off: everyone's does.
+- Live today, nobody active is affected: the only office user with assign tasks and no approve
+  (sashen) is switched off. Claude's shared key is an admin key.
+
+**A proposed task is a request.** One queue, one decide tool:
+- `create_task` in that case writes a `vehicle_requests` row with `kind = 'task'` (new column; the
+  others are `'request'`), the proposed driver and vehicle (`proposed_employee_id`,
+  `proposed_vehicle_id`), the whole trip in §34's model (stops, start, leave-by, back by, title,
+  passengers, contact, notes, projects) and the plan with its warnings and conflicts as planned. The
+  assigner is the requester.
+- No task row exists until it is approved. The driver sees nothing and gets no push, and the accept
+  window (19) has not started. Approving creates the task and sends it then (`sent_at`), so the window
+  starts when it is sent.
+
+**The queue.**
+- Requests page: the proposal is a card among the waiting ones: "Task for Kamal · WP CAB-4521 ·
+  proposed by Nimal". The Overview count of requests waiting includes it.
+- Push to everyone with approve (`request.created`): "Task to approve · Nimal proposes Kamal · Sat 18
+  Oct 08:00 · Head office → Kandy".
+- `task_board(date)` gains `waiting_approval[]` (title, proposed driver and vehicle, leave-by, proposed
+  by, request_id). The web board shows it as the first column, "Waiting for approval".
+- Its decide page (`/requests/:id/decide`) shows:
+  - the plan (timeline and map), the warnings and the conflicts;
+  - the proposed driver and vehicle, filled in;
+  - **Send as proposed**;
+  - or a change: the driver (Who's available), the vehicle, the leave-by or the back by (the stops as
+    proposed);
+  - **Decline** with a reason.
+- `decide_request(approve)` on a proposal creates the task from the request's stops, with nothing
+  retyped. The driver and the vehicle default to the proposed ones, and it plans again only when the
+  driver, the vehicle or a time changed. The answer is today's, with `task_id`.
+- The creator is told either way (`request.decided`, as for requests): "Task approved · sent to
+  Kamal", or "Task declined: <reason>".
+
+**Not decided 30 minutes before the leave-by.**
+- A new event, `request.not_decided`, goes once to everyone with approve and to the creator: "Not
+  decided yet: <title> leaves 08:00".
+- It is queued by the task-reminders minute job (`queue_decide_reminders`, with
+  `vehicle_requests.decide_reminder_sent_at`).
+
+**Connector (additive).**
+- `create_task` answers `waiting_for_approval: true`, the `request` card, the plan and the warnings,
+  and `next`: "Waiting for the fleet admin's OK · you'll be notified." There is no `task_id`.
+- Deciding: `decide_request`, the same tool.
+- `list_requests` cards gain `kind`, `proposed {driver, vehicle}` and `stops_count`.
+- `task_board` gains `waiting_approval`.
+- `get_settings` and `update_settings` know `tasks_need_approval`.
+
+## 34. Requests get the full planner (item 30, added 17 October)
+
+**One trip form for everyone.**
+- The trip part of Assign a task becomes one component, the trip editor:
+  - Start from, with "Passengers get in here";
+  - the stops with their type, what, arrive-by and time there;
+  - back by;
+  - the plan line and the timeline with the time at each stop;
+  - the plan map with Google's road line under the google package;
+  - the leave-by checks and wording of 17 and 20.
+- It is used by Assign a task, New request, Edit request and both decide pages.
+- Requesters never see the driver and vehicle part or Who's available.
+
+**Permissions change only the path:**
+- request → the approval queue;
+- assign tasks without approve → the approval queue with the proposed driver and vehicle (§33);
+- approve → straight to the driver.
+
+**Data** (one new migration):
+- `request_stops`: the same planning columns as `task_stops`: seq, type, what, place_id, place_name,
+  address, lat, lng, dwell_min, arrive_by, note, planned_arrive_at, planned_depart_at,
+  google_place_id, google_fetched_at.
+- `vehicle_requests` gains:
+  - the start: start_place_id / start_name / start_lat / start_lng and its Google pair;
+  - return_to_base, avoid_expressway, leave_by, leave_by_source, buffer_min, plan_json, plan_version;
+  - title, contact_name, contact_phone, and §33's columns.
+- Service role only, as `vehicle_requests` today.
+- Old requests (From and To only) keep working: they are read as two stops. `route_from` and
+  `route_to` are still written (the first and the last stop) for every old reader (the Teams
+  artifact, the cards). `needed_at` stays the time the vehicle is needed: the leave-by.
+
+**Google's 30-day rule, the same as a task's** (this replaces "a request's From and To never ask
+Google"):
+- the trigger that marks a stop on a Google pin also runs on `request_stops` and on a request's start;
+- `prune_google_content` clears them after 30 days;
+- the 23-day re-fetch includes stops of requests still waiting.
+
+**Tools (additive).**
+- `create_request` and `update_request` take the trip fields of `create_task`: `stops[]`, `start`,
+  `return_to_base`, `avoid_expressway`, `leave_by`, the stops' `arrive_by`. `route_from` and `route_to`
+  stay as the short form.
+- `plan_task` and `google_place` are opened to the request permission (a plan without a driver has no
+  conflicts).
+- `decide_request` and `book_vehicle` copy the stops into the task.
+- `redecide_request` applies changed stops through the same path as `update_task_stops`.
+
+**Routes calls.** One per settled change, as in Assign (1.5 s after the last edit, or Plan now),
+counted under the caps of the hotfix (215 a day). At a cap: openrouteservice or the estimate, with
+the note.
+
+## Part 3 order and Round A2 (Sahan, 17 October)
+
+- Part 3 (`phase7-3`) builds 29 (§33) and 30 (§34) first, then 4, 5, 6 and 28.
+- **Round A2 follows Part 3** instead of waiting for Round B. It contains:
+  - Part 3's migrations;
+  - the functions;
+  - the web;
+  - an EAS update for `1.2.0-gmaps`: the photo step (5), vehicle photos (6) and documents on the
+    phone (28). No native change; §30's check on the OPPO comes first.
+- Round B then has Parts 4–6.
+
+## 35. Questions for items 29 and 30, with my defaults
+
+16. The 30-minute "not decided" push also covers ordinary waiting requests, not only proposed tasks.
+17. The person who proposed a task, or asked for a vehicle, may cancel it while it waits
+    (`cancel_request` opened to the requester for their own waiting one). Approvers decline.
+18. A proposal whose leave-by passes undecided stays in the queue, marked "Leave-by passed". It is
+    never sent by itself.
+19. Requesters see their request's plan (the times and the map), but never the conflicts, the
+    drivers or the vehicles.
+20. (From the hotfix's check of item 3.) The 5-minute issue check stops asking Google for a running
+    task's ETA. It uses openrouteservice or the estimate, or a Google ETA someone's view already
+    fetched within 15 minutes. Google is asked only when a person looks at the running task (the
+    board, the task, Live), still at most once in 15 minutes per task.
+    - Today it asks Google for every running task every 15 minutes, all day, whether anyone looks or
+      not: 4 calls an hour per running task.
+    - Five drivers on tasks for 6 hours is 120 of the 215 a day, before any plan is made.
+
 ## As built
 
 ### Part 1 (branch `phase7-1`)
@@ -1319,6 +1454,73 @@ differs from the text above:
   frozen. The location task now sends the heartbeat itself when the last one is a minute old (`heartbeatDue`), so a
   heartbeat gap means the app really stopped. JS only.
 - **Odometer in Sinhala** (Sahan): one word family, see the Sinhala section.
+
+### Hotfix after Round A (branch `phase7-hotfix-1`, 17 October)
+
+From Sahan's Round A test results.
+
+**Who's available** (Assign a task, Change a task, New request with Assign now, Decide and Change the
+booking).
+- **Dark mode.** A picked row used a light colour written into the stylesheet (`#e6edf8`, behind a
+  token that does not exist), so dark mode showed white text on near-white (contrast 1.0).
+  - Picked rows now use the theme's blue (`--live-bg`), with a 4 px blue bar and a ✓ before the name,
+    so the state is not shown by colour alone. Hover uses `--surface-2`.
+  - No other highlighted state in the stylesheet had a fixed colour.
+- **The flicker and the jumping highlight.** The rows are ranked by straight-line km from each driver's
+  last position to the first stop. Two drivers parked side by side (test.driver and test.driver2 at
+  the desk) swapped places on every 60-second refresh as their GPS wandered. So:
+  - the rows reordered;
+  - on the decide page the default driver (the best match, shown picked) jumped with them, and the plan
+    asked again for the new driver.
+  - Now a refresh for the same day and time keeps the ranking and the best match, with fresh words
+    (`steadyAvailability`, through a `merge` option on `useQuery` and the store). It holds while:
+    - the same drivers are in the ranking;
+    - no driver shown lower is now nearer to the first stop by more than 0.5 km.
+  - It re-ranks when a driver goes on or off duty, takes a task, really moves, or gets the morning's
+    first position.
+  - The ranked rows carry `km_to_first` and `match_why` for this (additive). A held best match takes its
+    row's fresh reasons and vehicle.
+  - The decide page's default waits for Who's available, so it no longer starts on the first free
+    driver and then jumps.
+- **A row picks the driver and the vehicle.** A click or Enter does what Use suggestion does: the
+  driver, and the vehicle left to them (their vehicle today, else their regular one). The row shows ✓
+  and stays picked through refreshes. The rows are toggle buttons (`aria-pressed`) in a labelled group,
+  with an ink focus ring. The driver select always holds the picked driver, even when the
+  drivers list could not load (it then showed only "Couldn't load", and a pick looked like nothing
+  happened) or lacks them (`withPicked`).
+- **One first name, two drivers.** "Test Driver's vehicle today" and "Test Driver 2's regular vehicle":
+  the full name when another active driver has the same first name. It is one rule,
+  `_shared/fleet/names.ts`, used by the connector's `vehicle_used.why` and by the web (`@fleet/names`).
+- **Tests.**
+  - Playwright, in both colour schemes, with two drivers swapping places by GPS:
+    - 30 seconds with two of the page's minute refreshes brought forward, a heartbeat and new tasks: no
+      layout shift, one row order, the same row picked, the same best match;
+    - the picked and hovered rows' text contrast above 4.5;
+    - a row click, its pick surviving a refresh, Enter, and Assign a task.
+  - It fails on the old code: dark mode's contrast 1.0; without the steady ranking a layout shift of
+    0.027.
+  - Vitest: the steady ranking (the 0.5 km rule, a real move, the first position, the held best's
+    vehicle), the full names, the store's merge, and a pick when the drivers list could not load
+    (it fails without `withPicked`).
+  - A fresh reviewer checked the hotfix. Its findings were fixed: the held ranking never let go; the
+    held best's old vehicle; tests that passed without the fix; the rows' roles and focus ring.
+
+**Google's daily caps** are the month's cap ÷ 22 working days, rounded down to 5: 430 for map loads,
+place search and place details, 215 for road times and snap to roads. Weekends get the same daily cap,
+and the month's cap stays the hard stop. One day on top of the month is still inside Google's free
+usage (9,930 and 4,965). The live database has no `google_caps` row, so the new defaults apply with the
+functions. Updated: Settings → Fleet's text, `docs/google-maps-setup.md` (its table still showed Roads
+as off) and the tests.
+
+**Item 3, checked in the code.**
+- The driver app makes no Google Maps web-service call. It calls only Supabase (the tables and its
+  RPCs).
+- "Distance left by road" and the planned line come from the stored plan (`plan_json.legs`, the
+  Routes polyline fetched when the office planned).
+- The Android map (Maps SDK, free) is the only Google Maps part. The odometer photo goes to Gemini
+  (`read-odometer`), which is not Maps and is not counted in the caps.
+- Found on the server: the 5-minute issue check asks Google for every running task's ETA every 15
+  minutes. That is question 20 (§35).
 
 ## Sinhala
 
