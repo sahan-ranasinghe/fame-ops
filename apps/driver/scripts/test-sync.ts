@@ -461,6 +461,111 @@ async function main() {
     check(r.failed === 1 && r.sent === 1 && marks6.includes('fuel_video:failed') && !marks6.includes('fuel_video:uploaded'), 'a failed first piece: the row stays failed after the second piece', marks6);
   }
 
+  // --- Phase 7 §6: a vehicle's first photo from the phone ----------------------------
+  console.log('\nVehicle photos:');
+  {
+    const q = memoryStore();
+    const s = fakeServer();
+    // The vehicles on the fake server: their photo now (null = none), and which ones are gone (not active).
+    const photos = new Map<string, string | null>([['v1', null], ['v2', null], ['v3', 'v3/someone-else.jpg'], ['v4', 'v4/u4.jpg'], ['v5', null], ['v6', null]]);
+    const refuse = new Set<string>(); // paths the bucket refuses (the policy: the vehicle has a photo by then)
+    let uploadNetwork = false;
+    let rpcAnswer: string | null = null; // null = the real rule: 'ok' while there is none
+    const uploads: string[] = [];
+    const rpcs: string[] = [];
+    const removed: string[] = [];
+    const answers: string[] = [];
+    const api = {
+      ...s.api,
+      setVehiclePhotoFromDriver: async (_c: unknown, vehicleId: string, path: string) => {
+        rpcs.push(vehicleId);
+        if (rpcAnswer) return rpcAnswer;
+        if (photos.get(vehicleId) !== null) return 'has_photo';
+        photos.set(vehicleId, path);
+        return 'ok';
+      },
+      fetchVehiclePhoto: async (_c: unknown, vehicleId: string) =>
+        photos.has(vehicleId) ? { active: true, path: photos.get(vehicleId) ?? null } : { active: false, path: null },
+    } as unknown as typeof realApi;
+    const sync = createSync({
+      client: {} as realApi.Client,
+      store: q.store,
+      employeeId: () => 'e1',
+      uploadFile: async (_uri, path, bucket) => {
+        if (uploadNetwork) throw new ApiError('photo: Network request failed', false);
+        if (refuse.has(path)) throw new ApiError('photo: upload refused (403)', true, undefined, 403);
+        uploads.push(`${bucket}:${path}`);
+      },
+      removeFile: (uri) => void removed.push(uri),
+      api,
+      now: () => clock.now,
+      onVehiclePhoto: (op, answer) => void answers.push(`${op.vehicle_id}:${answer}`),
+    });
+    const photoOp = (vehicleId: string, id = `u-${vehicleId}`): Op => ({
+      kind: 'vehicle_photo', id, vehicle_id: vehicleId, path: `${vehicleId}/${id}.jpg`, thumb_path: `${vehicleId}/${id}-thumb.jpg`,
+      local_uri: `file:///photos/${id}.jpg`, thumb_uri: `file:///photos/${id}-thumb.jpg`, taken_at: '2026-10-17T03:00:00Z',
+    });
+
+    // The first photo of a vehicle: both files to vehicle-photos, then the RPC; the phone's copies go.
+    q.add(photoOp('v1'));
+    let r = await sync.flush();
+    check(r.sent === 1 && r.failed === 0 && q.ops() === 0 && uploads.join() === 'vehicle-photos:v1/u-v1.jpg,vehicle-photos:v1/u-v1-thumb.jpg'
+      && rpcs.join() === 'v1' && answers.join() === 'v1:ok' && removed.join() === 'file:///photos/u-v1.jpg,file:///photos/u-v1-thumb.jpg',
+      'a vehicle with no photo: the photo and the thumbnail go to vehicle-photos, then the RPC answers ok; the files leave the phone',
+      { r, uploads, rpcs, answers, removed });
+
+    // Two phones, one vehicle: the second one's files went up before the first one's RPC, so the RPC answers has_photo.
+    photos.set('v2', 'v2/first-phone.jpg');
+    answers.length = 0;
+    q.add(photoOp('v2'));
+    r = await sync.flush();
+    check(r.sent === 1 && r.failed === 0 && q.ops() === 0 && answers.join() === 'v2:has_photo' && photos.get('v2') === 'v2/first-phone.jpg',
+      "a second phone's photo for the same vehicle: 'has_photo' is done (not failed, not tried again); the first photo stays", { r, answers });
+
+    // The bucket refuses the files because the vehicle has someone else's photo by then: done as has_photo, no RPC.
+    refuse.add('v3/u-v3.jpg');
+    answers.length = 0;
+    rpcs.length = 0;
+    q.add(photoOp('v3'));
+    r = await sync.flush();
+    check(r.sent === 1 && r.failed === 0 && rpcs.length === 0 && answers.join() === 'v3:has_photo', "the files refused because a photo is there now: done, 'has_photo'", { r, answers });
+
+    // The RPC's answer was lost: the same op again finds its own photo there and counts as ok.
+    refuse.add('v4/u4.jpg');
+    answers.length = 0;
+    q.add(photoOp('v4', 'u4'));
+    r = await sync.flush();
+    check(r.sent === 1 && answers.join() === 'v4:ok', 'sent again after a lost answer: the photo there is this one, so ok', { r, answers });
+
+    // No connection: kept, in order, not failed; it goes once the connection is back.
+    uploadNetwork = true;
+    answers.length = 0;
+    q.add(photoOp('v5'));
+    r = await sync.flush();
+    check(r.offline && r.failed === 0 && q.ops() === 1 && answers.length === 0, 'no connection: the photo waits on the phone (works offline)', { r, ops: q.ops() });
+    uploadNetwork = false;
+    clock.now = sync.backoff().nextTryAt;
+    r = await sync.flush();
+    check(r.sent === 1 && q.ops() === 0 && answers.join() === 'v5:ok', 'the connection is back: it goes', { r, answers });
+
+    // Refused while the vehicle still has no photo (a real refusal): set aside, the files kept for the driver to see.
+    refuse.add('v6/u-v6.jpg');
+    removed.length = 0;
+    q.add(photoOp('v6'));
+    r = await sync.flush();
+    check(r.failed === 1 && q.ops() === 0 && removed.length === 0, 'refused with no photo there: set aside as failed, nothing deleted', { r, removed });
+
+    // A vehicle switched off meanwhile: nothing left to do. The RPC refusing the paths: failed.
+    answers.length = 0;
+    refuse.add('gone/u-gone.jpg');
+    q.add(photoOp('gone'));
+    rpcAnswer = 'not_this_vehicle';
+    photos.set('v7', null);
+    q.add(photoOp('v7'));
+    r = await sync.flush();
+    check(r.sent === 1 && r.failed === 1 && answers.join() === 'gone:has_photo', "a vehicle no longer active: done; the RPC's 'not_this_vehicle': failed", { r, answers });
+  }
+
   console.log(failures === 0 ? '\nAll sync tests passed.' : `\n${failures} sync test(s) failed.`);
   process.exit(failures === 0 ? 0 : 1);
 }

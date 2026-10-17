@@ -21,11 +21,12 @@ const PHOTO_BUCKET = 'driver-photos';
 export const REJECTED_RETRY_EVERY_MS = 24 * 3600_000;
 
 /**
- * Sends a photo straight from disk. A file that is already there counts as
- * sent, so the same photo can be uploaded early (for the odometer reader) and
- * again by the queue.
+ * Sends a photo straight from disk (to driver-photos unless another bucket is
+ * named: vehicle-photos for a vehicle's photo). A file that is already there
+ * counts as sent, so the same photo can be uploaded early (for the odometer
+ * reader) and again by the queue.
  */
-export async function uploadPhotoFile(localUri: string, storagePath: string): Promise<void> {
+export async function uploadPhotoFile(localUri: string, storagePath: string, bucket: string = PHOTO_BUCKET): Promise<void> {
   const file = new File(localUri);
   if (!file.exists) throw new ApiError('photo: the file is no longer on the phone', true);
   const { data } = await supabase.auth.getSession();
@@ -35,7 +36,7 @@ export async function uploadPhotoFile(localUri: string, storagePath: string): Pr
   let status: number;
   let body: string;
   try {
-    const result = await file.upload(`${SUPABASE_URL}/storage/v1/object/${PHOTO_BUCKET}/${storagePath}`, {
+    const result = await file.upload(`${SUPABASE_URL}/storage/v1/object/${bucket}/${storagePath}`, {
       httpMethod: 'POST',
       uploadType: UploadType.BINARY_CONTENT,
       mimeType: 'image/jpeg',
@@ -119,6 +120,17 @@ export function onHeartbeatAnswer(listener: HeartbeatListener): () => void {
   };
 }
 
+type VehiclePhotoListener = (vehicleId: string, answer: 'ok' | 'has_photo') => void;
+const vehiclePhotoListeners = new Set<VehiclePhotoListener>();
+
+/** Hears when a queued vehicle photo is done: 'ok', or 'has_photo' when another photo got there first (Phase 7 §6). */
+export function onVehiclePhotoAnswer(listener: VehiclePhotoListener): () => void {
+  vehiclePhotoListeners.add(listener);
+  return () => {
+    vehiclePhotoListeners.delete(listener);
+  };
+}
+
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
@@ -160,6 +172,9 @@ const sync = createSync({
   onHeartbeat: (answer) => {
     setWatched(answer.watched);
     for (const listener of heartbeatListeners) listener(answer);
+  },
+  onVehiclePhoto: (op, answer) => {
+    for (const listener of vehiclePhotoListeners) listener(op.vehicle_id, answer);
   },
 });
 
@@ -245,4 +260,4 @@ export function maybeRetryRejected(reason: 'refresh' | 'start', updateId: string
   return n;
 }
 
-export { pendingFuelLogs, queueCounts, retryVideo, videoUploads } from './store';
+export { pendingFuelLogs, pendingVehiclePhotos, queueCounts, retryVideo, videoUploads } from './store';

@@ -71,6 +71,10 @@ export const KEYS = {
   lastVehicle: 'duty.lastVehicle',
   /** Phase 7: the newest "taken over" banner the driver closed (the assignment id), so it does not come back. */
   takenSeen: 'duty.takenSeen',
+  /** Phase 7 §5: the driver's own photo kept on the phone ({photoId, uri}), so Me shows it at once and offline. */
+  profilePhoto: 'me.profilePhoto',
+  /** Phase 7 §28: the held vehicle's documents as last read ({vehicleId, rows}): the expiries show offline; the files never stay. */
+  documents: 'docs.lastRead',
   /** When the refused points were last put back in line (ms), and for which app update. */
   rejectedRetryAt: 'sync.rejectedRetryAt',
   rejectedRetryUpdate: 'sync.rejectedRetryUpdate',

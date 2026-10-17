@@ -18,10 +18,14 @@ export const DRIVER_EMAIL_DOMAIN = 'drivers.fame.invalid';
 
 /**
  * The vehicle columns a driver is allowed to read. Always select exactly these
- * by name: `select *` on vehicles is refused by the database.
+ * by name: `select *` on vehicles is refused by the database. The photo's two
+ * paths (Phase 7 §6) are signed by the app itself (lib/signedUrls.ts).
  */
 export const VEHICLE_COLUMNS =
-  'id, reg_no, make_model, vehicle_type, seats, current_odometer_km, monthly_km_allowance, in_garage, active' as const;
+  'id, reg_no, make_model, vehicle_type, seats, current_odometer_km, monthly_km_allowance, in_garage, active, photo_path, photo_thumb_path' as const;
+
+/** The private buckets the app reads or writes. */
+export const BUCKETS = { driverPhotos: 'driver-photos', vehiclePhotos: 'vehicle-photos', vehicleDocs: 'vehicle-docs' } as const;
 
 /**
  * `permanent` = the server refused this request and will refuse it again
@@ -480,4 +484,70 @@ export async function insertFuelLog(client: Client, row: FuelInsert): Promise<vo
 
 export async function insertReport(client: Client, row: ReportInsert): Promise<void> {
   check(await client.from('vehicle_reports').upsert(row, { onConflict: 'id', ignoreDuplicates: true }), 'report');
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 Part 3: the driver's photo (§5), vehicle photos (§6), the held vehicle's documents (§28).
+// ---------------------------------------------------------------------------
+
+/** The driver's photo is set when its file is in the bucket, its row in photos, and set_my_photo answered 'ok'. */
+export type MyPhotoAnswer = 'ok' | 'not_yours';
+
+export async function setMyPhoto(client: Client, photoId: string): Promise<MyPhotoAnswer> {
+  const res = await client.rpc('set_my_photo', { p_photo_id: photoId });
+  return check(res, 'my photo') as MyPhotoAnswer;
+}
+
+/**
+ * "Add your photo" and Change photo: sent at once, not queued (the step needs it done). The file first (`upload`, the
+ * same request the queue makes; a file already there counts), then the photos row, then set_my_photo. Each step can
+ * be repeated after a lost answer.
+ */
+export async function saveProfilePhoto(
+  client: Client,
+  photo: { id: string; employee_id: string; storage_path: string; taken_at: string },
+  upload: (storagePath: string) => Promise<void>,
+): Promise<MyPhotoAnswer> {
+  await upload(photo.storage_path);
+  await insertPhoto(client, { ...photo, kind: 'profile', lat: null, lng: null, vehicle_report_id: null });
+  return setMyPhoto(client, photo.id);
+}
+
+/** Where one of my photos is in the bucket (the Me tab signs it), or null. */
+export async function fetchPhotoPath(client: Client, photoId: string): Promise<string | null> {
+  const row = checkMaybe(await client.from('photos').select('storage_path').eq('id', photoId).maybeSingle(), 'photo');
+  return row?.storage_path ?? null;
+}
+
+/** A vehicle's photo from this phone: the server takes it only while the vehicle has none ('has_photo' otherwise). */
+export async function setVehiclePhotoFromDriver(client: Client, vehicleId: string, path: string, thumbPath: string): Promise<string> {
+  const res = await client.rpc('set_vehicle_photo_from_driver', { p_vehicle_id: vehicleId, p_path: path, p_thumb_path: thumbPath });
+  return check(res, 'vehicle photo') as string;
+}
+
+/** The vehicle's photo now: `active` false when the vehicle is gone (a driver reads active vehicles only). */
+export async function fetchVehiclePhoto(client: Client, vehicleId: string): Promise<{ active: boolean; path: string | null }> {
+  const row = checkMaybe(await client.from('vehicles').select('id, photo_path').eq('id', vehicleId).maybeSingle(), 'vehicle');
+  return { active: row !== null, path: row?.photo_path ?? null };
+}
+
+/** The vehicle I hold now (my open assignment), or null. */
+export async function fetchHeldVehicle(client: Client): Promise<string | null> {
+  const res = await client.rpc('my_held_vehicle');
+  if (res.error) fail(res, 'held vehicle');
+  return typeof res.data === 'string' ? res.data : null;
+}
+
+export type VehicleDocument = Pick<
+  Tables['vehicle_documents']['Row'],
+  'id' | 'vehicle_id' | 'kind' | 'name' | 'path' | 'content_type' | 'expiry' | 'uploaded_at'
+>;
+
+/** The held vehicle's revenue licence, insurance and emission test (the database returns nothing else to a driver). */
+export async function fetchVehicleDocuments(client: Client): Promise<VehicleDocument[]> {
+  return check(
+    await client.from('vehicle_documents').select('id, vehicle_id, kind, name, path, content_type, expiry, uploaded_at')
+      .order('uploaded_at', { ascending: false }),
+    'documents',
+  );
 }

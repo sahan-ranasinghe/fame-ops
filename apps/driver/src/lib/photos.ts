@@ -2,21 +2,41 @@
 // 1600 px, JPEG ~0.7 -> keep a copy in the app's own folder until it has been
 // uploaded. The odometer number comes from the server (lib/odometerAi.ts);
 // the phone's own reader here is only the pre-check and the offline fallback.
+// Phase 7 Part 3: the driver's own photo may also come from the gallery
+// (cropped square, 512 × 512), and a vehicle's first photo is made in two
+// sizes (1600 and 256 px) for the vehicle-photos bucket.
 
 import TextRecognition from '@react-native-ml-kit/text-recognition';
 import { Asset } from 'expo-asset';
 import * as Crypto from 'expo-crypto';
 import { Directory, File, Paths } from 'expo-file-system';
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { type Action, manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 
 import { enqueue } from '../sync';
+import type { VehiclePhotoOp } from '../sync/engine';
 import { odometerFromText } from './format';
 import { lastPosition } from './location';
+import {
+  fitWithin,
+  PROFILE_QUALITY,
+  PROFILE_SIDE,
+  squareCrop,
+  VEHICLE_PHOTO_SIDE,
+  VEHICLE_THUMB_SIDE,
+  vehiclePhotoPaths,
+} from './photoRules';
 import { colomboDate } from './time';
 import type { PhotoKind } from './types';
 
 const MAX_SIDE = 1600;
+
+/** The app's own folder for photos that wait to be uploaded. */
+function photoFolder(name = 'photos'): Directory {
+  const folder = new Directory(Paths.document, name);
+  if (!folder.exists) folder.create({ intermediates: true, idempotent: true });
+  return folder;
+}
 
 export interface LocalPhoto {
   /** Also the id of its row in the photos table. */
@@ -42,23 +62,109 @@ export async function takePhoto(): Promise<LocalPhoto | null | 'denied'> {
   const small = await manipulateAsync(asset.uri, tooBig ? [{ resize }] : [], { compress: 0.7, format: SaveFormat.JPEG });
 
   const id = Crypto.randomUUID();
-  const folder = new Directory(Paths.document, 'photos');
-  if (!folder.exists) folder.create({ intermediates: true, idempotent: true });
-  const kept = new File(folder, `${id}.jpg`);
+  const kept = new File(photoFolder(), `${id}.jpg`);
   await new File(small.uri).move(kept);
 
   const position = await lastPosition();
   return { id, uri: kept.uri, takenAt: new Date().toISOString(), lat: position?.lat ?? null, lng: position?.lng ?? null };
 }
 
-/** Removes a photo the driver decided not to use. */
-export function discardPhoto(photo: LocalPhoto): void {
+/** The driver's own photo (Phase 7 §5), on the phone until it is saved; its id is also its photos row's. */
+export interface LocalProfilePhoto {
+  id: string;
+  uri: string;
+  takenAt: string;
+}
+
+/**
+ * "Add your photo" and Change photo: the front camera or the gallery, both with the square crop screen, then 512 × 512
+ * JPEG (0.8). null = the driver cancelled; 'denied' = the camera is not allowed. The gallery needs no permission (the
+ * system photo picker).
+ */
+export async function pickProfilePhoto(source: 'camera' | 'gallery'): Promise<LocalProfilePhoto | null | 'denied'> {
+  const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 1 };
+  let picked: ImagePicker.ImagePickerResult;
+  if (source === 'camera') {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) return 'denied';
+    picked = await ImagePicker.launchCameraAsync({ ...options, cameraType: ImagePicker.CameraType.front });
+  } else {
+    picked = await ImagePicker.launchImageLibraryAsync(options);
+  }
+  if (picked.canceled) return null;
+  const asset = picked.assets[0];
+  if (!asset) return null;
+
+  const crop = squareCrop(asset.width, asset.height);
+  const actions: Action[] = [...(crop ? [{ crop }] : []), { resize: { width: PROFILE_SIDE, height: PROFILE_SIDE } }];
+  const square = await manipulateAsync(asset.uri, actions, { compress: PROFILE_QUALITY, format: SaveFormat.JPEG });
+  const id = Crypto.randomUUID();
+  const kept = new File(photoFolder('profile'), `${id}.jpg`);
+  await new File(square.uri).move(kept);
+  return { id, uri: kept.uri, takenAt: new Date().toISOString() };
+}
+
+/**
+ * A vehicle's first photo (Phase 7 §6, from the vehicle picker): the camera only, then the photo (1600 px on the long
+ * side) and its thumbnail (256 px), both kept in the app's folder until the queue has sent them. Returns the queue op
+ * (not queued yet), null when the driver cancelled, 'denied' when the camera is not allowed.
+ */
+export async function takeVehiclePhoto(vehicleId: string): Promise<VehiclePhotoOp | null | 'denied'> {
+  const permission = await ImagePicker.requestCameraPermissionsAsync();
+  if (!permission.granted) return 'denied';
+  const shot = await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 1 });
+  if (shot.canceled) return null;
+  const asset = shot.assets[0];
+  if (!asset) return null;
+
+  const sized = (max: number) => {
+    const resize = fitWithin(asset.width, asset.height, max);
+    return manipulateAsync(asset.uri, resize ? [{ resize }] : [], { compress: 0.7, format: SaveFormat.JPEG });
+  };
+  const [photo, thumb] = [await sized(VEHICLE_PHOTO_SIDE), await sized(VEHICLE_THUMB_SIDE)];
+  const id = Crypto.randomUUID();
+  const folder = photoFolder();
+  const keptPhoto = new File(folder, `${id}.jpg`);
+  const keptThumb = new File(folder, `${id}-thumb.jpg`);
+  await new File(photo.uri).move(keptPhoto);
+  await new File(thumb.uri).move(keptThumb);
+  const { path, thumbPath } = vehiclePhotoPaths(vehicleId, id);
+  return {
+    kind: 'vehicle_photo',
+    id,
+    vehicle_id: vehicleId,
+    path,
+    thumb_path: thumbPath,
+    local_uri: keptPhoto.uri,
+    thumb_uri: keptThumb.uri,
+    taken_at: new Date().toISOString(),
+  };
+}
+
+/** Whether a file the app kept is still on the phone (a thumbnail shown before its upload). */
+export function fileExists(uri: string | null | undefined): boolean {
+  if (!uri) return false;
   try {
-    const file = new File(photo.uri);
+    return new File(uri).exists;
+  } catch {
+    return false;
+  }
+}
+
+/** Removes a file the app kept (a photo the driver decided not to use, an old profile photo). */
+export function removeFile(uri: string | null | undefined): void {
+  if (!uri) return;
+  try {
+    const file = new File(uri);
     if (file.exists) file.delete();
   } catch {
     // Nothing to clean up.
   }
+}
+
+/** Removes a photo the driver decided not to use. */
+export function discardPhoto(photo: LocalPhoto): void {
+  removeFile(photo.uri);
 }
 
 /** Where a photo lives in the private bucket: <employee>/<day>/<photo id>.jpg. */

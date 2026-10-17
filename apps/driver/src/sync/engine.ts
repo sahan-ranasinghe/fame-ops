@@ -4,7 +4,8 @@
 // the file upload and the clock are passed in, so the tests run this very code.
 //
 //   ops         start/stop sharing, task and stop changes, photos, odometer and
-//               fuel logs, vehicle reports, the driver_latest heartbeat, and the
+//               fuel logs, vehicle reports, the driver_latest heartbeat, a
+//               vehicle's first photo (Phase 7 §6), and the
 //               fuel videos (one resumable upload each, sent a chunk at a time
 //               with the offset kept after every chunk). Sent strictly in the
 //               order they happened; a video waiting for Wi-Fi is stepped over
@@ -31,6 +32,7 @@
 import * as realApi from '../lib/api';
 import { ApiError, type Client } from '../lib/api';
 import type { Json } from '../lib/database.types';
+import { vehiclePhotoDone } from '../lib/photoRules';
 import type { Language, PhotoKind } from '../lib/types';
 import { CHUNK_BYTES, type VideoStore } from '../lib/videoStore';
 
@@ -62,6 +64,8 @@ export type Op =
   | { kind: 'vehicle_change'; id: string; vehicle_id: string | null; at: string }
   /** Only the newest one matters for driver_latest: the store keeps one waiting heartbeat at a time (replaceOp). */
   | { kind: 'heartbeat'; row: realApi.HeartbeatRow }
+  /** Phase 7 §6: a vehicle's first photo from this phone, both files to vehicle-photos, then the RPC. */
+  | VehiclePhotoOp
   /** A fuel video: the file on the phone, its place in the bucket, and how far the upload got (url + offset, kept after every chunk). */
   | VideoUploadOp;
 
@@ -80,6 +84,22 @@ export interface VideoUploadOp {
   /** Which piece of the fill this is (1-based) and how many there are; the row is marked uploaded after the last. */
   segment?: number;
   segments?: number;
+}
+
+/**
+ * A vehicle photo taken in the picker: the photo (1600 px) and its thumbnail (256 px) wait on the phone, go up to
+ * vehicle-photos at `path` and `thumb_path`, then set_vehicle_photo_from_driver. Someone else's photo got there
+ * first ('has_photo', or the bucket refusing the files because the vehicle has a photo by then): done, not an error.
+ */
+export interface VehiclePhotoOp {
+  kind: 'vehicle_photo';
+  id: string;
+  vehicle_id: string;
+  path: string;
+  thumb_path: string;
+  local_uri: string;
+  thumb_uri: string;
+  taken_at: string;
 }
 
 export type Connection = 'wifi' | 'cellular' | 'none' | 'unknown';
@@ -139,8 +159,8 @@ export interface SyncDeps {
   client: Client;
   store: QueueStore;
   employeeId: () => string | null;
-  /** Sends a photo file to storage. "Already there" counts as success. Throws ApiError. */
-  uploadFile: (localUri: string, storagePath: string) => Promise<void>;
+  /** Sends a photo file to storage (driver-photos unless a bucket is named). "Already there" counts as success. Throws ApiError. */
+  uploadFile: (localUri: string, storagePath: string, bucket?: string) => Promise<void>;
   /** Frees the phone's copy once the photo is safely uploaded. */
   removeFile: (localUri: string) => void;
   /** Hears the server's answer to an accept or decline (the screen tells the driver about an 'already_*' one). */
@@ -167,6 +187,8 @@ export interface SyncDeps {
   moving?: () => boolean;
   /** The server answered a heartbeat: whether the office is watching this driver (watched mode). */
   onHeartbeat?: (answer: realApi.HeartbeatAnswer) => void;
+  /** A vehicle photo is done: 'ok' (it is the vehicle's photo now) or 'has_photo' (another one was there first). */
+  onVehiclePhoto?: (op: VehiclePhotoOp, answer: 'ok' | 'has_photo') => void;
 }
 
 export interface FlushResult {
@@ -289,6 +311,31 @@ export function createSync(deps: SyncDeps) {
     await api.patchFuelVideo(client, op.fuel_log_id, patch);
   }
 
+  /**
+   * A vehicle photo: both files, then the RPC. The bucket takes a driver's file only while the vehicle has no photo,
+   * so a refused file is looked into: a photo there by now (someone else's, or this one after a lost answer), or a
+   * vehicle that is gone, means there is nothing left to do.
+   */
+  async function sendVehiclePhoto(op: VehiclePhotoOp): Promise<void> {
+    const done = (answer: 'ok' | 'has_photo') => {
+      deps.removeFile(op.local_uri);
+      deps.removeFile(op.thumb_uri);
+      deps.onVehiclePhoto?.(op, answer);
+    };
+    try {
+      await deps.uploadFile(op.local_uri, op.path, realApi.BUCKETS.vehiclePhotos);
+      await deps.uploadFile(op.thumb_uri, op.thumb_path, realApi.BUCKETS.vehiclePhotos);
+    } catch (error) {
+      if (!(error instanceof ApiError) || !error.permanent) throw error;
+      const now = await api.fetchVehiclePhoto(client, op.vehicle_id);
+      if (!now.active || now.path !== null) return done(now.path === op.path ? 'ok' : 'has_photo');
+      throw error;
+    }
+    const answer = await api.setVehiclePhotoFromDriver(client, op.vehicle_id, op.path, op.thumb_path);
+    if (!vehiclePhotoDone(answer)) throw new ApiError(`vehicle photo: ${answer}`, true, answer);
+    done(answer as 'ok' | 'has_photo');
+  }
+
   async function send(op: Op, seq: number): Promise<void> {
     switch (op.kind) {
       case 'session_start': {
@@ -347,6 +394,8 @@ export function createSync(deps: SyncDeps) {
       }
       case 'video_upload':
         return sendVideo(seq, op);
+      case 'vehicle_photo':
+        return sendVehiclePhoto(op);
     }
   }
 

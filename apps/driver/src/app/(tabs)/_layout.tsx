@@ -8,6 +8,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Txt } from '@/components/ui';
 import { getJson, KEYS } from '@/lib/kv';
+import { needsProfilePhoto } from '@/lib/photoRules';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -53,9 +54,13 @@ function TabBar({ state, navigation }: TabBarProps) {
 }
 
 export default function TabsLayout() {
-  const { me } = useApp();
+  const { me, meFresh, tasks } = useApp();
   if (!me) return <Redirect href="/login" />;
   if (!getJson<boolean>(KEYS.permissionsSeen)) return <Redirect href="/permissions" />;
+  // Phase 7 §5: "Add your photo" after Permissions, while the server says there is none (never over a running task).
+  if (needsProfilePhoto(me, { fresh: meFresh, taskRunning: tasks.some((task) => task.status === 'in_progress') })) {
+    return <Redirect href="/profile-photo" />;
+  }
 
   return (
     <Tabs initialRouteName="index" backBehavior="initialRoute" screenOptions={{ headerShown: false }} tabBar={(props) => <TabBar {...props} />}>

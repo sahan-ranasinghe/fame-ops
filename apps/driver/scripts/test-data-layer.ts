@@ -20,6 +20,7 @@ import { createClient } from '@supabase/supabase-js';
 import * as api from '../src/lib/api';
 import { swapReadingsWaiting, taskKmSoFar } from '../src/lib/dayRules';
 import { ApiError, type HeartbeatRow, VEHICLE_COLUMNS } from '../src/lib/api';
+import { currentDocuments, profilePhotoPath, vehiclePhotoPaths } from '../src/lib/photoRules';
 import type { Database } from '../src/lib/database.types';
 import { base64Decode, SupabaseTusStore } from '../src/lib/videoStore';
 import { createSync, type Op, type QueueStore, type StoredHeartbeat, type StoredOp, type StoredPoint } from '../src/sync/engine';
@@ -177,7 +178,7 @@ async function main() {
   const vehicles = await api.fetchVehicles(client);
   const mine = vehicles.filter((v) => v.reg_no.includes(run.toUpperCase()));
   check(mine.length === 2 && !mine.some((v) => v.id === gone.id), 'fetchVehicles returns the active vehicles only', mine.map((v) => v.reg_no));
-  check(Object.keys(mine[0] ?? {}).sort().join(',') === VEHICLE_COLUMNS.split(', ').sort().join(','), 'vehicles carry exactly the nine allowed columns', Object.keys(mine[0] ?? {}));
+  check(Object.keys(mine[0] ?? {}).sort().join(',') === VEHICLE_COLUMNS.split(', ').sort().join(','), 'vehicles carry exactly the allowed columns (with the photo paths)', Object.keys(mine[0] ?? {}));
   const star = await client.from('vehicles').select('*').limit(1);
   check(star.error?.code === '42501', 'select * on vehicles is refused, as the database promises', star.error);
   const aiFromPhone = await client.from('odometer_logs').insert({ vehicle_id: van.id, employee_id: a.row.id, reading_km: 84500, kind: 'manual', ai_value: 84500 });
@@ -195,22 +196,15 @@ async function main() {
   const queue = memoryStore();
   const uploads: string[] = [];
   const answers: string[] = [];
-  const sync = createSync({
-    client,
-    store: queue.store,
-    employeeId: () => a.row.id,
-    // Same request the phone makes: the file is POSTed straight to storage with the driver's token.
-    // The fuel video goes through the same resumable upload the phone uses (chunks read from the file at a position).
-    video: new SupabaseTusStore(API_URL, { apiKey: ANON_KEY, token: async () => (await client.auth.getSession()).data.session?.access_token ?? null },
-      (url, init) => (online.value ? fetch(url, init) : Promise.reject(new TypeError('Network request failed')))),
-    readChunk: async (localUri, offset, length) => base64Decode(readFileSync(localUri).subarray(offset, offset + length).toString('base64')),
-    fileSize: (localUri) => { try { return readFileSync(localUri).length; } catch { return null; } },
-    uploadFile: async (localUri, storagePath) => {
-      const { data } = await client.auth.getSession();
+  const photoAnswers: string[] = [];
+  /** The request the phone makes (sync/index.ts uploadPhotoFile): the file POSTed straight to a bucket with the driver's token. */
+  const uploader = (who: ReturnType<typeof driverClient>, log: string[], net: { value: boolean } = { value: true }) =>
+    async (localUri: string, storagePath: string, bucket = 'driver-photos') => {
+      const { data } = await who.auth.getSession();
       let res: Response;
       try {
-        if (!online.value) throw new TypeError('Network request failed');
-        res = await fetch(`${API_URL}/storage/v1/object/driver-photos/${storagePath}`, {
+        if (!net.value) throw new TypeError('Network request failed');
+        res = await fetch(`${API_URL}/storage/v1/object/${bucket}/${storagePath}`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${data.session?.access_token}`, apikey: ANON_KEY, 'Content-Type': 'image/jpeg', 'x-upsert': 'false' },
           body: readFileSync(localUri),
@@ -219,13 +213,25 @@ async function main() {
         throw new ApiError(`photo: ${(error as Error).message}`, false);
       }
       const body = await res.text();
-      uploads.push(`${res.status} ${body.slice(0, 60)}`);
+      log.push(`${res.status} ${body.slice(0, 60)}`);
       if (res.ok) return;
       if (res.status === 409 || /duplicate|already exists/i.test(body)) return;
       throw new ApiError(`photo: upload refused (${res.status})`, res.status >= 400 && res.status < 500 && res.status !== 401);
-    },
+    };
+  const sync = createSync({
+    client,
+    store: queue.store,
+    employeeId: () => a.row.id,
+    // Photos go up with the phone's own request (uploader above). The fuel video goes through the same resumable
+    // upload the phone uses (chunks read from the file at a position).
+    video: new SupabaseTusStore(API_URL, { apiKey: ANON_KEY, token: async () => (await client.auth.getSession()).data.session?.access_token ?? null },
+      (url, init) => (online.value ? fetch(url, init) : Promise.reject(new TypeError('Network request failed')))),
+    readChunk: async (localUri, offset, length) => base64Decode(readFileSync(localUri).subarray(offset, offset + length).toString('base64')),
+    fileSize: (localUri) => { try { return readFileSync(localUri).length; } catch { return null; } },
+    uploadFile: uploader(client, uploads, online),
     removeFile: () => undefined,
     onAnswer: (op, answer) => answers.push(`${op.kind}:${answer}`),
+    onVehiclePhoto: (_op, answer) => photoAnswers.push(answer),
   });
 
   const now = Date.now();
@@ -486,6 +492,118 @@ async function main() {
   check(result.failed === 0 && swapReadingsWaiting(afterSwap).oldEnd === null && swapReadingsWaiting(afterSwap).newStart === null
     && taskKmSoFar(afterSwap, 12025) === 65 && need.needs_vehicle === true,
     'through the real queue: both readings fill the stretches (40 + 25 km), and the report asks for another vehicle', { result, failed: queue.failed(), segments: afterSwap.task_vehicle_segments, need });
+
+  console.log('\n== Phase 7, Part 3: my photo, a vehicle\'s first photo from two phones, the held vehicle\'s documents ==');
+  // "Add your photo": sent at once (not queued), with the queue's own upload request, then the row, then set_my_photo.
+  check((await api.fetchMe(client))?.photo_id === null, 'a driver starts with no photo (the app shows "Add your photo")');
+  const profileId = randomUUID();
+  const profileFile = photoFile(profileId);
+  const profile = { id: profileId, employee_id: a.row.id, storage_path: profilePhotoPath(a.row.id, profileId), taken_at: new Date().toISOString() };
+  const uploadProfile = (path: string) => uploader(client, [])(profileFile, path);
+  const myPhoto = await api.saveProfilePhoto(client, profile, uploadProfile);
+  const meWithPhoto = await api.fetchMe(client);
+  const profileRow = must(await admin.from('photos').select('kind, storage_path').eq('id', profileId).single(), 'profile photo row');
+  const profileFiles = must(await admin.storage.from('driver-photos').list(`${a.row.id}/profile`), 'profile folder');
+  check(myPhoto === 'ok' && meWithPhoto?.photo_id === profileId && meWithPhoto.photo_updated_at !== null && profileRow.kind === 'profile'
+    && profileFiles.some((f) => f.name === `${profileId}.jpg`),
+    'the photo is in <employee_id>/profile/, its row is kind profile, and set_my_photo made it mine (photo_id readable by the driver)',
+    { myPhoto, photoId: meWithPhoto?.photo_id, profileRow });
+  check((await api.saveProfilePhoto(client, profile, uploadProfile)) === 'ok', 'sent again after a lost answer: the same photo is accepted again');
+  const myPath = await api.fetchPhotoPath(client, profileId);
+  const myLink = myPath ? await client.storage.from('driver-photos').createSignedUrl(myPath, 3600) : null;
+  check(myPath === profile.storage_path && !!myLink?.data?.signedUrl, 'the Me tab finds the path and signs its own link', myLink?.error);
+  check((await api.setMyPhoto(client, pStart)) === 'not_yours', 'an odometer photo cannot become my profile photo (not_yours)');
+
+  // A vehicle's first photo: phone A's op (both files, then the RPC); phone C took one of the same vehicle meanwhile.
+  const c = await makeDriver(3);
+  const clientC = driverClient({ value: true });
+  check((await api.signIn(clientC, c.username, c.pin)) === 'ok', 'driver C signs in');
+  const queueC = memoryStore();
+  const answersC: string[] = [];
+  const syncC = createSync({
+    client: clientC,
+    store: queueC.store,
+    employeeId: () => c.row.id,
+    uploadFile: uploader(clientC, []),
+    removeFile: () => undefined,
+    onVehiclePhoto: (_op, answer) => answersC.push(answer),
+  });
+  const photoVan = must(await admin.from('vehicles').insert({ reg_no: `TEST ${run.toUpperCase()}-4`, make_model: 'Nissan Caravan', vehicle_type: 'van' }).select('id').single(), 'vehicle');
+  const vehiclePhotoOp = (id: string): Op => {
+    const paths = vehiclePhotoPaths(photoVan.id, id);
+    return { kind: 'vehicle_photo', id, vehicle_id: photoVan.id, path: paths.path, thumb_path: paths.thumbPath, local_uri: photoFile(id), thumb_uri: photoFile(`${id}-thumb`), taken_at: new Date().toISOString() };
+  };
+  const fromA = randomUUID();
+  const fromC = randomUUID();
+  queue.add(vehiclePhotoOp(fromA));
+  queueC.add(vehiclePhotoOp(fromC));
+  result = await sync.flush();
+  const vanPhoto = must(await admin.from('vehicles').select('photo_path, photo_thumb_path, photo_updated_at').eq('id', photoVan.id).single(), 'vehicle photo');
+  const vanFiles = must(await admin.storage.from('vehicle-photos').list(photoVan.id), 'vehicle-photos');
+  check(result.failed === 0 && queue.waiting() === 0 && photoAnswers.join() === 'ok' && vanPhoto.photo_path === `${photoVan.id}/${fromA}.jpg`
+    && vanPhoto.photo_thumb_path === `${photoVan.id}/${fromA}-thumb.jpg` && vanPhoto.photo_updated_at !== null
+    && vanFiles.some((f) => f.name === `${fromA}.jpg`) && vanFiles.some((f) => f.name === `${fromA}-thumb.jpg`),
+    "through the real queue: both files are in vehicle-photos/<vehicle_id>/ and set_vehicle_photo_from_driver made them the vehicle's photo",
+    { result, failed: queue.failed(), photoAnswers, vanPhoto, files: vanFiles.map((f) => f.name) });
+  const seenVan = (await api.fetchVehicles(clientC)).find((v) => v.id === photoVan.id);
+  const thumbLink = seenVan?.photo_thumb_path ? await clientC.storage.from('vehicle-photos').createSignedUrl(seenVan.photo_thumb_path, 3600) : null;
+  check(seenVan?.photo_thumb_path === vanPhoto.photo_thumb_path && !!thumbLink?.data?.signedUrl,
+    "any driver reads the photo's paths with the vehicles (the app's column list) and signs the thumbnail", thumbLink?.error);
+  const resultC = await syncC.flush();
+  const vanAfter = must(await admin.from('vehicles').select('photo_path').eq('id', photoVan.id).single(), 'vehicle photo');
+  check(resultC.failed === 0 && queueC.waiting() === 0 && answersC.join() === 'has_photo' && vanAfter.photo_path === vanPhoto.photo_path,
+    "the second phone's op for the same vehicle ends as done on 'has_photo' (not failed); the first photo stays", { resultC, failed: queueC.failed(), answersC });
+  const late = vehiclePhotoPaths(photoVan.id, randomUUID());
+  check((await api.setVehiclePhotoFromDriver(clientC, photoVan.id, late.path, late.thumbPath)) === 'has_photo', 'the RPC itself answers has_photo once a photo is there');
+  const wrong = vehiclePhotoPaths(car.id, randomUUID());
+  check((await api.setVehiclePhotoFromDriver(clientC, photoVan.id, wrong.path, wrong.thumbPath)) === 'not_this_vehicle', "another vehicle's folder: not_this_vehicle");
+
+  // The documents: driver C holds docVan (Start work through the queue); the office has uploaded its documents.
+  const docVan = must(await admin.from('vehicles').insert({ reg_no: `TEST ${run.toUpperCase()}-5`, make_model: 'Toyota KDH', vehicle_type: 'van' }).select('id').single(), 'vehicle');
+  const sessionC = randomUUID();
+  queueC.add({ kind: 'session_start', id: sessionC, employee_id: c.row.id, vehicle_id: docVan.id, started_at: new Date().toISOString(), device_info: { model: 'test phone' } });
+  result = await syncC.flush();
+  check(result.failed === 0 && (await api.fetchHeldVehicle(clientC)) === docVan.id, 'Start work with the van: my_held_vehicle() is the van', { result, failed: queueC.failed() });
+  const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n');
+  async function addDocument(vehicleId: string, kind: string, at: string, opts: { expiry?: string; image?: boolean; removed?: boolean; name?: string } = {}) {
+    const id = randomUUID();
+    const path = `${vehicleId}/${kind}/${id}.${opts.image ? 'jpg' : 'pdf'}`;
+    const body = opts.image ? TINY_JPEG : PDF;
+    const contentType = opts.image ? 'image/jpeg' : 'application/pdf';
+    const stored = await admin.storage.from('vehicle-docs').upload(path, body, { contentType });
+    if (stored.error) throw new Error(`document file: ${stored.error.message}`);
+    must(await admin.from('vehicle_documents').insert({
+      id, vehicle_id: vehicleId, kind, name: opts.name ?? null, path, content_type: contentType, bytes: body.length, expiry: opts.expiry ?? null,
+      uploaded_by_name: 'test', uploaded_at: at, removed_at: opts.removed ? at : null, removed_by: opts.removed ? 'test' : null,
+      removed_reason: opts.removed ? 'replaced' : null,
+    }).select('id').single(), 'document');
+    return { id, path };
+  }
+  const oldLicence = await addDocument(docVan.id, 'revenue_licence', '2026-01-02T00:00:00Z', { expiry: '2026-06-30', removed: true });
+  const licence = await addDocument(docVan.id, 'revenue_licence', '2026-07-01T00:00:00Z', { expiry: '2027-06-30', image: true });
+  const insurance = await addDocument(docVan.id, 'insurance', '2026-07-02T00:00:00Z', { expiry: '2026-11-01' });
+  const emission = await addDocument(docVan.id, 'emission', '2026-07-03T00:00:00Z', { expiry: '2027-01-15' });
+  const registration = await addDocument(docVan.id, 'registration', '2026-07-04T00:00:00Z');
+  const otherDoc = await addDocument(docVan.id, 'other', '2026-07-05T00:00:00Z', { name: 'Permit' });
+  const elsewhere = await addDocument(photoVan.id, 'insurance', '2026-07-06T00:00:00Z', { expiry: '2027-02-01' });
+  const docs = await api.fetchVehicleDocuments(clientC);
+  const shownDocs = currentDocuments(docs);
+  check(docs.map((d) => d.id).sort().join() === [licence.id, insurance.id, emission.id].sort().join()
+    && shownDocs.map((d) => d.doc?.id).join() === [licence.id, insurance.id, emission.id].join(),
+    "the driver reads only the held vehicle's revenue licence, insurance and emission test: not the replaced licence, the CR, Other, or another vehicle's",
+    { got: docs.map((d) => `${d.kind}:${d.id === oldLicence.id ? 'old' : ''}`) });
+  check(docs.find((d) => d.id === licence.id)?.content_type === 'image/jpeg' && docs.find((d) => d.id === insurance.id)?.expiry === '2026-11-01',
+    'each row carries its type (a photo opens in the app, a PDF in the browser) and its expiry');
+  const pdfLink = await clientC.storage.from('vehicle-docs').createSignedUrl(insurance.path, 3600);
+  const pdfBytes = pdfLink.data?.signedUrl ? Buffer.from(await (await fetch(pdfLink.data.signedUrl)).arrayBuffer()) : null;
+  check(pdfBytes !== null && pdfBytes.equals(PDF), 'Open: a 1-hour link the app signs itself, and it serves the file', pdfLink.error);
+  const refusedLinks = await Promise.all([registration.path, otherDoc.path, elsewhere.path].map((p) => clientC.storage.from('vehicle-docs').createSignedUrl(p, 3600)));
+  check(refusedLinks.every((l) => !l.data?.signedUrl), "no link for the CR, Other, or another vehicle's document", refusedLinks.map((l) => l.error?.message));
+  check(!(await api.fetchVehicleDocuments(client)).some((d) => d.vehicle_id === docVan.id), "driver A, who does not hold the van, reads none of its documents");
+  queueC.add({ kind: 'session_end', id: sessionC, ended_at: new Date().toISOString(), end_reason: 'driver' });
+  result = await syncC.flush();
+  check(result.failed === 0 && (await api.fetchHeldVehicle(clientC)) === null && (await api.fetchVehicleDocuments(clientC)).length === 0,
+    'Finish work: no vehicle held, no documents (the screen says "Start work with a vehicle")');
 
   console.log('\n== The other driver ==');
   const clientB = driverClient({ value: true });

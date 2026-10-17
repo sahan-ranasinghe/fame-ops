@@ -22,15 +22,17 @@ import { type ArrivalFlag, canMarkDone, taskKmSoFar, withSwapReading } from '@/l
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
-import { type LocalPhoto, prepareOdometerReader, queuePhoto } from '@/lib/photos';
+import { type LocalPhoto, type LocalProfilePhoto, prepareOdometerReader, queuePhoto, removeFile } from '@/lib/photos';
+import { profilePhotoPath } from '@/lib/photoRules';
 import { queueVideoUpload, type RecordedVideo, videoSegmentRows, videoStoragePath } from '@/lib/video';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
 import type { Employee, Language, ReportCategory, TaskStop, TaskWithStops, Vehicle, VehicleReport } from '@/lib/types';
 import { applyDownloadedUpdate, checkForUpdate, forgetDownloadedUpdate, runningUpdateId, type UpdateOutcome } from '@/lib/updates';
-import { enqueue, flushNow, maybeRetryRejected, onAnswer, onQueueChange } from '@/sync';
-import { clearQueue, queueCounts, type QueueCounts, retryFailed, tasksWaiting } from '@/sync/store';
+import { enqueue, flushNow, maybeRetryRejected, onAnswer, onQueueChange, onVehiclePhotoAnswer, uploadPhotoFile } from '@/sync';
+import type { VehiclePhotoOp } from '@/sync/engine';
+import { clearQueue, pendingVehiclePhotos, queueCounts, type QueueCounts, retryFailed, tasksWaiting } from '@/sync/store';
 
 export type SignInOutcome = 'ok' | 'wrong' | 'network' | 'switched_off' | 'not_configured';
 /** Why a stop was skipped (task_stops.skip_reason); not_visited = the task was finished with the stop still open. */
@@ -46,6 +48,13 @@ export interface VehicleTaken {
   at: string;
 }
 export type LiveStatus = 'connected' | 'connecting' | 'off';
+/** The driver's photo was saved, or why not: no connection (try again) or the server refused it. */
+export type ProfilePhotoOutcome = 'ok' | 'network' | 'failed';
+/** The driver's own photo kept on the phone (KEYS.profilePhoto). */
+export interface KeptProfilePhoto {
+  photoId: string;
+  uri: string;
+}
 
 /** The "Turn on Location" cover (components/LocationGate.tsx): why it is up and what for. */
 export interface GateState {
@@ -88,6 +97,8 @@ interface AppValue {
   /** false until the saved sign-in has been checked. */
   booted: boolean;
   me: Employee | null;
+  /** true once the server answered who this driver is in this run of the app (the "Add your photo" step waits for it). */
+  meFresh: boolean;
   language: Language;
   t: (key: string, vars?: Vars) => string;
   tList: (key: string) => string[];
@@ -174,6 +185,12 @@ interface AppValue {
    */
   logOdometer: (reading: OdometerEntry, swap?: SwapReading) => void;
   logFuel: (fuel: FuelEntry, odometerKm: number | null) => void;
+  /** Phase 7 §5, "Add your photo" and Change photo: sent at once (not queued); the photo stays on the phone for Me. */
+  saveProfilePhoto: (photo: LocalProfilePhoto) => Promise<ProfilePhotoOutcome>;
+  /** Phase 7 §6: vehicle photos waiting on the phone (vehicle id → the thumbnail's file). */
+  pendingVehiclePhotos: Record<string, string>;
+  /** Queues a vehicle's first photo (made by lib/photos.ts takeVehiclePhoto); works offline. */
+  addVehiclePhoto: (op: VehiclePhotoOp) => void;
   /** needsVehicle: "I need another vehicle" (a breakdown or accident during a task, Phase 7). */
   sendReport: (
     category: ReportCategory,
@@ -201,6 +218,8 @@ const TRACKING_EVERY_TICKS = 4;
 export function AppProvider({ children }: { children: ReactNode }) {
   const [booted, setBooted] = useState(false);
   const [me, setMe] = useState<Employee | null>(() => getJson<Employee>(KEYS.me));
+  const [meFresh, setMeFresh] = useState(false);
+  const [vehiclePhotos, setVehiclePhotos] = useState<Record<string, string>>(() => pendingVehiclePhotos());
   const [language, setLanguageState] = useState<Language>(() => getJson<Language>(KEYS.language) ?? deviceLanguage());
   const [vehicles, setVehicles] = useState<Vehicle[]>(() => getJson<Vehicle[]>(KEYS.vehicles) ?? []);
   const [tasks, setTasks] = useState<TaskWithStops[]>(() => getJson<TaskWithStops[]>(KEYS.tasks) ?? []);
@@ -272,6 +291,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const forgetEverything = useCallback(() => {
     saveMe(null);
+    setMeFresh(false);
+    removeFile(getJson<KeptProfilePhoto>(KEYS.profilePhoto)?.uri);
+    remove(KEYS.profilePhoto);
+    remove(KEYS.documents);
     saveTasks([]);
     setVehicles([]);
     setReports([]);
@@ -315,6 +338,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
       saveMe(row);
+      setMeFresh(true);
       setVehicles(vehicleRows);
       setJson(KEYS.vehicles, vehicleRows);
       setReports(reportRows);
@@ -417,10 +441,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setQueue(queueCounts());
         setWaitingTasks(tasksWaiting());
         setGpsKm(kmCounters());
+        const photos = pendingVehiclePhotos();
+        setVehiclePhotos((old) => (JSON.stringify(old) === JSON.stringify(photos) ? old : photos));
         void applyDownloadedUpdate(safeToApplyUpdate);
       }),
     [safeToApplyUpdate],
   );
+
+  // A vehicle photo reached the server (or another one was there first): read the vehicles again for its paths.
+  useEffect(() => onVehiclePhotoAnswer(() => void refresh()), [refresh]);
 
   // Coming back to the front: check the location service, reconnect live updates
   // if they dropped, refresh, and look for a code update (at most every 30 min).
@@ -577,6 +606,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setJson(KEYS.language, row.language);
       }
       saveMe(row);
+      setMeFresh(true);
       void refresh();
       void ensureChannels().then(registerPush);
       void registerTrackingCheck();
@@ -1011,6 +1041,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void flushNow();
   }, []);
 
+  // --- Phase 7 Part 3: the driver's photo and vehicle photos ------------------------
+  const saveProfilePhoto = useCallback(async (photo: LocalProfilePhoto): Promise<ProfilePhotoOutcome> => {
+    const current = meRef.current;
+    if (!current) return 'failed';
+    try {
+      const answer = await api.saveProfilePhoto(
+        supabase,
+        { id: photo.id, employee_id: current.id, storage_path: profilePhotoPath(current.id, photo.id), taken_at: photo.takenAt },
+        (path) => uploadPhotoFile(photo.uri, path),
+      );
+      if (answer !== 'ok') return 'failed';
+    } catch (error) {
+      return error instanceof api.ApiError && error.permanent ? 'failed' : 'network';
+    }
+    // The new photo stays on the phone for Me; the one before it goes.
+    const before = getJson<KeptProfilePhoto>(KEYS.profilePhoto);
+    if (before && before.uri !== photo.uri) removeFile(before.uri);
+    setJson(KEYS.profilePhoto, { photoId: photo.id, uri: photo.uri } satisfies KeptProfilePhoto);
+    const now = meRef.current;
+    if (now) saveMe({ ...now, photo_id: photo.id, photo_updated_at: new Date().toISOString() });
+    return 'ok';
+  }, [saveMe]);
+
+  const addVehiclePhoto = useCallback((op: VehiclePhotoOp) => {
+    enqueue(op);
+    void flushNow();
+  }, []);
+
   const vehicle = useMemo(
     () => vehicles.find((item) => item.id === me?.current_vehicle_id) ?? null,
     [vehicles, me?.current_vehicle_id],
@@ -1021,13 +1079,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
 
   const value: AppValue = {
-    booted, me, language, t, tList, setLanguage,
+    booted, me, meFresh, language, t, tList, setLanguage,
     vehicles, vehicle, workVehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, settings: shift, wifiOnly, setWifiOnly, waitingTasks, refreshing, offline, dataAvailable,
     gate, resolveGate, requireLocation,
     signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, skipStop,
     dutySince, startWork, changeVehicle, finishWork, loadVehicleChoices, vehicleTaken, dismissVehicleTaken, dutyEnded, clearDutyEnded,
     acceptTask, declineTask, notice, clearNotice,
     startTask, completeTask, logOdometer, logFuel, sendReport,
+    saveProfilePhoto, pendingVehiclePhotos: vehiclePhotos, addVehiclePhoto,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

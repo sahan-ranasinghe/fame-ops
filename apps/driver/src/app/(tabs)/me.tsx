@@ -1,16 +1,18 @@
-// Me tab: who is signed in, language, current vehicle, what is still waiting
-// to be sent, permissions, app version, sign out (not while on duty: Finish work
-// first, Phase 7).
+// Me tab: who is signed in (with their photo and Change photo), language,
+// current vehicle and its documents, what is still waiting to be sent,
+// permissions, app version, sign out (not while on duty: Finish work first,
+// Phase 7).
 
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { LogOut, RefreshCw, Wifi } from '@/components/icons';
+import { Camera, FileText, LogOut, RefreshCw, Wifi } from '@/components/icons';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
+import { Thumb, useMyPhoto } from '@/components/Photos';
 import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { colomboTime } from '@/lib/time';
@@ -30,6 +32,7 @@ export default function MeScreen() {
   const [checking, setChecking] = useState(false);
   const dateLabel = useDateLabel();
   const update = runningUpdate();
+  const photo = useMyPhoto();
 
   async function checkUpdate() {
     setChecking(true);
@@ -74,7 +77,17 @@ export default function MeScreen() {
     <View style={styles.page}>
       <StatusBar style="dark" />
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 18, paddingBottom: 28, gap: 16 }}>
-        <Txt variant="title">{me?.name}</Txt>
+        {/* Phase 7 §5: the driver's photo at the top, Change photo (the same two choices as the first-run step). */}
+        <View style={styles.who}>
+          <Thumb uri={photo} size={84} round kind="person" />
+          <View style={{ flex: 1, gap: 8 }}>
+            <Txt variant="title" size={26}>{me?.name}</Txt>
+            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/profile-photo', params: { mode: 'change' } })} style={styles.link}>
+              <Camera size={20} color={colors.ink} />
+              <Txt variant="strong">{t(me?.photo_id ? 'profilePhoto.change' : 'profilePhoto.title')}</Txt>
+            </Pressable>
+          </View>
+        </View>
 
         <Card style={{ gap: 14 }}>
           <Line label={t('me.code')}><Mono size={17} bold>{me?.code}</Mono></Line>
@@ -84,6 +97,8 @@ export default function MeScreen() {
           </Line>
           {/* The vehicle changes only while on duty; off duty, Start work on Today picks it. */}
           {sharing && <Button kind="outline" label={t('vehicle.change')} onPress={() => router.push({ pathname: '/vehicle', params: { mode: 'change' } })} />}
+          {/* Phase 7 §28: the held vehicle's revenue licence, insurance and emission test, for roadside checks. */}
+          <Button kind="outline" icon={FileText} label={t('docs.title')} onPress={() => router.push('/documents')} />
         </Card>
 
         <Card style={{ gap: 12 }}>
@@ -160,6 +175,8 @@ function Line({ label, children }: { label: string; children: React.ReactNode })
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.page },
   line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  who: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  link: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, alignSelf: 'flex-start' },
   toggle: { width: 52, height: 30, borderRadius: 15, backgroundColor: '#c9c5bb', padding: 3, justifyContent: 'center' },
   knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.card },
 });

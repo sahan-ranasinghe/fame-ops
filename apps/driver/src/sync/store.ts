@@ -13,7 +13,7 @@
 import * as SQLite from 'expo-sqlite';
 
 import type { FuelInsert, HeartbeatRow } from '../lib/api';
-import type { Op, QueueStore, StoredHeartbeat, StoredOp, StoredPoint, VideoUploadOp } from './engine';
+import type { Op, QueueStore, StoredHeartbeat, StoredOp, StoredPoint, VehiclePhotoOp, VideoUploadOp } from './engine';
 
 export const HEARTBEAT_LOG_KEEP_DAYS = 30;
 
@@ -225,6 +225,16 @@ export function pendingFuelLogs(): FuelInsert[] {
   return db
     .getAllSync<{ op: string }>("SELECT op FROM ops WHERE failed = 0 AND op LIKE '{\"kind\":\"fuel_log\"%' ORDER BY seq")
     .map((row) => (JSON.parse(row.op) as { row: FuelInsert }).row);
+}
+
+/** Vehicle photos still on the phone (Phase 7 §6): vehicle id → the thumbnail's file, so the picker shows it at once. */
+export function pendingVehiclePhotos(): Record<string, string> {
+  const found: Record<string, string> = {};
+  for (const row of db.getAllSync<{ op: string }>("SELECT op FROM ops WHERE failed = 0 AND op LIKE '{\"kind\":\"vehicle_photo\"%' ORDER BY seq")) {
+    const op = JSON.parse(row.op) as VehiclePhotoOp;
+    found[op.vehicle_id] = op.thumb_uri;
+  }
+  return found;
 }
 
 /** Puts one refused video back in line ("Failed · tap to retry"). */

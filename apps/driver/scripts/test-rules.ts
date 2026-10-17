@@ -37,6 +37,19 @@ import {
   startPoint,
 } from '../src/components/taskMapLogic';
 import { encodePolyline } from '../src/lib/polyline';
+import {
+  currentDocuments,
+  dateLabel,
+  daysBetween,
+  expiryLine,
+  fitWithin,
+  needsProfilePhoto,
+  opensInApp,
+  profilePhotoPath,
+  squareCrop,
+  vehiclePhotoDone,
+  vehiclePhotoPaths,
+} from '../src/lib/photoRules';
 import en from '../src/i18n/en.json';
 import si from '../src/i18n/si.json';
 
@@ -348,6 +361,56 @@ check(frameOf([]).kind === 'none' && one.kind === 'point' && box.kind === 'box' 
 // The compass: only while the map is turned or tilted.
 check(!isTurned(0, 0) && !isTurned(359.5, 0) && !isTurned(-0.4, 0.2) && !isTurned(null, undefined), 'north-up and flat: no compass');
 check(isTurned(12, 0) && isTurned(350, 0) && isTurned(0, 30), 'turned or tilted: the compass shows');
+
+// 10. Part 3 (src/lib/photoRules.ts): the "Add your photo" step, the photos' sizes and paths, the documents' expiry.
+console.log('\nPhotos and documents (Part 3):');
+const fresh = { fresh: true, taskRunning: false };
+check(needsProfilePhoto({ photo_id: null }, fresh), 'no photo on the server: the step shows');
+check(!needsProfilePhoto({ photo_id: 'p1' }, fresh), 'a photo: no step');
+check(!needsProfilePhoto({ photo_id: null }, { fresh: false, taskRunning: false }), 'only after the server answered in this run (a cached row is not enough; no connection, no step)');
+check(!needsProfilePhoto({ photo_id: null }, { fresh: true, taskRunning: true }), 'never over a task in progress');
+check(!needsProfilePhoto({} as { photo_id: string | null }, fresh), 'a row from a server without the column (photo_id missing): no step');
+check(!needsProfilePhoto(null, fresh), 'signed out: no step');
+check(profilePhotoPath('e1', 'u1') === 'e1/profile/u1.jpg', "the profile photo goes to the driver's own profile folder");
+
+check(squareCrop(512, 512) === null, 'a square picture is not cropped');
+check(JSON.stringify(squareCrop(1081, 1080)) === '{"originX":0,"originY":0,"width":1080,"height":1080}', 'a crop a pixel off: the centred square', squareCrop(1081, 1080));
+check(JSON.stringify(squareCrop(3000, 4000)) === '{"originX":0,"originY":500,"width":3000,"height":3000}', 'a tall photo: the middle square', squareCrop(3000, 4000));
+
+check(JSON.stringify(fitWithin(4000, 3000, 1600)) === '{"width":1600}' && JSON.stringify(fitWithin(3000, 4000, 256)) === '{"height":256}',
+  'the vehicle photo and its thumbnail: the long side down to 1600 and 256 px');
+check(fitWithin(1200, 900, 1600) === null, 'a photo smaller than that keeps its size');
+const vp = vehiclePhotoPaths('v1', 'u1');
+check(vp.path === 'v1/u1.jpg' && vp.thumbPath === 'v1/u1-thumb.jpg', "the vehicle's photo and thumbnail: <vehicle_id>/<uuid>.jpg and -thumb.jpg", vp);
+check(vehiclePhotoDone('ok') && vehiclePhotoDone('has_photo') && !vehiclePhotoDone('not_this_vehicle') && !vehiclePhotoDone(null),
+  "the queue is done on 'ok' and on 'has_photo' (someone was first), not on a refusal");
+
+const TODAY = '2026-10-17';
+const line = (expiry: string | null) => { const l = expiryLine(expiry, TODAY); return `${l.tone}:${l.key}`; };
+check(line('2026-11-17') === 'ok:docs.validUntil', '31 days left: plain');
+check(line('2026-11-16') === 'amber:docs.validUntil' && line('2026-10-25') === 'amber:docs.validUntil', 'within 30 days: amber (as the office chip)');
+check(line('2026-10-24') === 'red:docs.validUntil' && line(TODAY) === 'red:docs.validUntil', 'within 7 days, and the last day: red, still "Valid until"');
+check(line('2026-10-16') === 'red:docs.expired', 'past: red, "Expired"');
+check(line(null) === 'none:docs.noExpiry', 'no date: "No expiry date"');
+check(daysBetween('2026-12-31', '2027-01-01') === 1 && daysBetween('2026-10-17', '2026-10-17') === 0, 'whole days across a year end');
+const months = (en as { months: string[] }).months;
+check(dateLabel('2027-03-12', months) === '12 Mar 2027', 'the date as "12 Mar 2027"', dateLabel('2027-03-12', months));
+check(tEn('docs.validUntil', { date: dateLabel('2027-03-12', months) }) === 'Valid until 12 Mar 2027', 'the line in English');
+check(tSi('docs.validUntil', { date: dateLabel('2027-03-12', (si as { months: string[] }).months) }).includes('2027'), 'the line in Sinhala keeps Latin digits');
+
+const doc = (id: string, kind: string, uploaded: string) =>
+  ({ id, vehicle_id: 'v1', kind, name: null, path: `v1/${kind}/${id}.pdf`, content_type: 'application/pdf', expiry: null, uploaded_at: uploaded });
+const current = currentDocuments([doc('i1', 'insurance', '2026-01-01T00:00:00Z'), doc('i2', 'insurance', '2026-09-01T00:00:00Z'), doc('e1', 'emission', '2026-05-01T00:00:00Z')]);
+check(current.map((c) => `${c.kind}:${c.doc?.id ?? '-'}`).join(' ') === 'revenue_licence:- insurance:i2 emission:e1',
+  'the three roadside kinds in order, the newest of a kind, "Not uploaded yet" for a missing one', current.map((c) => c.doc?.id));
+check(opensInApp('image/jpeg') && opensInApp('image/png') && !opensInApp('application/pdf'), 'a photo opens in the app, a PDF in the browser');
+for (const key of ['profilePhoto.title', 'profilePhoto.body', 'profilePhoto.take', 'profilePhoto.choose', 'profilePhoto.saving', 'profilePhoto.noConnection',
+  'profilePhoto.failed', 'profilePhoto.tryAgain', 'profilePhoto.change', 'profilePhoto.none', 'vehiclePhoto.add', 'vehiclePhoto.saving', 'vehiclePhoto.added',
+  'vehiclePhoto.hasOne', 'vehiclePhoto.queued', 'docs.title', 'docs.myVehicle', 'docs.open', 'docs.revenue_licence', 'docs.insurance', 'docs.emission',
+  'docs.validUntil', 'docs.expired', 'docs.noExpiry', 'docs.missing', 'docs.view', 'docs.needsConnection', 'docs.noVehicle', 'docs.failed', 'common.close',
+  'common.cameraDenied']) {
+  if (tEn(key) === key || tSi(key) === key) check(false, `the string ${key} is in en.json and si.json`);
+}
 
 console.log(failures === 0 ? '\nAll day rules tests passed.' : `\n${failures} day rules test(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

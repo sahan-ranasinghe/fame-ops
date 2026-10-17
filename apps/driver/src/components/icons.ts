@@ -26,3 +26,5 @@ export { default as Video } from 'lucide-react-native/icons/video';
 export { default as Wifi } from 'lucide-react-native/icons/wifi';
 export { default as Square } from 'lucide-react-native/icons/square';
 export { default as Check } from 'lucide-react-native/icons/check';
+export { default as FileText } from 'lucide-react-native/icons/file-text';
+export { default as Images } from 'lucide-react-native/icons/images';

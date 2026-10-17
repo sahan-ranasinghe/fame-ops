@@ -25,8 +25,10 @@ export type Vehicle = Pick<
   | 'monthly_km_allowance'
   | 'in_garage'
   | 'active'
+  | 'photo_path'
+  | 'photo_thumb_path'
 >;
 
 export type Language = 'en' | 'si';
 export type ReportCategory = 'breakdown' | 'accident' | 'tyre' | 'warning_light' | 'other';
-export type PhotoKind = 'odometer' | 'fuel_receipt' | 'vehicle_report';
+export type PhotoKind = 'odometer' | 'fuel_receipt' | 'vehicle_report' | 'profile';

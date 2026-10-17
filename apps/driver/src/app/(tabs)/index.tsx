@@ -2,6 +2,7 @@
 // Phase 7 Part 2: the card's stops are named by their place in the order with the time there
 // (components/task.tsx), and a running task the office moved to another vehicle says so
 // ("Vehicle changed: WP KL-1234") until both odometers are logged on the task screen.
+// Part 3 (§6): the card shows the task's vehicle with its photo.
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -16,11 +17,12 @@ import { DeclineSheet } from '@/components/DeclineSheet';
 import { DutyHeader, DutyNotices } from '@/components/DutyCard';
 import { leaveTime, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
 import { PhoneSetupCard } from '@/components/PhoneSetupCard';
+import { Thumb, useVehicleThumbs } from '@/components/Photos';
 import { PlateText } from '@/components/PlateText';
 import { plateOf } from '@/components/SwapCard';
 import { swapCard } from '@/components/taskLines';
 import { TrackingNotice } from '@/components/tracking';
-import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
+import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
 import { colomboDate, colomboHour, colomboTime } from '@/lib/time';
 import type { TaskWithStops } from '@/lib/types';
@@ -72,6 +74,8 @@ export default function TodayScreen() {
   }
 
   const people = next ? peopleLine(next) : null;
+  const nextVehicle = next ? app.vehicles.find((v) => v.id === next.vehicle_id) ?? null : null;
+  const thumbs = useVehicleThumbs(nextVehicle ? [nextVehicle.id] : []);
   // The office swapped the running task's vehicle: the readings wait on the task screen (Open task).
   const swap = next?.status === 'in_progress' ? swapCard(next) : null;
 
@@ -123,6 +127,14 @@ export default function TodayScreen() {
               <Txt variant="title" size={27} style={{ marginTop: 4, marginBottom: 14 }}>{next.title}</Txt>
               <StopTimeline stops={next.task_stops} compact />
               {people && <Txt variant="muted" style={{ marginTop: 14 }}>{people}</Txt>}
+              {/* Phase 7 §6: the task's vehicle, with its photo when it has one. */}
+              {nextVehicle && (
+                <View style={styles.vehicleLine}>
+                  {thumbs[nextVehicle.id] && <Thumb uri={thumbs[nextVehicle.id]} size={52} />}
+                  <Plate regNo={nextVehicle.reg_no} />
+                  {nextVehicle.make_model && <Txt variant="muted" numberOfLines={1} style={{ flex: 1 }}>{nextVehicle.make_model}</Txt>}
+                </View>
+              )}
               {waitingTasks.has(next.id) && <Txt variant="small" color={colors.amberText} style={{ marginTop: 8 }}>{t('today.notSentYet')}</Txt>}
               {swap && (
                 <View style={{ marginTop: 14 }}>
@@ -205,5 +217,6 @@ const styles = StyleSheet.create({
   headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   nextCard: { backgroundColor: colors.card, borderWidth: 2.5, borderColor: colors.ink, borderRadius: 22, padding: 20 },
   nextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  vehicleLine: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16, minHeight: 72 },
 });

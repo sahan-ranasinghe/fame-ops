@@ -4,20 +4,32 @@
 // The list comes from the server with who holds each vehicle now ("With Kamal now"); without
 // a connection it falls back to the vehicles saved on the phone. A vehicle another driver holds
 // can be picked: that is a hand-over, and the server tells the other driver.
+// Part 3 (§6): each vehicle shows its photo beside the plate; one without a photo has "Add a photo"
+// (the camera only). The photo is queued like every other photo, so it works offline; when another
+// photo got there first the driver is told and the server's photo stays.
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronLeft, Play } from '@/components/icons';
+import { Camera, Check, ChevronLeft, Play } from '@/components/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
+import { Thumb, useNeedsVehiclePhoto, useVehicleThumbs } from '@/components/Photos';
 import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
 import type { VehicleChoice } from '@/lib/api';
+import { takeVehiclePhoto } from '@/lib/photos';
 import type { Vehicle } from '@/lib/types';
 import { useApp } from '@/state/app';
+import { onVehiclePhotoAnswer } from '@/sync';
 import { colors } from '@/theme';
+
+/** A line under one vehicle after "Add a photo": added, waiting for the connection, someone was first, no camera. */
+interface PhotoNote {
+  vehicleId: string;
+  key: 'vehiclePhoto.added' | 'vehiclePhoto.queued' | 'vehiclePhoto.hasOne' | 'common.cameraDenied';
+}
 
 type Mode = 'start' | 'change';
 /** The vehicle picked: an id, null = "No vehicle today", undefined = nothing picked yet. */
@@ -47,8 +59,12 @@ export default function VehicleScreen() {
   const [picked, setPicked] = useState<Picked>(undefined);
   const [busy, setBusy] = useState(false);
   const [needLocation, setNeedLocation] = useState(false);
-  // Back does nothing while Start work runs (the Location cover may be up).
-  const { allowLeave } = useLeaveGuard(false, busy);
+  // "Add a photo": the vehicle whose photo is being made, and the line shown under a vehicle after it.
+  const [photoBusy, setPhotoBusy] = useState<string | null>(null);
+  const [photoNote, setPhotoNote] = useState<PhotoNote | null>(null);
+  const [pulls, setPulls] = useState(0);
+  // Back does nothing while Start work runs (the Location cover may be up) or a photo is being made.
+  const { allowLeave } = useLeaveGuard(false, busy || photoBusy !== null);
 
   const current = me?.current_vehicle_id ?? null;
   const load = useCallback(async () => {
@@ -69,14 +85,43 @@ export default function VehicleScreen() {
 
   const pull = useCallback(async () => {
     setRefreshing(true);
+    setPulls((n) => n + 1);
     await load();
     setRefreshing(false);
   }, [load]);
 
-  if (!me) return <Redirect href="/login" />;
+  // A photo from this phone found another one there first: the driver is told; the server's photo is shown.
+  useEffect(() => onVehiclePhotoAnswer((vehicleId, answer) => {
+    if (answer === 'has_photo') setPhotoNote({ vehicleId, key: 'vehiclePhoto.hasOne' });
+  }), []);
 
   const list = choices ?? offlineChoices(vehicles, current, app.workVehicle?.id ?? null);
+  const thumbs = useVehicleThumbs(list.map((v) => v.id), pulls);
+  const needsPhoto = useNeedsVehiclePhoto();
+
+  if (!me) return <Redirect href="/login" />;
+
   const goBack = () => (router.canGoBack() ? router.back() : router.replace('/'));
+
+  async function addPhoto(vehicleId: string) {
+    if (photoBusy) return;
+    setPhotoNote(null);
+    setPhotoBusy(vehicleId);
+    let made: Awaited<ReturnType<typeof takeVehiclePhoto>>;
+    try {
+      made = await takeVehiclePhoto(vehicleId);
+    } catch {
+      made = null;
+    }
+    setPhotoBusy(null);
+    if (made === 'denied') {
+      setPhotoNote({ vehicleId, key: 'common.cameraDenied' });
+      return;
+    }
+    if (!made) return;
+    app.addVehiclePhoto(made);
+    setPhotoNote({ vehicleId, key: app.offline || !app.dataAvailable ? 'vehiclePhoto.queued' : 'vehiclePhoto.added' });
+  }
 
   async function confirm() {
     if (picked === undefined || busy) return;
@@ -124,7 +169,16 @@ export default function VehicleScreen() {
             {choices === null && <Notice tone="warn" text={t('vehicle.listOffline')} />}
             {list.length === 0 && <Txt variant="muted" style={{ padding: 8 }}>{t('vehicle.none')}</Txt>}
             {list.map((item) => (
-              <Choice key={item.id} item={item} selected={picked === item.id} onPress={() => setPicked(item.id)} />
+              <Choice
+                key={item.id}
+                item={item}
+                selected={picked === item.id}
+                onPress={() => setPicked(item.id)}
+                thumb={thumbs[item.id] ?? null}
+                onAddPhoto={needsPhoto(item.id) ? () => void addPhoto(item.id) : undefined}
+                photoBusy={photoBusy === item.id}
+                note={photoNote?.vehicleId === item.id ? photoNote.key : null}
+              />
             ))}
             <Pressable accessibilityRole="radio" accessibilityState={{ checked: picked === null }} onPress={() => setPicked(null)}>
               <Card style={[styles.row, picked === null && styles.selected]}>
@@ -150,8 +204,19 @@ export default function VehicleScreen() {
   );
 }
 
-/** One vehicle: plate, make/model and seats, and what it is to me (mine now, my last, my regular, with someone else). */
-function Choice({ item, selected, onPress }: { item: VehicleChoice; selected: boolean; onPress: () => void }) {
+/**
+ * One vehicle: its photo, plate, make/model and seats, and what it is to me (mine now, my last, my regular, with
+ * someone else); "Add a photo" when it has none.
+ */
+function Choice({ item, selected, onPress, thumb, onAddPhoto, photoBusy, note }: {
+  item: VehicleChoice;
+  selected: boolean;
+  onPress: () => void;
+  thumb: string | null;
+  onAddPhoto?: () => void;
+  photoBusy: boolean;
+  note: PhotoNote['key'] | null;
+}) {
   const { t } = useApp();
   const tags: { text: string; tone: 'blue' | 'plain' | 'amber' }[] = [];
   if (item.mine_now) tags.push({ text: t('vehicle.yours'), tone: 'blue' });
@@ -162,6 +227,7 @@ function Choice({ item, selected, onPress }: { item: VehicleChoice; selected: bo
   return (
     <Pressable accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={onPress}>
       <Card style={[styles.row, selected && styles.selected]}>
+        <Thumb uri={thumb} size={64} />
         <View style={{ flex: 1, gap: 6 }}>
           <View style={styles.plate}>
             <Mono size={20} bold>{item.reg_no}</Mono>
@@ -177,6 +243,17 @@ function Choice({ item, selected, onPress }: { item: VehicleChoice; selected: bo
                 </View>
               ))}
             </View>
+          )}
+          {onAddPhoto && (
+            <Pressable accessibilityRole="button" disabled={photoBusy} onPress={onAddPhoto} style={[styles.addPhoto, photoBusy && { opacity: 0.5 }]}>
+              {photoBusy ? <ActivityIndicator color={colors.ink} /> : <Camera size={20} color={colors.ink} />}
+              <Txt variant="strong" size={16}>{t(photoBusy ? 'vehiclePhoto.saving' : 'vehiclePhoto.add')}</Txt>
+            </Pressable>
+          )}
+          {note && (
+            <Txt variant="small" color={note === 'vehiclePhoto.added' ? colors.blue : note === 'common.cameraDenied' ? colors.red : colors.amberText}>
+              {t(note)}
+            </Txt>
           )}
         </View>
         {selected && <Check size={26} color={colors.ink} strokeWidth={3} />}
@@ -219,4 +296,16 @@ const styles = StyleSheet.create({
   plate: { alignSelf: 'flex-start', borderWidth: 1.5, borderColor: colors.ink, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 1 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  addPhoto: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: colors.line,
+    backgroundColor: colors.card,
+  },
 });
