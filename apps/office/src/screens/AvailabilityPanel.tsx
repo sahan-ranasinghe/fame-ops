@@ -5,7 +5,7 @@
 // reasons and Use suggestion (fills the driver and the vehicle); the rows in the
 // best-match order. A click or Enter on a row (a toggle button) picks that
 // driver like Use suggestion (the driver and the vehicle they bring) and marks
-// the row picked.
+// the row picked. Each row starts with the driver's photo (§5).
 // Fetched 400 ms after the time settles and quietly every 60 s; the last answer
 // stays on screen while a new one loads ("Updating…" beside the title), and a
 // refresh for the same day and time keeps the ranking and the best match
@@ -14,7 +14,7 @@ import type { Availability, AvailableDriver, BestMatch } from "../data/types";
 import { type Query, useQuery } from "../data/useQuery";
 import { useFleet } from "../app/FleetContext";
 import { errText } from "../transport/errors";
-import { Loading, Notice, Pill } from "../ui/basics";
+import { Avatar, Loading, Notice, Pill } from "../ui/basics";
 import { bestRow, type DefaultVehicle, defaultVehicle, driverLine, driverTone, licenceTone, rankedRows, steadyAvailability } from "./availabilityLogic";
 
 export const AVAILABILITY_REFRESH_MS = 60_000;
@@ -108,6 +108,7 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
                 onClick={Tag === "button" ? () => onPick?.(d, veh) : undefined}
                 data-testid="avail-row"
               >
+                <Avatar name={d.name} src={d.photo_url} small />
                 {d.rank != null && <span className="num" aria-label={`Best match number ${d.rank}`} style={{ flex: "none", minWidth: 20, fontWeight: 700 }}>{d.rank}</span>}
                 <span className="grow">
                   {on && <span className="avail-tick" aria-hidden="true">✓ </span>}<span className="name">{d.name}{d.licence.chip === "red" || d.licence.chip === "orange" ? <> <Pill tone={licenceTone(d.licence.chip)}>licence {d.licence.chip === "red" ? "expired or due" : "expiring"}</Pill></> : null}</span>

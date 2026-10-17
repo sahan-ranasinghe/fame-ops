@@ -5,7 +5,9 @@
 // Phase 7 (§33, §34): a proposed task ("Task for Kamal · WP CAB-4521 · proposed
 // by Nimal"), the trip (the stops with their times, the plan, the map), "Leave-by
 // passed" when it waits past its leave-by, and Withdraw for the person who asked
-// while it waits (a reason, on the page, in two steps).
+// while it waits (a reason, on the page, in two steps). Once approved (§4): the
+// driver and the vehicle with their photos; Tell requester for a person who
+// asked without an office account, and their phone.
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -19,6 +21,7 @@ import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { isProposal, requestView, withdrawInput } from "./approvalLogic";
 import { ChangesList, LateNotice, RequestHead, Timeline } from "./requestParts";
+import { AssignedBlock, TellRequester } from "./RequestOutcome";
 import { TripSection, useTripLine } from "./RequestTrip";
 
 /**
@@ -143,6 +146,8 @@ export function RequestDetail() {
         </dl>
         <Timeline q={q} />
       </div>
+      {q.assigned && <div style={{ marginTop: 18 }}><AssignedBlock a={q.assigned} /></div>}
+      {(q.tell_requester || q.requester_phone) && <div style={{ marginTop: 18 }}><TellRequester key={`${q.id}-${q.version ?? 0}`} q={q} /></div>}
       {trip && <div style={{ marginTop: 18 }}><TripSection trip={trip} leaveNote={task ? "as proposed" : "the time asked for"} /></div>}
       {view.conflicts && q.status === "waiting" && !!(p?.warnings?.length || p?.conflicts?.length) && (
         <div className="notice" style={{ marginTop: 18 }} data-testid="proposal-checks">

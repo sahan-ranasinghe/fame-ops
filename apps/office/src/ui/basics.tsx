@@ -9,9 +9,31 @@ export const Pill = ({ tone = "", children }: { tone?: Tone; children: ReactNode
 export const Dot = ({ tone = "" }: { tone?: Tone }) => <i className={`dot ${tone}`} />;
 export const Loading = ({ children }: { children: ReactNode }) => <div className="loading">{children}</div>;
 export const Empty = ({ children }: { children: ReactNode }) => <div className="empty">{children}</div>;
-export const Avatar = ({ name, small }: { name?: string | null; small?: boolean }) => (
-  <span className={`avatar${small ? " sm" : ""}`}>{initials(name)}</span>
-);
+/**
+ * A person: their photo (Phase 7, §5), else the initials as before. The server hands out the same link while it lasts,
+ * so the browser keeps the picture across refreshes (never add anything to the link); a link that fails shows the initials.
+ */
+export function Avatar({ name, src, small, large }: { name?: string | null; src?: string | null; small?: boolean; large?: boolean }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const photo = src && src !== failed ? src : null;
+  return (
+    <span className={`avatar${small ? " sm" : large ? " lg" : ""}${photo ? " photo" : ""}`}>
+      {photo ? <img src={photo} alt="" loading="lazy" decoding="async" onError={() => setFailed(photo)} /> : initials(name)}
+    </span>
+  );
+}
+
+/**
+ * A vehicle's photo (§6): the thumbnail beside its plate, `md` on the request page, `large` on the vehicle's page.
+ * Nothing when the vehicle has none or the link fails. The same link across refreshes, as for Avatar.
+ */
+export function VehicleThumb({ src, plate, size }: { src?: string | null; plate?: string | null; size?: "md" | "lg" }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  if (!src || src === failed) return null;
+  // Beside the plate it is decoration (the plate says which vehicle); alone it is the vehicle's photo.
+  const alt = size && plate ? `Photo of ${plateOf(plate)}` : "";
+  return <img className={`vthumb${size ? ` ${size}` : ""}`} src={src} alt={alt} loading="lazy" decoding="async" onError={() => setFailed(src)} />;
+}
 
 export function Notice({ tone = "", children, action }: { tone?: "" | "bad" | "info" | "ok"; children: ReactNode; action?: ReactNode }) {
   return (

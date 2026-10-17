@@ -1,5 +1,6 @@
 // Manage a driver (/drivers/:username/edit): contact and licence, a new PIN,
 // switching the account off or on. The contact fields are kept as a draft.
+// Phase 7 (§5): the photo with Replace photo (the web app).
 import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -13,6 +14,7 @@ import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { isPin, randomPin } from "./driverLogic";
+import { DriverPhotoCard } from "./PhotoUpload";
 
 interface Contact {
   phone: string;
@@ -114,6 +116,7 @@ export function DriverManage() {
       <PageTop title={x.name} sub={<><span className="mono">{x.username}</span> · {x.code || ""}</>} backTo="/drivers" />
       <DraftBanner draft={draft} />
       <div className="page-form">
+        <DriverPhotoCard key={username} username={username} name={x.name} photoUrl={x.photo_url} onSaved={() => void store.load("lists.drivers", "list_drivers", {})} />
         <form className="card card-b form" onSubmit={save}>
           <h2>Contact and licence</h2>
           <div className="grid2">

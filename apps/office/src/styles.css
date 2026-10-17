@@ -500,3 +500,37 @@ button.avail-row:focus-visible { outline: 3px solid var(--ink); outline-offset: 
 .mk-cursor-arrow { display: none; position: absolute; left: 50%; top: 50%; width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-bottom: 8px solid #15181c }
 .mk-cursor.heading .mk-cursor-arrow { display: block }
 .mk-cursor.heading .mk-cursor-label { margin-bottom: 8px }
+
+/* ---------- Phase 7 Part 3: photos and documents (§4, §5, §6, §28) ---------- */
+/* A person's photo fills the avatar's circle; the initials stay when there is none. */
+.avatar.photo { background: var(--surface-2); overflow: hidden }
+.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block }
+.avatar.lg { width: 64px; height: 64px; font-size: 20px }
+/* A vehicle's thumbnail beside its plate; md on the request page, lg on the vehicle's page. */
+.vthumb { width: 44px; height: 30px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); vertical-align: middle; flex: none }
+.sub > .vthumb { margin-right: 8px }
+.vthumb.md { width: min(240px, 100%); height: auto; aspect-ratio: 4 / 3; border-radius: 10px }
+.vthumb.lg { display: block; width: 100%; height: auto; max-height: 360px; aspect-ratio: 4 / 3; border-radius: 12px }
+.with-photo { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.photo-cell { width: 1%; padding-right: 0 }
+.vphoto { display: grid; gap: 12px }
+.vehicle-detail { display: grid; gap: 16px }
+.vehicle-detail > .page-top { margin-bottom: 0 }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0 }
+/* Documents: one row per kind, the file's type as a chip, the grey "no document" chip, the expiry input inline. */
+.docs-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px }
+.doc-rows { display: grid; gap: 10px }
+.doc-row { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--surface) }
+.doc-row.removed { background: var(--surface-2) }
+.doc-row-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
+.doc-row-h b { flex: 1 1 auto }
+.doc-row-h .doc { margin: 0 }
+.doc.nofile { background: var(--surface-2); color: var(--muted); border: 1px solid var(--line-strong) }
+.doc-date { display: flex; flex-wrap: wrap; align-items: center; gap: 8px }
+.doc-date label { font-weight: 600; font-size: 14px }
+.doc-date input { width: auto; flex: 0 1 190px }
+/* The request's driver and vehicle once approved, and Tell requester's message. */
+.assigned { display: grid; gap: 14px }
+.assigned-vehicle { display: flex; flex-wrap: wrap; align-items: center; gap: 14px }
+.tell-msg { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); color: var(--ink); white-space: pre-line }
+@media (max-width: 768px) { .doc-date input { flex: 1 1 100% } .photo-cell { width: auto } }

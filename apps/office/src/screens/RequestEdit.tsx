@@ -6,6 +6,7 @@
 // and To only) opens with two stops, a pickup at From and a drop at To. A
 // waiting request stays waiting; an approved booking becomes "changed" and
 // needs re-approval (the approvers are told). Kept as a draft for this request.
+// Phase 7 (§4): an approver may give or change the requester's phone.
 import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -60,9 +61,10 @@ function EditForm({ id, q, f, setF, draft }: {
   setF: Dispatch<SetStateAction<RequestFields | null>>;
   draft: DraftControls<RequestFields | null>;
 }) {
-  const { store, transport } = useFleet();
+  const { me, store, transport } = useFleet();
   const navigate = useNavigate();
   const toast = useToast();
+  const approver = me.permissions.includes("approve");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const settings = useFleetSettings();
@@ -104,6 +106,13 @@ function EditForm({ id, q, f, setF, draft }: {
         )}
         <div className="card card-b form">
           <div className="field"><label htmlFor="re-behalf">On behalf of</label><input id="re-behalf" maxLength={120} value={f.behalf} onChange={(e) => set("behalf", e.target.value)} placeholder="Only when the vehicle is for someone else" /></div>
+          {approver && (
+            <div className="field">
+              <label htmlFor="re-phone">Requester's phone</label>
+              <input id="re-phone" maxLength={30} inputMode="tel" placeholder="077 123 4567" value={f.requesterPhone ?? ""} onChange={(e) => set("requesterPhone", e.target.value)} />
+              <span className="hint">Optional. For someone without a Fame Fleet account: Tell requester sends them the news on WhatsApp. Empty clears it.</span>
+            </div>
+          )}
         </div>
 
         <TripEditor trip={trip} prefix="re" />

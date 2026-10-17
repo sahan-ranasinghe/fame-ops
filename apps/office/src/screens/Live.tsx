@@ -49,7 +49,7 @@ import { GapsList, useGaps } from "./GapsList";
 import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
-import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
+import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote, VehicleThumb } from "../ui/basics";
 import { Icon } from "../ui/icons";
 
 /** The trails and the shown route are fetched again this often (the fallback when Realtime is not delivering). */
@@ -225,6 +225,7 @@ export function Live() {
             return (
               <button type="button" key={x.username} className={`lrow ${x.username === sel?.username ? "sel" : ""}`} onClick={() => { setSelected(x.username); setRouteErr(null); }}>
                 <span className={`dot ${liveTone(x)}`} />
+                <Avatar name={x.driver} src={x.photo_url} small />
                 <span className="grow">
                   <span className="name">{x.driver} <Plate v={x.vehicle} />{x.vehicle_since && <span className="muted small"> since {x.vehicle_since}</span>}</span>
                   <span className="duty-lines">
@@ -316,10 +317,10 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded
   return (
     <div className="card card-b" data-testid="live-detail">
       <div className="row" style={{ padding: 0 }}>
-        <Avatar name={x.driver} />
+        <Avatar name={x.driver} src={x.photo_url} large />
         <div className="grow">
           <div className="name" style={{ fontSize: 20 }}>{routes ? <Link to={`/drivers/${x.username}`}>{x.driver}</Link> : x.driver}</div>
-          <div className="sub">{joinDots([x.vehicle && (x.vehicle_since ? `${x.vehicle} · since ${x.vehicle_since}` : x.vehicle), x.task, x.going_to && "to " + x.going_to])}</div>
+          <div className="sub">{x.vehicle && <VehicleThumb src={x.vehicle_thumb_url} />}{joinDots([x.vehicle && (x.vehicle_since ? `${x.vehicle} · since ${x.vehicle_since}` : x.vehicle), x.task, x.going_to && "to " + x.going_to])}</div>
         </div>
         {working && <Pill tone={liveTone(x)}>{statusLine(x)}</Pill>}
       </div>

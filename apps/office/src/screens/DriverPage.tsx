@@ -21,7 +21,7 @@ import { useLiveDrivers } from "../data/useLive";
 import { addDays, longDate, num, today, waLink } from "../lib/format";
 import { MapView } from "../map/MapView";
 import { ESTIMATED_COLOR, type MapMarker, type RoutePoint, SPEED_COLORS } from "../map/types";
-import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, Tile } from "../ui/basics";
+import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, Tile, VehicleThumb } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { GapsList, useGaps } from "./GapsList";
 import { clockText, gapWindowsOf, playbackPath } from "./playbackLogic";
@@ -130,9 +130,9 @@ export function DriverPage() {
       <div className="stack">
         <div className="card card-b">
           <div className="row" style={{ padding: 0 }}>
-            <Avatar name={name} />
+            <Avatar name={name} src={card?.photo_url ?? info?.photo_url} large />
             <div className="grow">
-              <div className="name" style={{ fontSize: 20 }}>{name} {(card?.vehicle ?? info?.current_vehicle) && <Plate v={card?.vehicle ?? info?.current_vehicle} />}</div>
+              <div className="name" style={{ fontSize: 20 }}>{name} {(card?.vehicle ?? info?.current_vehicle) && <><VehicleThumb src={card?.vehicle_thumb_url} /><Plate v={card?.vehicle ?? info?.current_vehicle} /></>}</div>
               <div className="sub">{[phone, card?.task ? `On task: ${card.task}` : card ? "No task" : null, card?.near ? `near ${card.near}` : null].filter(Boolean).join(" · ") || "—"}</div>
               {info?.last_30_days && <div className="sub">Last 30 days: {info.last_30_days.accepted} accepted · {info.last_30_days.declined} declined</div>}
             </div>

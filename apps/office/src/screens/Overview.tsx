@@ -3,7 +3,8 @@
 // the needs-attention list to issues (everything) and assign_tasks (the task
 // items; the server already filters), the driver links to assign_tasks or
 // vehicles. Phase 7 (§19): the red "Needs a driver" block first, for approve or
-// assign_tasks, while any task needs a driver.
+// assign_tasks, while any task needs a driver. The waiting requests mark a
+// proposed task ("Task for Kamal · proposed by Nimal") and "Leave-by passed".
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { homeAction, ROUTES_NEED } from "../app/nav";
@@ -14,6 +15,7 @@ import { attIcon, joinDots, levelTone, longDate, today } from "../lib/format";
 import { can } from "../transport/types";
 import { Avatar, Empty, ErrBox, IconLink, Loading, Notice, Pill, Plate, StaleNote, Tile } from "../ui/basics";
 import { Icon } from "../ui/icons";
+import { LATE_BADGE, proposalLine } from "./approvalLogic";
 import { NeedsDriverList } from "./NeedsDriverList";
 
 export function Overview() {
@@ -118,7 +120,14 @@ export function Overview() {
                     <tbody>
                       {rq.data.requests.map((q) => (
                         <tr key={q.id}>
-                          <td data-label="Requested by"><b>{q.requested_by}</b></td><td data-label="Project">{q.project || "—"}</td><td data-label="When">{q.when}</td><td data-label="Route" className="muted">{q.route || "—"}</td><td data-label="Need">{q.need || "—"}</td>
+                          <td data-label="Requested by">
+                            {/* Phase 7 (§33, §35 18): a proposed task and one waiting past its leave-by, as on Requests. */}
+                            {q.kind === "task"
+                              ? <><Pill tone="live">Task</Pill> <b>{q.title || "Proposed task"}</b><div className="sub" data-testid="proposal-line">{proposalLine(q)}</div></>
+                              : <><b>{q.requested_by}</b>{q.on_behalf_of && <span className="muted"> · for {q.on_behalf_of}</span>}</>}
+                            {q.late && <div style={{ marginTop: 4 }}><Pill tone="bad">{LATE_BADGE}</Pill></div>}
+                          </td>
+                          <td data-label="Project">{q.project || "—"}</td><td data-label="When">{q.when}</td><td data-label="Route" className="muted">{q.route || "—"}</td><td data-label="Need">{q.need || "—"}</td>
                           <td className="r">
                             <div className="acts" style={{ justifyContent: "flex-end" }}>
                               <Link className="btn small" to={`/requests/${q.id}/decide?mode=decline`}>Decline</Link>

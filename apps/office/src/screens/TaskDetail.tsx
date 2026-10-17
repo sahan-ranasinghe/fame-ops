@@ -21,7 +21,7 @@ import { MapView } from "../map/MapView";
 import type { RoutePoint } from "../map/types";
 import { GapsList, useGaps } from "./GapsList";
 import { StopArrival } from "./StopArrival";
-import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
+import { Avatar, Empty, Loading, Notice, Pill, VehicleThumb, WarningsNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
@@ -114,11 +114,11 @@ export function TaskDetail() {
       {t.finish_flag && <Notice>{t.finish_flag.text}</Notice>}
       <div className="card card-b">
         <dl className="kv">
-          <div><dt>Driver</dt><dd>{t.driver || "—"}</dd></div>
+          <div><dt>Driver</dt><dd>{t.driver ? <span className="with-photo"><Avatar name={t.driver} src={t.driver_photo_url} small />{t.driver}</span> : "—"}</dd></div>
           <div>
             <dt>Vehicle</dt>
             <dd>
-              {t.vehicle || "—"}
+              {t.vehicle ? <span className="with-photo"><VehicleThumb src={t.vehicle_thumb_url} />{t.vehicle}</span> : "—"}
               {t.vehicle_taken && <div className="sub" style={{ fontWeight: 400 }}>{t.vehicle_taken}</div>}
               {t.vehicle_changed && <div className="sub" style={{ fontWeight: 400 }} data-testid="vehicle-changed">{t.vehicle_changed}</div>}
               {segments.length > 1 && <div className="sub" style={{ fontWeight: 400 }}>Swapped during the task: {segments.map((g) => g.vehicle).join(" → ")}</div>}

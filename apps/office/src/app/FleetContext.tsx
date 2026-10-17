@@ -2,6 +2,7 @@ import { createContext, useContext } from "react";
 import type { LatestRow } from "../data/live";
 import type { PointRow } from "../data/realtime";
 import type { FleetStore } from "../data/store";
+import type { UploadTicket } from "../data/types";
 import type { Me, Transport } from "../transport/types";
 
 export interface Fleet {
@@ -22,6 +23,8 @@ export interface Fleet {
     /** Every new location point of several drivers on one channel (the live map's trails). */
     driversPoints?: (employeeIds: string[], cb: (row: PointRow) => void, onStatus?: (s: "connecting" | "live" | "error") => void) => () => void;
   };
+  /** Web build only (Phase 7): a photo or document goes up through the signed upload a tool handed out. None = no upload buttons. */
+  files?: { upload: (ticket: UploadTicket, file: Blob, contentType: string) => Promise<void> };
 }
 
 const Ctx = createContext<Fleet | null>(null);

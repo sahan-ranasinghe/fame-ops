@@ -9,6 +9,7 @@ import { SetPassword } from "../auth/SetPassword";
 import { SignIn } from "../auth/SignIn";
 import { subscribeDriverLatest, subscribeDriverPoints, subscribeDriversPoints } from "../data/realtime";
 import { FleetStore } from "../data/store";
+import { uploadToTicket } from "../data/upload";
 import { registerServiceWorker } from "../push";
 import { ToastProvider } from "../ui/Toast";
 import { FleetProvider } from "./FleetContext";
@@ -25,6 +26,7 @@ function Gate() {
       noConnector: false,
       signOut: () => void auth.signOut(),
       realtime: { driverLatest: subscribeDriverLatest, driverPoints: subscribeDriverPoints, driversPoints: subscribeDriversPoints },
+      files: { upload: uploadToTicket },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.state.step === "ready" ? auth.state.me : null, auth.transport]);

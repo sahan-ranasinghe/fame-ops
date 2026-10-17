@@ -48,6 +48,8 @@ export function NewRequest() {
   // Someone who can neither approve nor assign asks in their own name (the server does the same).
   const staff = !can(me, "approve", "assign_tasks");
   const books = me.tools.includes("book_vehicle");
+  // Phase 7 (§4): an approver may give the phone of a requester without an account (Tell requester).
+  const approver = can(me, "approve");
   // The draft's key changed with the trip (§34): an older draft (From and To) is not offered.
   const [f, setF, draft] = useFormDraft<Form>("request-trip-new", null, () => ({ ...emptyRequest(today()), vehicle: "", pickedDriver: "" }));
   const [busy, setBusy] = useState(false);
@@ -158,6 +160,13 @@ export function NewRequest() {
       <form className="page-form" onSubmit={submit} noValidate>
         <div className="card card-b form">
           <div className="field"><label htmlFor="nr-behalf">On behalf of</label><input id="nr-behalf" maxLength={120} value={f.behalf} onChange={(e) => set("behalf", e.target.value)} placeholder="Only when the vehicle is for someone else" /></div>
+          {approver && (
+            <div className="field">
+              <label htmlFor="nr-phone">Requester's phone</label>
+              <input id="nr-phone" maxLength={30} inputMode="tel" placeholder="077 123 4567" value={f.requesterPhone ?? ""} onChange={(e) => set("requesterPhone", e.target.value)} />
+              <span className="hint">Optional. For someone without a Fame Fleet account: Tell requester sends them the news on WhatsApp.</span>
+            </div>
+          )}
           <div className="field"><label htmlFor="nr-project">Project or team</label><input id="nr-project" maxLength={200} placeholder="Job no., DU ID, or e.g. HR" value={f.project} onChange={(e) => set("project", e.target.value)} /></div>
         </div>
 

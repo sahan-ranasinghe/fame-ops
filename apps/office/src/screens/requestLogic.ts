@@ -20,6 +20,8 @@ export interface RequestFields extends TripFields {
   note: string;
   /** Unticked = the vehicle's custodian drives (no driver needed). */
   driver: boolean;
+  /** Phase 7 (§4): the phone of the person it is for when they have no office account (approvers fill it): Tell requester. */
+  requesterPhone?: string;
 }
 
 export const emptyRequest = (date: string): RequestFields => ({
@@ -42,6 +44,7 @@ function askInput(f: RequestFields): Record<string, unknown> {
   if (f.tools) input.tools = true;
   if (t(f.note)) input.note = t(f.note);
   if (!f.driver) input.driver_required = false;
+  if (t(f.requesterPhone ?? "")) input.requester_phone = t(f.requesterPhone ?? "");
   return input;
 }
 
@@ -181,9 +184,10 @@ export function timelineSteps(q: { status: string; decided?: string; decline_rea
  * The edit form's fields, from the card: the trip from its stops and start (the start stop's what, note and time
  * there from the card's trip), or an older request's From and To as two stops; then what it asks for.
  */
-export function editFields(q: { fields?: RequestEditFields; note?: string; trip?: { stops: (TripStartStop & { is_start?: boolean })[] } }): RequestFields {
+export function editFields(q: { fields?: RequestEditFields; note?: string; requester_phone?: string; trip?: { stops: (TripStartStop & { is_start?: boolean })[] } }): RequestFields {
   const f = q.fields;
   return {
+    ...(q.requester_phone ? { requesterPhone: q.requester_phone } : {}),
     ...tripFromRequest(f, q.trip?.stops.find((s) => s.is_start)),
     behalf: f?.on_behalf_of ?? "",
     project: "",
@@ -223,6 +227,8 @@ export function updateRequestInput(id: string, version: number, f: RequestFields
   if (t(f.note) !== t(was.note)) input.note = t(f.note) || null;
   if (f.driver !== was.driver) input.driver_required = f.driver;
   if (t(f.behalf) !== t(was.behalf)) input.on_behalf_of = t(f.behalf) || null;
+  // Undefined = not on the form (someone who does not approve, or a draft from before the field): left as it is.
+  if (f.requesterPhone !== undefined && t(f.requesterPhone) !== t(was.requesterPhone ?? "")) input.requester_phone = t(f.requesterPhone) || null;
   if (Object.keys(input).length === 2) return { error: "Nothing changed." };
   return { input };
 }

@@ -1,7 +1,10 @@
 // Register a vehicle (/vehicles/new) or change one (/vehicles/:reg/edit): the
 // same form; an update sends only the fields filled in. Kept as a draft.
+// Phase 7 (§28): after the first save Register vehicle stays on the page with
+// the Documents section (/vehicles/new?registered=<plate>): the files need the
+// vehicle saved first.
 import { type FormEvent, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
@@ -11,6 +14,8 @@ import { Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { useVehicle, vehicleDates } from "./VehicleDetail";
+import { VehicleDocumentsSection } from "./VehicleDocs";
 import { emptyVehicle, type VehicleFields, vehicleInput } from "./vehicleLogic";
 import { vehiclePath } from "./Vehicles";
 
@@ -22,6 +27,8 @@ export function VehicleForm() {
   const navigate = useNavigate();
   const toast = useToast();
   const lists = useLists();
+  const [params] = useSearchParams();
+  const registered = isNew ? params.get("registered") : null;
   const [f, setF, draft] = useFormDraft<VehicleFields>(isNew ? "vehicle-new" : "vehicle-edit", plate, emptyVehicle);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -44,12 +51,16 @@ export function VehicleForm() {
     }
     setBusy(true);
     try {
-      await transport.call(v.tool, v.input);
+      const out = await transport.call<{ registered?: { reg_no?: string } }>(v.tool, v.input);
       draft.clear();
       toast(isNew ? "Vehicle registered" : "Vehicle updated");
       void store.invalidate();
       void store.load("lists.vehicles", "list_vehicles", { filter: "all" });
-      navigate(isNew ? vehiclePath(String(v.input.reg_no)) : backTo);
+      // A new vehicle: the same page with its Documents section (when this person may add them), else the vehicle.
+      if (isNew && me.tools.includes("vehicle_documents")) {
+        navigate(`/vehicles/new?registered=${encodeURIComponent(out?.registered?.reg_no ?? String(v.input.reg_no))}`, { replace: true });
+        setBusy(false);
+      } else navigate(isNew ? vehiclePath(String(v.input.reg_no)) : backTo);
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);
@@ -72,6 +83,7 @@ export function VehicleForm() {
     }
   }
 
+  if (registered) return <Registered reg={registered} />;
   const drivers = (lists.drivers ?? []).filter((d) => d.active !== false);
   return (
     <section className="view" data-testid="vehicle-form">
@@ -147,8 +159,32 @@ export function VehicleForm() {
           )}
           {msg && <Notice tone="bad">{msg}</Notice>}
         </div>
+        {isNew && me.tools.includes("vehicle_documents") && (
+          <div className="card card-b form" data-testid="documents-after-save">
+            <h2>Documents</h2>
+            <p className="muted small" style={{ margin: 0 }}>The revenue licence, insurance, emission test, CR and the rent or lease agreement are added here after Register vehicle: the files need the vehicle saved first.</p>
+          </div>
+        )}
         <StickyActions><button className="btn primary" type="submit" disabled={busy}>{isNew ? "Register vehicle" : "Save changes"}</button></StickyActions>
       </form>
+    </section>
+  );
+}
+
+/** Register vehicle after the first save: the vehicle is in, its documents can go up now. */
+function Registered({ reg }: { reg: string }) {
+  const { v } = useVehicle(reg);
+  return (
+    <section className="view" data-testid="vehicle-registered">
+      <PageTop title="Register vehicle" sub="New rented vehicle" backTo="/vehicles" />
+      <div className="page-form">
+        <Notice tone="ok"><b>{reg} is registered.</b> Add its documents now, or later on the vehicle's page.</Notice>
+        <VehicleDocumentsSection key={reg} reg={reg} rented={!!v?.rented_from} dates={v ? vehicleDates(v) : {}} />
+        <StickyActions>
+          <Link className="btn primary" to={vehiclePath(reg)}>Open the vehicle</Link>
+          <Link className="btn" to="/vehicles/new">Register another</Link>
+        </StickyActions>
+      </div>
     </section>
   );
 }

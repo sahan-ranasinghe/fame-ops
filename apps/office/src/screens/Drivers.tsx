@@ -50,11 +50,12 @@ export function Drivers() {
             {list.length ? (
               <div className="tbl-wrap">
                 <table>
-                  <thead><tr><th>Driver</th><th>Code</th><th>Username</th><th>Phone</th><th>Licence expires</th><th>Vehicle</th><th>Location</th><th>Last 30 days</th><th className="r"></th></tr></thead>
+                  <thead><tr><th><span className="sr-only">Photo</span></th><th>Driver</th><th>Code</th><th>Username</th><th>Phone</th><th>Licence expires</th><th>Vehicle</th><th>Location</th><th>Last 30 days</th><th className="r"></th></tr></thead>
                   <tbody>
                     {list.map((x) => (
                       <tr key={x.username}>
-                        <td data-label="Driver"><span><div className="name"><Avatar name={x.name} small />{x.username && routes ? <Link to={`/drivers/${x.username}`}>{x.name}</Link> : x.name}</div>{x.active === false && <Pill tone="bad">Switched off</Pill>}</span></td>
+                        <td className="photo-cell"><Avatar name={x.name} src={x.photo_url} /></td>
+                        <td data-label="Driver"><span><div className="name">{x.username && routes ? <Link to={`/drivers/${x.username}`}>{x.name}</Link> : x.name}</div>{x.active === false && <Pill tone="bad">Switched off</Pill>}</span></td>
                         <td data-label="Code" className="mono">{x.code || "—"}</td>
                         <td data-label="Username" className="mono">{x.username || "—"}</td>
                         <td data-label="Phone">{x.phone || "—"}</td>
