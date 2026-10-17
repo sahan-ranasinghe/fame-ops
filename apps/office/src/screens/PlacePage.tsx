@@ -18,8 +18,8 @@ import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { parsePin } from "./stopsLogic";
 import {
-  placeActions, type PlaceDetailWithRemoved, REMOVE_IDLE, removedLine, removedNotice, removeInput, removeStep, type RemovePlaceAnswer, type RemoveState,
-  removeWords, taskLine,
+  placeActions, type PlaceDetailWithRemoved, type PlaceInUse, REMOVE_IDLE, removedLine, removedNotice, removeInput, removeStep, type RemovePlaceAnswer,
+  type RemoveState, removeTasks, removeWords, taskLine,
 } from "./placeRemoveLogic";
 import { PLACES_CHANGED } from "./Places";
 
@@ -76,7 +76,7 @@ export function PlacePage() {
 
   if (err && !p) return <><PageTop title="Place" backTo={backTo} /><Notice tone="bad">{err}</Notice></>;
   if (!p) return <><PageTop title="Place" backTo={backTo} /><Loading>Loading the place…</Loading></>;
-  const acts = placeActions(me.tools, !!p.removed);
+  const acts = placeActions(me.tools, !!p.removed, p.active === false);
   const pin = parsePin(f.pin);
   const changed = f.name !== p.name || f.address !== (p.address ?? "") || f.district !== (p.district ?? "") || f.depot !== (p.depot ?? "") ||
     f.pin !== (p.lat != null && p.lng != null ? pinText({ lat: p.lat, lng: p.lng }) : "");
@@ -106,12 +106,18 @@ export function PlacePage() {
     }
   }
 
-  // The first click only arms the second step; the second asks the server, which may want a confirm.
+  // The first click reads why removing would ask (place_detail's in_use, nothing written) and shows it above the second
+  // button; the second removes (with confirm for what was shown); the server asks again only for reasons that came up since.
   async function remove() {
     if (!p) return;
-    if (rm.step === "idle") return setRm(removeStep(rm, { type: "start" }));
     setBusy(true);
     setRmErr(null);
+    if (rm.step === "idle") {
+      const inUse = await transport.call<{ in_use?: PlaceInUse }>("place_detail", { id: p.id }).then((r) => r.in_use).catch(() => undefined);
+      setRm(removeStep(rm, { type: "start", inUse }));
+      setBusy(false);
+      return;
+    }
     try {
       const answer = await transport.call<RemovePlaceAnswer>("remove_place", removeInput(p.id, rm));
       setRm(removeStep(rm, { type: "answer", answer }));
@@ -209,16 +215,16 @@ export function PlacePage() {
             <b>{words.title}</b>
             <p className="muted small" style={{ margin: "4px 0 0" }}>{words.text}</p>
           </div>
-          {rm.step === "needs_confirm" && rm.tasks.length > 0 && (
+          {removeTasks(rm).length > 0 && (
             <ul className="small" style={{ margin: 0, paddingLeft: 18 }} data-testid="place-remove-tasks">
-              {rm.tasks.map((t) => (
+              {removeTasks(rm).map((t) => (
                 <li key={t.task_id}>{can(me, "assign_tasks") ? <Link to={`/tasks/${t.task_id}`}>{taskLine(t)}</Link> : taskLine(t)}</li>
               ))}
             </ul>
           )}
           {rmErr && <Notice tone="bad">{rmErr}</Notice>}
           <div className="acts">
-            <button type="button" className="btn danger" disabled={busy} onClick={() => void remove()}>{busy && rm.step !== "idle" ? "Removing…" : words.button}</button>
+            <button type="button" className="btn danger" disabled={busy} onClick={() => void remove()}>{busy ? (rm.step === "idle" ? "Checking…" : "Removing…") : words.button}</button>
             {words.keep && <button type="button" className="btn" disabled={busy} onClick={() => { setRm(removeStep(rm, { type: "cancel" })); setRmErr(null); }}>Keep it</button>}
           </div>
         </div>

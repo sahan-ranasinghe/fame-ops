@@ -1591,8 +1591,22 @@ as off) and the tests.
 - **An approved request shows the task.** Once a request has its task, its card's trip (stops, times, plan, map), `when`
   and `back_by` come from the task as it is now, the single source. "Changed by the office · was 09:00 Sat 17 Oct ·
   stops changed" when the task's leave time or stops differ from what was asked (an older From/To request compares the
-  time). Tell requester quotes the task's time. Tests: the suite (the office moves the task and changes its stops) and
-  Vitest (the page shows the task's times and the line, never the old plan).
+  time). Tell requester quotes the task's time. The card's route and stop count are the task's too.
+  - The edit page starts from the task while the request is approved (its day, time, back-by, start and stops).
+  - The first change after approval starts from the task as it is now (`update_request` takes the task's trip into
+    the request first), so what the requester changed is measured from the trip they saw.
+  - Deciding it again applies only what the requester changed since it was approved (the card's changes) and the
+    approver's own changes; everything else stays as the task has it. Before, Keep put the asked time, back-by,
+    passengers and route back over the office's edits. A second change before the decision keeps the approved
+    version to compare with (`previous` is no longer overwritten).
+  - The "changed by the office" line is hidden while the requester's own change waits for a decision. After a change
+    kept as asked, the request takes the task's times (a trip planned again a minute apart is not "changed"); when the
+    approver moves the time, the line shows what the requester had asked.
+  - The page's trip with its road lines (asked once) is used only while it matches the card's trip; an office edit
+    (no new request version) asks again and shows the newer plan meanwhile.
+  - Tests: the suite (the office moves the task and changes its stops; the edit page's fields; a passengers-only change
+    kept leaves the office's time and stop), Vitest (the page shows the task's times and the line, never the old plan;
+    an office edit while the page is open shows at once).
 - **Item 7, the app side.**
   - The Phone setup card is off Today.
   - The brand's steps are in the first-run Permissions flow once, after the battery step, and on Me → Phone setup (a
@@ -1605,9 +1619,24 @@ as off) and the tests.
   - `remove_place` answers `needs_confirm` with the reasons and the tasks for the base place or a place that tasks today or later use; with `confirm` it removes it, and removing the base place clears the setting.
   - `restore_place`; `list_places(removed)`. A removed place is not edited until it is restored.
   - Clearing a setting to null failed before (the column holds a value). It is now stored as JSON null (`save_fleet_setting`).
-  - Web (S5): Remove on the place page with a second step and the reasons above "Remove anyway"; Places → Removed places with Restore.
-  - Tests: pgTAP `phase7_places`, the suite, e2e.
+  - Web (S5): Remove on the place page with a second step; Places → Removed places with Restore. The first click
+    reads `place_detail`'s `in_use` (nothing written) and shows the reasons and tasks above "Yes, remove", which then
+    confirms: two clicks. Reasons that came up since are still asked by the server ("Remove anyway").
+  - The site import skips a removed site with the reason ("… was removed by the office: restore it first"), so a
+    removed place never comes back by itself (it also broke the whole batch before). `import_place_rows` is redefined
+    in the same unpushed migration.
+  - A removed place's name is still taken: adding it again says to restore it from Removed places; a restore after
+    someone took the name says so. A place switched off by an undone import is not removed (a restore would switch it
+    on); the page has no Remove for it.
+  - The tasks a removal asks about are read by their day and state in the database (no 500-stop cap before the
+    filter).
+  - Tests: pgTAP `phase7_places`, the suite (in_use, the import, the names, a switched-off place), Vitest, e2e.
 - The hotfix is in `phase7-3` (every hotfix commit is its ancestor). Live `get_settings` shows 430 / 430 / 430 / 215 / 215.
+- A fresh reviewer read `cb0c3a3..phase7-3` (the three items above). Its findings, all fixed: `place_detail` refused
+  a removed place (meant for `update_place`); the site import and a removed place; the edit page, the route and Keep
+  still read the request as first asked; the page's lined trip went stale after an office edit; the tasks query's cap;
+  the name clash; three clicks to remove; a switched-off place; the Sinhala table (`me.phoneSetup` is
+  `phoneSetup.title`; `phoneSetup.meHint` and Huawei's steps added).
 
 **The fresh reviewer at checkpoint 3** found no security gap. Its findings, all fixed:
 - A one-step booking writes its trip after its own approval, so a later Keep would have put the request's stops back
@@ -1659,7 +1688,7 @@ the boss or a driver). The table is completed with every key as built at each ch
 | `vehicle.change` | Change vehicle | වාහනය වෙනස් කරන්න |
 | `vehicle.takenBanner` | {plate} is now with {name} · choose your vehicle | {plate} දැන් {name} ළඟ · ඔබේ වාහනය තෝරන්න |
 | `me.finishWorkFirst` | Finish work first | පළමුව වැඩ අවසන් කරන්න |
-| `me.phoneSetup` | Phone setup | දුරකථන සැකසුම |
+| `phoneSetup.title` (the Me row and the page's title; planned as `me.phoneSetup`) | Phone setup | දුරකථන සැකසුම |
 | `me.changePhoto` | Change photo | ඡායාරූපය වෙනස් කරන්න |
 | `photo.title` | Add your photo | ඔබේ ඡායාරූපය එක් කරන්න |
 | `photo.why` | The office and the people you drive see it. | කාර්යාලයට සහ ඔබ රැගෙන යන අයට එය පෙනේ. |
@@ -1777,6 +1806,14 @@ Added in Part 3 (17 October: the driver's photo, vehicle photos, the held vehicl
 | `docs.needsConnection` | Needs a connection to open | විවෘත කිරීමට සම්බන්ධතාවක් අවශ්‍යයි |
 | `docs.noVehicle` | Start work with a vehicle to see its documents | ලේඛන බැලීමට වාහනයක් සමඟ වැඩ ආරම්භ කරන්න |
 | `docs.failed` | Couldn't open the document: try again | ලේඛනය විවෘත කළ නොහැකි විය: නැවත උත්සාහ කරන්න |
+
+Added before Round A2 (item 7, the app side: Phone setup on Me and in the first-run Permissions flow; as built):
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `phoneSetup.meHint` | If the phone stops Fame Driver by itself, change these settings once. | දුරකථනය Fame Driver තනිවම නතර කරන්නේ නම්, මෙම සැකසුම් එක් වරක් වෙනස් කරන්න. |
+| `phoneSetup.steps.huawei[0]` | Settings → Battery → App launch → Fame Driver: turn off "Manage automatically", then turn on all three switches. | Settings → Battery → App launch → Fame Driver: "Manage automatically" අක්‍රිය කර, ස්විච තුනම ක්‍රියාත්මක කරන්න. |
+| `phoneSetup.steps.huawei[1]` | Recent apps: pull Fame Driver down (or tap the lock) so it stays locked. | Recent apps තුළ Fame Driver පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ. |
 
 **Odometer words (Sahan, 16 October, the Part 2b go):** one word family everywhere, replacing the three spellings
 (ඔඩෝමීටරය, ඕඩෝමීටර, මීටර කියවීම): odometer = **මීටරය**, odometer reading = **මීටර් කියවීම**, start odo =

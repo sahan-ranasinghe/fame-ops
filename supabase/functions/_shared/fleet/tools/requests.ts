@@ -36,9 +36,26 @@ import { realDate, tool, zDate, zId, zText, zTime, zVehicleType } from "../tool.
 import { matchProjects } from "./projects.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
 import { actorUserId, logRequestEvent, requester } from "./requestCore.ts";
-import { type RequestStop, requestStopsOf, resolvedFromRow, saveRequestTrip, startOfRequest } from "./requestTrip.ts";
+import {
+  type RequestStop,
+  requestStopsOf,
+  type RequestTrip,
+  resolvedFromRow,
+  saveRequestTrip,
+  startOfRequest,
+  type StopRowLike,
+} from "./requestTrip.ts";
 import { loadSettings } from "../settings.ts";
-import { canRedecide, checkVersion, diffText, requestDiff, type RequestFields, snapshot, statusAfterEdit } from "../requests_rules.ts";
+import {
+  canRedecide,
+  checkVersion,
+  diffText,
+  FIELD_LABEL,
+  requestDiff,
+  type RequestFields,
+  snapshot,
+  statusAfterEdit,
+} from "../requests_rules.ts";
 import {
   activeDriver,
   activeVehicle,
@@ -232,8 +249,22 @@ function tripOf(r: VehicleRequest, stops: RequestStop[], withLine: boolean) {
   };
 }
 
+/** Where a trip starts and how it is planned: the same columns on a request and on its task. */
+type TripOwner = Pick<
+  VehicleRequest,
+  | "start_name"
+  | "start_place_id"
+  | "start_google_place_id"
+  | "start_lat"
+  | "start_lng"
+  | "leave_by"
+  | "leave_by_source"
+  | "return_to_base"
+  | "avoid_expressway"
+>;
+
 /** The start stop's own fields when passengers get in at the start (what, note, its time there when chosen). */
-function startStopFields(stops: RequestStop[]) {
+function startStopFields(stops: StopRowLike[]) {
   const at = stops.find((s) => s.is_start);
   if (!at) return {};
   return {
@@ -251,7 +282,8 @@ const timeThenDay = (iso: string) => colomboDayTime(iso).replace(/^(.*) (\d{2}:\
  * Once a request is approved its trip is the task's (Phase 7, §4; Sahan, 17 October): the stops and times as they are
  * now, never the plan as first asked. "Changed by the office · was 09:00 Sat 17 Oct" when the leave time or the stops
  * differ from what the request asked (an older From/To request compares the time only: its place names were resolved
- * when it was approved).
+ * when it was approved). Not while the requester's own change waits for a decision (status changed): the difference is
+ * theirs then, listed in the card's changes.
  */
 function taskTrip(r: VehicleRequest, t: TripOutcome, asked: RequestStop[], withLine: boolean) {
   const task = t.task;
@@ -262,7 +294,7 @@ function taskTrip(r: VehicleRequest, t: TripOutcome, asked: RequestStop[], withL
   const keys = (list: { type: string; place_name: string; place_id?: string | null; google_place_id?: string | null }[]) =>
     list.map((x) => stopForChange(x).key).join("\n");
   const stopsMoved = asked.length > 0 && keys(asked) !== keys(t.stops);
-  const changed = timeMoved || stopsMoved
+  const changed = r.status !== "changed" && (timeMoved || stopsMoved)
     ? {
       by: "the office",
       was: timeMoved ? timeThenDay(askedAt) : undefined,
@@ -292,8 +324,8 @@ function taskTrip(r: VehicleRequest, t: TripOutcome, asked: RequestStop[], withL
   };
 }
 
-/** The trip as the edit form takes it back (update_request's stops and start). */
-function tripFields(r: VehicleRequest, stops: RequestStop[]) {
+/** The trip as the edit form takes it back (update_request's stops and start): the request's, or once approved its task's. */
+function tripFields(r: TripOwner, stops: StopRowLike[]) {
   if (stops.length === 0) return {};
   return {
     stops: stops.filter((s) => !s.is_start).map((s) => ({
@@ -333,10 +365,20 @@ function requestCard(
   refs?: CardRefs,
   withLine = false,
 ) {
-  // Once there is a task behind it, the task's times are the request's (the office may have changed them).
+  // Once there is a task behind it, the task's times and stops are the request's (the office may have changed them).
   const outcome = r.task_id ? refs?.trips?.get(r.task_id) : undefined;
   const leaveAt = outcome ? outcome.task.leave_by ?? outcome.task.start_at : r.needed_at;
   const backBy = outcome ? outcome.task.end_by : r.back_by;
+  // The edit form starts from the task while approved; a change waiting for a decision is the request's own (it took
+  // the task's trip when it was made, update_request).
+  const editFrom = outcome && r.status === "approved" ? outcome : undefined;
+  const editLeave = editFrom ? leaveAt : r.needed_at;
+  const editBack = editFrom ? backBy : r.back_by;
+  const route = outcome?.stops.length
+    ? [outcome.stops[0].place_name, outcome.stops.length > 1 ? outcome.stops[outcome.stops.length - 1].place_name : null]
+    : [r.route_from, r.route_to];
+  // A request planned with stops edits the task's stops; an older From/To one edits From and To (the task's ends).
+  const editRoute = editFrom && stops.length === 0 ? route : [r.route_from, r.route_to];
   const sameDay = backBy && colomboDate(backBy) === colomboDate(leaveAt);
   // Decided = approved or declined (a cancelled booking was approved first; a cancelled waiting request was never decided).
   const decided = r.status === "approved" || r.status === "changed" || r.status === "declined" || (r.status === "cancelled" && r.task_id);
@@ -350,7 +392,7 @@ function requestCard(
     project: r.project_label,
     when: colomboDayTime(leaveAt),
     back_by: backBy ? (sameDay ? colomboTime(backBy) : colomboDayTime(backBy)) : undefined,
-    route: [r.route_from, r.route_to].filter(Boolean).join(" → ") || undefined,
+    route: route.filter(Boolean).join(" → ") || undefined,
     need: needText(r),
     note: r.note,
     status: r.status,
@@ -383,18 +425,18 @@ function requestCard(
         notes: r.task_notes ?? undefined,
       }
       : undefined,
-    stops_count: stops.length || undefined,
+    stops_count: (outcome ? outcome.stops.length : stops.length) || undefined,
     // Once approved (or changed, or cancelled after approval) the trip is the task's: never an old plan.
     trip: outcome ? taskTrip(r, outcome, stops, withLine) : tripOf(r, stops, withLine),
     requester_phone: r.requester_phone ?? undefined,
     ...outcomeOf(r, outcome),
     // The fields as the edit form needs them (Colombo day and clock).
     fields: {
-      date: colomboDate(r.needed_at),
-      time: colomboTime(r.needed_at),
-      back_by: r.back_by ? colomboTime(r.back_by) : undefined,
-      route_from: r.route_from ?? undefined,
-      route_to: r.route_to ?? undefined,
+      date: colomboDate(editLeave),
+      time: colomboTime(editLeave),
+      back_by: editBack ? colomboTime(editBack) : undefined,
+      route_from: editRoute[0] ?? undefined,
+      route_to: editRoute[1] ?? undefined,
       need_type: r.need_type ?? undefined,
       pax: r.pax ?? undefined,
       tools: r.tools,
@@ -403,7 +445,7 @@ function requestCard(
       on_behalf_of: r.on_behalf_of ?? undefined,
       from_dwell_min: r.from_dwell_min ?? undefined,
       to_dwell_min: r.to_dwell_min ?? undefined,
-      ...tripFields(r, stops),
+      ...(editFrom && stops.length > 0 ? tripFields(editFrom.task, editFrom.stops) : tripFields(r, stops)),
     },
     // An approved booking the requester edited: what changed since it was approved, until it is decided again.
     changed: r.changed_at
@@ -1491,6 +1533,93 @@ async function replanRequest(
   };
 }
 
+/**
+ * The first change to an approved request starts from its task as it is now (Phase 7, §4): the time, back-by, start and
+ * stops the office may have changed since. What the requester changes is measured from the trip they saw, and deciding it
+ * again never brings back the plan as first asked. A request planned with stops takes the task's stops; an older From/To
+ * one takes the times and the first and last stops' names (it stays a From/To request). Null when there is no task to
+ * start from (finished or cancelled).
+ */
+async function tripOfTask(
+  db: Db,
+  request: VehicleRequest,
+  now: Date,
+  withStops: boolean,
+): Promise<{ request: VehicleRequest; rows?: RequestStop[]; trip?: RequestTrip } | null> {
+  if (!request.task_id) return null;
+  const task = unwrapMaybe(await db.from("tasks").select("*").eq("id", request.task_id).maybeSingle(), "task");
+  if (!task || task.status === "completed" || task.status === "cancelled") return null;
+  const stops = unwrap(await db.from("task_stops").select("*").eq("task_id", task.id).neq("status", "removed").order("seq"), "stops");
+  const leave = task.leave_by ?? task.start_at;
+  if (!withStops) {
+    const [first, last] = [stops[0], stops.length > 1 ? stops[stops.length - 1] : undefined];
+    return {
+      request: {
+        ...request,
+        needed_at: leave,
+        back_by: task.end_by,
+        route_from: first?.place_name ?? request.route_from,
+        route_to: last?.place_name ?? request.route_to,
+      },
+    };
+  }
+  const nowIso = now.toISOString();
+  const rows: RequestStop[] = stops.map((x) => ({
+    id: x.id,
+    request_id: request.id,
+    seq: x.seq,
+    type: x.type,
+    what: x.what,
+    place_id: x.place_id,
+    place_name: x.place_name,
+    address: x.address,
+    lat: x.lat,
+    lng: x.lng,
+    dwell_min: x.dwell_min,
+    arrive_by: x.arrive_by,
+    note: x.note,
+    planned_arrive_at: x.planned_arrive_at,
+    planned_depart_at: x.planned_depart_at,
+    is_start: x.is_start,
+    dwell_source: x.dwell_source,
+    google_place_id: x.google_place_id,
+    google_fetched_at: x.google_fetched_at,
+    created_at: nowIso,
+    removed_at: null,
+  }));
+  const caught: VehicleRequest = {
+    ...request,
+    needed_at: leave,
+    back_by: task.end_by,
+    start_place_id: task.start_place_id,
+    start_name: task.start_name,
+    start_lat: task.start_lat,
+    start_lng: task.start_lng,
+    start_google_place_id: task.start_google_place_id,
+    start_google_fetched_at: task.start_google_fetched_at,
+    leave_by: leave,
+    leave_by_source: task.leave_by_source ?? "manual",
+    return_to_base: task.return_to_base,
+    avoid_expressway: task.avoid_expressway,
+    buffer_min: task.buffer_min,
+    plan_json: task.plan_json,
+  };
+  return {
+    request: caught,
+    rows,
+    trip: {
+      start: startOfRequest(caught),
+      stops: rows.map(resolvedFromRow),
+      plan: task.plan_json as unknown as StoredPlan,
+      returnToBase: task.return_to_base,
+      avoidExpressway: task.avoid_expressway,
+      leaveBy: leave,
+      leaveBySource: task.leave_by_source === "plan" ? "plan" : "manual",
+      bufferMin: task.buffer_min,
+    },
+  };
+}
+
 export const updateRequest = tool({
   name: "update_request",
   title: "Change a request",
@@ -1534,38 +1663,38 @@ export const updateRequest = tool({
       ? { status: request.status, event: "edited", needs_reapproval: false }
       : statusAfterEdit(request.status);
 
-    const day = args.date ?? colomboDate(request.needed_at);
+    // Phase 7 (§4): the first change after approval starts from the task as it is now (the office may have changed it).
+    const stored = (await requestStopsOf(db, [request.id])).get(request.id) ?? [];
+    const fromTask = request.status === "approved" && !phoneOnly ? await tripOfTask(db, request, now, stored.length > 0) : null;
+    const base = fromTask?.request ?? request;
+    const day = args.date ?? colomboDate(base.needed_at);
     // Phase 7 (§34): a request with its trip is planned again when its stops, start, day or time change.
-    const tripRows = (await requestStopsOf(db, [request.id])).get(request.id) ?? [];
+    const tripRows = fromTask?.rows ?? stored;
     const tripEdit = args.stops !== undefined ||
       (tripRows.length > 0 &&
         (args.date !== undefined || args.time !== undefined || args.return_to_base !== undefined || args.avoid_expressway !== undefined));
     if (args.start && !args.stops) throw new ToolError("Give the stops together with the start.");
-    const trip = tripEdit ? await replanRequest(db, now, request, tripRows, day, args) : null;
-    const neededAt = trip
-      ? trip.leaveBy
-      : args.date || args.time
-      ? utcIso(day, args.time ?? colomboTime(request.needed_at))
-      : request.needed_at;
+    const trip = tripEdit ? await replanRequest(db, now, base, tripRows, day, args) : null;
+    const neededAt = trip ? trip.leaveBy : args.date || args.time ? utcIso(day, args.time ?? colomboTime(base.needed_at)) : base.needed_at;
     const backBy = args.back_by === null
       ? null
       : args.back_by
       ? utcIso(day, args.back_by)
-      : request.back_by
-      ? utcIso(day, colomboTime(request.back_by))
+      : base.back_by
+      ? utcIso(day, colomboTime(base.back_by))
       : null;
     if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
     const driverRequired = args.driver_required ?? request.driver_required;
     if (!driverRequired && !(await loadSettings(db)).self_drive_allowed) throw new ToolError(SELF_DRIVE_OFF);
 
-    const before = snapshot(request);
+    const before = snapshot(base);
     const tripFrom = trip ? trip.stops[0].place_name : undefined;
     const tripTo = trip && trip.stops.length > 1 ? trip.stops[trip.stops.length - 1].place_name : undefined;
     const after: RequestFields = {
       needed_at: neededAt,
       back_by: backBy,
-      route_from: tripFrom ?? args.route_from ?? request.route_from,
-      route_to: trip ? tripTo ?? null : args.route_to ?? request.route_to,
+      route_from: tripFrom ?? args.route_from ?? base.route_from,
+      route_to: trip ? tripTo ?? null : args.route_to ?? base.route_to,
       need_type: args.need_type === undefined ? request.need_type : args.need_type,
       pax: args.pax === undefined ? request.pax : args.pax,
       tools: args.tools ?? request.tools,
@@ -1604,8 +1733,9 @@ export const updateRequest = tool({
         to_dwell_min: toDwell,
         status: next.status,
         version: request.version + 1,
-        // A phone alone keeps the record of an earlier change (what the approver decides again) as it is.
-        ...(!phoneOnly && { previous: before as unknown as Json }),
+        // The request as approved, kept from the first change until it is decided again (the card's changes, and what
+        // redecide_request applies: only what the requester changed). A phone alone keeps it as it is.
+        ...(!phoneOnly && request.status !== "changed" && { previous: before as unknown as Json }),
         // The asker changed the trip itself: an approved booking's task takes the stops when decided again.
         ...(trip && { trip_edited_at: nowIso }),
         // A waiting request moved to another time is reminded afresh (30 minutes before, and once if it passes).
@@ -1616,6 +1746,7 @@ export const updateRequest = tool({
     );
     if (rows.length === 0) throw new ToolError("Someone else changed this request just now. Reload it and try again.");
     if (trip) await saveRequestTrip(db, request.id, trip, now);
+    else if (fromTask?.trip) await saveRequestTrip(db, request.id, fromTask.trip, now);
     await logRequestEvent(db, request.id, next.event, actor.name, { note: diffText(changes), changes, at: nowIso });
 
     if (next.needs_reapproval) {
@@ -1628,7 +1759,7 @@ export const updateRequest = tool({
     }
     return {
       result: {
-        request: await requestCardOf(db, trip ? await getRequest(db, request.id) : rows[0], now),
+        request: await requestCardOf(db, trip || fromTask ? await getRequest(db, request.id) : rows[0], now),
         needs_reapproval: next.needs_reapproval,
         changes,
         next: next.needs_reapproval
@@ -1736,22 +1867,35 @@ export const redecideRequest = tool({
       };
     }
 
-    // keep or change: the task takes what the request now asks, plus the approver's own changes.
+    // keep or change: the task takes what the requester changed since it was approved (the card's changes), plus the
+    // approver's own changes. Everything else stays as the task has it now: the office's own edits are never undone.
     if (task.status === "completed" || task.status === "cancelled") {
       throw new ToolError(`The task behind this request is ${task.status}; decline the request or make a new booking.`);
     }
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     const change = args.decision === "change";
-    const day = change && args.date ? args.date : colomboDate(request.needed_at);
-    const neededAt = change && (args.date || args.time) ? utcIso(day, args.time ?? colomboTime(request.needed_at)) : request.needed_at;
-    const backBy = change && args.back_by === null
+    const asked = request.status === "changed" && request.previous
+      ? requestDiff(request.previous as unknown as RequestFields, snapshot(request))
+      : {};
+    const askedLeave = asked[FIELD_LABEL.needed_at] ? request.needed_at : task.start_at;
+    const day = change && args.date ? args.date : colomboDate(askedLeave);
+    const startAt = change && (args.date || args.time)
+      ? utcIso(day, args.time ?? colomboTime(askedLeave))
+      : asked[FIELD_LABEL.needed_at]
+      ? request.needed_at
+      : undefined;
+    const leaveDay = colomboDate(startAt ?? task.start_at);
+    // Back-by stays at its clock time when the time moves (on the new day when the day moves): as asked, not shifted.
+    const endBy = change && args.back_by === null
       ? null
       : change && args.back_by
-      ? utcIso(day, args.back_by)
-      : request.back_by
-      ? utcIso(day, colomboTime(request.back_by))
-      : null;
-    if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
+      ? utcIso(leaveDay, args.back_by)
+      : asked[FIELD_LABEL.back_by]
+      ? (request.back_by ? utcIso(leaveDay, colomboTime(request.back_by)) : null)
+      : startAt
+      ? (task.end_by ? utcIso(leaveDay, colomboTime(task.end_by)) : null)
+      : undefined;
+    if (endBy && endBy <= (startAt ?? task.start_at)) throw new ToolError("back_by must be later than time on the same day.");
     // A new driver with no vehicle named takes the vehicle they hold today, else their regular one (Phase 7, §3).
     const vehicle = change && args.vehicle
       ? activeVehicle(refs, args.vehicle)
@@ -1766,15 +1910,19 @@ export const redecideRequest = tool({
       : refs.emp.get(task.employee_id);
     if (!driver) throw new ToolError("The task's driver no longer exists.");
 
-    // Phase 7 (§34): a request with its trip changes the task's stops through update_task_stops (below), not its From and To.
+    // Phase 7 (§34): a trip the requester edited changes the task's stops through update_task_stops (below); a From or To
+    // they changed (an older request, or the connector) through the route.
     const tripRows = (await requestStopsOf(db, [request.id])).get(request.id) ?? [];
+    const decidedAt = request.decided_at;
+    const tripEdited = tripRows.length > 0 && decidedAt !== null && request.trip_edited_at !== null && request.trip_edited_at > decidedAt;
+    const routeAsked = !tripEdited && (asked[FIELD_LABEL.route_from] || asked[FIELD_LABEL.route_to]);
     const out = await changeTask(db, now, actor, task, {
-      startAt: neededAt,
-      endBy: backBy,
+      startAt,
+      endBy,
       driver,
       vehicle,
-      passengers: request.pax,
-      route: tripRows.length > 0 ? undefined : routeOf(request),
+      passengers: asked[FIELD_LABEL.pax] ? request.pax : undefined,
+      route: routeAsked ? routeOf(request) : undefined,
     }, {
       note: args.decision === "keep" ? "request decided again: kept" : "request decided again: changed",
       tellRequester: false,
@@ -1783,13 +1931,16 @@ export const redecideRequest = tool({
     const warnings = [...out.warnings, ...fitWarnings(vehicle, request)];
 
     // Phase 7 (§34): the trip edited since it was approved: the task takes its stops as update_task_stops does (the pending
-    // ones replaced, planned again, the driver told what changed). A task under way keeps its stops.
-    const decidedAt = request.decided_at;
-    const tripEdited = tripRows.length > 0 && decidedAt !== null && request.trip_edited_at !== null && request.trip_edited_at > decidedAt;
+    // ones replaced, planned again, the driver told what changed). A task under way keeps its stops. The request's stops
+    // started from the task's when it was changed (update_request), so the office's stop edits are in them.
     if (tripEdited && out.task.status === "assigned") {
       const fields = tripFields(request, tripRows);
       // The approver's own time wins; else a time typed by the asker; else planned from the arrive-by times.
-      const leave = change && args.time ? args.time : request.leave_by_source === "manual" ? colomboTime(neededAt) : undefined;
+      const leave = change && args.time
+        ? args.time
+        : request.leave_by_source === "manual"
+        ? colomboTime(startAt ?? out.task.start_at)
+        : undefined;
       const res = await updateTaskStops.run({
         task_id: task.id,
         plan_version: out.plan_version,
@@ -1808,11 +1959,18 @@ export const redecideRequest = tool({
     const onlyTime = change && Object.keys(out.changes).every((k) => k === "time" || k === "end by") &&
       (out.changes.time || out.changes["end by"]);
     const action: EventAction = onlyTime ? "postponed" : "redecided";
+    // The request keeps what its requester asked: its page says "Changed by the office · was …" when the approver moved
+    // the time now (or the office changed the task of a request nobody edited). A requester's change taken as asked
+    // takes the task's times, so a trip planned again (the same stops, a minute apart on the roads) is not shown as changed.
+    const final = unwrap(await db.from("tasks").select("start_at, end_by, leave_by").eq("id", task.id).single(), "task");
+    const neededAt = final.leave_by ?? final.start_at;
+    const approverMoved = change && (args.date !== undefined || args.time !== undefined || args.back_by !== undefined);
+    const asTask = request.status === "changed" && !approverMoved;
     const rows = unwrap(
       await db.from("vehicle_requests").update({
         status: "approved",
-        needed_at: neededAt,
-        back_by: backBy,
+        ...(asTask && { needed_at: neededAt, back_by: final.end_by }),
+        ...(asTask && request.leave_by !== null && { leave_by: neededAt }),
         decided_at: nowIso,
         decided_by: actor.name,
         changed_at: null,
@@ -1847,8 +2005,8 @@ export const redecideRequest = tool({
         decision: action === "postponed" ? "postponed" : args.decision === "keep" ? "kept" : "changed",
         task: {
           task_id: task.id,
-          when: colomboDayTime(out.task.start_at),
-          until: out.task.end_by ? colomboTime(out.task.end_by) : undefined,
+          when: colomboDayTime(final.start_at),
+          until: final.end_by ? colomboTime(final.end_by) : undefined,
           driver: driver.name,
           vehicle: vehicle.reg_no,
           plan_version: out.plan_version,

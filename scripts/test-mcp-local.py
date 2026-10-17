@@ -1967,6 +1967,22 @@ tool("update_task_stops", {"task_id": dq["task_id"], "plan_version": td6["task"]
 moved = tool("list_requests", {"status": "all", "id": rq["id"]})["requests"][0]
 check(any(x.get("place") == "Kandy" for x in moved["trip"]["stops"]) and moved["trip"]["changed"]["text"].endswith("stops changed"),
       "the office changed the stops: the request shows the task's stops, 'stops changed'", json.dumps(moved["trip"])[:400])
+leave_now = psql(f"select to_char(leave_by at time zone 'Asia/Colombo', 'HH24:MI') from tasks where id = '{dq['task_id']}'")
+check(moved["fields"]["time"] == leave_now and any(x.get("place") == "Kandy" for x in moved["fields"]["stops"])
+      and moved["stops_count"] == len(moved["trip"]["stops"]) and moved["route"].endswith("Galle"),
+      "the edit page starts from the task (its time and stops), the route and stop count are the task's", json.dumps(moved["fields"])[:400])
+# The requester changes only the passengers; the approver keeps it: the office's time and stops stay (nothing as first asked).
+ch = tool("update_request", {"request_id": rq["id"], "version": moved["version"], "pax": 4})
+check(ch["request"]["status"] == "changed" and list(ch["changes"].keys()) == ["passengers"] and "changed" not in ch["request"]["trip"],
+      "a passengers-only change after the office's edits: only the passengers changed (measured from the task); no office line while it waits",
+      json.dumps({"changes": ch["changes"], "trip_changed": ch["request"]["trip"].get("changed")}))
+kp = tool("redecide_request", {"request_id": rq["id"], "version": ch["request"]["version"], "decision": "keep"})
+after_keep = tool("list_requests", {"status": "all", "id": rq["id"]})["requests"][0]
+check(psql(f"select to_char(leave_by at time zone 'Asia/Colombo', 'HH24:MI') || '|' || passengers from tasks where id = '{dq['task_id']}'") == f"{leave_now}|4"
+      and psql(f"select count(*) from task_stops where task_id = '{dq['task_id']}' and status <> 'removed' and place_name like 'Kandy%'") == "1"
+      and list(kp["task"]["changes"].keys()) == ["passengers"] and "changed" not in after_keep["trip"],
+      "kept: the task takes the passengers only; the office's time and Kandy stop stay; no 'changed by the office' after it",
+      json.dumps({"changes": kp["task"]["changes"], "trip_changed": after_keep["trip"].get("changed")}))
 # An edit while it waits: the stops replaced (the old ones kept as removed), still waiting.
 rq2 = tool("create_request", {"date": day(6), "time": "08:30", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]})["request"]
 up = tool("update_request", {"request_id": rq2["id"], "version": rq2["version"],
@@ -2006,6 +2022,9 @@ yard_name = f"Removable yard {uuid.uuid4().hex[:6]}"
 yard = tool("add_place", {"name": yard_name, "lat": 7.01, "lng": 80.01, "kind": "other"})["added"]
 yt = tool("create_task", {"title": "6i yard run", "date": day(8), "start_time": "09:00", "driver": "nuwan.p", "vehicle": "cab4521",
                           "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place_id": yard["id"]}]})
+iu = tool("place_detail", {"id": yard["id"]}).get("in_use", {})
+check(iu.get("reasons") == ["1 task today or later starts or stops there"] and iu.get("tasks", [{}])[0].get("title") == "6i yard run",
+      "place_detail's in_use: what remove_place would ask about, read before the second click", json.dumps(iu))
 ask = tool("remove_place", {"id": yard["id"]})
 check(ask.get("needs_confirm") is True and ask["reasons"] == ["1 task today or later starts or stops there"] and ask["tasks"][0]["title"] == "6i yard run"
       and psql(f"select active from places where id = '{yard['id']}'") == "t",
@@ -2019,8 +2038,31 @@ check(done.get("removed") == yard_name and not any(x.get("id") == yard["id"] for
       "confirmed: out of the search, under Removed places, the task's stop keeps its name (nothing deleted)", json.dumps(done))
 r = tool("update_place", {"id": yard["id"], "address": "Somewhere else"}, expect_error=True)
 check("restore it first" in r, "a removed place is not edited until it is restored", r)
+pd = tool("place_detail", {"id": yard["id"]})["place"]
+check(bool(pd.get("removed")) and pd.get("active") is False,
+      "place_detail still opens a removed place: Removed <when> by <who>, switched off", json.dumps(pd)[:200])
+r = tool("add_place", {"name": yard_name.upper()}, expect_error=True)
+check("was removed: restore it from Removed places" in r, "adding a removed place's name again points to Removed places", r)
 tool("restore_place", {"id": yard["id"]})
 check(any(x.get("id") == yard["id"] for x in tool("search_places", {"text": yard_name}).get("results", [])), "restore_place: found again")
+r = tool("add_place", {"name": yard_name}, expect_error=True)
+check("already exists" in r and "Key (" not in r, "a name taken by a place in use: plain words", r)
+# A removed site: the site import skips it with the reason (never switches it back on), the batch goes through.
+rs = f"RM{uuid.uuid4().hex[:4].upper()}"
+tool("import_places", {"preset": "dialog", "rows": [{"operator": "dialog", "site_id": rs, "name": "Removable site", "lat": 7.2, "lng": 80.2}]})
+rsid = tool("search_places", {"text": rs, "map": False})["results"][0]["id"]
+tool("remove_place", {"id": rsid})
+again = tool("import_places", {"preset": "dialog", "rows": [
+    {"operator": "dialog", "site_id": rs, "name": "Removable site renamed", "lat": 7.2, "lng": 80.2},
+    {"operator": "dialog", "site_id": rs + "B", "name": "Its neighbour", "lat": 7.3, "lng": 80.3}]})
+check(again["added"] == 1 and len(again["skipped"]) == 1 and "removed by the office" in again["skipped"][0]["reason"]
+      and psql(f"select active::text || ' ' || name from places where id = '{rsid}'") == "false Removable site",
+      "the site import skips a removed site with the reason and adds the rest", json.dumps(again))
+tool("restore_place", {"id": rsid})
+psql(f"update places set active = false where id = '{rsid}'")  # as an undone import leaves it
+r = tool("remove_place", {"id": rsid}, expect_error=True)
+check("switched off already" in r, "a place switched off by an undone import is not removed (a restore would switch it on)", r)
+psql(f"update places set active = true where id = '{rsid}'")
 before_base = tool("get_settings")["settings"].get("base_place_id")
 tool("update_settings", {"key": "base_place_id", "value": yard["id"]})
 ask = tool("remove_place", {"id": yard["id"]})

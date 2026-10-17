@@ -1,5 +1,6 @@
-// Remove a place (Phase 7, §15), on the pages: the place page's second step (the first click calls nothing, the
-// server's reasons and tasks above Remove anyway, the notice with Settings → Fleet when the base place was cleared, the
+// Remove a place (Phase 7, §15), on the pages: the place page's second step (the first click only reads place_detail's
+// in_use: the reasons and tasks above the second button, two clicks in all; the server's needs_confirm above Remove
+// anyway for reasons that came up since, the notice with Settings → Fleet when the base place was cleared, the
 // removed place read-only with Restore), and Places → Removed places with Restore on each row.
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -63,38 +64,43 @@ const fleetAdmin: Me = {
 const PLACE = { id: "p1", name: "Head office", kind: "office", badge: "Office", source: "manual", updated_at: "2026-10-01 09:00", lat: 6.9, lng: 79.85, pinned: true };
 const TASKS = [{ task_id: "t1", title: "Team drop · Kurunegala site", when: "Sat 18 Oct 09:00" }];
 
+const IN_USE = { reasons: ["Head office is the base place", "1 task today or later starts or stops there"], tasks: TASKS };
+
 describe("the place page's Remove", () => {
-  it("asks on the page: nothing called on the first click, the reasons above Remove anyway, then the notice and Restore", async () => {
+  it("asks on the page in two clicks: the first only reads, the reasons and tasks above Yes, remove; then the notice and Restore", async () => {
+    let removed = false;
     const t = new FakeTransport({
       list_places: () => ({ count: 1, places: [PLACE] }),
-      place_detail: (_a, n) => ({ place: n > 1 ? { ...PLACE, active: false, removed: "2026-10-17 10:05 by Sahan" } : PLACE, stops_90_days: 3 }),
-      remove_place: (a) => a.confirm
-        ? { removed: "Head office", base_place_cleared: true, tasks: TASKS }
-        : { needs_confirm: true, place: "Head office", reasons: ["Head office is the base place", "1 task today or later starts or stops there"], tasks: TASKS },
-      restore_place: () => ({ restored: "Head office", place: PLACE }),
+      place_detail: () => removed
+        ? { place: { ...PLACE, active: false, removed: "2026-10-17 10:05 by Sahan" }, stops_90_days: 3 }
+        : { place: PLACE, stops_90_days: 3, in_use: IN_USE },
+      remove_place: (a) => {
+        if (!a.confirm) return { needs_confirm: true, place: "Head office", ...IN_USE };
+        removed = true;
+        return { removed: "Head office", base_place_cleared: true, tasks: TASKS };
+      },
+      restore_place: () => { removed = false; return { restored: "Head office", place: PLACE }; },
     }, fleetAdmin);
     await mount(t, "/places/p1");
     const block = await screen.findByTestId("place-remove");
     expect(block.textContent).toContain("Remove this place");
 
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    const reads = t.argsOf("place_detail").length;
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Remove" })); });
     expect(t.argsOf("remove_place")).toEqual([]);
-    expect(screen.getByTestId("place-remove").textContent).toContain("Remove Head office?");
-
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, remove" })); });
-    expect(t.argsOf("remove_place")).toEqual([{ id: "p1" }]);
+    expect(t.argsOf("place_detail").length).toBe(reads + 1);
     const asked = screen.getByTestId("place-remove");
-    expect(asked.textContent).toContain("Remove Head office anyway?");
+    expect(asked.textContent).toContain("Remove Head office?");
     expect(asked.textContent).toContain("Head office is the base place; 1 task today or later starts or stops there.");
     expect(screen.getByRole("link", { name: "Sat 18 Oct 09:00 · Team drop · Kurunegala site" }).getAttribute("href")).toBe("/tasks/t1");
 
     // Keep it goes back; asking again starts from the first step.
     fireEvent.click(screen.getByRole("button", { name: "Keep it" }));
     expect(screen.getByTestId("place-remove").textContent).toContain("Remove this place");
-    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(screen.queryByTestId("place-remove-tasks")).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Remove" })); });
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, remove" })); });
-    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Remove anyway" })); });
-    expect(t.argsOf("remove_place").at(-1)).toEqual({ id: "p1", confirm: true });
+    expect(t.argsOf("remove_place")).toEqual([{ id: "p1", confirm: true }]);
 
     expect(await screen.findByText(/Removed\. It is listed under Removed places\./)).toBeTruthy();
     expect(screen.getByRole("link", { name: /The base place is no longer set/ }).getAttribute("href")).toBe("/settings/fleet");
@@ -107,6 +113,25 @@ describe("the place page's Remove", () => {
     expect(await screen.findByText(/Restored\. It is back in the searches/)).toBeTruthy();
     expect(screen.queryByTestId("place-removed")).toBeNull();
     expect(screen.getByTestId("place-remove").textContent).toContain("Remove this place");
+  });
+
+  it("reasons that came up after the first click: the server asks, and Remove anyway confirms", async () => {
+    const t = new FakeTransport({
+      list_places: () => ({ count: 1, places: [PLACE] }),
+      place_detail: () => ({ place: PLACE, stops_90_days: 0 }),
+      remove_place: (a) => a.confirm ? { removed: "Head office", tasks: TASKS } : { needs_confirm: true, place: "Head office", reasons: [IN_USE.reasons[1]], tasks: TASKS },
+    }, fleetAdmin);
+    await mount(t, "/places/p1");
+    await screen.findByTestId("place-remove");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Remove" })); });
+    expect(screen.getByTestId("place-remove").textContent).toContain("It moves to Removed places");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Yes, remove" })); });
+    expect(t.argsOf("remove_place")).toEqual([{ id: "p1" }]);
+    expect(screen.getByTestId("place-remove").textContent).toContain("Remove Head office anyway?");
+    expect(screen.getByTestId("place-remove-tasks").textContent).toContain("Team drop · Kurunegala site");
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Remove anyway" })); });
+    expect(t.argsOf("remove_place").at(-1)).toEqual({ id: "p1", confirm: true });
+    expect(await screen.findByText(/Removed\. It is listed under Removed places\./)).toBeTruthy();
   });
 
   it("no Remove without remove_place, and no Restore without restore_place", async () => {

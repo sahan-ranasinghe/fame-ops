@@ -1,8 +1,10 @@
 // Remove a place (Phase 7, §15), the pure part: the place page's second step
-// (the first click calls nothing; the second calls remove_place; a
-// needs_confirm answer shows its reasons and tasks above "Remove anyway"), its
-// words, the notice after it, which buttons a person sees, and the Removed
-// places view on Places (list_places with removed, Restore on each row).
+// (the first click only reads place_detail's in_use, so the reasons and the
+// tasks show above the second button; the second calls remove_place, with
+// confirm when they were shown; a needs_confirm answer, for reasons that came
+// up since, shows them above "Remove anyway"), its words, the notice after it,
+// which buttons a person sees, and the Removed places view on Places
+// (list_places with removed, Restore on each row).
 import type { Place, PlaceDetail } from "../data/types";
 import { byWhenText } from "./mediaLogic";
 
@@ -30,29 +32,38 @@ export interface RemovePlaceAnswer {
 export type RemovedPlace = Place;
 export type PlaceDetailWithRemoved = PlaceDetail;
 
+/** place_detail's in_use: why removing would ask first (absent when nothing would). */
+export interface PlaceInUse {
+  reasons?: string[];
+  tasks?: RemovePlaceTask[];
+}
+
 export type RemoveState =
   | { step: "idle" }
-  | { step: "armed" }
+  | { step: "armed"; reasons: string[]; tasks: RemovePlaceTask[] }
   | { step: "needs_confirm"; reasons: string[]; tasks: RemovePlaceTask[] }
   | { step: "removed"; name: string; baseCleared: boolean };
 
-export type RemoveEvent = { type: "start" } | { type: "cancel" } | { type: "answer"; answer: RemovePlaceAnswer };
+export type RemoveEvent = { type: "start"; inUse?: PlaceInUse } | { type: "cancel" } | { type: "answer"; answer: RemovePlaceAnswer };
 
 export const REMOVE_IDLE: RemoveState = { step: "idle" };
 
-/** The second step: Remove arms it (nothing called), Keep it goes back, an answer asks again or ends it. */
+/** The second step: Remove arms it with the reasons read (nothing written), Keep it goes back, an answer asks again or ends it. */
 export function removeStep(s: RemoveState, e: RemoveEvent): RemoveState {
-  if (e.type === "start") return s.step === "idle" ? { step: "armed" } : s;
+  if (e.type === "start") return s.step === "idle" ? { step: "armed", reasons: e.inUse?.reasons ?? [], tasks: e.inUse?.tasks ?? [] } : s;
   if (e.type === "cancel") return s.step === "armed" || s.step === "needs_confirm" ? REMOVE_IDLE : s;
   const a = e.answer;
   if (a.needs_confirm) return { step: "needs_confirm", reasons: a.reasons ?? [], tasks: a.tasks ?? [] };
   return { step: "removed", name: a.removed ?? "", baseCleared: a.base_place_cleared === true };
 }
 
-/** remove_place's input for the button pressed: confirm only after the server asked for it. */
+/** remove_place's input for the button pressed: confirm only for reasons the person was shown. */
 export function removeInput(id: string, s: RemoveState): { id: string; confirm?: true } {
-  return s.step === "needs_confirm" ? { id, confirm: true } : { id };
+  return s.step === "needs_confirm" || (s.step === "armed" && s.reasons.length > 0) ? { id, confirm: true } : { id };
 }
+
+/** The tasks listed above the second button (the armed step's or the server's). */
+export const removeTasks = (s: RemoveState): RemovePlaceTask[] => (s.step === "armed" || s.step === "needs_confirm" ? s.tasks : []);
 
 const cap = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
@@ -79,7 +90,13 @@ export function removeWords(name: string, s: RemoveState): RemoveWords | null {
     case "idle":
       return { title: "Remove this place", text: "It leaves every search, list and picker. Past tasks keep its name. Nothing is deleted: it can be restored.", button: "Remove", keep: false };
     case "armed":
-      return { title: `Remove ${name}?`, text: "It moves to Removed places and can be restored from there.", button: "Yes, remove", keep: true };
+      return {
+        title: `Remove ${name}?`,
+        text: [reasonsText(s.reasons), s.tasks.length ? "Those tasks keep their stops as they are." : "", "It moves to Removed places and can be restored from there."]
+          .filter(Boolean).join(" "),
+        button: "Yes, remove",
+        keep: true,
+      };
     case "needs_confirm":
       return {
         title: `Remove ${name} anyway?`,
@@ -110,11 +127,11 @@ export function removedNotice(baseCleared: boolean, tools: readonly string[]): R
 /** "Removed by Sahan 17 Oct 10:05" (the year only when it is not this year's). */
 export const removedLine = (removed: string | undefined, thisYear: string) => byWhenText("Removed", removed, thisYear);
 
-/** Which buttons the place page shows: a removed place is read-only with Restore. */
-export function placeActions(tools: readonly string[], removed: boolean): { edit: boolean; remove: boolean; restore: boolean } {
+/** Which buttons the place page shows: a removed place is read-only with Restore; one switched off by an undone import has no Remove. */
+export function placeActions(tools: readonly string[], removed: boolean, switchedOff = false): { edit: boolean; remove: boolean; restore: boolean } {
   return {
     edit: !removed && tools.includes("update_place"),
-    remove: !removed && tools.includes("remove_place"),
+    remove: !removed && !switchedOff && tools.includes("remove_place"),
     restore: removed && tools.includes("restore_place"),
   };
 }

@@ -154,19 +154,50 @@ const LIVE = ["assigned", "in_progress", "declined"];
 /** The tasks today or later that start or stop at a place (what removing it would touch). */
 async function tasksAt(db: Db, placeId: string, now: Date) {
   const from = dayRange(colomboDate(now)).from;
-  const viaStops = unwrap(
-    await db.from("task_stops").select("task_id").eq("place_id", placeId).neq("status", "removed").limit(500),
-    "stops",
-  );
-  const ids = [...new Set(viaStops.map((s) => s.task_id))];
   const [byStop, byStart] = await Promise.all([
-    ids.length
-      ? db.from("tasks").select("id, title, start_at").in("id", ids).in("status", LIVE).gte("start_at", from)
-      : { data: [], error: null },
-    db.from("tasks").select("id, title, start_at").eq("start_place_id", placeId).in("status", LIVE).gte("start_at", from),
+    db.from("task_stops").select("tasks!inner(id, title, start_at)").eq("place_id", placeId).neq("status", "removed")
+      .in("tasks.status", LIVE).gte("tasks.start_at", from).limit(1000),
+    db.from("tasks").select("id, title, start_at").eq("start_place_id", placeId).in("status", LIVE).gte("start_at", from).limit(1000),
   ]);
-  const all = [...unwrap(byStop, "tasks"), ...unwrap(byStart, "tasks")];
+  const all = [...unwrap(byStop, "stops").map((s) => s.tasks), ...unwrap(byStart, "tasks")];
   return [...new Map(all.map((t) => [t.id, t])).values()].sort((a, b) => a.start_at.localeCompare(b.start_at));
+}
+
+/** Why removing a place asks first: it is the base place, or tasks today or later start or stop there. */
+async function removeReasons(db: Db, place: Place, now: Date) {
+  const [settings, tasks] = await Promise.all([loadSettings(db), tasksAt(db, place.id, now)]);
+  const isBase = settings.base_place_id === place.id;
+  const reasons = [
+    isBase ? `${place.name} is the base place` : null,
+    tasks.length
+      ? `${tasks.length} task${tasks.length === 1 ? "" : "s"} today or later ${
+        tasks.length === 1 ? "starts or stops" : "start or stop"
+      } there`
+      : null,
+  ].filter((r): r is string => r !== null);
+  const cards = tasks.map((t) => ({ task_id: t.id, title: t.title, when: colomboDayTime(t.start_at) }));
+  return { isBase, reasons, tasks: cards };
+}
+
+/**
+ * A saved place's name is taken once among the office's own places (places_saved_name_key), removed ones included:
+ * the clash in plain words, pointing to Removed places when the name belongs to a removed one.
+ */
+async function nameFree<T>(db: Db, name: string, write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (e) {
+    if (!(e instanceof ToolError) || !/already exists/.test(e.message)) throw e;
+    const removed = unwrap(
+      await db.from("places").select("name").not("removed_at", "is", null).ilike("name", escapeLike(name)).limit(1),
+      "places",
+    );
+    throw new ToolError(
+      removed[0]
+        ? `${removed[0].name} was removed: restore it from Removed places (restore_place) instead of adding it again.`
+        : `A place named ${name} already exists: use it, or give this one another name.`,
+    );
+  }
 }
 
 export const removePlace = tool({
@@ -180,17 +211,11 @@ export const removePlace = tool({
   async run({ id, confirm }, { db, now, actor }) {
     const place = await placeById(db, id);
     if (place.removed_at) throw new ToolError(`${place.name} is removed already.`);
-    const [settings, tasks] = await Promise.all([loadSettings(db), tasksAt(db, id, now)]);
-    const isBase = settings.base_place_id === id;
-    const reasons = [
-      isBase ? `${place.name} is the base place` : null,
-      tasks.length
-        ? `${tasks.length} task${tasks.length === 1 ? "" : "s"} today or later ${
-          tasks.length === 1 ? "starts or stops" : "start or stop"
-        } there`
-        : null,
-    ].filter((r): r is string => r !== null);
-    const cards = tasks.map((t) => ({ task_id: t.id, title: t.title, when: colomboDayTime(t.start_at) }));
+    // Switched off by an undone import: in no search or list already, and a restore must not switch it on.
+    if (!place.active) {
+      throw new ToolError(`${place.name} is switched off already (its import was undone): it is in no search, list or picker.`);
+    }
+    const { isBase, reasons, tasks: cards } = await removeReasons(db, place, now);
     if (reasons.length > 0 && !confirm) {
       return {
         result: { needs_confirm: true, place: place.name, reasons, tasks: cards.length ? cards : undefined },
@@ -227,10 +252,18 @@ export const restorePlace = tool({
   async run({ id }, { db }) {
     const place = await placeById(db, id);
     if (!place.removed_at) throw new ToolError(`${place.name} is not removed.`);
-    const rows = unwrap(
-      await db.from("places").update({ active: true, removed_at: null, removed_by: null }).eq("id", id).select("*"),
-      "place",
-    );
+    const rows = await nameFree(
+      db,
+      place.name,
+      async () =>
+        unwrap(await db.from("places").update({ active: true, removed_at: null, removed_by: null }).eq("id", id).select("*"), "place"),
+    ).catch((e) => {
+      // The removed place itself is not the clash: another place took its name since it was removed.
+      if (e instanceof ToolError && e.message.includes("was removed")) {
+        throw new ToolError(`A place named ${place.name} was added after this one was removed: rename or remove that one first.`);
+      }
+      throw e;
+    });
     return { result: { restored: place.name, place: detailCard(rows[0]) }, summary: `restored place ${place.name}` };
   },
 });
@@ -250,20 +283,21 @@ export const addPlace = tool({
   }),
   async run({ name, address, lat, lng, kind }, { db }) {
     if ((lat === undefined) !== (lng === undefined)) throw new ToolError("Give both lat and lng, or neither.");
-    const created = unwrap(
-      await db.from("places")
-        .insert({
-          name,
-          address: address ?? null,
-          lat: lat ?? null,
-          lng: lng ?? null,
-          kind: kind ?? "other",
-          source: "claude",
-          pin_source: lat !== undefined ? "manual" : null,
-        })
-        .select("*").single(),
-      "place",
-    );
+    const created = await nameFree(db, name, async () =>
+      unwrap(
+        await db.from("places")
+          .insert({
+            name,
+            address: address ?? null,
+            lat: lat ?? null,
+            lng: lng ?? null,
+            kind: kind ?? "other",
+            source: "claude",
+            pin_source: lat !== undefined ? "manual" : null,
+          })
+          .select("*").single(),
+        "place",
+      ));
     return { result: { added: placeCard(created) }, summary: `added place ${created.name}` };
   },
 });
@@ -814,6 +848,7 @@ export const updatePlace = tool({
     if ((lat === undefined) !== (lng === undefined)) throw new ToolError("Give both lat and lng, or neither.");
     if (clear_pin && lat !== undefined) throw new ToolError("Either move the pin or remove it, not both.");
     const before = await placeById(db, id);
+    if (before.removed_at) throw new ToolError(`${before.name} is removed: restore it first (restore_place).`);
     const patch: Update<"places"> = {};
     if (name !== undefined) patch.name = name;
     if (address !== undefined) patch.address = address;
@@ -825,7 +860,11 @@ export const updatePlace = tool({
     if (Object.keys(patch).length === 0) {
       return { result: { place: detailCard(before), changed: [] }, summary: `place ${before.name}: nothing to change` };
     }
-    const after = unwrap(await db.from("places").update(patch).eq("id", id).select("*").single(), "place");
+    const after = await nameFree(
+      db,
+      patch.name ?? before.name,
+      async () => unwrap(await db.from("places").update(patch).eq("id", id).select("*").single(), "place"),
+    );
     return {
       result: { place: detailCard(after), changed: Object.keys(patch).filter((k) => k !== "pin_source") },
       summary: `updated place ${after.name}: ${Object.keys(patch).join(", ")}`,
@@ -837,17 +876,28 @@ export const placeDetail = tool({
   name: "place_detail",
   title: "One place",
   description: "Everything about one place: the ids, region, district, depot, the pin and where it came from, the credit of a " +
-    "place saved from the map search, and how often tasks used it in the last 90 days.",
+    "place saved from the map search, how often tasks used it in the last 90 days, and in_use: why remove_place would ask " +
+    "first (the base place, the tasks today or later that start or stop there).",
   readOnly: true,
   input: z.object({ id: zId }),
   async run({ id }, { db, now }) {
     const place = await placeById(db, id);
-    if (place.removed_at) throw new ToolError(`${place.name} is removed: restore it first (restore_place).`);
     const since = new Date(now.getTime() - RECENT_DAYS * 86400000).toISOString();
-    const used = await db.from("task_stops").select("id, tasks!inner(start_at)", { count: "exact", head: true }).eq("place_id", id).gte(
-      "tasks.start_at",
-      since,
-    );
-    return { result: { place: detailCard(place), stops_90_days: used.count ?? 0 }, summary: `place ${place.name}` };
+    const [used, inUse] = await Promise.all([
+      db.from("task_stops").select("id, tasks!inner(start_at)", { count: "exact", head: true }).eq("place_id", id).gte(
+        "tasks.start_at",
+        since,
+      ),
+      place.active && !place.removed_at ? removeReasons(db, place, now) : null,
+    ]);
+    return {
+      result: {
+        place: detailCard(place),
+        stops_90_days: used.count ?? 0,
+        // Phase 7 (§15): what remove_place would ask about, shown above the place page's second Remove button.
+        in_use: inUse?.reasons.length ? { reasons: inUse.reasons, tasks: inUse.tasks.length ? inUse.tasks : undefined } : undefined,
+      },
+      summary: `place ${place.name}`,
+    };
   },
 });

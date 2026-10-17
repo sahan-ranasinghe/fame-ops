@@ -11,6 +11,7 @@ import { useQuery } from "../data/useQuery";
 import { cap, joinDots } from "../lib/format";
 import { Notice } from "../ui/basics";
 import { PlanWithMap } from "./PlanMap";
+import { tripKey } from "./requestLogic";
 
 /** The request's trip with its road lines (web), the card's own trip until they answer or after an edit. */
 export function useTripLine(q: RequestCard | undefined): RequestTrip | undefined {
@@ -18,12 +19,15 @@ export function useTripLine(q: RequestCard | undefined): RequestTrip | undefined
   const args = q?.trip && __BUILD__ === "web" ? { status: "all", id: q.id, with_line: true } : null;
   const line = useQuery<RequestsList>("request-line", "list_requests", args, { enabled: me.tools.includes("list_requests") });
   const lined = line.data?.requests.find((r) => r.id === q?.id);
-  // Edited since (a new version): asked again once; the card's trip meanwhile.
+  // Edited since (a new version), or its task changed by the office (the same version, another trip): asked again once;
+  // the card's trip meanwhile. Never an older plan than the card's.
+  const key = tripKey(q?.trip);
+  const fresh = !!lined?.trip && lined.version === q?.version && tripKey(lined.trip) === key;
   useEffect(() => {
-    if (lined && q && lined.version !== q.version) line.refetch();
+    if (lined && q && !fresh) line.refetch();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [q?.version]);
-  return lined?.trip && lined.version === q?.version ? lined.trip : q?.trip;
+  }, [q?.version, key]);
+  return fresh ? lined!.trip : q?.trip;
 }
 
 /** The stops when no plan was stored: the label, the time planned there and the arrive-by. */

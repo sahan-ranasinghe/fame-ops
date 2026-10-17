@@ -67,8 +67,29 @@ export async function saveRequestTrip(db: Db, requestId: string, t: RequestTrip,
   );
 }
 
+/** A stored stop, a request's or a task's (the same planning columns). */
+export type StopRowLike = Pick<
+  RequestStop,
+  | "seq"
+  | "type"
+  | "what"
+  | "place_id"
+  | "place_name"
+  | "address"
+  | "lat"
+  | "lng"
+  | "dwell_min"
+  | "arrive_by"
+  | "note"
+  | "google_place_id"
+  | "planned_arrive_at"
+  | "planned_depart_at"
+  | "is_start"
+  | "dwell_source"
+>;
+
 /** A stored stop as the planner reads it. */
-export function resolvedFromRow(s: RequestStop): ResolvedStop {
+export function resolvedFromRow(s: StopRowLike): ResolvedStop {
   return {
     seq: s.seq,
     type: s.type as ResolvedStop["type"],

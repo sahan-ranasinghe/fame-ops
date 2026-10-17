@@ -5,7 +5,7 @@
 // (§34): the day, the leave-by time (typed, or planned from the stops'
 // arrive-by times), the back-by time, Start from with "Passengers get in here"
 // and the stops with their times there (the trip editor's fields).
-import type { FieldChanges, RequestEditFields, RequestEvent, RequestTimeline } from "../data/types";
+import type { FieldChanges, RequestEditFields, RequestEvent, RequestTimeline, RequestTrip } from "../data/types";
 import { parseDwell } from "./stopsLogic";
 import { type Base, emptyTrip, type TripFields, tripChanges, tripFromRequest, tripRequestInput, type TripStartStop, tripTitle } from "./tripLogic";
 
@@ -255,4 +255,19 @@ export function redecideInput(
     if (Object.keys(input).length === 3) return { error: "Pick what to change: the vehicle, the driver, the day, the time or the back-by time." };
   }
   return { input };
+}
+
+/**
+ * What a request's page shows of its trip, the road lines aside: the start, the leave time, each stop with its times
+ * and state, the office's change. The trip with its lines (asked once) is shown only while this matches the card's
+ * trip; an office edit to the task moves the card's trip on without a new request version.
+ */
+export function tripKey(t: RequestTrip | undefined): string {
+  if (!t) return "";
+  return JSON.stringify([
+    t.start?.name ?? null,
+    t.leave_by ?? null,
+    t.stops.map((s) => [s.type, s.place ?? null, s.planned_arrive ?? null, s.planned_depart ?? null, s.arrive_by ?? null, s.status ?? null]),
+    t.changed?.text ?? null,
+  ]);
 }

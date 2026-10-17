@@ -930,11 +930,14 @@ office_audit.
   `vehicle_documents`, `remove_vehicle_document`, `restore_vehicle_document`; `photo_url` / `thumb_url` on the tools that
   name drivers and plates. A running task's Google ETA is asked only by `task_detail` (someone opened it). Once a request
   has its task, its card's `trip`, `when` and `back_by` are the task's as they are now (`trip.source` task, `trip.changed`
-  "Changed by the office · was 09:00 Sat 17 Oct · stops changed"): a requester never sees an old plan. Places (item 15):
-  `remove_place(id, confirm?)` (needs_confirm for the base place or a place tasks today or later use; removing the base
-  place clears it) and `restore_place(id)` (vehicles), `list_places(removed)`; a removed place is switched off with
-  `removed_at` / `removed_by` and is not edited until restored. A setting cleared to null is stored as JSON null
-  (`save_fleet_setting`).
+  "Changed by the office · was 09:00 Sat 17 Oct · stops changed"; hidden while the requester's change waits): a requester
+  never sees an old plan. The edit page starts from the task; the first change after approval takes the task's trip into
+  the request first, and `redecide_request` applies only what the requester changed since approval (`previous`) plus the
+  approver's changes, never the plan as first asked. Places (item 15): `remove_place(id, confirm?)` (needs_confirm for the
+  base place or a place tasks today or later use; removing the base place clears it; `place_detail.in_use` gives the same
+  reasons for the page's second button) and `restore_place(id)` (vehicles), `list_places(removed)`; a removed place is
+  switched off with `removed_at` / `removed_by`, is not edited until restored, keeps its name taken, and is skipped by the
+  site import. A setting cleared to null is stored as JSON null (`save_fleet_setting`).
 
 ## Not now
 Project costs, WhatsApp as a location source or automated WhatsApp sending (use wa.me links),

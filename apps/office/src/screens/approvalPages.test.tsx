@@ -281,6 +281,38 @@ describe("the request page for the person who asked (§35 17, 19)", () => {
     expect(plan).not.toContain("08:00");
   });
 
+  it("the office changes the task while the page is open: the next card's trip shows at once and its road lines are asked again", async () => {
+    // A task edit does not bump the request's version: the trip asked once with its lines must not hide the newer plan.
+    let leave = "07:15";
+    const cardNow = (): RequestCard => ({
+      ...proposal, id: "r1", kind: "request", title: undefined, proposed: undefined, requested_by: "Dilini Jayasinghe", status: "approved",
+      when: `Sat 18 Oct ${leave}`, task_id: "t1", version: 3,
+      trip: { ...trip, source: "task", leave_by: leave, timeline: { ...timeline, items: [{ kind: "leave", at: leave, source: "manual" }, ...timeline.items.slice(1)] } },
+    });
+    let push: ((ev: WatchEvent<unknown>) => void) | undefined;
+    class Pushing extends FakeTransport {
+      watch<T>(tool: string, args: Record<string, unknown>, cb: (ev: WatchEvent<T>) => void): () => void {
+        if (tool === "list_requests" && !args.with_line) push = cb as (ev: WatchEvent<unknown>) => void;
+        return super.watch(tool, args, cb);
+      }
+    }
+    const transport = new Pushing({ list_requests: () => ({ status: "all", count: 1, requests: [cardNow()] }) }, requester);
+    // As in the app: the request beside its list, which the list's watch keeps current.
+    await mount(transport, "/requests/r1", <Route path="/requests" element={<Requests />}><Route path=":id" element={<RequestDetail />} /></Route>);
+    await act(async () => { await Promise.resolve(); });
+    expect((await screen.findByTestId("plan-timeline")).textContent).toContain("Leave by 07:15");
+    const lineAsks = () => transport.argsOf("list_requests").filter((a) => a.with_line).length;
+    const asked = lineAsks();
+    expect(asked).toBeGreaterThan(0);
+
+    leave = "07:40";
+    await act(async () => { push?.({ type: "data", data: { status: "all", count: 1, requests: [cardNow()] }, at: Date.now() }); });
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("plan-timeline").textContent).toContain("Leave by 07:40");
+    expect(screen.getByTestId("plan-timeline").textContent).not.toContain("07:15");
+    expect(lineAsks()).toBe(asked + 1);
+  });
+
   it("the proposer sees their proposal's driver and vehicle", async () => {
     const dispatcher: Me = { name: "Nimal Fernando", role: "office", permissions: ["view", "assign_tasks"], tools: ["list_requests", "cancel_request", "task_board"] };
     const transport = new FakeTransport({ list_requests: () => ({ status: "all", count: 1, requests: [proposal] }) }, dispatcher);
