@@ -423,10 +423,12 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   await page.goto("/requests");
   await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
   // Their notifications: their decided and redecided request events, a task of theirs that needs a driver (declined, not
-  // accepted), plus the three booking events everyone can get.
+  // accepted), the three booking events everyone can get, and (Phase 7, §4, §33) not decided 30 minutes before leaving and
+  // the trip's four moments (on the way, arrived, driver changed, cancelled).
   await page.goto("/settings/notifications");
   await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
-  await expect(page.getByRole("checkbox")).toHaveCount(7);
+  await expect(page.getByRole("checkbox")).toHaveCount(12);
+  await expect(page.getByRole("checkbox", { name: "Your driver is on the way" })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Your request is decided" })).toBeChecked();
 
   // A new request (its own page) is in their own name; "On behalf of" is for someone else.
@@ -435,8 +437,10 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   await expect(page).toHaveURL(/\/requests\/new$/);
   await expect(page.getByLabel("Who needs it")).toHaveCount(0);
   await expect(page.getByLabel("On behalf of")).toBeVisible();
-  await page.getByLabel("Time", { exact: true }).fill("09:00");
-  await page.getByLabel("To", { exact: true }).fill("Galle");
+  // Phase 7 (§34): the request is the trip editor (Leave by, the stops).
+  await page.getByLabel("Leave by", { exact: true }).fill("09:00");
+  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
   await page.getByRole("button", { name: "Save request" }).click();
   await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
   await expect(page.locator("tr", { hasText: "E2E Requester" })).toBeVisible();
@@ -873,8 +877,9 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await page.goto("/requests/new");
   await page.getByLabel("On behalf of").fill("Someone from HR");
   await page.getByLabel("Day").fill(day);
-  await page.getByLabel("Time", { exact: true }).fill("09:30");
-  await page.getByLabel("To", { exact: true }).fill("Galle");
+  await page.getByLabel("Leave by", { exact: true }).fill("09:30");
+  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
   await expect(page.getByTestId("group-free_pool")).toContainText(plate);
   await page.getByTestId("group-free_pool").locator(".opt", { hasText: plate }).getByRole("radio").check();
   await page.getByTestId("assign-now").getByLabel("Driver", { exact: true }).selectOption({ label: driver.name });
@@ -955,9 +960,10 @@ test("a requester changes an approved booking; the approver sees who is availabl
   await page.goto("/requests/new");
   await page.getByLabel("On behalf of").fill(visitor);
   await page.getByLabel("Day").fill(day);
-  await page.getByLabel("Time", { exact: true }).fill("09:00");
+  await page.getByLabel("Leave by", { exact: true }).fill("09:00");
   await page.getByLabel("Back by").fill("12:00");
-  await page.getByLabel("To", { exact: true }).fill("Galle");
+  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
   await page.getByRole("button", { name: "Save request" }).click();
   await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
   const row = page.locator("tr", { hasText: visitor });
@@ -975,8 +981,8 @@ test("a requester changes an approved booking; the approver sees who is availabl
   await page.getByRole("link", { name: "Edit request" }).click();
   await expect(page).toHaveURL(new RegExp(`/requests/${req.id}/edit$`));
   await expect(page.getByText("your change needs re-approval")).toBeVisible();
-  await page.getByLabel("Time", { exact: true }).fill("09:30");
-  await page.getByLabel("To", { exact: true }).fill("Matara");
+  await page.getByLabel("Leave by", { exact: true }).fill("09:30");
+  await page.getByLabel("Stop 2", { exact: true }).fill("Matara");
   await page.getByRole("button", { name: "Save · ask for re-approval" }).click();
   await expect(page.getByRole("status")).toHaveText("Changed · the office will decide again");
   await expect(page).toHaveURL(new RegExp(`/requests/${req.id}$`));
@@ -1205,11 +1211,11 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   expect(cafeDetail.place).toMatchObject({ source: "ors", attribution: "© OpenStreetMap contributors · openrouteservice" });
   await page.unroute("**/functions/v1/office-api/tools/search_places");
 
-  // The request form's From and To use the same box.
+  // The request form's stops use the same box (Phase 7, §34: the request is the trip editor).
   await page.goto("/requests/new");
-  await page.getByLabel("From", { exact: true }).fill(pinned);
+  await page.getByLabel("Stop 1", { exact: true }).fill(pinned);
   await page.getByRole("option", { name: new RegExp(`Pinned Site ${stamp}`) }).click();
-  await expect(page.getByLabel("From", { exact: true })).toHaveValue(`Pinned Site ${stamp}`);
+  await expect(page.getByLabel("Stop 1", { exact: true })).toHaveValue(`Pinned Site ${stamp}`);
 
   // Places: find the bare site, give it a pin by hand; a later import never moves it.
   await page.goto("/places?who=dialog");
@@ -1359,4 +1365,88 @@ test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps 
   expect(t1 - t0).toBeGreaterThan(100);
   expect(t1 - t0).toBeLessThan(260);
   await playback.getByRole("button", { name: "Pause" }).click();
+});
+
+test("a request planned like a task is approved with its stops; a dispatcher's task waits for the fleet admin's OK and is sent as proposed (Phase 7, Part 3)", async ({ page, browser }) => {
+  test.setTimeout(300_000);
+  const tag = `p3${stamp}`;
+  const requester = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E P3 Requester", email: `e2e.p3req.${stamp}@fame.test`, permissions: ["view", "request"] });
+  const dispatcher = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E P3 Dispatcher", email: `e2e.p3disp.${stamp}@fame.test`, permissions: ["view", "request", "assign_tasks"] });
+  const approver = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E P3 Approver", email: `e2e.p3appr.${stamp}@fame.test`, permissions: ["view", "request", "approve", "assign_tasks"] });
+  const driver = { name: `E2E P3 Driver ${stamp}`, code: `EP3-${stamp}`, username: `ep3.${stamp}`, pin: "357913" };
+  await tool("create_driver", driver);
+  const plate = `WP EP3-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
+  await tool("update_vehicle", { reg_no: plate, regular_driver: driver.username });
+  const day = new Date(Date.now() + 5.5 * 3600000 + 86400000).toISOString().slice(0, 10); // tomorrow in Colombo
+  const signIn = async (p: import("@playwright/test").Page, link: string, password: string) => {
+    const verify = await fetch(link, { redirect: "manual" });
+    const landing = verify.headers.get("location") ?? "";
+    await p.goto("/" + landing.slice(landing.indexOf("#")));
+    await p.getByLabel("New password").fill(password);
+    await p.getByLabel("Again").fill(password);
+    await p.getByRole("button", { name: "Save password" }).click();
+    await expect(p.getByRole("heading", { name: "Overview" })).toBeVisible();
+  };
+
+  // 1. The requester plans the trip as Assign a task does: two stops, be in Galle by 16:00; the plan's timeline shows.
+  await signIn(page, requester.set_password_link, `P3 requester ${stamp}!`);
+  await page.goto("/requests/new");
+  await page.getByLabel("Day").fill(day);
+  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+  await page.getByLabel("Arrive by").nth(1).fill("16:00");
+  await expect(page.getByTestId("plan-card")).toContainText("Leave by", { timeout: 20000 });
+  await expect(page.getByTestId("availability")).toHaveCount(0); // a requester never sees who drives
+  await page.getByLabel("Note").fill(`P3 trip ${tag}`);
+  await page.getByRole("button", { name: "Save request" }).click();
+  await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
+  const waiting = await tool<{ requests: { id: string; note?: string; trip?: { stops: unknown[] } }[] }>("list_requests", { status: "waiting" });
+  const asked = waiting.requests.find((r) => r.note === `P3 trip ${tag}`)!;
+  expect(asked.trip?.stops.length).toBe(2);
+
+  // 2. The approver: the decide page shows the trip as asked; a row of Who's available picks the driver; Approve and send.
+  const approverPage = await (await browser.newContext()).newPage();
+  await signIn(approverPage, approver.set_password_link, `P3 approver ${stamp}!`);
+  await approverPage.goto(`/requests/${asked.id}/decide`);
+  await expect(approverPage.getByTestId("request-decide-trip")).toBeVisible();
+  await expect(approverPage.getByTestId("request-trip").getByTestId("plan-timeline")).toContainText("Galle");
+  await approverPage.getByTestId("availability").getByTestId("avail-row").filter({ hasText: driver.name }).click();
+  await expect(approverPage.getByLabel("Driver", { exact: true })).toHaveValue(driver.username);
+  await approverPage.getByTestId("decide-send").click();
+  await expect(approverPage.getByTestId("request-decided")).toBeVisible();
+  const decided = await tool<{ requests: { task_id?: string; status: string }[] }>("list_requests", { status: "all", id: asked.id });
+  expect(decided.requests[0].status).toBe("approved");
+  const task = await tool<{ stops: { place?: string; place_name?: string }[] }>("task_detail", { task_id: decided.requests[0].task_id });
+  expect(task.stops.map((s) => s.place ?? s.place_name)).toHaveLength(2);
+
+  // 3. The dispatcher (no approve) assigns a task: it waits for the fleet admin's OK; the board's first column holds it.
+  const dispatcherPage = await (await browser.newContext()).newPage();
+  await signIn(dispatcherPage, dispatcher.set_password_link, `P3 dispatcher ${stamp}!`);
+  await dispatcherPage.goto("/tasks/new");
+  const title = `E2E proposed ${tag}`;
+  await dispatcherPage.getByLabel("Task", { exact: true }).fill(title);
+  await dispatcherPage.getByLabel("Date", { exact: true }).fill(day);
+  await dispatcherPage.getByLabel("Leave by", { exact: true }).fill("10:00");
+  await dispatcherPage.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await dispatcherPage.getByLabel("Stop 2", { exact: true }).fill("Kandy");
+  await dispatcherPage.getByLabel("Driver", { exact: true }).selectOption(driver.username);
+  await expect(dispatcherPage.getByTestId("plan-card")).toContainText("Leave by", { timeout: 20000 });
+  await dispatcherPage.getByRole("button", { name: "Send for approval" }).click();
+  await expect(dispatcherPage.getByText("Waiting for the fleet admin's OK").first()).toBeVisible();
+  await expect(dispatcherPage.getByRole("link", { name: "Open the request" })).toBeVisible();
+  await dispatcherPage.goto(`/tasks?date=${day}`);
+  await expect(dispatcherPage.getByTestId("waiting-approval").getByTestId("waiting-card").filter({ hasText: title })).toBeVisible();
+  const proposals = await tool<{ requests: { id: string; title?: string; kind?: string }[] }>("list_requests", { status: "waiting", kind: "task" });
+  const proposal = proposals.requests.find((r) => r.title === title)!;
+  expect(proposal.kind).toBe("task");
+
+  // 4. The approver sends it as proposed: now the driver has it.
+  await approverPage.goto(`/requests/${proposal.id}/decide`);
+  await expect(approverPage.getByTestId("decide-send")).toHaveText("Send as proposed");
+  await approverPage.getByTestId("decide-send").click();
+  await expect(approverPage.getByTestId("request-decided")).toBeVisible();
+  const board = await tool<{ assigned: { title: string; driver?: string }[]; waiting_approval?: { title: string }[] }>("task_board", { date: day });
+  expect(board.assigned.some((c) => c.title === title && c.driver === driver.name)).toBe(true);
+  expect((board.waiting_approval ?? []).some((c) => c.title === title)).toBe(false);
 });

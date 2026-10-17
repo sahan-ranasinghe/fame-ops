@@ -151,8 +151,9 @@ test("a requester on a phone: four tabs, New request as the big action, the requ
   await expect(page.getByTestId("draft-banner")).toContainText("Resume draft from");
   await page.getByRole("button", { name: "Resume" }).click();
   await expect(page.getByLabel("Note")).toHaveValue("Phone draft");
-  await page.getByLabel("Time", { exact: true }).fill("09:00");
-  await page.getByLabel("To", { exact: true }).fill("Galle");
+  await page.getByLabel("Leave by", { exact: true }).fill("09:00");
+  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
   await page.getByRole("button", { name: "Save request" }).click();
   await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
   await expect(page).toHaveURL(/\/requests$/);
