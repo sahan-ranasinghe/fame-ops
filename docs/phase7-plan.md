@@ -1693,3 +1693,12 @@ stays ට්‍රිප් මීටරය.
 5. EAS update, channel preview, `--environment preview`: runtime `1.2.0-gmaps`, update group
    `ca6db3fe-2a07-4598-a9e3-ba3e9a9d3776` (Android update id `01a145ef…`, so phones show `1.2.0+01a145ef`). No
    native change since the 1.2.0 build (only a test script line in package.json).
+
+**Hotfix after Round A, 17 October 2026** (branch `phase7-hotfix-1`; main fast-forwarded to `399ac47`), with Sahan's go:
+1. `npx supabase functions deploy office-mcp office-api fleet-jobs` (fleet-jobs counts the Routes calls of the
+   running tasks' ETA, so it carries the new caps too; no migration, no secret). `get_settings` through the live
+   connector: `google_caps` 430 / 430 / 430 / 215 / 215 a day, 9,500 / 9,500 / 9,500 / 4,750 / 4,750 a month (the
+   defaults: live has no `google_caps` row); nothing refused today.
+2. Web: `npm run build:web` (the bundle names only the live project), `npx wrangler pages deploy --branch main`;
+   https://fame-fleet.pages.dev serves `index-BYSJpQoy.js`.
+3. No driver app update (nothing in `apps/driver` changed).
