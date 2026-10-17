@@ -371,6 +371,7 @@ check(!needsProfilePhoto({ photo_id: null }, { fresh: false, taskRunning: false 
 check(!needsProfilePhoto({ photo_id: null }, { fresh: true, taskRunning: true }), 'never over a task in progress');
 check(!needsProfilePhoto({} as { photo_id: string | null }, fresh), 'a row from a server without the column (photo_id missing): no step');
 check(!needsProfilePhoto(null, fresh), 'signed out: no step');
+check(!needsProfilePhoto({ photo_id: null }, { ...fresh, deferred: true }), '"Not now" after the picker failed twice: no step until the app starts again');
 check(profilePhotoPath('e1', 'u1') === 'e1/profile/u1.jpg', "the profile photo goes to the driver's own profile folder");
 
 check(squareCrop(512, 512) === null, 'a square picture is not cropped');

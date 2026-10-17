@@ -16,10 +16,26 @@ export const PROFILE_QUALITY = 0.8;
  */
 export function needsProfilePhoto(
   me: Pick<Employee, 'photo_id'> | null,
-  state: { fresh: boolean; taskRunning: boolean },
+  state: { fresh: boolean; taskRunning: boolean; deferred?: boolean },
 ): boolean {
-  if (!me || !state.fresh || state.taskRunning) return false;
+  if (!me || !state.fresh || state.taskRunning || state.deferred) return false;
   return me.photo_id === null;
+}
+
+/**
+ * After the camera or the gallery itself failed to open this many times in a row, the step offers "Not now" for this
+ * run of the app: a phone whose picker is broken must not keep its driver from work (the step comes back at the next
+ * start). A cancelled pick or a failed upload does not count.
+ */
+export const PICKER_FAILS_BEFORE_LATER = 2;
+
+let deferredThisRun = false;
+/** "Not now": the step stays away until the app starts again. */
+export function deferProfilePhoto(): void {
+  deferredThisRun = true;
+}
+export function profilePhotoDeferred(): boolean {
+  return deferredThisRun;
 }
 
 /** The driver's photo in their own folder: <employee_id>/profile/<uuid>.jpg (set_my_photo checks the folder). */

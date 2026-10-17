@@ -529,7 +529,9 @@
     "failed": "Couldn't save the photo: try again",
     "tryAgain": "Try again",
     "change": "Change photo",
-    "none": "No photo yet"
+    "none": "No photo yet",
+    "pickerFailed": "The camera or the gallery didn't open. Try again.",
+    "later": "Not now: ask me next time"
   },
   "vehiclePhoto": {
     "add": "Add a photo",

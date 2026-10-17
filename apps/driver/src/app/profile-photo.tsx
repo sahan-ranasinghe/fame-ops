@@ -15,6 +15,7 @@ import { useLeaveGuard } from '@/components/navigation';
 import { Thumb, useMyPhoto } from '@/components/Photos';
 import { Button, Notice, Txt } from '@/components/ui';
 import { type LocalProfilePhoto, pickProfilePhoto, removeFile } from '@/lib/photos';
+import { deferProfilePhoto, PICKER_FAILS_BEFORE_LATER } from '@/lib/photoRules';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -32,6 +33,9 @@ export default function ProfilePhotoScreen() {
   const [problem, setProblem] = useState<string | null>(null);
   const saved = useRef(false);
   const photoRef = useRef(photo);
+  // The camera or the gallery failing to open (not a cancel, not an upload): twice in a row brings "Not now".
+  const pickerFails = useRef(0);
+  const [pickerBroken, setPickerBroken] = useState(false);
   photoRef.current = photo;
   // Back does nothing while the photo is being saved.
   const { allowLeave } = useLeaveGuard(false, busy === 'save');
@@ -71,9 +75,12 @@ export default function ProfilePhotoScreen() {
     let picked: Awaited<ReturnType<typeof pickProfilePhoto>>;
     try {
       picked = await pickProfilePhoto(source);
+      pickerFails.current = 0;
     } catch {
       picked = null;
-      setProblem('profilePhoto.failed');
+      pickerFails.current += 1;
+      setPickerBroken(pickerFails.current >= PICKER_FAILS_BEFORE_LATER);
+      setProblem('profilePhoto.pickerFailed');
     }
     setBusy(null);
     if (picked === 'denied') {
@@ -126,6 +133,18 @@ export default function ProfilePhotoScreen() {
           onPress={() => void pick('camera')}
         />
         <Button kind="outline" label={t('profilePhoto.choose')} icon={Images} disabled={busy !== null} onPress={() => void pick('gallery')} />
+        {!change && pickerBroken && (
+          <Button
+            kind="outline"
+            label={t('profilePhoto.later')}
+            disabled={busy !== null}
+            onPress={() => {
+              deferProfilePhoto();
+              allowLeave();
+              router.replace('/');
+            }}
+          />
+        )}
       </View>
     </View>
   );
