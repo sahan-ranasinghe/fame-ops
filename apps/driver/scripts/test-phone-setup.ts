@@ -68,6 +68,7 @@ check(stoppedNote([], null, now) === null && stoppedNote(gaps.slice(0, 1), null,
 // 3. Brands, names and the settings pages.
 check(setupBrand('OPPO', 'OPPO') === 'oppo' && setupBrand('realme', 'realme') === 'realme' && setupBrand('OnePlus', 'OnePlus') === 'oppo', 'OPPO, realme (its own steps) and OnePlus (ColorOS)');
 check(setupBrand('Redmi', 'Xiaomi') === 'xiaomi' && setupBrand('POCO', 'Xiaomi') === 'xiaomi' && setupBrand('iQOO', 'vivo') === 'vivo' && setupBrand('samsung', 'samsung') === 'samsung', 'Redmi and POCO are Xiaomi, iQOO is vivo, Samsung');
+check(setupBrand('HUAWEI', 'HUAWEI') === 'huawei' && setupBrand('HONOR', 'HONOR') === 'huawei', 'Huawei and HONOR keep their own steps (App launch)');
 check(setupBrand('Nokia', 'HMD Global') === 'other' && setupBrand(null, null) === 'other', 'anything else gets the general steps');
 check(brandName('OPPO', 'OPPO') === 'OPPO' && brandName('redmi', 'Xiaomi') === 'Redmi' && brandName('nokia', null) === 'Nokia' && brandName('', null) === null, 'the brand as the phone shows it');
 const xiaomi = settingsIntents('xiaomi', 'com.fameglobal.driver', 'Fame Driver');
@@ -86,7 +87,7 @@ const lang = (code: string) => JSON.parse(readFileSync(join(here, '..', 'src', '
 const lookup = (source: unknown, key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), source);
 const en = lang('en');
 const si = lang('si');
-const brands: SetupBrand[] = ['oppo', 'realme', 'xiaomi', 'vivo', 'samsung', 'other'];
+const brands: SetupBrand[] = ['oppo', 'realme', 'xiaomi', 'vivo', 'samsung', 'huawei', 'other'];
 const stepCounts = brands.map((b) => [lookup(en, stepsKey(b)), lookup(si, stepsKey(b))]);
 check(stepCounts.every(([e, s]) => Array.isArray(e) && Array.isArray(s) && e.length >= 2 && e.length === s.length && [...e, ...s].every((x) => typeof x === 'string' && x.length > 0)),
   'every brand (and any other phone) has its steps in English and Sinhala, the same number in both', stepCounts.map(([e, s]) => [(e as unknown[] | undefined)?.length, (s as unknown[] | undefined)?.length]));

@@ -64,14 +64,7 @@
     "continue": "Continue",
     "later": "You can change these later under Me.",
     "background": "Keep running in the background",
-    "backgroundWhy": "Some phones stop apps that work in the background. Without this, recording stops when the screen is off.",
-    "background_oppo": "Open app settings → Battery usage → allow background activity. In Phone Manager → Startup manager, allow Fame Driver.",
-    "background_xiaomi": "Settings → Apps → Fame Driver: Autostart on; Battery saver: No restrictions.",
-    "background_vivo": "i Manager → App manager → Autostart: allow Fame Driver. Battery → Background power consumption: allow.",
-    "background_huawei": "Settings → Battery → App launch → Fame Driver: Manage manually, all three switches on.",
-    "background_samsung": "App info → Battery → Unrestricted. Do not put Fame Driver in \"Sleeping apps\".",
-    "background_other": "In the app's settings, allow it to run in the background without battery restrictions.",
-    "openAppSettings": "Open app settings"
+    "backgroundWhy": "Some phones stop apps that work in the background. Without this, recording stops when the screen is off."
   },
   "tabs": {
     "today": "Today",
@@ -460,6 +453,10 @@
         "Settings → Apps → Fame Driver → Battery: allow background activity, no restrictions.",
         "If the phone has \"Autostart\" or \"Auto launch\", turn it on for Fame Driver.",
         "Recent apps: lock Fame Driver so it stays open."
+      ],
+      "huawei": [
+        "Settings → Battery → App launch → Fame Driver: turn off \"Manage automatically\", then turn on all three switches.",
+        "Recent apps: pull Fame Driver down (or tap the lock) so it stays locked."
       ]
     },
     "meHint": "If the phone stops Fame Driver by itself, change these settings once."

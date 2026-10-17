@@ -60,7 +60,7 @@ export function stoppedNote(gaps: Gap[], dismissedAt: number | null, now: number
   return { key: 'phoneSetup.stoppedMany', count: shown.length, minutes, at: shown[shown.length - 1].from };
 }
 
-export type SetupBrand = 'oppo' | 'realme' | 'xiaomi' | 'vivo' | 'samsung' | 'other';
+export type SetupBrand = 'oppo' | 'realme' | 'xiaomi' | 'vivo' | 'samsung' | 'huawei' | 'other';
 
 /** The brand whose steps apply. realme before OPPO (both run Oplus software); OnePlus runs ColorOS too. */
 export function setupBrand(brand: string | null | undefined, manufacturer: string | null | undefined): SetupBrand {
@@ -70,11 +70,13 @@ export function setupBrand(brand: string | null | undefined, manufacturer: strin
   if (/xiaomi|redmi|poco/.test(name)) return 'xiaomi';
   if (/vivo|iqoo/.test(name)) return 'vivo';
   if (/samsung/.test(name)) return 'samsung';
+  if (/huawei|honor/.test(name)) return 'huawei';
   return 'other';
 }
 
 const NAMES: Record<string, string> = {
   oppo: 'OPPO', realme: 'realme', oneplus: 'OnePlus', xiaomi: 'Xiaomi', redmi: 'Redmi', poco: 'POCO', vivo: 'vivo', iqoo: 'iQOO', samsung: 'Samsung',
+  huawei: 'Huawei', honor: 'HONOR',
 };
 
 /** The steps: a list per brand under this key in en.json and si.json. */
@@ -130,6 +132,11 @@ export function settingsIntents(brand: SetupBrand, appId: string, appLabel: stri
         { packageName: 'com.samsung.android.lool', className: 'com.samsung.android.sm.battery.ui.BatteryActivity' },
         { packageName: 'com.samsung.android.lool', className: 'com.samsung.android.sm.ui.battery.BatteryActivity' },
         { packageName: 'com.samsung.android.sm', className: 'com.samsung.android.sm.ui.battery.BatteryActivity' },
+      ];
+    case 'huawei':
+      return [
+        { packageName: 'com.huawei.systemmanager', className: 'com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity' },
+        { packageName: 'com.huawei.systemmanager', className: 'com.huawei.systemmanager.optimize.process.ProtectActivity' },
       ];
     default:
       return [];

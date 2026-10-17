@@ -64,14 +64,7 @@
     "continue": "ඉදිරියට",
     "later": "මේවා පසුව \"මම\" යටතේ වෙනස් කළ හැක.",
     "background": "පසුබිමේ ක්‍රියාත්මකව තබන්න",
-    "backgroundWhy": "සමහර දුරකථන පසුබිමේ වැඩ කරන යෙදුම් නවත්වයි. මෙය නොමැතිව තිරය වසා ඇති විට සටහන් කිරීම නතර වේ.",
-    "background_oppo": "යෙදුම් සැකසුම් → Battery usage → background activity සඳහා ඉඩ දෙන්න. Phone Manager → Startup manager තුළ Fame Driver හට ඉඩ දෙන්න.",
-    "background_xiaomi": "Settings → Apps → Fame Driver: Autostart සක්‍රිය කරන්න; Battery saver: No restrictions.",
-    "background_vivo": "i Manager → App manager → Autostart: Fame Driver හට ඉඩ දෙන්න. Battery → Background power consumption: ඉඩ දෙන්න.",
-    "background_huawei": "Settings → Battery → App launch → Fame Driver: Manage manually, ස්විච තුනම සක්‍රිය කරන්න.",
-    "background_samsung": "App info → Battery → Unrestricted. Fame Driver \"Sleeping apps\" වෙත නොදමන්න.",
-    "background_other": "යෙදුමේ සැකසුම් තුළ බැටරි සීමා නොමැතිව පසුබිමේ ක්‍රියාත්මක වීමට ඉඩ දෙන්න.",
-    "openAppSettings": "යෙදුම් සැකසුම් විවෘත කරන්න"
+    "backgroundWhy": "සමහර දුරකථන පසුබිමේ වැඩ කරන යෙදුම් නවත්වයි. මෙය නොමැතිව තිරය වසා ඇති විට සටහන් කිරීම නතර වේ."
   },
   "tabs": {
     "today": "අද",
@@ -460,6 +453,10 @@
         "Settings → Apps → Fame Driver → Battery: පසුබිම් ක්‍රියාකාරිත්වයට ඉඩ දෙන්න, සීමා නැතිව.",
         "දුරකථනයේ \"Autostart\" හෝ \"Auto launch\" ඇත්නම්, Fame Driver සඳහා එය ක්‍රියාත්මක කරන්න.",
         "Recent apps තුළ Fame Driver අගුළු දමන්න, එවිට එය විවෘතව පවතී."
+      ],
+      "huawei": [
+        "Settings → Battery → App launch → Fame Driver: \"Manage automatically\" අක්‍රිය කර, ස්විච තුනම ක්‍රියාත්මක කරන්න.",
+        "Recent apps තුළ Fame Driver පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ."
       ]
     },
     "meHint": "දුරකථනය Fame Driver තනිවම නතර කරන්නේ නම්, මෙම සැකසුම් එක් වරක් වෙනස් කරන්න."
