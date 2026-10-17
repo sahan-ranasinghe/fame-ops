@@ -1,6 +1,9 @@
 // Requests (/requests): the queue for someone who approves, one's own for
 // everyone else; the detail beside the list (a panel on a desktop, a full
-// screen on a phone); New request at /requests/new.
+// screen on a phone); New request at /requests/new. Phase 7 (§33): a task
+// proposed by someone without approve is a card among them ("Task" and "Task
+// for Kamal · WP CAB-4521 · proposed by Nimal"); a late one is marked
+// "Leave-by passed" and stays in the queue.
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -11,6 +14,7 @@ import { can } from "../transport/types";
 import { Chips, Empty, ErrBox, Loading, Pill, StaleNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { ListWithDetail } from "../ui/Page";
+import { LATE_BADGE, proposalLine, requestView } from "./approvalLogic";
 import { timelineSteps } from "./requestLogic";
 
 type Filter = "waiting" | "changed" | "approved" | "declined" | "cancelled" | "all";
@@ -55,14 +59,25 @@ export function Requests() {
                     <thead><tr><th>Requested by</th><th>Project</th><th>When</th><th>Route</th><th>Need</th><th>Status</th><th className="r"></th></tr></thead>
                     <tbody>
                       {d.requests.map((q) => (
-                        <tr key={q.id} className="click" onClick={() => navigate(`/requests/${q.id}`)}>
-                          <td data-label="Requested by"><b>{q.requested_by}</b>{q.on_behalf_of && <span className="muted"> · for {q.on_behalf_of}</span>}{q.asked && <div className="sub">{q.asked}</div>}</td>
+                        <tr key={q.id} className="click" onClick={() => navigate(`/requests/${q.id}`)} data-kind={q.kind}>
+                          <td data-label="Requested by">
+                            {q.kind === "task"
+                              ? (
+                                <>
+                                  <Pill tone="live">Task</Pill> <b>{q.title || "Proposed task"}</b>
+                                  <div className="sub" data-testid="proposal-line">{requestView(q, me).proposal ? proposalLine(q) : `proposed by ${q.requested_by}`}</div>
+                                </>
+                              )
+                              : <><b>{q.requested_by}</b>{q.on_behalf_of && <span className="muted"> · for {q.on_behalf_of}</span>}</>}
+                            {q.asked && <div className="sub">{q.asked}</div>}
+                          </td>
                           <td data-label="Project">{q.project || "—"}</td>
                           <td data-label="When">{q.when}{q.back_by && <div className="sub">back by {q.back_by}</div>}</td>
-                          <td data-label="Route" className="muted">{q.route || "—"}</td>
-                          <td data-label="Need">{q.need || "—"}{q.driver_required === false && <div className="sub">no driver · custodian drives</div>}</td>
+                          <td data-label="Route" className="muted">{q.route || "—"}{q.stops_count && q.stops_count > 2 ? <div className="sub">{q.stops_count} stops</div> : null}</td>
+                          <td data-label="Need">{q.kind === "task" ? (q.proposed?.passengers != null ? `${q.proposed.passengers} passengers` : "—") : q.need || "—"}{q.driver_required === false && <div className="sub">no driver · custodian drives</div>}</td>
                           <td data-label="Status">
                             <Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>
+                            {q.late && <> <Pill tone="bad">{LATE_BADGE}</Pill></>}
                             {(() => {
                               const last = timelineSteps(q).filter((s) => s.done).pop();
                               const words = q.one_step ? "booked directly" : last && last.label !== "Sent" ? `${last.label}${last.at ? ` · ${last.at}` : ""}` : last?.at ? `sent ${last.at}` : "";

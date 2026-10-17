@@ -1,8 +1,11 @@
 // Pieces the request pages share: the four vehicle groups and one vehicle as
-// an option (the plate, what it is, how it stands, the custodian's links), and
-// the requester's timeline.
+// an option (the plate, what it is, how it stands, the custodian's links), the
+// requester's timeline, and (Phase 7, §33) the card's head: who asked, or a
+// proposed task's title with its driver and vehicle, and "Leave-by passed".
 import type { FieldChanges, RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
 import { joinDots } from "../lib/format";
+import { Pill } from "../ui/basics";
+import { LATE_TEXT, proposalLine } from "./approvalLogic";
 import { diffLines, timelineSteps } from "./requestLogic";
 
 export const GROUPS: [keyof NonNullable<Suggestions["groups"]>, string][] = [
@@ -77,5 +80,37 @@ export function VehicleGroups({ sug, name, vehicle, onPick, greyGarage }: { sug:
         );
       })}
     </>
+  );
+}
+
+/**
+ * The card's head: who asked (and for whom); a proposed task's title and "Task for Kamal · WP CAB-4521 · proposed by
+ * Nimal" (the driver and the vehicle only to who may see them, §35 19); then the project and when it was asked.
+ */
+export function RequestHead({ q, proposal }: { q: RequestCard; proposal: boolean }) {
+  return (
+    <>
+      {q.kind === "task"
+        ? (
+          <>
+            <div className="name" style={{ fontSize: 19 }}><Pill tone="live">Task</Pill> {q.title || "Proposed task"}</div>
+            <div className="sub" data-testid="proposal-line">{proposal ? proposalLine(q) : `Proposed by ${q.requested_by}`}</div>
+          </>
+        )
+        : <div className="name" style={{ fontSize: 19 }}>{q.requested_by}{q.on_behalf_of ? <span className="muted"> · for {q.on_behalf_of}</span> : null}</div>}
+      <div className="sub">{joinDots([q.project, q.asked, q.one_step ? "booked directly by the office" : ""])}</div>
+    </>
+  );
+}
+
+/** Waiting past its leave-by (§35 18): it stays in the queue and is never sent by itself. */
+export function LateNotice({ approver }: { approver: boolean }) {
+  return (
+    <div className="notice bad" data-testid="late-notice" role="status">
+      <p>
+        <b>{LATE_TEXT}.</b>{" "}
+        {approver ? "It is never sent by itself: send it with a later leave-by, or decline it." : "It is never sent by itself: the fleet admin decides it, or you withdraw it."}
+      </p>
+    </div>
   );
 }

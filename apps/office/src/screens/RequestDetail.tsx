@@ -2,6 +2,10 @@
 // decision or the cancellation; Review opens /requests/:id/decide (a changed
 // booking too); Edit opens /requests/:id/edit for the person who asked (or an
 // approver); an approved booking can be cancelled here with a reason (its task too).
+// Phase 7 (§33, §34): a proposed task ("Task for Kamal · WP CAB-4521 · proposed
+// by Nimal"), the trip (the stops with their times, the plan, the map), "Leave-by
+// passed" when it waits past its leave-by, and Withdraw for the person who asked
+// while it waits (a reason, on the page, in two steps).
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -13,11 +17,13 @@ import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
-import { ChangesList, Timeline } from "./requestParts";
+import { isProposal, requestView, withdrawInput } from "./approvalLogic";
+import { ChangesList, LateNotice, RequestHead, Timeline } from "./requestParts";
+import { TripSection, useTripLine } from "./RequestTrip";
 
 /**
  * The request from the lists already loaded (followed as they refresh), else
- * from list_requests(all) once the list is not loading.
+ * from list_requests(id) once the list is not loading.
  */
 export function useRequest(id: string): { q: RequestCard | undefined; err: string | null; setQ: (q: RequestCard) => void } {
   const { transport } = useFleet();
@@ -34,8 +40,14 @@ export function useRequest(id: string): { q: RequestCard | undefined; err: strin
     }
     if (list.loading) return; // the list's answer arrives through known
     let alive = true;
-    void transport.call<RequestsList>("list_requests", { status: "all" })
-      .then((p) => { if (alive) setQ(p.requests.find((r) => r.id === id)); })
+    // An older server ignores `id` and answers every request: found among them the same way.
+    void transport.call<RequestsList>("list_requests", { status: "all", id })
+      .then((p) => {
+        if (!alive) return;
+        const found = p.requests.find((r) => r.id === id);
+        if (found) setQ(found);
+        else setErr("This request is not in your list: it is someone else's, or the link is wrong.");
+      })
       .catch((e) => { if (alive) setErr(errText(e as FleetError)[0]); });
     return () => { alive = false; };
   }, [id, transport, known, list.loading]);
@@ -48,9 +60,12 @@ export function RequestDetail() {
   const navigate = useNavigate();
   const toast = useToast();
   const { q, err } = useRequest(id);
+  const trip = useTripLine(q);
   const [cancelReason, setCancelReason] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Withdraw's second step: the reason and the confirming button.
+  const [withdrawing, setWithdrawing] = useState(false);
   const decides = me.tools.includes("decide_request");
   const cancels = me.tools.includes("cancel_request");
   const approver = me.permissions.includes("approve");
@@ -73,19 +88,40 @@ export function RequestDetail() {
     }
   }
 
+  async function withdraw() {
+    const v = withdrawInput(id, cancelReason);
+    if ("error" in v) {
+      setMsg(v.error);
+      return;
+    }
+    setBusy(true);
+    try {
+      await transport.call("cancel_request", v.input);
+      toast(q && isProposal(q) ? "Task withdrawn" : "Request withdrawn");
+      void store.invalidate();
+      navigate("/requests");
+    } catch (e) {
+      setMsg(errText(e as FleetError)[0]);
+      setBusy(false);
+    }
+  }
+
   if (err) return <><PageTop title="Vehicle request" backTo="/requests" /><Notice tone="bad">{err}</Notice></>;
   if (!q) return <><PageTop title="Vehicle request" backTo="/requests" /><Loading>Loading the request…</Loading></>;
+  const view = requestView(q, me);
+  const task = isProposal(q);
+  const p = view.proposal ? q.proposed : undefined;
   return (
     <div data-testid="request-detail">
       <PageTop
-        title="Vehicle request"
+        title={task ? "Proposed task" : "Vehicle request"}
         sub={<Pill tone={requestTone(q.status)}>{cap(q.status || "waiting")}</Pill>}
         backTo="/requests"
         actions={(q.status === "waiting" || q.status === "changed") && decides ? <Link className="btn small dark" to={`/requests/${id}/decide`}>Review</Link> : undefined}
       />
       <div className="card card-b">
-        <div className="name" style={{ fontSize: 19 }}>{q.requested_by}{q.on_behalf_of ? <span className="muted"> · for {q.on_behalf_of}</span> : null}</div>
-        <div className="sub">{joinDots([q.project, q.asked, q.one_step ? "booked directly by the office" : ""])}</div>
+        <RequestHead q={q} proposal={view.proposal} />
+        {q.late && <div style={{ marginTop: 12 }}><LateNotice approver={approver} /></div>}
         {q.status === "changed" && (
           <div className="notice" style={{ marginTop: 12 }} data-testid="changed-notice">
             <p><b>Changed{q.changed?.by ? ` by ${q.changed.by}` : ""}{q.changed?.at ? ` · ${q.changed.at}` : ""} · needs re-approval.</b> The booking keeps its old plan until the office decides again.</p>
@@ -95,27 +131,56 @@ export function RequestDetail() {
         <dl className="kv" style={{ marginTop: 14 }}>
           <div><dt>When</dt><dd>{q.when}</dd></div>
           <div><dt>Back by</dt><dd>{q.back_by || "—"}</dd></div>
-          <div><dt>Route</dt><dd>{q.route || "—"}</dd></div>
-          <div><dt>Need</dt><dd>{joinDots([q.need, q.driver_required === false ? "no driver · the custodian drives" : ""]) || "—"}</dd></div>
+          <div><dt>Route</dt><dd>{joinDots([q.route || "—", q.stops_count && q.stops_count > 2 ? `${q.stops_count} stops` : ""])}</dd></div>
+          {task
+            ? <div><dt>Passengers</dt><dd>{p?.passengers ?? "—"}</dd></div>
+            : <div><dt>Need</dt><dd>{joinDots([q.need, q.driver_required === false ? "no driver · the custodian drives" : ""]) || "—"}</dd></div>}
+          {(p?.contact_name || p?.contact_phone) && <div><dt>Contact</dt><dd>{joinDots([p.contact_name, p.contact_phone])}</dd></div>}
+          {p?.notes && <div style={{ gridColumn: "1/-1" }}><dt>Notes for the driver</dt><dd style={{ fontWeight: 400 }}>{p.notes}</dd></div>}
           {q.note && <div style={{ gridColumn: "1/-1" }}><dt>Note</dt><dd style={{ fontWeight: 400 }}>{q.note}</dd></div>}
           {q.decline_reason && <div style={{ gridColumn: "1/-1" }}><dt>Declined because</dt><dd>{q.decline_reason}</dd></div>}
           {q.cancel_reason && <div style={{ gridColumn: "1/-1" }}><dt>Cancelled because</dt><dd>{q.cancel_reason}</dd></div>}
         </dl>
         <Timeline q={q} />
       </div>
+      {trip && <div style={{ marginTop: 18 }}><TripSection trip={trip} leaveNote={task ? "as proposed" : "the time asked for"} /></div>}
+      {view.conflicts && q.status === "waiting" && !!(p?.warnings?.length || p?.conflicts?.length) && (
+        <div className="notice" style={{ marginTop: 18 }} data-testid="proposal-checks">
+          <p>
+            <b>When it was proposed:</b>{" "}
+            {[...(p?.warnings ?? []), ...(p?.conflicts ?? []).map((c) => c.text)].map((w, i) => <span key={i}>{i > 0 && <br />}{w}</span>)}
+          </p>
+        </div>
+      )}
       <div className="acts">
         {q.task_id && me.tools.includes("task_detail") && <Link className="btn" to={`/tasks/${q.task_id}`}>Open the task</Link>}
         {(q.status === "waiting" || q.status === "approved" || q.status === "changed") && me.tools.includes("update_request") && (approver || q.requested_by === me.name) && (
           <Link className="btn" to={`/requests/${id}/edit`}>Edit request</Link>
         )}
+        {view.withdraw && !withdrawing && (
+          <button type="button" className="btn" onClick={() => { setWithdrawing(true); setMsg(null); }}>Withdraw</button>
+        )}
       </div>
+      {view.withdraw && withdrawing && (
+        <div className="confirm" data-testid="withdraw">
+          <div className="field">
+            <label htmlFor="rq-withdraw">Withdraw this {task ? "task" : "request"} with a reason</label>
+            <input id="rq-withdraw" maxLength={300} placeholder="e.g. The trip is off" value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} autoFocus />
+          </div>
+          {msg && <Notice tone="bad">{msg}</Notice>}
+          <div className="acts">
+            <button type="button" className="btn" disabled={busy} onClick={() => { setWithdrawing(false); setMsg(null); }}>Keep it</button>
+            <button type="button" className="btn dark" disabled={busy} onClick={() => void withdraw()}>{task ? "Withdraw the task" : "Withdraw the request"}</button>
+          </div>
+        </div>
+      )}
       {q.status === "waiting" && (decides
         ? <Link className="btn dark" to={`/requests/${id}/decide`}>Approve or decline</Link>
-        : <Notice tone="info">The fleet office will approve or decline this request.</Notice>)}
+        : <Notice tone="info">{task ? "The fleet admin will approve or decline this task. It is sent to the driver only when approved." : "The fleet office will approve or decline this request."}</Notice>)}
       {q.status === "changed" && (decides
         ? <Link className="btn dark" to={`/requests/${id}/decide`}>Decide the change</Link>
         : <Notice tone="info">The fleet office will keep, change or decline the changed booking.</Notice>)}
-      {(q.status === "approved" || q.status === "changed") && cancels && (
+      {(q.status === "approved" || q.status === "changed") && cancels && approver && (
         <div className="confirm" style={{ borderColor: "var(--line)" }} data-testid="cancel-booking">
           <div className="field">
             <label htmlFor="rq-cancel">Cancel this booking with a reason</label>

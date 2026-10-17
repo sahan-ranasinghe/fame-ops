@@ -1,7 +1,8 @@
 // Settings → Fleet (the users permission): the dispatch defaults
 // (docs/dispatch-plan.md, section 6) and the routing provider's usage.
 // Phase 7: the time at a stop by type (pickup, drop, visit, any other) and the
-// accept window with the driver's reminder (when it ends, the task needs a driver).
+// accept window with the driver's reminder (when it ends, the task needs a driver),
+// and (§33) whether a task made without the approve permission waits for an approver.
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useFleet } from "../../app/FleetContext";
 import { useLists } from "../../data/hooks";
@@ -249,6 +250,18 @@ export function FleetSettings() {
           <label className="row" style={{ padding: 0, cursor: "pointer" }}>
             <input type="checkbox" checked={draft.self_drive_allowed !== false} disabled={busy !== null} onChange={(e) => { setDraft({ ...draft, self_drive_allowed: e.target.checked }); void save("self_drive_allowed", e.target.checked); }} />
             <span className="grow"><span className="name">Self-drive bookings allowed</span><span className="sub" style={{ display: "block" }}>{data.about.self_drive_allowed}</span></span>
+          </label>
+        </div>
+
+        {/* Phase 7 (§33): a task made without the approve permission waits for an approver (on by default). */}
+        <div className="card card-b form" data-testid="approval-settings">
+          <h2>Approval</h2>
+          <label className="row" style={{ padding: 0, cursor: "pointer" }}>
+            <input type="checkbox" checked={draft.tasks_need_approval !== false} disabled={busy !== null} onChange={(e) => { setDraft({ ...draft, tasks_need_approval: e.target.checked }); void save("tasks_need_approval", e.target.checked); }} />
+            <span className="grow">
+              <span className="name">New tasks need the fleet admin's OK</span>
+              <span className="sub" style={{ display: "block" }}>A task made by someone without the approve permission waits in the Requests queue and is sent to the driver only when approved. Off: every task is sent at once.</span>
+            </span>
           </label>
         </div>
 

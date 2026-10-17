@@ -2,6 +2,7 @@
 // desktop, a full screen on a phone), Assign a task at /tasks/new.
 // Phase 7 (§19): the tasks that need a driver (today and later) above the
 // columns; /tasks?filter=needs_driver shows only them, with the way back.
+// §33: the day's proposed tasks waiting for an approver as the first column.
 import { useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -12,6 +13,7 @@ import { Avatar, Dot, ErrBox, Loading, Plate, StaleNote, Updated } from "../ui/b
 import { Icon } from "../ui/icons";
 import { ListWithDetail } from "../ui/Page";
 import { NeedsDriverList } from "./NeedsDriverList";
+import { WaitingApprovalColumn } from "./WaitingApprovalColumn";
 
 const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
@@ -131,6 +133,8 @@ export function Tasks() {
             </div>
           )}
           {b && board.err && <div style={{ gridColumn: "1/-1" }}><StaleNote entry={board} /></div>}
+          {/* Proposed tasks of the day that wait for an approver (§33): first, shown only when there is one. */}
+          {b?.waiting_approval?.length ? <WaitingApprovalColumn cards={b.waiting_approval} /> : null}
           {b && cols.map(([k, label, dot]) => (
             <div className="col" key={k}>
               <div className="col-h"><span><Dot tone={dot} />{label}</span><span className="num">{(b[k] ?? []).length}</span></div>

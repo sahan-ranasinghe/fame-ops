@@ -8,12 +8,15 @@
 // Keep as asked / Change the driver, vehicle or time / Decline with a reason
 // (Phase 6). The answers stay on screen while they refresh, and a choice is
 // never reset by a refresh (§10). The pick and the reason are kept as a draft.
+// Phase 7 (§33, §34): a waiting proposed task, or a request planned with its
+// stops, gets the trip decide page (TripDecide); an old request (From and To
+// only) keeps this one. The page is chosen once, on the first answer.
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
-import type { DecideResult, RedecideResult, SuggestedVehicle, Suggestions } from "../data/types";
+import type { DecideResult, RedecideResult, RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { cap, joinDots, requestTone, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
@@ -22,6 +25,7 @@ import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { decidesTrip } from "./approvalLogic";
 import { availabilityArgs, driverVehicle, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
@@ -35,6 +39,7 @@ import { useRequest } from "./RequestDetail";
 import { decisionInput, dwellChanges, redecideInput } from "./requestLogic";
 import { VehicleGroups, VehicleOption } from "./requestParts";
 import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
+import { TripDecide } from "./TripDecide";
 
 interface Decision {
   /** The vehicle picked; "" = the one the driver brings (or, deciding again, keep the vehicle). */
@@ -61,6 +66,19 @@ const routeRows = (from: string, to: string): StopDraft[] => [
 
 export function RequestDecide() {
   const { id = "" } = useParams();
+  const { q, err, setQ } = useRequest(id);
+  // Chosen once: once decided, the request is approved and the answer stays on the page that sent it.
+  const [trip, setTrip] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (q && trip === null) setTrip(decidesTrip(q));
+  }, [q, trip]);
+  if (err) return <section className="view"><PageTop title="Vehicle request" backTo="/requests" /><Notice tone="bad">{err}</Notice></section>;
+  if (!q || trip === null) return <section className="view"><PageTop title="Vehicle request" backTo="/requests" /><Loading>Loading the request…</Loading></section>;
+  return trip ? <TripDecide id={id} q={q} setQ={setQ} /> : <ClassicDecide id={id} q={q} setQ={setQ} />;
+}
+
+/** A request with From and To only (and every changed or approved booking decided again). */
+function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: RequestCard) => void }) {
   const [params] = useSearchParams();
   const { me, store, transport } = useFleet();
   const navigate = useNavigate();
@@ -68,7 +86,6 @@ export function RequestDecide() {
   const lists = useLists();
   const settings = useFleetSettings();
   const base = basePlace(settings.data);
-  const { q, err, setQ } = useRequest(id);
   const [f, setF, draft] = useFormDraft<Decision>("request-decide", id, { vehicle: "", driver: "", reason: "", date: "", time: "", back: "" });
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "bad" | "ok"; text: React.ReactNode; warnings?: string[] } | null>(null);
@@ -225,8 +242,6 @@ export function RequestDecide() {
     setBusy(false);
   }
 
-  if (err) return <section className="view"><PageTop title="Vehicle request" backTo="/requests" /><Notice tone="bad">{err}</Notice></section>;
-  if (!q) return <section className="view"><PageTop title="Vehicle request" backTo="/requests" /><Loading>Loading the request…</Loading></section>;
   const decides = me.tools.includes("decide_request");
   const redecides = me.tools.includes("redecide_request");
   if ((q.status !== "waiting" && !again) || (q.status === "waiting" && !decides) || (again && !redecides)) {
@@ -300,7 +315,8 @@ export function RequestDecide() {
       <PageTop title="Decide the request" sub={<>{q.requested_by} · {joinDots([q.when, q.route])}</>} backTo={`/requests/${id}`} />
       <DraftBanner draft={draft} />
       <div className="page-form">
-        <RequestDetailCard q={q} compact />
+        {/* An old request keeps today's page: no leave-by to move here, so no "Leave-by passed" advice either. */}
+        <RequestDetailCard q={q} compact hideLate />
         <div className="card card-b form" data-testid="decide-pick">
           <div className="section-t" style={{ marginBottom: 2 }}>Driver and vehicle{updating}</div>
           {sugNote && <Notice>{sugNote}</Notice>}
