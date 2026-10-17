@@ -673,6 +673,10 @@ for (const scheme of ["light", "dark"] as const) {
     // page's clock is ours from here, so a minute's refresh can be brought forward.
     const day = new Date(Date.now() + 5.5 * 3600000 + 86400000).toISOString().slice(0, 10); // tomorrow in Colombo
     const rq = await tool<{ request: { id: string } }>("create_request", { requested_by: "E2E Twins Desk", date: day, time: "13:00", route_from: depot.name, route_to: "Galle", need_type: "van", pax: 3 });
+    // The vehicle for the other day's tasks below, registered now: a vehicle that becomes free is new data (the list above
+    // the panel grows by a row), not a refresh.
+    const spare = `WP TWC-${scheme[0].toUpperCase()}${stamp.slice(-4).toUpperCase()}`;
+    await tool("register_vehicle", { reg_no: spare, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 500 });
     await page.clock.install();
     await page.goto(`/requests/${rq.request.id}/decide`);
     const panel = page.getByTestId("availability");
@@ -727,8 +731,6 @@ for (const scheme of ["light", "dark"] as const) {
       note();
       new MutationObserver(note).observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
     });
-    const spare = `WP TWC-${scheme[0].toUpperCase()}${stamp.slice(-4).toUpperCase()}`;
-    await tool("register_vehicle", { reg_no: spare, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 500 });
     const after = new Date(Date.now() + 5.5 * 3600000 + 2 * 86400000).toISOString().slice(0, 10);
     for (let i = 0; i < 6; i++) {
       await wander(i % 2 === 1); // B nearer, then A, then B…
