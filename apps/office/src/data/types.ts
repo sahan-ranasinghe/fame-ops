@@ -638,9 +638,13 @@ export interface RequestTrip {
   leave_by_source?: string;
   return_to_base?: boolean;
   avoid_expressway?: boolean;
-  /** As plan_task's stops; `google` = the stop is on a Google pin (drawn on Google's map only). */
-  stops: (PlannedStop & { google?: boolean })[];
+  /** As plan_task's stops; `google` = the stop is on a Google pin (drawn on Google's map only); `status` once a task. */
+  stops: (PlannedStop & { google?: boolean; status?: string })[];
   timeline?: PlanTimeline;
+  /** "task" once approved: the task's stops and times as they are now (never the plan as first asked). */
+  source?: "task";
+  /** What the office changed against the request: "Changed by the office · was 09:00 Sat 17 Oct · stops changed". */
+  changed?: { by: string; was?: string; stops?: boolean; text: string };
 }
 
 /** A task proposed by someone without the approve permission (Phase 7, §33): what they proposed and saw. */

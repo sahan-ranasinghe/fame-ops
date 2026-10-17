@@ -250,6 +250,37 @@ describe("the request page for the person who asked (§35 17, 19)", () => {
     expect(transport.argsOf("cancel_request")).toEqual([{ request_id: "r1", reason: "The trip is off" }]);
   });
 
+  it("once approved, the page shows the task's stops and times with what the office changed; never the plan as asked", async () => {
+    // Sahan, 17 October: the task is the single source of the trip; here the office moved it to 07:15 and added a stop.
+    const nowTimeline: PlanTimeline = {
+      items: [
+        { kind: "leave", at: "07:15", source: "manual" },
+        { kind: "stop", n: 1, label: "Stop 1 · Pickup · Head office", place: "Head office", planned_arrive: "07:25", planned_leave: "07:30", dwell_min: 5 },
+        { kind: "stop", n: 2, label: "Stop 2 · Visit · Kurunegala site", place: "Kurunegala site", planned_arrive: "09:00", planned_leave: "10:00", dwell_min: 60 },
+        { kind: "stop", n: 3, label: "Stop 3 · Drop · Kandy site", place: "Kandy site", planned_arrive: "10:40", planned_leave: "10:45", arrive_by: "11:00", dwell_min: 5 },
+      ],
+      totals: { drive_min: 180, km: 150, ends: "10:45" },
+    };
+    const card: RequestCard = {
+      ...proposal, id: "r1", kind: "request", title: undefined, proposed: undefined, requested_by: "Dilini Jayasinghe", status: "approved",
+      when: "Sat 18 Oct 07:15", task_id: "t1",
+      trip: {
+        ...trip, source: "task", leave_by: "07:15", timeline: nowTimeline,
+        stops: [...trip.stops.slice(0, 1), { seq: 3, n: 2, label: "Stop 2 · Visit · Kurunegala site", type: "visit", place: "Kurunegala site", status: "pending" }, { ...trip.stops[1], n: 3 }],
+        changed: { by: "the office", was: "08:00 Sat 18 Oct", stops: true, text: "Changed by the office · was 08:00 Sat 18 Oct · stops changed" },
+      },
+      assigned: { driver: "Kamal Perera", phone: "077 123 4567", call: "tel:+94771234567", whatsapp: "https://wa.me/94771234567", vehicle: "WP CAB-4521" },
+    };
+    const transport = new FakeTransport({ list_requests: () => ({ status: "all", count: 1, requests: [card] }) }, requester);
+    await mount(transport, "/requests/r1", <Route path="/requests/:id" element={<RequestDetail />} />);
+    await act(async () => { await Promise.resolve(); });
+    expect((await screen.findByTestId("trip-changed")).textContent).toBe("Changed by the office · was 08:00 Sat 18 Oct · stops changed");
+    const plan = screen.getByTestId("plan-timeline").textContent ?? "";
+    expect(plan).toContain("Leave by 07:15");
+    expect(plan).toContain("Kurunegala site");
+    expect(plan).not.toContain("08:00");
+  });
+
   it("the proposer sees their proposal's driver and vehicle", async () => {
     const dispatcher: Me = { name: "Nimal Fernando", role: "office", permissions: ["view", "assign_tasks"], tools: ["list_requests", "cancel_request", "task_board"] };
     const transport = new FakeTransport({ list_requests: () => ({ status: "all", count: 1, requests: [proposal] }) }, dispatcher);

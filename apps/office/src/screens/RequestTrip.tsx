@@ -9,6 +9,7 @@ import { useFleet } from "../app/FleetContext";
 import type { RequestCard, RequestsList, RequestTrip } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { cap, joinDots } from "../lib/format";
+import { Notice } from "../ui/basics";
 import { PlanWithMap } from "./PlanMap";
 
 /** The request's trip with its road lines (web), the card's own trip until they answer or after an edit. */
@@ -48,16 +49,19 @@ export function TripSection({ trip, leaveNote, title = "Stops and plan" }: {
   title?: string;
 }) {
   const atStart = trip.stops.some((s) => s.is_start);
+  // Once approved the trip is the task's as it is now: the leave time is the task's own, and a change by the office says so.
+  const fromTask = trip.source === "task";
   return (
     <div className="card card-b form" data-testid="request-trip">
       <div className="section-t" style={{ marginBottom: 2 }}>{title}</div>
+      {trip.changed && <Notice tone="info"><span data-testid="trip-changed">{trip.changed.text}</span></Notice>}
       {trip.start && (
         <p className="muted small" style={{ margin: 0 }}>
           {joinDots([`Start from ${trip.start.name}`, atStart ? "passengers get in here (Stop 1)" : "", trip.return_to_base ? "back to the base at the end" : "", trip.avoid_expressway ? "no expressway" : ""])}
         </p>
       )}
       {trip.timeline
-        ? <PlanWithMap timeline={trip.timeline} stops={trip.stops} start={trip.start} startName={trip.start?.name} leaveNote={leaveNote} />
+        ? <PlanWithMap timeline={trip.timeline} stops={trip.stops} start={trip.start} startName={trip.start?.name} leaveNote={fromTask ? undefined : leaveNote} />
         : <TripStops stops={trip.stops} />}
     </div>
   );

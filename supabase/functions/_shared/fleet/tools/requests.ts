@@ -107,7 +107,12 @@ interface TripOutcome {
   firstPickup?: string;
   arrived: boolean;
   reassigned: boolean;
+  /** The task as it is now: the single source of the trip once the request is approved (§4). */
+  task: Task;
+  stops: TaskStopRow[];
 }
+
+type TaskStopRow = Row<"task_stops">;
 
 /** The approved push's pictures (Phase 7, §4): the driver's photo as its icon, the vehicle's as its image. */
 async function pushPhotos(db: Db, driver: Employee, vehicle: Vehicle) {
@@ -123,10 +128,9 @@ async function tripOutcomes(db: Db, rows: VehicleRequest[], now: Date): Promise<
   const out = new Map<string, TripOutcome>();
   const taskIds = rows.flatMap((r) => r.task_id ? [r.task_id] : []);
   if (taskIds.length === 0) return out;
-  const tasks = unwrap(await db.from("tasks").select("id, employee_id, vehicle_id, status, started_at").in("id", taskIds), "tasks");
-  const [pickups, events, emps, vehs] = await Promise.all([
-    db.from("task_stops").select("task_id, seq, place_name, arrived_at, auto_detected_at").in("task_id", taskIds).eq("type", "pickup")
-      .neq("status", "removed").order("seq"),
+  const tasks = unwrap(await db.from("tasks").select("*").in("id", taskIds), "tasks");
+  const [taskStops, events, emps, vehs] = await Promise.all([
+    db.from("task_stops").select("*").in("task_id", taskIds).neq("status", "removed").order("seq").limit(5000),
     db.from("task_assignment_events").select("task_id").in("task_id", taskIds).eq("action", "reassigned"),
     db.from("employees").select("id, name, phone, photo_id").in("id", [...new Set(tasks.map((t) => t.employee_id))]),
     db.from("vehicles").select("id, reg_no, make_model, photo_path, photo_thumb_path").in("id", [
@@ -136,8 +140,9 @@ async function tripOutcomes(db: Db, rows: VehicleRequest[], now: Date): Promise<
   const people = unwrap(emps, "employees");
   const vehicles = unwrap(vehs, "vehicles");
   const [driverPhotos, vehiclePhotos] = await Promise.all([driverPhotoLinks(db, people, now), vehiclePhotoLinks(db, vehicles, now)]);
+  const allStops = unwrap(taskStops, "stops");
   const firsts = new Map<string, { place_name: string; arrived: boolean }>();
-  for (const p of unwrap(pickups, "stops")) {
+  for (const p of allStops.filter((x) => x.type === "pickup")) {
     if (!firsts.has(p.task_id)) firsts.set(p.task_id, { place_name: p.place_name, arrived: !!(p.arrived_at || p.auto_detected_at) });
   }
   const reassigned = new Set(unwrap(events, "assignment history").map((e) => e.task_id));
@@ -157,6 +162,8 @@ async function tripOutcomes(db: Db, rows: VehicleRequest[], now: Date): Promise<
       firstPickup: firsts.get(t.id)?.place_name,
       arrived: firsts.get(t.id)?.arrived ?? false,
       reassigned: reassigned.has(t.id),
+      task: t,
+      stops: allStops.filter((x) => x.task_id === t.id),
     });
   }
   return out;
@@ -169,7 +176,7 @@ function outcomeOf(r: VehicleRequest, trip: TripOutcome | undefined) {
   const message = moment && (moment === "cancelled" || trip)
     ? tellMessage({
       moment,
-      when: colomboDayTime(r.needed_at),
+      when: colomboDayTime(trip ? trip.task.leave_by ?? trip.task.start_at : r.needed_at),
       driver: trip?.driver,
       driverPhone: trip?.phone,
       plate: trip?.plate,
@@ -237,6 +244,54 @@ function startStopFields(stops: RequestStop[]) {
   };
 }
 
+/** "Sat 17 Oct 09:00" as "09:00 Sat 17 Oct" (the time first, as the changed line says it). */
+const timeThenDay = (iso: string) => colomboDayTime(iso).replace(/^(.*) (\d{2}:\d{2})$/, "$2 $1");
+
+/**
+ * Once a request is approved its trip is the task's (Phase 7, §4; Sahan, 17 October): the stops and times as they are
+ * now, never the plan as first asked. "Changed by the office · was 09:00 Sat 17 Oct" when the leave time or the stops
+ * differ from what the request asked (an older From/To request compares the time only: its place names were resolved
+ * when it was approved).
+ */
+function taskTrip(r: VehicleRequest, t: TripOutcome, asked: RequestStop[], withLine: boolean) {
+  const task = t.task;
+  const plan = task.plan_json as unknown as StoredPlan | null;
+  const leave = task.leave_by ?? task.start_at;
+  const askedAt = r.leave_by ?? r.needed_at;
+  const timeMoved = Math.abs(new Date(leave).getTime() - new Date(askedAt).getTime()) >= 60000;
+  const keys = (list: { type: string; place_name: string; place_id?: string | null; google_place_id?: string | null }[]) =>
+    list.map((x) => stopForChange(x).key).join("\n");
+  const stopsMoved = asked.length > 0 && keys(asked) !== keys(t.stops);
+  const changed = timeMoved || stopsMoved
+    ? {
+      by: "the office",
+      was: timeMoved ? timeThenDay(askedAt) : undefined,
+      stops: stopsMoved || undefined,
+      text: ["Changed by the office", timeMoved ? `was ${timeThenDay(askedAt)}` : "", stopsMoved ? "stops changed" : ""]
+        .filter(Boolean).join(" · "),
+    }
+    : undefined;
+  return {
+    source: "task" as const,
+    start: task.start_name
+      ? {
+        name: task.start_name,
+        has_pin: task.start_lat != null,
+        lat: task.start_lat ?? undefined,
+        lng: task.start_lng ?? undefined,
+        google: task.start_google_place_id ? true : undefined,
+      }
+      : undefined,
+    leave_by: colomboTime(leave),
+    leave_by_source: task.leave_by_source ?? undefined,
+    return_to_base: task.return_to_base || undefined,
+    avoid_expressway: task.avoid_expressway || undefined,
+    stops: t.stops.map((x, i) => ({ ...stopCard(x, i), status: x.status, google: x.google_place_id ? true : undefined })),
+    timeline: planTimeline(plan, t.stops, withLine),
+    changed,
+  };
+}
+
 /** The trip as the edit form takes it back (update_request's stops and start). */
 function tripFields(r: VehicleRequest, stops: RequestStop[]) {
   if (stops.length === 0) return {};
@@ -278,7 +333,11 @@ function requestCard(
   refs?: CardRefs,
   withLine = false,
 ) {
-  const sameDay = r.back_by && colomboDate(r.back_by) === colomboDate(r.needed_at);
+  // Once there is a task behind it, the task's times are the request's (the office may have changed them).
+  const outcome = r.task_id ? refs?.trips?.get(r.task_id) : undefined;
+  const leaveAt = outcome ? outcome.task.leave_by ?? outcome.task.start_at : r.needed_at;
+  const backBy = outcome ? outcome.task.end_by : r.back_by;
+  const sameDay = backBy && colomboDate(backBy) === colomboDate(leaveAt);
   // Decided = approved or declined (a cancelled booking was approved first; a cancelled waiting request was never decided).
   const decided = r.status === "approved" || r.status === "changed" || r.status === "declined" || (r.status === "cancelled" && r.task_id);
   return {
@@ -289,8 +348,8 @@ function requestCard(
     requested_by: r.requested_by_name,
     on_behalf_of: r.on_behalf_of ?? undefined,
     project: r.project_label,
-    when: colomboDayTime(r.needed_at),
-    back_by: r.back_by ? (sameDay ? colomboTime(r.back_by) : colomboDayTime(r.back_by)) : undefined,
+    when: colomboDayTime(leaveAt),
+    back_by: backBy ? (sameDay ? colomboTime(backBy) : colomboDayTime(backBy)) : undefined,
     route: [r.route_from, r.route_to].filter(Boolean).join(" → ") || undefined,
     need: needText(r),
     note: r.note,
@@ -325,9 +384,10 @@ function requestCard(
       }
       : undefined,
     stops_count: stops.length || undefined,
-    trip: tripOf(r, stops, withLine),
+    // Once approved (or changed, or cancelled after approval) the trip is the task's: never an old plan.
+    trip: outcome ? taskTrip(r, outcome, stops, withLine) : tripOf(r, stops, withLine),
     requester_phone: r.requester_phone ?? undefined,
-    ...outcomeOf(r, r.task_id ? refs?.trips?.get(r.task_id) : undefined),
+    ...outcomeOf(r, outcome),
     // The fields as the edit form needs them (Colombo day and clock).
     fields: {
       date: colomboDate(r.needed_at),

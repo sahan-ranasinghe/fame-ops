@@ -1947,6 +1947,26 @@ wanted = psql(f"select string_agg(place_name, ' | ' order by seq) from request_s
 check(names == wanted and psql(f"select leave_by = (select leave_by from vehicle_requests where id = '{rq['id']}') from tasks where id = '{dq['task_id']}'") == "t",
       "approving copies the stops into the task with nothing retyped, at the planned leave-by", f"{names} / {wanted}")
 check(psql(f"select status || '|' || (task_id = '{dq['task_id']}') from vehicle_requests where id = '{rq['id']}'") == "approved|true", "the request is approved and linked")
+# Sahan, 17 October: once approved, the request shows the task's stops and times (never an old plan), and says what the
+# office changed.
+same = tool("list_requests", {"status": "all", "id": rq["id"]})["requests"][0]
+check(same["trip"].get("source") == "task" and "changed" not in same["trip"] and len(same["trip"]["stops"]) == 3,
+      "approved: the trip is read from the task (as asked: nothing changed)", json.dumps(same["trip"])[:300])
+asked_when = same["when"]
+td6 = tool("task_detail", {"task_id": dq["task_id"]})
+tool("update_task", {"task_id": dq["task_id"], "plan_version": td6["task"]["plan_version"], "time": "07:15"})
+moved = tool("list_requests", {"status": "all", "id": rq["id"]})["requests"][0]
+was = asked_when.split(" ")[-1] + " " + " ".join(asked_when.split(" ")[:-1])
+check(moved["when"].endswith("07:15") and moved["trip"]["leave_by"] == "07:15"
+      and moved["trip"].get("changed", {}).get("text") == f"Changed by the office · was {was}",
+      "the office moved the task: the request says the new time and 'Changed by the office · was <the time asked>'", json.dumps(moved["trip"].get("changed")))
+td6 = tool("task_detail", {"task_id": dq["task_id"]})
+tool("update_task_stops", {"task_id": dq["task_id"], "plan_version": td6["task"]["plan_version"],
+                           "stops": [{"type": "visit", "place": "Kurunegala tower site", "dwell_min": 45}, {"type": "visit", "place": "Kandy"},
+                                     {"type": "drop", "place": "Galle", "arrive_by": "16:00"}]})
+moved = tool("list_requests", {"status": "all", "id": rq["id"]})["requests"][0]
+check(any(x.get("place") == "Kandy" for x in moved["trip"]["stops"]) and moved["trip"]["changed"]["text"].endswith("stops changed"),
+      "the office changed the stops: the request shows the task's stops, 'stops changed'", json.dumps(moved["trip"])[:400])
 # An edit while it waits: the stops replaced (the old ones kept as removed), still waiting.
 rq2 = tool("create_request", {"date": day(6), "time": "08:30", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]})["request"]
 up = tool("update_request", {"request_id": rq2["id"], "version": rq2["version"],
