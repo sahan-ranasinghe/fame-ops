@@ -14,8 +14,8 @@ import { GOOGLE_ATTRIBUTION, googleUse } from "../google.ts";
 import { GOOGLE_MIN_CHARS, googlePin, googleSuggestions } from "../googlePlaces.ts";
 import { pastedPin } from "../pasted.ts";
 import { BUILT_IN, type Field, FIELDS, type Mapping, type Preset } from "../sites.ts";
-import { loadSettings } from "../settings.ts";
-import { colomboDateTime } from "../time.ts";
+import { loadSettings, saveSetting } from "../settings.ts";
+import { colomboDate, colomboDateTime, colomboDayTime, dayRange } from "../time.ts";
 import { tool, zId, zText } from "../tool.ts";
 
 export type Place = Row<"places">;
@@ -111,6 +111,8 @@ function detailCard(p: Place) {
     imported_at: p.imported_at ? colomboDateTime(p.imported_at) : undefined,
     updated_at: colomboDateTime(p.updated_at),
     active: p.active ? undefined : false,
+    // Phase 7 (§15): removed by the office (restore_place brings it back).
+    removed: p.removed_at ? `${colomboDateTime(p.removed_at)}${p.removed_by ? ` by ${p.removed_by}` : ""}` : undefined,
   };
 }
 
@@ -126,20 +128,110 @@ export const listPlaces = tool({
     operator: z.enum(["dialog", "mobitel", "other"]).optional(),
     pinned: z.boolean().optional().describe("Only places with (true) or without (false) a pin"),
     limit: z.number().int().min(1).max(1000).optional().describe("Default 200"),
+    removed: z.boolean().optional().describe("true = only the places the office removed (restore_place brings one back)"),
   }),
-  async run({ search, kind, operator, pinned, limit = 200 }, { db }) {
-    let q = db.from("places").select("*").eq("active", true).order("name").limit(limit);
+  async run({ search, kind, operator, pinned, limit = 200, removed }, { db }) {
+    let q = removed
+      ? db.from("places").select("*").not("removed_at", "is", null).order("removed_at", { ascending: false }).limit(limit)
+      : db.from("places").select("*").eq("active", true).order("name").limit(limit);
     if (kind) q = q.eq("kind", kind);
     if (operator) q = q.eq("operator", operator);
-    if (!kind && !operator && !search) q = q.neq("kind", "site");
+    if (!kind && !operator && !search && !removed) q = q.neq("kind", "site");
     if (pinned !== undefined) q = q.eq("pinned", pinned);
     const text = search?.replace(/[,()"\\]/g, " ").trim();
     if (text) {
       const like = `%${escapeLike(text)}%`;
       q = q.or(`name.ilike."${like}",address.ilike."${like}",ids_text.ilike."${like.toLowerCase()}"`);
     }
-    const places = unwrap(await q, "places").map(placeCard);
-    return { result: { count: places.length, places }, summary: `${places.length} places` };
+    const rows = unwrap(await q, "places");
+    const places = rows.map((p) => removed ? { ...placeCard(p), removed: detailCard(p).removed } : placeCard(p));
+    return { result: { count: places.length, places }, summary: `${places.length} ${removed ? "removed " : ""}places` };
+  },
+});
+
+const LIVE = ["assigned", "in_progress", "declined"];
+
+/** The tasks today or later that start or stop at a place (what removing it would touch). */
+async function tasksAt(db: Db, placeId: string, now: Date) {
+  const from = dayRange(colomboDate(now)).from;
+  const viaStops = unwrap(
+    await db.from("task_stops").select("task_id").eq("place_id", placeId).neq("status", "removed").limit(500),
+    "stops",
+  );
+  const ids = [...new Set(viaStops.map((s) => s.task_id))];
+  const [byStop, byStart] = await Promise.all([
+    ids.length
+      ? db.from("tasks").select("id, title, start_at").in("id", ids).in("status", LIVE).gte("start_at", from)
+      : { data: [], error: null },
+    db.from("tasks").select("id, title, start_at").eq("start_place_id", placeId).in("status", LIVE).gte("start_at", from),
+  ]);
+  const all = [...unwrap(byStop, "tasks"), ...unwrap(byStart, "tasks")];
+  return [...new Map(all.map((t) => [t.id, t])).values()].sort((a, b) => a.start_at.localeCompare(b.start_at));
+}
+
+export const removePlace = tool({
+  name: "remove_place",
+  title: "Remove a place",
+  description: "Takes a place out of every search, list and picker (past tasks keep its name on their stops; nothing is deleted). " +
+    "If it is the base place, or a task today or later starts or stops there, the answer is needs_confirm with the reasons and " +
+    "the tasks: call again with confirm true. Removing the base place clears that setting. restore_place brings it back.",
+  readOnly: false,
+  input: z.object({ id: zId, confirm: z.boolean().optional().describe("Remove it although it is the base place or tasks use it") }),
+  async run({ id, confirm }, { db, now, actor }) {
+    const place = await placeById(db, id);
+    if (place.removed_at) throw new ToolError(`${place.name} is removed already.`);
+    const [settings, tasks] = await Promise.all([loadSettings(db), tasksAt(db, id, now)]);
+    const isBase = settings.base_place_id === id;
+    const reasons = [
+      isBase ? `${place.name} is the base place` : null,
+      tasks.length
+        ? `${tasks.length} task${tasks.length === 1 ? "" : "s"} today or later ${
+          tasks.length === 1 ? "starts or stops" : "start or stop"
+        } there`
+        : null,
+    ].filter((r): r is string => r !== null);
+    const cards = tasks.map((t) => ({ task_id: t.id, title: t.title, when: colomboDayTime(t.start_at) }));
+    if (reasons.length > 0 && !confirm) {
+      return {
+        result: { needs_confirm: true, place: place.name, reasons, tasks: cards.length ? cards : undefined },
+        summary: `remove ${place.name}: needs confirm (${reasons.join("; ")})`,
+      };
+    }
+    unwrap(
+      await db.from("places").update({ active: false, removed_at: now.toISOString(), removed_by: actor.name }).eq("id", id).is(
+        "removed_at",
+        null,
+      )
+        .select("id"),
+      "place",
+    );
+    if (isBase) await saveSetting(db, "base_place_id", null, actor.name);
+    return {
+      result: {
+        removed: place.name,
+        base_place_cleared: isBase || undefined,
+        note: isBase ? "The base place is no longer set: pick another in Settings → Fleet (base_place_id)." : undefined,
+        tasks: cards.length ? cards : undefined,
+      },
+      summary: `removed place ${place.name}${isBase ? " (was the base place)" : ""}`,
+    };
+  },
+});
+
+export const restorePlace = tool({
+  name: "restore_place",
+  title: "Restore a place",
+  description: "Puts a removed place back in the searches, lists and pickers.",
+  readOnly: false,
+  input: z.object({ id: zId }),
+  async run({ id }, { db }) {
+    const place = await placeById(db, id);
+    if (!place.removed_at) throw new ToolError(`${place.name} is not removed.`);
+    const rows = unwrap(
+      await db.from("places").update({ active: true, removed_at: null, removed_by: null }).eq("id", id).select("*"),
+      "place",
+    );
+    return { result: { restored: place.name, place: detailCard(rows[0]) }, summary: `restored place ${place.name}` };
   },
 });
 

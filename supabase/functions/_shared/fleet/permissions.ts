@@ -66,6 +66,9 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   vehicle_documents: VEH,
   remove_vehicle_document: VEH,
   restore_vehicle_document: VEH,
+  // Phase 7 (§15): places are the vehicles permission's (§32 8: restored by the same people).
+  remove_place: VEH,
+  restore_place: VEH,
   fleet_overview: V,
   live_drivers: V,
   watch_drivers: V,

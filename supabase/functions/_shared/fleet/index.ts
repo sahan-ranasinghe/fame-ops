@@ -27,6 +27,8 @@ import {
   listPlaceImports,
   listPlaces,
   placeDetail,
+  removePlace,
+  restorePlace,
   saveArrivalPlace,
   saveImportPreset,
   savePlace,
@@ -155,6 +157,9 @@ export const TOOLS: AnyTool[] = [
   vehicleDocuments,
   removeVehicleDocument,
   restoreVehicleDocument,
+  // Phase 7 (§15): remove and restore a place.
+  removePlace,
+  restorePlace,
 ];
 
 export { WEB_ONLY_TOOLS } from "./tools/media.ts";
@@ -214,7 +219,8 @@ export const INSTRUCTIONS = [
   "Photos and documents: drivers and vehicles may have photos (photo_url, thumb_url), and vehicles their documents " +
   "(vehicle_documents: revenue licence, insurance, emission test, CR, the rent or lease agreement, others; missing ones are listed). " +
   "Files are added in the web app only.",
-  "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
+  "Nothing is deleted: tasks are cancelled, drivers and vehicles switched off, places removed and restored (remove_place " +
+  "answers needs_confirm for the base place or a place that tasks today or later use; list_places removed lists them).",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",
   "Office accounts (users permission): create_office_user returns a one-time set-password link to send by WhatsApp; never ask for or type a password. " +

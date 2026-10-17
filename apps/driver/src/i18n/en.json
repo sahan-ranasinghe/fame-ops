@@ -461,7 +461,8 @@
         "If the phone has \"Autostart\" or \"Auto launch\", turn it on for Fame Driver.",
         "Recent apps: lock Fame Driver so it stays open."
       ]
-    }
+    },
+    "meHint": "If the phone stops Fame Driver by itself, change these settings once."
   },
   "arrival": {
     "title": "Arrived at {stop}?",

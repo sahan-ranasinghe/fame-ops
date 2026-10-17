@@ -78,4 +78,5 @@ export const ALL_TOOLS = [
   // Phase 7, Part 3: photos and documents (the uploads photo_upload_url, vehicle_document_upload_url and
   // save_vehicle_document are the web app's only, so neither the connector nor the artifact has them).
   "set_driver_photo", "set_vehicle_photo", "vehicle_documents", "remove_vehicle_document", "restore_vehicle_document",
+  "remove_place", "restore_place",
 ];
