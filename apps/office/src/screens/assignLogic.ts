@@ -3,9 +3,12 @@
 // create_task / plan_task arguments (the connector contract). Phase 7: the
 // driver first and the vehicle they bring when none is picked (the call then
 // names no vehicle and the server takes the same one); Start from with
-// "Passengers get in here".
+// "Passengers get in here". The trip part is the trip editor's (§34); a task
+// proposed by someone without approve waits for the fleet admin's OK (§33).
+import type { CreateTaskResult } from "../data/types";
 import { waLink } from "../lib/format";
-import { defaultStops, hasDeadline, type StartFields, startInput, type StopDraft, stopsInput } from "./stopsLogic";
+import { hasDeadline, stopsInput } from "./stopsLogic";
+import { type Base, emptyTrip, type TripFields, tripPlanInput } from "./tripLogic";
 
 export interface ProjectRow {
   project: string;
@@ -14,19 +17,13 @@ export interface ProjectRow {
   bad?: boolean;
 }
 
-export interface AssignFields extends StartFields {
+/** The trip (the day, the leave-by, the stops, the start, "Vehicle free by" as `end`), then the task's own fields. */
+export interface AssignFields extends TripFields {
   title: string;
-  date: string;
-  /** The leave-by time typed by hand; empty = planned from the stops' deadlines. */
-  leaveBy: string;
-  stops: StopDraft[];
-  returnToBase: boolean;
-  avoidExpressway: boolean;
   buffer: string;
   driver: string;
   /** The vehicle picked; "" = the one the driver brings (their vehicle today, else their regular one). */
   vehicle: string;
-  end: string;
   pax: string;
   cname: string;
   cphone: string;
@@ -35,30 +32,20 @@ export interface AssignFields extends StartFields {
 }
 
 export const emptyAssign = (date: string): AssignFields => ({
-  title: "", date, leaveBy: "", stops: defaultStops(), start: "", startPax: false, returnToBase: false, avoidExpressway: false, buffer: "",
-  driver: "", vehicle: "", end: "", pax: "", cname: "", cphone: "", notes: "", whatsapp: false,
+  ...emptyTrip(date), title: "", buffer: "", driver: "", vehicle: "", pax: "", cname: "", cphone: "", notes: "", whatsapp: false,
 });
 
 export const splitTotal = (rows: ProjectRow[]) => rows.reduce((a, r) => a + (Number(r.percent) || 0), 0);
 
-type Base = { id: string; name: string } | null;
-
 /**
- * The part of the form the planner needs, as plan_task takes it; null when it cannot be planned yet.
- * `base`: the base place, named only when passengers get in there (otherwise the server takes it by itself).
+ * The part of the form the planner needs, as plan_task takes it (the trip, then the buffer, the driver and vehicle for
+ * the overlaps and the end time); null when it cannot be planned yet. `base`: the base place, named only when
+ * passengers get in there (otherwise the server takes it by itself).
  */
 export function planInput(f: AssignFields, base: Base = null): Record<string, unknown> | null {
   const t = (s: string) => s.trim();
-  if (!t(f.date)) return null;
-  const s = stopsInput(f.stops, f.startPax ? 1 : 0);
-  if ("error" in s) return null;
-  if (!t(f.leaveBy) && !hasDeadline(f.stops)) return null;
-  const input: Record<string, unknown> = { date: t(f.date), stops: s.stops };
-  if (t(f.leaveBy)) input.leave_by = t(f.leaveBy);
-  const start = startInput(f, base);
-  if (start) input.start = start;
-  if (f.returnToBase) input.return_to_base = true;
-  if (f.avoidExpressway) input.avoid_expressway = true;
+  const input = tripPlanInput(f, base);
+  if (!input) return null;
   if (t(f.buffer) !== "") input.buffer_min = Math.max(0, Math.min(600, parseInt(t(f.buffer), 10) || 0));
   if (t(f.driver)) input.driver = t(f.driver);
   if (t(f.vehicle)) input.vehicle = t(f.vehicle);
@@ -100,6 +87,28 @@ export function validateAssign(
   if (used.length) input.projects = used.map((r) => ({ project: r.project.trim(), percent: Number(r.percent) }));
   if (createdBy) input.created_by = createdBy.slice(0, 80);
   return { input };
+}
+
+/**
+ * What Assign a task says after create_task: sent to the driver, or (§33: no approve permission while new tasks need
+ * the fleet admin's OK) waiting in the approval queue as a request, with no task yet and nothing sent.
+ */
+export function assignOutcome(p: Pick<CreateTaskResult, "waiting_for_approval" | "request_id" | "next" | "task_id">, driverName: string): {
+  waiting: boolean;
+  head: string;
+  toast: string;
+  /** The request while it waits; the task once sent. */
+  link?: { to: string; label: string };
+} {
+  if (p.waiting_for_approval || (!p.task_id && p.request_id)) {
+    return {
+      waiting: true,
+      head: p.next ?? "Waiting for the fleet admin's OK · you'll be notified.",
+      toast: "Waiting for the fleet admin's OK",
+      link: p.request_id ? { to: `/requests/${p.request_id}`, label: "Open the request" } : undefined,
+    };
+  }
+  return { waiting: false, head: `Sent to ${driverName}.`, toast: "Task sent", link: p.task_id ? { to: `/tasks/${p.task_id}`, label: "Open task" } : undefined };
 }
 
 /** The WhatsApp message for the driver, when the office asked for one. */

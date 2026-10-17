@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { driverWhatsApp, emptyAssign, planInput, validateAssign } from "./assignLogic";
-import { bookInput, decisionInput, emptyRequest, suggestInput, timelineSteps, validateNewRequest, diffLines, editFields, redecideInput, updateRequestInput } from "./requestLogic";
+import { assignOutcome, driverWhatsApp, emptyAssign, planInput, validateAssign } from "./assignLogic";
+import { bookInput, decisionInput, emptyRequest, type RequestFields, suggestInput, timelineSteps, validateNewRequest, diffLines, editFields, redecideInput, updateRequestInput } from "./requestLogic";
+
+/** A request with its stops' places (a pickup, then a drop; "" leaves a row empty) and the other fields. */
+function request(date: string, places: [string, string], patch: Partial<RequestFields> = {}): RequestFields {
+  const r = { ...emptyRequest(date), ...patch };
+  r.stops = r.stops.map((s, i) => ({ ...s, place: places[i] ?? "" }));
+  return r;
+}
 
 function filledAssign() {
   const f = { ...emptyAssign("2026-10-12"), title: "Team drop · Matara", leaveBy: "06:30", driver: "kasun.s", vehicle: "WP CAB-4521" };
@@ -49,16 +56,31 @@ describe("Assign a task", () => {
     expect(url.startsWith("https://wa.me/94771234567?text=")).toBe(true);
     expect(decodeURIComponent(url.split("text=")[1])).toBe("New task: Team drop · Matara\nLeave by Mon 12 Oct 06:30\nPickup: Head office\nDrop-off: Matara site\nContact: Ruwan\nOpen Fame Driver for the details.");
   });
+  it("says it was sent, or (without approve, §33) that it waits for the fleet admin's OK, with the request to open", () => {
+    expect(assignOutcome({ task_id: "t1" }, "Kamal Perera")).toEqual({ waiting: false, head: "Sent to Kamal Perera.", toast: "Task sent", link: { to: "/tasks/t1", label: "Open task" } });
+    const waiting = assignOutcome({ waiting_for_approval: true, request_id: "r9", next: "Waiting for the fleet admin's OK · you'll be notified." }, "Kamal Perera");
+    expect(waiting).toEqual({
+      waiting: true, head: "Waiting for the fleet admin's OK · you'll be notified.", toast: "Waiting for the fleet admin's OK",
+      link: { to: "/requests/r9", label: "Open the request" },
+    });
+    expect(JSON.stringify(waiting)).not.toMatch(/sent|Kamal/i);
+    // No task id but a request: it waits, whatever the flag says.
+    expect(assignOutcome({ request_id: "r9" }, "Kamal").head).toBe("Waiting for the fleet admin's OK · you'll be notified.");
+  });
 });
 
 describe("Vehicle requests", () => {
-  it("needs the day and the time", () => {
-    expect(validateNewRequest(emptyRequest("2026-10-12"))).toEqual({ error: "Add the day and the time." });
+  it("needs the day, a stop, and a leave-by time or an arrive-by time on a stop", () => {
+    expect(validateNewRequest(emptyRequest(""))).toEqual({ error: "Add the day." });
+    expect(validateNewRequest(emptyRequest("2026-10-12"))).toEqual({ error: "Add at least one stop." });
+    expect(validateNewRequest(request("2026-10-12", ["", "Matara"]))).toEqual({ error: "Add a leave-by time, or an arrive-by time on a stop so it can be planned." });
   });
-  it("builds the create_request arguments, in the asker's own name, with who it is for when that is someone else", () => {
-    const v = validateNewRequest({ ...emptyRequest("2026-10-12"), time: "08:00", project: "HR", need: "van", pax: "6", tools: true, to: "Matara" });
-    expect(v).toEqual({ input: { date: "2026-10-12", time: "08:00", project: "HR", need_type: "van", route_to: "Matara", pax: 6, tools: true } });
-    expect(validateNewRequest({ ...emptyRequest("2026-10-12"), time: "08:00", behalf: " A visitor " })).toEqual({ input: { date: "2026-10-12", time: "08:00", on_behalf_of: "A visitor" } });
+  it("builds the create_request arguments with the trip, in the asker's own name, with who it is for when that is someone else", () => {
+    const v = validateNewRequest(request("2026-10-12", ["", "Matara"], { leaveBy: "08:00", project: "HR", need: "van", pax: "6", tools: true }));
+    expect(v).toEqual({ input: { date: "2026-10-12", time: "08:00", stops: [{ type: "drop", place: "Matara" }], project: "HR", need_type: "van", pax: 6, tools: true } });
+    expect(validateNewRequest(request("2026-10-12", ["", "Matara"], { leaveBy: "08:00", behalf: " A visitor " }))).toEqual({
+      input: { date: "2026-10-12", time: "08:00", stops: [{ type: "drop", place: "Matara" }], on_behalf_of: "A visitor" },
+    });
   });
   it("decides with a driver (and a vehicle when one is picked), or a reason", () => {
     expect(decisionInput({ id: "r1", decision: "approve" })).toEqual({ error: "Pick a driver: the vehicle fills itself." });
@@ -71,28 +93,31 @@ describe("Vehicle requests", () => {
 });
 
 describe("Vehicle requests (Part 6: custodians and one-step booking)", () => {
-  const f = { ...emptyRequest("2026-10-17"), time: "09:00", back: "12:00", need: "car", pax: "2", to: "Rajagiriya" };
+  const f = request("2026-10-17", ["", "Rajagiriya"], { leaveBy: "09:00", end: "12:00", need: "car", pax: "2" });
+  const trip = { date: "2026-10-17", time: "09:00", back_by: "12:00", stops: [{ type: "drop", place: "Rajagiriya" }] };
   it("sends driver_required only when the driver box is unticked", () => {
-    expect(validateNewRequest(f)).toEqual({ input: { date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", route_to: "Rajagiriya", pax: 2 } });
+    expect(validateNewRequest(f)).toEqual({ input: { ...trip, need_type: "car", pax: 2 } });
     expect(validateNewRequest({ ...f, driver: false })).toMatchObject({ input: { driver_required: false } });
   });
-  it("looks for free vehicles once the day and time are known", () => {
-    expect(suggestInput(emptyRequest("2026-10-17"))).toBeNull();
-    expect(suggestInput(f)).toEqual({ date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", pax: 2 });
+  it("looks for free vehicles once the day and the leave time (typed, or the plan's) are known", () => {
+    expect(suggestInput(emptyRequest("2026-10-17"), "")).toBeNull();
+    expect(suggestInput(f, "09:00")).toEqual({ date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", pax: 2 });
   });
-  it("books in one step: a driver, or the custodian when no driver is needed", () => {
+  it("books in one step with the trip: a driver, or the custodian when no driver is needed; the task is named after the last stop", () => {
     expect(bookInput(f, { vehicle: "", driver: "", hasCustodian: false })).toEqual({ error: "Pick a driver." });
     expect(bookInput(f, { vehicle: "WP CAR-1182", driver: "", hasCustodian: false })).toEqual({ error: "Pick a driver." });
     expect(bookInput(f, { vehicle: "WP CAR-1182", driver: "", hasCustodian: true })).toEqual({ error: 'Pick a driver, or untick "A driver is needed" so the custodian drives.' });
     expect(bookInput({ ...f, driver: false }, { vehicle: "WP CAR-1182", driver: "", hasCustodian: true })).toEqual({
-      input: { date: "2026-10-17", time: "09:00", back_by: "12:00", need_type: "car", route_to: "Rajagiriya", pax: 2, driver_required: false, vehicle: "WP CAR-1182" },
+      input: { ...trip, need_type: "car", pax: 2, driver_required: false, vehicle: "WP CAR-1182", title: "Trip · Rajagiriya" },
     });
-    expect(bookInput(f, { vehicle: "WP PH-2087", driver: "kasun.s", hasCustodian: false })).toMatchObject({ input: { vehicle: "WP PH-2087", driver: "kasun.s" } });    // From is the start and passengers get in there: From's time there goes to the start stop (Phase 7, §11).
-    const atStart = { ...f, from: "Head office", fromDwell: "15" };
-    const start = { fields: { start: "", startPax: true }, base: { id: "p-base", name: "Head office" }, fromIsStart: true };
-    expect(bookInput(atStart, { vehicle: "WP PH-2087", driver: "kasun.s", hasCustodian: false }, start)).toMatchObject({
-      input: { start: { place_id: "p-base", passengers: true, dwell_min: 15 }, stops: [{ type: "drop", place: "Rajagiriya" }] },
+    expect(bookInput(f, { vehicle: "WP PH-2087", driver: "kasun.s", hasCustodian: false })).toMatchObject({ input: { vehicle: "WP PH-2087", driver: "kasun.s" } });
+    // Passengers get in at the start (Phase 7, §11): the start is Stop 1, a pickup at the base place, with its time there.
+    const atStart = { ...f, startPax: true, startDwell: "15" };
+    expect(bookInput(atStart, { vehicle: "WP PH-2087", driver: "kasun.s", hasCustodian: false }, { id: "p-base", name: "Head office" })).toMatchObject({
+      input: { start: { place_id: "p-base", place: "Head office", passengers: true, dwell_min: 15 }, stops: [{ type: "drop", place: "Rajagiriya" }] },
     });
+    // The trip's own mistakes come first.
+    expect(bookInput(request("2026-10-17", ["", ""], { leaveBy: "09:00" }), { vehicle: "", driver: "kasun.s", hasCustodian: false })).toEqual({ error: "Add at least one stop." });
   });
   it("approves without a driver only when the custodian drives", () => {
     expect(decisionInput({ id: "r1", decision: "approve", vehicle: "WP CAR-1182" })).toEqual({ error: "Pick a driver: the vehicle fills itself." });
@@ -102,7 +127,7 @@ describe("Vehicle requests (Part 6: custodians and one-step booking)", () => {
 });
 
 describe("Driver first, the vehicle fills itself (Phase 7, §3)", () => {
-  const f = { ...emptyRequest("2026-10-17"), time: "09:00", from: "Head office", to: "Kurunegala site" };
+  const f = request("2026-10-17", ["Head office", "Kurunegala site"], { leaveBy: "09:00" });
   it("approves with the driver alone when they bring a vehicle (or it is not known yet); the server takes the same one", () => {
     expect(decisionInput({ id: "r1", decision: "approve", driver: "kamal.p", defaultVehicle: "WP CAB-4521" })).toEqual({ input: { request_id: "r1", decision: "approve", driver: "kamal.p" } });
     expect(decisionInput({ id: "r1", decision: "approve", driver: "kamal.p" })).toEqual({ input: { request_id: "r1", decision: "approve", driver: "kamal.p" } });
@@ -111,7 +136,10 @@ describe("Driver first, the vehicle fills itself (Phase 7, §3)", () => {
   });
   it("books with the driver alone, the same way", () => {
     expect(bookInput(f, { vehicle: "", driver: "kamal.p", hasCustodian: false, defaultVehicle: "WP CAB-4521" })).toEqual({
-      input: { date: "2026-10-17", time: "09:00", route_from: "Head office", route_to: "Kurunegala site", driver: "kamal.p" },
+      input: {
+        date: "2026-10-17", time: "09:00", stops: [{ type: "pickup", place: "Head office" }, { type: "drop", place: "Kurunegala site" }],
+        driver: "kamal.p", title: "Trip · Kurunegala site",
+      },
     });
     expect(bookInput(f, { vehicle: "", driver: "kamal.p", hasCustodian: false, defaultVehicle: null })).toEqual({ error: "Pick a vehicle: this driver holds none today and has no regular one." });
   });
@@ -127,28 +155,32 @@ describe("Driver first, the vehicle fills itself (Phase 7, §3)", () => {
   });
 });
 
-describe("The time at From and To, Start from on the one-step booking (Phase 7, §11, §17)", () => {
-  const f = { ...emptyRequest("2026-10-17"), time: "09:00", from: "Head office", to: "Kurunegala site", fromDwell: "15", toDwell: "1:30" };
-  it("sends the times at From and To when chosen", () => {
-    expect(validateNewRequest(f)).toMatchObject({ input: { from_dwell_min: 15, to_dwell_min: 90 } });
-    expect(validateNewRequest({ ...f, toDwell: "13:00" })).toEqual({ error: "The time at a stop must be minutes or h:mm, up to 12 h." });
+describe("The time at each stop, Start from on the request forms (Phase 7, §11, §17, §34)", () => {
+  const f = request("2026-10-17", ["Head office", "Kurunegala site"], { leaveBy: "09:00" });
+  f.stops[0].dwell = "15";
+  f.stops[1].dwell = "1:30";
+  it("sends the times at the stops when chosen", () => {
+    expect(validateNewRequest(f)).toMatchObject({ input: { stops: [{ type: "pickup", place: "Head office", dwell_min: 15 }, { type: "drop", place: "Kurunegala site", dwell_min: 90 }] } });
+    const late = { ...f, stops: f.stops.map((s, i) => (i === 1 ? { ...s, dwell: "13:00" } : s)) };
+    expect(validateNewRequest(late)).toEqual({ error: "Stop 2: the time at the stop must be minutes or h:mm, up to 12 h." });
+    // An older request's times at From and To come back on its two stops; a change goes as the stops.
     const was = editFields({ fields: { date: "2026-10-17", time: "09:00", route_from: "Head office", route_to: "Kurunegala site", from_dwell_min: 15 } });
-    expect([was.fromDwell, was.toDwell]).toEqual(["15", ""]);
-    expect(updateRequestInput("r1", 4, { ...was, fromDwell: "", toDwell: "30" }, was)).toEqual({ input: { request_id: "r1", version: 4, from_dwell_min: null, to_dwell_min: 30 } });
+    expect(was.stops.map((s) => s.dwell)).toEqual(["15", ""]);
+    const changed = { ...was, stops: was.stops.map((s, i) => ({ ...s, dwell: i === 0 ? "" : "30" })) };
+    expect(updateRequestInput("r1", 4, changed, was)).toEqual({
+      input: { request_id: "r1", version: 4, stops: [{ type: "pickup", place: "Head office" }, { type: "drop", place: "Kurunegala site", dwell_min: 30 }] },
+    });
   });
-  it("Passengers get in at the start: the start becomes Stop 1, the From pickup goes when it is the same place", () => {
+  it("Passengers get in at the start: the start becomes Stop 1 and the stops after it are the rows", () => {
     const base = { id: "p-base", name: "Head office" };
     const pick = { vehicle: "", driver: "kamal.p", hasCustodian: false, defaultVehicle: "WP CAB-4521" };
-    const ticked = { start: "", startPax: true };
-    expect(bookInput(f, pick, { fields: ticked, base, fromIsStart: true })).toMatchObject({
+    const ticked = { ...f, startPax: true, stops: [f.stops[1]] };
+    expect(bookInput(ticked, pick, base)).toMatchObject({
       input: { start: { place_id: "p-base", place: "Head office", passengers: true }, stops: [{ type: "drop", place: "Kurunegala site", dwell_min: 90 }] },
     });
-    expect(bookInput(f, pick, { fields: ticked, base, fromIsStart: false })).toMatchObject({
-      input: { stops: [{ type: "pickup", place: "Head office", dwell_min: 15 }, { type: "drop", place: "Kurunegala site", dwell_min: 90 }] },
-    });
-    const plain = bookInput(f, pick, { fields: { start: "", startPax: false }, base });
-    expect("input" in plain && "stops" in plain.input).toBe(false);
+    const plain = bookInput(f, pick, base);
     expect("input" in plain && "start" in plain.input).toBe(false);
+    expect("input" in plain && plain.input.stops).toEqual([{ type: "pickup", place: "Head office", dwell_min: 15 }, { type: "drop", place: "Kurunegala site", dwell_min: 90 }]);
   });
   it("the decide page's times go onto the request only when they differ from it", async () => {
     const { dwellChanges } = await import("./requestLogic");
@@ -176,18 +208,23 @@ describe("Vehicle form (Part 6: the custodian)", () => {
 });
 
 describe("Vehicle requests (Phase 6: edits, re-approval, the timeline from events)", () => {
-  const was = { ...emptyRequest("2026-10-17"), time: "09:00", back: "12:00", need: "van", pax: "4", from: "Head office", to: "Galle", note: "" };
-  it("reads the edit form from the card's fields", () => {
-    expect(editFields({ fields: { date: "2026-10-17", time: "09:00", back_by: "12:00", route_from: "Head office", route_to: "Galle", need_type: "van", pax: 4, tools: false, driver_required: true, on_behalf_of: "A visitor" } }))
-      .toEqual({ ...was, behalf: "A visitor" });
+  const card = { fields: { date: "2026-10-17", time: "09:00", back_by: "12:00", route_from: "Head office", route_to: "Galle", need_type: "van", pax: 4, tools: false, driver_required: true, on_behalf_of: "A visitor" } };
+  const was = editFields(card);
+  it("reads the edit form from the card's fields (an older request's From and To as two stops)", () => {
+    expect(was).toMatchObject({ date: "2026-10-17", leaveBy: "09:00", end: "12:00", need: "van", pax: "4", tools: false, driver: true, behalf: "A visitor", note: "", startPax: false, start: "" });
+    expect(was.stops.map((s) => [s.type, s.place])).toEqual([["pickup", "Head office"], ["drop", "Galle"]]);
     expect(editFields({ note: "old note" }).note).toBe("old note");
   });
   it("sends update_request only the fields that changed, with the version", () => {
     expect(updateRequestInput("r1", 2, was, was)).toEqual({ error: "Nothing changed." });
-    expect(updateRequestInput("r1", 2, { ...was, time: "09:30", to: "Matara", back: "", pax: "", tools: true, driver: false, behalf: "Someone" }, was)).toEqual({
-      input: { request_id: "r1", version: 2, time: "09:30", back_by: null, route_to: "Matara", pax: null, tools: true, driver_required: false, on_behalf_of: "Someone" },
+    const to = was.stops.map((s, i) => (i === 1 ? { ...s, place: "Matara" } : s));
+    expect(updateRequestInput("r1", 2, { ...was, leaveBy: "09:30", stops: to, end: "", pax: "", tools: true, driver: false, behalf: "Someone" }, was)).toEqual({
+      input: {
+        request_id: "r1", version: 2, time: "09:30", back_by: null, stops: [{ type: "pickup", place: "Head office" }, { type: "drop", place: "Matara" }],
+        pax: null, tools: true, driver_required: false, on_behalf_of: "Someone",
+      },
     });
-    expect(updateRequestInput("r1", 2, { ...was, date: "" }, was)).toEqual({ error: "Add the day and the time." });
+    expect(updateRequestInput("r1", 2, { ...was, date: "" }, was)).toEqual({ error: "Add the day." });
   });
   it("decides a changed booking again: keep, change with a pick, decline with a reason", () => {
     expect(redecideInput({ id: "r1", version: 3, decision: "keep" })).toEqual({ input: { request_id: "r1", version: 3, decision: "keep" } });
