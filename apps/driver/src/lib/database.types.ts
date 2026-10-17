@@ -451,6 +451,20 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"media_links": {
+                  Row: {
+                    "bucket": string,"expires_at": string,"path": string,"url": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "bucket": string,"expires_at": string,"path": string,"url": string
+                  }
+                  Update: {
+                    "bucket"?: string,"expires_at"?: string,"path"?: string,"url"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"notification_settings": {
                   Row: {
                     "employee_id": string,"enabled": boolean,"event": string,"updated_at": string

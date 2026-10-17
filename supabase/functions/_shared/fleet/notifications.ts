@@ -34,7 +34,11 @@ export type NotifyEvent =
   | "request.redecided"
   | "booking.changed"
   | "request.not_decided"
-  | "request.late";
+  | "request.late"
+  | "request.on_the_way"
+  | "request.arrived"
+  | "request.driver_changed"
+  | "request.cancelled";
 
 export interface EventInfo {
   event: NotifyEvent;
@@ -131,6 +135,31 @@ export const EVENTS: readonly EventInfo[] = [
     text: "It stays waiting until someone decides it; never sent by itself",
     needs: ["approve"],
   },
+  // Phase 7 (§4): the person who asked follows their trip (written in SQL by the triggers on tasks and task_stops).
+  {
+    event: "request.on_the_way",
+    label: "Your driver is on the way",
+    text: "The driver of a trip you asked for starts it",
+    needs: ["request"],
+  },
+  {
+    event: "request.arrived",
+    label: "Your driver has arrived",
+    text: "The driver of a trip you asked for reaches the first pickup",
+    needs: ["request"],
+  },
+  {
+    event: "request.driver_changed",
+    label: "Your driver is changed",
+    text: "A trip you asked for gets another driver",
+    needs: ["request"],
+  },
+  {
+    event: "request.cancelled",
+    label: "Your trip is cancelled",
+    text: "The task of a trip you asked for is cancelled by the office",
+    needs: ["request"],
+  },
 ];
 
 export interface Message {
@@ -140,6 +169,9 @@ export interface Message {
   url: string;
   /** Replaces an earlier notification about the same thing on the device. */
   tag?: string;
+  /** Phase 7 (§4): the driver's photo (icon) and the vehicle's (image) as storage paths; notify-office signs them. */
+  icon_path?: { bucket: "driver-photos"; path: string };
+  image_path?: { bucket: "vehicle-photos"; path: string };
 }
 
 export interface Person {
@@ -177,6 +209,12 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
       break;
     case "request.late":
       ids = holders("approve");
+      break;
+    case "request.on_the_way":
+    case "request.arrived":
+    case "request.driver_changed":
+    case "request.cancelled":
+      ids = ctx.requester ? [ctx.requester] : [];
       break;
     case "task.declined":
     case "task.not_accepted":

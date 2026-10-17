@@ -18,6 +18,7 @@ import { loadLatest, type Refs } from "../fleet.ts";
 import { haversineKm } from "../geo.ts";
 import type { Plan } from "../plan.ts";
 import { loadSettings } from "../settings.ts";
+import { driverPhotoLinks } from "../media.ts";
 import { colomboDate, colomboTime, dayRange } from "../time.ts";
 
 /**
@@ -128,8 +129,13 @@ export async function driverRows(
   });
   const top = ranked[0];
   const bestRow = top ? withRank.find((r) => (r.username ?? r.name) === (top.username ?? top.name)) : undefined;
+  // Phase 7 (§5): each driver's photo (Who's available on Approve and Assign).
+  const photos = await driverPhotoLinks(db, drivers, now);
   return {
-    rows: rankAvailability(withRank),
+    rows: rankAvailability(withRank.map((r) => {
+      const photo = r.username ? photos.get(drivers.find((d) => d.username === r.username)?.id ?? "") : undefined;
+      return photo ? { ...r, photo_url: photo } : r;
+    })),
     best: top ? { name: top.name, username: top.username, vehicle: bestRow?.vehicle, why: top.why } : undefined,
   };
 }

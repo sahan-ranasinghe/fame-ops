@@ -26,6 +26,8 @@ import {
   type Vehicle,
 } from "../fleet.ts";
 import { contactLinks } from "../format.ts";
+import { driverPhotoLinks, profilePaths, vehiclePhotoLinks } from "../media.ts";
+import { momentOf, tellLink, tellMessage } from "../requesterUpdates.ts";
 import { notifyEvent } from "../notifications.ts";
 import { hasAny } from "../permissions.ts";
 import type { Actor } from "../roles.ts";
@@ -84,10 +86,118 @@ function eventCard(e: RequestEvent) {
   };
 }
 
-/** The names a proposed task's card shows (Phase 7, §33). */
+/** The names a proposed task's card shows (Phase 7, §33), and the trip behind an approved one (§4). */
 interface CardRefs {
   people: Map<string, { name: string; username: string | null }>;
   plates: Map<string, string>;
+  trips?: Map<string, TripOutcome>;
+}
+
+/** What the person who asked sees once it is approved (Phase 7, §4, §35 19): the driver, the vehicle, their photos. */
+interface TripOutcome {
+  status: string;
+  driver: string;
+  phone: string | null;
+  driverPhoto?: string;
+  plate: string;
+  model: string | null;
+  vehiclePhoto?: string;
+  vehicleThumb?: string;
+  started: string | null;
+  firstPickup?: string;
+  arrived: boolean;
+  reassigned: boolean;
+}
+
+/** The approved push's pictures (Phase 7, §4): the driver's photo as its icon, the vehicle's as its image. */
+async function pushPhotos(db: Db, driver: Employee, vehicle: Vehicle) {
+  const driverPath = (await profilePaths(db, [driver])).get(driver.id);
+  return {
+    ...(driverPath ? { icon_path: { bucket: "driver-photos" as const, path: driverPath } } : {}),
+    ...(vehicle.photo_thumb_path ? { image_path: { bucket: "vehicle-photos" as const, path: vehicle.photo_thumb_path } } : {}),
+  };
+}
+
+/** The trips behind these requests' tasks, with the photos (one query each). */
+async function tripOutcomes(db: Db, rows: VehicleRequest[], now: Date): Promise<Map<string, TripOutcome>> {
+  const out = new Map<string, TripOutcome>();
+  const taskIds = rows.flatMap((r) => r.task_id ? [r.task_id] : []);
+  if (taskIds.length === 0) return out;
+  const tasks = unwrap(await db.from("tasks").select("id, employee_id, vehicle_id, status, started_at").in("id", taskIds), "tasks");
+  const [pickups, events, emps, vehs] = await Promise.all([
+    db.from("task_stops").select("task_id, seq, place_name, arrived_at, auto_detected_at").in("task_id", taskIds).eq("type", "pickup")
+      .neq("status", "removed").order("seq"),
+    db.from("task_assignment_events").select("task_id").in("task_id", taskIds).eq("action", "reassigned"),
+    db.from("employees").select("id, name, phone, photo_id").in("id", [...new Set(tasks.map((t) => t.employee_id))]),
+    db.from("vehicles").select("id, reg_no, make_model, photo_path, photo_thumb_path").in("id", [
+      ...new Set(tasks.map((t) => t.vehicle_id)),
+    ]),
+  ]);
+  const people = unwrap(emps, "employees");
+  const vehicles = unwrap(vehs, "vehicles");
+  const [driverPhotos, vehiclePhotos] = await Promise.all([driverPhotoLinks(db, people, now), vehiclePhotoLinks(db, vehicles, now)]);
+  const firsts = new Map<string, { place_name: string; arrived: boolean }>();
+  for (const p of unwrap(pickups, "stops")) {
+    if (!firsts.has(p.task_id)) firsts.set(p.task_id, { place_name: p.place_name, arrived: !!(p.arrived_at || p.auto_detected_at) });
+  }
+  const reassigned = new Set(unwrap(events, "assignment history").map((e) => e.task_id));
+  for (const t of tasks) {
+    const e = people.find((x) => x.id === t.employee_id);
+    const v = vehicles.find((x) => x.id === t.vehicle_id);
+    out.set(t.id, {
+      status: t.status,
+      driver: e?.name ?? "",
+      phone: e?.phone ?? null,
+      driverPhoto: driverPhotos.get(t.employee_id),
+      plate: v?.reg_no ?? "",
+      model: v?.make_model ?? null,
+      vehiclePhoto: vehiclePhotos.get(t.vehicle_id)?.photo,
+      vehicleThumb: vehiclePhotos.get(t.vehicle_id)?.thumb,
+      started: t.started_at,
+      firstPickup: firsts.get(t.id)?.place_name,
+      arrived: firsts.get(t.id)?.arrived ?? false,
+      reassigned: reassigned.has(t.id),
+    });
+  }
+  return out;
+}
+
+/** The trip behind an approved request, and the "Tell requester" message for someone without an office account. */
+function outcomeOf(r: VehicleRequest, trip: TripOutcome | undefined) {
+  const moment = momentOf({ requestStatus: r.status, taskStatus: trip?.status, arrived: trip?.arrived, reassigned: trip?.reassigned });
+  const shown = trip && (r.status === "approved" || r.status === "changed");
+  const message = moment && (moment === "cancelled" || trip)
+    ? tellMessage({
+      moment,
+      when: colomboDayTime(r.needed_at),
+      driver: trip?.driver,
+      driverPhone: trip?.phone,
+      plate: trip?.plate,
+      model: trip?.model,
+      place: trip?.firstPickup,
+      left: trip?.started ? colomboTime(trip.started) : undefined,
+      reason: r.cancel_reason,
+    })
+    : null;
+  return {
+    assigned: shown
+      ? {
+        driver: trip.driver,
+        phone: trip.phone ?? undefined,
+        ...contactLinks(trip.phone),
+        photo_url: trip.driverPhoto,
+        vehicle: trip.plate,
+        make_model: trip.model ?? undefined,
+        vehicle_photo_url: trip.vehiclePhoto,
+        vehicle_thumb_url: trip.vehicleThumb,
+        task_status: trip.status,
+      }
+      : undefined,
+    // Only for a person who asked without an office account (they get no pushes): the office tells them.
+    tell_requester: !r.requested_by_employee_id && moment && message
+      ? { moment, message, whatsapp: tellLink(r.requester_phone, message) }
+      : undefined,
+  };
 }
 
 /** The request's trip (Phase 7, §34): the start, the stops with their times, the plan timeline; and the fields to edit it. */
@@ -111,6 +221,18 @@ function tripOf(r: VehicleRequest, stops: RequestStop[], withLine: boolean) {
     avoid_expressway: r.avoid_expressway || undefined,
     stops: resolved.map((s, i) => ({ ...stopCard(s, i), google: stops[i].google_place_id ? true : undefined })),
     timeline: planTimeline(plan, resolved, withLine),
+  };
+}
+
+/** The start stop's own fields when passengers get in at the start (what, note, its time there when chosen). */
+function startStopFields(stops: RequestStop[]) {
+  const at = stops.find((s) => s.is_start);
+  if (!at) return {};
+  return {
+    passengers: true,
+    what: at.what ?? undefined,
+    note: at.note ?? undefined,
+    dwell_min: at.dwell_source === "chosen" ? at.dwell_min ?? undefined : undefined,
   };
 }
 
@@ -138,7 +260,7 @@ function tripFields(r: VehicleRequest, stops: RequestStop[]) {
         google_place_id: r.start_google_place_id ?? undefined,
         lat: r.start_lat ?? undefined,
         lng: r.start_lng ?? undefined,
-        passengers: stops.some((s) => s.is_start) || undefined,
+        ...startStopFields(stops),
       }
       : undefined,
     leave_by: r.leave_by_source === "manual" && r.leave_by ? colomboTime(r.leave_by) : undefined,
@@ -203,6 +325,8 @@ function requestCard(
       : undefined,
     stops_count: stops.length || undefined,
     trip: tripOf(r, stops, withLine),
+    requester_phone: r.requester_phone ?? undefined,
+    ...outcomeOf(r, r.task_id ? refs?.trips?.get(r.task_id) : undefined),
     // The fields as the edit form needs them (Colombo day and clock).
     fields: {
       date: colomboDate(r.needed_at),
@@ -243,16 +367,18 @@ async function requestCards(db: Db, rows: VehicleRequest[], now: Date, withLine 
   const ids = rows.map((r) => r.id);
   const people = [...new Set(rows.flatMap((r) => r.proposed_employee_id ? [r.proposed_employee_id] : []))];
   const plates = [...new Set(rows.flatMap((r) => r.proposed_vehicle_id ? [r.proposed_vehicle_id] : []))];
-  const [events, stops, emps, vehs] = await Promise.all([
+  const [events, stops, emps, vehs, trips] = await Promise.all([
     db.from("request_events").select("*").in("request_id", ids).order("at").order("id").limit(5000),
     requestStopsOf(db, ids),
     people.length ? db.from("employees").select("id, name, username").in("id", people) : { data: [], error: null },
     plates.length ? db.from("vehicles").select("id, reg_no").in("id", plates) : { data: [], error: null },
+    tripOutcomes(db, rows, now),
   ]);
   const evs = unwrap(events, "request events");
   const refs: CardRefs = {
     people: new Map(unwrap(emps, "employees").map((e) => [e.id, { name: e.name, username: e.username }])),
     plates: new Map(unwrap(vehs, "vehicles").map((v) => [v.id, v.reg_no])),
+    trips,
   };
   return rows.map((r) => requestCard(r, now, evs.filter((e) => e.request_id === r.id), stops.get(r.id) ?? [], refs, withLine));
 }
@@ -321,6 +447,9 @@ const requestFields = {
   tools: z.boolean().optional().describe("true if tools or equipment travel too"),
   note: zText(1000).optional(),
   driver_required: z.boolean().optional().describe("false when no driver is needed: the vehicle's custodian drives. Default true"),
+  requester_phone: zText(30).optional().describe(
+    "The phone of the person who asked, when they have no office account: Tell requester (WhatsApp) goes to it (Phase 7, §4)",
+  ),
   from_dwell_min: z.number().int().min(0).max(1440).optional().describe(
     "Minutes at the From place (the pickup). Default: its usual time, else 5",
   ),
@@ -410,6 +539,7 @@ export const createRequest = tool({
         on_behalf_of: args.on_behalf_of ?? null,
         from_dwell_min: args.from_dwell_min ?? null,
         to_dwell_min: args.to_dwell_min ?? null,
+        requester_phone: args.requester_phone ?? null,
       }).select("*").single(),
       "vehicle request",
     );
@@ -794,6 +924,7 @@ export const decideRequest = tool({
       ),
       url: `/requests/${request.id}`,
       tag: `request:${request.id}`,
+      ...(await pushPhotos(db, driver, vehicle)),
     }, told);
 
     return {
@@ -929,6 +1060,7 @@ async function approveTrip(
     note: `${vehicle.reg_no} · ${driver.name}${changedNote ? ` (${changedNote})` : task ? " (as proposed)" : ""}`,
   });
   await notifyEvent(db, "request.decided", {
+    ...(await pushPhotos(db, driver, vehicle)),
     title: task ? `Task approved · sent to ${driver.name}` : `Request approved · ${vehicle.reg_no} · ${driver.name}`,
     body: [
       task ? title : null,
@@ -1041,9 +1173,7 @@ export const bookVehicle = tool({
       project_label: label,
       needed_at: neededAt,
       back_by: backBy,
-      route_from: args.stops
-        ? prepared.stops[0].place_name
-        : args.route_from ?? null,
+      route_from: args.stops ? prepared.stops[0].place_name : args.route_from ?? null,
       route_to: args.stops
         ? (prepared.stops.length > 1 ? prepared.stops[prepared.stops.length - 1].place_name : null)
         : args.route_to ?? null,
@@ -1085,6 +1215,12 @@ export const bookVehicle = tool({
       request: { create, decidedBy: actor.name },
       bookedBy: actor.employeeId,
     }, warnings);
+    if (args.requester_phone) {
+      unwrap(
+        await db.from("vehicle_requests").update({ requester_phone: args.requester_phone }).eq("id", saved.result.request_id!).select("id"),
+        "vehicle request",
+      );
+    }
     // The request keeps the trip too (Phase 7, §34): its page shows the stops and the plan as the task has them.
     await saveRequestTrip(db, saved.result.request_id!, {
       start: prepared.start,
@@ -1216,16 +1352,14 @@ const routeOf = (r: Pick<VehicleRequest, "route_from" | "route_to">) => ({
 /** The edit form's start of a stored trip, as an input (the start stop's own fields when passengers get in there). */
 function startInput(r: VehicleRequest, rows: RequestStop[]) {
   if (!r.start_name) return undefined;
-  const atStart = rows.find((x) => x.is_start);
+  const { what, ...rest } = startStopFields(rows);
   return {
     place: r.start_name,
     place_id: r.start_place_id ?? undefined,
     lat: r.start_lat ?? undefined,
     lng: r.start_lng ?? undefined,
-    passengers: atStart ? true : undefined,
-    what: (atStart?.what ?? undefined) as "people" | "goods" | "documents" | "other" | undefined,
-    note: atStart?.note ?? undefined,
-    dwell_min: atStart?.dwell_source === "chosen" ? atStart.dwell_min ?? undefined : undefined,
+    ...rest,
+    what: what as "people" | "goods" | "documents" | "other" | undefined,
   };
 }
 
@@ -1320,6 +1454,9 @@ export const updateRequest = tool({
     note: z.string().trim().max(1000).nullable().optional().describe("The note; empty or null clears it"),
     driver_required: z.boolean().optional(),
     on_behalf_of: z.string().trim().max(120).nullable().optional(),
+    requester_phone: z.string().trim().max(30).nullable().optional().describe(
+      "The phone of the person who asked (no office account); null clears it",
+    ),
     from_dwell_min: z.number().int().min(0).max(1440).nullable().optional().describe("Minutes at From; null = the default"),
     to_dwell_min: z.number().int().min(0).max(1440).nullable().optional().describe("Minutes at To; null = the default"),
   }),
@@ -1373,6 +1510,8 @@ export const updateRequest = tool({
     const changes = requestDiff(before, after);
     const onBehalfOf = args.on_behalf_of === undefined ? request.on_behalf_of : (args.on_behalf_of || null);
     if (onBehalfOf !== request.on_behalf_of) changes["for"] = { from: request.on_behalf_of, to: onBehalfOf };
+    const requesterPhone = args.requester_phone === undefined ? request.requester_phone : (args.requester_phone || null);
+    if (requesterPhone !== request.requester_phone) changes["phone"] = { from: request.requester_phone, to: requesterPhone };
     // Phase 7 (§17): the times at From and To.
     const fromDwell = args.from_dwell_min === undefined ? request.from_dwell_min : args.from_dwell_min;
     const toDwell = args.to_dwell_min === undefined ? request.to_dwell_min : args.to_dwell_min;
@@ -1395,6 +1534,7 @@ export const updateRequest = tool({
       await db.from("vehicle_requests").update({
         ...after,
         on_behalf_of: onBehalfOf,
+        requester_phone: requesterPhone,
         from_dwell_min: fromDwell,
         to_dwell_min: toDwell,
         status: next.status,

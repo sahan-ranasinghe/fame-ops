@@ -61,6 +61,10 @@ Deno.test("the Settings page shows a person the events their permissions can bri
     "request.redecided",
     "booking.changed",
     "request.not_decided",
+    "request.on_the_way",
+    "request.arrived",
+    "request.driver_changed",
+    "request.cancelled",
   ]);
   assertEquals(relevantEvents(["view", "request", "assign_tasks"]).map((e) => e.event), [
     "request.decided",
@@ -73,6 +77,10 @@ Deno.test("the Settings page shows a person the events their permissions can bri
     "request.redecided",
     "booking.changed",
     "request.not_decided",
+    "request.on_the_way",
+    "request.arrived",
+    "request.driver_changed",
+    "request.cancelled",
   ]);
   assertEquals(relevantEvents(["view", "request", "approve", "assign_tasks", "vehicles", "issues"]).length, EVENTS.length);
 });

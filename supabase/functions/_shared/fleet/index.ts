@@ -62,6 +62,16 @@ import {
   updateTaskStops,
 } from "./tools/tasks.ts";
 import { addRentalCompany, listVehicles, registerVehicle, updateVehicle } from "./tools/vehicles.ts";
+import {
+  photoUploadUrl,
+  removeVehicleDocument,
+  restoreVehicleDocument,
+  saveVehicleDocument,
+  setDriverPhoto,
+  setVehiclePhoto,
+  vehicleDocuments,
+  vehicleDocumentUploadUrl,
+} from "./tools/media.ts";
 
 export const TOOLS: AnyTool[] = [
   fleetOverview,
@@ -136,7 +146,18 @@ export const TOOLS: AnyTool[] = [
   moveDriverVehicle,
   swapReading,
   reopenTask,
+  // Phase 7, Part 3 (§5, §6, §28): photos and documents.
+  photoUploadUrl,
+  setDriverPhoto,
+  setVehiclePhoto,
+  vehicleDocumentUploadUrl,
+  saveVehicleDocument,
+  vehicleDocuments,
+  removeVehicleDocument,
+  restoreVehicleDocument,
 ];
+
+export { WEB_ONLY_TOOLS } from "./tools/media.ts";
 
 export const INSTRUCTIONS = [
   "Fame Fleet office connector for Fame Global Solutions (Sri Lanka): vehicles, drivers, tasks, vehicle requests, live locations and mileage.",
@@ -185,6 +206,14 @@ export const INSTRUCTIONS = [
   "vehicle's mileage gets its own; swap_reading types a reading still owed afterwards (a towed vehicle). A driver can ask for another vehicle on a breakdown or accident report: a critical issue. " +
   "A task completed with far fewer km than planned is flagged completed early; reopen_task sets a " +
   "task completed today back to in progress.",
+  "Tasks go to the fleet admin first (get_settings tasks_need_approval, on by default): create_task by someone without the approve " +
+  "permission answers waiting_for_approval and the task waits in the requests queue (list_requests kind task, task_board " +
+  "waiting_approval) until decide_request sends it as proposed or changed. A request can carry its whole trip (create_request with " +
+  "stops, as create_task takes them); approving copies its stops into the task. A waiting one is pushed to the approvers 30 minutes " +
+  "before it leaves and when its leave-by passes; it is never sent by itself.",
+  "Photos and documents: drivers and vehicles may have photos (photo_url, thumb_url), and vehicles their documents " +
+  "(vehicle_documents: revenue licence, insurance, emission test, CR, the rent or lease agreement, others; missing ones are listed). " +
+  "Files are added in the web app only.",
   "Nothing can be deleted. Tasks are cancelled, drivers and vehicles are switched off.",
   "Links: maps = Google Maps, call = tel:, whatsapp = wa.me. Photo links stop working after 1 hour.",
   "Projects come from Zoho Books: read them with the Zoho connector and pass them to import_projects.",

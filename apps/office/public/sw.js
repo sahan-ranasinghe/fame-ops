@@ -16,7 +16,9 @@ self.addEventListener("push", (event) => {
     tag: data.tag || undefined,
     renotify: !!data.tag,
     data: { url: data.url || "/" },
-    icon: "/icons/icon-192.png",
+    // Phase 7 (§4): the driver's photo and the vehicle's, when the push carries them (Chrome on Windows and Android).
+    icon: data.icon || "/icons/icon-192.png",
+    image: data.image || undefined,
     badge: "/icons/badge-96.png",
   }));
 });

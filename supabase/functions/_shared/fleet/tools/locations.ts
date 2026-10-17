@@ -28,6 +28,7 @@ export function snapProvider(settings: Settings, channel: Channel): MapMatchingP
 }
 import { buildRoute, type LinePoint, type RouteFix, type Segment, withSpeeds } from "../route.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
+import { driverPhotoLinks, vehiclePhotoLinks } from "../media.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
 
 /** watch_drivers keeps a driver watched this long; the web calls it again every 30 s while the page is open. */
@@ -126,6 +127,11 @@ export const liveDrivers = tool({
 
     // Every active driver (Phase 7): on a task, on duty or off duty.
     const shown = refs.employees.filter((e) => e.role === "driver" && e.active);
+    // Phase 7 (§5, §6): the drivers' and the vehicles' photos, in one batch each (the same links while they last).
+    const [driverPhotos, vehiclePhotos] = await Promise.all([
+      driverPhotoLinks(db, shown, now),
+      vehiclePhotoLinks(db, refs.vehicles, now),
+    ]);
     const cards = await Promise.all(shown.map(async (e) => {
       const pos = latest.get(e.id);
       const share = sharing(pos, now);
@@ -175,7 +181,9 @@ export const liveDrivers = tool({
         speed_kmh: share.state === "sharing" ? kmh(pos?.speed_mps) : undefined,
         battery_pct: pos?.battery_pct,
         source: "Fame Driver app",
+        photo_url: driverPhotos.get(e.id),
         vehicle: vehicleId ? vehicleLabel(refs.veh.get(vehicleId)) : undefined,
+        vehicle_thumb_url: vehicleId ? vehiclePhotos.get(vehicleId)?.thumb : undefined,
         vehicle_since: !task && e.current_vehicle_id && holderSince.get(e.id) ? colomboTime(holderSince.get(e.id)!) : undefined,
         vehicle_note: handover,
         task_note: (() => {

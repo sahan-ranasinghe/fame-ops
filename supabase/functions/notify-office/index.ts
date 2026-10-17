@@ -88,6 +88,15 @@ function appServer(): Promise<ApplicationServer | null> {
 }
 
 // --- The outbox -------------------------------------------------------------------------
+/** A photo's path in the payload ({ bucket, path }) as a link for one hour, or nothing (never fails the push). */
+async function signedFile(db: Db, file: unknown): Promise<string | undefined> {
+  const f = file as { bucket?: unknown; path?: unknown } | null;
+  if (!f || typeof f.bucket !== "string" || typeof f.path !== "string") return undefined;
+  if (f.bucket !== "driver-photos" && f.bucket !== "vehicle-photos") return undefined;
+  const { data, error } = await db.storage.from(f.bucket).createSignedUrl(f.path, 3600);
+  return error || !data ? undefined : data.signedUrl;
+}
+
 /** Counts the attempt on a row that is still queued or failed; null when another call has it. */
 async function claim(db: Db, row: Notification): Promise<Notification | null> {
   const { data, error } = await db.from("notifications").update({ attempts: row.attempts + 1 })
@@ -140,6 +149,9 @@ async function deliver(db: Db, server: ApplicationServer | null, row: Notificati
     body: typeof payload.body === "string" ? payload.body : "",
     url: origin && path.startsWith("/") ? origin + path : path,
     tag: typeof payload.tag === "string" ? payload.tag : undefined,
+    // Phase 7 (§4): the driver's photo as the icon and the vehicle's as the image, signed now for an hour.
+    icon: await signedFile(db, payload.icon_path),
+    image: await signedFile(db, payload.image_path),
   });
 
   let ok = 0;

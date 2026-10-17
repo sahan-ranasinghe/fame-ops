@@ -6,6 +6,7 @@ import { ToolError, unwrap } from "../db.ts";
 import { docChip, type Employee, findDriver, loadLatest, loadRefs, sharing } from "../fleet.ts";
 import { contactLinks } from "../format.ts";
 import { colomboDate, colomboTime, dayRange } from "../time.ts";
+import { driverPhotoLinks } from "../media.ts";
 import { realDate, tool, zDate, zText } from "../tool.ts";
 
 // Drivers sign in with a username and a 6-digit PIN. Supabase Auth needs an
@@ -79,8 +80,10 @@ export const listDrivers = tool({
       else row.declined += 1;
       last30.set(e.employee_id, row);
     }
-    const drivers = refs.employees
-      .filter((e) => e.role === "driver" && (include_inactive || e.active))
+    const shown = refs.employees.filter((e) => e.role === "driver" && (include_inactive || e.active));
+    // Phase 7 (§5): each driver's photo (a link that works for at least an hour; the same link while it lasts).
+    const photos = await driverPhotoLinks(db, shown, now);
+    const drivers = shown
       .map((e) => ({
         ...driverCard(
           e,
@@ -92,6 +95,7 @@ export const listDrivers = tool({
         // Presence: on duty = sharing location (the open duty session); off duty since = when the last one ended today.
         on_duty_since: onDuty.has(e.id) ? colomboTime(onDuty.get(e.id)!) : undefined,
         off_duty_since: !onDuty.has(e.id) && offDuty.has(e.id) ? colomboTime(offDuty.get(e.id)!) : undefined,
+        photo_url: photos.get(e.id),
       }));
     return { result: { count: drivers.length, drivers }, summary: `${drivers.length} drivers` };
   },

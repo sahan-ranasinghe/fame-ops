@@ -19,6 +19,9 @@ import {
 } from "../fleet.ts";
 import { centsToLkr, contactLinks, lkrToCents } from "../format.ts";
 import { colomboDate, colomboTime } from "../time.ts";
+import { vehiclePhotoLinks } from "../media.ts";
+import { documentsOf } from "./media.ts";
+import { missingText, requiredKinds } from "../docs.ts";
 import { realDate, tool, zDate, zText, zVehicleType } from "../tool.ts";
 
 const vehicleFields = {
@@ -214,8 +217,13 @@ export const listVehicles = tool({
       ...unwrap(booked, "tasks").map((t) => ({ vehicle_id: t.vehicle_id, status: t.status, start_at: t.start_at, end_by: t.end_by })),
     ];
 
-    const cards = (filter === "inactive" ? refs.vehicles.filter((v) => !v.active) : active).map((v) => {
+    const listed = filter === "inactive" ? refs.vehicles.filter((v) => !v.active) : active;
+    // Phase 7 (§6, §28): each vehicle's photo and its document files (the current one of each kind), what is missing.
+    const [photos, docs] = await Promise.all([vehiclePhotoLinks(db, listed, now), documentsOf(db, listed.map((v) => v.id))]);
+    const cards = listed.map((v) => {
       const card = vehicleCard(v, refs, today);
+      const files = docs.get(v.id) ?? [];
+      const missing = v.active ? requiredKinds(v).filter((k) => !files.some((d) => d.kind === k)) : [];
       const used = km.get(v.id) ?? 0;
       const expiring = Object.values(card.documents).some((d) => d.chip === "orange" || d.chip === "red");
       return {
@@ -226,6 +234,15 @@ export const listVehicles = tool({
         ...availabilityOf(v.in_garage, busy.filter((t) => t.vehicle_id === v.id), now),
         held_by: holders.has(v.id) ? refs.emp.get(holders.get(v.id)!.employee_id)?.name : undefined,
         held_since: holders.has(v.id) ? colomboTime(holders.get(v.id)!.from_at) : undefined,
+        photo_url: photos.get(v.id)?.photo,
+        thumb_url: photos.get(v.id)?.thumb,
+        document_files: files.length
+          ? files.map((d) => ({ kind: d.kind, name: d.name ?? undefined, expiry: d.expiry ?? undefined, has_file: true }))
+          : undefined,
+        documents_missing: missing.length ? missing : undefined,
+        documents_missing_text: missing.length
+          ? `${missing.length} document${missing.length === 1 ? "" : "s"} missing: ${missingText(missing)}`
+          : undefined,
         expiring,
       };
     });

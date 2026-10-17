@@ -57,6 +57,15 @@ const ANY: readonly Permission[] = PERMISSIONS;
  *   fleet_overview  needs_attention: every item with issues, the task items with assign_tasks, otherwise none
  */
 export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
+  // Phase 7, Part 3 (§5, §6, §28): photos and documents are the vehicles permission's (reading the files too, §32 14).
+  photo_upload_url: VEH,
+  set_driver_photo: VEH,
+  set_vehicle_photo: VEH,
+  vehicle_document_upload_url: VEH,
+  save_vehicle_document: VEH,
+  vehicle_documents: VEH,
+  remove_vehicle_document: VEH,
+  restore_vehicle_document: VEH,
   fleet_overview: V,
   live_drivers: V,
   watch_drivers: V,

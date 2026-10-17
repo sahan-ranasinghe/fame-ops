@@ -28,6 +28,7 @@ import { thousands } from "./format.ts";
 import { loadSettings } from "./settings.ts";
 import { needsAttention } from "./status.ts";
 import { ago, colomboDate, colomboDayTime, colomboTime, daysBetween, shortDate } from "./time.ts";
+import { missingText, requiredKinds } from "./docs.ts";
 
 export type Severity = "info" | "warning" | "critical";
 export type IssueStatus = "open" | "in_progress" | "resolved" | "dismissed";
@@ -66,6 +67,7 @@ export const KIND_TEXT: Record<string, string> = {
   km_gap: "Km outside tasks",
   service_due: "Service",
   document: "Vehicle document",
+  documents_missing: "Documents missing",
   licence: "Driver licence",
   allowance: "Km allowance",
   rental: "Rental agreement",
@@ -205,6 +207,15 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   // --- The fleet: documents, service, km allowance, rental, garage, licences ---------
   if (fleetScope) {
     const km = await monthKm(db, vehicleIds, today.slice(0, 7));
+    const docKinds = new Map<string, Set<string>>();
+    if (vehicleIds.length > 0) {
+      for (
+        const d of unwrap(
+          await db.from("vehicle_documents").select("vehicle_id, kind").in("vehicle_id", vehicleIds).is("removed_at", null).limit(5000),
+          "vehicle documents",
+        )
+      ) docKinds.set(d.vehicle_id, (docKinds.get(d.vehicle_id) ?? new Set()).add(d.kind));
+    }
     for (const v of vehicles) {
       const label = vehicleLabel(v) ?? v.reg_no;
       for (const doc of VEHICLE_DOCS) {
@@ -219,6 +230,20 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           detail: label,
           due: dueText(days, expiry),
           sort_key: days,
+          vehicle_id: v.id,
+        });
+      }
+      // Phase 7 (§28): the papers an active vehicle should have and has not got: one row per vehicle, not one each.
+      const missing = requiredKinds(v).filter((k) => !(docKinds.get(v.id) ?? new Set()).has(k));
+      if (missing.length > 0) {
+        wanted.push({
+          kind: "documents_missing",
+          ref_key: `docs-missing:${v.id}`,
+          severity: "info",
+          title: `${missing.length} document${missing.length === 1 ? "" : "s"} missing: ${missingText(missing)}`,
+          detail: label,
+          due: null,
+          sort_key: 900,
           vehicle_id: v.id,
         });
       }

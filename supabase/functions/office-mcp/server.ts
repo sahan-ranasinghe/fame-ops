@@ -2,7 +2,7 @@
 // through the shared runner (permission check, audit row, the tool, the outcome).
 
 import { McpServer } from "@modelcontextprotocol/server";
-import { type Actor, canCall, type Db, INSTRUCTIONS, runTool, TOOLS } from "../_shared/fleet/index.ts";
+import { type Actor, canCall, type Db, INSTRUCTIONS, runTool, TOOLS, WEB_ONLY_TOOLS } from "../_shared/fleet/index.ts";
 
 interface ToolReply {
   content: { type: "text"; text: string }[];
@@ -17,7 +17,8 @@ function reply(text: string, isError = false): ToolReply {
 export function buildServer(db: Db, actor: Actor): McpServer {
   const server = new McpServer({ name: "fame-fleet-office", version: "1.1.0" }, { instructions: INSTRUCTIONS });
   for (const def of TOOLS) {
-    if (!canCall(actor, def.name)) continue;
+    // The upload tools are the web app's: no file goes through chat (Phase 7, §28).
+    if (!canCall(actor, def.name) || WEB_ONLY_TOOLS.has(def.name)) continue;
     server.registerTool(
       def.name,
       {

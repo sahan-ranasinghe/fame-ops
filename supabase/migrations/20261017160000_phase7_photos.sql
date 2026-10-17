@@ -371,3 +371,15 @@ revoke all on function public.task_stops_notify_requester() from public, anon, a
 create trigger task_stops_notify_requester
   after update of arrived_at, auto_detected_at on public.task_stops
   for each row execute function public.task_stops_notify_requester();
+
+-- 5. Steady links (§5, §6, §28): a file's signed link is kept and handed out again while it has over an hour left, so a
+-- page refreshing every 30 seconds keeps the same picture link (nothing reloads or flickers). Service role only.
+create table public.media_links (
+  bucket     text not null,
+  path       text not null,
+  url        text not null,
+  expires_at timestamptz not null,
+  primary key (bucket, path)
+);
+alter table public.media_links enable row level security;
+revoke all on public.media_links from anon, authenticated;

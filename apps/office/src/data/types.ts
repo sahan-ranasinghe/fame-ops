@@ -352,6 +352,8 @@ export interface PlannedStop {
   planned_arrive?: string;
   planned_depart?: string;
   dwell_min?: number;
+  /** The stop's line for the driver (the tools send it with every stop). */
+  note?: string;
   pin?: string;
 }
 

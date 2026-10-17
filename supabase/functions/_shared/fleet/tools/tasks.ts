@@ -47,6 +47,7 @@ import { estimateLegFn, googleLegs, legFnFor, memoLegFn, providerFromEnv } from 
 import { googleUse } from "../google.ts";
 import { notifyEvent } from "../notifications.ts";
 import { shortName } from "../names.ts";
+import { driverPhotoLinks, vehiclePhotoLinks } from "../media.ts";
 import { logRequestEvent, requester } from "./requestCore.ts";
 import { requestStopsOf, saveRequestTrip } from "./requestTrip.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
@@ -1437,6 +1438,11 @@ export const taskBoard = tool({
     const tasks = [...unwrap(stillRunning, "tasks"), ...unwrap(ofDay, "tasks")];
     const stops = tasks.length > 0 ? unwrap(await db.from("task_stops").select("*").in("task_id", tasks.map((t) => t.id)), "stops") : [];
 
+    // Phase 7 (§5, §6): the drivers' and the vehicles' photos on the cards, one batch each (the same links while they last).
+    const [driverPhotos, vehiclePhotos] = await Promise.all([
+      driverPhotoLinks(db, [...new Set(tasks.map((t) => t.employee_id))].flatMap((id) => refs.emp.get(id) ?? []), now),
+      vehiclePhotoLinks(db, [...new Set(tasks.map((t) => t.vehicle_id))].flatMap((id) => refs.veh.get(id) ?? []), now),
+    ]);
     const card = async (t: Task) => {
       const mine = live(stops.filter((s) => s.task_id === t.id));
       const eta = t.status === "in_progress" ? await taskEta(db, t, mine, latest.get(t.employee_id), settings, now) : null;
@@ -1451,7 +1457,9 @@ export const taskBoard = tool({
         leave_by: t.leave_by ? colomboTime(t.leave_by) : undefined,
         accepted: t.accepted_at ? colomboTime(t.accepted_at) : undefined,
         driver: refs.emp.get(t.employee_id)?.name,
+        driver_photo_url: driverPhotos.get(t.employee_id),
         vehicle: refs.veh.get(t.vehicle_id)?.reg_no,
+        vehicle_thumb_url: vehiclePhotos.get(t.vehicle_id)?.thumb,
         status: statusLine(t, latest.get(t.employee_id), now, refs.emp.get(t.employee_id)),
         eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
         eta_final: eta?.final_eta_at ? colomboTime(eta.final_eta_at) : undefined,
@@ -1612,6 +1620,11 @@ export const taskDetail = tool({
     const vehicle = refs.veh.get(task.vehicle_id);
     const when = (at: string | null) => at ? colomboDateTime(at) : undefined;
     const names = new Map(allStops.map((s) => [s.seq, s.place_name]));
+    // Phase 7 (§5, §6): the driver's and the vehicle's photos.
+    const [driverPhoto, vehiclePhoto] = await Promise.all([
+      driver ? driverPhotoLinks(db, [driver], now).then((m) => m.get(driver.id)) : undefined,
+      vehicle ? vehiclePhotoLinks(db, [vehicle], now).then((m) => m.get(vehicle.id)) : undefined,
+    ]);
 
     return {
       result: {
@@ -1641,7 +1654,10 @@ export const taskDetail = tool({
           avoid_expressway: task.avoid_expressway,
           plan_version: task.plan_version,
           driver: driver?.name,
+          driver_photo_url: driverPhoto,
           vehicle: vehicle ? `${vehicle.reg_no}${vehicle.make_model ? ` · ${vehicle.make_model}` : ""}` : undefined,
+          vehicle_photo_url: vehiclePhoto?.photo,
+          vehicle_thumb_url: vehiclePhoto?.thumb,
           passengers: task.passengers,
           contact: task.contact_name || task.contact_phone
             ? { name: task.contact_name, phone: task.contact_phone, ...contactLinks(task.contact_phone) }
