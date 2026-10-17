@@ -57,7 +57,7 @@ export const KEYS = {
   lastBeat: 'phone.lastBeat',
   /** When the last heartbeat was built (the location task sends one when the JS timers are frozen in the background). */
   lastHeartbeatAt: 'heartbeat.lastAt',
-  /** Those gaps, the last 7 days (lib/phoneSetup.ts), and when the driver last tapped Done on the Phone setup card. */
+  /** Those gaps, the last 7 days (lib/phoneSetup.ts), and when the driver last tapped Done on Me → Phone setup (same key as the old card's Done). */
   phoneGaps: 'phone.gaps',
   phoneSetupDoneAt: 'phone.setupDoneAt',
   /** The stops the arrival nudge already spoke about (lib/arrival.ts). */

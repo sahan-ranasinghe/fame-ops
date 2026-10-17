@@ -1,17 +1,19 @@
 // Me tab: who is signed in (with their photo and Change photo), language,
 // current vehicle and its documents, what is still waiting to be sent,
-// permissions, app version, sign out (not while on duty: Finish work first,
-// Phase 7).
+// permissions, Phone setup (Phase 7 item 7: the brand's battery and auto-start
+// steps on their own page, amber when the phone stopped the app lately), app
+// version, sign out (not while on duty: Finish work first, Phase 7).
 
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Camera, FileText, LogOut, RefreshCw, Wifi } from '@/components/icons';
+import { BatteryCharging, Camera, ChevronRight, FileText, LogOut, RefreshCw, Wifi } from '@/components/icons';
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
+import { useStoppedNote } from '@/components/PhoneSetup';
 import { Thumb, useMyPhoto } from '@/components/Photos';
 import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
@@ -33,6 +35,8 @@ export default function MeScreen() {
   const dateLabel = useDateLabel();
   const update = runningUpdate();
   const photo = useMyPhoto();
+  // The phone stopped the app on one of the last 3 days: the Phone setup row is amber (the page says when).
+  const stopped = useStoppedNote().note !== null;
 
   async function checkUpdate() {
     setChecking(true);
@@ -135,6 +139,18 @@ export default function MeScreen() {
 
         <Button kind="outline" label={t('me.permissions')} onPress={() => router.push('/permissions')} />
 
+        {/* Phase 7 item 7: the brand's steps moved here from Today; a pushed page, back returns to Me. */}
+        <Pressable accessibilityRole="button" onPress={() => router.push('/phone-setup')} testID="me-phone-setup">
+          <Card style={[styles.row, stopped && { backgroundColor: '#fdf1d6' }]}>
+            <BatteryCharging size={24} color={stopped ? colors.amberText : colors.ink} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Txt variant="big" color={stopped ? colors.amberText : colors.ink}>{t('phoneSetup.title')}</Txt>
+              <Txt variant="muted">{t('phoneSetup.meHint')}</Txt>
+            </View>
+            <ChevronRight size={24} color={colors.muted} />
+          </Card>
+        </Pressable>
+
         <Card style={{ gap: 14 }}>
           <Line label={t('me.version')}><Mono size={17}>{Constants.expoConfig?.version}</Mono></Line>
           <Line label={t('me.live')}>
@@ -176,6 +192,7 @@ const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: colors.page },
   line: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   who: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 14, minHeight: 64 },
   link: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, alignSelf: 'flex-start' },
   toggle: { width: 52, height: 30, borderRadius: 15, backgroundColor: '#c9c5bb', padding: 3, justifyContent: 'center' },
   knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.card },

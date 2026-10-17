@@ -14,7 +14,7 @@
 // task is active, so the background location task sends the heartbeat too
 // (heartbeatDue, at most once a minute): a gap in the heartbeats then means
 // the app really stopped. Each one also notes a gap of
-// over 3 minutes since the previous one (the Phone setup card), and the loop's
+// over 3 minutes since the previous one (shown on Me → Phone setup), and the loop's
 // 10-second look runs the watchdog that restarts a frozen location service. Two copies: the newest one feeds
 // driver_latest (queued with replaceOp: only the newest waits), and every one
 // goes into the history (driver_heartbeats) in batches, also after an outage,
@@ -66,7 +66,7 @@ export async function dataAvailable(): Promise<boolean | null> {
   }
 }
 
-/** A heartbeat while on duty: over 3 minutes since the one before (same duty period) is a gap the Phone setup card shows. */
+/** A heartbeat while on duty: over 3 minutes since the one before (same duty period) is a gap Me → Phone setup tells about. */
 function noteGap(now: number): void {
   const sessionId = getSharing()?.sessionId ?? null;
   const gap = noteBeat(getJson<Beat>(KEYS.lastBeat), { at: now, sessionId });

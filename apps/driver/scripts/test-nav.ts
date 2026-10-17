@@ -1,6 +1,12 @@
-// Tests of the navigation hand-off and the arrival nudge's rule (Part 4b). Pure code, no stack needed:
+// Tests of the navigation hand-off and the arrival nudge's rule (Part 4b), the task map's Google rule (Part 5) and
+// where Phone setup lives (Phase 7 item 7: off Today, once in the first-run Permissions flow, and Me → Phone setup,
+// a pushed page). Pure code, no stack needed:
 //
 //   npm run test:nav          (from apps/driver)
+
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { arrivalDue } from '../src/lib/arrivalRule';
 import { allStopsLink, navigateLink } from '../src/lib/format';
@@ -49,6 +55,31 @@ check(JSON.stringify(drawnDestination({ lat: 7.29, lng: 80.63, google_place_id: 
 check(drawnDestination({ lat: 7.29, lng: 80.63, google_place_id: 'ChIJ-x' }, false) === null, 'a Google place: never drawn on the OpenFreeMap map (Google\'s terms)');
 check(JSON.stringify(drawnDestination({ lat: 7.29, lng: 80.63, google_place_id: 'ChIJ-x' }, true)) === '[80.63,7.29]', 'a Google place on Google\'s map: drawn');
 check(drawnDestination({ lat: null, lng: null, google_place_id: null }, false) === null, 'a stop without a pin: nothing drawn');
+
+// The screens' source, read as text (the screens need React Native, so they are not run here). Comments are left out.
+console.log('\nPhone setup off Today (Phase 7 item 7):');
+const src = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
+const code = (path: string) => readFileSync(join(src, path), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const today = code('app/(tabs)/index.tsx');
+const me = code('app/(tabs)/me.tsx');
+const permissions = code('app/permissions.tsx');
+check(!existsSync(join(src, 'components', 'PhoneSetupCard.tsx')) && !/PhoneSetup|phoneSetup\./.test(today), 'Today shows no Phone setup card');
+check(existsSync(join(src, 'app', 'phone-setup.tsx')) && !existsSync(join(src, 'app', '(tabs)', 'phone-setup.tsx')),
+  'Me → Phone setup is its own stack screen (app/phone-setup.tsx), not a tab');
+const setupPage = existsSync(join(src, 'app', 'phone-setup.tsx')) ? code('app/phone-setup.tsx') : '';
+check(/router\.push\(['"]\/phone-setup['"]\)/.test(me) && /t\('phoneSetup\.title'\)/.test(me) && /t\('phoneSetup\.meHint'\)/.test(me),
+  'Me has the Phone setup row with the hint under it; it pushes the page');
+check(/router\.back\(\)/.test(setupPage) && !/router\.(replace|navigate|dismissAll)\(/.test(setupPage),
+  'the page goes back to Me (the arrow and Done use router.back(); it never jumps to a tab)');
+check(/<PhoneSetupSteps\s*\/>/.test(setupPage) && setupPage.indexOf('stoppedText(note)') > -1 && setupPage.indexOf('stoppedText(note)') < setupPage.indexOf('<PhoneSetupSteps'),
+  'the page has the brand\'s steps, with "the phone stopped Fame Driver …" above them');
+check(!/useLeaveGuard/.test(setupPage), 'nothing is typed on the page: no "Discard changes?"');
+const steps = [...permissions.matchAll(/<PhoneSetupSteps\s*\/>/g)];
+const battery = permissions.indexOf("t('permissions.battery')");
+check(steps.length === 1 && battery > -1 && battery < (steps[0]?.index ?? -1) && (steps[0]?.index ?? Infinity) < permissions.indexOf("t('permissions.continue')"),
+  'the first-run Permissions flow shows the brand\'s steps once, after the battery step, before Continue');
+check(/label=\{t\('permissions\.continue'\)\} onPress=\{finish\}/.test(permissions) && /setJson\(KEYS\.permissionsSeen, true\)/.test(permissions),
+  'Continue goes on as before (marks the permissions seen, back or Today)');
 
 console.log(failures === 0 ? '\nAll navigation tests passed.' : `\n${failures} navigation test(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

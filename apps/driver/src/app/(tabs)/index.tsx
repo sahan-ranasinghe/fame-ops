@@ -3,6 +3,8 @@
 // (components/task.tsx), and a running task the office moved to another vehicle says so
 // ("Vehicle changed: WP KL-1234") until both odometers are logged on the task screen.
 // Part 3 (§6): the card shows the task's vehicle with its photo.
+// Part 4 (item 7): no Phone setup card here any more; the brand's steps are in the first-run Permissions
+// flow and on Me → Phone setup (app/phone-setup.tsx).
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -16,7 +18,6 @@ import { LanguagePill } from '@/components/LanguageSwitch';
 import { DeclineSheet } from '@/components/DeclineSheet';
 import { DutyHeader, DutyNotices } from '@/components/DutyCard';
 import { leaveTime, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
-import { PhoneSetupCard } from '@/components/PhoneSetupCard';
 import { Thumb, useVehicleThumbs } from '@/components/Photos';
 import { PlateText } from '@/components/PlateText';
 import { plateOf } from '@/components/SwapCard';
@@ -110,7 +111,6 @@ export default function TodayScreen() {
             </Pressable>
           )}
           <TrackingNotice />
-          <PhoneSetupCard />
           {app.queue.points > 0 && (!app.dataAvailable || app.offline) && (
             <Txt variant="small" color={colors.amberText}>{t('today.offlineWaiting', { n: app.queue.points })}</Txt>
           )}

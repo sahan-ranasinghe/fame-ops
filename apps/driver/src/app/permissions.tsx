@@ -1,7 +1,8 @@
 // Permissions, asked once after sign-in and reachable later from Me:
 // location ("Allow all the time"), notifications, no battery saving for this
-// app, and the phone-brand-specific settings that keep the app alive in the
-// background (OPPO, Xiaomi, Vivo, Huawei and Samsung all have their own).
+// app, and then, once, the phone brand's own battery and auto-start steps with
+// "Open <brand> settings" (OPPO, realme, Xiaomi, vivo, Samsung or any other
+// phone; components/PhoneSetup.tsx, the same steps as Me → Phone setup).
 
 import * as Battery from 'expo-battery';
 import { Redirect, useRouter } from 'expo-router';
@@ -11,15 +12,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PhoneSetupSteps } from '@/components/PhoneSetup';
 import { Button, Card, Txt } from '@/components/ui';
 import { KEYS, setJson } from '@/lib/kv';
-import {
-  askIgnoreBatteryOptimisation,
-  locationPermissions,
-  openAppSettings,
-  phoneBrand,
-  requestLocationPermissions,
-} from '@/lib/location';
+import { askIgnoreBatteryOptimisation, locationPermissions, requestLocationPermissions } from '@/lib/location';
 import { notificationsAllowed, requestNotifications, showTestNotification } from '@/lib/notifications';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -76,7 +72,6 @@ export default function PermissionsScreen() {
   const insets = useSafeAreaInsets();
   const [status, setStatus] = useState<Status | null>(null);
   const [askedLocation, setAskedLocation] = useState(false);
-  const brand = phoneBrand();
 
   const check = useCallback(() => {
     readStatus().then(setStatus).catch(() => undefined);
@@ -146,15 +141,19 @@ export default function PermissionsScreen() {
           action={t('permissions.allow')}
           onPress={() => askIgnoreBatteryOptimisation().then(check)}
         />
-        <Row
-          icon={ShieldCheck}
-          title={t('permissions.background')}
-          why={t('permissions.backgroundWhy')}
-          hint={t(`permissions.background_${brand}`)}
-          done={undefined}
-          action={t('permissions.openAppSettings')}
-          onPress={() => void openAppSettings()}
-        />
+        {/* Phase 7 item 7: after the battery step, once, the brand's own steps (they left Today's card). */}
+        <Card style={{ gap: 12 }}>
+          <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
+            <View style={styles.icon}>
+              <ShieldCheck size={24} color={colors.amber} />
+            </View>
+            <View style={{ flex: 1, gap: 2 }}>
+              <Txt variant="big">{t('permissions.background')}</Txt>
+              <Txt variant="muted">{t('permissions.backgroundWhy')}</Txt>
+            </View>
+          </View>
+          <PhoneSetupSteps />
+        </Card>
       </ScrollView>
       <View style={{ padding: 16, paddingBottom: insets.bottom + 16, gap: 10 }}>
         <Button label={t('permissions.continue')} onPress={finish} />

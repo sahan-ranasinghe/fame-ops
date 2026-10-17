@@ -317,19 +317,6 @@ export async function askIgnoreBatteryOptimisation(): Promise<void> {
   }
 }
 
-export type PhoneBrand = 'oppo' | 'xiaomi' | 'vivo' | 'huawei' | 'samsung' | 'other';
-
-/** The phone brand, for the brand-specific "keep running in the background" help. OPPO, Realme and OnePlus share ColorOS. */
-export function phoneBrand(): PhoneBrand {
-  const name = `${Device.brand ?? ''} ${Device.manufacturer ?? ''}`.toLowerCase();
-  if (/oppo|realme|oneplus/.test(name)) return 'oppo';
-  if (/xiaomi|redmi|poco/.test(name)) return 'xiaomi';
-  if (/vivo|iqoo/.test(name)) return 'vivo';
-  if (/huawei|honor/.test(name)) return 'huawei';
-  if (/samsung/.test(name)) return 'samsung';
-  return 'other';
-}
-
 /** The phone's last known position, when location is allowed. */
 export async function lastPosition(): Promise<{ lat: number; lng: number } | null> {
   try {
