@@ -1615,16 +1615,7 @@ Added 15 October (items 17, 19, 20, 24, 28):
 | `task.distanceLeftRoad` | Distance left by road | මාර්ගයේ ඉතිරි දුර |
 | `task.noRouteLine` | Stops only: no planned road line for this task | නැවතුම් පමණි: මෙම කාර්යයට සැලසුම් කළ මාර්ග රේඛාවක් නැත |
 | `map.northUp` | North up | උතුර ඉහළට |
-| `docs.title` | Documents | ලේඛන |
-| `docs.revenueLicence` | Revenue licence | ආදායම් බලපත්‍රය |
-| `docs.insurance` | Insurance | රක්ෂණය |
-| `docs.emission` | Emission test | දුම් පරීක්ෂණය |
-| `docs.validUntil` | Valid until {date} | {date} දක්වා වලංගුයි |
-| `docs.expired` | Expired {date} | {date} කල් ඉකුත් විය |
-| `docs.open` | Open | විවෘත කරන්න |
-| `docs.none` | No document yet | තවම ලේඛනයක් නැත |
-| `docs.needsConnection` | Needs a connection to open. | විවෘත කිරීමට සම්බන්ධතාවක් අවශ්‍යයි. |
-| `docs.noVehicle` | Start work with a vehicle to see its documents. | එහි ලේඛන බැලීමට වාහනයක් සමඟ වැඩ ආරම්භ කරන්න. |
+| `docs.*` | (the documents strings: planned here, as built in Part 3's table below) | |
 
 Added in Part 2 (16 October: stop labels by order, the time at each stop, the vehicle swap, "I need another vehicle"):
 
@@ -1647,6 +1638,43 @@ Added in Part 2 (16 October: stop labels by order, the time at each stop, the ve
 | `report.needVehicleHint` | The fleet admins are told at once. | වාහන කළමනාකරුවන්ට වහාම දැනුම් දෙයි. |
 | `report.needVehicleSent` | The office knows you need another vehicle. | ඔබට වෙනත් වාහනයක් අවශ්‍ය බව කාර්යාලය දනී. |
 | push `changed`, a stop | Stop {n} added / removed / moved / changed: {place} · {more} more | නැවතුම {n} එක් කළා / ඉවත් කළා / අනුපිළිවෙල වෙනස් විය / වෙනස් විය: {place} · තවත් {more} |
+
+Added in Part 3 (17 October: the driver's photo, vehicle photos, the held vehicle's documents; as built):
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `profilePhoto.title` | Add your photo | ඔබේ ඡායාරූපය එක් කරන්න |
+| `profilePhoto.body` | The office and the people you drive see it with your name. | කාර්යාලයට සහ ඔබ රැගෙන යන අයට එය ඔබේ නම සමඟ පෙනේ. |
+| `profilePhoto.take` | Take photo | ඡායාරූපයක් ගන්න |
+| `profilePhoto.choose` | Choose from gallery | ගැලරියෙන් තෝරන්න |
+| `profilePhoto.saving` | Saving your photo… | ඔබේ ඡායාරූපය සුරකිමින්… |
+| `profilePhoto.saved` | Photo saved | ඡායාරූපය සුරැකිණි |
+| `profilePhoto.noConnection` | No connection: try again | සම්බන්ධතාවක් නැත: නැවත උත්සාහ කරන්න |
+| `profilePhoto.failed` | Couldn't save the photo: try again | ඡායාරූපය සුරැකිය නොහැකි විය: නැවත උත්සාහ කරන්න |
+| `profilePhoto.tryAgain` | Try again | නැවත උත්සාහ කරන්න |
+| `profilePhoto.change` | Change photo | ඡායාරූපය වෙනස් කරන්න |
+| `profilePhoto.none` | No photo yet | තවම ඡායාරූපයක් නැත |
+| `profilePhoto.pickerFailed` | The camera or the gallery didn't open. Try again. | කැමරාව හෝ ගැලරිය විවෘත නොවීය. නැවත උත්සාහ කරන්න. |
+| `profilePhoto.later` | Not now: ask me next time | දැන් නොවේ: ඊළඟ වතාවේ අහන්න |
+| `vehiclePhoto.add` | Add a photo | ඡායාරූපයක් එක් කරන්න |
+| `vehiclePhoto.saving` | Saving the photo… | ඡායාරූපය සුරකිමින්… |
+| `vehiclePhoto.added` | Photo added | ඡායාරූපය එක් කළා |
+| `vehiclePhoto.hasOne` | This vehicle already has a photo | මෙම වාහනයට දැනටමත් ඡායාරූපයක් ඇත |
+| `vehiclePhoto.queued` | The photo is sent when the connection is back | සම්බන්ධතාවය නැවත ලැබුණු විට ඡායාරූපය යවනු ලැබේ |
+| `docs.title` | Documents | ලේඛන |
+| `docs.myVehicle` | My vehicle | මගේ වාහනය |
+| `docs.open` | Documents of {plate} | {plate} හි ලේඛන |
+| `docs.revenue_licence` | Revenue licence | ආදායම් බලපත්‍රය |
+| `docs.insurance` | Insurance | රක්ෂණය |
+| `docs.emission` | Emission test | දුම් පරීක්ෂණය |
+| `docs.validUntil` | Valid until {date} | {date} දක්වා වලංගුයි |
+| `docs.expired` | Expired {date} | {date} කල් ඉකුත් විය |
+| `docs.noExpiry` | No expiry date | කල් ඉකුත් වන දිනයක් නැත |
+| `docs.missing` | Not uploaded yet | තවම උඩුගත කර නැත |
+| `docs.view` | Open | විවෘත කරන්න |
+| `docs.needsConnection` | Needs a connection to open | විවෘත කිරීමට සම්බන්ධතාවක් අවශ්‍යයි |
+| `docs.noVehicle` | Start work with a vehicle to see its documents | ලේඛන බැලීමට වාහනයක් සමඟ වැඩ ආරම්භ කරන්න |
+| `docs.failed` | Couldn't open the document: try again | ලේඛනය විවෘත කළ නොහැකි විය: නැවත උත්සාහ කරන්න |
 
 **Odometer words (Sahan, 16 October, the Part 2b go):** one word family everywhere, replacing the three spellings
 (ඔඩෝමීටරය, ඕඩෝමීටර, මීටර කියවීම): odometer = **මීටරය**, odometer reading = **මීටර් කියවීම**, start odo =
