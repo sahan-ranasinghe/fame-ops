@@ -1450,3 +1450,41 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   expect(board.assigned.some((c) => c.title === title && c.driver === driver.name)).toBe(true);
   expect((board.waiting_approval ?? []).some((c) => c.title === title)).toBe(false);
 });
+
+test("a vehicle's documents: upload with its expiry, view, replace, remove with a second step, restore (Phase 7, §28)", async ({ page }) => {
+  test.setTimeout(180_000);
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Docs Desk", email: `e2e.docs.${stamp}@fame.test`, permissions: ["view", "vehicles"] });
+  const plate = `WP EDC-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota Axio", vehicle_type: "car", seats: 4 });
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.getByLabel("New password").fill(`Docs desk for ${stamp}!`);
+  await page.getByLabel("Again").fill(`Docs desk for ${stamp}!`);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  await page.goto(`/vehicles/${encodeURIComponent(plate)}`);
+  const docs = page.getByTestId("vehicle-documents");
+  await expect(docs.getByTestId("docs-missing")).toContainText("insurance");
+  // A PDF with its expiry: the row shows who uploaded it and View; the vehicle's insurance date follows.
+  const insurance = docs.getByTestId("doc-insurance");
+  const expiry = new Date(Date.now() + 200 * 86400000).toISOString().slice(0, 10);
+  await insurance.getByLabel("Expires").fill(expiry);
+  await insurance.locator('input[type="file"]').setInputFiles({ name: "insurance.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF\n") });
+  await expect(insurance).toContainText("Uploaded by E2E Docs Desk");
+  await expect(insurance.getByRole("link", { name: "View" })).toHaveAttribute("href", /\/storage\/v1\/object\/sign\/vehicle-docs\//);
+  const listed = await tool<{ vehicles: { reg_no: string; documents_missing?: string[] }[] }>("list_vehicles", {});
+  expect(listed.vehicles.find((v) => v.reg_no === plate)?.documents_missing).not.toContain("insurance");
+  // Replace: the old one is kept as replaced.
+  await insurance.locator('input[type="file"]').setInputFiles({ name: "insurance-2.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%second\n%%EOF\n") });
+  await expect(docs.getByTestId("removed-documents").getByTestId("removed-doc")).toContainText("Replaced");
+  // Remove has a second step on the page; Restore brings it back.
+  await insurance.getByRole("button", { name: "Remove" }).click();
+  await insurance.getByTestId("doc-remove-confirm").getByRole("button", { name: "Remove" }).click();
+  await expect(insurance).toContainText("No document");
+  await expect(docs.getByTestId("removed-doc")).toHaveCount(2);
+  await docs.getByTestId("removed-doc").filter({ hasText: "Removed" }).getByRole("button", { name: "Restore" }).click();
+  await expect(insurance).toContainText("Uploaded by E2E Docs Desk");
+  await expect(docs.getByTestId("removed-doc")).toHaveCount(1);
+});
