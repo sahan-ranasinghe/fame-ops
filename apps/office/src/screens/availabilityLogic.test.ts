@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Availability, AvailableDriver } from "../data/types";
-import { availabilityArgs, defaultVehicle, driverLine, driverTone, driverVehicle, floorTo5, licenceTone, rankedRows, steadyAvailability } from "./availabilityLogic";
+import { availabilityArgs, defaultVehicle, driverLine, driverTone, driverVehicle, floorTo5, licenceTone, rankedRows, steadyAvailability, withPicked } from "./availabilityLogic";
 
 const base: AvailableDriver = { name: "Nuwan", username: "nuwan.p", state: "on_duty", status_text: "On duty since 07:12", on_duty_since: "07:12", accepted_today: 0, declined_today: 0, licence: { chip: "ok" }, free: true };
 
@@ -85,6 +85,14 @@ describe("Who's available, hotfix (17 October 2026)", () => {
     // The same answer again keeps its rows' objects (the store then keeps the whole answer).
     const again = answer("kamal");
     expect(steadyAvailability(shown, again).drivers[0]).toBe(again.drivers[0]);
+  });
+
+  it("a driver select keeps the picked driver among its options, even when its list lacks them", () => {
+    const list = [{ username: "kamal", name: "Kamal Perera" }];
+    expect(withPicked(list, "kamal", "Kamal Perera")).toBe(list);
+    expect(withPicked(list, "", undefined)).toBe(list);
+    expect(withPicked([], "nuwan", "Nuwan Silva")).toEqual([{ username: "nuwan", name: "Nuwan Silva" }]);
+    expect(withPicked(list, "sunil", undefined)).toEqual([...list, { username: "sunil", name: "sunil" }]);
   });
 
   it("a driver joining or leaving the ranking ranks them all again", () => {

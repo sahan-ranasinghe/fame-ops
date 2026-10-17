@@ -80,6 +80,15 @@ export function driverVehicle(avail: DefaultVehicle | null, driver: { name: stri
   return { reg_no: plateOf(driver.current_vehicle), why: `${shortName(driver.name, names)}'s vehicle today` };
 }
 
+/**
+ * A driver select's options with the picked driver in them even when the list lacks them (it could not load, or the
+ * driver is new): a pick from Who's available always shows in the select.
+ */
+export function withPicked<T extends { username: string; name: string }>(list: T[], picked: string, name: string | undefined): (T | { username: string; name: string })[] {
+  if (!picked || list.some((d) => d.username === picked)) return list;
+  return [...list, { username: picked, name: name ?? picked }];
+}
+
 /** The rows in the best-match order (1, 2, 3… the free drivers on duty), then the others as the server sorted them. */
 export function rankedRows(rows: AvailableDriver[]): AvailableDriver[] {
   const ranked = rows.filter((r) => r.rank != null).sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));

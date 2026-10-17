@@ -22,7 +22,7 @@ import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
-import { availabilityArgs, driverVehicle } from "./availabilityLogic";
+import { availabilityArgs, driverVehicle, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
 import { checkDeparture, departurePlan } from "./departureLogic";
@@ -110,6 +110,8 @@ export function RequestDecide() {
   const driver = f.driver || defaultDriver;
   const def = driver ? driverVehicle(vehicleFor(avail.data, driver), lists.drivers?.find((d) => d.username === driver), (lists.drivers ?? []).filter((d) => d.active !== false).map((d) => d.name)) : null;
   const vehicle = f.vehicle || (again ? "" : def?.reg_no ?? "");
+  // The select always holds the driver picked (from Who's available too), even when its list lacks them.
+  const driverOptions: { username: string; name: string; label?: string }[] = withPicked(drivers, driver, avail.data?.drivers.find((d) => d.username === driver)?.name);
   const picked = allOptions.find((v) => v.reg_no === vehicle);
   const custodianDrives = !again && noDriverNeeded && !!picked?.assigned_to && sug?.self_drive_allowed !== false;
   // A driver picked in the list keeps a vehicle picked by hand; Use suggestion and a row of Who's available take the
@@ -254,7 +256,7 @@ export function RequestDecide() {
               <label htmlFor="rq-driver">Driver</label>
               <select id="rq-driver" value={f.driver} onChange={(e) => pickDriver(e.target.value)}>
                 <option value="">Keep the driver</option>
-                {drivers.map((d) => <option key={d.username} value={d.username}>{d.name}{d.label ? ` · ${d.label}` : ""}</option>)}
+                {driverOptions.map((d) => <option key={d.username} value={d.username}>{d.name}{d.label ? ` · ${d.label}` : ""}</option>)}
               </select>
             </div>
             {!ready ? <Loading>Finding free vehicles…</Loading> : (
@@ -309,7 +311,7 @@ export function RequestDecide() {
               : (
                 <select id="rq-driver" value={driver} onChange={(e) => pickDriver(e.target.value)}>
                   <option value="">{noDriverNeeded ? "No driver: pick the custodian’s vehicle" : "Pick a driver"}</option>
-                  {drivers.map((d) => <option key={d.username} value={d.username}>{d.name}{d.label ? ` · ${d.label}` : ""}</option>)}
+                  {driverOptions.map((d) => <option key={d.username} value={d.username}>{d.name}{d.label ? ` · ${d.label}` : ""}</option>)}
                 </select>
               )}
             {!f.driver && defaultDriver && (

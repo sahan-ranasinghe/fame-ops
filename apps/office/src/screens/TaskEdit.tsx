@@ -19,7 +19,7 @@ import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
-import { availabilityArgs, driverVehicle, floorTo5 } from "./availabilityLogic";
+import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { checkDeparture, departurePlan } from "./departureLogic";
 import { DepartureNote, DriverSelect, VehicleSelect } from "./dispatchParts";
@@ -202,7 +202,7 @@ export function TaskEdit() {
             {!running && (
               <>
                 <div className="grid2">
-                  <DriverSelect id="ra-driver" value={f.driver} drivers={drivers} onChange={pickDriver} autoFocus={driverMode} loading={!lists.drivers && !lists.error}
+                  <DriverSelect id="ra-driver" value={f.driver} drivers={withPicked(drivers, f.driver, avail.data?.drivers.find((d) => d.username === f.driver)?.name)} onChange={pickDriver} autoFocus={driverMode} loading={!lists.drivers && !lists.error}
                     emptyLabel={needsDriver ? `Choose a driver${t.driver ? ` (now ${t.driver})` : ""}` : `Keep${t.driver ? ` (${t.driver})` : ""}`} />
                   <VehicleSelect id="ra-vehicle" value={f.vehicle} def={def} vehicles={lists.vehicles ?? []} onChange={(reg) => set("vehicle", reg)}
                     emptyLabel={`Keep${currentPlate ? ` (${currentPlate})` : ""}`}

@@ -700,12 +700,23 @@ for (const scheme of ["light", "dark"] as const) {
     // refreshes (Who's available, the free vehicles). Nothing moves: no layout shift, the same rows in the same order,
     // the same row picked, the same best match.
     await page.evaluate(() => {
-      const w = window as unknown as { __shift: number; __orders: string[]; __picked: string[] };
+      const w = window as unknown as { __shift: number; __orders: string[]; __picked: string[]; __moved: string[] };
       w.__shift = 0;
       w.__orders = [];
       w.__picked = [];
+      w.__moved = [];
+      const describe = (n: Node | null) => {
+        const el = n instanceof Element ? n : n?.parentElement;
+        if (!el) return "?";
+        const id = el.closest("[data-testid]")?.getAttribute("data-testid") ?? "";
+        return `${id}>${el.tagName.toLowerCase()}.${[...el.classList].join(".")} "${(el.textContent ?? "").slice(0, 40)}"`;
+      };
       new PerformanceObserver((list) => {
-        for (const e of list.getEntries() as unknown as { value: number; hadRecentInput: boolean }[]) if (!e.hadRecentInput) w.__shift += e.value;
+        for (const e of list.getEntries() as unknown as { value: number; hadRecentInput: boolean; sources?: { node: Node | null }[] }[]) {
+          if (e.hadRecentInput) continue;
+          w.__shift += e.value;
+          w.__moved.push(`${e.value.toFixed(4)}: ${(e.sources ?? []).map((x) => describe(x.node)).join(" | ")}`);
+        }
       }).observe({ type: "layout-shift", buffered: false });
       const root = document.querySelector('[data-testid="availability"]')!;
       const note = () => {
@@ -727,11 +738,11 @@ for (const scheme of ["light", "dark"] as const) {
       await page.waitForTimeout(5000);
     }
     const seen = await page.evaluate(() => {
-      const w = window as unknown as { __shift: number; __orders: string[]; __picked: string[] };
-      return { shift: w.__shift, orders: [...new Set(w.__orders)], picked: [...new Set(w.__picked)] };
+      const w = window as unknown as { __shift: number; __orders: string[]; __picked: string[]; __moved: string[] };
+      return { shift: w.__shift, orders: [...new Set(w.__orders)], picked: [...new Set(w.__picked)], moved: w.__moved };
     });
-    expect(seen.shift).toBeLessThan(0.01);
     expect(seen.orders).toHaveLength(1);
+    expect(seen.shift, `what moved: ${seen.moved.join(" ;; ")}`).toBeLessThan(0.01);
     expect(seen.picked).toEqual([a.name]);
     await expect(panel.getByTestId("best-match")).toContainText(a.name);
     await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(a.username);

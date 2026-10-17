@@ -23,7 +23,7 @@ import { Icon } from "../ui/icons";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { type AssignFields, driverWhatsApp, emptyAssign, planInput, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
-import { availabilityArgs, driverVehicle, floorTo5 } from "./availabilityLogic";
+import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
 import { checkDeparture, departurePlan } from "./departureLogic";
@@ -227,7 +227,7 @@ export function NewTask() {
 
         <div className="card card-b form">
           <div className="grid2">
-            <DriverSelect id="af-driver" value={f.driver} drivers={drivers} onChange={pickDriver} loading={!lists.drivers && !lists.error}
+            <DriverSelect id="af-driver" value={f.driver} drivers={withPicked(drivers, f.driver, avail.data?.drivers.find((d) => d.username === f.driver)?.name)} onChange={pickDriver} loading={!lists.drivers && !lists.error}
               emptyLabel={lists.error && !lists.drivers ? "Couldn’t load" : "Choose a driver"} />
             <VehicleSelect id="af-vehicle" value={f.vehicle} def={def} vehicles={vehicles} onChange={(reg) => set("vehicle", reg)}
               emptyLabel={!lists.vehicles && lists.error ? "Couldn’t load" : f.driver ? "Pick a vehicle" : "Choose the driver first"}
