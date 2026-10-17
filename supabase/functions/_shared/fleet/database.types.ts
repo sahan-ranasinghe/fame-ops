@@ -1453,6 +1453,9 @@ isOneToOne: false
 "request_event_visible":
 { Args: { "p_request_id": string }; Returns: boolean
                            },
+"save_fleet_setting":
+{ Args: { "p_by": string,"p_key": string,"p_value": Json }; Returns: undefined
+                           },
 "search_places_ranked":
 { Args: { "p_limit"?: number,"p_text": string }; Returns: {
               "address": string,"attribution": string,"depot": string,"district": string,"id": string,"kind": string,"lat": number,"lng": number,"name": string,"operator": string,"other_ids": (string)[],"rank": number,"site_id": string,"source": string

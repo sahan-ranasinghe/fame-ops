@@ -2001,6 +2001,36 @@ check(psql(f"select count(*) from task_stops where task_id = '{bk['task_id']}' a
       psql(f"select string_agg(place_name || ':' || status, ' | ' order by seq) from task_stops where task_id = '{bk['task_id']}'"))
 check(tool("get_settings")["settings"]["tasks_need_approval"] is True, "tasks_need_approval is on by default (§33)")
 
+print("\n== 6i. Phase 7, Part 3: remove and restore a place (§15) ==")
+yard_name = f"Removable yard {uuid.uuid4().hex[:6]}"
+yard = tool("add_place", {"name": yard_name, "lat": 7.01, "lng": 80.01, "kind": "other"})["added"]
+yt = tool("create_task", {"title": "6i yard run", "date": day(8), "start_time": "09:00", "driver": "nuwan.p", "vehicle": "cab4521",
+                          "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place_id": yard["id"]}]})
+ask = tool("remove_place", {"id": yard["id"]})
+check(ask.get("needs_confirm") is True and ask["reasons"] == ["1 task today or later starts or stops there"] and ask["tasks"][0]["title"] == "6i yard run"
+      and psql(f"select active from places where id = '{yard['id']}'") == "t",
+      "remove_place: a place a task tomorrow uses asks first, naming the task; nothing removed yet", json.dumps(ask))
+done = tool("remove_place", {"id": yard["id"], "confirm": True})
+found = tool("search_places", {"text": yard_name})
+check(done.get("removed") == yard_name and not any(x.get("id") == yard["id"] for x in found.get("results", []))
+      and any(p["id"] == yard["id"] and p.get("removed") for p in tool("list_places", {"removed": True})["places"])
+      and psql(f"select name from places where id = '{yard['id']}'") == yard_name
+      and psql(f"select place_name from task_stops where task_id = '{yt['task_id']}' and seq = 2") == yard_name,
+      "confirmed: out of the search, under Removed places, the task's stop keeps its name (nothing deleted)", json.dumps(done))
+tool("restore_place", {"id": yard["id"]})
+check(any(x.get("id") == yard["id"] for x in tool("search_places", {"text": yard_name}).get("results", [])), "restore_place: found again")
+before_base = tool("get_settings")["settings"].get("base_place_id")
+tool("update_settings", {"key": "base_place_id", "value": yard["id"]})
+ask = tool("remove_place", {"id": yard["id"]})
+check(f"{yard_name} is the base place" in ask.get("reasons", []), "the base place asks first", json.dumps(ask))
+done = tool("remove_place", {"id": yard["id"], "confirm": True})
+check(done.get("base_place_cleared") is True and "base_place_id" not in tool("get_settings")["settings"],
+      "removing the base place clears the setting, and says so", json.dumps(done))
+tool("restore_place", {"id": yard["id"]})
+if before_base:
+    tool("update_settings", {"key": "base_place_id", "value": before_base})
+tool("cancel_task", {"task_id": yt["task_id"], "reason": "suite: done with the yard"})
+
 print("\n== 6h. Phase 7, Part 3: photos, documents, the request's driver and Tell requester (§4, §5, §6, §28) ==")
 card = tool("list_requests", {"status": "all", "id": rq["id"]})["requests"][0]
 check(card.get("assigned", {}).get("driver") == "Kasun Silva" and card["assigned"].get("vehicle") == "WP CAR-1182"

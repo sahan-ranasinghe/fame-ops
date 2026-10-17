@@ -352,11 +352,7 @@ export async function loadSettings(db: Db): Promise<Settings> {
   return out;
 }
 
+/** Stores a setting with who changed it; null (a cleared base place) is kept as JSON null by the database function. */
 export async function saveSetting(db: Db, key: SettingKey, value: Settings[SettingKey], by: string): Promise<void> {
-  unwrap(
-    await db.from("fleet_settings").upsert({ key, value: value as never, updated_at: new Date().toISOString(), updated_by: by }, {
-      onConflict: "key",
-    }),
-    "fleet settings",
-  );
+  unwrap(await db.rpc("save_fleet_setting", { p_key: key, p_value: value as never, p_by: by }), "fleet settings");
 }
