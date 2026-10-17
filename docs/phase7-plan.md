@@ -1587,6 +1587,28 @@ as off) and the tests.
 - The artifact build carried supabase-js since 16 October (the issues bell imported Realtime). Now Realtime comes through the web's context, and the artifact is 774 KB instead of 998 KB.
 - `ALL_TOOLS` (the artifact's tools) lists every connector tool but the two web-only uploads, with a test. The Phase 7 duty tools had been missing.
 
+**Before Round A2 (Sahan, 17 October), added to Part 3:**
+- **An approved request shows the task.** Once a request has its task, its card's trip (stops, times, plan, map), `when`
+  and `back_by` come from the task as it is now, the single source. "Changed by the office · was 09:00 Sat 17 Oct ·
+  stops changed" when the task's leave time or stops differ from what was asked (an older From/To request compares the
+  time). Tell requester quotes the task's time. Tests: the suite (the office moves the task and changes its stops) and
+  Vitest (the page shows the task's times and the line, never the old plan).
+- **Item 7, the app side.**
+  - The Phone setup card is off Today.
+  - The brand's steps are in the first-run Permissions flow once, after the battery step, and on Me → Phone setup (a
+    pushed page; the Me row turns amber after the phone stopped the app).
+  - Huawei and HONOR keep their own steps.
+  - The gap notes and the watchdog are unchanged.
+  - Delegated to S6.
+- **Item 15, remove and restore a place.**
+  - Migration `20261017180000_phase7_places.sql`: `places.removed_at` / `removed_by`. A removed place is switched off, so every search, list and picker leaves it out, and a check ties the two.
+  - `remove_place` answers `needs_confirm` with the reasons and the tasks for the base place or a place that tasks today or later use; with `confirm` it removes it, and removing the base place clears the setting.
+  - `restore_place`; `list_places(removed)`. A removed place is not edited until it is restored.
+  - Clearing a setting to null failed before (the column holds a value). It is now stored as JSON null (`save_fleet_setting`).
+  - Web (S5): Remove on the place page with a second step and the reasons above "Remove anyway"; Places → Removed places with Restore.
+  - Tests: pgTAP `phase7_places`, the suite, e2e.
+- The hotfix is in `phase7-3` (every hotfix commit is its ancestor). Live `get_settings` shows 430 / 430 / 430 / 215 / 215.
+
 **The fresh reviewer at checkpoint 3** found no security gap. Its findings, all fixed:
 - A one-step booking writes its trip after its own approval, so a later Keep would have put the request's stops back
   over the office's stop edits. Now only an edit by the asker after the decision counts (`trip_edited_at`); the suite

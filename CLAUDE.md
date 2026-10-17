@@ -757,11 +757,12 @@ is kept as rejected like points and put back in line with them, never dropped). 
 heartbeat loop's 10-second look restarts the location service when the driver is on duty, moving
 and no position came for 90 s (`watchLocation`, at most once every 90 s; the next history row
 carries `location_restarts`, `driver_route` sums them). Each heartbeat on duty notes a gap of over
-3 minutes since the previous one of the same duty period (the battery manager froze the app); the
-"Phone setup" card on Today (`components/PhoneSetupCard.tsx`, `lib/phoneSetup.ts`) shows while one
-of the last 3 days is not dismissed: the brand, a button that opens the brand's battery or startup
-page (expo-intent-launcher, App info as the fallback) and the steps for OPPO, realme, Xiaomi, vivo,
-Samsung or any other phone (`phoneSetup.*`, en + si). A dead location service is
+3 minutes since the previous one of the same duty period (the battery manager froze the app). The phone
+setup steps (Phase 7 item 7: off Today) are in the first-run Permissions flow once, after the battery step, and on
+Me → Phone setup (`app/phone-setup.tsx`, `components/PhoneSetup.tsx`, `lib/phoneSetup.ts`; the Me row turns amber and
+the page opens with "stopped Fame Driver N times" while one of the last 3 days is not dismissed): the brand, a button
+that opens the brand's battery or startup page (expo-intent-launcher, App info as the fallback) and the steps for OPPO,
+realme, Xiaomi, vivo, Samsung, Huawei / HONOR or any other phone (`phoneSetup.*`, en + si). A dead location service is
 restarted when the app opens, comes to the front, or every minute while on screen; a
 watchdog notification fires 12 min after the last position. Location points are kept 90
 days (pg_cron job `prune-location-points`).
@@ -927,7 +928,13 @@ office_audit.
   `tell_requester`. Photos and documents (vehicles permission): `photo_upload_url` and `vehicle_document_upload_url`
   (web only: not on the connector), `set_driver_photo`, `set_vehicle_photo`, `save_vehicle_document`,
   `vehicle_documents`, `remove_vehicle_document`, `restore_vehicle_document`; `photo_url` / `thumb_url` on the tools that
-  name drivers and plates. A running task's Google ETA is asked only by `task_detail` (someone opened it).
+  name drivers and plates. A running task's Google ETA is asked only by `task_detail` (someone opened it). Once a request
+  has its task, its card's `trip`, `when` and `back_by` are the task's as they are now (`trip.source` task, `trip.changed`
+  "Changed by the office · was 09:00 Sat 17 Oct · stops changed"): a requester never sees an old plan. Places (item 15):
+  `remove_place(id, confirm?)` (needs_confirm for the base place or a place tasks today or later use; removing the base
+  place clears it) and `restore_place(id)` (vehicles), `list_places(removed)`; a removed place is switched off with
+  `removed_at` / `removed_by` and is not edited until restored. A setting cleared to null is stored as JSON null
+  (`save_fleet_setting`).
 
 ## Not now
 Project costs, WhatsApp as a location source or automated WhatsApp sending (use wa.me links),
