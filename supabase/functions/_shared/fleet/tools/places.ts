@@ -842,6 +842,7 @@ export const placeDetail = tool({
   input: z.object({ id: zId }),
   async run({ id }, { db, now }) {
     const place = await placeById(db, id);
+    if (place.removed_at) throw new ToolError(`${place.name} is removed: restore it first (restore_place).`);
     const since = new Date(now.getTime() - RECENT_DAYS * 86400000).toISOString();
     const used = await db.from("task_stops").select("id, tasks!inner(start_at)", { count: "exact", head: true }).eq("place_id", id).gte(
       "tasks.start_at",

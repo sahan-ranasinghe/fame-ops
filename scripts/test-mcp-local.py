@@ -2017,6 +2017,8 @@ check(done.get("removed") == yard_name and not any(x.get("id") == yard["id"] for
       and psql(f"select name from places where id = '{yard['id']}'") == yard_name
       and psql(f"select place_name from task_stops where task_id = '{yt['task_id']}' and seq = 2") == yard_name,
       "confirmed: out of the search, under Removed places, the task's stop keeps its name (nothing deleted)", json.dumps(done))
+r = tool("update_place", {"id": yard["id"], "address": "Somewhere else"}, expect_error=True)
+check("restore it first" in r, "a removed place is not edited until it is restored", r)
 tool("restore_place", {"id": yard["id"]})
 check(any(x.get("id") == yard["id"] for x in tool("search_places", {"text": yard_name}).get("results", [])), "restore_place: found again")
 before_base = tool("get_settings")["settings"].get("base_place_id")

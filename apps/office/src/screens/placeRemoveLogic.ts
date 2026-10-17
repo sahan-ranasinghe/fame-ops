@@ -26,9 +26,9 @@ export interface RemovePlaceAnswer {
   note?: string;
 }
 
-/** list_places({ removed: true }) and place_detail carry `removed`: "2026-10-17 10:05 by Sahan". */
-export type RemovedPlace = Place & { removed?: string };
-export type PlaceDetailWithRemoved = PlaceDetail & { removed?: string; active?: boolean };
+/** list_places({ removed: true }) and place_detail carry `removed`: "2026-10-17 10:05 by Sahan" (data/types.ts). */
+export type RemovedPlace = Place;
+export type PlaceDetailWithRemoved = PlaceDetail;
 
 export type RemoveState =
   | { step: "idle" }

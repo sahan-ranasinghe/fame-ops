@@ -1232,6 +1232,20 @@ test("the location search box: sites by id with their badges, a pasted pin saved
   const bareNow = await tool<{ results: { lat: number; site_id: string }[] }>("search_places", { text: bare, map: false });
   expect(bareNow.results[0]).toMatchObject({ site_id: bare, lat: 7.4675 });
 
+  // Phase 7 (§15): Remove has a second step on the page; the search leaves it out; Removed places restores it.
+  const removeBox = placePage.getByTestId("place-remove");
+  await removeBox.getByRole("button", { name: "Remove" }).click();
+  await removeBox.getByRole("button", { name: "Yes, remove" }).click();
+  await expect(placePage).toContainText("Removed. It is listed under Removed places.");
+  const removedNow = await tool<{ results: { site_id?: string }[] }>("search_places", { text: bare, map: false });
+  expect(removedNow.results.some((r) => r.site_id === bare)).toBe(false);
+  await page.goto("/places?who=removed");
+  const removedRow = page.getByTestId("places-table").locator("tr", { hasText: `Bare Site ${stamp}` });
+  await removedRow.getByRole("button", { name: "Restore" }).click();
+  await expect(page.getByTestId("places-table").locator("tr", { hasText: `Bare Site ${stamp}` })).toHaveCount(0);
+  const back = await tool<{ results: { site_id?: string }[] }>("search_places", { text: bare, map: false });
+  expect(back.results.some((r) => r.site_id === bare)).toBe(true);
+
   // Import sites: a spreadsheet shaped like Dialog's, read in the browser, previewed, imported in one batch.
   const XLSX = await import("xlsx");
   const sheet = XLSX.utils.json_to_sheet([

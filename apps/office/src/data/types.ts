@@ -814,6 +814,8 @@ export interface Place {
   /** Since Part 4 (additive). */
   id?: string;
   name: string;
+  /** Phase 7 (§15): removed by the office, "17 Oct 2026 10:05 by Sahan" (list_places removed, place_detail). */
+  removed?: string;
   address?: string;
   kind?: string;
   operator?: "dialog" | "mobitel";
@@ -875,6 +877,8 @@ export interface SearchAnswer {
 /** place_detail, update_place, save_place: everything about one place. */
 export interface PlaceDetail extends Place {
   id: string;
+  /** false = switched off (a removed place is off too). */
+  active?: boolean;
   badge: string;
   other_ids?: string[];
   region?: string;

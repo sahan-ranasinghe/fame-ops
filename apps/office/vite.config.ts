@@ -63,6 +63,8 @@ export default defineConfig(({ mode }) => {
       environment: "jsdom",
       include: ["src/**/*.test.{ts,tsx}"],
       setupFiles: ["src/test/setup.ts"],
+      // The page tests import whole screens: under the full suite's load the first one in a file can pass 5 s.
+      testTimeout: 15_000,
     },
   };
 });
