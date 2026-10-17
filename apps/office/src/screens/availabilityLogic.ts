@@ -67,14 +67,14 @@ export interface DefaultVehicle {
   why: string;
 }
 
-export function defaultVehicle(d: { name: string; vehicle?: { reg_no: string; source: "on_duty" | "regular" } } | null | undefined, names: readonly string[] = []): DefaultVehicle | null {
+export function defaultVehicle(d: { name: string; vehicle?: { reg_no: string; source: "on_duty" | "regular" } } | null | undefined, names: readonly string[]): DefaultVehicle | null {
   if (!d?.vehicle?.reg_no) return null;
   const who = shortName(d.name, names);
   return { reg_no: d.vehicle.reg_no, why: d.vehicle.source === "on_duty" ? `${who}'s vehicle today` : `${who}'s regular vehicle` };
 }
 
 /** The vehicle the picked driver brings: Who's available's row, else the driver list's vehicle today. */
-export function driverVehicle(avail: DefaultVehicle | null, driver: { name: string; current_vehicle?: string } | undefined, names: readonly string[] = []): DefaultVehicle | null {
+export function driverVehicle(avail: DefaultVehicle | null, driver: { name: string; current_vehicle?: string } | undefined, names: readonly string[]): DefaultVehicle | null {
   if (avail) return avail;
   if (!driver?.current_vehicle) return null;
   return { reg_no: plateOf(driver.current_vehicle), why: `${shortName(driver.name, names)}'s vehicle today` };
@@ -103,19 +103,30 @@ export function bestRow(best: BestMatch | undefined, rows: AvailableDriver[] | u
 
 const driverKey = (r: { username?: string | null; name: string }) => r.username ?? r.name;
 
+/** How much nearer to the first stop a driver must come before a refresh re-ranks Who's available, km. */
+export const RERANK_KM = 0.5;
+
+/** `b` (shown lower) is now really nearer than `a`: by more than RERANK_KM, or it has a position and `a` has none. */
+const nearer = (b: AvailableDriver, a: AvailableDriver) =>
+  b.km_to_first != null && (a.km_to_first == null || a.km_to_first - b.km_to_first > RERANK_KM);
+
 /**
- * A refresh of Who's available for the same day and time (useQuery's merge; hotfix, 17 October 2026). While the same
- * drivers are in the best-match ranking (on duty and free), the ranking and the best match stay as they were: two
- * drivers parked side by side would otherwise swap places, and the best match with them, on every refresh, as their
- * GPS wanders. Everything else (the status words, the counts, the vehicles) is the fresh answer. A driver joining or
- * leaving the ranking (on or off duty, a task taken) ranks them all again.
+ * A refresh of Who's available for the same day and time (useQuery's merge; hotfix, 17 October 2026). Two drivers
+ * parked side by side would swap places, and the best match with them, on every refresh as their GPS wanders. So the
+ * ranking and the best match shown stay while the same drivers are in the ranking and none of them is now nearer than
+ * one shown above it by more than RERANK_KM; the words (status, reasons, counts, vehicles) are the fresh ones. A driver
+ * joining or leaving the ranking, or a real move, ranks them all again.
  */
 export function steadyAvailability(prev: Availability, next: Availability): Availability {
   const ranked = (a: Availability) => a.drivers.filter((r) => r.rank != null).map(driverKey).sort().join("\n");
   if (ranked(prev) !== ranked(next)) return next;
+  const fresh = new Map(next.drivers.map((r) => [driverKey(r), r]));
+  const shown = rankedRows(prev.drivers).filter((r) => r.rank != null).map((r) => fresh.get(driverKey(r))!);
+  if (shown.some((a, i) => shown.slice(i + 1).some((b) => nearer(b, a)))) return next;
   const rankOf = new Map(prev.drivers.map((r) => [driverKey(r), r.rank]));
   const drivers = next.drivers.map((r) => (r.rank === rankOf.get(driverKey(r)) ? r : { ...r, rank: rankOf.get(driverKey(r)) }));
   const held = prev.best && next.best && driverKey(prev.best) !== driverKey(next.best) ? prev.best : undefined;
-  const best = held ? { ...held, vehicle: next.drivers.find((r) => driverKey(r) === driverKey(held))?.vehicle ?? held.vehicle } : next.best;
+  const row = held ? fresh.get(driverKey(held)) : undefined;
+  const best = held ? { ...held, vehicle: row?.vehicle, why: row?.match_why ?? held.why } : next.best;
   return { ...next, drivers, best };
 }

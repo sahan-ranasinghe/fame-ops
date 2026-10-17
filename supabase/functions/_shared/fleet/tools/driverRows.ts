@@ -115,8 +115,17 @@ export async function driverRows(
   }));
   const windowText = `${colomboTime(w.from)}–${w.to ? colomboTime(w.to) : "end of day"}`;
   const ranked: BestMatch[] = rankMatches(matches, windowText, firstStop ? "the pickup" : "the first stop");
-  const rankOf = new Map(ranked.map((m) => [m.username ?? m.name, m.rank]));
-  const withRank = rows.map((r) => ({ ...r, rank: rankOf.get(r.username ?? r.name) }));
+  const rankOf = new Map(ranked.map((m) => [m.username ?? m.name, m]));
+  const kmOf = new Map(matches.map((m) => [m.username ?? m.name, m.km_to_first]));
+  // A ranked row carries its km to the first stop (0.1 km) and its reasons, so the web can hold its order while two
+  // drivers are within half a kilometre of each other and still re-rank when one really moves (hotfix, 17 October).
+  const withRank = rows.map((r) => {
+    const m = rankOf.get(r.username ?? r.name);
+    const km = kmOf.get(r.username ?? r.name);
+    return m
+      ? { ...r, rank: m.rank, match_why: m.why, ...(km != null ? { km_to_first: Math.round(km * 10) / 10 } : {}) }
+      : { ...r, rank: undefined };
+  });
   const top = ranked[0];
   const bestRow = top ? withRank.find((r) => (r.username ?? r.name) === (top.username ?? top.name)) : undefined;
   return {

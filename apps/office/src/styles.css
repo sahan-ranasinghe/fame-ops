@@ -430,7 +430,7 @@ button.avail-row:hover { background: var(--surface-2) }
 .avail-row.picked, button.avail-row.picked:hover { background: var(--live-bg); box-shadow: inset 4px 0 0 var(--live) }
 .avail-row.picked .pill.live { box-shadow: inset 0 0 0 1px var(--live) }
 .avail-tick { color: var(--live); font-weight: 700 }
-button.avail-row:focus-visible { outline-offset: -3px }
+button.avail-row:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px }
 .avail-row:first-child { border-top: 0 }
 
 /* The location search box (Part 4) */

@@ -205,7 +205,7 @@ describe("Who's available: a refresh keeps the nodes and the choices", () => {
     expect(after[0]).toBe(rows[0]); // Kamal's row: the same node
     expect(after[1]).toBe(rows[1]); // Nuwan's row: the same node, new words
     expect(after[1].textContent).toContain("Busy");
-    expect(after[0].getAttribute("aria-selected")).toBe("true");
+    expect(after[0].getAttribute("aria-pressed")).toBe("true");
     expect((screen.getByLabelText("Note") as HTMLInputElement).value).toBe("Gate 2");
     expect(screen.queryByText("Looking who is free…")).toBeNull();
   });
@@ -233,8 +233,8 @@ describe("Who's available: two drivers side by side (hotfix, 17 October 2026)", 
   /** Kamal and Nuwan parked together: each answer ranks the other one first, as their GPS wanders. */
   const swapping = (_args: Record<string, unknown>, n: number): Availability => {
     const kamalFirst = n % 2 === 1;
-    const kamal = driver("Kamal Perera", "kamal.p", { rank: kamalFirst ? 1 : 2, vehicle: { reg_no: "WP CAB-4521", source: "on_duty" } });
-    const nuwan = driver("Nuwan Perera", "nuwan.p", { rank: kamalFirst ? 2 : 1, vehicle: { reg_no: "WP KL-1234", source: "regular" } });
+    const kamal = driver("Kamal Perera", "kamal.p", { rank: kamalFirst ? 1 : 2, km_to_first: kamalFirst ? 0.3 : 0.4, vehicle: { reg_no: "WP CAB-4521", source: "on_duty" } });
+    const nuwan = driver("Nuwan Perera", "nuwan.p", { rank: kamalFirst ? 2 : 1, km_to_first: kamalFirst ? 0.4 : 0.3, vehicle: { reg_no: "WP KL-1234", source: "regular" } });
     const top = kamalFirst ? kamal : nuwan;
     return {
       as_of: "17 Oct 08:00",
@@ -267,16 +267,16 @@ describe("Who's available: two drivers side by side (hotfix, 17 October 2026)", 
 
     fireEvent.click(rows[1]);
     expect(picks).toEqual(["nuwan.p WP KL-1234 Nuwan's regular vehicle"]);
-    expect(rows[1].getAttribute("aria-selected")).toBe("true");
+    expect(rows[1].getAttribute("aria-pressed")).toBe("true");
     expect(rows[1].className).toContain("picked");
-    expect(rows[0].getAttribute("aria-selected")).toBe("false");
+    expect(rows[0].getAttribute("aria-pressed")).toBe("false");
 
     for (let i = 0; i < 3; i++) await settle(60_000); // three refreshes, each ranking the other first
     expect(transport.count("availability")).toBe(4);
     expect(screen.getAllByTestId("avail-row")).toEqual(rows); // the same nodes in the same order
     expect(names()).toEqual(["Kamal Perera", "Nuwan Perera", "Kamal Silva"]);
     expect(screen.getByTestId("best-match").textContent).toContain("Kamal Perera");
-    expect(rows[1].getAttribute("aria-selected")).toBe("true");
+    expect(rows[1].getAttribute("aria-pressed")).toBe("true");
   });
 });
 
@@ -356,5 +356,34 @@ describe("the decide page: a refresh never resets the driver, the vehicle or wha
     expect(screen.getByTestId("decide-pick")).toBe(pickCard);
     expect(screen.getAllByTestId("avail-row")[0]).toBe(kamalRow);
     expect(screen.queryByText("Finding free vehicles…")).toBeNull();
+  });
+
+  it("a row of Who's available picks its driver even when the driver lists lack them (the list could not load)", async () => {
+    const withSunil = (a: Record<string, unknown>, n: number): Availability => {
+      const x = availability(a, n);
+      return { ...x, drivers: [...x.drivers, driver("Sunil Silva", "sunil.s", { state: "off_duty", status_text: "Off duty", vehicle: { reg_no: "WP PH-2087", source: "regular" } })] };
+    };
+    const transport = new FakeTransport({
+      list_requests: () => ({ status: "all", count: 1, requests: [card] }),
+      suggest_vehicles: suggestions,
+      availability: withSunil,
+      plan_task: plan,
+      get_settings: () => ({ settings: { dwell_min: { pickup: 5, drop: 5, visit: 60, default: 5 } }, defaults: {}, about: {}, base_place: { id: "p-base", name: "Head office", has_pin: true }, routing_provider: "estimate" }),
+      list_vehicles: () => ({ vehicles: [{ reg_no: "WP CAB-4521" }, { reg_no: "WP KL-1234" }] }),
+      list_places: () => ({ places: [] }),
+    }, tools); // list_drivers fails: no answer
+    const { wrap } = await setup(transport);
+    render(wrap(
+      <MemoryRouter initialEntries={["/requests/r1/decide"]}>
+        <Routes><Route path="/requests/:id/decide" element={<RequestDecide />} /></Routes>
+      </MemoryRouter>,
+    ));
+    await settle(400);
+    await settle(1500);
+    const sunil = screen.getAllByTestId("avail-row").find((r) => r.textContent?.includes("Sunil Silva"))!;
+    fireEvent.click(sunil);
+    expect((screen.getByLabelText("Driver") as HTMLSelectElement).value).toBe("sunil.s");
+    expect(sunil.getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByTestId("vehicle-default").textContent).toContain("WP PH-2087 · Sunil's regular vehicle");
   });
 });

@@ -3,8 +3,9 @@
 // task until ~10:40), what is next or what makes them busy, the day's counts,
 // the licence and the vehicle they bring; the best match on top with its
 // reasons and Use suggestion (fills the driver and the vehicle); the rows in the
-// best-match order. A click or Enter on a row picks that driver like Use
-// suggestion (the driver and the vehicle they bring) and marks the row picked.
+// best-match order. A click or Enter on a row (a toggle button) picks that
+// driver like Use suggestion (the driver and the vehicle they bring) and marks
+// the row picked.
 // Fetched 400 ms after the time settles and quietly every 60 s; the last answer
 // stays on screen while a new one loads ("Updating…" beside the title), and a
 // refresh for the same day and time keeps the ranking and the best match
@@ -93,7 +94,7 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
         </div>
       )}
       {data && (
-        <div className="rows" role={onPick ? "listbox" : undefined} aria-label={onPick ? "Free drivers" : undefined} style={updating ? { opacity: 0.75 } : undefined}>
+        <div className="rows" role={onPick ? "group" : undefined} aria-label={onPick ? "Drivers: pick one" : undefined} style={updating ? { opacity: 0.75 } : undefined}>
           {rankedRows(data.drivers).map((d) => {
             const Tag = onPick && d.username ? "button" : "div";
             const veh = defaultVehicle(d, names);
@@ -103,8 +104,7 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
                 key={d.username ?? d.name}
                 type={Tag === "button" ? "button" : undefined}
                 className={`row avail-row${on ? " picked" : ""}`}
-                role={onPick ? "option" : undefined}
-                aria-selected={onPick ? on : undefined}
+                aria-pressed={Tag === "button" ? on : undefined}
                 onClick={Tag === "button" ? () => onPick?.(d, veh) : undefined}
                 data-testid="avail-row"
               >

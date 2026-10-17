@@ -684,8 +684,8 @@ for (const scheme of ["light", "dark"] as const) {
       scope.getByTestId("avail-row").filter({ has: page.locator(".name", { hasText: new RegExp(`^${name}$`) }) });
     const rowA = rowOf(panel, a.name);
     const rowB = rowOf(panel, b.name);
-    await expect(rowA).toHaveAttribute("aria-selected", "true");
-    await expect(rowB).toHaveAttribute("aria-selected", "false");
+    await expect(rowA).toHaveAttribute("aria-pressed", "true");
+    await expect(rowB).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(a.username);
     await expect(panel.getByTestId("best-match")).toContainText(a.name);
     // Two drivers called Twin: the full name in the vehicle's words.
@@ -726,7 +726,7 @@ for (const scheme of ["light", "dark"] as const) {
       const note = () => {
         const rows = [...root.querySelectorAll('[data-testid="avail-row"]')];
         w.__orders.push(rows.map((r) => r.querySelector(".name")?.textContent ?? "").join(" | "));
-        w.__picked.push(rows.filter((r) => r.getAttribute("aria-selected") === "true").map((r) => r.querySelector(".name")?.textContent ?? "").join(","));
+        w.__picked.push(rows.filter((r) => r.getAttribute("aria-pressed") === "true").map((r) => r.querySelector(".name")?.textContent ?? "").join(","));
       };
       note();
       new MutationObserver(note).observe(root, { subtree: true, childList: true, attributes: true, characterData: true });
@@ -752,20 +752,20 @@ for (const scheme of ["light", "dark"] as const) {
 
     // A click on Twin B's row picks B with the vehicle B brings, and the pick stays through the next refresh.
     await rowB.click();
-    await expect(rowB).toHaveAttribute("aria-selected", "true");
-    await expect(rowA).toHaveAttribute("aria-selected", "false");
+    await expect(rowB).toHaveAttribute("aria-pressed", "true");
+    await expect(rowA).toHaveAttribute("aria-pressed", "false");
     await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(b.username);
     await expect(page.getByTestId("vehicle-default")).toContainText(`${plateB} · ${b.name}'s vehicle today`);
     expect(await contrastOf(rowB.locator(".name"))).toBeGreaterThan(4.5);
     await wander(true);
     await page.clock.fastForward(61_000);
     await page.waitForTimeout(3000);
-    await expect(rowB).toHaveAttribute("aria-selected", "true");
+    await expect(rowB).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(b.username);
     // Enter on Twin A's row picks A again.
     await rowA.focus();
     await page.keyboard.press("Enter");
-    await expect(rowA).toHaveAttribute("aria-selected", "true");
+    await expect(rowA).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(a.username);
     await expect(page.getByTestId("vehicle-default")).toContainText(`${plateA} · ${a.name}'s vehicle today`);
 
@@ -777,7 +777,7 @@ for (const scheme of ["light", "dark"] as const) {
     await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
     const rowBNew = rowOf(page.getByTestId("availability"), b.name);
     await rowBNew.click();
-    await expect(rowBNew).toHaveAttribute("aria-selected", "true");
+    await expect(rowBNew).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(b.username);
     await expect(page.getByLabel("Vehicle", { exact: true }).locator("option:checked")).toContainText(plateB);
     // Finish work on both phones: nobody this test put on duty stays for the next run.

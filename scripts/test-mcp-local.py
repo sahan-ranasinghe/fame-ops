@@ -902,6 +902,13 @@ code, _ = app.post("location_points?on_conflict=employee_id,recorded_at", points
 check(code == 201, f"driver uploads {len(points)} location points", f"{code}")
 code, _ = app.post("location_points?on_conflict=employee_id,recorded_at", points[:10], prefer="resolution=ignore-duplicates,return=minimal")
 check(code in (200, 201) and psql(f"select count(*) from location_points where employee_id='{ME}'") == str(len(points)), "re-uploading the same points adds nothing")
+# Hotfix (17 October): a ranked row carries its km to the first stop and its reasons (the web holds its order within 0.5 km).
+avk = tool("availability", {"at": f"{day(2)} 10:30", "until": "12:00", "lat": 6.9271, "lng": 79.8612})
+nk = next(d for d in avk["drivers"] if d["username"] == "nuwan.p")
+check(nk.get("rank") == 1 and isinstance(nk.get("km_to_first"), (int, float)) and nk.get("match_why") == avk["best"]["why"]
+      and "km from the pickup" in nk["match_why"] and avk["best"]["username"] == "nuwan.p"
+      and all("match_why" not in d and "km_to_first" not in d for d in avk["drivers"] if "rank" not in d),
+      "availability: the ranked row carries km_to_first and match_why (the best match's reasons); unranked rows neither", json.dumps(nk)[:400])
 
 code, row = app.patch("tasks?id=eq." + T1, {"status": "in_progress", "start_odometer_km": 84530})
 check(code == 200 and row[0]["status"] == "in_progress" and row[0]["started_at"], "driver starts the task with start odometer 84,530", str(row)[:200])

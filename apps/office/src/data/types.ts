@@ -1340,6 +1340,10 @@ export interface AvailableDriver {
   vehicle?: { reg_no: string; source: "on_duty" | "regular" };
   /** Phase 7 (§3): the place in the best-match ranking (1 = best). */
   rank?: number;
+  /** A ranked row: straight-line km from the last position to the first stop (0.1 km), when both are known. */
+  km_to_first?: number;
+  /** A ranked row: its best-match reasons ("On duty · free 09:00–end of day · 0.4 km from the pickup · 1 task today"). */
+  match_why?: string;
 }
 
 export interface Availability {

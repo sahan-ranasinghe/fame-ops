@@ -39,11 +39,11 @@ describe("Who's available, Phase 7 (§3, §10)", () => {
     expect(availabilityArgs("2026-10-17", floorTo5("07:23"))).toEqual(availabilityArgs("2026-10-17", floorTo5("07:21")));
   });
   it("names the vehicle a driver brings: today's when on duty, else the regular one, else none", () => {
-    expect(defaultVehicle({ name: "Kamal Perera", vehicle: { reg_no: "WP CAB-4521", source: "on_duty" } })).toEqual({ reg_no: "WP CAB-4521", why: "Kamal's vehicle today" });
-    expect(defaultVehicle({ name: "Kamal Perera", vehicle: { reg_no: "WP KL-1234", source: "regular" } })).toEqual({ reg_no: "WP KL-1234", why: "Kamal's regular vehicle" });
-    expect(defaultVehicle({ name: "Kamal Perera" })).toBeNull();
-    expect(driverVehicle(null, { name: "Nuwan Silva", current_vehicle: "WP PH-2087 · Toyota Axio" })).toEqual({ reg_no: "WP PH-2087", why: "Nuwan's vehicle today" });
-    expect(driverVehicle(null, { name: "Nuwan Silva" })).toBeNull();
+    expect(defaultVehicle({ name: "Kamal Perera", vehicle: { reg_no: "WP CAB-4521", source: "on_duty" } }, [])).toEqual({ reg_no: "WP CAB-4521", why: "Kamal's vehicle today" });
+    expect(defaultVehicle({ name: "Kamal Perera", vehicle: { reg_no: "WP KL-1234", source: "regular" } }, [])).toEqual({ reg_no: "WP KL-1234", why: "Kamal's regular vehicle" });
+    expect(defaultVehicle({ name: "Kamal Perera" }, [])).toBeNull();
+    expect(driverVehicle(null, { name: "Nuwan Silva", current_vehicle: "WP PH-2087 · Toyota Axio" }, [])).toEqual({ reg_no: "WP PH-2087", why: "Nuwan's vehicle today" });
+    expect(driverVehicle(null, { name: "Nuwan Silva" }, [])).toBeNull();
   });
   it("puts the ranked drivers first in their order, then the rest as the server sorted them", () => {
     const rows = [{ ...base, name: "A" }, { ...base, name: "B", rank: 2 }, { ...base, name: "C", free: false }, { ...base, name: "D", rank: 1 }];
@@ -93,6 +93,38 @@ describe("Who's available, hotfix (17 October 2026)", () => {
     expect(withPicked(list, "", undefined)).toBe(list);
     expect(withPicked([], "nuwan", "Nuwan Silva")).toEqual([{ username: "nuwan", name: "Nuwan Silva" }]);
     expect(withPicked(list, "sunil", undefined)).toEqual([...list, { username: "sunil", name: "sunil" }]);
+  });
+
+  it("re-ranks on a real move: a driver shown lower is now nearer by more than half a kilometre", () => {
+    const at = (kamalKm: number, nuwanKm: number) => {
+      const a = answer(kamalKm <= nuwanKm ? "kamal" : "nuwan");
+      a.drivers = a.drivers.map((r) => (r.username === "kamal" ? { ...r, km_to_first: kamalKm, match_why: `${kamalKm} km` } : r.username === "nuwan" ? { ...r, km_to_first: nuwanKm, match_why: `${nuwanKm} km` } : r));
+      return a;
+    };
+    const shown = at(0.3, 0.4);
+    // GPS wander: Nuwan 0.2 km nearer now. The ranking holds; the held best's words and vehicle are its fresh row's.
+    const wander = steadyAvailability(shown, at(0.6, 0.4));
+    expect(wander.best?.username).toBe("kamal");
+    expect(wander.best?.why).toBe("0.6 km");
+    expect(wander.best?.vehicle?.reg_no).toBe("WP CAB-4521");
+    expect(rankedRows(wander.drivers).map((r) => r.username)).toEqual(["kamal", "nuwan", "sunil"]);
+    // Kamal drives off: Nuwan is 19.6 km nearer. Ranked again.
+    const moved = at(20, 0.4);
+    expect(steadyAvailability(shown, moved)).toBe(moved);
+    expect(moved.best?.username).toBe("nuwan");
+    // The first position of the morning: neither had one (ranked by name), now Nuwan has. Ranked again.
+    const none = at(0.3, 0.4);
+    none.drivers = none.drivers.map((r) => ({ ...r, km_to_first: undefined }));
+    const later = at(0.4, 0.3);
+    later.drivers = later.drivers.map((r) => (r.username === "kamal" ? { ...r, km_to_first: undefined } : r));
+    expect(steadyAvailability(none, later)).toBe(later);
+  });
+
+  it("the held best match carries no vehicle its fresh row has lost", () => {
+    const shown = answer("kamal");
+    const next = answer("nuwan");
+    next.drivers = next.drivers.map((r) => (r.username === "kamal" ? { ...r, vehicle: undefined } : r));
+    expect(steadyAvailability(shown, next).best?.vehicle).toBeUndefined();
   });
 
   it("a driver joining or leaving the ranking ranks them all again", () => {
