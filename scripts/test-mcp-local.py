@@ -568,7 +568,7 @@ check(pg["plan"]["source"] != "google" and "google_note" not in pg["plan"], "wit
 r = tool("plan_task", {"date": day(6), "leave_by": "09:00", "stops": [{"type": "drop", "google_place_id": "ChIJ-suite-unknown", "place": "Somewhere"}]}, expect_error=True)
 check("Google place search is not set up" in r, "a Google place with no kept pin and no key: refused with the reason", r)
 code, gj = fleet_jobs(job="google_content")
-check(code == 200 and gj.get("places") == 0 and gj.get("pruned") == {"pins": 0, "stops": 0, "starts": 0, "matched": 0, "lines": 0},
+check(code == 200 and gj.get("places") == 0 and gj.get("pruned") == {"pins": 0, "stops": 0, "starts": 0, "matched": 0, "lines": 0, "request_stops": 0, "request_starts": 0},
       "fleet-jobs google_content: nothing to refresh or remove yet", json.dumps(gj))
 
 # Two days ahead: in the evening the tasks above are already on tomorrow, and the approved request's task must not join their day.
@@ -1505,7 +1505,8 @@ if CHANNEL == "api":
     # The admin's own settings and devices through office-api (what Settings → Notifications does).
     ms = tool("my_notification_settings")
     check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.vehicle_needed", "task.stop_skipped", "issue.opened", "issue.assigned",
-                                                 "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed"]
+                                                 "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed",
+                                                 "request.not_decided", "request.late"]
           and all(e["enabled"] for e in ms["events"]) and ms["devices"] == [] and ms["push"]["configured"] is VAPID and (("public_key" in ms["push"]) is VAPID),
           "my_notification_settings: every event on (the admin holds every permission), no devices, push.configured says whether the server has the keys", json.dumps(ms)[:300])
     ms = tool("set_my_notification_settings", {"events": {"issue.opened": False}})
@@ -1925,6 +1926,47 @@ r = tool("update_settings", {"key": "google_caps", "value": {**st["google_caps"]
 check("4750" in r or "4,750" in r, "a month above 95 % of the free 5,000 is refused", r)
 tool("update_settings", {"key": "google_caps", "value": st["google_caps"]})
 
+print("\n== 6g. Phase 7, Part 3: a request planned like a task (§34), approved with its stops ==")
+rq = tool("create_request", {"date": day(6), "start": {"place": "Head office", "passengers": True},
+                             "stops": [{"type": "visit", "place": "Kurunegala tower site", "dwell_min": 45},
+                                       {"type": "drop", "place": "Galle", "arrive_by": "16:00"}],
+                             "pax": 3, "note": "6g trip"})["request"]
+items = rq.get("trip", {}).get("timeline", {}).get("items", [])
+check(rq["kind"] == "request" and len(rq["trip"]["stops"]) == 3 and rq["trip"]["stops"][0].get("is_start") and rq["trip"]["leave_by_source"] == "plan"
+      and [i["kind"] for i in items].count("stop") == 3 and rq["route"].startswith("Head office") and rq["route"].endswith("Galle"),
+      "create_request with stops: the trip planned from the 16:00 deadline (start, three stops, the timeline); From and To from the stops",
+      json.dumps(rq)[:400])
+check(len(rq["fields"]["stops"]) == 2 and rq["fields"]["start"]["passengers"] is True and "leave_by" not in rq["fields"]
+      and rq["fields"]["stops"][0]["dwell_min"] == 45 and rq["fields"]["stops"][1]["arrive_by"] == "16:00",
+      "the card's fields hand the trip back to the edit form (the start with passengers, the stops, no typed leave time)", json.dumps(rq["fields"])[:300])
+check(psql(f"select count(*) from request_stops where request_id = '{rq['id']}' and removed_at is null") == "3", "three request stops stored")
+dq = tool("decide_request", {"request_id": rq["id"], "decision": "approve", "driver": "kasun.s", "vehicle": "car1182"})
+names = psql(f"select string_agg(place_name, ' | ' order by seq) from task_stops where task_id = '{dq['task_id']}'")
+wanted = psql(f"select string_agg(place_name, ' | ' order by seq) from request_stops where request_id = '{rq['id']}' and removed_at is null")
+check(names == wanted and psql(f"select leave_by = (select leave_by from vehicle_requests where id = '{rq['id']}') from tasks where id = '{dq['task_id']}'") == "t",
+      "approving copies the stops into the task with nothing retyped, at the planned leave-by", f"{names} / {wanted}")
+check(psql(f"select status || '|' || (task_id = '{dq['task_id']}') from vehicle_requests where id = '{rq['id']}'") == "approved|true", "the request is approved and linked")
+# An edit while it waits: the stops replaced (the old ones kept as removed), still waiting.
+rq2 = tool("create_request", {"date": day(6), "time": "08:30", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]})["request"]
+up = tool("update_request", {"request_id": rq2["id"], "version": rq2["version"],
+                             "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "Kurunegala tower site"}, {"type": "drop", "place": "Kandy"}]})
+check(up["request"]["status"] == "waiting" and len(up["request"]["trip"]["stops"]) == 3 and "stops" in up["changes"]
+      and psql(f"select count(*) filter (where removed_at is null) || '/' || count(*) from request_stops where request_id = '{rq2['id']}'") == "3/5",
+      "update_request with new stops: planned again, still waiting; the old stops kept as removed", json.dumps(up["changes"])[:300])
+# An approved booking edited with stops: changed, then kept: the task takes the stops.
+dq2 = tool("decide_request", {"request_id": rq2["id"], "decision": "approve", "driver": "kasun.s", "vehicle": "car1182"})
+cur = tool("list_requests", {"status": "all", "id": rq2["id"]})["requests"][0]
+up2 = tool("update_request", {"request_id": rq2["id"], "version": cur["version"],
+                              "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Galle"}]})
+check(up2["request"]["status"] == "changed" and up2["needs_reapproval"], "an approved booking edited with new stops needs re-approval", json.dumps(up2)[:200])
+kept = tool("redecide_request", {"request_id": rq2["id"], "version": up2["request"]["version"], "decision": "keep"})
+check(psql(f"select string_agg(place_name, ' | ' order by seq) from task_stops where task_id = '{dq2['task_id']}' and status <> 'removed'") == "Head office, Colombo 05 | Galle"
+      and "stops" in kept["task"]["changes"],
+      "kept: the task takes the request's new stops (the old pending ones removed)", psql(f"select string_agg(place_name || ':' || status, ' | ' order by seq) from task_stops where task_id = '{dq2['task_id']}'"))
+r = tool("create_request", {"date": day(6), "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]}, expect_error=True)
+check("arrive_by" in r, "a trip needs the leave time or a stop's arrive_by", r)
+check(tool("get_settings")["settings"]["tasks_need_approval"] is True, "tasks_need_approval is on by default (§33)")
+
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")
     shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
@@ -1944,10 +1986,10 @@ if CHANNEL == "api":
     staff_token = office_sign_in(staff_email, staff_pw, enrol_totp=False)
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["view", "request"]
-          and sorted(me.get("tools", [])) == ["create_request", "find_project", "fleet_overview", "get_settings", "list_drivers", "list_places", "list_requests",
-                                             "list_vehicles", "live_drivers", "my_notification_settings",
-                                             "place_detail", "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
-                                             "set_my_notification_settings", "task_detail", "update_request", "watch_drivers"]
+          and sorted(me.get("tools", [])) == ["cancel_request", "create_request", "find_project", "fleet_overview", "get_settings", "google_place",
+                                             "list_drivers", "list_places", "list_requests", "list_vehicles", "live_drivers", "my_notification_settings",
+                                             "place_detail", "plan_task", "register_map_load", "register_web_push", "remove_web_push", "save_place",
+                                             "search_places", "set_my_notification_settings", "task_detail", "update_request", "watch_drivers"]
           and me.get("map") == {"package": "open", "places": False},
           "a requester signs in without a second step and sees the request tools plus view's (any permission implies view, Phase 7 §12; the map: open with no keys)",
           f"{code} {str(me)[:200]}")
@@ -1957,7 +1999,7 @@ if CHANNEL == "api":
     check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True, "a requester reads the fleet settings (the request form needs the self-drive switch)", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "my_notification_settings", {})
     check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "task.declined", "task.not_accepted", "vehicle.booked", "vehicle.booking_cancelled",
-                                                                          "request.redecided", "booking.changed"],
+                                                                          "request.redecided", "booking.changed", "request.not_decided"],
           "a requester's notification settings hold their request events (with a task of theirs that needs a driver) and the three booking events", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})
     check(code == 200 and body["result"]["count"] == 0, "staff see none of the office's requests", f"{code} {str(body)[:160]}")
@@ -2000,6 +2042,55 @@ if CHANNEL == "api":
     check(code == 403, "mileage needs the vehicles permission (403)", f"{code} {str(body)[:120]}")
     code, body = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})
     check(code == 200 and body["result"]["leave_by_source"] == "manual", "with assign_tasks they can plan a task", f"{code} {str(body)[:160]}")
+    # Phase 7 (§33): without approve, a new task waits for the fleet admin's OK.
+    code, body = api_call(staff_token, "create_task", {"title": "6g proposed drop", "date": day(7), "start_time": "09:00", "driver": "nuwan.p", "vehicle": "cab4521",
+                                                       "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]})
+    prop = body.get("result", {})
+    check(code == 200 and prop.get("waiting_for_approval") is True and "task_id" not in prop and prop.get("request_id")
+          and prop["next"].startswith("Waiting for the fleet admin's OK") and prop["driver"] == "Nuwan Perera"
+          and psql("select count(*) from tasks where title = '6g proposed drop'") == "0"
+          and psql(f"select kind || '|' || status || '|' || (proposed_employee_id is not null) from vehicle_requests where id = '{prop.get('request_id')}'") == "task|waiting|true",
+          "create_task without approve: proposed (a request of kind task with the driver), no task exists, the driver sees nothing", f"{code} {str(body)[:300]}")
+    code, body = api_call(staff_token, "task_board", {"date": day(7)})
+    wa = body["result"].get("waiting_approval", [])
+    check(code == 200 and any(c["request_id"] == prop["request_id"] and c["driver"] == "Nuwan Perera" and c["stops_count"] == 2 for c in wa)
+          and body["result"]["counts"]["waiting_approval"] >= 1,
+          "task_board: the proposal in the Waiting for approval column", f"{code} {str(wa)[:300]}")
+    code, body = api_call(staff_token, "list_requests", {"status": "waiting", "kind": "task"})
+    pc = next((c for c in body["result"]["requests"] if c["id"] == prop["request_id"]), {})
+    check(code == 200 and pc.get("kind") == "task" and pc.get("proposed", {}).get("driver") == "Nuwan Perera" and pc.get("title") == "6g proposed drop"
+          and len(pc.get("trip", {}).get("stops", [])) == 2,
+          "list_requests: the proposer sees their proposal with the driver, vehicle and trip", f"{code} {str(pc)[:300]}")
+    sent = tool("decide_request", {"request_id": prop["request_id"], "decision": "approve"})
+    check(sent.get("as_proposed") is True and sent.get("task_id") and sent["driver"] == "Nuwan Perera"
+          and psql(f"select status || '|' || (sent_at is not null) || '|' || coalesce(created_by, '') from tasks where id = '{sent['task_id']}'") == "assigned|true|Test Staff"
+          and psql(f"select count(*) from task_stops where task_id = '{sent['task_id']}'") == "2",
+          "decide_request with nothing changed: sent as proposed (the task made now, sent now, the proposer as its creator)", json.dumps(sent)[:300])
+    code, body = api_call(staff_token, "create_task", {"title": "6g proposal two", "date": day(7), "start_time": "10:00", "driver": "nuwan.p", "vehicle": "cab4521",
+                                                       "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Galle"}]})
+    p2 = body["result"]["request_id"]
+    changed = tool("decide_request", {"request_id": p2, "decision": "approve", "driver": "kasun.s", "vehicle": "car1182", "leave_by": "11:00"})
+    check(changed.get("as_proposed") is False and changed["driver"] == "Kasun Silva" and changed["leave_by"].endswith("11:00"),
+          "the approver changes the driver and the time: sent changed, planned again", json.dumps(changed)[:300])
+    code, body = api_call(staff_token, "create_task", {"title": "6g proposal three", "date": day(7), "start_time": "12:00", "driver": "nuwan.p", "vehicle": "cab4521",
+                                                       "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Matara"}]})
+    p3 = body["result"]["request_id"]
+    no = tool("decide_request", {"request_id": p3, "decision": "decline", "reason": "No driver free that day"})
+    check(no["request"]["status"] == "declined" and psql("select count(*) from tasks where title = '6g proposal three'") == "0",
+          "declined with a reason: no task", json.dumps(no)[:200])
+    code, body = api_call(staff_token, "create_task", {"title": "6g proposal four", "date": day(7), "start_time": "13:00", "driver": "nuwan.p", "vehicle": "cab4521",
+                                                       "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]})
+    p4 = body["result"]["request_id"]
+    code, body = api_call(staff_token, "cancel_request", {"request_id": p4, "reason": "Not needed after all"})
+    check(code == 200 and psql(f"select status from vehicle_requests where id = '{p4}'") == "cancelled", "the proposer withdraws their own waiting proposal (§35 17)", f"{code} {str(body)[:200]}")
+    code, body = api_call(staff_token, "cancel_request", {"request_id": rq["id"], "reason": "Not mine"})
+    check(code == 409 and "not yours" in body.get("error", ""), "but not someone else's request (409)", f"{code} {body}")
+    tool("update_settings", {"key": "tasks_need_approval", "value": False})
+    code, body = api_call(staff_token, "create_task", {"title": "6g direct", "date": day(7), "start_time": "14:00", "driver": "nuwan.p", "vehicle": "cab4521",
+                                                       "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]})
+    check(code == 200 and body["result"].get("task_id") and not body["result"].get("waiting_for_approval"),
+          "with the setting off, their task goes straight to the driver", f"{code} {str(body)[:200]}")
+    tool("update_settings", {"key": "tasks_need_approval", "value": True})
     code, body = api_call(staff_token, "update_settings", {"key": "buffer_min", "value": 10})
     check(code == 403 and "users" in str(body.get("needs", [])), "but not change the fleet settings (403, needs users)", f"{code} {body}")
     code, body = api_call(staff_token, "get_settings", {})
@@ -2014,9 +2105,11 @@ if CHANNEL == "api":
           "and the overview's needs-attention holds task issues only", f"{code} {str(body['result'].get('needs_attention'))[:200]}")
     tool("update_office_user", {"email": staff_email, "permissions": ["request"]})
     code, body = api_call(staff_token, "get_settings", {})
-    code2, body2 = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle"})
-    check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True and code2 == 403,
-          "a requester reads the settings (the request form needs the self-drive switch) but cannot plan a task (403)", f"{code} {code2}")
+    code2, body2 = api_call(staff_token, "plan_task", {"date": day(3), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Galle",
+                                                       "driver": "nuwan.p"})
+    check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True and code2 == 200 and "conflicts" not in body2["result"]
+          and "vehicle_used" not in body2["result"],
+          "a requester reads the settings and plans their trip (Phase 7 §34), with no driver, vehicle or conflicts in the answer", f"{code} {code2} {str(body2)[:200]}")
     tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "assign_tasks"]})
     code, body = api_call(API_TOKEN, "update_office_user", {"email": admin_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
     check(code == 409 and "own users permission" in body.get("error", ""), "an admin cannot remove their own users permission (409)", f"{code} {body}")

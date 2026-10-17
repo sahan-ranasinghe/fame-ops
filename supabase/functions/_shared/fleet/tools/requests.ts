@@ -379,7 +379,8 @@ export const createRequest = tool({
     const neededAt = trip ? trip.leaveBy : utcIso(args.date, args.time!);
     const backBy = args.back_by ? utcIso(args.date, args.back_by) : null;
     if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than the leave time on the same day.");
-    const firstStop = trip?.stops.find((s) => !s.is_start) ?? trip?.stops[0];
+    // From is where the passengers first get in (the start, when they get in there), To the last stop.
+    const firstStop = trip?.stops[0];
     const lastStop = trip?.stops[trip.stops.length - 1];
 
     if (args.driver_required === false && !settingsNow.self_drive_allowed) throw new ToolError(SELF_DRIVE_OFF);
@@ -1041,7 +1042,7 @@ export const bookVehicle = tool({
       needed_at: neededAt,
       back_by: backBy,
       route_from: args.stops
-        ? prepared.stops.find((x) => !x.is_start)?.place_name ?? prepared.stops[0].place_name
+        ? prepared.stops[0].place_name
         : args.route_from ?? null,
       route_to: args.stops
         ? (prepared.stops.length > 1 ? prepared.stops[prepared.stops.length - 1].place_name : null)
@@ -1356,7 +1357,7 @@ export const updateRequest = tool({
     if (!driverRequired && !(await loadSettings(db)).self_drive_allowed) throw new ToolError(SELF_DRIVE_OFF);
 
     const before = snapshot(request);
-    const tripFrom = trip ? trip.stops.find((x) => !x.is_start)?.place_name ?? trip.stops[0].place_name : undefined;
+    const tripFrom = trip ? trip.stops[0].place_name : undefined;
     const tripTo = trip && trip.stops.length > 1 ? trip.stops[trip.stops.length - 1].place_name : undefined;
     const after: RequestFields = {
       needed_at: neededAt,
