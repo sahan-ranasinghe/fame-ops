@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useEntry } from "../data/hooks";
-import { subscribeIssues } from "../data/realtime";
 import type { IssuesList, Overview } from "../data/types";
 import { bellCount, severityTone } from "../screens/issuesLogic";
 import { longDate, today } from "../lib/format";
@@ -17,7 +16,7 @@ const BELL_ARGS = { status: "active", limit: 10 };
 
 /** The bell: how many issues are open or in progress, the newest ten in a dropdown. */
 function Bell() {
-  const { me, store, noConnector } = useFleet();
+  const { me, store, noConnector, realtime } = useFleet();
   const show = !noConnector && can(me, ...ISSUES_NEED);
   const entry = useEntry<IssuesList>("issues");
   const [open, setOpen] = useState(false);
@@ -32,14 +31,16 @@ function Bell() {
   useEffect(() => {
     if (!show) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    return subscribeIssues(() => {
+    // Web only: the artifact has no Realtime (its build carries no Supabase code).
+    if (!realtime?.issues) return;
+    return realtime.issues(() => {
       if (timer) return;
       timer = setTimeout(() => {
         timer = null;
         void store.load("issues", "list_issues", BELL_ARGS);
       }, 1000);
     });
-  }, [store, show]);
+  }, [store, show, realtime]);
   useEffect(() => setOpen(false), [pathname]);
 
   if (!show) return null;
@@ -74,21 +75,23 @@ function Bell() {
  * within a second, since declining and the end of the accept window open an issue.
  */
 function NeedsDriverBanner() {
-  const { me, store, noConnector } = useFleet();
+  const { me, store, noConnector, realtime } = useFleet();
   const overview = useEntry<Overview>("overview");
   const { pathname, search } = useLocation();
   const show = !noConnector && can(me, "approve", "assign_tasks");
   useEffect(() => {
     if (!show) return;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    return subscribeIssues(() => {
+    // Web only: the artifact has no Realtime (its build carries no Supabase code).
+    if (!realtime?.issues) return;
+    return realtime.issues(() => {
       if (timer) return;
       timer = setTimeout(() => {
         timer = null;
         void store.load("overview", "fleet_overview", {});
       }, 1000);
     });
-  }, [store, show]);
+  }, [store, show, realtime]);
   const count = overview.data?.needs_driver?.count ?? 0;
   // Not on the needs-a-driver list itself (it is the list the banner opens).
   if (!show || count === 0 || !(pathname === "/tasks" || pathname.startsWith("/tasks/"))) return null;

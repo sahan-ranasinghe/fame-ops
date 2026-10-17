@@ -74,4 +74,9 @@ export const ALL_TOOLS = [
   "plan_task", "update_task_stops", "get_settings", "update_settings", "routing_usage", "list_issues", "update_issue", "issue_history",
   "my_notification_settings", "set_my_notification_settings", "register_web_push", "remove_web_push",
   "availability", "update_request", "redecide_request", "update_task", "list_fuel",
+  "duty_log", "clock_out_driver", "move_driver_vehicle", "swap_reading", "reopen_task",
+  // Phase 7, Part 3: photos and documents (the upload tools photo_upload_url and vehicle_document_upload_url are the
+  // web app's only, so neither the connector nor the artifact has them).
+  "set_driver_photo", "set_vehicle_photo", "save_vehicle_document", "vehicle_documents", "remove_vehicle_document",
+  "restore_vehicle_document",
 ];

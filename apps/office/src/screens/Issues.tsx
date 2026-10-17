@@ -6,7 +6,6 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useWatch } from "../data/hooks";
-import { subscribeIssues } from "../data/realtime";
 import type { IssuesList } from "../data/types";
 import { attIcon } from "../lib/format";
 import { Chips, Empty, ErrBox, Loading, Pill, Plate, StaleNote } from "../ui/basics";
@@ -16,7 +15,7 @@ import { filterIssues, filterOptions, type IssueTab, kindText, severityTone, sta
 export const ISSUES_ARGS = { status: "all", limit: 200 };
 
 export default function Issues() {
-  const { store, noConnector, managePermissions } = useFleet();
+  const { store, noConnector, managePermissions, realtime } = useFleet();
   const [params, setParams] = useSearchParams();
   const tab = (TABS.some(([k]) => k === params.get("tab")) ? params.get("tab") : "open") as IssueTab;
   const [kind, setKind] = useState("");
@@ -26,14 +25,16 @@ export default function Issues() {
   // Web: a change on the table reloads the list at once (a sync touches many rows: one reload a second at most).
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
-    return subscribeIssues(() => {
+    // Web only: the artifact has no Realtime (its build carries no Supabase code).
+    if (!realtime?.issues) return;
+    return realtime.issues(() => {
       if (timer) return;
       timer = setTimeout(() => {
         timer = null;
         void store.load("issuesAll", "list_issues", ISSUES_ARGS);
       }, 1000);
     });
-  }, [store]);
+  }, [store, realtime]);
 
   const all = entry.data?.issues ?? [];
   const rows = filterIssues(all, { tab, kind: kind || undefined, vehicle: vehicle || undefined });

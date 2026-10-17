@@ -22,6 +22,8 @@ export interface Fleet {
     driverPoints?: (employeeId: string, cb: (row: PointRow) => void, onStatus?: (s: "connecting" | "live" | "error") => void) => () => void;
     /** Every new location point of several drivers on one channel (the live map's trails). */
     driversPoints?: (employeeIds: string[], cb: (row: PointRow) => void, onStatus?: (s: "connecting" | "live" | "error") => void) => () => void;
+    /** Any change on the issues table (the bell, the Needs a driver banner and the Issues page reload). */
+    issues?: (cb: () => void) => () => void;
   };
   /** Web build only (Phase 7): a photo or document goes up through the signed upload a tool handed out. None = no upload buttons. */
   files?: { upload: (ticket: UploadTicket, file: Blob, contentType: string) => Promise<void> };

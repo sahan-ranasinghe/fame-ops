@@ -193,8 +193,9 @@ function outcomeOf(r: VehicleRequest, trip: TripOutcome | undefined) {
         task_status: trip.status,
       }
       : undefined,
-    // Only for a person who asked without an office account (they get no pushes): the office tells them.
-    tell_requester: !r.requested_by_employee_id && moment && message
+    // For a person with no office account to push to: the asker typed in by the office, or the person it is for
+    // (on behalf of). The office tells them.
+    tell_requester: (!r.requested_by_employee_id || r.on_behalf_of) && moment && message
       ? { moment, message, whatsapp: tellLink(r.requester_phone, message) }
       : undefined,
   };
@@ -1467,7 +1468,11 @@ export const updateRequest = tool({
       throw new ToolError("This request is not yours to change.");
     }
     checkVersion(request.version, args.version);
-    const next = statusAfterEdit(request.status);
+    // The asker's phone alone (Phase 7, §4) changes nothing about the trip: the status stays, no re-approval, no push.
+    const phoneOnly = Object.keys(args).every((k) => k === "request_id" || k === "version" || k === "requester_phone");
+    const next: { status: string; event: "edited" | "changed"; needs_reapproval: boolean } = phoneOnly
+      ? { status: request.status, event: "edited", needs_reapproval: false }
+      : statusAfterEdit(request.status);
 
     const day = args.date ?? colomboDate(request.needed_at);
     // Phase 7 (§34): a request with its trip is planned again when its stops, start, day or time change.
@@ -1539,8 +1544,9 @@ export const updateRequest = tool({
         to_dwell_min: toDwell,
         status: next.status,
         version: request.version + 1,
-        previous: before as unknown as Json,
-        ...(next.status === "changed" && { changed_at: nowIso, changed_by: actor.name, change_note: diffText(changes) }),
+        // A phone alone keeps the record of an earlier change (what the approver decides again) as it is.
+        ...(!phoneOnly && { previous: before as unknown as Json }),
+        ...(!phoneOnly && next.status === "changed" && { changed_at: nowIso, changed_by: actor.name, change_note: diffText(changes) }),
       }).eq("id", request.id).eq("version", request.version).select("*"),
       "vehicle request",
     );
@@ -1563,6 +1569,8 @@ export const updateRequest = tool({
         changes,
         next: next.needs_reapproval
           ? "The approvers were told; the booking keeps its old plan until they decide again (redecide_request)."
+          : phoneOnly
+          ? "The phone is saved."
           : "Still waiting for approval, with the new details.",
       },
       summary: `request ${request.id} edited (${next.status}, version ${request.version + 1}): ${diffText(changes)}`,

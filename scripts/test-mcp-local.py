@@ -1978,6 +1978,16 @@ if CHANNEL == "mcp":
     check(card.get("tell_requester", {}).get("moment") == "approved" and card["tell_requester"]["message"].startswith("Your vehicle for ")
           and card["tell_requester"]["whatsapp"].startswith("https://wa.me/?text="),
           "Tell requester: the approved message, a WhatsApp link that lets the office pick the contact (no phone given)", json.dumps(card.get("tell_requester"))[:300])
+ph = tool("update_request", {"request_id": rq["id"], "version": card["version"], "requester_phone": "077 123 4567"})
+check(ph["request"]["status"] == "approved" and ph["needs_reapproval"] is False and ph["next"] == "The phone is saved."
+      and ph["request"]["requester_phone"] == "077 123 4567",
+      "the asker's phone alone keeps an approved booking approved (no re-approval, no push)", json.dumps({k: ph.get(k) for k in ("needs_reapproval", "next")}))
+ob = tool("book_vehicle", {"on_behalf_of": "A visitor from Dialog", "requester_phone": "071 555 0199", "date": day(6), "time": "15:00",
+                           "route_from": "Head office", "route_to": "Kandy", "driver": "kasun.s", "vehicle": "car1182"})
+obc = tool("list_requests", {"status": "all", "id": ob["request"]["id"]})["requests"][0]
+check(obc.get("tell_requester", {}).get("moment") == "approved" and obc["tell_requester"]["whatsapp"].startswith("https://wa.me/94715550199?text=")
+      and obc.get("requester_phone") == "071 555 0199",
+      "Tell requester for a booking made on behalf of someone without an account: to their phone", json.dumps(obc.get("tell_requester"))[:300])
 lv = tool("list_vehicles")["vehicles"]
 cab = next(v for v in lv if v["reg_no"] == "WP CAB-4521")
 check(cab.get("documents_missing") and "insurance" in cab["documents_missing"] and cab["documents_missing_text"].startswith(f"{len(cab['documents_missing'])} documents missing: ")
