@@ -1270,13 +1270,20 @@ the note.
 
 ## 35. Questions for items 29 and 30, with my defaults
 
+Answered with Part 3's go (Sahan, 17 October): 16 and 17 yes; 18, 19 and 20 yes, with the additions
+in **Decided** below each.
+
 16. The 30-minute "not decided" push also covers ordinary waiting requests, not only proposed tasks.
 17. The person who proposed a task, or asked for a vehicle, may cancel it while it waits
     (`cancel_request` opened to the requester for their own waiting one). Approvers decline.
 18. A proposal whose leave-by passes undecided stays in the queue, marked "Leave-by passed". It is
     never sent by itself.
+    **Decided:** marked late. The approvers get one push when it passes its leave-by
+    (`request.late`, `vehicle_requests.late_push_sent_at`).
 19. Requesters see their request's plan (the times and the map), but never the conflicts, the
     drivers or the vehicles.
+    **Decided:** until it is decided. After approval the requester sees the driver, the vehicle and
+    the photos, as in item 4.
 20. (From the hotfix's check of item 3.) The 5-minute issue check stops asking Google for a running
     task's ETA. It uses openrouteservice or the estimate, or a Google ETA someone's view already
     fetched within 15 minutes. Google is asked only when a person looks at the running task (the
@@ -1284,6 +1291,8 @@ the note.
     - Today it asks Google for every running task every 15 minutes, all day, whether anyone looks or
       not: 4 calls an hour per running task.
     - Five drivers on tasks for 6 hours is 120 of the 215 a day, before any plan is made.
+    **Decided:** a Google ETA only when someone opens a running task, at most once in 15 minutes per
+    task and counted in the caps. The background check uses openrouteservice.
 
 ## As built
 

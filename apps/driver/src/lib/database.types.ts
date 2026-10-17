@@ -3,7 +3,25 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type Database = {
   
-  "public": {
+  "graphql_public": {
+          Tables: {
+            [_ in never]: never
+          }
+          Views: {
+            [_ in never]: never
+          }
+          Functions: {
+            "graphql":
+{ Args: { "extensions"?: Json,"operationName"?: string,"query"?: string,"variables"?: Json }; Returns: Json
+                           }
+          }
+          Enums: {
+            [_ in never]: never
+          }
+          CompositeTypes: {
+            [_ in never]: never
+          }
+        },"public": {
           Tables: {
             "allowance_types": {
                   Row: {
@@ -755,6 +773,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"request_stops": {
+                  Row: {
+                    "address": string | null,"arrive_by": string | null,"created_at": string,"dwell_min": number | null,"dwell_source": string | null,"google_fetched_at": string | null,"google_place_id": string | null,"id": string,"is_start": boolean,"lat": number | null,"lng": number | null,"note": string | null,"place_id": string | null,"place_name": string,"planned_arrive_at": string | null,"planned_depart_at": string | null,"removed_at": string | null,"request_id": string,"seq": number,"type": string,"what": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "address"?: string | null,"arrive_by"?: string | null,"created_at"?: string,"dwell_min"?: number | null,"dwell_source"?: string | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"is_start"?: boolean,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name": string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"request_id": string,"seq": number,"type": string,"what"?: string | null
+                  }
+                  Update: {
+                    "address"?: string | null,"arrive_by"?: string | null,"created_at"?: string,"dwell_min"?: number | null,"dwell_source"?: string | null,"google_fetched_at"?: string | null,"google_place_id"?: string | null,"id"?: string,"is_start"?: boolean,"lat"?: number | null,"lng"?: number | null,"note"?: string | null,"place_id"?: string | null,"place_name"?: string,"planned_arrive_at"?: string | null,"planned_depart_at"?: string | null,"removed_at"?: string | null,"request_id"?: string,"seq"?: number,"type"?: string,"what"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "request_stops_place_id_fkey"
+      columns: ["place_id"]
+isOneToOne: false
+      referencedRelation: "places"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "request_stops_request_id_fkey"
+      columns: ["request_id"]
+isOneToOne: false
+      referencedRelation: "vehicle_requests"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"route_gap_lines": {
                   Row: {
                     "fetched_at": string,"from_lat": number,"from_lng": number,"geometry": NonNullable<Json>,"km": number | null,"provider": string,"to_lat": number,"to_lng": number
@@ -1097,14 +1141,14 @@ isOneToOne: false
                   ]
                 },"vehicle_requests": {
                   Row: {
-                    "back_by": string | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"change_note": string | null,"changed_at": string | null,"changed_by": string | null,"created_at": string,"decided_at": string | null,"decided_by": string | null,"decline_reason": string | null,"driver_required": boolean,"from_dwell_min": number | null,"id": string,"need_type": string | null,"needed_at": string,"note": string | null,"on_behalf_of": string | null,"one_step": boolean,"pax": number | null,"previous": Json | null,"project_id": string | null,"project_label": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"requested_by_user_id": string | null,"route_from": string | null,"route_to": string | null,"seen_at": string | null,"seen_by": string | null,"status": string,"task_id": string | null,"to_dwell_min": number | null,"tools": boolean,"version": number
+                    "avoid_expressway": boolean,"back_by": string | null,"buffer_min": number | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"change_note": string | null,"changed_at": string | null,"changed_by": string | null,"contact_name": string | null,"contact_phone": string | null,"created_at": string,"decide_reminder_sent_at": string | null,"decided_at": string | null,"decided_by": string | null,"decline_reason": string | null,"driver_required": boolean,"from_dwell_min": number | null,"id": string,"kind": string,"label": string | null,"late_push_sent_at": string | null,"leave_by": string | null,"leave_by_source": string | null,"need_type": string | null,"needed_at": string,"note": string | null,"on_behalf_of": string | null,"one_step": boolean,"pax": number | null,"plan_json": Json | null,"previous": Json | null,"project_id": string | null,"project_label": string | null,"projects_json": Json | null,"proposal_json": Json | null,"proposed_employee_id": string | null,"proposed_vehicle_id": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"requested_by_user_id": string | null,"return_to_base": boolean,"route_from": string | null,"route_to": string | null,"seen_at": string | null,"seen_by": string | null,"start_google_fetched_at": string | null,"start_google_place_id": string | null,"start_lat": number | null,"start_lng": number | null,"start_name": string | null,"start_place_id": string | null,"status": string,"task_id": string | null,"task_notes": string | null,"title": string | null,"to_dwell_min": number | null,"tools": boolean,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"version"?: number
+                    "avoid_expressway"?: boolean,"back_by"?: string | null,"buffer_min"?: number | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"decide_reminder_sent_at"?: string | null,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"kind"?: string,"label"?: string | null,"late_push_sent_at"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"plan_json"?: Json | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"projects_json"?: Json | null,"proposal_json"?: Json | null,"proposed_employee_id"?: string | null,"proposed_vehicle_id"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"requested_by_user_id"?: string | null,"return_to_base"?: boolean,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_place_id"?: string | null,"status"?: string,"task_id"?: string | null,"task_notes"?: string | null,"title"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"version"?: number
                   }
                   Update: {
-                    "back_by"?: string | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"created_at"?: string,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"requested_by_user_id"?: string | null,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"status"?: string,"task_id"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"version"?: number
+                    "avoid_expressway"?: boolean,"back_by"?: string | null,"buffer_min"?: number | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"decide_reminder_sent_at"?: string | null,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"kind"?: string,"label"?: string | null,"late_push_sent_at"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"plan_json"?: Json | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"projects_json"?: Json | null,"proposal_json"?: Json | null,"proposed_employee_id"?: string | null,"proposed_vehicle_id"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"requested_by_user_id"?: string | null,"return_to_base"?: boolean,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_place_id"?: string | null,"status"?: string,"task_id"?: string | null,"task_notes"?: string | null,"title"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"version"?: number
                   }
                   Relationships: [
                     {
@@ -1114,10 +1158,28 @@ isOneToOne: false
       referencedRelation: "projects"
       referencedColumns: ["id"]
     },{
+      foreignKeyName: "vehicle_requests_proposed_employee_id_fkey"
+      columns: ["proposed_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "vehicle_requests_proposed_vehicle_id_fkey"
+      columns: ["proposed_vehicle_id"]
+isOneToOne: false
+      referencedRelation: "vehicles"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "vehicle_requests_requested_by_employee_id_fkey"
       columns: ["requested_by_employee_id"]
 isOneToOne: false
       referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "vehicle_requests_start_place_id_fkey"
+      columns: ["start_place_id"]
+isOneToOne: false
+      referencedRelation: "places"
       referencedColumns: ["id"]
     },{
       foreignKeyName: "vehicle_requests_task_id_fkey"
@@ -1192,6 +1254,9 @@ isOneToOne: false
 { Args: { "p_from": string,"p_to": string }; Returns: {
               "employee_id": string,"last_stop_at": string,"stops": number
             }[]
+                           },
+"approve_recipients":
+{ Args: Record<PropertyKey, never>; Returns: (string)[]
                            },
 "bump_minute_calls":
 { Args: { "p_provider": string }; Returns: number
@@ -1311,6 +1376,9 @@ isOneToOne: false
 { Args: { "p_event": string,"p_payload": Json,"p_recipients": (string)[] }; Returns: number
                            },
 "queue_odometer_checks":
+{ Args: Record<PropertyKey, never>; Returns: number
+                           },
+"queue_request_reminders":
 { Args: Record<PropertyKey, never>; Returns: number
                            },
 "queue_task_reminders":
@@ -1472,7 +1540,11 @@ export type CompositeTypes<
   : never
 
 export const Constants = {
-  "public": {
+  "graphql_public": {
+          Enums: {
+            
+          }
+        },"public": {
           Enums: {
             
           }

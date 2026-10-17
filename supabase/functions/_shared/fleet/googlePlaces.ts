@@ -133,9 +133,24 @@ export async function googleContentJob(db: Db, now: Date, fetchFn: Fetcher = fet
     await db.from("tasks").select("id, start_google_place_id").lt("start_google_fetched_at", cut).in("status", ["assigned", "declined"]),
     "google starts",
   );
+  // Phase 7 (§34): a request's stops and start, while it waits or is changed (approving copies them into the task).
+  const reqStops = unwrap(
+    await db.from("request_stops").select("id, google_place_id, vehicle_requests!inner(status)")
+      .lt("google_fetched_at", cut).is("removed_at", null).in("vehicle_requests.status", ["waiting", "changed"]),
+    "google request stops",
+  );
+  const reqStarts = unwrap(
+    await db.from("vehicle_requests").select("id, start_google_place_id").lt("start_google_fetched_at", cut).in("status", [
+      "waiting",
+      "changed",
+    ]),
+    "google request starts",
+  );
   const ids = new Set<string>([
     ...stops.map((s) => s.google_place_id).filter((x): x is string => !!x),
     ...starts.map((t) => t.start_google_place_id).filter((x): x is string => !!x),
+    ...reqStops.map((s) => s.google_place_id).filter((x): x is string => !!x),
+    ...reqStarts.map((r) => r.start_google_place_id).filter((x): x is string => !!x),
   ]);
   let refreshed = 0;
   const notes = new Set<string>();
@@ -158,6 +173,24 @@ export async function googleContentJob(db: Db, now: Date, fetchFn: Fetcher = fet
         .eq("start_google_place_id", id).in("id", starts.filter((t) => t.start_google_place_id === id).map((t) => t.id)),
       "google starts",
     );
+    const rs = reqStops.filter((s) => s.google_place_id === id).map((s) => s.id);
+    if (rs.length) {
+      unwrap(
+        await db.from("request_stops").update({ lat: p.lat, lng: p.lng, google_fetched_at: p.fetched_at }).eq("google_place_id", id).in(
+          "id",
+          rs,
+        ),
+        "google request stops",
+      );
+    }
+    const rq = reqStarts.filter((r) => r.start_google_place_id === id).map((r) => r.id);
+    if (rq.length) {
+      unwrap(
+        await db.from("vehicle_requests").update({ start_lat: p.lat, start_lng: p.lng, start_google_fetched_at: p.fetched_at })
+          .eq("start_google_place_id", id).in("id", rq),
+        "google request starts",
+      );
+    }
   }
   const pruned = unwrap(await db.rpc("prune_google_content", {}), "google prune");
   return { places: ids.size, refreshed, notes: [...notes], pruned };

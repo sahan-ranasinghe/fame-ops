@@ -4,8 +4,11 @@
 // and recomputed at most every 2 minutes per task, so the board, the task
 // drawer and the live map can all ask for it. Under the google package one
 // Routes call answers every remaining leg (traffic now); that ETA stands 15
-// minutes, so a Live page refreshing every 30 seconds costs at most 4 calls an
-// hour per running task; refused or failed, the open chain answers.
+// minutes. Google is asked only when someone opens the running task
+// (task_detail, `google: true`; Sahan, 17 October 2026): the board, Live, Who's
+// available and the 5-minute issue check reuse a Google ETA under 15 minutes
+// old, else take openrouteservice. So at most 4 calls an hour per task, and
+// only while someone looks at it; refused or failed, the open chain answers.
 
 import type { Db, Row } from "./db.ts";
 import { unwrap, unwrapMaybe } from "./db.ts";
@@ -45,17 +48,35 @@ export async function basePoint(db: Db, settings: Settings): Promise<{ id: strin
 }
 
 /**
+ * Whether a cached ETA answers (Phase 7, §35 20): a Google one for 15 minutes, to everyone; an open one for 2 minutes,
+ * except to a person opening the task while Google may be asked.
+ */
+export function cachedEtaServes(source: string | null, ageMs: number, askGoogle: boolean): boolean {
+  return source === "google" ? ageMs < GOOGLE_ETA_MS : ageMs < ETA_CACHE_MS && !askGoogle;
+}
+
+/**
  * The ETA of a running task, or null when there is nothing to say (not running,
  * no position, no open stop). Reads the cache first.
  */
-export async function taskEta(db: Db, task: Task, stops: Stop[], latest: Latest, settings: Settings, now: Date): Promise<Eta | null> {
+export async function taskEta(
+  db: Db,
+  task: Task,
+  stops: Stop[],
+  latest: Latest,
+  settings: Settings,
+  now: Date,
+  /** google: someone opened the running task, so Google may be asked (at most once in 15 minutes per task). */
+  ask: { google?: boolean } = {},
+): Promise<Eta | null> {
   if (task.status !== "in_progress" || !latest || latest.lat == null || latest.lng == null) return null;
   const open = stops.filter((s) => s.status === "pending" || s.status === "arrived").sort((a, b) => a.seq - b.seq);
   if (open.length === 0) return null;
 
   const cached = unwrapMaybe(await db.from("task_eta").select("*").eq("task_id", task.id).maybeSingle(), "task eta");
   const age = cached ? now.getTime() - new Date(cached.computed_at).getTime() : Infinity;
-  if (cached && (age < ETA_CACHE_MS || (cached.source === "google" && age < GOOGLE_ETA_MS))) {
+  const askGoogle = ask.google === true && googleUse(settings).routes;
+  if (cached && cachedEtaServes(cached.source, age, askGoogle)) {
     return {
       next_seq: cached.next_seq,
       next_eta_at: cached.next_eta_at,
@@ -74,7 +95,7 @@ export async function taskEta(db: Db, task: Task, stops: Stop[], latest: Latest,
   const opts = { avoid_expressway: task.avoid_expressway };
   const base = task.return_to_base ? await basePoint(db, settings) : null;
   let legFn: LegFn = (from, to, departAt, o) => legMinutes(db, from, to, departAt, o, settings);
-  if (googleUse(settings).routes) {
+  if (askGoogle) {
     const points: PlanPoint[] = [prev];
     for (const stop of open) {
       if (stop.status !== "arrived" && stop.lat != null && stop.lng != null) points.push({ lat: stop.lat, lng: stop.lng });

@@ -52,6 +52,7 @@ const ANY: readonly Permission[] = PERMISSIONS;
  * Some tools answer less to some holders (the "own rows" rules in the tools themselves):
  *   list_requests   every request with approve; otherwise the person's own
  *   update_request  any request with approve; otherwise the person's own
+ *   cancel_request  any request with approve; otherwise the person's own while it waits
  *   task_detail     any task with assign_tasks; a request's task with approve; an own request's task with request
  *   fleet_overview  needs_attention: every item with issues, the task items with assign_tasks, otherwise none
  */
@@ -68,7 +69,8 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   suggest_vehicles: AA,
   decide_request: ["approve"],
   book_vehicle: ["approve"],
-  cancel_request: ["approve"],
+  // The person who asked may cancel their own waiting request or proposal (§35 17); approvers any.
+  cancel_request: ["approve", "request", "assign_tasks"],
   update_request: ["request", "approve"],
   redecide_request: ["approve"],
   availability: AA,
@@ -78,7 +80,8 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   create_task: ["assign_tasks"],
   reassign_task: ["assign_tasks"],
   cancel_task: ["assign_tasks"],
-  plan_task: AA,
+  // Phase 7 (§34): requesters plan their trip too (no conflicts without a driver).
+  plan_task: ["approve", "assign_tasks", "request"],
   update_task_stops: ["assign_tasks"],
   update_task: ["assign_tasks"],
   // Phase 7, Part 1: a driver's day. The duty log and the office's clock-out / move belong to who runs the
@@ -115,7 +118,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   undo_place_import: ["vehicles"],
   // Part 5: the Google package. A Google pick for a stop or a start (the forms that place stops: a task's,
   // a booking's); the map load the web records before Google's map loads (anyone who sees a map or a pin).
-  google_place: AA,
+  google_place: ["approve", "assign_tasks", "request"],
   register_map_load: ANY,
   // Part 5b: a reached Google stop saved as one of our places at the driver's arrival point.
   save_arrival_place: ["vehicles", "assign_tasks"],

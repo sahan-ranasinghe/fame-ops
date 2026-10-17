@@ -60,6 +60,7 @@ Deno.test("the Settings page shows a person the events their permissions can bri
     "vehicle.booking_cancelled",
     "request.redecided",
     "booking.changed",
+    "request.not_decided",
   ]);
   assertEquals(relevantEvents(["view", "request", "assign_tasks"]).map((e) => e.event), [
     "request.decided",
@@ -71,6 +72,7 @@ Deno.test("the Settings page shows a person the events their permissions can bri
     "vehicle.booking_cancelled",
     "request.redecided",
     "booking.changed",
+    "request.not_decided",
   ]);
   assertEquals(relevantEvents(["view", "request", "approve", "assign_tasks", "vehicles", "issues"]).length, EVENTS.length);
 });
@@ -106,4 +108,9 @@ Deno.test("a changed booking goes to the approvers; the redecision to the reques
   ]);
   assertEquals(recipientsFor("booking.changed", people, { requester: "staff", custodian: "staff", actor: "boss" }), ["staff"]);
   assertEquals(recipientsFor("booking.changed", people, { custodian: null, requester: null }), []);
+});
+
+Deno.test("Phase 7 (§33): not decided 30 minutes before leaving goes to the approvers and the person who asked; late only to the approvers", () => {
+  assertEquals(recipientsFor("request.not_decided", people, { requester: "dispatcher" }), ["boss", "fleet", "dispatcher"]);
+  assertEquals(recipientsFor("request.late", people, { requester: "dispatcher" }), ["boss", "fleet"]);
 });

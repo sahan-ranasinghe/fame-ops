@@ -32,6 +32,8 @@ export interface Settings {
   rush_hour: RushHour;
   /** Off = every booking needs a driver: the "A driver is needed" box and the custodian-drives path are hidden. */
   self_drive_allowed: boolean;
+  /** Phase 7 (§33): a task made by someone without the approve permission waits for an approver before it is sent. */
+  tasks_need_approval: boolean;
   /** Snap to roads under the open package: none or osrm (secret OSRM_URL); under the google package Google's Roads API is used (google_caps.roads; 0 = off) and this is not read. */
   map_matching: { provider: MapMatchingProvider };
   /** The driver app's "At work? Start work" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
@@ -114,6 +116,7 @@ export const SETTINGS_DEFAULTS: Settings = {
     bands: [{ days: [1, 2, 3, 4, 5], from: "07:00", to: "09:30" }, { days: [1, 2, 3, 4, 5], from: "16:30", to: "19:00" }],
   },
   self_drive_allowed: true,
+  tasks_need_approval: true,
   map_matching: { provider: "none" },
   shift_start: "08:00",
   shift_days: [1, 2, 3, 4, 5],
@@ -161,6 +164,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   rush_hour: "Rush hour: the factor on legs that start or end within the radius of the centre during the bands (weekdays)",
   self_drive_allowed:
     "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
+  tasks_need_approval:
+    "New tasks need the fleet admin's OK: a task made by someone without the approve permission waits in the approval queue (Requests) with the proposed driver and vehicle, and is sent to the driver only when approved (off = sent at once)",
   map_matching:
     "Snap to roads under the open package: provider none or osrm (self-hosted, secret OSRM_URL); under the google package Google's Roads API snaps the web's Google map instead (its caps in google_caps.roads, 0 = off) and this setting is not read; km stay from the odometer",
   shift_start: 'The driver app\'s shift nudge ("At work? Start work"): the time of day, HH:MM, shown only to a driver who is off duty',
@@ -227,6 +232,9 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       return number(value, key, 1, 1440, true);
     case "self_drive_allowed":
       if (typeof value !== "boolean") throw new ToolError("self_drive_allowed: true or false.");
+      return value;
+    case "tasks_need_approval":
+      if (typeof value !== "boolean") throw new ToolError("tasks_need_approval: true or false.");
       return value;
     case "shift_start":
       if (!isTime(value)) throw new ToolError("shift_start: a time of day, HH:MM.");

@@ -47,6 +47,8 @@ import { estimateLegFn, googleLegs, legFnFor, memoLegFn, providerFromEnv } from 
 import { googleUse } from "../google.ts";
 import { notifyEvent } from "../notifications.ts";
 import { shortName } from "../names.ts";
+import { logRequestEvent, requester } from "./requestCore.ts";
+import { requestStopsOf, saveRequestTrip } from "./requestTrip.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
 import type { Actor } from "../roles.ts";
 import { loadSettings, type Settings } from "../settings.ts";
@@ -589,7 +591,7 @@ export function stopLabel(n: number, s: { type: string; place_name: string }): s
   return `Stop ${n} · ${STOP_TYPE[s.type] ?? s.type} · ${s.place_name}`;
 }
 
-function stopCard(s: ResolvedStop | TaskStop, i?: number) {
+export function stopCard(s: ResolvedStop | TaskStop, i?: number) {
   return {
     n: i !== undefined ? i + 1 : undefined,
     label: i !== undefined ? stopLabel(i + 1, s) : undefined,
@@ -963,10 +965,122 @@ const planFields = {
   buffer_min: z.number().int().min(0).max(600).optional().describe("Arrive this early before a deadline. Default: the fleet setting"),
 };
 
+/**
+ * A task proposed by someone without the approve permission (Phase 7, §33): a request of kind 'task' with the proposed
+ * driver and vehicle, the whole trip (request_stops) and the plan, warnings and conflicts as the proposer saw them. No
+ * task row exists until an approver sends it (decide_request), so the driver sees nothing and no accept window runs.
+ */
+async function proposeTask(db: Db, now: Date, actor: Actor, p: {
+  args: {
+    title: string;
+    label?: string;
+    passengers?: number;
+    contact_name?: string;
+    contact_phone?: string;
+    notes?: string;
+    return_to_base?: boolean;
+    avoid_expressway?: boolean;
+    buffer_min?: number;
+  };
+  driver: Employee;
+  vehicle: Vehicle;
+  picked: { why?: string; choice: VehicleChoice | null };
+  prepared: Awaited<ReturnType<typeof prepareTask>>;
+  startAt: string;
+  endBy: string | null;
+  split: Split;
+  warnings: string[];
+  conflicts: Conflict[];
+}) {
+  const { args, driver, vehicle, prepared } = p;
+  const who = await requester(db, actor, undefined);
+  const first = prepared.stops[0];
+  const last = prepared.stops[prepared.stops.length - 1];
+  const row = unwrap(
+    await db.from("vehicle_requests").insert({
+      kind: "task",
+      requested_by_name: who.name,
+      requested_by_employee_id: who.employeeId,
+      requested_by_user_id: who.userId,
+      project_id: p.split.rows.length === 1 ? p.split.rows[0].project_id : null,
+      project_label: p.split.label ?? null,
+      needed_at: p.startAt,
+      back_by: p.endBy,
+      route_from: first.place_name,
+      route_to: prepared.stops.length > 1 ? last.place_name : null,
+      pax: args.passengers ?? null,
+      driver_required: true,
+      proposed_employee_id: driver.id,
+      proposed_vehicle_id: vehicle.id,
+      title: args.title,
+      label: args.label ?? p.split.label ?? null,
+      contact_name: args.contact_name ?? null,
+      contact_phone: args.contact_phone ?? null,
+      task_notes: args.notes ?? null,
+      projects_json: { rows: p.split.rows, shown: p.split.shown, label: p.split.label } as unknown as Json,
+      proposal_json: {
+        warnings: p.warnings,
+        conflicts: p.conflicts,
+        vehicle_why: p.picked.why ?? null,
+        vehicle_choice: p.picked.choice,
+      } as unknown as Json,
+    }).select("*").single(),
+    "vehicle request",
+  );
+  await saveRequestTrip(db, row.id, {
+    start: prepared.start,
+    stops: prepared.stops,
+    plan: prepared.plan,
+    returnToBase: args.return_to_base ?? false,
+    avoidExpressway: args.avoid_expressway ?? false,
+    leaveBy: prepared.leaveBy,
+    leaveBySource: prepared.leaveBySource,
+    bufferMin: args.buffer_min ?? null,
+  }, now);
+  await logRequestEvent(db, row.id, "created", actor.name, { at: row.created_at, note: `Proposed: ${driver.name} · ${vehicle.reg_no}` });
+  const route = `${first.place_name}${prepared.stops.length > 1 ? ` → ${last.place_name}` : ""}`;
+  await notifyEvent(db, "request.created", {
+    title: `Task to approve · ${actor.name} proposes ${driver.name}`,
+    body: [colomboDayTime(p.startAt), route].join(" · "),
+    url: `/requests/${row.id}/decide`,
+    tag: `request:${row.id}`,
+  }, { actor: actor.employeeId });
+  const names = new Map(prepared.stops.map((s) => [s.seq, s.place_name]));
+  return {
+    result: {
+      waiting_for_approval: true,
+      request_id: row.id,
+      request: { id: row.id, kind: "task", status: "waiting", when: colomboDayTime(p.startAt), route },
+      title: args.title,
+      when: colomboDayTime(p.startAt),
+      until: p.endBy ? colomboTime(p.endBy) : undefined,
+      leave_by: colomboDayTime(prepared.leaveBy),
+      leave_by_source: prepared.leaveBySource,
+      driver: driver.name,
+      vehicle: vehicle.reg_no,
+      vehicle_used: p.picked.why ? { reg_no: vehicle.reg_no, why: p.picked.why } : undefined,
+      vehicle_changed: vehicleChoiceText(p.picked.choice),
+      pickup: first.place_name,
+      dropoff: prepared.stops.length > 1 ? last.place_name : undefined,
+      stops: prepared.stops.map(stopCard),
+      plan: planSummary(prepared.plan, names),
+      timeline: planTimeline(prepared.plan, prepared.stops),
+      projects: p.split.shown.length > 0 ? p.split.shown : "Fame internal (no project)",
+      warnings: p.warnings,
+      conflicts: p.conflicts.length ? p.conflicts : undefined,
+      next: "Waiting for the fleet admin's OK · you'll be notified.",
+    },
+    summary: `proposed task (request ${row.id}): ${args.title}, leave by ${colomboDateTime(prepared.leaveBy)}, ${driver.name}, ` +
+      `${vehicle.reg_no}, ${prepared.stops.length} stops: waiting for approval`,
+  };
+}
+
 export const createTask = tool({
   name: "create_task",
   title: "Assign a task",
-  description: "Creates a task with its stops and sends it to the driver's app. The leave-by time is planned from the stops' arrive_by " +
+  description: "Creates a task with its stops and sends it to the driver's app. When the setting tasks_need_approval is on and you " +
+    "lack the approve permission, the task is proposed instead: it waits in the approval queue (waiting_for_approval, request_id) " +
+    "and decide_request sends it. The leave-by time is planned from the stops' arrive_by " +
     "deadlines (road time, dwell at each stop, the buffer), or taken from start_time / leave_by. Returns the plan and warnings (never " +
     "blocks): vehicle or driver already booked, vehicle over its monthly km allowance or in the garage, expired document, a deadline " +
     "that cannot be met, a stop without a map pin. Read the warnings to the user.",
@@ -1005,6 +1119,11 @@ export const createTask = tool({
     const { warnings, conflicts } = await assignCheck(db, { driver, vehicle, startAt, endBy, plannedEnd: prepared.plan.ends_at });
     warnings.push(...prepared.plan.warnings.map((w) => w.text), ...prepared.notes);
     if (new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
+
+    // Phase 7 (§33): someone without the approve permission proposes the task; it waits for the fleet admin's OK.
+    if (settings.tasks_need_approval && !actor.permissions.includes("approve")) {
+      return await proposeTask(db, now, actor, { args, driver, vehicle, picked, prepared, startAt, endBy, split, warnings, conflicts });
+    }
 
     const saved = await saveTask(db, {
       title: args.title,
@@ -1063,7 +1182,9 @@ export const planTask = tool({
     const warnings = [...prepared.plan.warnings.map((w) => w.text), ...prepared.notes];
     let conflicts: Conflict[] = [];
     let vehicleUsed: { reg_no: string; why: string } | undefined;
-    if (args.driver) {
+    // A requester plans a trip without the driver and vehicle part (Phase 7, §34, §35 19): no conflicts for them.
+    const dispatches = actor.permissions.includes("approve") || actor.permissions.includes("assign_tasks");
+    if (args.driver && dispatches) {
       const refs = await loadRefs(db);
       const driver = activeDriver(refs, args.driver);
       // With a driver and no vehicle, the default one (the driver's today, else the regular one), as saving would use.
@@ -1292,6 +1413,7 @@ export const taskBoard = tool({
   description: "Tasks that need a driver first (needs_driver: declined, or not accepted within the accept window, today and later, " +
     "with the reason, minutes to the start and the best free driver), then the day's tasks in four columns (assigned, in progress, " +
     "completed, declined = needs a driver) with status lines such as " +
+    "(and waiting_approval: tasks proposed for the day that wait for an approver, Phase 7 §33) " +
     '"Seen by driver 10:42", "Accepted 10:50", "Sent · not opened yet", "Declined (Vehicle problem)", "Started 07:06 · sharing location", ' +
     '"Done 07:55 · 62 km logged", ' +
     'the leave-by time ("Leave by HH:MM"), the number of stops, and for a task under way the live ETA and how late it runs.',
@@ -1346,6 +1468,28 @@ export const taskBoard = tool({
     };
     const cancelled = tasks.filter((t) => t.status === "cancelled").length;
     const needsDriver = await needsDriverList(db, refs, now);
+    // Phase 7 (§33): the tasks proposed for this day that wait for an approver (no task row exists yet).
+    const proposals = unwrap(
+      await db.from("vehicle_requests").select("*").eq("kind", "task").eq("status", "waiting").gte("needed_at", from).lt("needed_at", to)
+        .order("needed_at"),
+      "vehicle requests",
+    );
+    const stopCounts = await requestStopsOf(db, proposals.map((r) => r.id));
+    const waitingApproval = proposals.map((r) => ({
+      request_id: r.id,
+      time: colomboTime(r.needed_at),
+      leave_by: colomboTime(r.leave_by ?? r.needed_at),
+      title: r.title ?? "Task",
+      label: r.label ?? undefined,
+      from: r.route_from ?? undefined,
+      to: r.route_to ?? undefined,
+      stops_count: stopCounts.get(r.id)?.length ?? 0,
+      driver: r.proposed_employee_id ? refs.emp.get(r.proposed_employee_id)?.name : undefined,
+      vehicle: r.proposed_vehicle_id ? refs.veh.get(r.proposed_vehicle_id)?.reg_no : undefined,
+      proposed_by: r.requested_by_name,
+      status: new Date(r.needed_at) <= now ? "Leave-by passed · not decided" : `Waiting for approval · proposed by ${r.requested_by_name}`,
+      late: new Date(r.needed_at) <= now ? true : undefined,
+    }));
 
     return {
       result: {
@@ -1353,15 +1497,20 @@ export const taskBoard = tool({
         needs_driver: needsDriver.length ? needsDriver : undefined,
         date: day,
         counts: {
+          waiting_approval: waitingApproval.length,
           assigned: board.assigned.length,
           in_progress: board.in_progress.length,
           completed: board.completed.length,
           cancelled,
           declined: board.declined.length,
         },
+        waiting_approval: waitingApproval,
         ...board,
       },
-      summary: `${day}: ${board.assigned.length} assigned, ${board.in_progress.length} in progress, ${board.completed.length} completed` +
+      summary:
+        `${day}: ${
+          waitingApproval.length ? `${waitingApproval.length} waiting for approval, ` : ""
+        }${board.assigned.length} assigned, ${board.in_progress.length} in progress, ${board.completed.length} completed` +
         (board.declined.length ? `, ${board.declined.length} declined` : ""),
     };
   },
@@ -1440,7 +1589,8 @@ export const taskDetail = tool({
         : { data: null, error: null },
       unloggedBeforeStart(db, odometer.find((o) => o.kind === "task_start")),
       taskGpsKm(db, task, now),
-      taskEta(db, task, stops, latest.get(task.employee_id), settings, now),
+      // Someone opened the running task: the one place Google is asked for its ETA (Phase 7, §35 20).
+      taskEta(db, task, stops, latest.get(task.employee_id), settings, now, { google: true }),
       videoLinks(db, fuel),
     ]);
     const projects = new Map(unwrap(projectsRes, "projects").map((p) => [p.id, p]));

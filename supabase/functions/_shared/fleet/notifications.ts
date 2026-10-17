@@ -11,6 +11,8 @@
 // Phase 6: request.changed (the requester edited an approved booking) goes to the
 // approvers, request.redecided to the requester, booking.changed (the office moved
 // or re-equipped a booking) to the requester and the custodian.
+// Phase 7 (§33): a proposed task is a request (request.created, request.decided); request.not_decided and
+// request.late are written in SQL by queue_request_reminders.
 
 import type { Db } from "./db.ts";
 import { unwrap } from "./db.ts";
@@ -30,7 +32,9 @@ export type NotifyEvent =
   | "vehicle.booking_cancelled"
   | "request.changed"
   | "request.redecided"
-  | "booking.changed";
+  | "booking.changed"
+  | "request.not_decided"
+  | "request.late";
 
 export interface EventInfo {
   event: NotifyEvent;
@@ -114,6 +118,19 @@ export const EVENTS: readonly EventInfo[] = [
     text: "The time, vehicle or driver of a booking you asked for, or of a vehicle you look after, is changed",
     needs: [],
   },
+  // Phase 7 (§33, §35 16 and 18): written in SQL by queue_request_reminders (the minute job).
+  {
+    event: "request.not_decided",
+    label: "A request or a proposed task is not decided 30 minutes before it leaves",
+    text: "To the approvers, and to the person who asked or proposed it",
+    needs: ["approve", "request", "assign_tasks"],
+  },
+  {
+    event: "request.late",
+    label: "A request or a proposed task passes its leave-by undecided",
+    text: "It stays waiting until someone decides it; never sent by itself",
+    needs: ["approve"],
+  },
 ];
 
 export interface Message {
@@ -153,6 +170,13 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
       break;
     case "request.decided":
       ids = ctx.requester ? [ctx.requester] : [];
+      break;
+    case "request.not_decided":
+      // The approvers, plus the person who asked or proposed it (the SQL writes them; listed here for the rule).
+      ids = [...holders("approve"), ...(ctx.requester ? [ctx.requester] : [])];
+      break;
+    case "request.late":
+      ids = holders("approve");
       break;
     case "task.declined":
     case "task.not_accepted":

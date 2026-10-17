@@ -134,7 +134,7 @@ export interface FinishFlag {
 
 export interface Board {
   date: string;
-  counts: { assigned: number; in_progress: number; completed: number; cancelled: number; declined?: number };
+  counts: { assigned: number; in_progress: number; completed: number; cancelled: number; declined?: number; waiting_approval?: number };
   assigned: BoardCard[];
   in_progress: BoardCard[];
   completed: BoardCard[];
@@ -142,6 +142,26 @@ export interface Board {
   declined?: BoardCard[];
   /** Phase 7 (§19): every task that needs a driver, today and later (declined or not accepted in time). */
   needs_driver?: NeedsDriverTask[];
+  /** Phase 7 (§33): tasks proposed for the day that wait for an approver (no task exists yet). */
+  waiting_approval?: WaitingApprovalCard[];
+}
+
+/** A task proposed for the day, waiting for an approver (task_board.waiting_approval). */
+export interface WaitingApprovalCard {
+  request_id: string;
+  time: string;
+  leave_by: string;
+  title: string;
+  label?: string;
+  from?: string;
+  to?: string;
+  stops_count: number;
+  driver?: string;
+  vehicle?: string;
+  proposed_by: string;
+  /** "Waiting for approval · proposed by Nimal" or "Leave-by passed · not decided". */
+  status: string;
+  late?: boolean;
 }
 
 export interface AssignmentEvent {
@@ -564,10 +584,76 @@ export interface RequestEditFields {
   /** Phase 7 (§17): minutes at the From and To places (empty = the place's usual time, else the default). */
   from_dwell_min?: number;
   to_dwell_min?: number;
+  /** Phase 7 (§34): a request planned with its trip, as the edit form takes it back (update_request's stops and start). */
+  stops?: TripStopInput[];
+  start?: TripStartInput;
+  /** The leave time typed by hand; absent = planned from the stops' arrive_by times. */
+  leave_by?: string;
+  return_to_base?: boolean;
+  avoid_expressway?: boolean;
+}
+
+/** A trip stop as create_request / update_request / create_task take it (Phase 7, §34). */
+export interface TripStopInput {
+  type: "pickup" | "drop" | "visit";
+  what?: "people" | "goods" | "documents" | "other";
+  place?: string;
+  place_id?: string;
+  google_place_id?: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  dwell_min?: number;
+  /** HH:MM on the trip's day. */
+  arrive_by?: string;
+  note?: string;
+}
+
+export interface TripStartInput {
+  place?: string;
+  place_id?: string;
+  google_place_id?: string;
+  lat?: number;
+  lng?: number;
+  /** "Passengers get in here": the start is Stop 1, a pickup. */
+  passengers?: boolean;
+  what?: "people" | "goods" | "documents" | "other";
+  note?: string;
+  dwell_min?: number;
+}
+
+/** A request's trip as list_requests shows it (Phase 7, §34): the start, the stops with their planned times, the timeline. */
+export interface RequestTrip {
+  start?: { name: string; has_pin: boolean; lat?: number; lng?: number; google?: boolean };
+  leave_by?: string;
+  leave_by_source?: string;
+  return_to_base?: boolean;
+  avoid_expressway?: boolean;
+  /** As plan_task's stops; `google` = the stop is on a Google pin (drawn on Google's map only). */
+  stops: (PlannedStop & { google?: boolean })[];
+  timeline?: PlanTimeline;
+}
+
+/** A task proposed by someone without the approve permission (Phase 7, §33): what they proposed and saw. */
+export interface RequestProposal {
+  driver?: string;
+  username?: string;
+  vehicle?: string;
+  vehicle_why?: string;
+  warnings?: string[];
+  conflicts?: Conflict[];
+  passengers?: number;
+  contact_name?: string;
+  contact_phone?: string;
+  notes?: string;
 }
 
 export interface RequestCard {
   id: string;
+  /** Phase 7 (§33): "task" = a task proposed by someone without approve; "request" = a vehicle request. */
+  kind?: "request" | "task";
+  /** A proposed task's title. */
+  title?: string;
   requested_by: string;
   project?: string;
   when: string;
@@ -596,6 +682,13 @@ export interface RequestCard {
   cancelled?: string;
   cancel_reason?: string;
   timeline?: RequestTimeline;
+  /** Phase 7 (§35 18): waiting past its leave-by (it stays in the queue; never sent by itself). */
+  late?: boolean;
+  /** Phase 7 (§33): a proposed task's driver, vehicle, warnings and conflicts as proposed. */
+  proposed?: RequestProposal;
+  stops_count?: number;
+  /** Phase 7 (§34): the trip, when the request was planned with its stops. */
+  trip?: RequestTrip;
 }
 
 export interface RequestsList {
@@ -798,8 +891,14 @@ export interface FindProject {
 }
 
 export interface CreateTaskResult {
-  task_id: string;
+  /** Absent when the task was proposed instead (waiting_for_approval). */
+  task_id?: string;
   title: string;
+  /** Phase 7 (§33): no approve permission and tasks_need_approval on: it waits in the approval queue. */
+  waiting_for_approval?: boolean;
+  request_id?: string;
+  /** "Waiting for the fleet admin's OK · you'll be notified." */
+  next?: string;
   when?: string;
   leave_by?: string;
   leave_by_source?: string;
@@ -840,6 +939,8 @@ export interface FleetSettings {
   rush_hour: { factor: number; centre: { lat: number; lng: number }; radius_km: number; bands: { days: number[]; from: string; to: string }[] };
   /** Off = every booking needs a driver (Part 7). */
   self_drive_allowed?: boolean;
+  /** Phase 7 (§33): a task made by someone without approve waits for an approver (default on). */
+  tasks_need_approval?: boolean;
   /** The driver app's shift nudge: HH:MM on these days (0 = Sunday … 6 = Saturday). */
   shift_start?: string;
   shift_days?: number[];
@@ -916,6 +1017,9 @@ export interface DecideResult {
   vehicle_used?: VehicleUsed;
   vehicle_changed?: string;
   leave_by?: string;
+  /** Phase 7 (§33): a proposed task sent with nothing changed. */
+  as_proposed?: boolean;
+  conflicts?: Conflict[];
 }
 
 export type ShareState = "sharing" | "stale" | "not_sharing";
