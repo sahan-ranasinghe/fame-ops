@@ -1587,6 +1587,22 @@ as off) and the tests.
 - The artifact build carried supabase-js since 16 October (the issues bell imported Realtime). Now Realtime comes through the web's context, and the artifact is 774 KB instead of 998 KB.
 - `ALL_TOOLS` (the artifact's tools) lists every connector tool but the two web-only uploads, with a test. The Phase 7 duty tools had been missing.
 
+**The fresh reviewer at checkpoint 3** found no security gap. Its findings, all fixed:
+- A one-step booking writes its trip after its own approval, so a later Keep would have put the request's stops back
+  over the office's stop edits. Now only an edit by the asker after the decision counts (`trip_edited_at`); the suite
+  checks it.
+- A task moved to another day keeps its arrive-by deadlines' clock time and moves them by the days (`moveStopTimes`).
+  The approver's typed time wins when an edited trip is applied.
+- The asker heard a cancelled trip or a new driver twice, and the person acting heard their own. Now the tools send
+  these (`reassign_task`, `cancel_task`), never twice and never to the actor; the trigger keeps only On the way, and not
+  after a reopen.
+- A waiting request moved to another time gets its reminders afresh.
+- A driver could list replaced or removed document files of the held vehicle. Now only a current document's file
+  (pgTAP).
+- `save_vehicle_document` is web only. A document saved without an expiry keeps the vehicle's date.
+- Proposers (assign tasks without request) can switch their trip events off.
+- "Not now" on the photo step also after two failed saves (a weak signal).
+
 **Delegated.** Four subagents in their own worktrees, at most three at a time:
 - S1: the trip editor and the request forms.
 - S2: the approval side.
