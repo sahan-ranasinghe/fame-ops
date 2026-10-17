@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  50::bigint, 'there are 50 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included, geocode_cache; Part 4b: site_import_presets, place_imports, place_import_changes, api_minute_calls; Part 5: google_calls, google_pins; 5b: route_gap_lines; Phase 7: vehicle_assignments, task_vehicle_segments)');
+  53::bigint, 'there are 53 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included, geocode_cache; Part 4b: site_import_presets, place_imports, place_import_changes, api_minute_calls; Part 5: google_calls, google_pins; 5b: route_gap_lines; Phase 7: vehicle_assignments, task_vehicle_segments; Part 3: request_stops, vehicle_documents, media_links)');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -115,10 +115,10 @@ select is(
 
 -- 37 since 15 October: driver_heartbeats_select_own (a driver reads their own heartbeat history; the app's
 -- upsert needs it, migration phone_health). 38 with Phase 7: vehicle_assignments_select_own; 39 with Part 2:
--- task_vehicle_segments_select_own.
+-- task_vehicle_segments_select_own; 40 with Part 3: vehicle_documents_driver_held.
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  39::bigint, 'there are 39 policies on public tables');
+  40::bigint, 'there are 40 policies on public tables (Part 3: vehicle_documents_driver_held)');
 
 select is(
   (select count(*) from pg_policies
@@ -139,8 +139,8 @@ select results_eq(
        and has_column_privilege('authenticated', a.attrelid, a.attnum, 'SELECT')
      order by a.attname $$,
   array['active', 'current_odometer_km', 'id', 'in_garage', 'make_model',
-        'monthly_km_allowance', 'reg_no', 'seats', 'vehicle_type'],
-  'drivers can read exactly nine vehicle columns, no others');
+        'monthly_km_allowance', 'photo_path', 'photo_thumb_path', 'photo_updated_at', 'reg_no', 'seats', 'vehicle_type'],
+  'drivers can read exactly twelve vehicle columns, no others (Part 3: the photo, its thumbnail, when)');
 
 select is(
   (select public from storage.buckets where id = 'driver-photos'),

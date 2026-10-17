@@ -141,6 +141,7 @@ describe("the trip decide page (§33, §34)", () => {
   });
   afterEach(() => vi.useRealTimers());
 
+  // The first test pays for importing the decide page (slow while the full suite runs): 20 s.
   it("shows the plan as asked with its road lines, the proposal filled in and its conflicts; Send as proposed sends nothing else", async () => {
     const transport = decideTransport(proposal);
     await mount(transport, "/requests/r9/decide", decideRoutes);
@@ -162,7 +163,7 @@ describe("the trip decide page (§33, §34)", () => {
     expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r9", decision: "approve", decided_by: "Palitha" }]);
     expect(screen.getByTestId("request-decided").textContent).toContain("Sent as proposed.");
     expect(screen.getByRole("link", { name: "Open task" }).getAttribute("href")).toBe("/tasks/t9");
-  });
+  }, 20_000);
 
   it("a moved leave-by and another driver from Who's available: Approve and send, only those sent; a refresh resets neither", async () => {
     const transport = decideTransport(proposal);
