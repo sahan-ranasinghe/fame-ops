@@ -1531,6 +1531,70 @@ as off) and the tests.
 - Found on the server: the 5-minute issue check asks Google for every running task's ETA every 15
   minutes. That is question 20 (§35).
 
+### Part 3 (branch `phase7-3`, 17 October)
+
+**Items 29 and 30: one approval queue, one trip editor.**
+- **Data.** Migration `20261017140000_phase7_approval.sql`.
+  - `vehicle_requests` gains the trip:
+    - `kind` (request | task) and the proposed driver and vehicle;
+    - title, label, contact, `task_notes`, `projects_json`;
+    - the start and its Google pair; return to base, no expressway; `leave_by` and its source, the buffer;
+    - `plan_json` and `proposal_json` (warnings, conflicts, the vehicle and why);
+    - `decide_reminder_sent_at` and `late_push_sent_at`.
+  - `request_stops` holds the planning columns of `task_stops`. An edit marks the old stops removed (nothing deleted). It is service role only (pgTAP: a driver and an office person read and write none).
+  - Google's 30-day rule covers a request's stops, its start and its plan's lines: the tasks' triggers, `prune_google_content`, and the 23-day re-fetch of waiting requests.
+  - The minute job `request-reminders` (`queue_request_reminders`) pushes "Not decided yet" 30 minutes before the leave-by to the approvers and the asker (§35 16). When the leave-by passes it pushes once to the approvers only, for up to 2 hours (§35 18). Requests already close or past when the migration runs are marked, so there is no burst.
+- **Server.**
+  - `create_task` by someone without approve, while `tasks_need_approval` (on by default) holds: a request of kind task, answered `waiting_for_approval`, with the plan and the warnings.
+  - `decide_request` copies the request's stops into the task with nothing retyped (`approveTrip`): the proposed driver and vehicle unless changed, the stored plan unless the day or the leave time changes (the arrive-by times move with the day), the proposer as the task's creator and assigner, `as_proposed`.
+  - `create_request`, `update_request` and `book_vehicle` take the trip (`stops`, `start`; the time optional when a stop has an arrive-by). An edit while waiting plans again. An approved booking edited with stops becomes changed, and `redecide_request` hands the stops to the task through `update_task_stops`.
+  - `task_board` gains `waiting_approval`. `list_requests` gains `kind`, `proposed`, `trip`, `late`, `id`, `with_line`.
+  - `plan_task` and `google_place` are open to requesters (no conflicts for them). `cancel_request` lets the asker withdraw their own waiting one (§35 17).
+  - The shared request helpers live in `tools/requestCore.ts` and the trip in `tools/requestTrip.ts`, so tasks.ts and requests.ts form no cycle.
+- **§35 20.** `taskEta(…, { google: true })` only from `task_detail`. The board, Live, Who's available and the 5-minute issue check reuse a Google ETA under 15 minutes old, else take openrouteservice (`cachedEtaServes`, tested).
+- **Web.**
+  - S1: the trip editor (`TripEditor.tsx`, `tripLogic.ts`: Assign a task's trip part as one piece) for Assign a task, New request and Change the request. Assign a task says when a task waits for approval ("Send for approval", "Open the request").
+  - S2: the trip decide page (`TripDecide.tsx`: the stops and plan as asked with the map, the proposal's warnings and conflicts, the proposed driver and vehicle filled in, Day / Leave by / Back by sent only when changed, "Send as proposed"), the request page's trip and Withdraw, the Requests list's Task pill and Leave-by passed, the board's Waiting for approval column, and Settings' "New tasks need the fleet admin's OK".
+
+**Items 4, 5, 6 and 28: photos, documents, the asker told.**
+- **Data.** Migration `20261017160000_phase7_photos.sql`.
+  - The profile photo: `photos.kind` profile, `employees.photo_id`, `set_my_photo`.
+  - Vehicle photos: bucket `vehicle-photos`, the vehicles' photo columns readable by drivers. A driver may add a photo only to an active vehicle that has none: a storage policy and `set_vehicle_photo_from_driver`.
+  - Documents: `vehicle_documents` and bucket `vehicle-docs`, with one expiry date both ways (triggers each side, writing only what differs). A driver reads the held vehicle's revenue licence, insurance and emission test (`my_held_vehicle()`), rows and files.
+  - The asker told: `notify_requester` and the triggers on tasks and task_stops (on the way, the first pickup reached once, driver changed, cancelled).
+  - `media_links`: a file's signed link is kept and handed out again while it has over an hour left, so a refreshing page keeps its picture.
+- **Server.**
+  - `tools/media.ts`: `photo_upload_url` and `vehicle_document_upload_url` (web only: not on the connector, and refused off the web), `set_driver_photo`, `set_vehicle_photo`, `save_vehicle_document` (the one before kept as replaced), `vehicle_documents`, `remove_vehicle_document`, `restore_vehicle_document`.
+  - Photos on `list_drivers`, `live_drivers`, `task_board`, availability, `task_detail` and `list_vehicles`. `list_vehicles` also has `document_files`, `documents_missing` and their text.
+  - A `documents_missing` issue per vehicle (info, no push; §32 12). The rules are in `docs.ts`.
+  - The request card's `assigned` (the driver, the vehicle, their photos) once approved. `requester_phone`, and `tell_requester` (`requesterUpdates.ts`) for an asker without an account or a request made on behalf of someone.
+  - The asker's phone alone keeps a booking's status.
+  - The approved push and the trip pushes carry the photos as paths; notify-office signs them and the service worker shows them.
+- **Driver app (S3).**
+  - "Add your photo" after Permissions, while the server says there is none, never over a running task. If the camera or gallery fails to open twice, "Not now" for that run.
+  - Me shows the photo with Change photo.
+  - The picker shows each vehicle's thumbnail, with Add a photo (the `vehicle_photo` queue op; 'has_photo' counts as done).
+  - Me → Documents: the held vehicle's three kinds with the expiry tones. Open uses a 1-hour link; the list is kept for offline, the files never are.
+- **Office web (S4).**
+  - Avatars and vehicle thumbnails where drivers and plates are named.
+  - Replace photo and Upload photo, made in the browser (canvas).
+  - The Documents section on the vehicle page and after Register vehicle: upload with the expiry, View, Replace, Remove with a second step, Restore.
+  - The request page's driver and vehicle once approved, Tell requester, and the asker's phone for approvers.
+  - The Overview marks proposals and late ones.
+- **§30.** expo-image-picker 57.0.20 is in the 1.2.0 build with its crop activity (`ExpoCropImageActivity`); the gallery is Android's own photo picker (no permission). To confirm on the OPPO after the Round A2 update: the preview build has no development client.
+
+**Also.**
+- The artifact build carried supabase-js since 16 October (the issues bell imported Realtime). Now Realtime comes through the web's context, and the artifact is 774 KB instead of 998 KB.
+- `ALL_TOOLS` (the artifact's tools) lists every connector tool but the two web-only uploads, with a test. The Phase 7 duty tools had been missing.
+
+**Delegated.** Four subagents in their own worktrees, at most three at a time:
+- S1: the trip editor and the request forms.
+- S2: the approval side.
+- S3: the driver app's photos and documents.
+- S4: the office's photos, documents and request page.
+
+The main session wrote the migrations, the server, the types, the strings, the suites and the e2e, and merged each by cherry-pick.
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with

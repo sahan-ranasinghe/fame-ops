@@ -70,7 +70,11 @@
   each stop, overlap cards, stops named by order, any permission brings view, needs a driver, the vehicle swap during
   a task, "I need another vehicle"). Part 2b: the maps (the plan's Google line, gap markers, playback 1–60×, one
   control cluster, the compass, snap to roads on within the free usage), app stops = 10 min with no point and no
-  heartbeat, the heartbeat also from the background location task. Round A (Parts 1–2b) deployed 16 October 2026.
+  heartbeat, the heartbeat also from the background location task. Round A (Parts 1–2b) deployed 16 October 2026; its
+  hotfix 17 October (Who's available steady and readable, Google day caps = the month ÷ 22: 430 / 215). Part 3
+  (`phase7-3`): tasks go to the fleet admin first (§33: a task made without approve is a request of kind task until an
+  approver sends it), requests get the full planner (§34: one trip editor; a request's own stops), requester updates,
+  the driver's photo, vehicle photos and vehicle documents (§4, §5, §6, §28); Round A2 deploys it.
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
@@ -462,6 +466,20 @@
   of stops still to be driven fetched again at 23 days, then the 30-day clean-up), `stop-arrivals`
   (every 5 min), `prune-gap-lines` (nightly).
 - `task_projects`: task_id, project_id (null = Fame internal), percent. Sum = 100 per task.
+- Phase 7 Part 3 (§33, §34): `vehicle_requests` also carries a trip: `kind` (request | task), `proposed_employee_id` /
+  `proposed_vehicle_id`, title, label, contact, `task_notes`, `projects_json`, the start (and its Google pair),
+  `return_to_base`, `avoid_expressway`, `leave_by` (+ source), `buffer_min`, `plan_json`, `proposal_json`,
+  `decide_reminder_sent_at`, `late_push_sent_at`, `requester_phone`, `arrived_push_sent_at`. `request_stops` = the
+  planning columns of task_stops (an edit marks old ones `removed_at`; service role only; copied into task_stops when
+  approved). Job `request-reminders` (every minute: not decided 30 min before, the leave-by passed once).
+- Photos and documents (Part 3, §5, §6, §28): `employees.photo_id` (a photos row of kind profile; `set_my_photo`),
+  `vehicles.photo_path / photo_thumb_path / photo_updated_at` (bucket `vehicle-photos`; a driver adds one only when
+  there is none: `set_vehicle_photo_from_driver`), `vehicle_documents` (kind revenue_licence | insurance | emission |
+  registration | lease | other, path in bucket `vehicle-docs`, expiry written both ways with the vehicle's date,
+  removed_at / removed_reason removed | replaced; a driver reads the held vehicle's three roadside kinds through
+  `my_held_vehicle()`), `media_links` (a file's signed link kept while over an hour is left: a refreshing page keeps
+  its picture; service role only). The asker of a trip is pushed on the way / arrived / driver changed / cancelled
+  (`notify_requester`, triggers on tasks and task_stops).
 - `odometer_logs`: id, vehicle_id, employee_id, task_id (nullable), reading_km,
   ocr_value (nullable), photo_id, kind ('task_start'|'task_end'|'manual'), logged_at,
   entry ('photo'|'photo_changed'|'typed_unreadable'|'typed_offline'), photo_attempts,
@@ -902,6 +920,14 @@ office_audit.
   (events + the linked task / report with photos / request).
 - Projects: `import_projects(projects[])` (upsert; the office's Claude reads Zoho and sends
   them), `find_project(text)`.
+- Phase 7 Part 3: `create_task` without approve (setting `tasks_need_approval`, on) answers `waiting_for_approval` and the
+  task waits as a request of kind task (`task_board.waiting_approval`, `list_requests kind`); `decide_request(…, date?,
+  leave_by?, back_by?)` sends it as proposed or changed, copying the request's stops. `create_request` / `update_request`
+  / `book_vehicle` take `stops`, `start`, `requester_phone`; cards carry `trip`, `proposed`, `late`, `assigned`,
+  `tell_requester`. Photos and documents (vehicles permission): `photo_upload_url` and `vehicle_document_upload_url`
+  (web only: not on the connector), `set_driver_photo`, `set_vehicle_photo`, `save_vehicle_document`,
+  `vehicle_documents`, `remove_vehicle_document`, `restore_vehicle_document`; `photo_url` / `thumb_url` on the tools that
+  name drivers and plates. A running task's Google ETA is asked only by `task_detail` (someone opened it).
 
 ## Not now
 Project costs, WhatsApp as a location source or automated WhatsApp sending (use wa.me links),
