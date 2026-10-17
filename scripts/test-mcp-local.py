@@ -1506,7 +1506,8 @@ if CHANNEL == "api":
     ms = tool("my_notification_settings")
     check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.vehicle_needed", "task.stop_skipped", "issue.opened", "issue.assigned",
                                                  "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed",
-                                                 "request.not_decided", "request.late"]
+                                                 "request.not_decided", "request.late", "request.on_the_way", "request.arrived",
+                                                 "request.driver_changed", "request.cancelled"]
           and all(e["enabled"] for e in ms["events"]) and ms["devices"] == [] and ms["push"]["configured"] is VAPID and (("public_key" in ms["push"]) is VAPID),
           "my_notification_settings: every event on (the admin holds every permission), no devices, push.configured says whether the server has the keys", json.dumps(ms)[:300])
     ms = tool("set_my_notification_settings", {"events": {"issue.opened": False}})
@@ -1967,6 +1968,35 @@ r = tool("create_request", {"date": day(6), "stops": [{"type": "pickup", "place"
 check("arrive_by" in r, "a trip needs the leave time or a stop's arrive_by", r)
 check(tool("get_settings")["settings"]["tasks_need_approval"] is True, "tasks_need_approval is on by default (§33)")
 
+print("\n== 6h. Phase 7, Part 3: photos, documents, the request's driver and Tell requester (§4, §5, §6, §28) ==")
+card = tool("list_requests", {"status": "all", "id": rq["id"]})["requests"][0]
+check(card.get("assigned", {}).get("driver") == "Kasun Silva" and card["assigned"].get("vehicle") == "WP CAR-1182"
+      and card["assigned"].get("call") and card["assigned"].get("task_status") == "assigned",
+      "an approved request's card names the driver (with Call), the vehicle and the task's state", json.dumps(card.get("assigned"))[:300])
+if CHANNEL == "mcp":
+    # The shared key has no person behind it: the request has no office account to push to, so the office tells them.
+    check(card.get("tell_requester", {}).get("moment") == "approved" and card["tell_requester"]["message"].startswith("Your vehicle for ")
+          and card["tell_requester"]["whatsapp"].startswith("https://wa.me/?text="),
+          "Tell requester: the approved message, a WhatsApp link that lets the office pick the contact (no phone given)", json.dumps(card.get("tell_requester"))[:300])
+lv = tool("list_vehicles")["vehicles"]
+cab = next(v for v in lv if v["reg_no"] == "WP CAB-4521")
+check(cab.get("documents_missing") and "insurance" in cab["documents_missing"] and cab["documents_missing_text"].startswith(f"{len(cab['documents_missing'])} documents missing: ")
+      and "document_files" not in cab,
+      "list_vehicles: a vehicle with no documents lists what is missing", json.dumps({k: cab.get(k) for k in ("documents_missing", "documents_missing_text")}))
+fleet_jobs()
+na = tool("fleet_overview")["needs_attention"]
+check(any(a["kind"] == "documents_missing" and a["subject"].startswith("WP CAB-4521") and a["severity"] == "info" for a in na),
+      "one 'documents missing' item per vehicle in the overview (info, no push)", json.dumps([a for a in na if a["kind"] == "documents_missing"])[:300])
+if CHANNEL == "mcp":
+    code, answer = mcp("tools/call", {"name": "vehicle_document_upload_url", "arguments": {"vehicle": "cab4521", "kind": "insurance",
+                                                                                         "content_type": "image/jpeg", "bytes": 100}})
+    check("not found" in str(answer.get("error", {}).get("message", "")), "Claude cannot move files: the upload tools are not on the connector",
+          json.dumps(answer)[:200])
+    code, answer = mcp("tools/list", {})
+    names = [t["name"] for t in answer.get("result", {}).get("tools", [])]
+    check("photo_upload_url" not in names and "vehicle_document_upload_url" not in names and "vehicle_documents" in names,
+          "and the connector does not list them (vehicle_documents is listed)", ",".join(n for n in names if "vehicle" in n))
+
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")
     shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
@@ -1999,7 +2029,9 @@ if CHANNEL == "api":
     check(code == 200 and body["result"]["settings"]["self_drive_allowed"] is True, "a requester reads the fleet settings (the request form needs the self-drive switch)", f"{code} {str(body)[:160]}")
     code, body = api_call(staff_token, "my_notification_settings", {})
     check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "task.declined", "task.not_accepted", "vehicle.booked", "vehicle.booking_cancelled",
-                                                                          "request.redecided", "booking.changed", "request.not_decided"],
+                                                                          "request.redecided", "booking.changed", "request.not_decided",
+                                                                          "request.on_the_way", "request.arrived", "request.driver_changed",
+                                                                          "request.cancelled"],
           "a requester's notification settings hold their request events (with a task of theirs that needs a driver) and the three booking events", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})
     check(code == 200 and body["result"]["count"] == 0, "staff see none of the office's requests", f"{code} {str(body)[:160]}")
@@ -2140,6 +2172,51 @@ if CHANNEL == "api":
     code, _ = api_call(API_TOKEN, "revoke_office_key", {"key_id": key["key_id"]})
     code, names, raw_text = mcp_tools_list(key_url)
     check(code == 404, "a revoked key answers 404 like any wrong key", f"{code} {raw_text}")
+
+
+if CHANNEL == "api":
+    # Phase 7, Part 3 (§5, §6, §28): files through the web's own upload, after the contract check (only this channel has
+    # photos, so their links stay out of the shapes the artifact reads).
+    print("\n== 8. Photos and documents uploaded by the web app ==")
+    def upload(ticket, data, content_type):
+        code, body = http("PUT", f"{API}/storage/v1/object/upload/sign/{ticket['bucket']}/{ticket['path']}?token={ticket['token']}",
+                          {"Content-Type": content_type, "apikey": ANON}, data)
+        return code
+    t1 = tool("vehicle_document_upload_url", {"vehicle": "cab4521", "kind": "insurance", "content_type": "image/jpeg", "bytes": len(TINY_JPEG)})["upload"]
+    check(upload(t1, TINY_JPEG, "image/jpeg") == 200, "the browser uploads the document with the one-time token")
+    d1 = tool("save_vehicle_document", {"vehicle": "cab4521", "kind": "insurance", "path": t1["path"], "content_type": "image/jpeg",
+                                        "bytes": len(TINY_JPEG), "expiry": day(200)})["document"]
+    check(d1["kind_name"] == "Insurance" and d1["url"] and d1["uploaded"].endswith("by Test Admin")
+          and psql("select insurance_expiry from vehicles where reg_no = 'WP CAB-4521'") == day(200),
+          "save_vehicle_document: the current insurance, its link, and its expiry is the vehicle's insurance date", json.dumps(d1)[:300])
+    t2 = tool("vehicle_document_upload_url", {"vehicle": "cab4521", "kind": "insurance", "content_type": "application/pdf", "bytes": 20})["upload"]
+    upload(t2, b"%PDF-1.4\n%%EOF\n", "application/pdf")
+    tool("save_vehicle_document", {"vehicle": "cab4521", "kind": "insurance", "path": t2["path"], "content_type": "application/pdf", "expiry": day(300)})
+    docs = tool("vehicle_documents", {"vehicle": "cab4521", "removed": True})
+    check(len([d for d in docs["documents"] if d["kind"] == "insurance"]) == 1 and docs["removed"][0]["removed_reason"] == "replaced"
+          and psql("select insurance_expiry from vehicles where reg_no = 'WP CAB-4521'") == day(300),
+          "a new insurance replaces the old (kept as replaced); the date follows the current one", json.dumps(docs)[:300])
+    tool("restore_vehicle_document", {"id": d1["id"]})
+    check(psql("select insurance_expiry from vehicles where reg_no = 'WP CAB-4521'") == day(200), "Restore makes the old one current again, with its date")
+    tool("remove_vehicle_document", {"id": d1["id"]})
+    docs = tool("vehicle_documents", {"vehicle": "cab4521"})
+    check(not any(d["kind"] == "insurance" for d in docs["documents"]) and "insurance" in docs.get("missing", []),
+          "Remove takes it off (kept); insurance is missing again", json.dumps(docs)[:300])
+    up = tool("photo_upload_url", {"kind": "driver_profile", "target": "kasun.s"})["upload"]
+    check(upload(up, TINY_JPEG, "image/jpeg") == 200, "the browser uploads a driver's photo")
+    tool("set_driver_photo", {"driver": "kasun.s", "path": up["path"]})
+    ks = next(d for d in tool("list_drivers")["drivers"] if d["username"] == "kasun.s")
+    check(ks.get("photo_url", "").find("/storage/v1/object/sign/driver-photos/") >= 0, "list_drivers: the driver's photo link", ks.get("photo_url"))
+    vp = tool("photo_upload_url", {"kind": "vehicle", "target": "cab4521"})
+    upload(vp["upload"], TINY_JPEG, "image/jpeg")
+    upload(vp["thumb"], TINY_JPEG, "image/jpeg")
+    tool("set_vehicle_photo", {"vehicle": "cab4521", "path": vp["upload"]["path"], "thumb_path": vp["thumb"]["path"]})
+    a = next(v for v in tool("list_vehicles")["vehicles"] if v["reg_no"] == "WP CAB-4521")
+    b = next(v for v in tool("list_vehicles")["vehicles"] if v["reg_no"] == "WP CAB-4521")
+    check(a.get("thumb_url") and a["thumb_url"] == b["thumb_url"] and a["photo_url"] == b["photo_url"],
+          "list_vehicles: the vehicle's photo and thumbnail; the same links on the next call (a page refreshing keeps its pictures)", a.get("thumb_url"))
+    r = tool("set_driver_photo", {"driver": "nuwan.p", "path": up["path"]}, expect_error=True)
+    check("not that driver" in r, "a photo uploaded for one driver cannot be set on another", r)
 
 
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
