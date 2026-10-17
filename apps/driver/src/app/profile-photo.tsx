@@ -15,7 +15,7 @@ import { useLeaveGuard } from '@/components/navigation';
 import { Thumb, useMyPhoto } from '@/components/Photos';
 import { Button, Notice, Txt } from '@/components/ui';
 import { type LocalProfilePhoto, pickProfilePhoto, removeFile } from '@/lib/photos';
-import { deferProfilePhoto, PICKER_FAILS_BEFORE_LATER } from '@/lib/photoRules';
+import { deferProfilePhoto, FAILS_BEFORE_LATER } from '@/lib/photoRules';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -33,9 +33,13 @@ export default function ProfilePhotoScreen() {
   const [problem, setProblem] = useState<string | null>(null);
   const saved = useRef(false);
   const photoRef = useRef(photo);
-  // The camera or the gallery failing to open (not a cancel, not an upload): twice in a row brings "Not now".
-  const pickerFails = useRef(0);
-  const [pickerBroken, setPickerBroken] = useState(false);
+  // Failures in a row (the camera or the gallery not opening, the photo not saving; not a cancel): twice brings "Not now".
+  const fails = useRef(0);
+  const [stuck, setStuck] = useState(false);
+  const countFailure = () => {
+    fails.current += 1;
+    if (fails.current >= FAILS_BEFORE_LATER) setStuck(true);
+  };
   photoRef.current = photo;
   // Back does nothing while the photo is being saved.
   const { allowLeave } = useLeaveGuard(false, busy === 'save');
@@ -59,6 +63,7 @@ export default function ProfilePhotoScreen() {
     const outcome = await app.saveProfilePhoto(next);
     setBusy(null);
     if (outcome !== 'ok') {
+      countFailure();
       setProblem(outcome === 'network' ? 'profilePhoto.noConnection' : 'profilePhoto.failed');
       return;
     }
@@ -75,11 +80,9 @@ export default function ProfilePhotoScreen() {
     let picked: Awaited<ReturnType<typeof pickProfilePhoto>>;
     try {
       picked = await pickProfilePhoto(source);
-      pickerFails.current = 0;
     } catch {
       picked = null;
-      pickerFails.current += 1;
-      setPickerBroken(pickerFails.current >= PICKER_FAILS_BEFORE_LATER);
+      countFailure();
       setProblem('profilePhoto.pickerFailed');
     }
     setBusy(null);
@@ -133,7 +136,7 @@ export default function ProfilePhotoScreen() {
           onPress={() => void pick('camera')}
         />
         <Button kind="outline" label={t('profilePhoto.choose')} icon={Images} disabled={busy !== null} onPress={() => void pick('gallery')} />
-        {!change && pickerBroken && (
+        {!change && stuck && (
           <Button
             kind="outline"
             label={t('profilePhoto.later')}

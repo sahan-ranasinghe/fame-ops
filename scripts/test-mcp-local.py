@@ -1966,6 +1966,19 @@ check(psql(f"select string_agg(place_name, ' | ' order by seq) from task_stops w
       "kept: the task takes the request's new stops (the old pending ones removed)", psql(f"select string_agg(place_name || ':' || status, ' | ' order by seq) from task_stops where task_id = '{dq2['task_id']}'"))
 r = tool("create_request", {"date": day(6), "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}]}, expect_error=True)
 check("arrive_by" in r, "a trip needs the leave time or a stop's arrive_by", r)
+# From the checkpoint review: a one-step booking whose task the office changed keeps those stops when the asker changes
+# only the passengers and the approver keeps it (its trip was written after its own approval, not edited since).
+bk = tool("book_vehicle", {"date": day(6), "time": "11:00", "stops": [{"type": "pickup", "place": "Head office"}, {"type": "drop", "place": "Kandy"}],
+                           "driver": "kasun.s", "vehicle": "car1182", "pax": 2})
+btd = tool("task_detail", {"task_id": bk["task_id"]})
+tool("update_task_stops", {"task_id": bk["task_id"], "plan_version": btd["task"]["plan_version"],
+                           "stops": [{"type": "pickup", "place": "Head office"}, {"type": "visit", "place": "Kurunegala tower site"}, {"type": "drop", "place": "Kandy"}]})
+bc = tool("list_requests", {"status": "all", "id": bk["request"]["id"]})["requests"][0]
+bu = tool("update_request", {"request_id": bc["id"], "version": bc["version"], "pax": 3})
+tool("redecide_request", {"request_id": bc["id"], "version": bu["request"]["version"], "decision": "keep"})
+check(psql(f"select count(*) from task_stops where task_id = '{bk['task_id']}' and status <> 'removed'") == "3",
+      "kept after a passengers-only change: the office's stop edits stay (the booking's trip was never edited)",
+      psql(f"select string_agg(place_name || ':' || status, ' | ' order by seq) from task_stops where task_id = '{bk['task_id']}'"))
 check(tool("get_settings")["settings"]["tasks_need_approval"] is True, "tasks_need_approval is on by default (§33)")
 
 print("\n== 6h. Phase 7, Part 3: photos, documents, the request's driver and Tell requester (§4, §5, §6, §28) ==")

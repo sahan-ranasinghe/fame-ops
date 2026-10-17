@@ -23,11 +23,11 @@ export function needsProfilePhoto(
 }
 
 /**
- * After the camera or the gallery itself failed to open this many times in a row, the step offers "Not now" for this
- * run of the app: a phone whose picker is broken must not keep its driver from work (the step comes back at the next
- * start). A cancelled pick or a failed upload does not count.
+ * After this many failures in a row (the camera or the gallery not opening, or the photo not saving on a weak signal),
+ * the step offers "Not now" for this run of the app: a broken picker or a bad connection must not keep the driver from
+ * work (the step comes back at the next start). A cancelled pick does not count.
  */
-export const PICKER_FAILS_BEFORE_LATER = 2;
+export const FAILS_BEFORE_LATER = 2;
 
 let deferredThisRun = false;
 /** "Not now": the step stays away until the app starts again. */

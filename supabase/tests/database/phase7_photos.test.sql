@@ -103,6 +103,7 @@ update public.vehicle_documents set removed_at = now(), removed_by = 'Office', r
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-000000000ab1","role":"authenticated"}';
 select is((select count(*) from public.vehicle_documents), 0::bigint, 'a removed document is hidden from the driver');
+select is((select count(*) from storage.objects where bucket_id = 'vehicle-docs'), 0::bigint, 'and so is its file (only a current document''s)');
 reset role;
 select is((select count(*) from public.vehicle_documents where id = '60000000-0000-0000-0000-000000000ab1'), 1::bigint, 'and kept');
 
@@ -116,9 +117,8 @@ select public.office_create_task(
   '[]'::jsonb, '30000000-0000-0000-0000-000000000ab1', 'Office');
 create temp table p7p_task as select id from public.tasks where request_id = '30000000-0000-0000-0000-000000000ab1';
 update public.tasks set employee_id = '10000000-0000-0000-0000-000000000ab1' where id = (select id from p7p_task);
-select is((select payload ->> 'title' from public.notifications where event = 'request.driver_changed'
-             and recipient_employee_id = '10000000-0000-0000-0000-000000000ab3'), 'Driver changed: Nimal Perera instead of Kamal Silva',
-  'a new driver: "Driver changed: Nimal Perera instead of Kamal Silva"');
+select is((select count(*) from public.notifications where event = 'request.driver_changed'), 0::bigint,
+  'a new driver is told by the tool that changes it (reassign_task), not by a trigger: never twice, never to the person acting');
 update public.tasks set status = 'in_progress', started_at = now(), start_odometer_km = 7000 where id = (select id from p7p_task);
 select ok((select payload ->> 'title' from public.notifications where event = 'request.on_the_way'
              and recipient_employee_id = '10000000-0000-0000-0000-000000000ab3') like 'On the way · Nimal · WP P7P-0002',
@@ -132,9 +132,13 @@ select is((select count(*) from public.notifications where event = 'request.arri
              and recipient_employee_id = '10000000-0000-0000-0000-000000000ab3'), 1::bigint, 'the first pickup reached: told once');
 update public.task_stops set arrived_at = now() where task_id = (select id from p7p_task) and seq = 2;
 select is((select count(*) from public.notifications where event = 'request.arrived'), 1::bigint, 'the drop is not the first pickup');
+update public.tasks set status = 'completed', completed_at = now(), end_odometer_km = 7010 where id = (select id from p7p_task);
+update public.tasks set status = 'in_progress', completed_at = null, end_odometer_km = null where id = (select id from p7p_task);
+select is((select count(*) from public.notifications where event = 'request.on_the_way'
+             and recipient_employee_id = '10000000-0000-0000-0000-000000000ab3'), 1::bigint, 'a task reopened is not "on the way" again');
 update public.tasks set status = 'cancelled', cancelled_reason = 'Client postponed' where id = (select id from p7p_task);
-select is((select payload ->> 'body' from public.notifications where event = 'request.cancelled'
-             and recipient_employee_id = '10000000-0000-0000-0000-000000000ab3'), 'Client postponed', 'cancelled: with the reason');
+select is((select count(*) from public.notifications where event = 'request.cancelled'), 0::bigint,
+  'a cancelled trip is told by cancel_task, not by a trigger');
 
 select * from finish();
 rollback;

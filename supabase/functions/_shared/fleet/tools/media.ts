@@ -18,7 +18,7 @@ type VehicleDocument = Row<"vehicle_documents">;
 const EXT: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "application/pdf": "pdf" };
 
 /** The upload tools are the web app's: Claude never moves files (they are not listed on the connector either). */
-export const WEB_ONLY_TOOLS = new Set(["photo_upload_url", "vehicle_document_upload_url"]);
+export const WEB_ONLY_TOOLS = new Set(["photo_upload_url", "vehicle_document_upload_url", "save_vehicle_document"]);
 
 function webOnly(actor: Actor) {
   if (actor.channel !== "web") throw new ToolError("Files are added in the web app (Fame Fleet), not through the connector.");
@@ -150,7 +150,8 @@ function docCard(d: VehicleDocument, url: string | undefined) {
 export const saveVehicleDocument = tool({
   name: "save_vehicle_document",
   title: "Save a vehicle document",
-  description: "Saves a document uploaded with vehicle_document_upload_url. It becomes the current one of its kind; the one before " +
+  description:
+    "Web app only. Saves a document uploaded with vehicle_document_upload_url. It becomes the current one of its kind; the one before " +
     "is kept as replaced. The expiry (revenue licence, insurance, emission test, the rent or lease agreement) is the vehicle's " +
     "date too: the chips, reminders and issues follow it.",
   readOnly: false,
@@ -166,8 +167,18 @@ export const saveVehicleDocument = tool({
   async run(args, { db, now, actor }) {
     if (args.expiry && !isRealDate(args.expiry)) throw new ToolError(`expiry: ${args.expiry} is not a real date.`);
     if (args.kind === "other" && !args.name) throw new ToolError("Name the document (kind Other).");
+    webOnly(actor);
     const vehicle = findVehicle(await loadRefs(db), args.vehicle);
     if (!args.path.startsWith(`${vehicle.id}/${args.kind}/`)) throw new ToolError("This file is not an upload for that vehicle and kind.");
+    // No expiry given for a kind that has one: the vehicle's date stays the document's, so the two never disagree.
+    const kept = {
+      revenue_licence: vehicle.licence_expiry,
+      insurance: vehicle.insurance_expiry,
+      emission: vehicle.emission_expiry,
+      lease: vehicle.rent_until,
+    }[
+      args.kind as "revenue_licence" | "insurance" | "emission" | "lease"
+    ] ?? null;
     // The one before (of the same kind, not removed) is kept, marked replaced; Other may have several.
     if (args.kind !== "other") {
       unwrap(
@@ -184,7 +195,7 @@ export const saveVehicleDocument = tool({
         path: args.path,
         content_type: args.content_type,
         bytes: args.bytes ?? null,
-        expiry: DOC_EXPIRES.includes(args.kind) ? args.expiry ?? null : null,
+        expiry: DOC_EXPIRES.includes(args.kind) ? args.expiry ?? kept : null,
         uploaded_by: actor.employeeId,
         uploaded_by_name: actor.name,
         uploaded_at: now.toISOString(),

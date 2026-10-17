@@ -1546,6 +1546,10 @@ export const updateRequest = tool({
         version: request.version + 1,
         // A phone alone keeps the record of an earlier change (what the approver decides again) as it is.
         ...(!phoneOnly && { previous: before as unknown as Json }),
+        // The asker changed the trip itself: an approved booking's task takes the stops when decided again.
+        ...(trip && { trip_edited_at: nowIso }),
+        // A waiting request moved to another time is reminded afresh (30 minutes before, and once if it passes).
+        ...(neededAt !== request.needed_at && next.status === "waiting" && { decide_reminder_sent_at: null, late_push_sent_at: null }),
         ...(!phoneOnly && next.status === "changed" && { changed_at: nowIso, changed_by: actor.name, change_note: diffText(changes) }),
       }).eq("id", request.id).eq("version", request.version).select("*"),
       "vehicle request",
@@ -1721,10 +1725,11 @@ export const redecideRequest = tool({
     // Phase 7 (§34): the trip edited since it was approved: the task takes its stops as update_task_stops does (the pending
     // ones replaced, planned again, the driver told what changed). A task under way keeps its stops.
     const decidedAt = request.decided_at;
-    const tripEdited = tripRows.length > 0 && decidedAt !== null && tripRows.some((r) => r.created_at > decidedAt);
+    const tripEdited = tripRows.length > 0 && decidedAt !== null && request.trip_edited_at !== null && request.trip_edited_at > decidedAt;
     if (tripEdited && out.task.status === "assigned") {
       const fields = tripFields(request, tripRows);
-      const leave = request.leave_by_source === "manual" ? colomboTime(neededAt) : undefined;
+      // The approver's own time wins; else a time typed by the asker; else planned from the arrive-by times.
+      const leave = change && args.time ? args.time : request.leave_by_source === "manual" ? colomboTime(neededAt) : undefined;
       const res = await updateTaskStops.run({
         task_id: task.id,
         plan_version: out.plan_version,

@@ -36,7 +36,10 @@ alter table public.vehicle_requests
   -- What the proposer saw when proposing: the warnings, the conflicts, the vehicle used and why.
   add column proposal_json jsonb,
   add column decide_reminder_sent_at timestamptz,
-  add column late_push_sent_at timestamptz;
+  add column late_push_sent_at timestamptz,
+  -- When the asker last changed the trip itself (update_request): an approved booking's task takes the stops again
+  -- only when this is after the decision (a one-step booking writes its trip after its own approval).
+  add column trip_edited_at timestamptz;
 
 alter table public.vehicle_requests
   add constraint vehicle_requests_kind_check check (kind in ('request', 'task')),

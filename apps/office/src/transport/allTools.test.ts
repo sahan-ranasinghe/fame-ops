@@ -4,7 +4,7 @@ import { TOOL_PERMISSION } from "@fleet/permissions";
 import { describe, expect, it } from "vitest";
 import { ALL_TOOLS } from "./types";
 
-const WEB_ONLY = ["photo_upload_url", "vehicle_document_upload_url"];
+const WEB_ONLY = ["photo_upload_url", "vehicle_document_upload_url", "save_vehicle_document"];
 
 describe("ALL_TOOLS", () => {
   it("names every connector tool once, and nothing else", () => {

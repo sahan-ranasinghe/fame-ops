@@ -147,6 +147,37 @@ export function pickVehicle(refs: Refs, driver: Employee, typed: string | undefi
   return { vehicle, why: fallback?.vehicle.id === vehicle.id ? fallback.why : "chosen", choice };
 }
 
+/** How far a task moved in whole Colombo days (a deadline keeps its clock time and moves with the day only). */
+export function dayShiftMs(fromIso: string, toIso: string): number {
+  return new Date(dayRange(colomboDate(toIso)).from).getTime() - new Date(dayRange(colomboDate(fromIso)).from).getTime();
+}
+
+/**
+ * A task moved: its stops' planned times move with it, and their arrive-by deadlines move by the whole days only
+ * ("by 10:00" stays 10:00 when the leave time changes, and is 10:00 the next day when the task moves a day).
+ */
+async function moveStopTimes(db: Db, taskId: string, shift: (iso: string | null) => string | null, dayMs: number) {
+  const stops = unwrap(
+    await db.from("task_stops").select("id, planned_arrive_at, planned_depart_at, arrive_by").eq("task_id", taskId).neq(
+      "status",
+      "removed",
+    ),
+    "stops",
+  );
+  for (const s of stops) {
+    const arriveBy = s.arrive_by && dayMs !== 0 ? new Date(new Date(s.arrive_by).getTime() + dayMs).toISOString() : s.arrive_by;
+    if (!s.planned_arrive_at && !s.planned_depart_at && arriveBy === s.arrive_by) continue;
+    unwrap(
+      await db.from("task_stops").update({
+        planned_arrive_at: shift(s.planned_arrive_at),
+        planned_depart_at: shift(s.planned_depart_at),
+        arrive_by: arriveBy,
+      }).eq("id", s.id),
+      "stop",
+    );
+  }
+}
+
 /** "Vehicle changed by Palitha: WP CAB-4521 instead of Kamal's regular vehicle WP KL-1234". */
 export function vehicleChoiceText(choice: unknown): string | undefined {
   const c = choice as Partial<VehicleChoice> | null;
@@ -2073,19 +2104,7 @@ export async function changeTask(
     );
     saved = await getTask(db, task.id);
   } else if (delta !== 0) {
-    // The planned times move with the task.
-    const stops = unwrap(
-      await db.from("task_stops").select("id, planned_arrive_at, planned_depart_at").eq("task_id", task.id).neq("status", "removed"),
-      "stops",
-    );
-    for (const s of stops) {
-      if (!s.planned_arrive_at && !s.planned_depart_at) continue;
-      unwrap(
-        await db.from("task_stops").update({ planned_arrive_at: shift(s.planned_arrive_at), planned_depart_at: shift(s.planned_depart_at) })
-          .eq("id", s.id),
-        "stop",
-      );
-    }
+    await moveStopTimes(db, task.id, shift, dayShiftMs(task.start_at, startAt));
   }
 
   unwrap(
@@ -2265,6 +2284,30 @@ export const reopenTask = tool({
   },
 });
 
+/**
+ * The person who asked for the trip hears what the office did to it (Phase 7, §4): never the person acting, and not
+ * when the request itself is cancelled or declined (that push says it already).
+ */
+async function tellAsker(
+  db: Db,
+  task: Task,
+  actor: Actor,
+  event: "request.driver_changed" | "request.cancelled",
+  title: string,
+  body: string,
+) {
+  if (!task.request_id) return;
+  const request = unwrapMaybe(
+    await db.from("vehicle_requests").select("id, status, requested_by_employee_id").eq("id", task.request_id).maybeSingle(),
+    "vehicle request",
+  );
+  if (!request?.requested_by_employee_id || request.status === "cancelled" || request.status === "declined") return;
+  await notifyEvent(db, event, { title, body, url: `/requests/${request.id}`, tag: `request:${request.id}` }, {
+    actor: actor.employeeId,
+    requester: request.requested_by_employee_id,
+  });
+}
+
 export const cancelTask = tool({
   name: "cancel_task",
   title: "Cancel a task",
@@ -2295,6 +2338,7 @@ export const cancelTask = tool({
       "assignment history",
     );
 
+    await tellAsker(db, task, actor, "request.cancelled", `Trip cancelled · ${task.title}`, reason);
     const driver = unwrapMaybe(await db.from("employees").select("name, phone").eq("id", task.employee_id).maybeSingle(), "employee");
     return {
       result: {
@@ -2384,24 +2428,18 @@ export const reassignTask = tool({
       }),
       "assignment history",
     );
-    if (delta !== 0) {
-      // The planned times move with the task.
-      const stops = unwrap(
-        await db.from("task_stops").select("id, planned_arrive_at, planned_depart_at").eq("task_id", task.id).neq("status", "removed"),
-        "stops",
-      );
-      for (const s of stops) {
-        if (!s.planned_arrive_at && !s.planned_depart_at) continue;
-        unwrap(
-          await db.from("task_stops").update({
-            planned_arrive_at: shift(s.planned_arrive_at),
-            planned_depart_at: shift(s.planned_depart_at),
-          }).eq("id", s.id),
-          "stop",
-        );
-      }
-    }
+    if (delta !== 0) await moveStopTimes(db, task.id, shift, dayShiftMs(task.start_at, startAt));
 
+    if (driverChanged) {
+      await tellAsker(
+        db,
+        task,
+        actor,
+        "request.driver_changed",
+        `Driver changed: ${newDriver.name} instead of ${refs.emp.get(task.employee_id)?.name ?? "the driver before"}`,
+        `${task.title} · ${colomboDayTime(startAt)}`,
+      );
+    }
     const warnings = await assignWarnings(db, { driver: newDriver, vehicle: newVehicle, startAt, endBy, ignoreTaskId: task.id });
     if (new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
     const previousDriver = refs.emp.get(task.employee_id);

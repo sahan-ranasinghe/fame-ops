@@ -57,7 +57,12 @@ export const EVENTS: readonly EventInfo[] = [
     text: "Someone asks for a vehicle; it waits for your decision",
     needs: ["approve"],
   },
-  { event: "request.decided", label: "Your request is decided", text: "A request you made is approved or declined", needs: ["request"] },
+  {
+    event: "request.decided",
+    label: "Your request is decided",
+    text: "A request you made, or a task you proposed, is approved or declined",
+    needs: ["request", "assign_tasks"],
+  },
   // Phase 7 (§19): the dispatchers, the person who assigned the task and the requester (on their own request's link).
   {
     event: "task.declined",
@@ -146,19 +151,19 @@ export const EVENTS: readonly EventInfo[] = [
     event: "request.arrived",
     label: "Your driver has arrived",
     text: "The driver of a trip you asked for reaches the first pickup",
-    needs: ["request"],
+    needs: ["request", "assign_tasks"],
   },
   {
     event: "request.driver_changed",
     label: "Your driver is changed",
     text: "A trip you asked for gets another driver",
-    needs: ["request"],
+    needs: ["request", "assign_tasks"],
   },
   {
     event: "request.cancelled",
     label: "Your trip is cancelled",
     text: "The task of a trip you asked for is cancelled by the office",
-    needs: ["request"],
+    needs: ["request", "assign_tasks"],
   },
 ];
 

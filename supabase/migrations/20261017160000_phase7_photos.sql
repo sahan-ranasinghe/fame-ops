@@ -169,6 +169,9 @@ create policy vehicle_docs_select_held on storage.objects
     bucket_id = 'vehicle-docs'
     and (storage.foldername(name))[1] = (select public.my_held_vehicle())::text
     and (storage.foldername(name))[2] in ('revenue_licence', 'insurance', 'emission')
+    -- Only a current document's file, not a replaced or removed one (the driver's own row rule on vehicle_documents
+    -- shows only the held vehicle's current roadside documents).
+    and exists (select 1 from public.vehicle_documents d where d.path = objects.name)
   );
 
 -- One expiry date, two ways in: the current document's expiry is the vehicle's date, and a date set on the vehicle
@@ -285,6 +288,9 @@ end;
 $$;
 revoke all on function public.notify_requester(uuid, text, text, text) from public, anon, authenticated;
 
+-- The driver starting the trip (Start task, not a reopen) is the phone's: the trigger tells the asker. A driver changed
+-- or a trip cancelled by the office is told by the tool that does it (reassign_task, cancel_task), leaving out the
+-- person acting and any push that already says it (booking.changed, request.redecided, request.decided).
 create function public.tasks_notify_requester()
 returns trigger
 language plpgsql
@@ -293,40 +299,24 @@ set search_path = ''
 as $$
 declare
   v_driver text;
-  v_old    text;
   v_plate  text;
-  v_status text;
 begin
   if new.request_id is null or current_setting('fleet.quiet', true) = 'on' then
     return null;
   end if;
-  select name into v_driver from public.employees where id = new.employee_id;
-  select reg_no into v_plate from public.vehicles where id = new.vehicle_id;
-  if new.status = 'in_progress' and old.status is distinct from 'in_progress' then
+  if new.status = 'in_progress' and old.status in ('assigned', 'declined') then
+    select name into v_driver from public.employees where id = new.employee_id;
+    select reg_no into v_plate from public.vehicles where id = new.vehicle_id;
     perform public.notify_requester(new.id, 'request.on_the_way',
       'On the way · ' || split_part(v_driver, ' ', 1) || ' · ' || coalesce(v_plate, ''),
       'Left at ' || to_char(coalesce(new.started_at, now()) at time zone 'Asia/Colombo', 'HH24:MI') || ' · ' || new.title);
-  end if;
-  if new.employee_id is distinct from old.employee_id and new.status in ('assigned', 'in_progress') then
-    select name into v_old from public.employees where id = old.employee_id;
-    perform public.notify_requester(new.id, 'request.driver_changed',
-      'Driver changed: ' || v_driver || ' instead of ' || coalesce(v_old, 'the driver before'),
-      new.title || ' · ' || to_char(new.start_at at time zone 'Asia/Colombo', 'DD Mon HH24:MI'));
-  end if;
-  if new.status = 'cancelled' and old.status is distinct from 'cancelled' then
-    -- A request cancelled or declined as a whole already tells the person who asked (request.decided / redecided).
-    select status into v_status from public.vehicle_requests where id = new.request_id;
-    if v_status not in ('cancelled', 'declined') then
-      perform public.notify_requester(new.id, 'request.cancelled', 'Trip cancelled · ' || new.title,
-        coalesce(new.cancelled_reason, 'Cancelled by the office'));
-    end if;
   end if;
   return null;
 end;
 $$;
 revoke all on function public.tasks_notify_requester() from public, anon, authenticated;
 create trigger tasks_notify_requester
-  after update of status, employee_id on public.tasks
+  after update of status on public.tasks
   for each row execute function public.tasks_notify_requester();
 
 -- The first pickup reached (the Arrived tap or the arrival nudge, whichever comes first), once per request.
