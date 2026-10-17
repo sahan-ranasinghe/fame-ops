@@ -517,5 +517,41 @@
   },
   "map": {
     "northUp": "North up"
+  },
+  "profilePhoto": {
+    "title": "Add your photo",
+    "body": "The office and the people you drive see it with your name.",
+    "take": "Take photo",
+    "choose": "Choose from gallery",
+    "saving": "Saving your photo…",
+    "saved": "Photo saved",
+    "noConnection": "No connection: try again",
+    "failed": "Couldn't save the photo: try again",
+    "tryAgain": "Try again",
+    "change": "Change photo",
+    "none": "No photo yet"
+  },
+  "vehiclePhoto": {
+    "add": "Add a photo",
+    "saving": "Saving the photo…",
+    "added": "Photo added",
+    "hasOne": "This vehicle already has a photo",
+    "queued": "The photo is sent when the connection is back"
+  },
+  "docs": {
+    "title": "Documents",
+    "myVehicle": "My vehicle",
+    "open": "Documents of {plate}",
+    "revenue_licence": "Revenue licence",
+    "insurance": "Insurance",
+    "emission": "Emission test",
+    "validUntil": "Valid until {date}",
+    "expired": "Expired {date}",
+    "noExpiry": "No expiry date",
+    "missing": "Not uploaded yet",
+    "view": "Open",
+    "needsConnection": "Needs a connection to open",
+    "noVehicle": "Start work with a vehicle to see its documents",
+    "failed": "Couldn't open the document: try again"
   }
 }
