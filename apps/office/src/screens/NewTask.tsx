@@ -52,7 +52,9 @@ export function NewTask() {
   const base = basePlace(settings.data);
   const [params] = useSearchParams();
   const date = isDate(params.get("date")) ? params.get("date")! : today();
-  const [state, setState, draft] = useFormDraft<Form>("task-new", null, () => ({ f: emptyAssign(date), rows: [] }));
+  // Part 3b (H5): the Drivers board's "New task" opens /tasks/new?driver=<username> with that driver picked.
+  const driverParam = (params.get("driver") ?? "").trim();
+  const [state, setState, draft] = useFormDraft<Form>("task-new", null, () => ({ f: { ...emptyAssign(date), ...(driverParam ? { driver: driverParam } : {}) }, rows: [] }));
   const { f, rows } = state;
   const setF = (patch: Partial<AssignFields> | ((x: AssignFields) => AssignFields)) =>
     setState((s) => ({ ...s, f: typeof patch === "function" ? patch(s.f) : { ...s.f, ...patch } }));

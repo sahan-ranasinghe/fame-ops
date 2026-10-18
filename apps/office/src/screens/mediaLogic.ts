@@ -12,6 +12,8 @@ export const PROFILE_PX = 512;
 /** A vehicle's photo and its thumbnail, on the long side. */
 export const VEHICLE_PX = 1600;
 export const THUMB_PX = 256;
+/** A photo of a driving licence (Part 3b), on the long side. */
+export const LICENCE_PX = 1600;
 /** A document photo, on the long side. */
 export const DOC_PX = 2000;
 /** A document file (vehicle-docs bucket): 10 MB. */
@@ -166,6 +168,10 @@ export const canSetDriverPhoto = (tools: readonly string[], uploads: boolean) =>
 /** Upload or replace a vehicle's photo (the vehicle's page): the web app only, with both tools. */
 export const canSetVehiclePhoto = (tools: readonly string[], uploads: boolean) =>
   uploads && tools.includes("photo_upload_url") && tools.includes("set_vehicle_photo");
+
+/** Part 3b (G): replace the front or back of a driver's licence (the driver's page): the web app only, with both tools. */
+export const canSetLicencePhoto = (tools: readonly string[], uploads: boolean) =>
+  uploads && tools.includes("photo_upload_url") && tools.includes("set_driver_licence_photo");
 
 /** What Tell requester's message is about, as a heading. */
 export const TELL_MOMENT: Record<"approved" | "driver_changed" | "on_the_way" | "arrived" | "cancelled", string> = {

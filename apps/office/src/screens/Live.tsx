@@ -53,6 +53,7 @@ import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote, VehicleThumb } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
+import { livePresence } from "../ui/driverRowLogic";
 import { Icon } from "../ui/icons";
 import { linksFromCall } from "../ui/phoneLinks";
 import { duration } from "@fleet/durations";
@@ -246,6 +247,7 @@ export function Live() {
                   {x.task_note && <span className="status bad" style={{ display: "block" }} data-testid="task-note">{x.task_note}</span>}
                   {x.vehicle_note && <span className="sub" style={{ display: "block" }}>{x.vehicle_note}</span>}
                   {x.app_stops_text && <span className="small" style={{ display: "block" }}><span className="app-stops">{x.app_stops_text}</span>{x.phone && <span className="muted"> · {x.phone}</span>}</span>}
+                  <Presence x={x} />
                 </span>
                 {working && <span className={`age status ${liveTone(x)}`}>{statusLine(x).replace(/^Live · /, "")}</span>}
               </button>
@@ -276,6 +278,20 @@ function RouteSnap({ route, snap, busy, onRecorded }: { route: Route; snap: bool
       {ui.toggle && <label><input type="checkbox" checked={!snap} disabled={busy} onChange={(e) => onRecorded(e.target.checked)} /> Recorded points</label>}
       {ui.note && <span>{ui.note}</span>}
     </div>
+  );
+}
+
+/**
+ * Part 3b (H2, H4), for people with approve or assign_tasks (only their answers carry it): the driver's "Running late 15 min
+ * · said 08:52" and "Not available, back 13:00" in amber, the next task and the usual start in grey.
+ */
+function Presence({ x, note }: { x: LiveDriver; note?: boolean }) {
+  const p = livePresence(x);
+  return (
+    <>
+      {p.warn && <span className={`status warn small${note ? " duty-note" : ""}`} style={note ? undefined : { display: "block" }} data-testid="live-presence-warn">{p.warn}</span>}
+      {p.facts && <span className={`sub small${note ? " duty-note" : ""}`} style={note ? undefined : { display: "block" }} data-testid="live-presence">{p.facts}</span>}
+    </>
   );
 }
 
@@ -341,6 +357,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded
         {x.vehicle_note && <span className="sub duty-note" data-testid="vehicle-note">{x.vehicle_note}</span>}
         {x.app_stops_text && <span className="small app-stops duty-note" data-testid="app-stops">{x.app_stops_text}</span>}
         {x.phone && <span className="muted small duty-note">{x.phone}</span>}
+        <Presence x={x} note />
       </div>
       <dl className="facts">
         <div><dt>Last position</dt><dd className="mono" data-testid="live-position">{x.last_position_time ?? x.last_position_at ?? (x.updated ? String(x.updated).slice(-5) : "—")}</dd></div>

@@ -33,6 +33,9 @@ export const ISSUES_NEED: Permission[] = ["issues", "assign_tasks"];
 /** Hotfix 2 (A): My trips (my_trips): the requests and proposed tasks a person made, for request or assign_tasks. */
 export const TRIPS_NEED: Permission[] = ["request", "assign_tasks"];
 
+/** Part 3b (H5): the Drivers board (drivers_board), and who adds or changes when a driver is not available. */
+export const BOARD_NEED: Permission[] = ["approve", "assign_tasks"];
+
 /** Every screen of the menu, in the menu's order (its sections below). */
 export const NAV: NavItem[] = [
   // Today
@@ -42,6 +45,7 @@ export const NAV: NavItem[] = [
   { key: "requests", label: "Requests", need: ["view", "request"], path: "/requests" },
   { key: "my_trips", label: "My trips", need: TRIPS_NEED, path: "/my-trips" },
   { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
+  { key: "drivers_board", label: "Drivers board", need: BOARD_NEED, path: "/drivers/board" },
   // Fleet
   { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
   { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
@@ -66,7 +70,7 @@ export interface NavSection {
 }
 
 export const NAV_SECTIONS: { key: NavSectionKey; label: string; keys: string[] }[] = [
-  { key: "today", label: "Today", keys: ["overview", "live", "tasks", "requests", "my_trips", "issues"] },
+  { key: "today", label: "Today", keys: ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board"] },
   { key: "fleet", label: "Fleet", keys: ["vehicles", "drivers", "places", "maintenance"] },
   { key: "reports", label: "Reports", keys: ["mileage", "fuel", "duty"] },
   { key: "admin", label: "Admin", keys: ["projects", "settings"] },

@@ -5,6 +5,7 @@ import { DriverForm } from "../screens/DriverForm";
 import { DriverManage } from "../screens/DriverManage";
 import { DriverPage } from "../screens/DriverPage";
 import { Drivers } from "../screens/Drivers";
+import { DriversBoard } from "../screens/DriversBoard";
 import { DutyLog } from "../screens/DutyLog";
 import { MoveVehicle } from "../screens/MoveVehicle";
 import { Live } from "../screens/Live";
@@ -42,7 +43,7 @@ import { VehicleForm } from "../screens/VehicleForm";
 import { Vehicles } from "../screens/Vehicles";
 import { can } from "../transport/types";
 import { useFleet } from "./FleetContext";
-import { DUTY_NEED, ROUTES_NEED, ISSUES_NEED, TRIPS_NEED } from "./nav";
+import { BOARD_NEED, DUTY_NEED, ROUTES_NEED, ISSUES_NEED, TRIPS_NEED } from "./nav";
 import { Shell } from "./Shell";
 
 /** The screen, or "No access" when the person holds none of the permissions (the server refuses the tools either way). */
@@ -147,6 +148,8 @@ export const routes: RouteObject[] = [
       { path: "drivers/new", element: <Guard need={["vehicles"]}><DriverForm /></Guard> },
       // Phase 7: the duty log and the office's "Move to vehicle" (a static segment outranks :username).
       { path: "drivers/duty", element: <Guard need={DUTY_NEED}><DutyLog /></Guard> },
+      // Part 3b (H5): the Drivers board and its week view (a static segment outranks :username).
+      { path: "drivers/board", element: <Guard need={BOARD_NEED}><DriversBoard /></Guard> },
       { path: "drivers/:username/vehicle", element: <Guard need={DUTY_NEED}><MoveVehicle /></Guard> },
       { path: "drivers/:username", element: <Guard need={ROUTES_NEED}><DriverPage /></Guard> },
       { path: "drivers/:username/edit", element: <Guard need={["vehicles"]}><DriverManage /></Guard> },

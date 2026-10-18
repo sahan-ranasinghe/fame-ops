@@ -47,6 +47,7 @@ export function Drivers() {
       <div className="ph">
         <div><div className="eyebrow">Fame Driver sign-ins</div><h1>Drivers</h1></div>
         <div className="ph-actions">
+          {me.tools.includes("drivers_board") && <Link className="btn" to="/drivers/board">Drivers board</Link>}
           {me.tools.includes("duty_log") && <Link className="btn" to="/drivers/duty">Duty log</Link>}
           {canAdd && <Link className="btn primary" to="/drivers/new">Add driver</Link>}
         </div>

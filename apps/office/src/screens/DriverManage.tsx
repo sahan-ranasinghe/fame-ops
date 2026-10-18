@@ -1,11 +1,15 @@
-// Manage a driver (/drivers/:username/edit): contact and licence, a new PIN,
-// switching the account off or on. The contact fields are kept as a draft.
+// Manage a driver (/drivers/:username/edit): the driver's profile (Part 3b, G), a new PIN, switching the account off or on.
 // Phase 7 (§5): the photo with Replace photo (the web app).
+// Part 3b (G): driver_profile, watched: Contact, Emergency contact, Driving licence (with the front and back photos), This
+// month and the app version, Not available, Changes, and a banner for what is missing. Each section's Edit saves through
+// update_driver with only what changed; the open section's fields are kept as a draft. Without driver_profile the page
+// shows the driver list's mobile and licence expiry, as before.
 import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import type { Driver, DriversList } from "../data/types";
+import type { Driver, DriverProfile, DriversList } from "../data/types";
+import { useQuery } from "../data/useQuery";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice } from "../ui/basics";
@@ -13,12 +17,12 @@ import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { isPin, randomPin } from "./driverLogic";
+import { missingText, profileFields } from "./driverProfileLogic";
+import { type ProfileDraft, ProfileSections } from "./DriverProfileParts";
 import { DriverPhotoCard } from "./PhotoUpload";
 
-interface Contact {
-  phone: string;
-  lic: string;
-}
+/** The profile is fetched again this often while the page is open. */
+export const PROFILE_REFRESH_MS = 60_000;
 
 export function DriverManage() {
   const { username = "" } = useParams();
@@ -42,12 +46,13 @@ export function DriverManage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [username, transport]);
 
-  const [f, setF, draft] = useFormDraft<Contact | null>("driver-edit", username, null);
-  useEffect(() => {
-    if (x && f === null) setF({ phone: x.phone ?? "", lic: x.licence?.expiry ?? "" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [x]);
-  const [edMsg, setEdMsg] = useState<string | null>(null);
+  const profileQ = useQuery<DriverProfile>("driverProfile", "driver_profile", username ? { driver: username } : null, {
+    every: PROFILE_REFRESH_MS,
+    enabled: me.tools.includes("driver_profile"),
+  });
+  const p = profileQ.data;
+  const [draft, setDraft, controls] = useFormDraft<ProfileDraft>("driver-profile", username, () => ({ section: null, f: profileFields(undefined, null) }));
+
   const [pin, setPin] = useState("");
   const [pinMsg, setPinMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
   const [armed, setArmed] = useState(false);
@@ -60,24 +65,10 @@ export function DriverManage() {
   };
 
   if (loadErr) return <section className="view"><PageTop title="Driver" backTo="/drivers" /><Notice tone="bad">{loadErr}</Notice></section>;
-  if (!x || f === null) return <section className="view"><PageTop title="Driver" backTo="/drivers" /><Loading>Loading the driver…</Loading></section>;
+  if (!x) return <section className="view"><PageTop title="Driver" backTo="/drivers" /><Loading>Loading the driver…</Loading></section>;
   const off = x.active === false;
+  const missing = missingText(p?.missing);
 
-  async function save(ev: FormEvent) {
-    ev.preventDefault();
-    if (!f) return;
-    setBusy(true);
-    try {
-      await transport.call("update_driver", { username, phone: f.phone.trim() || null, licence_expiry: f.lic || null });
-      draft.clear();
-      toast("Driver updated");
-      after();
-      navigate("/drivers");
-    } catch (e) {
-      setEdMsg(errText(e as FleetError)[0]);
-      setBusy(false);
-    }
-  }
   async function setNewPin(ev: FormEvent) {
     ev.preventDefault();
     if (!isPin(pin.trim())) {
@@ -114,18 +105,14 @@ export function DriverManage() {
   return (
     <section className="view" data-testid="driver-manage">
       <PageTop title={x.name} sub={<><span className="mono">{x.username}</span> · {x.code || ""}</>} backTo="/drivers" />
-      <DraftBanner draft={draft} />
+      <DraftBanner draft={controls} />
       <div className="page-form">
-        <DriverPhotoCard key={username} username={username} name={x.name} photoUrl={x.photo_url} onSaved={() => void store.load("lists.drivers", "list_drivers", {})} />
-        <form className="card card-b form" onSubmit={save}>
-          <h2>Contact and licence</h2>
-          <div className="grid2">
-            <div className="field"><label htmlFor="ed-phone">Mobile</label><input id="ed-phone" maxLength={30} inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
-            <div className="field"><label htmlFor="ed-lic">Driving licence expires</label><input type="date" id="ed-lic" value={f.lic} onChange={(e) => setF({ ...f, lic: e.target.value })} /></div>
-          </div>
-          {edMsg && <Notice tone="bad">{edMsg}</Notice>}
-          <div><button className="btn dark" type="submit" disabled={busy}>Save</button></div>
-        </form>
+        {missing && <div data-testid="pf-missing"><Notice>{missing}</Notice></div>}
+        {profileQ.err && !p && <Notice tone="bad">{errText(profileQ.err)[0]}</Notice>}
+        <DriverPhotoCard key={username} username={username} name={x.name} photoUrl={p?.driver.photo_url ?? x.photo_url} onSaved={() => void store.load("lists.drivers", "list_drivers", {})} />
+        {me.tools.includes("driver_profile") && !p && !profileQ.err ? <Loading>Loading the profile…</Loading> : (
+          <ProfileSections username={username} name={x.name} p={p} row={x} draft={draft} setDraft={setDraft} controls={controls} />
+        )}
         {me.tools.includes("reset_pin") && (
           <form className="card card-b form" onSubmit={setNewPin}>
             <h2>New PIN</h2>

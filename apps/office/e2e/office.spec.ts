@@ -230,8 +230,9 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByLabel("Find a vehicle").fill(plate);
   await expect(page.locator("tr", { hasText: plate })).toContainText("9 seats");
 
-  await page.getByRole("link", { name: "Drivers" }).first().click();
-  await expect(page.getByRole("heading", { name: "Drivers" })).toBeVisible();
+  // Exact: the menu's "Drivers board" (Part 3b) comes first in the rail.
+  await page.getByRole("link", { name: "Drivers", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: "Drivers", exact: true })).toBeVisible();
   await page.getByLabel("Find a driver").fill(driver.name);
   const drow = page.locator("tr", { hasText: driver.name });
   await expect(drow).toBeVisible();

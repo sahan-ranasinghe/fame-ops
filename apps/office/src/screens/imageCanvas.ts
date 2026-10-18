@@ -2,7 +2,7 @@
 // decoded upright (its EXIF turn applied), drawn on a canvas at the size
 // mediaLogic gives and made a JPEG. Plain DOM, no Supabase: the upload itself
 // is the web app's (FleetContext `files`).
-import { type DrawBox, DOC_PX, fitLongSide, JPEG_QUALITY, PROFILE_PX, squareCrop, THUMB_PX, VEHICLE_PX } from "./mediaLogic";
+import { type DrawBox, DOC_PX, fitLongSide, JPEG_QUALITY, LICENCE_PX, PROFILE_PX, squareCrop, THUMB_PX, VEHICLE_PX } from "./mediaLogic";
 
 interface Decoded {
   img: CanvasImageSource;
@@ -75,4 +75,9 @@ export function vehiclePhoto(file: Blob): Promise<{ photo: Blob; thumb: Blob }> 
 /** A document photo at 2000 px on the long side, so the text stays readable. */
 export function documentPhoto(file: Blob): Promise<Blob> {
   return withDecoded(file, (src) => draw(src, fitLongSide(src.w, src.h, DOC_PX)));
+}
+
+/** A photo of a driving licence (Part 3b) at 1600 px on the long side. */
+export function licencePhoto(file: Blob): Promise<Blob> {
+  return withDecoded(file, (src) => draw(src, fitLongSide(src.w, src.h, LICENCE_PX)));
 }
