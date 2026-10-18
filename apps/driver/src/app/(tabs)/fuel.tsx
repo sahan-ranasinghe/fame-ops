@@ -2,6 +2,8 @@
 // of each video (uploading with a percentage, waiting for Wi-Fi, uploaded,
 // failed · tap to retry), and the one button: Log fuel (the fuel form with
 // its required video).
+// Hotfix 3 (L6): the fills 20 at a time with "Load more". The month's rows are all on the phone already (the totals
+// need them, at most 200), so the list is a window over them; offline the same.
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -10,11 +12,13 @@ import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LoadMore } from '@/components/LoadMore';
 import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Plate, Txt } from '@/components/ui';
 import { fetchMileage, type Mileage } from '@/lib/api';
 import { thousands } from '@/lib/format';
 import { getJson, setJson } from '@/lib/kv';
+import { loadMore, PAGE, pageInfo, windowOf } from '@/lib/lists';
 import { supabase } from '@/lib/supabase';
 import { colomboTime, startOfColomboMonth } from '@/lib/time';
 import { megabytes, percentOf } from '@/lib/video';
@@ -43,6 +47,7 @@ export default function FuelScreen() {
   const dateLabel = useDateLabel();
   const [mileage, setMileage] = useState<Mileage | null>(() => getJson<Mileage>(CACHE_KEY));
   const [, bump] = useState(0);
+  const [shown, setShown] = useState(PAGE);
 
   const vehicleId = vehicle?.id ?? null;
   const queued = queue.ops;
@@ -138,7 +143,7 @@ export default function FuelScreen() {
 
         <Card style={{ padding: 0 }}>
           {rows.length === 0 && <Txt variant="muted" style={{ padding: 18 }}>{t('fuel.nothingYet')}</Txt>}
-          {rows.map((row, index) => {
+          {windowOf(rows, shown).map((row, index) => {
             const line = videoLine(row);
             return (
               <Pressable
@@ -161,6 +166,7 @@ export default function FuelScreen() {
             );
           })}
         </Card>
+        <LoadMore info={pageInfo(shown, rows.length)} onPress={() => setShown(loadMore(shown, rows.length, null).shown)} />
         {queue.videos > 0 && <Txt variant="muted" style={{ textAlign: 'center' }}>{`${queue.videos} · ${megabytes(queue.videoBytes)}`}</Txt>}
       </ScrollView>
     </View>

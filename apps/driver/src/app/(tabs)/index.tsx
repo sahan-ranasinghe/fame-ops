@@ -11,12 +11,14 @@
 // the vehicle or "Your vehicle on the day" / "Any van" (J), Call contact / requester / fleet admin / office with
 // WhatsApp (F), and "Changed" when the office changed the task since it was last seen (I). Tapping the card opens the
 // whole task (the preview on app/task/[id].tsx) before accepting.
+// Hotfix 3 (L6): after the card at most 3 later tasks (later today first, then coming up) and the row "All today's tasks"
+// ("2 more later today" when Today leaves some out), which pushes app/today-tasks.tsx; a missed task is shown nowhere
+// (lib/lists.ts). Only the rows on screen count as seen (components/TaskRows.tsx).
 
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { GoogleCredit } from '@/components/GoogleCredit';
 import { Check, ChevronRight, Play, Route } from '@/components/icons';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -29,10 +31,12 @@ import { Thumb, useVehicleThumbs } from '@/components/Photos';
 import { PlateText } from '@/components/PlateText';
 import { plateOf } from '@/components/SwapCard';
 import { swapCard, taskTitle } from '@/components/taskLines';
+import { TaskList, useMarkShown } from '@/components/TaskRows';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { taskCalls } from '@/lib/contacts';
 import { firstName } from '@/lib/format';
+import { todayLists } from '@/lib/lists';
 import { hasChanges, vehicleLine, vehicleWords } from '@/lib/taskPreview';
 import { colomboDate, colomboHour, colomboTime } from '@/lib/time';
 import { isSelfTrip } from '@/lib/trips';
@@ -57,34 +61,16 @@ export default function TodayScreen() {
 
   const today = colomboDate();
   const [declining, setDeclining] = useState<TaskWithStops | null>(null);
-  const running = tasks.find((task) => task.status === 'in_progress');
-  const assigned = tasks
-    .filter((task) => task.status === 'assigned')
-    .sort((a, b) => a.start_at.localeCompare(b.start_at));
-  const next: TaskWithStops | undefined = running ?? assigned[0];
-  const rest = assigned.filter((task) => task !== next);
-  const laterToday = rest.filter((task) => colomboDate(task.start_at) <= today);
-  const upcoming = rest.filter((task) => colomboDate(task.start_at) > today);
+  // Hotfix 3 (L6): the card, at most 3 later tasks, then "All today's tasks"; never a missed task.
+  const lists = todayLists(tasks, now);
+  const { running, next, shownToday, shownUpcoming, moreToday } = lists;
 
-  // "Seen by driver": recorded the first time a task is on screen.
-  const unseen = tasks.filter((task) => task.status === 'assigned' && !task.seen_at).map((task) => task.id).join(',');
-  const { markSeen, refresh, rememberShown, loadTaskContacts } = app;
-  useFocusEffect(
-    useCallback(() => {
-      if (unseen !== '') markSeen(unseen.split(','));
-    }, [unseen, markSeen]),
-  );
-  // Hotfix 2 (I): the first copy of each task on screen is kept, so a later change by the office shows as "Changed".
-  const shownKey = tasks.filter((task) => task.status === 'assigned').map((task) => task.id).join(',');
-  useFocusEffect(
-    useCallback(() => {
-      rememberShown(tasksOnScreen(app.tasks));
-      // Only when the list of tasks changes.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [shownKey, rememberShown]),
-  );
+  // "Seen by driver" (recorded the first time a task is on screen) and the first copy of each, so a later change by the
+  // office shows as "Changed" (Hotfix 2, I): the card and the rows shown.
+  const { refresh, loadTaskContacts } = app;
+  useMarkShown([...(next ? [next] : []), ...shownToday, ...shownUpcoming]);
   // Who to call about the next task (kept on the phone: shown offline too).
-  const nextId = running?.id ?? assigned[0]?.id;
+  const nextId = next?.id;
   useEffect(() => {
     if (nextId) loadTaskContacts(nextId);
   }, [nextId, loadTaskContacts]);
@@ -229,56 +215,21 @@ export default function TodayScreen() {
             <Button kind={next ? 'dark' : 'primary'} icon={Route} label={t('trip.start')} onPress={() => router.push('/start-trip')} />
           )}
 
-          <TaskList title={t('today.laterToday')} tasks={laterToday} />
-          <TaskList title={t('today.upcoming')} tasks={upcoming} showDate />
+          <TaskList title={t('today.laterToday')} tasks={shownToday} />
+          <TaskList title={t('today.upcoming')} tasks={shownUpcoming} showDate />
+          {/* Hotfix 3 (L6): the whole list on its own screen, pushed over Today (back returns here as it was). */}
+          {lists.allRow && (
+            <Pressable accessibilityRole="button" onPress={() => router.push('/today-tasks')} style={styles.allRow}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Txt variant="strong" size={18}>{t('today.allTasks')}</Txt>
+                {moreToday > 0 && <Txt variant="muted">{t('today.moreLater', { n: moreToday })}</Txt>}
+              </View>
+              <ChevronRight size={22} color={colors.ink} />
+            </Pressable>
+          )}
         </View>
       </ScrollView>
       <DeclineSheet task={declining} onClose={() => setDeclining(null)} />
-    </View>
-  );
-}
-
-/** The tasks Today shows that are still to start (their first copy is kept: lib/taskPreview.ts). */
-function tasksOnScreen(tasks: TaskWithStops[]): TaskWithStops[] {
-  return tasks.filter((task) => task.status === 'assigned');
-}
-
-function TaskList({ title, tasks, showDate = false }: { title: string; tasks: TaskWithStops[]; showDate?: boolean }) {
-  const { t, changesFor } = useApp();
-  const router = useRouter();
-  const dateLabel = useDateLabel();
-  if (tasks.length === 0) return null;
-  return (
-    <View style={{ gap: 10 }}>
-      <Txt variant="heading" style={{ marginLeft: 6 }}>{title}</Txt>
-      <Card style={{ padding: 0 }}>
-        {tasks.map((task, index) => (
-          <Pressable
-            key={task.id}
-            accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/task/[id]', params: { id: task.id } })}
-            style={[styles.row, index > 0 && { borderTopWidth: 1, borderTopColor: colors.line }]}
-          >
-            <View style={{ width: 62 }}>
-              <Mono size={18} bold>{colomboTime(leaveTime(task))}</Mono>
-              {showDate && <Txt variant="small">{dateLabel(task.start_at)}</Txt>}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Txt variant="strong" size={18}>{taskTitle(t, task)}</Txt>
-              {/* A trip of the driver's own goes to its stop: there is no "from". */}
-              {isSelfTrip(task)
-                ? task.task_stops.length > 0 && <Txt variant="muted">{task.task_stops[task.task_stops.length - 1].place_name}</Txt>
-                : task.task_stops[0] && <Txt variant="muted">{t('today.from', { place: task.task_stops[0].place_name })}</Txt>}
-              <GoogleCredit show={task.task_stops.some((s) => !!s.google_place_id)} />
-              {task.status === 'assigned' && (
-                <Txt variant="small" color={task.accepted_at ? colors.blue : colors.amberText}>{t(task.accepted_at ? 'today.accepted' : 'today.notAccepted')}</Txt>
-              )}
-              {task.status === 'assigned' && hasChanges(changesFor(task)) && <ChangedTag />}
-            </View>
-            <ChevronRight size={22} color={colors.ink} />
-          </Pressable>
-        ))}
-      </Card>
     </View>
   );
 }
@@ -290,5 +241,8 @@ const styles = StyleSheet.create({
   nextCard: { backgroundColor: colors.card, borderWidth: 2.5, borderColor: colors.ink, borderRadius: 22, padding: 20 },
   nextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   vehicleLine: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 16, minHeight: 72 },
+  allRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: 18, borderWidth: 1,
+    borderColor: colors.line, paddingHorizontal: 16, paddingVertical: 16, minHeight: 72,
+  },
 });

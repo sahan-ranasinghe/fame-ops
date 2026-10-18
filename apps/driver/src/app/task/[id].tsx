@@ -18,6 +18,7 @@
 // totals, the vehicle or "Your vehicle on the day", who asked and who approved, Accept / Can't do). Under way: Call
 // contact beside Navigate as designed, then Call requester / fleet admin / office with WhatsApp (F), "Approved by
 // Palitha · 10:42" with Call (K), and the time at a stop as a duration ("1 h 30 min there", lib/durations.ts).
+// Hotfix 3: a missed task (lib/lists.ts isMissed) is not shown: "This task is no longer assigned to you."
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -41,6 +42,7 @@ import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { arrivalCheck, arrivalRecord, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/dayRules';
 import { approvedBy, taskCalls } from '@/lib/contacts';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
+import { isMissed } from '@/lib/lists';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { canAddStop } from '@/lib/trips';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
@@ -60,7 +62,8 @@ export default function TaskScreen() {
   const peopleLine = usePeopleLine();
   const { duration } = useDurations();
 
-  const task: TaskWithStops | undefined = tasks.find((item) => item.id === id);
+  // Hotfix 3: a missed task (never started, its leave-by over a day ago) has left the driver's list: "no longer yours".
+  const task: TaskWithStops | undefined = tasks.find((item) => item.id === id && !isMissed(item, Date.now()));
   const running = task?.status === 'in_progress';
   // The phone's position while this screen is open: the map and the Arrived rule (nothing is recorded here).
   const here = useHere(running);

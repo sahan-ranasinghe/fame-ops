@@ -153,13 +153,17 @@ export async function fetchVehicles(client: Client): Promise<Vehicle[]> {
   return check(await client.from('vehicles').select(VEHICLE_COLUMNS).order('reg_no'), 'vehicles');
 }
 
-/** Tasks still to do or under way, plus everything that starts at or after `since`. */
+/**
+ * Tasks still to do or under way, plus everything that starts at or after `since`. Never a missed one (Hotfix 3: never
+ * started, its leave-by over a day ago): the app shows it nowhere.
+ */
 export async function fetchTasks(client: Client, since: Date): Promise<TaskWithStops[]> {
   const tasks = check(
     await client
       .from('tasks')
       .select('*, task_stops(*), task_vehicle_segments(*)')
       .or(`status.in.(assigned,in_progress),start_at.gte."${since.toISOString()}"`)
+      .neq('status', 'missed')
       .order('start_at'),
     'tasks',
   );
@@ -188,11 +192,44 @@ export async function fetchTaskStatus(client: Client, id: string): Promise<strin
   return row?.status ?? null;
 }
 
+/** My newest reports (kept on the phone; the Report tab asks for older ones with fetchReportsBefore). */
 export async function fetchReports(client: Client): Promise<VehicleReport[]> {
   return check(
-    await client.from('vehicle_reports').select('*').order('created_at', { ascending: false }).limit(30),
+    await client.from('vehicle_reports').select('*').order('created_at', { ascending: false }).order('id', { ascending: false }).limit(30),
     'reports',
   );
+}
+
+/** The filter for the reports below this one, newest first (created_at, then id): the order fetchReports and the Report tab use. */
+export function reportsOlderThan(before: ReportCursor): string {
+  return `created_at.lt."${before.created_at}",and(created_at.eq."${before.created_at}",id.lt.${before.id})`;
+}
+
+export interface ReportCursor {
+  created_at: string;
+  id: string;
+}
+
+/**
+ * Hotfix 3 (L6): my reports older than `before` (all of them when null), newest first, `limit` at a time, and how many
+ * there are below `before` in all (`limit` 0 only counts them).
+ */
+export async function fetchReportsBefore(
+  client: Client,
+  before: ReportCursor | null,
+  limit: number,
+): Promise<{ rows: VehicleReport[]; older: number }> {
+  if (limit <= 0) {
+    const head = client.from('vehicle_reports').select('id', { count: 'exact', head: true });
+    const res = await (before ? head.or(reportsOlderThan(before)) : head);
+    if (res.error) fail(res, 'reports');
+    return { rows: [], older: res.count ?? 0 };
+  }
+  const query = client.from('vehicle_reports').select('*', { count: 'exact' })
+    .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(limit);
+  const res = await (before ? query.or(reportsOlderThan(before)) : query);
+  const rows = check(res, 'reports');
+  return { rows, older: res.count ?? rows.length };
 }
 
 export interface Mileage {
