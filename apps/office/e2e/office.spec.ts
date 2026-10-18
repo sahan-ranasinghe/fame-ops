@@ -225,10 +225,13 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByRole("button", { name: "Save changes" }).click();
   await expect(page.getByRole("status")).toHaveText("Vehicle updated");
   await expect(page.getByTestId("vehicle-detail")).toContainText("9 seats");
+  // Hotfix 3 (L3): a list shows 25 a page: find the row first.
+  await page.getByLabel("Find a vehicle").fill(plate);
   await expect(page.locator("tr", { hasText: plate })).toContainText("9 seats");
 
   await page.getByRole("link", { name: "Drivers" }).first().click();
   await expect(page.getByRole("heading", { name: "Drivers" })).toBeVisible();
+  await page.getByLabel("Find a driver").fill(driver.name);
   const drow = page.locator("tr", { hasText: driver.name });
   await expect(drow).toBeVisible();
   await drow.getByRole("link", { name: "Manage" }).click();
@@ -259,6 +262,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await page.getByRole("link", { name: /^Users/ }).click();
   await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
+  await page.getByLabel("Find a person").fill(email);
   const myRow = page.locator("tr", { hasText: email });
   await expect(myRow).toBeVisible();
   await expect(myRow).toContainText("Users");
@@ -567,6 +571,7 @@ test("a driver accepts one task and declines another; the office gives it to a f
 
   // Drivers: accepts and declines in the last 30 days.
   await page.goto("/drivers");
+  await page.getByLabel("Find a driver").fill(d1.name);
   const row = page.locator("tr", { hasText: d1.name });
   await expect(row).toContainText("1 accepted");
   await expect(row).toContainText("1 declined");
