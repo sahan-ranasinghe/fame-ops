@@ -577,6 +577,7 @@ export function localTrip(input: {
     vehicle_type_wanted: null,
     approved_by_employee_id: null,
     approved_at: null,
+    missed_at: null,
     start_place_id: null,
     start_name: null,
     start_lat: null,
