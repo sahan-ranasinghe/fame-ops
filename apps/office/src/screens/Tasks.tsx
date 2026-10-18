@@ -20,6 +20,7 @@ import { Icon } from "../ui/icons";
 import { LoadMore, PAGE_SIZE, type PagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import { decidedText } from "./approversLogic";
+import { LateReportLine } from "./LateReport";
 import { NeedsDriverList } from "./NeedsDriverList";
 import { TripTags } from "./TripPurpose";
 import { WaitingApprovalColumn } from "./WaitingApprovalColumn";
@@ -42,6 +43,8 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
           {t.late_min ? <span className="status bad"> · late by {duration(t.late_min)}</span> : null}
         </span>
       )}
+      {/* Part 3b (H4): the driver's own word. */}
+      <LateReportLine late={t.late_report} testId="card-late-report" />
       <span className="who"><Avatar name={t.driver} src={t.driver_photo_url} small /><span className="grow">{t.driver || ""}</span><VehicleThumb src={t.vehicle_thumb_url} />{t.vehicle ? <Plate v={t.vehicle} /> : t.vehicle_text ? <span className="muted small" data-testid="vehicle-text">{t.vehicle_text}</span> : null}</span>
       <span className={`status ${statusTone(col, t.status)}`}>{t.status || ""}</span>
       {/* Hotfix 2 (K): who sent it to the driver. */}

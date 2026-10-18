@@ -101,3 +101,20 @@ export function subscribeIssues(cb: () => void): () => void {
     });
   return () => { void client.removeChannel(channel); };
 }
+
+/**
+ * Web only (Part 3b, H3): a driver's row on one question changed (sent, seen, answered): the answers page asks
+ * ask_answers again. Office people with approve or assign_tasks read driver_ask_answers through RLS.
+ */
+export function subscribeAskAnswers(askId: string, cb: () => void): () => void {
+  // The id goes into the channel's filter: only a uuid.
+  if (!supabase || !/^[0-9a-f-]{36}$/i.test(askId)) return () => {};
+  const client = supabase;
+  const channel = client
+    .channel(`driver_ask_answers:${askId}:${++serial}:${Date.now()}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "driver_ask_answers", filter: `ask_id=eq.${askId}` }, () => cb())
+    .subscribe((status, err) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn(`Realtime driver_ask_answers: ${status}`, err?.message ?? "");
+    });
+  return () => { void client.removeChannel(channel); };
+}

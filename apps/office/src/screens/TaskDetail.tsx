@@ -22,6 +22,7 @@ import { can, type FleetError } from "../transport/types";
 import { MapView } from "../map/MapView";
 import type { RoutePoint } from "../map/types";
 import { GapsList, useGaps } from "./GapsList";
+import { LateReportLine } from "./LateReport";
 import { StopArrival } from "./StopArrival";
 import { TripPurposeCard, TripTags } from "./TripPurpose";
 import { Avatar, Empty, Loading, Notice, Pill, VehicleThumb, WarningsNote } from "../ui/basics";
@@ -152,6 +153,13 @@ export function TaskDetail() {
                 {eta.late_min ? <span className="status bad"> · running late by {duration(eta.late_min)}</span> : <span className="status live"> · on time</span>}
                 <span className="muted small"> · as of {eta.as_of}</span>
               </dd>
+            </div>
+          )}
+          {/* Part 3b (H4): the driver's own "Running late". */}
+          {t.late_report && (
+            <div style={{ gridColumn: "1/-1" }}>
+              <dt>The driver says</dt>
+              <dd><LateReportLine late={t.late_report} /></dd>
             </div>
           )}
           <div><dt>Passengers</dt><dd>{t.passengers ?? "—"}</dd></div>
