@@ -297,10 +297,11 @@ describe("the Overview's waiting requests", () => {
     store.watch("overview", "fleet_overview", {}, 30000);
     const line = await screen.findByTestId("proposal-line");
     expect(line.textContent).toBe("Task for Kamal Perera · WP CAB-4521 · proposed by Nimal Fernando");
-    const row = line.closest("tr")!;
+    // Hotfix 3 (L1): the section's compact rows (no table).
+    const row = line.closest("[data-testid='request-row']")!;
     expect(row.textContent).toContain("Team drop · Galle");
     expect(row.textContent).toContain("Leave-by passed");
-    const plain = screen.getByText("Isuru Bandara").closest("tr")!;
+    const plain = screen.getByText("Isuru Bandara").closest("[data-testid='request-row']")!;
     expect(plain.textContent).not.toContain("Leave-by passed");
   });
 });

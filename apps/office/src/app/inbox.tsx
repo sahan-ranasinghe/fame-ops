@@ -4,21 +4,25 @@
 // item that arrives after the page loaded (never one of the first load's) shows a banner (who, what, Open, Close) and
 // plays its kind's sound (data/sounds.ts) at the person's volume, unless their sound is off. Browsers keep a page
 // silent until its first click or key press: until then a slim "Click to turn on sounds" strip shows, and one click
-// anywhere turns them on. The bell (a tray: the bell is the issues', which stays as it is) sits beside the issues
-// bell: on a desktop it opens a panel that stays until closed (no outside click closes it); on a phone it opens /inbox.
-// Opening an item marks it read; "Mark all read" reads them all. A person without my_inbox (or the shared connector
-// key, which has no person: the tool refuses) sees none of it.
+// anywhere turns them on. Hotfix 3 (L4): the tray is the one notification icon (the issues bell is gone; the issues
+// count is a badge on the Issues menu item): on a desktop it opens a panel that stays until closed (no outside click
+// closes it), the items by day (Today, Yesterday, Earlier) with All / Unread and Mark all read; on a phone it opens
+// /inbox. It shows what my_inbox answers by default: the last 30 days (older read items are archived; the
+// notifications page shows them). Opening an item marks it read; "Mark all read" reads them all. A person without
+// my_inbox (or the shared connector key, which has no person: the tool refuses) sees none of it.
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { useEntry } from "../data/hooks";
 import { addBanners, freshItems, headline, KIND_TONE, linkOf, markedRead, unreadBadge } from "../data/inboxLogic";
 import { DEFAULT_SOUND, loudest, type MakeAudio, SoundPlayer, soundPrefs } from "../data/sounds";
 import type { Inbox, InboxItem, NotificationSettings, SoundPrefs } from "../data/types";
+import { today } from "../lib/format";
 import { AUTHZ } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Icon } from "../ui/icons";
 import { useIsPhone } from "../ui/phone";
 import { useFleet } from "./FleetContext";
+import { filterInbox, groupByDay, type InboxFilter } from "./inboxGroups";
 
 export const INBOX_KEY = "inbox";
 export const INBOX_ARGS = { limit: 50 };
@@ -218,11 +222,37 @@ export function InboxList({ items, onOpen }: { items: InboxItem[]; onOpen: (i: I
 /** The empty list's sentence. */
 export const INBOX_EMPTY = "Nothing yet. When a request is decided, a task needs you or a trip moves, it shows here.";
 
-/** The desktop panel beside the rail: the newest items, Mark all read, All notifications, Close. */
+/** The empty list's sentence with the Unread filter on. */
+export const INBOX_NONE_UNREAD = "Nothing unread.";
+
+/** Hotfix 3 (L4): items under Today, Yesterday and Earlier (the tray; the notifications page may use it too). */
+export function InboxGroups({ items, onOpen, day = today() }: { items: InboxItem[]; onOpen: (i: InboxItem) => void; day?: string }) {
+  return (
+    <>
+      {groupByDay(items, day).map((g) => (
+        <div className="inbox-group" key={g.label} data-testid="inbox-group">
+          <div className="inbox-day">{g.label}</div>
+          <InboxList items={g.items} onOpen={onOpen} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** The tray shows at most this many items; the rest are on the notifications page. */
+export const TRAY_ITEMS = 15;
+
+/** The desktop panel beside the rail: All / Unread, the newest items by day, Mark all read, All notifications, Close. */
 function InboxPanel({ api, onClose }: { api: InboxApi; onClose: () => void }) {
-  const items = api.inbox?.items ?? [];
+  const all = api.inbox?.items ?? [];
   const unread = api.inbox?.unread ?? 0;
+  const total = api.inbox?.total ?? all.length;
+  const [filter, setFilter] = useState<InboxFilter>("all");
   const [msg, setMsg] = useState<string | null>(null);
+  const items = filterInbox(all, filter).slice(0, TRAY_ITEMS);
+  const chip = (f: InboxFilter, label: string) => (
+    <button type="button" className="chip small" aria-pressed={filter === f} onClick={() => setFilter(f)}>{label}</button>
+  );
   return (
     <div className="inbox-panel" role="region" aria-label="Notifications" data-testid="inbox-panel">
       <div className="inbox-head">
@@ -234,14 +264,20 @@ function InboxPanel({ api, onClose }: { api: InboxApi; onClose: () => void }) {
         )}
         <button type="button" className="btn small icon-btn" aria-label="Close notifications" onClick={onClose}><Icon name="close" /></button>
       </div>
+      <div className="inbox-filter" role="group" aria-label="Show">
+        {chip("all", "All")}
+        {chip("unread", unread ? `Unread (${unreadBadge(unread)})` : "Unread")}
+      </div>
       {msg && <div className="inbox-msg">{msg}</div>}
-      {items.length ? <InboxList items={items.slice(0, 15)} onOpen={(i) => api.read([i.id])} /> : <div className="inbox-empty">{INBOX_EMPTY}</div>}
-      <Link className="bell-all" to="/inbox">All notifications{items.length > 15 ? ` (${items.length})` : ""}</Link>
+      {items.length
+        ? <InboxGroups items={items} onOpen={(i) => api.read([i.id])} />
+        : <div className="inbox-empty">{filter === "unread" && all.length ? INBOX_NONE_UNREAD : INBOX_EMPTY}</div>}
+      <Link className="bell-all" to="/inbox">All notifications{total > items.length ? ` (${total})` : ""}</Link>
     </div>
   );
 }
 
-/** The bell beside the issues bell: a panel on a desktop, the /inbox page on a phone. */
+/** The one notification icon (Hotfix 3, L4): a panel on a desktop, the /inbox page on a phone. */
 export function InboxBell() {
   const api = useInbox();
   const phone = useIsPhone();

@@ -607,3 +607,81 @@ a.bell-btn { text-decoration: none }
 .load-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
 .pager { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 16px; flex-wrap: wrap; }
 .pager .btn[aria-current="page"] { pointer-events: none; }
+
+/* ---------- Hotfix 3 W1: the Overview by role (L1, L2), the one notification icon (L4), the menu in sections (L5) ---------- */
+/* A chevron drawn with two borders: down while open, right while collapsed. */
+.chev { display: inline-block; width: 8px; height: 8px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: translateY(-2px) rotate(45deg); transition: transform .15s; flex: none }
+[aria-expanded="false"] > .chev { transform: rotate(-45deg) }
+@media (prefers-reduced-motion: reduce) { .chev { transition: none } }
+
+/* The desktop menu: Today · Fleet · Reports · Admin, each name a button that collapses its section. */
+.nav-sections { gap: 2px }
+.nav-sec { display: grid; gap: 2px }
+.nav-sec-h { display: flex; align-items: center; gap: 8px; width: 100%; border: 0; background: transparent; color: var(--rail-muted); font: 600 12px/1 var(--font-body); letter-spacing: .08em; text-transform: uppercase; padding: 12px 14px 6px; border-radius: 8px; cursor: pointer; text-align: left }
+.nav-sec-h:hover { color: var(--rail-ink) }
+.nav-sec-h .grow { flex: 1 1 auto; min-width: 0 }
+.nav-sec-h .badge { margin-left: 0; min-width: 20px; height: 20px; font-size: 11px; line-height: 20px; padding: 0 6px; letter-spacing: 0 }
+.nav-sec-items { display: grid; gap: 2px }
+.nav-sections a { padding: 9px 14px }
+.nav-sections .nav-more { margin-top: 8px }
+
+/* The Overview's sections: a card whose title collapses it; the count beside the title; View all on the right. */
+.ov-stack { gap: 16px }
+.ov-sec-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 16px 8px 10px; border-bottom: 1px solid var(--line) }
+.ov-sec[data-collapsed] .ov-sec-h { border-bottom: 0 }
+.ov-sec-h h2 { min-width: 0 }
+.ov-toggle { display: inline-flex; align-items: center; gap: 10px; border: 0; background: transparent; color: inherit; font: inherit; padding: 6px 8px; border-radius: 8px; cursor: pointer; text-align: left }
+.ov-toggle:hover { background: var(--surface-2) }
+.ov-count { min-width: 24px; padding: 0 8px; border-radius: 12px; background: var(--surface-2); color: var(--muted); font: 700 13px/24px var(--font-body); text-align: center }
+.ov-sec.bad { border-color: var(--bad) }
+.ov-sec.bad .ov-title { color: var(--bad) }
+.ov-sec.bad .ov-count { background: var(--bad-bg); color: var(--bad) }
+.ov-sec.warn .ov-count { background: var(--warn-bg); color: var(--warn) }
+.ov-all { font-weight: 600; font-size: 14px; white-space: nowrap }
+.ov-summary { padding: 0 16px 12px 46px; color: var(--muted); font-size: 14px; margin-top: -4px }
+/* The tiles keep their own cards: their section is only a title. */
+.ov-sec[data-section="tiles"] { background: transparent; border: 0; border-radius: 0 }
+.ov-sec[data-section="tiles"] .ov-sec-h { border-bottom: 0; padding: 0 0 8px; margin-left: -8px }
+.ov-sec[data-section="tiles"] .ov-summary { padding: 0 0 4px 30px }
+/* Compact rows: two lines each. */
+.ov-row { padding: 10px 16px; gap: 12px }
+.ov-row .name { gap: 6px }
+.att-ic.sm { width: 34px; height: 34px; border-radius: 8px }
+.att-ic.sm svg { width: 18px; height: 18px }
+.ov-expand { display: inline-flex; align-items: center; gap: 8px; color: var(--ink); text-decoration: none; font-weight: 600; text-align: left }
+.ov-expand:hover { text-decoration: underline }
+.ov-items { margin: 0 16px 8px 62px; border-left: 2px solid var(--line) }
+.ov-items .ov-item { padding: 8px 12px }
+.ov-more.icon-btn { width: 36px; height: 36px; min-height: 36px }
+.ov-more.on { background: var(--surface-2); border-color: var(--ink) }
+/* Snooze or dismiss: an inline strip under the row (no pop-up). */
+.ov-acts { flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0 2px }
+.ov-acts-err { flex-basis: 100%; color: var(--bad); font-size: 14px; font-weight: 500 }
+
+/* The tray: All / Unread, the items by day. */
+.inbox-filter { display: flex; gap: 8px; padding: 10px 16px 2px }
+.inbox-filter .chip { min-height: 32px; padding: 4px 12px; font-size: 13px }
+.inbox-day { padding: 12px 16px 4px; color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600 }
+.inbox-group + .inbox-group { border-top: 1px solid var(--line) }
+.rail .bells .inbox-bell .bell-btn { width: auto }
+
+@media (max-width: 768px) {
+  /* A phone: three rows a section, each row two single lines, the tiles smaller (about two screens in all). */
+  .ov-row .name, .ov-row .sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .ov-row .name .pill { vertical-align: 1px }
+  .ov-row { padding: 10px 12px }
+  .ov-row > .grow { flex: 1 1 0 }
+  /* On the road on a phone's Home: who, the vehicle, where to and the status on two lines; Call and the map are on Live. */
+  .ov-sec[data-section="road"] .row { flex-wrap: nowrap; padding: 10px 12px; gap: 10px }
+  .ov-sec[data-section="road"] .row .avatar, .ov-sec[data-section="road"] .row .acts { display: none }
+  .ov-sec[data-section="road"] .row .grow { flex: 1 1 0 }
+  .ov-sec[data-section="road"] .row .name, .ov-sec[data-section="road"] .row .sub { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+  .ov-sec-h { padding: 6px 12px 6px 6px }
+  .ov-sec-h h2 { font-size: 17px }
+  .ov-items { margin-left: 24px; margin-right: 8px }
+  .ov-more.icon-btn { width: 40px; height: 40px; min-height: 40px }
+  .ov-sec[data-section="tiles"] .tiles { gap: 10px }
+  .ov-sec[data-section="tiles"] .tile { padding: 12px 14px; gap: 4px }
+  .ov-sec[data-section="tiles"] .tile .val b { font-size: 30px }
+  .ov-sec[data-section="tiles"] .tile .lbl, .ov-sec[data-section="tiles"] .tile .sub { font-size: 13px }
+}
