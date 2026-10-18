@@ -38,9 +38,14 @@ begin
     return null;
   end if;
 
-  -- Phase 7 (§13): a trip the driver started is theirs: no "new" or "Task changed" push for it. The office cancelling it
-  -- or giving it to someone else still tells them (below).
-  if new.kind = 'self' and (tg_op = 'INSERT' or (new.employee_id = old.employee_id and new.status <> 'cancelled')) then
+  -- Phase 7 (§13): a trip the driver started is theirs: no "new" push for it, and none when they cancel it themselves
+  -- before it starts (driver-api writes as the service role, so the check above does not see it). The office changing,
+  -- reassigning or cancelling it still tells them (below); a stop the driver adds on the way writes no task row.
+  if new.kind = 'self' and tg_op = 'INSERT' then
+    return null;
+  end if;
+  if new.kind = 'self' and tg_op = 'UPDATE' and new.status = 'cancelled' and old.status <> 'cancelled'
+     and new.cancelled_reason = 'Cancelled by the driver before starting' then
     return null;
   end if;
 
@@ -125,4 +130,54 @@ as $$
     'driver_personal_trips',
                    coalesce((select value #>> '{}' from public.fleet_settings where key = 'driver_personal_trips'), 'allowed')
   )
+$$;
+
+-- "Used before" never offers where a driver went on a personal trip (the office's search box; driver-api leaves the whole
+-- layer out for drivers).
+create or replace function public.recent_places(p_text text, p_since timestamptz, p_limit integer default 5)
+returns table (name text, address text, lat double precision, lng double precision, last_used timestamptz, uses bigint)
+language sql
+stable
+set search_path = public, extensions
+as $$
+  with q as (select replace(replace(replace(lower(trim(p_text)), '\', '\\'), '%', '\%'), '_', '\_') as e),
+  used as (
+    select s.place_name as name, s.address, s.lat, s.lng, t.start_at as at
+    from public.task_stops s join public.tasks t on t.id = s.task_id, q
+    where s.place_id is null and s.google_place_id is null and s.status <> 'removed' and t.start_at >= p_since
+      and t.purpose <> 'personal'
+      and s.place_name ilike '%' || q.e || '%'
+    union all
+    select t.start_name, null, t.start_lat, t.start_lng, t.start_at
+    from public.tasks t, q
+    where t.start_place_id is null and t.start_google_place_id is null and t.start_name is not null and t.start_at >= p_since
+      and t.purpose <> 'personal'
+      and t.start_name ilike '%' || q.e || '%'
+    union all
+    select r.route_from, null, null::double precision, null::double precision, r.created_at
+    from public.vehicle_requests r, q
+    where r.created_at >= p_since and r.route_from ilike '%' || q.e || '%'
+    union all
+    select r.route_to, null, null::double precision, null::double precision, r.created_at
+    from public.vehicle_requests r, q
+    where r.created_at >= p_since and r.route_to ilike '%' || q.e || '%'
+  ),
+  grouped as (
+    select lower(trim(u.name)) as k,
+           (array_agg(trim(u.name) order by (u.lat is null), u.at desc))[1] as name,
+           (array_agg(u.address order by (u.address is null), u.at desc))[1] as address,
+           (array_agg(u.lat order by (u.lat is null), u.at desc))[1] as lat,
+           (array_agg(u.lng order by (u.lat is null), u.at desc))[1] as lng,
+           max(u.at) as last_used,
+           count(*) as uses
+    from used u
+    where trim(coalesce(u.name, '')) <> ''
+    group by lower(trim(u.name))
+  )
+  select g.name, g.address, g.lat, g.lng, g.last_used, g.uses
+  from grouped g, q
+  -- not the name of one of our places (those show in the first layer)
+  where not exists (select 1 from public.places p where lower(p.name) = g.k)
+  order by (g.k like q.e || '%') desc, g.uses desc, g.last_used desc
+  limit greatest(1, least(p_limit, 20))
 $$;

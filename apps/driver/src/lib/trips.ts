@@ -302,6 +302,8 @@ export interface TripRequest {
   vehicle_id?: string;
   /** When the driver pressed Start (an offline start is sent later). */
   at: string;
+  /** Sent by the offline queue: the trip happened already, so the server notes its start-time rules instead of refusing. */
+  queued?: boolean;
 }
 
 /** POST /trips/:taskId/stops. */
@@ -309,6 +311,8 @@ export interface StopRequest {
   /** The phone's uuid: the stop's id. */
   id: string;
   destination: Destination;
+  /** Sent by the offline queue (see TripRequest.queued). */
+  queued?: boolean;
 }
 
 export function tripRequest(input: { id: string; stopId?: string; purpose: Purpose; pick: Choice; note: string; vehicleId: string | null; at: string }): TripRequest {

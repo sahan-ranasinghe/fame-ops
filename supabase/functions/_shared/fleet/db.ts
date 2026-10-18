@@ -75,3 +75,13 @@ export async function fetchAll<R extends { data: unknown[] | null; error: DbErro
   }
   return rows as NonNullable<R["data"]>;
 }
+
+/**
+ * Ids in pieces for `.in()` filters: each id is in the request's URL, and the hosted gateway refuses a URL over about
+ * 16 KB (a uuid is ~37 characters there), so 100 at a time.
+ */
+export function inChunks<T>(items: readonly T[], size = 100): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}

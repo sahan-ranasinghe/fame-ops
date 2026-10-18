@@ -308,6 +308,7 @@ function fakeTrips() {
   const api = {
     async createTrip(request: TripRequest): Promise<TripAnswer> {
       log.push(`trip:${JSON.stringify(request.destination)}`);
+      if (request.queued !== true) log.push('trip:not-marked-queued');
       if (network) throw new ApiError('trip: Network request failed', false);
       if (refuseAll) throw new ApiError(refuseAll, true, 'refused', 409);
       const d = request.destination as { place_id?: string };
@@ -322,8 +323,9 @@ function fakeTrips() {
       }
       return { trip, repeated: false };
     },
-    async addTripStop(taskId: string, request: { id: string }): Promise<TripAnswer> {
+    async addTripStop(taskId: string, request: { id: string; queued?: boolean }): Promise<TripAnswer> {
       log.push(`stop:${taskId}:${request.id}`);
+      if (request.queued !== true) log.push('stop:not-marked-queued');
       if (network) throw new ApiError('trip stop: Network request failed', false);
       const trip = trips.get(taskId);
       if (!trip) throw new ApiError('No such trip.', true, 'refused', 409);
@@ -395,6 +397,7 @@ async function queueTests(req: TripRequest, pick: Choice) {
       calls.join() === `upload,photo,odometer:${req.id},task:${req.id}:in_progress,stop:${STOP_SERVER}:arrived`,
       "the trip first, then the start; Arrived goes to the server's stop id; the added stop after", { calls, log: trips.log });
     check(answers.join() === 'trip_create:false,trip_stop:false', 'the screens hear both answers (the phone\'s copy takes the server\'s ids)', answers);
+    check(!trips.log.some((l) => l.includes('not-marked-queued')), "the queue marks what it sends as queued (the trip happened: the server notes its rules instead of refusing)", trips.log);
   }
 
   // The server made the trip but the answer was lost: the queue sends it again; nothing is made twice.

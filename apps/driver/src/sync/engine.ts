@@ -262,10 +262,12 @@ export function createSync(deps: SyncDeps) {
   async function sendTrip(op: TripCreateOp | TripStopOp): Promise<void> {
     const trips = deps.trips;
     if (!trips) throw new ApiError('trip: no driver-api client', false);
+    // queued: the trip has happened already and its records follow it here, so the server notes its start-time rules
+    // (personal trips off, a task under way, the vehicle) instead of refusing it and failing everything behind it.
     const call = (destination: TripCreateOp['request']['destination']) =>
       op.kind === 'trip_create'
-        ? trips.createTrip({ ...op.request, destination })
-        : trips.addTripStop(op.task_id, { id: op.id, destination });
+        ? trips.createTrip({ ...op.request, destination, queued: true })
+        : trips.addTripStop(op.task_id, { id: op.id, destination, queued: true });
     const first = op.kind === 'trip_create' ? op.request.destination : op.destination;
     let answer: TripAnswer;
     try {

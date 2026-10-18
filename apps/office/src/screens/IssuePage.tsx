@@ -58,7 +58,7 @@ function PanelTop({ title, sub, side, onClose }: { title: ReactNode; sub?: React
 
 export default function IssuePage() {
   const { id = "" } = useParams();
-  const { search } = useLocation();
+  const { search, state } = useLocation();
   const navigate = useNavigate();
   const { me, store, transport, noConnector } = useFleet();
   const toast = useToast();
@@ -73,8 +73,12 @@ export default function IssuePage() {
     setMsg(null);
   }, [id]);
 
-  /** Back to the list with its filters. */
-  const close = () => navigate(`/issues${search}`);
+  /**
+   * Back to the list with its filters, without a history entry of its own: opened from the list (the row pushed it),
+   * one step back; opened from a link (the bell, the Overview, a reload), the URL replaced. Back then leaves Issues
+   * instead of reopening a resolved issue.
+   */
+  const close = () => ((state as { fromList?: boolean } | null)?.fromList ? navigate(-1) : navigate(`/issues${search}`, { replace: true }));
 
   async function change(input: Record<string, unknown>, done: string, closes: boolean) {
     const was = q.data?.issue.status ?? "";

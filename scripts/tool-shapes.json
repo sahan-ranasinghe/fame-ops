@@ -122,6 +122,7 @@
   "needs_attention[].level: string",
   "needs_attention[].severity: string",
   "needs_attention[].subject: string",
+  "needs_attention[].vehicle: string",
   "needs_attention[].what: string",
   "needs_driver.count: number",
   "needs_driver.tasks[].best.name: string",

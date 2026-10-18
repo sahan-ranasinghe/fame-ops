@@ -2,7 +2,7 @@
 // set_trip_purpose (a driver-started trip switched between company work and personal, with a project attached).
 
 import { z } from "zod";
-import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
+import { fetchAll, inChunks, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { findDriver, findVehicle, loadRefs } from "../fleet.ts";
 import { colomboDate, colomboDateTime, colomboTime } from "../time.ts";
 import { daySpan, tool, zDate, zId, zText } from "../tool.ts";
@@ -39,14 +39,17 @@ export const listTasks = tool({
     if (kind) q = q.eq("kind", kind);
     const rows = unwrap(await q.order("start_at", { ascending: false }).order("id").limit(LIMIT + 1), "tasks");
     const shown = rows.slice(0, LIMIT);
-    const stops = shown.length
-      ? await fetchAll(
-        (a, b) =>
-          db.from("task_stops").select("task_id, seq, place_name, status").in("task_id", shown.map((t) => t.id)).neq("status", "removed")
-            .order("task_id").order("seq").range(a, b),
-        "stops",
-      )
-      : [];
+    // 100 ids a request: each id is in the URL (the hosted gateway refuses a long one).
+    const stops = (await Promise.all(
+      inChunks(shown.map((t) => t.id)).map((ids) =>
+        fetchAll(
+          (a, b) =>
+            db.from("task_stops").select("task_id, seq, place_name, status").in("task_id", ids).neq("status", "removed")
+              .order("task_id").order("seq").range(a, b),
+          "stops",
+        )
+      ),
+    )).flat();
     const tasks = shown.map((t) => {
       const mine = stops.filter((s) => s.task_id === t.id);
       return {

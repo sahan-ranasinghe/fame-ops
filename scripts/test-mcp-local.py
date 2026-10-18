@@ -2138,10 +2138,11 @@ if CHANNEL == "api":
     check(code == 403 and ans.get("error") == "not_a_driver", "an office session is not a driver: 403", f"{code} {ans}")
 code, found = dapi("/places/search", {"text": "Head office"})
 head = next((r for r in found.get("results", []) if r.get("layer") == "place" and r.get("name", "").startswith("Head office")), None) if code == 200 else None
-check(head is not None and head.get("id"), "driver-api /places/search: our places first, the office's search box", json.dumps(found)[:300])
+check(head is not None and head.get("id") and not any(r.get("layer") == "recent" for r in found.get("results", [])),
+      "driver-api /places/search: our places first, the office's search box, no 'Used before' (other people's destinations)", json.dumps(found)[:300])
 trip_id = str(uuid.uuid4())
 code, ans = dapi("/trips", {"id": trip_id, "purpose": "company", "destination": {"text": "Kadawatha"}})
-check(code == 409 and "today's vehicle" in ans.get("message", ""), "Start a trip needs today's vehicle (409, in words)", f"{code} {ans}")
+check(code == 409 and ans.get("message") == "Start work first.", "Start a trip needs the driver on duty (409, in words)", f"{code} {ans}")
 code, ans = dapi("/trips", {"id": "not-a-uuid", "purpose": "company", "destination": {"text": "Kadawatha"}})
 check(code == 400 and ans.get("error") == "bad_input", "a trip id is the phone's uuid", f"{code} {ans}")
 plate_t = f"WP TR{tag[:2].upper()}-{int(tag, 16) % 9000 + 1000}"
@@ -2171,9 +2172,27 @@ check(psql(f"select count(*) || '|' || count(*) filter (where result_summary lik
            f"from office_audit where channel = 'driver' and tool = 'start_trip' and actor_name = 'Trip Driver {tag}'") == "4|2|1",
       "every Start a trip call is in the audit log (channel driver, the driver's name): the two refused in words, the repeat as again")
 code, ans = dapi("/trips", {"id": str(uuid.uuid4()), "purpose": "company", "destination": {"text": "Kelaniya"}})
-check(code == 201, "another trip while the first is only assigned is allowed (none in progress yet)", f"{code} {ans}")
-second_id = ans.get("trip", {}).get("task_id")
-tool("cancel_task", {"task_id": second_id, "reason": "suite: one trip at a time"})
+check(code == 409 and "Start or cancel your trip" in ans.get("message", ""), "a second trip while the first has not started: refused in words", f"{code} {ans}")
+# The offline queue's trip has happened already: its start-time rules are noted on its history, never refused (the phone's
+# records of it follow it in the queue).
+tool("update_settings", {"key": "driver_personal_trips", "value": "off"})
+queued_id = str(uuid.uuid4())
+code, ans = dapi("/trips", {"id": queued_id, "purpose": "personal", "destination": {"text": "Kelaniya"}, "queued": True,
+                            "at": iso(dt.datetime.now(dt.timezone.utc) - dt.timedelta(minutes=40))})
+tool("update_settings", {"key": "driver_personal_trips", "value": "allowed"})
+note_q = psql(f"select note from task_assignment_events where task_id = '{queued_id}' and action = 'assigned'")
+check(code == 201 and ans.get("trip", {}).get("purpose") == "personal" and "sent later" in note_q and "switched off" in note_q and "had not started" in note_q,
+      "a queued trip is taken although personal trips are off and another has not started; both noted on its history", f"{code} {note_q}")
+check(not any(i.get("task_id") == queued_id for i in tool("list_issues", {"status": "active", "kind": "late_start"})["issues"]),
+      "a trip the driver started (40 minutes ago, sent now) opens no late-start issue")
+# The driver cancels a trip started by mistake: no "Task cancelled" push to them; once cancelled it stays so.
+code, ans = dapi(f"/trips/{queued_id}/cancel", {})
+check(code == 200 and ans.get("trip", {}).get("status") == "cancelled"
+      and psql(f"select count(*) from net.http_request_queue where url like '%/push-task' and convert_from(body, 'UTF8')::jsonb ->> 'task_id' = '{queued_id}'") == "0"
+      and psql(f"select action || '|' || actor from task_assignment_events where task_id = '{queued_id}' order by at desc limit 1") == f"cancelled|driver: Trip Driver {tag}",
+      "Cancel this trip: cancelled by the driver before it started, in its history, no push to them", f"{code} {ans}")
+code, ans = dapi(f"/trips/{queued_id}/cancel", {})
+check(code == 200 and ans.get("repeated") is True, "cancelling it again answers the cancelled trip", f"{code}")
 board = tool("task_board")
 card = next((c for c in board.get("assigned", []) if c["id"] == trip_id), {})
 check(card.get("kind") == "self" and card.get("purpose") == "company", "task_board: the card says self and company", json.dumps(card)[:300])
@@ -2214,8 +2233,11 @@ today_c = day(0)
 ms = tool("mileage_summary", {"from": today_c, "to": today_c, "vehicle": plate_t})
 rrow = (ms.get("range", {}).get("vehicles") or [{}])[0]
 check(ms.get("range", {}).get("from") == today_c and rrow.get("personal_km") == 12 and rrow.get("task_km") == 0
-      and ms["range"]["totals"].get("personal_km") == 12 and ms["month"] == today_c[:7] and ms["vehicles"][0].get("personal_km") == 12,
-      "mileage_summary for one day: the personal trip's 12 km apart from the task km, the month beside it", json.dumps(ms.get("range"))[:400])
+      and ms["range"]["totals"].get("personal_km") == 12 and ms["month"] == today_c[:7] and ms["vehicles"][0].get("personal_km") == 12
+      and "km_allowance" not in rrow and "over_allowance" not in rrow
+      and ms["range"].get("personal_by_driver") == [{"driver": f"Trip Driver {tag}", "personal_km": 12, "trips": 1}],
+      "mileage_summary for one day: the personal trip's 12 km apart from the task km (and by driver), no monthly allowance in the range, the month beside it",
+      json.dumps(ms.get("range"))[:400])
 sp2 = tool("set_trip_purpose", {"task_id": trip_id, "purpose": "company", "project": "internal"})
 check(sp2["purpose"] == "company" and sp2["project"] == "Fame internal" and psql(f"select count(*) || '|' || coalesce(max(percent)::text, '') from task_projects where task_id = '{trip_id}'") == "1|100.00",
       "back to company with a project: one row, 100 %", json.dumps(sp2))

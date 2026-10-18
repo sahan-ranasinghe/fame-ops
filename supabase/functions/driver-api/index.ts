@@ -3,7 +3,6 @@
 // fleet rules:
 //   POST /places/search {text, session?}               the office's three layers (our places, used before, the map's;
 //                                                       Google's through the counted gate, openrouteservice when refused)
-//   POST /places/google {google_place_id, session?}    a Google pick's pin (Essentials only, kept 30 days, counted)
 //   POST /trips {id, purpose, destination, note?, vehicle_id?, at?}   Start a trip (idempotent by the phone's id)
 //   POST /trips/:id/stops {id, destination}            a stop added on the way (self trips under way)
 //   POST /trips/:id/cancel {}                           a trip started by mistake, cancelled before it starts
@@ -15,7 +14,7 @@ import { z } from "zod";
 import { auditFinish, auditStart } from "../_shared/fleet/audit.ts";
 import { adminClient, ToolError } from "../_shared/fleet/db.ts";
 import type { Actor } from "../_shared/fleet/roles.ts";
-import { googlePlace, searchPlaces } from "../_shared/fleet/tools/places.ts";
+import { searchPlaces } from "../_shared/fleet/tools/places.ts";
 import { addTripStop, cancelSelfTrip, createSelfTrip } from "../_shared/fleet/trips.ts";
 
 const CALLS_PER_MINUTE = 60;
@@ -45,7 +44,6 @@ const zDestination = z.object({
 
 const INPUTS = {
   search: z.object({ text: z.string().trim().min(1).max(500), session: zSession }),
-  google: z.object({ google_place_id: z.string().trim().min(1).max(300), session: zSession }),
   trip: z.object({
     id: z.string().uuid(),
     stop_id: z.string().uuid().optional(),
@@ -54,8 +52,9 @@ const INPUTS = {
     note: z.string().trim().max(500).optional(),
     vehicle_id: z.string().uuid().optional(),
     at: z.string().datetime({ offset: true }).optional(),
+    queued: z.boolean().optional(),
   }),
-  stop: z.object({ id: z.string().uuid(), destination: zDestination }),
+  stop: z.object({ id: z.string().uuid(), destination: zDestination, queued: z.boolean().optional() }),
 };
 
 type Driver = { row: Awaited<ReturnType<typeof driverRow>>; actor: Actor };
@@ -93,6 +92,12 @@ function overLimit(employeeId: string): boolean {
   recent.push(now);
   calls.set(employeeId, recent);
   return recent.length > CALLS_PER_MINUTE;
+}
+
+/** The audit log keeps no Google content: a Google pick is written as its id and "Google place" (hard rule 10). */
+function auditArgs<T extends { destination: { google_place_id?: string; name?: string } }>(args: T): T {
+  const d = args.destination;
+  return d.google_place_id ? { ...args, destination: { google_place_id: d.google_place_id, name: "Google place" } } : args;
 }
 
 /** A write the office can see in its audit log (channel driver), like the office's own tools. */
@@ -134,21 +139,18 @@ Deno.serve(async (request) => {
     if (path === "/places/search") {
       const p = INPUTS.search.safeParse(raw);
       if (!p.success) return bad(p.error);
-      // Google's layer whenever the google package is on (the tool asks the gate; at a cap openrouteservice answers).
+      // Google's layer whenever the google package is on (the tool asks the gate; at a cap openrouteservice answers). No
+      // "Used before" for a driver: it lists other people's typed destinations and requests (the phone keeps its own).
       const out = await searchPlaces.run({ text: p.data.text, session: p.data.session, google: true, map: true, limit: 8 }, ctx);
-      return json(200, out.result);
-    }
-    if (path === "/places/google") {
-      const p = INPUTS.google.safeParse(raw);
-      if (!p.success) return bad(p.error);
-      return json(200, (await googlePlace.run(p.data, ctx)).result);
+      const result = out.result as { results?: { layer: string }[] };
+      return json(200, { ...result, results: (result.results ?? []).filter((r) => r.layer !== "recent") });
     }
     if (path === "/trips") {
       const p = INPUTS.trip.safeParse(raw);
       if (!p.success) return bad(p.error);
       const out = await audited(
         "start_trip",
-        p.data,
+        auditArgs(p.data),
         actor,
         () => createSelfTrip(db, now, row!, p.data),
         (r) => `${r.repeated ? "again: " : ""}${r.trip.title}`,
@@ -161,7 +163,7 @@ Deno.serve(async (request) => {
       if (!p.success) return bad(p.error);
       const out = await audited(
         "add_trip_stop",
-        { task_id: stop[1], ...p.data },
+        { task_id: stop[1], ...auditArgs(p.data) },
         actor,
         () => addTripStop(db, now, row!, stop[1], p.data),
         (r) => `${r.repeated ? "again: " : ""}${r.trip.title}: ${r.trip.stops.length} stops`,

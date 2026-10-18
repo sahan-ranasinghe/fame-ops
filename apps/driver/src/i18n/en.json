@@ -583,6 +583,7 @@
     "cancel": "Cancel this trip",
     "cancelConfirm": "Cancel this trip? It has not started.",
     "cancelled": "Trip cancelled",
-    "cancelOffline": "No connection: cancel it when the connection is back."
+    "cancelOffline": "No connection: cancel it when the connection is back.",
+    "cancelFailed": "Couldn't cancel the trip: {reason}"
   }
 }

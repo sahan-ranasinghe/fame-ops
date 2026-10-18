@@ -339,7 +339,7 @@ export default function TaskScreen() {
                           } else if (out.kind === 'offline') {
                             Alert.alert(t('trip.cancelOffline'));
                           } else if (out.message) {
-                            Alert.alert(t('trip.failed', { reason: out.message }));
+                            Alert.alert(t('trip.cancelFailed', { reason: out.message }));
                           }
                         }),
                       },

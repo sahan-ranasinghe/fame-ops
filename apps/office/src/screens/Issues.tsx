@@ -131,7 +131,7 @@ export default function Issues() {
             <div className="card" data-testid="issues-list">
               <div className="rows">
                 {rows.length ? rows.map((i) => (
-                  <Link className="row issue-row" to={`/issues/${i.id}${search}`} key={i.id} aria-current={i.id === id ? "true" : undefined} style={i.id === id ? { background: "var(--surface-2)" } : undefined}>
+                  <Link className="row issue-row" to={`/issues/${i.id}${search}`} key={i.id} state={{ fromList: true }} replace={!!id} aria-current={i.id === id ? "true" : undefined} style={i.id === id ? { background: "var(--surface-2)" } : undefined}>
                     <span className={`att-ic ${severityTone(i.severity)}`}><Icon name={attIcon(i.title)} /></span>
                     <div className="grow">
                       <div className="name">{i.title}</div>

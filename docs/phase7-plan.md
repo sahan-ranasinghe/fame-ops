@@ -1674,13 +1674,18 @@ Items 8, 9, 13 and 16 (7's app side and 15 went into Part 3, before Round A2).
   "Task changed" push; the office cancelling or reassigning it still tells the driver. `get_driver_settings` gives
   `driver_personal_trips`.
 - `driver-api` (new Edge Function, `--no-verify-jwt`, the driver's session and role checked on every call, 60 calls a
-  minute): `/places/search` (the office's three layers, Google's through the counted gate, "Google Maps" under its
-  results), `/places/google`, `/trips` (idempotent by the phone's ids: the task's and the first stop's), `/trips/:id/stops`
-  (a stop on the way, while under way), `/trips/:id/cancel` (a trip started by mistake, before it starts; an addition at
-  checkpoint 4, see below). Every trip call is in `office_audit` with channel driver; refusals in words.
+  minute): `/places/search` (our places and the map's, Google's through the counted gate with "Google Maps" under its
+  results; no "Used before" for drivers), `/trips` (idempotent by the phone's ids: the task's and the first stop's),
+  `/trips/:id/stops` (a stop on the way, while under way), `/trips/:id/cancel` (a trip started by mistake, before it
+  starts; an addition at checkpoint 4, see below). Every trip call is in `office_audit` with channel driver (a Google
+  pick as its id and "Google place"); refusals in words.
 - `trips.ts`: a self trip is accepted, seen and reminded at once, on the driver's vehicle today, one visit stop, no plan
-  deadline (its leave-by is its start); no second trip while one is under way; personal refused when the setting is off;
-  a personal trip queues `trip.personal` (approve + assign_tasks).
+  deadline (its leave-by is its start), no late-start issue. Started online it needs the driver on duty, no task under
+  way, no other trip not yet started, a vehicle in use and not in the garage, and personal allowed by the setting; a trip
+  sent by the offline queue (`queued`) has happened already, so each of those is noted on its history instead of refusing
+  it (a refusal would fail the odometer, fuel and report records queued behind it). Google's name stays on the stop only
+  (cleared after 30 days): the title and the push say "Google place"; at Google's cap an online pick is refused in words, a
+  queued one keeps only the place id. A personal trip queues `trip.personal` (approve + assign_tasks).
 - Setting `driver_personal_trips`: allowed (the default), default, off, ask_first (accepted, behaves as allowed).
 - Office: the board, the task page and Tasks → History tag "Driver-started" and "Personal"; the task page switches
   Company work ↔ Personal and attaches a project (`set_trip_purpose`, assign_tasks; one task_projects row of 100 %,
@@ -1711,8 +1716,26 @@ vehicle), then everything else the tile counts (to its issue); `needs_attention[
 "Oldest waiting" read `requests.oldest`, which the server never sent (it is `oldest_waiting`).
 
 **Addition at checkpoint 4 (for Sahan to keep or drop):** a driver cancels a trip they started by mistake while it has
-not started ("Cancel this trip", `POST /trips/:id/cancel`, audited). Without it the trip would wait for the office and
-its leave-by would pass (a late-start issue).
+not started ("Cancel this trip", `POST /trips/:id/cancel`, audited, no push to them). Without it the trip would wait for
+the office.
+
+**The fresh reviewer at checkpoint 4** found no way for a driver to reach another driver's task, office data or a
+secret. Its findings, all fixed:
+- High: a trip queued offline and refused when sent (personal switched off meanwhile, a task reopened, the vehicle
+  switched off) failed every record queued behind it (odometer, fuel with its video, a report). Now the queue sends it as
+  `queued` and the server notes those rules instead of refusing.
+- "Used before" in the driver's search showed other people's typed destinations and requests: drivers get no "Used
+  before" (the phone keeps its own), and the office's never shows a personal trip's places (`recent_places`).
+- Google's name in a trip's title, the office's push and the audit row would outlive the 30 days; and at the cap a
+  Google pick kept Google's name with no place id. Both fixed as above.
+- A driver who cancelled their own trip got a "Task cancelled" push: not any more. The office's changes to a self trip
+  now push "Task changed" (the driver's own stop adds write no task row).
+- `list_tasks` and the mileage sent hundreds of ids in one URL (the hosted gateway refuses over ~16 KB): 100 at a time.
+- Smaller: a trip whose first try failed half-way gets its stop and history on the resend; one trip not yet started at a
+  time; the monthly allowance left out of a range's rows; personal km by driver (`personal_by_driver`); the issue panel's
+  close adds no history entry (Back leaves Issues); the task page's fuel video link carries the fill's day; the map
+  search's credit under "Map" results on the phone; "Couldn't cancel the trip" in its own words; `/places/google`
+  removed (the phone never called it); no late-start issue for a driver's own trip.
 
 **Tests.** Connector suite 6j (driver-api: no sign-in 401, an office session 403, the search, the refusals in words, the
 idempotent resend, no push, the audit; a stop on the way; set_trip_purpose; personal km for one day; list_tasks; fuel and

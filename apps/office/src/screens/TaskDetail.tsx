@@ -288,7 +288,7 @@ export function TaskDetail() {
                 <div className="name">{num(f.litres)} L · LKR {num(f.amount_lkr)}</div>
                 <div className="sub">{joinDots(["Fuel", f.at, f.video ? videoWords(f.video) : ""])}</div>
               </div>
-              {f.video?.status === "uploaded" && f.id && can(me, "vehicles") && <Link className="btn small" to={`/fuel/${f.id}`}><Icon name="video" />Video</Link>}
+              {f.video?.status === "uploaded" && f.id && can(me, "vehicles") && <Link className="btn small" to={`/fuel/${f.id}${f.at ? `?range=custom&from=${f.at.slice(0, 10)}&to=${f.at.slice(0, 10)}` : ""}`}><Icon name="video" />Video</Link>}
               {f.receipt_photo && <a className="btn small" href={f.receipt_photo} {...ext}>Receipt</a>}
             </div>
           ))}

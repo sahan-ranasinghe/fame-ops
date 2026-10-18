@@ -440,8 +440,10 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         });
       }
     }
-    // A custodian-driven task (its employee is an office person, not a driver) has no app: nothing to start or accept.
-    for (const t of tasks.filter((x) => x.status === "assigned" && refs.emp.get(x.employee_id)?.role === "driver")) {
+    // A custodian-driven task (its employee is an office person, not a driver) has no app: nothing to start or accept. A trip
+    // the driver started (Phase 7, §13) is accepted when it is made and has no leave-by of the office's: no late start
+    // (a queued one arrives with its past time just before its start).
+    for (const t of tasks.filter((x) => x.status === "assigned" && x.kind !== "self" && refs.emp.get(x.employee_id)?.role === "driver")) {
       const leaveBy = t.leave_by ?? t.start_at;
       if (new Date(leaveBy).getTime() + LATE_START_MIN * 60000 < now.getTime()) {
         wanted.push({

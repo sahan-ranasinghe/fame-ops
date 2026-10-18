@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import type { Db } from "../db.ts";
-import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
+import { fetchAll, inChunks, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { describeGap, findDriver, findVehicle, gapPlaces, loadGaps, loadRefs, odometerCheck } from "../fleet.ts";
 import { centsToLkr, contactLinks } from "../format.ts";
 import { syncIssues } from "../issues.ts";
@@ -29,6 +29,7 @@ async function mileageOf(
   to: string,
   onlyVehicle: MileageVehicle | null,
   onlyDriver: MileageDriver | null,
+  monthly = true,
 ) {
   const vehicleIds = onlyVehicle ? [onlyVehicle.id] : refs.vehicles.map((v) => v.id);
   const [tasks, fuel, logs, before] = await Promise.all([
@@ -67,18 +68,28 @@ async function mileageOf(
   ]);
 
   // A task's km per vehicle: one piece, or one per stretch when the vehicle was swapped during the task.
-  const segments = tasks.length
-    ? unwrap(
-      await db.from("task_vehicle_segments").select("task_id, seq, vehicle_id, start_odometer_km, end_odometer_km")
-        .in("task_id", tasks.map((t) => t.id)),
-      "vehicle segments",
-    )
-    : [];
+  const segments = (await Promise.all(
+    inChunks(tasks.map((t) => t.id)).map(async (ids) =>
+      unwrap(
+        await db.from("task_vehicle_segments").select("task_id, seq, vehicle_id, start_odometer_km, end_odometer_km").in("task_id", ids),
+        "vehicle segments",
+      )
+    ),
+  )).flat();
   // Personal trips (Phase 7, §13) are counted apart: never in the task km charged to jobs.
   const personal = new Set(tasks.filter((t) => t.purpose === "personal").map((t) => t.id));
   const allPieces = taskPieces(tasks, segments);
   const pieces = allPieces.filter((p) => !personal.has(p.task_id));
   const personalPieces = allPieces.filter((p) => personal.has(p.task_id));
+  const driverOf = new Map(tasks.map((t) => [t.id, t.employee_id]));
+  const personalByDriver = [...new Set(personalPieces.map((p) => driverOf.get(p.task_id)!))].map((id) => {
+    const mine = personalPieces.filter((p) => driverOf.get(p.task_id) === id && vehicleIds.includes(p.vehicle_id));
+    return {
+      driver: refs.emp.get(id)?.name,
+      personal_km: mine.reduce((sum, p) => sum + p.km, 0),
+      trips: new Set(mine.map((p) => p.task_id)).size,
+    };
+  }).filter((d) => d.trips > 0);
   const taskTitle = new Map(tasks.map((t) => [t.id, t.title]));
   const previous = new Map<string, number | null>(before);
   const firstReading = new Map<string, number>();
@@ -147,8 +158,9 @@ async function mileageOf(
       task_km: taskKm,
       // The odometer figures describe the whole vehicle, so they are left out when looking at one driver.
       odometer_km: onlyDriver ? undefined : odometerKm,
-      km_allowance: onlyDriver ? undefined : v.monthly_km_allowance,
-      over_allowance: !onlyDriver && v.monthly_km_allowance != null && odometerKm > v.monthly_km_allowance ? true : undefined,
+      // The allowance is a month's: a range of days other than a month leaves it out (the month beside it carries it).
+      km_allowance: onlyDriver || !monthly ? undefined : v.monthly_km_allowance,
+      over_allowance: monthly && !onlyDriver && v.monthly_km_allowance != null && odometerKm > v.monthly_km_allowance ? true : undefined,
       km_outside_tasks: !onlyDriver && odometerKm - taskKm - personalKm > UNLOGGED_KM ? odometerKm - taskKm - personalKm : undefined,
       personal_km: personalKm || undefined,
       personal_trips: personalPieces.filter((p) => p.vehicle_id === id).length || undefined,
@@ -178,6 +190,8 @@ async function mileageOf(
       overnight_km: total((r) => r.overnight_km),
     },
     vehicles: rows,
+    // Phase 7 (§13): personal trips' km by driver (the rows are by vehicle).
+    personal_by_driver: personalByDriver.length ? personalByDriver : undefined,
     biggest_gaps: biggestGaps,
     unlogged_km: flags,
     check_odometer: checkOdometer,
@@ -215,7 +229,7 @@ export const mileageSummary = tool({
     const onlyDriver = driver ? findDriver(refs, driver) : null;
     const [m, r] = await Promise.all([
       mileageOf(db, refs, from, to, onlyVehicle, onlyDriver),
-      span ? mileageOf(db, refs, span.start, span.end, onlyVehicle, onlyDriver) : null,
+      span ? mileageOf(db, refs, span.start, span.end, onlyVehicle, onlyDriver, false) : null,
     ]);
     return {
       result: {

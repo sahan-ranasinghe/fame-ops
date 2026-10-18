@@ -174,6 +174,12 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
                     onPress={() => choose(pickFromResult(r, session.current))}
                   />
                 ))}
+                {/* The map search's public places carry their credit (OpenStreetMap · openrouteservice), as in the office. */}
+                {group.layers.includes('map') && rows.some((r) => r.layer === 'map' && r.attribution) && (
+                  <Txt variant="small" color={colors.muted} style={{ paddingHorizontal: 14, paddingBottom: 8 }}>
+                    {rows.find((r) => r.layer === 'map' && r.attribution)?.attribution}
+                  </Txt>
+                )}
               </Group>
             );
           })}

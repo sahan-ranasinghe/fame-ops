@@ -948,9 +948,12 @@ office_audit.
   `mileage_summary` (a `range` block; `personal_km`), `list_fuel` (`month_totals`) and `list_issues` (`sort`; `opened_by`,
   `taken_by`, `resolved_at`), `kind`/`purpose` on task_board and task_detail, `needs_attention[].vehicle`, the setting
   `driver_personal_trips`, the event `trip.personal`. The driver app's server is the Edge Function `driver-api`
-  (`--no-verify-jwt`; the driver's session and role checked; 60 calls a minute; audited with channel driver):
-  `/places/search`, `/places/google`, `/trips` (idempotent by the phone's task and first-stop ids), `/trips/:id/stops`,
-  `/trips/:id/cancel` (before it starts).
+  (`--no-verify-jwt`; the driver's session and role checked; 60 calls a minute; audited with channel driver, a Google pick
+  as its id and "Google place"): `/places/search` (no "Used before" for drivers), `/trips` (idempotent by the phone's task
+  and first-stop ids; online it needs on duty, no task under way, no other unstarted trip, a usable vehicle, personal
+  allowed; `queued` from the offline queue notes those rules instead of refusing), `/trips/:id/stops`,
+  `/trips/:id/cancel` (before it starts; no push to the driver). Google's name never goes in a trip's title or push
+  ("Google place").
 - Phase 7 Part 3: `create_task` without approve (setting `tasks_need_approval`, on) answers `waiting_for_approval` and the
   task waits as a request of kind task (`task_board.waiting_approval`, `list_requests kind`); `decide_request(…, date?,
   leave_by?, back_by?)` sends it as proposed or changed, copying the request's stops. `create_request` / `update_request`

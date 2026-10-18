@@ -1,7 +1,7 @@
 -- Phase 7, Part 4, checked with pgTAP (docs/phase7-plan.md §13): trips a driver starts. tasks.kind and purpose with their
 -- defaults and checks; a driver reads them but never writes them; a self trip (made by driver-api as service role) pushes
--- the driver nothing when it is made or changed, while the office cancelling it still tells them; the driver app reads the
--- setting driver_personal_trips.
+-- the driver nothing when it is made or when they cancel it themselves, while the office changing or cancelling it still
+-- tells them; the driver app reads the setting driver_personal_trips; "Used before" never offers a personal trip's place.
 -- Run with: npx supabase test db   (local database only; everything is rolled back)
 
 begin;
@@ -44,10 +44,22 @@ insert into public.tasks (id, kind, purpose, title, employee_id, vehicle_id, sta
 select is((select count(*) from net.http_request_queue where url like '%/push-task'
            and (convert_from(body, 'UTF8')::jsonb ->> 'task_id') = '30000000-0000-0000-0000-000000000ac2'), 0::bigint,
   'a trip the driver started is not pushed to them as a new task');
-update public.tasks set title = 'Personal trip · Kadawatha town', plan_version = plan_version + 1 where id = '30000000-0000-0000-0000-000000000ac2';
+insert into public.task_stops (task_id, seq, type, place_name, status) values
+  ('30000000-0000-0000-0000-000000000ac2', 1, 'visit', 'P7T Kadawatha home', 'pending'),
+  ('30000000-0000-0000-0000-000000000ac2', 2, 'visit', 'P7T Kadawatha shop', 'pending');
 select is((select count(*) from net.http_request_queue where url like '%/push-task'
            and (convert_from(body, 'UTF8')::jsonb ->> 'task_id') = '30000000-0000-0000-0000-000000000ac2'), 0::bigint,
-  'nor as "Task changed" (a stop added on the way)');
+  'nor when a stop is added on the way (driver-api writes stops, no task row)');
+select is((select count(*) from public.recent_places('P7T Kadawatha', now() - interval '1 day', 10)), 0::bigint,
+  '"Used before" never offers where a driver went on a personal trip');
+update public.tasks set purpose = 'company' where id = '30000000-0000-0000-0000-000000000ac2';
+select is((select count(*) from public.recent_places('P7T Kadawatha', now() - interval '1 day', 10)), 2::bigint, 'a company trip''s places are offered');
+update public.tasks set purpose = 'personal' where id = '30000000-0000-0000-0000-000000000ac2';
+update public.tasks set title = 'Personal trip · Kadawatha town', plan_version = plan_version + 1 where id = '30000000-0000-0000-0000-000000000ac2';
+select is((select count(*) from net.http_request_queue where url like '%/push-task'
+           and (convert_from(body, 'UTF8')::jsonb ->> 'task_id') = '30000000-0000-0000-0000-000000000ac2'
+           and (convert_from(body, 'UTF8')::jsonb ->> 'kind') = 'changed'), 1::bigint,
+  'the office changing the trip tells the driver ("Task changed")');
 
 -- 3. The driver reads kind and purpose, and never writes them ------------------------------------------------------------
 set local role authenticated;
@@ -67,8 +79,15 @@ set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-000000000ac1","
 select is((public.get_driver_settings() ->> 'driver_personal_trips'), 'off', 'and the office''s choice');
 reset role;
 
--- 4. The office cancelling a self trip still tells the driver --------------------------------------------------------------
-set local request.jwt.claims to '{}'; -- the office (service role), not the driver's app
+-- 4. The driver cancelling their trip before it starts hears nothing; the office cancelling one still tells the driver --------
+set local request.jwt.claims to '{}'; -- driver-api and the office both write as the service role
+insert into public.tasks (id, kind, title, employee_id, vehicle_id, start_at, status, sent_at, accepted_at, created_by) values
+  ('30000000-0000-0000-0000-000000000ac3', 'self', 'Trip · by mistake', '10000000-0000-0000-0000-000000000ac1', '20000000-0000-0000-0000-000000000ac1',
+   now(), 'assigned', now(), now(), 'driver: Ruwan Jayasuriya');
+update public.tasks set status = 'cancelled', cancelled_reason = 'Cancelled by the driver before starting' where id = '30000000-0000-0000-0000-000000000ac3';
+select is((select count(*) from net.http_request_queue where url like '%/push-task'
+           and (convert_from(body, 'UTF8')::jsonb ->> 'task_id') = '30000000-0000-0000-0000-000000000ac3'), 0::bigint,
+  'the driver cancelling their own trip before it starts gets no "Task cancelled" push');
 update public.tasks set status = 'cancelled', cancelled_reason = 'Not needed' where id = '30000000-0000-0000-0000-000000000ac2';
 select is((select count(*) from net.http_request_queue where url like '%/push-task'
            and (convert_from(body, 'UTF8')::jsonb ->> 'task_id') = '30000000-0000-0000-0000-000000000ac2'
