@@ -397,7 +397,8 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 /* Phase 5, Part 3a: the bell and the issues centre */
 .bell { position: relative }
 .rail .bell { margin: -6px 0 -6px; display: none }
-@media (min-width: 621px) { .rail .bell { display: block } .mhead .bell { display: none } }
+/* The phone breakpoint (768 px, ui/phone.ts): at 621–768 px the rail is hidden, so the top bar keeps its bell. */
+@media (min-width: 769px) { .rail .bell { display: block } .mhead .bell { display: none } }
 .bell-btn { display: inline-flex; align-items: center; gap: 8px; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 8px; border-radius: 10px; font: inherit }
 .rail .bell-btn { color: var(--rail-ink); width: 100% }
 .rail .bell-btn:hover { background: var(--rail-hover) }
@@ -548,3 +549,49 @@ a.link-row:hover { background: var(--surface-2) }
 .panel-group { padding: 10px 22px 4px; color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600 }
 /* Phase 7 (§13): a driver-started trip, a personal one. */
 .trip-tags { display: inline-flex; flex-wrap: wrap; gap: 6px }
+/* Hotfix 2 (A, B): the notification centre (a tray beside the issues bell), its banners and the sound strip. */
+.bells { display: flex; align-items: center; gap: 2px }
+.rail .bells { margin: -6px 0 }
+.rail .bells .bell { margin: 0 }
+.rail .bells .bell-btn { width: auto }
+.inbox-bell { position: relative }
+.rail .inbox-bell .bell-btn { color: var(--rail-ink) }
+.rail .inbox-bell .bell-btn:hover { background: var(--rail-hover) }
+a.bell-btn { text-decoration: none }
+.inbox-panel { position: fixed; z-index: 45; top: 12px; left: 256px; width: min(400px, calc(100vw - 272px)); max-height: calc(100vh - 24px); overflow-y: auto; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,.2) }
+.inbox-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; background: var(--surface); border-bottom: 1px solid var(--line) }
+.inbox-head b { font-size: 16px; flex: 1 1 auto }
+.inbox-msg { padding: 8px 16px; color: var(--bad); font-size: 14px }
+.inbox-list { display: grid }
+.inbox-item { display: flex; gap: 12px; align-items: flex-start; width: 100%; padding: 12px 16px; border: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--muted); text-decoration: none; text-align: left; font: inherit; font-size: 14px; cursor: pointer }
+.inbox-item:last-child { border-bottom: 0 }
+.inbox-item:hover { background: var(--bg) }
+.inbox-item .dot { margin-top: 6px }
+.inbox-item b { display: block; font-weight: 500 }
+.inbox-item small { display: block }
+.inbox-item .when { margin-top: 2px; font-size: 13px }
+.inbox-item.unread { color: var(--ink) }
+.inbox-item.unread b { font-weight: 700 }
+.inbox-item.unread .when { color: var(--live); font-weight: 600 }
+.inbox-empty { padding: 18px 16px; color: var(--muted) }
+.inbox-banners { position: fixed; z-index: 60; top: 16px; right: 16px; width: min(420px, calc(100vw - 32px)); display: grid; gap: 10px }
+.inbox-banner { display: flex; gap: 12px; align-items: flex-start; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-left: 6px solid var(--muted); border-radius: 12px; padding: 12px 12px 12px 14px; box-shadow: 0 12px 32px rgba(0,0,0,.18) }
+.inbox-banner .dot { margin-top: 6px }
+.inbox-banner .grow { flex: 1 1 auto }
+.inbox-banner .acts { flex-wrap: nowrap; align-items: center }
+.inbox-banner.urgent { border-left-color: var(--accent) }
+.inbox-banner.alert { border-left-color: var(--live) }
+.inbox-banner.soft { border-left-color: var(--ok) }
+.inbox-banner.alarm { border-left-color: var(--bad); background: var(--bad-bg) }
+.sound-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; width: 100%; margin-bottom: 16px; padding: 8px 14px; border: 0; border-radius: 10px; background: var(--ink); color: var(--surface); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer }
+.sound-strip svg { width: 18px; height: 18px; flex: none }
+.sound-strip small { font-weight: 400; opacity: .75 }
+.sound-kinds { display: grid; gap: 8px }
+.sound-kind { display: flex; align-items: center; gap: 12px; flex-wrap: wrap }
+.sound-kind .grow { flex: 1 1 220px }
+.volume { display: flex; align-items: center; gap: 12px }
+.volume input[type="range"] { flex: 1 1 auto; min-height: 0; accent-color: var(--accent) }
+@media (max-width: 768px) {
+  .inbox-banners { top: 8px; right: 8px; left: 8px; width: auto }
+  .mhead .inbox-bell .bell-btn { min-width: 48px; min-height: 48px; justify-content: center }
+}

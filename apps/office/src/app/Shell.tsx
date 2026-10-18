@@ -10,6 +10,7 @@ import { Notice } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { PullToRefresh } from "../ui/PullToRefresh";
 import { useFleet } from "./FleetContext";
+import { InboxBanners, InboxBell, InboxProvider, SoundStrip } from "./inbox";
 import { allowed, ISSUES_NEED, NAV, tabsFor } from "./nav";
 
 const BELL_ARGS = { status: "active", limit: 10 };
@@ -132,7 +133,7 @@ function Banner() {
   );
 }
 
-export function Shell() {
+function ShellBody() {
   const { me, store, noConnector } = useFleet();
   const overview = useEntry<Overview>("overview");
   const waiting = can(me, "approve") ? overview.data?.requests?.waiting ?? 0 : 0;
@@ -164,7 +165,8 @@ export function Shell() {
           <div className="logo">FF</div>
           <div><b>Fame Fleet</b><span>Fleet office</span></div>
         </div>
-        <Bell />
+        {/* Hotfix 2 (A): the notification centre (a tray) beside the issues bell, which stays as it is. */}
+        <div className="bells"><InboxBell /><Bell /></div>
         <nav className="nav">
           {nav.map((n) => (
             <NavLink key={n.key} to={n.path} end={n.path === "/"}>
@@ -184,8 +186,11 @@ export function Shell() {
         <div className="mhead">
           <div className="logo">FF</div>
           <div className="grow"><b>Fame Fleet</b><div className="muted small">{longDate(today(), true)}</div></div>
+          <InboxBell />
           <Bell />
         </div>
+        <SoundStrip />
+        <InboxBanners />
         <Banner />
         <NeedsDriverBanner />
         <PullToRefresh><Outlet /></PullToRefresh>
@@ -200,4 +205,9 @@ export function Shell() {
       </nav>
     </div>
   );
+}
+
+/** Hotfix 2 (A, B): one notification-centre feed (and its sounds) for the whole page. */
+export function Shell() {
+  return <InboxProvider><ShellBody /></InboxProvider>;
 }

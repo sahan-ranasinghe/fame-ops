@@ -24,6 +24,8 @@ export interface Fleet {
     driversPoints?: (employeeIds: string[], cb: (row: PointRow) => void, onStatus?: (s: "connecting" | "live" | "error") => void) => () => void;
     /** Any change on the issues table (the bell, the Needs a driver banner and the Issues page reload). */
     issues?: (cb: () => void) => () => void;
+    /** Hotfix 2 (A): a new or read item in the signed-in person's notification centre (office_inbox). */
+    inbox?: (cb: () => void) => () => void;
   };
   /** Web build only (Phase 7): a photo or document goes up through the signed upload a tool handed out. None = no upload buttons. */
   files?: { upload: (ticket: UploadTicket, file: Blob, contentType: string) => Promise<void> };
