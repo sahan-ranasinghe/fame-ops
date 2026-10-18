@@ -108,6 +108,13 @@
   (`presence.ts`, `ui/DriverRow.tsx`), Ask drivers (`driver_asks` / `driver_ask_answers`, `ask_drivers`, `ask_answers`, the
   `driver-asks` channel, one location fix), Running late (`report_running_late`) and Can't make it, the Drivers board
   (`drivers_board`, `/drivers/board` with its week view). As built: `docs/phase7-plan.md` "Part 3b as built".
+- **Hotfix 4 (19 October 2026, branch `phase7-hotfix-4`)**: one "New request" (the phone/desktop visibility classes win);
+  back means back (`useBack`: one step in the history; a page's own address only for a page opened straight; `BackButton`;
+  every save replaces its form, a change to a task goes back to where it came from, `useAfterSave`); Give it a driver as one
+  page (`TaskSummary` on top, Who can take it below, Open task →); forward links say so and a task link shows only to people
+  who may open it (`canOpenTask`); Ask drivers as its own step (`asks/AskSheet`: no tick boxes on the rows, a sheet with the
+  free drivers ticked, the answers live under the rows with Use this driver / Assign →). As built: `docs/phase7-plan.md`
+  "Hotfix 4 as built".
 - **Phase 8 (planned 19 October 2026)**: Office mode, the office's interface in the same Expo app for office sign-ins, by
   permission (view, request, approve, assign_tasks, vehicles, issues, users), never by role name; the web build of the same
   screens becomes the phone version of the office site. Design first (Part 8.0, a clickable prototype from

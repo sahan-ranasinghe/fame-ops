@@ -2318,6 +2318,91 @@ Running late on the task page and the board; D1 the driver app.
   Left as they are, said here: Live keeps its own cards with the row's lines added (not the DriverRow component); Running
   late is offered once the task is accepted (before that the driver accepts or says Can't do).
 
+## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
+
+What Sahan asked:
+- **a.** The Requests page has two "New request" buttons: keep one.
+- **b.** Needs a driver: an item opened "Give it a driver" with no task details, and that page's back arrow opened the task
+  details (a forward move on a back button) while the phone's back went to the list. Give it a driver is one page: the task
+  summary on top (time, stops with arrive-by, requester, notes, map), Who's available below, an "Open task" link forward;
+  the back arrow and the phone's back both return to wherever the person came from (Overview, Tasks or the push), never
+  anywhere else. The same rule on every decide, change and reassign page: back means back, forward links are labelled.
+- **c.** Who's available without tick boxes: a row click picks (as now); "Ask drivers" is its own step, a sheet with its own
+  list and tick boxes (the free drivers ticked), the question and Send; the answers come back live as chips under the rows,
+  and a Yes has "Use this driver". The same on Assign, Approve, Give it a driver and the Drivers board.
+
+### Hotfix 4 as built (branch `phase7-hotfix-4`, 19 October)
+
+Office web only: no migration, no function, no driver app change, the connector's tools as they were.
+
+- **a. One "New request".**
+  - The cause was site-wide. `.btn { display: inline-flex }` comes later in `styles.css` than the visibility classes, with
+    the same specificity. So a `phone-only` button also showed on a desktop and a `desktop-only` one on a phone (Requests,
+    My trips and every such pair).
+  - Now `.phone-only` is hidden from 769 px and `.desktop-only` up to 768 px, both with `!important`. Each screen shows one.
+- **b. Back means back.**
+  - `useBack` (`ui/Page.tsx`), the arrow and Esc on every page go one step back in the history, the same as the phone's
+    back.
+  - A page's own address is used only by a page opened straight (a push, a link): `history.state.idx` 0, kept by the browser
+    and hash routers; a memory router's first key. That page then goes to its parent, replacing itself.
+  - `BackButton` does the same for Cancel and Back buttons. MoveVehicle's "Back to Live locations" and Cancel were links that
+    pushed `/live`.
+  - Every save replaces its form in the history. After a change to a task (Give it a driver, Change, Edit stops) the page
+    goes back to where the person came from (`useAfterSave`), so the task page is not in the history twice. The new
+    warnings wait for the task page in `data/flash` (per task, a minute).
+- **b. Give it a driver** (`/tasks/:id/edit?driver=1`, the push's link and the Overview's and the board's rows) is one page:
+  - on top `TaskSummary`: the day and leave-by (with "leaves in 42 min" in the header), passengers, the vehicle, the start and
+    the stops with arrive-by and time there, who asked and who approved, the contact, the notes and the plan on the map;
+  - below, Who can take it;
+  - "Give to Kamal · WP CAB-4521" (disabled until a driver is picked);
+  - "Open task →" and "Change the time or the trip →" go forward and say so;
+  - Cancel task as before.
+
+  The task page's "Give it a driver" opens it too.
+- **Forward links say so** ("Open task →", "The request →", "The board →", "All answers →"). A link to a task's page shows
+  only to people who may open it (`canOpenTask`: the `/tasks` routes need assign_tasks). Before, an approver or a requester
+  got links that landed on No access: on the request page, the decide pages, the booking result, issues, maintenance, fuel,
+  the conflict cards and the answers. "The whole board" replaces a forward "Back to the board".
+- **c. Ask drivers as its own step** (`screens/asks/AskSheet.tsx`):
+  - Who's available (every dispatch page) and the Drivers board have no tick boxes; a click on a row picks, as before.
+  - "Ask drivers" opens a sheet (a dialog: Esc, the close button or the shade close it; at the bottom of the screen on a
+    phone) with:
+    - the question cards;
+    - for a trip, the page's day and times;
+    - a note;
+    - its own list with the free drivers ticked (All free · None);
+    - "Send to N drivers".
+  - The answers come back as chips under the rows: on the web Realtime on `driver_ask_answers` asks again at once, the
+    artifact every 10 s.
+  - A line above the list gives the question and its counts, with "All answers →".
+  - A Yes has "Use this driver" on the dispatch pages (it picks the driver and the vehicle they bring) and "Assign →" on the
+    board (a new task for them at the asked time).
+  - The question is kept for the page's task or request (or the board) while the tab is open (sessionStorage).
+  - The Ask page (`/drivers/ask`) and the answers pages stay for Earlier questions.
+- **Tests:**
+  - Vitest:
+    - the back rule (`ui/back.test.tsx`);
+    - Give it a driver from the Overview and from a push (`giveDriver.test.tsx`);
+    - the panel and the board with the sheet and the live answers;
+    - the changed labels.
+  - The e2e asks from the board's sheet and sees the Yes come in under the row, and gives a declined task to another driver
+    from Give it a driver.
+
+**Test steps** (they go into `docs/phase7-test-plan.md` when this branch and Part 6's meet):
+1. Requests, as a fleet admin on a laptop and on a phone. **See:** one "New request" (the header's on a laptop, the big
+   button on a phone).
+2. Make a driver decline a task. Open it from the Overview's Needs a driver. **See:** the task on top (leave-by, stops with
+   arrive-by, who asked, notes, the map), Who can take it below, "Open task →". Pick a driver by clicking their row. **See:**
+   "Give to <name> · <plate>". Tap it. **See:** back on the Overview; the task left Needs a driver.
+3. Open Give it a driver again from the push on a phone, then tap back. **See:** the Overview, never the task page. From
+   Tasks: back returns to Tasks.
+4. Assign a task: Who's available has no tick boxes. Ask drivers. **See:** a sheet with the free drivers ticked, the trip's
+   day and time filled in. Send. On the driver's phone answer Yes. **See:** "Yes" appears under that driver's row within
+   seconds, with "Use this driver"; it fills the driver and the vehicle.
+5. The same on Approve, Give it a driver and the Drivers board (there a Yes has "Assign →").
+6. As an approver without assign_tasks: a request page, an issue or a fuel fill. **See:** no "Open task" link (before, it
+   led to No access).
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
