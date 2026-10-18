@@ -13,7 +13,7 @@ import { notifyEvent } from "../notifications.ts";
 import { PHOTO_LINK_NOTE, photoLinks } from "../photos.ts";
 import type { Actor } from "../roles.ts";
 import { colomboDateTime, colomboDayTime } from "../time.ts";
-import { tool, zId, zText } from "../tool.ts";
+import { daySpan, tool, zDate, zId, zText } from "../tool.ts";
 
 const STATUS = z.enum(["open", "in_progress", "resolved", "dismissed"]);
 const KINDS = Object.keys(KIND_TEXT) as [string, ...string[]];
@@ -25,7 +25,13 @@ function kindsFor(actor: Actor): "all" | string[] {
   return [];
 }
 
-function issueCard(i: IssueRow, refs: Refs) {
+/** Who opened and who took an issue, from its events (Phase 7, §9): the opened event, the latest assignment. */
+interface WhoDid {
+  openedBy?: string;
+  takenAt?: string;
+}
+
+function issueCard(i: IssueRow, refs: Refs, who?: WhoDid) {
   const driver = i.employee_id ? refs.emp.get(i.employee_id) : undefined;
   const assignee = i.assigned_to ? refs.emp.get(i.assigned_to) : undefined;
   return {
@@ -42,6 +48,10 @@ function issueCard(i: IssueRow, refs: Refs) {
     updated: colomboDateTime(i.updated_at),
     resolved: i.resolved_at ? colomboDateTime(i.resolved_at) : undefined,
     resolved_by: i.resolved_by ?? undefined,
+    // Phase 7 (§9): "System · Vehicle problem" or the person; who took it and when; when it was resolved or dismissed.
+    opened_by: who ? who.openedBy ?? `System · ${KIND_TEXT[i.kind] ?? i.kind}` : undefined,
+    taken_by: who && assignee ? { name: assignee.name, at: who.takenAt } : undefined,
+    resolved_at: i.resolved_at ? colomboDateTime(i.resolved_at) : undefined,
     resolution_note: i.resolution_note ?? undefined,
     assigned_to: assignee ? { name: assignee.name, email: assignee.email ?? undefined } : undefined,
     vehicle: i.vehicle_id ? refs.veh.get(i.vehicle_id)?.reg_no : undefined,
@@ -90,11 +100,16 @@ export const listIssues = tool({
     vehicle: zText(20).optional().describe("A number plate"),
     assigned_to: zText(120).optional().describe('An office e-mail, or "me"'),
     limit: z.number().int().min(1).max(200).optional().describe("Default 50"),
+    from: zDate.optional().describe("Opened on or after this Colombo day, YYYY-MM-DD (with to)"),
+    to: zDate.optional().describe("Opened on or before this day"),
+    sort: z.enum(["urgent", "newest"]).optional().describe("urgent (the default: most urgent, then newest) or newest first"),
   }),
-  async run({ status = "active", kind, vehicle, assigned_to, limit = 50 }, { db, actor }) {
+  async run({ status = "active", kind, vehicle, assigned_to, limit = 50, from, to, sort = "urgent" }, { db, actor }) {
     const kinds = kindsFor(actor);
+    const span = daySpan(from, to);
     const refs = await loadRefs(db);
     let q = db.from("issues").select("*");
+    if (span) q = q.gte("opened_at", span.start).lt("opened_at", span.end);
     if (status === "active") q = q.in("status", ACTIVE);
     else if (status !== "all") q = q.eq("status", status);
     if (kind) q = q.eq("kind", kind);
@@ -105,7 +120,31 @@ export const listIssues = tool({
       q = q.eq("assigned_to", id);
     }
     if (kinds !== "all") q = q.in("kind", kinds);
-    const rows = unwrap(await q.order("sort_key").order("opened_at", { ascending: false }).limit(limit), "issues");
+    const rows = unwrap(
+      await (sort === "newest" ? q.order("opened_at", { ascending: false }) : q.order("sort_key").order("opened_at", { ascending: false }))
+        .order("id").limit(limit),
+      "issues",
+    );
+    // Who opened and who took each listed issue (one query for all).
+    const events = rows.length
+      ? unwrap(
+        await db.from("issue_events").select("issue_id, action, actor, at").in("issue_id", rows.map((r) => r.id)).in("action", [
+          "opened",
+          "assigned",
+        ])
+          .order("at"),
+        "issue events",
+      )
+      : [];
+    const whoOf = (id: string): WhoDid => {
+      const mine = events.filter((e) => e.issue_id === id);
+      const opened = mine.find((e) => e.action === "opened");
+      const taken = mine.filter((e) => e.action === "assigned").at(-1);
+      return {
+        openedBy: opened?.actor && opened.actor !== "system" ? opened.actor : undefined,
+        takenAt: taken ? colomboDateTime(taken.at) : undefined,
+      };
+    };
     // The counts of everything active the person may see, whatever the filters (the bell).
     let countQ = db.from("issues").select("status").in("status", ACTIVE);
     if (kinds !== "all") countQ = countQ.in("kind", kinds);
@@ -116,7 +155,10 @@ export const listIssues = tool({
         count: rows.length,
         open: counts.filter((r) => r.status === "open").length,
         in_progress: counts.filter((r) => r.status === "in_progress").length,
-        issues: rows.map((i) => issueCard(i, refs)),
+        from: span?.from,
+        to: span?.to,
+        sort,
+        issues: rows.map((i) => issueCard(i, refs, whoOf(i.id))),
       },
       summary: `${rows.length} issues (${status}); ${counts.length} active`,
     };
@@ -248,10 +290,17 @@ export const issueHistory = tool({
     const report = reportRes ? unwrapMaybe(reportRes, "vehicle report") : null;
     const request = requestRes ? unwrapMaybe(requestRes, "vehicle request") : null;
     const links = report ? await photoLinks(db, { reportIds: [report.id] }) : null;
+    const events = unwrap(eventsRes, "issue events");
+    const opened = events.find((e) => e.action === "opened");
+    const taken = events.filter((e) => e.action === "assigned").at(-1);
+    const who: WhoDid = {
+      openedBy: opened?.actor && opened.actor !== "system" ? opened.actor : undefined,
+      takenAt: taken ? colomboDateTime(taken.at) : undefined,
+    };
     return {
       result: {
-        issue: issueCard(issue, refs),
-        events: unwrap(eventsRes, "issue events").map((e) => ({
+        issue: issueCard(issue, refs, who),
+        events: events.map((e) => ({
           at: colomboDateTime(e.at),
           actor: e.actor ?? undefined,
           action: e.action,

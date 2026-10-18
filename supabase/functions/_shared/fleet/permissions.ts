@@ -87,6 +87,9 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   redecide_request: ["approve"],
   availability: AA,
   task_board: ["assign_tasks"],
+  // Phase 7 (§8, §13): task history, and a driver-started trip switched between company and personal.
+  list_tasks: ["assign_tasks"],
+  set_trip_purpose: ["assign_tasks"],
   task_detail: ["assign_tasks", "approve", "request"],
   driver_route: ["assign_tasks", "vehicles"],
   create_task: ["assign_tasks"],

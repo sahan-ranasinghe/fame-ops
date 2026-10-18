@@ -553,5 +553,32 @@
     "needsConnection": "Needs a connection to open",
     "noVehicle": "Start work with a vehicle to see its documents",
     "failed": "Couldn't open the document: try again"
+  },
+  "trip": {
+    "start": "Start a trip",
+    "title": "Start a trip",
+    "company": "Company work",
+    "personal": "Personal",
+    "where": "Where to?",
+    "searchHint": "A place, a site id or an address",
+    "searching": "Searching…",
+    "noResults": "Nothing found. You can go by the words you typed.",
+    "typed": "Go to “{text}”",
+    "ours": "Our place",
+    "usedBefore": "Used before",
+    "map": "Map",
+    "note": "Note (optional)",
+    "go": "Start",
+    "starting": "Starting…",
+    "addStop": "Add a stop",
+    "stopAdded": "Stop added",
+    "offlineOnly": "No connection: type the place or pick one of the list.",
+    "queued": "No connection: the trip is saved and sent when the connection is back.",
+    "needVehicle": "Start work with today's vehicle first.",
+    "finishFirst": "Finish the task in progress first.",
+    "officeTold": "The office sees personal trips.",
+    "yours": "Your trip",
+    "failed": "Couldn't start the trip: {reason}",
+    "stopFailed": "Couldn't add the stop: {reason}"
   }
 }

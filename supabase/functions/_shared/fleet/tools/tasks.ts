@@ -1483,6 +1483,9 @@ export const taskBoard = tool({
         started_on: colomboDate(t.start_at) === day ? undefined : colomboDate(t.start_at),
         label: t.label,
         title: t.title,
+        // Phase 7 (§13): self = started by the driver in the app; personal km are counted apart.
+        kind: t.kind,
+        purpose: t.purpose,
         ...endsOf(mine),
         stops_count: mine.length,
         leave_by: t.leave_by ? colomboTime(t.leave_by) : undefined,
@@ -1663,6 +1666,8 @@ export const taskDetail = tool({
           id: task.id,
           title: task.title,
           label: task.label,
+          kind: task.kind,
+          purpose: task.purpose,
           status: task.status,
           status_line: statusLine(task, latest.get(task.employee_id), now, driver),
           start: colomboDayTime(task.start_at),

@@ -417,6 +417,11 @@ verify_jwt = false
 enabled = true
 verify_jwt = false
 
+# Phase 7 (§13): the driver app's server (place search, Start a trip); it checks the driver's session itself.
+[functions.driver-api]
+enabled = true
+verify_jwt = false
+
 [functions.notify-office]
 enabled = true
 verify_jwt = false

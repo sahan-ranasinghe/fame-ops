@@ -38,7 +38,8 @@ export type NotifyEvent =
   | "request.on_the_way"
   | "request.arrived"
   | "request.driver_changed"
-  | "request.cancelled";
+  | "request.cancelled"
+  | "trip.personal";
 
 export interface EventInfo {
   event: NotifyEvent;
@@ -81,6 +82,13 @@ export const EVENTS: readonly EventInfo[] = [
     event: "task.vehicle_needed",
     label: "A driver needs another vehicle",
     text: "A breakdown or an accident during a task: the driver asks for another vehicle",
+    needs: ["approve", "assign_tasks"],
+  },
+  // Phase 7 (§13): a driver starts a personal trip (driver-api); company trips are only tagged on the board.
+  {
+    event: "trip.personal",
+    label: "A driver starts a personal trip",
+    text: "A driver starts a personal trip in the app: where to, the vehicle and the time",
     needs: ["approve", "assign_tasks"],
   },
   // Phase 7: written in SQL by the trigger task_stops_skipped (a driver's skip, with the reason).
@@ -227,6 +235,7 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
       ids = [...holders("approve", "assign_tasks"), ...[ctx.assigner, ctx.requester].flatMap((id) => id ? [id] : [])];
       break;
     case "task.vehicle_needed":
+    case "trip.personal":
       ids = holders("approve", "assign_tasks");
       break;
     case "task.stop_skipped":

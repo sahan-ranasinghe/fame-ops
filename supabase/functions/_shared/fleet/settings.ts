@@ -34,6 +34,8 @@ export interface Settings {
   self_drive_allowed: boolean;
   /** Phase 7 (§33): a task made by someone without the approve permission waits for an approver before it is sent. */
   tasks_need_approval: boolean;
+  /** Phase 7 (§13): trips a driver starts: allowed (Company work preselected, Personal offered), default (Personal preselected), off (no Personal); ask_first is reserved and behaves as allowed. */
+  driver_personal_trips: PersonalTrips;
   /** Snap to roads under the open package: none or osrm (secret OSRM_URL); under the google package Google's Roads API is used (google_caps.roads; 0 = off) and this is not read. */
   map_matching: { provider: MapMatchingProvider };
   /** The driver app's "At work? Start work" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
@@ -87,6 +89,9 @@ export const dayCapFor = (month: number) => Math.floor(month / WORKING_DAYS_A_MO
 export const ROADS_CAPS_PLANNED = { day: dayCapFor(4750), month: 4750 } as const;
 
 export type VideoQuality = "480p" | "720p";
+/** Phase 7 (§13): whether a driver may mark a trip they start as personal. */
+export const PERSONAL_TRIPS = ["allowed", "default", "off", "ask_first"] as const;
+export type PersonalTrips = (typeof PERSONAL_TRIPS)[number];
 
 export interface ChecklistItem {
   key: string;
@@ -117,6 +122,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   },
   self_drive_allowed: true,
   tasks_need_approval: true,
+  driver_personal_trips: "allowed",
   map_matching: { provider: "none" },
   shift_start: "08:00",
   shift_days: [1, 2, 3, 4, 5],
@@ -166,6 +172,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
   tasks_need_approval:
     "New tasks need the fleet admin's OK: a task made by someone without the approve permission waits in the approval queue (Requests) with the proposed driver and vehicle, and is sent to the driver only when approved (off = sent at once)",
+  driver_personal_trips:
+    "Trips a driver starts in the app (Start a trip): allowed = Company work preselected and Personal offered, default = Personal preselected, off = no Personal choice; ask_first is reserved (accepted, behaves as allowed until it is built). Personal km are counted apart and never charged to a job",
   map_matching:
     "Snap to roads under the open package: provider none or osrm (self-hosted, secret OSRM_URL); under the google package Google's Roads API snaps the web's Google map instead (its caps in google_caps.roads, 0 = off) and this setting is not read; km stay from the odometer",
   shift_start: 'The driver app\'s shift nudge ("At work? Start work"): the time of day, HH:MM, shown only to a driver who is off duty',
@@ -267,6 +275,11 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
         return short ? { key, en, si: si || en, short } : { key, en, si: si || en };
       });
     }
+    case "driver_personal_trips":
+      if (!PERSONAL_TRIPS.includes(value as PersonalTrips)) {
+        throw new ToolError(`driver_personal_trips: ${PERSONAL_TRIPS.join(", ")}.`);
+      }
+      return value as PersonalTrips;
     case "fuel_video_quality":
       if (value !== "480p" && value !== "720p") throw new ToolError("fuel_video_quality: 480p or 720p.");
       return value;

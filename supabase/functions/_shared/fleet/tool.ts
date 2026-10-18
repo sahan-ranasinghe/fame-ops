@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { Db } from "./db.ts";
 import { ToolError } from "./db.ts";
 import type { Actor } from "./roles.ts";
-import { isRealDate } from "./time.ts";
+import { dayRange, isRealDate } from "./time.ts";
 
 export interface Ctx {
   db: Db;
@@ -48,4 +48,23 @@ export const zVehicleType = z.enum(["car", "van", "double_cab", "lorry", "other"
 export function realDate(date: string, name = "date"): string {
   if (!isRealDate(date)) throw new ToolError(`${name}: ${date} is not a real date.`);
   return date;
+}
+
+/**
+ * Phase 7 (§8): a span of Colombo days from the date-range control, both days counted: the UTC range [start, end) to
+ * query, or null when neither is given. One without the other, From after To, or more than maxDays is refused in words.
+ */
+export function daySpan(
+  from: string | undefined,
+  to: string | undefined,
+  maxDays = 366,
+): { from: string; to: string; start: string; end: string } | null {
+  if (from === undefined && to === undefined) return null;
+  if (from === undefined || to === undefined) throw new ToolError("Give from and to together (YYYY-MM-DD).");
+  realDate(from, "from");
+  realDate(to, "to");
+  if (from > to) throw new ToolError(`from (${from}) is after to (${to}).`);
+  const days = Math.round((Date.parse(to + "T00:00:00Z") - Date.parse(from + "T00:00:00Z")) / 86400000) + 1;
+  if (days > maxDays) throw new ToolError(`${days} days is too long: at most ${maxDays}.`);
+  return { from, to, start: dayRange(from).from, end: dayRange(to).to };
 }

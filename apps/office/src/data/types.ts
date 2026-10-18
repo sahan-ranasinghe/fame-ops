@@ -105,12 +105,18 @@ export interface BestMatch {
   why: string;
 }
 
+/** Phase 7 (§13): dispatch = the office's task; self = a trip the driver started in the app. */
+export type TaskKind = "dispatch" | "self";
+export type TripPurpose = "company" | "personal";
+
 export interface BoardCard {
   id: string;
   time: string;
   started_on?: string;
   label?: string;
   title: string;
+  kind?: TaskKind;
+  purpose?: TripPurpose;
   from?: string;
   to?: string;
   stops_count?: number;
@@ -464,6 +470,10 @@ export interface FuelEntry {
 
 export interface FuelList {
   month: string;
+  /** Phase 7 (§8): a range of days (list_fuel from/to); the entries and totals are those days', month_totals the month of to. */
+  from?: string;
+  to?: string;
+  month_totals?: { entries: number; litres: number; lkr: number };
   vehicle?: string;
   driver?: string;
   totals: { entries: number; litres: number; lkr: number; videos: number; videos_waiting: number; videos_missing: number; bytes: number; interrupted?: number };
@@ -485,6 +495,8 @@ export interface TaskDetail {
     id: string;
     title: string;
     label?: string;
+    kind?: TaskKind;
+    purpose?: TripPurpose;
     status: "assigned" | "in_progress" | "completed" | "cancelled" | "declined" | string;
     status_line?: string;
     start: string;
@@ -1007,6 +1019,8 @@ export interface UpdateStopsResult {
 }
 
 export interface FleetSettings {
+  /** Phase 7 (§13): Start a trip in the app: allowed (Company preselected), default (Personal preselected), off; ask_first = allowed for now. */
+  driver_personal_trips?: "allowed" | "default" | "off" | "ask_first";
   dwell_min: Record<string, number>;
   buffer_min: number;
   base_place_id: string | null;
@@ -1314,13 +1328,29 @@ export interface DriversList {
 /** Rows the generic table shows: flat objects, numbers right-aligned. */
 export type Row = Record<string, string | number | boolean | null | undefined>;
 
+export interface MileageTotals {
+  tasks: number;
+  task_km: number;
+  /** Phase 7 (§13): personal trips' km, apart from the task km charged to jobs. */
+  personal_km?: number;
+  fuel_litres: number;
+  fuel_lkr: number;
+  unlogged_km_flags: number;
+  check_odometer: number;
+  between_tasks_km: number;
+  overnight_km: number;
+}
+
 export interface MileageSummary {
   month: string;
   vehicle?: string;
   driver?: string;
+  /** Phase 7 (§8): with from/to, the range's own rows and totals (the top level stays the month that contains to). */
+  range?: { from: string; to: string; totals: MileageTotals; vehicles: Row[]; biggest_gaps: Row[]; unlogged_km: Row[]; check_odometer: Row[] };
   totals: {
     tasks: number;
     task_km: number;
+    personal_km?: number;
     fuel_litres: number;
     fuel_lkr: number;
     unlogged_km_flags: number;
@@ -1425,6 +1455,10 @@ export interface Issue {
   resolved_by?: string;
   resolution_note?: string;
   assigned_to?: { name: string; email?: string };
+  /** Phase 7 (§9): "System · Vehicle problem" or the person; who took it and when; when it was resolved or dismissed. */
+  opened_by?: string;
+  taken_by?: { name: string; at?: string };
+  resolved_at?: string;
   vehicle?: string;
   driver?: string;
   driver_username?: string;
@@ -1435,6 +1469,9 @@ export interface Issue {
 }
 export interface IssuesList {
   status: string;
+  from?: string;
+  to?: string;
+  sort?: "urgent" | "newest";
   count: number;
   open: number;
   in_progress: number;
@@ -1579,4 +1616,46 @@ export interface UndoAnswer {
   restored: number;
   left_as_is: number;
   left_names?: string[];
+}
+
+/** Phase 7 (§8): one row of the task history (list_tasks). */
+export interface HistoryTask {
+  id: string;
+  date: string;
+  time: string;
+  title: string;
+  label?: string;
+  kind: TaskKind;
+  purpose: TripPurpose;
+  status: string;
+  driver?: string;
+  driver_username?: string;
+  vehicle?: string;
+  from?: string;
+  to?: string;
+  stops_count: number;
+  started?: string;
+  completed?: string;
+  km?: number;
+  cancelled_reason?: string;
+  created_by?: string;
+}
+
+export interface TaskHistory {
+  from: string;
+  to: string;
+  count: number;
+  /** Over 500: the sentence that says so. */
+  more?: string;
+  totals: { completed: number; cancelled: number; km: number; driver_started: number; personal: number };
+  tasks: HistoryTask[];
+}
+
+/** set_trip_purpose's answer. */
+export interface TripPurposeResult {
+  task_id: string;
+  purpose: TripPurpose;
+  project?: string;
+  was?: TripPurpose;
+  note?: string;
 }
