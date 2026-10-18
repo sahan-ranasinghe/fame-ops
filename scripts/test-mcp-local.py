@@ -1504,7 +1504,7 @@ check(code == 200 and f3 > f1, "the job's own sync runs regardless and records i
 if CHANNEL == "api":
     # The admin's own settings and devices through office-api (what Settings → Notifications does).
     ms = tool("my_notification_settings")
-    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.vehicle_needed", "task.stop_skipped", "issue.opened", "issue.assigned",
+    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.vehicle_needed", "trip.personal", "task.stop_skipped", "issue.opened", "issue.assigned",
                                                  "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed",
                                                  "request.not_decided", "request.late", "request.on_the_way", "request.arrived",
                                                  "request.driver_changed", "request.cancelled"]
@@ -2113,6 +2113,141 @@ if CHANNEL == "mcp":
     names = [t["name"] for t in answer.get("result", {}).get("tools", [])]
     check("photo_upload_url" not in names and "vehicle_document_upload_url" not in names and "vehicle_documents" in names,
           "and the connector does not list them (vehicle_documents is listed)", ",".join(n for n in names if "vehicle" in n))
+
+print("\n== 6j. Phase 7, Part 4: trips a driver starts (driver-api), task history, date ranges, issues (§8, §9, §13) ==")
+tag = uuid.uuid4().hex[:6]
+PIN_T = "593017"
+tool("create_driver", {"name": f"Trip Driver {tag}", "code": f"T{tag}", "username": f"trip.{tag}", "pin": PIN_T})
+code, ses_t = sign_in(f"trip.{tag}", PIN_T)
+tripper = Driver(ses_t["access_token"])
+TD = tripper.get("employees?select=id")[1][0]["id"]
+DAPI = f"{API}/functions/v1/driver-api"
+
+
+def dapi(path, body, token=None):
+    headers = {"apikey": ANON, "Content-Type": "application/json"}
+    if token != "":
+        headers["Authorization"] = f"Bearer {token or ses_t['access_token']}"
+    return http("POST", f"{DAPI}{path}", headers, body)
+
+
+code, ans = dapi("/places/search", {"text": "Head office"}, token="")
+check(code == 401, "driver-api without a sign-in answers 401", f"{code} {ans}")
+if CHANNEL == "api":
+    code, ans = dapi("/places/search", {"text": "Head office"}, token=API_TOKEN)
+    check(code == 403 and ans.get("error") == "not_a_driver", "an office session is not a driver: 403", f"{code} {ans}")
+code, found = dapi("/places/search", {"text": "Head office"})
+head = next((r for r in found.get("results", []) if r.get("layer") == "place" and r.get("name", "").startswith("Head office")), None) if code == 200 else None
+check(head is not None and head.get("id"), "driver-api /places/search: our places first, the office's search box", json.dumps(found)[:300])
+trip_id = str(uuid.uuid4())
+code, ans = dapi("/trips", {"id": trip_id, "purpose": "company", "destination": {"text": "Kadawatha"}})
+check(code == 409 and "today's vehicle" in ans.get("message", ""), "Start a trip needs today's vehicle (409, in words)", f"{code} {ans}")
+code, ans = dapi("/trips", {"id": "not-a-uuid", "purpose": "company", "destination": {"text": "Kadawatha"}})
+check(code == 400 and ans.get("error") == "bad_input", "a trip id is the phone's uuid", f"{code} {ans}")
+plate_t = f"WP TR{tag[:2].upper()}-{int(tag, 16) % 9000 + 1000}"
+tool("register_vehicle", {"reg_no": plate_t, "make_model": "Toyota Axio", "vehicle_type": "car", "seats": 4, "current_odometer_km": 1000})
+VT = psql(f"select id from vehicles where reg_no = '{plate_t}'")
+code, _ = tripper.post("duty_sessions", {"id": str(uuid.uuid4()), "employee_id": TD, "vehicle_id": VT, "device_info": {"brand": "OPPO", "model": "CPH2119"}})
+check(code == 201 and psql(f"select current_vehicle_id from employees where id = '{TD}'") == VT, "the trip driver starts work with the new vehicle", f"{code}")
+tool("update_settings", {"key": "driver_personal_trips", "value": "off"})
+code, ans = dapi("/trips", {"id": trip_id, "purpose": "personal", "destination": {"text": "Kadawatha"}})
+check(code == 409 and "switched off" in ans.get("message", ""), "personal trips off: a personal trip is refused in words", f"{code} {ans}")
+tool("update_settings", {"key": "driver_personal_trips", "value": "allowed"})
+code, made = dapi("/trips", {"id": trip_id, "purpose": "company", "destination": {"place_id": head["id"]}, "note": "Pick up the files"})
+trip = made.get("trip", {}) if isinstance(made, dict) else {}
+check(code == 201 and trip.get("task_id") == trip_id and trip.get("kind") == "self" and trip.get("status") == "assigned"
+      and trip.get("vehicle_id") == VT and len(trip.get("stops", [])) == 1 and trip["stops"][0]["place"].startswith("Head office")
+      and trip["title"].startswith("Trip · Head office"),
+      "Start a trip: a self task on today's vehicle with one stop at our place, assigned", json.dumps(made)[:400])
+code, again = dapi("/trips", {"id": trip_id, "purpose": "company", "destination": {"place_id": head["id"]}})
+check(code == 200 and again.get("repeated") is True and psql(f"select count(*) from tasks where id = '{trip_id}'") == "1",
+      "the same trip sent again (the offline queue) answers the trip already made", f"{code} {json.dumps(again)[:200]}")
+check(psql(f"select (accepted_at is not null and seen_at is not null and reminder_0_sent_at is not null)::text || '|' || created_by || '|' || notes from tasks where id = '{trip_id}'")
+      == f"true|driver: Trip Driver {tag}|Pick up the files",
+      "accepted, seen and reminded at once; made by the driver; the note kept")
+check(psql(f"select count(*) from net.http_request_queue where url like '%/push-task' and convert_from(body, 'UTF8')::jsonb ->> 'task_id' = '{trip_id}'") == "0",
+      "no 'new task' push to the driver who started it")
+check(psql(f"select count(*) || '|' || count(*) filter (where result_summary like 'refused: %') || '|' || count(*) filter (where result_summary like 'again: %') "
+           f"from office_audit where channel = 'driver' and tool = 'start_trip' and actor_name = 'Trip Driver {tag}'") == "4|2|1",
+      "every Start a trip call is in the audit log (channel driver, the driver's name): the two refused in words, the repeat as again")
+code, ans = dapi("/trips", {"id": str(uuid.uuid4()), "purpose": "company", "destination": {"text": "Kelaniya"}})
+check(code == 201, "another trip while the first is only assigned is allowed (none in progress yet)", f"{code} {ans}")
+second_id = ans.get("trip", {}).get("task_id")
+tool("cancel_task", {"task_id": second_id, "reason": "suite: one trip at a time"})
+board = tool("task_board")
+card = next((c for c in board.get("assigned", []) if c["id"] == trip_id), {})
+check(card.get("kind") == "self" and card.get("purpose") == "company", "task_board: the card says self and company", json.dumps(card)[:300])
+
+# The normal flow on the phone: start, a stop added on the way, arrived and done, complete.
+code, _ = tripper.patch(f"tasks?id=eq.{trip_id}", {"status": "in_progress", "start_odometer_km": 1000})
+check(code == 200, "the driver starts the trip like any task", f"{code}")
+code, ans = dapi("/trips", {"id": str(uuid.uuid4()), "purpose": "company", "destination": {"text": "Kelaniya"}})
+check(code == 409 and "first" in ans.get("message", ""), "no second trip while one is under way", f"{code} {ans}")
+stop_id = str(uuid.uuid4())
+code, st = dapi(f"/trips/{trip_id}/stops", {"id": stop_id, "destination": {"lat": 6.9976, "lng": 79.9259, "name": "Kiribathgoda"}})
+check(code == 201 and len(st.get("trip", {}).get("stops", [])) == 2 and st["trip"]["stops"][1]["place"] == "Kiribathgoda",
+      "Add a stop on the way: the trip has two stops", json.dumps(st)[:300])
+code, st2 = dapi(f"/trips/{trip_id}/stops", {"id": stop_id, "destination": {"text": "Kiribathgoda"}})
+check(code == 200 and st2.get("repeated") is True and psql(f"select count(*) from task_stops where task_id = '{trip_id}'") == "2",
+      "the same stop again answers the stop already added", f"{code}")
+office_task = tool("create_task", {"title": "6j office run", "date": day(3), "start_time": "10:00", "driver": f"trip.{tag}", "vehicle": plate_t,
+                                   "pickup": "Head office", "dropoff": "Kandy"})["task_id"]
+code, ans = dapi(f"/trips/{office_task}/stops", {"id": str(uuid.uuid4()), "destination": {"text": "Kandy"}})
+check(code == 409 and "office" in ans.get("message", ""), "the office's tasks are not changed from the phone", f"{code} {ans}")
+tool("cancel_task", {"task_id": office_task, "reason": "suite"})
+check(psql(f"select count(*) from net.http_request_queue where url like '%/push-task' and convert_from(body, 'UTF8')::jsonb ->> 'task_id' = '{trip_id}'") == "0",
+      "a stop added on the way pushes nothing to the driver")
+for sid in psql(f"select id from task_stops where task_id = '{trip_id}' order by seq").split("\n"):
+    tripper.patch(f"task_stops?id=eq.{sid}", {"status": "arrived", "arrived_at": iso(dt.datetime.now(dt.timezone.utc)), "arrival_flag": "ok", "arrival_distance_m": 30})
+    tripper.patch(f"task_stops?id=eq.{sid}", {"status": "done", "done_at": iso(dt.datetime.now(dt.timezone.utc))})
+code, _ = tripper.patch(f"tasks?id=eq.{trip_id}", {"status": "completed", "end_odometer_km": 1012})
+check(code == 200 and psql(f"select status || '|' || km from tasks where id = '{trip_id}'") == "completed|12", "completed with 12 km", f"{code}")
+
+# The office: personal, a project, the km apart.
+sp = tool("set_trip_purpose", {"task_id": trip_id, "purpose": "personal"})
+check(sp["purpose"] == "personal" and sp.get("was") == "company", "set_trip_purpose: switched to personal", json.dumps(sp))
+r = tool("set_trip_purpose", {"task_id": trip_id, "purpose": "personal", "project": "internal"}, expect_error=True)
+check("no project" in r, "a personal trip has no project", r)
+r = tool("set_trip_purpose", {"task_id": T5, "purpose": "personal"}, expect_error=True)
+check("Only a trip a driver started" in r, "the office's tasks are company work", r)
+today_c = day(0)
+ms = tool("mileage_summary", {"from": today_c, "to": today_c, "vehicle": plate_t})
+rrow = (ms.get("range", {}).get("vehicles") or [{}])[0]
+check(ms.get("range", {}).get("from") == today_c and rrow.get("personal_km") == 12 and rrow.get("task_km") == 0
+      and ms["range"]["totals"].get("personal_km") == 12 and ms["month"] == today_c[:7] and ms["vehicles"][0].get("personal_km") == 12,
+      "mileage_summary for one day: the personal trip's 12 km apart from the task km, the month beside it", json.dumps(ms.get("range"))[:400])
+sp2 = tool("set_trip_purpose", {"task_id": trip_id, "purpose": "company", "project": "internal"})
+check(sp2["purpose"] == "company" and sp2["project"] == "Fame internal" and psql(f"select count(*) || '|' || coalesce(max(percent)::text, '') from task_projects where task_id = '{trip_id}'") == "1|100.00",
+      "back to company with a project: one row, 100 %", json.dumps(sp2))
+ms2 = tool("mileage_summary", {"from": today_c, "to": today_c, "vehicle": plate_t})
+check((ms2["range"]["vehicles"] or [{}])[0].get("task_km") == 12 and "personal_km" not in ms2["range"]["vehicles"][0], "and its km are task km again",
+      json.dumps(ms2["range"]["vehicles"])[:200])
+r = tool("mileage_summary", {"from": today_c}, expect_error=True)
+check("together" in r, "from without to is refused", r)
+
+# Task history.
+hist = tool("list_tasks", {"from": today_c, "to": today_c, "driver": f"trip.{tag}"})
+h = next((t for t in hist["tasks"] if t["id"] == trip_id), {})
+check(h.get("kind") == "self" and h.get("status") == "completed" and h.get("km") == 12 and h.get("from", "").startswith("Head office") and h.get("to") == "Kiribathgoda"
+      and hist["totals"]["driver_started"] >= 1 and all(t["date"] == today_c for t in hist["tasks"]),
+      "list_tasks: the day's tasks with kind, km and ends", json.dumps(h)[:300])
+check(all(t["kind"] == "self" for t in tool("list_tasks", {"from": today_c, "to": today_c, "kind": "self"})["tasks"]), "list_tasks kind self: only driver-started")
+r = tool("list_tasks", {"from": "2024-01-01", "to": today_c}, expect_error=True)
+check("too long" in r, "list_tasks: at most 366 days", r)
+
+# Fuel and issues over days.
+fl = tool("list_fuel", {"from": today_c, "to": today_c})
+check(fl.get("from") == today_c and fl.get("to") == today_c and "month_totals" in fl and fl["month"] == today_c[:7]
+      and all(e["at"].startswith(today_c) for e in fl["entries"]),
+      "list_fuel for one day: the day's entries, the month's totals beside", json.dumps({k: fl.get(k) for k in ("from", "to", "totals", "month_totals")})[:300])
+il = tool("list_issues", {"status": "all", "from": today_c, "to": today_c, "sort": "newest", "limit": 200})
+opened = [i["opened"] for i in il["issues"]]
+check(il.get("from") == today_c and il.get("sort") == "newest" and opened == sorted(opened, reverse=True) and all(o.startswith(today_c) for o in opened)
+      and all(i.get("opened_by") for i in il["issues"]),
+      "list_issues for one day, newest first, each with opened_by", json.dumps(il["issues"][:2])[:300])
+taken = [i for i in il["issues"] if i.get("assigned_to")]
+check(all(i.get("taken_by", {}).get("name") == i["assigned_to"]["name"] for i in taken), "taken_by names the assignee (with when)", json.dumps(taken[:1])[:300])
+check(any(i.get("opened_by", "").startswith("System · ") for i in il["issues"]), "the system's issues say 'System · <kind>'")
 
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")
