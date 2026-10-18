@@ -853,7 +853,9 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   await expect(page.getByTestId("issues-list")).toContainText("Vehicle problem: breakdown");
   await page.goto("/issues");
   await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
-  await expect(page.getByTestId("issues-list").getByText(`${plate}`)).toHaveCount(0);
+  // Only the vehicle problem: the new vehicle may also have "Documents missing" (Part 3, §28) once a full sync has run.
+  const open = page.getByTestId("issues-list").getByRole("link").filter({ hasText: plate });
+  await expect(open.filter({ hasText: "Vehicle problem" })).toHaveCount(0);
 });
 
 test("an approver books a vehicle in one step from the Free group; the task is on the board with Leave by; the booking is cancelled", async ({ page }) => {
