@@ -369,7 +369,7 @@
   coloured by speed (standing / under 20 / 20–60 / over 60 km/h), stops as circles with
   their times, data gaps dashed, a date bar (Today / Yesterday / a date), the timeline
   beside the map (a row zooms the map to it) and, web only, playback (`usePlayback`:
-  Play / Pause, ×10 ×60 ×300, a time slider, the marker stepping through every point of the
+  Play / Pause, 1× 5× 20× 60× (Phase 7, §22), a time slider, the marker stepping through every point of the
   line in time order with its time and speed). Data: one
   shared builder `supabase/functions/_shared/fleet/route.ts` (imported as `@fleet/route`,
   with `@fleet/track`) feeds `driver_route`; the page watches it every 60 s for today
@@ -386,7 +386,7 @@
   Projects (find + the Zoho import message), Accounts (admin: add office user → one-time
   set-password link shown once, new link, switch off, personal connector keys shown once,
   revoke). Buttons appear only when `me.tools` allows the tool; the server guards. Phone tabs:
-  Home, Map, Tasks, Vehicles, More (More lists the rest). No audit page yet (no tool for it).
+  Home, three tabs for the role, More (Hotfix 3, `tabsFor`; the map tab is "Live"). No audit page yet (no tool for it).
 - `npm run dev:live` runs the dev server against the REAL project (`.env.live.local`,
   gitignored, publishable key only) for a laptop trial; `npm run dev` uses `.env.local`.
 - Requests (Phase 5 Part 6): the new-request form has "A driver is needed" (unticked = the
