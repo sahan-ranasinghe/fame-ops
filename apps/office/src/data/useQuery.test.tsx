@@ -60,7 +60,7 @@ const driver = (name: string, username: string, extra: Partial<AvailableDriver> 
 /** Who's available: Kamal (best, brings WP CAB-4521) and Nuwan; from the second answer on, Nuwan's line changes. */
 const availability = (_args: Record<string, unknown>, n: number): Availability => ({
   as_of: "16 Oct 08:00",
-  window: { from: "Fri 17 Oct 09:00", until: "end of the day", day: "2026-10-17" },
+  window: { from: "Sat 17 Oct 09:00", until: "end of the day", day: "2026-10-17" },
   drivers: [
     driver("Kamal Perera", "kamal.p", { rank: 1, vehicle: { reg_no: "WP CAB-4521", source: "on_duty" } }),
     driver("Nuwan Silva", "nuwan.s", n > 1 ? { state: "on_task", status_text: "On a task until ~10:40", free: false, busy_with: "Team drop 09:00–10:40" } : { rank: 2, vehicle: { reg_no: "WP KL-1234", source: "regular" } }),
@@ -288,7 +288,7 @@ describe("the decide page: a refresh never resets the driver, the vehicle or wha
   afterEach(() => vi.useRealTimers());
 
   const card: RequestCard = {
-    id: "r1", requested_by: "Dilini Jayasinghe", when: "Fri 17 Oct 09:00", route: "Head office → Kurunegala site", status: "waiting", version: 2,
+    id: "r1", requested_by: "Dilini Jayasinghe", when: "Sat 17 Oct 09:00", route: "Head office → Kurunegala site", status: "waiting", version: 2,
     fields: { date: "2026-10-17", time: "09:00", route_from: "Head office", route_to: "Kurunegala site", pax: 3 },
   };
   /** The free vehicles; from the second answer on, one more is free and the availability words change. */
@@ -304,7 +304,7 @@ describe("the decide page: a refresh never resets the driver, the vehicle or wha
     };
   };
   const plan = () => ({
-    date: "2026-10-17", leave_by: "Fri 17 Oct 09:00", leave_by_source: "manual", stops: [], warnings: [],
+    date: "2026-10-17", leave_by: "Sat 17 Oct 09:00", leave_by_source: "manual", stops: [], warnings: [],
     timeline: { items: [{ kind: "leave", at: "09:00", source: "manual" }], totals: { drive_min: 90, km: 94, ends: "10:35" } },
   });
   const tools = ["suggest_vehicles", "availability", "plan_task", "get_settings", "decide_request", "list_drivers", "list_vehicles", "list_places", "list_requests"];

@@ -29,6 +29,6 @@ describe("tripKey", () => {
     expect(tripKey({ ...trip, stops: [{ ...trip.stops[0], planned_arrive: "07:50" }, trip.stops[1]] })).not.toBe(k);
     expect(tripKey({ ...trip, stops: [{ ...trip.stops[0], status: "arrived" }, trip.stops[1]] })).not.toBe(k);
     expect(tripKey({ ...trip, start: { name: "Head office", has_pin: true } })).not.toBe(k);
-    expect(tripKey({ ...trip, changed: { by: "the office", was: "08:00 Sat 18 Oct", text: "Changed by the office · was 08:00 Sat 18 Oct" } })).not.toBe(k);
+    expect(tripKey({ ...trip, changed: { by: "the office", was: "08:00 Sun 18 Oct", text: "Changed by the office · was 08:00 Sun 18 Oct" } })).not.toBe(k);
   });
 });

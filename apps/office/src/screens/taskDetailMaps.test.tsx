@@ -23,7 +23,7 @@ const last = (id: "plan" | "route") => [...maps].reverse().find((p) => (id === "
 const day = "2026-10-16";
 const iso = (hhmm: string) => `${day}T${hhmm}:00+05:30`;
 const detail: TaskDetailData = {
-  task: { id: "t1", title: "Team drop · Kurunegala", status: "in_progress", start: "Thu 16 Oct 07:24", started: "2026-10-16 07:30", driver: "Kamal Silva", start_place: "Head office", start_lat: 6.9271, start_lng: 79.8612 },
+  task: { id: "t1", title: "Team drop · Kurunegala", status: "in_progress", start: "Fri 16 Oct 07:24", started: "2026-10-16 07:30", driver: "Kamal Silva", start_place: "Head office", start_lat: 6.9271, start_lng: 79.8612 },
   plan: { source: "google", total_drive_min: 96, total_km: 94, legs: [], warnings: [] },
   timeline: {
     items: [

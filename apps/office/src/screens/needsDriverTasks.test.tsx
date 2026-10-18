@@ -17,7 +17,7 @@ const board: Board = {
   declined: [{ id: "t1", time: "09:00", title: "Team drop · Kurunegala", driver: "Kamal Silva", status: "Declined (Vehicle problem)" }],
   needs_driver: [
     { task_id: "t1", start: "09:00", title: "Team drop · Kurunegala", driver: "Kamal Silva", kind: "declined", reason_text: "Vehicle problem", line: "Kamal declined · Vehicle problem", minutes_to_start: 42, when: "in 42 min" },
-    { task_id: "t2", start: "Fri 17 Oct 08:00", title: "Site visit · Galle", driver: "Sunil", kind: "not_accepted", reason_text: "Not accepted in time", line: "Sunil hasn't accepted · needs a driver", minutes_to_start: 1400, when: "in 1400 min" },
+    { task_id: "t2", start: "Sat 17 Oct 08:00", title: "Site visit · Galle", driver: "Sunil", kind: "not_accepted", reason_text: "Not accepted in time", line: "Sunil hasn't accepted · needs a driver", minutes_to_start: 1400, when: "in 1400 min" },
   ],
 };
 

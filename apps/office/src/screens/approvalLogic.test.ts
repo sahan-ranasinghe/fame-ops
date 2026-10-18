@@ -5,12 +5,12 @@ import {
 } from "./approvalLogic";
 
 const proposal: RequestCard = {
-  id: "r9", kind: "task", title: "Team drop · Kandy", requested_by: "Nimal Fernando", when: "Sat 18 Oct 08:00", status: "waiting",
+  id: "r9", kind: "task", title: "Team drop · Kandy", requested_by: "Nimal Fernando", when: "Sun 18 Oct 08:00", status: "waiting",
   proposed: { driver: "Kamal Perera", username: "kamal.p", vehicle: "WP CAB-4521", vehicle_why: "Kamal's vehicle today", conflicts: [{ kind: "driver", text: "Kamal is on Team drop 07:00–09:00" }] },
   fields: { date: "2026-10-18", time: "08:00", back_by: "17:00" },
   trip: { leave_by: "08:00", stops: [{ seq: 1, type: "pickup", place: "Head office" }, { seq: 2, type: "drop", place: "Kandy site" }] },
 };
-const request: RequestCard = { id: "r1", kind: "request", requested_by: "Dilini", when: "Fri 17 Oct 09:00", status: "waiting", fields: { date: "2026-10-17", time: "09:00" } };
+const request: RequestCard = { id: "r1", kind: "request", requested_by: "Dilini", when: "Sat 17 Oct 09:00", status: "waiting", fields: { date: "2026-10-17", time: "09:00" } };
 const approver = { name: "Palitha", permissions: ["view", "approve", "assign_tasks"] as const, tools: ["decide_request", "cancel_request", "list_requests"] };
 const dispatcher = { name: "Nimal Fernando", permissions: ["view", "assign_tasks"] as const, tools: ["cancel_request", "list_requests", "task_board"] };
 const requester = { name: "Dilini", permissions: ["view", "request"] as const, tools: ["cancel_request", "list_requests", "create_request"] };

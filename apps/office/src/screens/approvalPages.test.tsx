@@ -95,7 +95,7 @@ const trip = {
   ],
 };
 const proposal: RequestCard = {
-  id: "r9", kind: "task", title: "Team drop · Kandy", requested_by: "Nimal Fernando", when: "Sat 18 Oct 08:00", back_by: "17:00", route: "Head office → Kandy site",
+  id: "r9", kind: "task", title: "Team drop · Kandy", requested_by: "Nimal Fernando", when: "Sun 18 Oct 08:00", back_by: "17:00", route: "Head office → Kandy site",
   status: "waiting", version: 1, stops_count: 2, asked: "5 min ago",
   proposed: {
     driver: "Kamal Perera", username: "kamal.p", vehicle: "WP CAB-4521", vehicle_why: "Kamal's vehicle today", passengers: 4,
@@ -111,7 +111,7 @@ const driver = (name: string, username: string, extra: Partial<AvailableDriver> 
 /** Who's available: Nuwan the best match, Kamal (the proposed driver) second; from the second answer on, Nuwan's words change. */
 const availability = (_a: Record<string, unknown>, n: number): Availability => ({
   as_of: "18 Oct 07:00",
-  window: { from: "Sat 18 Oct 08:00", until: "17:00", day: "2026-10-18" },
+  window: { from: "Sun 18 Oct 08:00", until: "17:00", day: "2026-10-18" },
   drivers: [
     driver("Nuwan Silva", "nuwan.s", { rank: 1, vehicle: { reg_no: "WP KL-1234", source: "regular" }, status_text: n > 1 ? "On duty since 07:40" : "On duty since 07:12" }),
     driver("Kamal Perera", "kamal.p", { rank: 2, vehicle: { reg_no: "WP CAB-4521", source: "on_duty" } }),
@@ -263,18 +263,18 @@ describe("the request page for the person who asked (§35 17, 19)", () => {
     };
     const card: RequestCard = {
       ...proposal, id: "r1", kind: "request", title: undefined, proposed: undefined, requested_by: "Dilini Jayasinghe", status: "approved",
-      when: "Sat 18 Oct 07:15", task_id: "t1",
+      when: "Sun 18 Oct 07:15", task_id: "t1",
       trip: {
         ...trip, source: "task", leave_by: "07:15", timeline: nowTimeline,
         stops: [...trip.stops.slice(0, 1), { seq: 3, n: 2, label: "Stop 2 · Visit · Kurunegala site", type: "visit", place: "Kurunegala site", status: "pending" }, { ...trip.stops[1], n: 3 }],
-        changed: { by: "the office", was: "08:00 Sat 18 Oct", stops: true, text: "Changed by the office · was 08:00 Sat 18 Oct · stops changed" },
+        changed: { by: "the office", was: "08:00 Sun 18 Oct", stops: true, text: "Changed by the office · was 08:00 Sun 18 Oct · stops changed" },
       },
       assigned: { driver: "Kamal Perera", phone: "077 123 4567", call: "tel:+94771234567", whatsapp: "https://wa.me/94771234567", vehicle: "WP CAB-4521" },
     };
     const transport = new FakeTransport({ list_requests: () => ({ status: "all", count: 1, requests: [card] }) }, requester);
     await mount(transport, "/requests/r1", <Route path="/requests/:id" element={<RequestDetail />} />);
     await act(async () => { await Promise.resolve(); });
-    expect((await screen.findByTestId("trip-changed")).textContent).toBe("Changed by the office · was 08:00 Sat 18 Oct · stops changed");
+    expect((await screen.findByTestId("trip-changed")).textContent).toBe("Changed by the office · was 08:00 Sun 18 Oct · stops changed");
     const plan = screen.getByTestId("plan-timeline").textContent ?? "";
     expect(plan).toContain("Leave by 07:15");
     expect(plan).toContain("Kurunegala site");
@@ -286,7 +286,7 @@ describe("the request page for the person who asked (§35 17, 19)", () => {
     let leave = "07:15";
     const cardNow = (): RequestCard => ({
       ...proposal, id: "r1", kind: "request", title: undefined, proposed: undefined, requested_by: "Dilini Jayasinghe", status: "approved",
-      when: `Sat 18 Oct ${leave}`, task_id: "t1", version: 3,
+      when: `Sun 18 Oct ${leave}`, task_id: "t1", version: 3,
       trip: { ...trip, source: "task", leave_by: leave, timeline: { ...timeline, items: [{ kind: "leave", at: leave, source: "manual" }, ...timeline.items.slice(1)] } },
     });
     let push: ((ev: WatchEvent<unknown>) => void) | undefined;
@@ -325,7 +325,7 @@ describe("the request page for the person who asked (§35 17, 19)", () => {
 
 describe("the queue and the board", () => {
   it("Requests marks a proposal and a late one", async () => {
-    const other: RequestCard = { id: "r1", kind: "request", requested_by: "Dilini Jayasinghe", when: "Sat 18 Oct 09:00", status: "waiting", route: "Head office → Galle" };
+    const other: RequestCard = { id: "r1", kind: "request", requested_by: "Dilini Jayasinghe", when: "Sun 18 Oct 09:00", status: "waiting", route: "Head office → Galle" };
     const transport = new FakeTransport({ list_requests: () => ({ status: "waiting", count: 2, requests: [{ ...proposal, late: true }, other] }) }, approver);
     await mount(transport, "/requests", <Route path="/requests" element={<Requests />} />);
     const rows = await screen.findAllByRole("row");

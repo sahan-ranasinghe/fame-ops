@@ -8,8 +8,8 @@ import {
 } from "./placeRemoveLogic";
 
 const TASKS = [
-  { task_id: "t1", title: "Team drop · Kurunegala site", when: "Sat 18 Oct 09:00" },
-  { task_id: "t2", title: "Documents to Dialog", when: "Mon 20 Oct 14:30" },
+  { task_id: "t1", title: "Team drop · Kurunegala site", when: "Sun 18 Oct 09:00" },
+  { task_id: "t2", title: "Documents to Dialog", when: "Tue 20 Oct 14:30" },
 ];
 const NEEDS = { needs_confirm: true, place: "Head office", reasons: ["Head office is the base place", "2 tasks today or later start or stop there"], tasks: TASKS };
 
@@ -105,7 +105,7 @@ describe("the words", () => {
   });
 
   it("a task as one line", () => {
-    expect(TASKS.map(taskLine)).toEqual(["Sat 18 Oct 09:00 · Team drop · Kurunegala site", "Mon 20 Oct 14:30 · Documents to Dialog"]);
+    expect(TASKS.map(taskLine)).toEqual(["Sun 18 Oct 09:00 · Team drop · Kurunegala site", "Tue 20 Oct 14:30 · Documents to Dialog"]);
   });
 
   it("the notice after removing: the base place cleared, with the Settings link only for who can set it", () => {

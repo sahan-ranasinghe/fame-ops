@@ -62,7 +62,7 @@ const fleetAdmin: Me = {
   tools: ["list_places", "place_detail", "update_place", "remove_place", "restore_place", "update_settings", "task_detail"],
 };
 const PLACE = { id: "p1", name: "Head office", kind: "office", badge: "Office", source: "manual", updated_at: "2026-10-01 09:00", lat: 6.9, lng: 79.85, pinned: true };
-const TASKS = [{ task_id: "t1", title: "Team drop · Kurunegala site", when: "Sat 18 Oct 09:00" }];
+const TASKS = [{ task_id: "t1", title: "Team drop · Kurunegala site", when: "Sun 18 Oct 09:00" }];
 
 const IN_USE = { reasons: ["Head office is the base place", "1 task today or later starts or stops there"], tasks: TASKS };
 
@@ -92,7 +92,7 @@ describe("the place page's Remove", () => {
     const asked = screen.getByTestId("place-remove");
     expect(asked.textContent).toContain("Remove Head office?");
     expect(asked.textContent).toContain("Head office is the base place; 1 task today or later starts or stops there.");
-    expect(screen.getByRole("link", { name: "Sat 18 Oct 09:00 · Team drop · Kurunegala site" }).getAttribute("href")).toBe("/tasks/t1");
+    expect(screen.getByRole("link", { name: "Sun 18 Oct 09:00 · Team drop · Kurunegala site" }).getAttribute("href")).toBe("/tasks/t1");
 
     // Keep it goes back; asking again starts from the first step.
     fireEvent.click(screen.getByRole("button", { name: "Keep it" }));

@@ -1880,3 +1880,19 @@ stays ට්‍රිප් මීටරය.
 2. Web: `npm run build:web` (the bundle names only the live project), `npx wrangler pages deploy --branch main`;
    https://fame-fleet.pages.dev serves `index-BYSJpQoy.js`.
 3. No driver app update (nothing in `apps/driver` changed).
+
+**Round A2, 18 October 2026** (Part 3 with items 7 and 15; branch `phase7-3`; main fast-forwarded to `7855d00`), with
+Sahan's go (after he checked the weekday: the server reads it on Colombo time, 00:00 Colombo on 18 Oct is "Sun 18
+Oct"; the wrong weekdays were only in hand-written test fixtures, set to 2026 after the round):
+1. `npx supabase secrets list`: every secret Part 3 uses is set; no new secret.
+2. `npx supabase db push --linked --yes` (a dry run first named the same three): `20261017140000_phase7_approval`,
+   `20261017160000_phase7_photos`, `20261017180000_phase7_places`.
+3. `npx supabase functions deploy office-mcp office-api fleet-jobs notify-office` (all verify_jwt = false).
+   `get_settings` through the live connector shows `tasks_need_approval` (on) and the caps 430 / 215 unchanged;
+   office-api and fleet-jobs answer 401 without a sign-in or the server key.
+4. Web: `npm run build:web`, `wrangler pages deploy --branch main`; https://fame-fleet.pages.dev serves
+   `index-C2U2MB4s.js`. The bundle holds no key (the only `sb_secret_` is supabase-js's own key-format check).
+5. `npx eas update --channel preview --environment preview`: update group `75bbbdef-89d6-49ee-9480-f9fb9d504679`,
+   runtime `1.2.0-gmaps`, commit `7855d00` (no native change since main). Every driver sees "Add your photo".
+6. main fast-forwarded to `7855d00`.
+Next: the OPPO check of §30 (the gallery picker and the square crop). The Teams artifact is not in this round.

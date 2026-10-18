@@ -65,10 +65,10 @@ describe("the vehicle swap", () => {
 
 describe("needs a driver", () => {
   it("says since when and why", () => {
-    expect(needsDriverText({ driver: "Kamal Silva", needs_driver: { since: "Thu 16 Oct 08:40", reason: "declined", reason_text: "Vehicle problem" } }))
-      .toBe("Needs a driver since Thu 16 Oct 08:40 · Kamal declined: Vehicle problem");
-    expect(needsDriverText({ driver: "Kamal Silva", needs_driver: { since: "Thu 16 Oct 08:40", reason: "not_accepted", reason_text: "Not accepted in time" } }))
-      .toBe("Needs a driver since Thu 16 Oct 08:40 · Kamal hasn't accepted in time");
+    expect(needsDriverText({ driver: "Kamal Silva", needs_driver: { since: "Fri 16 Oct 08:40", reason: "declined", reason_text: "Vehicle problem" } }))
+      .toBe("Needs a driver since Fri 16 Oct 08:40 · Kamal declined: Vehicle problem");
+    expect(needsDriverText({ driver: "Kamal Silva", needs_driver: { since: "Fri 16 Oct 08:40", reason: "not_accepted", reason_text: "Not accepted in time" } }))
+      .toBe("Needs a driver since Fri 16 Oct 08:40 · Kamal hasn't accepted in time");
     expect(needsDriverText({ driver: "Kamal Silva" })).toBe("");
   });
 });

@@ -229,7 +229,7 @@ describe("Replace photo on a driver", () => {
 });
 
 const approved: RequestCard = {
-  id: "r1", requested_by: "Mr Silva", when: "Mon 20 Oct 08:00", route: "Head office → Matara", status: "approved", version: 4,
+  id: "r1", requested_by: "Mr Silva", when: "Tue 20 Oct 08:00", route: "Head office → Matara", status: "approved", version: 4,
   requester_phone: "0771234567",
   assigned: {
     driver: "Kamal Perera", phone: "0779876543", call: "tel:0779876543", whatsapp: "https://wa.me/94779876543", photo_url: "https://files/kamal.jpg",
@@ -286,8 +286,8 @@ describe("the Overview's waiting requests", () => {
       reminders: { count: 0, window_days: 14 }, on_the_road: [], needs_attention: [],
     };
     const waiting: RequestCard[] = [
-      { id: "r2", kind: "task", title: "Team drop · Galle", requested_by: "Nimal Fernando", when: "Mon 20 Oct 08:00", status: "waiting", late: true, proposed: { driver: "Kamal Perera", vehicle: "WP CAB-4521" } },
-      { id: "r3", requested_by: "Isuru Bandara", when: "Tue 21 Oct 09:00", status: "waiting" },
+      { id: "r2", kind: "task", title: "Team drop · Galle", requested_by: "Nimal Fernando", when: "Tue 20 Oct 08:00", status: "waiting", late: true, proposed: { driver: "Kamal Perera", vehicle: "WP CAB-4521" } },
+      { id: "r3", requested_by: "Isuru Bandara", when: "Wed 21 Oct 09:00", status: "waiting" },
     ];
     const t = new FakeTransport({ fleet_overview: () => overview, list_requests: () => ({ status: "waiting", count: 2, requests: waiting }) }, { ...officer, tools: ["fleet_overview", "list_requests", "decide_request"] });
     const store = mount(t, await t.me(), <Overview />);

@@ -29,7 +29,7 @@ const dispatcher: Me = { name: "Palitha", role: "office", permissions: ["view", 
 const approver: Me = { name: "Boss", role: "office", permissions: ["view", "approve"], tools: ["task_detail"] };
 
 const base: TaskDetailData = {
-  task: { id: "t1", title: "Team drop · Kurunegala", status: "declined", start: "Thu 16 Oct 09:00", driver: "Kamal Silva", vehicle: "WP CAB-4521 · Toyota HiAce" },
+  task: { id: "t1", title: "Team drop · Kurunegala", status: "declined", start: "Fri 16 Oct 09:00", driver: "Kamal Silva", vehicle: "WP CAB-4521 · Toyota HiAce" },
   stops: [],
   projects: "Fame internal (no project)",
   odometer: [],
@@ -56,7 +56,7 @@ describe("the task page (Part 2)", () => {
       task: {
         ...base.task,
         declined: { at: "08:40", reason: "vehicle_problem", reason_text: "Vehicle problem" },
-        needs_driver: { since: "Thu 16 Oct 08:40", reason: "declined", reason_text: "Vehicle problem" },
+        needs_driver: { since: "Fri 16 Oct 08:40", reason: "declined", reason_text: "Vehicle problem" },
         vehicle_changed: "Vehicle changed by Palitha: WP CAB-4521 instead of Kamal's regular vehicle WP KL-1234",
         warnings_saved: ["Leaving 08:00 you reach Kurunegala site at 09:36 (saved by Palitha)"],
       },
@@ -65,7 +65,7 @@ describe("the task page (Part 2)", () => {
         { seq: 2, n: 2, label: "Stop 2 · Drop · Kurunegala site", type: "drop", place: "Kurunegala site", status: "pending", dwell_source: "place", planned_stay: { arrive: "09:00", leave: "10:30", minutes: 90 } },
       ],
     }, dispatcher);
-    expect(screen.getByTestId("needs-driver-line").textContent).toBe("Needs a driver since Thu 16 Oct 08:40 · Kamal declined: Vehicle problem");
+    expect(screen.getByTestId("needs-driver-line").textContent).toBe("Needs a driver since Fri 16 Oct 08:40 · Kamal declined: Vehicle problem");
     expect(screen.getByRole("link", { name: "Find a driver" }).getAttribute("href")).toBe("/tasks/t1/edit?driver=1");
     expect(screen.queryByRole("link", { name: "Give it to another driver" })).toBeNull();
     expect(screen.getByTestId("vehicle-changed").textContent).toContain("instead of Kamal's regular vehicle");
@@ -81,8 +81,8 @@ describe("the task page (Part 2)", () => {
   });
 
   it("no Find a driver for an approver (the change page needs assign_tasks)", async () => {
-    await mount({ ...base, task: { ...base.task, needs_driver: { since: "Thu 16 Oct 08:40", reason: "not_accepted", reason_text: "Not accepted in time" } } }, approver);
-    expect(screen.getByTestId("needs-driver-line").textContent).toBe("Needs a driver since Thu 16 Oct 08:40 · Kamal hasn't accepted in time");
+    await mount({ ...base, task: { ...base.task, needs_driver: { since: "Fri 16 Oct 08:40", reason: "not_accepted", reason_text: "Not accepted in time" } } }, approver);
+    expect(screen.getByTestId("needs-driver-line").textContent).toBe("Needs a driver since Fri 16 Oct 08:40 · Kamal hasn't accepted in time");
     expect(screen.queryByRole("link", { name: "Find a driver" })).toBeNull();
   });
 
