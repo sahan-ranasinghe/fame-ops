@@ -2520,3 +2520,23 @@ have the update). Before it, Round A3 was confirmed live (the remote migrations 
 7. The Teams artifact: the file and the message for Sahan (`docs/teams-artifact-update.md`, Hotfix 2); 76 tools declared.
 Not in this round: Sahan's decision 2 (My trips also lists the tasks a person created directly, with All · Requests ·
 Tasks I created) is built after it and shown before its own deploy (his rule: a go covers what was shown).
+
+**Round Hotfix 3, 18 October 2026** (branch `phase7-hotfix-3` at `08d45f5`, the commit shown at the checkpoint; main
+fast-forwarded to it), with Sahan's go ("your defaults are accepted"). It also carries Hotfix 2's decision 2 (My trips with
+the tasks a person created).
+1. `npx supabase db push --linked --yes` (a dry run first): `20261019090000_phase7_hotfix3`. Checked after (read only): the
+   status check with missed, `tasks.missed_at`, `issues.snoozed_until` / `snoozed_by`, `office_prefs` with RLS,
+   `mark_missed_tasks` for the service role only, the 7 functions with the missed status; no task missed before the new
+   fleet-jobs.
+2. `npx supabase functions deploy office-mcp office-api fleet-jobs driver-api` (notify-office and push-task: no change).
+   `fleet_overview` through the live connector: `attention` ("Odometer typed by hand · 10" as one group) and `critical`.
+3. The first full sync with the new rules (18:43): 7 tasks missed (1 assigned from 15 Oct, 6 declined since 10 Oct), 7
+   Missed task issues open, 3 issues expired (completed early, declined, late start), the "200 of 0 km" allowance issue
+   closed, as the checkpoint said.
+4. Web: `npm run build:web`, the key scan on its own (one JWT, role anon; no secret value or name), then `wrangler pages
+   deploy --branch main`; https://fame-fleet.pages.dev serves `index-D2C6yN2N.js`.
+5. `npx eas update --channel preview --environment preview`: update group `07c10c60-6b6a-43ac-ab6b-f633c654f2f1`,
+   runtime `1.2.0-gmaps`, commit `08d45f5` (no native change).
+6. main fast-forwarded to `08d45f5`.
+7. The Teams artifact: the file and the message for Sahan (`docs/teams-artifact-update.md`, Hotfix 3); 78 tools declared.
+Next: `vehicle_on_the_day` is switched on once Sahan says both phones have the update; then Part 3b (G–H) from main.

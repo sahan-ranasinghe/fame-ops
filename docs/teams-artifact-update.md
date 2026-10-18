@@ -1,8 +1,8 @@
 # Updating the Teams copy of the Fame Fleet artifact
 
-## Hotfix 3 (18 October 2026, branch `phase7-hotfix-3`)
+## Hotfix 3 (18 October 2026, main at `08d45f5`)
 
-Build from main once Hotfix 3 is merged, with `npm run build:artifact` (`apps/office`):
+Build from main at `08d45f5` with `npm run build:artifact` (`apps/office`):
 
 - `apps/office/dist-artifact/index.html` (one file, no Supabase code, no key) and
   `apps/office/dist-artifact/capabilities.json`, pasted unchanged: the connector **Fame Fleet** with 78 tools. New since
