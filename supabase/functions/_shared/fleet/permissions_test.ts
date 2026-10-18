@@ -115,6 +115,11 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "register_web_push",
     "remove_web_push",
     "update_request",
+    // Hotfix 2: My trips, the notification centre, my phone number.
+    "my_trips",
+    "my_inbox",
+    "mark_inbox_read",
+    "update_my_profile",
   ]);
   assertEquals(toolsFor(PRESETS.viewer.permissions, names), [
     "fleet_overview",
@@ -133,8 +138,15 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "set_my_notification_settings",
     "register_web_push",
     "remove_web_push",
+    "my_inbox",
+    "mark_inbox_read",
+    "update_my_profile",
   ]);
   assertEquals(allows(PRESETS.dispatcher.permissions, "plan_task"), true);
+  // Hotfix 2: "reviewing" is the approvers'; My trips is for those who ask or assign.
+  assertEquals(allows(["approve"], "reviewing"), true);
+  assertEquals(allows(["assign_tasks"], "reviewing"), false);
+  assertEquals(allows(["view"], "my_trips"), false);
   assertEquals(allows(PRESETS.dispatcher.permissions, "update_task_stops"), true);
   assertEquals(allows(["approve"], "plan_task"), true);
   assertEquals(allows(["approve"], "update_task_stops"), false);
