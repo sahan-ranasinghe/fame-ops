@@ -28,8 +28,8 @@ export function UnavailabilityEditor({ driver, driverName, entry, day, onDone }:
   const { me, store, transport } = useFleet();
   const toast = useToast();
   const settings = useFleetSettings();
-  // The contract's FleetSettings has no half_day_split yet: read it from the answer as it comes (13:00 when absent).
-  const split = splitOf((settings.data?.settings as { half_day_split?: unknown } | undefined)?.half_day_split);
+  // The setting half_day_split (13:00 when it is absent or not a time).
+  const split = splitOf(settings.data?.settings?.half_day_split);
   const [f, setF] = useState<EntryForm>(() => entryForm(entry, day ?? today()));
   const [busy, setBusy] = useState(false);
   const [armed, setArmed] = useState(false);

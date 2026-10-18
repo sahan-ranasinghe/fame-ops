@@ -1184,6 +1184,8 @@ export interface UpdateStopsResult {
 }
 
 export interface FleetSettings {
+  /** Part 3b (H1): where a morning ends and an afternoon starts for a driver who is not available half a day ("13:00"). */
+  half_day_split?: string;
   /** Hotfix 2 (F): the office's own number, E.164 (+94…) (Call office). */
   office_phone?: string | null;
   /** Hotfix 2 (J): a task may be made with its vehicle chosen on the day or of a type (switched on after every phone has the update). */

@@ -89,6 +89,7 @@ export function DriversBoard() {
               Ask drivers<span className="muted"> · {asking.length ? `${asking.length} ticked` : "all free"}</span>
             </Link>
           )}
+          {me.tools.includes("ask_answers") && <Link className="btn" to="/drivers/asks">Questions</Link>}
         </div>
       </div>
       <div className="board-tools">
