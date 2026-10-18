@@ -47,6 +47,7 @@ export interface IssueListFilters {
 }
 
 export const KIND_TEXT: Record<string, string> = {
+  missed_task: "Missed task",
   vehicle_report: "Vehicle problem",
   odometer_flag: "Odometer check",
   km_gap: "Km outside tasks",

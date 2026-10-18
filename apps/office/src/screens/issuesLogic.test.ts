@@ -89,8 +89,9 @@ describe("the issues list's filters (§9, Hotfix 3)", () => {
     expect(o.vehicles).toEqual(["WP CAB-4521", "WP PH-2087"]);
     // The fleet's vehicles when known; a kind or vehicle chosen that nothing has stays in its select.
     expect(filterOptions(rows, {}, ["WP KL-1234", "WP CAB-4521"]).vehicles).toEqual(["WP CAB-4521", "WP KL-1234"]);
-    const chosen = filterOptions([], { kind: "missed_task", vehicle: "WP XX-0001" });
-    expect(chosen.kinds.find(([k]) => k === "missed_task")).toEqual(["missed_task", "missed_task"]);
+    const chosen = filterOptions([], { kind: "a_future_kind", vehicle: "WP XX-0001" });
+    expect(chosen.kinds.find(([k]) => k === "a_future_kind")).toEqual(["a_future_kind", "a_future_kind"]);
+    expect(filterOptions([]).kinds.find(([k]) => k === "missed_task")).toEqual(["missed_task", "Missed task"]);
     expect(chosen.vehicles).toEqual(["WP XX-0001"]);
   });
 

@@ -928,7 +928,8 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await page.goto("/requests");
   await page.getByRole("button", { name: "Approved", exact: true }).click();
   await page.locator("tr", { hasText: "Someone from HR" }).first().click();
-  await expect(page).toHaveURL(/\/requests\/[0-9a-f-]+$/);
+  // Hotfix 3 (L3): the row keeps the list's filter in its link (the list beside the detail keeps it).
+  await expect(page).toHaveURL(/\/requests\/[0-9a-f-]+(\?.*)?$/);
   await expect(page.getByTestId("request-timeline")).toContainText("Approved");
   await page.getByLabel("Cancel this booking with a reason").fill("Trip called off");
   await page.getByRole("button", { name: "Cancel booking" }).click();

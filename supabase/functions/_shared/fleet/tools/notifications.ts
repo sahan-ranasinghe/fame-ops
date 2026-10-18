@@ -10,7 +10,7 @@ import type { Actor } from "../roles.ts";
 import { colomboDateTime } from "../time.ts";
 import { whenText } from "../durations.ts";
 import { pageInfo, pageWindow } from "../paging.ts";
-import { tool, zId, zPaging, zText } from "../tool.ts";
+import { tool, zId, zPaging, zSearch, zText } from "../tool.ts";
 
 function person(actor: Actor): string {
   if (!actor.employeeId) {
@@ -236,8 +236,10 @@ export const myInbox = tool({
     unread: z.boolean().optional().describe("Only the unread ones"),
     // Hotfix 3 (L4): the tray shows the last 30 days; read items older than that are archived (the page's history).
     archived: z.boolean().optional().describe("true = also the archived ones (read over 30 days ago)"),
+    // Hotfix 3 (L3): the notifications page's search box (the title, the text, who).
+    search: zSearch,
   }),
-  async run({ limit = 30, cursor, unread, archived }, { db, actor, now }) {
+  async run({ limit = 30, cursor, unread, archived, search }, { db, actor, now }) {
     const id = person(actor);
     const w = pageWindow(limit, cursor);
     let q = db.from("office_inbox").select("id, event, title, body, url, who, created_at, read_at", { count: "exact" }).eq(
@@ -245,6 +247,8 @@ export const myInbox = tool({
       id,
     );
     if (unread) q = q.is("read_at", null);
+    const words = search?.replace(/[%_,()*]/g, " ").trim();
+    if (words) q = q.or(`title.ilike.*${words}*,body.ilike.*${words}*,who.ilike.*${words}*`);
     if (!archived) {
       const cut = new Date(now.getTime() - ARCHIVE_AFTER_DAYS * 86400_000).toISOString();
       q = q.or(`read_at.is.null,created_at.gte.${cut}`);
