@@ -104,7 +104,10 @@
     "leaveBy": "{time} ට පිටත් වන්න",
     "moreStops": "තවත් {n}",
     "notAccepted": "තවම පිළිගෙන නැත",
-    "accepted": "පිළිගත්තා"
+    "accepted": "පිළිගත්තා",
+    "allTasks": "අද සියලු කාර්යයන්",
+    "allTasksTitle": "අද කාර්යයන්",
+    "moreLater": "අද පසුව තවත් {n}"
   },
   "task": {
     "started": "ආරම්භය {time}",
@@ -654,5 +657,11 @@
     "double_cab": "ඩබල් කැබ්",
     "lorry": "ලොරි",
     "other": "වාහන"
+  },
+  "list": {
+    "loadMore": "තවත් පෙන්වන්න",
+    "showing": "{total} න් {n} ක් පෙන්වයි",
+    "loading": "පූරණය වෙමින්…",
+    "empty": "තවම කිසිවක් නැත."
   }
 }

@@ -104,7 +104,10 @@
     "leaveBy": "Leave by {time}",
     "moreStops": "+{n} more",
     "notAccepted": "Not accepted yet",
-    "accepted": "Accepted"
+    "accepted": "Accepted",
+    "allTasks": "All today's tasks",
+    "allTasksTitle": "Today's tasks",
+    "moreLater": "{n} more later today"
   },
   "task": {
     "started": "Started {time}",
@@ -654,5 +657,11 @@
     "double_cab": "double cab",
     "lorry": "lorry",
     "other": "vehicle"
+  },
+  "list": {
+    "loadMore": "Load more",
+    "showing": "Showing {n} of {total}",
+    "loading": "Loading…",
+    "empty": "Nothing here yet."
   }
 }
