@@ -160,7 +160,7 @@ async function mileageOf(
       odometer_km: onlyDriver ? undefined : odometerKm,
       // The allowance is a month's: a range of days other than a month leaves it out (the month beside it carries it).
       km_allowance: onlyDriver || !monthly ? undefined : v.monthly_km_allowance,
-      over_allowance: monthly && !onlyDriver && v.monthly_km_allowance != null && odometerKm > v.monthly_km_allowance ? true : undefined,
+      over_allowance: monthly && !onlyDriver && v.monthly_km_allowance && odometerKm > v.monthly_km_allowance ? true : undefined,
       km_outside_tasks: !onlyDriver && odometerKm - taskKm - personalKm > UNLOGGED_KM ? odometerKm - taskKm - personalKm : undefined,
       personal_km: personalKm || undefined,
       personal_trips: personalPieces.filter((p) => p.vehicle_id === id).length || undefined,

@@ -161,6 +161,8 @@ function vehicleCard(v: Vehicle, refs: Refs, today: string) {
     custodian_note: custodian ? v.custodian_note ?? undefined : undefined,
     odometer_km: v.current_odometer_km,
     km_allowance: v.monthly_km_allowance,
+    // Hotfix 3 (L2): none set (null or 0) is said so, and never checked.
+    km_allowance_note: v.monthly_km_allowance ? undefined : "no km allowance set",
     next_service: svc.text,
     service_state: svc.state,
     garage_booked: v.garage_booked_date,
@@ -236,7 +238,7 @@ export const listVehicles = tool({
       return {
         ...card,
         km_this_month: used,
-        over_allowance: v.monthly_km_allowance != null && used > v.monthly_km_allowance ? true : undefined,
+        over_allowance: v.monthly_km_allowance && used > v.monthly_km_allowance ? true : undefined,
         status: vehicleStatus(v, onTask),
         ...availabilityOf(v.in_garage, busy.filter((t) => t.vehicle_id === v.id), now),
         held_by: holders.has(v.id) ? refs.emp.get(holders.get(v.id)!.employee_id)?.name : undefined,

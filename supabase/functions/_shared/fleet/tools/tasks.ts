@@ -56,7 +56,8 @@ import type { Actor } from "../roles.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { duration, whenText } from "../durations.ts";
-import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
+import { realDate, tool, zDate, zId, zPaging, zText, zTime } from "../tool.ts";
+import { pageOf, pageWindow } from "../paging.ts";
 import { endOfDay, type GooglePin, googlePin } from "../googlePlaces.ts";
 import { findPlace, placeById } from "./places.ts";
 import { findOneProject } from "./projects.ts";
@@ -1552,8 +1553,14 @@ export const taskBoard = tool({
     '"Done 07:55 · 62 km logged", ' +
     'the leave-by time ("Leave by HH:MM"), the number of stops, and for a task under way the live ETA and how late it runs.',
   readOnly: true,
-  input: z.object({ date: zDate.optional().describe("Default: today") }),
-  async run({ date }, { db, now }) {
+  input: z.object({
+    date: zDate.optional().describe("Default: today"),
+    // Hotfix 3 (L3): each column a page at a time; with column, only that column's next page.
+    limit: zPaging.limit.describe("Cards per column (the answer has totals and next per column)"),
+    column: z.enum(["assigned", "in_progress", "completed", "declined"]).optional().describe("Only this column (with cursor)"),
+    cursor: zPaging.cursor,
+  }),
+  async run({ date, limit, column: only, cursor }, { db, now }) {
     const today = colomboDate(now);
     const day = realDate(date ?? today);
     const { from, to } = dayRange(day);
@@ -1612,7 +1619,24 @@ export const taskBoard = tool({
         finish_flag: finishFlagText(t.finish_flag),
       };
     };
-    const column = async (status: string) => await Promise.all(tasks.filter((t) => t.status === status).map(card));
+    // Hotfix 3 (L3): asked with limit, each column's cards are a page (the cards are made for that page only).
+    const COLUMNS = ["assigned", "in_progress", "completed", "declined"] as const;
+    const totals: Record<string, number> = {};
+    const nexts: Record<string, string> = {};
+    const column = async (status: (typeof COLUMNS)[number]) => {
+      const all = tasks.filter((t) => t.status === status);
+      totals[status] = all.length;
+      const page = pageOf(all, pageWindow(limit, status === only ? cursor : undefined));
+      if (page.next) nexts[status] = page.next;
+      return await Promise.all(page.rows.map(card));
+    };
+    if (only) {
+      const cards = await column(only);
+      return {
+        result: { date: day, [only]: cards, totals: { [only]: totals[only] }, next: nexts[only] ? { [only]: nexts[only] } : undefined },
+        summary: `${day}: ${only} ${cards.length} of ${totals[only]}`,
+      };
+    }
     const board = {
       assigned: await column("assigned"),
       in_progress: await column("in_progress"),
@@ -1653,14 +1677,16 @@ export const taskBoard = tool({
         date: day,
         counts: {
           waiting_approval: waitingApproval.length,
-          assigned: board.assigned.length,
-          in_progress: board.in_progress.length,
-          completed: board.completed.length,
+          assigned: totals.assigned,
+          in_progress: totals.in_progress,
+          completed: totals.completed,
           cancelled,
-          declined: board.declined.length,
+          declined: totals.declined,
         },
         waiting_approval: waitingApproval,
         ...board,
+        totals: limit ? totals : undefined,
+        next: limit && Object.keys(nexts).length ? nexts : undefined,
       },
       summary:
         `${day}: ${

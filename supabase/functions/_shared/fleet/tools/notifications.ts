@@ -4,11 +4,13 @@
 import { z } from "zod";
 import { ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import type { Db } from "../db.ts";
+import type { Json } from "../database.types.ts";
 import { deviceLabel, EVENTS, inboxKind, relevantEvents } from "../notifications.ts";
 import type { Actor } from "../roles.ts";
 import { colomboDateTime } from "../time.ts";
 import { whenText } from "../durations.ts";
-import { tool, zId, zText } from "../tool.ts";
+import { pageInfo, pageWindow } from "../paging.ts";
+import { tool, zId, zPaging, zText } from "../tool.ts";
 
 function person(actor: Actor): string {
   if (!actor.employeeId) {
@@ -182,6 +184,9 @@ export const removeWebPush = tool({
   },
 });
 
+/** Hotfix 3 (L4): read items older than this leave the tray (they stay in the page's history). */
+const ARCHIVE_AFTER_DAYS = 30;
+
 /** One item of the notification centre as the page shows it. */
 function inboxItem(
   r: {
@@ -226,19 +231,30 @@ export const myInbox = tool({
     "how many are unread in all. Kept 90 days once read.",
   readOnly: true,
   input: z.object({
-    limit: z.number().int().min(1).max(100).optional().describe("Default 30"),
+    limit: z.number().int().min(1).max(500).optional().describe("Default 30 (the answer has total and next)"),
+    cursor: zPaging.cursor,
     unread: z.boolean().optional().describe("Only the unread ones"),
+    // Hotfix 3 (L4): the tray shows the last 30 days; read items older than that are archived (the page's history).
+    archived: z.boolean().optional().describe("true = also the archived ones (read over 30 days ago)"),
   }),
-  async run({ limit = 30, unread }, { db, actor, now }) {
+  async run({ limit = 30, cursor, unread, archived }, { db, actor, now }) {
     const id = person(actor);
-    let q = db.from("office_inbox").select("id, event, title, body, url, who, created_at, read_at").eq("employee_id", id);
+    const w = pageWindow(limit, cursor);
+    let q = db.from("office_inbox").select("id, event, title, body, url, who, created_at, read_at", { count: "exact" }).eq("employee_id", id);
     if (unread) q = q.is("read_at", null);
-    const [rows, count] = await Promise.all([
-      q.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit),
+    if (!archived) {
+      const cut = new Date(now.getTime() - ARCHIVE_AFTER_DAYS * 86400_000).toISOString();
+      q = q.or(`read_at.is.null,created_at.gte.${cut}`);
+    }
+    const [res, count] = await Promise.all([
+      q.order("created_at", { ascending: false }).order("id", { ascending: false }).range(w.offset, w.offset + (w.limit ?? 30) - 1),
       unreadCount(db, id),
     ]);
-    const items = unwrap(rows, "notification centre").map((r) => inboxItem(r, now));
-    return { result: { unread: count, items }, summary: `${items.length} notifications, ${count} unread` };
+    const items = unwrap(res, "notification centre").map((r) => inboxItem(r, now));
+    return {
+      result: { unread: count, ...pageInfo(w, items.length, res.count ?? items.length), items },
+      summary: `${items.length} notifications, ${count} unread`,
+    };
   },
 });
 
@@ -259,5 +275,51 @@ export const markInboxRead = tool({
     if (!all) q = q.in("id", ids!);
     const marked = unwrap(await q.select("id"), "notification centre").length;
     return { result: { marked, unread: await unreadCount(db, id) }, summary: `${marked} marked read` };
+  },
+});
+
+/** The page preferences a person may keep (Hotfix 3, L1 and L5): the collapsed sections. */
+const PREF_KEYS = ["overview_collapsed", "menu_collapsed"] as const;
+const zSections = z.array(z.string().trim().min(1).max(40)).max(30);
+
+async function prefsOf(db: Db, employeeId: string): Promise<Record<string, unknown>> {
+  const row = unwrapMaybe(await db.from("office_prefs").select("prefs").eq("employee_id", employeeId).maybeSingle(), "preferences");
+  return (row?.prefs as Record<string, unknown> | null) ?? {};
+}
+
+export const myPrefs = tool({
+  name: "my_prefs",
+  title: "My page preferences",
+  description: "The person's own page preferences (Hotfix 3): the Overview's collapsed sections (overview_collapsed) and the side " +
+    "menu's (menu_collapsed). Personal: a signed-in person or a personal key.",
+  readOnly: true,
+  input: z.object({}),
+  async run(_args, { db, actor }) {
+    const id = person(actor);
+    return { result: { prefs: await prefsOf(db, id) }, summary: `preferences of ${actor.name}` };
+  },
+});
+
+export const setMyPrefs = tool({
+  name: "set_my_prefs",
+  title: "Keep my page preferences",
+  description: "Keeps the person's page preferences: the fields given replace those fields (overview_collapsed, menu_collapsed: lists " +
+    "of section names); the others stay. Answers the preferences as kept.",
+  readOnly: false,
+  input: z.object({
+    prefs: z.object({ overview_collapsed: zSections.optional(), menu_collapsed: zSections.optional() }),
+  }),
+  async run({ prefs }, { db, actor, now }) {
+    const id = person(actor);
+    const given = Object.fromEntries(PREF_KEYS.flatMap((k) => (prefs[k] !== undefined ? [[k, prefs[k]]] : [])));
+    if (Object.keys(given).length === 0) throw new ToolError("Nothing to keep: give overview_collapsed or menu_collapsed.");
+    const merged = { ...(await prefsOf(db, id)), ...given };
+    unwrap(
+      await db.from("office_prefs").upsert({ employee_id: id, prefs: merged as Json, updated_at: now.toISOString() }, {
+        onConflict: "employee_id",
+      }),
+      "preferences",
+    );
+    return { result: { prefs: merged }, summary: `${actor.name} kept ${Object.keys(given).join(", ")}` };
   },
 });

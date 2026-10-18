@@ -159,6 +159,9 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   mark_inbox_read: ANY,
   update_my_profile: ANY,
   reviewing: ["approve"],
+  // Hotfix 3 (L1, L5): the person's own page preferences.
+  my_prefs: ANY,
+  set_my_prefs: ANY,
 };
 
 /** The four buttons on the Users page. An admin is everything, so it is not a preset. */

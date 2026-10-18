@@ -33,7 +33,9 @@ import { hasAny } from "../permissions.ts";
 import type { Actor } from "../roles.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, daysBetween, utcIso } from "../time.ts";
 import { duration, whenText } from "../durations.ts";
-import { realDate, tool, zDate, zId, zText, zTime, zVehicleType } from "../tool.ts";
+import { realDate, tool, zDate, zId, zPaging, zSearch, zText, zTime, zVehicleType } from "../tool.ts";
+import { pageInfo, pageOf, pageWindow } from "../paging.ts";
+import { DECLINE_TEXT } from "../decline.ts";
 import { matchProjects } from "./projects.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
 import { actorUserId, logRequestEvent, requester } from "./requestCore.ts";
@@ -816,9 +818,20 @@ export const listRequests = tool({
     kind: z.enum(["request", "task"]).optional().describe("task = only tasks proposed by someone without approve (Phase 7)"),
     id: zId.optional().describe("Only this request"),
     with_line: z.boolean().optional().describe("The web's plan map: each leg's Google road line in the trip's timeline"),
+    // Hotfix 3 (L3): a page at a time, and the search box.
+    search: zSearch,
+    ...zPaging,
   }),
-  async run({ status = "waiting", kind, id, with_line }, { db, now, actor }) {
-    let query = db.from("vehicle_requests").select("*");
+  async run({ status = "waiting", kind, id, with_line, search, limit, cursor }, { db, now, actor }) {
+    const w = pageWindow(limit, cursor);
+    let query = db.from("vehicle_requests").select("*", { count: "exact" });
+    const words = search?.replace(/[%_,()*]/g, " ").trim();
+    if (words) {
+      query = query.or(
+        `requested_by_name.ilike.*${words}*,route_from.ilike.*${words}*,route_to.ilike.*${words}*,title.ilike.*${words}*,` +
+          `note.ilike.*${words}*,project_label.ilike.*${words}*,on_behalf_of.ilike.*${words}*`,
+      );
+    }
     if (kind) query = query.eq("kind", kind);
     if (id) query = query.eq("id", id);
     if (status === "waiting") query = query.in("status", ["waiting", "changed"]);
@@ -827,12 +840,16 @@ export const listRequests = tool({
     if (!actor.permissions.includes("approve")) {
       query = query.eq("requested_by_employee_id", actor.employeeId ?? "00000000-0000-0000-0000-000000000000");
     }
-    const rows = unwrap(
-      await query.order("needed_at", { ascending: status === "waiting" || status === "changed" }).limit(100),
-      "vehicle requests",
-    );
+    const ordered = query.order("needed_at", { ascending: status === "waiting" || status === "changed" }).order("id");
+    const res = w.limit === null ? await ordered.limit(100) : await ordered.range(w.offset, w.offset + w.limit - 1);
+    const rows = unwrap(res, "vehicle requests");
     return {
-      result: { status, count: rows.length, requests: await requestCards(db, rows, now, with_line === true, actor.employeeId) },
+      result: {
+        status,
+        count: rows.length,
+        ...pageInfo(w, rows.length, res.count ?? rows.length),
+        requests: await requestCards(db, rows, now, with_line === true, actor.employeeId),
+      },
       summary: `${rows.length} requests (${status})`,
     };
   },
@@ -848,10 +865,94 @@ const TRIP_FILTER: Record<string, readonly string[]> = {
   cancelled: ["cancelled"],
 };
 
+/**
+ * The tasks a person created directly, as My trips rows (Hotfix 3): the task's live state, the driver and the vehicle, who
+ * sent it. `at` (the leave time, ISO) is for the sort and is taken off before the answer.
+ */
+async function createdTaskCards(db: Db, tasks: Task[], now: Date) {
+  if (tasks.length === 0) return [];
+  const outcomes = await tripOutcomes(db, tasks.map((t) => ({ task_id: t.id }) as VehicleRequest), now);
+  const approverIds = [...new Set(tasks.flatMap((t) => (t.approved_by_employee_id ? [t.approved_by_employee_id] : [])))];
+  const approvers = approverIds.length
+    ? unwrap(await db.from("employees").select("id, name, phone, photo_id").in("id", approverIds), "employees")
+    : [];
+  const photos = await driverPhotoLinks(db, approvers, now);
+  return tasks.map((t) => {
+    const trip = outcomes.get(t.id);
+    const leave = t.leave_by ?? t.start_at;
+    const stops = trip?.stops ?? [];
+    const approver = approvers.find((a) => a.id === t.approved_by_employee_id);
+    const sameDay = t.end_by && colomboDate(t.end_by) === colomboDate(leave);
+    return {
+      source: "task" as const,
+      id: t.id,
+      task_id: t.id,
+      title: t.title,
+      label: t.label ?? undefined,
+      kind: t.kind,
+      when: colomboDayTime(leave),
+      back_by: t.end_by ? (sameDay ? colomboTime(t.end_by) : colomboDayTime(t.end_by)) : undefined,
+      route: stops.length ? [stops[0].place_name, stops.length > 1 ? stops[stops.length - 1].place_name : null].filter(Boolean).join(" → ") : undefined,
+      stops_count: stops.length || undefined,
+      status: t.status,
+      live: taskLive(t, trip, now),
+      assigned: trip
+        ? {
+          driver: trip.driver,
+          phone: trip.phone ?? undefined,
+          ...contactLinks(trip.phone),
+          photo_url: trip.driverPhoto,
+          vehicle: trip.plate,
+          vehicle_text: trip.plate ? undefined : vehicleText(t.vehicle_mode, t.vehicle_type_wanted),
+          make_model: trip.model ?? undefined,
+          vehicle_photo_url: trip.vehiclePhoto,
+          vehicle_thumb_url: trip.vehicleThumb,
+          task_status: t.status,
+        }
+        : undefined,
+      approved_by: approver && t.approved_at ? personAt(approver.name, t.approved_at, now, { phone: approver.phone, photo: photos.get(approver.id) }) : undefined,
+      created: colomboDateTime(t.created_at),
+      at: leave,
+    };
+  });
+}
+
+/** A task's live state on My trips (Hotfix 3): sent, accepted, on the way, arrived, completed, declined, cancelled, missed. */
+function taskLive(t: Task, trip: TripOutcome | undefined, now: Date) {
+  const at = (iso: string | null | undefined) => (iso ? atText(iso, now) : undefined);
+  const dot = (text: string, iso: string | null | undefined) => (iso ? `${text} · ${atText(iso, now)}` : text);
+  switch (t.status) {
+    case "completed":
+      return { state: "completed" as const, text: dot("Completed", t.completed_at), at: at(t.completed_at) };
+    case "cancelled":
+      return { state: "cancelled" as const, text: t.cancelled_reason ? `Cancelled · ${t.cancelled_reason}` : "Cancelled", at: at(t.updated_at) };
+    case "missed":
+      return { state: "missed" as const, text: dot("Missed", t.missed_at), at: at(t.missed_at) };
+    case "declined":
+      return {
+        state: "declined" as const,
+        text: `Declined by the driver${t.declined_reason ? ` · ${DECLINE_TEXT[t.declined_reason] ?? t.declined_reason}` : ""}`,
+        at: at(t.declined_at),
+      };
+    case "in_progress": {
+      const pickup = trip?.stops.find((s) => s.type === "pickup");
+      const arrivedAt = pickup?.arrived_at ?? pickup?.auto_detected_at;
+      return arrivedAt
+        ? { state: "arrived" as const, text: dot("Arrived", arrivedAt), at: at(arrivedAt) }
+        : { state: "on_the_way" as const, text: dot("On the way", t.started_at), at: at(t.started_at) };
+    }
+    default:
+      return t.accepted_at
+        ? { state: "accepted" as const, text: dot("Driver accepted", t.accepted_at), at: at(t.accepted_at) }
+        : { state: "approved" as const, text: "Sent to the driver", at: at(t.sent_at) };
+  }
+}
+
 export const myTrips = tool({
   name: "my_trips",
   title: "My trips",
-  description: "The person's own requests and proposed tasks whose trip day is between from and to (Colombo dates, at most a " +
+  description: "The person's own requests and proposed tasks, and (Hotfix 3) the tasks they created directly (source task), " +
+    "whose trip day is between from and to (Colombo dates, at most a " +
     "year), newest first, each with its live state from its task (live: waiting, approved, accepted, on_the_way, arrived, " +
     "completed, declined, cancelled), who decided it (approved_by / declined_by with their number), the driver and the vehicle " +
     "(assigned, with Call and WhatsApp), and the office's number. status filters on the live state (under_way = on the way or " +
@@ -863,8 +964,12 @@ export const myTrips = tool({
     status: z.enum(["waiting", "approved", "under_way", "completed", "declined", "cancelled", "all"]).optional().describe(
       "Default all",
     ),
+    include: z.enum(["all", "requests", "tasks"]).optional().describe(
+      "Default all: the requests and proposals, and the tasks the person created directly",
+    ),
+    ...zPaging,
   }),
-  async run({ from, to, status = "all" }, { db, now, actor }) {
+  async run({ from, to, status = "all", include = "all", limit, cursor }, { db, now, actor }) {
     realDate(from);
     realDate(to);
     if (to < from) throw new ToolError("to must be the same day as from or later.");
@@ -872,18 +977,38 @@ export const myTrips = tool({
     if (!actor.employeeId) {
       throw new ToolError("This is personal: it needs a signed-in person (the web app) or a personal connector key.");
     }
-    const rows = unwrap(
+    const span = { from: dayRange(from).from, to: dayRange(to).to };
+    const rows = include === "tasks" ? [] : unwrap(
       await db.from("vehicle_requests").select("*").eq("requested_by_employee_id", actor.employeeId)
-        .gte("needed_at", dayRange(from).from).lt("needed_at", dayRange(to).to)
+        .gte("needed_at", span.from).lt("needed_at", span.to)
         .order("needed_at", { ascending: false }).order("created_at", { ascending: false }).limit(500),
       "vehicle requests",
     );
-    const cards = await requestCards(db, rows, now, false, actor.employeeId);
+    // Hotfix 3 (decision 2): the tasks the person made directly (not from a request): they assigned them.
+    const made = include === "requests" ? [] : unwrap(
+      await db.from("tasks").select("*").eq("assigned_by_employee_id", actor.employeeId).is("request_id", null).eq("kind", "dispatch")
+        .gte("start_at", span.from).lt("start_at", span.to).order("start_at", { ascending: false }).limit(500),
+      "tasks",
+    );
+    const [requestRows, taskRows] = await Promise.all([
+      requestCards(db, rows, now, false, actor.employeeId),
+      createdTaskCards(db, made, now),
+    ]);
+    // Newest trip first, requests and tasks together.
+    const all = [
+      ...requestRows.map((c) => ({ card: c as Record<string, unknown> & { live: { state: string } }, at: rows.find((r) => r.id === c.id)!.needed_at })),
+      ...taskRows.map((c) => ({ card: c as Record<string, unknown> & { live: { state: string } }, at: c.at })),
+    ].sort((a, b) => b.at.localeCompare(a.at));
     const wanted = status === "all" ? null : TRIP_FILTER[status];
-    const trips = wanted ? cards.filter((c) => wanted.includes(c.live.state)) : cards;
+    const kept = (wanted ? all.filter((x) => wanted.includes(x.card.live.state)) : all).map((x) => x.card);
+    const page = pageOf(kept, pageWindow(limit, cursor));
+    const trips = page.rows.map((c) => {
+      const { at: _at, ...card } = c as Record<string, unknown> & { at?: string };
+      return card;
+    });
     return {
-      result: { from, to, status, count: trips.length, trips },
-      summary: `${trips.length} trips of ${actor.name} ${from}..${to} (${status})`,
+      result: { from, to, status, include, count: trips.length, total: page.total, next: page.next, trips },
+      summary: `${trips.length} trips of ${actor.name} ${from}..${to} (${status}, ${include})`,
     };
   },
 });

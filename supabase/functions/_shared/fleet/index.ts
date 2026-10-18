@@ -58,6 +58,8 @@ import {
   markInboxRead,
   myInbox,
   myNotificationSettings,
+  myPrefs,
+  setMyPrefs,
   registerWebPush,
   removeWebPush,
   setMyNotificationSettings,
@@ -179,6 +181,9 @@ export const TOOLS: AnyTool[] = [
   markInboxRead,
   updateMyProfile,
   reviewing,
+  // Hotfix 3: the person's page preferences.
+  myPrefs,
+  setMyPrefs,
 ];
 
 export { WEB_ONLY_TOOLS } from "./tools/media.ts";

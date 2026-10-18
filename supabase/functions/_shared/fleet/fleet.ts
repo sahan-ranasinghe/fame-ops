@@ -624,7 +624,8 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
     }
 
     const used = km.get(vehicle.id) ?? 0;
-    if (vehicle.monthly_km_allowance != null && used > vehicle.monthly_km_allowance) {
+    // Hotfix 3 (L2): no allowance set (null or 0) means no check.
+    if (vehicle.monthly_km_allowance && used > vehicle.monthly_km_allowance) {
       warnings.push(
         `${vehicle.reg_no} is over its monthly km allowance (${thousands(used)} of ${thousands(vehicle.monthly_km_allowance)} km).`,
       );

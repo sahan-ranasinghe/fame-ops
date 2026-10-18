@@ -824,7 +824,8 @@ export interface PhoneLinks {
 
 /** A trip's live state on My trips (Hotfix 2, A), from the request and its task. */
 export interface TripLive {
-  state: "waiting" | "approved" | "accepted" | "on_the_way" | "arrived" | "completed" | "declined" | "cancelled";
+  /** Hotfix 3: "missed" = a task the person created that was never started (its leave-by over a day ago). */
+  state: "waiting" | "approved" | "accepted" | "on_the_way" | "arrived" | "completed" | "declined" | "cancelled" | "missed";
   /** "Waiting", "Approved", "Driver accepted · 09:12", "On the way · 09:30", "Arrived · 10:05", "Completed · 11:40",
    * "Declined · no vehicle that day", "Cancelled · not needed". */
   text: string;
@@ -1462,6 +1463,8 @@ export interface DocChip {
 }
 
 export interface VehicleCard extends Vehicle {
+  /** Hotfix 3 (L2): "no km allowance set" when none is (null or 0): no allowance check then. */
+  km_allowance_note?: string;
   /** Phase 7: the driver who holds it now (vehicle_assignments), since HH:MM. */
   held_by?: string;
   held_since?: string;

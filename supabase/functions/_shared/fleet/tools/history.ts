@@ -5,10 +5,12 @@ import { z } from "zod";
 import { fetchAll, inChunks, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { findDriver, findVehicle, loadRefs } from "../fleet.ts";
 import { colomboDate, colomboDateTime, colomboTime } from "../time.ts";
-import { daySpan, tool, zDate, zId, zText } from "../tool.ts";
+import { daySpan, tool, zDate, zId, zPaging, zSearch, zText } from "../tool.ts";
+import { pageOf, pageWindow } from "../paging.ts";
+import { plain } from "../format.ts";
 import { findOneProject } from "./projects.ts";
 
-const STATUSES = ["assigned", "in_progress", "completed", "cancelled", "declined"] as const;
+const STATUSES = ["assigned", "in_progress", "completed", "cancelled", "declined", "missed"] as const;
 
 export const listTasks = tool({
   name: "list_tasks",
@@ -25,20 +27,45 @@ export const listTasks = tool({
     vehicle: zText(20).optional().describe("Plate"),
     status: z.enum(STATUSES).optional(),
     kind: z.enum(["dispatch", "self"]).optional(),
+    // Hotfix 3 (L3): a page at a time (the totals stay the whole range's), and the search box (title, label, driver, plate).
+    search: zSearch,
+    ...zPaging,
   }),
-  async run({ from, to, driver, vehicle, status, kind }, { db }) {
+  async run({ from, to, driver, vehicle, status, kind, search, limit, cursor }, { db }) {
     const span = daySpan(from, to)!;
     const refs = await loadRefs(db);
     const onlyDriver = driver ? findDriver(refs, driver) : null;
     const onlyVehicle = vehicle ? findVehicle(refs, vehicle) : null;
-    const LIMIT = 500;
-    let q = db.from("tasks").select("*").gte("start_at", span.start).lt("start_at", span.end);
-    if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
-    if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
-    if (status) q = q.eq("status", status);
-    if (kind) q = q.eq("kind", kind);
-    const rows = unwrap(await q.order("start_at", { ascending: false }).order("id").limit(LIMIT + 1), "tasks");
-    const shown = rows.slice(0, LIMIT);
+    const w = pageWindow(limit, cursor);
+    // Paged: every task of the range (up to 5,000) for the totals, the stops for the page only. Not paged: 500, as before.
+    const LIMIT = w.limit === null ? 500 : 5000;
+    const words = search?.replace(/[%_,()*]/g, " ").trim();
+    const key = words ? plain(words) : "";
+    const people = key ? refs.employees.filter((e) => plain(e.name).includes(key)).map((e) => e.id) : [];
+    const plates = key ? refs.vehicles.filter((v) => plain(v.reg_no).includes(key)).map((v) => v.id) : [];
+    // A fresh query each time (a page of fetchAll orders and ranges its own).
+    const build = () => {
+      let q = db.from("tasks").select("*").gte("start_at", span.start).lt("start_at", span.end);
+      if (words) {
+        q = q.or([
+          `title.ilike.*${words}*`,
+          `label.ilike.*${words}*`,
+          ...(people.length ? [`employee_id.in.(${people.join(",")})`] : []),
+          ...(plates.length ? [`vehicle_id.in.(${plates.join(",")})`] : []),
+        ].join(","));
+      }
+      if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
+      if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
+      if (status) q = q.eq("status", status);
+      if (kind) q = q.eq("kind", kind);
+      return q.order("start_at", { ascending: false }).order("id");
+    };
+    const rows = w.limit === null
+      ? unwrap(await build().limit(LIMIT + 1), "tasks")
+      : await fetchAll((a, b) => build().range(a, b), "tasks", LIMIT + 1);
+    const inRange = rows.slice(0, LIMIT);
+    const page = pageOf(inRange, w);
+    const shown = page.rows;
     // 100 ids a request: each id is in the URL (the hosted gateway refuses a long one).
     const stops = (await Promise.all(
       inChunks(shown.map((t) => t.id)).map((ids) =>
@@ -74,19 +101,23 @@ export const listTasks = tool({
         created_by: t.created_by ?? undefined,
       };
     });
-    const count = (pick: (t: (typeof tasks)[number]) => boolean) => tasks.filter(pick).length;
+    // The totals are the whole range's (every page shows the same ones).
+    const count = (pick: (t: (typeof inRange)[number]) => boolean) => inRange.filter(pick).length;
     return {
       result: {
         from: span.from,
         to: span.to,
         count: tasks.length,
+        total: page.total,
+        next: page.next,
         more: rows.length > LIMIT ? `Over ${LIMIT} tasks: narrow the days or the filters to see the rest.` : undefined,
         totals: {
           completed: count((t) => t.status === "completed"),
           cancelled: count((t) => t.status === "cancelled"),
-          km: tasks.reduce((sum, t) => sum + (t.status === "completed" ? t.km ?? 0 : 0), 0),
+          km: inRange.reduce((sum, t) => sum + (t.status === "completed" ? t.km ?? 0 : 0), 0),
           driver_started: count((t) => t.kind === "self"),
           personal: count((t) => t.purpose === "personal"),
+          missed: count((t) => t.status === "missed") || undefined,
         },
         tasks,
       },
