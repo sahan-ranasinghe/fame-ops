@@ -4,7 +4,8 @@
 
 export interface TaskKmRow {
   id: string;
-  vehicle_id: string;
+  /** Null only for a task not started yet whose vehicle is chosen on the day (Hotfix 2, J): it has no km. */
+  vehicle_id: string | null;
   km: number | null;
 }
 
@@ -28,7 +29,7 @@ export function taskPieces(tasks: readonly TaskKmRow[], segments: readonly Segme
   for (const s of segments) byTask.set(s.task_id, [...(byTask.get(s.task_id) ?? []), s]);
   return tasks.flatMap((t) => {
     const own = (byTask.get(t.id) ?? []).sort((a, b) => a.seq - b.seq);
-    if (own.length === 0) return [{ task_id: t.id, vehicle_id: t.vehicle_id, km: t.km ?? 0 }];
+    if (own.length === 0) return t.vehicle_id ? [{ task_id: t.id, vehicle_id: t.vehicle_id, km: t.km ?? 0 }] : [];
     return own.map((s) => ({
       task_id: t.id,
       vehicle_id: s.vehicle_id,

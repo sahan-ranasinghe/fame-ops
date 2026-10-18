@@ -199,22 +199,29 @@ export const listVehicles = tool({
     ]);
     const holders = new Map(unwrap(holdersRes, "vehicle holders").map((a) => [a.vehicle_id, a]));
     const runningTasks = unwrap(running, "tasks");
-    const onTask = new Set(runningTasks.map((t) => t.vehicle_id));
+    const onTask = new Set(runningTasks.flatMap((t) => t.vehicle_id ? [t.vehicle_id] : []));
     const etas = runningTasks.length > 0
       ? new Map(
         unwrap(await db.from("task_eta").select("task_id, final_eta_at").in("task_id", runningTasks.map((t) => t.id)), "eta")
           .map((e) => [e.task_id, e.final_eta_at]),
       )
       : new Map<string, string | null>();
+    // A task with its vehicle chosen on the day (Hotfix 2, J) makes no vehicle busy until it has one.
     const busy: (VehicleBusy & { vehicle_id: string })[] = [
-      ...runningTasks.map((t) => ({
-        vehicle_id: t.vehicle_id,
-        status: t.status,
-        start_at: t.start_at,
-        end_by: t.end_by,
-        final_eta_at: etas.get(t.id) ?? null,
-      })),
-      ...unwrap(booked, "tasks").map((t) => ({ vehicle_id: t.vehicle_id, status: t.status, start_at: t.start_at, end_by: t.end_by })),
+      ...runningTasks.flatMap((t) =>
+        t.vehicle_id
+          ? [{
+            vehicle_id: t.vehicle_id,
+            status: t.status,
+            start_at: t.start_at,
+            end_by: t.end_by,
+            final_eta_at: etas.get(t.id) ?? null,
+          }]
+          : []
+      ),
+      ...unwrap(booked, "tasks").flatMap((t) =>
+        t.vehicle_id ? [{ vehicle_id: t.vehicle_id, status: t.status, start_at: t.start_at, end_by: t.end_by }] : []
+      ),
     ];
 
     const listed = filter === "inactive" ? refs.vehicles.filter((v) => !v.active) : active;

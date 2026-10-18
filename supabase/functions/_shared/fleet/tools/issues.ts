@@ -314,7 +314,7 @@ export const issueHistory = tool({
             title: task.title,
             status: task.status,
             driver: refs.emp.get(task.employee_id)?.name,
-            vehicle: refs.veh.get(task.vehicle_id)?.reg_no,
+            vehicle: refs.veh.get(task.vehicle_id ?? "")?.reg_no,
             leave_by: colomboDayTime(task.leave_by ?? task.start_at),
           }
           : undefined,

@@ -57,7 +57,7 @@ export const fleetOverview = tool({
       const hasPosition = pos?.lat != null && pos?.lng != null;
       return {
         driver: driver?.name,
-        vehicle: refs.veh.get(t.vehicle_id)?.reg_no,
+        vehicle: refs.veh.get(t.vehicle_id ?? "")?.reg_no,
         task: t.title,
         going_to: stops.filter((s) => s.task_id === t.id).at(-1)?.place_name,
         location: sharing(pos, now).text,

@@ -9,6 +9,36 @@ export function phoneDigits(phone: string | null | undefined): string | null {
   return digits.length >= 9 ? digits : null;
 }
 
+/**
+ * Hotfix 2 (F): a Sri Lankan number as stored, E.164 ("+94771234567"), from 077 123 4567, 77 123 4567, 94771234567 or
+ * +94 77 123 4567 (spaces, dashes and brackets ignored); null when it is none of those.
+ */
+export function phoneE164(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const d = phone.replace(/\D/g, "");
+  if (/^0[1-9]\d{8}$/.test(d)) return `+94${d.slice(1)}`;
+  if (/^[1-9]\d{8}$/.test(d)) return `+94${d}`;
+  if (/^94[1-9]\d{8}$/.test(d)) return `+${d}`;
+  return null;
+}
+
+/** "+94771234567" → "077 123 4567"; another number as it is. */
+export function phoneDisplay(phone: string | null | undefined): string | undefined {
+  if (!phone) return undefined;
+  const e = phoneE164(phone);
+  if (!e) return phone;
+  const local = `0${e.slice(3)}`;
+  return `${local.slice(0, 3)} ${local.slice(3, 6)} ${local.slice(6)}`;
+}
+
+/** A number with its links (Call and WhatsApp), or undefined when there is none. */
+export function phoneLinks(phone: string | null | undefined): { phone: string; phone_display: string; call: string; whatsapp: string } | undefined {
+  const call = telLink(phone);
+  const whatsapp = waLink(phone);
+  if (!phone || !call || !whatsapp) return undefined;
+  return { phone: phoneE164(phone) ?? phone, phone_display: phoneDisplay(phone) ?? phone, call, whatsapp };
+}
+
 export function telLink(phone: string | null | undefined): string | null {
   const digits = phoneDigits(phone);
   return digits ? `tel:+${digits}` : null;

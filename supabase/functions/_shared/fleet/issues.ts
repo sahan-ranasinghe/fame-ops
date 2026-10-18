@@ -529,14 +529,17 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     const taken = unwrap(takenRes, "vehicle hand-overs");
     // Today's tasks still to start (the conflict stands past the leave-by too, until the task starts, changes or the day ends).
     for (const t of unwrap(laterRes, "tasks")) {
-      const holder = holders.get(t.vehicle_id);
+      // A task whose vehicle is chosen on the day (Hotfix 2, J) has none to lose yet.
+      if (!t.vehicle_id) continue;
+      const vehicleId = t.vehicle_id;
+      const holder = holders.get(vehicleId);
       const lost = taken.filter((a) =>
-        a.employee_id === t.employee_id && a.vehicle_id === t.vehicle_id
+        a.employee_id === t.employee_id && a.vehicle_id === vehicleId
       ).sort((a, b) => (b.to_at ?? "").localeCompare(a.to_at ?? ""))[0];
       if (!lost || !holder || holder === t.employee_id) {
         continue;
       }
-      const plate = vehicleLabel(refs.veh.get(t.vehicle_id));
+      const plate = vehicleLabel(refs.veh.get(vehicleId));
       wanted.push({
         kind: "vehicle_conflict",
         ref_key: `vehicle_conflict:${t.id}`,

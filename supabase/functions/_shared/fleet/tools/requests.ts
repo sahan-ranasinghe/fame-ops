@@ -64,6 +64,8 @@ import {
   changeTask,
   defaultVehicleFor,
   makePlan,
+  ON_THE_DAY_OFF,
+  parseVehicleWord,
   pickVehicle,
   planTimeline,
   prepareTask,
@@ -74,6 +76,8 @@ import {
   type StoredPlan,
   updateTaskStops,
   type VehicleChoice,
+  type VehicleMode,
+  vehicleText,
   zStart,
   zStops,
 } from "./tasks.ts";
@@ -132,11 +136,11 @@ interface TripOutcome {
 type TaskStopRow = Row<"task_stops">;
 
 /** The approved push's pictures (Phase 7, §4): the driver's photo as its icon, the vehicle's as its image. */
-async function pushPhotos(db: Db, driver: Employee, vehicle: Vehicle) {
+async function pushPhotos(db: Db, driver: Employee, vehicle: Vehicle | null) {
   const driverPath = (await profilePaths(db, [driver])).get(driver.id);
   return {
     ...(driverPath ? { icon_path: { bucket: "driver-photos" as const, path: driverPath } } : {}),
-    ...(vehicle.photo_thumb_path ? { image_path: { bucket: "vehicle-photos" as const, path: vehicle.photo_thumb_path } } : {}),
+    ...(vehicle?.photo_thumb_path ? { image_path: { bucket: "vehicle-photos" as const, path: vehicle.photo_thumb_path } } : {}),
   };
 }
 
@@ -151,7 +155,7 @@ async function tripOutcomes(db: Db, rows: VehicleRequest[], now: Date): Promise<
     db.from("task_assignment_events").select("task_id").in("task_id", taskIds).eq("action", "reassigned"),
     db.from("employees").select("id, name, phone, photo_id").in("id", [...new Set(tasks.map((t) => t.employee_id))]),
     db.from("vehicles").select("id, reg_no, make_model, photo_path, photo_thumb_path").in("id", [
-      ...new Set(tasks.map((t) => t.vehicle_id)),
+      ...new Set(tasks.flatMap((t) => t.vehicle_id ? [t.vehicle_id] : [])),
     ]),
   ]);
   const people = unwrap(emps, "employees");
@@ -173,8 +177,8 @@ async function tripOutcomes(db: Db, rows: VehicleRequest[], now: Date): Promise<
       driverPhoto: driverPhotos.get(t.employee_id),
       plate: v?.reg_no ?? "",
       model: v?.make_model ?? null,
-      vehiclePhoto: vehiclePhotos.get(t.vehicle_id)?.photo,
-      vehicleThumb: vehiclePhotos.get(t.vehicle_id)?.thumb,
+      vehiclePhoto: t.vehicle_id ? vehiclePhotos.get(t.vehicle_id)?.photo : undefined,
+      vehicleThumb: t.vehicle_id ? vehiclePhotos.get(t.vehicle_id)?.thumb : undefined,
       started: t.started_at,
       firstPickup: firsts.get(t.id)?.place_name,
       arrived: firsts.get(t.id)?.arrived ?? false,
@@ -211,6 +215,8 @@ function outcomeOf(r: VehicleRequest, trip: TripOutcome | undefined) {
         ...contactLinks(trip.phone),
         photo_url: trip.driverPhoto,
         vehicle: trip.plate,
+        // Hotfix 2 (J): no vehicle yet: "Vehicle: on the day", "Any van".
+        vehicle_text: trip.plate ? undefined : vehicleText(trip.task.vehicle_mode, trip.task.vehicle_type_wanted),
         make_model: trip.model ?? undefined,
         vehicle_photo_url: trip.vehiclePhoto,
         vehicle_thumb_url: trip.vehicleThumb,
@@ -511,10 +517,11 @@ async function markSeen(db: Db, request: VehicleRequest, actor: Actor, now: Date
 const SELF_DRIVE_OFF = "Self-drive bookings are switched off (Settings → Fleet, self_drive_allowed): give a driver.";
 
 /** The driver of a booking: the one named, or the vehicle's custodian when no driver is needed (and self-drive is allowed). */
-function pickDriver(refs: Refs, typed: string | undefined, driverRequired: boolean, vehicle: Vehicle, selfDrive: boolean): Employee {
+function pickDriver(refs: Refs, typed: string | undefined, driverRequired: boolean, vehicle: Vehicle | null, selfDrive: boolean): Employee {
   if (typed) return activeDriver(refs, typed);
   if (!driverRequired) {
     if (!selfDrive) throw new ToolError(SELF_DRIVE_OFF);
+    if (!vehicle) throw new ToolError("The custodian drives their own vehicle: name the vehicle.");
     const custodian = vehicle.custodian_employee_id ? refs.emp.get(vehicle.custodian_employee_id) : undefined;
     if (custodian?.active) return custodian;
     throw new ToolError(`${vehicle.reg_no} has no custodian to drive it: give a driver.`);
@@ -523,8 +530,10 @@ function pickDriver(refs: Refs, typed: string | undefined, driverRequired: boole
 }
 
 /** Warnings about the vehicle against what was asked for (never blocks). */
-function fitWarnings(vehicle: Vehicle, need: { need_type?: string | null; pax?: number | null }): string[] {
+function fitWarnings(vehicle: Vehicle | null, need: { need_type?: string | null; pax?: number | null }): string[] {
   const out: string[] = [];
+  // No vehicle yet (on the day, any of a type, Hotfix 2 J): its fit is checked when it is set.
+  if (!vehicle) return out;
   if (need.need_type && vehicle.vehicle_type !== need.need_type) {
     out.push(
       `${vehicle.reg_no} is a ${(TYPE_NAME[vehicle.vehicle_type] ?? vehicle.vehicle_type).toLowerCase()}, not a ${
@@ -957,7 +966,10 @@ export const decideRequest = tool({
       );
     }
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
-    const chosen = chooseVehicle(refs, args.vehicle, args.driver, decidedBy, now);
+    const chosen = chooseVehicle(refs, args.vehicle, args.driver, decidedBy, now, {
+      day: colomboDate(request.needed_at),
+      onTheDay: settings.vehicle_on_the_day,
+    });
     const vehicle = chosen.vehicle;
     const driver = pickDriver(refs, args.driver, request.driver_required, vehicle, settings.self_drive_allowed);
     const warnings = await assignWarnings(db, { driver, vehicle, startAt: request.needed_at, endBy: request.back_by });
@@ -1016,12 +1028,20 @@ export const decideRequest = tool({
       savedWarnings: warnings,
       assignedBy: actor.employeeId,
       vehicleWhy: chosen.why,
+      vehicleMode: chosen.mode,
+      vehicleType: chosen.type,
+      approvedBy: actor.employeeId,
     }, warnings);
-    // Every decision bumps the version (the approval itself is written by office_create_task).
-    unwrap(await db.from("vehicle_requests").update({ version: request.version + 1 }).eq("id", request.id).select("id"), "vehicle request");
-    await logRequestEvent(db, request.id, "approved", decidedBy, { note: `${vehicle.reg_no} · ${driver.name}` });
+    // Every decision bumps the version (the approval itself is written by office_create_task), with who decided (K).
+    unwrap(
+      await db.from("vehicle_requests").update({ version: request.version + 1, decided_by_employee_id: actor.employeeId })
+        .eq("id", request.id).select("id"),
+      "vehicle request",
+    );
+    await logRequestEvent(db, request.id, "approved", decidedBy, { note: `${vehicleWordsOf(chosen)} · ${driver.name}` });
     await notifyEvent(db, "request.decided", {
-      title: `Request approved · ${vehicle.reg_no} · ${driver.name}`,
+      title: `Request approved by ${decidedBy} · ${vehicleWordsOf(chosen)} · ${driver.name}`,
+      who: decidedBy,
       body: [colomboDayTime(request.needed_at), [request.route_from, request.route_to].filter(Boolean).join(" → ")].filter(Boolean).join(
         " · ",
       ),
@@ -1061,14 +1081,24 @@ async function approveTrip(
   const driverTyped = args.driver ?? (proposed ? proposed.username ?? proposed.code : undefined);
   const sameAsProposed = !args.driver || (proposed !== undefined && sameDriver(proposed, args.driver));
   const proposedPlate = request.proposed_vehicle_id ? refs.veh.get(request.proposed_vehicle_id)?.reg_no : undefined;
-  const vehicleTyped = args.vehicle ?? (sameAsProposed ? proposedPlate : undefined);
+  // Hotfix 2 (J): a proposal made with the driver's vehicle on the day, or any of a type, keeps it when approved as proposed.
+  const proposedWord = request.proposed_vehicle_mode === "driver_day"
+    ? "on the day"
+    : request.proposed_vehicle_mode === "any_type" && request.proposed_vehicle_type
+    ? `any ${request.proposed_vehicle_type.replace("_", " ")}`
+    : undefined;
+  const proposedShown = proposedPlate ?? vehicleText(request.proposed_vehicle_mode, request.proposed_vehicle_type);
+  const vehicleTyped = args.vehicle ?? (sameAsProposed ? proposedPlate ?? proposedWord : undefined);
   if (!vehicleTyped && !driverTyped) {
     throw new ToolError(
       "To approve, give a driver (the vehicle fills itself: the one they hold today, else their regular one) or a vehicle. " +
         "availability shows who is free.",
     );
   }
-  const chosen = chooseVehicle(refs, vehicleTyped, driverTyped, decidedBy, now);
+  const chosen = chooseVehicle(refs, vehicleTyped, driverTyped, decidedBy, now, {
+    day: args.date ?? colomboDate(request.leave_by ?? request.needed_at),
+    onTheDay: settings.vehicle_on_the_day,
+  });
   const vehicle = chosen.vehicle;
   const driver = pickDriver(refs, driverTyped, request.driver_required, vehicle, settings.self_drive_allowed);
 
@@ -1152,19 +1182,28 @@ async function approveTrip(
     savedWarnings: warnings,
     assignedBy: task ? request.requested_by_employee_id : actor.employeeId,
     vehicleWhy: chosen.why,
+    vehicleMode: chosen.mode,
+    vehicleType: chosen.type,
+    approvedBy: actor.employeeId,
   }, warnings);
-  unwrap(await db.from("vehicle_requests").update({ version: request.version + 1 }).eq("id", request.id).select("id"), "vehicle request");
+  unwrap(
+    await db.from("vehicle_requests").update({ version: request.version + 1, decided_by_employee_id: actor.employeeId })
+      .eq("id", request.id).select("id"),
+    "vehicle request",
+  );
+  const shownNow = vehicleWordsOf(chosen);
   const changedNote = [
     task && proposed && driver.id !== proposed.id ? `driver ${driver.name} instead of ${proposed.name}` : null,
-    task && proposedPlate && vehicle.reg_no !== proposedPlate ? `vehicle ${vehicle.reg_no} instead of ${proposedPlate}` : null,
+    task && proposedShown && shownNow !== proposedShown ? `vehicle ${shownNow} instead of ${proposedShown}` : null,
     args.date || args.leave_by ? `leave ${colomboDayTime(leaveBy)}` : null,
   ].filter(Boolean).join(", ");
   await logRequestEvent(db, request.id, "approved", decidedBy, {
-    note: `${vehicle.reg_no} · ${driver.name}${changedNote ? ` (${changedNote})` : task ? " (as proposed)" : ""}`,
+    note: `${shownNow} · ${driver.name}${changedNote ? ` (${changedNote})` : task ? " (as proposed)" : ""}`,
   });
   await notifyEvent(db, "request.decided", {
     ...(await pushPhotos(db, driver, vehicle)),
-    title: task ? `Task approved · sent to ${driver.name}` : `Request approved · ${vehicle.reg_no} · ${driver.name}`,
+    title: task ? `Task approved by ${decidedBy} · sent to ${driver.name}` : `Request approved by ${decidedBy} · ${shownNow} · ${driver.name}`,
+    who: decidedBy,
     body: [
       task ? title : null,
       colomboDayTime(leaveBy),
@@ -1191,20 +1230,36 @@ async function approveTrip(
  * The vehicle for an approval or a booking (Phase 7, §3): as typed, else the driver's vehicle today or their regular one;
  * when the office picks another than the driver's default, the choice is kept on the task.
  */
-function chooseVehicle(refs: Refs, typedVehicle: string | undefined, typedDriver: string | undefined, by: string, now: Date) {
-  if (typedVehicle) {
+/**
+ * The vehicle for an approval or a booking: as typed (a plate, or "on the day" / "any van" with vehicle_on_the_day), else
+ * the driver's default (pickVehicle's rules, the request's day). Hotfix 2 (J): the vehicle may be none yet (mode).
+ */
+function chooseVehicle(
+  refs: Refs,
+  typedVehicle: string | undefined,
+  typedDriver: string | undefined,
+  by: string,
+  now: Date,
+  opts: { day?: string; onTheDay?: boolean } = {},
+): { vehicle: Vehicle | null; mode: VehicleMode; type: string | null; why: string | undefined; choice: VehicleChoice | null } {
+  const word = parseVehicleWord(typedVehicle);
+  if (typedVehicle && !word) {
     const vehicle = activeVehicle(refs, typedVehicle);
     const driver = typedDriver ? refs.employees.find((e) => e.role === "driver" && e.active && sameDriver(e, typedDriver)) : undefined;
     if (driver) {
-      const picked = pickVehicle(refs, driver, typedVehicle, by, now);
-      return { vehicle, why: picked.why as string | undefined, choice: picked.choice };
+      const picked = pickVehicle(refs, driver, typedVehicle, by, now, opts);
+      return { vehicle, mode: "specific", type: null, why: picked.why, choice: picked.choice };
     }
-    return { vehicle, why: undefined as string | undefined, choice: null as VehicleChoice | null };
+    return { vehicle, mode: "specific", type: null, why: undefined, choice: null };
   }
   const driver = activeDriver(refs, typedDriver ?? "");
-  const picked = pickVehicle(refs, driver, undefined, by, now);
-  return { vehicle: picked.vehicle, why: picked.why as string | undefined, choice: null as VehicleChoice | null };
+  const picked = pickVehicle(refs, driver, typedVehicle, by, now, opts);
+  return { vehicle: picked.vehicle, mode: picked.mode, type: picked.type, why: picked.why, choice: null };
 }
+
+/** "WP CAB-4521", or "Vehicle: on the day" / "Any van" while there is none (messages and history). */
+const vehicleWordsOf = (v: { vehicle: Vehicle | null; mode: string; type: string | null }) =>
+  v.vehicle?.reg_no ?? vehicleText(v.mode, v.type) ?? "the vehicle on the day";
 
 const sameDriver = (e: { username: string | null; code: string; name: string }, typed: string) => {
   const t = typed.trim().toLowerCase();
@@ -1224,7 +1279,9 @@ export const bookVehicle = tool({
     requested_by: zText(120).optional().describe("Who asks. Default: you"),
     on_behalf_of: zText(120).optional().describe("The person the vehicle is for, when it is not the asker"),
     ...requestFields,
-    vehicle: zText(20).optional().describe("Plate. Default: the driver's vehicle today, else their regular one"),
+    vehicle: zText(20).optional().describe(
+      'Plate, or "on the day" / "any van" (car, double cab, lorry) with vehicle_on_the_day. Default: the driver\'s vehicle today, else their regular one',
+    ),
     driver: zText(80).optional().describe("Username, code or name; not needed when the custodian drives"),
     title: zText(120).optional().describe("Task title. Default: built from the route"),
     stops: zStops.optional().describe("The task's stops; default: route_from → route_to"),
@@ -1240,7 +1297,10 @@ export const bookVehicle = tool({
 
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     if (!args.vehicle && !args.driver) throw new ToolError("Give a driver (the vehicle fills itself) or a vehicle.");
-    const chosen = chooseVehicle(refs, args.vehicle, args.driver, actor.name, now);
+    const chosen = chooseVehicle(refs, args.vehicle, args.driver, actor.name, now, {
+      day: args.date,
+      onTheDay: settings.vehicle_on_the_day,
+    });
     const vehicle = chosen.vehicle;
     const driverRequired = args.driver_required ?? true;
     const driver = pickDriver(refs, args.driver, driverRequired, vehicle, settings.self_drive_allowed);
@@ -1312,18 +1372,23 @@ export const bookVehicle = tool({
       split,
       createdBy: actor.name,
       vehicleChoice: chosen.choice,
+      vehicleMode: chosen.mode,
+      vehicleType: chosen.type,
+      approvedBy: actor.employeeId,
       savedWarnings: warnings,
       assignedBy: actor.employeeId,
       vehicleWhy: chosen.why,
       request: { create, decidedBy: actor.name },
       bookedBy: actor.employeeId,
     }, warnings);
-    if (args.requester_phone) {
-      unwrap(
-        await db.from("vehicle_requests").update({ requester_phone: args.requester_phone }).eq("id", saved.result.request_id!).select("id"),
-        "vehicle request",
-      );
-    }
+    // Who booked (and so approved) it (Hotfix 2, K), and the asker's phone when given.
+    unwrap(
+      await db.from("vehicle_requests").update({
+        decided_by_employee_id: actor.employeeId,
+        ...(args.requester_phone && { requester_phone: args.requester_phone }),
+      }).eq("id", saved.result.request_id!).select("id"),
+      "vehicle request",
+    );
     // The request keeps the trip too (Phase 7, §34): its page shows the stops and the plan as the task has them.
     await saveRequestTrip(db, saved.result.request_id!, {
       start: prepared.start,
@@ -1337,10 +1402,10 @@ export const bookVehicle = tool({
     }, now);
     const row = await getRequest(db, saved.result.request_id!);
     await logRequestEvent(db, row.id, "created", actor.name, { at: row.created_at, note: "booked in one step" });
-    await logRequestEvent(db, row.id, "approved", actor.name, { note: `${vehicle.reg_no} · ${driver.name}` });
+    await logRequestEvent(db, row.id, "approved", actor.name, { note: `${vehicleWordsOf(chosen)} · ${driver.name}` });
     return {
       result: { request: await requestCardOf(db, row, now), booked: "in one step", ...saved.result },
-      summary: `booked ${vehicle.reg_no} for ${who.name} (requested and approved by ${actor.name}) -> ${saved.summary}`,
+      summary: `booked ${vehicleWordsOf(chosen)} for ${who.name} (requested and approved by ${actor.name}) -> ${saved.summary}`,
     };
   },
 });
@@ -1412,10 +1477,12 @@ export const cancelRequest = tool({
     await logRequestEvent(db, request.id, "cancelled", actor.name, { note: reason, at: nowIso });
 
     if (task) {
-      const vehicle = unwrapMaybe(
-        await db.from("vehicles").select("reg_no, custodian_employee_id").eq("id", task.vehicle_id).maybeSingle(),
-        "vehicle",
-      );
+      const vehicle = task.vehicle_id
+        ? unwrapMaybe(
+          await db.from("vehicles").select("reg_no, custodian_employee_id").eq("id", task.vehicle_id).maybeSingle(),
+          "vehicle",
+        )
+        : null;
       if (vehicle?.custodian_employee_id) {
         await notifyEvent(db, "vehicle.booking_cancelled", {
           title: `${vehicle.reg_no} booking cancelled`,
@@ -1849,10 +1916,12 @@ export const redecideRequest = tool({
         url: `/requests/${request.id}`,
         tag: `request:${request.id}`,
       }, told);
-      const vehicle = unwrapMaybe(
-        await db.from("vehicles").select("reg_no, custodian_employee_id").eq("id", task.vehicle_id).maybeSingle(),
-        "vehicle",
-      );
+      const vehicle = task.vehicle_id
+        ? unwrapMaybe(
+          await db.from("vehicles").select("reg_no, custodian_employee_id").eq("id", task.vehicle_id).maybeSingle(),
+          "vehicle",
+        )
+        : null;
       if (vehicle?.custodian_employee_id) {
         await notifyEvent(db, "vehicle.booking_cancelled", {
           title: `${vehicle.reg_no} booking cancelled`,
@@ -1896,16 +1965,25 @@ export const redecideRequest = tool({
       ? (task.end_by ? utcIso(leaveDay, colomboTime(task.end_by)) : null)
       : undefined;
     if (endBy && endBy <= (startAt ?? task.start_at)) throw new ToolError("back_by must be later than time on the same day.");
-    // A new driver with no vehicle named takes the vehicle they hold today, else their regular one (Phase 7, §3).
-    const vehicle = change && args.vehicle
+    // A new driver with no vehicle named takes the vehicle they hold today, else their regular one (Phase 7, §3). Hotfix 2
+    // (J): "on the day" / "any van" clears the vehicle; a task without one keeps it so unless a vehicle is named.
+    const word = change ? parseVehicleWord(args.vehicle) : null;
+    if (word && !settings.vehicle_on_the_day) throw new ToolError(ON_THE_DAY_OFF);
+    const current = task.vehicle_id ? refs.veh.get(task.vehicle_id) ?? null : null;
+    if (task.vehicle_id && !current) throw new ToolError("The task's vehicle no longer exists.");
+    const vehicle: Vehicle | null = word
+      ? null
+      : change && args.vehicle
       ? activeVehicle(refs, args.vehicle)
       : change && args.driver
-      ? defaultVehicleFor(refs, activeDriver(refs, args.driver))?.vehicle ?? refs.veh.get(task.vehicle_id)
-      : refs.veh.get(task.vehicle_id);
-    if (!vehicle) throw new ToolError("The task's vehicle no longer exists.");
+      ? defaultVehicleFor(refs, activeDriver(refs, args.driver))?.vehicle ?? current
+      : current;
+    const shownVehicle = vehicle?.reg_no ??
+      (word ? vehicleText(word.mode, word.mode === "any_type" ? word.type : null) : vehicleText(task.vehicle_mode, task.vehicle_type_wanted)) ??
+      "the vehicle on the day";
     const driver = change && args.driver
       ? activeDriver(refs, args.driver)
-      : !request.driver_required && vehicle.id !== task.vehicle_id
+      : !request.driver_required && (vehicle?.id ?? null) !== task.vehicle_id
       ? pickDriver(refs, undefined, false, vehicle, settings.self_drive_allowed)
       : refs.emp.get(task.employee_id);
     if (!driver) throw new ToolError("The task's driver no longer exists.");
@@ -1920,7 +1998,8 @@ export const redecideRequest = tool({
       startAt,
       endBy,
       driver,
-      vehicle,
+      vehicle: vehicle ?? undefined,
+      vehicleMode: word ? { mode: word.mode, type: word.mode === "any_type" ? word.type : null } : undefined,
       passengers: asked[FIELD_LABEL.pax] ? request.pax : undefined,
       route: routeAsked ? routeOf(request) : undefined,
     }, {
@@ -1994,7 +2073,7 @@ export const redecideRequest = tool({
         : onlyTime
         ? "Your booking was postponed"
         : "Your booking was changed",
-      body: [text || "as asked", `${vehicle.reg_no} · ${driver.name} · ${colomboDayTime(neededAt)}`].join(" · "),
+      body: [text || "as asked", `${shownVehicle} · ${driver.name} · ${colomboDayTime(neededAt)}`].join(" · "),
       url: `/requests/${request.id}`,
       tag: `request:${request.id}`,
     }, told);
@@ -2008,7 +2087,8 @@ export const redecideRequest = tool({
           when: colomboDayTime(final.start_at),
           until: final.end_by ? colomboTime(final.end_by) : undefined,
           driver: driver.name,
-          vehicle: vehicle.reg_no,
+          vehicle: vehicle?.reg_no,
+          vehicle_text: vehicle ? undefined : shownVehicle,
           plan_version: out.plan_version,
           changes: out.changes,
         },

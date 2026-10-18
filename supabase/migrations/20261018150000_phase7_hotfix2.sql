@@ -411,3 +411,42 @@ end;
 $$;
 revoke all on function public.my_office_contacts() from public, anon;
 grant execute on function public.my_office_contacts() to authenticated;
+
+-- B. The driver app's notification channels: a phone with the update says it has the "new-tasks" channel when it
+-- registers its push token; push-task uses that channel for new, changed and cancelled tasks only on such a phone (an
+-- Android notification sent to a channel the phone does not have may not show). The older app's five-argument call still
+-- matches (p_channels defaults to null).
+alter table public.device_tokens add column channels text[];
+drop function public.register_device_token(text, text, text, text, text);
+create function public.register_device_token(
+  p_token        text,
+  p_platform     text default 'android',
+  p_device_model text default null,
+  p_app_version  text default null,
+  p_language     text default null,
+  p_channels     text[] default null
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_me uuid := public.current_employee_id();
+begin
+  if v_me is null then
+    raise exception 'Only a signed-in driver can register a device';
+  end if;
+  delete from public.device_tokens where token = p_token and employee_id <> v_me;
+  insert into public.device_tokens (employee_id, token, platform, device_model, app_version, language, channels)
+  values (v_me, p_token, p_platform, p_device_model, p_app_version, p_language, p_channels)
+  on conflict (token) do update
+    set device_model = excluded.device_model,
+        app_version  = excluded.app_version,
+        language     = excluded.language,
+        channels     = coalesce(excluded.channels, public.device_tokens.channels),
+        updated_at   = now();
+end;
+$$;
+revoke all on function public.register_device_token(text, text, text, text, text, text[]) from public, anon;
+grant execute on function public.register_device_token(text, text, text, text, text, text[]) to authenticated, service_role;

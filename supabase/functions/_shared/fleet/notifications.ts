@@ -182,6 +182,8 @@ export interface Message {
   url: string;
   /** Replaces an earlier notification about the same thing on the device. */
   tag?: string;
+  /** Hotfix 2 (A): who did it, shown in the notification centre ("Palitha"). */
+  who?: string;
   /** Phase 7 (§4): the driver's photo (icon) and the vehicle's (image) as storage paths; notify-office signs them. */
   icon_path?: { bucket: "driver-photos"; path: string };
   image_path?: { bucket: "vehicle-photos"; path: string };

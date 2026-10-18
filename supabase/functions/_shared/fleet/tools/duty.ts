@@ -219,7 +219,14 @@ export const moveDriverVehicle = tool({
       await db.from("tasks").select("id, title, vehicle_id").eq("employee_id", who.id).eq("status", "in_progress").limit(1),
       "tasks",
     )[0];
-    if (running) return await swapDuringTask(db, actor.name, who.name, running, target, { old_end_km, new_start_km, reason });
+    // A task under way always has its vehicle (the database's check): the swap moves it.
+    if (running?.vehicle_id) {
+      return await swapDuringTask(db, actor.name, who.name, { ...running, vehicle_id: running.vehicle_id }, target, {
+        old_end_km,
+        new_start_km,
+        reason,
+      });
+    }
     if (old_end_km !== undefined || new_start_km !== undefined) {
       throw new ToolError(`${who.name} is not on a task: the readings are only for a swap during a task.`);
     }

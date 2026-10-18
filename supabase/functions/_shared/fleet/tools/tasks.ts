@@ -123,14 +123,69 @@ export interface VehicleChoice {
   at: string;
 }
 
-/** The vehicle for a driver: as typed, else the default; and the choice when it differs from the default. */
-export function pickVehicle(refs: Refs, driver: Employee, typed: string | undefined, by: string, now: Date) {
+/** Hotfix 2 (J): a task's vehicle may be chosen when the task is made, or on the day (the driver's), or any of a type. */
+export type VehicleMode = "specific" | "driver_day" | "any_type";
+const TYPE_TEXT: Record<string, string> = { car: "car", van: "van", double_cab: "double cab", lorry: "lorry", other: "vehicle" };
+
+/** "on the day" / "driver's vehicle" → the driver's on the day; "any van" (car, double cab, lorry, other) → any of the type. */
+export function parseVehicleWord(typed: string | undefined | null): { mode: "driver_day" } | { mode: "any_type"; type: string } | null {
+  const t = (typed ?? "").trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  if (!t) return null;
+  if (/^(on the day|driver'?s vehicle( on the day)?|the driver'?s vehicle)$/.test(t)) return { mode: "driver_day" };
+  const any = t.match(/^any (car|van|double cab|lorry|other)$/);
+  return any ? { mode: "any_type", type: any[1].replace(" ", "_") } : null;
+}
+
+/** "Vehicle: on the day", "Any van" (the board, task detail, the answers) while a task has no vehicle. */
+export function vehicleText(mode: string | null | undefined, type: string | null | undefined): string | undefined {
+  if (mode === "driver_day") return "Vehicle: on the day";
+  if (mode === "any_type") return `Any ${TYPE_TEXT[type ?? ""] ?? "vehicle"}`;
+  return undefined;
+}
+
+export interface PickedVehicle {
+  /** Null while the vehicle is chosen on the day or of a type (mode). */
+  vehicle: Vehicle | null;
+  mode: VehicleMode;
+  type: string | null;
+  why: string;
+  choice: VehicleChoice | null;
+}
+
+export const ON_THE_DAY_OFF = "A vehicle on the day is switched off: name a vehicle (Settings → Fleet → Vehicle on the day).";
+
+/**
+ * The vehicle for a driver: as typed (a plate, "on the day" or "any van"), else the default; and the choice when it
+ * differs from the default. With the setting vehicle_on_the_day (Hotfix 2, J): a future day defaults to the driver's
+ * vehicle on the day, and today to the vehicle they hold, else their regular one, else on the day; saving is never blocked
+ * for want of a vehicle. Without it, as before.
+ */
+export function pickVehicle(
+  refs: Refs,
+  driver: Employee,
+  typed: string | undefined,
+  by: string,
+  now: Date,
+  opts: { day?: string; onTheDay?: boolean } = {},
+): PickedVehicle {
   const fallback = defaultVehicleFor(refs, driver);
+  const word = parseVehicleWord(typed);
+  const first = shortName(driver.name, refs.employees.filter((e) => e.role === "driver" && e.active).map((e) => e.name));
+  if (word) {
+    if (!opts.onTheDay) throw new ToolError(ON_THE_DAY_OFF);
+    return word.mode === "driver_day"
+      ? { vehicle: null, mode: "driver_day", type: null, why: `${first}'s vehicle on the day`, choice: null }
+      : { vehicle: null, mode: "any_type", type: word.type, why: `any ${TYPE_TEXT[word.type]}`, choice: null };
+  }
   if (!typed) {
+    const future = !!opts.day && opts.day > colomboDate(now);
+    if (opts.onTheDay && (future || !fallback)) {
+      return { vehicle: null, mode: "driver_day", type: null, why: `${first}'s vehicle on the day`, choice: null };
+    }
     if (!fallback) {
       throw new ToolError(`Pick a vehicle: ${driver.name} holds none today and has no regular vehicle.`);
     }
-    return { vehicle: fallback.vehicle, why: fallback.why, choice: null as VehicleChoice | null };
+    return { vehicle: fallback.vehicle, mode: "specific", type: null, why: fallback.why, choice: null };
   }
   const vehicle = activeVehicle(refs, typed);
   const choice: VehicleChoice | null = fallback && fallback.vehicle.id !== vehicle.id
@@ -144,7 +199,7 @@ export function pickVehicle(refs: Refs, driver: Employee, typed: string | undefi
       at: now.toISOString(),
     }
     : null;
-  return { vehicle, why: fallback?.vehicle.id === vehicle.id ? fallback.why : "chosen", choice };
+  return { vehicle, mode: "specific", type: null, why: fallback?.vehicle.id === vehicle.id ? fallback.why : "chosen", choice };
 }
 
 /** How far a task moved in whole Colombo days (a deadline keeps its clock time and moves with the day only). */
@@ -658,7 +713,12 @@ export interface NewTask {
   title: string;
   label: string | null;
   driver: Employee;
-  vehicle: Vehicle;
+  /** Null while the vehicle is chosen on the day or of a type (Hotfix 2, J). */
+  vehicle: Vehicle | null;
+  vehicleMode?: VehicleMode;
+  vehicleType?: string | null;
+  /** Hotfix 2 (K): who sent it to the driver (an approver deciding, or a person with approve making it). */
+  approvedBy?: string | null;
   startAt: string;
   endBy: string | null;
   passengers: number | null;
@@ -735,7 +795,11 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
     title: t.title,
     label: t.label,
     employee_id: t.driver.id,
-    vehicle_id: t.vehicle.id,
+    vehicle_id: t.vehicle?.id ?? null,
+    vehicle_mode: t.vehicle ? "specific" : t.vehicleMode ?? "driver_day",
+    vehicle_type_wanted: t.vehicle ? null : t.vehicleType ?? null,
+    approved_by_employee_id: t.approvedBy ?? null,
+    approved_at: t.approvedBy ? new Date().toISOString() : null,
     start_at: t.startAt,
     end_by: t.endBy,
     passengers: t.passengers,
@@ -805,7 +869,7 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
   const names = new Map(t.stops.map((s) => [s.seq, s.place_name]));
 
   // The vehicle's custodian hears about the booking (not when they booked it themselves).
-  if (t.vehicle.custodian_employee_id) {
+  if (t.vehicle?.custodian_employee_id) {
     await notifyEvent(db, "vehicle.booked", {
       title: `${t.vehicle.reg_no} booked · ${colomboDayTime(t.startAt)}`,
       body: [t.createdBy ?? "the office", `${first.place_name} → ${last.place_name}`].join(" · "),
@@ -824,8 +888,9 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
       leave_by: colomboDayTime(t.leaveBy),
       leave_by_source: t.leaveBySource,
       driver: t.driver.name,
-      vehicle: t.vehicle.reg_no,
-      vehicle_used: t.vehicleWhy ? { reg_no: t.vehicle.reg_no, why: t.vehicleWhy } : undefined,
+      vehicle: t.vehicle?.reg_no,
+      vehicle_text: t.vehicle ? undefined : vehicleText(t.vehicleMode ?? "driver_day", t.vehicleType),
+      vehicle_used: t.vehicleWhy ? { reg_no: t.vehicle?.reg_no, why: t.vehicleWhy } : undefined,
       vehicle_changed: vehicleChoiceText(t.vehicleChoice),
       pickup: first.place_name,
       dropoff: t.stops.length > 1 ? last.place_name : undefined,
@@ -839,7 +904,9 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
       links: { whatsapp_driver: waLink(t.driver.phone, message), call_driver: telLink(t.driver.phone) },
     },
     summary:
-      `task ${taskId}: ${t.title}, leave by ${colomboDateTime(t.leaveBy)} (${t.leaveBySource}), ${t.driver.name}, ${t.vehicle.reg_no}, ` +
+      `task ${taskId}: ${t.title}, leave by ${colomboDateTime(t.leaveBy)} (${t.leaveBySource}), ${t.driver.name}, ${
+        t.vehicle?.reg_no ?? vehicleText(t.vehicleMode ?? "driver_day", t.vehicleType)
+      }, ` +
       `${t.stops.length} stops` + (warnings.length > 0 ? ` (${warnings.length} warnings)` : ""),
   };
 }
@@ -1015,8 +1082,8 @@ async function proposeTask(db: Db, now: Date, actor: Actor, p: {
     buffer_min?: number;
   };
   driver: Employee;
-  vehicle: Vehicle;
-  picked: { why?: string; choice: VehicleChoice | null };
+  vehicle: Vehicle | null;
+  picked: PickedVehicle;
   prepared: Awaited<ReturnType<typeof prepareTask>>;
   startAt: string;
   endBy: string | null;
@@ -1043,7 +1110,9 @@ async function proposeTask(db: Db, now: Date, actor: Actor, p: {
       pax: args.passengers ?? null,
       driver_required: true,
       proposed_employee_id: driver.id,
-      proposed_vehicle_id: vehicle.id,
+      proposed_vehicle_id: vehicle?.id ?? null,
+      proposed_vehicle_mode: p.picked.mode,
+      proposed_vehicle_type: p.picked.type,
       title: args.title,
       label: args.label ?? p.split.label ?? null,
       contact_name: args.contact_name ?? null,
@@ -1069,7 +1138,8 @@ async function proposeTask(db: Db, now: Date, actor: Actor, p: {
     leaveBySource: prepared.leaveBySource,
     bufferMin: args.buffer_min ?? null,
   }, now);
-  await logRequestEvent(db, row.id, "created", actor.name, { at: row.created_at, note: `Proposed: ${driver.name} · ${vehicle.reg_no}` });
+  const vehicleWords = vehicle?.reg_no ?? vehicleText(p.picked.mode, p.picked.type);
+  await logRequestEvent(db, row.id, "created", actor.name, { at: row.created_at, note: `Proposed: ${driver.name} · ${vehicleWords}` });
   const route = `${first.place_name}${prepared.stops.length > 1 ? ` → ${last.place_name}` : ""}`;
   await notifyEvent(db, "request.created", {
     title: `Task to approve · ${actor.name} proposes ${driver.name}`,
@@ -1089,8 +1159,9 @@ async function proposeTask(db: Db, now: Date, actor: Actor, p: {
       leave_by: colomboDayTime(prepared.leaveBy),
       leave_by_source: prepared.leaveBySource,
       driver: driver.name,
-      vehicle: vehicle.reg_no,
-      vehicle_used: p.picked.why ? { reg_no: vehicle.reg_no, why: p.picked.why } : undefined,
+      vehicle: vehicle?.reg_no,
+      vehicle_text: vehicle ? undefined : vehicleWords,
+      vehicle_used: p.picked.why ? { reg_no: vehicle?.reg_no, why: p.picked.why } : undefined,
       vehicle_changed: vehicleChoiceText(p.picked.choice),
       pickup: first.place_name,
       dropoff: prepared.stops.length > 1 ? last.place_name : undefined,
@@ -1103,7 +1174,7 @@ async function proposeTask(db: Db, now: Date, actor: Actor, p: {
       next: "Waiting for the fleet admin's OK · you'll be notified.",
     },
     summary: `proposed task (request ${row.id}): ${args.title}, leave by ${colomboDateTime(prepared.leaveBy)}, ${driver.name}, ` +
-      `${vehicle.reg_no}, ${prepared.stops.length} stops: waiting for approval`,
+      `${vehicleWords}, ${prepared.stops.length} stops: waiting for approval`,
   };
 }
 
@@ -1125,7 +1196,11 @@ export const createTask = tool({
     ),
     end_time: zTime.optional().describe("When the vehicle should be free again, HH:MM the same day"),
     driver: zText(80).describe("Driver's username, code or name"),
-    vehicle: zText(20).optional().describe("Vehicle plate. Default: the vehicle the driver holds today, else their regular vehicle"),
+    vehicle: zText(20).optional().describe(
+      'Vehicle plate, or "on the day" (the driver\'s vehicle on the day) or "any van" (car, double cab, lorry) when the setting ' +
+        "vehicle_on_the_day is on. Default: the vehicle the driver holds today, else their regular vehicle; with the setting, a " +
+        "future day's task gets the driver's vehicle on the day",
+    ),
     ...planFields,
     passengers: z.number().int().min(0).max(80).optional(),
     contact_name: zText(120).optional().describe("Person the driver can call"),
@@ -1139,7 +1214,10 @@ export const createTask = tool({
     realDate(args.date);
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
     const driver = activeDriver(refs, args.driver);
-    const picked = pickVehicle(refs, driver, args.vehicle, args.created_by ?? actor.name, now);
+    const picked = pickVehicle(refs, driver, args.vehicle, args.created_by ?? actor.name, now, {
+      day: args.date,
+      onTheDay: settings.vehicle_on_the_day,
+    });
     const vehicle = picked.vehicle;
     const typed = args.leave_by ?? args.start_time;
     const prepared = await prepareTask(db, settings, now, { day: args.date, ...args, leaveAt: typed ? utcIso(args.date, typed) : null });
@@ -1183,6 +1261,10 @@ export const createTask = tool({
       savedWarnings: warnings,
       assignedBy: actor.employeeId,
       vehicleWhy: picked.why,
+      vehicleMode: picked.mode,
+      vehicleType: picked.type,
+      // Hotfix 2 (K): made by a person who approves: they sent it to the driver.
+      approvedBy: actor.permissions.includes("approve") ? actor.employeeId : null,
     }, warnings);
     return { ...saved, result: { ...saved.result, conflicts: conflicts.length ? conflicts : undefined } };
   },
@@ -1213,14 +1295,29 @@ export const planTask = tool({
     });
     const warnings = [...prepared.plan.warnings.map((w) => w.text), ...prepared.notes];
     let conflicts: Conflict[] = [];
-    let vehicleUsed: { reg_no: string; why: string } | undefined;
+    let vehicleUsed: { reg_no?: string; why: string; text?: string } | undefined;
     // A requester plans a trip without the driver and vehicle part (Phase 7, §34, §35 19): no conflicts for them.
     const dispatches = actor.permissions.includes("approve") || actor.permissions.includes("assign_tasks");
     if (args.driver && dispatches) {
       const refs = await loadRefs(db);
       const driver = activeDriver(refs, args.driver);
       // With a driver and no vehicle, the default one (the driver's today, else the regular one), as saving would use.
-      const vehicle = args.vehicle ? activeVehicle(refs, args.vehicle) : defaultVehicleFor(refs, driver)?.vehicle;
+      // Hotfix 2 (J): "on the day" / "any van": the driver's checks only (the vehicle's run when it is set).
+      const word = parseVehicleWord(args.vehicle);
+      if (word) {
+        const picked = pickVehicle(refs, driver, args.vehicle, actor.name, now, { day: args.date, onTheDay: settings.vehicle_on_the_day });
+        vehicleUsed = { why: picked.why, text: vehicleText(picked.mode, picked.type) };
+        const check = await assignCheck(db, {
+          driver,
+          vehicle: null,
+          startAt: prepared.leaveBy,
+          endBy: args.end_time ? utcIso(args.date, args.end_time) : null,
+          plannedEnd: prepared.plan.ends_at,
+        });
+        warnings.push(...check.warnings);
+        conflicts = check.conflicts;
+      }
+      const vehicle = word ? undefined : args.vehicle ? activeVehicle(refs, args.vehicle) : defaultVehicleFor(refs, driver)?.vehicle;
       if (vehicle) {
         vehicleUsed = { reg_no: vehicle.reg_no, why: pickVehicle(refs, driver, vehicle.reg_no, actor.name, now).why };
         const check = await assignCheck(db, {
@@ -1472,7 +1569,7 @@ export const taskBoard = tool({
     // Phase 7 (§5, §6): the drivers' and the vehicles' photos on the cards, one batch each (the same links while they last).
     const [driverPhotos, vehiclePhotos] = await Promise.all([
       driverPhotoLinks(db, [...new Set(tasks.map((t) => t.employee_id))].flatMap((id) => refs.emp.get(id) ?? []), now),
-      vehiclePhotoLinks(db, [...new Set(tasks.map((t) => t.vehicle_id))].flatMap((id) => refs.veh.get(id) ?? []), now),
+      vehiclePhotoLinks(db, [...new Set(tasks.flatMap((t) => t.vehicle_id ? [t.vehicle_id] : []))].flatMap((id) => refs.veh.get(id) ?? []), now),
     ]);
     const card = async (t: Task) => {
       const mine = live(stops.filter((s) => s.task_id === t.id));
@@ -1492,8 +1589,9 @@ export const taskBoard = tool({
         accepted: t.accepted_at ? colomboTime(t.accepted_at) : undefined,
         driver: refs.emp.get(t.employee_id)?.name,
         driver_photo_url: driverPhotos.get(t.employee_id),
-        vehicle: refs.veh.get(t.vehicle_id)?.reg_no,
-        vehicle_thumb_url: vehiclePhotos.get(t.vehicle_id)?.thumb,
+        vehicle: t.vehicle_id ? refs.veh.get(t.vehicle_id)?.reg_no : undefined,
+        vehicle_text: t.vehicle_id ? undefined : vehicleText(t.vehicle_mode, t.vehicle_type_wanted),
+        vehicle_thumb_url: t.vehicle_id ? vehiclePhotos.get(t.vehicle_id)?.thumb : undefined,
         status: statusLine(t, latest.get(t.employee_id), now, refs.emp.get(t.employee_id)),
         eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
         eta_final: eta?.final_eta_at ? colomboTime(eta.final_eta_at) : undefined,
@@ -1651,7 +1749,7 @@ export const taskDetail = tool({
       )
       : null;
     const driver = refs.emp.get(task.employee_id);
-    const vehicle = refs.veh.get(task.vehicle_id);
+    const vehicle = task.vehicle_id ? refs.veh.get(task.vehicle_id) : undefined;
     const when = (at: string | null) => at ? colomboDateTime(at) : undefined;
     const names = new Map(allStops.map((s) => [s.seq, s.place_name]));
     // Phase 7 (§5, §6): the driver's and the vehicle's photos.
@@ -1934,6 +2032,8 @@ export interface TaskChanges {
   endBy?: string | null;
   driver?: Employee;
   vehicle?: Vehicle;
+  /** Hotfix 2 (J): no vehicle now: the driver's on the day, or any of a type (the vehicle is cleared). */
+  vehicleMode?: { mode: "driver_day" | "any_type"; type: string | null };
   title?: string;
   passengers?: number | null;
   contactName?: string | null;
@@ -1987,7 +2087,7 @@ export async function changeTask(
   }
   const running = task.status === "in_progress";
   const wasDeclined = task.status === "declined";
-  if (running && (c.startAt || c.driver || c.vehicle || c.route || c.endBy !== undefined)) {
+  if (running && (c.startAt || c.driver || c.vehicle || c.vehicleMode || c.route || c.endBy !== undefined)) {
     throw new ToolError(
       "This task has started: its time, driver, vehicle and route cannot change now (the title, passengers, contact and notes can).",
     );
@@ -1995,12 +2095,15 @@ export async function changeTask(
 
   const refs = await loadRefs(db);
   const oldDriver = refs.emp.get(task.employee_id);
-  const oldVehicle = refs.veh.get(task.vehicle_id);
+  const oldVehicle = task.vehicle_id ? refs.veh.get(task.vehicle_id) : undefined;
   const driver = c.driver ?? oldDriver;
-  const vehicle = c.vehicle ?? oldVehicle;
-  if (!driver || !vehicle) throw new ToolError("The task's driver or vehicle no longer exists.");
+  if (!driver || (task.vehicle_id && !oldVehicle)) throw new ToolError("The task's driver or vehicle no longer exists.");
+  // Hotfix 2 (J): a vehicle named sets it; "on the day" or a type clears it; otherwise the task keeps what it has.
+  const vehicle = c.vehicle ?? (c.vehicleMode ? null : oldVehicle ?? null);
+  const mode: VehicleMode = c.vehicle ? "specific" : c.vehicleMode ? c.vehicleMode.mode : task.vehicle_mode as VehicleMode;
+  const wanted = c.vehicle ? null : c.vehicleMode ? c.vehicleMode.type : task.vehicle_type_wanted;
   const driverChanged = driver.id !== task.employee_id;
-  const vehicleChanged = vehicle.id !== task.vehicle_id;
+  const vehicleChanged = (vehicle?.id ?? null) !== task.vehicle_id || mode !== task.vehicle_mode || wanted !== task.vehicle_type_wanted;
   const startAt = c.startAt ?? task.start_at;
   const delta = new Date(startAt).getTime() - new Date(task.start_at).getTime();
   const shift = (iso: string | null) => iso && delta !== 0 ? new Date(new Date(iso).getTime() + delta).toISOString() : iso;
@@ -2014,7 +2117,11 @@ export async function changeTask(
   note("time", colomboDayTime(task.start_at), colomboDayTime(startAt));
   note("end by", task.end_by ? colomboTime(task.end_by) : null, endBy ? colomboTime(endBy) : null);
   note("driver", oldDriver?.name ?? null, driver.name);
-  note("vehicle", oldVehicle?.reg_no ?? null, vehicle.reg_no);
+  note(
+    "vehicle",
+    oldVehicle?.reg_no ?? vehicleText(task.vehicle_mode, task.vehicle_type_wanted) ?? null,
+    vehicle?.reg_no ?? vehicleText(mode, wanted) ?? null,
+  );
   if (c.title !== undefined) note("title", task.title, c.title);
   if (c.passengers !== undefined) {
     note("passengers", task.passengers == null ? null : String(task.passengers), c.passengers == null ? null : String(c.passengers));
@@ -2055,7 +2162,9 @@ export async function changeTask(
   const updated = unwrap(
     await db.from("tasks").update({
       employee_id: driver.id,
-      vehicle_id: vehicle.id,
+      vehicle_id: vehicle?.id ?? null,
+      vehicle_mode: mode,
+      vehicle_type_wanted: wanted,
       start_at: startAt,
       end_by: endBy,
       ...(delta !== 0 && { leave_by: startAt, leave_by_source: "manual" }),
@@ -2117,7 +2226,7 @@ export async function changeTask(
       task_id: task.id,
       action: driverChanged ? "reassigned" : "changed",
       employee_id: driver.id,
-      vehicle_id: vehicle.id,
+      vehicle_id: vehicle?.id ?? null,
       actor: actor.name,
       note: [opts.note, wasDeclined ? "after a decline" : null, changesText(changes) || null].filter(Boolean).join(" · ") || null,
       changes: changes as unknown as Json,
@@ -2143,12 +2252,12 @@ export async function changeTask(
     }, {
       actor: actor.employeeId,
       requester: opts.tellRequester === false ? null : request?.requested_by_employee_id ?? null,
-      custodian: vehicle.custodian_employee_id,
+      custodian: vehicle?.custodian_employee_id ?? null,
     });
-    if (vehicleChanged && oldVehicle?.custodian_employee_id && oldVehicle.custodian_employee_id !== vehicle.custodian_employee_id) {
+    if (vehicleChanged && oldVehicle?.custodian_employee_id && oldVehicle.custodian_employee_id !== vehicle?.custodian_employee_id) {
       await notifyEvent(db, "vehicle.booking_cancelled", {
         title: `${oldVehicle.reg_no} no longer booked`,
-        body: `${saved.title} · now ${vehicle.reg_no} · ${colomboDayTime(startAt)}`,
+        body: `${saved.title} · now ${vehicle?.reg_no ?? vehicleText(mode, wanted)} · ${colomboDayTime(startAt)}`,
         url: `/tasks?task=${task.id}`,
         tag: `task:${task.id}`,
       }, { actor: actor.employeeId, custodian: oldVehicle.custodian_employee_id });
@@ -2181,7 +2290,7 @@ export const updateTask = tool({
     time: zTime.optional().describe("New leave-by time, HH:MM"),
     end_time: zTime.nullable().optional().describe("When the vehicle should be free again, HH:MM; null clears it"),
     driver: zText(80).optional().describe("New driver: username, code or name"),
-    vehicle: zText(20).optional().describe("New vehicle plate"),
+    vehicle: zText(20).optional().describe('New vehicle plate, or "on the day" / "any van" (car, double cab, lorry) with vehicle_on_the_day'),
     title: zText(120).optional(),
     passengers: z.number().int().min(0).max(80).nullable().optional(),
     contact_name: zClearable(120),
@@ -2192,6 +2301,9 @@ export const updateTask = tool({
     if (args.date) realDate(args.date);
     const task = await getTask(db, args.task_id);
     const refs = (args.driver || args.vehicle) ? await loadRefs(db) : null;
+    // Hotfix 2 (J): "on the day" or "any van" clears the vehicle (with the setting on).
+    const word = parseVehicleWord(args.vehicle);
+    if (word && !(await loadSettings(db)).vehicle_on_the_day) throw new ToolError(ON_THE_DAY_OFF);
     const day = args.date ?? colomboDate(task.start_at);
     const startAt = args.date || args.time ? utcIso(day, args.time ?? colomboTime(task.start_at)) : undefined;
     const endBy = args.end_time === undefined ? undefined : args.end_time === null ? null : utcIso(day, args.end_time);
@@ -2199,7 +2311,8 @@ export const updateTask = tool({
       startAt,
       endBy,
       driver: args.driver && refs ? activeDriver(refs, args.driver) : undefined,
-      vehicle: args.vehicle && refs ? activeVehicle(refs, args.vehicle) : undefined,
+      vehicle: args.vehicle && !word && refs ? activeVehicle(refs, args.vehicle) : undefined,
+      vehicleMode: word ? { mode: word.mode, type: word.mode === "any_type" ? word.type : null } : undefined,
       title: args.title,
       passengers: args.passengers,
       contactName: cleared(args.contact_name),
@@ -2371,7 +2484,7 @@ export const reassignTask = tool({
   input: z.object({
     task_id: zId,
     driver: zText(80).optional().describe("New driver: username, code or name"),
-    vehicle: zText(20).optional().describe("New vehicle plate"),
+    vehicle: zText(20).optional().describe('New vehicle plate, or "on the day" / "any van" (car, double cab, lorry) with vehicle_on_the_day'),
     start_time: zTime.optional().describe("New leave time, HH:MM"),
     date: zDate.optional().describe("New day, YYYY-MM-DD"),
   }),
@@ -2390,7 +2503,13 @@ export const reassignTask = tool({
 
     const refs = await loadRefs(db);
     const newDriver = driver ? activeDriver(refs, driver) : refs.emp.get(task.employee_id)!;
-    const newVehicle = vehicle ? activeVehicle(refs, vehicle) : refs.veh.get(task.vehicle_id)!;
+    // Hotfix 2 (J): a plate sets the vehicle; "on the day" / "any van" clears it; otherwise the task keeps what it has.
+    const word = parseVehicleWord(vehicle);
+    if (word && !(await loadSettings(db)).vehicle_on_the_day) throw new ToolError(ON_THE_DAY_OFF);
+    const newVehicle = vehicle && !word ? activeVehicle(refs, vehicle) : word ? null : task.vehicle_id ? refs.veh.get(task.vehicle_id) ?? null : null;
+    const newMode: VehicleMode = newVehicle && (vehicle && !word) ? "specific" : word ? word.mode : task.vehicle_mode as VehicleMode;
+    const newType = word?.mode === "any_type" ? word.type : word ? null : newVehicle && vehicle ? null : task.vehicle_type_wanted;
+    const vehicleWords = (v: { reg_no: string } | null | undefined, m: string | null, t: string | null) => v?.reg_no ?? vehicleText(m, t) ?? null;
     const startAt = utcIso(date ?? colomboDate(task.start_at), start_time ?? colomboTime(task.start_at));
     const delta = new Date(startAt).getTime() - new Date(task.start_at).getTime();
     const shift = (iso: string | null) => iso && delta !== 0 ? new Date(new Date(iso).getTime() + delta).toISOString() : iso;
@@ -2404,7 +2523,9 @@ export const reassignTask = tool({
     const changed = unwrap(
       await db.from("tasks").update({
         employee_id: newDriver.id,
-        vehicle_id: newVehicle.id,
+        vehicle_id: newVehicle?.id ?? null,
+        vehicle_mode: newMode,
+        vehicle_type_wanted: newType,
         start_at: startAt,
         end_by: endBy,
         status: "assigned",
@@ -2418,7 +2539,12 @@ export const reassignTask = tool({
     if (changed.length === 0) throw new ToolError("The driver started this task just now, so it was not changed. Check task_detail.");
     const reassignChanges: Record<string, FieldChange> = {
       ...(driverChanged && { driver: { from: refs.emp.get(task.employee_id)?.name ?? null, to: newDriver.name } }),
-      ...(newVehicle.id !== task.vehicle_id && { vehicle: { from: refs.veh.get(task.vehicle_id)?.reg_no ?? null, to: newVehicle.reg_no } }),
+      ...(((newVehicle?.id ?? null) !== task.vehicle_id || newMode !== task.vehicle_mode) && {
+        vehicle: {
+          from: vehicleWords(task.vehicle_id ? refs.veh.get(task.vehicle_id) : null, task.vehicle_mode, task.vehicle_type_wanted),
+          to: vehicleWords(newVehicle, newMode, newType),
+        },
+      }),
       ...(delta !== 0 && { time: { from: colomboDayTime(task.start_at), to: colomboDayTime(startAt) } }),
     };
     unwrap(
@@ -2426,7 +2552,7 @@ export const reassignTask = tool({
         task_id: task.id,
         action: "reassigned",
         employee_id: newDriver.id,
-        vehicle_id: newVehicle.id,
+        vehicle_id: newVehicle?.id ?? null,
         actor: actor.name,
         note: [wasDeclined ? "after a decline" : null, changesText(reassignChanges) || null].filter(Boolean).join(" · ") || undefined,
         changes: reassignChanges as unknown as Json,
@@ -2454,7 +2580,8 @@ export const reassignTask = tool({
         title: task.title,
         when: colomboDayTime(startAt),
         driver: newDriver.name,
-        vehicle: newVehicle.reg_no,
+        vehicle: newVehicle?.reg_no,
+        vehicle_text: newVehicle ? undefined : vehicleText(newMode, newType),
         was: wasDeclined ? "declined" : undefined,
         warnings,
         notes: [
@@ -2463,7 +2590,7 @@ export const reassignTask = tool({
         ],
         links: { whatsapp_driver: waLink(newDriver.phone), call_driver: telLink(newDriver.phone) },
       },
-      summary: `reassigned task ${task.id}: ${newDriver.name}, ${newVehicle.reg_no}, ${colomboDateTime(startAt)}`,
+      summary: `reassigned task ${task.id}: ${newDriver.name}, ${vehicleWords(newVehicle, newMode, newType)}, ${colomboDateTime(startAt)}`,
     };
   },
 });

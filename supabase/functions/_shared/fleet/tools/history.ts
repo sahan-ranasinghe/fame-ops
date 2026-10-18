@@ -63,7 +63,7 @@ export const listTasks = tool({
         status: t.status,
         driver: refs.emp.get(t.employee_id)?.name,
         driver_username: refs.emp.get(t.employee_id)?.username ?? undefined,
-        vehicle: refs.veh.get(t.vehicle_id)?.reg_no,
+        vehicle: refs.veh.get(t.vehicle_id ?? "")?.reg_no,
         from: mine[0]?.place_name,
         to: mine.length > 1 ? mine[mine.length - 1].place_name : undefined,
         stops_count: mine.length,

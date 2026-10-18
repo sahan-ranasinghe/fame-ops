@@ -4,6 +4,7 @@
 
 import type { Db } from "./db.ts";
 import { ToolError, unwrap } from "./db.ts";
+import { phoneE164 } from "./format.ts";
 
 export interface RushHourBand {
   /** 0 = Sunday … 6 = Saturday (Asia/Colombo). */
@@ -36,6 +37,10 @@ export interface Settings {
   tasks_need_approval: boolean;
   /** Phase 7 (§13): trips a driver starts: allowed (Company work preselected, Personal offered), default (Personal preselected), off (no Personal); ask_first is reserved and behaves as allowed. */
   driver_personal_trips: PersonalTrips;
+  /** Hotfix 2 (F): the office's own number, E.164 (Call office in the driver app and on the requester's pages). */
+  office_phone: string | null;
+  /** Hotfix 2 (J): a task may be made with its vehicle chosen on the day or of a type (on after every phone has the update). */
+  vehicle_on_the_day: boolean;
   /** Snap to roads under the open package: none or osrm (secret OSRM_URL); under the google package Google's Roads API is used (google_caps.roads; 0 = off) and this is not read. */
   map_matching: { provider: MapMatchingProvider };
   /** The driver app's "At work? Start work" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
@@ -123,6 +128,8 @@ export const SETTINGS_DEFAULTS: Settings = {
   self_drive_allowed: true,
   tasks_need_approval: true,
   driver_personal_trips: "allowed",
+  office_phone: null,
+  vehicle_on_the_day: false,
   map_matching: { provider: "none" },
   shift_start: "08:00",
   shift_days: [1, 2, 3, 4, 5],
@@ -172,6 +179,10 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
   tasks_need_approval:
     "New tasks need the fleet admin's OK: a task made by someone without the approve permission waits in the approval queue (Requests) with the proposed driver and vehicle, and is sent to the driver only when approved (off = sent at once)",
+  office_phone:
+    "The office's own number (Call office in the driver app and on the requester's pages): a Sri Lankan number, stored +94…; null clears it",
+  vehicle_on_the_day:
+    "A task may be made without a vehicle: the driver's vehicle on the day, or any vehicle of a type (the driver confirms it at Start task). Switch it on after every phone has the app update that knows it",
   driver_personal_trips:
     "Trips a driver starts in the app (Start a trip): allowed = Company work preselected and Personal offered, default = Personal preselected, off = no Personal choice; ask_first is reserved (accepted, behaves as allowed until it is built). Personal km are counted apart and never charged to a job",
   map_matching:
@@ -275,6 +286,15 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
         return short ? { key, en, si: si || en, short } : { key, en, si: si || en };
       });
     }
+    case "office_phone": {
+      if (value === null || value === "") return null;
+      const phone = typeof value === "string" ? phoneE164(value) : null;
+      if (!phone) throw new ToolError("office_phone: a Sri Lankan number such as 011 234 5678 or 077 123 4567, or null.");
+      return phone;
+    }
+    case "vehicle_on_the_day":
+      if (typeof value !== "boolean") throw new ToolError("vehicle_on_the_day: true or false.");
+      return value;
     case "driver_personal_trips":
       if (!PERSONAL_TRIPS.includes(value as PersonalTrips)) {
         throw new ToolError(`driver_personal_trips: ${PERSONAL_TRIPS.join(", ")}.`);

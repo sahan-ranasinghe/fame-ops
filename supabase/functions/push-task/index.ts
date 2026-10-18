@@ -53,6 +53,13 @@ const CHANNEL: Record<Kind, string> = {
   duty_office_out: "general",
 };
 
+/**
+ * Hotfix 2 (B): new, changed, cancelled and reassigned tasks go to the "New tasks" channel (maximum importance, a long
+ * vibration) on a phone whose app has made it (device_tokens.channels); an older phone keeps the channels above.
+ */
+const NEW_TASKS_CHANNEL = "new-tasks";
+const ON_NEW_TASKS: ReadonlySet<Kind> = new Set<Kind>(["new", "changed", "cancelled", "removed"]);
+
 /** The words for each changed field ("Task changed: new time 09:30 · vehicle WP KL-1234"). */
 const CHANGE_TEXT: Record<Language, Record<string, string>> = {
   en: {
@@ -219,7 +226,7 @@ Deno.serve(async (request) => {
       ? admin.from("task_stops").select("seq, place_name").eq("task_id", taskId).neq("status", "removed").order("seq")
       : Promise.resolve({ data: [] as { seq: number; place_name: string }[] }),
     admin.from("employees").select("id, name, language, active").eq("id", employeeId).maybeSingle(),
-    admin.from("device_tokens").select("id, token").eq("employee_id", employeeId),
+    admin.from("device_tokens").select("id, token, channels").eq("employee_id", employeeId),
   ]);
   const task = taskRes.data;
   const driver = driverRes.data;
@@ -256,8 +263,9 @@ Deno.serve(async (request) => {
     to: t.token,
     title: fill(text.title, vars),
     body: fill(text.body, vars).replace(/ · $/, "").replace(/ → $/, ""),
-    data: taskId ? { taskId, kind } : { kind },
-    channelId: CHANNEL[kind],
+    // A changed task carries what changed: the app highlights it on the task's preview (Hotfix 2, I).
+    data: taskId ? { taskId, kind, ...(kind === "changed" && body.changes ? { changes: body.changes } : {}) } : { kind },
+    channelId: ON_NEW_TASKS.has(kind) && (t.channels ?? []).includes(NEW_TASKS_CHANNEL) ? NEW_TASKS_CHANNEL : CHANNEL[kind],
     priority: "high",
     sound: "default",
     ttl: 3600,

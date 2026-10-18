@@ -503,7 +503,8 @@ function overlaps(aStart: string, aEnd: string | null, b: Pick<Task, "start_at" 
 
 export interface AssignCheck {
   driver: Employee;
-  vehicle: Vehicle;
+  /** Null while the task's vehicle is chosen on the day or of a type (Hotfix 2, J): the vehicle's checks run when it is set. */
+  vehicle: Vehicle | null;
   startAt: string;
   endBy: string | null;
   /** The task being changed, so it is not compared with itself. */
@@ -551,12 +552,12 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
 
   const [sameDay, km] = await Promise.all([
     openTasksOn(db, date),
-    monthKm(db, [vehicle.id], date.slice(0, 7)),
+    vehicle ? monthKm(db, [vehicle.id], date.slice(0, 7)) : new Map<string, number>(),
   ]);
 
   // The people behind an overlapping task: who asked for it (its request) and who drives it.
   const clashing = sameDay.filter((o) =>
-    o.id !== check.ignoreTaskId && overlaps(startAt, endBy, o) && (o.vehicle_id === vehicle.id || o.employee_id === driver.id)
+    o.id !== check.ignoreTaskId && overlaps(startAt, endBy, o) && ((!!vehicle && o.vehicle_id === vehicle.id) || o.employee_id === driver.id)
   );
   const requestIds = [...new Set(clashing.flatMap((o) => o.request_id ? [o.request_id] : []))];
   const requests = new Map(
@@ -605,7 +606,7 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
       requester,
       driver: otherDriver,
     });
-    if (other.vehicle_id === vehicle.id) {
+    if (vehicle && other.vehicle_id === vehicle.id) {
       warnings.push(`${vehicle.reg_no} is booked ${taskWindow(other)} ${clash} (${other.title}).`);
       if (atSameTime) conflicts.push(card("vehicle", `${vehicle.reg_no} is on task`));
     }
@@ -615,21 +616,23 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
     }
   }
 
-  if (vehicle.in_garage) {
-    warnings.push(`${vehicle.reg_no} is marked as in the garage.`);
-    conflicts.push({ kind: "garage", text: `${vehicle.reg_no} is in the garage` });
-  }
+  if (vehicle) {
+    if (vehicle.in_garage) {
+      warnings.push(`${vehicle.reg_no} is marked as in the garage.`);
+      conflicts.push({ kind: "garage", text: `${vehicle.reg_no} is in the garage` });
+    }
 
-  const used = km.get(vehicle.id) ?? 0;
-  if (vehicle.monthly_km_allowance != null && used > vehicle.monthly_km_allowance) {
-    warnings.push(
-      `${vehicle.reg_no} is over its monthly km allowance (${thousands(used)} of ${thousands(vehicle.monthly_km_allowance)} km).`,
-    );
-  }
+    const used = km.get(vehicle.id) ?? 0;
+    if (vehicle.monthly_km_allowance != null && used > vehicle.monthly_km_allowance) {
+      warnings.push(
+        `${vehicle.reg_no} is over its monthly km allowance (${thousands(used)} of ${thousands(vehicle.monthly_km_allowance)} km).`,
+      );
+    }
 
-  for (const doc of VEHICLE_DOCS) {
-    const expiry = vehicle[doc.column];
-    if (expiry && expiry < date) warnings.push(`${vehicle.reg_no}: ${doc.name.toLowerCase()} expired on ${expiry}.`);
+    for (const doc of VEHICLE_DOCS) {
+      const expiry = vehicle[doc.column];
+      if (expiry && expiry < date) warnings.push(`${vehicle.reg_no}: ${doc.name.toLowerCase()} expired on ${expiry}.`);
+    }
   }
   if (driver.licence_expiry && driver.licence_expiry < date) {
     warnings.push(`${driver.name}'s driving licence expired on ${driver.licence_expiry}.`);
