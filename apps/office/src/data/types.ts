@@ -119,6 +119,10 @@ export interface BoardCard {
   title: string;
   kind?: TaskKind;
   purpose?: TripPurpose;
+  /** Hotfix 2 (J): "Vehicle: on the day" or "Any van" while no vehicle is set (vehicle is then absent). */
+  vehicle_text?: string;
+  /** Hotfix 2 (K): who sent it to the driver. */
+  approved_by?: PersonAt;
   from?: string;
   to?: string;
   stops_count?: number;
