@@ -684,6 +684,7 @@ a.bell-btn { text-decoration: none }
   .ov-sec[data-section="tiles"] .tile { padding: 12px 14px; gap: 4px }
   .ov-sec[data-section="tiles"] .tile .val b { font-size: 30px }
   .ov-sec[data-section="tiles"] .tile .lbl, .ov-sec[data-section="tiles"] .tile .sub { font-size: 13px }
+}
 
 /* Hotfix 3 W2 (L3): the search box (ui/ListKit SearchBox), the list header holding it, Load more under a board column. */
 .list-h { flex-wrap: wrap; }
@@ -695,3 +696,9 @@ a.bell-btn { text-decoration: none }
 @media (max-width: 768px) {
   .list-h .list-search, .filters .list-search { flex: 1 1 100%; }
 }
+
+/* Hotfix 3 (L1, L7): the phone's big button stays on the phone (.home-action's own display came after .phone-only and won
+   on a desktop, repeating the section under it); the Overview's tiles in one row on a desktop (6 tiles were two rows). */
+.home-action.phone-only { display: none }
+@media (max-width: 768px) { .home-action.phone-only { display: flex } }
+@media (min-width: 1151px) { .ov-sec[data-section="tiles"] .tiles { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) } }

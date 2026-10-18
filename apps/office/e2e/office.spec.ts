@@ -9,6 +9,7 @@
 //   OFFICE_MCP_KEY   the local shared key (never the real one)
 //   API_URL, ANON_KEY  the local stack (scripts/test-office-local.sh sets them)
 import { expect, test } from "@playwright/test";
+import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { totp } from "./totp";
 
@@ -1716,4 +1717,87 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   await onePage.waitForTimeout(2500);
   expect(planned.filter((b) => b.includes('"leave_by":"02:00"'))).toHaveLength(0);
   expect(planned.filter((b) => b.includes('"leave_by":"14:00"'))).toHaveLength(1);
+});
+
+test("Hotfix 3 (L7): with 100 open issues and 50 waiting requests the Overview fits in about two screens on a desktop and a phone; lists load 25 at a time", async ({ page, browser }) => {
+  test.setTimeout(240_000);
+  const tag = `l7${stamp}`;
+  const sql = (q: string) => execFileSync("docker", ["exec", "-i", process.env.DB_CONTAINER || "supabase_db_fame-ops", "psql", "-U", "postgres", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1", "-c", q], { encoding: "utf8" }).trim();
+  // The issue sync closes rows the rules did not make: paused while the seeded rows are on screen (local stack only).
+  sql("select cron.alter_job((select jobid from cron.job where jobname = 'fleet-sync'), active := false)");
+  sql("insert into job_runs (job, started_at, finished_at) values ('issues', now(), now() + interval '1 hour') on conflict (job) do update set started_at = excluded.started_at, finished_at = excluded.finished_at");
+  try {
+    const kinds = ["odometer_flag", "km_gap", "service_due", "document", "app_stopped", "late_start", "vehicle_report"];
+    sql(`insert into issues (kind, severity, title, detail, due, sort_key, ref_key, status, opened_at, updated_at)
+         select (array[${kinds.map((k) => `'${k}'`).join(",")}])[1 + g % ${kinds.length}],
+                case when g % 10 = 0 then 'critical' else 'warning' end,
+                'L7 seeded issue ' || g, 'seed ${tag}', 'now', g % 7 - 3, '${tag}:' || g, 'open', now(), now()
+         from generate_series(1, 100) g`);
+    sql(`insert into vehicle_requests (requested_by_name, needed_at, route_from, route_to, need_type, pax, note)
+         select 'L7 asker ${tag}', now() + (g || ' hours')::interval, 'Head office', 'Galle', 'van', 2, 'seed ${tag}'
+         from generate_series(1, 50) g`);
+    const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E L7 Approver", email: `e2e.l7.${stamp}@fame.test`, permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues"] });
+    const signIn = async (p: import("@playwright/test").Page) => {
+      const verify = await fetch(user.set_password_link, { redirect: "manual" });
+      const landing = verify.headers.get("location") ?? "";
+      await p.goto("/" + landing.slice(landing.indexOf("#")));
+      await p.getByLabel("New password").fill(`L7 approver ${stamp}!`);
+      await p.getByLabel("Again").fill(`L7 approver ${stamp}!`);
+      await p.getByRole("button", { name: "Save password" }).click();
+      await expect(p.getByRole("heading", { name: "Overview" })).toBeVisible();
+    };
+
+    // Desktop, 1366 × 768: every section at most 5 rows with View all; the page about two screen heights at most.
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await signIn(page);
+    await expect(page.locator('[data-section="requests"]')).toBeVisible();
+    await expect(page.locator('[data-section="attention"]')).toBeVisible();
+    await expect(page.locator('[data-section="requests"] [data-testid="request-row"]')).toHaveCount(5);
+    await expect(page.locator('[data-section="requests"]').getByTestId("view-all")).toContainText(/\(\d{2,}\)/);
+    for (const id of ["requests", "needs_driver", "critical", "road", "attention"]) {
+      const rows = await page.locator(`[data-section="${id}"] .ov-row, [data-section="${id}"] [data-testid$="-row"]`).count();
+      expect(rows, `${id} rows`).toBeLessThanOrEqual(10);
+    }
+    const desktop = await page.evaluate(() => document.scrollingElement!.scrollHeight);
+    expect(desktop, "the desktop Overview's height").toBeLessThanOrEqual(Math.round(2.2 * 768));
+
+    // Lists: 25 rows a page with page numbers; the count in the header.
+    await page.goto("/issues");
+    await expect(page.getByTestId("list-count").first()).toContainText(/\d{3}|1\d\d/);
+    await expect(page.getByTestId("issues-list").locator(".issue-row")).toHaveCount(25);
+    await expect(page.getByTestId("pager")).toBeVisible();
+    await page.goto("/requests");
+    await expect(page.getByTestId("request-row")).toHaveCount(25);
+    await expect(page.getByTestId("pager")).toBeVisible();
+
+    // A phone, 412 × 915: the same person; the Overview about two screen heights; a list 25 at a time with Load more.
+    const phone = await (await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true })).newPage();
+    // The set-password link works once: the phone signs in with the e-mail and the password.
+    await phone.goto("/");
+    await phone.getByLabel("E-mail").fill(`e2e.l7.${stamp}@fame.test`);
+    await phone.getByLabel("Password").fill(`L7 approver ${stamp}!`);
+    await phone.getByRole("button", { name: "Sign in" }).click();
+    await expect(phone.getByRole("heading", { name: "Overview" })).toBeVisible();
+    await expect(phone.locator('[data-section="attention"]')).toBeVisible();
+    const tall = await phone.evaluate(() => document.scrollingElement!.scrollHeight);
+    expect(tall, "the phone Overview's height").toBeLessThanOrEqual(Math.round(2.2 * 915));
+    await phone.goto("/issues");
+    await expect(phone.getByTestId("issues-list").locator(".issue-row")).toHaveCount(25);
+    await phone.getByTestId("load-more").getByRole("button", { name: "Load more" }).click();
+    await expect(phone.getByTestId("issues-list").locator(".issue-row")).toHaveCount(50);
+  } finally {
+    // Each step on its own: a failing clean-up never hides the test's own failure.
+    for (const q of [
+      `update issues set status = 'resolved', resolved_at = now(), resolved_by = 'e2e', updated_at = now() where ref_key like '${tag}:%'`,
+      `update vehicle_requests set status = 'cancelled', decided_at = now(), cancelled_at = now(), cancelled_by = 'e2e', cancel_reason = 'e2e seed' where note = 'seed ${tag}'`,
+      "update job_runs set finished_at = now() - interval '1 hour' where job = 'issues'",
+      "select cron.alter_job((select jobid from cron.job where jobname = 'fleet-sync'), active := true)",
+    ]) {
+      try {
+        sql(q);
+      } catch (error) {
+        console.error(`L7 clean-up: ${String(error).slice(0, 300)}`);
+      }
+    }
+  }
 });
