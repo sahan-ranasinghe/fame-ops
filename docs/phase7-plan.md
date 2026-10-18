@@ -2870,6 +2870,18 @@ Added in Part 3b (18 October: the profile, the phone prompt, availability, the o
 | `avail.officeAdded` | The office added this: ask them to change it. | මෙය කාර්යාලය එක් කළා: වෙනස් කිරීමට ඔවුන්ගෙන් අසන්න. |
 | `avail.past` | It has ended: nothing to remove. | මෙය අවසන්: ඉවත් කිරීමට දෙයක් නැත. |
 
+**Checked at Part 5** (18 October): every key of `apps/driver/src/i18n/en.json` at HEAD (`003c749`) that was not there
+before Phase 7 (`cd0aae5`, the commit before "Phase 7 plan"), 302 keys, compared with the tables above. Every key has its
+Sinhala in `si.json`. One key was missing from the tables:
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `trip.cancelFailed` | Couldn't cancel the trip: {reason} | ගමන අවලංගු කළ නොහැකි විය: {reason} |
+
+The three keys whose English changed in Phase 7 (`task.minutesThere`, `phoneSetup.stoppedOnce`,
+`phoneSetup.stoppedMany`) are in the Hotfix 2 table. Planned rows that were built under other names: `photo.*` and
+`me.changePhoto` are `profilePhoto.*` (Part 3's table), `vehicle.addPhoto` is `vehiclePhoto.add`.
+
 ## Deployment log
 
 **Round A, 16 October 2026** (Parts 1, 2 and 2b; main at `21b1d9a`), in the plan's order, with Sahan's go:
