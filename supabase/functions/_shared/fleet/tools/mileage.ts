@@ -4,12 +4,12 @@ import { z } from "zod";
 import type { Db } from "../db.ts";
 import { fetchAll, inChunks, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { describeGap, findDriver, findVehicle, gapPlaces, loadGaps, loadRefs, odometerCheck } from "../fleet.ts";
-import { centsToLkr, contactLinks } from "../format.ts";
+import { centsToLkr, contactLinks, plain } from "../format.ts";
 import { syncIssues } from "../issues.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { taskPieces } from "../segments.ts";
 import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
-import { daySpan, tool, zDate, zId, zMonth, zPaging, zText } from "../tool.ts";
+import { daySpan, tool, zDate, zId, zMonth, zPaging, zSearch, zText } from "../tool.ts";
 import { pageInfo, pageWindow } from "../paging.ts";
 
 /** A start reading this far from the last logged one means unlogged driving. */
@@ -253,6 +253,8 @@ export const mileageSummary = tool({
   },
 });
 
+const CATEGORIES = ["breakdown", "accident", "tyre", "warning_light", "other"];
+
 export const listVehicleReports = tool({
   name: "list_vehicle_reports",
   title: "Vehicle problem reports",
@@ -261,18 +263,31 @@ export const listVehicleReports = tool({
   readOnly: true,
   input: z.object({
     status: z.enum(["not_closed", "open", "in_garage", "closed", "all"]).optional().describe("Default: not_closed"),
-    // Hotfix 3 (L3): a page at a time (without limit the newest 50, as before).
+    // Hotfix 3 (L3): a page at a time (without limit the newest 50, as before), and the search box.
+    search: zSearch.describe("Words to look for: the plate, the driver, the problem or a note"),
     ...zPaging,
   }),
-  async run({ status = "not_closed", limit, cursor }, { db }) {
+  async run({ status = "not_closed", search, limit, cursor }, { db }) {
     const w = pageWindow(limit, cursor);
+    const refs = await loadRefs(db);
     let query = db.from("vehicle_reports").select("*", { count: "exact" });
     if (status === "not_closed") query = query.neq("status", "closed");
     else if (status !== "all") query = query.eq("status", status);
-    const [refs, reports] = await Promise.all([
-      loadRefs(db),
-      query.order("created_at", { ascending: false }).order("id").range(w.offset, w.offset + (w.limit ?? 50) - 1),
-    ]);
+    const words = search?.replace(/[%_,()*]/g, " ").trim();
+    if (words) {
+      const key = plain(words);
+      const people = refs.employees.filter((e) => plain(e.name).includes(key)).map((e) => e.id).slice(0, 60);
+      const plates = refs.vehicles.filter((v) => plain(v.reg_no).includes(key)).map((v) => v.id).slice(0, 40);
+      const cats = CATEGORIES.filter((c) => plain(c).includes(key));
+      query = query.or([
+        `note.ilike.*${words}*`,
+        `office_note.ilike.*${words}*`,
+        ...(cats.length ? [`category.in.(${cats.join(",")})`] : []),
+        ...(people.length ? [`employee_id.in.(${people.join(",")})`] : []),
+        ...(plates.length ? [`vehicle_id.in.(${plates.join(",")})`] : []),
+      ].join(","));
+    }
+    const reports = await query.order("created_at", { ascending: false }).order("id").range(w.offset, w.offset + (w.limit ?? 50) - 1);
     const rows = unwrap(reports, "vehicle reports");
     const paging = pageInfo(w, rows.length, reports.count ?? rows.length);
     const links = await photoLinks(db, { reportIds: rows.map((r) => r.id) });

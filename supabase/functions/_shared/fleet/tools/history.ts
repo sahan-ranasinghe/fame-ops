@@ -41,8 +41,10 @@ export const listTasks = tool({
     const LIMIT = w.limit === null ? 500 : 5000;
     const words = search?.replace(/[%_,()*]/g, " ").trim();
     const key = words ? plain(words) : "";
-    const people = key ? refs.employees.filter((e) => plain(e.name).includes(key)).map((e) => e.id) : [];
-    const plates = key ? refs.vehicles.filter((v) => plain(v.reg_no).includes(key)).map((v) => v.id) : [];
+    // At most 60 people and 40 plates in the filter: every id is in the URL (the hosted gateway refuses a long one); a word
+    // that matches more is too short to narrow anything by name.
+    const people = key ? refs.employees.filter((e) => plain(e.name).includes(key)).map((e) => e.id).slice(0, 60) : [];
+    const plates = key ? refs.vehicles.filter((v) => plain(v.reg_no).includes(key)).map((v) => v.id).slice(0, 40) : [];
     // A fresh query each time (a page of fetchAll orders and ranges its own).
     const build = () => {
       let q = db.from("tasks").select("*").gte("start_at", span.start).lt("start_at", span.end);

@@ -202,7 +202,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
   await page.getByRole("button", { name: "Yesterday" }).click();
   await expect(dp).toContainText("No location was shared", { timeout: 10000 });
-  await page.getByRole("button", { name: "Today" }).click();
+  // The date bar's Today (the menu has a section called Today too).
+  await page.getByTestId("date-range").getByRole("button", { name: "Today" }).click();
   await expect(timeline).toContainText("Driving", { timeout: 10000 });
   await page.getByRole("link", { name: "Live locations" }).first().click();
   await expect(page.getByRole("heading", { name: "Live locations" })).toBeVisible();
@@ -1742,6 +1743,8 @@ test("Hotfix 3 (L7): with 100 open issues and 50 waiting requests the Overview f
          select 'L7 asker ${tag}', now() + (g || ' hours')::interval, 'Head office', 'Galle', 'van', 2, 'seed ${tag}'
          from generate_series(1, 50) g`);
     const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E L7 Approver", email: `e2e.l7.${stamp}@fame.test`, permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues"] });
+    // An approver with their number (Hotfix 2's banner asks for it once; it is not the Overview's).
+    sql(`update employees set phone = '+94771234567' where email = 'e2e.l7.${stamp}@fame.test'`);
     const signIn = async (p: import("@playwright/test").Page) => {
       const verify = await fetch(user.set_password_link, { redirect: "manual" });
       const landing = verify.headers.get("location") ?? "";

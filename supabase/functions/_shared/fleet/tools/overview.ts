@@ -103,8 +103,9 @@ export const fleetOverview = tool({
     const sections = {
       requests: actor.permissions.includes("approve"),
       needsDriver: hasAny(actor.permissions, ["approve", "assign_tasks"]),
-      // The page shows Critical issues to the people who handle issues (its own rule, screens/overview/overviewLogic.ts).
-      critical: actor.permissions.includes("issues"),
+      // The page's rule (overviewSections in apps/office/src/screens/overview/overviewLogic.ts): Critical issues for the
+      // people who handle issues or dispatch (each sees their own share: a dispatcher the task kinds).
+      critical: hasAny(actor.permissions, ["issues", "assign_tasks"]),
     };
     const plainItems = shown.map(({ scope: _scope, ...item }) => item);
     const onRoadVehicles = new Set(running.map((t) => t.vehicle_id)).size;

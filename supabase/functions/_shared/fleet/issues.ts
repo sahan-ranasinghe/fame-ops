@@ -868,10 +868,11 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
     ),
   ]);
   const active = unwrap(activeRes, "issues") as (ActiveRow & { task_id: string | null })[];
-  // Hotfix 3 (L2): an issue about a task that is over and left over a day ago expires (resolved by the system, "Expired"),
-  // except the missed-task issue itself, which waits for a person.
+  // Hotfix 3 (L2): an issue about a task that is over and left over a day ago expires (resolved by the system, "Expired"):
+  // the task kinds only (a vehicle problem reported during a task, an odometer check, stay until a person closes them),
+  // and never the missed-task issue itself, which waits for a person.
   const expired = await expiredTasks(db, [...active.map((r) => r.task_id), ...wantedAll.map((w) => w.task_id)], now);
-  const wanted = wantedAll.filter((w) => !(w.task_id && expired.has(w.task_id) && w.kind !== "missed_task"));
+  const wanted = wantedAll.filter((w) => !(w.task_id && expired.has(w.task_id) && expiresWithTask(w.kind)));
   const muted = new Map<string, Severity>();
   for (const r of unwrap(mutedRes, "issues")) if (!muted.has(r.ref_key)) muted.set(r.ref_key, r.severity as Severity);
 
@@ -928,7 +929,7 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
   }
   for (const row of plan.resolve) {
     const taskId = (row as ActiveRow & { task_id?: string | null }).task_id;
-    const note = taskId && expired.has(taskId) && row.kind !== "missed_task" ? EXPIRED_NOTE : null;
+    const note = taskId && expired.has(taskId) && expiresWithTask(row.kind) ? EXPIRED_NOTE : null;
     const done = unwrap(
       await db.from("issues").update({
         status: "resolved",
@@ -971,6 +972,9 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
   }
   return result;
 }
+
+/** The kinds that expire with their task (Hotfix 3, L2): the task's own, and a plan that could not be routed. */
+export const expiresWithTask = (kind: string): boolean => kind !== "missed_task" && (TASK_KINDS.has(kind) || kind === "routing_failed");
 
 /** The note on an issue that expired with its task. */
 export const EXPIRED_NOTE = "Expired: the task is over and its leave-by passed over 24 hours ago";

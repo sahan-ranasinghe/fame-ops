@@ -8,7 +8,7 @@
 // numbers ask one page by its cursor. useWatchedPagedList does the same on a fixed store entry (a list whose entry other
 // pages read or patch: the request page finds its card in "reqs", the issue panel patches "issuesAll"), and
 // useLocalPagedList pages rows already in memory (Reminders) with the same look.
-import { cursorAt } from "@fleet/paging";
+import { cursorAt, MAX_LIMIT } from "@fleet/paging";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -74,8 +74,9 @@ function useMode(opts: { mode?: PagingMode; pageSize?: number }): { mode: Paging
 /** The tool's arguments for the page(s) shown: the filters with limit, and the cursor of a later page. */
 function pageArgs(args: Record<string, unknown> | null, mode: PagingMode, pageSize: number, shown: number, page: number): Record<string, unknown> | null {
   if (args === null) return null;
+  // "more" asks every page shown in one call, up to the most a tool answers at once (then the search or a filter narrows).
   return mode === "more"
-    ? { ...args, limit: pageSize * shown }
+    ? { ...args, limit: Math.min(MAX_LIMIT, pageSize * shown) }
     : { ...args, limit: pageSize, cursor: page > 1 ? cursorAt((page - 1) * pageSize) : undefined };
 }
 
@@ -94,7 +95,7 @@ function listOf<T, A extends { total?: number }>(
     items,
     total,
     mode,
-    hasMore: mode === "more" && items.length < total,
+    hasMore: mode === "more" && items.length < total && items.length < MAX_LIMIT,
     loadMore: paging.loadMore,
     page: paging.page,
     pages,
@@ -219,10 +220,12 @@ export function LoadMore<T, A>({ list }: { list: PagedList<T, A> }) {
   if (list.mode !== "more" || list.total <= list.items.length) return null;
   return (
     <div className="load-more" data-testid="load-more">
-      <span className="muted">Showing {list.items.length} of {list.total}</span>
-      <button type="button" className="btn small" disabled={list.query.fetching} onClick={list.loadMore}>
-        {list.query.fetching ? "Loading…" : "Load more"}
-      </button>
+      <span className="muted">Showing {list.items.length} of {list.total}{list.hasMore ? "" : " · search or filter to see the rest"}</span>
+      {list.hasMore && (
+        <button type="button" className="btn small" disabled={list.query.fetching} onClick={list.loadMore}>
+          {list.query.fetching ? "Loading…" : "Load more"}
+        </button>
+      )}
     </div>
   );
 }

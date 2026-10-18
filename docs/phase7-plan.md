@@ -2043,6 +2043,103 @@ W3 (when a slot frees) the list pattern on Duty log, Mileage, Fuel, Places, Driv
 6. The phone's bottom bar for each role: approver Home, Requests, Tasks, Live; dispatcher Home, Tasks, Live, Issues;
    requester Home, My trips, Vehicles, Live; viewer Home, Live, Vehicles, Drivers; More holds the rest.
 
+### Hotfix 3 as built (branch `phase7-hotfix-3`, 18 October)
+
+Built by the main session (the migration, the server, the contract, the list kit, the suites, the L7 e2e and the
+integration) and four subagents in worktrees: W1 the Overview by role, Needs attention, the tray and the menu (L1, L2 on the
+web, L4, L5); W2 the list pattern on Tasks, History, Requests, My trips, Issues, Reminders and the notifications page; W3 the
+list pattern on Duty log, Mileage, Fuel, Places, Drivers, Vehicles, Maintenance, Settings → Users and the site import's
+history; D1 the driver app (L6).
+
+- **Migration `20261019090000_phase7_hotfix3.sql`.** `tasks.status` gains 'missed' and `missed_at`; `mark_missed_tasks()`
+  (service role only) marks an assigned or declined task whose leave-by passed over 24 hours ago missed and clears its
+  needs-a-driver, with no push; `tasks_driver_guard` lets a driver's start (also one queued offline) take a missed task back
+  to in progress (missed_at cleared) and never lets a driver set missed; `accept_task` / `decline_task` answer 'cancelled' for
+  a missed task (the app drops it) and `confirm_task_vehicle` from the offline queue still counts; `issues.snoozed_until` /
+  `snoozed_by`; `office_prefs` (service role only); `issue_visible` adds missed_task for the dispatchers.
+- **L1.** `fleet_overview` answers `attention {count, groups[]}` and `critical {count, items[≤5]}` beside the unchanged
+  `needs_attention`. The page (`screens/overview/*`): approve → Requests to approve, Needs a driver, Critical issues, the
+  tiles, On the road, Needs attention; assign_tasks → Needs a driver, Critical issues, the tiles, On the road, Needs
+  attention; a requester →
+  My trips (the latest 5 with their live state) and the tiles; view → the tiles and On the road. 5 rows a section on a
+  computer, **3 on a phone** (so the phone stays near two screens), "View all (N)" to the page or the item-16 panel; a
+  section collapses to its title and count, remembered per person through `my_prefs` / `set_my_prefs` (`office_prefs`;
+  the artifact keeps them in the browser). The tiles in one row on a computer. **Critical issues: one rule on both sides** (the
+  server's `sections.critical` and the page): the issues or the assign_tasks permission (a dispatcher sees the task
+  kinds; the plan listed it for approvers only), so a critical item is listed once, in Critical issues.
+- **L2.** `attention.ts` (pure, tested): no request_waiting / not_accepted / declined rows when the person's Overview has
+  those sections, no critical ones when it has Critical issues, no info, nothing snoozed; one group per kind with the count
+  ("Odometer typed by hand · 9", "Documents missing on 3 vehicles", "Km outside tasks · 2 vehicles", "Missed tasks · 6"),
+  expanding in place, a single item stays a row. Snooze (Tomorrow = 07:00 Colombo, 1 week) and Dismiss on every row and
+  group (a group's action applies to each of its issues); Issues has Snoozed, severity and order filters. The issue sync
+  (full sync only) marks missed tasks, keeps one Missed task issue (warning) per task until someone resolves it (30 days at
+  most), and resolves the task's own issues (not a vehicle problem or an odometer check) once the task is over (completed,
+  cancelled, missed) and its leave-by passed over 24 hours ago, with "Expired: the task is over and its leave-by passed over
+  24 hours ago". Missed = a driver's dispatched task, assigned or declined, never started (not a custodian's booking or a
+  trip the driver started); a late start still counts and gets the start's own rules. No allowance (null or 0) = no check
+  anywhere (issue, assign warning, proposal, Overview, Mileage); `list_vehicles` cards say `km_allowance_note` "no km
+  allowance set". "1 open · Nothing waiting" (the page read `requests.oldest`, which the server never sent; fixed in the
+  web at A3, hardened now: the line never says "Nothing waiting" while something waits).
+- **L3.** `@fleet/paging`: `limit` (1–500) and `cursor` (opaque) in, `total` and `next` out; **without `limit` every tool
+  answers exactly as before** (the Teams artifact and Claude keep their lists). Paged: list_requests, list_tasks (whole-range
+  totals on every page, missed and search), my_trips (include all | requests | tasks), task_board (each column, `column` +
+  `cursor` for one column's next page), list_issues (severity, snoozed, search), my_inbox (archived, search), list_drivers and
+  list_vehicles (search), list_places (by the database, up to 1,000 a page as before), list_fuel and duty_log (whole-range
+  totals), list_vehicle_reports, list_office_users (search). The web's kit `ui/ListKit.tsx` (25 a page: page numbers on a
+  computer's tables, Load more on phones and the board's columns; the count in the header; the search box; filters in the
+  URL; the empty line) and `screens/listLocal.tsx` for the lists the page already holds whole. Defaults: Tasks today's board
+  (25 a column), Task history this week, Requests waiting, My trips All, Issues Active (most urgent first), Reminders the soonest
+  first, Duty log today, Mileage this month, **Fuel this week** (was the month), Places the office's own places (the sites by
+  search), Drivers and Vehicles active, Maintenance not closed, Users everyone (no active filter: few rows), the import
+  history its last 100. My trips (decision 2): the tasks the person assigned directly (no request) are rows with their live
+  state ("Sent to the driver", accepted, on the way, … missed) that open the task; All · Requests · Tasks I created in the
+  URL (`?show=`; the tool's `include`, whose default stays the requests only, as before), with a search box.
+- **L4.** The tray replaces the bell: Today / Yesterday / Earlier, All / Unread, Mark all read; the issues count is a badge
+  on the Issues menu item (and on More on a phone); read items over 30 days old leave the tray and stay on the
+  notifications page's History (`my_inbox(archived)`).
+- **L5.** The side menu in sections Today · Fleet · Reports · Admin, each collapsible and remembered with the Overview's
+  (Task history sits under Tasks); only what the person may open. The phone's bar: Home + 3 for the role + More (approver
+  Requests, Tasks, Live; dispatcher Tasks, Live, Issues; requester My trips, Vehicles, Live; viewer Live, Vehicles, Drivers;
+  a tab the person cannot open is filled from the next useful one). **The phone's tab "Map" is now "Live"**, the menu's word.
+- **L6.** Today: the next task and at most 3 later ones, then "All today's tasks" (`app/today-tasks.tsx`, pushed, 20 at a
+  time); Report's list (pages from the server below the oldest held), Fuel's fills and the Mileage tab's tasks 20 at a time
+  with Load more. A missed task is shown nowhere: `fetchTasks` leaves it out and a stale copy on the phone is judged by the
+  same 24-hour rule. No native change.
+- **L7.** The e2e seeds 100 open issues and 50 waiting requests (the sync paused while it runs): the Overview is under 2.2
+  screen heights on a computer (1366 × 768) and on a phone (412 × 915); /issues and /requests show 25 rows with the pager, the
+  phone's Load more makes 50. The connector suite's 6l pages list_places, list_requests, list_tasks, list_issues, the board's
+  columns, my_trips and my_inbox; pgTAP `phase7_hotfix3`: missed, the late start, the driver's calls, snooze, prefs.
+- **The artifact's declaration** adds `my_prefs` and `set_my_prefs` (the artifact itself keeps its collapsed sections in the
+  browser; the declaration lists every tool the source calls).
+- **The fresh reviewer (one blocker, five to fix; all fixed):**
+  1. **Blocker:** the expiry caught every issue linked to a task that is over, so a breakdown reported during a task would
+     have been closed as "Expired" a day after the task's leave-by while the report stayed open on Maintenance. **Fixed:**
+     only the task's own kinds expire (signal, late start, running late, not accepted, declined, vehicle conflict, arrival
+     override, completed early, vehicle needed, and a plan that could not be routed); a vehicle problem or an odometer check
+     stays until a person closes it (suite 6l checks a breakdown on a missed task stays open).
+  2. The Critical rule differed: the page showed Critical issues to dispatchers (assign_tasks), the server kept their
+     critical items in Needs attention, so they were listed twice. **Fixed:** the server's rule is the page's (issues or
+     assign_tasks; each sees their own share); `attention_test.ts` covers an approver, a dispatcher and neither.
+  3. Bookings the custodian drives (an office person, no app: nobody can start them) would all have become missed, each
+     with a Missed task issue. **Fixed:** `mark_missed_tasks` marks only dispatched tasks of drivers (`role = 'driver'`,
+     `kind = 'dispatch'`); a custodian's booking and a trip the driver started in the app stay as they were (pgTAP).
+  4. My trips' search box filtered nothing (the tool had no `search`). **Fixed:** `my_trips(search)` (title, label,
+     project, route and stops, the driver, the plate).
+  5. A vehicle with allowance 0 still counted as "over km allowance" in `suggest_vehicles` and the best match (and on the
+     driver app's Mileage tab). **Fixed** in both.
+  6. A missed task started late (a start the phone queued offline) skipped the start's own rules: Stop 1 stayed pending,
+     no "accepted by starting" in the history, no "On the way" to the asker. **Fixed:** `tasks_start_stop_arrived`,
+     `tasks_assignment_events` and `tasks_notify_requester` treat missed as assigned (pgTAP for the first two).
+  Minor, done: `my_trips` without `include` answers as before (the requests only; the page and the Overview ask `all`), so
+  the contract's default is unchanged; "Load more" stops at the 500 rows a tool answers at once ("search or filter to see
+  the rest") instead of failing; a request whose task was missed says "Missed"; Task history's placeholder no longer
+  promises places, and a short word's driver and plate ids are capped (the URL length); Maintenance got its search box
+  (`list_vehicle_reports(search)`: plate, driver, problem, note). Left as they are, said here: Fuel, Mileage and the Duty
+  log search through their vehicle and driver pickers (their rows hold nothing else to search); Needs attention groups by
+  kind, a group naming its vehicle when all its items are one vehicle's; the expiry and the allowance rule are server rules
+  (TypeScript), tested in the connector suite, not pgTAP; `my_inbox` hides read items older than 30 days and
+  `fleet_overview.needs_attention` leaves snoozed issues out (both as the plan says).
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
@@ -2334,6 +2431,18 @@ stop and Phone setup now take `{duration}`; as built):
 | `vehicleType.other` | vehicle | වාහන |
 | push `changed`, vehicle | vehicle: yours on the day / vehicle: any {type} | වාහනය: එදින ඔබ ළඟ ඇති වාහනය / වාහනය: ඕනෑම {type} |
 | push `leave_30` (changed) | {title} · leave in 30 min · {pickup} → {dropoff} | {title} · මිනිත්තු 30 කින් පිටත් වන්න · {pickup} → {dropoff} |
+
+Added in Hotfix 3 (18 October: Today's short list, the lists 20 at a time):
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `today.allTasks` | All today's tasks | අද සියලු කාර්යයන් |
+| `today.allTasksTitle` | Today's tasks | අද කාර්යයන් |
+| `today.moreLater` | {n} more later today | අද පසුව තවත් {n} |
+| `list.loadMore` | Load more | තවත් පෙන්වන්න |
+| `list.showing` | Showing {n} of {total} | {total} න් {n} ක් පෙන්වයි |
+| `list.loading` | Loading… | පූරණය වෙමින්… |
+| `list.empty` | Nothing here yet. | තවම කිසිවක් නැත. |
 
 ## Deployment log
 

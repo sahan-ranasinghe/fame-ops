@@ -86,6 +86,14 @@
   `my_task_contacts`), the whole task before accepting (`TaskPreview`), a task's vehicle on the day (`vehicle_mode`,
   `confirm_task_vehicle`, setting `vehicle_on_the_day`, off), several approvers (`approved_by`, `reviewing`, the version
   check). As built: `docs/phase7-plan.md` "Hotfix 2 as built".
+- **Hotfix 3 (18 October 2026, branch `phase7-hotfix-3`)**: no endless lists. The Overview by role, 5 rows a section (3 on a
+  phone) with View all, collapsed sections per person (`office_prefs`, `my_prefs` / `set_my_prefs`); Needs attention as
+  groups (`attention.ts`: no repeats, no info, snooze `issues.snoozed_until`); missed tasks (`tasks.status` 'missed',
+  `mark_missed_tasks` at the full sync, a Missed task issue) and issues about tasks that are over expire after 24 h; no
+  allowance = no check; every list tool takes `limit` + `cursor` and answers `total` + `next` (`@fleet/paging`; without
+  `limit` as before); the web's `ui/ListKit.tsx` (25 a page); one notification icon (the tray, archived after 30 days); the
+  menu in sections and the phone bar per role; the driver app's Today with 3 later tasks and lists 20 at a time. As built:
+  `docs/phase7-plan.md` "Hotfix 3 as built".
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).

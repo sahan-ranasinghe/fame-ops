@@ -90,7 +90,7 @@ describe("Needs attention and Critical issues", () => {
 
 describe("My trips on the Overview", () => {
   it("30 days back and forward, the limit asked", () => {
-    expect(myTripsArgs("2026-10-18", 5)).toEqual({ from: "2026-09-18", to: "2026-11-17", limit: 5 });
+    expect(myTripsArgs("2026-10-18", 5)).toEqual({ from: "2026-09-18", to: "2026-11-17", include: "all", limit: 5 });
   });
   it("a request opens under My trips, a task the person created opens the task; the live state from the server or the status", () => {
     expect(tripRow({ id: "r1", requested_by: "Me", when: "Mon 19 Oct 08:00", route: "Head office → Galle", status: "approved", need: "Car" })).toEqual({

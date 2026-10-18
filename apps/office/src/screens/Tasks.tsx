@@ -7,7 +7,7 @@
 // Hotfix 3 (L3): each column holds 25 cards (task_board's limit), its count is
 // every card of the column (totals), and "Load more" under it asks that column's
 // next cards (task_board(date, column, limit, cursor)), refreshed with the board.
-import { cursorAt } from "@fleet/paging";
+import { cursorAt, MAX_LIMIT } from "@fleet/paging";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -69,7 +69,7 @@ function BoardColumn({ b, k, label, dot, onOpen }: { b: Board; k: ColumnKey; lab
   const more = useQuery<Board>(
     "boardColumn",
     "task_board",
-    extra > 0 ? { date: b.date, column: k, limit: PAGE_SIZE * extra, cursor: cursorAt(PAGE_SIZE) } : null,
+    extra > 0 ? { date: b.date, column: k, limit: Math.min(MAX_LIMIT, PAGE_SIZE * extra), cursor: cursorAt(PAGE_SIZE) } : null,
     { keep: true, every: 30000 },
   );
   const seen = new Set(base.map((c) => c.id));
@@ -79,7 +79,7 @@ function BoardColumn({ b, k, label, dot, onOpen }: { b: Board; k: ColumnKey; lab
     items: cards,
     total,
     mode: "more",
-    hasMore: cards.length < total,
+    hasMore: cards.length < total && cards.length < PAGE_SIZE + MAX_LIMIT,
     loadMore: () => setExtra((n) => n + 1),
     page: 1,
     pages: 1,

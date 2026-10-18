@@ -1,6 +1,7 @@
--- Phase 7, Hotfix 3, checked with pgTAP (docs/phase7-plan.md "Hotfix 3"): a task never started whose leave-by passed over
--- a day ago is marked missed (assigned or declined; no push), a driver's late start un-misses it, a driver cannot mark one
--- missed; the missed-task issue is the dispatcher's too; snooze; the page preferences are the service role's.
+-- Phase 7, Hotfix 3, checked with pgTAP (docs/phase7-plan.md "Hotfix 3"): a driver's task never started whose leave-by
+-- passed over a day ago is marked missed (assigned or declined; no push; not a custodian's booking or the driver's own
+-- trip), a driver's late start un-misses it with the start's own rules, a driver cannot mark one missed; the missed-task
+-- issue is the dispatcher's too; snooze; the page preferences are the service role's.
 -- Run with: npx supabase test db   (local database only; everything is rolled back)
 
 begin;
@@ -28,6 +29,17 @@ insert into public.tasks (id, title, employee_id, vehicle_id, start_at, leave_by
   ('30000000-0000-0000-0000-000000000ce4', 'HF3 tomorrow', '10000000-0000-0000-0000-000000000ce1', '20000000-0000-0000-0000-000000000ce1',
    now() + interval '1 day', now() + interval '1 day', 'assigned', now(), 'test');
 update public.tasks set needs_driver_since = now(), needs_driver_reason = 'declined' where id = '30000000-0000-0000-0000-000000000ce2';
+-- The first task's Stop 1 ("Passengers get in here"), marked arrived when it starts.
+insert into public.task_stops (task_id, seq, type, place_name, is_start) values
+  ('30000000-0000-0000-0000-000000000ce1', 1, 'pickup', 'Head office', true);
+-- Never missed: a booking the custodian drives (an office person, no app) and a trip the driver started in the app.
+insert into public.employees (id, code, name, email, role, permissions, active) values
+  ('10000000-0000-0000-0000-000000000ce2', 'HF3C', 'Kamal Custodian', 'hf3.custodian@fame.test', 'office', '{view,request}', true);
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, leave_by, status, sent_at, created_by, kind) values
+  ('30000000-0000-0000-0000-000000000cf1', 'HF3 custodian drives', '10000000-0000-0000-0000-000000000ce2', '20000000-0000-0000-0000-000000000ce1',
+   now() - interval '2 days', now() - interval '2 days', 'assigned', now() - interval '3 days', 'test', 'dispatch'),
+  ('30000000-0000-0000-0000-000000000cf2', 'HF3 own trip', '10000000-0000-0000-0000-000000000ce1', '20000000-0000-0000-0000-000000000ce1',
+   now() - interval '2 days', now() - interval '2 days', 'assigned', now() - interval '2 days', 'test', 'self');
 -- The pushes of the inserts above are not this test's business.
 delete from net.http_request_queue;
 
@@ -38,6 +50,8 @@ select is((select count(*) from public.mark_missed_tasks() as id
 select is((select string_agg(title || ':' || status, ', ' order by title) from public.tasks where id::text like '30000000-0000-0000-0000-000000000ce%'),
   'HF3 declined long ago:missed, HF3 tomorrow:assigned, HF3 two days ago:missed, HF3 two hours ago:assigned',
   'a task two hours late or tomorrow stays as it is');
+select is((select string_agg(title || ':' || status, ', ' order by title) from public.tasks where id::text like '30000000-0000-0000-0000-000000000cf%'),
+  'HF3 custodian drives:assigned, HF3 own trip:assigned', 'a booking the custodian drives and a trip the driver started stay as they are');
 select ok((select missed_at is not null and needs_driver_since is null and needs_driver_reason is null from public.tasks
            where id = '30000000-0000-0000-0000-000000000ce2'),
   'a missed task leaves needs-a-driver');
@@ -62,6 +76,10 @@ reset role;
 set local request.jwt.claims to '{}';
 select is((select status || '|' || coalesce(missed_at::text, '-') from public.tasks where id = '30000000-0000-0000-0000-000000000ce1'),
   'in_progress|-', 'the task is under way again, no longer missed');
+select is((select status || '|' || arrival_flag from public.task_stops where task_id = '30000000-0000-0000-0000-000000000ce1' and is_start),
+  'arrived|ok', 'the late start marks Stop 1 arrived, as any start does');
+select is((select note from public.task_assignment_events where task_id = '30000000-0000-0000-0000-000000000ce1' and action = 'accepted'),
+  'by starting the task', 'and the history says it was accepted by starting it');
 select is((select status || '|' || coalesce(needs_driver_reason, '-') from public.tasks where id = '30000000-0000-0000-0000-000000000ce2'),
   'missed|-', 'the declined call left the missed task as it was (no needs-a-driver for an old task)');
 

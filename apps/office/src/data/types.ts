@@ -824,7 +824,7 @@ export interface PhoneLinks {
 
 /** A trip's live state on My trips (Hotfix 2, A), from the request and its task. */
 export interface TripLive {
-  /** Hotfix 3: "missed" = a task the person created that was never started (its leave-by over a day ago). */
+  /** Hotfix 3: "missed" = the trip's task was never started (its leave-by over a day ago). */
   state: "waiting" | "approved" | "accepted" | "on_the_way" | "arrived" | "completed" | "declined" | "cancelled" | "missed";
   /** "Waiting", "Approved", "Driver accepted · 09:12", "On the way · 09:30", "Arrived · 10:05", "Completed · 11:40",
    * "Declined · no vehicle that day", "Cancelled · not needed". */

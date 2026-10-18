@@ -194,7 +194,12 @@ export function withoutIssues(o: Overview, ids: readonly string[]): Overview {
 }
 
 /** My trips on the Overview: the last 30 days and the next 30, the newest 5 (the server pages with limit). */
-export const myTripsArgs = (day: string, limit: number): Record<string, unknown> => ({ from: addDays(day, -30), to: addDays(day, 30), limit });
+export const myTripsArgs = (day: string, limit: number): Record<string, unknown> => ({
+  from: addDays(day, -30),
+  to: addDays(day, 30),
+  include: "all",
+  limit,
+});
 
 export interface TripRow {
   key: string;

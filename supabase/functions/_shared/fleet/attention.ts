@@ -34,7 +34,7 @@ export interface Sections {
   requests: boolean;
   /** Needs a driver (approve or assign_tasks). */
   needsDriver: boolean;
-  /** Critical issues (the issues permission). */
+  /** Critical issues (the issues or the assign_tasks permission). */
   critical: boolean;
 }
 

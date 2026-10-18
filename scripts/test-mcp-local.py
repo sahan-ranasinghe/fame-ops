@@ -2545,6 +2545,18 @@ check(psql(f"select resolution_note from issues where task_id = '{MT}' and kind 
       "L2: its late-start issue expired by itself")
 check(psql(f"select count(*) from issues where task_id = '{MT}' and kind = 'missed_task' and status = 'open'") == "1",
       "L2: one Missed task issue, until someone resolves it")
+# A vehicle problem reported during that task is not the task's: it stays until a person closes it (the reviewer's find).
+NUWAN = psql("select id from employees where username = 'nuwan.p'")
+CAB = psql("select id from vehicles where reg_no = 'WP CAB-4521'")
+rep6l = psql(f"insert into vehicle_reports (vehicle_id, employee_id, task_id, category, note) values ('{CAB}', '{NUWAN}', '{MT}', 'breakdown', "
+             f"'6l engine stopped {hl}') returning id")
+fleet_jobs()
+check(psql(f"select status from issues where vehicle_report_id = '{rep6l}'") == "open",
+      "L2: a breakdown reported during a task that is over stays open (only the task's own issues expire)")
+check(any(r["id"] == rep6l for r in tool("list_vehicle_reports", {"search": f"engine stopped {hl}", "limit": 5})["reports"])
+      and tool("list_vehicle_reports", {"search": "nothing-like-this-6l", "limit": 5})["total"] == 0,
+      "L3: list_vehicle_reports searches the note")
+psql(f"update vehicle_reports set status = 'closed', closed_at = now() where id = '{rep6l}'")
 hist = tool("list_tasks", {"from": day(-3), "to": day(0), "status": "missed"})
 check(any(t["id"] == MT for t in hist["tasks"]), "L2: History lists it as missed")
 
@@ -2584,10 +2596,16 @@ if CHANNEL == "api":
     print("\n== 6l (office-api). My trips with the tasks I created, the page preferences, the archived notifications ==")
     made = tool("create_task", {"title": f"6l mine {hl}", "date": day(2), "start_time": "10:00", "driver": "nuwan.p", "vehicle": "cab4521",
                                 "pickup": "Head office", "dropoff": "Galle"})
-    mt_all = tool("my_trips", {"from": day(0), "to": day(5)})
+    mt_all = tool("my_trips", {"from": day(0), "to": day(5), "include": "all"})
     mine = next((t for t in mt_all["trips"] if t.get("id") == made["task_id"]), {})
     check(mine.get("source") == "task" and mine.get("live", {}).get("state") == "approved" and mine.get("live", {}).get("text") == "Sent to the driver",
           "My trips lists a task the person created (source task, its live state)", json.dumps(mine)[:300])
+    check(not any(t.get("source") == "task" for t in tool("my_trips", {"from": day(0), "to": day(5)})["trips"]),
+          "My trips without include answers as before (the requests only)")
+    found = tool("my_trips", {"from": day(0), "to": day(5), "include": "all", "search": "galle", "limit": 50})
+    none = tool("my_trips", {"from": day(0), "to": day(5), "include": "all", "search": "nothing-like-this-6l", "limit": 5})
+    check(any(t.get("id") == made["task_id"] for t in found["trips"]) and none["total"] == 0 and not none["trips"],
+          "My trips searches the route", json.dumps({"found": found.get("total"), "none": none.get("total")}))
     only_req = tool("my_trips", {"from": day(0), "to": day(5), "include": "requests"})
     only_tasks = tool("my_trips", {"from": day(0), "to": day(5), "include": "tasks", "limit": 1})
     check(not any(t.get("source") == "task" for t in only_req["trips"]) and all(t.get("source") == "task" for t in only_tasks["trips"])

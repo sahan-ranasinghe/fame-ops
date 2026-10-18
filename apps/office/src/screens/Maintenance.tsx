@@ -14,7 +14,7 @@ import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { Chips, Notice, Pill, Plate } from "../ui/basics";
 import { Icon } from "../ui/icons";
-import { EmptyLine, ListHeader, usePagedList, useUrlFilter } from "../ui/ListKit";
+import { EmptyLine, ListHeader, SearchBox, usePagedList, useUrlFilter, useUrlSearch } from "../ui/ListKit";
 import { useToast } from "../ui/Toast";
 import { ListFooter, ListStale, ListWaiting, useLocalPages } from "./listLocal";
 import { dueFromVehicles } from "./maintenanceLogic";
@@ -99,12 +99,13 @@ export const reportsEmpty = (filter: Filter): string => FILTER_WORDS[filter];
 export function Maintenance() {
   const { me, noConnector } = useFleet();
   const [filter, setFilter] = useUrlFilter<Filter>("status", "not_closed", FILTERS.map(([k]) => k));
+  const [search, setSearch] = useUrlSearch();
   const canReports = me.tools.includes("list_vehicle_reports");
   const fromOverview = can(me, "issues");
   const overview = useEntry<Overview>("overview");
   const lists = useLists(!noConnector && !fromOverview);
   // Hotfix 3 (L3): the newest reports first, 25 at a time (Load more on a phone, page numbers on a desktop).
-  const list = usePagedList<VehicleReport, VehicleReports>(REPORTS_QUERY, "list_vehicle_reports", { status: filter }, (d) => d.reports,
+  const list = usePagedList<VehicleReport, VehicleReports>(REPORTS_QUERY, "list_vehicle_reports", { status: filter, ...(search ? { search } : {}) }, (d) => d.reports,
     { every: 60000, enabled: !noConnector && canReports });
   const q = list.query;
   const d = q.data;
@@ -128,9 +129,10 @@ export function Maintenance() {
         {canReports && d && (
           <div className="stack" style={q.stale ? { opacity: 0.6 } : undefined} aria-busy={q.updating || q.stale || undefined} data-testid="reports-list">
             <div className="card">
-              <ListHeader title={label} count={list.total} updating={q.updating || q.stale} />
+              <ListHeader title={label} count={list.total} updating={q.updating || q.stale}
+                right={<SearchBox value={search} onChange={setSearch} placeholder="Plate, driver, problem or note" />} />
               <ListStale q={q} />
-              {!list.items.length && <EmptyLine>{q.stale ? "Loading…" : reportsEmpty(filter)}</EmptyLine>}
+              {!list.items.length && <EmptyLine>{q.stale ? "Loading…" : search ? `No report matches "${search}".` : reportsEmpty(filter)}</EmptyLine>}
             </div>
             {list.items.map((r) => <ReportCard key={r.id} r={r} />)}
             {list.total > list.items.length || list.pages > 1 ? <div className="card"><ListFooter list={list} /></div> : null}

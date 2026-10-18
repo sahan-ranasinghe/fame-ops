@@ -61,7 +61,8 @@ export default function MileageScreen() {
   const startKm = mileage?.baselineKm ?? readings[0]?.reading_km ?? null;
   const nowKm = vehicle?.current_odometer_km ?? readings[readings.length - 1]?.reading_km ?? null;
   const monthKm = startKm !== null && nowKm !== null ? Math.max(0, nowKm - startKm) : 0;
-  const allowance = vehicle?.monthly_km_allowance ?? null;
+  // No allowance set (null or 0): no allowance line and never "over" (Hotfix 3, L2).
+  const allowance = (vehicle?.monthly_km_allowance ?? 0) > 0 ? vehicle!.monthly_km_allowance : null;
   const over = allowance !== null && monthKm > allowance;
 
   const today = colomboDate();

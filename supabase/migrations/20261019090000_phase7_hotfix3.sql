@@ -85,20 +85,23 @@ begin
 end;
 $$;
 
--- Marks missed every task never started whose leave-by passed over 24 hours ago (the issue sync calls it, fleet-jobs every
--- 5 minutes). No push: the driver's app stops listing it. Answers the tasks marked.
+-- Marks missed every task the office gave a driver and nobody started, whose leave-by passed over 24 hours ago (the issue
+-- sync calls it, fleet-jobs every 5 minutes). No push: the driver's app stops listing it. Answers the tasks marked. Left
+-- as they are: a booking the custodian drives (an office person with no app, so nobody can start it) and a trip the driver
+-- started in the app (kind self: the driver cancels it).
 create function public.mark_missed_tasks()
 returns setof uuid
 language sql
 security definer
 set search_path = ''
 as $$
-  update public.tasks
+  update public.tasks t
   set status = 'missed', missed_at = now(), needs_driver_since = null, needs_driver_reason = null
-  where status in ('assigned', 'declined')
-    and coalesce(leave_by, start_at) < now() - interval '24 hours'
-    -- A task the custodian drives (an office person, no app) is missed the same way.
-  returning id
+  where t.status in ('assigned', 'declined')
+    and t.kind = 'dispatch'
+    and coalesce(t.leave_by, t.start_at) < now() - interval '24 hours'
+    and exists (select 1 from public.employees e where e.id = t.employee_id and e.role = 'driver')
+  returning t.id
 $$;
 revoke all on function public.mark_missed_tasks() from public, anon, authenticated;
 grant execute on function public.mark_missed_tasks() to service_role;
@@ -287,3 +290,70 @@ begin
   return 'ok';
 end;
 $$;
+
+-- L2. A missed task started late (a start the phone queued offline, sent the next day) gets the start's own rules, as an
+-- assigned task does: Stop 1 ("Passengers get in here") arrived, "accepted by starting the task" in the history, the
+-- asker told "On the way". As in 20261016090000_phase7_dispatch.sql (tasks_start_stop_arrived),
+-- 20261014120000_task_accept_decline.sql (tasks_assignment_events) and 20261017160000_phase7_photos.sql
+-- (tasks_notify_requester), with the missed status.
+create or replace function public.tasks_start_stop_arrived()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if new.status = 'in_progress' and old.status in ('assigned', 'missed') then
+    update public.task_stops
+    set status = 'arrived', arrived_at = coalesce(new.started_at, now()), arrival_flag = 'ok', arrival_distance_m = 0
+    where task_id = new.id and is_start and status = 'pending';
+  end if;
+  return null;
+end;
+$$;
+revoke all on function public.tasks_start_stop_arrived() from public, anon, authenticated;
+
+create or replace function public.tasks_assignment_events()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    insert into public.task_assignment_events (task_id, at, action, employee_id, vehicle_id, actor)
+    values (new.id, new.sent_at, 'assigned', new.employee_id, new.vehicle_id, new.created_by);
+  elsif old.status in ('assigned', 'missed') and new.status = 'in_progress' and old.accepted_at is null then
+    insert into public.task_assignment_events (task_id, at, action, employee_id, vehicle_id, actor, note)
+    select new.id, coalesce(new.accepted_at, now()), 'accepted', new.employee_id, new.vehicle_id, e.name, 'by starting the task'
+    from public.employees e where e.id = new.employee_id;
+  end if;
+  return null;
+end;
+$$;
+revoke all on function public.tasks_assignment_events() from public, anon, authenticated;
+
+create or replace function public.tasks_notify_requester()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_driver text;
+  v_plate  text;
+begin
+  if new.request_id is null or current_setting('fleet.quiet', true) = 'on' then
+    return null;
+  end if;
+  if new.status = 'in_progress' and old.status in ('assigned', 'declined', 'missed') then
+    select name into v_driver from public.employees where id = new.employee_id;
+    select reg_no into v_plate from public.vehicles where id = new.vehicle_id;
+    perform public.notify_requester(new.id, 'request.on_the_way',
+      'On the way · ' || split_part(v_driver, ' ', 1) || ' · ' || coalesce(v_plate, ''),
+      'Left at ' || to_char(coalesce(new.started_at, now()) at time zone 'Asia/Colombo', 'HH24:MI') || ' · ' || new.title);
+  end if;
+  return null;
+end;
+$$;
+revoke all on function public.tasks_notify_requester() from public, anon, authenticated;

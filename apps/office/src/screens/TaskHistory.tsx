@@ -57,7 +57,7 @@ export function TaskHistory() {
         <div className="card card-b" style={{ display: "grid", gap: 12 }}>
           <DateRange value={dates} />
           <div className="filters" style={{ marginBottom: 0 }}>
-            <SearchBox value={search} onChange={setSearch} placeholder="Title, driver, plate or place" />
+            <SearchBox value={search} onChange={setSearch} placeholder="Title, driver or plate" />
             <label className="field"><span>Driver</span>
               <select aria-label="Driver" value={f.driver} onChange={(e) => set("driver", e.target.value)}>
                 <option value="">All drivers</option>

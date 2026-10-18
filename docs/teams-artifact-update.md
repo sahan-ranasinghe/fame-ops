@@ -1,5 +1,33 @@
 # Updating the Teams copy of the Fame Fleet artifact
 
+## Hotfix 3 (18 October 2026, branch `phase7-hotfix-3`)
+
+Build from main once Hotfix 3 is merged, with `npm run build:artifact` (`apps/office`):
+
+- `apps/office/dist-artifact/index.html` (one file, no Supabase code, no key) and
+  `apps/office/dist-artifact/capabilities.json`, pasted unchanged: the connector **Fame Fleet** with 78 tools. New since
+  Hotfix 2: `my_prefs` and `set_my_prefs` (a person's collapsed sections). Through the Teams connector (the shared key, no
+  person) the artifact keeps them in the browser instead; the declaration lists them because the shared source names them.
+- The lists ask a page at a time (`limit`, `cursor`); a copy of the artifact from before keeps working, since every tool
+  answers as before without `limit`.
+
+The message for the Teams chat:
+
+> Fame Fleet is updated. What is new for the office:
+>
+> - The Overview puts what needs a decision first: Requests to approve, then tasks that need a driver, then critical
+>   issues, then the numbers, who is on the road and what needs attention. Each part shows at most 5 rows with "View
+>   all", and folds away with its count.
+> - Needs attention no longer repeats itself: the same kind of item is one row with a count ("Odometer typed by hand ·
+>   10") that opens in place, information-only items stay on Issues, and every row can be snoozed (until tomorrow
+>   morning or a week) or dismissed.
+> - A task nobody started is marked "Missed" a day after its leave time (one "Missed task" item until someone resolves
+>   it), and old items about finished tasks close themselves.
+> - A vehicle with no km allowance set is never "over its allowance" any more.
+> - Every list shows 25 rows at a time with the count, page numbers, a search box where it helps, and the filters in the
+>   link.
+> - The menu is in sections (Today, Fleet, Reports, Admin) that fold away.
+
 ## Hotfix 2 (18 October 2026, main at `5172554`)
 
 Build from main at `5172554` with `npm run build:artifact` (`apps/office`):

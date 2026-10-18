@@ -25,7 +25,7 @@ import {
   taskWindow,
   type Vehicle,
 } from "../fleet.ts";
-import { contactLinks, phoneLinks } from "../format.ts";
+import { contactLinks, phoneLinks, plain } from "../format.ts";
 import { driverPhotoLinks, profilePaths, vehiclePhotoLinks } from "../media.ts";
 import { momentOf, tellLink, tellMessage } from "../requesterUpdates.ts";
 import { notifyEvent } from "../notifications.ts";
@@ -173,6 +173,8 @@ function liveOf(r: VehicleRequest, trip: TripOutcome | undefined, now: Date) {
     }
     case "declined":
       return { state: "approved" as const, text: "Approved · finding another driver", at: at(r.decided_at) };
+    case "missed":
+      return { state: "missed" as const, text: dot("Missed", t.missed_at), at: at(t.missed_at) };
     default:
       return t.accepted_at
         ? { state: "accepted" as const, text: dot("Driver accepted", t.accepted_at), at: at(t.accepted_at) }
@@ -921,6 +923,20 @@ async function createdTaskCards(db: Db, tasks: Task[], now: Date) {
   });
 }
 
+/** What a My trips row is found by (Hotfix 3): its title, label, project, route and stops, the driver and the plate. */
+function tripWords(card: Record<string, unknown>): string {
+  const c = card as {
+    title?: string;
+    label?: string;
+    project?: string;
+    route?: string;
+    trip?: { stops?: { place?: string; place_name?: string }[] };
+    assigned?: { driver?: string; vehicle?: string };
+  };
+  const stops = (c.trip?.stops ?? []).map((s) => s.place ?? s.place_name);
+  return plain([c.title, c.label, c.project, c.route, ...stops, c.assigned?.driver, c.assigned?.vehicle].filter(Boolean).join(" "));
+}
+
 /** A task's live state on My trips (Hotfix 3): sent, accepted, on the way, arrived, completed, declined, cancelled, missed. */
 function taskLive(t: Task, trip: TripOutcome | undefined, now: Date) {
   const at = (iso: string | null | undefined) => (iso ? atText(iso, now) : undefined);
@@ -959,7 +975,8 @@ function taskLive(t: Task, trip: TripOutcome | undefined, now: Date) {
 export const myTrips = tool({
   name: "my_trips",
   title: "My trips",
-  description: "The person's own requests and proposed tasks, and (Hotfix 3) the tasks they created directly (source task), " +
+  description: "The person's own requests and proposed tasks, and with include tasks or all (Hotfix 3) the tasks they created " +
+    "directly (source task), " +
     "whose trip day is between from and to (Colombo dates, at most a " +
     "year), newest first, each with its live state from its task (live: waiting, approved, accepted, on_the_way, arrived, " +
     "completed, declined, cancelled), who decided it (approved_by / declined_by with their number), the driver and the vehicle " +
@@ -973,11 +990,12 @@ export const myTrips = tool({
       "Default all",
     ),
     include: z.enum(["all", "requests", "tasks"]).optional().describe(
-      "Default all: the requests and proposals, and the tasks the person created directly",
+      "requests (the default, as before): the requests and proposals; tasks: the tasks the person created directly; all: both",
     ),
+    search: zSearch.describe("Words to look for: the title, a place on the route, the project, the driver or the plate"),
     ...zPaging,
   }),
-  async run({ from, to, status = "all", include = "all", limit, cursor }, { db, now, actor }) {
+  async run({ from, to, status = "all", include = "requests", search, limit, cursor }, { db, now, actor }) {
     realDate(from);
     realDate(to);
     if (to < from) throw new ToolError("to must be the same day as from or later.");
@@ -1011,7 +1029,9 @@ export const myTrips = tool({
       ...taskRows.map((c) => ({ card: c as Record<string, unknown> & { live: { state: string } }, at: c.at })),
     ].sort((a, b) => b.at.localeCompare(a.at));
     const wanted = status === "all" ? null : TRIP_FILTER[status];
-    const kept = (wanted ? all.filter((x) => wanted.includes(x.card.live.state)) : all).map((x) => x.card);
+    const key = search ? plain(search) : "";
+    const kept = all.filter((x) => (!wanted || wanted.includes(x.card.live.state)) && (!key || tripWords(x.card).includes(key)))
+      .map((x) => x.card);
     const page = pageOf(kept, pageWindow(limit, cursor));
     const trips = page.rows.map((c) => {
       const { at: _at, ...card } = c as Record<string, unknown> & { at?: string };
@@ -1085,7 +1105,8 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
     const mine = tasks.filter((t) => t.vehicle_id === v.id);
     const clash = mine.find(busy);
     const used = km.get(v.id) ?? 0;
-    const over = v.monthly_km_allowance != null && used > v.monthly_km_allowance;
+    // No allowance set (null or 0): no check (Hotfix 3, L2).
+    const over = (v.monthly_km_allowance ?? 0) > 0 && used > v.monthly_km_allowance!;
     const availability = v.in_garage
       ? "in garage"
       : clash
