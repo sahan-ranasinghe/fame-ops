@@ -12,6 +12,7 @@ import type { DefaultVehicle } from "./availabilityLogic";
 import type { DepartureCheck } from "./departureLogic";
 import { DwellPicker } from "./DwellPicker";
 import { type StartFields, WHAT_LABEL } from "./stopsLogic";
+import { ANY_TYPES, anyValue, isChoice, ON_THE_DAY, ON_THE_DAY_LABEL } from "./vehicleChoiceLogic";
 
 /** The plan preview is computed this long after the last edit (or at once with Plan now): every call may count against a daily cap. */
 export const PLAN_DEBOUNCE_MS = 1500;
@@ -21,6 +22,9 @@ export function useFleetSettings(): Query<SettingsResult> {
   const { me } = useFleet();
   return useQuery<SettingsResult>("settings", "get_settings", {}, { enabled: me.tools.includes("get_settings"), onWrite: false });
 }
+
+/** Hotfix 2 (J): the fleet setting vehicle_on_the_day (off until every driver's phone has the update; absent = off). */
+export const vehicleOnTheDay = (s: SettingsResult | undefined): boolean => s?.settings.vehicle_on_the_day === true;
 
 /**
  * plan_task for the form as it stands, 1.5 s after the last edit; the plan shown stays while the next one comes. The web
@@ -62,7 +66,7 @@ export function DriverSelect({ id, value, drivers, onChange, emptyLabel, autoFoc
  * The vehicle select after the driver: empty = the driver's vehicle ("WP CAB-4521 · Kamal's vehicle today"),
  * or "Pick a vehicle" when the driver brings none. Picking one is a choice no refresh overwrites.
  */
-export function VehicleSelect({ id, value, def, vehicles, onChange, emptyLabel = "Pick a vehicle", hint }: {
+export function VehicleSelect({ id, value, def, vehicles, onChange, emptyLabel = "Pick a vehicle", hint, choices, dayDefault }: {
   id: string;
   /** The vehicle chosen; "" = the default. */
   value: string;
@@ -71,17 +75,49 @@ export function VehicleSelect({ id, value, def, vehicles, onChange, emptyLabel =
   onChange: (reg: string) => void;
   emptyLabel?: string;
   hint?: ReactNode;
+  /** Hotfix 2 (J, vehicle_on_the_day on): "Driver's vehicle on the day" and "Any <type>" besides the plates. */
+  choices?: boolean;
+  /** The default is the driver's vehicle on the day (a later day, or a driver who brings none today). */
+  dayDefault?: boolean;
 }) {
+  const first = dayDefault ? ON_THE_DAY_LABEL : def ? `${def.reg_no} · ${def.why}` : emptyLabel;
   return (
     <div className="field">
       <label htmlFor={id}>Vehicle</label>
       <select id={id} value={value} onChange={(e) => onChange(e.target.value)}>
-        <option value="">{def ? `${def.reg_no} · ${def.why}` : emptyLabel}</option>
+        <option value="">{first}</option>
+        {choices && !dayDefault && <option value={ON_THE_DAY}>{ON_THE_DAY_LABEL}</option>}
+        {choices && ANY_TYPES.map(([type, label]) => <option key={type} value={anyValue(type)}>{label}</option>)}
         {vehicles.map((v) => <option key={v.reg_no} value={v.reg_no}>{v.reg_no}{v.make_model ? ` · ${v.make_model}` : ""}{v.status ? ` · ${v.status}` : ""}</option>)}
       </select>
-      {value && def && value !== def.reg_no
+      {value && dayDefault && value !== ON_THE_DAY
+        ? <span className="hint" data-testid="vehicle-changed">Instead of the driver's vehicle on the day. <button type="button" className="linkish" onClick={() => onChange("")}>Leave it to the day</button></span>
+        : value && !dayDefault && def && value !== def.reg_no
         ? <span className="hint" data-testid="vehicle-changed">Instead of {def.why} {def.reg_no}. <button type="button" className="linkish" onClick={() => onChange("")}>Use {def.reg_no}</button></span>
-        : hint ? <span className="hint">{hint}</span> : null}
+        : hint ? <span className="hint">{hint}</span>
+        : dayDefault && !value ? <span className="hint" data-testid="vehicle-day-default">The driver confirms the vehicle they hold at Start task.</span>
+        : isChoice(value) ? <span className="hint">The driver picks one at Start task.</span> : null}
+    </div>
+  );
+}
+
+/**
+ * Hotfix 2 (J, vehicle_on_the_day on): the decide page's and Book now's vehicle radios get "Driver's vehicle on the day"
+ * and "Any <type>" before the vehicles by plate.
+ */
+export function VehicleChoiceRadios({ name, value, onPick, dayDefault }: { name: string; value: string; onPick: (v: string) => void; dayDefault?: boolean }) {
+  return (
+    <div className="form" data-testid="vehicle-choices">
+      <label className="opt">
+        <input type="radio" name={name} value={ON_THE_DAY} checked={value === ON_THE_DAY} onChange={() => onPick(dayDefault ? "" : ON_THE_DAY)} />
+        <span className="grow">{ON_THE_DAY_LABEL}<span className="sub" style={{ display: "block", marginTop: 4 }}>The driver confirms the vehicle they hold at Start task.</span></span>
+      </label>
+      {ANY_TYPES.map(([type, label]) => (
+        <label className="opt" key={type}>
+          <input type="radio" name={name} value={anyValue(type)} checked={value === anyValue(type)} onChange={() => onPick(anyValue(type))} />
+          <span className="grow">{label}<span className="sub" style={{ display: "block", marginTop: 4 }}>The driver picks one at Start task.</span></span>
+        </label>
+      ))}
     </div>
   );
 }

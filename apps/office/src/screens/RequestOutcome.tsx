@@ -6,12 +6,17 @@
 // itself, with the requester's phone an approver can change on the page.
 import { useState } from "react";
 import { useFleet } from "../app/FleetContext";
-import type { RequestCard } from "../data/types";
+import type { PhoneLinks, RequestCard } from "../data/types";
 import { asFleetError, errText } from "../transport/errors";
 import { Avatar, Notice, Plate, VehicleThumb } from "../ui/basics";
+import { ContactButtons } from "../ui/ContactButtons";
+import { linksFromCall } from "../ui/phoneLinks";
 import { Icon } from "../ui/icons";
 import { useToast } from "../ui/Toast";
 import { phoneChange, TELL_MOMENT } from "./mediaLogic";
+
+/** The driver's number with its links as the card carries them (call, whatsapp), or made from the number alone. */
+export const assignedPhone = (a: Pick<NonNullable<RequestCard["assigned"]>, "phone" | "call" | "whatsapp">): PhoneLinks | null => linksFromCall(a);
 
 /** Who drives and in what, with their photos. */
 export function AssignedBlock({ a }: { a: NonNullable<RequestCard["assigned"]> }) {
@@ -22,17 +27,15 @@ export function AssignedBlock({ a }: { a: NonNullable<RequestCard["assigned"]> }
         <Avatar name={a.driver} src={a.photo_url} large />
         <div className="grow">
           <div className="name" style={{ fontSize: 18 }}>{a.driver}</div>
-          {a.phone && <div className="sub mono">{a.phone}</div>}
         </div>
-        <div className="acts">
-          {a.call && <a className="btn" href={a.call}><Icon name="phone" />Call</a>}
-          {a.whatsapp && <a className="btn" href={a.whatsapp} target="_blank" rel="noopener"><Icon name="chat" />WhatsApp</a>}
-        </div>
+        {/* Hotfix 2 (F): Call driver and WhatsApp driver (tel: and wa.me on a phone; the number, Copy and WhatsApp web on a computer). */}
+        <ContactButtons phone={assignedPhone(a)} label="Call driver" testId="call-driver" />
       </div>
       <div className="assigned-vehicle">
         <VehicleThumb src={a.vehicle_photo_url ?? a.vehicle_thumb_url} plate={a.vehicle} size="md" />
         <div>
-          <Plate v={a.vehicle} />
+          {/* Hotfix 2 (J): no vehicle yet ("Vehicle: on the day", "Any van"). */}
+          {a.vehicle ? <Plate v={a.vehicle} /> : a.vehicle_text ? <span data-testid="vehicle-text">{a.vehicle_text}</span> : null}
           {a.make_model && <div className="sub" style={{ marginTop: 4 }}>{a.make_model}</div>}
         </div>
       </div>

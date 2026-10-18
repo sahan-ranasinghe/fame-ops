@@ -11,6 +11,7 @@ import { Icon } from "../../ui/icons";
 const SecurityCard = __BUILD__ === "web" ? lazy(() => import("./SecurityCard")) : null;
 
 const PAGE_TEXT: Record<string, string> = {
+  profile: "Your phone number, so drivers and requesters can call you",
   users: "Office users, their permissions, set-password links, connector keys",
   fleet: "Dispatch defaults: minutes at stops, the buffer, the base place, rush hour, the routing provider's usage",
   notifications: "Which events reach you, and the browsers notifications are on in",
@@ -26,7 +27,7 @@ export default function SettingsHome() {
         <div className="more-list">
           {pages.map((p) => (
             <Link key={p.key} to={p.path}>
-              <Icon name={p.key === "fleet" ? "settings" : p.key === "notifications" ? "issues" : "accounts"} />
+              <Icon name={p.key === "fleet" ? "settings" : p.key === "notifications" ? "issues" : p.key === "profile" ? "phone" : "accounts"} />
               <span className="grow">{p.label}<span className="sub" style={{ display: "block", fontWeight: 400 }}>{PAGE_TEXT[p.key]}</span></span>
             </Link>
           ))}

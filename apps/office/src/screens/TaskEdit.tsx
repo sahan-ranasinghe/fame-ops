@@ -12,17 +12,19 @@ import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
 import type { TaskDetail, UpdateTaskResult } from "../data/types";
-import { cap, plateOf, warnList } from "../lib/format";
+import { cap, plateOf, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
+import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
 import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { checkDeparture, departurePlan } from "./departureLogic";
-import { DepartureNote, DriverSelect, VehicleSelect } from "./dispatchParts";
+import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
+import { ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 import { TONE, useBoardQuery, useTask } from "./TaskDetail";
 
 interface EditForm {
@@ -121,6 +123,7 @@ export function TaskEdit() {
   const availArgs = !t || running ? null : availabilityArgs(f.date || t.date || "", floorTo5(f.time || t.time || ""), f.end || t.end_by, undefined, undefined,
     first?.lat != null && first.lng != null && !first.google ? { lat: first.lat, lng: first.lng } : first?.place ? { place: first.place } : null);
   const avail = useAvailability(availArgs);
+  const settings = useFleetSettings();
 
   if (err) return <><PageTop title="Task" backTo={back} /><Notice tone="bad">{err}</Notice></>;
   if (!p || !t) return <><PageTop title="Task" backTo={back} /><Loading>Loading the task…</Loading></>;
@@ -134,7 +137,15 @@ export function TaskEdit() {
   const currentPlate = t.vehicle ? plateOf(t.vehicle) : "";
   // A new driver brings their vehicle (today's, else the regular one) unless one is picked.
   const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), drivers.find((d) => d.username === f.driver), drivers.map((d) => d.name)) : null;
-  const vehicleToSend = f.vehicle || (def && def.reg_no !== currentPlate ? def.reg_no : "");
+  // Hotfix 2 (J): with vehicle_on_the_day on, a new driver on a later day (or one who brings none today) leaves the vehicle
+  // to the day, unless the task already does.
+  const onDay = vehicleOnTheDay(settings.data);
+  const dflt = f.driver ? vehicleDefault({ on: onDay, date: f.date || t.date || "", today: today(), driver: f.driver, def }) : null;
+  const dayDefault = dflt?.kind === "on_the_day";
+  const keepsDay = t.vehicle_mode === "driver_day";
+  const vehicleToSend = f.vehicle || (dayDefault ? (keepsDay ? "" : ON_THE_DAY) : def && def.reg_no !== currentPlate ? def.reg_no : "");
+  // "Keep (WP CAB-4521)", or the task's words while it has no vehicle ("Keep (Vehicle: on the day)").
+  const keepLabel = `Keep${currentPlate ? ` (${currentPlate})` : t.vehicle_text ? ` (${t.vehicle_text})` : ""}`;
   const reason = needsDriverText(t);
   // The leave-by checked at once against the stops' arrive-by times (the task's plan shifted).
   const check = running ? null : checkDeparture(f.time, departurePlan(p.timeline, p.plan?.buffer_min));
@@ -205,17 +216,17 @@ export function TaskEdit() {
                   <DriverSelect id="ra-driver" value={f.driver} drivers={withPicked(drivers, f.driver, avail.data?.drivers.find((d) => d.username === f.driver)?.name)} onChange={pickDriver} autoFocus={driverMode} loading={!lists.drivers && !lists.error}
                     emptyLabel={needsDriver ? `Choose a driver${t.driver ? ` (now ${t.driver})` : ""}` : `Keep${t.driver ? ` (${t.driver})` : ""}`} />
                   <VehicleSelect id="ra-vehicle" value={f.vehicle} def={def} vehicles={lists.vehicles ?? []} onChange={(reg) => set("vehicle", reg)}
-                    emptyLabel={`Keep${currentPlate ? ` (${currentPlate})` : ""}`}
-                    hint={f.driver && !def ? `Keeps ${currentPlate || "the vehicle"}: this driver holds none today and has no regular one.` : undefined} />
+                    emptyLabel={keepLabel} choices={onDay} dayDefault={dayDefault}
+                    hint={f.driver && !def && !onDay ? `Keeps ${currentPlate || "the vehicle"}: this driver holds none today and has no regular one.` : undefined} />
                 </div>
                 <div className="grid2">
                   <div className="field"><label htmlFor="ra-date">Day</label><input type="date" id="ra-date" value={f.date} onChange={(e) => set("date", e.target.value)} /></div>
                   <div className="field">
                     <label htmlFor="ra-time">Leave by</label>
-                    <input type="time" id="ra-time" value={f.time} onChange={(e) => set("time", e.target.value)} />
+                    <TimeInput id="ra-time" value={f.time} onCommit={(time) => set("time", time)} />
                     <DepartureNote check={check} onUse={(time) => set("time", time)} />
                   </div>
-                  <div className="field"><label htmlFor="ra-end">Vehicle free again by</label><input type="time" id="ra-end" value={f.end} onChange={(e) => set("end", e.target.value)} /></div>
+                  <div className="field"><label htmlFor="ra-end">Vehicle free again by</label><TimeInput id="ra-end" value={f.end} onCommit={(end) => set("end", end)} /></div>
                 </div>
               </>
             )}

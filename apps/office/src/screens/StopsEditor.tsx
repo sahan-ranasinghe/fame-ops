@@ -13,6 +13,7 @@ import { useFleet } from "../app/FleetContext";
 import { Icon } from "../ui/icons";
 import { LocationSearch } from "../ui/LocationSearch";
 import { pinText } from "../ui/locationLogic";
+import { TimeInput } from "../ui/TimeInput";
 import { type DwellFallback, DwellPicker } from "./DwellPicker";
 import { moveStop, newStop, pickupAtStart, type StartPoint, type StopDraft, stopLabel, stopNumber, type StopType, TYPE_LABEL, type What, WHAT_LABEL } from "./stopsLogic";
 
@@ -83,7 +84,7 @@ export function StopsRows({ list, onChange, idPrefix = "st", offset = 0, fallbac
               </div>
               <div className="field">
                 <label htmlFor={`${idPrefix}-by-${s.key}`}>Arrive by</label>
-                <input id={`${idPrefix}-by-${s.key}`} type="time" value={s.arriveBy} onChange={(e) => set(i, { arriveBy: e.target.value })} />
+                <TimeInput id={`${idPrefix}-by-${s.key}`} value={s.arriveBy} onCommit={(arriveBy) => set(i, { arriveBy })} />
                 {note?.(s, i)}
               </div>
             </div>

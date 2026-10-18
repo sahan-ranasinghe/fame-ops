@@ -18,19 +18,21 @@ import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
 import type { DecideResult, RedecideResult, RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
 import { useQuery } from "../data/useQuery";
-import { cap, joinDots, requestTone, warnList } from "../lib/format";
+import { cap, joinDots, requestTone, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
+import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
 import { decidesTrip } from "./approvalLogic";
 import { availabilityArgs, driverVehicle, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
 import { checkDeparture, departurePlan } from "./departureLogic";
-import { basePlace, DepartureNote, useFleetSettings, usePlanPreview } from "./dispatchParts";
+import { DecidedBy, refreshRequest, ReviewingLine, useReviewing } from "./approvers";
+import { basePlace, DepartureNote, useFleetSettings, usePlanPreview, VehicleChoiceRadios, vehicleOnTheDay } from "./dispatchParts";
 import { DwellPicker } from "./DwellPicker";
 import { dwellFallbacks, planReasons } from "./planLogic";
 import { PlanWithMap } from "./PlanMap";
@@ -40,6 +42,7 @@ import { decisionInput, dwellChanges, redecideInput } from "./requestLogic";
 import { VehicleGroups, VehicleOption } from "./requestParts";
 import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
 import { TripDecide } from "./TripDecide";
+import { ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 
 interface Decision {
   /** The vehicle picked; "" = the one the driver brings (or, deciding again, keep the vehicle). */
@@ -126,7 +129,11 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
   const defaultDriver = again || noDriverNeeded ? "" : availDefault ?? (avail.loading ? "" : sug?.drivers_free?.[0]?.username) ?? "";
   const driver = f.driver || defaultDriver;
   const def = driver ? driverVehicle(vehicleFor(avail.data, driver), lists.drivers?.find((d) => d.username === driver), (lists.drivers ?? []).filter((d) => d.active !== false).map((d) => d.name)) : null;
-  const vehicle = f.vehicle || (again ? "" : def?.reg_no ?? "");
+  // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the day.
+  const onDay = vehicleOnTheDay(settings.data);
+  const dflt = again ? null : vehicleDefault({ on: onDay, date: fields?.date ?? "", today: today(), driver, def });
+  const dayDefault = dflt?.kind === "on_the_day";
+  const vehicle = again ? f.vehicle : shownVehicle(f.vehicle, dflt);
   // The select always holds the driver picked (from Who's available too), even when its list lacks them.
   const driverOptions: { username: string; name: string; label?: string }[] = withPicked(drivers, driver, avail.data?.drivers.find((d) => d.username === driver)?.name);
   const picked = allOptions.find((v) => v.reg_no === vehicle);
@@ -156,6 +163,8 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
     : null;
   const plan = usePlanPreview(planArgs);
   const preview = plan.err ? null : plan.data ?? null;
+  // Hotfix 2 (K): this page is open (every 20 s), and who else has it open.
+  const reviewers = useReviewing(id, q.status === "waiting" || q.status === "changed");
   const fallbacks = dwellFallbacks(rows, preview?.stops, settings.data?.settings.dwell_min);
   // Leaving at the time asked for, is the vehicle back by the time asked for (§20)? Said in the plan card; the requester's times stay.
   const backCheck = fields?.back_by ? checkDeparture(fields.time ?? "", departurePlan(preview?.timeline, preview?.plan?.buffer_min, fields.back_by)) : null;
@@ -164,7 +173,10 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
     if (!q) return;
     // The driver's vehicle: known (Who's available), known to be none, or not known yet (the server decides).
     const knownDefault = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
-    const v = decisionInput({ id, decision, reason: f.reason, vehicle: custodianDrives ? vehicle : f.vehicle, driver: custodianDrives ? "" : driver, decidedBy: me.name, custodianDrives, defaultVehicle: knownDefault });
+    const v = decisionInput({
+      id, version: q.version, decision, reason: f.reason, vehicle: custodianDrives ? vehicle : vehicleArg(f.vehicle, dflt), driver: custodianDrives ? "" : driver,
+      decidedBy: me.name, custodianDrives, defaultVehicle: knownDefault,
+    });
     if ("error" in v) {
       setMsg({ tone: "bad", text: v.error });
       return;
@@ -201,7 +213,10 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
         navigate("/requests");
       }
     } catch (e) {
+      // Refused (another approver decided it first: "Already approved by Palitha at 10:42"): the server's words, and the
+      // card as it is now. Never a second decision.
       setMsg({ tone: "bad", text: errText(e as FleetError)[0] });
+      void refreshRequest(transport, id, setQ, () => store.invalidate());
     }
     setBusy(false);
   }
@@ -238,6 +253,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
       }
     } catch (e) {
       setMsg({ tone: "bad", text: errText(e as FleetError)[0] });
+      void refreshRequest(transport, id, setQ, () => store.invalidate());
     }
     setBusy(false);
   }
@@ -248,7 +264,10 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
     return (
       <section className="view">
         <PageTop title="Vehicle request" sub={<Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>} backTo={`/requests/${id}`} />
+        {/* A decision just made here, or the server's refusal of a second one ("Already approved by Palitha at 10:42"). */}
+        {msg && <div style={{ marginBottom: 12 }} data-testid="decide-message"><Notice tone={msg.tone}>{msg.text}</Notice>{msg.warnings && <WarningsNote warnings={msg.warnings} />}</div>}
         <Notice tone="info">This request is {q.status}; there is nothing to decide. <Link to={`/requests/${id}`}>Open the request</Link>.</Notice>
+        <DecidedBy q={q} />
       </section>
     );
   }
@@ -260,6 +279,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
     return (
       <section className="view" data-testid="request-redecide">
         <PageTop title={q.status === "changed" ? "Decide the change" : "Change the booking"} sub={<>{q.requested_by} · {joinDots([q.when, q.route])}</>} backTo={`/requests/${id}`} />
+        <ReviewingLine list={reviewers} block />
         <DraftBanner draft={draft} />
         <div className="page-form">
           <RequestDetailCard q={q} compact />
@@ -279,6 +299,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
                 <div className="lab" id="rq-vehicles">Vehicle</div>
                 <label className="opt"><input type="radio" name="rq-veh" value="" checked={f.vehicle === ""} onChange={() => set("vehicle", "")} />
                   <span className="grow">{againDef ? <>{againDef.reg_no} · {againDef.why}</> : "Keep the vehicle"}</span></label>
+                {onDay && <VehicleChoiceRadios name="rq-veh" value={f.vehicle} onPick={(v) => set("vehicle", v)} />}
                 {sug?.groups
                   ? <VehicleGroups sug={sug} name="rq-veh" vehicle={f.vehicle} onPick={(reg) => set("vehicle", reg)} />
                   : options.map((v) => <VehicleOption key={v.reg_no} v={v} name="rq-veh" checked={f.vehicle === v.reg_no} onPick={() => set("vehicle", v.reg_no)} />)}
@@ -286,8 +307,8 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             )}
             <div className="grid2">
               <div className="field"><label htmlFor="rq-date">Day</label><input type="date" id="rq-date" value={f.date} placeholder={q.fields?.date} onChange={(e) => set("date", e.target.value)} /></div>
-              <div className="field"><label htmlFor="rq-time">Time</label><input type="time" id="rq-time" value={f.time} onChange={(e) => set("time", e.target.value)} /></div>
-              <div className="field"><label htmlFor="rq-back">Back by</label><input type="time" id="rq-back" value={f.back} onChange={(e) => set("back", e.target.value)} /></div>
+              <div className="field"><label htmlFor="rq-time">Time</label><TimeInput id="rq-time" value={f.time} onCommit={(time) => set("time", time)} /></div>
+              <div className="field"><label htmlFor="rq-back">Back by</label><TimeInput id="rq-back" value={f.back} onCommit={(back) => set("back", back)} /></div>
             </div>
             <p className="hint" style={{ margin: 0 }}>Now {q.when}{q.back_by ? ` · back by ${q.back_by}` : ""}. A new time alone postpones the booking.</p>
           </div>
@@ -313,6 +334,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
   return (
     <section className="view" data-testid="request-decide">
       <PageTop title="Decide the request" sub={<>{q.requested_by} · {joinDots([q.when, q.route])}</>} backTo={`/requests/${id}`} />
+      <ReviewingLine list={reviewers} block />
       <DraftBanner draft={draft} />
       <div className="page-form">
         {/* An old request keeps today's page: no leave-by to move here, so no "Leave-by passed" advice either. */}
@@ -337,9 +359,13 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             )}
           </div>
           <div className="lab" id="rq-vehicles">Vehicle</div>
-          {driver && !custodianDrives && (
+          {(driver || dayDefault) && !custodianDrives && (
             <p className="hint" style={{ margin: 0 }} data-testid="vehicle-default">
-              {f.vehicle && def && f.vehicle !== def.reg_no
+              {dayDefault
+                ? (f.vehicle && f.vehicle !== ON_THE_DAY
+                  ? <>Instead of the driver's vehicle on the day. <button type="button" className="linkish" onClick={() => set("vehicle", "")}>Leave it to the day</button></>
+                  : <>The driver's vehicle on the day: they confirm it at Start task. Pick another below to change it.</>)
+                : f.vehicle && def && f.vehicle !== def.reg_no
                 ? <>Instead of {def.why} {def.reg_no}. <button type="button" className="linkish" onClick={() => set("vehicle", "")}>Use {def.reg_no}</button></>
                 : def ? <>{def.reg_no} · {def.why}. Pick another below to change it.</>
                 : <>This driver holds no vehicle today and has no regular one: pick one below.</>}
@@ -347,6 +373,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
           )}
           {!ready ? <Loading>Finding free vehicles…</Loading> : (
             <>
+              {onDay && !custodianDrives && <VehicleChoiceRadios name="rq-veh" value={vehicle} dayDefault={dayDefault} onPick={(v) => set("vehicle", v)} />}
               {sug?.groups
                 ? <VehicleGroups sug={sug} name="rq-veh" vehicle={vehicle} onPick={(reg) => set("vehicle", reg)} />
                 : options.map((v) => <VehicleOption key={v.reg_no} v={v} name="rq-veh" checked={vehicle === v.reg_no} onPick={() => set("vehicle", v.reg_no)} />)}

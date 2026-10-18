@@ -59,6 +59,8 @@ h1, h2, h3 { text-wrap: balance; margin: 0 }
 .viewer { margin-top: auto; border-top: 1px solid var(--rail-hover); padding: 16px 8px 0; display: flex; align-items: center; gap: 12px; font-size: 14px }
 .viewer .avatar { background: var(--rail-hover); color: var(--rail-ink) }
 .viewer small { display: block; color: var(--rail-muted) }
+a.viewer { color: inherit; text-decoration: none }
+a.viewer:hover { color: #fff }
 .main { min-width: 0; padding-inline: clamp(16px, 3vw, 40px); padding-block: 28px 56px }
 .mhead { display: none; align-items: center; gap: 12px; margin-bottom: 18px }
 .mhead b { font: 800 22px/1 var(--font-display) }
@@ -432,6 +434,10 @@ button.avail-row:hover { background: var(--surface-2) }
 .avail-tick { color: var(--live); font-weight: 700 }
 button.avail-row:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px }
 .avail-row:first-child { border-top: 0 }
+/* Hotfix 2 (F): Call and WhatsApp under a Who's available row (outside its button). */
+.rows > .avail-contact { border-top: 0; padding: 0 10px 10px 54px }
+.contact-buttons { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center }
+.contact-buttons .num { font-weight: 600 }
 
 /* The location search box (Part 4) */
 .ls { position: relative }

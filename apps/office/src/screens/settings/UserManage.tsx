@@ -11,6 +11,7 @@ import type { CreateKeyResult, OfficeUser, OfficeUsers, SetPasswordLinkResult, U
 import { errText } from "../../transport/errors";
 import { type FleetError, ROLE_LABEL, type Role } from "../../transport/types";
 import { Loading, Notice, Pill } from "../../ui/basics";
+import { phoneDisplay } from "../../ui/ContactButtons";
 import { DraftBanner } from "../../ui/DraftBanner";
 import { PageTop } from "../../ui/Page";
 import { useToast } from "../../ui/Toast";
@@ -42,7 +43,8 @@ export function UserManage() {
 
   const [f, setF, draft] = useFormDraft<UserFields | null>("user-edit", email, null);
   useEffect(() => {
-    if (u && f === null) setF({ name: u.name, email, phone: u.phone ?? "", permissions: normalisePermissions(u.permissions) });
+    // The number as it is shown (077 123 4567; stored +94…).
+    if (u && f === null) setF({ name: u.name, email, phone: u.phone_display ?? (u.phone ? phoneDisplay(u.phone) : ""), permissions: normalisePermissions(u.permissions) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [u]);
   const [edMsg, setEdMsg] = useState<{ tone: "ok" | "bad"; text: string } | null>(null);
@@ -85,7 +87,9 @@ export function UserManage() {
       draft.clear();
       toast("User updated");
       setEdMsg({ tone: "ok", text: `Saved. ${r.updated.name} now has: ${normalisePermissions(r.updated.permissions).map((p) => PERMISSION_TEXT[p].label).join(", ") || "no permissions"}. It applies to their next call.` });
-      setU({ ...u!, name: r.updated.name, permissions: r.updated.permissions });
+      const phone = r.updated.phone === undefined ? u!.phone : r.updated.phone;
+      setU({ ...u!, name: r.updated.name, permissions: r.updated.permissions, phone, phone_display: phone ? phoneDisplay(phone) : undefined });
+      if (phone !== undefined) draft.reset({ ...f, phone: phone ? phoneDisplay(phone) : "" });
       void store.invalidate();
     } catch (e) {
       setEdMsg({ tone: "bad", text: errText(e as FleetError)[0] });
@@ -134,7 +138,7 @@ export function UserManage() {
             <h2>Name, phone and permissions</h2>
             <div className="grid2">
               <div className="field"><label htmlFor="eu-name">Full name</label><input id="eu-name" maxLength={120} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
-              <div className="field"><label htmlFor="eu-phone">Mobile</label><input id="eu-phone" maxLength={30} inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></div>
+              <div className="field"><label htmlFor="eu-phone">Mobile</label><input id="eu-phone" maxLength={30} inputMode="tel" placeholder="077 123 4567" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /><span className="hint">Drivers and requesters see it with Call and WhatsApp. Empty and Save clears it.</span></div>
             </div>
             <PermissionPicker value={f.permissions} onChange={(permissions) => setF({ ...f, permissions })} idPrefix="eu" />
             {edMsg && <Notice tone={edMsg.tone}>{edMsg.text}</Notice>}

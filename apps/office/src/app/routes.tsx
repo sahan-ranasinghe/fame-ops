@@ -31,6 +31,7 @@ import { TaskHistory } from "../screens/TaskHistory";
 import { Tasks } from "../screens/Tasks";
 import { TaskStops } from "../screens/TaskStops";
 import { FleetSettings } from "../screens/settings/FleetSettings";
+import { MyProfile } from "../screens/settings/MyProfile";
 import { UserForm } from "../screens/settings/UserForm";
 import { UserManage } from "../screens/settings/UserManage";
 import { Users } from "../screens/settings/Users";
@@ -140,6 +141,8 @@ export const routes: RouteObject[] = [
       { path: "drivers/:username", element: <Guard need={ROUTES_NEED}><DriverPage /></Guard> },
       { path: "drivers/:username/edit", element: <Guard need={["vehicles"]}><DriverManage /></Guard> },
       { path: "settings", element: <SettingsRoute /> },
+      // Hotfix 2 (F): everyone's own page (their phone number).
+      { path: "settings/profile", element: <MyProfile /> },
       { path: "settings/users", element: <Guard need={["users"]}><Users /></Guard> },
       { path: "settings/users/new", element: <Guard need={["users"]}><UserForm /></Guard> },
       { path: "settings/users/:email/edit", element: <Guard need={["users"]}><UserManage /></Guard> },

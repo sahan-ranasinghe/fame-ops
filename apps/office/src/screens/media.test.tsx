@@ -248,8 +248,11 @@ describe("the request once approved (§4)", () => {
     const block = await screen.findByTestId("assigned");
     expect(block.textContent).toContain("Kamal Perera");
     expect(block.textContent).toContain("Toyota HiAce");
-    expect(within(block).getByRole("link", { name: "Call" }).getAttribute("href")).toBe("tel:0779876543");
-    expect(within(block).getByRole("link", { name: "WhatsApp" }).getAttribute("href")).toBe("https://wa.me/94779876543");
+    // Hotfix 2 (F): on a computer the number with Copy and WhatsApp web (tel: and wa.me on a phone: ContactButtons).
+    const call = within(block).getByTestId("call-driver");
+    expect(call.textContent).toContain("077 987 6543");
+    expect(within(call).getByRole("button", { name: "Copy" })).toBeTruthy();
+    expect(within(call).getByRole("link", { name: "WhatsApp" }).getAttribute("href")).toBe("https://web.whatsapp.com/send?phone=94779876543");
     expect([...block.querySelectorAll("img")].map((i) => i.getAttribute("src"))).toEqual(["https://files/kamal.jpg", "https://files/van.jpg"]);
 
     const tell = screen.getByTestId("tell-requester");

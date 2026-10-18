@@ -15,22 +15,25 @@ import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
 import type { Conflict, DecideResult, RequestCard, Suggestions } from "../data/types";
 import { useQuery } from "../data/useQuery";
-import { cap, joinDots, requestTone, warnList } from "../lib/format";
+import { cap, joinDots, requestTone, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
+import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
 import { askedTimes, decideLabel, emptyTripDecision, isProposal, requestView, shownTimes, type TripDecision, tripDecideInput, tripPick } from "./approvalLogic";
 import { availabilityArgs, type DefaultVehicle, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
 import { checkDeparture, departurePlan } from "./departureLogic";
-import { DepartureNote, DriverSelect, VehicleSelect } from "./dispatchParts";
+import { DecidedBy, refreshRequest, ReviewingLine, useReviewing } from "./approvers";
+import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
 import { RequestDetailCard } from "./RequestDetailCard";
 import { LateNotice } from "./requestParts";
 import { TripSection, useTripLine } from "./RequestTrip";
+import { ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 
 export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: RequestCard) => void }) {
   const { me, store, transport } = useFleet();
@@ -64,6 +67,9 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   const availArgs = availabilityArgs(shown.date, floorTo5(shown.leaveBy), shown.back, q.fields?.need_type, q.fields?.pax == null ? "" : String(q.fields.pax),
     first?.lat != null && first.lng != null && !first.google ? { lat: first.lat, lng: first.lng } : first?.place ? { place: first.place } : null);
   const avail = useAvailability(availArgs);
+  const settings = useFleetSettings();
+  // Hotfix 2 (K): this page is open (every 20 s), and who else has it open.
+  const reviewers = useReviewing(id, q.status === "waiting");
 
   // The driver: picked, else the proposed one, else (a request) the best match once Who's available answers.
   const noDriverNeeded = q.driver_required === false;
@@ -77,7 +83,15 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   const def: DefaultVehicle | null = asProposedDriver && proposed?.vehicle ? { reg_no: proposed.vehicle, why: "the proposed vehicle" } : driverVeh;
   // The driver's vehicle known, known to be none, or not known yet (the server decides).
   const knownVehicle = driverVeh?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
-  const pickArgs = { f, was, driver, proposed: proposed ? { username: proposed.username, vehicle: proposed.vehicle } : undefined, driverVehicle: knownVehicle, noDriverNeeded };
+  // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the
+  // day; a proposal sent with its proposed driver keeps the vehicle it was proposed with.
+  const onDay = vehicleOnTheDay(settings.data);
+  const dflt = asProposedDriver ? null : vehicleDefault({ on: onDay, date: shown.date, today: today(), driver, def: driverVeh });
+  const dayDefault = dflt?.kind === "on_the_day";
+  const pickArgs = {
+    f: dayDefault && !f.vehicle ? { ...f, vehicle: ON_THE_DAY } : f, was, driver,
+    proposed: proposed ? { username: proposed.username, vehicle: proposed.vehicle } : undefined, driverVehicle: knownVehicle, noDriverNeeded,
+  };
   const pick = tripPick(pickArgs);
   const custodianDrives = noDriverNeeded && !driver && !!f.vehicle;
   const vehicles = sug?.vehicles.length
@@ -92,7 +106,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   const check = checkDeparture(shown.leaveBy, departurePlan(trip?.timeline, undefined, shown.back));
 
   async function decide(decision: "approve" | "decline") {
-    const v = tripDecideInput({ ...pickArgs, id, decision, decidedBy: me.name });
+    const v = tripDecideInput({ ...pickArgs, id, decision, decidedBy: me.name, version: q.version });
     if ("error" in v) {
       setMsg({ tone: "bad", text: v.error });
       return;
@@ -125,7 +139,10 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
         ),
       });
     } catch (e) {
+      // Refused (another approver decided it first: "Already approved by Palitha at 10:42"): the server's words, and the
+      // card as it is now. Never a second decision.
       setMsg({ tone: "bad", text: errText(e as FleetError)[0] });
+      void refreshRequest(transport, id, setQ, () => store.invalidate());
     }
     setBusy(false);
   }
@@ -148,7 +165,10 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
     return (
       <section className="view">
         <PageTop title={title} sub={<Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>} backTo={`/requests/${id}`} />
+        {/* The server's refusal of a second decision ("Already approved by Palitha at 10:42"). */}
+        {msg && <div style={{ marginBottom: 12 }} data-testid="decide-message"><Notice tone={msg.tone}>{msg.text}</Notice></div>}
         <Notice tone="info">This {proposal ? "task" : "request"} is {q.status}; there is nothing to decide. <Link to={`/requests/${id}`}>Open it</Link>.</Notice>
+        <DecidedBy q={q} />
       </section>
     );
   }
@@ -160,6 +180,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   return (
     <section className="view" data-testid="request-decide-trip">
       <PageTop title={title} sub={sub} backTo={`/requests/${id}`} />
+      <ReviewingLine list={reviewers} block />
       <DraftBanner draft={draft} />
       <div className="page-form">
         {q.late && <LateNotice approver />}
@@ -187,7 +208,8 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
           )}
           <VehicleSelect id="rq-vehicle" value={f.vehicle} def={def} vehicles={vehicles} onChange={(reg) => set("vehicle", reg)}
             emptyLabel={noDriverNeeded && !driver ? "Pick the custodian’s vehicle" : "Pick a vehicle"}
-            hint={driver && !def && knownVehicle === null ? "This driver holds no vehicle today and has no regular one: pick one." : undefined} />
+            choices={onDay && !(noDriverNeeded && !driver)} dayDefault={dayDefault}
+            hint={driver && !def && knownVehicle === null && !onDay ? "This driver holds no vehicle today and has no regular one: pick one." : undefined} />
         </div>
         {!custodianDrives && (
           <AvailabilityPanel args={availArgs} picked={driver} onPick={(d) => { if (d.username) takeDriver(d.username); }} onUse={(b) => { if (b.username) takeDriver(b.username); }} />
@@ -196,8 +218,8 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
           <div className="section-t" style={{ marginBottom: 2 }}>Day and times</div>
           <div className="grid2">
             <div className="field"><label htmlFor="rq-date">Day</label><input type="date" id="rq-date" value={shown.date} onChange={(e) => set("date", e.target.value)} /></div>
-            <div className="field"><label htmlFor="rq-leave">Leave by</label><input type="time" id="rq-leave" value={shown.leaveBy} onChange={(e) => set("leaveBy", e.target.value)} /></div>
-            <div className="field"><label htmlFor="rq-back">Back by</label><input type="time" id="rq-back" value={shown.back} onChange={(e) => set("back", e.target.value)} /></div>
+            <div className="field"><label htmlFor="rq-leave">Leave by</label><TimeInput id="rq-leave" value={shown.leaveBy} onCommit={(t) => set("leaveBy", t)} /></div>
+            <div className="field"><label htmlFor="rq-back">Back by</label><TimeInput id="rq-back" value={shown.back} onCommit={(t) => set("back", t)} /></div>
           </div>
           <DepartureNote check={check} onUse={(t) => set("leaveBy", t)} onMoveBack={(t) => set("back", t)} />
           <p className="hint" style={{ margin: 0 }} data-testid="times-hint">

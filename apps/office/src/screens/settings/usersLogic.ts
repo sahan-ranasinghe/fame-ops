@@ -3,6 +3,7 @@
 // one thing an admin may not do to themselves. Phase 7 (§12): any other
 // permission implies view, so view is ticked with it and locked while one is.
 import { IMPLIES_VIEW, normalisePermissions, type Permission, PERMISSIONS, PRESETS } from "@fleet/permissions";
+import { samePhone } from "./profileLogic";
 
 export type Preset = keyof typeof PRESETS;
 
@@ -70,7 +71,8 @@ export function updateInput(
   const t = (s: string) => s.trim();
   const input: Record<string, unknown> = { email: before.email };
   if (t(f.name) && t(f.name) !== before.name) input.name = t(f.name);
-  if (t(f.phone) !== (before.phone ?? "")) input.phone = t(f.phone) || null;
+  // Hotfix 2 (F): the number is stored +94… and shown 077 123 4567: the same number written either way is no change.
+  if (!samePhone(f.phone, before.phone)) input.phone = t(f.phone) || null;
   const perms = normalisePermissions(f.permissions);
   if (perms.join(",") !== normalisePermissions(before.permissions).join(",")) {
     if (perms.length === 0) return { error: "Tick at least one permission, or switch the account off instead." };

@@ -11,9 +11,11 @@ import type { FleetSettings as Values, PlaceWithId, RoutingUsage, SettingsResult
 import { errText } from "../../transport/errors";
 import type { FleetError } from "../../transport/types";
 import { Loading, Notice, Pill } from "../../ui/basics";
+import { phoneDisplay } from "../../ui/ContactButtons";
 import { GenericTable } from "../../ui/GenericTable";
 import { useToast } from "../../ui/Toast";
 import { PERSONAL_TRIPS_OPTIONS, personalTripsValue } from "../tripPurposeLogic";
+import { officePhoneValue, samePhone } from "./profileLogic";
 
 /** The time at a stop by its type (Phase 7, §17); "default" is any other. */
 const DWELL_KEYS: [string, string][] = [["pickup", "Pickup"], ["drop", "Drop"], ["visit", "Visit"], ["default", "Any other"]];
@@ -47,6 +49,9 @@ export function FleetSettings() {
   const [busy, setBusy] = useState<string | null>(null);
   // The settings as the server last answered: a draft key that differs from them is being edited.
   const server = useRef<Values | null>(null);
+  // Hotfix 2 (F): the office's number as typed (null = as saved, shown 011 234 5678) and what is wrong with it.
+  const [officePhone, setOfficePhone] = useState<string | null>(null);
+  const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
 
   async function load(saved?: keyof Values) {
     try {
@@ -72,16 +77,19 @@ export function FleetSettings() {
   }
   useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
 
-  async function save(key: keyof Values, value: unknown) {
+  async function save(key: keyof Values, value: unknown): Promise<boolean> {
     setBusy(key);
+    let ok = false;
     try {
       await transport.call("update_settings", { key, value });
       toast("Setting saved");
+      ok = true;
       await load(key);
     } catch (e) {
       setErr(errText(e as FleetError)[0]);
     }
     setBusy(null);
+    return ok;
   }
 
   if (err && !data) return <section className="view"><div className="ph"><div><h1>Fleet settings</h1></div></div><Notice tone="bad">{err}</Notice></section>;
@@ -108,6 +116,7 @@ export function FleetSettings() {
   // Stored keys the card does not show (the old "pickup.people" kind, set before Phase 7 or through Claude): they come before the type.
   const otherDwell = Object.entries(draft.dwell_min ?? {}).filter(([k]) => !DWELL_KEYS.some(([d]) => d === k));
   const personalTrips = personalTripsValue(draft.driver_personal_trips, data.defaults.driver_personal_trips);
+  const shownOfficePhone = data.settings.office_phone ? phoneDisplay(data.settings.office_phone) : "";
 
   return (
     <section className="view" data-testid="fleet-settings">
@@ -129,6 +138,33 @@ export function FleetSettings() {
             {!places.some((p) => p.id) && <span className="hint">The places list carries no ids yet: pick the base with the connector (update_settings base_place_id) until the next update.</span>}
           </div>
           <div><button className="btn dark" type="submit" disabled={busy !== null || !changed("base_place_id")}>Save</button></div>
+        </form>
+
+        {/* Hotfix 2 (F): the office's own number: Call office on the requester's pages and in the driver app. */}
+        <form className="card card-b form" data-testid="office-phone-settings" onSubmit={(ev) => {
+          ev.preventDefault();
+          const v = officePhoneValue(officePhone ?? shownOfficePhone);
+          if ("error" in v) {
+            setPhoneMsg(v.error);
+            return;
+          }
+          setPhoneMsg(null);
+          void save("office_phone", v.value).then((ok) => { if (ok) setOfficePhone(null); });
+        }}>
+          <h2>Office phone number</h2>
+          <p className="muted small" style={{ margin: 0 }}>
+            Call office: drivers and the people who ask for vehicles get it with Call and WhatsApp, where nobody else's number is there to call. Empty and Save
+            clears it.
+          </p>
+          <div className="grid2" style={{ alignItems: "end" }}>
+            <div className="field">
+              <label htmlFor="fs-office-phone">Office phone number</label>
+              <input id="fs-office-phone" maxLength={30} inputMode="tel" placeholder="011 234 5678" value={officePhone ?? shownOfficePhone}
+                onChange={(e) => { setOfficePhone(e.target.value); setPhoneMsg(null); }} />
+              {phoneMsg ? <span className="hint" style={{ color: "var(--bad)" }}>{phoneMsg}</span> : <span className="hint">{data.settings.office_phone ? `Saved: ${phoneDisplay(data.settings.office_phone)}` : "None saved: Call office is not shown."}</span>}
+            </div>
+            <div><button className="btn dark" type="submit" disabled={busy !== null || officePhone === null || samePhone(officePhone, data.settings.office_phone)}>Save</button></div>
+          </div>
         </form>
 
         <form className="card card-b form" data-testid="dwell-settings" onSubmit={(ev) => { ev.preventDefault(); void save("dwell_min", draft.dwell_min); }}>
@@ -264,6 +300,22 @@ export function FleetSettings() {
             <span className="grow">
               <span className="name">New tasks need the fleet admin's OK</span>
               <span className="sub" style={{ display: "block" }}>A task made by someone without the approve permission waits in the Requests queue and is sent to the driver only when approved. Off: every task is sent at once.</span>
+            </span>
+          </label>
+        </div>
+
+        {/* Hotfix 2 (J): a task without a vehicle up front; off until every driver's phone has the update. */}
+        <div className="card card-b form" data-testid="vehicle-on-the-day-settings">
+          <h2>Vehicle on the day</h2>
+          <label className="row" style={{ padding: 0, cursor: "pointer" }}>
+            <input type="checkbox" checked={draft.vehicle_on_the_day === true} disabled={busy !== null} onChange={(e) => { setDraft({ ...draft, vehicle_on_the_day: e.target.checked }); void save("vehicle_on_the_day", e.target.checked); }} />
+            <span className="grow">
+              <span className="name">Tasks may leave the vehicle to the day</span>
+              <span className="sub" style={{ display: "block" }}>
+                Assign a task, the decide pages and Book now then offer "Driver's vehicle on the day" (the default for a later day, and today when the driver
+                holds no vehicle) and "Any van" (or another type) besides a vehicle by its plate. The driver confirms the vehicle they hold, or picks one of
+                the type, at Start task. Switch it on only after every driver's phone has the app update: an older app cannot start a task with no vehicle.
+              </span>
             </span>
           </label>
         </div>
