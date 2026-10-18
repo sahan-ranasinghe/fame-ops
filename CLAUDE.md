@@ -74,7 +74,11 @@
   hotfix 17 October (Who's available steady and readable, Google day caps = the month ÷ 22: 430 / 215). Part 3
   (`phase7-3`): tasks go to the fleet admin first (§33: a task made without approve is a request of kind task until an
   approver sends it), requests get the full planner (§34: one trip editor; a request's own stops), requester updates,
-  the driver's photo, vehicle photos and vehicle documents (§4, §5, §6, §28); Round A2 deploys it.
+  the driver's photo, vehicle photos and vehicle documents (§4, §5, §6, §28); Round A2 deployed it 18 October. Part 4
+  (`phase7-4`): trips a driver starts (§13: `tasks.kind` self, `purpose` company | personal, the Edge Function `driver-api`,
+  the setting `driver_personal_trips`, `set_trip_purpose`, personal km apart), the date range everywhere (§8: Mileage, Fuel,
+  the driver page, Issues, Tasks → History with `list_tasks`), the Issues page as list + panel (§9) and the Overview's tiles
+  opening their lists with a Reminders page (§16).
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
@@ -269,6 +273,13 @@
   our place" (`screens/StopArrival.tsx`); the route views (the driver page, a task's route, Live's
   shown route) ask `driver_route(estimate_gaps)` and draw gaps as dashed slate "estimated" road
   lines (all three maps; `estimatedLegend`), never km.
+- Phase 7 Part 4 (18 October 2026): the date range (`ui/DateRange.tsx`, `?range=&from=&to=`) on Mileage and Fuel (a whole
+  month sent as `month`, other days as `from`/`to` with the month of To beside them), Issues, the driver page (one-day) and
+  `/tasks/history` (`screens/TaskHistory.tsx`); `/issues/:id` is a child of `/issues` (panel with X / Esc on a desktop,
+  full page on a phone; Take, Resolve and Dismiss close it and patch the row); the Overview's tiles open `/?open=road|free|
+  garage|tasks|requests|reminders` (desktop panel, `screens/OverviewPanel.tsx`) or the full page on a phone; `?filter=` on
+  Live and Vehicles; `/reminders` (`screens/Reminders.tsx`); trip tags and the Company work / Personal switch
+  (`screens/TripPurpose.tsx`); Settings → Fleet's Driver-started trips card.
 - `src/data/store.ts`: one entry per key (`overview`, `board`, `reqs`, `reqWaiting`,
   `issues` (the bell), `issuesAll` (the Issues page), `lists.*`); screens use `useEntry` / `useWatch` / `useLists` (a list load that fails on a
   dropped connection is retried twice by itself, then the form shows the error with Try again).
@@ -466,6 +477,9 @@
   of stops still to be driven fetched again at 23 days, then the 30-day clean-up), `stop-arrivals`
   (every 5 min), `prune-gap-lines` (nightly).
 - `task_projects`: task_id, project_id (null = Fame internal), percent. Sum = 100 per task.
+- Phase 7 Part 4 (§13): `tasks.kind` ('dispatch' | 'self': started by the driver in the app through `driver-api`, one
+  visit stop, accepted and reminded at once, no "new" / "Task changed" push) and `tasks.purpose` ('company' | 'personal');
+  drivers read both and never write them.
 - Phase 7 Part 3 (§33, §34): `vehicle_requests` also carries a trip: `kind` (request | task), `proposed_employee_id` /
   `proposed_vehicle_id`, title, label, contact, `task_notes`, `projects_json`, the start (and its Google pair),
   `return_to_base`, `avoid_expressway`, `leave_by` (+ source), `buffer_min`, `plan_json`, `proposal_json`,
@@ -632,6 +646,8 @@ The office sees photos only through 1-hour signed URLs returned by connector too
   over GAP_ATTENTION_KM (30, in fleet.ts) go to fleet_overview needs-attention for 7 days.
 - Cost model (Phase C): fuel from fuel_logs; rent share = vehicle monthly rent split across
   jobs by km; split by task_projects percent; tasks with no project go to "Fame internal".
+  Personal trips (`tasks.purpose = personal`, Phase 7 §13) are never charged to a job: their km are
+  `personal_km` in mileage_summary, apart from task km, whatever task_projects row they carry.
 
 ## Auth and RLS
 - Supabase Auth email+password with synthetic email `<username>@drivers.fame.invalid` and
@@ -678,6 +694,12 @@ Tabs: Today, Mileage, Report, Me.
    my reports with status.
 8. Me tab (not designed): name, code, phone, language, current vehicle, app version,
    sign out (disabled while a task is in progress).
+9. Start a trip (Phase 7 §13, `app/start-trip.tsx`; on Today while on duty with no task running): purpose per
+   `driver_personal_trips` (Company work / Personal), the place search through `driver-api` (`components/PlaceSearch.tsx`;
+   "Google Maps" under Google results; offline only our places or typed words), a note, then the normal Start task.
+   Offline it is queued as `trip_create` with a local copy of the task (`lib/trips.ts`); Add a stop (`app/add-stop.tsx`,
+   `trip_stop`); "Cancel this trip" before it starts (online). A self trip shows "Your trip · <purpose>" and has no
+   "Can't do this task".
 Location required for work (`components/LocationGate.tsx`, like going online in a
 ride-hailing app): Start task and switching "Sharing my location" on need Location services
 on and the permission "Allow all the time". If not, a full-screen "Turn on Location" cover with
@@ -921,6 +943,14 @@ office_audit.
   (events + the linked task / report with photos / request).
 - Projects: `import_projects(projects[])` (upsert; the office's Claude reads Zoho and sends
   them), `find_project(text)`.
+- Phase 7 Part 4: `list_tasks(from, to, driver?, vehicle?, status?, kind?)` (assign_tasks; task history, 366 days, 500
+  rows), `set_trip_purpose(task_id, purpose, project?)` (assign_tasks; self trips only), `from`/`to` on
+  `mileage_summary` (a `range` block; `personal_km`), `list_fuel` (`month_totals`) and `list_issues` (`sort`; `opened_by`,
+  `taken_by`, `resolved_at`), `kind`/`purpose` on task_board and task_detail, `needs_attention[].vehicle`, the setting
+  `driver_personal_trips`, the event `trip.personal`. The driver app's server is the Edge Function `driver-api`
+  (`--no-verify-jwt`; the driver's session and role checked; 60 calls a minute; audited with channel driver):
+  `/places/search`, `/places/google`, `/trips` (idempotent by the phone's task and first-stop ids), `/trips/:id/stops`,
+  `/trips/:id/cancel` (before it starts).
 - Phase 7 Part 3: `create_task` without approve (setting `tasks_need_approval`, on) answers `waiting_for_approval` and the
   task waits as a request of kind task (`task_board.waiting_approval`, `list_requests kind`); `decide_request(…, date?,
   leave_by?, back_by?)` sends it as proposed or changed, copying the request's stops. `create_request` / `update_request`

@@ -1664,6 +1664,67 @@ as off) and the tests.
 
 The main session wrote the migrations, the server, the types, the strings, the suites and the e2e, and merged each by cherry-pick.
 
+### Part 4 (branch `phase7-4`, 18 October)
+
+Items 8, 9, 13 and 16 (7's app side and 15 went into Part 3, before Round A2).
+
+**Item 13, trips a driver starts.**
+- Migration `20261018090000_phase7_trips.sql`: `tasks.kind` (dispatch | self) and `purpose` (company | personal); drivers
+  read them and never write them (the update grant lists the columns). `tasks_notify_push` sends a self trip no "new" or
+  "Task changed" push; the office cancelling or reassigning it still tells the driver. `get_driver_settings` gives
+  `driver_personal_trips`.
+- `driver-api` (new Edge Function, `--no-verify-jwt`, the driver's session and role checked on every call, 60 calls a
+  minute): `/places/search` (the office's three layers, Google's through the counted gate, "Google Maps" under its
+  results), `/places/google`, `/trips` (idempotent by the phone's ids: the task's and the first stop's), `/trips/:id/stops`
+  (a stop on the way, while under way), `/trips/:id/cancel` (a trip started by mistake, before it starts; an addition at
+  checkpoint 4, see below). Every trip call is in `office_audit` with channel driver; refusals in words.
+- `trips.ts`: a self trip is accepted, seen and reminded at once, on the driver's vehicle today, one visit stop, no plan
+  deadline (its leave-by is its start); no second trip while one is under way; personal refused when the setting is off;
+  a personal trip queues `trip.personal` (approve + assign_tasks).
+- Setting `driver_personal_trips`: allowed (the default), default, off, ask_first (accepted, behaves as allowed).
+- Office: the board, the task page and Tasks → History tag "Driver-started" and "Personal"; the task page switches
+  Company work ↔ Personal and attaches a project (`set_trip_purpose`, assign_tasks; one task_projects row of 100 %,
+  never deleted); Settings → Fleet has the setting; `mileage_summary` counts `personal_km` apart from `task_km` (and from
+  the km outside tasks).
+- Driver app: Start a trip on Today (on duty, no task running), the trip page (purpose per the setting, the search box,
+  a note), then the normal Start task; offline only our places or typed words, queued as `trip_create` with a local copy
+  of the task so the start runs at once (queue order puts the trip first; Arrived and Done go to the first stop by the
+  phone's id); Add a stop (`trip_stop`); Cancel this trip (online, before it starts). No native module, no permission.
+
+**Item 8, the date range everywhere.** Mileage and Fuel (a whole month is sent as `month`; other days as `from`/`to`, with
+the month that contains To beside them for the allowance), the driver page (one-day mode, the day in the URL), Issues, and
+the new Tasks → History (`list_tasks`, at most 366 days and 500 rows; the History button on Tasks, Task history in the
+phone's More list). Tools: `from`/`to` on `mileage_summary` (a `range` block), `list_fuel` (`month_totals`) and
+`list_issues`; `daySpan` (Colombo days, both counted).
+
+**Item 9, the Issues page.** The issue is a child route of the list (`ListWithDetail`): a panel with an X and Esc on a
+desktop, a full page with Back on a phone. Take, Resolve and Dismiss close it and patch the row in place (the list and the
+bell, then a quiet refetch). Each issue shows Opened, Opened by ("System · <kind>" or the person), Taken by (with the
+time), Resolved or dismissed at and by. The list: the date range on opened_at, Open / In progress / Resolved / Dismissed /
+All, kind and vehicle, newest first, all in the URL (`?tab=` still read).
+
+**Item 16, the Overview's tiles.** Each tile is a link where the person may open the list: on a desktop a panel beside
+the Overview (`/?open=road|free|garage|tasks|requests|reminders`, kept on reload, X and Esc close it), on a phone the full
+page (`/live?filter=road`, `/vehicles?filter=free|garage`, `/tasks`, `/requests`, `/reminders`). Live and Vehicles keep
+their chip in the URL. The new Reminders page: the documents and services due (with the plate and the date, to the
+vehicle), then everything else the tile counts (to its issue); `needs_attention[].vehicle` names the plate. Also fixed:
+"Oldest waiting" read `requests.oldest`, which the server never sent (it is `oldest_waiting`).
+
+**Addition at checkpoint 4 (for Sahan to keep or drop):** a driver cancels a trip they started by mistake while it has
+not started ("Cancel this trip", `POST /trips/:id/cancel`, audited). Without it the trip would wait for the office and
+its leave-by would pass (a late-start issue).
+
+**Tests.** Connector suite 6j (driver-api: no sign-in 401, an office session 403, the search, the refusals in words, the
+idempotent resend, no push, the audit; a stop on the way; set_trip_purpose; personal km for one day; list_tasks; fuel and
+issues over days), pgTAP `phase7_trips` (the columns, a driver cannot write them, no push for a self trip, the cancel push,
+the setting), Deno `trips_test` (the setting, the title, the time, daySpan), Vitest (the logic and the pages of S7 and S8),
+e2e (the issues panel; a trip started through driver-api, tagged, switched to personal; task history; the Overview's panels;
+Reminders; the setting), driver `test:trips` and `test:data` (a trip through the real queue in order, the resend, cancel).
+
+**Delegated.** Three subagents in their own worktrees, at the same time: S7 (date ranges and the Issues panel), S8 (the
+Overview's tiles, Reminders, the trips' office side), S9 (the driver app's trips). The main session wrote the migration,
+the server and driver-api, the types and strings, the suites and the e2e, and merged each by cherry-pick.
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
@@ -1710,7 +1771,7 @@ the boss or a driver). The table is completed with every key as built at each ch
 | `complete.checkBody` | The trip is {planned} km, the odometer says {km} km. | ගමන කි.මී. {planned} යි, ඔඩෝමීටරය කි.මී. {km} ක් පෙන්වයි. |
 | `complete.correct` | Correct the reading | කියවීම නිවැරදි කරන්න |
 | `complete.goOn` | Go on | ඉදිරියට යන්න |
-| `trip.start` | Start a trip | ගමනක් ආරම්භ කරන්න |
+| `trip.start` (planned; as built in Part 4's table below) | Start a trip | ගමනක් ආරම්භ කරන්න |
 | `trip.company` | Company work | සමාගම් වැඩ |
 | `trip.personal` | Personal | පෞද්ගලික |
 | `trip.where` | Where to? | කොහෙටද? |
@@ -1816,6 +1877,41 @@ Added before Round A2 (item 7, the app side: Phone setup on Me and in the first-
 | `phoneSetup.meHint` | If the phone stops Fame Driver by itself, change these settings once. | දුරකථනය Fame Driver තනිවම නතර කරන්නේ නම්, මෙම සැකසුම් එක් වරක් වෙනස් කරන්න. |
 | `phoneSetup.steps.huawei[0]` | Settings → Battery → App launch → Fame Driver: turn off "Manage automatically", then turn on all three switches. | Settings → Battery → App launch → Fame Driver: "Manage automatically" අක්‍රිය කර, ස්විච තුනම ක්‍රියාත්මක කරන්න. |
 | `phoneSetup.steps.huawei[1]` | Recent apps: pull Fame Driver down (or tap the lock) so it stays locked. | Recent apps තුළ Fame Driver පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ. |
+
+
+Added in Part 4 (18 October: Start a trip, Add a stop, Cancel this trip; as built):
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `trip.start` | Start a trip | ගමනක් ආරම්භ කරන්න |
+| `trip.title` | Start a trip | ගමනක් ආරම්භ කරන්න |
+| `trip.company` | Company work | සමාගම් වැඩ |
+| `trip.personal` | Personal | පෞද්ගලික |
+| `trip.where` | Where to? | කොහෙටද? |
+| `trip.searchHint` | A place, a site id or an address | ස්ථානයක්, site id එකක් හෝ ලිපිනයක් |
+| `trip.searching` | Searching… | සොයමින්… |
+| `trip.noResults` | Nothing found. You can go by the words you typed. | කිසිවක් හමු නොවීය. ඔබ ටයිප් කළ වචන අනුව යා හැක. |
+| `trip.typed` | Go to “{text}” | “{text}” වෙත යන්න |
+| `trip.ours` | Our place | අපේ ස්ථානය |
+| `trip.usedBefore` | Used before | කලින් භාවිත කළ |
+| `trip.map` | Map | සිතියම |
+| `trip.note` | Note (optional) | සටහන (අත්‍යවශ්‍ය නොවේ) |
+| `trip.go` | Start | ආරම්භ කරන්න |
+| `trip.starting` | Starting… | ආරම්භ කරමින්… |
+| `trip.addStop` | Add a stop | නැවතුමක් එක් කරන්න |
+| `trip.stopAdded` | Stop added | නැවතුම එක් කළා |
+| `trip.offlineOnly` | No connection: type the place or pick one of the list. | සම්බන්ධතාවක් නැත: ස්ථානය ටයිප් කරන්න හෝ ලැයිස්තුවෙන් තෝරන්න. |
+| `trip.queued` | No connection: the trip is saved and sent when the connection is back. | සම්බන්ධතාවක් නැත: ගමන සුරැකී ඇත, සම්බන්ධතාවය ලැබුණු විට යවනු ලැබේ. |
+| `trip.needVehicle` | Start work with today's vehicle first. | පළමුව අද වාහනය සමඟ වැඩ ආරම්භ කරන්න. |
+| `trip.finishFirst` | Finish the task in progress first. | පළමුව ක්‍රියාත්මක කාර්යය අවසන් කරන්න. |
+| `trip.officeTold` | The office sees personal trips. | පෞද්ගලික ගමන් කාර්යාලයට පෙනේ. |
+| `trip.yours` | Your trip | ඔබේ ගමන |
+| `trip.failed` | Couldn't start the trip: {reason} | ගමන ආරම්භ කළ නොහැකි විය: {reason} |
+| `trip.stopFailed` | Couldn't add the stop: {reason} | නැවතුම එක් කළ නොහැකි විය: {reason} |
+| `trip.cancel` | Cancel this trip | මෙම ගමන අවලංගු කරන්න |
+| `trip.cancelConfirm` | Cancel this trip? It has not started. | මෙම ගමන අවලංගු කරනවාද? එය තවම ආරම්භ කර නැත. |
+| `trip.cancelled` | Trip cancelled | ගමන අවලංගු කළා |
+| `trip.cancelOffline` | No connection: cancel it when the connection is back. | සම්බන්ධතාවක් නැත: සම්බන්ධතාවය ලැබුණු විට අවලංගු කරන්න. |
 
 **Odometer words (Sahan, 16 October, the Part 2b go):** one word family everywhere, replacing the three spellings
 (ඔඩෝමීටරය, ඕඩෝමීටර, මීටර කියවීම): odometer = **මීටරය**, odometer reading = **මීටර් කියවීම**, start odo =
