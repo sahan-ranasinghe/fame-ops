@@ -12,6 +12,7 @@ import { Empty, Loading, Notice, Pill } from "../../ui/basics";
 import { useToast } from "../../ui/Toast";
 import { removeDevice, setEvent, turnOffHere, turnOnHere } from "./notificationsActions";
 import { DEVICE_NOTE, type PushState, stateText } from "./notificationsLogic";
+import { SoundCard } from "./SoundCard";
 
 const TOOL_ARGS = {};
 
@@ -95,6 +96,8 @@ export default function Notifications() {
           </div>
           <p className="muted small" style={{ margin: 0 }}>{DEVICE_NOTE}</p>
         </div>
+
+        <SoundCard data={data} onSaved={setData} />
 
         <div className="card card-b" style={{ display: "grid", gap: 14 }}>
           <h2>Tell me when</h2>

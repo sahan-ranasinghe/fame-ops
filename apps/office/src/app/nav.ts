@@ -28,12 +28,16 @@ export const DUTY_NEED: Permission[] = ["assign_tasks", "vehicles"];
 /** The issues centre and the bell: everything with issues, the task kinds with assign_tasks. */
 export const ISSUES_NEED: Permission[] = ["issues", "assign_tasks"];
 
+/** Hotfix 2 (A): My trips (my_trips): the requests and proposed tasks a person made, for request or assign_tasks. */
+export const TRIPS_NEED: Permission[] = ["request", "assign_tasks"];
+
 export const NAV: NavItem[] = [
   { key: "overview", label: "Overview", need: ["view"], path: "/" },
   { key: "live", label: "Live locations", need: ["view"], path: "/live" },
   { key: "tasks", label: "Tasks", need: ["assign_tasks"], path: "/tasks" },
   { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
   { key: "requests", label: "Requests", need: ["view", "request"], path: "/requests" },
+  { key: "my_trips", label: "My trips", need: TRIPS_NEED, path: "/my-trips" },
   { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
   { key: "projects", label: "Projects", need: ["view", "request"], path: "/projects" },
   { key: "maintenance", label: "Maintenance", need: ["vehicles"], path: "/maintenance" },
@@ -51,14 +55,17 @@ export const TAB_COUNT = 5;
 /**
  * The phone tab bar: Home first, then the first screens of this list the person
  * may open, in this order, until four are filled; More is always the fifth.
- * So a requester gets Home, My requests, Map, Vehicles, More; a fleet admin
+ * So a requester gets Home, My trips, Map, Vehicles, More; a fleet admin
  * Home, Requests, Tasks, Map, More; a dispatcher (who may also ask) Home,
- * Tasks, My requests, Map, More; a viewer Home, Map, Vehicles, Drivers, More.
+ * Tasks, My trips, Map, More; a viewer Home, Map, Vehicles, Drivers, More.
+ * Hotfix 2 (A): My trips takes the slot My requests had (the person's own
+ * requests with their live state); an approver keeps the queue there and
+ * finds My trips under More. Items sharing a `slot` take one tab between them.
  */
-export const TAB_ORDER: NavItem[] = [
-  { key: "requests", label: "Requests", need: ["approve"], path: "/requests" },
+export const TAB_ORDER: (NavItem & { slot?: string })[] = [
+  { key: "requests", label: "Requests", need: ["approve"], path: "/requests", slot: "requests" },
   { key: "tasks", label: "Tasks", need: ["assign_tasks"], path: "/tasks" },
-  { key: "requests", label: "My requests", need: ["request"], path: "/requests" },
+  { key: "my_trips", label: "My trips", need: ["request"], path: "/my-trips", slot: "requests" },
   { key: "live", label: "Map", need: ["view"], path: "/live" },
   { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
   { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
@@ -70,9 +77,12 @@ export const MORE_TAB: NavItem = { key: "more", label: "More", need: [], path: "
 
 export function tabsFor(me: Pick<Me, "permissions">): NavItem[] {
   const picked: NavItem[] = [HOME_TAB];
-  for (const t of TAB_ORDER) {
+  const slots = new Set<string>();
+  for (const { slot, ...t } of TAB_ORDER) {
     if (picked.length >= TAB_COUNT - 1) break;
-    if (!can(me, ...t.need) || picked.some((p) => p.key === t.key)) continue;
+    const s = slot ?? t.key;
+    if (!can(me, ...t.need) || slots.has(s) || picked.some((p) => p.key === t.key)) continue;
+    slots.add(s);
     picked.push(t);
   }
   return [...picked, MORE_TAB];

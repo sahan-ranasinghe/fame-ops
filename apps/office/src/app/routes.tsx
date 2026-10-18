@@ -12,7 +12,9 @@ import { Maintenance } from "../screens/Maintenance";
 import { Fuel } from "../screens/Fuel";
 import { FuelDetail } from "../screens/FuelDetail";
 import { Mileage } from "../screens/Mileage";
+import { InboxPage } from "../screens/InboxPage";
 import { More } from "../screens/More";
+import { MyTrips } from "../screens/MyTrips";
 import { NewRequest } from "../screens/NewRequest";
 import { NewTask } from "../screens/NewTask";
 import { NoAccess } from "../screens/NoAccess";
@@ -39,7 +41,7 @@ import { VehicleForm } from "../screens/VehicleForm";
 import { Vehicles } from "../screens/Vehicles";
 import { can } from "../transport/types";
 import { useFleet } from "./FleetContext";
-import { DUTY_NEED, ROUTES_NEED, ISSUES_NEED } from "./nav";
+import { DUTY_NEED, ROUTES_NEED, ISSUES_NEED, TRIPS_NEED } from "./nav";
 import { Shell } from "./Shell";
 
 /** The screen, or "No access" when the person holds none of the permissions (the server refuses the tools either way). */
@@ -109,6 +111,14 @@ export const routes: RouteObject[] = [
         element: <Guard need={VR}><Requests /></Guard>,
         children: [{ path: ":id", element: <RequestDetail /> }],
       },
+      // Hotfix 2 (A): My trips; a trip opens the request page beside the list (full screen on a phone).
+      {
+        path: "my-trips",
+        element: <Guard need={TRIPS_NEED}><MyTrips /></Guard>,
+        children: [{ path: ":id", element: <RequestDetail /> }],
+      },
+      // Hotfix 2 (A): the notification centre as a page (the bell opens it on a phone); everyone.
+      { path: "inbox", element: <InboxPage /> },
       { path: "requests/new", element: <Guard need={RA}><NewRequest /></Guard> },
       { path: "requests/:id/decide", element: <Guard need={["approve"]}><RequestDecide /></Guard> },
       { path: "requests/:id/edit", element: <Guard need={RA}><RequestEdit /></Guard> },

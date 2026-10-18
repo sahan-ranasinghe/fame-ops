@@ -7,7 +7,7 @@ import { Blocked } from "../auth/Blocked";
 import { SecondStep } from "../auth/SecondStep";
 import { SetPassword } from "../auth/SetPassword";
 import { SignIn } from "../auth/SignIn";
-import { subscribeDriverLatest, subscribeDriverPoints, subscribeDriversPoints, subscribeIssues } from "../data/realtime";
+import { subscribeDriverLatest, subscribeDriverPoints, subscribeDriversPoints, subscribeInbox, subscribeIssues } from "../data/realtime";
 import { FleetStore } from "../data/store";
 import { uploadToTicket } from "../data/upload";
 import { registerServiceWorker } from "../push";
@@ -30,6 +30,7 @@ function Gate() {
         driverPoints: subscribeDriverPoints,
         driversPoints: subscribeDriversPoints,
         issues: subscribeIssues,
+        inbox: subscribeInbox,
       },
       files: { upload: uploadToTicket },
     };

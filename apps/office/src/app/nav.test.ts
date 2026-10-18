@@ -7,9 +7,12 @@ const keys = (items: { key: string }[]) => items.map((n) => n.key);
 const labels = (items: { label: string }[]) => items.map((n) => n.label);
 
 describe("menu from permissions", () => {
-  it("a requester sees what a viewer sees (any permission implies view, Phase 7 §12)", () => {
-    expect(keys(allowed(NAV, me(PRESETS.requester.permissions)))).toEqual(keys(allowed(NAV, me(PRESETS.viewer.permissions))));
-    expect(keys(allowed(NAV, me(["request"])))).toEqual(["requests", "projects", "settings"]);
+  it("a requester sees what a viewer sees (any permission implies view, Phase 7 §12), plus My trips (Hotfix 2, A)", () => {
+    const viewer = keys(allowed(NAV, me(PRESETS.viewer.permissions)));
+    expect(keys(allowed(NAV, me(PRESETS.requester.permissions)))).toEqual([...viewer.slice(0, 3), "my_trips", ...viewer.slice(3)]);
+    expect(keys(allowed(NAV, me(["request"])))).toEqual(["requests", "my_trips", "projects", "settings"]);
+    // assign_tasks alone brings My trips too (the tasks the person proposed or made).
+    expect(keys(allowed(NAV, me(["assign_tasks"])))).toContain("my_trips");
   });
   it("a viewer opens the counts, live locations, drivers, vehicles and own requests; a fleet admin everything", () => {
     expect(keys(allowed(NAV, me(PRESETS.viewer.permissions)))).toEqual(["overview", "live", "requests", "vehicles", "projects", "drivers", "settings"]);
@@ -20,13 +23,15 @@ describe("menu from permissions", () => {
 });
 
 describe("the phone tab bar: at most five, chosen from the permissions, More always last", () => {
-  it("gives each role its tabs", () => {
-    expect(labels(tabsFor(me(["view", "request"])))).toEqual(["Home", "My requests", "Map", "Vehicles", "More"]);
+  it("gives each role its tabs (My trips where My requests was; an approver keeps the queue there)", () => {
+    expect(labels(tabsFor(me(["view", "request"])))).toEqual(["Home", "My trips", "Map", "Vehicles", "More"]);
     expect(labels(tabsFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["Home", "Requests", "Tasks", "Map", "More"]);
-    expect(labels(tabsFor(me(PRESETS.dispatcher.permissions)))).toEqual(["Home", "Tasks", "My requests", "Map", "More"]);
+    expect(labels(tabsFor(me(PRESETS.dispatcher.permissions)))).toEqual(["Home", "Tasks", "My trips", "Map", "More"]);
     expect(labels(tabsFor(me(PRESETS.viewer.permissions)))).toEqual(["Home", "Map", "Vehicles", "Drivers", "More"]);
-    expect(labels(tabsFor(me(PRESETS.requester.permissions)))).toEqual(["Home", "My requests", "Map", "Vehicles", "More"]);
-    expect(labels(tabsFor(me(["request"])))).toEqual(["Home", "My requests", "More"]);
+    expect(labels(tabsFor(me(PRESETS.requester.permissions)))).toEqual(["Home", "My trips", "Map", "Vehicles", "More"]);
+    expect(labels(tabsFor(me(["request"])))).toEqual(["Home", "My trips", "More"]);
+    expect(labels(tabsFor(me(["view", "request", "approve"])))).toEqual(["Home", "Requests", "Map", "Vehicles", "More"]);
+    expect(tabsFor(me(["request"])).find((t) => t.key === "my_trips")).toEqual({ key: "my_trips", label: "My trips", need: ["request"], path: "/my-trips" });
   });
   it("never shows a screen twice: More lists only what is not on the bar", () => {
     for (const preset of Object.values(PRESETS)) {
@@ -37,13 +42,14 @@ describe("the phone tab bar: at most five, chosen from the permissions, More alw
       expect(bar.length).toBeLessThanOrEqual(5);
       expect(bar[bar.length - 1]).toBe("more");
     }
-    // Task history (Phase 7 §8) sits where Tasks is in the order: Tasks itself is on the bar.
-    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["task_history", "issues", "vehicles", "projects", "maintenance", "mileage", "fuel", "places", "drivers", "duty", "settings"]);
+    // Task history (Phase 7 §8) sits where Tasks is in the order: Tasks itself is on the bar. An approver finds My trips under More.
+    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["task_history", "issues", "my_trips", "vehicles", "projects", "maintenance", "mileage", "fuel", "places", "drivers", "duty", "settings"]);
     expect(moreFor(me(PRESETS.dispatcher.permissions)).find((n) => n.key === "task_history")).toEqual({ key: "task_history", label: "Task history", need: ["assign_tasks"], path: "/tasks/history" });
     // Not in the rail: the desktop opens it from the Tasks page.
     expect(keys(NAV)).not.toContain("task_history");
-    expect(keys(moreFor(me(PRESETS.requester.permissions)))).toEqual(["projects", "drivers", "settings"]); // no task history without assign_tasks
-    expect(keys(moreFor(me(["request"])))).toEqual(["projects", "settings"]);
+    // The Requests list stays reachable for a requester, under More (no task history without assign_tasks).
+    expect(keys(moreFor(me(PRESETS.requester.permissions)))).toEqual(["requests", "projects", "drivers", "settings"]);
+    expect(keys(moreFor(me(["request"])))).toEqual(["requests", "projects", "settings"]);
   });
   it("the big Home action is the one thing the person does most", () => {
     expect(homeAction(me(PRESETS.requester.permissions))).toEqual({ label: "New request", path: "/requests/new" });

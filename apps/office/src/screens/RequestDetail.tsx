@@ -23,6 +23,7 @@ import { isProposal, requestView, withdrawInput } from "./approvalLogic";
 import { ChangesList, LateNotice, RequestHead, Timeline } from "./requestParts";
 import { AssignedBlock, TellRequester } from "./RequestOutcome";
 import { TripSection, useTripLine } from "./RequestTrip";
+import { useRequestsHome, useTripCard } from "./myTripsQuery";
 
 /**
  * The request from the lists already loaded (followed as they refresh), else
@@ -33,7 +34,9 @@ export function useRequest(id: string): { q: RequestCard | undefined; err: strin
   const list = useEntry<RequestsList>("reqs");
   const fromList = list.data?.requests.find((r) => r.id === id);
   const fromWaiting = useEntry<RequestsList>("reqWaiting").data?.requests.find((r) => r.id === id);
-  const known = fromList ?? fromWaiting;
+  // Hotfix 2 (A): opened from My trips (/my-trips/:id): the trip from that list, followed as it refreshes.
+  const trips = useTripCard(id);
+  const known = fromList ?? fromWaiting ?? trips.card;
   const [q, setQ] = useState<RequestCard | undefined>(known);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => {
@@ -41,7 +44,7 @@ export function useRequest(id: string): { q: RequestCard | undefined; err: strin
       setQ(known);
       return;
     }
-    if (list.loading) return; // the list's answer arrives through known
+    if (list.loading || trips.waiting) return; // the list's answer arrives through known
     let alive = true;
     // An older server ignores `id` and answers every request: found among them the same way.
     void transport.call<RequestsList>("list_requests", { status: "all", id })
@@ -53,7 +56,7 @@ export function useRequest(id: string): { q: RequestCard | undefined; err: strin
       })
       .catch((e) => { if (alive) setErr(errText(e as FleetError)[0]); });
     return () => { alive = false; };
-  }, [id, transport, known, list.loading]);
+  }, [id, transport, known, list.loading, trips.waiting]);
   return { q, err, setQ };
 }
 
@@ -72,6 +75,8 @@ export function RequestDetail() {
   const decides = me.tools.includes("decide_request");
   const cancels = me.tools.includes("cancel_request");
   const approver = me.permissions.includes("approve");
+  // Hotfix 2 (A): back to My trips (its dates and filter) when opened from it, else to Requests.
+  const home = useRequestsHome();
 
   async function cancel() {
     const r = cancelReason.trim();
@@ -84,7 +89,7 @@ export function RequestDetail() {
       await transport.call("cancel_request", { request_id: id, reason: r });
       toast("Booking cancelled");
       void store.invalidate();
-      navigate("/requests");
+      navigate(home);
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);
@@ -102,15 +107,15 @@ export function RequestDetail() {
       await transport.call("cancel_request", v.input);
       toast(q && isProposal(q) ? "Task withdrawn" : "Request withdrawn");
       void store.invalidate();
-      navigate("/requests");
+      navigate(home);
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);
     }
   }
 
-  if (err) return <><PageTop title="Vehicle request" backTo="/requests" /><Notice tone="bad">{err}</Notice></>;
-  if (!q) return <><PageTop title="Vehicle request" backTo="/requests" /><Loading>Loading the request…</Loading></>;
+  if (err) return <><PageTop title="Vehicle request" backTo={home} /><Notice tone="bad">{err}</Notice></>;
+  if (!q) return <><PageTop title="Vehicle request" backTo={home} /><Loading>Loading the request…</Loading></>;
   const view = requestView(q, me);
   const task = isProposal(q);
   const p = view.proposal ? q.proposed : undefined;
@@ -119,7 +124,7 @@ export function RequestDetail() {
       <PageTop
         title={task ? "Proposed task" : "Vehicle request"}
         sub={<Pill tone={requestTone(q.status)}>{cap(q.status || "waiting")}</Pill>}
-        backTo="/requests"
+        backTo={home}
         actions={(q.status === "waiting" || q.status === "changed") && decides ? <Link className="btn small dark" to={`/requests/${id}/decide`}>Review</Link> : undefined}
       />
       <div className="card card-b">

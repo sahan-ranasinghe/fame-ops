@@ -71,6 +71,24 @@ export function subscribeDriversPoints(employeeIds: string[], cb: (row: PointRow
   return () => { void client.removeChannel(channel); };
 }
 
+/**
+ * Web only (Hotfix 2, A): the signed-in person's notification centre. office_inbox's policy lets a person read only
+ * their own rows, so Realtime delivers only theirs: a new item (INSERT) and one read in another tab (UPDATE) reload
+ * the bell. Deletes are left out (the nightly clean-up removes read rows; Realtime does not filter deletes by policy).
+ */
+export function subscribeInbox(cb: () => void): () => void {
+  if (!supabase) return () => {};
+  const client = supabase;
+  const channel = client
+    .channel(`office_inbox:${++serial}:${Date.now()}`)
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: "office_inbox" }, () => cb())
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "office_inbox" }, () => cb())
+    .subscribe((status, err) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn(`Realtime office_inbox: ${status}`, err?.message ?? "");
+    });
+  return () => { void client.removeChannel(channel); };
+}
+
 /** Web only: any change on the issues table (the bell and the Issues page reload their list). */
 export function subscribeIssues(cb: () => void): () => void {
   if (!supabase) return () => {};
