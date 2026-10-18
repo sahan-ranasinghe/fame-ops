@@ -160,7 +160,7 @@ describe("Places → Removed places", () => {
     await screen.findByText("Head office");
     fireEvent.click(screen.getByRole("button", { name: "Removed places" }));
     expect(await screen.findByText("Removed by Palitha 16 Oct 15:20")).toBeTruthy();
-    expect(t.argsOf("list_places").at(-1)).toEqual({ limit: 200, removed: true });
+    expect(t.argsOf("list_places").at(-1)).toEqual({ limit: 25, removed: true });
 
     await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Restore" })); });
     expect(t.argsOf("restore_place")).toEqual([{ id: "p2" }]);

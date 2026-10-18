@@ -6,7 +6,6 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useFleet } from "../../app/FleetContext";
 import { useFormDraft } from "../../data/drafts";
-import { useEntry } from "../../data/hooks";
 import type { CreateKeyResult, OfficeUser, OfficeUsers, SetPasswordLinkResult, UpdateOfficeUserResult } from "../../data/types";
 import { errText } from "../../transport/errors";
 import { type FleetError, ROLE_LABEL, type Role } from "../../transport/types";
@@ -24,18 +23,18 @@ export function UserManage() {
   const { me, store, transport } = useFleet();
   const navigate = useNavigate();
   const toast = useToast();
-  const list = useEntry<OfficeUsers>("officeUsers");
-  const fromList = list.data?.users.find((x) => (x.email ?? "").toLowerCase() === email.toLowerCase());
-  const [u, setU] = useState<OfficeUser | undefined>(fromList);
+  const [u, setU] = useState<OfficeUser | undefined>();
   const [loadErr, setLoadErr] = useState<string | null>(null);
   useEffect(() => {
-    if (fromList) {
-      setU(fromList);
-      return;
-    }
     let alive = true;
-    void transport.call<OfficeUsers>("list_office_users", {})
-      .then((p) => { if (alive) setU(p.users.find((x) => (x.email ?? "").toLowerCase() === email.toLowerCase())); })
+    // Hotfix 3 (L3): the person found by the list's search (one page), not the whole list.
+    void transport.call<OfficeUsers>("list_office_users", { search: email, limit: 25 })
+      .then((p) => {
+        if (!alive) return;
+        const found = p.users.find((x) => (x.email ?? "").toLowerCase() === email.toLowerCase());
+        setU(found);
+        if (!found) setLoadErr(`No office user has the e-mail ${email}.`);
+      })
       .catch((e) => { if (alive) setLoadErr(errText(e as FleetError)[0]); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

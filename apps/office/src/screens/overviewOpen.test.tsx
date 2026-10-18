@@ -220,7 +220,7 @@ describe("the Overview's tiles (phone)", () => {
     const transport = await mount("/?open=garage");
     expect(where()).toBe("/vehicles?filter=garage");
     expect(screen.getByRole("button", { name: /^In garage/ }).getAttribute("aria-pressed")).toBe("true");
-    expect(transport.argsOf("list_vehicles").at(-1)).toEqual({ filter: "in_garage" });
+    expect(transport.argsOf("list_vehicles").at(-1)).toEqual({ filter: "in_garage", limit: 25 });
   });
 });
 
@@ -228,11 +228,11 @@ describe("the list screens' filter in the URL", () => {
   it("Vehicles reads it on load and writes it when a chip changes, keeping the other parameters", async () => {
     const transport = await mount("/vehicles?filter=free&x=1");
     expect(screen.getByRole("button", { name: /^Available/ }).getAttribute("aria-pressed")).toBe("true");
-    expect(transport.argsOf("list_vehicles").at(-1)).toEqual({ filter: "available" });
+    expect(transport.argsOf("list_vehicles").at(-1)).toEqual({ filter: "available", limit: 25 });
     fireEvent.click(screen.getByRole("button", { name: /^In garage/ }));
     await act(async () => { await Promise.resolve(); });
     expect(where()).toBe("/vehicles?filter=garage&x=1");
-    expect(transport.argsOf("list_vehicles").at(-1)).toEqual({ filter: "in_garage" });
+    expect(transport.argsOf("list_vehicles").at(-1)).toEqual({ filter: "in_garage", limit: 25 });
     // A vehicle opened from the filtered board keeps the filter (the list beside it, and Back).
     fireEvent.click(screen.getByText("WP KL-1234"));
     await act(async () => { await Promise.resolve(); });

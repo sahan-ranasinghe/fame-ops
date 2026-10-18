@@ -20,8 +20,10 @@ import { num } from "../../lib/format";
 import { errText } from "../../transport/errors";
 import type { FleetError } from "../../transport/types";
 import { Notice, Pill } from "../../ui/basics";
+import { EmptyLine, ListHeader } from "../../ui/ListKit";
 import { PageTop } from "../../ui/Page";
 import { useToast } from "../../ui/Toast";
+import { ListFooter, useLocalPages } from "../listLocal";
 import { guessMapping, presetKeyFor, problemRows } from "./importLogic";
 
 export const BATCH = 500;
@@ -76,7 +78,7 @@ export default function ImportSites() {
     try {
       const [p, i] = await Promise.all([
         load,
-        transport.call<{ imports: PlaceImport[] }>("list_place_imports", { limit: 20 }),
+        transport.call<{ imports: PlaceImport[] }>("list_place_imports", { limit: HISTORY_LIMIT }),
       ]);
       setPresets(p);
       setImports(i.imports);
@@ -351,31 +353,48 @@ export default function ImportSites() {
         </div>
       )}
 
-      <div className="card card-b stack" data-testid="import-history">
-        <h2>Imports</h2>
-        {imports === null ? <div className="sub">Loading…</div> : imports.length === 0 ? <div className="sub">No import yet.</div> : (
-          <div className="tbl-wrap">
-            <table>
-              <thead><tr><th>When</th><th>Who</th><th>File · preset</th><th>Added</th><th>Updated</th><th>Skipped</th><th></th></tr></thead>
-              <tbody>
-                {imports.map((i) => (
-                  <tr key={i.id} data-testid="import-row">
-                    <td className="mono">{i.at}</td>
-                    <td>{i.by}</td>
-                    <td>{i.file ?? "—"}<div className="sub">{i.preset}</div></td>
-                    <td className="num">{num(i.added)}</td>
-                    <td className="num">{num(i.updated + (i.attached ?? 0))}</td>
-                    <td className="num">{num(i.skipped ?? 0)}</td>
-                    <td>{i.undone
-                      ? <span className="sub">Undone {i.undone.at}{i.undone.by ? ` by ${i.undone.by}` : ""}{i.undone.left_as_is ? ` · ${i.undone.left_as_is} left as they were` : ""}</span>
-                      : <button type="button" className="btn small" disabled={busy} onClick={() => void undo(i)}>Undo this import</button>}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+      <ImportHistory imports={imports} busy={busy} onUndo={(i) => void undo(i)} />
     </section>
+  );
+}
+
+/** list_place_imports answers at most this many (the newest first); the page shows them 25 at a time. */
+export const HISTORY_LIMIT = 100;
+
+/**
+ * The import history (Hotfix 3, L3): the newest imports first, 25 at a time (page numbers on a desktop, Load more and
+ * cards on a phone), the count in the header. list_place_imports does not page: the newest 100 are asked once and paged
+ * here.
+ */
+export function ImportHistory({ imports, busy, onUndo }: { imports: PlaceImport[] | null; busy: boolean; onUndo: (i: PlaceImport) => void }) {
+  const list = useLocalPages(imports ?? [], "imports");
+  return (
+    <div className="card" data-testid="import-history">
+      <ListHeader title="Imports" count={imports?.length}
+        right={imports && imports.length >= HISTORY_LIMIT ? <span className="muted small">The newest {HISTORY_LIMIT}</span> : undefined} />
+      {imports === null ? <EmptyLine>Loading…</EmptyLine> : imports.length === 0 ? <EmptyLine>No import yet: the files imported here are listed with Undo.</EmptyLine> : (
+        <div className="tbl-wrap">
+          <table>
+            <thead><tr><th>When</th><th>Who</th><th>File · preset</th><th>Added</th><th>Updated</th><th>Skipped</th><th></th></tr></thead>
+            <tbody>
+              {list.items.map((i) => (
+                <tr key={i.id} data-testid="import-row">
+                  <td data-label="When" className="mono">{i.at}</td>
+                  <td data-label="Who">{i.by}</td>
+                  <td data-label="File · preset">{i.file ?? "—"}<div className="sub">{i.preset}</div></td>
+                  <td data-label="Added" className="num">{num(i.added)}</td>
+                  <td data-label="Updated" className="num">{num(i.updated + (i.attached ?? 0))}</td>
+                  <td data-label="Skipped" className="num">{num(i.skipped ?? 0)}</td>
+                  <td>{i.undone
+                    ? <span className="sub">Undone {i.undone.at}{i.undone.by ? ` by ${i.undone.by}` : ""}{i.undone.left_as_is ? ` · ${i.undone.left_as_is} left as they were` : ""}</span>
+                    : <button type="button" className="btn small" disabled={busy} onClick={() => onUndo(i)}>Undo this import</button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <ListFooter list={list} />
+    </div>
   );
 }

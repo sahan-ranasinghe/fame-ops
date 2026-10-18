@@ -5,7 +5,6 @@ import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
-import { useEntry } from "../data/hooks";
 import type { Driver, DriversList } from "../data/types";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
@@ -26,17 +25,18 @@ export function DriverManage() {
   const { me, store, transport } = useFleet();
   const navigate = useNavigate();
   const toast = useToast();
-  const fromList = useEntry<DriversList>("drivers").data?.drivers.find((d) => d.username === username);
-  const [x, setX] = useState<Driver | undefined>(fromList);
+  const [x, setX] = useState<Driver | undefined>();
   const [loadErr, setLoadErr] = useState<string | null>(null);
   useEffect(() => {
-    if (fromList) {
-      setX(fromList);
-      return;
-    }
     let alive = true;
-    void transport.call<DriversList>("list_drivers", { include_inactive: true })
-      .then((p) => { if (alive) setX(p.drivers.find((d) => d.username === username)); })
+    // Hotfix 3 (L3): the driver found by the list's search (one page), not the whole list.
+    void transport.call<DriversList>("list_drivers", { include_inactive: true, search: username, limit: 25 })
+      .then((p) => {
+        if (!alive) return;
+        const found = p.drivers.find((d) => d.username === username);
+        setX(found);
+        if (!found) setLoadErr(`No driver has the username ${username}.`);
+      })
       .catch((e) => { if (alive) setLoadErr(errText(e as FleetError)[0]); });
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps

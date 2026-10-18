@@ -147,9 +147,10 @@ export function whoOf(param: string | null, tools: readonly string[]): Who {
   return whoOptions(tools).some(([k]) => k === param) ? (param as Who) : "ours";
 }
 
-/** list_places' input for the chips, the search box and Without a pin. */
-export function listArgs(who: Who, text: string, nopin: boolean, limit: number): Record<string, unknown> {
-  const args: Record<string, unknown> = who === "removed" ? { limit, removed: true } : { limit, operator: who === "ours" ? "other" : who };
+/** list_places' input for the chips, the search box and Without a pin (Hotfix 3: no limit = the paged list adds its own). */
+export function listArgs(who: Who, text: string, nopin: boolean, limit?: number): Record<string, unknown> {
+  const args: Record<string, unknown> = who === "removed" ? { removed: true } : { operator: who === "ours" ? "other" : who };
+  if (limit !== undefined) args.limit = limit;
   if (text.trim()) args.search = text.trim();
   if (nopin) args.pinned = false;
   return args;
