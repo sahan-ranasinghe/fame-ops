@@ -2,13 +2,15 @@ import { PERMISSION_TEXT } from "@fleet/permissions";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { moreFor } from "../app/nav";
+import { badgeText, useNavBadges } from "../app/navBadges";
 import { ROLE_LABEL } from "../transport/types";
 import { Icon } from "../ui/icons";
 
-/** Everything the person may open that is not on the phone's tab bar, and their account. */
+/** Everything the person may open that is not on the phone's tab bar (Issues and Requests with their counts), and their account. */
 export function More() {
   const { me, signOut, transport } = useFleet();
   const more = moreFor(me);
+  const badges = useNavBadges();
   return (
     <section className="view">
       <div className="ph"><div><div className="eyebrow">Your account and everything else</div><h1>More</h1></div></div>
@@ -16,7 +18,7 @@ export function More() {
         {more.length > 0 && (
           <div className="more-list" data-testid="more-list">
             {more.map((n) => (
-              <Link key={n.key} to={n.path}><Icon name={n.key} />{n.label}</Link>
+              <Link key={n.key} to={n.path}><Icon name={n.key} />{n.label}{badges[n.key] ? <span className="badge" data-testid={`more-badge-${n.key}`}>{badgeText(badges[n.key])}</span> : null}</Link>
             ))}
           </div>
         )}

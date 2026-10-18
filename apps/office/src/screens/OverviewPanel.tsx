@@ -1,7 +1,8 @@
 // Phase 7 (§16): the side panel beside the Overview on a desktop (/?open=road|free|garage|tasks|requests|reminders): the
 // list a tile counts, with an X (and Esc) to close it and a link to the full page. The vehicles on the road and the
 // reminders come from the overview already on screen; Free now and In garage read list_vehicles, Tasks today the day's
-// board, Requests the waiting queue the Overview watches. Each list keeps its answer on screen while it refreshes.
+// board, Requests the first page of the waiting queue (Hotfix 3: 25, with how many there are). Each list keeps its
+// answer on screen while it refreshes.
 import { type ReactNode, useEffect } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -14,7 +15,9 @@ import { joinDots, plateOf, today, vehicleAvailabilityTone } from "../lib/format
 import { can } from "../transport/types";
 import { Avatar, Empty, ErrBox, IconLink, Loading, Pill, Plate, VehicleThumb } from "../ui/basics";
 import { Icon } from "../ui/icons";
+import { PAGE_SIZE } from "../ui/ListKit";
 import { LATE_BADGE } from "./approvalLogic";
+import { requestsLine } from "./overview/overviewLogic";
 import { FULL_PATH, OPEN_TEXT, type OverviewOpen, VEHICLE_FILTER_WORDS } from "./overviewLinks";
 import { ReminderList } from "./Reminders";
 import { TripTags } from "./TripPurpose";
@@ -123,18 +126,21 @@ function TaskRows() {
   );
 }
 
-/** Requests to approve: the waiting queue the Overview already watches, each to its request. */
-function RequestRows({ rq }: { rq: Entry<RequestsList> }) {
+/** Requests to approve: the first page of the waiting queue (Hotfix 3: 25), each to its request; the rest on Requests. */
+function RequestRows() {
+  const rq = useQuery<RequestsList>("overview.requests", "list_requests", { status: "waiting", limit: PAGE_SIZE }, { every: 60000 });
   const list = rq.data?.requests ?? [];
   if (!rq.data) {
     return rq.err
-      ? <div className="card-b"><ErrBox entry={rq} /></div>
+      ? <div className="card-b"><ErrBox entry={{ data: undefined, err: rq.err, loading: false }} onRetry={rq.refetch} /></div>
       : <Loading>Loading requests…</Loading>;
   }
   if (!list.length) return <Empty>No requests are waiting.</Empty>;
+  const total = rq.data.total ?? list.length;
   return (
     <div className="rows">
-      {list.map((q) => (
+      {total > list.length && <p className="muted small" style={{ margin: "10px 22px" }} data-testid="panel-more">Showing {list.length} of {total}: the rest are on Requests.</p>}
+      {list.slice(0, PAGE_SIZE).map((q) => (
         <Link key={q.id} className="row link-row" to={`/requests/${q.id}`} data-testid="panel-row">
           <span className="grow">
             <span className="name">
@@ -149,7 +155,7 @@ function RequestRows({ rq }: { rq: Entry<RequestsList> }) {
   );
 }
 
-export function OverviewPanel({ open, overview, rq, onClose }: { open: OverviewOpen; overview: Overview | undefined; rq: Entry<RequestsList>; onClose: () => void }) {
+export function OverviewPanel({ open, overview, onClose }: { open: OverviewOpen; overview: Overview | undefined; onClose: () => void }) {
   const { me } = useFleet();
   // Esc closes the panel (not while typing in a field), like a detail panel beside a list.
   useEffect(() => {
@@ -184,8 +190,8 @@ export function OverviewPanel({ open, overview, rq, onClose }: { open: OverviewO
       body = <TaskRows />;
       break;
     case "requests":
-      eyebrow = o?.requests.oldest_waiting ? `Oldest waiting ${o.requests.oldest_waiting}` : "Waiting for a decision";
-      body = <RequestRows rq={rq} />;
+      eyebrow = o ? requestsLine(o.requests) : "Waiting for a decision";
+      body = <RequestRows />;
       break;
     case "reminders":
       eyebrow = `Due in the next ${o?.reminders.window_days ?? 14} days`;

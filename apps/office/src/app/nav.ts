@@ -5,7 +5,9 @@
 // Maintenance and Mileage need vehicles; the driver page (routes) needs
 // assign_tasks or vehicles. Since Phase 6 a screen the person may not open is
 // not in the menu at all (a direct URL shows the "No access" page; the server
-// refuses the tools either way).
+// refuses the tools either way). Hotfix 3 (L5): the desktop menu in sections
+// (Today · Fleet · Reports · Admin), each collapsible; the phone's bottom bar
+// holds the four most used screens for the person's role, then More.
 import type { Permission } from "@fleet/permissions";
 import { can, type Me } from "../transport/types";
 
@@ -25,52 +27,97 @@ export const LOCK_HINT = "Ask an admin for access";
 /** Phase 7: the duty log, the office's clock-out and "Move to vehicle" (duty_log, clock_out_driver, move_driver_vehicle). */
 export const DUTY_NEED: Permission[] = ["assign_tasks", "vehicles"];
 
-/** The issues centre and the bell: everything with issues, the task kinds with assign_tasks. */
+/** The issues centre and its count: everything with issues, the task kinds with assign_tasks. */
 export const ISSUES_NEED: Permission[] = ["issues", "assign_tasks"];
 
 /** Hotfix 2 (A): My trips (my_trips): the requests and proposed tasks a person made, for request or assign_tasks. */
 export const TRIPS_NEED: Permission[] = ["request", "assign_tasks"];
 
+/** Every screen of the menu, in the menu's order (its sections below). */
 export const NAV: NavItem[] = [
+  // Today
   { key: "overview", label: "Overview", need: ["view"], path: "/" },
   { key: "live", label: "Live locations", need: ["view"], path: "/live" },
   { key: "tasks", label: "Tasks", need: ["assign_tasks"], path: "/tasks" },
-  { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
   { key: "requests", label: "Requests", need: ["view", "request"], path: "/requests" },
   { key: "my_trips", label: "My trips", need: TRIPS_NEED, path: "/my-trips" },
+  { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
+  // Fleet
   { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
-  { key: "projects", label: "Projects", need: ["view", "request"], path: "/projects" },
+  { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
+  { key: "places", label: "Places", need: ["vehicles"], path: "/places" },
   { key: "maintenance", label: "Maintenance", need: ["vehicles"], path: "/maintenance" },
+  // Reports
   { key: "mileage", label: "Mileage", need: ["vehicles"], path: "/mileage" },
   { key: "fuel", label: "Fuel", need: ["vehicles"], path: "/fuel" },
-  { key: "places", label: "Places", need: ["vehicles"], path: "/places" },
-  { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
   { key: "duty", label: "Duty log", need: DUTY_NEED, path: "/drivers/duty" },
+  // Admin
+  { key: "projects", label: "Projects", need: ["view", "request"], path: "/projects" },
   { key: "settings", label: "Settings", need: [], path: "/settings" },
 ];
+
+/** Hotfix 3 (L5): the desktop menu's sections, each collapsible (prefs.menu_collapsed holds the collapsed keys). */
+export type NavSectionKey = "today" | "fleet" | "reports" | "admin";
+
+export interface NavSection {
+  key: NavSectionKey;
+  label: string;
+  items: NavItem[];
+}
+
+export const NAV_SECTIONS: { key: NavSectionKey; label: string; keys: string[] }[] = [
+  { key: "today", label: "Today", keys: ["overview", "live", "tasks", "requests", "my_trips", "issues"] },
+  { key: "fleet", label: "Fleet", keys: ["vehicles", "drivers", "places", "maintenance"] },
+  { key: "reports", label: "Reports", keys: ["mileage", "fuel", "duty"] },
+  { key: "admin", label: "Admin", keys: ["projects", "settings"] },
+];
+
+/** The menu's sections with only what the person may open, in NAV's order; a section with nothing in it is left out. */
+export function menuFor(me: Pick<Me, "permissions">): NavSection[] {
+  const mine = allowed(NAV, me);
+  return NAV_SECTIONS
+    .map((s) => ({ key: s.key, label: s.label, items: mine.filter((n) => s.keys.includes(n.key)) }))
+    .filter((s) => s.items.length > 0);
+}
 
 /** At most this many tabs on a phone, the last one always More. */
 export const TAB_COUNT = 5;
 
 /**
- * The phone tab bar: Home first, then the first screens of this list the person
- * may open, in this order, until four are filled; More is always the fifth.
- * So a requester gets Home, My trips, Map, Vehicles, More; a fleet admin
- * Home, Requests, Tasks, Map, More; a dispatcher (who may also ask) Home,
- * Tasks, My trips, Map, More; a viewer Home, Map, Vehicles, Drivers, More.
- * Hotfix 2 (A): My trips takes the slot My requests had (the person's own
- * requests with their live state); an approver keeps the queue there and
- * finds My trips under More. Items sharing a `slot` take one tab between them.
+ * Hotfix 3 (L5): the phone's bottom bar is Home, the most used screens for the person's role, then More. The role is
+ * read from the permissions: approve = an approver, else assign_tasks = a dispatcher, else request = a requester, else
+ * a viewer. A role's tab the person may not open is skipped and the bar is filled from TAB_FILL, in order. Items sharing
+ * a `slot` take one tab between them: an approver keeps the queue there and finds My trips under More.
  */
-export const TAB_ORDER: (NavItem & { slot?: string })[] = [
-  { key: "requests", label: "Requests", need: ["approve"], path: "/requests", slot: "requests" },
-  { key: "tasks", label: "Tasks", need: ["assign_tasks"], path: "/tasks" },
-  { key: "my_trips", label: "My trips", need: ["request"], path: "/my-trips", slot: "requests" },
-  { key: "live", label: "Map", need: ["view"], path: "/live" },
-  { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
-  { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
-  { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
-];
+export type TabRole = "approver" | "dispatcher" | "requester" | "viewer";
+
+export const TABS: Record<string, NavItem & { slot?: string }> = {
+  requests: { key: "requests", label: "Requests", need: ["approve"], path: "/requests", slot: "requests" },
+  tasks: { key: "tasks", label: "Tasks", need: ["assign_tasks"], path: "/tasks" },
+  my_trips: { key: "my_trips", label: "My trips", need: ["request"], path: "/my-trips", slot: "requests" },
+  live: { key: "live", label: "Live", need: ["view"], path: "/live" },
+  vehicles: { key: "vehicles", label: "Vehicles", need: ["view"], path: "/vehicles" },
+  issues: { key: "issues", label: "Issues", need: ISSUES_NEED, path: "/issues" },
+  drivers: { key: "drivers", label: "Drivers", need: ["view"], path: "/drivers" },
+};
+
+/** Each role's tabs after Home (Sahan's defaults, Hotfix 3 question 6). */
+export const ROLE_TABS: Record<TabRole, string[]> = {
+  approver: ["requests", "tasks", "live"],
+  dispatcher: ["tasks", "live", "issues"],
+  requester: ["my_trips", "vehicles", "live"],
+  viewer: ["live", "vehicles", "drivers"],
+};
+
+/** What fills the bar when a role's own tabs are not all open to the person (mixed permissions). */
+export const TAB_FILL = ["requests", "tasks", "my_trips", "live", "issues", "vehicles", "drivers"];
+
+export function tabRole(me: Pick<Me, "permissions">): TabRole {
+  if (can(me, "approve")) return "approver";
+  if (can(me, "assign_tasks")) return "dispatcher";
+  if (can(me, "request")) return "requester";
+  return "viewer";
+}
 
 export const HOME_TAB: NavItem = { key: "overview", label: "Home", need: [], path: "/" };
 export const MORE_TAB: NavItem = { key: "more", label: "More", need: [], path: "/more" };
@@ -78,8 +125,11 @@ export const MORE_TAB: NavItem = { key: "more", label: "More", need: [], path: "
 export function tabsFor(me: Pick<Me, "permissions">): NavItem[] {
   const picked: NavItem[] = [HOME_TAB];
   const slots = new Set<string>();
-  for (const { slot, ...t } of TAB_ORDER) {
+  for (const key of [...ROLE_TABS[tabRole(me)], ...TAB_FILL]) {
     if (picked.length >= TAB_COUNT - 1) break;
+    const tab = TABS[key];
+    if (!tab) continue;
+    const { slot, ...t } = tab;
     const s = slot ?? t.key;
     if (!can(me, ...t.need) || slots.has(s) || picked.some((p) => p.key === t.key)) continue;
     slots.add(s);

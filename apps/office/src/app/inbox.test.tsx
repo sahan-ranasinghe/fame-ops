@@ -230,6 +230,36 @@ describe("the notification centre", () => {
     expect(t.argsOf("mark_inbox_read").at(-1)).toEqual({ ids: [9] });
   });
 
+  it("the tray (Hotfix 3, L4): the items under Today, Yesterday and Earlier; All / Unread; everything the inbox holds behind All notifications", async () => {
+    const t = new FakeTransport();
+    const day = 24 * 3600 * 1000;
+    t.inbox = {
+      unread: 2,
+      total: 40,
+      items: [
+        item(4, { at: colomboAt(Date.now()) }),
+        item(3, { at: colomboAt(Date.now() - day), read: true }),
+        item(2, { at: colomboAt(Date.now() - 5 * day) }),
+        item(1, { at: colomboAt(Date.now() - 6 * day), read: true }),
+      ],
+    };
+    await mount(t);
+    fireEvent.click(screen.getByRole("button", { name: "Notifications: 2 unread" }));
+    const panel = screen.getByTestId("inbox-panel");
+    const groups = () => within(screen.getByTestId("inbox-panel")).queryAllByTestId("inbox-group");
+    expect(groups().map((g) => [g.querySelector(".inbox-day")?.textContent, within(g).getAllByTestId("inbox-item").length])).toEqual([["Today", 1], ["Yesterday", 1], ["Earlier", 2]]);
+    expect(within(panel).getByRole("link", { name: "All notifications (40)" }).getAttribute("href")).toBe("/inbox");
+    expect(within(panel).getByRole("button", { name: "All" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(panel).getByRole("button", { name: "Unread (2)" }));
+    expect(groups().map((g) => [g.querySelector(".inbox-day")?.textContent, within(g).getAllByTestId("inbox-item").map((i) => i.textContent?.includes("unread"))])).toEqual([["Today", [true]], ["Earlier", [true]]]);
+    // Mark all read: nothing unread is left to show; All shows them again.
+    fireEvent.click(within(panel).getByRole("button", { name: "Mark all read" }));
+    await flush();
+    expect(within(screen.getByTestId("inbox-panel")).getByText("Nothing unread.")).toBeTruthy();
+    fireEvent.click(within(screen.getByTestId("inbox-panel")).getByRole("button", { name: "All" }));
+    expect(within(screen.getByTestId("inbox-panel")).getAllByTestId("inbox-item")).toHaveLength(4);
+  });
+
   it("on a phone the bell opens /inbox: the list and Mark all read", async () => {
     vi.stubGlobal("matchMedia", (q: string) => ({ matches: true, media: q, addEventListener: () => {}, removeEventListener: () => {} }));
     const t = new FakeTransport();

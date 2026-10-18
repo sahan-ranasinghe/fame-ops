@@ -1,8 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useEntry } from "../data/hooks";
-import type { IssuesList, Overview } from "../data/types";
-import { bellCount, severityTone } from "../screens/issuesLogic";
+import type { Overview } from "../data/types";
 import { longDate, today } from "../lib/format";
 import { AUTHZ, errText } from "../transport/errors";
 import { can, ROLE_LABEL } from "../transport/types";
@@ -11,69 +10,14 @@ import { Icon } from "../ui/icons";
 import { PullToRefresh } from "../ui/PullToRefresh";
 import { useFleet } from "./FleetContext";
 import { InboxBanners, InboxBell, InboxProvider, SoundStrip } from "./inbox";
-import { allowed, ISSUES_NEED, NAV, tabsFor } from "./nav";
-
-const BELL_ARGS = { status: "active", limit: 10 };
-
-/** The bell: how many issues are open or in progress, the newest ten in a dropdown. */
-function Bell() {
-  const { me, store, noConnector, realtime } = useFleet();
-  const show = !noConnector && can(me, ...ISSUES_NEED);
-  const entry = useEntry<IssuesList>("issues");
-  const [open, setOpen] = useState(false);
-  const { pathname } = useLocation();
-
-  useEffect(() => {
-    if (!show) return;
-    store.watch("issues", "list_issues", BELL_ARGS, 60000);
-    return () => store.unwatch("issues");
-  }, [store, show]);
-  // Web: a change on the issues table refreshes the count at once (one reload a second at most).
-  useEffect(() => {
-    if (!show) return;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    // Web only: the artifact has no Realtime (its build carries no Supabase code).
-    if (!realtime?.issues) return;
-    return realtime.issues(() => {
-      if (timer) return;
-      timer = setTimeout(() => {
-        timer = null;
-        void store.load("issues", "list_issues", BELL_ARGS);
-      }, 1000);
-    });
-  }, [store, show, realtime]);
-  useEffect(() => setOpen(false), [pathname]);
-
-  if (!show) return null;
-  const count = bellCount(entry.data);
-  const items = entry.data?.issues ?? [];
-  return (
-    <div className="bell">
-      <button type="button" className="bell-btn" aria-label={`Issues: ${count} open`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <Icon name="issues" />
-        {count > 0 && <span className="badge" data-testid="bell-count">{count}</span>}
-      </button>
-      {open && (
-        <div className="bell-menu" role="menu" data-testid="bell-menu">
-          {items.length
-            ? items.map((i) => (
-              <Link key={i.id} role="menuitem" to={`/issues/${i.id}`} className="bell-item">
-                <i className={`dot ${severityTone(i.severity)}`} />
-                <span className="grow"><b>{i.title}</b><small>{i.detail ?? ""}</small></span>
-              </Link>
-            ))
-            : <div className="bell-item muted">Nothing needs attention.</div>}
-          <Link role="menuitem" to="/issues" className="bell-all">All issues{count > items.length ? ` (${count})` : ""}</Link>
-        </div>
-      )}
-    </div>
-  );
-}
+import { menuFor, moreFor, type NavItem, tabsFor } from "./nav";
+import { badgeText, useIssuesCountWatch, useNavBadges } from "./navBadges";
+import { usePrefs } from "./prefs";
 
 /**
  * Phase 7 (§19): "2 tasks need a driver · Show" on every Tasks page (board, detail, history, the forms) while any does.
- * It reads the overview (watched every 30 s); on the web a change on the issues table (the bell's channel) reloads it
- * within a second, since declining and the end of the accept window open an issue.
+ * It reads the overview (watched every 30 s); on the web a change on the issues table reloads it within a second, since
+ * declining and the end of the accept window open an issue.
  */
 function NeedsDriverBanner() {
   const { me, store, noConnector, realtime } = useFleet();
@@ -153,13 +97,62 @@ function Banner() {
   );
 }
 
+/** A screen is current on its own path and on every page under it (/requests/new, /tasks/:id …). */
+const isCurrent = (pathname: string, path: string) => (path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(path + "/"));
+
+/**
+ * Hotfix 3 (L5): the desktop menu in sections (Today · Fleet · Reports · Admin), only what the person may open. A
+ * section's name collapses it (remembered per person with the Overview's sections); a collapsed section still shows the
+ * page you are on, and the sum of its counts beside its name.
+ */
+function RailMenu({ badges }: { badges: Record<string, number> }) {
+  const { me } = useFleet();
+  const { pathname } = useLocation();
+  const { isCollapsed, setCollapsed } = usePrefs();
+  const sections = menuFor(me);
+  const current = (n: NavItem) => isCurrent(pathname, n.path);
+  const badge = (key: string) => (badges[key] ? <span className="badge" data-testid={`nav-badge-${key}`} aria-label={`${badges[key]} ${key === "issues" ? "open" : "waiting"}`}>{badgeText(badges[key])}</span> : null);
+  return (
+    <nav className="nav nav-sections" aria-label="Menu">
+      {sections.map((s) => {
+        const collapsed = isCollapsed("menu_collapsed", s.key);
+        const items = collapsed ? s.items.filter(current) : s.items;
+        const hidden = s.items.filter((n) => !items.includes(n)).reduce((sum, n) => sum + (badges[n.key] ?? 0), 0);
+        return (
+          <div className="nav-sec" key={s.key} data-testid={`nav-${s.key}`}>
+            <button
+              type="button"
+              className="nav-sec-h"
+              aria-expanded={!collapsed}
+              aria-controls={`nav-sec-${s.key}`}
+              onClick={() => setCollapsed("menu_collapsed", s.key, !collapsed)}
+            >
+              <span className="grow">{s.label}</span>
+              {collapsed && hidden > 0 && <span className="badge" aria-label={`${hidden} inside`}>{badgeText(hidden)}</span>}
+              <span className="chev" aria-hidden="true" />
+            </button>
+            <div id={`nav-sec-${s.key}`} className="nav-sec-items">
+              {items.map((n) => (
+                <NavLink key={n.key} to={n.path} end={n.path === "/"}>
+                  <Icon name={n.key} /><span>{n.label}</span>{badge(n.key)}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      <NavLink to="/more" className="nav-more"><Icon name="more" /><span>More</span></NavLink>
+    </nav>
+  );
+}
+
 function ShellBody() {
   const { me, store, noConnector } = useFleet();
-  const overview = useEntry<Overview>("overview");
-  const waiting = can(me, "approve") ? overview.data?.requests?.waiting ?? 0 : 0;
-  // The rail lists only what this person may open; the phone tab bar follows its own order.
-  const nav = allowed(NAV, me);
+  const badges = useNavBadges();
+  // The phone tab bar follows its own order (the role's most used screens).
   const tabs = tabsFor(me);
+  // Hotfix 3 (L4): the issues count, when Issues is not on the bar, shows on More (Issues is listed there).
+  const issuesUnderMore = badges.issues > 0 && moreFor(me).some((n) => n.key === "issues");
   const { pathname } = useLocation();
 
   // The overview feeds the Requests badge and the Home tiles: watched while the app is open.
@@ -168,15 +161,19 @@ function ShellBody() {
     store.watch("overview", "fleet_overview", {}, 30000);
     return () => store.unwatch("overview");
   }, [store, noConnector, me]);
+  useIssuesCountWatch();
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [pathname]);
 
-  const badge = (key: string) => key === "requests" && waiting ? <span className="badge">{waiting}</span> : null;
   const role = me.name ? ROLE_LABEL[me.role] ?? "Fleet office" : "Fleet office";
-  // A tab is current on its own screen and on every page under it (/requests/new, /tasks/:id …).
-  const current = (path: string) => (path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(path + "/"));
+  const tabBadge = (key: string) => {
+    const n = key === "more" ? (issuesUnderMore ? badges.issues : 0) : badges[key] ?? 0;
+    if (!n) return null;
+    const what = key === "requests" ? "waiting" : key === "more" ? "open issues" : "open";
+    return <span className="tab-badge" data-testid={`tab-badge-${key}`} aria-label={`${n} ${what}`}>{badgeText(n)}</span>;
+  };
 
   return (
     <div className="app">
@@ -185,16 +182,9 @@ function ShellBody() {
           <div className="logo">FF</div>
           <div><b>Fame Fleet</b><span>Fleet office</span></div>
         </div>
-        {/* Hotfix 2 (A): the notification centre (a tray) beside the issues bell, which stays as it is. */}
-        <div className="bells"><InboxBell /><Bell /></div>
-        <nav className="nav">
-          {nav.map((n) => (
-            <NavLink key={n.key} to={n.path} end={n.path === "/"}>
-              <Icon name={n.key} /><span>{n.label}</span>{badge(n.key)}
-            </NavLink>
-          ))}
-          <NavLink to="/more"><Icon name="more" /><span>More</span></NavLink>
-        </nav>
+        {/* Hotfix 3 (L4): one notification icon, the tray; the issues count is on the Issues menu item. */}
+        <div className="bells"><InboxBell /></div>
+        <RailMenu badges={badges} />
         {/* The person's name opens My profile (their phone number, Hotfix 2 F). */}
         <Link className="viewer" to={PROFILE_PATH} title="My profile" data-testid="viewer-profile">
           {me.name
@@ -208,7 +198,6 @@ function ShellBody() {
           <div className="logo">FF</div>
           <div className="grow"><b>Fame Fleet</b><div className="muted small">{longDate(today(), true)}</div></div>
           <InboxBell />
-          <Bell />
         </div>
         <SoundStrip />
         <InboxBanners />
@@ -219,11 +208,14 @@ function ShellBody() {
       </main>
 
       <nav className="tabbar" aria-label="Sections">
-        {tabs.map((t) => (
-          <NavLink key={t.key} to={t.path} end={t.path === "/"} className={current(t.path) ? "active" : undefined} aria-current={current(t.path) ? "page" : undefined}>
-            <i><Icon name={t.key} /></i>{t.label}{t.key === "requests" && waiting ? <span className="tab-badge" aria-label={`${waiting} waiting`}>{waiting}</span> : null}
-          </NavLink>
-        ))}
+        {tabs.map((t) => {
+          const cur = isCurrent(pathname, t.path);
+          return (
+            <NavLink key={t.key} to={t.path} end={t.path === "/"} className={cur ? "active" : undefined} aria-current={cur ? "page" : undefined}>
+              <i><Icon name={t.key} /></i>{t.label}{tabBadge(t.key)}
+            </NavLink>
+          );
+        })}
       </nav>
     </div>
   );

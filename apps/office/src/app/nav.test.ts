@@ -1,6 +1,6 @@
 import { type Permission, PRESETS } from "@fleet/permissions";
 import { describe, expect, it } from "vitest";
-import { allowed, homeAction, moreFor, NAV, ROUTES_NEED, tabsFor } from "./nav";
+import { allowed, homeAction, menuFor, moreFor, NAV, NAV_SECTIONS, ROUTES_NEED, tabRole, tabsFor } from "./nav";
 
 const me = (permissions: readonly Permission[]) => ({ permissions: [...permissions] });
 const keys = (items: { key: string }[]) => items.map((n) => n.key);
@@ -15,23 +15,64 @@ describe("menu from permissions", () => {
     expect(keys(allowed(NAV, me(["assign_tasks"])))).toContain("my_trips");
   });
   it("a viewer opens the counts, live locations, drivers, vehicles and own requests; a fleet admin everything", () => {
-    expect(keys(allowed(NAV, me(PRESETS.viewer.permissions)))).toEqual(["overview", "live", "requests", "vehicles", "projects", "drivers", "settings"]);
+    expect(keys(allowed(NAV, me(PRESETS.viewer.permissions)))).toEqual(["overview", "live", "requests", "vehicles", "drivers", "projects", "settings"]);
     expect(keys(allowed(NAV, me(PRESETS.fleet_admin.permissions)))).toEqual(keys(NAV));
     expect(ROUTES_NEED.some((p) => PRESETS.dispatcher.permissions.includes(p))).toBe(true);
     expect(ROUTES_NEED.some((p) => PRESETS.viewer.permissions.includes(p))).toBe(false);
   });
 });
 
-describe("the phone tab bar: at most five, chosen from the permissions, More always last", () => {
-  it("gives each role its tabs (My trips where My requests was; an approver keeps the queue there)", () => {
-    expect(labels(tabsFor(me(["view", "request"])))).toEqual(["Home", "My trips", "Map", "Vehicles", "More"]);
-    expect(labels(tabsFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["Home", "Requests", "Tasks", "Map", "More"]);
-    expect(labels(tabsFor(me(PRESETS.dispatcher.permissions)))).toEqual(["Home", "Tasks", "My trips", "Map", "More"]);
-    expect(labels(tabsFor(me(PRESETS.viewer.permissions)))).toEqual(["Home", "Map", "Vehicles", "Drivers", "More"]);
-    expect(labels(tabsFor(me(PRESETS.requester.permissions)))).toEqual(["Home", "My trips", "Map", "Vehicles", "More"]);
+describe("the desktop menu in sections (Hotfix 3, L5)", () => {
+  it("Today · Fleet · Reports · Admin, every screen in exactly one section", () => {
+    expect(NAV_SECTIONS.map((s) => s.label)).toEqual(["Today", "Fleet", "Reports", "Admin"]);
+    const inSections = NAV_SECTIONS.flatMap((s) => s.keys);
+    expect([...inSections].sort()).toEqual(keys(NAV).sort());
+    expect(new Set(inSections).size).toBe(inSections.length);
+    const admin = menuFor(me(PRESETS.fleet_admin.permissions));
+    expect(admin.map((s) => [s.key, keys(s.items)])).toEqual([
+      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues"]],
+      ["fleet", ["vehicles", "drivers", "places", "maintenance"]],
+      ["reports", ["mileage", "fuel", "duty"]],
+      ["admin", ["projects", "settings"]],
+    ]);
+  });
+  it("each person sees only what their permissions allow; an empty section is left out", () => {
+    expect(menuFor(me(PRESETS.viewer.permissions)).map((s) => [s.key, keys(s.items)])).toEqual([
+      ["today", ["overview", "live", "requests"]],
+      ["fleet", ["vehicles", "drivers"]],
+      ["admin", ["projects", "settings"]],
+    ]);
+    expect(menuFor(me(PRESETS.dispatcher.permissions)).map((s) => [s.key, keys(s.items)])).toEqual([
+      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues"]],
+      ["fleet", ["vehicles", "drivers"]],
+      ["reports", ["duty"]],
+      ["admin", ["projects", "settings"]],
+    ]);
+    expect(menuFor(me(["request"])).map((s) => [s.key, keys(s.items)])).toEqual([["today", ["requests", "my_trips"]], ["admin", ["projects", "settings"]]]);
+  });
+});
+
+describe("the phone tab bar: Home, the four most used for the role, More", () => {
+  it("gives each role its tabs (Hotfix 3 question 6)", () => {
+    expect(labels(tabsFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["Home", "Requests", "Tasks", "Live", "More"]);
+    expect(labels(tabsFor(me(PRESETS.dispatcher.permissions)))).toEqual(["Home", "Tasks", "Live", "Issues", "More"]);
+    expect(labels(tabsFor(me(PRESETS.requester.permissions)))).toEqual(["Home", "My trips", "Vehicles", "Live", "More"]);
+    expect(labels(tabsFor(me(PRESETS.viewer.permissions)))).toEqual(["Home", "Live", "Vehicles", "Drivers", "More"]);
+    // Every permission (an admin) is an approver.
+    expect(labels(tabsFor(me(["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"])))).toEqual(["Home", "Requests", "Tasks", "Live", "More"]);
+    expect(tabsFor(me(PRESETS.requester.permissions)).find((t) => t.key === "my_trips")).toEqual({ key: "my_trips", label: "My trips", need: ["request"], path: "/my-trips" });
+  });
+  it("mixed permissions: a role's tab the person cannot open is replaced from the fill order", () => {
+    expect(tabRole(me(["view", "request", "approve"]))).toBe("approver");
+    // An approver without assign_tasks: no Tasks; My trips shares the Requests slot; Vehicles fills.
+    expect(labels(tabsFor(me(["view", "request", "approve"])))).toEqual(["Home", "Requests", "Live", "Vehicles", "More"]);
+    // A dispatcher who cannot ask (no request): the same three.
+    expect(labels(tabsFor(me(["view", "assign_tasks"])))).toEqual(["Home", "Tasks", "Live", "Issues", "More"]);
+    // Request without view: only My trips.
     expect(labels(tabsFor(me(["request"])))).toEqual(["Home", "My trips", "More"]);
-    expect(labels(tabsFor(me(["view", "request", "approve"])))).toEqual(["Home", "Requests", "Map", "Vehicles", "More"]);
-    expect(tabsFor(me(["request"])).find((t) => t.key === "my_trips")).toEqual({ key: "my_trips", label: "My trips", need: ["request"], path: "/my-trips" });
+    // Issues and view (no tasks, no requests): the viewer's bar; Issues is under More.
+    expect(labels(tabsFor(me(["view", "issues"])))).toEqual(["Home", "Live", "Vehicles", "Drivers", "More"]);
+    expect(keys(moreFor(me(["view", "issues"])))).toContain("issues");
   });
   it("never shows a screen twice: More lists only what is not on the bar", () => {
     for (const preset of Object.values(PRESETS)) {
@@ -42,13 +83,15 @@ describe("the phone tab bar: at most five, chosen from the permissions, More alw
       expect(bar.length).toBeLessThanOrEqual(5);
       expect(bar[bar.length - 1]).toBe("more");
     }
-    // Task history (Phase 7 §8) sits where Tasks is in the order: Tasks itself is on the bar. An approver finds My trips under More.
-    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["task_history", "issues", "my_trips", "vehicles", "projects", "maintenance", "mileage", "fuel", "places", "drivers", "duty", "settings"]);
+    // In the menu's order; Task history sits where Tasks is. An approver finds My trips under More.
+    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["task_history", "my_trips", "issues", "vehicles", "drivers", "places", "maintenance", "mileage", "fuel", "duty", "projects", "settings"]);
+    expect(keys(moreFor(me(PRESETS.dispatcher.permissions)))).toEqual(["task_history", "requests", "my_trips", "vehicles", "drivers", "duty", "projects", "settings"]);
     expect(moreFor(me(PRESETS.dispatcher.permissions)).find((n) => n.key === "task_history")).toEqual({ key: "task_history", label: "Task history", need: ["assign_tasks"], path: "/tasks/history" });
     // Not in the rail: the desktop opens it from the Tasks page.
     expect(keys(NAV)).not.toContain("task_history");
     // The Requests list stays reachable for a requester, under More (no task history without assign_tasks).
-    expect(keys(moreFor(me(PRESETS.requester.permissions)))).toEqual(["requests", "projects", "drivers", "settings"]);
+    expect(keys(moreFor(me(PRESETS.requester.permissions)))).toEqual(["requests", "drivers", "projects", "settings"]);
+    expect(keys(moreFor(me(PRESETS.viewer.permissions)))).toEqual(["requests", "projects", "settings"]);
     expect(keys(moreFor(me(["request"])))).toEqual(["requests", "projects", "settings"]);
   });
   it("the big Home action is the one thing the person does most", () => {
