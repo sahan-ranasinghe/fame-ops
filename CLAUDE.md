@@ -1,7 +1,7 @@
 # Fame Fleet: driver app + fleet office for Fame Global Solutions
 
 ## What this is
-- **Fame Driver**: an Android app for drivers. Drivers sign in with a username and 6-digit
+- **Fame Driver** (called **Fame Fleet** from 1.3.0, Phase 7 Part 6; package `com.fameglobal.driver`): an Android app for drivers. Drivers sign in with a username and 6-digit
   PIN (no Claude account). It shows their tasks, shares their location in the background,
   logs odometer readings with photos, logs fuel, and reports vehicle problems.
 - **Fame Fleet (office)**: designed by the boss (see `design/`). Office users (the boss and
@@ -133,7 +133,12 @@
   cleared when the app starts or comes to the front, or the task opens: `stopRinging`, a push Android showed itself is
   known by its title), `task-updates` (changed, cancelled, removed) and `office-asks`; there the app removes `new-tasks`
   and `driver-asks` (push-task `channels.ts`). As built: `docs/phase7-plan.md` "Part 6 as built"; test plan:
-  `docs/phase7-test-plan.md` "Part 6".
+  `docs/phase7-test-plan.md` "Part 6". Store readiness (nothing published): the app's name Fame Fleet with the FF icon and
+  splash (`scripts/make-icons.mjs`), the privacy policy at `/privacy` on the office site (open without signing in; linked
+  from the app's sign-in and Me), the location disclosure before Android's question (`components/LocationDisclosure.tsx`),
+  the `store` profile (.aab, both ABIs, EAS raises the version code), the reviewers' demo driver (`employees.demo` /
+  `vehicles.demo` and a `demo` column set by trigger on tasks, fuel, odometer, reports and duty; never mixed with real rows;
+  left out of every office list and notification; `seed_demo_driver`). Play and App Store steps: `docs/store-release.md`.
 - **Phase 8 (planned 19 October 2026)**: Office mode, the office's interface in the same Expo app for office sign-ins, by
   permission (view, request, approve, assign_tasks, vehicles, issues, users), never by role name; the web build of the same
   screens becomes the phone version of the office site. Design first (Part 8.0, a clickable prototype from
@@ -200,7 +205,8 @@
   node, npm, npx or eas must start with: `source ~/.nvm/nvm.sh && nvm use >/dev/null && `
 - Supabase project ref: hinurfsaxvplbyqgtozj (already linked).
 - Expo: logged in as `fameops`. The app's owner is the Expo organisation `fame-global`
-  (`owner` in app.json). App name "Fame Driver".
+  (`owner` in app.json). App name "Fame Fleet" from 1.3.0 ("Fame Driver" before; the office's texts still say Fame
+  Driver until every phone has 1.3.0).
 - Never print, log or commit secrets. Sahan sets secrets himself with
   `npx supabase secrets set`.
 

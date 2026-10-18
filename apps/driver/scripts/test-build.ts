@@ -77,6 +77,9 @@ check(store?.extends === 'drivers' && store.android?.buildType === 'app-bundle' 
   && (JSON.parse(read('eas.json')) as { cli?: { appVersionSource?: string } }).cli?.appVersionSource === 'remote'
   && JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'store', GOOGLE_ANDROID_MAPS: 'on' })) === JSON.stringify([...DEV, '@maplibre/maplibre-react-native']),
   'store: an .aab with both ABIs (Play gives each phone its own), lean; EAS raises the version code at every drivers and store build');
+check(/-Pexpo\.useLegacyPackaging=true$/.test(drivers.android?.gradleCommand ?? '') && /-Pexpo\.useLegacyPackaging=true$/.test(eas.build['drivers-32']?.android?.gradleCommand ?? '')
+  && !/useLegacyPackaging/.test(store.android?.gradleCommand ?? ''),
+  'the APKs keep their native libraries compressed (41.5 MB → about 25 MB to download; §27\'s rule over 40 MB); the .aab leaves it to Play');
 check(/arm64-v8a,armeabi-v7a/.test(eas.build.preview?.android?.gradleCommand ?? '') && !eas.build.preview?.environment,
   'the preview profile is as it was (1.2.0)');
 const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string>; expo?: { autolinking?: unknown } };

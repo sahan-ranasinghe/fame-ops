@@ -1041,9 +1041,13 @@ Ask in Claude Teams. The shared key is an admin key: it sees everything and its 
 
 ## Part 6 (the 1.3.0 build)
 
-The 1.3.0 build is the `drivers` profile: a smaller app (only what a 64-bit phone needs) with three sounds of its own.
-It is installed once on each phone, over 1.2.0. Everything above is tested on 1.2.0; after the install, P5 runs the
-driver's tests again on 1.3.0.
+The 1.3.0 build is the `drivers` profile: a smaller app (only what a 64-bit phone needs) with three sounds of its own,
+now called **Fame Fleet**, with what the stores ask for. It is installed once on each phone, over 1.2.0. Everything above
+is tested on 1.2.0; after the install, P5 runs the driver's tests again on 1.3.0.
+
+Android versions: **minSdkVersion 24** (Android 7.0 Nougat and later install it) and **targetSdkVersion 36** (built for
+Android 16's rules). A phone older than Android 7.0 cannot install it; the store build (`store`, an .aab) has the same two
+levels.
 
 ### P1. Install over 1.2.0
 1. On the OPPO, open the EAS link of the `drivers` build in Chrome, download it and open the file. Allow installs from
@@ -1052,7 +1056,7 @@ driver's tests again on 1.3.0.
 3. Open Fame Driver.
 
 You should see:
-- The download is about 47 MB (1.2.0 was 89 MB).
+- The download is about 25 MB (1.2.0 was 89 MB).
 - Still signed in, the same duty state and vehicle; Me: "Everything is sent" (or the same "Waiting to be sent" as
   before), App version `1.3.0+…`.
 - Today's task map is Google's map, as on 1.2.0.
@@ -1109,7 +1113,59 @@ You should see:
 - The 1.3.0 build is for 64-bit phones only (every phone we know, the OPPO CPH2119 and the Samsung SM-A226B, is 64-bit).
 - On a 32-bit phone (typically an Android Go phone) installing ends with "App not installed". A CPU-info app shows
   armeabi-v7a only.
-- Then ask for a `drivers-32` build: the same app for that phone.
+- Then ask for a `drivers-32` build: the same app for that phone (the profile is ready in eas.json). Through Play (the
+  `store` .aab) a 32-bit phone gets its own part by itself.
+
+### P7. The name, the icon and the splash
+1. Look at the phone's home screen and app drawer, then open the app.
+2. On Android 13 or later: Settings → Wallpaper & style → Themed icons on.
+
+You should see:
+- "Fame Fleet" under an amber icon with "FF" in dark letters (as on the office site), not "FD".
+- Opening: the amber FF square on dark.
+- A notification's small icon in the status bar is "FF".
+- With themed icons on, the icon takes the phone's colours and keeps the FF shape.
+- Me → Sign out asks "Sign out of Fame Fleet?"; Me → Phone setup's steps say "Fame Fleet".
+
+### P8. The location disclosure
+1. Sign in on a phone where this driver has not agreed yet (a new phone, or Settings → Apps → Fame Fleet → Storage →
+   Clear data first). Permissions → Location → Allow.
+2. Tap Not now. Then Allow again, and Agree.
+3. Sign out, sign in as the other test driver on the same phone, and open Permissions.
+4. On a phone where location is not allowed, answer an office question "Where are you now?" (A19).
+
+You should see:
+- Before Android's own question, a full screen "Your location while you are on duty" saying the app collects location to
+  show the office where the vehicle is, record the trips and km and mark the stops, while on duty, "even when the app is
+  closed or not in use"; "Off duty, nothing is recorded"; the 90 days; a "Privacy policy" link; Agree and Not now.
+- Not now: back to Permissions, nothing asked.
+- Agree: Android's question follows at once.
+- The other driver sees the disclosure again (it is agreed per driver).
+- "Where are you now?" shows the same screen first when Android would ask.
+- In Sinhala: "රාජකාරියේ සිටින විට ඔබේ ස්ථානය", "එකඟයි", "දැන් නොවේ".
+
+### P9. The privacy policy
+1. The sign-in screen: the line under the form.
+2. Me → Privacy policy.
+3. On a laptop, signed out: https://fame-fleet.pages.dev/privacy, and the site's sign-in page.
+
+You should see:
+- Sign-in: "Fame Fleet 1.3.0" and "Privacy policy"; the link opens the policy in the browser.
+- The policy opens without signing in: what is collected (location only while on duty, photos and videos, phone numbers),
+  who sees it, how long it is kept (location points 90 days, fuel videos 12 months …), your choices, security, questions.
+- The site's sign-in has a "Privacy policy" link.
+
+### P10. The reviewers' account (after the round and docs/store-release.md step 3.2)
+1. On the second phone, sign in as `store.review`. Start work, Accept a task, Start task.
+2. On the OPPO, test.driver: Today → Change vehicle.
+3. In the office: Overview, Tasks, Live, Drivers, the Drivers board, Who's available on Assign a task, Fuel, Issues.
+
+You should see:
+- The reviewer's Today has the demo tasks ("Demo · Station pickup" and others, every four hours), and Change vehicle offers
+  only DEMO-0001.
+- test.driver is never offered DEMO-0001.
+- The office never shows the reviewer, their tasks or DEMO-0001 anywhere, and a decline or Running late from the reviewer
+  brings no notification.
 
 ## If something looks wrong
 

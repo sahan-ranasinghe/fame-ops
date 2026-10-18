@@ -492,7 +492,7 @@ role. Endpoints:
 - `docs/teams-artifact-update.md` regenerated with the new file, tools and message.
 - The deployment log at the end of this document.
 - CLAUDE.md and the README as built.
-- Part 6's section (the 1.3.0 build, its sizes, the one-time install) is added at checkpoint 6.
+- Part 6's section (the 1.3.0 build, its sizes, the one-time install, store readiness): the test plan's "Part 6" (P1–P10).
 
 ## 15. Remove a place (item 15)
 
@@ -2318,6 +2318,120 @@ Running late on the task page and the board; D1 the driver app.
   Left as they are, said here: Live keeps its own cards with the row's lines added (not the DriverRow component); Running
   late is offered once the task is accepted (before that the driver accepts or says Can't do).
 
+### Part 6 as built (branch `phase7-6`, 18–19 October): the 1.3.0 build, its sounds and store readiness
+
+Nothing is deployed or built on EAS. Checked with local Docker builds (`reactnativecommunity/react-native-android`, 2 cores,
+6 GB, Gradle 1 worker, debug-signed: for measuring only), with the drivers profile's Gradle flags.
+
+**The drivers build (§27).**
+- `apps/driver/eas.json`:
+  - `drivers`: an APK of arm64-v8a only, R8 and resource shrinking, the preview environment and channel, runtime
+    `1.3.0-gmaps`, the native libraries compressed.
+  - `drivers-32`: armeabi-v7a, built only when asked.
+  - `store`: an .aab with both ABIs.
+  - EAS raises the version code at every drivers and store build (`appVersionSource: remote`, `autoIncrement`).
+- `scripts/lean-build.mjs` (EAS runs it as `eas-build-pre-install`; `FAME_LEAN_BUILD=1` on the laptop) writes
+  package.json's `expo.autolinking`:
+  - it leaves out the dev client (expo-dev-client, -launcher, -menu, -menu-interface) and, with the Google map, MapLibre;
+  - it builds expo-camera from source.
+
+  `app.config.ts` drops the same plugins and stops an EAS drivers build that lacks the exclusions.
+- `plugins/withLeanAndroid.js`: BouncyCastle's post-quantum tables out of the packaging; R8 told that the barcode classes are
+  left out on purpose.
+- `plugins/withKeptSounds.js` (every build): the notification sounds kept by name.
+
+**Sizes** (compressed zip entries, MB; the 1.2.0 column is the EAS build ddc92043):
+
+| Part of the APK | 1.2.0 | first lean build | 1.3.0 |
+|---|---|---|---|
+| Native libraries armeabi-v7a | 28.6 | 0 | 0 |
+| Native libraries arm64-v8a | 40.8 (MapLibre 10.8, barcode 4.9) | 29.3 (barcode 4.9 still) | 24.4 |
+| Dex | 9.7 | 9.4 | 9.2 |
+| JS bundle | 3.8 | 4.1 | 4.1 |
+| Fonts | 1.4 | 1.3 | 1.3 |
+| ML Kit barcode models | 0.9 | 0.9 | 0 |
+| BouncyCastle tables | 1.2 | 0 | 0 |
+| Sounds | 0.2 (2 of 5 lost, below) | 0.3 | 0.6 (all 8) |
+| **The file** | **89.1** | **47.2** | **41.5**, with the libraries compressed **about 25** (24.4 → 8.1) |
+
+What each change saved:
+- arm64 only: 28.6 MB.
+- MapLibre: 10.8 MB plus its classes.
+- The barcode scanner: 5.8 MB (4.9 library and 0.9 models).
+- BouncyCastle's tables: 1.2 MB.
+- The two fonts: 0.1 MB.
+- R8 was already running in 1.2.0 (its mapping is there). The dex shrank 0.5 MB with the dev client and MapLibre gone.
+
+The .aab of the store profile (built here with arm64 only) is 37.2 MB, 15.8 MB of which are debug symbols and the mapping
+that never reach a phone.
+
+**Found on the way.**
+1. **The barcode scanner came twice.**
+   - expo-dev-launcher brought ML Kit's barcode scanner.
+   - Expo links expo-camera as a ready-made library whose dependencies always include the scanner; `barcodeScannerEnabled:
+     false` works only when expo-camera is built from source.
+   - The drivers build therefore builds expo-camera from source. It checks for the scanner before any scan, and the app
+     never scans.
+2. **Resource shrinking had dropped two notification sounds, in the 1.2.0 build too.**
+   - `new_task.wav` and `general.wav` were gone. They are named only by their channels.
+   - On today's phones the "New tasks" and "Questions from the office" channels therefore play the phone's default sound
+     (expo-notifications falls back to it, and Android fixes it when the channel is made).
+   - Every build now keeps all the sounds (`raw/fame_sounds_keep.xml`). On 1.3.0 those two kinds go to the new channels.
+3. **R8 refuses a `//` line in proguard-rules.pro** (ProGuard comments start with `#`): the first rebuild stopped there.
+4. **The 40 MB target.**
+   - 41.5 MB with the libraries stored uncompressed. Android loads them straight from the file, so that is also the space
+     the app takes.
+   - §27's rule for "still over" applies: the APKs compress them (`-Pexpo.useLegacyPackaging=true`). That makes about
+     25 MB to download (measured by compressing the built file's libraries) and about 8 MB more on the phone once
+     installed, where they are unpacked.
+   - The .aab leaves it to Play.
+   - Decision for Sahan: keep this, or take the flag out for the smaller footprint.
+5. **Android versions:** minSdkVersion 24 (Android 7.0), targetSdkVersion 36 (Android 16).
+
+**The sounds (Hotfix 2 B, item 27).**
+- `scripts/make-sounds.sh` makes three OGG tones:
+  - `task_ring.ogg`: 30 s, a two-tone ring 1.2 s in every 2 s;
+  - `task_update.ogg`: three falling notes, twice;
+  - `office_ask.ogg`: two rising notes, twice.
+- They play on new channel ids, made only on a 1.3.0 build: `task-ring` "New tasks (ringing)", `task-updates` "Changed and
+  cancelled tasks", `office-asks` "Questions from the office". On 1.3.0 the app removes `new-tasks` and `driver-asks`.
+- push-task sends:
+  - `new` → `task-ring`;
+  - `changed`, `cancelled` and `removed` → `task-updates`;
+  - `ask` → `office-asks`;
+  - and only to a phone that registered those channels (`channels.ts`, `channel_test.ts`). The other kinds stay on the
+    original channels.
+- As built, the ring is the 30-second sound played once, not a looping full-screen intent: no new permission. It stops:
+  - when the notification is cleared, which the app does (`stopRinging`) when it starts or comes to the front, when any
+    notification is opened, and 6 s after a new task arrives with the app open;
+  - for a push Android showed itself in the background, which keeps no data: the app knows it by push-task's title "New
+    task …" / "නව කාර්යය …".
+- The Permissions screen's sound test rings on the ring channel.
+
+**Store readiness (Sahan, 19 October; nothing published).**
+- The app's name is Fame Fleet; the package stays the same.
+- The FF mark as icon, adaptive and themed icon, splash and notification icon, plus the store's 512 icon and feature
+  graphic (`scripts/make-icons.mjs`).
+- The privacy policy at `/privacy` on the office site, open without signing in.
+- The location disclosure before Android's question.
+- Overlay, fingerprint and biometric permissions are blocked.
+- The reviewers' demo driver (migration `20261019150000_phase7_6_demo.sql`, pgTAP `phase7_6_demo`, 26 checks).
+- `docs/store-release.md`: the Play and App Store steps, what Fame provides, the texts.
+
+**The fresh reviewer (Part 6 core; no blocker, three to fix, five minor; all done).**
+1. Opening the app did not stop a ring Android had shown itself. **Fixed:** the title match, and a check at a cold start.
+2. The sounds were kept only in the drivers build. **Fixed:** `withKeptSounds` runs in every build.
+3. The new channels were made on any build; on an older one they would be fixed to the default sound. **Fixed:** they are
+   made only on 1.3.0.
+4. The sound test played the old channel. **Fixed.**
+5. Two pairs of channels had the same name. **Fixed:** "Changed and cancelled tasks", and the replaced channels removed.
+6. lean-build could skip itself on a symlinked path. **Fixed:** real paths, plus app.config's check.
+7. `channel_test` lacked a 1.3.0 phone's every kind and a Hotfix 2 phone. **Added.**
+8. CLAUDE.md's font line and Part 6 notes were behind. **Fixed.**
+
+Left as it is, said here: the Hotfix 2 "what changed" lines of a push that arrived while the app was in the background are
+not recovered either (Android keeps no data with it). That is older than Part 6.
+
 ## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
 
 What Sahan asked:
@@ -2445,7 +2559,6 @@ Office web only: no migration, no function, no driver app change, the connector'
 5. The same on Approve, Give it a driver and the Drivers board (there a Yes has "Assign →").
 6. As an approver without assign_tasks: a request page, an issue or a fuel fill. **See:** no "Open task" link (before, it
    led to No access).
-
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
@@ -2892,6 +3005,27 @@ is removed on 1.3.0). No other key changed.
 | `channel.ringDesc` | A new task rings for up to 30 seconds, until you open it | නව කාර්යයක් ඔබ එය විවෘත කරන තුරු තත්පර 30 ක් දක්වා නාද වේ |
 | `channel.updates` | Changed and cancelled tasks | වෙනස් කළ සහ අවලංගු කළ කාර්යයන් |
 | `channel.updatesDesc` | A task changed, cancelled or given to someone else | වෙනස් වූ, අවලංගු කළ හෝ වෙනත් අයෙකුට දුන් කාර්යයක් |
+
+**Part 6 additions** (store readiness): the location disclosure, the privacy link and the version line on sign-in.
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `disclosure.title` | Your location while you are on duty | රාජකාරියේ සිටින විට ඔබේ ස්ථානය |
+| `disclosure.body` | Fame Fleet collects location data to show the office where your vehicle is, to record your trips and the km of each task, and to mark when you reach each stop, while you are on duty (from Start work to Finish work), even when the app is closed or not in use. | Fame Fleet ඔබ රාජකාරියේ සිටින විට (වැඩ ආරම්භ කළ සිට වැඩ අවසන් කරන තුරු), යෙදුම වසා ඇති විට හෝ භාවිත නොකරන විට පවා, ඔබේ වාහනය ඇති තැන කාර්යාලයට පෙන්වීමට, ඔබේ ගමන් සහ එක් එක් කාර්යයේ කිලෝමීටර් සටහන් කිරීමට සහ ඔබ එක් එක් නැවතුමට පැමිණි වේලාව සටහන් කිරීමට ස්ථාන දත්ත එකතු කරයි. |
+| `disclosure.offDuty` | Off duty, nothing is recorded. | රාජකාරියෙන් පිටත කිසිවක් සටහන් නොවේ. |
+| `disclosure.whoSees` | The Fame Global Solutions office sees it. The points are kept for 90 days. | Fame Global Solutions කාර්යාලයට එය පෙනේ. ස්ථාන සටහන් දින 90 ක් තබා ගනී. |
+| `disclosure.settings` | You can turn location off in the phone's settings at any time; then trips are not recorded. | ඔබට ඕනෑම වේලාවක දුරකථනයේ සැකසුම් තුළින් ස්ථානය අක්‍රිය කළ හැක; එවිට ගමන් සටහන් නොවේ. |
+| `disclosure.next` | Next, Android asks for your permission. | ඊළඟට Android ඔබේ අවසරය අසයි. |
+| `disclosure.agree` | Agree | එකඟයි |
+| `disclosure.notNow` | Not now | දැන් නොවේ |
+| `common.privacy` | Privacy policy | පෞද්ගලිකත්ව ප්‍රතිපත්තිය |
+| `login.version` | Fame Fleet {version} | Fame Fleet {version} |
+
+The app is now called Fame Fleet: 18 keys changed only the app's name ("Fame Driver" → "Fame Fleet", the same word in both
+languages): `common.cameraDenied`, `fuel.cameraDenied`, `gate.permissionBody`, `me.signOutConfirm`, `permissions.locationWhy`,
+`phoneSetup.meHint`, `phoneSetup.stoppedOnce`, `phoneSetup.stoppedMany`, `phoneSetup.steps.*` (huawei, oppo, other, realme,
+samsung, vivo, xiaomi), `service.title`, `tracking.noPermission`, `tracking.stoppedTitle`. push-task's accept reminder now
+says "open the app" / "යෙදුම විවෘත කරන්න" (it reaches 1.2.0 phones, still called Fame Driver, too).
 
 ## Deployment log
 

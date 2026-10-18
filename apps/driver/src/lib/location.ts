@@ -294,7 +294,7 @@ export async function restartLocationUpdates(texts: ServiceTexts): Promise<boole
 /** The brand's battery or startup settings (lib/phoneSetup.ts), else this app's App info page. */
 export async function openBrandSettings(brand: SetupBrand): Promise<void> {
   const appId = Application.applicationId ?? 'com.fameglobal.driver';
-  for (const intent of settingsIntents(brand, appId, Application.applicationName ?? 'Fame Driver')) {
+  for (const intent of settingsIntents(brand, appId, Application.applicationName ?? 'Fame Fleet')) {
     try {
       await IntentLauncher.startActivityAsync('android.intent.action.MAIN', { packageName: intent.packageName, className: intent.className, extra: intent.extra });
       return;
