@@ -244,6 +244,21 @@ async function main() {
   const tripKeys = Object.keys(en.trip ?? {});
   check(tripKeys.length > 0 && tripKeys.every((k) => typeof si.trip?.[k] === 'string'), 'every trip.* key has its Sinhala');
 
+  // The screens' source, read as text (they need React Native). The back rules of CLAUDE.md.
+  console.log('\nNavigation (the screens as text):');
+  const source = (file: string) => readFileSync(join(here, '..', file), 'utf8');
+  const today = source('src/app/(tabs)/index.tsx');
+  const startTrip = source('src/app/start-trip.tsx');
+  const addStop = source('src/app/add-stop.tsx');
+  const taskScreen = source('src/app/task/[id].tsx');
+  check(/app\.sharing && !running && \(\s*<Button [^\n]*t\('trip\.start'\)[^\n]*router\.push\('\/start-trip'\)/.test(today), 'Today: Start a trip only on duty with no task in progress, pushed (back returns to Today)');
+  check(/useLeaveGuard\(dirty, busy\)/.test(startTrip) && /const dirty = text\.trim\(\) !== '' \|\| note\.trim\(\) !== '' \|\| pick !== null/.test(startTrip), 'Start a trip: "Discard changes?" only when something was typed or picked; nothing while it starts');
+  check(/allowLeave\(\);[\s\S]*router\.replace\(\{ pathname: '\/log-mileage', params: \{ mode: 'start', taskId: outcome\.taskId/.test(startTrip), 'after Start: the normal Start task flow takes the page\'s place (no question asked)');
+  check(/requireLocation\('start'/.test(startTrip), 'Location first (like Start task): "Not now" makes nothing');
+  check(/useLeaveGuard\(dirty, busy\)/.test(addStop) && /allowLeave\(\);[\s\S]*router\.back\(\)/.test(addStop), 'Add a stop: pushed on the task screen, back returns there; after adding, no question');
+  check(/canAddStop\(task\) && \([\s\S]*pathname: '\/add-stop'/.test(taskScreen), 'the task screen offers Add a stop only on a self trip under way');
+  check(/!isSelfTrip\(task\) && <Button kind="danger-text" label=\{t\('task\.cantDo'\)\}/.test(taskScreen) && /!isSelfTrip\(next\) && <Button kind="danger-text"/.test(today), "no \"Can't do this task\" on a trip the driver started");
+
   console.log(failures === 0 ? '\nAll trip tests passed.' : `\n${failures} trip test(s) failed.`);
   process.exit(failures === 0 ? 0 : 1);
 }
