@@ -1,6 +1,7 @@
 // Mileage tab: this month's km for my vehicle against its allowance, today's
 // tasks with their km, and the two buttons to log a reading or fuel.
 // A task the office moved to another vehicle (Phase 7 Part 2) shows each vehicle's km under its title.
+// Hotfix 3 (L6): today's tasks 20 at a time with "Load more" (the phone's own list: works offline); never a missed one.
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -9,13 +10,15 @@ import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LoadMore } from '@/components/LoadMore';
 import { Stretches } from '@/components/SwapCard';
-import { useDateLabel } from '@/components/task';
+import { useDateLabel, useNow } from '@/components/task';
 import { shownTaskKm, taskTitle } from '@/components/taskLines';
 import { Button, Card, Mono, Plate, Txt } from '@/components/ui';
 import { fetchMileage, type Mileage } from '@/lib/api';
 import { thousands } from '@/lib/format';
 import { getJson, setJson } from '@/lib/kv';
+import { loadMore, PAGE, pageInfo, visibleTasks, windowOf } from '@/lib/lists';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboMonth } from '@/lib/time';
 import { useApp } from '@/state/app';
@@ -31,6 +34,8 @@ export default function MileageScreen() {
   const insets = useSafeAreaInsets();
   const dateLabel = useDateLabel();
   const [mileage, setMileage] = useState<Mileage | null>(() => getJson<Mileage>(CACHE_KEY));
+  const [shown, setShown] = useState(PAGE);
+  const now = useNow();
 
   const vehicleId = vehicle?.id ?? null;
   const queued = app.queue.ops;
@@ -60,7 +65,8 @@ export default function MileageScreen() {
   const over = allowance !== null && monthKm > allowance;
 
   const today = colomboDate();
-  const todayTasks = tasks.filter((task) => colomboDate(task.start_at) === today || (task.completed_at && colomboDate(task.completed_at) === today));
+  const todayTasks = visibleTasks(tasks, now)
+    .filter((task) => colomboDate(task.start_at) === today || (task.completed_at && colomboDate(task.completed_at) === today));
 
   const entries = [
     ...readings.map((log) => ({ at: log.logged_at, title: t('mileage.odometer'), value: thousands(log.reading_km) })),
@@ -112,7 +118,7 @@ export default function MileageScreen() {
           <Txt variant="heading" style={{ marginLeft: 6 }}>{t('mileage.todayTasks')}</Txt>
           <Card style={{ padding: 0 }}>
             {todayTasks.length === 0 && <Txt variant="muted" style={{ padding: 18 }}>{t('mileage.noTasksToday')}</Txt>}
-            {todayTasks.map((task, index) => {
+            {windowOf(todayTasks, shown).map((task, index) => {
               const km = task.status === 'completed' ? shownTaskKm(task) : null;
               return (
                 <Pressable
@@ -134,6 +140,7 @@ export default function MileageScreen() {
               );
             })}
           </Card>
+          <LoadMore info={pageInfo(shown, todayTasks.length)} onPress={() => setShown(loadMore(shown, todayTasks.length, null).shown)} />
         </View>
 
         <View style={{ gap: 10 }}>

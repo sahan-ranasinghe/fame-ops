@@ -81,5 +81,17 @@ check(steps.length === 1 && battery > -1 && battery < (steps[0]?.index ?? -1) &&
 check(/label=\{t\('permissions\.continue'\)\} onPress=\{finish\}/.test(permissions) && /setJson\(KEYS\.permissionsSeen, true\)/.test(permissions),
   'Continue goes on as before (marks the permissions seen, back or Today)');
 
+console.log('\nAll today\'s tasks (Hotfix 3, L6):');
+const allTasksPage = existsSync(join(src, 'app', 'today-tasks.tsx')) ? code('app/today-tasks.tsx') : '';
+const taskRows = code('components/TaskRows.tsx');
+check(allTasksPage !== '' && !existsSync(join(src, 'app', '(tabs)', 'today-tasks.tsx')), 'the list is its own stack screen (app/today-tasks.tsx), not a tab');
+check(/router\.push\(['"]\/today-tasks['"]\)/.test(today), 'Today pushes it on top (back returns to Today as it was)');
+check(/router\.back\(\)/.test(allTasksPage) && !/router\.(replace|navigate|dismissAll)\(/.test(allTasksPage),
+  'the page goes back to Today (the arrow uses router.back(); it never jumps to a tab)');
+check(/router\.push\(\{ pathname: '\/task\/\[id\]', params: \{ id: task\.id \} \}\)/.test(taskRows) && !/router\.(replace|navigate|dismissAll)\(/.test(taskRows),
+  'a row opens the task pushed on top of the list (back returns to the list)');
+check(/<TaskRows /.test(allTasksPage) && /<TaskList /.test(today) && !/function TaskList/.test(today), 'Today and the page use the same rows (components/TaskRows.tsx)');
+check(!/useLeaveGuard/.test(allTasksPage), 'nothing is typed on the page: no "Discard changes?"');
+
 console.log(failures === 0 ? '\nAll navigation tests passed.' : `\n${failures} navigation test(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);
