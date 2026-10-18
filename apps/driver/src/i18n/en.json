@@ -743,7 +743,9 @@
     "lineAfternoon": "{day} · from {time}",
     "lineHours": "{day} · {from}–{to}",
     "failed": "Couldn't save: {reason}",
-    "noConnection": "No connection: try again when you are online."
+    "noConnection": "No connection: try again when you are online.",
+    "officeAdded": "The office added this: ask them to change it.",
+    "past": "It has ended: nothing to remove."
   },
   "ask": {
     "title": "Question from the office",

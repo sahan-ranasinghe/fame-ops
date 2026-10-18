@@ -168,7 +168,8 @@ export const routes: RouteObject[] = [
       { path: "drivers/board", element: <Guard need={BOARD_NEED}><DriversBoard /></Guard> },
       { path: "drivers/:username/vehicle", element: <Guard need={DUTY_NEED}><MoveVehicle /></Guard> },
       { path: "drivers/:username", element: <Guard need={ROUTES_NEED}><DriverPage /></Guard> },
-      { path: "drivers/:username/edit", element: <Guard need={["vehicles"]}><DriverManage /></Guard> },
+      // Part 3b (G): the driver's profile is for people with vehicles or users (update_driver).
+      { path: "drivers/:username/edit", element: <Guard need={["vehicles", "users"]}><DriverManage /></Guard> },
       { path: "settings", element: <SettingsRoute /> },
       // Hotfix 2 (F): everyone's own page (their phone number).
       { path: "settings/profile", element: <MyProfile /> },

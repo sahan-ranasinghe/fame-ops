@@ -44,6 +44,10 @@ export const photoUploadUrl = tool({
   }),
   async run({ kind, target }, { db, actor }) {
     webOnly(actor);
+    // Part 3b: users may upload a driver's licence only (the profile and vehicle photos stay with vehicles).
+    if (kind !== "driver_licence" && !actor.permissions.includes("vehicles")) {
+      throw new ToolError("Uploading this photo needs the vehicles permission.");
+    }
     const refs = await loadRefs(db);
     if (kind === "driver_profile") {
       const driver = findDriver(refs, target);

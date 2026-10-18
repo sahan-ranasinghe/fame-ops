@@ -69,7 +69,9 @@ export default function AvailabilityScreen() {
         onPress: async () => {
           setRemoving(row.id);
           try {
-            await removeMyUnavailability(supabase, row.id);
+            const result = await removeMyUnavailability(supabase, row.id);
+            if (result === 'office') setProblem(t('avail.officeAdded'));
+            if (result === 'past') setProblem(t('avail.past'));
             await load();
           } catch (error) {
             setProblem(error instanceof ApiError && error.permanent ? t('avail.failed', { reason: error.message }) : t('avail.noConnection'));
@@ -110,12 +112,15 @@ export default function AvailabilityScreen() {
 
         {list.map((row) => {
           const by = addedByOther(row, me.id);
+          // An entry the office added is theirs to change (the server refuses it too).
+          const office = row.channel !== 'driver';
           return (
             <Card key={row.id} style={{ gap: 8 }}>
               <Txt variant="big">{availLine(t, dateLabel, row)}</Txt>
               {row.note && <Txt variant="body">{row.note}</Txt>}
               {by && <Txt variant="muted">{t('avail.addedBy', { name: by })}</Txt>}
-              <View style={styles.actions}>
+              {office && <Txt variant="muted">{t('avail.officeAdded')}</Txt>}
+              {!office && <View style={styles.actions}>
                 <Button
                   kind="outline"
                   icon={Pencil}
@@ -132,7 +137,7 @@ export default function AvailabilityScreen() {
                   onPress={() => remove(row)}
                   style={{ flex: 1 }}
                 />
-              </View>
+              </View>}
             </Card>
           );
         })}

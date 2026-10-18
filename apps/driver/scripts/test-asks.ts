@@ -288,7 +288,9 @@ check(/needsPhonePrompt\([\s\S]*?\}\)\) return <Redirect href="\/phone-prompt" \
   'the phone prompt replaces the tabs (Redirect, like the photo step), before the photo step');
 check(/router\.replace\('\/'\)/.test(prompt) && !/router\.(push|back|navigate)\(/.test(prompt) && /deferPhonePrompt\(\)/.test(prompt) && !/useLeaveGuard/.test(prompt),
   'the prompt: no skip; after Save or Continue (no connection) it goes on where the app would have gone (replace, never pushed)');
-check(/t\('phonePrompt\.offline'\)/.test(prompt) && /t\('phonePrompt\.continue'\)/.test(prompt) && /noConnection && <Button/.test(prompt), 'with no connection it says so and offers Continue');
+check(/t\('phonePrompt\.offline'\)/.test(prompt) && /t\('phonePrompt\.continue'\)/.test(prompt) && /\(noConnection \|\| stuck\) && <Button/.test(prompt),
+  'with no connection it says so and offers Continue; a save the server refuses offers Continue too (never trapped)');
+check(/setStuck\(true\)/.test(prompt), 'a refused save sets the way on (Continue)');
 check(/router\.push\('\/profile-edit'\)/.test(meScreen) && /router\.push\('\/availability'\)/.test(meScreen) && /router\.push\('\/documents'\)/.test(meScreen)
   && /router\.push\('\/phone-setup'\)/.test(meScreen), 'Me pushes Edit, Availability, Phone setup and Documents (back returns to Me)');
 check(/disabled=\{signOutBlocked !== null\}/.test(meScreen) && /t\('me\.thisMonth'\)/.test(meScreen) && /useLicencePhotos\(\)/.test(meScreen), 'Me keeps Sign out\'s rule; shows this month and the licence photos');

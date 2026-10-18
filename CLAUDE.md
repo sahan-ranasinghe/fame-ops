@@ -94,6 +94,13 @@
   `limit` as before); the web's `ui/ListKit.tsx` (25 a page); one notification icon (the tray, archived after 30 days); the
   menu in sections and the phone bar per role; the driver app's Today with 3 later tasks and lists 20 at a time. As built:
   `docs/phase7-plan.md` "Hotfix 3 as built".
+- **Part 3b (18 October 2026, branch `phase7-3b`)**: the driver's profile (WhatsApp, emergency contact, licence number and
+  photos; `driver_profile`, `update_driver`, driver-api `/profile`, every change in `employee_changes`; the private part only
+  for users or vehicles; `create_driver` needs a phone; the app's phone prompt), availability for dispatch
+  (`driver_unavailability`, `half_day_split`; Who's available, the best match and the warnings skip it), one driver row
+  (`presence.ts`, `ui/DriverRow.tsx`), Ask drivers (`driver_asks` / `driver_ask_answers`, `ask_drivers`, `ask_answers`, the
+  `driver-asks` channel, one location fix), Running late (`report_running_late`) and Can't make it, the Drivers board
+  (`drivers_board`, `/drivers/board` with its week view). As built: `docs/phase7-plan.md` "Part 3b as built".
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).

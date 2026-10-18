@@ -707,9 +707,10 @@ export async function setMyUnavailability(client: Client, args: AvailArgs): Prom
 }
 
 /** Removes one of my entries (kept on the server as removed): 'ok', or 'not_found' when it is gone already. */
-export async function removeMyUnavailability(client: Client, id: string): Promise<'ok' | 'not_found'> {
-  const res = await client.rpc('remove_my_unavailability', { p_id: id });
-  return check(res, 'availability') === 'ok' ? 'ok' : 'not_found';
+/** 'office' = the office added it (theirs to remove); 'past' = it has ended (kept as it was). */
+export async function removeMyUnavailability(client: Client, id: string): Promise<'ok' | 'not_found' | 'office' | 'past'> {
+  const res = check(await client.rpc('remove_my_unavailability', { p_id: id }), 'availability');
+  return res === 'ok' || res === 'office' || res === 'past' ? res : 'not_found';
 }
 
 /** The questions I was asked that are still open (or closed since `since`), newest first. */

@@ -284,7 +284,8 @@ export async function saveProfile(
   actor: Parameters<typeof logChanges>[3],
 ): Promise<Employee> {
   if (Object.keys(patch).length === 0) throw new ToolError("Nothing to change.");
-  if ("phone" in patch && patch.phone === null && driver.role === "driver") {
+  // Clearing a number the driver has is refused; a null for one who has none changes nothing (an older page sends it).
+  if ("phone" in patch && patch.phone === null && driver.role === "driver" && driver.phone) {
     throw new ToolError("phone: a driver always has a mobile number (Part 3b); give the new one instead.");
   }
   const updated = unwrap(await db.from("employees").update(patch).eq("id", driver.id).select("*").single(), "employee");

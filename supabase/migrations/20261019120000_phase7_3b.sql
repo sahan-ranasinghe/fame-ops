@@ -195,6 +195,11 @@ begin
   if v_me is null then
     raise exception 'Not signed in as an employee' using errcode = '42501';
   end if;
+  -- The driver changes only the entries they added; one the office added is the office's to change.
+  if p_id is not null and exists (select 1 from public.driver_unavailability
+                                  where id = p_id and employee_id = v_me and channel <> 'driver') then
+    return jsonb_build_object('result', 'refused', 'reason', 'The office added this one: ask them to change it.');
+  end if;
   select name into v_name from public.employees where id = v_me;
   return public.save_unavailability(v_me, p_id, p_from, p_to, p_part, p_start, p_end, p_reason, p_note,
                                     coalesce(v_name, 'The driver'), v_me, 'driver');
@@ -203,6 +208,7 @@ $$;
 revoke all on function public.set_my_unavailability(uuid, date, date, text, time, time, text, text) from public, anon;
 grant execute on function public.set_my_unavailability(uuid, date, date, text, time, time, text, text) to authenticated;
 
+-- Answers 'ok' | 'not_found' | 'office' (the office added it: theirs to remove) | 'past' (it has ended: kept as it was).
 create function public.remove_my_unavailability(p_id uuid)
 returns text
 language plpgsql
@@ -212,14 +218,24 @@ as $$
 declare
   v_me   uuid := public.current_employee_id();
   v_name text;
+  v_row  public.driver_unavailability%rowtype;
 begin
   if v_me is null then
     raise exception 'Not signed in as an employee' using errcode = '42501';
   end if;
+  select * into v_row from public.driver_unavailability where id = p_id and employee_id = v_me and removed_at is null for update;
+  if not found then
+    return 'not_found';
+  end if;
+  if v_row.channel <> 'driver' then
+    return 'office';
+  end if;
+  if v_row.ends_at <= now() then
+    return 'past';
+  end if;
   select name into v_name from public.employees where id = v_me;
-  update public.driver_unavailability set removed_at = now(), removed_by_name = coalesce(v_name, 'The driver')
-  where id = p_id and employee_id = v_me and removed_at is null;
-  return case when found then 'ok' else 'not_found' end;
+  update public.driver_unavailability set removed_at = now(), removed_by_name = coalesce(v_name, 'The driver') where id = p_id;
+  return 'ok';
 end;
 $$;
 revoke all on function public.remove_my_unavailability(uuid) from public, anon;
@@ -494,6 +510,25 @@ end;
 $$;
 revoke all on function public.report_running_late(uuid, integer, timestamptz) from public, anon;
 grant execute on function public.report_running_late(uuid, integer, timestamptz) to authenticated;
+
+-- A late report is the driver's: when the task goes to another driver it goes with it (the new driver has said nothing).
+create function public.tasks_late_report_reset()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.employee_id is distinct from old.employee_id then
+    new.late_report_min := null;
+    new.late_report_at := null;
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.tasks_late_report_reset() from public, anon, authenticated;
+create trigger tasks_late_report_reset
+  before update of employee_id on public.tasks
+  for each row execute function public.tasks_late_report_reset();
 
 -- H1. The phone reads where a half day splits (the setting half_day_split, 13:00 by default), with its other settings. As in
 -- 20261018090000_phase7_trips.sql, with half_day_split.

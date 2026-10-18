@@ -106,6 +106,7 @@ export const setUnavailability = tool({
     realDate(args.date, "date");
     if (args.to_date) realDate(args.to_date, "to_date");
     const driver = findDriver(await loadRefs(db), args.driver);
+    if (!driver.active) throw new ToolError(`${driver.name} is switched off.`);
     const saved = unwrap(
       await db.rpc("save_unavailability", {
         p_employee: driver.id,

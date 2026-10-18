@@ -28,6 +28,8 @@ export default function PhonePromptScreen() {
   // The save found no connection (or the phone knows it has none): the driver may go on and is asked next time.
   const [offline, setOffline] = useState(false);
   const noConnection = offline || app.offline || !app.dataAvailable;
+  // A save the server refuses (or an older server without /profile) never traps the driver: Continue, asked again next start.
+  const [stuck, setStuck] = useState(false);
 
   // The step ends as soon as the driver has a number (saved here, or added meanwhile by the office).
   const hasPhone = !!me?.phone;
@@ -54,6 +56,7 @@ export default function PhonePromptScreen() {
     }
     if (outcome.kind === 'refused') {
       setProblem(t('profile.failed', { reason: outcome.message }));
+      setStuck(true);
       return;
     }
     // The effect above goes on once the number is on `me`.
@@ -95,7 +98,7 @@ export default function PhonePromptScreen() {
 
       <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 16, gap: 10 }}>
         <Button label={t('phonePrompt.save')} busy={busy} disabled={typed.trim() === ''} onPress={() => void save()} />
-        {noConnection && <Button kind="outline" label={t('phonePrompt.continue')} disabled={busy} onPress={goOn} />}
+        {(noConnection || stuck) && <Button kind="outline" label={t('phonePrompt.continue')} disabled={busy} onPress={goOn} />}
       </View>
     </KeyboardAvoidingView>
   );

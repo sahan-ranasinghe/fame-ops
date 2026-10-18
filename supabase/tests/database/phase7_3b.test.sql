@@ -70,6 +70,20 @@ select is(public.remove_my_unavailability((select id from public.driver_unavaila
 select is(public.remove_my_unavailability((select id from public.driver_unavailability where employee_id = '10000000-0000-0000-0000-000000003b02' limit 1)),
   'not_found', 'and cannot remove Nuwan''s (he cannot even see it)');
 reset role;
+-- The office's entry is theirs: Nuwan can neither remove nor change it; an entry that has ended stays as it was.
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-000000003b02","role":"authenticated"}';
+select is(public.remove_my_unavailability((select id from public.driver_unavailability limit 1)), 'office', 'Nuwan cannot remove the office''s entry');
+select is((public.set_my_unavailability((select id from public.driver_unavailability limit 1), (now() at time zone 'Asia/Colombo')::date + 1, null,
+  'morning', null, null, 'other', null)) ->> 'reason', 'The office added this one: ask them to change it.', 'nor change it');
+reset role;
+insert into public.driver_unavailability (id, employee_id, starts_at, ends_at, part, reason, created_by_name, created_by_employee_id, channel)
+values ('70000000-0000-0000-0000-000000003b01', '10000000-0000-0000-0000-000000003b02', now() - interval '2 days', now() - interval '1 day',
+        'full_day', 'leave', 'Nuwan Silva', '10000000-0000-0000-0000-000000003b02', 'driver');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-000000003b02","role":"authenticated"}';
+select is(public.remove_my_unavailability('70000000-0000-0000-0000-000000003b01'), 'past', 'an entry that has ended is kept as it was');
+reset role;
 select is((select removed_by_name from public.driver_unavailability where part = 'morning' and employee_id = '10000000-0000-0000-0000-000000003b01'), 'Kamal Perera', 'a removed entry is kept, with who removed it');
 select is(public.get_driver_settings() ->> 'half_day_split', '13:00', 'the phone reads the half-day split');
 
@@ -135,6 +149,9 @@ select is((select count(*) from public.office_inbox where employee_id = '1000000
   1::bigint, 'the dispatcher who assigned it is told');
 select is((select count(*) from public.office_inbox where employee_id = '10000000-0000-0000-0000-000000003b04' and event = 'request.running_late'),
   1::bigint, 'and the person who asked for the trip');
+update public.tasks set employee_id = '10000000-0000-0000-0000-000000003b02' where id = '30000000-0000-0000-0000-000000003b01';
+select is((select coalesce(late_report_min::text, '-') from public.tasks where id = '30000000-0000-0000-0000-000000003b01'), '-',
+  'the task goes to Nuwan: Kamal''s late report goes with Kamal');
 
 -- 4. The licence photos -------------------------------------------------------------------------------------------------------
 insert into public.photos (id, employee_id, kind, storage_path, taken_at) values

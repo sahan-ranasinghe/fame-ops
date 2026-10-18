@@ -16,7 +16,7 @@ const { data: list } = await admin.auth.admin.listUsers({ perPage: 200 });
 const u = list.users.find((x) => x.email === email);
 await admin.auth.admin.updateUserById(u.id, { password: `Sentence for ${stamp}!` });
 console.log("1. office user created:", created.created.email);
-const driver = { name: "RT Driver", code: `RT-${stamp}`, username: `rt.${stamp}`, pin: "135790" };
+const driver = { name: "RT Driver", code: `RT-${stamp}`, username: `rt.${stamp}`, pin: "135790", phone: "0771234503" };
 await tool("create_driver", driver);
 const drv = createClient(API, ANON, { auth: { persistSession: false } });
 const ds = await drv.auth.signInWithPassword({ email: `${driver.username}@drivers.fame.invalid`, password: driver.pin });

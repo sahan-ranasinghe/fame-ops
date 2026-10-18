@@ -174,6 +174,7 @@ export const askDrivers = tool({
     } else {
       chosen = [...new Map(args.drivers!.map((d) => {
         const e = findDriver(refs, d);
+        if (!e.active) throw new ToolError(`${e.name} is switched off: they cannot be asked.`);
         return [e.id, e] as const;
       })).values()];
     }
@@ -193,11 +194,11 @@ export const askDrivers = tool({
       }).select("*").single(),
       "question",
     ) as AskRow;
-    // One row per driver; each insert sends that driver's push (the trigger).
-    const rows = unwrap(
-      await db.from("driver_ask_answers").insert(chosen.map((e) => ({ ask_id: ask.id, employee_id: e.id }))).select("*"),
-      "question",
-    ) as AnswerRow[];
+    // One row per driver; each insert sends that driver's push (the trigger). If that fails the question is closed at once
+    // (nothing is deleted), so no empty question waits.
+    const inserted = await db.from("driver_ask_answers").insert(chosen.map((e) => ({ ask_id: ask.id, employee_id: e.id }))).select("*");
+    if (inserted.error) await db.from("driver_asks").update({ expires_at: now.toISOString() }).eq("id", ask.id);
+    const rows = unwrap(inserted, "question") as AnswerRow[];
     const card = await askCard(db, ask, rows, chosen, now);
     return {
       result: { ask: card, next: "The drivers get a push; their answers show in ask_answers and in your notifications." },

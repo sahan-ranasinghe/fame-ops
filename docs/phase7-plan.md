@@ -2229,6 +2229,70 @@ fresh reviewer at the checkpoint.
    problem.
 6. The phone prompt does not block a driver who has no connection (it asks again at the next start).
 
+### Part 3b as built (branch `phase7-3b`, 18 October)
+
+Built by the main session (the migration, the server, driver-api `/profile`, push-task's question, the contract, the driver
+strings, the suites, the e2e and the merges) and three subagents in worktrees: W1 the office's driver row, Who's available
+on it, Live's lines, the Drivers board with its week view, the not-available editor and the driver's profile on the
+manage page; W2 the office's Ask drivers, its answers live, the questions list, Assign with the driver preselected, and
+Running late on the task page and the board; D1 the driver app.
+
+- **Migration `20261019120000_phase7_3b.sql`.** employees: whatsapp, emergency_name / _relation / _phone, licence_no,
+  licence_front_photo_id / licence_back_photo_id (photos of kind licence in `<id>/licence/`, `set_my_licence_photo`, logged
+  as the driver's); `driver_unavailability` (starts_at / ends_at from `unavailability_window` in Colombo time: full days,
+  the morning until the split, the afternoon from it, from–to; who added, changed and removed it; drivers read their own;
+  `save_unavailability` service role only, `set_my_unavailability` / `remove_my_unavailability` for the driver);
+  `driver_asks` + `driver_ask_answers` (drivers read the questions they were asked and their own rows, approve or
+  assign_tasks read every answer, Realtime on the answers; `answer_ask` with 'seen', the last answer given wins, a closed
+  question answers 'expired'; the push on insert through `send_push(null, 'ask', …)`, the asker's `ask.answered` on each
+  answer; pruned after 30 days); tasks.late_report_min / late_report_at with `report_running_late` (latest wins, a history
+  event, `task.running_late` to the dispatchers and the person who assigned it, `request.running_late` to the asker);
+  push_log kind ask; `get_driver_settings()` answers `half_day_split` (as in `20261018090000_phase7_trips.sql`).
+- **G.** `driver_profile(driver)` (the private part, the changes and the licence photos only with users or vehicles;
+  "changed by the driver"), `update_driver` takes whatsapp, the emergency contact and the licence number and logs every
+  field (a driver's phone is never cleared), `set_driver_licence_photo` after `photo_upload_url` kind `driver_licence`;
+  `create_driver` needs a phone (the Add driver form too). WhatsApp links go to the WhatsApp number when one is set.
+  driver-api `POST /profile` (the driver's own fields; numbers +94…; the audit line names the fields, never the numbers).
+  The app: Me is the profile (photo, numbers, emergency contact, licence with its expiry tone and photos, language,
+  vehicle, this month's tasks and km, Availability, Phone setup, Documents, Permissions, Sign out); Edit
+  (`app/profile-edit.tsx`: only what changed; the licence photos 1600 px JPEG); the phone prompt
+  (`app/phone-prompt.tsx`: before the photo step, never over a running task, no skip, Continue only with no connection).
+  The office: the manage page's sections (Contact, Emergency contact, Driving licence with Replace, This month, App
+  version, Not available, Changes; each section's Edit sends only what changed).
+- **H1.** Entries feed Who's available ("Not available · half day, back 13:00", never free), the best match, the
+  needs-a-driver suggestions and `suggest_vehicles`' free drivers, `assignCheck` ("Kamal is not available then · …", a card
+  when it overlaps the trip; "… that day · …" otherwise). Tools `unavailability`, `set_unavailability`,
+  `remove_unavailability`; the setting `half_day_split` (13:00). The app: Me → Availability (the list with who added it;
+  the form: day buttons for 60 days, the last day for full days, the four choices, the reason, a note; online). The office:
+  the editor in the week view and on the manage page (Remove needs a second click).
+- **H2.** One row: `presence.ts` (the words, the usual start = the median first Start work of the last 20 days on duty,
+  from 3; last seen with the town) and `driverRows` (now_status, last_seen, usual_start, next_task); `live_drivers` adds
+  usual_start, next_task, not_available and late_report for approve or assign_tasks. The web: `ui/DriverRow.tsx` in
+  Who's available (with tick boxes and Ask drivers), Live (the extra lines) and the board.
+- **H3.** `ask_drivers` (named drivers or all free ones; a trip question closes at the trip's start, the others after 2
+  hours; a time that has passed is refused) and `ask_answers` (one question with each driver's row, or the last 7 days).
+  The app: the channel `driver-asks` (maximum importance, general.wav, four short pulses; registered in p_channels), a tap
+  opens `app/ask/[id].tsx` with Today underneath, Today's banner (refresh, the push and Realtime on the driver's own
+  rows), one-tap answers, a time from 8 quarter-hour buttons or typed, "Share my location" = one fix with the foreground
+  permission (`oneFix()`), never recording; the queue op `ask_answer` ('ok' and 'expired' done, 'bad' and 'not_yours' kept
+  as failed, never retried by themselves). The office: `/drivers/ask` (the three questions, the drivers from the link or
+  the picker, or all free ones), `/drivers/asks/:id` (Realtime on the web filtered by the question, every 10 s in the
+  artifact; Assign on a Yes: the task's edit page, the request's decide page or a new task with the driver, the day and
+  the time preselected on a fresh form), `/drivers/asks` (the last 7 days, 25 a page).
+- **H4.** The app: Running late (10 · 15 · 30 · Other 5–180; the queue op `task_late`; "You said 15 min late at 08:52") on
+  the task screen under way and, once accepted, on Today's card and the preview; Can't make it (the reasons sheet, decline
+  after accepting) once accepted, before the start; neither on a trip the driver started. The office: the amber line
+  "Running late 15 min · said 08:52" on the task page, the board's card and Live.
+- **H5.** `drivers_board(filter?, search?, week_from?)`; `/drivers/board` (menu Today, approve or assign_tasks; on a phone
+  under More): the rows with tick boxes, filters with counts and search in the URL, Ask drivers, Questions, New task per
+  row; the week view (`?view=week&from=`, Monday by default, ‹ ›; each day's tasks and not-available chips; "+" from today
+  on; on a phone one driver at a time).
+- **H6.** Requesters see neither the board, Ask, the answers nor Who's available (approve or assign_tasks); the Drivers
+  list and Live stay as they were for them (question 4).
+- **Tests.** pgTAP `phase7_3b` (40); the connector suite's 6m on both channels; Deno `presence_test.ts` (6) and the event
+  lists; Vitest (100 files); the e2e "Part 3b" (the board and its week view, a question answered live, the profile); the
+  driver app's `test:asks` and `test:sync` (the two ops).
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
@@ -2644,6 +2708,12 @@ Added in Part 3b (18 October: the profile, the phone prompt, availability, the o
 | `channel.asks` | Questions from the office | කාර්යාලයේ ප්‍රශ්න |
 | `channel.asksDesc` | Questions the office asks you (free for a trip, a time, where you are) | කාර්යාලය ඔබෙන් අසන ප්‍රශ්න (ගමනකට නිදහස්ද, වේලාවක්, ඔබ සිටින තැන) |
 | `task.cantMakeIt` | Can't make it | එන්න බැහැ |
+| `common.badTime` | Enter the time as HH:MM, e.g. 14:30. | වේලාව HH:MM ලෙස ඇතුළත් කරන්න, උදා. 14:30. |
+| `ask.otherTime` | Another time | වෙනත් වේලාවක් |
+| `ask.noFix` | no GPS signal yet. Try again in the open. | තවම GPS සංඥාවක් නැත. එළිමහනේ නැවත උත්සාහ කරන්න. |
+| `ask.noConnection` | No connection: the question shows when you are online. | සම්බන්ධතාවක් නැත: සම්බන්ධ වූ විට ප්‍රශ්නය පෙන්වයි. |
+| `late.closed` | This task is over: nothing was sent. | මෙම කාර්යය අවසන්: කිසිවක් යැව්වේ නැත. |
+| `late.failed` | Couldn't send: {reason} | යැවිය නොහැකි විය: {reason} |
 
 ## Deployment log
 
