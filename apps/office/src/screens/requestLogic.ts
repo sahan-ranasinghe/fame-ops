@@ -97,9 +97,21 @@ export function bookInput(
  * picked) or, when the custodian drives, the custodian's vehicle.
  */
 export function decisionInput(
-  d: { id: string; decision: "approve" | "decline"; reason?: string; vehicle?: string; driver?: string; decidedBy?: string; custodianDrives?: boolean; defaultVehicle?: string | null },
+  d: {
+    id: string;
+    /** Hotfix 2 (K): the card's version; a second approver's decision is refused ("Already approved by Palitha at 10:42"). */
+    version?: number;
+    decision: "approve" | "decline";
+    reason?: string;
+    vehicle?: string;
+    driver?: string;
+    decidedBy?: string;
+    custodianDrives?: boolean;
+    defaultVehicle?: string | null;
+  },
 ): { error: string } | { input: Record<string, unknown> } {
   const input: Record<string, unknown> = { request_id: d.id, decision: d.decision };
+  if (d.version != null) input.version = d.version;
   if (d.decidedBy) input.decided_by = d.decidedBy.slice(0, 80);
   if (d.decision === "decline") {
     const r = (d.reason ?? "").trim();

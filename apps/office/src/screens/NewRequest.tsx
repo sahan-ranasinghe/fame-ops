@@ -25,12 +25,13 @@ import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { availabilityArgs, floorTo5 } from "./availabilityLogic";
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
-import { basePlace, useFleetSettings } from "./dispatchParts";
+import { basePlace, useFleetSettings, VehicleChoiceRadios, vehicleOnTheDay } from "./dispatchParts";
 import { bookInput, emptyRequest, type RequestFields, suggestInput, validateNewRequest } from "./requestLogic";
 import { VehicleGroups } from "./requestParts";
 import { firstStopOf } from "./stopsLogic";
 import { TripEditor, useTrip } from "./TripEditor";
 import { tripPlanInput } from "./tripLogic";
+import { knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 
 interface Form extends RequestFields {
   /** The vehicle picked; "" = the one the driver brings. */
@@ -77,7 +78,11 @@ export function NewRequest() {
   const avail = useAvailability(availArgs);
 
   const def = f.pickedDriver ? vehicleFor(avail.data, f.pickedDriver) : null;
-  const vehicle = f.vehicle || def?.reg_no || "";
+  // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the day.
+  const onDay = books && vehicleOnTheDay(settings.data);
+  const dflt = vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.pickedDriver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
+  const dayDefault = dflt?.kind === "on_the_day";
+  const vehicle = shownVehicle(f.vehicle, dflt);
   const all = sug ? (sug.groups ? Object.values(sug.groups).flat() : sug.vehicles) : [];
   const picked = all.find((v) => v.reg_no === vehicle);
   const custodianDrives = selfDrive && !f.driver && !!picked?.assigned_to;
@@ -113,7 +118,7 @@ export function NewRequest() {
 
   async function book() {
     const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
-    const v = bookInput(fields, { vehicle: f.vehicle, driver: custodianDrives ? "" : f.pickedDriver, hasCustodian: !!picked?.assigned_to, defaultVehicle: known }, base);
+    const v = bookInput(fields, { vehicle: custodianDrives ? f.vehicle : vehicleArg(f.vehicle, dflt), driver: custodianDrives ? "" : f.pickedDriver, hasCustodian: !!picked?.assigned_to, defaultVehicle: known }, base);
     if ("error" in v) {
       setErr(v.error);
       return;
@@ -211,14 +216,19 @@ export function NewRequest() {
                     )}
                 </div>
                 <div className="lab" id="nr-vehicles">Vehicle</div>
-                {f.pickedDriver && !custodianDrives && (
+                {(f.pickedDriver || dayDefault) && !custodianDrives && (
                   <p className="hint" style={{ margin: 0 }} data-testid="vehicle-default">
-                    {f.vehicle && def && f.vehicle !== def.reg_no
+                    {dayDefault
+                      ? (f.vehicle && f.vehicle !== ON_THE_DAY
+                        ? <>Instead of the driver's vehicle on the day. <button type="button" className="linkish" onClick={() => set("vehicle", "")}>Leave it to the day</button></>
+                        : <>The driver's vehicle on the day: they confirm it at Start task. Pick another below to change it.</>)
+                      : f.vehicle && def && f.vehicle !== def.reg_no
                       ? <>Instead of {def.why} {def.reg_no}. <button type="button" className="linkish" onClick={() => set("vehicle", "")}>Use {def.reg_no}</button></>
                       : def ? <>{def.reg_no} · {def.why}. Pick another below to change it.</>
                       : <>This driver holds no vehicle today and has no regular one: pick one below.</>}
                   </p>
                 )}
+                {onDay && !custodianDrives && <VehicleChoiceRadios name="nr-veh" value={vehicle} dayDefault={dayDefault} onPick={(v) => set("vehicle", v)} />}
                 <VehicleGroups sug={sug} name="nr-veh" vehicle={vehicle} onPick={(reg) => set("vehicle", reg)} greyGarage />
                 {sug.vehicles.length === 0 && <Empty>No vehicles registered yet.</Empty>}
               </div>

@@ -10,7 +10,9 @@
 // stays on screen while a new one loads ("Updating…" beside the title), and a
 // refresh for the same day and time keeps the ranking and the best match
 // (steadyAvailability), so nothing jumps, swaps or resets.
+import { Fragment } from "react";
 import type { Availability, AvailableDriver, BestMatch } from "../data/types";
+import { ContactButtons } from "../ui/ContactButtons";
 import { type Query, useQuery } from "../data/useQuery";
 import { useFleet } from "../app/FleetContext";
 import { errText } from "../transport/errors";
@@ -100,8 +102,8 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
             const veh = defaultVehicle(d, names);
             const on = !!picked && d.username === picked;
             return (
+              <Fragment key={d.username ?? d.name}>
               <Tag
-                key={d.username ?? d.name}
                 type={Tag === "button" ? "button" : undefined}
                 className={`row avail-row${on ? " picked" : ""}`}
                 aria-pressed={Tag === "button" ? on : undefined}
@@ -113,10 +115,16 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
                 <span className="grow">
                   {on && <span className="avail-tick" aria-hidden="true">✓ </span>}<span className="name">{d.name}{d.licence.chip === "red" || d.licence.chip === "orange" ? <> <Pill tone={licenceTone(d.licence.chip)}>licence {d.licence.chip === "red" ? "expired or due" : "expiring"}</Pill></> : null}</span>
                   <span className="sub" style={{ display: "block" }}>{driverLine(d)}</span>
-                  {veh && <span className="sub" style={{ display: "block" }}><span className="plate">{veh.reg_no}</span> {veh.why}</span>}
+                  {/* Hotfix 2 (J): "no vehicle yet · regular: WP CAB-4521" says it in words (information only, never a block). */}
+                  {d.vehicle_note
+                    ? <span className="sub" style={{ display: "block" }} data-testid="avail-vehicle-note">{d.vehicle_note}</span>
+                    : veh && <span className="sub" style={{ display: "block" }}><span className="plate">{veh.reg_no}</span> {veh.why}</span>}
                 </span>
                 <Pill tone={driverTone(d)}>{d.free ? (d.state === "off_duty" ? "Free · off duty" : "Free") : "Busy"}</Pill>
               </Tag>
+              {/* Hotfix 2 (F): Call and WhatsApp the driver, beside the row (never inside its button). */}
+              {d.phone?.call && <div className="avail-contact" data-testid="avail-contact"><ContactButtons phone={d.phone} label={`Call ${d.name.split(" ")[0]}`} /></div>}
+              </Fragment>
             );
           })}
           {data.drivers.length === 0 && <p className="muted small" style={{ margin: 0 }}>No active drivers.</p>}

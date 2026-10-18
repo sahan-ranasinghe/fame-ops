@@ -160,7 +160,7 @@ describe("the trip decide page (§33, §34)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Send as proposed" }));
     await settle();
-    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r9", decision: "approve", decided_by: "Palitha" }]);
+    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r9", decision: "approve", version: 1, decided_by: "Palitha" }]);
     expect(screen.getByTestId("request-decided").textContent).toContain("Sent as proposed.");
     expect(screen.getByRole("link", { name: "Open task" }).getAttribute("href")).toBe("/tasks/t9");
   }, 20_000);
@@ -170,6 +170,8 @@ describe("the trip decide page (§33, §34)", () => {
     await mount(transport, "/requests/r9/decide", decideRoutes);
     await opened();
     fireEvent.change(screen.getByLabelText("Leave by"), { target: { value: "08:30" } });
+    // The time counts when the field is left (Hotfix 2, C).
+    fireEvent.blur(screen.getByLabelText("Leave by"));
     expect(screen.getByRole("button", { name: "Approve and send" })).toBeTruthy();
     // Leaving 30 min later misses Stop 2's 11:00: said at once, from the plan as asked.
     expect(screen.getByTestId("departure-check")).toBeTruthy();
@@ -188,7 +190,7 @@ describe("the trip decide page (§33, §34)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Approve and send" }));
     await settle();
-    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r9", decision: "approve", decided_by: "Palitha", driver: "nuwan.s", leave_by: "08:30" }]);
+    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r9", decision: "approve", version: 1, decided_by: "Palitha", driver: "nuwan.s", leave_by: "08:30" }]);
     expect(screen.getByTestId("request-decided").textContent).toContain("Approved and sent.");
   });
 
@@ -204,7 +206,7 @@ describe("the trip decide page (§33, §34)", () => {
     fireEvent.change(screen.getByLabelText("Decline with a reason"), { target: { value: "Too late now" } });
     fireEvent.click(screen.getByRole("button", { name: "Decline" }));
     await settle();
-    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r9", decision: "decline", decided_by: "Palitha", reason: "Too late now" }]);
+    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r9", decision: "decline", version: 1, decided_by: "Palitha", reason: "Too late now" }]);
     expect(screen.getByText("The list")).toBeTruthy();
   });
 
@@ -219,7 +221,7 @@ describe("the trip decide page (§33, §34)", () => {
     expect(screen.getByTestId("driver-default").textContent).toContain("The best match");
     fireEvent.click(screen.getByRole("button", { name: "Approve and send" }));
     await settle();
-    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r5", decision: "approve", decided_by: "Palitha", driver: "nuwan.s" }]);
+    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r5", decision: "approve", version: 1, decided_by: "Palitha", driver: "nuwan.s" }]);
   });
 });
 

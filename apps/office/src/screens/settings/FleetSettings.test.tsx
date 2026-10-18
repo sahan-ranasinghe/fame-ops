@@ -146,4 +146,27 @@ describe("FleetSettings", () => {
     fireEvent.submit(card.getByLabelText("Visit (min)").closest("form")!);
     await waitFor(() => expect(transport.saves).toEqual([{ key: "dwell_min", value: { pickup: 5, drop: 5, visit: 90, default: 5, "pickup.goods": 15 } }]));
   });
+
+  it("Hotfix 2: the office's number is saved as +94… (refused in words otherwise), and the vehicle on the day is a switch, off by default", async () => {
+    const transport = new Settings(false);
+    await mount(transport);
+    const phone = within(screen.getByTestId("office-phone-settings"));
+    expect(phone.getByText("None saved: Call office is not shown.")).toBeTruthy();
+    fireEvent.change(phone.getByLabelText("Office phone number"), { target: { value: "011 23" } });
+    fireEvent.submit(phone.getByLabelText("Office phone number").closest("form")!);
+    expect(phone.getByText("Type a Sri Lankan number, e.g. 077 123 4567.")).toBeTruthy();
+    expect(transport.saves).toEqual([]);
+    fireEvent.change(phone.getByLabelText("Office phone number"), { target: { value: "011 234 5678" } });
+    fireEvent.submit(phone.getByLabelText("Office phone number").closest("form")!);
+    await waitFor(() => expect(transport.saves).toEqual([{ key: "office_phone", value: "+94112345678" }]));
+    await waitFor(() => expect(phone.getByText("Saved: 011 234 5678")).toBeTruthy());
+    expect(phone.getByLabelText<HTMLInputElement>("Office phone number").value).toBe("011 234 5678");
+
+    const day = within(screen.getByTestId("vehicle-on-the-day-settings"));
+    const box = day.getByRole("checkbox");
+    expect((box as HTMLInputElement).checked).toBe(false);
+    expect(day.getByText(/Switch it on only after every driver's phone has the app update/)).toBeTruthy();
+    fireEvent.click(box);
+    await waitFor(() => expect(transport.saves).toContainEqual({ key: "vehicle_on_the_day", value: true }));
+  });
 });

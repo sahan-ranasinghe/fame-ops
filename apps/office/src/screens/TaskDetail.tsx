@@ -25,8 +25,11 @@ import { GapsList, useGaps } from "./GapsList";
 import { StopArrival } from "./StopArrival";
 import { TripPurposeCard, TripTags } from "./TripPurpose";
 import { Avatar, Empty, Loading, Notice, Pill, VehicleThumb, WarningsNote } from "../ui/basics";
+import { ContactButtons, linksOf } from "../ui/ContactButtons";
 import { Icon } from "../ui/icons";
 import { PageTop } from "../ui/Page";
+import { DecisionRow } from "./approvers";
+import { useFleetSettings } from "./dispatchParts";
 import { useToast } from "../ui/Toast";
 import { PlanWithMap } from "./PlanMap";
 import { videoWords } from "./fuelLogic";
@@ -76,6 +79,9 @@ export function TaskDetail() {
   const { id = "" } = useParams();
   const { me } = useFleet();
   const { p, err, reload } = useTask(id, { withLine: true });
+  // Hotfix 2 (F): the office's number, for Call office beside "Approved by …" when the approver has none.
+  const settings = useFleetSettings();
+  const officePhone = linksOf(settings.data?.settings.office_phone);
   const backTo = useBoardBack();
   const q = useBoardQuery();
   // The warnings of a change just made on /tasks/:id/edit (passed in the navigation state).
@@ -117,11 +123,18 @@ export function TaskDetail() {
       {t.finish_flag && <Notice>{t.finish_flag.text}</Notice>}
       <div className="card card-b">
         <dl className="kv">
-          <div><dt>Driver</dt><dd>{t.driver ? <span className="with-photo"><Avatar name={t.driver} src={t.driver_photo_url} small />{t.driver}</span> : "—"}</dd></div>
+          <div>
+            <dt>Driver</dt>
+            <dd>
+              {t.driver ? <span className="with-photo"><Avatar name={t.driver} src={t.driver_photo_url} small />{t.driver}</span> : "—"}
+              {/* Hotfix 2 (F): Call and WhatsApp the driver, for people who may see drivers' numbers (the server decides). */}
+              {t.driver_phone && <div style={{ marginTop: 6 }}><ContactButtons phone={t.driver_phone} label="Call driver" testId="call-driver" /></div>}
+            </dd>
+          </div>
           <div>
             <dt>Vehicle</dt>
             <dd>
-              {t.vehicle ? <span className="with-photo"><VehicleThumb src={t.vehicle_thumb_url} />{t.vehicle}</span> : "—"}
+              {t.vehicle ? <span className="with-photo"><VehicleThumb src={t.vehicle_thumb_url} />{t.vehicle}</span> : <span data-testid="vehicle-text">{t.vehicle_text || "—"}</span>}
               {t.vehicle_taken && <div className="sub" style={{ fontWeight: 400 }}>{t.vehicle_taken}</div>}
               {t.vehicle_changed && <div className="sub" style={{ fontWeight: 400 }} data-testid="vehicle-changed">{t.vehicle_changed}</div>}
               {segments.length > 1 && <div className="sub" style={{ fontWeight: 400 }}>Swapped during the task: {segments.map((g) => g.vehicle).join(" → ")}</div>}
@@ -159,6 +172,8 @@ export function TaskDetail() {
           <div><dt>Odometer</dt><dd className="num">{t.start_odometer_km != null ? num(t.start_odometer_km) : "—"}{t.end_odometer_km != null ? " → " + num(t.end_odometer_km) : ""}</dd></div>
           <div><dt>Km this task</dt><dd className="num">{km != null ? num(km) + " km" : "—"}{segments.length > 1 ? <span className="muted"> · {segments.length} vehicles</span> : null}{t.gps_km != null ? <span className="muted"> · GPS {num(t.gps_km)} km</span> : null}</dd></div>
           {t.created_by && <div><dt>Assigned by</dt><dd>{t.created_by}</dd></div>}
+          {/* Hotfix 2 (K): who sent it to the driver, with their number (Call office when they have none). */}
+          {t.approved_by && <div style={{ gridColumn: "1/-1" }}><dt>Approved</dt><dd style={{ fontWeight: 400 }}><DecisionRow kind="approved" who={t.approved_by} office={officePhone} /></dd></div>}
           {t.cancelled_reason && <div><dt>Cancelled because</dt><dd>{t.cancelled_reason}</dd></div>}
           {t.notes && <div style={{ gridColumn: "1/-1" }}><dt>Notes</dt><dd style={{ fontWeight: 400 }}>{t.notes}</dd></div>}
         </dl>

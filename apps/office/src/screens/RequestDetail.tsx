@@ -19,7 +19,9 @@ import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { ContactButtons } from "../ui/ContactButtons";
 import { isProposal, requestView, withdrawInput } from "./approvalLogic";
+import { DecidedBy, ReviewingLine } from "./approvers";
 import { ChangesList, LateNotice, RequestHead, Timeline } from "./requestParts";
 import { AssignedBlock, TellRequester } from "./RequestOutcome";
 import { TripSection, useTripLine } from "./RequestTrip";
@@ -150,6 +152,15 @@ export function RequestDetail() {
           {q.cancel_reason && <div style={{ gridColumn: "1/-1" }}><dt>Cancelled because</dt><dd>{q.cancel_reason}</dd></div>}
         </dl>
         <Timeline q={q} />
+        {/* Hotfix 2 (K): who decided it, with Call / WhatsApp (Call office when they have no number); who is reviewing it. */}
+        <div style={{ marginTop: 12 }}><DecidedBy q={q} /></div>
+        {approver && <ReviewingLine list={q.reviewing} block />}
+        {!approver && !q.approved_by && q.office_phone?.call && (
+          <div className="row" style={{ padding: 0, marginTop: 12 }} data-testid="office-contact">
+            <span className="grow muted small">Questions about it? The fleet office.</span>
+            <ContactButtons phone={q.office_phone} label="Call office" testId="call-office" />
+          </div>
+        )}
       </div>
       {q.assigned && <div style={{ marginTop: 18 }}><AssignedBlock a={q.assigned} /></div>}
       {(q.tell_requester || q.requester_phone) && <div style={{ marginTop: 18 }}><TellRequester key={`${q.id}-${q.version ?? 0}`} q={q} /></div>}

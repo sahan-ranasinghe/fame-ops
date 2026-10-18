@@ -15,6 +15,7 @@ import { Chips, Empty, ErrBox, Loading, Pill, StaleNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { ListWithDetail } from "../ui/Page";
 import { LATE_BADGE, proposalLine, requestView } from "./approvalLogic";
+import { ReviewingLine } from "./approvers";
 import { timelineSteps } from "./requestLogic";
 
 type Filter = "waiting" | "changed" | "approved" | "declined" | "cancelled" | "all";
@@ -83,6 +84,8 @@ export function Requests() {
                               const words = q.one_step ? "booked directly" : last && last.label !== "Sent" ? `${last.label}${last.at ? ` · ${last.at}` : ""}` : last?.at ? `sent ${last.at}` : "";
                               return words ? <div className="sub" style={{ marginTop: 4 }}>{words}</div> : null;
                             })()}
+                            {/* Hotfix 2 (K): another approver has its decide page open. */}
+                            {(q.status === "waiting" || q.status === "changed") && <ReviewingLine list={q.reviewing} block />}
                           </td>
                           <td className="r">
                             {(q.status === "waiting" || q.status === "changed") && decides

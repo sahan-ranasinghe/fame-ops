@@ -25,12 +25,17 @@ export function More() {
             <div><dt>Name</dt><dd>{me.name || "—"}</dd></div>
             <div><dt>Role</dt><dd>{ROLE_LABEL[me.role] ?? me.role}</dd></div>
             {me.email && <div><dt>E-mail</dt><dd>{me.email}</dd></div>}
+            {/* Hotfix 2 (F): the person's own number (Call the fleet admin), changed on My profile. */}
+            <div><dt>Phone</dt><dd>{me.phone_display ?? me.phone ?? <Link to="/settings/profile">Add my number</Link>}</dd></div>
             <div><dt>Fame Fleet</dt><dd>{__VERSION__} · {transport.kind === "api" ? "web" : "Claude"}</dd></div>
             <div style={{ gridColumn: "1/-1" }}>
               <dt>Permissions</dt>
               <dd>{me.permissions.length ? me.permissions.map((p) => <span key={p} className="perm">{PERMISSION_TEXT[p].label}</span>) : "None"}</dd>
             </div>
           </dl>
+          <div className="acts" style={{ marginTop: 16 }}>
+            <Link className="btn" to="/settings/profile">My profile</Link>
+          </div>
           {signOut && (
             <div className="acts" style={{ marginTop: 16 }}>
               <Link className="btn" to="/settings">Sign-in and security</Link>

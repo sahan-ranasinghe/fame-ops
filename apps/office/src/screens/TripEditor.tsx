@@ -14,6 +14,7 @@ import { type ReactNode, useEffect } from "react";
 import type { PlanPreview, SettingsResult } from "../data/types";
 import type { Query } from "../data/useQuery";
 import { errText } from "../transport/errors";
+import { TimeInput } from "../ui/TimeInput";
 import { checkDeparture, type DepartureCheck, departurePlan } from "./departureLogic";
 import { DepartureNote, StartFrom, startPoint, usePlanPreview } from "./dispatchParts";
 import { dwellFallbacks, type PlanReason, planReasons, rowStopNumbers } from "./planLogic";
@@ -120,7 +121,7 @@ export function LeaveByField({ trip, id, label = "Leave by" }: { trip: Trip; id:
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input type="time" id={id} value={f.leaveBy} onChange={(e) => trip.setLeave(e.target.value)} />
+      <TimeInput id={id} value={f.leaveBy} onCommit={trip.setLeave} />
       {check && check.kind !== "fill"
         ? <DepartureNote check={check} onUse={trip.setLeave} onMove={trip.moveArriveBy} onMoveBack={trip.setEnd} backLabel={trip.backLabel} />
         : <span className="hint">Empty: planned from the stops’ arrive-by times.</span>}
@@ -133,7 +134,7 @@ export function BackByField({ trip, id, label = "Back by" }: { trip: Trip; id: s
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <input type="time" id={id} value={trip.f.end} onChange={(e) => trip.setEnd(e.target.value)} />
+      <TimeInput id={id} value={trip.f.end} onCommit={trip.setEnd} />
       {trip.lateBack && <DepartureNote check={trip.check} onUse={trip.setLeave} onMoveBack={trip.setEnd} backLabel={trip.backLabel} testId="departure-check-back" />}
     </div>
   );

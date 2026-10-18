@@ -1,6 +1,6 @@
 // The office web app: everyone signs in with their own account; office-api
 // checks the session and the role on every call.
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "../auth/AuthProvider";
 import { Blocked } from "../auth/Blocked";
@@ -11,20 +11,29 @@ import { subscribeDriverLatest, subscribeDriverPoints, subscribeDriversPoints, s
 import { FleetStore } from "../data/store";
 import { uploadToTicket } from "../data/upload";
 import { registerServiceWorker } from "../push";
+import type { Me } from "../transport/types";
 import { ToastProvider } from "../ui/Toast";
 import { FleetProvider } from "./FleetContext";
 import { routes } from "./routes";
 
 function Gate() {
   const auth = useAuth();
-  const fleet = useMemo(() => {
-    if (auth.state.step !== "ready") return null;
+  const signedIn = auth.state.step === "ready" ? auth.state.me : null;
+  // Hotfix 2 (F): /me asked again after a change to the person's own details (their phone number). The store and the
+  // router stay (no page reset): only `me` changes. A new sign-in starts from its own answer.
+  const [fresh, setFresh] = useState<{ of: Me; me: Me } | null>(null);
+  const me = signedIn && fresh?.of === signedIn ? fresh.me : signedIn;
+  const base = useMemo(() => {
+    if (!signedIn) return null;
     return {
       store: new FleetStore(auth.transport),
       transport: auth.transport,
-      me: auth.state.me,
       noConnector: false,
       signOut: () => void auth.signOut(),
+      refreshMe: async () => {
+        const next = await auth.transport.me();
+        setFresh({ of: signedIn, me: next });
+      },
       realtime: {
         driverLatest: subscribeDriverLatest,
         driverPoints: subscribeDriverPoints,
@@ -35,8 +44,9 @@ function Gate() {
       files: { upload: uploadToTicket },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [auth.state.step === "ready" ? auth.state.me : null, auth.transport]);
-  const router = useMemo(() => (fleet ? createBrowserRouter(routes) : null), [fleet]);
+  }, [signedIn, auth.transport]);
+  const fleet = useMemo(() => (base && me ? { ...base, me } : null), [base, me]);
+  const router = useMemo(() => (base ? createBrowserRouter(routes) : null), [base]);
   // Signed in: the service worker (push notifications; a tap on one opens its link here).
   useEffect(() => {
     if (!router) return;

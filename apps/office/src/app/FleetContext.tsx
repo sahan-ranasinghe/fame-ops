@@ -13,6 +13,8 @@ export interface Fleet {
   noConnector: boolean;
   /** Web build only. */
   signOut?: () => void;
+  /** Web build only (Hotfix 2, F): asks GET /me again (after the person saved their phone number); the store and the page stay. */
+  refreshMe?: () => Promise<void>;
   /** Artifact build only: Claude's permissions sheet. */
   managePermissions?: () => Promise<boolean>;
   /** Web build only: live rows from the database (Supabase Realtime). */

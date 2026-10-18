@@ -106,6 +106,26 @@ function NeedsDriverBanner() {
   );
 }
 
+/** The path of My profile (Hotfix 2, F). */
+export const PROFILE_PATH = "/settings/profile";
+
+/**
+ * Hotfix 2 (F): someone who approves or assigns tasks with no phone number saved (GET /me's phone_required) is asked for
+ * it on every page; the banner goes once it is saved (My profile asks /me again). Not on My profile itself.
+ */
+export function PhoneBanner() {
+  const { me } = useFleet();
+  const { pathname } = useLocation();
+  if (!me.phone_required || pathname === PROFILE_PATH) return null;
+  return (
+    <div style={{ marginBottom: 16 }} data-testid="phone-banner">
+      <Notice tone="info" action={<Link className="btn small" to={PROFILE_PATH}>Add my number</Link>}>
+        <b>Add your phone number so drivers can call you.</b>
+      </Notice>
+    </div>
+  );
+}
+
 function Banner() {
   const { noConnector, store, managePermissions } = useFleet();
   const overview = useEntry<Overview>("overview");
@@ -175,11 +195,12 @@ function ShellBody() {
           ))}
           <NavLink to="/more"><Icon name="more" /><span>More</span></NavLink>
         </nav>
-        <div className="viewer">
+        {/* The person's name opens My profile (their phone number, Hotfix 2 F). */}
+        <Link className="viewer" to={PROFILE_PATH} title="My profile" data-testid="viewer-profile">
           {me.name
             ? <><span className="avatar sm">{me.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}</span><span>{me.name}<small>{role}</small></span></>
             : <span className="muted small">Fleet office</span>}
-        </div>
+        </Link>
       </aside>
 
       <main className="main">
@@ -192,6 +213,7 @@ function ShellBody() {
         <SoundStrip />
         <InboxBanners />
         <Banner />
+        <PhoneBanner />
         <NeedsDriverBanner />
         <PullToRefresh><Outlet /></PullToRefresh>
       </main>

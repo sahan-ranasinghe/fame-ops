@@ -110,6 +110,8 @@ export const ROUTES_NEED: Permission[] = ["assign_tasks", "vehicles"];
 
 /** The pages under Settings and what they need. */
 export const SETTINGS_PAGES: NavItem[] = [
+  // Hotfix 2 (F): everyone's own phone number.
+  { key: "profile", label: "My profile", need: [], path: "/settings/profile" },
   { key: "users", label: "Users", need: ["users"], path: "/settings/users" },
   { key: "fleet", label: "Fleet", need: ["users"], path: "/settings/fleet" },
   { key: "import-sites", label: "Import sites", need: ["vehicles"], path: "/settings/import-sites" },

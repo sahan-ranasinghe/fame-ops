@@ -142,9 +142,11 @@ export function decideLabel(p: { proposal: boolean; asProposed: boolean; custodi
 
 /** decide_request on the trip decide page: decline with a reason, or approve with only what changed. */
 export function tripDecideInput(
-  d: TripPick & { id: string; decision: "approve" | "decline"; decidedBy?: string },
+  d: TripPick & { id: string; decision: "approve" | "decline"; decidedBy?: string; version?: number },
 ): { error: string } | { input: Record<string, unknown>; asProposed: boolean } {
   const input: Record<string, unknown> = { request_id: d.id, decision: d.decision };
+  // Hotfix 2 (K): the card's version; a second approver's decision is refused.
+  if (d.version != null) input.version = d.version;
   if (d.decidedBy) input.decided_by = d.decidedBy.slice(0, 80);
   if (d.decision === "decline") {
     const r = d.f.reason.trim();

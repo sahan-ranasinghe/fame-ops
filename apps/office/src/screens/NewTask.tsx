@@ -29,9 +29,10 @@ import { type AssignFields, assignOutcome, driverWhatsApp, emptyAssign, planInpu
 import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
-import { basePlace, DriverSelect, useFleetSettings, VehicleSelect } from "./dispatchParts";
+import { basePlace, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
 import { defaultStops, firstStopOf } from "./stopsLogic";
 import { BackByField, LeaveByField, TripPlanCard, TripRoute, useTrip } from "./TripEditor";
+import { knownDef, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 
 const SPLIT_COLORS = ["var(--accent)", "var(--live)", "var(--ok)", "var(--bad)", "var(--muted)"];
 export { PLAN_DEBOUNCE_MS } from "./dispatchParts";
@@ -79,6 +80,10 @@ export function NewTask() {
   const avail = useAvailability(availArgs);
   const pickedDriver = drivers.find((d) => d.username === f.driver);
   const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), pickedDriver, drivers.map((d) => d.name)) : null;
+  // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the day.
+  const onDay = vehicleOnTheDay(settings.data);
+  const dflt = vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.driver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
+  const dayDefault = dflt?.kind === "on_the_day";
 
   /** Picking a driver in the list: the vehicle follows them (their vehicle today, else their regular one) unless one was picked. */
   function pickDriver(username: string) {
@@ -114,7 +119,8 @@ export function NewTask() {
     ev.preventDefault();
     // The driver's vehicle: known (Who's available, else the driver list), known to be none, or not known yet (the server decides).
     const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
-    const v = validateAssign(f, rows, me.name, { defaultVehicle: known, base });
+    // "on the day" is named when it is the default (Hotfix 2, J): never held up for a vehicle.
+    const v = validateAssign({ ...f, vehicle: vehicleArg(f.vehicle, dflt) }, rows, me.name, { defaultVehicle: known, base });
     if ("error" in v) {
       setMsg({ tone: "bad", text: v.error });
       return;
@@ -187,7 +193,8 @@ export function NewTask() {
               emptyLabel={lists.error && !lists.drivers ? "Couldn’t load" : "Choose a driver"} />
             <VehicleSelect id="af-vehicle" value={f.vehicle} def={def} vehicles={vehicles} onChange={(reg) => set("vehicle", reg)}
               emptyLabel={!lists.vehicles && lists.error ? "Couldn’t load" : f.driver ? "Pick a vehicle" : "Choose the driver first"}
-              hint={f.driver && !def ? "This driver holds no vehicle today and has no regular one." : undefined} />
+              choices={onDay} dayDefault={dayDefault}
+              hint={f.driver && !def && !onDay ? "This driver holds no vehicle today and has no regular one." : undefined} />
           </div>
           {lists.error && (!lists.drivers || !lists.vehicles) && <Notice>Couldn’t load the {!lists.drivers && !lists.vehicles ? "drivers and vehicles" : !lists.drivers ? "drivers" : "vehicles"}: {lists.error} <button type="button" className="btn small" onClick={lists.reload}>Try again</button></Notice>}
           <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }}

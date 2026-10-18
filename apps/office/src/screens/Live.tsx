@@ -52,7 +52,9 @@ import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote, VehicleThumb } from "../ui/basics";
+import { ContactButtons } from "../ui/ContactButtons";
 import { Icon } from "../ui/icons";
+import { linksFromCall } from "../ui/phoneLinks";
 
 /** The trails and the shown route are fetched again this often (the fallback when Realtime is not delivering). */
 const TRAIL_REFRESH_MS = 60000;
@@ -361,8 +363,8 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded
       <div className="acts">
         {routes && <Link className="btn dark" to={`/drivers/${x.username}`}><Icon name="route" />Driver page</Link>}
         {links.maps && <a className="btn" href={links.maps} target="_blank" rel="noopener">Open in Google Maps</a>}
-        {links.whatsapp && <a className="btn" href={links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}
-        {links.call && <a className="btn" href={links.call}>Call</a>}
+        {/* Hotfix 2 (F): Call driver and WhatsApp (on a computer the number, Copy and WhatsApp web). */}
+        <ContactButtons phone={linksFromCall(links)} label="Call driver" testId="call-driver" />
         {routes && <button type="button" className="btn" onClick={onRoute} disabled={busy}>Today’s route</button>}
         {move && <Link className="btn" to={`/drivers/${x.username}/vehicle`}>{swap ? "Swap vehicle" : "Move to vehicle"}</Link>}
         {clockOut && !armed && <button type="button" className="btn" disabled={saving} onClick={() => { setArmed(true); setMsg(null); }}>Clock out</button>}
