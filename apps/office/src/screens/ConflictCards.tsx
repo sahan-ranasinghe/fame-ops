@@ -5,6 +5,7 @@
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import type { Conflict, ConflictPerson } from "../data/types";
+import { canOpenTask } from "../transport/types";
 
 function Reach({ who, role }: { who?: ConflictPerson; role: string }) {
   if (!who || (!who.call && !who.whatsapp)) return null;
@@ -26,7 +27,7 @@ export function ConflictCards({ conflicts, onPickVehicle, onPickDriver }: {
 }) {
   const { me } = useFleet();
   if (!conflicts?.length) return null;
-  const opens = me.tools.includes("task_detail");
+  const opens = canOpenTask(me);
   return (
     <div className="form" data-testid="conflicts" style={{ gap: 10 }}>
       {conflicts.map((c, i) => (

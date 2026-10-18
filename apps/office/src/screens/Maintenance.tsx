@@ -11,7 +11,7 @@ import { useEntry, useLists } from "../data/hooks";
 import type { Overview, VehicleReport, VehicleReports } from "../data/types";
 import { attIcon, cap, levelTone, today } from "../lib/format";
 import { errText } from "../transport/errors";
-import { can, type FleetError } from "../transport/types";
+import { can, canOpenTask, type FleetError } from "../transport/types";
 import { Chips, Notice, Pill, Plate } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { EmptyLine, ListHeader, SearchBox, usePagedList, useUrlFilter, useUrlSearch } from "../ui/ListKit";
@@ -61,7 +61,7 @@ function ReportCard({ r }: { r: VehicleReport }) {
       {r.office_note && <p className="muted" style={{ margin: 0 }}>Office: {r.office_note}</p>}
       <div className="photos">
         {r.photos.map((u, i) => <a key={i} className="btn small" href={u} target="_blank" rel="noopener">Photo {i + 1}</a>)}
-        {r.task_id && me.tools.includes("task_detail") && <Link className="btn small" to={`/tasks/${r.task_id}`}>Open task</Link>}
+        {r.task_id && canOpenTask(me) && <Link className="btn small" to={`/tasks/${r.task_id}`}>Open task →</Link>}
         {r.driver_links?.call && <a className="btn small" href={r.driver_links.call}>Call driver</a>}
       </div>
       {canEdit && (

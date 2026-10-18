@@ -14,6 +14,7 @@ import { errText } from "../transport/errors";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { PageTop } from "../ui/Page";
 import { checklistWords, clockOf, megabytes, pieceAt, videoChip, videoTone } from "./fuelLogic";
+import { canOpenTask } from "../transport/types";
 
 export function FuelDetail() {
   const { id = "" } = useParams();
@@ -126,7 +127,7 @@ export function FuelDetail() {
         </dl>
       </div>
       <div className="acts">
-        {e.task_id && me.tools.includes("task_detail") && <Link className="btn" to={`/tasks/${e.task_id}`}>Open the task</Link>}
+        {e.task_id && canOpenTask(me) && <Link className="btn" to={`/tasks/${e.task_id}`}>Open the task →</Link>}
         {e.driver_username && <Link className="btn" to={`/drivers/${e.driver_username}`}>Driver</Link>}
       </div>
     </div>

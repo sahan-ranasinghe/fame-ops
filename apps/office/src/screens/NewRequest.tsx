@@ -109,7 +109,7 @@ export function NewRequest() {
       draft.clear();
       toast(staff ? r.next ?? "Sent to the fleet admin · you'll be notified" : "Request saved");
       void store.invalidate();
-      navigate("/requests");
+      navigate("/requests", { replace: true });
     } catch (e) {
       setErr(errText(e as FleetError)[0]);
       setBusy(false);
@@ -150,8 +150,8 @@ export function NewRequest() {
           )}
           <WarningsNote warnings={warnList(booked)} />
           <div className="acts">
-            {booked.task_id && me.tools.includes("task_detail") && <Link className="btn" to={`/tasks/${booked.task_id}`}>Open task</Link>}
-            <Link className="btn dark" to="/requests">Done</Link>
+            {booked.task_id && can(me, "assign_tasks") && <Link className="btn" to={`/tasks/${booked.task_id}`}>Open task →</Link>}
+            <Link className="btn dark" to="/requests" replace>Done</Link>
           </div>
         </div>
       </section>

@@ -150,7 +150,7 @@ export function NewTask() {
               : p.vehicle_used ? <span data-testid="vehicle-used">Vehicle: {p.vehicle_used.reg_no} · {p.vehicle_used.why === "chosen" ? "as picked" : p.vehicle_used.why}. </span>
               : p.vehicle ? <span data-testid="vehicle-used">Vehicle: {p.vehicle}. </span> : null}
             {out.link && <Link className="btn small" to={out.link.to}>{out.link.label}</Link>}{" "}
-            <Link className="btn small" to={`/tasks${v.input.date !== today() ? `?date=${v.input.date}` : ""}`}>The board</Link>{" "}
+            <Link className="btn small" to={`/tasks${v.input.date !== today() ? `?date=${v.input.date}` : ""}`}>The board →</Link>{" "}
             {wa ? <a className="btn small" href={wa} target="_blank" rel="noopener">WhatsApp the driver</a>
               : f.whatsapp && !out.waiting ? <span className="small">No phone number saved for this driver, so no WhatsApp link.</span> : null}
           </>

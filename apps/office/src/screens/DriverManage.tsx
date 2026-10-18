@@ -95,7 +95,7 @@ export function DriverManage() {
       toast(want ? "Driver switched on" : "Driver switched off");
       if (out.notes?.length) toast(out.notes[0]);
       after();
-      navigate("/drivers");
+      navigate("/drivers", { replace: true });
     } catch (e) {
       setSaMsg(errText(e as FleetError)[0]);
       setBusy(false);

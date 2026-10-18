@@ -14,7 +14,7 @@ import type { Issue, IssueHistory, IssuesList } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { attIcon, cap, clock } from "../lib/format";
 import { errText } from "../transport/errors";
-import { can, type FleetError } from "../transport/types";
+import { can, canOpenTask, type FleetError } from "../transport/types";
 import { Loading, Notice, Pill, Plate } from "../ui/basics";
 import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
@@ -154,7 +154,7 @@ export default function IssuePage() {
         </dl>
         {i.resolution_note && <Notice tone="ok">{i.status === "dismissed" ? "Dismissed" : "Resolved"} by {i.resolved_by ?? "?"} {i.resolved ? `at ${i.resolved}` : ""}: {i.resolution_note}</Notice>}
         <div className="chips">
-          {h.task && me.tools.includes("task_detail") && <Link className="btn small" to={`/tasks/${h.task.id}`}>Task · {h.task.title}</Link>}
+          {h.task && canOpenTask(me) && <Link className="btn small" to={`/tasks/${h.task.id}`}>Task · {h.task.title} →</Link>}
           {driverLink && <Link className="btn small" to={driverLink}>Driver · {i.driver}</Link>}
           {i.driver_links?.call && <a className="btn small" href={i.driver_links.call}>Call driver</a>}
           {i.driver_links?.whatsapp && <a className="btn small" href={i.driver_links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}

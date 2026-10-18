@@ -35,6 +35,7 @@ import { useToast } from "../ui/Toast";
 import { PlanWithMap } from "./PlanMap";
 import { videoWords } from "./fuelLogic";
 import { driveText } from "./stopsLogic";
+import { findDriverPath } from "./needsDriverLogic";
 import { dwellNote, needsDriverText, segmentRows, segmentsTotal, stayLine, stopTitle, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
 
@@ -114,10 +115,14 @@ export function TaskDetail() {
         title={t.title || "Task"}
         sub={<><Pill tone={TONE[t.status] ?? ""}>{cap(t.status)}</Pill> <TripTags t={t} /> <span className="mono">{t.start}</span></>}
         backTo={backTo}
-        actions={(canChange || canCancel) ? <Link className="btn small" to={`/tasks/${id}/edit${q}`}>{declined ? "Give it to a driver" : "Change"}</Link> : undefined}
+        actions={(canChange || canCancel)
+          ? (declined || t.needs_driver) && canChange
+            ? <Link className="btn small" to={findDriverPath(id)}>Give it a driver</Link>
+            : <Link className="btn small" to={`/tasks/${id}/edit${q}`}>Change</Link>
+          : undefined}
       />
       {t.needs_driver && (
-        <Notice tone="bad" action={findDriver ? <Link className="btn small" to={`/tasks/${id}/edit?driver=1`}>Find a driver</Link> : undefined}>
+        <Notice tone="bad" action={findDriver ? <Link className="btn small" to={findDriverPath(id)}>Find a driver</Link> : undefined}>
           <b data-testid="needs-driver-line">{needsDriverText(t)}</b>
         </Notice>
       )}
@@ -198,7 +203,7 @@ export function TaskDetail() {
       {t.declined && (
         <Notice tone="bad">
           Declined{t.declined.after_accept ? " after accepting" : ""}{t.declined.at ? ` at ${t.declined.at}` : ""}: {t.declined.reason_text ?? t.declined.reason ?? "no reason given"}
-          {t.declined.note ? ` · “${t.declined.note}”` : ""}. {canChange && !findDriver ? <Link to={`/tasks/${id}/edit${q}`}>Give it to another driver</Link> : null}
+          {t.declined.note ? ` · “${t.declined.note}”` : ""}. {canChange && !findDriver ? <Link to={findDriverPath(id)}>Give it to another driver →</Link> : null}
         </Notice>
       )}
       {t.warnings_saved?.length ? (
@@ -340,7 +345,7 @@ export function TaskDetail() {
 
       {(canChange || canCancel) && (
         <div className="acts">
-          {canChange && <Link className="btn dark" to={`/tasks/${id}/edit${q}`}>{declined ? "Give it to a driver" : "Change the task"}</Link>}
+          {canChange && <Link className="btn dark" to={declined ? findDriverPath(id) : `/tasks/${id}/edit${q}`}>{declined ? "Give it a driver" : "Change the task"}</Link>}
           {canCancel && <Link className="btn danger" to={`/tasks/${id}/edit${q}#cancel`}>Cancel task</Link>}
         </div>
       )}

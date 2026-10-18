@@ -131,7 +131,7 @@ export function TaskStops() {
       draft.clear();
       toast(`Stops saved · leave by ${out.leave_by?.slice(-5) ?? "—"}`);
       void store.invalidate();
-      navigate(back, { state: { warnings: out.warnings ?? [] } });
+      navigate(back, { replace: true, state: { warnings: out.warnings ?? [] } });
     } catch (e) {
       const text = errText(e as FleetError)[0];
       setMsg(/changed since/i.test(text) ? `${text} Go back to the task and open the stops again.` : text);

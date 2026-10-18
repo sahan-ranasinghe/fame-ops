@@ -15,7 +15,7 @@ import { joinDots, plateOf } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { ErrBox, Loading, Notice } from "../ui/basics";
-import { PageTop, StickyActions } from "../ui/Page";
+import { BackButton, PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import {
   canMove,
@@ -64,7 +64,7 @@ export function MoveVehicle() {
     return (
       <section className="view">
         {top}
-        {live.data ? <Notice tone="bad">There is no active driver “{username}”. <Link to="/live">Back to Live locations</Link></Notice> : (
+        {live.data ? <Notice tone="bad" action={<BackButton fallback="/live">Back</BackButton>}>There is no active driver “{username}”.</Notice> : (
           <>
             <ErrBox entry={live} onRetry={() => void store.load("live", "live_drivers", { filter: "all" })} onFix={onFix} />
             {!live.err && <Loading>Finding the driver…</Loading>}
@@ -74,7 +74,7 @@ export function MoveVehicle() {
     );
   }
   const taskId = swapped?.task_id ?? x.task_id;
-  const openTask = taskId && can(me, "assign_tasks") ? <Link className="btn" to={`/tasks/${taskId}`}>Open the task</Link> : null;
+  const openTask = taskId && can(me, "assign_tasks") ? <Link className="btn" to={`/tasks/${taskId}`}>Open the task →</Link> : null;
   if (swapped) {
     return (
       <section className="view" data-testid="move-vehicle">
@@ -88,7 +88,7 @@ export function MoveVehicle() {
             </ul>
           </div>
           <div className="acts">
-            <Link className="btn dark" to="/live">Back to Live locations</Link>
+            <BackButton className="btn dark" fallback="/live">Back</BackButton>
             {openTask}
           </div>
         </div>
@@ -102,7 +102,7 @@ export function MoveVehicle() {
         {top}
         <div className="page-form">
           <Notice tone="info">{why}</Notice>
-          <div className="acts"><Link className="btn" to="/live">Back to Live locations</Link></div>
+          <div className="acts"><BackButton fallback="/live">Back</BackButton></div>
         </div>
       </section>
     );
@@ -132,7 +132,7 @@ export function MoveVehicle() {
       const r = await transport.call<MoveResult>("move_driver_vehicle", moveInput(username, picked));
       toast(moveSentence(r));
       void store.invalidate();
-      navigate("/live");
+      navigate("/live", { replace: true });
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);
@@ -165,7 +165,7 @@ export function MoveVehicle() {
         {msg && <Notice tone="bad">{msg}</Notice>}
         <StickyActions>
           <button type="button" className="btn dark" disabled={busy || !veh.data || !canMove(rows, picked)} onClick={() => void move()}>Move</button>
-          <Link className="btn" to="/live">Cancel</Link>
+          <BackButton fallback="/live">Cancel</BackButton>
         </StickyActions>
       </div>
     </section>
@@ -268,7 +268,7 @@ function SwapForm({ x, username, rows, loaded, vehicleList, openTask, onDone }: 
       {msg && <Notice tone="bad">{msg}</Notice>}
       <StickyActions>
         <button type="button" className="btn dark" disabled={busy || !loaded || !canSwap(rows, choice)} onClick={() => void swap()}>Swap</button>
-        <Link className="btn" to="/live">Cancel</Link>
+        <BackButton fallback="/live">Cancel</BackButton>
       </StickyActions>
     </div>
   );

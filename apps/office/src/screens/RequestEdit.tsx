@@ -89,7 +89,7 @@ function EditForm({ id, q, f, setF, draft }: {
       draft.clear();
       toast(r.needs_reapproval ? "Changed · the office will decide again" : "Request changed");
       void store.invalidate();
-      navigate(`/requests/${id}`);
+      navigate(`/requests/${id}`, { replace: true });
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);

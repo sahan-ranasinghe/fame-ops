@@ -60,7 +60,7 @@ export function VehicleForm() {
       if (isNew && me.tools.includes("vehicle_documents")) {
         navigate(`/vehicles/new?registered=${encodeURIComponent(out?.registered?.reg_no ?? String(v.input.reg_no))}`, { replace: true });
         setBusy(false);
-      } else navigate(isNew ? vehiclePath(String(v.input.reg_no)) : backTo);
+      } else navigate(isNew ? vehiclePath(String(v.input.reg_no)) : backTo, { replace: true });
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);

@@ -11,7 +11,7 @@ import type { AskDriversResult, BoardDriver, DriversBoard } from "../../data/typ
 import { useQuery } from "../../data/useQuery";
 import { today } from "../../lib/format";
 import { errText } from "../../transport/errors";
-import type { FleetError } from "../../transport/types";
+import { canOpenTask, type FleetError } from "../../transport/types";
 import { Avatar, Chips, Notice, Pill } from "../../ui/basics";
 import { DraftBanner } from "../../ui/DraftBanner";
 import { Icon } from "../../ui/icons";
@@ -64,7 +64,7 @@ function AskDriversForm() {
       const n = r.ask.counts.asked;
       toast(`Asked ${n} driver${n === 1 ? "" : "s"}`);
       void store.invalidate();
-      navigate(`/drivers/asks/${r.ask.id}`, { state: { ask: r.ask } });
+      navigate(`/drivers/asks/${r.ask.id}`, { replace: true, state: { ask: r.ask } });
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);
@@ -79,7 +79,7 @@ function AskDriversForm() {
       <form className="page-form" onSubmit={send} noValidate>
         {(link.task || link.request) && (
           <Notice tone="info">
-            For {link.task ? <Link to={`/tasks/${link.task}`}>this task</Link> : <Link to={`/requests/${link.request}`}>this request</Link>}: a Yes on the
+            For {link.task ? (canOpenTask(me) ? <Link to={`/tasks/${link.task}`}>this task</Link> : "this task") : <Link to={`/requests/${link.request}`}>this request</Link>}: a Yes on the
             answers page gets Assign.
           </Notice>
         )}

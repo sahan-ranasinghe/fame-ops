@@ -15,7 +15,7 @@ import { useEntry } from "../data/hooks";
 import type { RequestCard, RequestsList } from "../data/types";
 import { cap, joinDots, requestTone } from "../lib/format";
 import { errText } from "../transport/errors";
-import type { FleetError } from "../transport/types";
+import { canOpenTask, type FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { PageTop } from "../ui/Page";
 import { useToast } from "../ui/Toast";
@@ -91,7 +91,7 @@ export function RequestDetail() {
       await transport.call("cancel_request", { request_id: id, reason: r });
       toast("Booking cancelled");
       void store.invalidate();
-      navigate(home);
+      navigate(home, { replace: true });
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);
@@ -109,7 +109,7 @@ export function RequestDetail() {
       await transport.call("cancel_request", v.input);
       toast(q && isProposal(q) ? "Task withdrawn" : "Request withdrawn");
       void store.invalidate();
-      navigate(home);
+      navigate(home, { replace: true });
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);
@@ -174,7 +174,7 @@ export function RequestDetail() {
         </div>
       )}
       <div className="acts">
-        {q.task_id && me.tools.includes("task_detail") && <Link className="btn" to={`/tasks/${q.task_id}`}>Open the task</Link>}
+        {q.task_id && canOpenTask(me) && <Link className="btn" to={`/tasks/${q.task_id}`}>Open the task →</Link>}
         {(q.status === "waiting" || q.status === "approved" || q.status === "changed") && me.tools.includes("update_request") && (approver || q.requested_by === me.name) && (
           <Link className="btn" to={`/requests/${id}/edit`}>Edit request</Link>
         )}

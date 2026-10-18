@@ -14,7 +14,7 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import type { RequestCard, RequestsList } from "../data/types";
 import { cap, requestTone } from "../lib/format";
-import { can } from "../transport/types";
+import { can, canOpenTask } from "../transport/types";
 import { Chips, ErrBox, Loading, Pill, StaleNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, useUrlFilter, useUrlSearch, useWatchedPagedList } from "../ui/ListKit";
@@ -107,7 +107,7 @@ export function Requests() {
                             <td className="r">
                               {(q.status === "waiting" || q.status === "changed") && decides
                                 ? <Link className="btn small dark" to={`/requests/${q.id}/decide`} onClick={(e) => e.stopPropagation()}>Review</Link>
-                                : q.task_id ? <Link className="btn small" to={`/tasks/${q.task_id}`} onClick={(e) => e.stopPropagation()}>Task</Link> : null}
+                                : q.task_id && canOpenTask(me) ? <Link className="btn small" to={`/tasks/${q.task_id}`} onClick={(e) => e.stopPropagation()}>Task →</Link> : null}
                             </td>
                           </tr>
                         ))}

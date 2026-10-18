@@ -72,7 +72,9 @@ a.viewer:hover { color: #fff }
 .tabbar svg { width: 22px; height: 22px }
 .tabbar a { position: relative }
 .tab-badge { position: absolute; top: 0; right: 4px; min-width: 20px; height: 20px; border-radius: 10px; background: var(--bad); color: #fff; font: 700 12px/20px var(--font-body); text-align: center; padding: 0 5px }
-.phone-only { display: none }
+/* Hotfix 4 (a): the visibility classes win over a component's own display (.btn's inline-flex came later in the file and
+   showed a phone-only button on a desktop and a desktop-only one on a phone: two "New request" buttons). */
+@media (min-width: 769px) { .phone-only { display: none !important } }
 @media (max-width: 768px) {
   .app { grid-template-columns: minmax(0, 1fr) }
   .rail { display: none }
@@ -80,7 +82,7 @@ a.viewer:hover { color: #fff }
   .mhead { display: flex }
   .main { padding-block: 18px 110px }
   .phone-only { display: block }
-  .desktop-only { display: none }
+  .desktop-only { display: none !important }
   /* 48 px targets */
   .btn { min-height: 48px }
   .btn.small { min-height: 40px }
@@ -839,3 +841,7 @@ button.wk-off:hover { border-color: var(--warn) }
   .wk-day .wk-off { padding: 8px 10px; font-size: 14px }
   .wk-day .wk-task { padding: 6px 8px; font-size: 14px }
 }
+
+/* Hotfix 4 (b): the stops of Give it a driver's summary: S for the start (amber), then 1, 2 … (ink), as on the plan map. */
+.stop-pin { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font: 700 13px/1 var(--font-body) }
+.stop-pin.start { background: var(--accent); color: var(--accent-ink) }

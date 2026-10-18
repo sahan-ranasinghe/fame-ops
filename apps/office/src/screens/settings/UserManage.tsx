@@ -122,7 +122,7 @@ export function UserManage() {
       await transport.call("set_office_user_active", { email, active: !u!.active });
       toast(u!.active ? "Account switched off" : "Account switched on");
       void store.invalidate();
-      navigate("/settings/users");
+      navigate("/settings/users", { replace: true });
     });
   };
 

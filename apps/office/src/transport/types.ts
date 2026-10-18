@@ -36,6 +36,9 @@ export function can(me: Pick<Me, "permissions">, ...any: Permission[]): boolean 
   return any.length === 0 || any.some((p) => me.permissions.includes(p));
 }
 
+/** Hotfix 4: a link to a task's page only for people who may open it (/tasks/:id is assign_tasks), never one to No access. */
+export const canOpenTask = (me: Pick<Me, "permissions">): boolean => can(me, "assign_tasks");
+
 export interface FleetError {
   code: string;
   message: string;

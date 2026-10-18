@@ -16,6 +16,7 @@ import { ListHeader } from "../../ui/ListKit";
 import { PageTop } from "../../ui/Page";
 import { linksFromCall } from "../../ui/phoneLinks";
 import { answerChip, assignLink, countsLine, openLine, placeLine, stateLine } from "./askLogic";
+import { canOpenTask } from "../../transport/types";
 
 /** How often the answers are asked again: the artifact has no Realtime; on the web Realtime does the work. */
 export const ASK_EVERY = { poll: 10_000, behindRealtime: 60_000 } as const;
@@ -75,7 +76,7 @@ export function AskAnswers() {
           {ask.note && <p className="ask-note">“{ask.note}”</p>}
           {(ask.task_id || ask.request_id) && (
             <p className="sub" style={{ margin: 0 }}>
-              For {ask.task_id ? <Link to={`/tasks/${ask.task_id}`}>a task</Link> : <Link to={`/requests/${ask.request_id}`}>a request</Link>}
+              For {ask.task_id ? (canOpenTask(me) ? <Link to={`/tasks/${ask.task_id}`}>a task</Link> : "a task") : <Link to={`/requests/${ask.request_id}`}>a request</Link>}
             </p>
           )}
           <dl className="facts" data-testid="ask-counts" aria-label={countsLine(ask)}>

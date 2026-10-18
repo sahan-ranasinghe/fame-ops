@@ -6,17 +6,21 @@
 // Cancel with a reason. A task under way takes only the words. Typed input is
 // kept as a draft for this task. With ?driver=1 (the push for a task that needs
 // a driver, §19) the reason is at the top and the driver field is focused.
+// Hotfix 4 (b): with ?driver=1 it is Give it a driver, one page: the task on top (TaskSummary: time, stops with arrive-by,
+// who asked, notes, the map), Who can take it below, "Give to <driver> · <plate>"; Open task and Change the time or the trip
+// go forward and say so; back returns to wherever the person came from (the Overview when opened from a push).
 import { type FormEvent, useEffect, useState } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { useLists } from "../data/hooks";
 import type { TaskDetail, UpdateTaskResult } from "../data/types";
-import { cap, plateOf, today, warnList } from "../lib/format";
+import { cap, joinDots, plateOf, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
+import { firstName } from "../ui/driverRowLogic";
 import { PageTop, StickyActions } from "../ui/Page";
 import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
@@ -27,6 +31,7 @@ import { checkDeparture, departurePlan } from "./departureLogic";
 import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
 import { knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 import { TONE, useBoardQuery, useTask } from "./TaskDetail";
+import { leaveIn, TaskSummary } from "./TaskSummary";
 
 interface EditForm {
   driver: string;
@@ -132,8 +137,9 @@ export function TaskEdit() {
   const avail = useAvailability(availArgs);
   const settings = useFleetSettings();
 
-  if (err) return <><PageTop title="Task" backTo={back} /><Notice tone="bad">{err}</Notice></>;
-  if (!p || !t) return <><PageTop title="Task" backTo={back} /><Loading>Loading the task…</Loading></>;
+  const fallback = driverMode ? "/" : back;
+  if (err) return <><PageTop title="Task" backTo={fallback} /><Notice tone="bad">{err}</Notice></>;
+  if (!p || !t) return <><PageTop title="Task" backTo={fallback} /><Loading>Loading the task…</Loading></>;
   const declined = t.status === "declined";
   const needsDriver = declined || !!t.needs_driver;
   const canChange = (t.status === "assigned" || declined || running) && me.tools.includes("update_task");
@@ -182,7 +188,7 @@ export function TaskEdit() {
       const vehicleWords = !f.vehicle && def && input.vehicle === def.reg_no ? ` · ${def.reg_no} (${def.why})` : "";
       toast((needsDriver && f.driver ? `Task sent to ${out.driver ?? "the driver"}` : "Task changed") + vehicleWords);
       void store.invalidate();
-      navigate(back, { state: { warnings: warnList(out) } });
+      navigate(back, { replace: true, state: { warnings: warnList(out) } });
       return;
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
@@ -201,11 +207,55 @@ export function TaskEdit() {
       draft.clear();
       toast("Task cancelled");
       void store.invalidate();
-      navigate(`/tasks${q}`);
+      navigate(`/tasks${q}`, { replace: true });
     } catch (e) {
       setCxMsg(errText(e as FleetError)[0]);
       setBusy(false);
     }
+  }
+
+  const cancelBox = canCancel && (
+    <div className="confirm" id="cancel">
+      <div className="field"><label htmlFor="cx-reason">Cancel this task</label><input id="cx-reason" maxLength={300} placeholder="Reason the driver will see" value={f.reason} onChange={(e) => set("reason", e.target.value)} /></div>
+      {cxMsg && <Notice tone="bad">{cxMsg}</Notice>}
+      <button type="button" className="btn danger" onClick={() => void cancel()} disabled={busy}>Cancel task</button>
+    </div>
+  );
+
+  // Hotfix 4 (b): Give it a driver.
+  if (driverMode && canChange && !running) {
+    const pickedName = f.driver ? (avail.data?.drivers.find((d) => d.username === f.driver)?.name ?? drivers.find((d) => d.username === f.driver)?.name ?? f.driver) : null;
+    const plate = vehicleToSend && vehicleToSend !== ON_THE_DAY ? vehicleToSend : def?.reg_no ?? "";
+    return (
+      <section className="view" data-testid="give-driver">
+        <PageTop title={t.title || "Task"} sub={joinDots(["Needs a driver", leaveIn(t.date, t.leave_by, Date.now())])} backTo="/"
+          actions={<Link className="btn small" to={`/tasks/${id}${q}`} data-testid="open-task">Open task →</Link>} />
+        <DraftBanner draft={draft} />
+        <div className="page-form">
+          {reason && <Notice tone="bad"><span data-testid="needs-driver-reason">{reason}</span></Notice>}
+          <TaskSummary p={p} />
+          <AvailabilityPanel title="Who can take it" args={availArgs} askFor={{ task: id }} picked={f.driver}
+            onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
+          <form className="card card-b form" onSubmit={save} data-testid="give-form">
+            <div className="grid2">
+              <DriverSelect id="ra-driver" value={f.driver} drivers={withPicked(drivers, f.driver, avail.data?.drivers.find((d) => d.username === f.driver)?.name)} onChange={pickDriver} loading={!lists.drivers && !lists.error}
+                emptyLabel={`Choose a driver${t.driver ? ` (now ${t.driver})` : ""}`} />
+              <VehicleSelect id="ra-vehicle" value={f.vehicle} def={def} vehicles={lists.vehicles ?? []} onChange={(reg) => set("vehicle", reg)}
+                emptyLabel={keepLabel} choices={onDay} dayDefault={dayDefault}
+                hint={f.driver && !def && !onDay ? `Keeps ${currentPlate || "the vehicle"}: this driver holds none today and has no regular one.` : undefined} />
+            </div>
+            {msg && <Notice tone="bad">{msg}</Notice>}
+            <StickyActions>
+              <button className="btn primary" type="submit" disabled={busy || !f.driver} data-testid="give-to">
+                {busy ? "Sending…" : pickedName ? `Give to ${firstName(pickedName)}${plate ? ` · ${plate}` : ""}` : "Pick a driver above"}
+              </button>
+              <Link className="btn" to={`/tasks/${id}/edit${q}`} data-testid="change-trip">Change the time or the trip →</Link>
+            </StickyActions>
+          </form>
+          {cancelBox}
+        </div>
+      </section>
+    );
   }
 
   return (
@@ -271,13 +321,7 @@ export function TaskEdit() {
             </div>
           </div>
         )}
-        {canCancel && (
-          <div className="confirm" id="cancel">
-            <div className="field"><label htmlFor="cx-reason">Cancel this task</label><input id="cx-reason" maxLength={300} placeholder="Reason the driver will see" value={f.reason} onChange={(e) => set("reason", e.target.value)} /></div>
-            {cxMsg && <Notice tone="bad">{cxMsg}</Notice>}
-            <button type="button" className="btn danger" onClick={() => void cancel()} disabled={busy}>Cancel task</button>
-          </div>
-        )}
+        {cancelBox}
         {!canChange && !canCancel && <Notice tone="info">This task can no longer be changed.</Notice>}
       </div>
     </section>

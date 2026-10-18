@@ -20,7 +20,7 @@ import type { DecideResult, RedecideResult, RequestCard, SuggestedVehicle, Sugge
 import { useQuery } from "../data/useQuery";
 import { cap, joinDots, requestTone, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
-import type { FleetError } from "../transport/types";
+import { can, type FleetError } from "../transport/types";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
@@ -205,14 +205,14 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
               {p.vehicle_changed ? <span data-testid="vehicle-used">{p.vehicle_changed}. </span>
                 : p.vehicle_used ? <span data-testid="vehicle-used">Vehicle: {p.vehicle_used.reg_no} · {p.vehicle_used.why === "chosen" ? "as picked" : p.vehicle_used.why}. </span>
                 : p.vehicle ? <span data-testid="vehicle-used">Vehicle: {p.vehicle}. </span> : null}
-              {p.task_id && <Link className="btn small" to={`/tasks/${p.task_id}`}>Open task</Link>}{" "}
-              <Link className="btn small" to={`/requests/${id}`}>The request</Link>
+              {p.task_id && can(me, "assign_tasks") && <Link className="btn small" to={`/tasks/${p.task_id}`}>Open task →</Link>}{" "}
+              <Link className="btn small" to={`/requests/${id}`}>The request →</Link>
             </>
           ),
         });
       } else {
         toast("Request declined");
-        navigate("/requests");
+        navigate("/requests", { replace: true });
       }
     } catch (e) {
       // Refused (another approver decided it first: "Already approved by Palitha at 10:42"): the server's words, and the
@@ -238,7 +238,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
       void store.invalidate();
       if (decision === "decline") {
         toast("Request declined · the booking is cancelled");
-        navigate(`/requests/${id}`);
+        navigate(`/requests/${id}`, { replace: true });
       } else {
         setMsg({
           tone: "ok",
@@ -247,8 +247,8 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             <>
               <b>{p.decision === "kept" ? "Kept as asked." : p.decision === "postponed" ? "Postponed." : "Changed."}</b> {p.sent}{" "}
               {p.task?.vehicle && <span data-testid="vehicle-used">Vehicle: {p.task.vehicle}{p.task.driver ? ` · ${p.task.driver}` : ""}. </span>}
-              {p.task?.task_id && <Link className="btn small" to={`/tasks/${p.task.task_id}`}>Open task</Link>}{" "}
-              <Link className="btn small" to={`/requests/${id}`}>The request</Link>
+              {p.task?.task_id && can(me, "assign_tasks") && <Link className="btn small" to={`/tasks/${p.task.task_id}`}>Open task →</Link>}{" "}
+              <Link className="btn small" to={`/requests/${id}`}>The request →</Link>
             </>
           ),
         });
@@ -268,7 +268,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
         <PageTop title="Vehicle request" sub={<Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>} backTo={`/requests/${id}`} />
         {/* A decision just made here, or the server's refusal of a second one ("Already approved by Palitha at 10:42"). */}
         {msg && <div style={{ marginBottom: 12 }} data-testid="decide-message"><Notice tone={msg.tone}>{msg.text}</Notice>{msg.warnings && <WarningsNote warnings={msg.warnings} />}</div>}
-        {msg?.tone !== "ok" && <Notice tone="info">This request is {q.status}; there is nothing to decide. <Link to={`/requests/${id}`}>Open the request</Link>.</Notice>}
+        {msg?.tone !== "ok" && <Notice tone="info">This request is {q.status}; there is nothing to decide. <Link to={`/requests/${id}`}>Open the request →</Link>.</Notice>}
         <DecidedBy q={q} />
       </section>
     );

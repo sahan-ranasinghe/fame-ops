@@ -17,7 +17,7 @@ import type { Conflict, DecideResult, RequestCard, Suggestions } from "../data/t
 import { useQuery } from "../data/useQuery";
 import { cap, joinDots, requestTone, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
-import type { FleetError } from "../transport/types";
+import { can, type FleetError } from "../transport/types";
 import { Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
@@ -120,7 +120,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
       void store.invalidate();
       if (decision === "decline") {
         toast(proposal ? "Task declined" : "Request declined");
-        navigate("/requests");
+        navigate("/requests", { replace: true });
         return;
       }
       setSent(true);
@@ -135,8 +135,8 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
             {p.vehicle_changed ? <span data-testid="vehicle-used">{p.vehicle_changed}. </span>
               : p.vehicle_used ? <span data-testid="vehicle-used">Vehicle: {p.vehicle_used.reg_no} · {p.vehicle_used.why === "chosen" ? "as picked" : p.vehicle_used.why}. </span>
               : p.vehicle ? <span data-testid="vehicle-used">Vehicle: {p.vehicle}. </span> : null}
-            {p.task_id && <Link className="btn small" to={`/tasks/${p.task_id}`}>Open task</Link>}{" "}
-            <Link className="btn small" to={`/requests/${id}`}>The request</Link>
+            {p.task_id && can(me, "assign_tasks") && <Link className="btn small" to={`/tasks/${p.task_id}`}>Open task →</Link>}{" "}
+            <Link className="btn small" to={`/requests/${id}`}>The request →</Link>
           </>
         ),
       });
@@ -169,7 +169,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
         <PageTop title={title} sub={<Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>} backTo={`/requests/${id}`} />
         {/* The server's refusal of a second decision ("Already approved by Palitha at 10:42"). */}
         {msg && <div style={{ marginBottom: 12 }} data-testid="decide-message"><Notice tone={msg.tone}>{msg.text}</Notice></div>}
-        <Notice tone="info">This {proposal ? "task" : "request"} is {q.status}; there is nothing to decide. <Link to={`/requests/${id}`}>Open it</Link>.</Notice>
+        <Notice tone="info">This {proposal ? "task" : "request"} is {q.status}; there is nothing to decide. <Link to={`/requests/${id}`}>Open it →</Link>.</Notice>
         <DecidedBy q={q} />
       </section>
     );

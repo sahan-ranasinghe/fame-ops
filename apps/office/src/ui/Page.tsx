@@ -3,18 +3,38 @@
 // tab bar, and the list-plus-detail layout (the list on the left and the detail
 // in a panel on a desktop; only the detail, full screen, on a phone).
 import { type ReactNode, useEffect } from "react";
-import { useNavigate, useOutlet } from "react-router";
+import { useLocation, useNavigate, useOutlet } from "react-router";
 import { useIsPhone } from "./phone";
 import { Icon } from "./icons";
 
-/** Back: to `backTo` when given, else one step in the history (a page opened by a link). */
+/**
+ * Back means back (Hotfix 4 b): one step in the history, like the phone's own back, to wherever the person came from
+ * (Overview, Tasks, a list). `backTo` is only where a page opened straight (a push, a typed or shared link: the router's
+ * first entry) goes, replacing itself, so back never moves forward to a page the person was not on.
+ */
 export function useBack(backTo?: string): () => void {
   const navigate = useNavigate();
+  const { key } = useLocation();
   return () => {
-    if (backTo) navigate(backTo);
-    else if (window.history.length > 1) navigate(-1);
-    else navigate("/");
+    if (hasAppPageBefore(typeof window === "undefined" ? null : window.history.state, key)) navigate(-1);
+    else navigate(backTo ?? "/", { replace: true });
   };
+}
+
+/**
+ * Is there a page of this visit before this one? The browser router keeps each entry's place in history.state.idx (0 = the
+ * first, also after a save replaced it); a memory router (tests, the artifact) has only its location key ("default" = the
+ * first). Pure.
+ */
+export function hasAppPageBefore(historyState: unknown, key: string): boolean {
+  const idx = (historyState as { idx?: unknown } | null)?.idx;
+  return typeof idx === "number" ? idx > 0 : key !== "default";
+}
+
+/** Cancel or Back on a page: the same as the back arrow (Hotfix 4 b), never a link forward to a fixed page. */
+export function BackButton({ fallback, className = "btn", children, testId }: { fallback?: string; className?: string; children: ReactNode; testId?: string }) {
+  const back = useBack(fallback);
+  return <button type="button" className={className} onClick={back} data-testid={testId}>{children}</button>;
 }
 
 /**
