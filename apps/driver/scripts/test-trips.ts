@@ -130,7 +130,9 @@ async function main() {
   const req = tripRequest({ id: TRIP_ID, purpose: 'personal', pick: pOurs, note: '  dropping the laptop  ', vehicleId: VEHICLE, at: AT });
   check(same(req, { id: TRIP_ID, purpose: 'personal', destination: { place_id: PLACE_ID }, note: 'dropping the laptop', vehicle_id: VEHICLE, at: AT }), 'POST /trips: id, purpose, destination, the note trimmed, the vehicle, the time', req);
   const bare = tripRequest({ id: TRIP_ID, purpose: 'company', pick: pickFromText('Kadawatha')!, note: '   ', vehicleId: null, at: AT });
-  check(!('note' in bare) && !('vehicle_id' in bare), 'no note and no vehicle: left out (the server takes the vehicle today)');
+  check(!('note' in bare) && !('vehicle_id' in bare) && !('stop_id' in bare), 'no note and no vehicle: left out (the server takes the vehicle today)');
+  const withStop = tripRequest({ id: TRIP_ID, stopId: STOP_LOCAL, purpose: 'company', pick: pickFromText('Kadawatha')!, note: '', vehicleId: VEHICLE, at: AT });
+  check(withStop.stop_id === STOP_LOCAL, "the first stop's id is the phone's (the server keeps it: Arrived queued before the trip lands on it)", withStop);
   check(isUuid(TRIP_ID) && !isUuid('trip-1') && isSessionToken(session) && !isSessionToken('short'), 'ids are uuids; a uuid is a valid session token (36 of [A-Za-z0-9_-])');
   const createOp = tripCreateOp(req, STOP_LOCAL, pOurs);
   check(same(createOp, { kind: 'trip_create', id: TRIP_ID, request: req, local_stop_id: STOP_LOCAL, fallback: pOurs.fallback }), 'trip_create: the request, the local stop id and the fallback', createOp);
@@ -208,6 +210,8 @@ async function main() {
   check((await client(200, { ...answerBody, repeated: true }).createTrip(req)).repeated, '200 repeated: the same id again made nothing new');
   await client(201, answerBody).addTripStop(TRIP_ID, sreq);
   check(sent.at(-1)?.url.endsWith(`/trips/${TRIP_ID}/stops`) === true && same(sent.at(-1)?.body, sreq), 'POST /trips/:id/stops with the stop request');
+  await client(200, answerBody).cancelTrip(TRIP_ID);
+  check(sent.at(-1)?.url.endsWith(`/trips/${TRIP_ID}/cancel`) === true && same(sent.at(-1)?.body, {}), 'POST /trips/:id/cancel: a trip started by mistake');
   const errorOf = async (p: Promise<unknown>) => p.then(() => null, (e: unknown) => e as ApiError);
   const refused = await errorOf(client(409, { error: 'refused', message: 'Personal trips are switched off by the office: choose Company work.' }).createTrip(req));
   check(refused instanceof ApiError && refused.permanent && refused.code === 'refused' && refused.message.startsWith('Personal trips are switched off'), "409: a refusal, permanent, the server's words as they are", refused?.message);

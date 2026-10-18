@@ -30,12 +30,13 @@ import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
 import { driverApi } from '@/lib/driverApiClient';
 import {
-  type Choice,
   canAddStop,
+  type Choice,
+  isSelfTrip,
   keepLocalTrips,
-  type KnownPlace,
   knownFromPick,
   knownFromTasks,
+  type KnownPlace,
   localTrip,
   mergeKnown,
   type Purpose,
@@ -112,6 +113,7 @@ export type StartTripOutcome =
   | { kind: 'task_running' };
 /** Add a stop on the way: added now, or kept on the phone; refused with the server's words; or the trip has 12 stops. */
 export type AddStopOutcome = { kind: 'added'; queued: boolean; offline: boolean } | { kind: 'refused'; message: string } | { kind: 'full' };
+export type CancelTripOutcome = { kind: 'cancelled' } | { kind: 'offline' } | { kind: 'refused'; message: string };
 /** A queued trip or stop the server refused for good: Today and the task screen say why (trip.failed / trip.stopFailed). */
 export interface TripProblem {
   key: 'trip.failed' | 'trip.stopFailed';
@@ -241,6 +243,8 @@ interface AppValue {
   startTrip: (input: { purpose: Purpose; pick: Choice; note: string }) => Promise<StartTripOutcome>;
   /** Add a stop to my trip under way (the same two ways). */
   addTripStop: (task: TaskWithStops, pick: Choice) => Promise<AddStopOutcome>;
+  /** A self trip that has not started, cancelled by the driver (online only). */
+  cancelTrip: (task: TaskWithStops) => Promise<CancelTripOutcome>;
   tripProblem: TripProblem | null;
   clearTripProblem: () => void;
   /** needsVehicle: "I need another vehicle" (a breakdown or accident during a task, Phase 7). */
@@ -1183,8 +1187,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     if (tasksRef.current.some((task) => task.status === 'in_progress')) return { kind: 'task_running' };
     const vehicleId = current.current_vehicle_id;
     if (!vehicleId) return { kind: 'no_vehicle' };
-    const request = tripRequest({ id: Crypto.randomUUID(), purpose, pick, note, vehicleId, at: new Date().toISOString() });
+    // The first stop's id is the phone's too (the server keeps it): Arrived and Done queued before the trip land on it.
     const localStopId = Crypto.randomUUID();
+    const request = tripRequest({ id: Crypto.randomUUID(), stopId: localStopId, purpose, pick, note, vehicleId, at: new Date().toISOString() });
     const local = localTrip({ request, pick, employeeId: current.id, employeeName: current.name, vehicleId, localStopId });
     const keep = (task: TaskWithStops) => {
       pendingTrips.current.add(task.id);
@@ -1232,6 +1237,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return { kind: 'added', queued: true, offline };
   }, [canGoDirect, patchLocalTask, rememberPick]);
 
+  // A trip started by mistake: cancelled on the server while it has not started (online only: a trip still waiting in the
+  // queue is sent first, as with a direct start).
+  const cancelTrip = useCallback(async (task: TaskWithStops): Promise<CancelTripOutcome> => {
+    if (!isSelfTrip(task) || task.status !== 'assigned') return { kind: 'refused', message: '' };
+    if (!(await canGoDirect())) return { kind: 'offline' };
+    try {
+      await driverApi.cancelTrip(task.id);
+      pendingTrips.current.delete(task.id);
+      saveTasks(tasksRef.current.filter((item) => item.id !== task.id));
+      return { kind: 'cancelled' };
+    } catch (error) {
+      if (error instanceof api.ApiError && error.permanent) return { kind: 'refused', message: error.message };
+      return { kind: 'offline' };
+    }
+  }, [canGoDirect, saveTasks]);
+
   // A queued trip or stop reached the server: the phone's copy takes its ids (the first stop's) and pins.
   useEffect(() => onTripSent((op, answer) => {
     if (!tasksRef.current.some((task) => task.id === answer.trip.task_id)) return;
@@ -1270,7 +1291,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     acceptTask, declineTask, notice, clearNotice,
     startTask, completeTask, logOdometer, logFuel, sendReport,
     saveProfilePhoto, pendingVehiclePhotos: vehiclePhotos, addVehiclePhoto,
-    knownPlaces, loadKnownPlaces, startTrip, addTripStop, tripProblem, clearTripProblem,
+    knownPlaces, loadKnownPlaces, startTrip, addTripStop, cancelTrip, tripProblem, clearTripProblem,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

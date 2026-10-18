@@ -71,6 +71,8 @@ export function createDriverApi(deps: DriverApiDeps) {
       parseSearchAnswer(await post('/places/search', { text, ...(session ? { session } : {}) }, 'search', SEARCH_TIMEOUT_MS)),
     createTrip: (request: TripRequest): Promise<TripAnswer> => trip('/trips', request, 'trip'),
     addTripStop: (taskId: string, request: StopRequest): Promise<TripAnswer> => trip(`/trips/${taskId}/stops`, request, 'trip stop'),
+    /** A trip started by mistake, cancelled before it starts (online only: it must be on the server). */
+    cancelTrip: (taskId: string): Promise<TripAnswer> => trip(`/trips/${taskId}/cancel`, {}, 'cancel trip'),
   };
 }
 

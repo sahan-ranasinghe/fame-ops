@@ -293,6 +293,8 @@ export function offlineMatches(text: string, places: readonly KnownPlace[], limi
 export interface TripRequest {
   /** The phone's uuid: the task's id. */
   id: string;
+  /** The phone's uuid for the first stop: the server keeps it, so Arrived and Done queued before the trip was sent land on it. */
+  stop_id?: string;
   purpose: Purpose;
   destination: Destination;
   note?: string;
@@ -309,10 +311,11 @@ export interface StopRequest {
   destination: Destination;
 }
 
-export function tripRequest(input: { id: string; purpose: Purpose; pick: Choice; note: string; vehicleId: string | null; at: string }): TripRequest {
+export function tripRequest(input: { id: string; stopId?: string; purpose: Purpose; pick: Choice; note: string; vehicleId: string | null; at: string }): TripRequest {
   const note = clip(input.note, MAX_NOTE);
   return {
     id: input.id,
+    ...(input.stopId ? { stop_id: input.stopId } : {}),
     purpose: input.purpose,
     destination: input.pick.destination,
     ...(note !== '' ? { note } : {}),

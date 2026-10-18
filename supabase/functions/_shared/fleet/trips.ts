@@ -30,6 +30,8 @@ export interface Destination {
 export interface TripInput {
   /** The phone's id for the trip: the task's id. */
   id: string;
+  /** The phone's id for the first stop (its Arrived and Done are queued against it before the trip is sent). */
+  stop_id?: string;
   purpose: Purpose;
   destination: Destination;
   note?: string;
@@ -168,7 +170,14 @@ export async function createSelfTrip(db: Db, now: Date, driver: Employee, input:
     "task",
   );
   const stopRow = unwrap(
-    await db.from("task_stops").insert({ task_id: task.id, seq: 1, type: "visit", status: "pending", ...stop }).select("*").single(),
+    await db.from("task_stops").insert({
+      ...(input.stop_id && { id: input.stop_id }),
+      task_id: task.id,
+      seq: 1,
+      type: "visit",
+      status: "pending",
+      ...stop,
+    }).select("*").single(),
     "stop",
   );
   unwrap(
@@ -215,4 +224,34 @@ export async function addTripStop(db: Db, now: Date, driver: Employee, taskId: s
     "stop",
   );
   return { trip: tripCard(task, await stopsOf(db, task.id)), repeated: false };
+}
+
+/**
+ * A trip started by mistake: the driver cancels their own trip while it has not started (it would otherwise wait for the
+ * office, and its leave-by would pass). Once started it is finished like any task, or the office cancels it.
+ */
+export async function cancelSelfTrip(db: Db, driver: Employee, taskId: string) {
+  const task = unwrapMaybe(await db.from("tasks").select("*").eq("id", taskId).maybeSingle(), "task");
+  if (!task || task.employee_id !== driver.id || task.kind !== "self") throw new ToolError("No such trip.");
+  if (task.status === "cancelled") return { trip: tripCard(task, await stopsOf(db, task.id)), repeated: true };
+  if (task.status !== "assigned") throw new ToolError("The trip has started: finish it with the odometer, or ask the office.");
+  const by = `driver: ${driver.name}`;
+  const rows = unwrap(
+    await db.from("tasks").update({ status: "cancelled", cancelled_reason: "Cancelled by the driver before starting" })
+      .eq("id", task.id).eq("status", "assigned").select("*"),
+    "task",
+  );
+  if (rows.length === 0) throw new ToolError("The trip changed just now: refresh.");
+  unwrap(
+    await db.from("task_assignment_events").insert({
+      task_id: task.id,
+      action: "cancelled",
+      employee_id: driver.id,
+      vehicle_id: task.vehicle_id,
+      actor: by,
+      note: "Cancelled by the driver before starting",
+    }),
+    "assignment history",
+  );
+  return { trip: tripCard(rows[0], await stopsOf(db, task.id)), repeated: false };
 }

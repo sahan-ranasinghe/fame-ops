@@ -6,6 +6,7 @@
 //   POST /places/google {google_place_id, session?}    a Google pick's pin (Essentials only, kept 30 days, counted)
 //   POST /trips {id, purpose, destination, note?, vehicle_id?, at?}   Start a trip (idempotent by the phone's id)
 //   POST /trips/:id/stops {id, destination}            a stop added on the way (self trips under way)
+//   POST /trips/:id/cancel {}                           a trip started by mistake, cancelled before it starts
 // Deployed with --no-verify-jwt like office-api: the token is checked here. Every trip call is written to office_audit
 // with channel driver.
 
@@ -15,7 +16,7 @@ import { auditFinish, auditStart } from "../_shared/fleet/audit.ts";
 import { adminClient, ToolError } from "../_shared/fleet/db.ts";
 import type { Actor } from "../_shared/fleet/roles.ts";
 import { googlePlace, searchPlaces } from "../_shared/fleet/tools/places.ts";
-import { addTripStop, createSelfTrip } from "../_shared/fleet/trips.ts";
+import { addTripStop, cancelSelfTrip, createSelfTrip } from "../_shared/fleet/trips.ts";
 
 const CALLS_PER_MINUTE = 60;
 const db = adminClient();
@@ -47,6 +48,7 @@ const INPUTS = {
   google: z.object({ google_place_id: z.string().trim().min(1).max(300), session: zSession }),
   trip: z.object({
     id: z.string().uuid(),
+    stop_id: z.string().uuid().optional(),
     purpose: z.enum(["company", "personal"]),
     destination: zDestination,
     note: z.string().trim().max(500).optional(),
@@ -165,6 +167,17 @@ Deno.serve(async (request) => {
         (r) => `${r.repeated ? "again: " : ""}${r.trip.title}: ${r.trip.stops.length} stops`,
       );
       return json(out.repeated ? 200 : 201, out);
+    }
+    const cancel = path.match(/^\/trips\/([0-9a-f-]{36})\/cancel$/);
+    if (cancel) {
+      const out = await audited(
+        "cancel_trip",
+        { task_id: cancel[1] },
+        actor,
+        () => cancelSelfTrip(db, row!, cancel[1]),
+        (r) => `${r.repeated ? "again: " : ""}${r.trip.title} cancelled before starting`,
+      );
+      return json(200, out);
     }
     return json(404, { error: "not_found" });
   } catch (error) {

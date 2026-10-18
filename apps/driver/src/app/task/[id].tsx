@@ -320,8 +320,32 @@ export default function TaskScreen() {
                   onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: task.id, from: 'task' } })}
                 />
                 {call && <Button kind="outline" icon={Phone} label={t('task.callContact')} onPress={() => Linking.openURL(call)} />}
-                {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list). */}
+                {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list): a trip
+                    started by mistake is cancelled instead, before it starts. */}
                 {!isSelfTrip(task) && <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(true)} />}
+                {isSelfTrip(task) && (
+                  <Button
+                    kind="danger-text"
+                    label={t('trip.cancel')}
+                    onPress={() => Alert.alert(t('trip.cancelConfirm'), '', [
+                      { text: t('common.no'), style: 'cancel' },
+                      {
+                        text: t('common.yes'),
+                        style: 'destructive',
+                        onPress: () => void app.cancelTrip(task).then((out) => {
+                          if (out.kind === 'cancelled') {
+                            Alert.alert(t('trip.cancelled'));
+                            goHome();
+                          } else if (out.kind === 'offline') {
+                            Alert.alert(t('trip.cancelOffline'));
+                          } else if (out.message) {
+                            Alert.alert(t('trip.failed', { reason: out.message }));
+                          }
+                        }),
+                      },
+                    ])}
+                  />
+                )}
               </>
             )}
           </>

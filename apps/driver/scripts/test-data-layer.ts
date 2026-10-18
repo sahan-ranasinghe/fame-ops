@@ -20,7 +20,9 @@ import { createClient } from '@supabase/supabase-js';
 import * as api from '../src/lib/api';
 import { swapReadingsWaiting, taskKmSoFar } from '../src/lib/dayRules';
 import { ApiError, type HeartbeatRow, VEHICLE_COLUMNS } from '../src/lib/api';
+import { createDriverApi } from '../src/lib/driverApi';
 import { currentDocuments, profilePhotoPath, vehiclePhotoPaths } from '../src/lib/photoRules';
+import { pickFromText, stopRequest, tripCreateOp, tripRequest, tripStopOp } from '../src/lib/trips';
 import type { Database } from '../src/lib/database.types';
 import { base64Decode, SupabaseTusStore } from '../src/lib/videoStore';
 import { createSync, type Op, type QueueStore, type StoredHeartbeat, type StoredOp, type StoredPoint } from '../src/sync/engine';
@@ -604,6 +606,68 @@ async function main() {
   result = await syncC.flush();
   check(result.failed === 0 && (await api.fetchHeldVehicle(clientC)) === null && (await api.fetchVehicleDocuments(clientC)).length === 0,
     'Finish work: no vehicle held, no documents (the screen says "Start work with a vehicle")');
+
+  console.log('\n== Phase 7, Part 4: a trip I start, sent through the queue in order; a stop on the way; a trip started by mistake ==');
+  const d = await makeDriver(4);
+  const clientD = driverClient({ value: true });
+  check((await api.signIn(clientD, d.username, d.pin)) === 'ok', 'driver D signs in');
+  const settingsD = await api.fetchDriverSettings(clientD);
+  check(settingsD.driver_personal_trips === 'allowed', 'the app reads driver_personal_trips (allowed by default)', settingsD);
+  const ours = await api.fetchOurPlaces(clientD);
+  check(ours.length > 0 && ours.every((p) => !('kind' in p)) && !ours.some((p) => p.site_id), "the offline list: our own places (no sites), read as the driver", ours.slice(0, 2));
+  const tripCar = must(await admin.from('vehicles').insert({ reg_no: `TEST ${run.toUpperCase()}-T`, make_model: 'Toyota Axio', vehicle_type: 'car', seats: 4, current_odometer_km: 3000 }).select('*').single(), 'trip car');
+  const queueD = memoryStore();
+  const tokenD = async () => (await clientD.auth.getSession()).data.session?.access_token ?? null;
+  const driverApiD = createDriverApi({ baseUrl: `${API_URL}/functions/v1/driver-api`, apiKey: ANON_KEY, token: tokenD, fetch });
+  const stopMap = new Map<string, string>();
+  const syncD = createSync({
+    client: clientD,
+    store: queueD.store,
+    employeeId: () => d.row.id,
+    uploadFile: uploader(clientD, []),
+    removeFile: () => undefined,
+    trips: driverApiD,
+    stopIds: { get: (id) => stopMap.get(id) ?? null, set: (id, server) => void stopMap.set(id, server) },
+  });
+  const sessionD = randomUUID();
+  queueD.add({ kind: 'session_start', id: sessionD, employee_id: d.row.id, vehicle_id: tripCar.id, started_at: new Date().toISOString(), device_info: { model: 'test phone' } });
+  // Offline on the phone: the trip, its start, Arrived and Done at the first stop (the phone's stop id), a stop on the way, finish.
+  const tripId = randomUUID();
+  const firstStop = randomUUID();
+  const where = pickFromText(`Kadawatha ${run}`)!;
+  const tripReq = tripRequest({ id: tripId, stopId: firstStop, purpose: 'company', pick: where, note: '', vehicleId: tripCar.id, at: new Date().toISOString() });
+  const extra = stopRequest(randomUUID(), pickFromText('Kiribathgoda')!);
+  queueD.add(
+    tripCreateOp(tripReq, firstStop, where),
+    { kind: 'task_patch', id: tripId, patch: { status: 'in_progress', start_odometer_km: 3000, started_at: new Date().toISOString() } },
+    { kind: 'stop_patch', id: firstStop, patch: { status: 'arrived', arrived_at: new Date().toISOString(), arrival_flag: 'no_pin' } },
+    { kind: 'stop_patch', id: firstStop, patch: { status: 'done', done_at: new Date().toISOString() } },
+    tripStopOp(tripId, extra, pickFromText('Kiribathgoda')!),
+    { kind: 'stop_patch', id: extra.id, patch: { status: 'arrived', arrived_at: new Date().toISOString(), arrival_flag: 'no_pin' } },
+    { kind: 'stop_patch', id: extra.id, patch: { status: 'done', done_at: new Date().toISOString() } },
+    { kind: 'task_patch', id: tripId, patch: { status: 'completed', end_odometer_km: 3015, completed_at: new Date().toISOString() } },
+  );
+  result = await syncD.flush();
+  const tripRow = must(await admin.from('tasks').select('kind, purpose, status, km, vehicle_id, created_by').eq('id', tripId).single(), 'trip');
+  const tripStops = must(await admin.from('task_stops').select('id, seq, place_name, status, arrival_flag').eq('task_id', tripId).order('seq'), 'trip stops');
+  check(result.failed === 0 && tripRow.kind === 'self' && tripRow.status === 'completed' && tripRow.km === 15 && tripRow.vehicle_id === tripCar.id
+    && tripStops.length === 2 && tripStops[0]?.id === firstStop && tripStops.every((st) => st.status === 'done' && st.arrival_flag === 'no_pin')
+    && tripStops[1]?.place_name === 'Kiribathgoda',
+    "the queue in order: the trip, its start, the first stop by the phone's id, a stop on the way, finished with 15 km (item 18's rules passed)", { result, tripRow, tripStops, failed: queueD.failed() });
+  queueD.add(tripCreateOp(tripReq, firstStop, where));
+  result = await syncD.flush();
+  check(result.failed === 0 && must(await admin.from('tasks').select('id').eq('id', tripId), 'again').length === 1, 'the same trip sent again (a lost answer) makes no second trip', result);
+  // A trip started by mistake: cancelled before it starts; once started it is not.
+  const mistake = await driverApiD.createTrip(tripRequest({ id: randomUUID(), purpose: 'personal', pick: pickFromText('Wrong place')!, note: '', vehicleId: tripCar.id, at: new Date().toISOString() }));
+  const cancelled = await driverApiD.cancelTrip(mistake.trip.task_id);
+  check(mistake.trip.purpose === 'personal' && cancelled.trip.status === 'cancelled', 'a personal trip started by mistake is cancelled by the driver before it starts', cancelled.trip);
+  const started = await driverApiD.createTrip(tripRequest({ id: randomUUID(), purpose: 'company', pick: pickFromText('Kelaniya')!, note: '', vehicleId: tripCar.id, at: new Date().toISOString() }));
+  must(await clientD.from('tasks').update({ status: 'in_progress', start_odometer_km: 3015 }).eq('id', started.trip.task_id).select('id'), 'start');
+  const tooLate = await driverApiD.cancelTrip(started.trip.task_id).then(() => null, (e: unknown) => e as ApiError);
+  check(tooLate instanceof ApiError && tooLate.permanent && tooLate.message.includes('has started'), 'once started it is not cancelled from the phone (in words)', tooLate?.message);
+  await admin.from('tasks').update({ status: 'cancelled', cancelled_reason: 'test' }).eq('id', started.trip.task_id);
+  queueD.add({ kind: 'session_end', id: sessionD, ended_at: new Date().toISOString(), end_reason: 'driver' });
+  await syncD.flush();
 
   console.log('\n== The other driver ==');
   const clientB = driverClient({ value: true });
