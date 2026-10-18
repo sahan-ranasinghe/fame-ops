@@ -301,8 +301,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   const requestBox = page.getByRole("checkbox", { name: "A vehicle request comes in" });
   await expect(requestBox).toBeChecked();
   // Phase 7: "A driver skips a stop", "A driver needs another vehicle"; Part 3: not decided, leave-by passed, and the
-  // trip's four moments for the asker; Part 4: a driver starts a personal trip.
-  await expect(page.getByRole("checkbox")).toHaveCount(20);
+  // trip's four moments for the asker; Part 4: a driver starts a personal trip; Hotfix 2: Play sounds.
+  await expect(page.getByRole("checkbox")).toHaveCount(21);
   await requestBox.uncheck();
   await expect(page.getByRole("status")).toHaveText("Saved");
   await page.reload();

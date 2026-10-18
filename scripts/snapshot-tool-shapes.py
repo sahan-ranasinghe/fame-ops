@@ -65,12 +65,20 @@ def call(tool, args):
     return json.loads(answer["content"][0]["text"])
 
 
+# Who decided (Hotfix 2, K): present, and with the person's number and photo, only when a named person decided (the web
+# app, a personal key); the shared key of the connector has no person. Their fields depend on who calls, not on the tool,
+# so they are left out of the comparison (the web's types record them: apps/office/src/data/types.ts PersonAt).
+PERSON_DEPENDENT = {"approved_by", "declined_by", "cancelled_by"}
+
+
 def shape(value, prefix, out):
     """Collects 'path: type' entries. Lists are collapsed to one entry of their item types."""
     if isinstance(value, dict):
         if not value:
             out.add(f"{prefix}: {{}}")
         for k, v in value.items():
+            if k in PERSON_DEPENDENT:
+                continue
             shape(v, f"{prefix}.{k}" if prefix else k, out)
     elif isinstance(value, list):
         if not value:

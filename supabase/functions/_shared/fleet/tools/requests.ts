@@ -780,8 +780,10 @@ export const createRequest = tool({
         [created.route_from, created.route_to].filter(Boolean).join(" → "),
       ]
         .filter(Boolean).join(" · "),
-      url: "/requests",
+      // Hotfix 2 (A): the notification centre and the push open this request (its page has Decide).
+      url: `/requests/${created.id}`,
       tag: `request:${created.id}`,
+      who: created.requested_by_name,
     }, { actor: actor.employeeId });
     const row = trip ? await getRequest(db, created.id) : created;
     return {

@@ -1427,8 +1427,8 @@ psql(f"insert into web_push_subscriptions (employee_id, endpoint, p256dh, auth) 
 rq = tool("create_request", {"requested_by": "Notify Approver", "date": day(4), "time": "08:30", "route_from": "Head office", "route_to": "Kandy", "need_type": "van", "pax": 5})
 RQ = rq["request"]["id"]
 row = outbox(f"event = 'request.created' and recipient_employee_id = '{APPROVER}'")
-check("\n" not in row and "|queued|Vehicle request · Notify Approver|" in row and "Van" in row and "Head office → Kandy" in row and row.endswith("|/requests"),
-      "a new request queues one row for the approver: the message and the link to the requests page", row)
+check("\n" not in row and "|queued|Vehicle request · Notify Approver|" in row and "Van" in row and "Head office → Kandy" in row and row.endswith(f"|/requests/{RQ}"),
+      "a new request queues one row for the approver: the message and the link to the request (Hotfix 2: its own page)", row)
 NID = row.split("|")[0]
 code, body = notify_office({"id": int(NID)})
 if VAPID:
@@ -2400,10 +2400,10 @@ if CHANNEL == "api":
         return email, office_sign_in(email, pw, enrol_totp=False)
 
     a2_email, a2 = person("Palitha Approver", ["view", "request", "approve", "assign_tasks"])
-    rq_email, rq = person("Ruwan Requester", ["view", "request"])
+    rq_email, rq_tok = person("Ruwan Requester", ["view", "request"])
     code, me2 = http("GET", f"{API}/functions/v1/office-api/me", api_headers(a2))
     check(code == 200 and me2.get("phone_required") is True and "phone" not in me2, "F: an approver with no number: /me says phone_required (the banner)", str(me2)[:200])
-    code, me3 = http("GET", f"{API}/functions/v1/office-api/me", api_headers(rq))
+    code, me3 = http("GET", f"{API}/functions/v1/office-api/me", api_headers(rq_tok))
     check(code == 200 and "phone_required" not in me3 and {"my_trips", "my_inbox", "mark_inbox_read", "update_my_profile"} <= set(me3.get("tools", []))
           and "reviewing" not in me3.get("tools", []),
           "F, A: a requester is not asked for a number; has My trips and the notification centre; no reviewing", str(me3)[:300])
@@ -2415,13 +2415,13 @@ if CHANNEL == "api":
     check(psql(f"select changed_by_name || '|' || new_value from employee_changes where employee_id = '{A2}' order by id desc limit 1") == "Palitha Approver|+94712345678",
           "F: the person's own change is logged in their name")
     # Privacy: a requester sees no driver's number on Live or the drivers list.
-    code, ld = api_call(rq, "live_drivers", {})
-    code2, dl = api_call(rq, "list_drivers", {})
+    code, ld = api_call(rq_tok, "live_drivers", {})
+    code2, dl = api_call(rq_tok, "list_drivers", {})
     check(code == 200 and code2 == 200 and not any(d.get("links", {}).get("call") for d in ld["result"]["drivers"])
           and not any(d.get("phone") or d.get("call") for d in dl["result"]["drivers"]),
           "F: someone who only views and asks sees no driver's number on Live or the drivers list", f"{code} {code2}")
     # The requester asks; both approvers have it in their notification centre (no browser needed); urgent.
-    code, made = api_call(rq, "create_request", {"date": day(7), "time": "10:00", "route_from": "Head office", "route_to": "Galle"})
+    code, made = api_call(rq_tok, "create_request", {"date": day(7), "time": "10:00", "route_from": "Head office", "route_to": "Galle"})
     RR = made["result"]["request"]["id"]
     code, inbox = api_call(a2, "my_inbox", {"limit": 5})
     it = next((i for i in inbox["result"]["items"] if i.get("url") == f"/requests/{RR}"), {})
@@ -2456,39 +2456,39 @@ if CHANNEL == "api":
           and re.fullmatch(rf"Already approved by {re.escape(winner)} at \d\d:\d\d\.", loser.get("error", "")) is not None,
           "K: two approvers at once: one decision, one task; the other gets 'Already approved by … at …'", f"{codes} {loser}")
     # The requester: told in their notification centre, My trips shows it approved with who and the driver.
-    code, rin = api_call(rq, "my_inbox", {"unread": True})
+    code, rin = api_call(rq_tok, "my_inbox", {"unread": True})
     dec = next((i for i in rin["result"]["items"] if i.get("event") == "request.decided"), {})
     check(code == 200 and dec.get("title", "").startswith(f"Request approved by {winner}") and dec.get("who") == winner and dec.get("kind") == "alert",
           "A: the requester's notification centre: 'Request approved by …' (alert, who)", json.dumps(dec)[:300])
-    code, mt = api_call(rq, "my_trips", {"from": day(0), "to": day(10)})
+    code, mt = api_call(rq_tok, "my_trips", {"from": day(0), "to": day(10)})
     trip_c = next((t for t in mt["result"]["trips"] if t["id"] == RR), {})
     check(code == 200 and trip_c.get("live", {}).get("state") == "approved" and trip_c.get("approved_by", {}).get("name") == winner
           and trip_c.get("assigned", {}).get("driver") == f"Trip Driver {tag}" and trip_c["assigned"].get("call") == "tel:+94771234567",
           "A, F: My trips: approved, by whom, the driver with Call (their own trip)", json.dumps({k: trip_c.get(k) for k in ("live", "approved_by", "assigned")})[:400])
-    code, mt_w = api_call(rq, "my_trips", {"from": day(0), "to": day(10), "status": "waiting"})
+    code, mt_w = api_call(rq_tok, "my_trips", {"from": day(0), "to": day(10), "status": "waiting"})
     check(code == 200 and not any(t["id"] == RR for t in mt_w["result"]["trips"]), "A: My trips filtered to waiting leaves it out")
-    code, mt_bad = api_call(rq, "my_trips", {"from": "2024-01-01", "to": day(10)})
+    code, mt_bad = api_call(rq_tok, "my_trips", {"from": "2024-01-01", "to": day(10)})
     check(code == 409 and "year" in mt_bad.get("error", ""), "A: My trips takes at most a year", f"{code} {mt_bad}")
     # The driver accepts, starts: the live state follows.
     TT = psql(f"select id from tasks where request_id = '{RR}'")
     tripper.post("rpc/accept_task", {"p_task_id": TT, "p_at": iso(dt.datetime.now(dt.timezone.utc))})
-    code, mt = api_call(rq, "my_trips", {"from": day(0), "to": day(10)})
+    code, mt = api_call(rq_tok, "my_trips", {"from": day(0), "to": day(10)})
     st = next((t for t in mt["result"]["trips"] if t["id"] == RR), {}).get("live", {})
     check(st.get("state") == "accepted" and st.get("text", "").startswith("Driver accepted · "), "A: the driver accepts: 'Driver accepted · HH:MM'", json.dumps(st))
     # Read: one item, then all.
-    code, mk = api_call(rq, "mark_inbox_read", {"ids": [dec["id"]]})
+    code, mk = api_call(rq_tok, "mark_inbox_read", {"ids": [dec["id"]]})
     check(code == 200 and mk["result"]["marked"] == 1, "A: opening an item marks it read", str(mk)[:200])
-    code, mk = api_call(rq, "mark_inbox_read", {"all": True})
-    code2, rin = api_call(rq, "my_inbox", {})
+    code, mk = api_call(rq_tok, "mark_inbox_read", {"all": True})
+    code2, rin = api_call(rq_tok, "my_inbox", {})
     check(code == 200 and rin["result"]["unread"] == 0 and all(i["read"] for i in rin["result"]["items"]), "A: Mark all read: nothing unread", str(rin)[:200])
     # RLS: a person reads their own inbox rows only (the web's Realtime bell).
-    code, rows = http("GET", f"{API}/rest/v1/office_inbox?select=employee_id", api_headers(rq))
+    code, rows = http("GET", f"{API}/rest/v1/office_inbox?select=employee_id", api_headers(rq_tok))
     RQ_ID = psql(f"select id from employees where email = '{rq_email}'")
     check(code == 200 and rows and all(r["employee_id"] == RQ_ID for r in rows), "A: the requester reads only their own notification rows", f"{code} {len(rows or [])}")
     # B. The office site's sounds per person.
-    code, ns = api_call(rq, "my_notification_settings", {})
+    code, ns = api_call(rq_tok, "my_notification_settings", {})
     check(code == 200 and ns["result"].get("sound") == {"on": True, "volume": 70}, "B: sounds on at 70 by default", str(ns["result"].get("sound")))
-    code, ns = api_call(rq, "set_my_notification_settings", {"sound": {"volume": 40}})
+    code, ns = api_call(rq_tok, "set_my_notification_settings", {"sound": {"volume": 40}})
     check(code == 200 and ns["result"].get("sound") == {"on": True, "volume": 40}, "B: the volume saved (sound stays on)", str(ns["result"].get("sound")))
     api_call(API_TOKEN, "cancel_request", {"request_id": RR, "reason": "suite: 6k api"})
 
