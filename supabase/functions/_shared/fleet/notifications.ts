@@ -39,7 +39,10 @@ export type NotifyEvent =
   | "request.arrived"
   | "request.driver_changed"
   | "request.cancelled"
-  | "trip.personal";
+  | "trip.personal"
+  | "task.running_late"
+  | "ask.answered"
+  | "request.running_late";
 
 export interface EventInfo {
   event: NotifyEvent;
@@ -82,6 +85,19 @@ export const EVENTS: readonly EventInfo[] = [
     event: "task.vehicle_needed",
     label: "A driver needs another vehicle",
     text: "A breakdown or an accident during a task: the driver asks for another vehicle",
+    needs: ["approve", "assign_tasks"],
+  },
+  // Part 3b (H4, H3): written in SQL by report_running_late and the trigger driver_ask_answers_notify (to the asker only).
+  {
+    event: "task.running_late",
+    label: "A driver is running late",
+    text: "A driver says they are running late for a task (10, 15, 30 minutes or more)",
+    needs: ["approve", "assign_tasks"],
+  },
+  {
+    event: "ask.answered",
+    label: "A driver answers your question",
+    text: "A driver answers a question you sent (free for a trip, a time at the office, where they are)",
     needs: ["approve", "assign_tasks"],
   },
   // Phase 7 (§13): a driver starts a personal trip (driver-api); company trips are only tagged on the board.
@@ -156,6 +172,12 @@ export const EVENTS: readonly EventInfo[] = [
     needs: ["request"],
   },
   {
+    event: "request.running_late",
+    label: "Your driver is running late",
+    text: "The driver of a trip you asked for says they are running late",
+    needs: ["request"],
+  },
+  {
     event: "request.arrived",
     label: "Your driver has arrived",
     text: "The driver of a trip you asked for reaches the first pickup",
@@ -198,7 +220,10 @@ const INBOX_KIND: Record<NotifyEvent, InboxKind> = {
   "vehicle.booked": "alert",
   "vehicle.booking_cancelled": "alert",
   "issue.assigned": "alert",
+  "task.running_late": "alert",
+  "ask.answered": "alert",
   "request.on_the_way": "soft",
+  "request.running_late": "soft",
   "request.arrived": "soft",
   "task.stop_skipped": "soft",
   "issue.opened": "alarm",
@@ -261,10 +286,19 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
       ids = holders("approve");
       break;
     case "request.on_the_way":
+    case "request.running_late":
     case "request.arrived":
     case "request.driver_changed":
     case "request.cancelled":
       ids = ctx.requester ? [ctx.requester] : [];
+      break;
+    case "task.running_late":
+      // Part 3b (H4): the dispatchers and the person who assigned it (written in SQL by report_running_late).
+      ids = [...holders("approve", "assign_tasks"), ...(ctx.assigner ? [ctx.assigner] : [])];
+      break;
+    case "ask.answered":
+      // Part 3b (H3): only the person who asked (the SQL trigger writes it).
+      ids = ctx.assignee ? [ctx.assignee] : [];
       break;
     case "task.declined":
     case "task.not_accepted":

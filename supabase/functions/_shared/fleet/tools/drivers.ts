@@ -4,8 +4,8 @@ import { z } from "zod";
 import type { Db } from "../db.ts";
 import { ToolError, unwrap } from "../db.ts";
 import { docChip, type Employee, findDriver, loadLatest, loadRefs, sharing } from "../fleet.ts";
-import { contactLinks, phoneDisplay, plain } from "../format.ts";
-import { logPhoneChange, seesDriverPhones, storedPhone } from "../phones.ts";
+import { phoneDisplay, plain, telLink, waLink } from "../format.ts";
+import { logChanges, seesDriverPhones, storedPhone } from "../phones.ts";
 import { colomboDate, colomboTime, dayRange } from "../time.ts";
 import { driverPhotoLinks } from "../media.ts";
 import { realDate, tool, zDate, zPaging, zSearch, zText } from "../tool.ts";
@@ -34,7 +34,8 @@ function driverCard(e: Employee, plate: string | null, location?: string, phones
     has_login: e.auth_user_id !== null,
     current_vehicle: plate,
     location,
-    ...(phones ? contactLinks(e.phone) : {}),
+    // Part 3b (G): WhatsApp goes to the driver's WhatsApp number when they gave one.
+    ...(phones ? { call: telLink(e.phone), whatsapp: waLink(e.whatsapp ?? e.phone) } : {}),
   };
 }
 
@@ -121,18 +122,19 @@ export const createDriver = tool({
   name: "create_driver",
   title: "Create driver",
   description:
-    "Adds a driver and their Fame Driver sign-in (username + 6-digit PIN). The PIN is not stored in readable form and is not shown again: tell the driver right away.",
+    "Adds a driver and their Fame Driver sign-in (username + 6-digit PIN). The PIN is not stored in readable form and is not shown again: tell the driver right away. The phone number is needed (Part 3b).",
   readOnly: false,
   input: z.object({
     name: zText(120).describe("Full name"),
     code: zText(30).describe("Employee number / code, e.g. E0123"),
     username: zUsername,
     pin: zPin,
-    phone: zText(30).optional().describe("Mobile number, e.g. 0771234567"),
+    phone: zText(30).describe("Mobile number, e.g. 0771234567 (needed)"),
   }),
   async run(args, { db }) {
-    // Checked before the sign-in is made (stored +94…).
-    const phone = storedPhone(args.phone) ?? null;
+    // Checked before the sign-in is made (stored +94…). Part 3b (G): a driver always has a number.
+    const phone = storedPhone(args.phone);
+    if (!phone) throw new ToolError("phone: the driver's mobile number is needed, e.g. 077 123 4567.");
     const username = args.username.toLowerCase();
     const code = args.code.trim();
     const email = emailFor(username);
@@ -246,36 +248,87 @@ export const setDriverActive = tool({
   },
 });
 
+/** Part 3b (G): the profile fields a driver and the office edit, as stored (numbers +94…, words trimmed). */
+export interface ProfilePatch {
+  phone?: string | null;
+  whatsapp?: string | null;
+  emergency_name?: string | null;
+  emergency_relation?: string | null;
+  emergency_phone?: string | null;
+  licence_no?: string | null;
+  licence_expiry?: string | null;
+}
+
+const text = (v: string | null | undefined) => (v === undefined ? undefined : v === null || v.trim() === "" ? null : v.trim());
+
+/** Typed values → stored ones; a bad number or date is refused in words. Undefined fields are left as they are. */
+export function profilePatch(typed: ProfilePatch): ProfilePatch {
+  if (typed.licence_expiry) realDate(typed.licence_expiry, "licence_expiry");
+  const patch: ProfilePatch = {
+    phone: storedPhone(typed.phone),
+    whatsapp: storedPhone(typed.whatsapp, "whatsapp"),
+    emergency_name: text(typed.emergency_name),
+    emergency_relation: text(typed.emergency_relation),
+    emergency_phone: storedPhone(typed.emergency_phone, "emergency_phone"),
+    licence_no: text(typed.licence_no),
+    licence_expiry: typed.licence_expiry === undefined ? undefined : typed.licence_expiry || null,
+  };
+  return Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)) as ProfilePatch;
+}
+
+/** Saves a driver's profile fields and logs each one that changed. Answers the updated row. */
+export async function saveProfile(
+  db: Db,
+  driver: Employee,
+  patch: ProfilePatch,
+  actor: Parameters<typeof logChanges>[3],
+): Promise<Employee> {
+  if (Object.keys(patch).length === 0) throw new ToolError("Nothing to change.");
+  if ("phone" in patch && patch.phone === null && driver.role === "driver") {
+    throw new ToolError("phone: a driver always has a mobile number (Part 3b); give the new one instead.");
+  }
+  const updated = unwrap(await db.from("employees").update(patch).eq("id", driver.id).select("*").single(), "employee");
+  await logChanges(
+    db,
+    driver.id,
+    (Object.keys(patch) as (keyof ProfilePatch)[]).map((field) => ({
+      field,
+      before: driver[field] ?? null,
+      after: updated[field] ?? null,
+    })),
+    actor,
+  );
+  return updated;
+}
+
 export const updateDriver = tool({
   name: "update_driver",
   title: "Update driver",
-  description: "Changes a driver's phone number and/or driving licence expiry date. Send null to clear a value.",
+  description: "Changes a driver's phone number, WhatsApp number, emergency contact (name, relationship, phone), driving " +
+    "licence number and/or licence expiry date. Send null to clear a value (never the phone). Every change is logged.",
   readOnly: false,
   input: z.object({
     username: zDriverRef,
     phone: zText(30).nullable().optional(),
     licence_expiry: zDate.nullable().optional().describe("Driving licence expiry, YYYY-MM-DD"),
+    whatsapp: zText(30).nullable().optional().describe("Part 3b: the WhatsApp number, when it is not the phone"),
+    emergency_name: zText(120).nullable().optional(),
+    emergency_relation: zText(60).nullable().optional().describe("e.g. wife, brother"),
+    emergency_phone: zText(30).nullable().optional(),
+    licence_no: zText(40).nullable().optional().describe("Driving licence number"),
   }),
-  async run({ username, phone: typedPhone, licence_expiry }, { db, actor }) {
-    const phone = storedPhone(typedPhone);
+  async run({ username, ...typed }, { db, actor }) {
+    const patch = profilePatch(typed);
     const refs = await loadRefs(db);
     const driver = findDriver(refs, username);
-    if (phone === undefined && licence_expiry === undefined) throw new ToolError("Nothing to change: give phone and/or licence_expiry.");
-    if (licence_expiry) realDate(licence_expiry, "licence_expiry");
-
-    const updated = unwrap(
-      await db.from("employees")
-        .update({ ...(phone !== undefined && { phone }), ...(licence_expiry !== undefined && { licence_expiry }) })
-        .eq("id", driver.id).select("*").single(),
-      "employee",
-    );
-    if (phone !== undefined) await logPhoneChange(db, driver.id, driver.phone, updated.phone, actor);
+    if (Object.keys(patch).length === 0) {
+      throw new ToolError("Nothing to change: give phone, whatsapp, the emergency contact, licence_no or licence_expiry.");
+    }
+    const updated = await saveProfile(db, driver, patch, actor);
     const plate = updated.current_vehicle_id ? refs.veh.get(updated.current_vehicle_id)?.reg_no ?? null : null;
     return {
       result: { updated: { ...driverCard(updated, plate), licence_expiry: updated.licence_expiry } },
-      summary: `updated ${driver.name}: ${
-        [phone !== undefined && "phone", licence_expiry !== undefined && "licence_expiry"].filter(Boolean).join(", ")
-      }`,
+      summary: `updated ${driver.name}: ${Object.keys(patch).join(", ")}`,
     };
   },
 });

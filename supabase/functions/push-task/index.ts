@@ -8,6 +8,7 @@
 //     "changes": { "time": "Thu 15 Oct 09:30", "vehicle": "WP KL-1234", "end_by": "12:00", "title": "…", "stops": true, "passengers": 4, "notes": true } }  (changed only)
 //   { "task_id": null, "kind": "vehicle_taken" | "vehicle_moved" | "duty_auto_out" | "duty_office_out", "employee_id": "...",
 //     "plate"?: "WP CAB-4521", "name"?: "Kamal", "time"?: "21:00" }   (Phase 7: the driver's day, no task)
+//   { "task_id": null, "kind": "ask", "employee_id": "...", "ask_id": "..." }   (Part 3b: a question from the office)
 //   200 { "sent": 1, "failed": 0 }   (also 200 with sent 0 when the driver has no registered phone)
 //
 // The text is in the driver's language (employees.language). Android plays
@@ -31,11 +32,11 @@ const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 type TaskKind = "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder" | "reopened";
-/** About the driver's day, with no task (Phase 7). */
-type DayKind = "vehicle_taken" | "vehicle_moved" | "duty_auto_out" | "duty_office_out";
+/** About the driver's day, with no task (Phase 7); Part 3b: ask = a question from the office (ask_drivers). */
+type DayKind = "vehicle_taken" | "vehicle_moved" | "duty_auto_out" | "duty_office_out" | "ask";
 type Kind = TaskKind | DayKind;
 const TASK_KINDS: TaskKind[] = ["new", "changed", "cancelled", "removed", "leave_30", "leave_now", "accept_reminder", "reopened"];
-const DAY_KINDS: DayKind[] = ["vehicle_taken", "vehicle_moved", "duty_auto_out", "duty_office_out"];
+const DAY_KINDS: DayKind[] = ["vehicle_taken", "vehicle_moved", "duty_auto_out", "duty_office_out", "ask"];
 type Language = "en" | "si";
 
 const CHANNEL: Record<Kind, string> = {
@@ -51,6 +52,25 @@ const CHANNEL: Record<Kind, string> = {
   vehicle_moved: "general",
   duty_auto_out: "general",
   duty_office_out: "general",
+  // Part 3b (H3): the "driver-asks" channel on a phone that made it (below); else the loud new-task channel.
+  ask: "tasks-new",
+};
+
+/** Part 3b (H3): the office's questions have their own channel (maximum importance, its own vibration). */
+const ASKS_CHANNEL = "driver-asks";
+
+/** The question in the driver's language: the title by the ask's kind, the line under it. */
+const ASK_TEXT: Record<Language, Record<string, { title: string; body: string }>> = {
+  en: {
+    free_for_trip: { title: "Free for a trip?", body: "{when} · {asker} asks · tap to answer" },
+    office_time: { title: "When can you be at the office?", body: "{asker} asks · tap to answer" },
+    where_now: { title: "Where are you now?", body: "{asker} asks · tap to share your location once" },
+  },
+  si: {
+    free_for_trip: { title: "ගමනකට නිදහස්ද?", body: "{when} · {asker} අසයි · පිළිතුරු දීමට තට්ටු කරන්න" },
+    office_time: { title: "කාර්යාලයට පැමිණිය හැක්කේ කීයටද?", body: "{asker} අසයි · පිළිතුරු දීමට තට්ටු කරන්න" },
+    where_now: { title: "ඔබ දැන් කොහෙද?", body: "{asker} අසයි · ඔබේ ස්ථානය එක් වරක් යැවීමට තට්ටු කරන්න" },
+  },
 };
 
 /**
@@ -150,6 +170,7 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     vehicle_moved: { title: "The office changed your vehicle", body: "Your vehicle is now {plate}" },
     duty_auto_out: { title: "You were clocked out", body: "Clocked out at {time} (end of the day)." },
     duty_office_out: { title: "You were clocked out", body: "The office clocked you out at {time}." },
+    ask: { title: "{question}", body: "{detail}" },
   },
   si: {
     new: { title: "නව කාර්යය {when}", body: "{title} · {pickup} → {dropoff}" },
@@ -164,6 +185,7 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     vehicle_moved: { title: "කාර්යාලය ඔබේ වාහනය වෙනස් කළා", body: "ඔබේ වාහනය දැන් {plate}" },
     duty_auto_out: { title: "ඔබව රාජකාරියෙන් ඉවත් කළා", body: "{time} ට රාජකාරියෙන් ඉවත් කළා (දවසේ අවසානය)." },
     duty_office_out: { title: "ඔබව රාජකාරියෙන් ඉවත් කළා", body: "කාර්යාලය {time} ට ඔබව රාජකාරියෙන් ඉවත් කළා." },
+    ask: { title: "{question}", body: "{detail}" },
   },
 };
 
@@ -231,7 +253,9 @@ Deno.serve(async (request) => {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
 
-  const [taskRes, stopsRes, driverRes, tokensRes] = await Promise.all([
+  const askId = kind === "ask" && typeof body.ask_id === "string" && body.ask_id.length === 36 ? body.ask_id : null;
+  if (kind === "ask" && !askId) return json(400, { error: "bad_request" });
+  const [taskRes, stopsRes, driverRes, tokensRes, askRes] = await Promise.all([
     taskId
       ? admin.from("tasks").select("id, title, start_at, leave_by, status, cancelled_reason").eq("id", taskId).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -240,7 +264,12 @@ Deno.serve(async (request) => {
       : Promise.resolve({ data: [] as { seq: number; place_name: string }[] }),
     admin.from("employees").select("id, name, language, active").eq("id", employeeId).maybeSingle(),
     admin.from("device_tokens").select("id, token, channels").eq("employee_id", employeeId),
+    askId
+      ? admin.from("driver_asks").select("id, kind, trip_from, trip_to, note, asked_by_name").eq("id", askId).maybeSingle()
+      : Promise.resolve({ data: null }),
   ]);
+  const ask = askRes.data;
+  if (kind === "ask" && !ask) return json(404, { error: "ask_not_found" });
   const task = taskRes.data;
   const driver = driverRes.data;
   if (!driver || (!dayKind && !task)) return json(404, { error: "task_or_driver_not_found" });
@@ -269,7 +298,17 @@ Deno.serve(async (request) => {
     plate: text_(body.plate),
     name: text_(body.name),
     time: text_(body.time),
+    question: "",
+    detail: "",
   };
+  // Part 3b (H3): the office's question ("Free for a trip?" · "Mon 20 Oct 09:00–12:00 · Palitha asks · tap to answer").
+  if (ask) {
+    const words = ASK_TEXT[language][ask.kind] ?? ASK_TEXT[language].office_time;
+    const tripWhen = ask.trip_from ? `${when(ask.trip_from)}${ask.trip_to ? `–${clock(ask.trip_to)}` : ""}` : "";
+    vars.question = words.title;
+    vars.detail = [fill(words.body, { when: tripWhen, asker: ask.asked_by_name.split(" ")[0] }), ask.note ?? ""]
+      .filter(Boolean).join(" · ");
+  }
   // Moved to no vehicle: say so instead of an empty plate.
   const text = kind === "vehicle_moved" && !vars.plate ? { ...TEXT[language][kind], body: NO_VEHICLE[language] } : TEXT[language][kind];
   const messages = tokens.map((t) => ({
@@ -277,8 +316,16 @@ Deno.serve(async (request) => {
     title: fill(text.title, vars),
     body: fill(text.body, vars).replace(/ · $/, "").replace(/ → $/, ""),
     // A changed task carries what changed: the app highlights it on the task's preview (Hotfix 2, I).
-    data: taskId ? { taskId, kind, ...(kind === "changed" && body.changes ? { changes: body.changes } : {}) } : { kind },
-    channelId: ON_NEW_TASKS.has(kind) && (t.channels ?? []).includes(NEW_TASKS_CHANNEL) ? NEW_TASKS_CHANNEL : CHANNEL[kind],
+    data: taskId
+      ? { taskId, kind, ...(kind === "changed" && body.changes ? { changes: body.changes } : {}) }
+      : askId
+      ? { kind, askId }
+      : { kind },
+    channelId: kind === "ask" && (t.channels ?? []).includes(ASKS_CHANNEL)
+      ? ASKS_CHANNEL
+      : ON_NEW_TASKS.has(kind) && (t.channels ?? []).includes(NEW_TASKS_CHANNEL)
+      ? NEW_TASKS_CHANNEL
+      : CHANNEL[kind],
     priority: "high",
     sound: "default",
     ttl: 3600,

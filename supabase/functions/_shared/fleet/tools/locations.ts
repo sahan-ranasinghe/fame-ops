@@ -31,6 +31,8 @@ import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, ut
 import { duration } from "../durations.ts";
 import { driverPhotoLinks, vehiclePhotoLinks } from "../media.ts";
 import { seesDriverPhones } from "../phones.ts";
+import { lateReportOf, notAvailableNow } from "../presence.ts";
+import { presenceOf } from "./driverRows.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
 
 /** watch_drivers keeps a driver watched this long; the web calls it again every 30 s while the page is open. */
@@ -89,7 +91,9 @@ export const liveDrivers = tool({
       loadRefs(db),
       loadLatest(db),
       loadSettings(db),
-      db.from("tasks").select("id, title, employee_id, vehicle_id, status, started_at, return_to_base, avoid_expressway").eq(
+      db.from("tasks").select(
+        "id, title, employee_id, vehicle_id, status, started_at, return_to_base, avoid_expressway, late_report_min, late_report_at",
+      ).eq(
         "status",
         "in_progress",
       ),
@@ -131,10 +135,22 @@ export const liveDrivers = tool({
     // Every active driver (Phase 7): on a task, on duty or off duty.
     const shown = refs.employees.filter((e) => e.role === "driver" && e.active);
     // Phase 7 (§5, §6): the drivers' and the vehicles' photos, in one batch each (the same links while they last).
-    const [driverPhotos, vehiclePhotos] = await Promise.all([
+    // Part 3b (H2): for the people who dispatch, the usual start, the next task and whether the driver is not available now.
+    const dispatches = actor.permissions.includes("approve") || actor.permissions.includes("assign_tasks");
+    const [driverPhotos, vehiclePhotos, presence, awayRes] = await Promise.all([
       driverPhotoLinks(db, shown, now),
       vehiclePhotoLinks(db, refs.vehicles, now),
+      // The card has its own "near" town: no second look-up.
+      dispatches ? presenceOf(db, shown.map((e) => e.id), now, latest, false) : Promise.resolve(new Map()),
+      dispatches
+        ? db.from("driver_unavailability").select("employee_id, starts_at, ends_at, part, reason").is("removed_at", null)
+          .lte("starts_at", now.toISOString()).gt("ends_at", now.toISOString())
+        : Promise.resolve({ data: [], error: null }),
     ]);
+    const awayNow = unwrap(
+      awayRes as { data: { employee_id: string; starts_at: string; ends_at: string; part: string; reason: string }[] | null; error: null },
+      "availability",
+    );
     const cards = await Promise.all(shown.map(async (e) => {
       const pos = latest.get(e.id);
       const share = sharing(pos, now);
@@ -207,6 +223,15 @@ export const liveDrivers = tool({
         eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
         eta_final: eta?.final_eta_at ? colomboTime(eta.final_eta_at) : undefined,
         late_min: eta && eta.late_min > 0 ? eta.late_min : undefined,
+        // Part 3b (H4): what the driver said ("Running late 15 min · said 08:52").
+        late_report: task ? lateReportOf(task, now) : undefined,
+        // Part 3b (H2), for the people who dispatch.
+        usual_start: presence.get(e.id)?.usual_start,
+        next_task: presence.get(e.id)?.next_task,
+        not_available: (() => {
+          const u = awayNow.find((a) => a.employee_id === e.id);
+          return u ? notAvailableNow(u, now) : undefined;
+        })(),
         // The position itself (the web map draws it; the maps link stays for Claude), and the heading the marker turns to.
         lat: hasPosition ? pos.lat! : undefined,
         lng: hasPosition ? pos.lng! : undefined,

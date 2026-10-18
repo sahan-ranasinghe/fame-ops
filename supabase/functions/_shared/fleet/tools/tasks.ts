@@ -55,6 +55,7 @@ import { stopChanges, stopForChange } from "../stopChanges.ts";
 import type { Actor } from "../roles.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
+import { lateReportOf } from "../presence.ts";
 import { duration, whenText } from "../durations.ts";
 import { realDate, tool, zDate, zId, zPaging, zText, zTime } from "../tool.ts";
 import { pageOf, pageWindow } from "../paging.ts";
@@ -1616,6 +1617,8 @@ export const taskBoard = tool({
         eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
         eta_final: eta?.final_eta_at ? colomboTime(eta.final_eta_at) : undefined,
         late_min: eta && eta.late_min > 0 ? eta.late_min : undefined,
+        // Part 3b (H4): the driver's own "Running late".
+        late_report: lateReportOf(t, now),
         finish_flag: finishFlagText(t.finish_flag),
       };
     };
@@ -1870,6 +1873,8 @@ export const taskDetail = tool({
           gps_km: gps?.km,
           gps_km_note: gps ? GPS_KM_NOTE : undefined,
           eta: etaCard(eta, stops),
+          // Part 3b (H4): the driver's own "Running late".
+          late_report: lateReportOf(task, now),
           finish_flag: finishFlagText(task.finish_flag),
           // Phase 7: the vehicle chosen against the default, the warnings saved past, and whether it needs a driver.
           vehicle_changed: vehicleChoiceText(task.vehicle_choice),

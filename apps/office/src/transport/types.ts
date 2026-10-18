@@ -86,4 +86,7 @@ export const ALL_TOOLS = [
   "remove_place", "restore_place", "list_tasks", "set_trip_purpose", "my_trips", "my_inbox", "mark_inbox_read", "update_my_profile", "reviewing",
   // Hotfix 3: the person's page preferences (the Overview's collapsed sections, the menu's).
   "my_prefs", "set_my_prefs",
+  // Part 3b: the driver's profile, availability, the Drivers board, asking drivers.
+  "driver_profile", "set_driver_licence_photo", "unavailability", "set_unavailability", "remove_unavailability",
+  "drivers_board", "ask_drivers", "ask_answers",
 ];

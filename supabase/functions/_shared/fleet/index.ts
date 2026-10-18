@@ -41,6 +41,10 @@ import {
 import { registerMapLoad } from "./tools/google.ts";
 import { findProject, importProjects } from "./tools/projects.ts";
 import { availability } from "./tools/availability.ts";
+import { askAnswers, askDrivers } from "./tools/asks.ts";
+import { driversBoard } from "./tools/board.ts";
+import { driverProfile, setDriverLicencePhoto } from "./tools/profile.ts";
+import { removeUnavailability, setUnavailability, unavailability } from "./tools/unavailability.ts";
 import {
   bookVehicle,
   cancelRequest,
@@ -184,6 +188,15 @@ export const TOOLS: AnyTool[] = [
   // Hotfix 3: the person's page preferences.
   myPrefs,
   setMyPrefs,
+  // Part 3b: the driver's profile, availability, the Drivers board, asking drivers.
+  driverProfile,
+  setDriverLicencePhoto,
+  unavailability,
+  setUnavailability,
+  removeUnavailability,
+  driversBoard,
+  askDrivers,
+  askAnswers,
 ];
 
 export { WEB_ONLY_TOOLS } from "./tools/media.ts";

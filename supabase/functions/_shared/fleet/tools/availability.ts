@@ -7,7 +7,7 @@ import { z } from "zod";
 import type { AvailabilityWindow } from "../availability.ts";
 import { ToolError } from "../db.ts";
 import { loadRefs } from "../fleet.ts";
-import { phoneLinks } from "../format.ts";
+import { personLinks } from "../format.ts";
 import { findPlace } from "./places.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
 import { realDate, tool, zText, zVehicleType } from "../tool.ts";
@@ -72,7 +72,11 @@ export const availability = tool({
         as_of: colomboDateTime(now),
         window: { from: colomboDayTime(from), until: to ? colomboTime(to) : "end of the day", day },
         // Hotfix 2 (F): Call and WhatsApp per driver (the people who approve or assign tasks).
-        drivers: ranked.map((r) => ({ ...r, phone: phoneLinks(refs.employees.find((e) => e.username === r.username)?.phone) })),
+        // Part 3b (G): WhatsApp to the driver's WhatsApp number when they gave one.
+        drivers: ranked.map((r) => {
+          const e = refs.employees.find((x) => x.username === r.username);
+          return { ...r, phone: personLinks(e?.phone, e?.whatsapp) };
+        }),
         // Phase 7 (§3): the best match (drivers on duty and free, nearest to the first stop, then the fewest tasks today).
         best,
         counts: {

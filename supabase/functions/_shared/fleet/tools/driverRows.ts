@@ -14,12 +14,59 @@ import {
 import type { Db } from "../db.ts";
 import { unwrap } from "../db.ts";
 import { taskEta } from "../eta.ts";
-import { loadLatest, type Refs } from "../fleet.ts";
+import { loadLatest, nearestTown, type Refs } from "../fleet.ts";
 import { haversineKm } from "../geo.ts";
 import type { Plan } from "../plan.ts";
+import { type BoardStatus, lastSeenText, notAvailableNow, overlapping, type Unavailable, usualStart } from "../presence.ts";
 import { loadSettings } from "../settings.ts";
 import { driverPhotoLinks } from "../media.ts";
-import { colomboDate, colomboTime, dayRange } from "../time.ts";
+import { colomboDate, colomboDayTime, colomboTime, dayRange } from "../time.ts";
+
+/** Part 3b (H2): the row's status now, one line. */
+export interface NowStatus {
+  kind: BoardStatus;
+  text: string;
+}
+
+/**
+ * Part 3b (H2): what every dispatch list says about a driver beside the window's answer: the status now, last seen (time and
+ * town), the next task, the usual start. Loaded once for a list of drivers.
+ */
+export async function presenceOf(
+  db: Db,
+  ids: string[],
+  now: Date,
+  latest: Map<string, { lat: number | null; lng: number | null; recorded_at: string | null }>,
+  withTowns = true,
+) {
+  if (ids.length === 0) return new Map<string, { last_seen?: string; usual_start?: string; next_task?: { title: string; when: string } }>();
+  const since = new Date(now.getTime() - 40 * 86400000).toISOString();
+  const week = new Date(now.getTime() + 7 * 86400000).toISOString();
+  const [startsRes, nextRes] = await Promise.all([
+    db.from("duty_sessions").select("employee_id, started_at").in("employee_id", ids).gte("started_at", since).limit(5000),
+    db.from("tasks").select("employee_id, title, start_at, leave_by").in("employee_id", ids).eq("status", "assigned")
+      .gte("start_at", now.toISOString()).lt("start_at", week).order("start_at"),
+  ]);
+  const starts = unwrap(startsRes, "duty sessions");
+  const next = unwrap(nextRes, "tasks");
+  const towns = new Map(
+    await Promise.all(ids.map(async (id) => {
+      const p = latest.get(id);
+      return [id, withTowns && p?.lat != null && p?.lng != null ? await nearestTown(db, p.lat, p.lng) : null] as const;
+    })),
+  );
+  return new Map(ids.map((id) => {
+    const n = next.find((t) => t.employee_id === id);
+    const at = n ? n.leave_by ?? n.start_at : null;
+    return [id, {
+      last_seen: lastSeenText(latest.get(id)?.recorded_at, towns.get(id), now) ?? undefined,
+      usual_start: usualStart(starts.filter((s) => s.employee_id === id).map((s) => s.started_at)) ?? undefined,
+      next_task: n && at
+        ? { title: n.title, when: colomboDate(at) === colomboDate(now) ? colomboTime(at) : colomboDayTime(at) }
+        : undefined,
+    }];
+  }));
+}
 
 /**
  * Every active driver for a window (the status chip, free or busy, the vehicle they hold today or their regular one) and
@@ -39,7 +86,8 @@ export async function driverRows(
   const [latest, settings] = await Promise.all([loadLatest(db), loadSettings(db)]);
   const drivers = refs.employees.filter((e) => e.role === "driver" && e.active && e.id !== exclude);
   const ids = drivers.map((d) => d.id);
-  const [dayTasksRes, runningRes, openRes, endedRes, eventsRes] = await Promise.all([
+  const dayRangeOf = dayRange(day);
+  const [dayTasksRes, runningRes, openRes, endedRes, eventsRes, offRes] = await Promise.all([
     db.from("tasks").select("*").in("employee_id", ids).in("status", ["assigned", "in_progress"]).gte(
       "start_at",
       w.day_end < w.from ? w.from : dayRange(day).from,
@@ -53,7 +101,13 @@ export async function driverRows(
       "at",
       todayStart,
     ),
+    // Part 3b (H1): not available on the window's day, or now.
+    db.from("driver_unavailability").select("id, employee_id, starts_at, ends_at, part, reason, note").in("employee_id", ids)
+      .is("removed_at", null)
+      .lt("starts_at", dayRangeOf.to > now.toISOString() ? dayRangeOf.to : new Date(now.getTime() + 1000).toISOString())
+      .gt("ends_at", dayRangeOf.from < now.toISOString() ? dayRangeOf.from : now.toISOString()),
   ]);
+  const off = unwrap(offRes, "availability") as Unavailable[];
   const dayTasks = unwrap(dayTasksRes, "tasks");
   const running = unwrap(runningRes, "tasks");
   const open = unwrap(openRes, "duty sessions");
@@ -93,6 +147,7 @@ export async function driverRows(
       running: current,
       accepted_today: counts.filter((ev) => ev.action === "accepted").length,
       declined_today: counts.filter((ev) => ev.action === "declined").length,
+      unavailable: overlapping(off.filter((u) => u.employee_id === e.id), dayRangeOf.from, dayRangeOf.to),
     };
     // Phase 7: the vehicle the driver holds today (on duty), else their regular one.
     const held = d.on_duty_since && e.current_vehicle_id ? refs.veh.get(e.current_vehicle_id) : undefined;
@@ -114,7 +169,18 @@ export async function driverRows(
     });
     // Hotfix 2 (J): information only, never a block (a task may take the driver's vehicle on the day).
     const vehicle_note = held ? undefined : regular ? `no vehicle yet · regular: ${regular.reg_no}` : "no vehicle yet";
-    return { ...row, duty: row.state, vehicle, vehicle_note };
+    // Part 3b (H2): the status now: on a task, not available (an entry covers now), on duty, off duty.
+    const awayNow = overlapping(
+      off.filter((u) => u.employee_id === e.id),
+      now.toISOString(),
+      new Date(now.getTime() + 1000).toISOString(),
+    )[0];
+    const now_status: NowStatus = row.state === "on_task"
+      ? { kind: "on_task", text: row.status_text }
+      : awayNow
+      ? { kind: "not_available", text: notAvailableNow(awayNow, now) }
+      : { kind: row.state, text: row.status_text };
+    return { ...row, duty: row.state, vehicle, vehicle_note, now_status, employee_id: e.id };
   }));
   const windowText = `${colomboTime(w.from)}–${w.to ? colomboTime(w.to) : "end of day"}`;
   const ranked: BestMatch[] = rankMatches(matches, windowText, firstStop ? "the pickup" : "the first stop");
@@ -131,12 +197,12 @@ export async function driverRows(
   });
   const top = ranked[0];
   const bestRow = top ? withRank.find((r) => (r.username ?? r.name) === (top.username ?? top.name)) : undefined;
-  // Phase 7 (§5): each driver's photo (Who's available on Approve and Assign).
-  const photos = await driverPhotoLinks(db, drivers, now);
+  // Phase 7 (§5): each driver's photo (Who's available on Approve and Assign); Part 3b (H2): last seen, usual start, next task.
+  const [photos, presence] = await Promise.all([driverPhotoLinks(db, drivers, now), presenceOf(db, ids, now, latest)]);
   return {
-    rows: rankAvailability(withRank.map((r) => {
-      const photo = r.username ? photos.get(drivers.find((d) => d.username === r.username)?.id ?? "") : undefined;
-      return photo ? { ...r, photo_url: photo } : r;
+    rows: rankAvailability(withRank.map(({ employee_id, ...r }) => {
+      const photo = photos.get(employee_id);
+      return { ...r, ...presence.get(employee_id), ...(photo ? { photo_url: photo } : {}) };
     })),
     best: top ? { name: top.name, username: top.username, vehicle: bestRow?.vehicle, why: top.why } : undefined,
   };

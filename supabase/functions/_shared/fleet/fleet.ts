@@ -19,6 +19,7 @@ import {
   shortDate,
 } from "./time.ts";
 import { whenText } from "./durations.ts";
+import { unavailableWarning } from "./presence.ts";
 
 export type Employee = Row<"employees">;
 export type Vehicle = Row<"vehicles">;
@@ -550,9 +551,13 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
   const warnings: string[] = [];
   const conflicts: Conflict[] = [];
 
-  const [sameDay, km] = await Promise.all([
+  const day = dayRange(date);
+  const [sameDay, km, offRes] = await Promise.all([
     openTasksOn(db, date),
     vehicle ? monthKm(db, [vehicle.id], date.slice(0, 7)) : new Map<string, number>(),
+    // Part 3b (H1): the driver's entries on the task's day.
+    db.from("driver_unavailability").select("id, employee_id, starts_at, ends_at, part, reason, note").eq("employee_id", driver.id)
+      .is("removed_at", null).lt("starts_at", day.to).gt("ends_at", day.from),
   ]);
 
   // The people behind an overlapping task: who asked for it (its request) and who drives it.
@@ -638,6 +643,19 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
   }
   if (driver.licence_expiry && driver.licence_expiry < date) {
     warnings.push(`${driver.name}'s driving licence expired on ${driver.licence_expiry}.`);
+  }
+  // Part 3b (H1): "Kamal is not available that day · half day, back 13:00" (a card too when it overlaps the trip).
+  const away = unavailableWarning(
+    driver.name,
+    unwrap(offRes, "availability"),
+    startAt,
+    endBy ?? day.to,
+    day.from,
+    day.to,
+  );
+  if (away) {
+    warnings.push(away.text);
+    if (away.overlaps) conflicts.push({ kind: "driver", text: away.text });
   }
   return { warnings, conflicts };
 }

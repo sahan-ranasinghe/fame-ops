@@ -167,6 +167,8 @@ export interface BoardCard {
   eta_next?: string;
   eta_final?: string;
   late_min?: number;
+  /** Part 3b (H4): the driver's own "Running late". */
+  late_report?: LateReport;
   /** Phase 7: completed early (the odometer or the time far under the plan). */
   finish_flag?: FinishFlag;
   /** Phase 7 (§5, §6): the driver's photo and the vehicle's thumbnail (links that work for at least an hour). */
@@ -594,6 +596,8 @@ export interface TaskDetail {
     avoid_expressway?: boolean;
     plan_version?: number;
     eta?: TaskEta;
+    /** Part 3b (H4): the driver's own "Running late". */
+    late_report?: LateReport;
     /** Phase 7: completed early, the reopen (reopen_task: completed today), and a vehicle taken at Start task. */
     finish_flag?: FinishFlag;
     can_reopen?: boolean;
@@ -1307,6 +1311,12 @@ export interface LiveDriver extends StatusFields {
   eta_next?: string;
   eta_final?: string;
   late_min?: number;
+  /** Part 3b (H4): the driver's own "Running late" for the task under way. */
+  late_report?: LateReport;
+  /** Part 3b (H2), for people with approve or assign_tasks: the usual start, the next task, not available now. */
+  usual_start?: string;
+  next_task?: { title: string; when: string };
+  not_available?: string;
   /** Set by a Realtime row: the ISO time of the last position. */
   recorded_at?: string | null;
   /** Heading of the last position in degrees, when the phone gave one (the marker turns with it). */
@@ -1752,6 +1762,13 @@ export interface AvailableDriver {
   match_why?: string;
   /** Phase 7 (§5). */
   photo_url?: string;
+  /** Part 3b (H1): "Not available · half day, back 13:00" when an entry overlaps the window (never free then). */
+  not_available?: string;
+  /** Part 3b (H2): the status now, last seen, the usual start, the next task. */
+  now_status?: NowStatus;
+  last_seen?: string;
+  usual_start?: string;
+  next_task?: { title: string; when: string };
 }
 
 export interface Availability {
@@ -1848,4 +1865,197 @@ export interface OfficePrefs {
   overview_collapsed?: string[];
   /** The side menu's collapsed sections: "today", "fleet", "reports", "admin". */
   menu_collapsed?: string[];
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Part 3b (G, H): the driver's profile, availability for dispatch, the Drivers board, asking drivers, running late.
+// ---------------------------------------------------------------------------------------------------------------------------
+
+/** "Running late 15 min · said 08:52": the driver's last report on a task (report_running_late). */
+export interface LateReport {
+  min: number;
+  said: string;
+  text: string;
+}
+
+/** A driver's status now (H2): on a task until, not available (and until when), on duty, off duty. */
+export interface NowStatus {
+  kind: "on_task" | "not_available" | "on_duty" | "off_duty";
+  text: string;
+}
+
+/** A driver's Call / WhatsApp links (WhatsApp to their WhatsApp number when they gave one). */
+export interface PersonLinks {
+  phone?: string;
+  phone_display?: string;
+  call?: string;
+  whatsapp?: string;
+}
+
+export type UnavailablePart = "full_day" | "morning" | "afternoon" | "hours";
+export type UnavailableReason = "leave" | "half_day" | "personal" | "other";
+
+/** One "not available" entry (H1). */
+export interface UnavailableEntry {
+  id: string;
+  driver?: string;
+  username?: string;
+  /** "2026-10-20 13:00" (Colombo). */
+  from: string;
+  to: string;
+  /** The first and the last day (YYYY-MM-DD). */
+  day: string;
+  last_day: string;
+  /** hours and afternoon: from HH:MM; hours and morning: to HH:MM. */
+  start_time?: string;
+  end_time?: string;
+  part: UnavailablePart;
+  reason: UnavailableReason;
+  reason_text: string;
+  note?: string;
+  /** "Not available · half day, back 13:00" */
+  text: string;
+  /** "Kamal Perera (the driver)" or the office person. */
+  added_by: string;
+  added: string;
+  changed_by?: string;
+}
+
+/** unavailability(from, to, driver?) */
+export interface UnavailabilityList {
+  from: string;
+  to: string;
+  count: number;
+  entries: UnavailableEntry[];
+}
+
+/** set_unavailability */
+export interface SetUnavailabilityResult {
+  saved: "added" | "changed";
+  entry: UnavailableEntry;
+}
+
+/** One driver on the Drivers board (H2, H5). */
+export interface BoardDriver {
+  name: string;
+  username?: string;
+  photo_url?: string;
+  status: NowStatus;
+  free_now: boolean;
+  /** "Last seen 17:42 near Kadawatha" */
+  last_seen?: string;
+  next_task?: { title: string; when: string };
+  /** "07:40" */
+  usual_start?: string;
+  vehicle?: { reg_no: string; source: "on_duty" | "regular" };
+  current_task?: { title: string; ends_planned?: string; ends_live?: string };
+  licence: { chip: "ok" | "orange" | "red" | "not set"; expiry?: string };
+  links?: PersonLinks;
+}
+
+export type BoardFilter = "all" | "free_now" | "on_task" | "off_duty" | "not_available";
+
+/** drivers_board(filter?, search?, week_from?) */
+export interface DriversBoard {
+  as_of: string;
+  filter: BoardFilter;
+  counts: Record<BoardFilter, number>;
+  count: number;
+  drivers: BoardDriver[];
+  week?: {
+    from: string;
+    to: string;
+    days: string[];
+    drivers: {
+      name: string;
+      username?: string;
+      days: {
+        date: string;
+        tasks: { id: string; title: string; time: string; end?: string; status: string }[];
+        not_available: UnavailableEntry[];
+      }[];
+    }[];
+  };
+}
+
+/** driver_profile(driver): the profile; emergency, licence and changes only for users or vehicles. */
+export interface DriverProfile {
+  driver: {
+    name: string;
+    code: string;
+    username?: string;
+    active: boolean;
+    language: string;
+    photo_url?: string;
+    phone?: string;
+    phone_display?: string;
+    whatsapp?: string;
+    whatsapp_display?: string;
+    links?: PersonLinks;
+    current_vehicle?: string;
+    app_version?: string;
+    licence_chip?: { chip: "ok" | "orange" | "red"; expiry: string | null; days?: number };
+  };
+  emergency?: { name?: string; relation?: string; phone?: string; phone_display?: string; links?: PersonLinks };
+  licence?: { number?: string; expiry?: string; chip: "ok" | "orange" | "red" | "not set"; front_url?: string; back_url?: string };
+  this_month: { month: string; tasks: number; km: number };
+  not_available: UnavailableEntry[];
+  /** What is missing ("phone", "licence expiry", "licence number", "emergency contact"). */
+  missing: string[];
+  changes?: { field: string; what: string; from?: string; to?: string; by: string; by_driver?: boolean; at: string }[];
+  /** Said instead of the private part to people without users or vehicles. */
+  private_hidden?: string;
+}
+
+export type AskKind = "free_for_trip" | "office_time" | "where_now";
+
+/** One driver's row on a question (H3). */
+export interface AskDriverRow {
+  name: string;
+  username?: string;
+  photo_url?: string;
+  links?: PersonLinks;
+  sent: string;
+  seen?: string;
+  answer?: "yes" | "no" | "call_me" | "time" | "location";
+  /** "Yes" · "No" · "Call me" · "At the office at 10:30" · "Shared where they are" */
+  answer_text?: string;
+  answer_time?: string;
+  answered?: string;
+  location?: { lat: number; lng: number; accuracy_m?: number; near?: string; map: string };
+  /** A Yes to an open trip question: the page offers Assign. */
+  assignable?: boolean;
+  state: "sent" | "seen" | "answered";
+}
+
+/** A question to drivers with every answer (ask_drivers, ask_answers). */
+export interface Ask {
+  id: string;
+  kind: AskKind;
+  /** "Free for a trip Mon 20 Oct 09:00–12:00?" */
+  question: string;
+  note?: string;
+  trip?: { date: string; from: string; to?: string };
+  task_id?: string;
+  request_id?: string;
+  asked_by: string;
+  asked: string;
+  asked_day: string;
+  expires: string;
+  expired?: boolean;
+  counts: { asked: number; seen: number; answered: number; yes: number };
+  drivers: AskDriverRow[];
+}
+
+/** ask_drivers */
+export interface AskDriversResult {
+  ask: Ask;
+  next: string;
+}
+
+/** ask_answers(ask_id) or the last 7 days' questions */
+export interface AskAnswers extends Paged {
+  ask?: Ask;
+  asks?: Ask[];
+  count?: number;
 }

@@ -33,11 +33,13 @@ async function signedUpload(db: Db, bucket: string, path: string) {
 export const photoUploadUrl = tool({
   name: "photo_upload_url",
   title: "A place to upload a photo",
-  description: "Web app only. A one-time signed upload (bucket, path, token) for a driver's profile photo (512 px square JPEG) " +
-    "or a vehicle's photo and its thumbnail (1600 px and 256 px JPEG); then set_driver_photo or set_vehicle_photo saves it.",
+  description: "Web app only. A one-time signed upload (bucket, path, token) for a driver's profile photo (512 px square JPEG), " +
+    "a photo of their driving licence (driver_licence, 1600 px JPEG; Part 3b) " +
+    "or a vehicle's photo and its thumbnail (1600 px and 256 px JPEG); then set_driver_photo, set_driver_licence_photo or " +
+    "set_vehicle_photo saves it.",
   readOnly: false,
   input: z.object({
-    kind: z.enum(["driver_profile", "vehicle"]),
+    kind: z.enum(["driver_profile", "driver_licence", "vehicle"]),
     target: zText(80).describe("The driver (username, code or name) or the vehicle (plate)"),
   }),
   async run({ kind, target }, { db, actor }) {
@@ -47,6 +49,11 @@ export const photoUploadUrl = tool({
       const driver = findDriver(refs, target);
       const upload = await signedUpload(db, "driver-photos", `${driver.id}/profile/${crypto.randomUUID()}.jpg`);
       return { result: { upload }, summary: `profile photo upload for ${driver.name}` };
+    }
+    if (kind === "driver_licence") {
+      const driver = findDriver(refs, target);
+      const upload = await signedUpload(db, "driver-photos", `${driver.id}/licence/${crypto.randomUUID()}.jpg`);
+      return { result: { upload }, summary: `licence photo upload for ${driver.name}` };
     }
     const vehicle = findVehicle(refs, target);
     const id = crypto.randomUUID();

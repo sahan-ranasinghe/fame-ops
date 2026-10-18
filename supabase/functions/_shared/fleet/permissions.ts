@@ -58,7 +58,7 @@ const ANY: readonly Permission[] = PERMISSIONS;
  */
 export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   // Phase 7, Part 3 (§5, §6, §28): photos and documents are the vehicles permission's (reading the files too, §32 14).
-  photo_upload_url: VEH,
+  photo_upload_url: ["vehicles", "users"],
   set_driver_photo: VEH,
   set_vehicle_photo: VEH,
   vehicle_document_upload_url: VEH,
@@ -115,7 +115,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   create_driver: VEH,
   reset_pin: VEH,
   set_driver_active: VEH,
-  update_driver: VEH,
+  update_driver: ["vehicles", "users"],
   import_projects: VEH,
   mileage_summary: VEH,
   list_fuel: VEH,
@@ -162,6 +162,15 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   // Hotfix 3 (L1, L5): the person's own page preferences.
   my_prefs: ANY,
   set_my_prefs: ANY,
+  // Part 3b: the profile (its private part needs users or vehicles, checked in the tool), availability, the board, asks.
+  driver_profile: ["approve", "assign_tasks", "vehicles", "users"],
+  set_driver_licence_photo: ["vehicles", "users"],
+  unavailability: AA,
+  set_unavailability: AA,
+  remove_unavailability: AA,
+  drivers_board: AA,
+  ask_drivers: AA,
+  ask_answers: AA,
 };
 
 /** The four buttons on the Users page. An admin is everything, so it is not a preset. */

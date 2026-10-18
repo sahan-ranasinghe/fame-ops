@@ -6,6 +6,9 @@
 //   POST /trips {id, purpose, destination, note?, vehicle_id?, at?}   Start a trip (idempotent by the phone's id)
 //   POST /trips/:id/stops {id, destination}            a stop added on the way (self trips under way)
 //   POST /trips/:id/cancel {}                           a trip started by mistake, cancelled before it starts
+//   POST /profile {phone?, whatsapp?, emergency_name?, emergency_relation?, emergency_phone?, licence_no?, licence_expiry?}
+//                                                       Part 3b (G): the driver's own profile, numbers stored +94…, every
+//                                                       change in employee_changes as "changed by the driver"
 // Deployed with --no-verify-jwt like office-api: the token is checked here. Every trip call is written to office_audit
 // with channel driver.
 
@@ -16,6 +19,7 @@ import { adminClient, ToolError } from "../_shared/fleet/db.ts";
 import type { Actor } from "../_shared/fleet/roles.ts";
 import { searchPlaces } from "../_shared/fleet/tools/places.ts";
 import { addTripStop, cancelSelfTrip, createSelfTrip } from "../_shared/fleet/trips.ts";
+import { profilePatch, saveProfile } from "../_shared/fleet/tools/drivers.ts";
 
 const CALLS_PER_MINUTE = 60;
 const db = adminClient();
@@ -55,6 +59,16 @@ const INPUTS = {
     queued: z.boolean().optional(),
   }),
   stop: z.object({ id: z.string().uuid(), destination: zDestination, queued: z.boolean().optional() }),
+  // Part 3b (G): null clears a value (never the phone: the rule refuses it).
+  profile: z.object({
+    phone: z.string().trim().max(30).nullable().optional(),
+    whatsapp: z.string().trim().max(30).nullable().optional(),
+    emergency_name: z.string().trim().max(120).nullable().optional(),
+    emergency_relation: z.string().trim().max(60).nullable().optional(),
+    emergency_phone: z.string().trim().max(30).nullable().optional(),
+    licence_no: z.string().trim().max(40).nullable().optional(),
+    licence_expiry: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  }).strict(),
 };
 
 type Driver = { row: Awaited<ReturnType<typeof driverRow>>; actor: Actor };
@@ -169,6 +183,34 @@ Deno.serve(async (request) => {
         (r) => `${r.repeated ? "again: " : ""}${r.trip.title}: ${r.trip.stops.length} stops`,
       );
       return json(out.repeated ? 200 : 201, out);
+    }
+    if (path === "/profile") {
+      const p = INPUTS.profile.safeParse(raw);
+      if (!p.success) return bad(p.error);
+      const out = await audited(
+        "update_my_profile_driver",
+        // The audit line names the fields, never the numbers.
+        { fields: Object.keys(p.data) },
+        actor,
+        async () => {
+          const patch = profilePatch(p.data);
+          const updated = await saveProfile(db, row!, patch, actor);
+          return {
+            saved: Object.keys(patch),
+            profile: {
+              phone: updated.phone,
+              whatsapp: updated.whatsapp,
+              emergency_name: updated.emergency_name,
+              emergency_relation: updated.emergency_relation,
+              emergency_phone: updated.emergency_phone,
+              licence_no: updated.licence_no,
+              licence_expiry: updated.licence_expiry,
+            },
+          };
+        },
+        (r) => `profile: ${r.saved.join(", ")}`,
+      );
+      return json(200, out);
     }
     const cancel = path.match(/^\/trips\/([0-9a-f-]{36})\/cancel$/);
     if (cancel) {

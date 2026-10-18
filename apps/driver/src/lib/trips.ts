@@ -578,6 +578,8 @@ export function localTrip(input: {
     approved_by_employee_id: null,
     approved_at: null,
     missed_at: null,
+    late_report_min: null,
+    late_report_at: null,
     start_place_id: null,
     start_name: null,
     start_lat: null,

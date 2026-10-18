@@ -2,7 +2,9 @@
 // a new driver (task_detail.suggestions). Same wording as suggest_vehicles.
 
 import type { Db } from "./db.ts";
+import { unwrap } from "./db.ts";
 import { docChip, loadRefs, openTasksOn, type Task, taskWindow } from "./fleet.ts";
+import { overlapping, type Unavailable, unavailableText } from "./presence.ts";
 import { colomboDate, colomboTime, dayRange } from "./time.ts";
 
 export interface FreeDriver {
@@ -29,7 +31,14 @@ export async function freeAt(
   const dayEnd = new Date(dayRange(day).to).getTime();
   const from = new Date(startAt).getTime();
   const to = endBy ? new Date(endBy).getTime() : dayEnd;
-  const [refs, open] = await Promise.all([loadRefs(db), openTasksOn(db, day)]);
+  const [refs, open, offRes] = await Promise.all([
+    loadRefs(db),
+    openTasksOn(db, day),
+    // Part 3b (H1): a driver who is not available then is not suggested.
+    db.from("driver_unavailability").select("employee_id, starts_at, ends_at").is("removed_at", null)
+      .lt("starts_at", new Date(to).toISOString()).gt("ends_at", new Date(from).toISOString()),
+  ]);
+  const away = new Set(unwrap(offRes, "availability").map((u) => u.employee_id));
   const tasks = open.filter((t) => t.id !== ignoreTaskId);
   const busy = (t: Task) => new Date(t.start_at).getTime() < to && from < (t.end_by ? new Date(t.end_by).getTime() : dayEnd);
   const availability = (mine: Task[]): string | null => {
@@ -40,7 +49,7 @@ export async function freeAt(
     Number(b.availability === "free all day") - Number(a.availability === "free all day");
 
   const drivers = refs.employees
-    .filter((e) => e.role === "driver" && e.active)
+    .filter((e) => e.role === "driver" && e.active && !away.has(e.id))
     .flatMap((e) => {
       const text = availability(tasks.filter((t) => t.employee_id === e.id));
       return text ? [{ name: e.name, username: e.username, availability: text }] : [];
@@ -87,6 +96,8 @@ export interface DriverDay {
   running: TaskLite | null;
   accepted_today: number;
   declined_today: number;
+  /** Part 3b (H1): the driver's entries on the window's day (not available). */
+  unavailable?: Unavailable[];
 }
 
 export interface AvailabilityWindow {
@@ -115,8 +126,10 @@ export interface DriverAvailability {
   licence: { chip: "ok" | "orange" | "red" | "not set"; expiry?: string };
   /** No task overlaps the window. */
   free: boolean;
-  /** The task that makes the driver busy, when one does. */
+  /** The task that makes the driver busy, when one does (or "Not available · …", Part 3b). */
   busy_with?: string;
+  /** Part 3b (H1): "Not available · half day, back 13:00" when an entry overlaps the window: never free then. */
+  not_available?: string;
 }
 
 const hhmm = (iso: string) => colomboTime(iso);
@@ -132,6 +145,7 @@ export function taskBusy(t: Pick<TaskLite, "start_at" | "end_by">, w: Availabili
 /** The status chip and the free flag of one driver. Pure. */
 export function driverAvailability(d: DriverDay, w: AvailabilityWindow, today: string): DriverAvailability {
   const busy = d.tasks.find((t) => taskBusy(t, w));
+  const away = overlapping(d.unavailable ?? [], w.from, w.to ?? w.day_end)[0];
   const next = d.tasks
     .filter((t) => t.status === "assigned" && new Date(t.start_at).getTime() > new Date(w.from).getTime())
     .sort((a, b) => a.start_at.localeCompare(b.start_at))[0];
@@ -173,8 +187,9 @@ export function driverAvailability(d: DriverDay, w: AvailabilityWindow, today: s
     accepted_today: d.accepted_today,
     declined_today: d.declined_today,
     licence: { chip: licence.chip, expiry: licence.expiry ?? undefined },
-    free: !busy,
-    busy_with: busy ? `${busy.title} ${taskWindow(busy)}` : undefined,
+    free: !busy && !away,
+    busy_with: busy ? `${busy.title} ${taskWindow(busy)}` : away ? unavailableText(away) : undefined,
+    not_available: away ? unavailableText(away) : undefined,
   };
 }
 

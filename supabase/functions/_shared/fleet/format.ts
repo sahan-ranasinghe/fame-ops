@@ -41,6 +41,20 @@ export function phoneLinks(
   return { phone: phoneE164(phone) ?? phone, phone_display: phoneDisplay(phone) ?? phone, call, whatsapp };
 }
 
+/**
+ * Part 3b (G): a driver's links: Call on the phone, WhatsApp on their WhatsApp number when they gave one that differs.
+ * Undefined when there is no phone and no WhatsApp number.
+ */
+export function personLinks(
+  phone: string | null | undefined,
+  whatsapp: string | null | undefined,
+): { phone?: string; phone_display?: string; call?: string; whatsapp?: string } | undefined {
+  const base = phoneLinks(phone);
+  const wa = waLink(whatsapp ?? phone);
+  if (!base && !wa) return undefined;
+  return { ...base, ...(wa ? { whatsapp: wa } : {}) };
+}
+
 export function telLink(phone: string | null | undefined): string | null {
   const digits = phoneDigits(phone);
   return digits ? `tel:+${digits}` : null;

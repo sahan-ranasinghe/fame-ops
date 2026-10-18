@@ -22,19 +22,47 @@ export async function logPhoneChange(
   after: string | null,
   actor: Actor,
 ): Promise<void> {
-  if ((before ?? null) === (after ?? null)) return;
-  unwrap(
-    await db.from("employee_changes").insert({
+  await logChanges(db, employeeId, [{ field: "phone", before, after }], actor);
+}
+
+/** Part 3b (G): every field that really changed, one row each (who, from, to, when, the channel). */
+export async function logChanges(
+  db: Db,
+  employeeId: string,
+  changes: readonly { field: string; before: string | null | undefined; after: string | null | undefined }[],
+  actor: Pick<Actor, "name" | "employeeId" | "channel">,
+): Promise<number> {
+  const rows = changes
+    .filter((c) => (c.before ?? null) !== (c.after ?? null))
+    .map((c) => ({
       employee_id: employeeId,
-      field: "phone",
-      old_value: before,
-      new_value: after,
+      field: c.field,
+      old_value: c.before ?? null,
+      new_value: c.after ?? null,
       changed_by_name: actor.name,
       changed_by_employee_id: actor.employeeId,
       channel: actor.channel,
-    }),
-    "change log",
-  );
+    }));
+  if (rows.length) unwrap(await db.from("employee_changes").insert(rows), "change log");
+  return rows.length;
+}
+
+/** The words for a changed field (Part 3b, G). */
+export const CHANGE_FIELD_TEXT: Record<string, string> = {
+  phone: "Phone",
+  whatsapp: "WhatsApp",
+  emergency_name: "Emergency contact",
+  emergency_relation: "Relationship",
+  emergency_phone: "Emergency phone",
+  licence_no: "Licence number",
+  licence_expiry: "Licence expiry",
+  licence_front_photo: "Licence photo (front)",
+  licence_back_photo: "Licence photo (back)",
+};
+
+/** The private part of a driver's profile (the emergency contact, the licence): users or vehicles, never a requester. */
+export function seesDriverPrivate(actor: Pick<Actor, "permissions">): boolean {
+  return ["users", "vehicles"].some((p) => actor.permissions.includes(p as never));
 }
 
 /**
