@@ -2299,3 +2299,23 @@ Cancel this trip: only for a driver-started trip that hasn't started; the office
 5. `npx eas update --channel preview --environment preview`: update group `b399a0b4-887b-4181-8039-36ee8972d17f`, runtime
    `1.2.0-gmaps`, commit `0b094b4` (no native change since main).
 6. main fast-forwarded to `0b094b4`.
+
+**Round Hotfix 2, 18 October 2026** (branch `phase7-hotfix-2` at `5172554`, the commit shown at the checkpoint; main
+fast-forwarded to it), with Sahan's go ("keep your rule" for durations; leave `vehicle_on_the_day` off until both phones
+have the update). Before it, Round A3 was confirmed live (the remote migrations up to `20261018090000`, the functions of
+13:40 with `driver-api` v1, `index-BhoUyTZC.js` with Task history, the EAS update "Phase 7 Part 4 (Round A3)").
+1. `npx supabase secrets list`: 18 names; no new secret.
+2. `npx supabase db push --linked --yes` (a dry run first): `20261018150000_phase7_hotfix2`. Checked after (read only): the
+   3 stored numbers are +94…, none left as it was; the 4 tables, the jobs `prune-office-inbox` and `prune-request-viewers`,
+   `confirm_task_vehicle`, `my_task_contacts`, `my_office_contacts`, the reset trigger; one `register_device_token`.
+3. `npx supabase functions deploy office-mcp office-api fleet-jobs notify-office driver-api push-task` (notify-office:
+   no change). `list_requests` through the live connector: "asked 5 h 4 min ago" and `live`.
+4. Web: `npm run build:web`, the key scan on its own (one JWT, role anon; no sb_secret_ value; no secret names), then
+   `wrangler pages deploy --branch main`; https://fame-fleet.pages.dev serves `index-vt9neBVe.js` (My trips, the
+   notification centre).
+5. `npx eas update --channel preview --environment preview`: update group `1b8e60ce-0a84-42e3-8da7-bfb4bffd632f`,
+   runtime `1.2.0-gmaps`, commit `5172554` (no native change).
+6. main fast-forwarded to `5172554`.
+7. The Teams artifact: the file and the message for Sahan (`docs/teams-artifact-update.md`, Hotfix 2); 76 tools declared.
+Not in this round: Sahan's decision 2 (My trips also lists the tasks a person created directly, with All · Requests ·
+Tasks I created) is built after it and shown before its own deploy (his rule: a go covers what was shown).

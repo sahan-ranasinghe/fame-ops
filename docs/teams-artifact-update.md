@@ -1,4 +1,36 @@
-# Updating the Teams copy of the Fame Fleet artifact (Phase 6, round 3)
+# Updating the Teams copy of the Fame Fleet artifact
+
+## Hotfix 2 (18 October 2026, main at `5172554`)
+
+Build from main at `5172554` with `npm run build:artifact` (`apps/office`):
+
+- `apps/office/dist-artifact/index.html` (one file, no Supabase code, no key) and
+  `apps/office/dist-artifact/capabilities.json`, pasted unchanged: the connector **Fame Fleet** with 76 tools. New since
+  the list below (Phase 6 round 3, 57 tools): `duty_log`, `clock_out_driver`, `move_driver_vehicle`, `swap_reading`,
+  `reopen_task`, `set_driver_photo`, `set_vehicle_photo`, `vehicle_documents`, `remove_vehicle_document`,
+  `restore_vehicle_document`, `remove_place`, `restore_place`, `list_tasks`, `set_trip_purpose` (Phase 7) and `my_trips`,
+  `my_inbox`, `mark_inbox_read`, `update_my_profile`, `reviewing` (Hotfix 2).
+- My trips, the notification centre and My profile are a person's own: through the Teams connector (the shared key, no
+  person) they hide themselves; each person uses them in the web app with their own sign-in.
+
+The message for the Teams chat:
+
+> Fame Fleet is updated. What is new for the office:
+>
+> - Several people can approve: a request shows who is reviewing it right now, and once one person decides, the other
+>   is told "Already approved by … at 10:42": a request is never decided twice. Every card says who approved, declined
+>   or cancelled it, with Call and WhatsApp.
+> - Times are said one way everywhere: "in 45 min", "3 h 20 min ago", "tomorrow 09:00".
+> - Typing a time no longer plans for every half-typed value: the plan follows once the time is complete.
+> - Call buttons for drivers on Live, Who's available, the task page and the request page (on a phone they open the
+>   dialler or WhatsApp; on a computer the number with Copy and WhatsApp web).
+> - A driver who is off duty is not chased: the 15 minutes to accept a task start when they start work (30 minutes
+>   before leaving it needs a driver in any case).
+>
+> In the web app at fame-fleet.pages.dev each person also has My trips (their requests with the trip's live state),
+> a notification centre with sounds, and My profile (your phone number, so drivers can call you).
+
+## Phase 6, round 3
 
 15 October 2026 (Phase 6 Parts 3 to 5b, deploy round 3). Sahan updates the Teams artifact
 (`RsGzozM5V4qCv4UeAECatu`, made in his Teams chat) himself from the file below; Claude Code never
