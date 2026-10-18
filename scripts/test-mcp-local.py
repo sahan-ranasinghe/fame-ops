@@ -2492,6 +2492,119 @@ if CHANNEL == "api":
     check(code == 200 and ns["result"].get("sound") == {"on": True, "volume": 40}, "B: the volume saved (sound stays on)", str(ns["result"].get("sound")))
     api_call(API_TOKEN, "cancel_request", {"request_id": RR, "reason": "suite: 6k api"})
 
+print("\n== 6l. Hotfix 3: lists a page at a time, missed tasks, expiry, snooze, the Overview's sections ==")
+hl = uuid.uuid4().hex[:6]
+
+# L3. Paging: limit gives total and next; the next page continues where the first stopped; no limit answers as before.
+p1 = tool("list_places", {"limit": 2})
+p2 = tool("list_places", {"limit": 2, "cursor": p1.get("next", "")}) if p1.get("next") else {"places": []}
+check(p1.get("total", 0) > 2 and p1.get("next") and len(p1["places"]) == 2 and p2["places"]
+      and not {x["id"] for x in p1["places"]} & {x["id"] for x in p2["places"]},
+      "L3: list_places pages: total, next, the second page continues", json.dumps({k: p1.get(k) for k in ("total", "next", "count")}))
+r1 = tool("list_requests", {"status": "all", "limit": 1})
+check(r1.get("total", 0) >= 2 and r1.get("next") and len(r1["requests"]) == 1, "L3: list_requests pages", json.dumps({k: r1.get(k) for k in ("total", "next")}))
+r2 = tool("list_requests", {"status": "all", "limit": 1, "cursor": r1["next"]})
+check(r2["requests"] and r2["requests"][0]["id"] != r1["requests"][0]["id"], "L3: list_requests' next page is the next request")
+check("total" not in tool("list_requests", {"status": "all"}), "L3: without limit list_requests answers as before (no total)")
+t1 = tool("list_tasks", {"from": day(-30), "to": day(30), "limit": 2})
+t2 = tool("list_tasks", {"from": day(-30), "to": day(30), "limit": 2, "cursor": t1.get("next", "")}) if t1.get("next") else t1
+check(t1.get("total", 0) > 2 and len(t1["tasks"]) == 2 and t1["totals"] == t2["totals"],
+      "L3: list_tasks pages; the totals are the whole range's on every page", json.dumps({k: t1.get(k) for k in ("total", "totals")}))
+i1 = tool("list_issues", {"status": "all", "limit": 1})
+check(i1.get("total", 0) >= 1 and len(i1["issues"]) == 1, "L3: list_issues pages", json.dumps({k: i1.get(k) for k in ("total", "next")}))
+drv = tool("list_drivers", {"search": "nuwan", "limit": 5})
+check(drv.get("total", 0) >= 1 and all("nuwan" in (d.get("username") or "") or "Nuwan" in d["name"] for d in drv["drivers"]),
+      "L3: list_drivers searches", json.dumps({k: drv.get(k) for k in ("total",)}))
+vh = tool("list_vehicles", {"search": "cab", "limit": 5})
+check(vh.get("total", 0) >= 1 and all("CAB" in v["reg_no"] or "cab" in (v.get("make_model") or "").lower() for v in vh["vehicles"]),
+      "L3: list_vehicles searches", json.dumps({k: vh.get(k) for k in ("total",)}))
+
+# The board's columns page; a column's next page alone.
+board_day = psql("select to_char(start_at at time zone 'Asia/Colombo', 'YYYY-MM-DD') from tasks where status = 'assigned' "
+                 "group by 1 having count(*) >= 2 order by 1 desc limit 1")
+if board_day:
+    b1 = tool("task_board", {"date": board_day, "limit": 1})
+    check(len(b1["assigned"]) == 1 and b1["totals"]["assigned"] >= 2 and b1["next"]["assigned"],
+          "L3: task_board: a column holds a page; totals and next per column", json.dumps({k: b1.get(k) for k in ("totals", "next")}))
+    b2 = tool("task_board", {"date": board_day, "limit": 1, "column": "assigned", "cursor": b1["next"]["assigned"]})
+    check(set(b2.keys()) >= {"assigned", "totals"} and b2["assigned"][0]["id"] != b1["assigned"][0]["id"],
+          "L3: task_board column: the column's next page alone", json.dumps(list(b2.keys())))
+
+# L2. Missed: a task never started, its leave-by over a day ago; its late-start issue expires, a Missed task issue opens.
+mt = tool("create_task", {"title": f"6l never started {hl}", "date": day(3), "start_time": "09:00", "driver": "nuwan.p", "vehicle": "cab4521",
+                          "pickup": "Head office", "dropoff": "Kandy"})
+MT = mt["task_id"]
+psql(f"update tasks set start_at = now() - interval '40 minutes', leave_by = now() - interval '40 minutes' where id = '{MT}'")
+fleet_jobs()
+late = psql(f"select count(*) from issues where task_id = '{MT}' and kind = 'late_start' and status in ('open', 'in_progress')")
+check(late == "1", "L2: forty minutes late: a late-start issue", late)
+psql(f"update tasks set start_at = now() - interval '2 days', leave_by = now() - interval '2 days' where id = '{MT}'")
+fleet_jobs()
+check(psql(f"select status from tasks where id = '{MT}'") == "missed", "L2: two days late: the task is missed")
+check(psql(f"select resolution_note from issues where task_id = '{MT}' and kind = 'late_start' order by opened_at desc limit 1").startswith("Expired"),
+      "L2: its late-start issue expired by itself")
+check(psql(f"select count(*) from issues where task_id = '{MT}' and kind = 'missed_task' and status = 'open'") == "1",
+      "L2: one Missed task issue, until someone resolves it")
+hist = tool("list_tasks", {"from": day(-3), "to": day(0), "status": "missed"})
+check(any(t["id"] == MT for t in hist["tasks"]), "L2: History lists it as missed")
+
+# L2. Snooze: out of the Overview and the counts until then; back with snooze null.
+mi = psql(f"select id from issues where task_id = '{MT}' and kind = 'missed_task'")
+sn = tool("update_issue", {"id": mi, "snooze": "tomorrow"})
+check(re.fullmatch(r"\d{4}-\d\d-\d\d 07:00", sn["issue"].get("snoozed_until", "")) is not None, "L2: snoozed until 07:00 tomorrow",
+      json.dumps(sn["issue"].get("snoozed_until")))
+ov = tool("fleet_overview")
+in_overview = any(mi in g["issue_ids"] for g in ov.get("attention", {}).get("groups", [])) or any(a.get("issue_id") == mi for a in ov["needs_attention"])
+check(not in_overview and any(i["id"] == mi for i in tool("list_issues", {"snoozed": True})["issues"]),
+      "L2: a snoozed issue leaves the Overview; Issues lists it under Snoozed")
+tool("update_issue", {"id": mi, "snooze": None})
+check(any(mi in g["issue_ids"] for g in tool("fleet_overview")["attention"]["groups"]), "L2: snooze ended: back on the Overview")
+tool("update_issue", {"id": mi, "status": "resolved", "note": "suite: 6l"})
+
+# L1, L2. The Overview's sections: no repeats, info left out, the critical ones apart.
+ov = tool("fleet_overview")
+kinds = {g["kind"] for g in ov["attention"]["groups"]}
+check(not kinds & {"request_waiting", "not_accepted", "declined"} and all(g["severity"] in ("critical", "warning") for g in ov["attention"]["groups"])
+      and not any(g["severity"] == "critical" for g in ov["attention"]["groups"]) and "critical" in ov,
+      "L1, L2: Needs attention: no requests waiting or needs-a-driver items, no info, the critical ones in their own section",
+      json.dumps(sorted(kinds)))
+multi = [g for g in ov["attention"]["groups"] if g["count"] > 1]
+check(all(len(g["items"]) == g["count"] == len(g["issue_ids"]) for g in multi), "L2: a group holds its items and their ids",
+      json.dumps([(g["title"], g["count"]) for g in multi])[:200])
+
+# L2. No allowance set: no check, and the vehicle says so.
+psql("update vehicles set monthly_km_allowance = 0 where reg_no = 'WP PH-2087'")
+card = next(v for v in tool("list_vehicles", {"search": "PH-2087"})["vehicles"])
+check(card.get("km_allowance_note") == "no km allowance set" and not card.get("over_allowance"), "L2: allowance 0: 'no km allowance set', never over it",
+      json.dumps({k: card.get(k) for k in ("km_allowance", "km_allowance_note", "over_allowance")}))
+check(psql("select count(*) from issues where kind = 'allowance' and status in ('open','in_progress') and detail like 'WP PH-2087%'") == "0",
+      "L2: and no allowance issue")
+
+if CHANNEL == "api":
+    print("\n== 6l (office-api). My trips with the tasks I created, the page preferences, the archived notifications ==")
+    made = tool("create_task", {"title": f"6l mine {hl}", "date": day(2), "start_time": "10:00", "driver": "nuwan.p", "vehicle": "cab4521",
+                                "pickup": "Head office", "dropoff": "Galle"})
+    mt_all = tool("my_trips", {"from": day(0), "to": day(5)})
+    mine = next((t for t in mt_all["trips"] if t.get("id") == made["task_id"]), {})
+    check(mine.get("source") == "task" and mine.get("live", {}).get("state") == "approved" and mine.get("live", {}).get("text") == "Sent to the driver",
+          "My trips lists a task the person created (source task, its live state)", json.dumps(mine)[:300])
+    only_req = tool("my_trips", {"from": day(0), "to": day(5), "include": "requests"})
+    only_tasks = tool("my_trips", {"from": day(0), "to": day(5), "include": "tasks", "limit": 1})
+    check(not any(t.get("source") == "task" for t in only_req["trips"]) and all(t.get("source") == "task" for t in only_tasks["trips"])
+          and only_tasks.get("total", 0) >= 1, "My trips' filter: requests only, tasks only (paged)")
+    tool("cancel_task", {"task_id": made["task_id"], "reason": "suite: 6l"})
+    p = tool("set_my_prefs", {"prefs": {"overview_collapsed": ["road", "tiles"]}})
+    p = tool("set_my_prefs", {"prefs": {"menu_collapsed": ["reports"]}})
+    check(tool("my_prefs")["prefs"] == {"overview_collapsed": ["road", "tiles"], "menu_collapsed": ["reports"]},
+          "the page preferences are kept per person and merged", json.dumps(p))
+    ADMIN_ID = psql(f"select id from employees where email = '{admin_email}'")
+    psql(f"insert into office_inbox (employee_id, event, title, url, created_at, read_at) values ('{ADMIN_ID}', 'request.decided', "
+         f"'6l old {hl}', '/requests', now() - interval '40 days', now() - interval '39 days')")
+    tray = tool("my_inbox", {"limit": 100})
+    hist_in = tool("my_inbox", {"limit": 100, "archived": True})
+    check(not any(i["title"] == f"6l old {hl}" for i in tray["items"]) and any(i["title"] == f"6l old {hl}" for i in hist_in["items"]),
+          "L4: a read notification over 30 days old leaves the tray, stays in the history")
+
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")
     shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
@@ -2513,9 +2626,10 @@ if CHANNEL == "api":
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["view", "request"]
           and sorted(me.get("tools", [])) == ["cancel_request", "create_request", "find_project", "fleet_overview", "get_settings", "google_place",
                                              "list_drivers", "list_places", "list_requests", "list_vehicles", "live_drivers", "mark_inbox_read",
-                                             "my_inbox", "my_notification_settings", "my_trips", "place_detail", "plan_task", "register_map_load",
-                                             "register_web_push", "remove_web_push", "save_place", "search_places", "set_my_notification_settings",
-                                             "task_detail", "update_my_profile", "update_request", "watch_drivers"]
+                                             "my_inbox", "my_notification_settings", "my_prefs", "my_trips", "place_detail", "plan_task",
+                                             "register_map_load", "register_web_push", "remove_web_push", "save_place", "search_places",
+                                             "set_my_notification_settings", "set_my_prefs", "task_detail", "update_my_profile", "update_request",
+                                             "watch_drivers"]
           and me.get("map") == {"package": "open", "places": False},
           "a requester signs in without a second step and sees the request tools plus view's (any permission implies view, Phase 7 §12; the map: open with no keys)",
           f"{code} {str(me)[:200]}")
