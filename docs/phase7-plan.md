@@ -2015,3 +2015,16 @@ Oct"; the wrong weekdays were only in hand-written test fixtures, set to 2026 af
    runtime `1.2.0-gmaps`, commit `7855d00` (no native change since main). Every driver sees "Add your photo".
 6. main fast-forwarded to `7855d00`.
 Next: the OPPO check of §30 (the gallery picker and the square crop). The Teams artifact is not in this round.
+
+**Round A3, 18 October 2026** (Part 4; branch `phase7-4`; main fast-forwarded to `0b094b4`), with Sahan's go ("keep
+Cancel this trip: only for a driver-started trip that hasn't started; the office history shows Cancelled by the driver"):
+1. `npx supabase secrets list`: everything `driver-api` uses is set; no new secret.
+2. `npx supabase db push --linked --yes` (a dry run first): `20261018090000_phase7_trips`.
+3. `npx supabase functions deploy office-mcp office-api fleet-jobs notify-office driver-api` (`driver-api` new; all
+   verify_jwt = false). `get_settings` through the live connector shows `driver_personal_trips` allowed and the caps
+   430 / 215; `driver-api` and `office-api` answer 401 without a sign-in.
+4. Web: `npm run build:web`, the key scan on its own (one JWT, role anon; no sb_ value; no service_role), then
+   `wrangler pages deploy --branch main`; https://fame-fleet.pages.dev serves `index-BhoUyTZC.js`.
+5. `npx eas update --channel preview --environment preview`: update group `b399a0b4-887b-4181-8039-36ee8972d17f`, runtime
+   `1.2.0-gmaps`, commit `0b094b4` (no native change since main).
+6. main fast-forwarded to `0b094b4`.
