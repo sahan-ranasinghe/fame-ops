@@ -494,3 +494,33 @@ end;
 $$;
 revoke all on function public.report_running_late(uuid, integer, timestamptz) from public, anon;
 grant execute on function public.report_running_late(uuid, integer, timestamptz) to authenticated;
+
+-- H1. The phone reads where a half day splits (the setting half_day_split, 13:00 by default), with its other settings. As in
+-- 20261018090000_phase7_trips.sql, with half_day_split.
+create or replace function public.get_driver_settings()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select jsonb_build_object(
+    'shift_start', coalesce((select value #>> '{}' from public.fleet_settings where key = 'shift_start'), '08:00'),
+    'shift_days',  coalesce((select value from public.fleet_settings where key = 'shift_days' and jsonb_typeof(value) = 'array'),
+                            '[1, 2, 3, 4, 5]'::jsonb),
+    'fuel_video_checklist',
+                   coalesce((select value from public.fleet_settings where key = 'fuel_video_checklist' and jsonb_typeof(value) = 'array'),
+                            '[{"key": "plate", "short": "Plate", "en": "Number plate", "si": "අංක තහඩුව"},
+                              {"key": "zero", "short": "Zero", "en": "Pump display at zero before pumping", "si": "පොම්ප කිරීමට පෙර පොම්ප තිරය බිංදුවේ"},
+                              {"key": "pumping", "short": "Pumping", "en": "Pumping", "si": "පොම්ප කරමින්"},
+                              {"key": "final", "short": "Final", "en": "Final pump display: litres and amount", "si": "අවසාන පොම්ප තිරය: ලීටර් සහ මුදල"}]'::jsonb),
+    'fuel_video_quality',
+                   coalesce((select value #>> '{}' from public.fleet_settings where key = 'fuel_video_quality'), '480p'),
+    -- Phase 7 (§13): Start a trip offers Personal per this setting (allowed, default, off; ask_first behaves as allowed).
+    'driver_personal_trips',
+                   coalesce((select value #>> '{}' from public.fleet_settings where key = 'driver_personal_trips'), 'allowed'),
+    -- Part 3b (H1): a morning ends and an afternoon starts here.
+    'half_day_split',
+                   coalesce((select value #>> '{}' from public.fleet_settings where key = 'half_day_split'), '13:00')
+  )
+$$;

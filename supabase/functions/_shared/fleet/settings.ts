@@ -46,6 +46,8 @@ export interface Settings {
   /** The driver app's "At work? Start work" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
   shift_start: string;
   shift_days: number[];
+  /** Part 3b (H1): where a morning ends and an afternoon starts when a driver is not available for half a day. */
+  half_day_split: string;
   /** Phase 7: whoever is still on duty after this time (HH:MM Colombo) is clocked out, not while a task runs; "" = off. */
   duty_cutoff: string;
   /** The steps the driver shows in order while recording a fuel video, ticked one by one (Phase 6, Part 3 and 3b); the last unlocks Stop. */
@@ -133,6 +135,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   map_matching: { provider: "none" },
   shift_start: "08:00",
   shift_days: [1, 2, 3, 4, 5],
+  half_day_split: "13:00",
   duty_cutoff: "21:00",
   fuel_video_checklist: [
     { key: "plate", short: "Plate", en: "Number plate", si: "අංක තහඩුව" },
@@ -189,6 +192,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "Snap to roads under the open package: provider none or osrm (self-hosted, secret OSRM_URL); under the google package Google's Roads API snaps the web's Google map instead (its caps in google_caps.roads, 0 = off) and this setting is not read; km stay from the odometer",
   shift_start: 'The driver app\'s shift nudge ("At work? Start work"): the time of day, HH:MM, shown only to a driver who is off duty',
   shift_days: "… on these days (0 = Sunday … 6 = Saturday); empty = never",
+  half_day_split:
+    "Part 3b: when a driver is not available for half a day, the morning ends and the afternoon starts at this time, HH:MM (entries already saved keep their times)",
   duty_cutoff:
     'The end of the working day, HH:MM: a driver still on duty after it is clocked out by the server ("You were clocked out at 21:00"), but never while a task is in progress (then when it is completed); "" = off',
   fuel_video_checklist:
@@ -257,6 +262,9 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
       return value;
     case "shift_start":
       if (!isTime(value)) throw new ToolError("shift_start: a time of day, HH:MM.");
+      return value as string;
+    case "half_day_split":
+      if (!isTime(value)) throw new ToolError("half_day_split: a time of day, HH:MM.");
       return value as string;
     case "duty_cutoff":
       if (value !== "" && !isTime(value)) throw new ToolError('duty_cutoff: a time of day, HH:MM, or "" for off.');
