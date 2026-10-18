@@ -65,6 +65,8 @@ const CHANGE_TEXT: Record<Language, Record<string, string>> = {
   en: {
     time: "new time {time}",
     vehicle: "vehicle {vehicle}",
+    vehicle_day: "vehicle: yours on the day",
+    vehicle_any: "vehicle: any {vehicle_any}",
     end_by: "back by {end_by}",
     title: "now “{title}”",
     stops: "stops changed",
@@ -74,6 +76,8 @@ const CHANGE_TEXT: Record<Language, Record<string, string>> = {
   si: {
     time: "නව වේලාව {time}",
     vehicle: "වාහනය {vehicle}",
+    vehicle_day: "වාහනය: එදින ඔබ ළඟ ඇති වාහනය",
+    vehicle_any: "වාහනය: ඕනෑම {vehicle_any}",
     end_by: "ආපසු {end_by} ට",
     title: "දැන් “{title}”",
     stops: "නැවතුම් වෙනස් විය",
@@ -81,7 +85,13 @@ const CHANGE_TEXT: Record<Language, Record<string, string>> = {
     notes: "සටහන වෙනස් විය",
   },
 };
-const CHANGE_ORDER = ["time", "end_by", "vehicle", "stops", "title", "passengers", "notes"];
+const CHANGE_ORDER = ["time", "end_by", "vehicle", "vehicle_day", "vehicle_any", "stops", "title", "passengers", "notes"];
+
+/** Hotfix 2 (J): the type words for "any van" (the driver app's vehicleType.* keys). */
+const TYPE_TEXT: Record<Language, Record<string, string>> = {
+  en: { car: "car", van: "van", double_cab: "double cab", lorry: "lorry", other: "vehicle" },
+  si: { car: "කාර්", van: "වෑන්", double_cab: "ඩබල් කැබ්", lorry: "ලොරි", other: "වාහන" },
+};
 
 /** Phase 7 (§11): a stop that changed, by its place in the order ("Stop 2 added: Kurunegala site"). */
 const STOP_CHANGE_TEXT: Record<Language, { line: string; more: string; change: Record<string, string> }> = {
@@ -118,7 +128,10 @@ export function changesLine(language: Language, changes: unknown): string {
   if (!changes || typeof changes !== "object") return "";
   const c = changes as Record<string, unknown>;
   return CHANGE_ORDER.filter((k) => c[k] !== undefined && c[k] !== null && c[k] !== false)
-    .map((k) => (k === "stops" ? stopsText(language, c[k]) : null) ?? fill(CHANGE_TEXT[language][k], { [k]: String(c[k]) }))
+    .map((k) =>
+      (k === "stops" ? stopsText(language, c[k]) : null) ??
+        fill(CHANGE_TEXT[language][k], { [k]: k === "vehicle_any" ? TYPE_TEXT[language][String(c[k])] ?? String(c[k]) : String(c[k]) })
+    )
     .join(" · ");
 }
 
@@ -128,7 +141,7 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     changed: { title: "Task changed {when}", body: "{title} · {changes}" },
     cancelled: { title: "Task cancelled", body: "{title} · {reason}" },
     removed: { title: "Task reassigned", body: "{title} is no longer yours." },
-    leave_30: { title: "Leave by {leave}", body: "{title} · leave in 30 minutes · {pickup} → {dropoff}" },
+    leave_30: { title: "Leave by {leave}", body: "{title} · leave in 30 min · {pickup} → {dropoff}" },
     leave_now: { title: "Time to leave", body: "{title} · leave by {leave} · {pickup} → {dropoff}" },
     // Phase 7 (§19): one reminder 5 minutes after sending; the office is told when the accept window ends.
     accept_reminder: { title: "Accept or decline: {title} {leave}", body: "{pickup} → {dropoff} · open Fame Driver" },
@@ -143,7 +156,7 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     changed: { title: "කාර්යය වෙනස් විය {when}", body: "{title} · {changes}" },
     cancelled: { title: "කාර්යය අවලංගු විය", body: "{title} · {reason}" },
     removed: { title: "කාර්යය වෙනත් අයෙකුට පැවරිණි", body: "{title} තවදුරටත් ඔබගේ නොවේ." },
-    leave_30: { title: "{leave} ට පිටත් වන්න", body: "{title} · විනාඩි 30 කින් පිටත් වන්න · {pickup} → {dropoff}" },
+    leave_30: { title: "{leave} ට පිටත් වන්න", body: "{title} · මිනිත්තු 30 කින් පිටත් වන්න · {pickup} → {dropoff}" },
     leave_now: { title: "පිටත් වීමට වෙලාවයි", body: "{title} · {leave} ට පිටත් වන්න · {pickup} → {dropoff}" },
     accept_reminder: { title: "පිළිගන්න හෝ ප්‍රතික්ෂේප කරන්න: {title} {leave}", body: "{pickup} → {dropoff} · Fame Driver විවෘත කරන්න" },
     reopened: { title: "කාර්යය නැවත විවෘත කළා", body: "{title} · යෙදුමෙන් නැවත අවසන් කරන්න" },

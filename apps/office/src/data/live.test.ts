@@ -35,7 +35,7 @@ describe("the one status rule (shared with the connector)", () => {
     expect(driverStatus({ ...base, sharing: false, pointAt: ago(1) }, now).status).toBe("not_sharing");
   });
   it("writes the same sentences as the server", () => {
-    expect(statusText(driverStatus({ ...base, pointAt: ago(2) }, now), now)).toBe("Live · 2 min");
+    expect(statusText(driverStatus({ ...base, pointAt: ago(2) }, now), now)).toBe("Live · 2 min ago");
     expect(statusText(driverStatus({ ...base, pointAt: ago(5), heartbeatAt: ago(1), locationOn: false, permission: "always", locationOffSince: ago(4) }, now), now)).toBe("Location off since 11:56");
     expect(statusText(driverStatus({ ...base, heartbeatAt: ago(1), locationOn: true, permission: "foreground", locationOffSince: ago(2) }, now), now)).toBe("Location permission removed since 11:58");
     expect(statusText(driverStatus({ ...base, pointAt: ago(9), heartbeatAt: ago(9) }, now), now)).toBe("No signal since 11:51");
@@ -67,7 +67,7 @@ describe("a Realtime row from driver_latest", () => {
     const out = applyLatest([card, { ...card, username: "other", employee_id: "emp-2" }], {
       employee_id: "emp-1", lat: 7.0, lng: 80.0, speed_mps: 20, battery_pct: 79, recorded_at: ago(0.5), sharing: true,
     }, now);
-    expect(out[0]).toMatchObject({ status: "live", status_text: "Live · 0 min", lat: 7.0, lng: 80.0, speed_kmh: 72, battery_pct: 79, last_position_at: "11:59" });
+    expect(out[0]).toMatchObject({ status: "live", status_text: "Live · now", lat: 7.0, lng: 80.0, speed_kmh: 72, battery_pct: 79, last_position_at: "11:59" });
     expect(out[0].links?.maps).toContain("query=7,80");
     expect(out[1].lat).toBeUndefined();
   });

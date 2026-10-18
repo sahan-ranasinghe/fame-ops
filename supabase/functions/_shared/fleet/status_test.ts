@@ -14,7 +14,7 @@ Deno.test("not sharing wins over everything", () => {
 Deno.test("a point under 3 minutes old is live, whatever the heartbeat says", () => {
   const r = driverStatus({ ...base, pointAt: ago(2), heartbeatAt: ago(1), locationOn: false, permission: "denied" }, now);
   assertEquals(r.status, "live");
-  assertEquals(statusText(r, now), "Live · 2 min");
+  assertEquals(statusText(r, now), "Live · 2 min ago");
 });
 
 Deno.test("a fresh heartbeat with Location off is location_off since the first off heartbeat", () => {
@@ -109,7 +109,7 @@ Deno.test("needs attention after 10 minutes of location off or no signal, not be
 
 Deno.test("points the server refused are on the status line, whatever the status", () => {
   const live = driverStatus({ ...base, pointAt: ago(1), rejectedPoints: 500 }, now);
-  assertEquals(statusText(live, now), "Live · 1 min · 500 points refused");
+  assertEquals(statusText(live, now), "Live · 1 min ago · 500 points refused");
   const quiet = driverStatus({ ...base, pointAt: ago(20), heartbeatAt: ago(20), rejectedPoints: 1 }, now);
   assertEquals(
     statusText(quiet, now),
@@ -117,5 +117,5 @@ Deno.test("points the server refused are on the status line, whatever the status
       new Date(ago(20)).toLocaleTimeString("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", minute: "2-digit", hour12: false })
     } · 1 point refused`,
   );
-  assertEquals(statusText(driverStatus({ ...base, pointAt: ago(1), rejectedPoints: 0 }, now), now), "Live · 1 min");
+  assertEquals(statusText(driverStatus({ ...base, pointAt: ago(1), rejectedPoints: 0 }, now), now), "Live · 1 min ago");
 });

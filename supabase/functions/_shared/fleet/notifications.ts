@@ -175,6 +175,41 @@ export const EVENTS: readonly EventInfo[] = [
   },
 ];
 
+/**
+ * Hotfix 2 (A, B): how the office site shows a new item of the notification centre: urgent (something to approve, a task
+ * that needs a driver), alert (a decision about your own request or booking, an issue given to you), soft (your driver on
+ * the way or arrived, a skipped stop), alarm (a critical issue); info = no sound (a personal trip).
+ */
+export type InboxKind = "urgent" | "alert" | "soft" | "alarm" | "info";
+
+const INBOX_KIND: Record<NotifyEvent, InboxKind> = {
+  "request.created": "urgent",
+  "request.changed": "urgent",
+  "request.not_decided": "urgent",
+  "request.late": "urgent",
+  "task.declined": "urgent",
+  "task.not_accepted": "urgent",
+  "task.vehicle_needed": "urgent",
+  "request.decided": "alert",
+  "request.redecided": "alert",
+  "request.driver_changed": "alert",
+  "request.cancelled": "alert",
+  "booking.changed": "alert",
+  "vehicle.booked": "alert",
+  "vehicle.booking_cancelled": "alert",
+  "issue.assigned": "alert",
+  "request.on_the_way": "soft",
+  "request.arrived": "soft",
+  "task.stop_skipped": "soft",
+  "issue.opened": "alarm",
+  "trip.personal": "info",
+};
+
+/** The sound and the banner of an event (an unknown one: info). Pure. */
+export function inboxKind(event: string): InboxKind {
+  return INBOX_KIND[event as NotifyEvent] ?? "info";
+}
+
 export interface Message {
   title: string;
   body: string;

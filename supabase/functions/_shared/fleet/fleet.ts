@@ -8,7 +8,6 @@ import { closest } from "./geo.ts";
 import { contactLinks, plain, thousands } from "./format.ts";
 import { colomboClockS, driverStatus, type StatusResult, statusText } from "./status.ts";
 import {
-  ago,
   colomboDate,
   colomboDateTime,
   colomboDayTime,
@@ -19,6 +18,7 @@ import {
   monthRange,
   shortDate,
 } from "./time.ts";
+import { whenText } from "./durations.ts";
 
 export type Employee = Row<"employees">;
 export type Vehicle = Row<"vehicles">;
@@ -123,7 +123,7 @@ export type ShareState = "sharing" | "stale" | "not_sharing";
 
 export interface Sharing {
   state: ShareState;
-  /** "Live · 2 min", "Last seen 48 min", "Not sharing" (the old field, kept as it was for the artifact; status_text says "Off duty") */
+  /** "Live · 2 min ago", "Last seen 48 min ago", "Not sharing" (the old field, kept for the artifact; status_text says "Off duty") */
   text: string;
   minutes: number | null;
 }
@@ -133,8 +133,8 @@ export function sharing(latest: Latest | undefined, now: Date): Sharing {
   const minutes = latest?.recorded_at ? minutesSince(latest.recorded_at, now) : null;
   if (!latest || !latest.sharing) return { state: "not_sharing", text: "Not sharing", minutes };
   if (!latest.recorded_at || minutes === null) return { state: "stale", text: "Sharing · no location yet", minutes: null };
-  if (minutes < STALE_AFTER_MINUTES) return { state: "sharing", text: `Live · ${ago(latest.recorded_at, now)}`, minutes };
-  return { state: "stale", text: `Last seen ${ago(latest.recorded_at, now)}`, minutes };
+  if (minutes < STALE_AFTER_MINUTES) return { state: "sharing", text: `Live · ${whenText(latest.recorded_at, now)}`, minutes };
+  return { state: "stale", text: `Last seen ${whenText(latest.recorded_at, now)}`, minutes };
 }
 
 /** The newer status (status.ts) with the fields the tools add to a driver card. The old `state`/`location` fields stay as they were. */
@@ -557,7 +557,8 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
 
   // The people behind an overlapping task: who asked for it (its request) and who drives it.
   const clashing = sameDay.filter((o) =>
-    o.id !== check.ignoreTaskId && overlaps(startAt, endBy, o) && ((!!vehicle && o.vehicle_id === vehicle.id) || o.employee_id === driver.id)
+    o.id !== check.ignoreTaskId && overlaps(startAt, endBy, o) &&
+    ((!!vehicle && o.vehicle_id === vehicle.id) || o.employee_id === driver.id)
   );
   const requestIds = [...new Set(clashing.flatMap((o) => o.request_id ? [o.request_id] : []))];
   const requests = new Map(

@@ -125,14 +125,14 @@ isOneToOne: false
                   ]
                 },"device_tokens": {
                   Row: {
-                    "app_version": string | null,"created_at": string,"device_model": string | null,"employee_id": string,"id": string,"language": string | null,"platform": string,"token": string,"updated_at": string
+                    "app_version": string | null,"channels": (string)[] | null,"created_at": string,"device_model": string | null,"employee_id": string,"id": string,"language": string | null,"platform": string,"token": string,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "app_version"?: string | null,"created_at"?: string,"device_model"?: string | null,"employee_id": string,"id"?: string,"language"?: string | null,"platform"?: string,"token": string,"updated_at"?: string
+                    "app_version"?: string | null,"channels"?: (string)[] | null,"created_at"?: string,"device_model"?: string | null,"employee_id": string,"id"?: string,"language"?: string | null,"platform"?: string,"token": string,"updated_at"?: string
                   }
                   Update: {
-                    "app_version"?: string | null,"created_at"?: string,"device_model"?: string | null,"employee_id"?: string,"id"?: string,"language"?: string | null,"platform"?: string,"token"?: string,"updated_at"?: string
+                    "app_version"?: string | null,"channels"?: (string)[] | null,"created_at"?: string,"device_model"?: string | null,"employee_id"?: string,"id"?: string,"language"?: string | null,"platform"?: string,"token"?: string,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1558,7 +1558,7 @@ isOneToOne: false
             }[]
                            },
 "register_device_token":
-{ Args: { "p_app_version"?: string,"p_device_model"?: string,"p_language"?: string,"p_platform"?: string,"p_token": string }; Returns: undefined
+{ Args: { "p_app_version"?: string,"p_channels"?: (string)[],"p_device_model"?: string,"p_language"?: string,"p_platform"?: string,"p_token": string }; Returns: undefined
                            },
 "release_vehicle":
 { Args: { "p_at": string,"p_by": string,"p_employee": string,"p_ended_how": string }; Returns: undefined

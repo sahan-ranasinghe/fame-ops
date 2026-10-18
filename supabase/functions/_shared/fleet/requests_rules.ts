@@ -114,6 +114,50 @@ export function checkVersion(current: number, sent: number): void {
   }
 }
 
+/** "10:42" today, "Sat 17 Oct 10:42" another day. */
+export function atText(iso: string, now: Date): string {
+  return colomboDate(iso) === colomboDate(now) ? colomboTime(iso) : colomboDayTime(iso);
+}
+
+/**
+ * Hotfix 2 (K): what a second approver is told when the request was decided (or changed) since they opened it, with who did
+ * it and when: "Already approved by Palitha at 10:42." `again` = redecide_request (the request was approved before).
+ */
+export function alreadyDecidedText(
+  r: {
+    status: string;
+    decided_by: string | null;
+    decided_at: string | null;
+    decline_reason: string | null;
+    cancelled_by: string | null;
+    cancelled_at: string | null;
+    changed_by: string | null;
+    changed_at: string | null;
+  },
+  now: Date,
+  again = false,
+): string {
+  const at = (iso: string | null) => iso ? ` at ${atText(iso, now)}` : "";
+  switch (r.status) {
+    case "approved":
+      return `Already ${again ? "decided again" : "approved"} by ${r.decided_by ?? "another approver"}${at(r.decided_at)}.`;
+    case "declined":
+      return `Already declined by ${r.decided_by ?? "another approver"}${at(r.decided_at)}${
+        r.decline_reason ? `: ${r.decline_reason}` : ""
+      }.`;
+    case "cancelled":
+      return `Already cancelled by ${r.cancelled_by ?? "someone"}${at(r.cancelled_at)}.`;
+    case "changed":
+      return again
+        ? `Changed again by ${r.changed_by ?? "the person who asked"}${at(r.changed_at)} since you opened it: open it again.`
+        : `Changed by ${r.changed_by ?? "the person who asked"}${
+          at(r.changed_at)
+        } after it was approved: decide it again (redecide_request).`;
+    default:
+      return "This request was edited since you opened it: open it again to see the change.";
+  }
+}
+
 /** Which decisions a request in a state allows (decide_request handles waiting; redecide_request the rest). */
 export function canRedecide(status: string): void {
   if (status === "waiting") throw new ToolError("This request is still waiting for its first decision: use decide_request.");

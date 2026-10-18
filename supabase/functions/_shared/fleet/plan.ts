@@ -3,7 +3,7 @@
 // the latest time the driver can leave and still arrive everywhere on time
 // with the buffer, and the planned arrival and departure at every stop.
 //
-// Pure: no imports, the leg durations are injected (routing.ts in the
+// Pure: no imports but the duration words (durations.ts); the leg durations are injected (routing.ts in the
 // functions, fixed numbers in the tests). Times are ISO strings in UTC;
 // nothing here knows about days, so a trip across midnight is nothing special.
 //
@@ -17,6 +17,8 @@
 //                     possible arrival), no_coordinates (a stop with no pin: its
 //                     leg counts as 0), no_base (no base place: the plan starts
 //                     from the first stop), long_day (over 12 hours)
+
+import { duration } from "./durations.ts";
 
 export type StopType = "pickup" | "drop" | "visit";
 export type What = "people" | "goods" | "documents" | "other";
@@ -272,7 +274,7 @@ export async function planTask(input: PlanInput, settings: PlanSettings, legFn: 
     });
   }
   const hours = diffMin(pass.ends_at, leaveBy) / 60;
-  if (hours > LONG_DAY_HOURS) warnings.push({ code: "long_day", text: `A long day: ${round1(hours)} hours from leaving to the end.` });
+  if (hours > LONG_DAY_HOURS) warnings.push({ code: "long_day", text: `A long day: ${duration(hours * 60)} from leaving to the end.` });
 
   return {
     leave_by: leaveBy,

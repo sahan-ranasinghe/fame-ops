@@ -7,10 +7,12 @@ import { unwrap } from "../db.ts";
 import { loadLatest, loadRefs, nearestTown, sharing, statusOf } from "../fleet.ts";
 import { contactLinks, mapsPoint } from "../format.ts";
 import { ACTIVE, scopeOf, syncIssuesIfStale } from "../issues.ts";
-import { ago, colomboDate, colomboDateTime, dayRange } from "../time.ts";
+import { colomboDate, colomboDateTime, dayRange, minutesSince } from "../time.ts";
+import { duration } from "../durations.ts";
 import { realDate, tool, zDate } from "../tool.ts";
 import { hasAny } from "../permissions.ts";
 import { needsDriverList } from "./tasks.ts";
+import { seesDriverPhones } from "../phones.ts";
 
 const REMINDER_DAYS = 14;
 
@@ -27,6 +29,7 @@ export const fleetOverview = tool({
   readOnly: true,
   input: z.object({ date: zDate.optional().describe("Day for the task counts. Default: today") }),
   async run({ date }, { db, now, actor }) {
+    const phones = seesDriverPhones(actor);
     const today = colomboDate(now);
     const day = realDate(date ?? today);
     const { from, to } = dayRange(day);
@@ -63,7 +66,8 @@ export const fleetOverview = tool({
         location: sharing(pos, now).text,
         ...statusOf(pos, now).fields,
         near: hasPosition ? await nearestTown(db, pos.lat!, pos.lng!) : undefined,
-        links: { maps: hasPosition ? mapsPoint(pos.lat!, pos.lng!) : undefined, ...contactLinks(driver?.phone) },
+        // Hotfix 2 (F): the driver's number only for the people who run the trips and the fleet.
+        links: { maps: hasPosition ? mapsPoint(pos.lat!, pos.lng!) : undefined, ...(phones ? contactLinks(driver?.phone) : {}) },
       };
     }));
 
@@ -111,7 +115,7 @@ export const fleetOverview = tool({
         done: count("completed"),
         cancelled: count("cancelled"),
       },
-      requests: { waiting: waiting.length, oldest_waiting: waiting[0] ? ago(waiting[0].created_at, now) : undefined },
+      requests: { waiting: waiting.length, oldest_waiting: waiting[0] ? duration(minutesSince(waiting[0].created_at, now)) : undefined },
       reminders: { count: shown.length, window_days: REMINDER_DAYS, red: shown.filter((a) => a.level === "red").length },
       on_the_road: onTheRoad,
       needs_attention: shown.map(({ scope: _scope, ...item }) => item),

@@ -32,6 +32,7 @@ import {
   mfaRequiredRoles,
   normalisePermissions,
   OFFICE_ROLES,
+  phoneDisplay,
   runTool,
   TOOL_PERMISSION,
   TOOLS,
@@ -80,7 +81,11 @@ function aalOf(token: string): string {
   }
 }
 
-type Resolved = { ok: true; actor: Actor; email: string; mfa: boolean } | { ok: false; status: number; error: string };
+type Resolved = { ok: true; actor: Actor; email: string; mfa: boolean; phone: string | null } | {
+  ok: false;
+  status: number;
+  error: string;
+};
 
 async function resolvePerson(request: Request): Promise<Resolved> {
   const token = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
@@ -92,7 +97,7 @@ async function resolvePerson(request: Request): Promise<Resolved> {
   const { data, error } = await asCaller.auth.getUser(token);
   if (error || !data.user) return { ok: false, status: 401, error: "not_signed_in" };
 
-  const { data: row, error: lookup } = await db.from("employees").select("id, name, email, role, permissions, active")
+  const { data: row, error: lookup } = await db.from("employees").select("id, name, email, phone, role, permissions, active")
     .eq("auth_user_id", data.user.id).maybeSingle();
   if (lookup) {
     console.error(`office-api: employee lookup failed: ${lookup.message}`);
@@ -114,6 +119,7 @@ async function resolvePerson(request: Request): Promise<Resolved> {
     },
     email: row.email ?? data.user.email ?? "",
     mfa,
+    phone: row.phone,
   };
 }
 
@@ -146,6 +152,12 @@ Deno.serve(async (request) => {
       mfa_required: MFA_ROLES.includes(actor.role),
       tools: TOOLS.filter((t) => canCall(actor, t.name)).map((t) => t.name),
       map: { package: use?.map ? "google" : "open", places: use?.places ?? false },
+      // Hotfix 2 (F): the person's own number; approvers and dispatchers without one see the banner until it is filled.
+      phone: person.phone ?? undefined,
+      phone_display: phoneDisplay(person.phone),
+      phone_required: !person.phone && (actor.permissions.includes("approve") || actor.permissions.includes("assign_tasks"))
+        ? true
+        : undefined,
     }, cors);
   }
 

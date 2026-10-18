@@ -25,13 +25,14 @@ import {
   taskWindow,
   type Vehicle,
 } from "../fleet.ts";
-import { contactLinks } from "../format.ts";
+import { contactLinks, phoneLinks } from "../format.ts";
 import { driverPhotoLinks, profilePaths, vehiclePhotoLinks } from "../media.ts";
 import { momentOf, tellLink, tellMessage } from "../requesterUpdates.ts";
 import { notifyEvent } from "../notifications.ts";
 import { hasAny } from "../permissions.ts";
 import type { Actor } from "../roles.ts";
-import { ago, colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
+import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, daysBetween, utcIso } from "../time.ts";
+import { duration, whenText } from "../durations.ts";
 import { realDate, tool, zDate, zId, zText, zTime, zVehicleType } from "../tool.ts";
 import { matchProjects } from "./projects.ts";
 import { stopChanges, stopForChange } from "../stopChanges.ts";
@@ -47,6 +48,8 @@ import {
 } from "./requestTrip.ts";
 import { loadSettings } from "../settings.ts";
 import {
+  alreadyDecidedText,
+  atText,
   canRedecide,
   checkVersion,
   diffText,
@@ -112,6 +115,67 @@ interface CardRefs {
   people: Map<string, { name: string; username: string | null }>;
   plates: Map<string, string>;
   trips?: Map<string, TripOutcome>;
+  /** Hotfix 2 (K): who decided, with their number and photo; the approvers who have it open now. */
+  deciders?: Map<string, { name: string; phone: string | null; photo?: string }>;
+  reviewing?: Map<string, { name: string; since: string }[]>;
+  /** Hotfix 2 (F): the office's number (Call office). */
+  officePhone?: string | null;
+}
+
+/** How long an approver's "reviewing" lasts after their decide page last said so (it says so every 20 s). */
+const REVIEWING_FOR_MS = 45_000;
+
+/** "Approved by Palitha · 10:42": the person (photo, Call, WhatsApp when they have a number) and when. */
+function personAt(name: string, at: string, now: Date, p?: { phone: string | null; photo?: string }) {
+  return { name, at: atText(at, now), photo_url: p?.photo, ...phoneLinks(p?.phone) };
+}
+
+/**
+ * The trip's live state for the person who asked (Hotfix 2, A): the request's decision, then its task (accepted, on the
+ * way, arrived at the first pickup, completed, cancelled).
+ */
+function liveOf(r: VehicleRequest, trip: TripOutcome | undefined, now: Date) {
+  const at = (iso: string | null | undefined) => (iso ? atText(iso, now) : undefined);
+  const dot = (text: string, iso: string | null | undefined) => (iso ? `${text} · ${atText(iso, now)}` : text);
+  switch (r.status) {
+    case "waiting":
+      return { state: "waiting" as const, text: new Date(r.needed_at) <= now ? "Waiting · its leave time has passed" : "Waiting" };
+    case "changed":
+      return { state: "waiting" as const, text: "Changed · waiting for the office", at: at(r.changed_at) };
+    case "declined":
+      return { state: "declined" as const, text: r.decline_reason ? `Declined · ${r.decline_reason}` : "Declined", at: at(r.decided_at) };
+    case "cancelled":
+      return {
+        state: "cancelled" as const,
+        text: r.cancel_reason ? `Cancelled · ${r.cancel_reason}` : "Cancelled",
+        at: at(r.cancelled_at),
+      };
+  }
+  const t = trip?.task;
+  if (!t) return { state: "approved" as const, text: "Approved", at: at(r.decided_at) };
+  switch (t.status) {
+    case "completed":
+      return { state: "completed" as const, text: dot("Completed", t.completed_at), at: at(t.completed_at) };
+    case "cancelled":
+      return {
+        state: "cancelled" as const,
+        text: t.cancelled_reason ? `Cancelled · ${t.cancelled_reason}` : "Cancelled",
+        at: at(t.updated_at),
+      };
+    case "in_progress": {
+      const pickup = trip.stops.find((s) => s.type === "pickup");
+      const arrivedAt = pickup?.arrived_at ?? pickup?.auto_detected_at;
+      return arrivedAt
+        ? { state: "arrived" as const, text: dot("Arrived", arrivedAt), at: at(arrivedAt) }
+        : { state: "on_the_way" as const, text: dot("On the way", t.started_at), at: at(t.started_at) };
+    }
+    case "declined":
+      return { state: "approved" as const, text: "Approved · finding another driver", at: at(r.decided_at) };
+    default:
+      return t.accepted_at
+        ? { state: "accepted" as const, text: dot("Driver accepted", t.accepted_at), at: at(t.accepted_at) }
+        : { state: "approved" as const, text: "Approved", at: at(r.decided_at) };
+  }
 }
 
 /** What the person who asked sees once it is approved (Phase 7, §4, §35 19): the driver, the vehicle, their photos. */
@@ -388,6 +452,7 @@ function requestCard(
   const sameDay = backBy && colomboDate(backBy) === colomboDate(leaveAt);
   // Decided = approved or declined (a cancelled booking was approved first; a cancelled waiting request was never decided).
   const decided = r.status === "approved" || r.status === "changed" || r.status === "declined" || (r.status === "cancelled" && r.task_id);
+  const decider = r.decided_by_employee_id ? refs?.deciders?.get(r.decided_by_employee_id) : undefined;
   return {
     id: r.id,
     // Phase 7 (§33): "task" = a task proposed by someone without approve, with the proposed driver and vehicle.
@@ -402,7 +467,7 @@ function requestCard(
     need: needText(r),
     note: r.note,
     status: r.status,
-    asked: `${ago(r.created_at, now)} ago`,
+    asked: whenText(r.created_at, now),
     decided: decided ? by(r.decided_at, r.decided_by) : undefined,
     decline_reason: r.decline_reason,
     task_id: r.task_id,
@@ -467,33 +532,70 @@ function requestCard(
       cancelled: by(r.cancelled_at, r.cancelled_by),
     },
     events: events.map(eventCard),
+    // Hotfix 2 (K): who decided it, with their number (Call, WhatsApp) and photo; who has it open now.
+    approved_by: decided && r.status !== "declined" && r.decided_at
+      ? personAt(r.decided_by ?? "the office", r.decided_at, now, decider)
+      : undefined,
+    declined_by: r.status === "declined" && r.decided_at
+      ? { ...personAt(r.decided_by ?? "the office", r.decided_at, now, decider), reason: r.decline_reason ?? undefined }
+      : undefined,
+    cancelled_by: r.status === "cancelled" && r.cancelled_at
+      ? { name: r.cancelled_by ?? "the office", at: atText(r.cancelled_at, now), reason: r.cancel_reason ?? undefined }
+      : undefined,
+    reviewing: (r.status === "waiting" || r.status === "changed") && refs?.reviewing?.get(r.id)?.length
+      ? refs.reviewing.get(r.id)
+      : undefined,
+    // Hotfix 2 (A, F): the trip's live state from its task, and the office's number for Call office.
+    live: liveOf(r, outcome, now),
+    office_phone: phoneLinks(refs?.officePhone),
   };
 }
 
-/** The cards with their timelines and trips (one query each for all the rows). */
-async function requestCards(db: Db, rows: VehicleRequest[], now: Date, withLine = false) {
+/**
+ * The cards with their timelines and trips (one query each for all the rows). `viewer` = the person asking: they are left
+ * out of "reviewing" (their own decide page).
+ */
+async function requestCards(db: Db, rows: VehicleRequest[], now: Date, withLine = false, viewer?: string | null) {
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   const people = [...new Set(rows.flatMap((r) => r.proposed_employee_id ? [r.proposed_employee_id] : []))];
   const plates = [...new Set(rows.flatMap((r) => r.proposed_vehicle_id ? [r.proposed_vehicle_id] : []))];
-  const [events, stops, emps, vehs, trips] = await Promise.all([
+  const deciderIds = [...new Set(rows.flatMap((r) => r.decided_by_employee_id ? [r.decided_by_employee_id] : []))];
+  const open = rows.filter((r) => r.status === "waiting" || r.status === "changed").map((r) => r.id);
+  const [events, stops, emps, vehs, trips, deciderRes, viewerRes, settings] = await Promise.all([
     db.from("request_events").select("*").in("request_id", ids).order("at").order("id").limit(5000),
     requestStopsOf(db, ids),
     people.length ? db.from("employees").select("id, name, username").in("id", people) : { data: [], error: null },
     plates.length ? db.from("vehicles").select("id, reg_no").in("id", plates) : { data: [], error: null },
     tripOutcomes(db, rows, now),
+    deciderIds.length ? db.from("employees").select("id, name, phone, photo_id").in("id", deciderIds) : { data: [], error: null },
+    open.length
+      ? db.from("request_viewers").select("request_id, employee_id, name, seen_at").in("request_id", open)
+        .gte("seen_at", new Date(now.getTime() - REVIEWING_FOR_MS).toISOString()).order("seen_at")
+      : { data: [], error: null },
+    loadSettings(db),
   ]);
   const evs = unwrap(events, "request events");
+  const deciders = unwrap(deciderRes, "employees");
+  const photos = await driverPhotoLinks(db, deciders, now);
+  const reviewing = new Map<string, { name: string; since: string }[]>();
+  for (const v of unwrap(viewerRes, "reviewing")) {
+    if (v.employee_id === viewer) continue;
+    reviewing.set(v.request_id, [...(reviewing.get(v.request_id) ?? []), { name: v.name, since: colomboTime(v.seen_at) }]);
+  }
   const refs: CardRefs = {
     people: new Map(unwrap(emps, "employees").map((e) => [e.id, { name: e.name, username: e.username }])),
     plates: new Map(unwrap(vehs, "vehicles").map((v) => [v.id, v.reg_no])),
     trips,
+    deciders: new Map(deciders.map((e) => [e.id, { name: e.name, phone: e.phone, photo: photos.get(e.id) }])),
+    reviewing,
+    officePhone: settings.office_phone,
   };
   return rows.map((r) => requestCard(r, now, evs.filter((e) => e.request_id === r.id), stops.get(r.id) ?? [], refs, withLine));
 }
 
-async function requestCardOf(db: Db, row: VehicleRequest, now: Date, withLine = false) {
-  return (await requestCards(db, [row], now, withLine))[0];
+async function requestCardOf(db: Db, row: VehicleRequest, now: Date, withLine = false, viewer?: string | null) {
+  return (await requestCards(db, [row], now, withLine, viewer))[0];
 }
 
 async function getRequest(db: Db, id: string): Promise<VehicleRequest> {
@@ -726,8 +828,93 @@ export const listRequests = tool({
       "vehicle requests",
     );
     return {
-      result: { status, count: rows.length, requests: await requestCards(db, rows, now, with_line === true) },
+      result: { status, count: rows.length, requests: await requestCards(db, rows, now, with_line === true, actor.employeeId) },
       summary: `${rows.length} requests (${status})`,
+    };
+  },
+});
+
+/** My trips' filter (Hotfix 2, A) on the trip's live state. */
+const TRIP_FILTER: Record<string, readonly string[]> = {
+  waiting: ["waiting"],
+  approved: ["approved", "accepted"],
+  under_way: ["on_the_way", "arrived"],
+  completed: ["completed"],
+  declined: ["declined"],
+  cancelled: ["cancelled"],
+};
+
+export const myTrips = tool({
+  name: "my_trips",
+  title: "My trips",
+  description: "The person's own requests and proposed tasks whose trip day is between from and to (Colombo dates, at most a " +
+    "year), newest first, each with its live state from its task (live: waiting, approved, accepted, on_the_way, arrived, " +
+    "completed, declined, cancelled), who decided it (approved_by / declined_by with their number), the driver and the vehicle " +
+    "(assigned, with Call and WhatsApp), and the office's number. status filters on the live state (under_way = on the way or " +
+    "arrived). Personal: a signed-in person or a personal key.",
+  readOnly: true,
+  input: z.object({
+    from: zDate.describe("First day, YYYY-MM-DD"),
+    to: zDate.describe("Last day, YYYY-MM-DD"),
+    status: z.enum(["waiting", "approved", "under_way", "completed", "declined", "cancelled", "all"]).optional().describe(
+      "Default all",
+    ),
+  }),
+  async run({ from, to, status = "all" }, { db, now, actor }) {
+    realDate(from);
+    realDate(to);
+    if (to < from) throw new ToolError("to must be the same day as from or later.");
+    if (daysBetween(from, to) > 366) throw new ToolError("At most a year at a time: choose a shorter range.");
+    if (!actor.employeeId) {
+      throw new ToolError("This is personal: it needs a signed-in person (the web app) or a personal connector key.");
+    }
+    const rows = unwrap(
+      await db.from("vehicle_requests").select("*").eq("requested_by_employee_id", actor.employeeId)
+        .gte("needed_at", dayRange(from).from).lt("needed_at", dayRange(to).to)
+        .order("needed_at", { ascending: false }).order("created_at", { ascending: false }).limit(500),
+      "vehicle requests",
+    );
+    const cards = await requestCards(db, rows, now, false, actor.employeeId);
+    const wanted = status === "all" ? null : TRIP_FILTER[status];
+    const trips = wanted ? cards.filter((c) => wanted.includes(c.live.state)) : cards;
+    return {
+      result: { from, to, status, count: trips.length, trips },
+      summary: `${trips.length} trips of ${actor.name} ${from}..${to} (${status})`,
+    };
+  },
+});
+
+export const reviewing = tool({
+  name: "reviewing",
+  title: "I'm deciding this request",
+  description: 'The decide page says so every 20 s while it is open: the others who approve see "Palitha is reviewing" (for ' +
+    "45 s after the last call). Answers the others reviewing it now. With the shared key (no person) nothing is recorded.",
+  readOnly: false,
+  input: z.object({ request_id: zId }),
+  async run({ request_id }, { db, now, actor }) {
+    const request = await getRequest(db, request_id);
+    if (actor.employeeId && (request.status === "waiting" || request.status === "changed")) {
+      unwrap(
+        await db.from("request_viewers").upsert(
+          { request_id, employee_id: actor.employeeId, name: actor.name, seen_at: now.toISOString() },
+          { onConflict: "request_id,employee_id" },
+        ),
+        "reviewing",
+      );
+    }
+    const others = unwrap(
+      await db.from("request_viewers").select("employee_id, name, seen_at").eq("request_id", request_id)
+        .gte("seen_at", new Date(now.getTime() - REVIEWING_FOR_MS).toISOString()).order("seen_at"),
+      "reviewing",
+    ).filter((v) => v.employee_id !== actor.employeeId);
+    return {
+      result: {
+        request_id,
+        status: request.status,
+        version: request.version,
+        reviewing: others.map((v) => ({ name: v.name, since: colomboTime(v.seen_at) })),
+      },
+      summary: `${actor.name} reviewing request ${request_id}`,
     };
   },
 });
@@ -922,140 +1109,178 @@ export const decideRequest = tool({
     date: zDate.optional().describe("Approve: another day (the stops' arrive_by times move with it)"),
     leave_by: zTime.optional().describe("Approve: another leave time, HH:MM (the plan then follows it)"),
     back_by: zTime.optional().describe("Approve: another time the vehicle is free again, HH:MM"),
+    // Hotfix 2 (K): several approvers; the one who loaded an older version is told who decided it, never a second decision.
+    version: z.number().int().min(0).optional().describe(
+      "The version list_requests showed: a request decided or edited since is refused with who did it and when",
+    ),
   }),
   async run(args, { db, now, actor }) {
     let request = await getRequest(db, args.request_id);
-    if (request.status !== "waiting") throw new ToolError(`This request is already ${request.status}.`);
+    if (request.status !== "waiting" || (args.version !== undefined && args.version !== request.version)) {
+      throw new ToolError(alreadyDecidedText(request, now));
+    }
     request = await markSeen(db, request, actor, now);
-    const decidedBy = args.decided_by ?? actor.name;
-    const told = { actor: actor.employeeId, requester: request.requested_by_employee_id };
-
-    if (args.decision === "decline") {
-      if (!args.reason) throw new ToolError("A reason is needed to decline a request.");
-      const changed = unwrap(
-        await db.from("vehicle_requests")
-          .update({
-            status: "declined",
-            decided_at: now.toISOString(),
-            decided_by: decidedBy,
-            decline_reason: args.reason,
-            version: request.version + 1,
-          })
-          .eq("id", request.id).eq("status", "waiting").select("*"),
-        "vehicle request",
-      );
-      if (changed.length === 0) throw new ToolError("Someone else decided this request just now. Check list_requests.");
-      await logRequestEvent(db, request.id, "declined", decidedBy, { note: args.reason });
-      await notifyEvent(db, "request.decided", {
-        title: request.kind === "task" ? `Task declined · ${request.title ?? "your task"}` : "Request declined",
-        body: args.reason,
-        url: `/requests/${request.id}`,
-        tag: `request:${request.id}`,
-      }, told);
-      return { result: { request: await requestCardOf(db, changed[0], now) }, summary: `declined request ${request.id}: ${args.reason}` };
-    }
-
-    // Phase 7 (§33, §34): a proposed task, or a request planned with its stops: the task takes the stops as asked.
-    const tripRows = (await requestStopsOf(db, [request.id])).get(request.id) ?? [];
-    if (tripRows.length > 0) return await approveTrip(db, now, actor, request, tripRows, args, decidedBy, told);
-
-    if (!args.vehicle && !args.driver) {
-      throw new ToolError(
-        "To approve, give a driver (the vehicle fills itself: the one they hold today, else their regular one) or a vehicle. " +
-          "suggest_vehicles and availability show who is free.",
-      );
-    }
-    const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
-    const chosen = chooseVehicle(refs, args.vehicle, args.driver, decidedBy, now, {
-      day: colomboDate(request.needed_at),
-      onTheDay: settings.vehicle_on_the_day,
-    });
-    const vehicle = chosen.vehicle;
-    const driver = pickDriver(refs, args.driver, request.driver_required, vehicle, settings.self_drive_allowed);
-    const warnings = await assignWarnings(db, { driver, vehicle, startAt: request.needed_at, endBy: request.back_by });
-    warnings.push(...fitWarnings(vehicle, request));
-
-    const split: Split = request.project_id
-      ? {
-        rows: [{ project_id: request.project_id, percent: 100 }],
-        shown: [{ project: request.project_label ?? "project", percent: 100 }],
-        label: request.project_label,
+    try {
+      return await decide(db, now, actor, request, args);
+    } catch (error) {
+      // Another approver got there first (office_create_task holds the request while it approves): say who and when.
+      if (error instanceof ToolError && /already (approved|declined|cancelled|changed)|Someone else decided/.test(error.message)) {
+        throw new ToolError(alreadyDecidedText(await getRequest(db, request.id), now));
       }
-      : { rows: [], shown: [], label: request.project_label };
-    const requesterRow = request.requested_by_employee_id ? refs.emp.get(request.requested_by_employee_id) : undefined;
-    const prepared = await prepareTask(db, settings, now, {
-      day: colomboDate(request.needed_at),
-      // The request's From and To, with the times the requester gave there (Phase 7, §17).
-      stops: [
-        {
-          type: "pickup",
-          place: request.route_from ?? "To be confirmed",
-          dwell_min: args.from_dwell_min ?? request.from_dwell_min ?? undefined,
-        },
-        { type: "drop", place: request.route_to ?? "To be confirmed", dwell_min: args.to_dwell_min ?? request.to_dwell_min ?? undefined },
-      ],
-      start: args.start,
-      leaveAt: request.needed_at,
-    });
-    warnings.push(...prepared.notes);
-    warnings.push(...prepared.plan.warnings.map((w) => w.text));
-
-    const saved = await saveTask(db, {
-      title: args.title ?? (request.route_to ? `Trip · ${request.route_to}` : `Trip for ${request.requested_by_name}`),
-      label: request.project_label,
-      driver,
-      vehicle,
-      startAt: request.needed_at,
-      endBy: request.back_by,
-      passengers: request.pax,
-      contactName: request.requested_by_name,
-      contactPhone: requesterRow?.phone ?? null,
-      notes: [request.note, request.tools ? "Tools / equipment travel too." : null, isDriver(driver) ? null : "Driven by the custodian."]
-        .filter(Boolean).join(" ") || null,
-      stops: prepared.stops,
-      start: prepared.start,
-      returnToBase: false,
-      avoidExpressway: false,
-      leaveBy: prepared.leaveBy,
-      leaveBySource: prepared.leaveBySource,
-      bufferMin: null,
-      plan: prepared.plan,
-      split,
-      createdBy: decidedBy,
-      request: { id: request.id, decidedBy },
-      bookedBy: actor.employeeId,
-      vehicleChoice: isDriver(driver) ? chosen.choice : null,
-      savedWarnings: warnings,
-      assignedBy: actor.employeeId,
-      vehicleWhy: chosen.why,
-      vehicleMode: chosen.mode,
-      vehicleType: chosen.type,
-      approvedBy: actor.employeeId,
-    }, warnings);
-    // Every decision bumps the version (the approval itself is written by office_create_task), with who decided (K).
-    unwrap(
-      await db.from("vehicle_requests").update({ version: request.version + 1, decided_by_employee_id: actor.employeeId })
-        .eq("id", request.id).select("id"),
-      "vehicle request",
-    );
-    await logRequestEvent(db, request.id, "approved", decidedBy, { note: `${vehicleWordsOf(chosen)} · ${driver.name}` });
-    await notifyEvent(db, "request.decided", {
-      title: `Request approved by ${decidedBy} · ${vehicleWordsOf(chosen)} · ${driver.name}`,
-      who: decidedBy,
-      body: [colomboDayTime(request.needed_at), [request.route_from, request.route_to].filter(Boolean).join(" → ")].filter(Boolean).join(
-        " · ",
-      ),
-      url: `/requests/${request.id}`,
-      tag: `request:${request.id}`,
-      ...(await pushPhotos(db, driver, vehicle)),
-    }, told);
-
-    return {
-      result: { request: "approved", requested_by: request.requested_by_name, ...saved.result },
-      summary: `approved request ${request.id} -> ${saved.summary}`,
-    };
+      throw error;
+    }
   },
 });
+
+type DecideArgs = {
+  request_id: string;
+  decision: "approve" | "decline";
+  vehicle?: string;
+  driver?: string;
+  reason?: string;
+  title?: string;
+  decided_by?: string;
+  start?: z.infer<typeof zStart>;
+  from_dwell_min?: number;
+  to_dwell_min?: number;
+  date?: string;
+  leave_by?: string;
+  back_by?: string;
+};
+
+async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, args: DecideArgs) {
+  const decidedBy = args.decided_by ?? actor.name;
+  const told = { actor: actor.employeeId, requester: request.requested_by_employee_id };
+
+  if (args.decision === "decline") {
+    if (!args.reason) throw new ToolError("A reason is needed to decline a request.");
+    const changed = unwrap(
+      await db.from("vehicle_requests")
+        .update({
+          status: "declined",
+          decided_at: now.toISOString(),
+          decided_by: decidedBy,
+          decided_by_employee_id: actor.employeeId,
+          decline_reason: args.reason,
+          version: request.version + 1,
+        })
+        .eq("id", request.id).eq("status", "waiting").select("*"),
+      "vehicle request",
+    );
+    if (changed.length === 0) throw new ToolError("Someone else decided this request just now. Check list_requests.");
+    await logRequestEvent(db, request.id, "declined", decidedBy, { note: args.reason });
+    await notifyEvent(db, "request.decided", {
+      title: request.kind === "task"
+        ? `Task declined by ${decidedBy} · ${request.title ?? "your task"}`
+        : `Request declined by ${decidedBy}`,
+      who: decidedBy,
+      body: args.reason,
+      url: `/requests/${request.id}`,
+      tag: `request:${request.id}`,
+    }, told);
+    return { result: { request: await requestCardOf(db, changed[0], now) }, summary: `declined request ${request.id}: ${args.reason}` };
+  }
+
+  // Phase 7 (§33, §34): a proposed task, or a request planned with its stops: the task takes the stops as asked.
+  const tripRows = (await requestStopsOf(db, [request.id])).get(request.id) ?? [];
+  if (tripRows.length > 0) return await approveTrip(db, now, actor, request, tripRows, args, decidedBy, told);
+
+  if (!args.vehicle && !args.driver) {
+    throw new ToolError(
+      "To approve, give a driver (the vehicle fills itself: the one they hold today, else their regular one) or a vehicle. " +
+        "suggest_vehicles and availability show who is free.",
+    );
+  }
+  const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
+  const chosen = chooseVehicle(refs, args.vehicle, args.driver, decidedBy, now, {
+    day: colomboDate(request.needed_at),
+    onTheDay: settings.vehicle_on_the_day,
+  });
+  const vehicle = chosen.vehicle;
+  const driver = pickDriver(refs, args.driver, request.driver_required, vehicle, settings.self_drive_allowed);
+  const warnings = await assignWarnings(db, { driver, vehicle, startAt: request.needed_at, endBy: request.back_by });
+  warnings.push(...fitWarnings(vehicle, request));
+
+  const split: Split = request.project_id
+    ? {
+      rows: [{ project_id: request.project_id, percent: 100 }],
+      shown: [{ project: request.project_label ?? "project", percent: 100 }],
+      label: request.project_label,
+    }
+    : { rows: [], shown: [], label: request.project_label };
+  const requesterRow = request.requested_by_employee_id ? refs.emp.get(request.requested_by_employee_id) : undefined;
+  const prepared = await prepareTask(db, settings, now, {
+    day: colomboDate(request.needed_at),
+    // The request's From and To, with the times the requester gave there (Phase 7, §17).
+    stops: [
+      {
+        type: "pickup",
+        place: request.route_from ?? "To be confirmed",
+        dwell_min: args.from_dwell_min ?? request.from_dwell_min ?? undefined,
+      },
+      { type: "drop", place: request.route_to ?? "To be confirmed", dwell_min: args.to_dwell_min ?? request.to_dwell_min ?? undefined },
+    ],
+    start: args.start,
+    leaveAt: request.needed_at,
+  });
+  warnings.push(...prepared.notes);
+  warnings.push(...prepared.plan.warnings.map((w) => w.text));
+
+  const saved = await saveTask(db, {
+    title: args.title ?? (request.route_to ? `Trip · ${request.route_to}` : `Trip for ${request.requested_by_name}`),
+    label: request.project_label,
+    driver,
+    vehicle,
+    startAt: request.needed_at,
+    endBy: request.back_by,
+    passengers: request.pax,
+    contactName: request.requested_by_name,
+    contactPhone: requesterRow?.phone ?? null,
+    notes: [request.note, request.tools ? "Tools / equipment travel too." : null, isDriver(driver) ? null : "Driven by the custodian."]
+      .filter(Boolean).join(" ") || null,
+    stops: prepared.stops,
+    start: prepared.start,
+    returnToBase: false,
+    avoidExpressway: false,
+    leaveBy: prepared.leaveBy,
+    leaveBySource: prepared.leaveBySource,
+    bufferMin: null,
+    plan: prepared.plan,
+    split,
+    createdBy: decidedBy,
+    request: { id: request.id, decidedBy },
+    bookedBy: actor.employeeId,
+    vehicleChoice: isDriver(driver) ? chosen.choice : null,
+    savedWarnings: warnings,
+    assignedBy: actor.employeeId,
+    vehicleWhy: chosen.why,
+    vehicleMode: chosen.mode,
+    vehicleType: chosen.type,
+    approvedBy: actor.employeeId,
+  }, warnings);
+  // Every decision bumps the version (the approval itself is written by office_create_task), with who decided (K).
+  unwrap(
+    await db.from("vehicle_requests").update({ version: request.version + 1, decided_by_employee_id: actor.employeeId })
+      .eq("id", request.id).select("id"),
+    "vehicle request",
+  );
+  await logRequestEvent(db, request.id, "approved", decidedBy, { note: `${vehicleWordsOf(chosen)} · ${driver.name}` });
+  await notifyEvent(db, "request.decided", {
+    title: `Request approved by ${decidedBy} · ${vehicleWordsOf(chosen)} · ${driver.name}`,
+    who: decidedBy,
+    body: [colomboDayTime(request.needed_at), [request.route_from, request.route_to].filter(Boolean).join(" → ")].filter(Boolean).join(
+      " · ",
+    ),
+    url: `/requests/${request.id}`,
+    tag: `request:${request.id}`,
+    ...(await pushPhotos(db, driver, vehicle)),
+  }, told);
+
+  return {
+    result: { request: "approved", requested_by: request.requested_by_name, ...saved.result },
+    summary: `approved request ${request.id} -> ${saved.summary}`,
+  };
+}
 
 /**
  * Approving a request that carries its trip (Phase 7, §33, §34): a proposed task (the proposed driver and vehicle unless
@@ -1202,7 +1427,9 @@ async function approveTrip(
   });
   await notifyEvent(db, "request.decided", {
     ...(await pushPhotos(db, driver, vehicle)),
-    title: task ? `Task approved by ${decidedBy} · sent to ${driver.name}` : `Request approved by ${decidedBy} · ${shownNow} · ${driver.name}`,
+    title: task
+      ? `Task approved by ${decidedBy} · sent to ${driver.name}`
+      : `Request approved by ${decidedBy} · ${shownNow} · ${driver.name}`,
     who: decidedBy,
     body: [
       task ? title : null,
@@ -1776,7 +2003,7 @@ export const updateRequest = tool({
     // Phase 7 (§17): the times at From and To.
     const fromDwell = args.from_dwell_min === undefined ? request.from_dwell_min : args.from_dwell_min;
     const toDwell = args.to_dwell_min === undefined ? request.to_dwell_min : args.to_dwell_min;
-    const minText = (m: number | null) => (m == null ? null : `${m} min`);
+    const minText = (m: number | null) => (m == null ? null : duration(m));
     if (fromDwell !== request.from_dwell_min) changes["time at From"] = { from: minText(request.from_dwell_min), to: minText(fromDwell) };
     if (toDwell !== request.to_dwell_min) changes["time at To"] = { from: minText(request.to_dwell_min), to: minText(toDwell) };
     if (trip) {
@@ -1863,8 +2090,9 @@ export const redecideRequest = tool({
   async run(args, { db, now, actor }) {
     if (args.date) realDate(args.date);
     const request = await getRequest(db, args.request_id);
+    // Hotfix 2 (K): another approver decided it (or the person who asked changed it) since this one loaded it.
+    if (request.version !== args.version && request.status !== "waiting") throw new ToolError(alreadyDecidedText(request, now, true));
     canRedecide(request.status);
-    checkVersion(request.version, args.version);
     if (!request.task_id) throw new ToolError("This request has no task behind it; cancel it and make a new booking.");
     const task = unwrapMaybe(await db.from("tasks").select("*").eq("id", request.task_id).maybeSingle(), "task");
     if (!task) throw new ToolError("The task behind this request no longer exists.");
@@ -1886,7 +2114,7 @@ export const redecideRequest = tool({
         }).eq("id", request.id).eq("version", request.version).select("*"),
         "vehicle request",
       );
-      if (rows.length === 0) throw new ToolError("Someone else changed this request just now. Reload it and try again.");
+      if (rows.length === 0) throw new ToolError(alreadyDecidedText(await getRequest(db, request.id), now, true));
       let taskCancelled: string | undefined;
       if (task.status === "assigned" || task.status === "in_progress" || task.status === "declined") {
         const changed = unwrap(
@@ -1911,7 +2139,8 @@ export const redecideRequest = tool({
       }
       await logRequestEvent(db, request.id, "declined", actor.name, { note: args.reason, at: nowIso });
       await notifyEvent(db, "request.redecided", {
-        title: "Your changed request was declined",
+        title: `Your changed request was declined by ${actor.name}`,
+        who: actor.name,
         body: args.reason,
         url: `/requests/${request.id}`,
         tag: `request:${request.id}`,
@@ -1979,7 +2208,9 @@ export const redecideRequest = tool({
       ? defaultVehicleFor(refs, activeDriver(refs, args.driver))?.vehicle ?? current
       : current;
     const shownVehicle = vehicle?.reg_no ??
-      (word ? vehicleText(word.mode, word.mode === "any_type" ? word.type : null) : vehicleText(task.vehicle_mode, task.vehicle_type_wanted)) ??
+      (word
+        ? vehicleText(word.mode, word.mode === "any_type" ? word.type : null)
+        : vehicleText(task.vehicle_mode, task.vehicle_type_wanted)) ??
       "the vehicle on the day";
     const driver = change && args.driver
       ? activeDriver(refs, args.driver)
@@ -2060,7 +2291,7 @@ export const redecideRequest = tool({
       }).eq("id", request.id).eq("version", request.version).select("*"),
       "vehicle request",
     );
-    if (rows.length === 0) throw new ToolError("Someone else changed this request just now. Reload it and try again.");
+    if (rows.length === 0) throw new ToolError(alreadyDecidedText(await getRequest(db, request.id), now, true));
     const text = changesText(out.changes);
     await logRequestEvent(db, request.id, action, actor.name, {
       note: args.decision === "keep" ? (text ? `kept as asked: ${text}` : "kept as asked") : text || "changed",
@@ -2068,11 +2299,10 @@ export const redecideRequest = tool({
       at: nowIso,
     });
     await notifyEvent(db, "request.redecided", {
-      title: args.decision === "keep"
-        ? "Your changed request was kept"
-        : onlyTime
-        ? "Your booking was postponed"
-        : "Your booking was changed",
+      title: `${
+        args.decision === "keep" ? "Your changed request was kept" : onlyTime ? "Your booking was postponed" : "Your booking was changed"
+      } by ${actor.name}`,
+      who: actor.name,
       body: [text || "as asked", `${shownVehicle} · ${driver.name} · ${colomboDayTime(neededAt)}`].join(" · "),
       url: `/requests/${request.id}`,
       tag: `request:${request.id}`,

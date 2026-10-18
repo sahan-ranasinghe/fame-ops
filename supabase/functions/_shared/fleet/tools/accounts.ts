@@ -16,6 +16,8 @@ import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { normalisePermissions, PERMISSIONS, permissionsForRole, roleForPermissions } from "../permissions.ts";
 import { isRole, OFFICE_ROLES, type Role } from "../roles.ts";
 import { colomboDateTime } from "../time.ts";
+import { phoneDisplay } from "../format.ts";
+import { logPhoneChange, storedPhone } from "../phones.ts";
 import { tool, zText } from "../tool.ts";
 
 const zEmail = z.string().trim().toLowerCase().email().max(160);
@@ -96,6 +98,7 @@ export const listOfficeUsers = tool({
           name: u.name,
           email: u.email,
           phone: u.phone,
+          phone_display: phoneDisplay(u.phone),
           role: u.role,
           permissions: normalisePermissions(u.permissions),
           active: u.active,
@@ -129,7 +132,8 @@ export const createOfficeUser = tool({
     phone: zText(30).optional(),
     code: zText(30).optional().describe("Employee number. Default: made from the e-mail"),
   }),
-  async run({ name, email, role, permissions, phone, code }, { db }) {
+  async run({ name, email, role, permissions, phone: typedPhone, code }, { db }) {
+    const phone = storedPhone(typedPhone);
     const existing = unwrapMaybe(await db.from("employees").select("id").eq("email", email).maybeSingle(), "office user");
     if (existing) throw new ToolError(`${email} already has an account. Use reset_office_password or set_office_user_active.`);
     const perms = permissions ? normalisePermissions(permissions) : permissionsForRole(role ?? "viewer");
@@ -170,7 +174,8 @@ export const updateOfficeUser = tool({
   name: "update_office_user",
   title: "Change an office user",
   description: "Changes an office user's name, phone and/or permissions (view, request, approve, assign_tasks, vehicles, issues, users). " +
-    "The permissions list replaces the old one and takes effect on the person's next call. You cannot remove your own users permission.",
+    "The permissions list replaces the old one and takes effect on the person's next call. You cannot remove your own users permission. " +
+    "The phone is a Sri Lankan number (stored +94…; null clears it); every change of a number is logged.",
   readOnly: false,
   input: z.object({
     email: zEmail,
@@ -179,7 +184,8 @@ export const updateOfficeUser = tool({
     permissions: zPermissions.optional().describe("The full new list"),
     role: zOfficeRole.optional().describe("The label. Default: derived from the permissions"),
   }),
-  async run({ email, name, phone, permissions, role }, { db, actor }) {
+  async run({ email, name, phone: typedPhone, permissions, role }, { db, actor }) {
+    const phone = storedPhone(typedPhone);
     const user = await officeUser(db, email);
     if (name === undefined && phone === undefined && permissions === undefined && role === undefined) {
       throw new ToolError("Nothing to change: give a name, phone, permissions and/or role.");
@@ -198,6 +204,7 @@ export const updateOfficeUser = tool({
       }).eq("id", user.id).select("name, email, phone, role, permissions").single(),
       "office user",
     );
+    if (phone !== undefined) await logPhoneChange(db, user.id, user.phone, updated.phone, actor);
     const changed = [
       name !== undefined && "name",
       phone !== undefined && "phone",
@@ -206,7 +213,9 @@ export const updateOfficeUser = tool({
     ]
       .filter(Boolean);
     return {
-      result: { updated: { ...updated, permissions: normalisePermissions(updated.permissions) } },
+      result: {
+        updated: { ...updated, phone_display: phoneDisplay(updated.phone), permissions: normalisePermissions(updated.permissions) },
+      },
       summary: `updated office user ${email}: ${changed.join(", ")}${permissions !== undefined ? ` (${perms.join(", ") || "none"})` : ""}`,
     };
   },
@@ -310,3 +319,29 @@ export const revokeOfficeKey = tool({
 export function describeRole(role: string): string {
   return isRole(role) ? role : "unknown";
 }
+
+export const updateMyProfile = tool({
+  name: "update_my_profile",
+  title: "My phone number",
+  description: "The person's own phone number (Settings → My profile): drivers and the people who asked call it from their trips. " +
+    "Needed by everyone who approves or assigns tasks. A Sri Lankan number (stored +94…); null clears it; every change is logged. " +
+    "Personal: a signed-in person or a personal key.",
+  readOnly: false,
+  input: z.object({ phone: zText(30).nullable().describe("e.g. 077 123 4567") }),
+  async run({ phone: typed }, { db, actor }) {
+    if (!actor.employeeId) {
+      throw new ToolError("This is personal: it needs a signed-in person (the web app) or a personal connector key.");
+    }
+    const phone = storedPhone(typed) ?? null;
+    const before = unwrap(await db.from("employees").select("phone").eq("id", actor.employeeId).single(), "employee");
+    const updated = unwrap(
+      await db.from("employees").update({ phone }).eq("id", actor.employeeId).select("name, phone").single(),
+      "employee",
+    );
+    await logPhoneChange(db, actor.employeeId, before.phone, updated.phone, actor);
+    return {
+      result: { name: updated.name, phone: updated.phone ?? undefined, phone_display: phoneDisplay(updated.phone) },
+      summary: `${actor.name} set their phone ${updated.phone ? "number" : "to none"}`,
+    };
+  },
+});

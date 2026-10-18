@@ -112,7 +112,9 @@ export async function driverRows(
       km_to_first: firstStop && pos?.lat != null && pos?.lng != null ? haversineKm({ lat: pos.lat, lng: pos.lng }, firstStop) : null,
       tasks_today: d.tasks.length,
     });
-    return { ...row, duty: row.state, vehicle };
+    // Hotfix 2 (J): information only, never a block (a task may take the driver's vehicle on the day).
+    const vehicle_note = held ? undefined : regular ? `no vehicle yet · regular: ${regular.reg_no}` : "no vehicle yet";
+    return { ...row, duty: row.state, vehicle, vehicle_note };
   }));
   const windowText = `${colomboTime(w.from)}–${w.to ? colomboTime(w.to) : "end of day"}`;
   const ranked: BestMatch[] = rankMatches(matches, windowText, firstStop ? "the pickup" : "the first stop");

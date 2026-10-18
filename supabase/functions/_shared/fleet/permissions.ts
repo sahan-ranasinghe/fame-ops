@@ -153,6 +153,12 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   set_my_notification_settings: ANY,
   register_web_push: ANY,
   remove_web_push: ANY,
+  // Hotfix 2 (A, F, K): the person's own trips, notification centre and number; "Palitha is reviewing" on the decide page.
+  my_trips: ["request", "assign_tasks"],
+  my_inbox: ANY,
+  mark_inbox_read: ANY,
+  update_my_profile: ANY,
+  reviewing: ["approve"],
 };
 
 /** The four buttons on the Users page. An admin is everything, so it is not a preset. */

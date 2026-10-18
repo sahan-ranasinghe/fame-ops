@@ -28,7 +28,9 @@ export function snapProvider(settings: Settings, channel: Channel): MapMatchingP
 }
 import { buildRoute, type LinePoint, type RouteFix, type Segment, withSpeeds } from "../route.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
+import { duration } from "../durations.ts";
 import { driverPhotoLinks, vehiclePhotoLinks } from "../media.ts";
+import { seesDriverPhones } from "../phones.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
 
 /** watch_drivers keeps a driver watched this long; the web calls it again every 30 s while the page is open. */
@@ -80,7 +82,8 @@ export const liveDrivers = tool({
       .optional()
       .describe("Default: all. on_task / on_duty / off_duty filter by duty (on_duty includes on_task)"),
   }),
-  async run({ filter = "all" }, { db, now }) {
+  async run({ filter = "all" }, { db, now, actor }) {
+    const phones = seesDriverPhones(actor);
     const dayStart = dayRange(colomboDate(now)).from;
     const [refs, latest, settings, running, openSessions, todaySessions, handovers, stopsToday] = await Promise.all([
       loadRefs(db),
@@ -208,7 +211,7 @@ export const liveDrivers = tool({
         lat: hasPosition ? pos.lat! : undefined,
         lng: hasPosition ? pos.lng! : undefined,
         heading: hasPosition && pos.heading != null ? Math.round(pos.heading) : undefined,
-        links: { maps: hasPosition ? mapsPoint(pos.lat!, pos.lng!) : undefined, ...contactLinks(e.phone) },
+        links: { maps: hasPosition ? mapsPoint(pos.lat!, pos.lng!) : undefined, ...(phones ? contactLinks(e.phone) : {}) },
         minutes: share.minutes ?? Number.MAX_SAFE_INTEGER,
       };
     }));
@@ -516,7 +519,7 @@ export const driverRoute = tool({
           to_at: iso(h.to),
           minutes: h.minutes,
           kind: h.kind,
-          text: `${KIND_TEXT[h.kind]} · ${h.minutes} min`,
+          text: `${KIND_TEXT[h.kind]} · ${duration(h.minutes)}`,
         })),
         uploaded_later: route.late.map((w) => ({
           from: t(w.from),

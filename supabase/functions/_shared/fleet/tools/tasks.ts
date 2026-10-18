@@ -29,7 +29,8 @@ import {
   type Task,
   type Vehicle,
 } from "../fleet.ts";
-import { centsToLkr, contactLinks, mapsDirections, mapsPoint, telLink, waLink } from "../format.ts";
+import { centsToLkr, contactLinks, mapsDirections, mapsPoint, phoneLinks, telLink, waLink } from "../format.ts";
+import { atText } from "../requests_rules.ts";
 import { GPS_KM_NOTE, haversineKm, type Point, summariseRoute } from "../geo.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { videoCard, videoLinks } from "../videos.ts";
@@ -54,6 +55,7 @@ import { stopChanges, stopForChange } from "../stopChanges.ts";
 import type { Actor } from "../roles.ts";
 import { loadSettings, type Settings } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange, utcIso } from "../time.ts";
+import { duration, whenText } from "../durations.ts";
 import { realDate, tool, zDate, zId, zText, zTime } from "../tool.ts";
 import { endOfDay, type GooglePin, googlePin } from "../googlePlaces.ts";
 import { findPlace, placeById } from "./places.ts";
@@ -1010,7 +1012,7 @@ function statusLine(task: Task, latest: Latest | undefined, now: Date, employee?
       const where = share.state === "sharing"
         ? "sharing location"
         : share.state === "stale" && share.minutes !== null
-        ? `location ${share.minutes} min old`
+        ? `location ${duration(share.minutes)} old`
         : "not sharing location";
       return `Started ${task.started_at ? colomboTime(task.started_at) : "?"} · ${where}`;
     }
@@ -1359,7 +1361,7 @@ export const planTask = tool({
       },
       summary:
         `plan ${args.date}: leave by ${colomboDateTime(prepared.leaveBy)} (${prepared.leaveBySource}), ${prepared.stops.length} stops, ` +
-        `${prepared.plan.total_drive_min} min`,
+        `${duration(prepared.plan.total_drive_min)} driving`,
     };
   },
 });
@@ -1530,7 +1532,7 @@ export async function needsDriverList(db: Db, refs: Refs, now: Date) {
       line: `${who.split(" ")[0]} ${declined ? "declined" : "hasn't accepted"} · ${declined ? reason : "needs a driver"}`,
       since: t.needs_driver_since ? colomboTime(t.needs_driver_since) : undefined,
       minutes_to_start: minutes,
-      when: minutes >= 0 ? `in ${minutes} min` : `${-minutes} min late`,
+      when: minutes >= 0 ? whenText(leave, now) : `${duration(-minutes)} late`,
       best,
     };
   }));
@@ -1569,7 +1571,11 @@ export const taskBoard = tool({
     // Phase 7 (§5, §6): the drivers' and the vehicles' photos on the cards, one batch each (the same links while they last).
     const [driverPhotos, vehiclePhotos] = await Promise.all([
       driverPhotoLinks(db, [...new Set(tasks.map((t) => t.employee_id))].flatMap((id) => refs.emp.get(id) ?? []), now),
-      vehiclePhotoLinks(db, [...new Set(tasks.flatMap((t) => t.vehicle_id ? [t.vehicle_id] : []))].flatMap((id) => refs.veh.get(id) ?? []), now),
+      vehiclePhotoLinks(
+        db,
+        [...new Set(tasks.flatMap((t) => t.vehicle_id ? [t.vehicle_id] : []))].flatMap((id) => refs.veh.get(id) ?? []),
+        now,
+      ),
     ]);
     const card = async (t: Task) => {
       const mine = live(stops.filter((s) => s.task_id === t.id));
@@ -1592,6 +1598,10 @@ export const taskBoard = tool({
         vehicle: t.vehicle_id ? refs.veh.get(t.vehicle_id)?.reg_no : undefined,
         vehicle_text: t.vehicle_id ? undefined : vehicleText(t.vehicle_mode, t.vehicle_type_wanted),
         vehicle_thumb_url: t.vehicle_id ? vehiclePhotos.get(t.vehicle_id)?.thumb : undefined,
+        // Hotfix 2 (K): who sent it to the driver.
+        approved_by: t.approved_by_employee_id && t.approved_at
+          ? { name: refs.emp.get(t.approved_by_employee_id)?.name ?? "the office", at: atText(t.approved_at, now) }
+          : undefined,
         status: statusLine(t, latest.get(t.employee_id), now, refs.emp.get(t.employee_id)),
         eta_next: eta?.next_eta_at ? colomboTime(eta.next_eta_at) : undefined,
         eta_final: eta?.final_eta_at ? colomboTime(eta.final_eta_at) : undefined,
@@ -1753,9 +1763,11 @@ export const taskDetail = tool({
     const when = (at: string | null) => at ? colomboDateTime(at) : undefined;
     const names = new Map(allStops.map((s) => [s.seq, s.place_name]));
     // Phase 7 (§5, §6): the driver's and the vehicle's photos.
-    const [driverPhoto, vehiclePhoto] = await Promise.all([
+    const approver = task.approved_by_employee_id ? refs.emp.get(task.approved_by_employee_id) : undefined;
+    const [driverPhoto, vehiclePhoto, approverPhoto] = await Promise.all([
       driver ? driverPhotoLinks(db, [driver], now).then((m) => m.get(driver.id)) : undefined,
       vehicle ? vehiclePhotoLinks(db, [vehicle], now).then((m) => m.get(vehicle.id)) : undefined,
+      approver ? driverPhotoLinks(db, [approver], now).then((m) => m.get(approver.id)) : undefined,
     ]);
 
     return {
@@ -1792,6 +1804,14 @@ export const taskDetail = tool({
           vehicle: vehicle ? `${vehicle.reg_no}${vehicle.make_model ? ` · ${vehicle.make_model}` : ""}` : undefined,
           vehicle_photo_url: vehiclePhoto?.photo,
           vehicle_thumb_url: vehiclePhoto?.thumb,
+          // Hotfix 2 (J, K, F): a vehicle chosen on the day, who sent it to the driver, the driver's Call and WhatsApp.
+          vehicle_mode: task.vehicle_mode,
+          vehicle_type_wanted: task.vehicle_type_wanted ?? undefined,
+          vehicle_text: vehicle ? undefined : vehicleText(task.vehicle_mode, task.vehicle_type_wanted),
+          approved_by: approver && task.approved_at
+            ? { name: approver.name, at: atText(task.approved_at, now), photo_url: approverPhoto, ...phoneLinks(approver.phone) }
+            : undefined,
+          driver_phone: phoneLinks(driver?.phone),
           passengers: task.passengers,
           contact: task.contact_name || task.contact_phone
             ? { name: task.contact_name, phone: task.contact_phone, ...contactLinks(task.contact_phone) }
@@ -2290,7 +2310,9 @@ export const updateTask = tool({
     time: zTime.optional().describe("New leave-by time, HH:MM"),
     end_time: zTime.nullable().optional().describe("When the vehicle should be free again, HH:MM; null clears it"),
     driver: zText(80).optional().describe("New driver: username, code or name"),
-    vehicle: zText(20).optional().describe('New vehicle plate, or "on the day" / "any van" (car, double cab, lorry) with vehicle_on_the_day'),
+    vehicle: zText(20).optional().describe(
+      'New vehicle plate, or "on the day" / "any van" (car, double cab, lorry) with vehicle_on_the_day',
+    ),
     title: zText(120).optional(),
     passengers: z.number().int().min(0).max(80).nullable().optional(),
     contact_name: zClearable(120),
@@ -2344,15 +2366,18 @@ export const updateTask = tool({
   },
 });
 
-/** "Completed early: 3 km on the odometer for a 50 km plan (12 min for 60 min of driving)", or undefined. */
+/** "1 h 15 min", or "?" when the number is missing. */
+const minText = (minutes: number | null | undefined) => (minutes == null ? "?" : duration(minutes));
+
+/** "Completed early: 3 km on the odometer for a 50 km plan (12 min for 1 h of driving)", or undefined. */
 export function finishFlagText(flag: unknown): { kind: string; text: string } | undefined {
   const f = flag as { kind?: string; odometer_km?: number; planned_km?: number; minutes?: number; planned_minutes?: number } | null;
   if (!f?.kind) return undefined;
   return {
     kind: f.kind,
-    text: `Completed early: ${f.odometer_km ?? "?"} km on the odometer for a ${f.planned_km ?? "?"} km plan (${f.minutes ?? "?"} min for ${
-      f.planned_minutes ?? "?"
-    } min of driving)`,
+    text: `Completed early: ${f.odometer_km ?? "?"} km on the odometer for a ${f.planned_km ?? "?"} km plan (${minText(f.minutes)} for ${
+      minText(f.planned_minutes)
+    } of driving)`,
   };
 }
 
@@ -2484,7 +2509,9 @@ export const reassignTask = tool({
   input: z.object({
     task_id: zId,
     driver: zText(80).optional().describe("New driver: username, code or name"),
-    vehicle: zText(20).optional().describe('New vehicle plate, or "on the day" / "any van" (car, double cab, lorry) with vehicle_on_the_day'),
+    vehicle: zText(20).optional().describe(
+      'New vehicle plate, or "on the day" / "any van" (car, double cab, lorry) with vehicle_on_the_day',
+    ),
     start_time: zTime.optional().describe("New leave time, HH:MM"),
     date: zDate.optional().describe("New day, YYYY-MM-DD"),
   }),
@@ -2506,10 +2533,17 @@ export const reassignTask = tool({
     // Hotfix 2 (J): a plate sets the vehicle; "on the day" / "any van" clears it; otherwise the task keeps what it has.
     const word = parseVehicleWord(vehicle);
     if (word && !(await loadSettings(db)).vehicle_on_the_day) throw new ToolError(ON_THE_DAY_OFF);
-    const newVehicle = vehicle && !word ? activeVehicle(refs, vehicle) : word ? null : task.vehicle_id ? refs.veh.get(task.vehicle_id) ?? null : null;
+    const newVehicle = vehicle && !word
+      ? activeVehicle(refs, vehicle)
+      : word
+      ? null
+      : task.vehicle_id
+      ? refs.veh.get(task.vehicle_id) ?? null
+      : null;
     const newMode: VehicleMode = newVehicle && (vehicle && !word) ? "specific" : word ? word.mode : task.vehicle_mode as VehicleMode;
     const newType = word?.mode === "any_type" ? word.type : word ? null : newVehicle && vehicle ? null : task.vehicle_type_wanted;
-    const vehicleWords = (v: { reg_no: string } | null | undefined, m: string | null, t: string | null) => v?.reg_no ?? vehicleText(m, t) ?? null;
+    const vehicleWords = (v: { reg_no: string } | null | undefined, m: string | null, t: string | null) =>
+      v?.reg_no ?? vehicleText(m, t) ?? null;
     const startAt = utcIso(date ?? colomboDate(task.start_at), start_time ?? colomboTime(task.start_at));
     const delta = new Date(startAt).getTime() - new Date(task.start_at).getTime();
     const shift = (iso: string | null) => iso && delta !== 0 ? new Date(new Date(iso).getTime() + delta).toISOString() : iso;

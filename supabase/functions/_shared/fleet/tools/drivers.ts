@@ -4,7 +4,8 @@ import { z } from "zod";
 import type { Db } from "../db.ts";
 import { ToolError, unwrap } from "../db.ts";
 import { docChip, type Employee, findDriver, loadLatest, loadRefs, sharing } from "../fleet.ts";
-import { contactLinks } from "../format.ts";
+import { contactLinks, phoneDisplay } from "../format.ts";
+import { logPhoneChange, seesDriverPhones, storedPhone } from "../phones.ts";
 import { colomboDate, colomboTime, dayRange } from "../time.ts";
 import { driverPhotoLinks } from "../media.ts";
 import { realDate, tool, zDate, zText } from "../tool.ts";
@@ -19,18 +20,20 @@ const zUsername = z.string().regex(/^[A-Za-z0-9._-]{3,40}$/, "3 to 40 characters
 const zPin = z.string().regex(/^\d{6}$/, "The PIN is exactly 6 digits").describe("6-digit PIN, as a string");
 const zDriverRef = zText(80).describe("The driver's username (employee code or full name also work)");
 
-function driverCard(e: Employee, plate: string | null, location?: string) {
+/** A driver's card; `phones` false (Hotfix 2, F: someone who only views) leaves the number and its links out. */
+function driverCard(e: Employee, plate: string | null, location?: string, phones = true) {
   return {
     name: e.name,
     code: e.code,
     username: e.username,
-    phone: e.phone,
+    phone: phones ? e.phone : undefined,
+    phone_display: phones ? phoneDisplay(e.phone) : undefined,
     active: e.active,
     language: e.language,
     has_login: e.auth_user_id !== null,
     current_vehicle: plate,
     location,
-    ...contactLinks(e.phone),
+    ...(phones ? contactLinks(e.phone) : {}),
   };
 }
 
@@ -55,7 +58,7 @@ export const listDrivers = tool({
   input: z.object({
     include_inactive: z.boolean().optional().describe("Also show drivers who have been switched off"),
   }),
-  async run({ include_inactive }, { db, now }) {
+  async run({ include_inactive }, { db, now, actor }) {
     const since = new Date(now.getTime() - 30 * 86400000).toISOString();
     const today = colomboDate(now);
     const [refs, latest, eventsRes, openRes, endedRes] = await Promise.all([
@@ -89,6 +92,7 @@ export const listDrivers = tool({
           e,
           e.current_vehicle_id ? refs.veh.get(e.current_vehicle_id)?.reg_no ?? null : null,
           sharing(latest.get(e.id), now).text,
+          seesDriverPhones(actor),
         ),
         licence: e.licence_expiry ? docChip(e.licence_expiry, today) : undefined,
         last_30_days: last30.get(e.id) ?? { accepted: 0, declined: 0 },
@@ -115,6 +119,8 @@ export const createDriver = tool({
     phone: zText(30).optional().describe("Mobile number, e.g. 0771234567"),
   }),
   async run(args, { db }) {
+    // Checked before the sign-in is made (stored +94…).
+    const phone = storedPhone(args.phone) ?? null;
     const username = args.username.toLowerCase();
     const code = args.code.trim();
     const email = emailFor(username);
@@ -149,7 +155,7 @@ export const createDriver = tool({
     }
 
     const inserted = await db.from("employees")
-      .insert({ code, name: args.name, username, phone: args.phone ?? null, role: "driver", permissions: [], auth_user_id: authUserId })
+      .insert({ code, name: args.name, username, phone, role: "driver", permissions: [], auth_user_id: authUserId })
       .select("*")
       .single();
     if (inserted.error) {
@@ -238,7 +244,8 @@ export const updateDriver = tool({
     phone: zText(30).nullable().optional(),
     licence_expiry: zDate.nullable().optional().describe("Driving licence expiry, YYYY-MM-DD"),
   }),
-  async run({ username, phone, licence_expiry }, { db }) {
+  async run({ username, phone: typedPhone, licence_expiry }, { db, actor }) {
+    const phone = storedPhone(typedPhone);
     const refs = await loadRefs(db);
     const driver = findDriver(refs, username);
     if (phone === undefined && licence_expiry === undefined) throw new ToolError("Nothing to change: give phone and/or licence_expiry.");
@@ -250,6 +257,7 @@ export const updateDriver = tool({
         .eq("id", driver.id).select("*").single(),
       "employee",
     );
+    if (phone !== undefined) await logPhoneChange(db, driver.id, driver.phone, updated.phone, actor);
     const plate = updated.current_vehicle_id ? refs.veh.get(updated.current_vehicle_id)?.reg_no ?? null : null;
     return {
       result: { updated: { ...driverCard(updated, plate), licence_expiry: updated.licence_expiry } },

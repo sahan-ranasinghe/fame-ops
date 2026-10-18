@@ -2,11 +2,12 @@
 // in the web app). Personal: a signed-in person or a personal connector key; the
 // shared key has no person and is refused. Any office permission may call them.
 import { z } from "zod";
-import { ToolError, unwrap } from "../db.ts";
+import { ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import type { Db } from "../db.ts";
-import { deviceLabel, EVENTS, relevantEvents } from "../notifications.ts";
+import { deviceLabel, EVENTS, inboxKind, relevantEvents } from "../notifications.ts";
 import type { Actor } from "../roles.ts";
 import { colomboDateTime } from "../time.ts";
+import { whenText } from "../durations.ts";
 import { tool, zId, zText } from "../tool.ts";
 
 function person(actor: Actor): string {
@@ -24,12 +25,17 @@ async function endpointHash(endpoint: string): Promise<string> {
   return [...new Uint8Array(digest)].slice(0, 8).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** The office site's sounds when the person never changed them (Hotfix 2, B). */
+const SOUND_DEFAULT = { on: true, volume: 70 };
+
 async function settingsOf(db: Db, employeeId: string, permissions: readonly string[]) {
-  const [rowsRes, subsRes] = await Promise.all([
+  const [rowsRes, subsRes, prefsRes] = await Promise.all([
     db.from("notification_settings").select("event, enabled").eq("employee_id", employeeId),
     db.from("web_push_subscriptions").select("id, endpoint, user_agent, created_at, last_ok_at").eq("employee_id", employeeId)
       .is("removed_at", null).order("created_at"),
+    db.from("notification_prefs").select("sound_on, volume").eq("employee_id", employeeId).maybeSingle(),
   ]);
+  const prefs = unwrapMaybe(prefsRes, "sound settings");
   const off = new Set(unwrap(rowsRes, "notification settings").filter((r) => !r.enabled).map((r) => r.event));
   const devices = await Promise.all(
     unwrap(subsRes, "devices").map(async (s) => ({
@@ -46,6 +52,7 @@ async function settingsOf(db: Db, employeeId: string, permissions: readonly stri
     events: relevantEvents(permissions).map((e) => ({ event: e.event, label: e.label, text: e.text, enabled: !off.has(e.event) })),
     devices,
     push: { configured, public_key: configured ? publicKey : undefined },
+    sound: prefs ? { on: prefs.sound_on, volume: prefs.volume } : SOUND_DEFAULT,
   };
 }
 
@@ -65,29 +72,56 @@ export const myNotificationSettings = tool({
 export const setMyNotificationSettings = tool({
   name: "set_my_notification_settings",
   title: "Switch my notifications on or off",
-  description:
-    'Per event, true or false: {"request.created": false}. Events not named keep their setting. Answers like my_notification_settings.',
+  description: 'Per event, true or false: {"request.created": false}. Events not named keep their setting. sound: the office ' +
+    "site's sounds for new notifications (on, volume 0–100). Answers like my_notification_settings.",
   readOnly: false,
   input: z.object({
-    events: z.record(z.string(), z.boolean()).describe("event → enabled"),
+    events: z.record(z.string(), z.boolean()).optional().describe("event → enabled"),
+    sound: z.object({
+      on: z.boolean().optional(),
+      volume: z.number().int().min(0).max(100).optional(),
+    }).optional().describe("Hotfix 2: the office site's sounds (default on, volume 70)"),
   }),
-  async run({ events }, { db, actor, now }) {
+  async run({ events = {}, sound }, { db, actor, now }) {
     const id = person(actor);
     const names = Object.keys(events);
-    if (names.length === 0) throw new ToolError("Nothing to change: name at least one event.");
+    if (names.length === 0 && sound?.on === undefined && sound?.volume === undefined) {
+      throw new ToolError("Nothing to change: name at least one event, or the sound.");
+    }
     const known = new Set(EVENTS.map((e) => e.event));
     const bad = names.filter((n) => !known.has(n as typeof EVENTS[number]["event"]));
     if (bad.length > 0) throw new ToolError(`Unknown event: ${bad.join(", ")}. The events are ${[...known].join(", ")}.`);
-    unwrap(
-      await db.from("notification_settings").upsert(
-        names.map((event) => ({ employee_id: id, event, enabled: events[event], updated_at: now.toISOString() })),
-        { onConflict: "employee_id,event" },
-      ),
-      "notification settings",
-    );
+    if (names.length > 0) {
+      unwrap(
+        await db.from("notification_settings").upsert(
+          names.map((event) => ({ employee_id: id, event, enabled: events[event], updated_at: now.toISOString() })),
+          { onConflict: "employee_id,event" },
+        ),
+        "notification settings",
+      );
+    }
+    if (sound && (sound.on !== undefined || sound.volume !== undefined)) {
+      const before = unwrapMaybe(
+        await db.from("notification_prefs").select("sound_on, volume").eq("employee_id", id).maybeSingle(),
+        "sound settings",
+      );
+      unwrap(
+        await db.from("notification_prefs").upsert({
+          employee_id: id,
+          sound_on: sound.on ?? before?.sound_on ?? SOUND_DEFAULT.on,
+          volume: sound.volume ?? before?.volume ?? SOUND_DEFAULT.volume,
+          updated_at: now.toISOString(),
+        }, { onConflict: "employee_id" }),
+        "sound settings",
+      );
+    }
     return {
       result: await settingsOf(db, id, actor.permissions),
-      summary: names.map((n) => `${n}=${events[n] ? "on" : "off"}`).join(", "),
+      summary: [
+        ...names.map((n) => `${n}=${events[n] ? "on" : "off"}`),
+        ...(sound?.on !== undefined ? [`sound=${sound.on ? "on" : "off"}`] : []),
+        ...(sound?.volume !== undefined ? [`volume=${sound.volume}`] : []),
+      ].join(", "),
     };
   },
 });
@@ -145,5 +179,85 @@ export const removeWebPush = tool({
       result: { removed: gone.length, ...(await settingsOf(db, id, actor.permissions)) },
       summary: `${gone.length} device(s) removed for ${actor.name}`,
     };
+  },
+});
+
+/** One item of the notification centre as the page shows it. */
+function inboxItem(
+  r: {
+    id: number;
+    event: string;
+    title: string;
+    body: string | null;
+    url: string | null;
+    who: string | null;
+    created_at: string;
+    read_at: string | null;
+  },
+  now: Date,
+) {
+  return {
+    id: r.id,
+    event: r.event,
+    title: r.title,
+    body: r.body ?? undefined,
+    url: r.url ?? undefined,
+    who: r.who ?? undefined,
+    at: colomboDateTime(r.created_at),
+    ago: whenText(r.created_at, now),
+    read: r.read_at !== null,
+    kind: inboxKind(r.event),
+  };
+}
+
+async function unreadCount(db: Db, employeeId: string): Promise<number> {
+  const { count, error } = await db.from("office_inbox").select("id", { count: "exact", head: true }).eq("employee_id", employeeId)
+    .is("read_at", null);
+  if (error) throw new Error(`notification centre: ${error.message}`);
+  return count ?? 0;
+}
+
+export const myInbox = tool({
+  name: "my_inbox",
+  title: "My notifications",
+  description: "The person's notification centre (Hotfix 2): everything they were told about (a request to approve, a decision, " +
+    "a driver on the way, a task that needs a driver, a critical issue…), newest first, with who did it, when (at, and ago as " +
+    "words), the page it links to (url), read or not, and its kind for the sound (urgent, alert, soft, alarm, info). unread = " +
+    "how many are unread in all. Kept 90 days once read.",
+  readOnly: true,
+  input: z.object({
+    limit: z.number().int().min(1).max(100).optional().describe("Default 30"),
+    unread: z.boolean().optional().describe("Only the unread ones"),
+  }),
+  async run({ limit = 30, unread }, { db, actor, now }) {
+    const id = person(actor);
+    let q = db.from("office_inbox").select("id, event, title, body, url, who, created_at, read_at").eq("employee_id", id);
+    if (unread) q = q.is("read_at", null);
+    const [rows, count] = await Promise.all([
+      q.order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit),
+      unreadCount(db, id),
+    ]);
+    const items = unwrap(rows, "notification centre").map((r) => inboxItem(r, now));
+    return { result: { unread: count, items }, summary: `${items.length} notifications, ${count} unread` };
+  },
+});
+
+export const markInboxRead = tool({
+  name: "mark_inbox_read",
+  title: "Mark notifications read",
+  description: "Marks the person's notifications read: the ids given (opening one), or all of them (Mark all read). Answers how " +
+    "many were marked and how many are still unread.",
+  readOnly: false,
+  input: z.object({
+    ids: z.array(z.number().int().positive()).min(1).max(200).optional(),
+    all: z.boolean().optional(),
+  }),
+  async run({ ids, all }, { db, actor, now }) {
+    const id = person(actor);
+    if (!all && !ids?.length) throw new ToolError("Give the ids, or all: true.");
+    let q = db.from("office_inbox").update({ read_at: now.toISOString() }).eq("employee_id", id).is("read_at", null);
+    if (!all) q = q.in("id", ids!);
+    const marked = unwrap(await q.select("id"), "notification centre").length;
+    return { result: { marked, unread: await unreadCount(db, id) }, summary: `${marked} marked read` };
   },
 });

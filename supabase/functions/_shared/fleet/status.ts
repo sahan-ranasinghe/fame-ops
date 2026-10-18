@@ -88,12 +88,16 @@ const clockS = new Intl.DateTimeFormat("en-GB", {
 /** "HH:MM:SS" in Asia/Colombo: the position time beside a live marker. */
 export const colomboClockS = (iso: string): string => clockS.format(new Date(iso));
 
-/** The age text the office reads: "2 min", "3 h", "2 d". */
+/**
+ * The age text the office reads, in the words of durations.ts (Hotfix 2, D; this file has no imports, so the few words
+ * are here): "now", "2 min ago", "3 h ago", "2 d ago".
+ */
 export function ageText(iso: string, now: Date): string {
   const minutes = minutesBetween(iso, now);
-  if (minutes < 60) return `${minutes} min`;
-  if (minutes < 48 * 60) return `${Math.floor(minutes / 60)} h`;
-  return `${Math.floor(minutes / (24 * 60))} d`;
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)} h ago`;
+  return `${Math.floor(minutes / (24 * 60))} d ago`;
 }
 
 /** The sentence for a status, the same on every screen; "· N points refused" when the server refused points the phone keeps. */

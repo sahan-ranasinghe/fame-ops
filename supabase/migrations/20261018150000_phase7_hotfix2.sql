@@ -450,3 +450,99 @@ end;
 $$;
 revoke all on function public.register_device_token(text, text, text, text, text, text[]) from public, anon;
 grant execute on function public.register_device_token(text, text, text, text, text, text[]) to authenticated, service_role;
+
+-- J. The driver hears when the vehicle is now chosen on the day or any vehicle of a type (vehicle_day, vehicle_any in the
+-- changed push), not only a new plate. The function as in 20261018090000_phase7_trips.sql with those two lines.
+create or replace function public.tasks_notify_push()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_changes jsonb := '{}'::jsonb;
+begin
+  -- A housekeeping write (the 30-day removal of Google's lines) changes nothing the driver sees: no push.
+  if coalesce(current_setting('fleet.quiet', true), '') = 'on' then
+    return null;
+  end if;
+  -- The driver's own app (seen, accepted, declined, started, completed) never pushes.
+  if coalesce(current_setting('request.jwt.claims', true)::jsonb ->> 'role', '') = 'authenticated' then
+    return null;
+  end if;
+
+  -- Phase 7 (§13): a trip the driver started is theirs: no "new" push for it, and none when they cancel it themselves
+  -- before it starts (driver-api writes as the service role, so the check above does not see it). The office changing,
+  -- reassigning or cancelling it still tells them (below); a stop the driver adds on the way writes no task row.
+  if new.kind = 'self' and tg_op = 'INSERT' then
+    return null;
+  end if;
+  if new.kind = 'self' and tg_op = 'UPDATE' and new.status = 'cancelled' and old.status <> 'cancelled'
+     and new.cancelled_reason = 'Cancelled by the driver before starting' then
+    return null;
+  end if;
+
+  if tg_op = 'INSERT' then
+    if new.status in ('assigned', 'in_progress') then
+      perform public.send_push(new.id, 'new', new.employee_id);
+    end if;
+    return null;
+  end if;
+
+  if new.employee_id <> old.employee_id then
+    -- The previous driver hears that the task is gone only if he had accepted it
+    -- (a task he never accepted simply leaves his list) and did not decline it himself.
+    if old.status <> 'declined' and old.accepted_at is not null then
+      perform public.send_push(new.id, 'removed', old.employee_id);
+    end if;
+    if new.status in ('assigned', 'in_progress') then
+      perform public.send_push(new.id, 'new', new.employee_id);
+    end if;
+  elsif new.status = 'cancelled' and old.status <> 'cancelled' then
+    if old.status <> 'declined' then
+      perform public.send_push(new.id, 'cancelled', new.employee_id);
+    end if;
+  elsif old.status = 'declined' and new.status = 'assigned' then
+    -- The same driver gets a declined task back (the office talked to him): as a new task.
+    perform public.send_push(new.id, 'new', new.employee_id);
+  elsif new.status in ('assigned', 'in_progress')
+    and (new.start_at, new.end_by, new.vehicle_id, new.vehicle_mode, new.vehicle_type_wanted, new.title, new.plan_version, new.notes,
+         new.passengers, new.contact_name, new.contact_phone)
+        is distinct from
+        (old.start_at, old.end_by, old.vehicle_id, old.vehicle_mode, old.vehicle_type_wanted, old.title, old.plan_version, old.notes,
+         old.passengers, old.contact_name, old.contact_phone) then
+    -- What changed, in the words the push shows ("Task changed: new time 09:30 · vehicle WP KL-1234").
+    if new.start_at is distinct from old.start_at then
+      v_changes := v_changes || jsonb_build_object('time', public.colombo_when(new.start_at));
+    end if;
+    if new.end_by is distinct from old.end_by then
+      v_changes := v_changes || jsonb_build_object('end_by',
+        case when new.end_by is null then 'none' else to_char(new.end_by at time zone 'Asia/Colombo', 'HH24:MI') end);
+    end if;
+    if (new.vehicle_id, new.vehicle_mode, new.vehicle_type_wanted) is distinct from (old.vehicle_id, old.vehicle_mode, old.vehicle_type_wanted) then
+      -- Hotfix 2 (J): a plate, or the vehicle chosen on the day (vehicle_day), or any vehicle of a type (vehicle_any).
+      v_changes := v_changes || case
+        when new.vehicle_id is not null then
+          jsonb_build_object('vehicle', (select v.reg_no from public.vehicles v where v.id = new.vehicle_id))
+        when new.vehicle_mode = 'any_type' then jsonb_build_object('vehicle_any', coalesce(new.vehicle_type_wanted, 'other'))
+        else jsonb_build_object('vehicle_day', true)
+      end;
+    end if;
+    if new.title is distinct from old.title then
+      v_changes := v_changes || jsonb_build_object('title', new.title);
+    end if;
+    if new.plan_json is distinct from old.plan_json then
+      -- Phase 7 (§11): which stops changed, by their place in the order, when update_task_stops said so.
+      v_changes := v_changes || jsonb_build_object('stops', coalesce(new.plan_json -> 'stop_changes', 'true'::jsonb));
+    end if;
+    if new.passengers is distinct from old.passengers then
+      v_changes := v_changes || jsonb_build_object('passengers', new.passengers);
+    end if;
+    if (new.notes, new.contact_name, new.contact_phone) is distinct from (old.notes, old.contact_name, old.contact_phone) then
+      v_changes := v_changes || jsonb_build_object('notes', true);
+    end if;
+    perform public.send_push(new.id, 'changed', new.employee_id, jsonb_build_object('changes', v_changes));
+  end if;
+  return null;
+end;
+$$;

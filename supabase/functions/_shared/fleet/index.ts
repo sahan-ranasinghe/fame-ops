@@ -12,6 +12,7 @@ import {
   resetOfficePassword,
   revokeOfficeKey,
   setOfficeUserActive,
+  updateMyProfile,
   updateOfficeUser,
 } from "./tools/accounts.ts";
 import { createDriver, listDrivers, resetPin, setDriverActive, updateDriver } from "./tools/drivers.ts";
@@ -46,12 +47,21 @@ import {
   createRequest,
   decideRequest,
   listRequests,
+  myTrips,
   redecideRequest,
+  reviewing,
   suggestVehicles,
   updateRequest,
 } from "./tools/requests.ts";
 import { issueHistory, listIssues, updateIssue } from "./tools/issues.ts";
-import { myNotificationSettings, registerWebPush, removeWebPush, setMyNotificationSettings } from "./tools/notifications.ts";
+import {
+  markInboxRead,
+  myInbox,
+  myNotificationSettings,
+  registerWebPush,
+  removeWebPush,
+  setMyNotificationSettings,
+} from "./tools/notifications.ts";
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
 import {
   cancelTask,
@@ -163,6 +173,12 @@ export const TOOLS: AnyTool[] = [
   restorePlace,
   listTasks,
   setTripPurpose,
+  // Hotfix 2: My trips, the notification centre, my phone number, who is reviewing a request.
+  myTrips,
+  myInbox,
+  markInboxRead,
+  updateMyProfile,
+  reviewing,
 ];
 
 export { WEB_ONLY_TOOLS } from "./tools/media.ts";
@@ -186,7 +202,12 @@ export const INSTRUCTIONS = [
   "Notifications (web push in the office web app): my_notification_settings and set_my_notification_settings are a person's own " +
   "(a signed-in person or a personal key; the shared key has no person). Events: a request comes in, your request is decided, a task " +
   "declined or not accepted (also to the person who assigned it and the requester), a driver who needs another vehicle, a critical " +
-  "issue, an issue given to you.",
+  "issue, an issue given to you. Everyone told has it in their notification centre too (my_inbox, mark_inbox_read), with or " +
+  "without a browser; my_trips lists a person's own requests and proposed tasks with each trip's live state.",
+  "Several people may approve: decide_request takes the version list_requests showed and refuses a request someone else decided " +
+  'since ("Already approved by Palitha at 10:42"); request cards name who approved, declined or cancelled. Phone numbers are ' +
+  "stored +94… (update_my_profile for your own, update_office_user and update_driver for others); a task may have its vehicle " +
+  'chosen on the day (vehicle "on the day" or "any van", when the setting vehicle_on_the_day is on).',
   "A vehicle can have a custodian (update_vehicle custodian): list_vehicles shows who it is assigned to and whether it is free, on a " +
   "task or booked; suggest_vehicles groups the free pool, the assigned ones (ask the custodian first), the busy and the in-garage ones. " +
   "book_vehicle makes a request and its task in one go (the custodian drives when driver_required is false); cancel_request cancels " +
@@ -252,3 +273,4 @@ export { runTool, type ToolOutcome } from "./run.ts";
 export type { AnyTool } from "./tool.ts";
 export { googleUse } from "./google.ts";
 export { loadSettings } from "./settings.ts";
+export { phoneDisplay } from "./format.ts";

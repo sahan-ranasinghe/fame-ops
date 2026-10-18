@@ -85,11 +85,3 @@ export function monthRange(month: string): { from: string; to: string; firstDay:
 export function minutesSince(at: string, now: Date): number {
   return Math.max(0, Math.floor((now.getTime() - new Date(at).getTime()) / 60000));
 }
-
-/** "2 min", "3 h", "4 d" */
-export function ago(at: string, now: Date): string {
-  const minutes = minutesSince(at, now);
-  if (minutes < 60) return `${minutes} min`;
-  if (minutes < 48 * 60) return `${Math.floor(minutes / 60)} h`;
-  return `${Math.floor(minutes / (24 * 60))} d`;
-}

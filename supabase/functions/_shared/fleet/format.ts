@@ -32,7 +32,9 @@ export function phoneDisplay(phone: string | null | undefined): string | undefin
 }
 
 /** A number with its links (Call and WhatsApp), or undefined when there is none. */
-export function phoneLinks(phone: string | null | undefined): { phone: string; phone_display: string; call: string; whatsapp: string } | undefined {
+export function phoneLinks(
+  phone: string | null | undefined,
+): { phone: string; phone_display: string; call: string; whatsapp: string } | undefined {
   const call = telLink(phone);
   const whatsapp = waLink(phone);
   if (!phone || !call || !whatsapp) return undefined;

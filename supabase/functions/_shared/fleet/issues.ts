@@ -27,7 +27,8 @@ import {
 import { thousands } from "./format.ts";
 import { loadSettings } from "./settings.ts";
 import { needsAttention } from "./status.ts";
-import { ago, colomboDate, colomboDayTime, colomboTime, daysBetween, shortDate } from "./time.ts";
+import { colomboDate, colomboDayTime, colomboTime, daysBetween, minutesSince, shortDate } from "./time.ts";
+import { duration, whenText } from "./durations.ts";
 import { missingText, requiredKinds } from "./docs.ts";
 
 export type Severity = "info" | "warning" | "critical";
@@ -183,6 +184,8 @@ export const APP_STOPS_PER_DAY = 2;
 export const NO_FIX_MIN = 30;
 
 const ms = (days: number) => days * 86400000;
+/** "1 h 15 min", or "?" when the number is missing. */
+const minText = (minutes: number | null | undefined) => (minutes == null ? "?" : duration(minutes));
 
 /** The wanted set from the data, for everything or for one task / report / request / vehicle. */
 export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): Promise<Wanted[]> {
@@ -332,7 +335,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         severity: r.category === "breakdown" || r.category === "accident" ? "critical" : "warning",
         title: `Vehicle problem: ${r.category.replace("_", " ")}${r.status === "in_garage" ? " (in garage)" : ""}`,
         detail: [refs.veh.get(r.vehicle_id)?.reg_no, refs.emp.get(r.employee_id)?.name, r.note].filter(Boolean).join(" · "),
-        due: `reported ${ago(r.created_at, now)} ago`,
+        due: `reported ${whenText(r.created_at, now)}`,
         sort_key: -2,
         vehicle_id: r.vehicle_id,
         employee_id: r.employee_id,
@@ -362,7 +365,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           refs.emp.get(l.employee_id)?.name,
           `${thousands(l.reading_km)} km${l.ai_value !== null ? ` (photo ${thousands(l.ai_value)})` : ""}`,
         ].filter(Boolean).join(" · "),
-        due: `logged ${ago(l.logged_at, now)} ago`,
+        due: `logged ${whenText(l.logged_at, now)}`,
         sort_key: -1,
         vehicle_id: l.vehicle_id,
         employee_id: l.employee_id,
@@ -382,7 +385,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           `${colomboDayTime(g.from.logged_at)} → ${colomboDayTime(g.to.logged_at)}`,
         ]
           .filter(Boolean).join(" · "),
-        due: `ended ${ago(g.to.logged_at, now)} ago`,
+        due: `ended ${whenText(g.to.logged_at, now)}`,
         sort_key: -1,
         vehicle_id: g.vehicle_id,
         employee_id: g.from.employee_id,
@@ -417,7 +420,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
             ? (result.permissionProblem ? "Driver's location permission removed" : "Driver's location is off")
             : "No signal from the driver",
           detail: `${who(t)} · last position ${fields.last_position_at ?? "none"}`,
-          due: from ? `for ${ago(from, now)}` : null,
+          due: from ? `for ${duration(minutesSince(from, now))}` : null,
           sort_key: -3,
           vehicle_id: t.vehicle_id,
           employee_id: t.employee_id,
@@ -430,7 +433,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           kind: "running_late",
           ref_key: `late:${t.id}`,
           severity: "warning",
-          title: `Running late by ${eta.late_min} min`,
+          title: `Running late by ${duration(eta.late_min)}`,
           detail: who(t),
           due: eta.final_eta_at ? `final ETA ${colomboTime(eta.final_eta_at)}` : null,
           sort_key: -2,
@@ -452,7 +455,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           severity: "warning",
           title: "Not started yet",
           detail: who(t),
-          due: `leave by ${colomboDayTime(leaveBy)} · ${ago(leaveBy, now)} ago`,
+          due: `leave by ${colomboDayTime(leaveBy)} · ${whenText(leaveBy, now)}`,
           sort_key: -2,
           vehicle_id: t.vehicle_id,
           employee_id: t.employee_id,
@@ -466,7 +469,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           ref_key: `accept:${t.id}`,
           severity: "critical",
           title: "Not accepted in time · needs a driver",
-          detail: `${who(t)} · sent ${ago(t.sent_at, now)} ago`,
+          detail: `${who(t)} · sent ${t.sent_at ? whenText(t.sent_at, now) : "?"}`,
           due: `leave by ${colomboDayTime(leaveBy)}`,
           sort_key: -1,
           vehicle_id: t.vehicle_id,
@@ -562,7 +565,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         ref_key: `early:${t.id}`,
         severity: "warning",
         title: `Completed early: ${f?.odometer_km ?? "?"} km on the odometer for a ${f?.planned_km ?? "?"} km plan`,
-        detail: `${who(t)} · ${f?.minutes ?? "?"} min for ${f?.planned_minutes ?? "?"} min of planned driving`,
+        detail: `${who(t)} · ${minText(f?.minutes)} for ${minText(f?.planned_minutes)} of planned driving`,
         due: t.completed_at ? `completed ${colomboDayTime(t.completed_at)}` : null,
         sort_key: -1,
         vehicle_id: t.vehicle_id,
@@ -674,7 +677,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         severity: "warning",
         title: [
           count >= APP_STOPS_PER_DAY ? `App stopped by the phone ${count}× today` : null,
-          noFix ? `no GPS fix for ${noFixMin} min on duty` : null,
+          noFix ? `no GPS fix for ${duration(noFixMin)} on duty` : null,
         ]
           .filter(Boolean).join(" · ").replace(/^n/, "N"),
         detail: `${e.name}${phone ? ` · ${phone}` : ""} · the phone's settings: Me → Phone setup in the app`,
@@ -702,7 +705,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
           Boolean,
         )
           .join(" · "),
-        due: `waiting ${ago(since, now)}`,
+        due: `waiting ${duration(minutesSince(since, now))}`,
         sort_key: -1,
         request_id: r.id,
         employee_id: r.requested_by_employee_id,
