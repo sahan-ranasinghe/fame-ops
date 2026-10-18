@@ -31,8 +31,11 @@ export type Latest = Row<"driver_latest">;
 // ---------------------------------------------------------------------------
 
 export interface Refs {
+  /** Part 6: without the stores' demo driver and vehicle (employees.demo, vehicles.demo): no list, search or suggestion
+   * of the office shows them. */
   employees: Employee[];
   vehicles: Vehicle[];
+  /** Every row, the demo too, so a row that names one still finds it. */
   emp: Map<string, Employee>;
   veh: Map<string, Vehicle>;
   company: Map<string, Row<"rental_companies">>;
@@ -48,8 +51,8 @@ export async function loadRefs(db: Db): Promise<Refs> {
   const v = unwrap(vehicles, "vehicles");
   const c = unwrap(companies, "rental companies");
   return {
-    employees: e,
-    vehicles: v,
+    employees: e.filter((row) => !row.demo),
+    vehicles: v.filter((row) => !row.demo),
     emp: new Map(e.map((row) => [row.id, row])),
     veh: new Map(v.map((row) => [row.id, row])),
     company: new Map(c.map((row) => [row.id, row])),
@@ -477,7 +480,7 @@ export async function openTasksOn(db: Db, date: string): Promise<Task[]> {
   const { from, to } = dayRange(date);
   return unwrap(
     await db.from("tasks").select("*")
-      .in("status", ["assigned", "in_progress"]).gte("start_at", from).lt("start_at", to)
+      .in("status", ["assigned", "in_progress"]).gte("start_at", from).lt("start_at", to).eq("demo", false)
       .order("start_at"),
     "tasks",
   );

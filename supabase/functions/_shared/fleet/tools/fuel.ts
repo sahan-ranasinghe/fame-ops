@@ -40,7 +40,7 @@ export const listFuel = tool({
     const onlyVehicle = vehicle ? findVehicle(refs, vehicle) : null;
     const onlyDriver = driver ? findDriver(refs, driver) : null;
     const logs = await fetchAll((a, b) => {
-      let q = db.from("fuel_logs").select("*").gte("logged_at", from).lt("logged_at", to);
+      let q = db.from("fuel_logs").select("*").gte("logged_at", from).lt("logged_at", to).eq("demo", false);
       if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
       if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
       return q.order("logged_at", { ascending: false }).order("id").range(a, b);
@@ -78,7 +78,8 @@ export const listFuel = tool({
     if (span) {
       const m = monthRange(which);
       const rows = await fetchAll((a, b) => {
-        let q = db.from("fuel_logs").select("id, litres, amount_cents").gte("logged_at", m.from).lt("logged_at", m.to);
+        let q = db.from("fuel_logs").select("id, litres, amount_cents").gte("logged_at", m.from).lt("logged_at", m.to)
+          .eq("demo", false);
         if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
         if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
         return q.order("logged_at").order("id").range(a, b);

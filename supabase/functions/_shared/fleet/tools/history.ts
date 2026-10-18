@@ -47,7 +47,7 @@ export const listTasks = tool({
     const plates = key ? refs.vehicles.filter((v) => plain(v.reg_no).includes(key)).map((v) => v.id).slice(0, 40) : [];
     // A fresh query each time (a page of fetchAll orders and ranges its own).
     const build = () => {
-      let q = db.from("tasks").select("*").gte("start_at", span.start).lt("start_at", span.end);
+      let q = db.from("tasks").select("*").gte("start_at", span.start).lt("start_at", span.end).eq("demo", false);
       if (words) {
         q = q.or([
           `title.ilike.*${words}*`,

@@ -37,13 +37,13 @@ async function mileageOf(
     fetchAll((a, b) => {
       // Every vehicle's tasks even for one vehicle: a task swapped off it during the trip ends on another (Phase 7).
       let q = db.from("tasks").select("id, title, vehicle_id, employee_id, km, completed_at, purpose")
-        .eq("status", "completed").gte("completed_at", from).lt("completed_at", to);
+        .eq("status", "completed").gte("completed_at", from).lt("completed_at", to).eq("demo", false);
       if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
       return q.order("completed_at").order("id").range(a, b);
     }, "tasks"),
     fetchAll((a, b) => {
       let q = db.from("fuel_logs").select("id, vehicle_id, employee_id, litres, amount_cents, video_status")
-        .gte("logged_at", from).lt("logged_at", to);
+        .gte("logged_at", from).lt("logged_at", to).eq("demo", false);
       if (onlyVehicle) q = q.eq("vehicle_id", onlyVehicle.id);
       if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
       return q.order("logged_at").order("id").range(a, b);
@@ -270,7 +270,7 @@ export const listVehicleReports = tool({
   async run({ status = "not_closed", search, limit, cursor }, { db }) {
     const w = pageWindow(limit, cursor);
     const refs = await loadRefs(db);
-    let query = db.from("vehicle_reports").select("*", { count: "exact" });
+    let query = db.from("vehicle_reports").select("*", { count: "exact" }).eq("demo", false);
     if (status === "not_closed") query = query.neq("status", "closed");
     else if (status !== "all") query = query.eq("status", status);
     const words = search?.replace(/[%_,()*]/g, " ").trim();

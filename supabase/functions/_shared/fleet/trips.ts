@@ -254,7 +254,8 @@ export async function createSelfTrip(db: Db, now: Date, driver: Employee, input:
     "stop",
   );
   await tripStarted(db, task, driver, noted);
-  if (input.purpose === "personal") {
+  // Part 6: the stores' demo driver tells the office nothing.
+  if (input.purpose === "personal" && !driver.demo) {
     await notifyEvent(db, "trip.personal", {
       title: `${driver.name} started a personal trip to ${shown}`,
       body: `${vehicle.reg_no} · ${colomboTime(at)}`,

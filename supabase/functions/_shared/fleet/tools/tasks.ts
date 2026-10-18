@@ -1500,7 +1500,7 @@ export const updateTaskStops = tool({
 export async function needsDriverList(db: Db, refs: Refs, now: Date) {
   const rows = unwrap(
     await db.from("tasks").select("*").not("needs_driver_since", "is", null).in("status", ["assigned", "declined"])
-      .gte("start_at", dayRange(colomboDate(now)).from).order("start_at"),
+      .gte("start_at", dayRange(colomboDate(now)).from).eq("demo", false).order("start_at"),
     "tasks",
   );
   const firstStops = rows.length
@@ -1570,10 +1570,10 @@ export const taskBoard = tool({
       loadRefs(db),
       loadLatest(db),
       loadSettings(db),
-      db.from("tasks").select("*").gte("start_at", from).lt("start_at", to).order("start_at"),
+      db.from("tasks").select("*").gte("start_at", from).lt("start_at", to).eq("demo", false).order("start_at"),
       // Looking at today: also show tasks started on an earlier day that are still running.
       day === today
-        ? db.from("tasks").select("*").eq("status", "in_progress").lt("start_at", from).order("start_at")
+        ? db.from("tasks").select("*").eq("status", "in_progress").lt("start_at", from).eq("demo", false).order("start_at")
         : { data: [] as Task[], error: null },
     ]);
     const tasks = [...unwrap(stillRunning, "tasks"), ...unwrap(ofDay, "tasks")];

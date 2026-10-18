@@ -54,7 +54,8 @@ export const dutyLog = tool({
     const who = driver ? findDriver(refs, driver) : null;
 
     let sq = db.from("duty_sessions").select("id, employee_id, vehicle_id, started_at, ended_at, end_reason, device_info")
-      .lt("started_at", toIso).or(`ended_at.is.null,ended_at.gte.${fromIso}`).order("started_at", { ascending: false }).limit(500);
+      .lt("started_at", toIso).or(`ended_at.is.null,ended_at.gte.${fromIso}`).eq("demo", false).order("started_at", { ascending: false })
+      .limit(500);
     if (who) sq = sq.eq("employee_id", who.id);
     const sessions = unwrap(await sq, "duty sessions");
     const ids = [...new Set(sessions.map((s) => s.employee_id))];

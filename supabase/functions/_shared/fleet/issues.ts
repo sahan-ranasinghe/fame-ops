@@ -333,7 +333,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
 
   // --- Vehicle problems reported by drivers (the issue mirrors the report) -----------
   if (reportScope) {
-    let q = db.from("vehicle_reports").select("*").neq("status", "closed");
+    let q = db.from("vehicle_reports").select("*").neq("status", "closed").eq("demo", false);
     if (scope.report_id) q = q.eq("id", scope.report_id);
     if (scope.vehicle_id) q = q.eq("vehicle_id", scope.vehicle_id);
     for (const r of unwrap(await q, "vehicle reports")) {
@@ -404,7 +404,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
 
   // --- Tasks: signal, late start, running late, not accepted, declined ------------------
   if (taskScope) {
-    let q = db.from("tasks").select("*").in("status", ["assigned", "in_progress", "declined"]);
+    let q = db.from("tasks").select("*").in("status", ["assigned", "in_progress", "declined"]).eq("demo", false);
     if (scope.task_id) q = q.eq("id", scope.task_id);
     const tasks = unwrap(await q, "tasks");
     const running = tasks.filter((t) => t.status === "in_progress");
@@ -509,7 +509,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   // --- Hotfix 3 (L2): a task never started, its leave-by over a day ago, is missed: one issue until someone resolves it --
   if (taskScope) {
     let q = db.from("tasks").select("id, title, employee_id, vehicle_id, leave_by, start_at, missed_at").eq("status", "missed")
-      .gte("missed_at", new Date(now.getTime() - ms(MISSED_KEEP_DAYS)).toISOString());
+      .gte("missed_at", new Date(now.getTime() - ms(MISSED_KEEP_DAYS)).toISOString()).eq("demo", false);
     if (scope.task_id) q = q.eq("id", scope.task_id);
     for (const t of unwrap(await q, "missed tasks")) {
       const leaveBy = t.leave_by ?? t.start_at;
@@ -536,9 +536,9 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     const keepFrom = new Date(now.getTime() - ms(KEEP_DAYS)).toISOString();
     const openFrom = now.getTime() - ms(OPEN_DAYS);
     let laterQ = db.from("tasks").select("id, title, employee_id, vehicle_id, start_at, leave_by").eq("status", "assigned")
-      .gte("start_at", dayStart).lt("start_at", dayEnd);
+      .gte("start_at", dayStart).lt("start_at", dayEnd).eq("demo", false);
     let flaggedQ = db.from("tasks").select("id, title, employee_id, vehicle_id, completed_at, finish_flag").not("finish_flag", "is", null)
-      .gte("completed_at", keepFrom);
+      .gte("completed_at", keepFrom).eq("demo", false);
     let stopsQ = db.from("task_stops").select(
       "id, task_id, seq, place_name, arrival_flag, arrival_distance_m, arrived_at, arrival_lat, arrival_lng",
     )
@@ -649,7 +649,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   // --- Phase 7: "I need another vehicle" (a breakdown or accident during a task) ------------------------
   if (taskScope) {
     let q = db.from("vehicle_reports").select("id, vehicle_id, employee_id, task_id, category, note, created_at").eq("needs_vehicle", true)
-      .not("task_id", "is", null).gte("created_at", new Date(now.getTime() - ms(2)).toISOString());
+      .not("task_id", "is", null).gte("created_at", new Date(now.getTime() - ms(2)).toISOString()).eq("demo", false);
     if (scope.task_id) q = q.eq("task_id", scope.task_id);
     const asks = unwrap(await q, "vehicle reports");
     const asked = asks.length
@@ -681,7 +681,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     const [stopsRes, sessionsRes] = await Promise.all([
       db.rpc("app_stops", { p_from: dayStart, p_to: nowIso }),
       db.from("duty_sessions").select("employee_id, started_at, ended_at, device_info").or(`ended_at.is.null,started_at.gte.${dayStart}`)
-        .order("started_at", { ascending: false }),
+        .eq("demo", false).order("started_at", { ascending: false }),
     ]);
     const stops = new Map(unwrap(stopsRes, "app stops").map((r) => [r.employee_id, r.stops]));
     const sessions = unwrap(sessionsRes, "duty sessions");

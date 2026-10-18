@@ -38,8 +38,9 @@ export const fleetOverview = tool({
     const [refs, latest, dayTasks, runningRes, waitingRes] = await Promise.all([
       loadRefs(db),
       loadLatest(db),
-      db.from("tasks").select("id, status").gte("start_at", from).lt("start_at", to),
-      db.from("tasks").select("id, title, employee_id, vehicle_id, started_at").eq("status", "in_progress").order("started_at"),
+      db.from("tasks").select("id, status").gte("start_at", from).lt("start_at", to).eq("demo", false),
+      db.from("tasks").select("id, title, employee_id, vehicle_id, started_at").eq("status", "in_progress").eq("demo", false)
+        .order("started_at"),
       db.from("vehicle_requests").select("id, created_at").in("status", ["waiting", "changed"]).order("created_at"),
     ]);
     const tasks = unwrap(dayTasks, "tasks");
