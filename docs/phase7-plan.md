@@ -2388,6 +2388,41 @@ Office web only: no migration, no function, no driver app change, the connector'
   - The e2e asks from the board's sheet and sees the Yes come in under the row, and gives a declined task to another driver
     from Give it a driver.
 
+**The fresh reviewer (one blocker, six to fix, six minor; all fixed but one said here).**
+1. **Blocker:** on Assign a task and New request the panel sits inside the page's own form, so the sheet's Send (or Enter)
+   also submitted the task or the request. **Fixed:** the sheet is drawn on document.body and its submit stops there (React
+   passes events up through a portal, so the stop is what counts). A test puts the sheet inside a form; it fails without the
+   fix.
+2. Esc in the sheet also left the page (PageTop's listener came first). **Fixed:** PageTop leaves Esc to an open dialog.
+3. The focus jumped back to the first card on every refresh. **Fixed:** focus once, `onClose` in a ref. Also: focus goes
+   back to the opener, Tab stays inside, a drag onto the shade does not close it, only drivers still listed are counted.
+4. Give it a driver could stay "Sending…" and showed "Needs a driver" for a task that had its driver again. **Fixed:** busy
+   cleared after a save; a "has a driver now" page.
+5. Warnings were lost when going back to the Overview. **Fixed:**
+   - New warnings take the task page, unless the change page was opened from it (`FROM_TASK`).
+   - From the task page, the save goes back to it and the warnings wait in `data/flash`.
+   - The e2e showed why: the task page twice in the history.
+6. Other saves left their page twice in the history (vehicle, request, a driver's or user's switch-off, cancel and withdraw),
+   and Done after adding a driver or a user pushed. **Fixed:** `useAfterSave`, Done replaces.
+7. The e2e's drivers step needed the list's search after back. **Fixed.**
+8. Minor:
+   - **Fixed:**
+     - the button's vehicle when the day decides;
+     - Give it a driver sends only the driver and vehicle (a resumed draft never adds fields);
+     - "Use this driver" only on an assignable Yes;
+     - the board's week chips and the duty log link a task only for people who may open it;
+     - "Open task →" in the booking result;
+     - the summary shows each stop's place by its pin;
+     - sessionStorage cleared between tests.
+   - **Said here:** a restored question is kept for the tab with no expiry. Its line says which trip it is about, and the
+     server's answer marks it closed, so "Use this driver" goes away.
+
+**The e2e on main's code with this branch:**
+- 21 of 24 passed the first time.
+- The three failures were the new cancel behaviour (the test updated), the duplicate history (fixed above), and a Live card
+  that had not refreshed yet.
+- All three pass on their own after the fixes.
+
 **Test steps** (they go into `docs/phase7-test-plan.md` when this branch and Part 6's meet):
 1. Requests, as a fleet admin on a laptop and on a phone. **See:** one "New request" (the header's on a laptop, the big
    button on a phone).
