@@ -106,7 +106,8 @@ export function entryChip(e: Pick<UnavailableEntry, "part" | "reason_text" | "st
     : e.part === "afternoon"
     ? `from ${e.start_time ?? ""}`.trim()
     : `${e.start_time ?? ""}–${e.end_time ?? ""}`;
-  return `${e.reason_text} · ${when}`;
+  // The server's words are lower case ("leave", "half day"): the chip starts with a capital.
+  return `${e.reason_text.charAt(0).toUpperCase()}${e.reason_text.slice(1)} · ${when}`;
 }
 
 /** "Mon 20 Oct", or "Mon 20 – Wed 22 Oct" for several full days: when an entry is, for the driver's page. */

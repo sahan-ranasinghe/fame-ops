@@ -90,7 +90,10 @@ export const driversBoard = tool({
             days: days.map((day) => {
               const range = dayRange(day);
               const mine = tasks.filter((t) => t.employee_id === e?.id && colomboDate(t.start_at) === day);
-              const away = off.filter((u) => u.employee_id === e?.id && u.starts_at < range.to && u.ends_at > range.from);
+              // Times compared as times: the database's "+00:00" and our ".000Z" do not compare as strings.
+              const from = Date.parse(range.from);
+              const to = Date.parse(range.to);
+              const away = off.filter((u) => u.employee_id === e?.id && Date.parse(u.starts_at) < to && Date.parse(u.ends_at) > from);
               return {
                 date: day,
                 tasks: mine.map((t) => ({

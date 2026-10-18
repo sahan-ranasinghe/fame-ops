@@ -1810,3 +1810,70 @@ test("Hotfix 3 (L7): with 100 open issues and 50 waiting requests the Overview f
     }
   }
 });
+
+test("Part 3b: the Drivers board and its week view, a question answered live, the driver's profile on the manage page", async ({ page }) => {
+  test.setTimeout(180_000);
+  const driver = { name: `Ruwan Board ${stamp}`, code: `EB3-${stamp}`, username: `eb3.${stamp}`, pin: "246817", phone: "0771234502" };
+  await tool("create_driver", driver);
+  const email = `e2e.3b.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E 3b Admin", email, role: "admin" });
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.getByLabel("New password").fill(`Part 3b admin ${stamp}!`);
+  await page.getByLabel("Again").fill(`Part 3b admin ${stamp}!`);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // H5. The board: the driver's row with its status; the week view: today "+" → Full day, Leave → its chip.
+  await page.getByRole("link", { name: "Drivers board" }).first().click();
+  await expect(page.getByRole("heading", { name: "Drivers board" })).toBeVisible();
+  await page.goto(`/drivers/board?q=${driver.username}`);
+  const row = page.getByTestId("board-list").locator(".drow", { hasText: driver.name });
+  await expect(row.getByTestId("drow-status")).toContainText("Off duty");
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();
+  const weekRow = page.getByTestId("week-row").filter({ hasText: driver.name });
+  await weekRow.getByRole("button", { name: new RegExp(`^${driver.name} not available `) }).first().click();
+  const editor = page.getByTestId("unav-editor");
+  await editor.getByRole("button", { name: "Full day" }).click();
+  await editor.getByRole("button", { name: "Leave" }).click();
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(weekRow).toContainText("Leave · all day");
+
+  // H3. Ask the driver from the board: free for a trip tomorrow 14:00–16:00; the answer arrives live; Assign.
+  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Now" }).click();
+  await page.getByRole("checkbox", { name: `Ask ${driver.name}` }).check();
+  await page.getByTestId("board-ask").click();
+  await expect(page.getByTestId("ask-picked")).toContainText(driver.name);
+  await page.getByTestId("ask-kind-free_for_trip").click();
+  const tomorrow = new Date(Date.now() + 5.5 * 3600_000 + 86400_000).toISOString().slice(0, 10);
+  await page.getByLabel("Day").fill(tomorrow);
+  await page.getByLabel("From").fill("14:00");
+  await page.getByLabel("From").press("Tab");
+  await page.getByLabel(/^To/).fill("16:00");
+  await page.getByLabel(/^To/).press("Tab");
+  await page.getByTestId("ask-send").click();
+  await expect(page).toHaveURL(/\/drivers\/asks\/[0-9a-f-]{36}$/);
+  const answer = page.getByTestId("ask-row").filter({ hasText: driver.name });
+  await expect(answer).toHaveAttribute("data-state", "sent");
+  const askId = page.url().split("/").pop()!;
+  const app = await driverRest(driver.username, driver.pin);
+  expect(await app.post("rpc/answer_ask", { p_ask_id: askId, p_answer: "yes" })).toBe(200);
+  await expect(answer).toHaveAttribute("data-state", "answered", { timeout: 20_000 });
+  await expect(answer).toContainText("Yes");
+  await expect(answer.getByTestId("ask-assign")).toBeVisible();
+
+  // G. The profile on the manage page: the emergency contact saved, its change logged.
+  await page.goto(`/drivers/${driver.username}/edit`);
+  await expect(page.getByTestId("pf-contact")).toContainText("077 123 4502");
+  await page.getByRole("button", { name: "Edit emergency contact" }).click();
+  const form = page.getByTestId("pf-edit-emergency");
+  await form.getByLabel("Name").fill("Nimali");
+  await form.getByLabel("Relationship").fill("wife");
+  await form.getByLabel("Phone").fill("0773334455");
+  await form.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("pf-emergency")).toContainText("Nimali");
+  await expect(page.getByTestId("pf-emergency")).toContainText("077 333 4455");
+  await expect(page.getByTestId("pf-changes")).toContainText("Emergency contact");
+  await expect(page.getByTestId("pf-unavailable")).toContainText("leave");
+});

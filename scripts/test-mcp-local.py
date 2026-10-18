@@ -2704,7 +2704,7 @@ bd = tool("drivers_board", {"week_from": day(0), "search": UB})
 brow = next((d for d in bd["drivers"] if d.get("username") == UB), {})
 wk = next((d for d in bd["week"]["drivers"] if d.get("username") == UB), {"days": []})
 check(brow.get("status", {}).get("kind") == "off_duty" and brow.get("links", {}).get("whatsapp") == "https://wa.me/94712223344"
-      and any(dd["not_available"] for dd in wk["days"]) and any(dd["tasks"] for dd in wk["days"]) and bd["counts"]["all"] >= 1,
+      and [dd["date"] for dd in wk["days"] if dd["not_available"]] == [day(1)] and any(dd["tasks"] for dd in wk["days"]) and bd["counts"]["all"] >= 1,
       "H5: the board's row (status, WhatsApp) and the week view (the task and the morning off)", json.dumps({"row": brow, "week": wk})[:400])
 
 # H3. A question with one-tap answers: the push, the answer, ask_answers, the asker's notification.

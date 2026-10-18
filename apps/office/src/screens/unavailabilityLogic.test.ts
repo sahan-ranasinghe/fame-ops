@@ -14,6 +14,7 @@ describe("the editor's words", () => {
 
   it("an entry's chip and days", () => {
     expect(entryChip(LEAVE)).toBe("Leave · all day");
+    expect(entryChip({ ...LEAVE, reason_text: "half day", part: "morning", end_time: "13:00" })).toBe("Half day · until 13:00");
     expect(entryChip(HALF)).toBe("Half day · until 13:00");
     expect(entryChip({ part: "afternoon", reason_text: "Personal", start_time: "13:00" })).toBe("Personal · from 13:00");
     expect(entryChip({ part: "hours", reason_text: "Other", start_time: "09:00", end_time: "11:30" })).toBe("Other · 09:00–11:30");
