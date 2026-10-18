@@ -33,7 +33,7 @@ import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOn
 import { RequestDetailCard } from "./RequestDetailCard";
 import { LateNotice } from "./requestParts";
 import { TripSection, useTripLine } from "./RequestTrip";
-import { ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
+import { knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 
 export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: RequestCard) => void }) {
   const { me, store, transport } = useFleet();
@@ -86,7 +86,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the
   // day; a proposal sent with its proposed driver keeps the vehicle it was proposed with.
   const onDay = vehicleOnTheDay(settings.data);
-  const dflt = asProposedDriver ? null : vehicleDefault({ on: onDay, date: shown.date, today: today(), driver, def: driverVeh });
+  const dflt = asProposedDriver ? null : vehicleDefault({ on: onDay, date: shown.date, today: today(), driver, def: knownDef(driverVeh, knownVehicle !== undefined) });
   const dayDefault = dflt?.kind === "on_the_day";
   const pickArgs = {
     f: dayDefault && !f.vehicle ? { ...f, vehicle: ON_THE_DAY } : f, was, driver,

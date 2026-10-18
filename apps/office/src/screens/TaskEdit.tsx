@@ -24,7 +24,7 @@ import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availab
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { checkDeparture, departurePlan } from "./departureLogic";
 import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
-import { ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
+import { knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 import { TONE, useBoardQuery, useTask } from "./TaskDetail";
 
 interface EditForm {
@@ -140,7 +140,7 @@ export function TaskEdit() {
   // Hotfix 2 (J): with vehicle_on_the_day on, a new driver on a later day (or one who brings none today) leaves the vehicle
   // to the day, unless the task already does.
   const onDay = vehicleOnTheDay(settings.data);
-  const dflt = f.driver ? vehicleDefault({ on: onDay, date: f.date || t.date || "", today: today(), driver: f.driver, def }) : null;
+  const dflt = f.driver ? vehicleDefault({ on: onDay, date: f.date || t.date || "", today: today(), driver: f.driver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) }) : null;
   const dayDefault = dflt?.kind === "on_the_day";
   const keepsDay = t.vehicle_mode === "driver_day";
   const vehicleToSend = f.vehicle || (dayDefault ? (keepsDay ? "" : ON_THE_DAY) : def && def.reg_no !== currentPlate ? def.reg_no : "");

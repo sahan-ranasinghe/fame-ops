@@ -43,15 +43,19 @@ export type VehicleDefault =
 
 /**
  * The default. `on`: the fleet setting vehicle_on_the_day. `def`: the vehicle the driver brings today (their vehicle
- * today, else their regular one), null when none or not known yet. A later `date` than `today` (both YYYY-MM-DD) leaves
- * it to the day; so does today with a driver who brings none.
+ * today, else their regular one); null = known to bring none; undefined = not known yet (Who's available still loading:
+ * no default yet, so it does not show the day and then jump to a plate). A later `date` than `today` (both YYYY-MM-DD)
+ * leaves it to the day; so does today with a driver known to bring none.
  */
-export function vehicleDefault(o: { on: boolean; date: string; today: string; driver: string; def: DefaultVehicle | null }): VehicleDefault {
+export function vehicleDefault(o: { on: boolean; date: string; today: string; driver: string; def: DefaultVehicle | null | undefined }): VehicleDefault {
   if (o.on && /^\d{4}-\d{2}-\d{2}$/.test(o.date) && o.date > o.today) return { kind: "on_the_day", why: "a later day: the vehicle the driver holds then" };
   if (o.def) return { kind: "plate", reg_no: o.def.reg_no, why: o.def.why };
-  if (o.on && o.driver) return { kind: "on_the_day", why: "the driver holds no vehicle today and has no regular one" };
+  if (o.on && o.driver && o.def === null) return { kind: "on_the_day", why: "the driver holds no vehicle today and has no regular one" };
   return null;
 }
+
+/** The driver's vehicle as the default takes it: known, known to be none (null), or not known yet (undefined). */
+export const knownDef = (def: DefaultVehicle | null, known: boolean): DefaultVehicle | null | undefined => def ?? (known ? null : undefined);
 
 /**
  * The vehicle the call names: the one picked, else "on the day" when that is the default; "" leaves it to the server

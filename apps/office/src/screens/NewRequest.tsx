@@ -31,7 +31,7 @@ import { VehicleGroups } from "./requestParts";
 import { firstStopOf } from "./stopsLogic";
 import { TripEditor, useTrip } from "./TripEditor";
 import { tripPlanInput } from "./tripLogic";
-import { ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
+import { knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 
 interface Form extends RequestFields {
   /** The vehicle picked; "" = the one the driver brings. */
@@ -80,7 +80,7 @@ export function NewRequest() {
   const def = f.pickedDriver ? vehicleFor(avail.data, f.pickedDriver) : null;
   // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the day.
   const onDay = books && vehicleOnTheDay(settings.data);
-  const dflt = vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.pickedDriver, def });
+  const dflt = vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.pickedDriver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
   const dayDefault = dflt?.kind === "on_the_day";
   const vehicle = shownVehicle(f.vehicle, dflt);
   const all = sug ? (sug.groups ? Object.values(sug.groups).flat() : sug.vehicles) : [];

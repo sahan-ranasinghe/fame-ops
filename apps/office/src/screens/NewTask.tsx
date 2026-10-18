@@ -32,7 +32,7 @@ import { ConflictCards } from "./ConflictCards";
 import { basePlace, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
 import { defaultStops, firstStopOf } from "./stopsLogic";
 import { BackByField, LeaveByField, TripPlanCard, TripRoute, useTrip } from "./TripEditor";
-import { vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
+import { knownDef, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 
 const SPLIT_COLORS = ["var(--accent)", "var(--live)", "var(--ok)", "var(--bad)", "var(--muted)"];
 export { PLAN_DEBOUNCE_MS } from "./dispatchParts";
@@ -82,7 +82,7 @@ export function NewTask() {
   const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), pickedDriver, drivers.map((d) => d.name)) : null;
   // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the day.
   const onDay = vehicleOnTheDay(settings.data);
-  const dflt = vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.driver, def });
+  const dflt = vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.driver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
   const dayDefault = dflt?.kind === "on_the_day";
 
   /** Picking a driver in the list: the vehicle follows them (their vehicle today, else their regular one) unless one was picked. */

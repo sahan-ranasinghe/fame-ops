@@ -42,7 +42,7 @@ import { decisionInput, dwellChanges, redecideInput } from "./requestLogic";
 import { VehicleGroups, VehicleOption } from "./requestParts";
 import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
 import { TripDecide } from "./TripDecide";
-import { ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
+import { knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 
 interface Decision {
   /** The vehicle picked; "" = the one the driver brings (or, deciding again, keep the vehicle). */
@@ -131,7 +131,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
   const def = driver ? driverVehicle(vehicleFor(avail.data, driver), lists.drivers?.find((d) => d.username === driver), (lists.drivers ?? []).filter((d) => d.active !== false).map((d) => d.name)) : null;
   // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the day.
   const onDay = vehicleOnTheDay(settings.data);
-  const dflt = again ? null : vehicleDefault({ on: onDay, date: fields?.date ?? "", today: today(), driver, def });
+  const dflt = again ? null : vehicleDefault({ on: onDay, date: fields?.date ?? "", today: today(), driver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
   const dayDefault = dflt?.kind === "on_the_day";
   const vehicle = again ? f.vehicle : shownVehicle(f.vehicle, dflt);
   // The select always holds the driver picked (from Who's available too), even when its list lacks them.

@@ -1,0 +1,88 @@
+// The time field (Hotfix 2, C): the value counts on blur, on Enter, or 1 s after the last change when it is a whole
+// valid HH:MM; a value set from outside shows at once unless the person is typing another one.
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { isWholeTime, TIME_SETTLE_MS, TimeInput } from "./TimeInput";
+
+function Harness({ initial = "", onCommit }: { initial?: string; onCommit: (v: string) => void }) {
+  const [v, setV] = useState(initial);
+  return (
+    <>
+      <label htmlFor="t">Leave by</label>
+      <TimeInput id="t" value={v} onCommit={(x) => { setV(x); onCommit(x); }} />
+      <output data-testid="held">{v}</output>
+      <button type="button" onClick={() => setV("07:24")}>Use 07:24</button>
+      <button type="button" onClick={() => setV("06:00")}>Use 06:00</button>
+    </>
+  );
+}
+
+const field = () => screen.getByLabelText("Leave by") as HTMLInputElement;
+const held = () => screen.getByTestId("held").textContent;
+const later = async (ms: number) => {
+  await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+};
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => vi.useRealTimers());
+
+describe("TimeInput", () => {
+  it("knows a whole time", () => {
+    expect(isWholeTime("07:05")).toBe(true);
+    expect(isWholeTime("23:59")).toBe(true);
+    expect(isWholeTime("24:00")).toBe(false);
+    expect(isWholeTime("7:05")).toBe(false);
+    expect(isWholeTime("")).toBe(false);
+  });
+
+  it("counts a whole time 1 s after its last change, once", async () => {
+    const commits: string[] = [];
+    render(<Harness onCommit={(v) => commits.push(v)} />);
+    fireEvent.change(field(), { target: { value: "02:00" } });
+    expect(field().value).toBe("02:00");
+    await later(TIME_SETTLE_MS - 100);
+    fireEvent.change(field(), { target: { value: "14:00" } });
+    await later(TIME_SETTLE_MS - 100);
+    expect(commits).toEqual([]);
+    expect(held()).toBe("");
+    await later(100);
+    expect(commits).toEqual(["14:00"]);
+    expect(held()).toBe("14:00");
+    fireEvent.blur(field()); // already counted: not again
+    expect(commits).toEqual(["14:00"]);
+  });
+
+  it("counts on blur and on Enter, an emptied field too; a half-typed time never by itself", async () => {
+    const commits: string[] = [];
+    render(<Harness initial="09:00" onCommit={(v) => commits.push(v)} />);
+    fireEvent.change(field(), { target: { value: "09:30" } });
+    fireEvent.blur(field());
+    expect(commits).toEqual(["09:30"]);
+    fireEvent.change(field(), { target: { value: "10:15" } });
+    fireEvent.keyDown(field(), { key: "Enter" });
+    expect(commits).toEqual(["09:30", "10:15"]);
+    // While only the hours are typed the browser gives "": nothing counts until the field is left.
+    fireEvent.change(field(), { target: { value: "" } });
+    await later(TIME_SETTLE_MS * 3);
+    expect(commits).toEqual(["09:30", "10:15"]);
+    fireEvent.blur(field());
+    expect(commits).toEqual(["09:30", "10:15", ""]);
+  });
+
+  it("shows a value set from outside (Use 07:24), but never over a time being typed", async () => {
+    const commits: string[] = [];
+    render(<Harness initial="09:00" onCommit={(v) => commits.push(v)} />);
+    fireEvent.click(screen.getByRole("button", { name: "Use 07:24" }));
+    expect(field().value).toBe("07:24");
+    expect(commits).toEqual([]);
+    fireEvent.change(field(), { target: { value: "08:00" } });
+    // The plan answers meanwhile (or another button): the time being typed stays, and counts when it is done.
+    fireEvent.click(screen.getByRole("button", { name: "Use 06:00" }));
+    expect(held()).toBe("06:00");
+    expect(field().value).toBe("08:00");
+    await later(TIME_SETTLE_MS);
+    expect(commits).toEqual(["08:00"]);
+    expect(held()).toBe("08:00");
+  });
+});
