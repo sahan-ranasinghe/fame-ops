@@ -3,7 +3,7 @@
 // the photo large (Upload photo / Replace photo on the web) and the Documents
 // section.
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { DocKind, VehicleCard, VehiclesList } from "../data/types";
@@ -57,13 +57,15 @@ export function VehicleDetail() {
   const { me } = useFleet();
   const { v, err } = useVehicle(plate);
   const canEdit = me.tools.includes("update_vehicle");
-  if (err) return <><PageTop title={plate} backTo="/vehicles" /><Notice tone="bad">{err}</Notice></>;
-  if (!v) return <><PageTop title={plate} backTo="/vehicles" /><Loading>Loading the vehicle…</Loading></>;
+  // Back to the board with its filter (Phase 7, §16: the filter is in the URL).
+  const back = `/vehicles${useLocation().search}`;
+  if (err) return <><PageTop title={plate} backTo={back} /><Notice tone="bad">{err}</Notice></>;
+  if (!v) return <><PageTop title={plate} backTo={back} /><Loading>Loading the vehicle…</Loading></>;
   const docs = v.documents ?? {};
   const used = Number(v.km_this_month) || 0, allow = Number(v.km_allowance) || 0;
   return (
     <div className="vehicle-detail" data-testid="vehicle-detail">
-      <PageTop title={<span className="plate" style={{ fontSize: 22 }}>{v.reg_no}</span>} sub={v.make_model || "Vehicle"} backTo="/vehicles"
+      <PageTop title={<span className="plate" style={{ fontSize: 22 }}>{v.reg_no}</span>} sub={v.make_model || "Vehicle"} backTo={back}
         actions={canEdit ? <Link className="btn small dark" to={`${vehiclePath(v.reg_no)}/edit`}>Edit</Link> : undefined} />
       <VehiclePhotoCard key={v.reg_no} reg={v.reg_no} photoUrl={v.photo_url} />
       <div className="card card-b">

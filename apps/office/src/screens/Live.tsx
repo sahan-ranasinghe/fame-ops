@@ -15,8 +15,9 @@
 // on the card itself). Part 2: a driver on a task gets "Swap vehicle" (the
 // same page, as a swap during the task), and "declined the 09:00 task" /
 // "hasn't accepted the 09:00 task" in red while that task needs a driver.
+// Part 4 (§16): the chip is in the URL (/live?filter=road is the Overview's "Vehicles on the road").
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import {
   canClockOut,
@@ -46,6 +47,7 @@ import { joinDots, num, plateOf } from "../lib/format";
 import { MapView } from "../map/MapView";
 import type { MapMarker, MapRoute, RoutePoint } from "../map/types";
 import { GapsList, useGaps } from "./GapsList";
+import { filterFromWord, LIVE_FILTER_WORDS, withParam } from "./overviewLinks";
 import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
@@ -67,7 +69,11 @@ const sharingNow = (x: LiveDriver) => (x.signal ? x.signal.sharing : x.state !==
 export function Live() {
   const { me, store, transport, noConnector, managePermissions, realtime } = useFleet();
   const routes = can(me, ...ROUTES_NEED);
-  const [filter, setFilter] = useState<LiveFilter>("all");
+  // The chip is in the URL (?filter=road | on_duty | off_duty | problems; none = All): the Overview's tile links to it,
+  // a reload keeps it, and a chip changes it in place (the history keeps one entry; other parameters are kept).
+  const [params, setParams] = useSearchParams();
+  const filter = filterFromWord<LiveFilter>(LIVE_FILTER_WORDS, params.get("filter"), "all");
+  const setFilter = (f: LiveFilter) => setParams((p) => withParam(p, "filter", LIVE_FILTER_WORDS[f]), { replace: true });
   const [selected, setSelected] = useState<string | null>(null);
   const [route, setRoute] = useState<Route | null>(null);
   const [routeBusy, setRouteBusy] = useState(false);
@@ -144,8 +150,10 @@ export function Live() {
     return () => clearInterval(timer);
   }, [trails, !!route, transport]);
   const shown = filter === "all" ? all : all.filter((x) => inFilter(x, filter));
-  const sel = all.find((x) => x.username === selected) ?? all[0];
-  useEffect(() => { if (!selected && all[0]) setSelected(all[0].username); }, [all, selected]);
+  // The first driver of the chip in the URL is selected first (Live opened from the Overview's "on the road").
+  const first = shown[0] ?? all[0];
+  const sel = all.find((x) => x.username === selected) ?? first;
+  useEffect(() => { if (!selected && first) setSelected(first.username); }, [first?.username, selected]);
   // Watched mode: the selected driver (every sharing driver while the trails are on) uploads every 10 s while moving.
   useWatchDrivers(trails ? all.filter(sharingNow).map((x) => x.username) : sel && sharingNow(sel) ? [sel.username] : []);
 

@@ -20,6 +20,7 @@ import { Overview } from "../screens/Overview";
 import { PlacePage } from "../screens/PlacePage";
 import { Places } from "../screens/Places";
 import { Projects } from "../screens/Projects";
+import { Reminders } from "../screens/Reminders";
 import { RequestDecide } from "../screens/RequestDecide";
 import { RequestDetail } from "../screens/RequestDetail";
 import { RequestEdit } from "../screens/RequestEdit";
@@ -92,6 +93,8 @@ export const routes: RouteObject[] = [
       { path: "tasks/new", element: <Guard need={["assign_tasks"]}><NewTask /></Guard> },
       { path: "tasks/:id/edit", element: <Guard need={["assign_tasks"]}><TaskEdit /></Guard> },
       { path: "tasks/:id/stops", element: <Guard need={["assign_tasks"]}><TaskStops /></Guard> },
+      // Phase 7 (§16): the Overview's "Reminders due" as a page (the same permission as the Overview's block).
+      { path: "reminders", element: <Guard need={ISSUES_NEED}><Reminders /></Guard> },
       { path: "issues", element: <Guard need={ISSUES_NEED}><Suspense fallback={<div className="loading">Opening issues…</div>}><Issues /></Suspense></Guard> },
       { path: "issues/:id", element: <Guard need={ISSUES_NEED}><Suspense fallback={<div className="loading">Opening the issue…</div>}><IssuePage /></Suspense></Guard> },
       {

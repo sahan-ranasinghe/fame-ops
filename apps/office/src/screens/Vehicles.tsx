@@ -1,17 +1,17 @@
 // Vehicles (/vehicles): the board with its filters; a vehicle's detail beside
 // it (/vehicles/:reg); Register at /vehicles/new, Edit at /vehicles/:reg/edit.
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
+// Phase 7 (§16): the filter is in the URL (?filter=free | garage | on_task | documents | returned; none = All), so the
+// Overview's "Free now" and "In garage" open it, a reload keeps it, and a chip changes it in place.
+import { useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { VehicleCard, VehiclesList } from "../data/types";
 import { joinDots, num, vehicleAvailabilityTone } from "../lib/format";
 import { Chips, Empty, ErrBox, Loading, Pill, StaleNote, VehicleThumb } from "../ui/basics";
 import { ListWithDetail } from "../ui/Page";
+import { filterFromWord, VEHICLE_FILTER_WORDS, VEHICLE_FILTERS as FILTERS, type VehicleFilter as Filter, withParam } from "./overviewLinks";
 import { docTone } from "./vehicleLogic";
-
-type Filter = "all" | "on_task" | "available" | "in_garage" | "documents_expiring" | "inactive";
-const FILTERS: [Filter, string][] = [["all", "All"], ["on_task", "On a task"], ["available", "Available"], ["in_garage", "In garage"], ["documents_expiring", "Documents expiring"], ["inactive", "Returned"]];
 
 export function DocChip({ name, d }: { name: string; d?: { chip?: string; expiry?: string } }) {
   const title = d?.expiry ? `${name} expires ${d.expiry}` : `${name}: ${d?.chip ?? "not set"}`;
@@ -34,7 +34,9 @@ export const vehiclePath = (reg: string) => `/vehicles/${encodeURIComponent(reg)
 export function Vehicles() {
   const { me, store, noConnector, managePermissions } = useFleet();
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<Filter>("all");
+  const [params, setParams] = useSearchParams();
+  const filter = filterFromWord<Filter>(VEHICLE_FILTER_WORDS, params.get("filter"), "all");
+  const setFilter = (f: Filter) => setParams((p) => withParam(p, "filter", VEHICLE_FILTER_WORDS[f]), { replace: true });
   const entry = useEntry<VehiclesList>("vehicles");
 
   useEffect(() => {
@@ -81,7 +83,7 @@ export function Vehicles() {
                         const docs = v.documents ?? {};
                         const st = String(v.status || "");
                         return (
-                          <tr key={v.reg_no} className="click" onClick={() => navigate(vehiclePath(v.reg_no))}>
+                          <tr key={v.reg_no} className="click" onClick={() => navigate({ pathname: vehiclePath(v.reg_no), search: params.toString() ? `?${params}` : "" })}>
                             <td data-label="Vehicle"><span><span className="with-photo"><VehicleThumb src={v.thumb_url} /><span className="plate">{v.reg_no}</span></span><div className="sub" style={{ marginTop: 6 }}>{joinDots([v.make_model, v.seats ? `${v.seats} seats` : "", v.type && !v.make_model ? v.type : ""])}</div></span></td>
                             <td data-label="Rented from"><span>{v.rented_from || "—"}{v.rent_until && <div className="sub">Until {v.rent_until}</div>}</span></td>
                             <td data-label="Regular driver">{v.regular_driver || "—"}</td>

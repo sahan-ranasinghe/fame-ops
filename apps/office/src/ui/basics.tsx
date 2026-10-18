@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useState } from "react";
+import { Link } from "react-router";
 import type { Entry } from "../data/store";
 import { clock, initials, plateOf, type Tone } from "../lib/format";
 import { AUTHZ, errText, type Fix } from "../transport/errors";
@@ -44,16 +45,31 @@ export function Notice({ tone = "", children, action }: { tone?: "" | "bad" | "i
   );
 }
 
-export function Tile({ label, value, unit, sub, tone = "" }: { label: string; value: ReactNode; unit: string; sub: string; tone?: "" | "warn" | "bad" }) {
-  return (
-    <div className="tile">
+/** Phase 7 (§16): a tile that opens its list (the Overview's side panel or the full page). */
+export interface TileLink {
+  to: string;
+  replace?: boolean;
+  state?: unknown;
+  /** Its panel is the one open. */
+  current?: boolean;
+}
+
+export function Tile({ label, value, unit, sub, tone = "", link }: { label: string; value: ReactNode; unit: string; sub: string; tone?: "" | "warn" | "bad"; link?: TileLink }) {
+  const body = (
+    <>
       <div className="lbl">{label}</div>
       <div className="val">
         <b className="num">{value}</b>
         <span>{unit}</span>
       </div>
       <div className={`sub ${tone}`}>{sub}</div>
-    </div>
+    </>
+  );
+  if (!link) return <div className="tile">{body}</div>;
+  return (
+    <Link className="tile" to={link.to} replace={link.replace} state={link.state} aria-current={link.current ? "true" : undefined} data-testid="tile-link">
+      {body}
+    </Link>
   );
 }
 
