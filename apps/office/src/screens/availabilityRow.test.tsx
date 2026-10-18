@@ -3,12 +3,13 @@
 // free ones ticked), the window and the page's task; the answers come back as chips under the rows, a Yes with "Use this
 // driver".
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
 import type { Ask, Availability, AvailableDriver } from "../data/types";
 import type { Me, Transport, WatchEvent } from "../transport/types";
+import { PageTop } from "../ui/Page";
 import { ToastProvider } from "../ui/Toast";
 import { askWindow, windowLine } from "./availabilityLogic";
 import { AvailabilityPanel } from "./AvailabilityPanel";
@@ -83,7 +84,10 @@ const settle = async (ms = 0) => {
   await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 };
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  sessionStorage.clear();
+});
 afterEach(() => vi.useRealTimers());
 
 describe("Who's available: the one driver row and Ask drivers (H2, H3)", () => {
@@ -135,6 +139,40 @@ describe("Who's available: the one driver row and Ask drivers (H2, H3)", () => {
     fireEvent.click(screen.getByTestId("avail-use"));
     expect(onPick).toHaveBeenCalledTimes(2);
     expect(onPick.mock.calls[1][0].username).toBe("kamal.p");
+  });
+
+  it("inside a page's form with its back arrow (Assign a task): Esc closes only the sheet; Send asks without submitting the page", async () => {
+    const t = new FakeTransport(answer);
+    const outer = vi.fn((e: { preventDefault: () => void }) => e.preventDefault());
+    function Where() {
+      return <output data-testid="where">{useLocation().pathname}</output>;
+    }
+    render(
+      <FleetProvider value={{ store: new FleetStore(t), transport: t, me: dispatcher, noConnector: false }}>
+        <ToastProvider>
+          <MemoryRouter initialEntries={["/", "/tasks/new"]} initialIndex={1}>
+            <Routes>
+              <Route path="/tasks/new" element={<><PageTop title="Assign a task" backTo="/" /><form onSubmit={outer}><AvailabilityPanel args={{ at: "2026-10-21 09:00", until: "12:00" }} onPick={vi.fn()} /></form></>} />
+              <Route path="*" element={null} />
+            </Routes>
+            <Where />
+          </MemoryRouter>
+        </ToastProvider>
+      </FleetProvider>,
+    );
+    await settle(400);
+    await settle();
+    fireEvent.click(screen.getByTestId("avail-ask"));
+    expect(screen.getByRole("dialog", { name: "Ask drivers" })).toBeTruthy();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByTestId("where").textContent).toBe("/tasks/new");
+    fireEvent.click(screen.getByTestId("avail-ask"));
+    vi.setSystemTime(new Date("2026-10-20T08:00:00+05:30"));
+    fireEvent.click(screen.getByTestId("sheet-send"));
+    await settle();
+    expect(t.calls.some((c) => c.tool === "ask_drivers")).toBe(true);
+    expect(outer).not.toHaveBeenCalled();
   });
 
   it("no ask_drivers: no ticks and no Ask button", async () => {

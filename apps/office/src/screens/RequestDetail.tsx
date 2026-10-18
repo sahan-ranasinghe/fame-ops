@@ -9,7 +9,7 @@
 // driver and the vehicle with their photos; Tell requester for a person who
 // asked without an office account, and their phone.
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { RequestCard, RequestsList } from "../data/types";
@@ -17,7 +17,7 @@ import { cap, joinDots, requestTone } from "../lib/format";
 import { errText } from "../transport/errors";
 import { canOpenTask, type FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
-import { PageTop } from "../ui/Page";
+import { PageTop, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { ContactButtons } from "../ui/ContactButtons";
 import { isProposal, requestView, withdrawInput } from "./approvalLogic";
@@ -65,7 +65,7 @@ export function useRequest(id: string): { q: RequestCard | undefined; err: strin
 export function RequestDetail() {
   const { id = "" } = useParams();
   const { me, store, transport } = useFleet();
-  const navigate = useNavigate();
+  const afterSave = useAfterSave();
   const toast = useToast();
   const { q, err } = useRequest(id);
   const trip = useTripLine(q);
@@ -91,7 +91,7 @@ export function RequestDetail() {
       await transport.call("cancel_request", { request_id: id, reason: r });
       toast("Booking cancelled");
       void store.invalidate();
-      navigate(home, { replace: true });
+      afterSave(home);
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);
@@ -109,7 +109,7 @@ export function RequestDetail() {
       await transport.call("cancel_request", v.input);
       toast(q && isProposal(q) ? "Task withdrawn" : "Request withdrawn");
       void store.invalidate();
-      navigate(home, { replace: true });
+      afterSave(home);
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);

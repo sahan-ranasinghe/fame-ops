@@ -8,7 +8,7 @@
 // needs re-approval (the approvers are told). Kept as a draft for this request.
 // Phase 7 (§4): an approver may give or change the requester's phone.
 import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { type DraftControls, useFormDraft } from "../data/drafts";
 import type { RequestCard, UpdateRequestResult } from "../data/types";
@@ -17,7 +17,7 @@ import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
-import { PageTop, StickyActions } from "../ui/Page";
+import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { basePlace, useFleetSettings } from "./dispatchParts";
 import { useRequest } from "./RequestDetail";
@@ -62,7 +62,7 @@ function EditForm({ id, q, f, setF, draft }: {
   draft: DraftControls<RequestFields | null>;
 }) {
   const { me, store, transport } = useFleet();
-  const navigate = useNavigate();
+  const afterSave = useAfterSave();
   const toast = useToast();
   const approver = me.permissions.includes("approve");
   const [busy, setBusy] = useState(false);
@@ -89,7 +89,7 @@ function EditForm({ id, q, f, setF, draft }: {
       draft.clear();
       toast(r.needs_reapproval ? "Changed · the office will decide again" : "Request changed");
       void store.invalidate();
-      navigate(`/requests/${id}`, { replace: true });
+      afterSave(`/requests/${id}`);
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);

@@ -11,7 +11,7 @@ import { ROUTES_NEED } from "../app/nav";
 import { useLists } from "../data/hooks";
 import type { DutyLog as DutyLogData, DutyPeriod } from "../data/types";
 import { cap, num } from "../lib/format";
-import { can } from "../transport/types";
+import { can, canOpenTask } from "../transport/types";
 import { DateRange, useDateRange } from "../ui/DateRange";
 import { colomboDay } from "../ui/dateRange";
 import { Pill, Plate } from "../ui/basics";
@@ -102,7 +102,7 @@ export function DutyLog() {
                                   <span className="sub">{p.tasks.length} task{p.tasks.length > 1 ? "s" : ""}</span>
                                   {p.tasks.map((t) => (
                                     <div key={t.task_id}>
-                                      <Link to={taskLink(p, t.task_id)}>{t.title}</Link>{" "}
+                                      {canOpenTask(me) ? <Link to={taskLink(p, t.task_id)}>{t.title}</Link> : t.title}{" "}
                                       <span className="mono small">{t.started}–{t.completed ?? ""}</span>
                                       <span className="sub">{t.km != null ? ` · ${num(t.km)} km` : ""}{t.status !== "completed" ? ` · ${cap(t.status)}` : ""}</span>
                                     </div>

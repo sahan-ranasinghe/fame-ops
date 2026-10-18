@@ -2,8 +2,11 @@
 // board) instead of tick boxes on the rows: the question (Free for a trip? with the page's day and times, When at the
 // office?, Where are you?), a note, its own list of drivers with tick boxes (the free ones ticked to start with; All free ·
 // None), and Send. The answers come back on the page's rows (useAskAnswers); the sheet closes once it is sent.
-// A dialog: Esc, the close button and a click on the shade close it; on a phone it sits at the bottom of the screen.
-import { type FormEvent, useEffect, useRef, useState } from "react";
+// A dialog: Esc, the close button and a click on the shade close it; on a phone it sits at the bottom of the screen. It is
+// drawn on document.body (a portal): on Assign a task and New request the panel sits inside the page's own form, and the
+// sheet's Send must never submit that form.
+import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useFleet } from "../../app/FleetContext";
 import { useWatch } from "../../data/hooks";
 import type { Ask, AskAnswers as AskAnswersData, AskDriverRow, AskDriversResult } from "../../data/types";
@@ -60,26 +63,57 @@ export function AskSheet({ candidates, window: trip, askFor, onSent, onClose }: 
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const first = useRef<HTMLButtonElement>(null);
+  const box = useRef<HTMLFormElement>(null);
+  // The page passes a new onClose on every render: kept in a ref so the effects below run once.
+  const close = useRef(onClose);
+  close.current = onClose;
+  // A press that started inside the sheet and ended on the shade (a drag) does not close it.
+  const downOnShade = useRef(false);
   const set = <K extends keyof AskForm>(k: K, v: AskForm[K]) => setF((x) => ({ ...x, [k]: v }));
   const toggle = (u: string) => setF((x) => ({ ...x, drivers: x.drivers.includes(u) ? x.drivers.filter((d) => d !== u) : [...x.drivers, u] }));
   const rows = freeFirst(candidates);
   const trip_ = f.kind === "free_for_trip";
+  // Only drivers still listed are asked (the list refreshes behind the sheet).
+  const listed = new Set(candidates.map((c) => c.username));
+  const picked = f.drivers.filter((u) => listed.has(u));
 
+  // Focus once when it opens, and back to what opened it when it closes; Esc closes the sheet only (PageTop leaves Esc to an
+  // open dialog).
   useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
     first.current?.focus();
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key === "Escape") {
         ev.preventDefault();
-        onClose();
+        close.current();
       }
     };
     document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      opener?.focus?.();
+    };
+  }, []);
+
+  /** Tab stays inside the sheet. */
+  const trap = (ev: ReactKeyboardEvent<HTMLFormElement>) => {
+    if (ev.key !== "Tab" || !box.current) return;
+    const items = [...box.current.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], select, textarea")];
+    if (!items.length) return;
+    const [head, tail] = [items[0], items[items.length - 1]];
+    if (ev.shiftKey && document.activeElement === head) {
+      ev.preventDefault();
+      tail.focus();
+    } else if (!ev.shiftKey && document.activeElement === tail) {
+      ev.preventDefault();
+      head.focus();
+    }
+  };
 
   async function send(ev: FormEvent) {
     ev.preventDefault();
-    const v = askInput(f, askFor ?? {});
+    ev.stopPropagation();
+    const v = askInput({ ...f, drivers: picked }, askFor ?? {});
     if ("error" in v) {
       setMsg(v.error);
       return;
@@ -99,9 +133,11 @@ export function AskSheet({ candidates, window: trip, askFor, onSent, onClose }: 
     }
   }
 
-  return (
-    <div className="sheet-shade" onClick={onClose} data-testid="ask-sheet-shade">
-      <form className="sheet" role="dialog" aria-modal="true" aria-label="Ask drivers" onClick={(e) => e.stopPropagation()} onSubmit={send} noValidate
+  return createPortal(
+    <div className="sheet-shade" data-testid="ask-sheet-shade"
+      onMouseDown={(e) => { downOnShade.current = e.target === e.currentTarget; }}
+      onClick={(e) => { if (downOnShade.current && e.target === e.currentTarget) onClose(); }}>
+      <form ref={box} className="sheet" role="dialog" aria-modal="true" aria-label="Ask drivers" onSubmit={send} onKeyDown={trap} noValidate
         data-testid="ask-sheet">
         <div className="sheet-h">
           <h2>Ask drivers</h2>
@@ -133,7 +169,7 @@ export function AskSheet({ candidates, window: trip, askFor, onSent, onClose }: 
         </div>
         <div className="field">
           <div className="sheet-who">
-            <span className="lab">Send to · {f.drivers.length} picked</span>
+            <span className="lab">Send to · {picked.length} picked</span>
             <span className="acts">
               <button type="button" className="btn small" onClick={() => set("drivers", candidates.filter((c) => c.free).map((c) => c.username))}>All free</button>
               <button type="button" className="btn small" onClick={() => set("drivers", [])}>None</button>
@@ -154,12 +190,13 @@ export function AskSheet({ candidates, window: trip, askFor, onSent, onClose }: 
           </div>
         </div>
         {msg && <Notice tone="bad">{msg}</Notice>}
-        <button className="btn primary wide" type="submit" disabled={busy || !f.drivers.length} data-testid="sheet-send">
-          {busy ? "Sending…" : `Send to ${f.drivers.length} driver${f.drivers.length === 1 ? "" : "s"}`}
+        <button className="btn primary wide" type="submit" disabled={busy || !picked.length} data-testid="sheet-send">
+          {busy ? "Sending…" : `Send to ${picked.length} driver${picked.length === 1 ? "" : "s"}`}
         </button>
         <p className="hint" style={{ margin: 0 }}>They answer with one tap. Answers show on this list and in Notifications.{trip_ ? " The question closes when the trip starts." : ""}</p>
       </form>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

@@ -59,6 +59,8 @@ export function PageTop({ title, sub, backTo, actions }: { title: ReactNode; sub
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape" || ev.defaultPrevented) return;
+      // An open dialog (the Ask drivers sheet) takes Esc for itself.
+      if (document.querySelector('[aria-modal="true"]')) return;
       const t = ev.target as HTMLElement | null;
       if (t && (t.tagName === "SELECT" || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       back();

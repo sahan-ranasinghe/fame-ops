@@ -54,7 +54,7 @@ export function DriverForm() {
           <p className="muted small">This is the only time the PIN is shown. If it is lost, set a new one from Manage.</p>
           <div className="acts">
             <button type="button" className="btn" onClick={() => { void navigator.clipboard?.writeText(done.pin).then(() => toast("Copied")); }}>Copy PIN</button>
-            <Link className="btn dark" to="/drivers">Done</Link>
+            <Link className="btn dark" to="/drivers" replace>Done</Link>
           </div>
         </div>
       </section>

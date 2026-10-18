@@ -14,7 +14,7 @@ import type { BoardDriver, BoardFilter, DriversBoard as Board, UnavailableEntry 
 import { useQuery } from "../data/useQuery";
 import { addDays, today } from "../lib/format";
 import { errText } from "../transport/errors";
-import { can } from "../transport/types";
+import { can, canOpenTask } from "../transport/types";
 import { Avatar, Chips, Loading, Notice, Pill } from "../ui/basics";
 import { DriverRow } from "../ui/DriverRow";
 import { toPhoneLinks } from "../ui/driverRowLogic";
@@ -262,7 +262,7 @@ function PhoneWeek({ grid, onEdit }: { grid: WeekGrid; onEdit: OnEdit }) {
 function WeekCellView({ cell, driver, name, onEdit }: { cell: WeekCell; driver?: string; name: string; onEdit: OnEdit }) {
   const { me } = useFleet();
   const canSet = me.tools.includes("set_unavailability") && !!driver;
-  const taskLinks = can(me, "assign_tasks");
+  const taskLinks = canOpenTask(me);
   const day = shortDay(cell.date);
   return (
     <div className="wk-cell">

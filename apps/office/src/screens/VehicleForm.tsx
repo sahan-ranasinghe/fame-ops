@@ -12,7 +12,7 @@ import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
-import { PageTop, StickyActions } from "../ui/Page";
+import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { useVehicle, vehicleDates } from "./VehicleDetail";
 import { VehicleDocumentsSection } from "./VehicleDocs";
@@ -25,6 +25,7 @@ export function VehicleForm() {
   const isNew = plate === null;
   const { store, transport, me } = useFleet();
   const navigate = useNavigate();
+  const afterSave = useAfterSave();
   const toast = useToast();
   const lists = useLists();
   const [params] = useSearchParams();
@@ -60,7 +61,8 @@ export function VehicleForm() {
       if (isNew && me.tools.includes("vehicle_documents")) {
         navigate(`/vehicles/new?registered=${encodeURIComponent(out?.registered?.reg_no ?? String(v.input.reg_no))}`, { replace: true });
         setBusy(false);
-      } else navigate(isNew ? vehiclePath(String(v.input.reg_no)) : backTo, { replace: true });
+      } else if (isNew) navigate(vehiclePath(String(v.input.reg_no)), { replace: true });
+      else afterSave(backTo);
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
       setBusy(false);

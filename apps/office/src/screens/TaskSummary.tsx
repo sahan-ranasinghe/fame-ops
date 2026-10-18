@@ -2,7 +2,7 @@
 // what the trip is without leaving the page: the day and the leave-by time, the passengers and the vehicle, the stops with
 // their arrive-by and time there, who asked and who approved it, the notes, and the plan on the map.
 import type { TaskDetail as TaskDetailData } from "../data/types";
-import { hhmm, joinDots } from "../lib/format";
+import { cap, hhmm, joinDots } from "../lib/format";
 import { Pill } from "../ui/basics";
 import { DecisionRow } from "./approvers";
 import { useFleetSettings } from "./dispatchParts";
@@ -44,9 +44,9 @@ export function TaskSummary({ p }: { p: TaskDetailData }) {
           <div className="row" key={s.seq} data-testid="summary-stop">
             <span className="stop-pin">{i + 1}</span>
             <div className="grow">
-              <div className="name">{stopTitle(s)}</div>
+              <div className="name">{s.place || stopTitle(s)}</div>
               <div className="sub">
-                {joinDots([whatOf(s), s.arrive_by ? `arrive by ${s.arrive_by}` : null, s.dwell_min != null ? `${duration(s.dwell_min)} there` : null])}
+                {joinDots([cap(s.type), whatOf(s), s.arrive_by ? `arrive by ${s.arrive_by}` : null, s.dwell_min != null ? `${duration(s.dwell_min)} there` : null])}
               </div>
             </div>
           </div>

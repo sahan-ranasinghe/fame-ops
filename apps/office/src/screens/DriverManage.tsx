@@ -5,7 +5,7 @@
 // update_driver with only what changed; the open section's fields are kept as a draft. Without driver_profile the page
 // shows the driver list's mobile and licence expiry, as before.
 import { type FormEvent, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import type { Driver, DriverProfile, DriversList } from "../data/types";
@@ -14,7 +14,7 @@ import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
-import { PageTop } from "../ui/Page";
+import { PageTop, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { isPin, randomPin } from "./driverLogic";
 import { missingText, profileFields } from "./driverProfileLogic";
@@ -27,7 +27,7 @@ export const PROFILE_REFRESH_MS = 60_000;
 export function DriverManage() {
   const { username = "" } = useParams();
   const { me, store, transport } = useFleet();
-  const navigate = useNavigate();
+  const afterSave = useAfterSave();
   const toast = useToast();
   const [x, setX] = useState<Driver | undefined>();
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -95,7 +95,7 @@ export function DriverManage() {
       toast(want ? "Driver switched on" : "Driver switched off");
       if (out.notes?.length) toast(out.notes[0]);
       after();
-      navigate("/drivers", { replace: true });
+      afterSave("/drivers");
     } catch (e) {
       setSaMsg(errText(e as FleetError)[0]);
       setBusy(false);

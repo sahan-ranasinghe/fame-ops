@@ -90,6 +90,7 @@ const rows = () => screen.getAllByTestId("board-row");
 const realMatchMedia = window.matchMedia;
 
 beforeEach(() => {
+  sessionStorage.clear();
   // Tuesday 20 October 2026, 08:30 in Colombo.
   vi.useFakeTimers({ now: new Date("2026-10-20T03:00:00Z") });
   localStorage.clear();

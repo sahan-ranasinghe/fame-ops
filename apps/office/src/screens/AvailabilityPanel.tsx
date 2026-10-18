@@ -159,7 +159,7 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
                   ? <Pill tone={licenceTone(d.licence.chip)}>licence {d.licence.chip === "red" ? "expired or due" : "expiring"}</Pill>
                   : null}
                 badge={<Pill tone={driverTone(d)}>{d.free ? (d.state === "off_duty" ? "Free · off duty" : "Free") : "Busy"}</Pill>}
-                right={answer?.answer === "yes" && onPick && user
+                right={answer?.answer === "yes" && answer.assignable && onPick && user
                   ? <button type="button" className="btn small primary" onClick={() => onPick(d, veh)} data-testid="avail-use">Use this driver</button>
                   : undefined}
                 testId="avail-row"

@@ -3,7 +3,7 @@
 // keys, switching the account off or on.
 import { normalisePermissions, PERMISSION_TEXT } from "@fleet/permissions";
 import { type FormEvent, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
 import { useFleet } from "../../app/FleetContext";
 import { useFormDraft } from "../../data/drafts";
 import type { CreateKeyResult, OfficeUser, OfficeUsers, SetPasswordLinkResult, UpdateOfficeUserResult } from "../../data/types";
@@ -12,7 +12,7 @@ import { type FleetError, ROLE_LABEL, type Role } from "../../transport/types";
 import { Loading, Notice, Pill } from "../../ui/basics";
 import { phoneDisplay } from "../../ui/ContactButtons";
 import { DraftBanner } from "../../ui/DraftBanner";
-import { PageTop } from "../../ui/Page";
+import { PageTop, useAfterSave } from "../../ui/Page";
 import { useToast } from "../../ui/Toast";
 import { PermissionPicker, Secret } from "./userParts";
 import { updateInput, type UserFields } from "./usersLogic";
@@ -21,7 +21,7 @@ export function UserManage() {
   const { email: raw = "" } = useParams();
   const email = decodeURIComponent(raw);
   const { me, store, transport } = useFleet();
-  const navigate = useNavigate();
+  const afterSave = useAfterSave();
   const toast = useToast();
   const [u, setU] = useState<OfficeUser | undefined>();
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -122,7 +122,7 @@ export function UserManage() {
       await transport.call("set_office_user_active", { email, active: !u!.active });
       toast(u!.active ? "Account switched off" : "Account switched on");
       void store.invalidate();
-      navigate("/settings/users", { replace: true });
+      afterSave("/settings/users");
     });
   };
 

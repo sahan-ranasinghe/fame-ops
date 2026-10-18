@@ -258,9 +258,10 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByLabel("New 6-digit PIN").fill("111222");
   await page.getByRole("button", { name: "Set PIN" }).click();
   await expect(page.getByTestId("driver-manage")).toContainText("New PIN 111222 is active");
-  // The page's back arrow (Part 3b: the licence's "Add back" photo button is on the page too).
+  // The page's back arrow (Part 3b: the licence's "Add back" photo button is on the page too): back to the list it came from,
+  // with its search (Hotfix 4 b).
   await page.getByRole("button", { name: "Back", exact: true }).click();
-  await expect(page).toHaveURL(/\/drivers$/);
+  await expect(page).toHaveURL(/\/drivers(\?.*)?$/);
 
   await page.getByRole("link", { name: "Maintenance" }).first().click();
   await expect(page.getByRole("heading", { name: "Maintenance" })).toBeVisible();

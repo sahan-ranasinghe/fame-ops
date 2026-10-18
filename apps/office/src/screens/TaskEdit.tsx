@@ -182,7 +182,10 @@ export function TaskEdit() {
         return;
       }
     }
-    const input = "input" in v ? v.input : { task_id: id, plan_version: t!.plan_version ?? 0, driver: f.driver };
+    // Give it a driver sends the driver and the vehicle only (a draft resumed from the change page never adds its fields).
+    const input = driverMode && needsDriver && f.driver
+      ? { task_id: id, plan_version: t!.plan_version ?? 0, driver: f.driver, ...(vehicleToSend ? { vehicle: vehicleToSend } : {}) }
+      : "input" in v ? v.input : { task_id: id, plan_version: t!.plan_version ?? 0, driver: f.driver };
     setBusy(true);
     try {
       const out = await transport.call<UpdateTaskResult>("update_task", input);
@@ -190,8 +193,14 @@ export function TaskEdit() {
       const vehicleWords = !f.vehicle && def && input.vehicle === def.reg_no ? ` · ${def.reg_no} (${def.why})` : "";
       toast((needsDriver && f.driver ? `Task sent to ${out.driver ?? "the driver"}` : "Task changed") + vehicleWords);
       void store.invalidate();
-      flashWarnings(id, warnList(out));
-      afterSave(back, { warnings: warnList(out) });
+      setBusy(false);
+      const warnings = warnList(out);
+      // New warnings are read on the task page; without any, back to where the person came from.
+      if (warnings.length) navigate(back, { replace: true, state: { warnings } });
+      else {
+        flashWarnings(id, []);
+        afterSave(back);
+      }
       return;
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
@@ -210,7 +219,8 @@ export function TaskEdit() {
       draft.clear();
       toast("Task cancelled");
       void store.invalidate();
-      navigate(`/tasks${q}`, { replace: true });
+      setBusy(false);
+      afterSave(`/tasks${q}`);
     } catch (e) {
       setCxMsg(errText(e as FleetError)[0]);
       setBusy(false);
@@ -225,10 +235,21 @@ export function TaskEdit() {
     </div>
   );
 
-  // Hotfix 4 (b): Give it a driver.
+  // Hotfix 4 (b): Give it a driver, while the task still needs one; once it has a driver again (given on another page, or
+  // the driver accepted before the push was opened) the page says so.
+  if (driverMode && canChange && !running && !needsDriver) {
+    return (
+      <section className="view" data-testid="give-driver-done">
+        <PageTop title={t.title || "Task"} sub="Has a driver" backTo="/"
+          actions={<Link className="btn small" to={`/tasks/${id}${q}`} data-testid="open-task">Open task →</Link>} />
+        <Notice tone="ok">{t.driver ? `${t.driver} has this task now.` : "This task has a driver now."} Nothing to do here.</Notice>
+      </section>
+    );
+  }
   if (driverMode && canChange && !running) {
     const pickedName = f.driver ? (avail.data?.drivers.find((d) => d.username === f.driver)?.name ?? drivers.find((d) => d.username === f.driver)?.name ?? f.driver) : null;
-    const plate = vehicleToSend && vehicleToSend !== ON_THE_DAY ? vehicleToSend : def?.reg_no ?? "";
+    // The vehicle the task will have: the one sent, the day's choice, or the one it keeps.
+    const plate = vehicleToSend === ON_THE_DAY ? "vehicle on the day" : vehicleToSend || (keepsDay ? t.vehicle_text ?? "" : currentPlate);
     return (
       <section className="view" data-testid="give-driver">
         <PageTop title={t.title || "Task"} sub={joinDots(["Needs a driver", leaveIn(t.date, t.leave_by, Date.now())])} backTo="/"
