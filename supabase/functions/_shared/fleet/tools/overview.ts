@@ -105,6 +105,7 @@ export const fleetOverview = tool({
       needsDriver: hasAny(actor.permissions, ["approve", "assign_tasks"]),
       critical: actor.permissions.includes("approve"),
     };
+    const plainItems = shown.map(({ scope: _scope, ...item }) => item);
     const onRoadVehicles = new Set(running.map((t) => t.vehicle_id)).size;
     const count = (status: string) => tasks.filter((t) => t.status === status).length;
     const result = {
@@ -128,8 +129,8 @@ export const fleetOverview = tool({
       on_the_road: onTheRoad,
       needs_attention: shown.map(({ scope: _scope, ...item }) => item),
       // Hotfix 3 (L1, L2): the page's sections: Needs attention grouped with no repeats, and the critical issues.
-      attention: attentionGroups(shown, sections, KIND_TEXT),
-      critical: sections.critical ? criticalItems(shown, sections) : undefined,
+      attention: attentionGroups(plainItems, sections, KIND_TEXT),
+      critical: sections.critical ? criticalItems(plainItems, sections) : undefined,
     };
     // Phase 7 (§19): the tasks that need a driver, for the people who can give them one (the red block at the top).
     const needsDriver = hasAny(actor.permissions, ["approve", "assign_tasks"]) ? await needsDriverList(db, refs, now) : [];

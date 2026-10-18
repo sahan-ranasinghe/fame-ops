@@ -120,6 +120,31 @@
  ],
  "fleet_overview {}": [
   "as_of: string",
+  "attention.count: number",
+  "attention.groups[].count: number",
+  "attention.groups[].issue_ids[]: string",
+  "attention.groups[].items[].due: string",
+  "attention.groups[].items[].issue_id: string",
+  "attention.groups[].items[].kind: string",
+  "attention.groups[].items[].level: string",
+  "attention.groups[].items[].severity: string",
+  "attention.groups[].items[].subject: string",
+  "attention.groups[].items[].vehicle: string",
+  "attention.groups[].items[].what: string",
+  "attention.groups[].key: string",
+  "attention.groups[].kind: string",
+  "attention.groups[].severity: string",
+  "attention.groups[].title: string",
+  "attention.groups[].vehicle: string",
+  "critical.count: number",
+  "critical.items[].due: string",
+  "critical.items[].issue_id: string",
+  "critical.items[].kind: string",
+  "critical.items[].level: string",
+  "critical.items[].severity: string",
+  "critical.items[].subject: string",
+  "critical.items[].vehicle: string",
+  "critical.items[].what: string",
   "date: string",
   "needs_attention[].due: string",
   "needs_attention[].issue_id: string",
@@ -481,8 +506,10 @@
   "issues[].vehicle: string",
   "issues[].vehicle_report_id: string",
   "open: number",
+  "snoozed: number",
   "sort: string",
-  "status: string"
+  "status: string",
+  "total: number"
  ],
  "list_issues {}": [
   "count: number",
@@ -511,8 +538,10 @@
   "issues[].vehicle: string",
   "issues[].vehicle_report_id: string",
   "open: number",
+  "snoozed: number",
   "sort: string",
-  "status: string"
+  "status: string",
+  "total: number"
  ],
  "list_place_imports {}": [
   "imports[].added: number",
@@ -542,7 +571,8 @@
   "places[].name: string",
   "places[].operator: string",
   "places[].pinned: bool",
-  "places[].site_id: string"
+  "places[].site_id: string",
+  "total: number"
  ],
  "list_places {}": [
   "count: number",
@@ -551,7 +581,8 @@
   "places[].kind: string",
   "places[].maps: string",
   "places[].name: string",
-  "places[].pinned: bool"
+  "places[].pinned: bool",
+  "total: number"
  ],
  "list_requests {\"status\": \"all\"}": [
   "count: number",
@@ -810,6 +841,7 @@
   "vehicles[].held_by: string",
   "vehicles[].held_since: string",
   "vehicles[].km_allowance: number",
+  "vehicles[].km_allowance_note: string",
   "vehicles[].km_this_month: number",
   "vehicles[].make_model: string",
   "vehicles[].monthly_rent_lkr: number",
