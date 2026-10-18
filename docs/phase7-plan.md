@@ -1933,6 +1933,23 @@ call buttons, the vehicle choice and the approvers; D1 the driver app. Merged in
   made directly stay on Tasks (they are not requests). Say if they should be listed too.
 - **The artifact's declaration** adds `my_trips`, `my_inbox`, `mark_inbox_read`, `update_my_profile` and `reviewing`: the
   Teams artifact needs the new file to use them.
+- **The fresh reviewer (no blocker; two to fix, both in J, both only once `vehicle_on_the_day` is on):**
+  1. A vehicle the first driver confirmed stayed on the task when it went to another driver (or after a decline), so the
+     next driver was never asked and took that van. **Fixed:** the trigger `tasks_vehicle_on_the_day_reset` clears a
+     confirmed vehicle when a task chosen on the day changes driver or is declined (a vehicle the office sets in the same
+     change stays), and the app asks "Which vehicle?" at every Start task of such a task (the vehicle in hand counts).
+  2. A vehicle confirmed offline and refused by the server (in the garage, the wrong type, the office's vehicle set
+     meanwhile) lost the start and the readings queued behind it. **Fixed:** `confirm_task_vehicle(task, vehicle, queued)`:
+     from the offline queue the vehicle driven is kept and what was wrong is noted on the task for the office
+     ("Started offline on WP X, a vehicle in the garage", task detail's saved warnings); online the rules still refuse in
+     words before anything is sent.
+  Minor, done: `approved_at` from the tool's clock; `redecide_request` keeps a task's vehicle choice (a new driver on an
+  on-the-day task confirms theirs; before, "keep" could turn it into a fixed vehicle); `request_viewers` pruned nightly
+  (`prune-request-viewers`); a committed `__pycache__` removed and ignored. Minor, left as is: the driver's "Call fleet
+  admin" lists every approver with a number (office people have no duty periods to filter by); the overlap and allowance
+  checks at the driver's confirmation are the issue sync's (the overlap issue opens on the next sync; no warning is shown
+  to the driver); "Approved by …" is on the requester's push, the request page, task detail and the driver's preview, not
+  in the driver's "New task" push.
 
 ## Sinhala
 
