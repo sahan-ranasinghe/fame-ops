@@ -1748,6 +1748,108 @@ Reminders; the setting), driver `test:trips` and `test:data` (a trip through the
 Overview's tiles, Reminders, the trips' office side), S9 (the driver app's trips). The main session wrote the migration,
 the server and driver-api, the types and strings, the suites and the e2e, and merged each by cherry-pick.
 
+## Hotfix 2 (Sahan, 18 October; branch `phase7-hotfix-2` from main `cb9c8ef`)
+
+Items A–F and I–K of his message; G–H are Part 3b after it, then Parts 5 and 6. Its own round, shown before any deploy.
+
+**A. Requesters keep their trips; a notification centre.**
+- Why the test requester got no push (checked on the live database, read only): "Requester Test" has never turned on
+  notifications in a browser (no row in `web_push_subscriptions`, ever). `queue_notification` writes the outbox row only for
+  a person with a browser, so for its three decided requests (11:59 declined, 12:18 cancelled, 12:20 approved) nothing was
+  queued and notify-office was never called. Delivery works: Sahan's own pushes went out. Only Sahan has a browser
+  registered; Charuka, sashen and the test accounts have none.
+- **My trips** (`/my-trips`, everyone with request or assign_tasks): every request and proposed task the person made,
+  newest first, the date range and a status filter (Waiting, Approved, Under way, Completed, Declined, Cancelled, All). Each
+  row's live status from the task: Waiting · Approved (driver, vehicle, photos, Call/WhatsApp) · Driver accepted · On the way ·
+  Arrived · Completed · Declined (reason) · Cancelled (reason). It opens the request page (the task's current plan, Part 3).
+  Tool `my_trips(from, to, status?)`.
+- **The notification centre**: table `office_inbox` (recipient, event, title, body, url, actor, created_at, read_at), one row
+  per person told about anything, written by `queue_notification` for everyone who has the event on, with or without a
+  browser (web push stays the extra, as now). A bell with the unread count and a list (who, what, when, link) on every page;
+  opening an item marks it read; "Mark all read". Office people read their own rows (RLS) and get them through Realtime on
+  the web, polling in the artifact. Tools `my_inbox(limit?, unread?)`, `mark_inbox_read(ids? | all)`. The events listed in A
+  are the existing ones (decided, declined, changed, cancelled, on the way, arrived, needs a driver, task to approve,
+  critical issue, issue given to you); the issues bell stays as it is.
+
+**B. Notifications that can't be missed.**
+- Office web: while the site is open, each new inbox item plays its sound and shows a banner: urgent (a task to approve,
+  needs a driver), alert (decided, declined), soft (on the way, arrived), alarm (critical issue). The sounds are made in
+  the browser (Web Audio), no files. Per person: sound on/off and volume (stored with their notification settings) and
+  "Test sound". Until the first click on the page the browser keeps it silent: a "Click to turn on sounds" strip.
+- Driver app (JS only): a channel "New tasks" at maximum importance with a long vibration, heads-up and on the lock screen,
+  using a sound already in the 1.2.0 build; push-task sends new, changed, reassigned and cancelled tasks on it. Android fixes
+  a channel's settings when it is first made, so it is a new channel id.
+- Part 6 (1.3.0): a ringtone for a new task that rings until the driver opens it or 30 s pass, a shorter sound for changes
+  and cancellations, the channels set up for them (added to §27 below).
+- docs/office-notifications-android.md: how Palitha sets a loud sound for the site's notifications in Chrome on Android.
+
+**C. Time fields commit, then plan.** One `TimeInput` for every time field (leave time, arrive-by, back by, time needed, the
+request times): the value counts on blur, Enter, or 1 s after the last change when it is a whole valid time; nothing plans
+or warns while the field is being edited. Vitest: hours, then minutes, then AM/PM gives one plan, for the final time, with
+no warning in between.
+
+**D. One duration formatter.** `@fleet/durations` (web, server, push texts; a copy in the driver app, en and si): under
+60 min "in 45 min", under 24 h "in 3 h 20 min", tomorrow "tomorrow 09:00", later "Mon 19 Oct 09:00 (in 2 days)", and the
+same for "ago". Every place that shows raw minutes is switched over and listed at the checkpoint.
+
+**E. The accept window counts only at work.** A task sent to a driver who is off duty waits until they Start work; then
+the 15 minutes run. 30 minutes before leave-by it needs a driver in any case. The reminder follows the same rule.
+`queue_accept_reminders` (migration).
+
+**F. Call buttons.**
+- `employees.phone` for office people too, stored E.164 (+94…), shown "07X XXX XXXX"; existing numbers converted. "My
+  phone number" on the office site (Settings → My profile, `update_my_profile`), required for approve or assign_tasks: a
+  banner until it is filled. Settings → Fleet: "Office phone number" (`office_phone`). Admins edit anyone's number in
+  Settings → Users (`update_office_user` takes phone). Every change is a row in `employee_changes` (who, what, from, to,
+  when): also used by Part 3b.
+- Driver app: on the task card and screen Call contact, Call requester (who asked, else who assigned), Call fleet admin
+  (who approved; else the approvers on duty), Call office; each tel: and WhatsApp; Me: Call office and Call fleet admin;
+  hidden without a number. The numbers come from an RPC `my_task_contacts(task)` (the driver's own tasks only).
+- Office site: Call driver and WhatsApp driver on My trips, the request page, task detail, Live and Who's available; on
+  the requester's pages also Call the fleet admin (who approved) and Call office. A phone: tel: and wa.me; a computer: the
+  number with Copy and WhatsApp web.
+- Privacy, enforced in the RPC, office-api and the tools, with pgTAP: a requester sees the driver's number only for their
+  own approved trips; a driver sees the requester's and assigner's only for their own tasks. No CALL_PHONE permission, no
+  automatic dialling.
+
+**I. The whole task before accepting.** The new-task card lists every stop (number, type, place, arrive-by, time at the
+stop; the first 4 and "Show all"). Tapping it or the push opens a preview: every stop with planned arrival and leave, the
+map with the route line and numbered pins, total km and drive time, leave-by, passengers, contact, notes, the vehicle (or
+"any van" / "your vehicle on the day"), who asked and who approved (Call), Accept / Decline at the bottom. A changed task
+shows the changes highlighted (the push's changes, kept on the phone). Works offline from the last copy.
+
+**J. No vehicle up front.** `tasks.vehicle_id` becomes optional with `vehicle_choice` (specific | driver_day | any_type) and
+`vehicle_type_wanted`. The forms offer a vehicle, "Driver's vehicle on the day" (the default for a future day, and for today
+when the driver holds none) or "Any <type>"; today otherwise defaults to the driver's vehicle, else their regular one. Saving
+never blocks. At Start task the driver confirms the vehicle they hold or picks one of the type (RPC
+`confirm_task_vehicle`, refused in the garage or of the wrong type); the overlap, allowance and garage checks run then and
+when the office sets one. Who's available says "no vehicle yet · regular: WP CAB-4521"; the board and task detail "Vehicle:
+on the day". Requests, proposals and the connector (create_task, decide_request, update_task, book_vehicle) take a vehicle,
+a type or nothing. **Safe order:** phones on the old update cannot start a task with no vehicle, so the setting
+`vehicle_on_the_day` (off) turns the choice on after every phone has the update.
+
+**K. Several fleet admins.**
+- `approved_by` (the person) and the time on tasks and requests; every decision and change names its person (approved,
+  changed, declined, cancelled, reassigned). "Approved by Palitha · 10:42" (photo, Call, WhatsApp; Call office when they have
+  no number) on My trips, the request page, task detail, the push and the driver's task screen; "Declined by …" with the
+  reason; "Changed by …".
+- "Palitha is reviewing" on the queue and the decide page, live (`reviewing(request_id)` every 20 s from the decide page,
+  shown while under 45 s old). Deciding takes the request's version: a second approver gets "Already approved by Palitha at
+  10:42", never a second decision (the suite and an e2e with two approvers at once).
+- Any number of people hold approve; pushes, the inbox and reminders go to all of them (as now).
+
+**Build.** The main session: the migration (inbox, phones, changes log, vehicle choice, approved_by, reviewing, the accept
+window, the RPCs and their policies), the server and tools, the shared types, the strings, the suites and the e2e. Three
+subagents at a time in worktrees: W1 the office's My trips, notification centre and sounds (A, B web); W2 the office's time
+fields, phone and call buttons, vehicle choice and the approvers (C, F, J, K web); D1 the driver app (B, D, F, I, J, K app).
+D's server and web switch-over is the main session's. A fresh reviewer at the checkpoint.
+
+**Questions, with my defaults (they do not hold up the build):**
+1. My trips for someone with assign_tasks only: the tasks they proposed plus the tasks they made directly (default yes).
+2. The inbox keeps 90 days (default), then the nightly job removes read rows.
+3. The office sound volume default 70 %.
+4. `vehicle_on_the_day` stays off until Sahan switches it on in Settings → Fleet after the update.
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
