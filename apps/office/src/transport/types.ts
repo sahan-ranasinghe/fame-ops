@@ -84,4 +84,6 @@ export const ALL_TOOLS = [
   // save_vehicle_document are the web app's only, so neither the connector nor the artifact has them).
   "set_driver_photo", "set_vehicle_photo", "vehicle_documents", "remove_vehicle_document", "restore_vehicle_document",
   "remove_place", "restore_place", "list_tasks", "set_trip_purpose", "my_trips", "my_inbox", "mark_inbox_read", "update_my_profile", "reviewing",
+  // Hotfix 3: the person's page preferences (the Overview's collapsed sections, the menu's).
+  "my_prefs", "set_my_prefs",
 ];

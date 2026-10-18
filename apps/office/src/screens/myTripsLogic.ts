@@ -1,7 +1,7 @@
 // My trips' rules (Hotfix 2, A), pure: the status filter in the URL (?status=, All by default: nothing disappears
 // after a decision), the tool's arguments, a trip's live state as a pill, who decided it, and the phone links of the
 // driver and the person who approved (Call and WhatsApp).
-import type { PersonAt, PhoneLinks, RequestCard, TripLive } from "../data/types";
+import type { CreatedTaskCard, PersonAt, PhoneLinks, RequestCard, TripLive } from "../data/types";
 import { cap, type Tone } from "../lib/format";
 import { linksOf, phoneDisplay } from "../ui/ContactButtons";
 import { rangeText } from "../ui/dateRange";
@@ -120,3 +120,6 @@ export function emptyText(status: TripStatus, canAsk: boolean): string {
   }
   return canAsk ? "No trips in these dates. Ask for a vehicle with New request." : "No trips in these dates.";
 }
+
+/** Hotfix 3: a request or proposal (a request card), not a task the person created directly. */
+export const isRequestTrip = (t: RequestCard | CreatedTaskCard): t is RequestCard => (t as CreatedTaskCard).source !== "task";

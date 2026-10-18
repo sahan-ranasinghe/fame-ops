@@ -7,7 +7,7 @@ import { useEntry } from "../data/hooks";
 import type { MyTrips, RequestCard } from "../data/types";
 import { queryKey } from "../data/useQuery";
 import { type DateRangeValue, useDateRange } from "../ui/DateRange";
-import { readStatus, type TripStatus, tripsArgs, TRIPS_MAX_DAYS, writeStatus } from "./myTripsLogic";
+import { isRequestTrip, readStatus, type TripStatus, tripsArgs, TRIPS_MAX_DAYS, writeStatus } from "./myTripsLogic";
 
 export const TRIPS_KEY = "myTrips";
 export const TRIPS_PATH = "/my-trips";
@@ -35,7 +35,7 @@ export function useTripCard(id: string): { card?: RequestCard; waiting: boolean 
   const mine = !noConnector && me.tools.includes("my_trips") && !!args && (pathname === TRIPS_PATH || pathname.startsWith(TRIPS_PATH + "/"));
   const entry = useEntry<MyTrips>(mine && args ? queryKey(TRIPS_KEY, args) : "");
   if (!mine) return { waiting: false };
-  return { card: entry.data?.trips?.find((t) => t.id === id), waiting: entry.data === undefined && !entry.err };
+  return { card: entry.data?.trips?.filter(isRequestTrip).find((t) => t.id === id), waiting: entry.data === undefined && !entry.err };
 }
 
 /** Where the request page goes back to: My trips (with its dates and filter) when opened from it, else Requests. */

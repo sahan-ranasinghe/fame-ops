@@ -601,3 +601,9 @@ a.bell-btn { text-decoration: none }
   .inbox-banners { top: 8px; right: 8px; left: 8px; width: auto }
   .mhead .inbox-bell .bell-btn { min-width: 48px; min-height: 48px; justify-content: center }
 }
+
+/* Hotfix 3 (L3): the list pattern's header count, Load more and the pager (ui/ListKit.tsx). */
+.list-h h2 .muted { font-weight: 500; }
+.load-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
+.pager { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 16px; flex-wrap: wrap; }
+.pager .btn[aria-current="page"] { pointer-events: none; }

@@ -47,6 +47,9 @@
       ],
       "@fleet/durations": [
         "../../supabase/functions/_shared/fleet/durations.ts"
+      ],
+      "@fleet/paging": [
+        "../../supabase/functions/_shared/fleet/paging.ts"
       ]
     },
     "allowImportingTsExtensions": true

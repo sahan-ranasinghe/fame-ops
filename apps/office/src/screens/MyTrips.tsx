@@ -18,7 +18,7 @@ import { DateRange } from "../ui/DateRange";
 import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
 import { ListWithDetail } from "../ui/Page";
-import { decisionLines, driverPhone, emptyText, liveOf, liveTone, officePhoneOf, personPhone, TRIP_STATUS_OPTIONS, totalsLine, vehicleOf } from "./myTripsLogic";
+import { decisionLines, driverPhone, emptyText, isRequestTrip, liveOf, liveTone, officePhoneOf, personPhone, TRIP_STATUS_OPTIONS, totalsLine, vehicleOf } from "./myTripsLogic";
 import { TRIPS_KEY, TRIPS_PATH, useMyTripsArgs } from "./myTripsQuery";
 
 /** A button or link inside a clickable row: it does its own thing, the row does not open. */
@@ -73,7 +73,8 @@ export function MyTrips() {
     every: dates.to >= today ? 60000 : undefined,
   });
   const d = q.data;
-  const trips = d?.trips ?? [];
+  // Hotfix 3: the tasks the person created directly get their own rows (W2); until then the requests only.
+  const trips = (d?.trips ?? []).filter(isRequestTrip);
   const office = officePhoneOf(trips);
   const updating = q.updating || q.stale;
 

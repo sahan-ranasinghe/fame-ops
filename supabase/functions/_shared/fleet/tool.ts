@@ -44,6 +44,17 @@ export const zId = z.guid();
 export const zText = (max: number) => z.string().trim().min(1).max(max);
 export const zVehicleType = z.enum(["car", "van", "double_cab", "lorry", "other"]);
 
+/**
+ * Hotfix 3 (L3): the paging inputs every list tool takes (paging.ts). With limit: that many rows, the total and the next
+ * page's cursor; without: the whole list as before.
+ */
+export const zPaging = {
+  limit: z.number().int().min(1).max(500).optional().describe("Rows per page (with it the answer has total and next)"),
+  cursor: z.string().max(100).optional().describe("The next page: the answer's `next`"),
+};
+/** A list's search box (names, plates, places, ids), once a list can pass a page. */
+export const zSearch = z.string().trim().max(120).optional().describe("Words to look for");
+
 /** Rejects dates such as 2026-02-31, which pass the pattern but do not exist. */
 export function realDate(date: string, name = "date"): string {
   if (!isRealDate(date)) throw new ToolError(`${name}: ${date} is not a real date.`);

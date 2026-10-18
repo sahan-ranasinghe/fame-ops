@@ -65,6 +65,31 @@ export interface Attention {
   severity?: string;
 }
 
+/**
+ * Hotfix 3 (L3): a page of a list (asked with `limit`, and `cursor` for a later page, @fleet/paging). `total` = every row
+ * the filters match; `next` = the cursor of the next page (absent on the last). Absent when no limit was asked.
+ */
+export interface Paged {
+  total?: number;
+  next?: string;
+}
+
+/** Hotfix 3 (L2): one row of Needs attention: one issue, or a group of one kind ("Odometer typed by hand · 9 this week"). */
+export interface AttentionGroup {
+  /** "kind" or "kind:vehicle": stable, for the expanded state. */
+  key: string;
+  kind: string;
+  /** "Odometer typed by hand · 9 this week", "Documents missing on 3 vehicles"; one item: its own words. */
+  title: string;
+  count: number;
+  severity: "critical" | "warning";
+  /** The issues behind it (Snooze and Dismiss act on all of them). */
+  issue_ids: string[];
+  /** The items, most urgent first (all of them: the group expands in place). */
+  items: Attention[];
+  vehicle?: string;
+}
+
 export interface Overview {
   date: string;
   as_of?: string;
@@ -76,6 +101,14 @@ export interface Overview {
   needs_attention: Attention[];
   /** Phase 7 (§19): tasks that need a driver (approve or assign_tasks), first on the page. */
   needs_driver?: { count: number; tasks: NeedsDriverTask[] };
+  /**
+   * Hotfix 3 (L1, L2): the Overview's Needs attention: critical and warning only, nothing another section shows
+   * (requests waiting, needs a driver, the critical issues), snoozed ones left out, items of one kind grouped.
+   * `count` = the issues behind the groups. needs_attention stays as it was for the connector.
+   */
+  attention?: { count: number; groups: AttentionGroup[] };
+  /** Hotfix 3 (L1): the critical active issues not snoozed (at most 5) and how many there are. */
+  critical?: { count: number; items: Attention[] };
 }
 
 /** A task declined, or not accepted within the accept window (Phase 7, §19): it needs a driver now. */
@@ -149,6 +182,12 @@ export interface FinishFlag {
 
 export interface Board {
   date: string;
+  /**
+   * Hotfix 3 (L3): asked with `limit`, each column holds at most that many; `totals` = every card of the column, `next`
+   * = the cursor for its next page (task_board(date, column, limit, cursor) answers that column only).
+   */
+  totals?: { assigned?: number; in_progress?: number; completed?: number; declined?: number };
+  next?: { assigned?: string; in_progress?: string; completed?: string; declined?: string };
   counts: { assigned: number; in_progress: number; completed: number; cancelled: number; declined?: number; waiting_approval?: number };
   assigned: BoardCard[];
   in_progress: BoardCard[];
@@ -476,7 +515,7 @@ export interface FuelEntry {
   video: VideoCard;
 }
 
-export interface FuelList {
+export interface FuelList extends Paged {
   month: string;
   /** Phase 7 (§8): a range of days (list_fuel from/to); the entries and totals are those days', month_totals the month of to. */
   from?: string;
@@ -793,11 +832,35 @@ export interface TripLive {
 }
 
 /** my_trips (Hotfix 2, A): the person's requests and proposed tasks over a range of days, newest first. */
-export interface MyTrips {
+export interface MyTrips extends Paged {
   from: string;
   to: string;
+  /** Hotfix 3 (Hotfix 2's decision 2): all, the requests and proposals, or the tasks the person created directly. */
+  include?: "all" | "requests" | "tasks";
   count: number;
-  trips: RequestCard[];
+  trips: (RequestCard | CreatedTaskCard)[];
+}
+
+/** A task the person created directly (no request), on My trips (Hotfix 3): it opens /tasks/:id. */
+export interface CreatedTaskCard {
+  source: "task";
+  /** The task's id. */
+  id: string;
+  task_id: string;
+  title: string;
+  label?: string;
+  kind?: TaskKind;
+  when: string;
+  back_by?: string;
+  route?: string;
+  stops_count?: number;
+  /** The task's status (assigned, in_progress, completed, cancelled, declined, missed). */
+  status: string;
+  live: TripLive;
+  assigned?: RequestCard["assigned"];
+  approved_by?: PersonAt;
+  /** "2026-10-18 10:42": when it was made. */
+  created: string;
 }
 
 /** One item of the notification centre (Hotfix 2, A): my_inbox. */
@@ -817,8 +880,9 @@ export interface InboxItem {
   kind: "urgent" | "alert" | "soft" | "alarm" | "info";
 }
 
-export interface Inbox {
+export interface Inbox extends Paged {
   unread: number;
+  /** Hotfix 3 (L4): the last 30 days unless asked with archived (read items older than that are archived). */
   items: InboxItem[];
 }
 
@@ -829,7 +893,7 @@ export interface SoundPrefs {
   volume: number;
 }
 
-export interface RequestsList {
+export interface RequestsList extends Paged {
   status: string;
   count: number;
   requests: RequestCard[];
@@ -1301,7 +1365,7 @@ export interface DutyPeriod {
   phone?: string;
 }
 
-export interface DutyLog {
+export interface DutyLog extends Paged {
   from: string;
   to: string;
   driver?: string;
@@ -1413,14 +1477,14 @@ export interface VehicleCard extends Vehicle {
   active?: boolean;
 }
 
-export interface VehiclesList {
+export interface VehiclesList extends Paged {
   filter: string;
   month?: string;
   counts: { all: number; on_task: number; available: number; in_garage: number; documents_expiring: number; inactive?: number };
   vehicles: VehicleCard[];
 }
 
-export interface DriversList {
+export interface DriversList extends Paged {
   count: number;
   drivers: Driver[];
 }
@@ -1481,7 +1545,7 @@ export interface VehicleReport {
   driver_links?: Links;
 }
 
-export interface VehicleReports {
+export interface VehicleReports extends Paged {
   status: string;
   count: number;
   reports: VehicleReport[];
@@ -1508,7 +1572,7 @@ export interface OfficeUser {
   connector_keys: OfficeKey[];
 }
 
-export interface OfficeUsers {
+export interface OfficeUsers extends Paged {
   count: number;
   users: OfficeUser[];
 }
@@ -1543,6 +1607,9 @@ export type IssueSeverity = "info" | "warning" | "critical";
 export type IssueStatus = "open" | "in_progress" | "resolved" | "dismissed";
 export interface Issue {
   id: string;
+  /** Hotfix 3 (L2): snoozed until then ("2026-10-19 07:00"); by whom. */
+  snoozed_until?: string;
+  snoozed_by?: string;
   kind: string;
   kind_text?: string;
   scope?: "task" | "fleet";
@@ -1577,7 +1644,11 @@ export interface IssuesList {
   count: number;
   open: number;
   in_progress: number;
+  /** Hotfix 3 (L2): how many active ones are snoozed (left out of the Overview and the counts). */
+  snoozed?: number;
   issues: Issue[];
+  total?: number;
+  next?: string;
 }
 export interface IssueEvent {
   at: string;
@@ -1749,7 +1820,7 @@ export interface HistoryTask {
   created_by?: string;
 }
 
-export interface TaskHistory {
+export interface TaskHistory extends Paged {
   from: string;
   to: string;
   count: number;
@@ -1766,4 +1837,12 @@ export interface TripPurposeResult {
   project?: string;
   was?: TripPurpose;
   note?: string;
+}
+
+/** Hotfix 3 (L1, L5): a person's page preferences, kept on the server (my_prefs, set_my_prefs merges what it is given). */
+export interface OfficePrefs {
+  /** The Overview's collapsed sections: "requests", "needs_driver", "critical", "tiles", "road", "attention", "my_trips". */
+  overview_collapsed?: string[];
+  /** The side menu's collapsed sections: "today", "fleet", "reports", "admin". */
+  menu_collapsed?: string[];
 }
