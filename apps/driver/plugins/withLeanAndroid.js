@@ -28,8 +28,11 @@ android {
 }
 `;
 
+// A ProGuard file's comments start with # (R8 stops at a // line).
+const R8_MARK = '# [fame-driver] Part 6: the drivers build';
+
 const R8_RULES = `
-${MARK}
+${R8_MARK}
 # Added by plugins/withLeanAndroid.js: expo-camera's barcode scanning is left out of this build.
 -dontwarn com.google.mlkit.vision.barcode.**
 -dontwarn com.google.mlkit.vision.codescanner.**
@@ -48,7 +51,7 @@ module.exports = function withLeanAndroid(config) {
     (c) => {
       const file = join(c.modRequest.platformProjectRoot, 'app', 'proguard-rules.pro');
       const now = existsSync(file) ? readFileSync(file, 'utf8') : '';
-      if (!now.includes(MARK)) writeFileSync(file, now + R8_RULES);
+      if (!now.includes(R8_MARK)) writeFileSync(file, now + R8_RULES);
       return c;
     },
   ]);

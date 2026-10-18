@@ -43,7 +43,9 @@ const configFor = (env: Record<string, string>) => {
 const camera = (appJson.expo.plugins ?? []).find((p) => Array.isArray(p) && p[0] === 'expo-camera') as [string, { barcodeScannerEnabled?: boolean }] | undefined;
 const leanPlugin = read('plugins/withLeanAndroid.js');
 check(camera?.[1].barcodeScannerEnabled === false && /-dontwarn com\.google\.mlkit\.vision\.barcode\.\*\*/.test(leanPlugin)
-  && /-dontwarn com\.google\.mlkit\.vision\.codescanner\.\*\*/.test(leanPlugin),
+  && /-dontwarn com\.google\.mlkit\.vision\.codescanner\.\*\*/.test(leanPlugin)
+  && /R8_MARK = '#/.test(leanPlugin)
+  && (leanPlugin.match(/const R8_RULES = `([\s\S]*?)`;/)?.[1] ?? '//').split('\n').every((l) => l === '' || /^(#|-|\$\{R8_MARK\})/.test(l)),
   'app.json turns the camera\'s barcode scanner off; withLeanAndroid tells R8 its classes are left out');
 const { soundNames } = require('../plugins/withKeptSounds') as { soundNames: (c: unknown) => string[] };
 const kept = read('plugins/withKeptSounds.js');
