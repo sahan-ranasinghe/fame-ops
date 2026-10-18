@@ -1,26 +1,50 @@
 // Pure rules of the issues centre: the list's filters (Phase 7 §9: the dates on
-// opened_at, a status filter, kind and vehicle), whether an answer is the one
-// asked for, the issue's facts, the in-place patch after a change, the bell's
-// count, tones and the timeline's sentences.
+// opened_at, a status filter, kind and vehicle; Hotfix 3: the active ones by
+// default, most urgent first, the snoozed ones on their own tab, severity, the
+// order and the search, all asked of the server a page at a time), the issue's
+// facts, the in-place patch after a change, the bell's count, tones and the
+// timeline's sentences.
 import type { Issue, IssuesList } from "../data/types";
 import type { Tone } from "../lib/format";
 import { rangeText } from "../ui/dateRange";
 
-export type IssueStatusFilter = "open" | "in_progress" | "resolved" | "dismissed" | "all";
+/** "snoozed" = the active issues someone snoozed (list_issues snoozed=true); the other active tabs leave them out. */
+export type IssueStatusFilter = "active" | "open" | "in_progress" | "snoozed" | "resolved" | "dismissed" | "all";
 export const STATUS_FILTERS: [IssueStatusFilter, string][] = [
+  ["active", "Active"],
   ["open", "Open"],
   ["in_progress", "In progress"],
+  ["snoozed", "Snoozed"],
   ["resolved", "Resolved"],
   ["dismissed", "Dismissed"],
   ["all", "All"],
 ];
-/** The page opens on the open issues (as the old Open tab did). */
-export const DEFAULT_STATUS: IssueStatusFilter = "open";
+/** The page opens on everything that still needs attention (open or in progress), the most urgent first. */
+export const DEFAULT_STATUS: IssueStatusFilter = "active";
 /** The issues page's store entry (the panel patches it after a change) and the bell's (Shell.tsx: active, 10 rows). */
 export const ISSUES_KEY = "issuesAll";
 export const BELL_KEY = "issues";
-/** list_issues answers at most this many rows. */
-export const ISSUES_LIMIT = 200;
+
+export type IssueSort = "urgent" | "newest";
+export const SORT_OPTIONS: [IssueSort, string][] = [["urgent", "Most urgent first"], ["newest", "Newest first"]];
+export type SeverityFilter = "" | "critical" | "warning" | "info";
+export const SEVERITY_OPTIONS: [SeverityFilter, string][] = [["", "All severities"], ["critical", "Critical"], ["warning", "Warning"], ["info", "Info"]];
+
+/** The filters that list the issues still to do: the most urgent first; the closed ones and All: the newest first. */
+const ACTIVE_FILTERS = new Set<IssueStatusFilter>(["active", "open", "in_progress", "snoozed"]);
+export const defaultSort = (status: IssueStatusFilter): IssueSort => (ACTIVE_FILTERS.has(status) ? "urgent" : "newest");
+
+/** Everything the list asks for besides the page. */
+export interface IssueListFilters {
+  status: IssueStatusFilter;
+  from: string;
+  to: string;
+  sort: IssueSort;
+  kind?: string;
+  vehicle?: string;
+  severity?: SeverityFilter;
+  search?: string;
+}
 
 export const KIND_TEXT: Record<string, string> = {
   vehicle_report: "Vehicle problem",
@@ -45,6 +69,8 @@ export const KIND_TEXT: Record<string, string> = {
   app_stopped: "App stopped",
   arrival_override: "Arrived away from the stop",
   completed_early: "Completed early",
+  documents_missing: "Documents missing",
+  vehicle_needed: "Needs another vehicle",
 };
 
 export const kindText = (i: Pick<Issue, "kind" | "kind_text">) => i.kind_text ?? KIND_TEXT[i.kind] ?? i.kind;
@@ -58,14 +84,36 @@ export function readStatus(params: Pick<URLSearchParams, "get">): IssueStatusFil
   return STATUS_FILTERS.some(([k]) => k === asked) ? asked as IssueStatusFilter : DEFAULT_STATUS;
 }
 
-/** list_issues' input for the list: the status, the opened_at days, newest first. Kind and vehicle are narrowed on screen. */
-export function issuesArgs(status: IssueStatusFilter, from: string, to: string): Record<string, unknown> {
-  return { status, from, to, sort: "newest", limit: ISSUES_LIMIT };
+/** ?sort=, else the status's own order. */
+export function readSort(params: Pick<URLSearchParams, "get">, status: IssueStatusFilter): IssueSort {
+  const s = params.get("sort");
+  return s === "urgent" || s === "newest" ? s : defaultSort(status);
 }
 
-/** Whether the answer on screen is the one for these filters (another one stays on screen, marked "Updating…", until it lands). */
-export function answerFor(d: Pick<IssuesList, "status" | "from" | "to" | "sort">, want: { status: string; from: string; to: string }): boolean {
-  return d.status === want.status && d.from === want.from && d.to === want.to && d.sort === "newest";
+/** ?severity= (anything else: every severity). */
+export function readSeverity(params: Pick<URLSearchParams, "get">): SeverityFilter {
+  const s = params.get("severity") ?? "";
+  return SEVERITY_OPTIONS.some(([k]) => k === s) ? s as SeverityFilter : "";
+}
+
+/**
+ * list_issues' input for the list (the kit adds the page): the status (Snoozed = the active ones snoozed; the other
+ * active tabs leave the snoozed out, as the Overview and the counts do), the opened_at days, the order, and only the
+ * filters chosen.
+ */
+export function issuesArgs(f: IssueListFilters): Record<string, unknown> {
+  const snoozed = f.status === "snoozed" ? { snoozed: true } : ACTIVE_FILTERS.has(f.status) ? { snoozed: false } : {};
+  return {
+    status: f.status === "snoozed" ? "active" : f.status,
+    from: f.from,
+    to: f.to,
+    sort: f.sort,
+    ...snoozed,
+    ...(f.kind ? { kind: f.kind } : {}),
+    ...(f.vehicle ? { vehicle: f.vehicle } : {}),
+    ...(f.severity ? { severity: f.severity } : {}),
+    ...(f.search ? { search: f.search } : {}),
+  };
 }
 
 export interface IssueFilters {
@@ -74,51 +122,68 @@ export interface IssueFilters {
   vehicle?: string;
 }
 
-/**
- * The rows to show, in the server's order (newest first). The status is checked here too, so an issue patched after
- * Take, Resolve or Dismiss leaves a list it no longer belongs in at once.
- */
-export function listRows(issues: Issue[], f: IssueFilters): Issue[] {
-  return issues.filter((i) => (f.status === "all" || i.status === f.status) && (!f.kind || i.kind === f.kind) && (!f.vehicle || i.vehicle === f.vehicle));
+/** Whether an issue belongs under a status filter (Active and Snoozed: open or in progress). */
+export function fitsStatus(i: Pick<Issue, "status">, status: IssueStatusFilter): boolean {
+  if (status === "all") return true;
+  if (status === "active" || status === "snoozed") return isActive(i.status);
+  return i.status === status;
 }
 
-/** The kinds and vehicles present, for the filter selects (a chosen one stays listed when no row has it). */
-export function filterOptions(issues: Issue[], chosen: { kind?: string; vehicle?: string } = {}): { kinds: [string, string][]; vehicles: string[] } {
-  const kinds = new Map<string, string>();
-  const vehicles = new Set<string>();
+/**
+ * The rows to show, in the server's order. The status is checked here too, so an issue patched after Take, Resolve or
+ * Dismiss leaves a list it no longer belongs in at once.
+ */
+export function listRows(issues: Issue[], f: IssueFilters): Issue[] {
+  return issues.filter((i) => fitsStatus(i, f.status) && (!f.kind || i.kind === f.kind) && (!f.vehicle || i.vehicle === f.vehicle));
+}
+
+/**
+ * The kinds (every kind the centre knows, by name) and the vehicles (the fleet's when known, else those on screen) for
+ * the filter selects; a chosen one stays listed when nothing else has it.
+ */
+export function filterOptions(issues: Issue[], chosen: { kind?: string; vehicle?: string } = {}, fleet?: string[]): { kinds: [string, string][]; vehicles: string[] } {
+  const kinds = new Map<string, string>(Object.entries(KIND_TEXT));
+  const vehicles = new Set<string>(fleet ?? []);
   for (const i of issues) {
-    kinds.set(i.kind, kindText(i));
-    if (i.vehicle) vehicles.add(i.vehicle);
+    if (!kinds.has(i.kind)) kinds.set(i.kind, kindText(i));
+    if (i.vehicle && !fleet) vehicles.add(i.vehicle);
   }
-  if (chosen.kind && !kinds.has(chosen.kind)) kinds.set(chosen.kind, KIND_TEXT[chosen.kind] ?? chosen.kind);
+  if (chosen.kind && !kinds.has(chosen.kind)) kinds.set(chosen.kind, chosen.kind);
   if (chosen.vehicle) vehicles.add(chosen.vehicle);
   return { kinds: [...kinds.entries()].sort((a, b) => a[1].localeCompare(b[1])), vehicles: [...vehicles].sort() };
 }
 
 /**
- * The active issues opened outside the chosen days (the server's open / in-progress counts cover every day), in a
- * sentence; none when the list was cut at the limit (the count would be wrong) or the filter shows no active issues.
+ * The active issues opened outside the chosen days (the server's open / in-progress counts cover every day and leave
+ * the snoozed out, as the Active tabs do), in a sentence. Only for the unnarrowed Active, Open and In progress tabs: the
+ * list's `total` (else its count) is how many of them the days hold.
  */
-export function outsideNote(d: Pick<IssuesList, "open" | "in_progress" | "issues" | "count">, status: IssueStatusFilter): string | undefined {
-  if (d.count >= ISSUES_LIMIT || status === "resolved" || status === "dismissed") return undefined;
-  const inRange = (s: string) => d.issues.filter((i) => i.status === s).length;
-  const n = status === "open" ? d.open - inRange("open")
-    : status === "in_progress" ? d.in_progress - inRange("in_progress")
-    : d.open + d.in_progress - inRange("open") - inRange("in_progress");
+export function outsideNote(d: Pick<IssuesList, "open" | "in_progress" | "count" | "total">, status: IssueStatusFilter, narrowed = false): string | undefined {
+  if (narrowed || (status !== "active" && status !== "open" && status !== "in_progress")) return undefined;
+  const inRange = d.total ?? d.count;
+  const all = status === "open" ? d.open : status === "in_progress" ? d.in_progress : d.open + d.in_progress;
+  const n = all - inRange;
   if (n <= 0) return undefined;
   const what = status === "open" ? "open" : status === "in_progress" ? "in progress" : "active";
   return n === 1 ? `1 more ${what} issue was opened outside these dates.` : `${n} more ${what} issues were opened outside these dates.`;
 }
 
-/** The list was cut at the limit: say so. */
-export const limitNote = (d: Pick<IssuesList, "count">): string | undefined =>
-  d.count >= ISSUES_LIMIT ? `Showing the newest ${ISSUES_LIMIT}: pick fewer days or a status to see the rest.` : undefined;
+/** "Snoozed until 2026-10-19 07:00 · by Sahan" on a snoozed row (none when it is not snoozed). */
+export function snoozeLine(i: Pick<Issue, "snoozed_until" | "snoozed_by">): string | undefined {
+  if (!i.snoozed_until) return undefined;
+  return `Snoozed until ${i.snoozed_until}${i.snoozed_by ? ` · by ${i.snoozed_by}` : ""}`;
+}
 
-/** Nothing to list, in words that fit the filter and the days. */
-export function emptyText(status: IssueStatusFilter, from: string, to: string, narrowed: boolean): string {
+/** Nothing to list, in words that fit the filter, the words searched for and the days. */
+export function emptyText(status: IssueStatusFilter, from: string, to: string, narrowed: boolean, search = ""): string {
   const days = rangeText(from, to);
-  if (narrowed) return `No issue matches the kind and vehicle chosen (${days}).`;
+  if (search) return `No issue matches "${search}"${narrowed ? " with the filters chosen" : ""} (${days}).`;
+  if (narrowed) return `No issue matches the filters chosen (${days}).`;
   switch (status) {
+    case "active":
+      return `Nothing needs attention (${days}). The fleet is in order.`;
+    case "snoozed":
+      return `Nothing is snoozed (${days}).`;
     case "open":
       return `Nothing open (${days}). The fleet is in order.`;
     case "in_progress":

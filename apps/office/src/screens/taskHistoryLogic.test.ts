@@ -43,4 +43,13 @@ describe("task history (§8)", () => {
     expect(emptyText("2026-10-12", "2026-10-18", false)).toBe("No tasks (Mon 12 Oct – Sun 18 Oct 2026).");
     expect(emptyText("2026-10-18", "2026-10-18", true)).toBe("No task matches these filters (Sun 18 Oct 2026).");
   });
+
+  it("Hotfix 3: the search, Missed, and the totals of a paged answer", () => {
+    expect(historyArgs("2026-10-12", "2026-10-18", { driver: "", vehicle: "", status: "missed", kind: "" }, "Kandy")).toEqual({ from: "2026-10-12", to: "2026-10-18", status: "missed", search: "Kandy" });
+    expect(readFilters(new URLSearchParams("status=missed")).status).toBe("missed");
+    expect(statusOf(row({ status: "missed" }))).toEqual({ text: "Missed", tone: "bad" });
+    expect(totalsLine({ count: 25, total: 132, totals: { completed: 90, cancelled: 0, km: 0, driver_started: 0, personal: 0 } })).toBe("132 tasks · 90 completed");
+    expect(emptyText("2026-10-18", "2026-10-18", false, "Kandy")).toBe('No task matches "Kandy" (Sun 18 Oct 2026).');
+    expect(emptyText("2026-10-18", "2026-10-18", true, "Kandy")).toBe('No task matches "Kandy" with these filters (Sun 18 Oct 2026).');
+  });
 });

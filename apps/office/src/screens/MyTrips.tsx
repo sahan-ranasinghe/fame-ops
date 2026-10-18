@@ -6,30 +6,49 @@
 // ("Approved by Palitha · 10:42", "Declined by … · reason", "Cancelled by … · reason") with their Call. A row opens
 // the request page beside the list (/my-trips/:id; full screen on a phone). Refreshed every minute while the days
 // reach today; an unchanged answer re-renders nothing, a changed filter keeps the old rows dimmed until the new come.
+// Hotfix 3 (Hotfix 2's decision 2): All · Requests · Tasks I created (?show=, my_trips' include); a task the person
+// created directly is a row with its title, when, route, live state and the driver with Call, and opens the task
+// (/tasks/:id). L3: 25 at a time ("Load more" on a phone, page numbers on a desktop), the count in the header, a search
+// box (?q=), an empty line that says what the filters mean.
 import type { MouseEvent, ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import type { MyTrips as MyTripsData, RequestCard } from "../data/types";
-import { useQuery } from "../data/useQuery";
+import type { CreatedTaskCard, MyTrips as MyTripsData, RequestCard } from "../data/types";
 import { errText } from "../transport/errors";
-import { Avatar, Chips, Empty, Loading, Notice, Pill, Plate, VehicleThumb } from "../ui/basics";
+import { Avatar, Chips, Loading, Notice, Pill, Plate, VehicleThumb } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
 import { DateRange } from "../ui/DateRange";
 import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
+import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, usePagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
-import { decisionLines, driverPhone, emptyText, isRequestTrip, liveOf, liveTone, officePhoneOf, personPhone, TRIP_STATUS_OPTIONS, totalsLine, vehicleOf } from "./myTripsLogic";
-import { TRIPS_KEY, TRIPS_PATH, useMyTripsArgs } from "./myTripsQuery";
+import {
+  createdLive,
+  createdTaskLink,
+  decisionLines,
+  driverPhone,
+  emptyText,
+  isCreatedTask,
+  isRequestTrip,
+  liveOf,
+  liveTone,
+  officePhoneOf,
+  personPhone,
+  TRIP_SHOW_OPTIONS,
+  TRIP_STATUS_OPTIONS,
+  totalsLine,
+  type TripShow,
+  vehicleOf,
+} from "./myTripsLogic";
+import { TripCardsContext, TRIPS_KEY, TRIPS_PATH, useMyTripsArgs } from "./myTripsQuery";
+
+type Trip = RequestCard | CreatedTaskCard;
 
 /** A button or link inside a clickable row: it does its own thing, the row does not open. */
 const Inside = ({ children }: { children: ReactNode }) => <span onClick={(e: MouseEvent) => e.stopPropagation()}>{children}</span>;
 
-function DriverCell({ q }: { q: RequestCard }) {
-  const a = q.assigned;
-  if (!a) {
-    const waiting = q.status === "waiting" || q.status === "changed";
-    return <span className="muted">{waiting ? "Not assigned yet" : "—"}</span>;
-  }
+function DriverCell({ a, waiting }: { a: RequestCard["assigned"]; waiting: boolean }) {
+  if (!a) return <span className="muted">{waiting ? "Not assigned yet" : "—"}</span>;
   const v = vehicleOf(a);
   return (
     <div style={{ display: "grid", gap: 8 }} data-testid="trip-driver">
@@ -58,107 +77,163 @@ function StatusCell({ q }: { q: RequestCard }) {
   );
 }
 
+/** A request or a proposal: it opens the request page beside the list. */
+function RequestRow({ t, search }: { t: RequestCard; search: string }) {
+  const navigate = useNavigate();
+  const to = `${TRIPS_PATH}/${t.id}${search}`;
+  return (
+    <tr className="click" onClick={() => navigate(to)} data-testid="trip-row" data-kind={t.kind} data-source="request">
+      <td data-label="When">
+        <div><span className="mono">{t.when}</span>{t.back_by && <div className="sub">back by {t.back_by}</div>}</div>
+      </td>
+      <td data-label="Trip">
+        <div>
+          {t.kind === "task" && <div className="name"><Pill tone="live">Task</Pill>{t.title || "Proposed task"}</div>}
+          <div className={t.kind === "task" ? "sub" : undefined}>
+            <Link to={to} onClick={(e) => e.stopPropagation()}>{t.route || "Route not given"}</Link>
+          </div>
+          {t.stops_count && t.stops_count > 2 ? <div className="sub">{t.stops_count} stops</div> : null}
+          {t.on_behalf_of && <div className="sub">for {t.on_behalf_of}</div>}
+          {t.project && <div className="sub">{t.project}</div>}
+        </div>
+      </td>
+      <td data-label="Status"><StatusCell q={t} /></td>
+      <td data-label="Driver"><DriverCell a={t.assigned} waiting={t.status === "waiting" || t.status === "changed"} /></td>
+    </tr>
+  );
+}
+
+/** A task the person created directly: its title, when, route, live state and driver; it opens the task. */
+function CreatedTaskRow({ t }: { t: CreatedTaskCard }) {
+  const navigate = useNavigate();
+  const to = createdTaskLink(t);
+  const live = createdLive(t);
+  return (
+    <tr className="click" onClick={() => navigate(to)} data-testid="trip-row" data-kind="task" data-source="task">
+      <td data-label="When">
+        <div><span className="mono">{t.when}</span>{t.back_by && <div className="sub">back by {t.back_by}</div>}</div>
+      </td>
+      <td data-label="Trip">
+        <div>
+          <div className="name"><Pill tone="">Task I created</Pill><Link to={to} onClick={(e) => e.stopPropagation()}>{t.title}</Link></div>
+          {t.route && <div className="sub">{t.route}</div>}
+          {t.stops_count && t.stops_count > 2 ? <div className="sub">{t.stops_count} stops</div> : null}
+          {t.label && <div className="sub">{t.label}</div>}
+        </div>
+      </td>
+      <td data-label="Status">
+        <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
+          <Pill tone={liveTone(live.state)}><span data-testid="trip-live">{live.text}</span></Pill>
+          {t.approved_by && <div className="sub" data-testid="trip-decision">{decisionLines({ approved_by: t.approved_by })[0]}</div>}
+        </div>
+      </td>
+      <td data-label="Driver"><DriverCell a={t.assigned} waiting={false} /></td>
+    </tr>
+  );
+}
+
+/** All · Requests · Tasks I created, as tabs above the list (the status filter is the chips). */
+function ShowTabs({ value, onChange }: { value: TripShow; onChange: (s: TripShow) => void }) {
+  return (
+    <div className="chips" role="tablist" aria-label="Show">
+      {TRIP_SHOW_OPTIONS.map(([k, label]) => (
+        <button key={k} type="button" role="tab" className="chip" aria-selected={value === k} onClick={() => onChange(k)}>{label}</button>
+      ))}
+    </div>
+  );
+}
+
 export function MyTrips() {
   const { me, noConnector, managePermissions } = useFleet();
-  const navigate = useNavigate();
-  const { search } = useLocation();
-  const { dates, status, setStatus, args } = useMyTripsArgs();
+  const { search: query } = useLocation();
+  const { dates, status, setStatus, show, setShow, search, setSearch, args } = useMyTripsArgs();
   const allowed = me.tools.includes("my_trips");
   const asks = me.tools.includes("create_request");
   const today = colomboDay();
-  const q = useQuery<MyTripsData>(TRIPS_KEY, "my_trips", args, {
-    keep: true,
-    enabled: !noConnector && allowed,
+  const on = !noConnector && allowed && !!args;
+  const list = usePagedList<Trip, MyTripsData>(TRIPS_KEY, "my_trips", args, (a) => a.trips ?? [], {
+    enabled: on,
     // Days that reach today change while trips move: fetched again every minute; past days once.
     every: dates.to >= today ? 60000 : undefined,
   });
+  const q = list.query;
   const d = q.data;
-  // Hotfix 3: the tasks the person created directly get their own rows (W2); until then the requests only.
-  const trips = (d?.trips ?? []).filter(isRequestTrip);
-  const office = officePhoneOf(trips);
+  const trips = list.items;
+  const requests = trips.filter(isRequestTrip);
+  const office = officePhoneOf(requests);
   const updating = q.updating || q.stale;
 
   return (
-    <section className="view" data-testid="my-trips">
-      <ListWithDetail>
-        <div className="ph">
-          <div><div className="eyebrow">The vehicles you asked for and the tasks you proposed</div><h1>My trips</h1></div>
-          {asks && <div className="ph-actions"><Link className="btn primary desktop-only" to="/requests/new">New request</Link></div>}
-        </div>
-        {asks && <Link className="btn primary home-action phone-only" to="/requests/new" style={{ marginBottom: 18 }}><Icon name="plus" />New request</Link>}
-        <div className="stack">
-          <div className="card card-b" style={{ display: "grid", gap: 12 }}>
-            <DateRange value={dates} />
-            <div role="group" aria-label="Status">
-              <Chips options={TRIP_STATUS_OPTIONS} value={status} onChange={setStatus} />
-            </div>
+    <TripCardsContext.Provider value={{ cards: requests, waiting: on && d === undefined && !q.err }}>
+      <section className="view" data-testid="my-trips">
+        <ListWithDetail>
+          <div className="ph">
+            <div><div className="eyebrow">The vehicles you asked for and the tasks you proposed or created</div><h1>My trips</h1></div>
+            {asks && <div className="ph-actions"><Link className="btn primary desktop-only" to="/requests/new">New request</Link></div>}
           </div>
-
-          {!allowed ? (
-            <Notice tone="bad">My trips needs the my_trips tool, which your account does not have yet. Ask an admin.</Notice>
-          ) : dates.error || noConnector ? null : !d ? (
-            q.err ? (
-              <Notice
-                tone="bad"
-                action={errText(q.err)[1] === "perms" && managePermissions
-                  ? <button type="button" className="btn small" onClick={() => void managePermissions()}>Open permissions</button>
-                  : <button type="button" className="btn small" onClick={q.refetch}>Try again</button>}
-              >
-                {errText(q.err)[0]}
-              </Notice>
-            ) : <Loading>Loading your trips…</Loading>
-          ) : q.err && q.stale ? (
-            // The rows on screen are other days' or another filter's: say what went wrong instead.
-            <Notice tone="bad" action={<button type="button" className="btn small" onClick={q.refetch}>Try again</button>}>{errText(q.err)[0]}</Notice>
-          ) : (
-            <div style={q.stale ? { opacity: 0.6 } : undefined} aria-busy={updating || undefined}>
-              <div className="muted small" style={{ paddingBottom: 10 }} data-testid="trips-totals">
-                {totalsLine(d.count ?? trips.length, d.from ?? dates.from, d.to ?? dates.to)}{updating ? <span className="updated"> · Updating…</span> : null}
+          {asks && <Link className="btn primary home-action phone-only" to="/requests/new" style={{ marginBottom: 18 }}><Icon name="plus" />New request</Link>}
+          <div className="stack">
+            <div className="card card-b" style={{ display: "grid", gap: 12 }}>
+              <ShowTabs value={show} onChange={setShow} />
+              <DateRange value={dates} />
+              <div role="group" aria-label="Status">
+                <Chips options={TRIP_STATUS_OPTIONS} value={status} onChange={setStatus} />
               </div>
-              <div className="card">
-                {trips.length ? (
-                  <div className="tbl-wrap">
-                    <table data-testid="trips-table">
-                      <thead><tr><th>When</th><th>Trip</th><th>Status</th><th>Driver and vehicle</th></tr></thead>
-                      <tbody>
-                        {trips.map((t) => (
-                          <tr key={t.id} className="click" onClick={() => navigate(`${TRIPS_PATH}/${t.id}${search}`)} data-testid="trip-row" data-kind={t.kind}>
-                            <td data-label="When">
-                              <div><span className="mono">{t.when}</span>{t.back_by && <div className="sub">back by {t.back_by}</div>}</div>
-                            </td>
-                            <td data-label="Trip">
-                              <div>
-                                {t.kind === "task" && <div className="name"><Pill tone="live">Task</Pill>{t.title || "Proposed task"}</div>}
-                                <div className={t.kind === "task" ? "sub" : undefined}>
-                                  <Link to={`${TRIPS_PATH}/${t.id}${search}`} onClick={(e) => e.stopPropagation()}>{t.route || "Route not given"}</Link>
-                                </div>
-                                {t.stops_count && t.stops_count > 2 ? <div className="sub">{t.stops_count} stops</div> : null}
-                                {t.on_behalf_of && <div className="sub">for {t.on_behalf_of}</div>}
-                                {t.project && <div className="sub">{t.project}</div>}
-                              </div>
-                            </td>
-                            <td data-label="Status"><StatusCell q={t} /></td>
-                            <td data-label="Driver"><DriverCell q={t} /></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <Empty>{q.stale ? "Loading…" : emptyText(status, asks)}</Empty>
-                )}
+              <div className="filters" style={{ marginBottom: 0 }}>
+                <SearchBox value={search} onChange={setSearch} placeholder="Place, title, driver or plate" />
               </div>
             </div>
-          )}
 
-          {office && (
-            <div className="card card-b" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }} data-testid="call-office-card">
-              <div className="grow"><b>The fleet office</b><div className="sub">Questions about a trip</div></div>
-              <ContactButtons phone={office} label="Call office" testId="call-office" />
-            </div>
-          )}
-        </div>
-      </ListWithDetail>
-    </section>
+            {!allowed ? (
+              <Notice tone="bad">My trips needs the my_trips tool, which your account does not have yet. Ask an admin.</Notice>
+            ) : dates.error || noConnector ? null : !d ? (
+              q.err ? (
+                <Notice
+                  tone="bad"
+                  action={errText(q.err)[1] === "perms" && managePermissions
+                    ? <button type="button" className="btn small" onClick={() => void managePermissions()}>Open permissions</button>
+                    : <button type="button" className="btn small" onClick={q.refetch}>Try again</button>}
+                >
+                  {errText(q.err)[0]}
+                </Notice>
+              ) : <Loading>Loading your trips…</Loading>
+            ) : q.err && q.stale ? (
+              // The rows on screen are other days' or another filter's: say what went wrong instead.
+              <Notice tone="bad" action={<button type="button" className="btn small" onClick={q.refetch}>Try again</button>}>{errText(q.err)[0]}</Notice>
+            ) : (
+              <div style={q.stale ? { opacity: 0.6 } : undefined} aria-busy={updating || undefined}>
+                <div className="muted small" style={{ paddingBottom: 10 }} data-testid="trips-totals">
+                  {totalsLine(list.total, d.from ?? dates.from, d.to ?? dates.to)}{updating ? <span className="updated"> · Updating…</span> : null}
+                </div>
+                <div className="card">
+                  <ListHeader title={show === "all" ? "Trips" : show === "requests" ? "Requests" : "Tasks I created"} count={list.total} />
+                  {trips.length ? (
+                    <div className="tbl-wrap">
+                      <table data-testid="trips-table">
+                        <thead><tr><th>When</th><th>Trip</th><th>Status</th><th>Driver and vehicle</th></tr></thead>
+                        <tbody>
+                          {trips.map((t) => isCreatedTask(t) ? <CreatedTaskRow key={`task:${t.id}`} t={t} /> : <RequestRow key={t.id} t={t} search={query} />)}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <EmptyLine>{q.stale ? "Loading…" : emptyText(status, asks, show, search)}</EmptyLine>
+                  )}
+                  <LoadMore list={list} />
+                  <Pager list={list} />
+                </div>
+              </div>
+            )}
+
+            {office && (
+              <div className="card card-b" style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }} data-testid="call-office-card">
+                <div className="grow"><b>The fleet office</b><div className="sub">Questions about a trip</div></div>
+                <ContactButtons phone={office} label="Call office" testId="call-office" />
+              </div>
+            )}
+          </div>
+        </ListWithDetail>
+      </section>
+    </TripCardsContext.Provider>
   );
 }

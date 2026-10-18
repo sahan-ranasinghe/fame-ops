@@ -5,10 +5,15 @@
 // The tools page the same way (@fleet/paging): asked with `limit` (and `cursor`) they answer the page with `total` and
 // `next`. usePagedList keeps ONE query per list, so the store's refresh (`every`) and its refetch after a write work as
 // for any other screen: "Load more" grows the limit by a page (the rows already shown stay, more come under them); page
-// numbers ask one page by its cursor.
+// numbers ask one page by its cursor. useWatchedPagedList does the same on a fixed store entry (a list whose entry other
+// pages read or patch: the request page finds its card in "reqs", the issue panel patches "issuesAll"), and
+// useLocalPagedList pages rows already in memory (Reminders) with the same look.
 import { cursorAt } from "@fleet/paging";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { useFleet } from "../app/FleetContext";
+import { useEntry } from "../data/hooks";
+import type { Entry } from "../data/store";
 import { argsKey, type Query, type QueryOptions, useQuery } from "../data/useQuery";
 import { useIsPhone } from "./phone";
 
@@ -33,6 +38,71 @@ export interface PagedList<T, A> {
   /** The whole answer of the last load (its other fields: counts, totals). */
   answer: A | undefined;
   query: Query<A>;
+  /** The arguments asked (the filters with limit and cursor; null = nothing asked): a Realtime reload asks the same. */
+  asked?: Record<string, unknown> | null;
+}
+
+interface PagingState {
+  key: string;
+  shown: number;
+  page: number;
+}
+
+/**
+ * The paging of one list: how many pages are shown ("more") or which page ("pages"). Back to the first page whenever the
+ * filters (`resetKey`) or the mode change; the reset happens in the same render, so a new filter never asks a later page.
+ */
+function usePaging(resetKey: string, mode: PagingMode) {
+  const key = `${mode}|${resetKey}`;
+  const [st, setSt] = useState<PagingState>({ key, shown: 1, page: 1 });
+  const cur = st.key === key ? st : { key, shown: 1, page: 1 };
+  // New filters: the first page (React re-renders at once with it; nothing is fetched for the old page).
+  if (st.key !== key) setSt(cur);
+  return {
+    shown: cur.shown,
+    page: cur.page,
+    loadMore: () => setSt((s) => (s.key === key ? { ...s, shown: s.shown + 1 } : { key, shown: 2, page: 1 })),
+    setPage: (p: number) => setSt((s) => ({ key, shown: s.key === key ? s.shown : 1, page: p })),
+  };
+}
+
+function useMode(opts: { mode?: PagingMode; pageSize?: number }): { mode: PagingMode; pageSize: number } {
+  const isPhone = useIsPhone();
+  return { mode: opts.mode ?? (isPhone ? "more" : "pages"), pageSize: opts.pageSize ?? PAGE_SIZE };
+}
+
+/** The tool's arguments for the page(s) shown: the filters with limit, and the cursor of a later page. */
+function pageArgs(args: Record<string, unknown> | null, mode: PagingMode, pageSize: number, shown: number, page: number): Record<string, unknown> | null {
+  if (args === null) return null;
+  return mode === "more"
+    ? { ...args, limit: pageSize * shown }
+    : { ...args, limit: pageSize, cursor: page > 1 ? cursorAt((page - 1) * pageSize) : undefined };
+}
+
+function listOf<T, A extends { total?: number }>(
+  items: T[],
+  answer: A | undefined,
+  query: Query<A>,
+  mode: PagingMode,
+  pageSize: number,
+  paging: ReturnType<typeof usePaging>,
+  asked: Record<string, unknown> | null,
+): PagedList<T, A> {
+  const total = answer?.total ?? items.length;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  return {
+    items,
+    total,
+    mode,
+    hasMore: mode === "more" && items.length < total,
+    loadMore: paging.loadMore,
+    page: paging.page,
+    pages,
+    setPage: (p: number) => paging.setPage(Math.min(Math.max(1, p), pages)),
+    answer,
+    query,
+    asked,
+  };
 }
 
 /**
@@ -47,41 +117,86 @@ export function usePagedList<T, A extends { total?: number; next?: string }>(
   itemsOf: (answer: A) => T[],
   opts: QueryOptions<A> & { mode?: PagingMode; pageSize?: number } = {},
 ): PagedList<T, A> {
-  const isPhone = useIsPhone();
-  const { mode = isPhone ? "more" : "pages", pageSize = PAGE_SIZE, ...query } = opts;
-  const filtersKey = argsKey(args);
-  const [shown, setShown] = useState(1);
-  const [page, setPageState] = useState(1);
-  // New filters: back to the first page.
-  useEffect(() => {
-    setShown(1);
-    setPageState(1);
-  }, [filtersKey, mode]);
-
-  const asked = useMemo(() => {
-    if (args === null) return null;
-    return mode === "more"
-      ? { ...args, limit: pageSize * shown }
-      : { ...args, limit: pageSize, cursor: page > 1 ? cursorAt((page - 1) * pageSize) : undefined };
-    // filtersKey stands for args.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtersKey, mode, pageSize, shown, page]);
-
+  const { mode, pageSize } = useMode(opts);
+  const { mode: _m, pageSize: _p, ...query } = opts;
+  const paging = usePaging(argsKey(args), mode);
+  const asked = pageArgs(args, mode, pageSize, paging.shown, paging.page);
   const q = useQuery<A>(key, tool, asked, { keep: true, ...query });
   const items = q.data ? itemsOf(q.data) : [];
-  const total = q.data?.total ?? items.length;
-  const pages = Math.max(1, Math.ceil(total / pageSize));
+  return listOf(items, q.data, q, mode, pageSize, paging, asked);
+}
+
+/** Marks an answer on screen as another filter's or page's until the one asked lands (see useWatchedPagedList). */
+const STALE = "__otherArgs";
+
+/**
+ * usePagedList on a fixed store entry, watched every `every` ms (the store's watch: the artifact's watchTool, the web's
+ * polling, refetched after a write). For a list whose entry other pages read or patch by its key. While new filters or
+ * another page load, the rows on screen stay, marked stale (dimmed, "Updating…"): the entry's answer carries a mark that
+ * the next answer, even an equal one, replaces.
+ */
+export function useWatchedPagedList<T, A extends { total?: number; next?: string }>(
+  key: string,
+  tool: string,
+  args: Record<string, unknown> | null,
+  itemsOf: (answer: A) => T[],
+  opts: { every: number; enabled?: boolean; mode?: PagingMode; pageSize?: number },
+): PagedList<T, A> & { entry: Entry<A> } {
+  const { store } = useFleet();
+  const { mode, pageSize } = useMode(opts);
+  const paging = usePaging(argsKey(args), mode);
+  const asked = pageArgs(args, mode, pageSize, paging.shown, paging.page);
+  const on = (opts.enabled ?? true) && asked !== null;
+  const ak = argsKey(asked);
+  const every = opts.every;
+  useEffect(() => {
+    if (!on) return;
+    store.patch<A>(key, (d) => ((d as Record<string, unknown>)[STALE] ? d : { ...d, [STALE]: true }));
+    store.watch(key, tool, JSON.parse(ak) as Record<string, unknown>, every);
+    return () => store.unwatch(key);
+  }, [store, key, tool, ak, every, on]);
+  const entry = useEntry<A>(key);
+  const data = on ? entry.data : undefined;
+  const stale = !!data && (data as Record<string, unknown>)[STALE] === true;
+  const refetch = useCallback(() => {
+    if (on) void store.load(key, tool, JSON.parse(ak) as Record<string, unknown>);
+  }, [store, key, tool, ak, on]);
+  const query: Query<A> = {
+    data,
+    err: on ? entry.err : undefined,
+    loading: on && data === undefined && !entry.err,
+    updating: on && data !== undefined && (stale || entry.loading),
+    stale,
+    fetching: on && (stale || entry.loading),
+    refetch,
+  };
+  const items = data ? itemsOf(data) : [];
+  return { ...listOf(items, data, query, mode, pageSize, paging, asked), entry };
+}
+
+const IDLE: Query<never> = { data: undefined, err: undefined, loading: false, updating: false, stale: false, fetching: false, refetch: () => {} };
+
+/**
+ * Rows already in memory, paged with the same look (25, "Load more" on a phone, page numbers on a desktop). Back to the
+ * first page when `resetKey` changes (a filter).
+ */
+export function useLocalPagedList<T>(rows: T[], opts: { mode?: PagingMode; pageSize?: number; resetKey?: string } = {}): PagedList<T, undefined> {
+  const { mode, pageSize } = useMode(opts);
+  const paging = usePaging(opts.resetKey ?? "", mode);
+  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const page = Math.min(paging.page, pages);
+  const items = mode === "more" ? rows.slice(0, pageSize * paging.shown) : rows.slice((page - 1) * pageSize, page * pageSize);
   return {
     items,
-    total,
+    total: rows.length,
     mode,
-    hasMore: mode === "more" && items.length < total,
-    loadMore: () => setShown((n) => n + 1),
+    hasMore: mode === "more" && items.length < rows.length,
+    loadMore: paging.loadMore,
     page,
     pages,
-    setPage: (p: number) => setPageState(Math.min(Math.max(1, p), pages)),
-    answer: q.data,
-    query: q,
+    setPage: (p: number) => paging.setPage(Math.min(Math.max(1, p), pages)),
+    answer: undefined,
+    query: IDLE as Query<undefined>,
   };
 }
 
@@ -162,3 +277,50 @@ export function useUrlFilter<V extends string>(name: string, fallback: V, allowe
   };
   return [value, set];
 }
+
+/** How long typing settles before a search is asked. */
+export const SEARCH_DELAY_MS = 300;
+
+/**
+ * The list's search box: what is typed waits SEARCH_DELAY_MS for the typing to settle (Enter asks at once), then goes to
+ * `onChange` (the URL's ?q=, so the server's `search`). A value changed from outside (Back, a link) shows in the box.
+ */
+export function SearchBox({ value, onChange, label = "Search", placeholder, delay = SEARCH_DELAY_MS }: {
+  value: string;
+  onChange: (text: string) => void;
+  label?: string;
+  placeholder?: string;
+  delay?: number;
+}) {
+  const [draft, setDraft] = useState(value);
+  const send = useRef(onChange);
+  send.current = onChange;
+  // The URL changed by itself: the box follows (a trailing space being typed is kept).
+  useEffect(() => setDraft((d) => (d.trim() === value ? d : value)), [value]);
+  useEffect(() => {
+    const text = draft.trim();
+    if (text === value) return;
+    const timer = setTimeout(() => send.current(text), delay);
+    return () => clearTimeout(timer);
+  }, [draft, value, delay]);
+  return (
+    <label className="field list-search">
+      <span>{label}</span>
+      <input
+        type="search"
+        value={draft}
+        placeholder={placeholder}
+        aria-label={label}
+        data-testid="list-search"
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && draft.trim() !== value) send.current(draft.trim());
+        }}
+      />
+    </label>
+  );
+}
+
+/** ?q= as a search (useUrlFilter with no default). */
+export const useUrlSearch = (name = "q") => useUrlFilter<string>(name, "");
+

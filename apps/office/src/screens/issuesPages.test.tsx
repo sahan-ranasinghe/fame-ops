@@ -1,6 +1,7 @@
 // The issues page (Phase 7 §9): the list over a range of opened days with a status filter, newest first; an issue as a
 // child route (a panel beside the list with an X and Esc on a desktop, a full page with Back on a phone); Take, Resolve
 // and Dismiss close the panel and patch the row in place (the other rows keep their DOM nodes; no reload, no flash).
+import { cursorAt, offsetOf } from "@fleet/paging";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
@@ -32,9 +33,21 @@ class FakeTransport implements Transport {
   }
   answer(tool: string, args: Record<string, unknown>): unknown {
     if (tool === "list_issues") {
+      // As the server pages (Hotfix 3): Active = open or in progress; snoozed true = only those, false = without them.
       const status = String(args.status);
-      const issues = this.rows.filter((i) => status === "all" || i.status === status);
-      return { status, from: args.from, to: args.to, sort: args.sort, count: issues.length, open: this.rows.filter((i) => i.status === "open").length, in_progress: this.rows.filter((i) => i.status === "in_progress").length, issues };
+      const fits = (i: Issue) => status === "all" || (status === "active" ? i.status === "open" || i.status === "in_progress" : i.status === status);
+      const snooze = (i: Issue) => (args.snoozed === true ? !!i.snoozed_until : args.snoozed === false ? !i.snoozed_until : true);
+      const words = (i: Issue) => !args.search || i.title.toLowerCase().includes(String(args.search).toLowerCase());
+      const all = this.rows.filter((i) => fits(i) && snooze(i) && words(i));
+      const from = offsetOf(args.cursor as string | undefined);
+      const issues = typeof args.limit === "number" ? all.slice(from, from + args.limit) : all;
+      const end = from + issues.length;
+      const active = this.rows.filter((i) => !i.snoozed_until);
+      return {
+        status, from: args.from, to: args.to, sort: args.sort, count: issues.length, total: all.length, ...(end < all.length ? { next: cursorAt(end) } : {}),
+        open: active.filter((i) => i.status === "open").length, in_progress: active.filter((i) => i.status === "in_progress").length,
+        snoozed: this.rows.filter((i) => i.snoozed_until).length, issues,
+      };
     }
     if (tool === "issue_history") {
       const issue = this.rows.find((i) => i.id === args.id)!;
@@ -71,8 +84,9 @@ function Where() {
   return <div data-testid="where">{pathname + search}</div>;
 }
 
-async function mount(url: string) {
+async function mount(url: string, rows?: Issue[]) {
   const transport = new FakeTransport();
+  if (rows) transport.rows = rows;
   const me = await transport.me();
   render(
     <FleetProvider value={{ store: new FleetStore(transport), transport, me, noConnector: false }}>
@@ -99,12 +113,12 @@ afterEach(() => {
 });
 
 describe("the issues list (§9)", () => {
-  it("asks for this month's open issues, newest first; the status and the dates are filters in the URL", async () => {
+  it("asks for this month's active issues, the most urgent first, snoozed left out; the status and the dates are filters in the URL", async () => {
     const t = await mount("/issues");
-    expect(t.argsOf("list_issues")[0]).toEqual({ status: "open", from: month.from, to: month.to, sort: "newest", limit: 200 });
+    expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", from: month.from, to: month.to, sort: "urgent", snoozed: false, limit: 25 });
     await screen.findByText("Vehicle problem: breakdown");
     expect(rowOf("Vehicle problem: breakdown").textContent).toContain(`Opened ${month.from} 08:00 · System · Vehicle problem`);
-    expect(screen.getByRole("tab", { name: "Open" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Active" }).getAttribute("aria-selected")).toBe("true");
 
     fireEvent.click(screen.getByRole("tab", { name: "Dismissed" }));
     await flush();
@@ -211,5 +225,74 @@ describe("the issues list (§9)", () => {
     expect(screen.queryByTestId("issue-page")).toBeNull();
     expect(await screen.findByTestId("issues-list")).toBeTruthy();
     expect(screen.getByTestId("where").textContent).toBe("/issues?status=all");
+  });
+});
+
+describe("the issues list a page at a time (Hotfix 3, L3)", () => {
+  const many = (n: number, over: Partial<Issue> = {}) =>
+    Array.from({ length: n }, (_, k) => card({ id: `i${k + 1}`, title: `Odometer check ${k + 1}`, kind: "odometer_flag", kind_text: "Odometer check", severity: "warning", ...over }));
+  const phone = () => {
+    window.matchMedia = ((q: string) => ({ matches: true, media: q, addEventListener: () => undefined, removeEventListener: () => undefined })) as unknown as typeof window.matchMedia;
+  };
+
+  it("a desktop: 25 rows, the count in the header, page numbers; page 2 is asked by its cursor", async () => {
+    const t = await mount("/issues", many(30));
+    await screen.findByText("Odometer check 1");
+    const list = screen.getByTestId("issues-list");
+    expect(within(list).getAllByRole("link")).toHaveLength(25);
+    expect(within(list).getByTestId("list-count").textContent).toBe(" · 30");
+    expect(screen.queryByTestId("load-more")).toBeNull();
+    fireEvent.click(within(screen.getByTestId("pager")).getByRole("button", { name: "2" }));
+    await flush();
+    expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "active", limit: 25, cursor: cursorAt(25) });
+    expect(await screen.findByText("Odometer check 26")).toBeTruthy();
+    expect(within(screen.getByTestId("issues-list")).getAllByRole("link")).toHaveLength(5);
+  });
+
+  it("a phone: Load more brings the next 25 under the rows shown", async () => {
+    phone();
+    const t = await mount("/issues", many(30));
+    await screen.findByText("Odometer check 1");
+    const firstRow = () => within(screen.getByTestId("issues-list")).getAllByRole("link")[0];
+    const first = firstRow();
+    expect(screen.getByTestId("load-more").textContent).toContain("Showing 25 of 30");
+    expect(screen.queryByTestId("pager")).toBeNull();
+    fireEvent.click(within(screen.getByTestId("load-more")).getByRole("button", { name: "Load more" }));
+    await flush();
+    expect(t.argsOf("list_issues").at(-1)).toMatchObject({ limit: 50 });
+    expect(await screen.findByText("Odometer check 30")).toBeTruthy();
+    expect(firstRow()).toBe(first);
+    expect(within(screen.getByTestId("issues-list")).getAllByRole("link")).toHaveLength(30);
+    expect(screen.queryByTestId("load-more")).toBeNull();
+  });
+
+  it("Snoozed: its own tab with the count, the rows say until when; Active leaves them out", async () => {
+    const rows = [card({}), card({ id: "z", title: "Documents missing", kind: "documents_missing", severity: "info", snoozed_until: "2026-10-19 07:00", snoozed_by: "Sahan" })];
+    const t = await mount("/issues", rows);
+    await screen.findByText("Vehicle problem: breakdown");
+    expect(within(screen.getByTestId("issues-list")).queryByText("Documents missing")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Snoozed · 1" }));
+    await flush();
+    expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "active", snoozed: true });
+    expect(screen.getByTestId("where").textContent).toBe("/issues?status=snoozed");
+    expect((await screen.findByTestId("snoozed-until")).textContent).toBe("Snoozed until 2026-10-19 07:00 · by Sahan");
+    expect(within(screen.getByTestId("issues-list")).queryByText("Vehicle problem: breakdown")).toBeNull();
+  });
+
+  it("the search box asks the server once the typing settles, and keeps the words in the URL", async () => {
+    const t = await mount("/issues", many(3));
+    await screen.findByText("Odometer check 1");
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "check 2" } });
+    expect(t.argsOf("list_issues").some((a) => a.search)).toBe(false);
+    await act(async () => { await new Promise((r) => setTimeout(r, 350)); });
+    await flush();
+    expect(t.argsOf("list_issues").at(-1)).toMatchObject({ search: "check 2", limit: 25 });
+    expect(screen.getByTestId("where").textContent).toBe("/issues?q=check+2");
+    expect(within(screen.getByTestId("issues-list")).getAllByRole("link")).toHaveLength(1);
+    // Enter asks at once; nothing found: the line says what was looked for.
+    fireEvent.change(screen.getByLabelText("Search"), { target: { value: "tyre" } });
+    fireEvent.keyDown(screen.getByLabelText("Search"), { key: "Enter" });
+    await flush();
+    expect((await screen.findByTestId("empty-line")).textContent).toMatch(/^No issue matches "tyre"/);
   });
 });
