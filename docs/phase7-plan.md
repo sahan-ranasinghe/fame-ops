@@ -1951,6 +1951,98 @@ call buttons, the vehicle choice and the approvers; D1 the driver app. Merged in
   to the driver); "Approved by …" is on the requester's push, the request page, task detail and the driver's preview, not
   in the driver's "New task" push.
 
+## Hotfix 3 (Sahan, 18 October; branch `phase7-hotfix-3` from main `9c586fb`)
+
+Item L of his message: no endless lists anywhere, web and driver app. Its own round, shown before any deploy, before Part
+3b. It also carries his Hotfix 2 decision 2 (My trips lists the tasks a person created directly, with All · Requests ·
+Tasks I created), which was not in the Hotfix 2 round (a go covers what was shown).
+
+**What the live Overview showed (read only, 18 October 17:09):** 21 Needs-attention rows: the waiting request and the
+two not-accepted tasks again (they are in their own sections), 9 rows "Odometer check: typed …", 3 info rows "documents
+missing", a declined task from 16 Oct, a late start from 15 Oct, a completed-early check from 17 Oct, and "Over monthly
+km allowance · CAP-2207 · 200 of 0 km" (CAP-2207 has no allowance set). Tasks never started with their leave-by over a day
+ago: 1 assigned (15 Oct) and 6 declined (since 10 Oct). `fleet_overview` answers `requests.oldest_waiting` ("5 h 11 min"),
+so "1 open · Nothing waiting" is the page's: traced and fixed in L2.
+
+**L1. Overview, action first, by role.** One page, its sections by what the person may do:
+- approve: Requests to approve → Needs a driver → Critical issues → the tiles → On the road → Needs attention.
+- assign_tasks without approve: Needs a driver → the tiles → On the road → Needs attention (the task kinds).
+- request only: My trips (the latest 5, the live state) → the tiles.
+- view only: the tiles → On the road.
+Every section shows at most 5 rows and "View all (N)", which opens its page or the item-16 side panel; a section
+collapses and then shows its count; the collapsed sections are remembered per person on the server (`office_prefs`, the
+tools `my_prefs` / `set_my_prefs`; the artifact, which has no person, keeps them in the browser).
+`fleet_overview` adds `attention` (L2) and `critical` (the critical active issues, at most 5, with the count), and keeps
+`needs_attention` as it is for the connector's contract.
+
+**L2. Needs attention.**
+- No repeats: the kinds shown in their own sections (request_waiting; not_accepted and declined = Needs a driver) are
+  not listed again; critical ones are in Critical issues, not again in Needs attention.
+- Groups: items of one kind (and one vehicle, where it applies) become one row with the count, expandable: "Odometer
+  typed by hand · 9 this week" (odometer_flag), "Documents missing on 3 vehicles" (documents_missing), "Km outside tasks ·
+  2 vehicles" and so on (`attention.groups[]`: kind, title, count, severity, items[]; a single item stays a row).
+- Severity: the Overview shows critical and warning; info stays on Issues and Reminders.
+- Stale items close themselves (the issue sync): an issue about a task that is no longer active (completed, cancelled,
+  missed) whose leave-by passed over 24 hours ago is resolved by the system with the note "Expired". A task never started
+  (assigned or declined) whose leave-by passed over 24 hours ago becomes **missed** (`tasks.status` gains 'missed',
+  `missed_at`): it leaves the boards and needs-a-driver, shows in History as "Missed", and has one "Missed task" issue
+  (warning) until someone resolves it. No push to the driver (their app simply stops listing it). On the live data: 1
+  assigned and 6 declined tasks become missed at the first sync after the deploy.
+- Snooze (until tomorrow 07:00, one week) and Dismiss on every item and group (`update_issue` takes `snooze`:
+  "tomorrow" | "week" | null; `issues.snoozed_until`); snoozed items leave the Overview and the counts until then; Issues
+  has a Snoozed filter.
+- Bug: no allowance set (null or 0) means no allowance check (no issue, no warning on assign or on a proposal); the
+  vehicle page says "no km allowance set".
+- Bug: "1 open · Nothing waiting": proposed tasks count as waiting and the oldest one is shown (traced on the page).
+
+**L3. One list pattern.** Every list: a sensible default filter (open, today or this week, mine where it fits), the most
+urgent or newest first, 25 rows with "Load more" (page numbers on a desktop table), the count in the header, a search box
+once a list can pass 25 rows, the filters in the URL, an empty-state line; on a phone, cards. The pages: Tasks (the board's
+columns: 25 per column with Load more), History, Requests, My trips, Issues, Reminders, Duty log, Mileage (its tables),
+Fuel, Places (thousands of sites: server search, 25 a page), Drivers, Vehicles, Users, notifications and any logs. The
+connector's list tools take `limit` and `cursor` and answer `next` (an opaque cursor) and `total`; with no `limit` they
+answer as today (the Teams artifact and Claude keep their lists). My trips (decision 2): `my_trips(…, include? all |
+requests | tasks)`; a task the person created directly (no request; they assigned it) is a row with its live state that
+opens the task; the filter All · Requests · Tasks I created in the URL.
+
+**L4. One notification icon.** The tray takes over the bell; the issues count becomes a badge on the Issues menu item.
+The tray groups Today / Yesterday / Earlier, filters All / Unread, has Mark all read, and shows the last 30 days: read
+items older than that are archived (still on the notifications page's history: `my_inbox(archived?)`).
+
+**L5. The menu.** The side menu in sections, each collapsible (remembered per person with the Overview's): Today
+(Overview, Live, Tasks, Requests, My trips, Issues) · Fleet (Vehicles, Drivers, Places, Maintenance) · Reports (Mileage,
+Fuel, Duty log) · Admin (Projects, Settings); each person sees only what their permissions allow. On a phone: a bottom bar
+with the 4 most used for the role, plus More.
+
+**L6. The driver app.** Today: the next task and at most 3 later ones, then "All today's tasks" (a list screen). The lists
+that grow (Reports, Fuel, the Mileage tab's tasks) load 20 at a time with "Load more"; nothing on Today grows without
+limit. (The app has no notification list or trip history screen yet: none is added.) The app ignores a task once it is
+missed (its copy leaves Today).
+
+**L7. Tests.** Seeded with 100 open issues and 50 waiting requests, Playwright measures the Overview at about two screen
+heights or less on a desktop (1366 × 768) and on a phone (412 × 915); every list above loads 25 at a time (the e2e counts
+rows and Load more); the connector suite pages through `list_requests`, `list_issues`, `list_places`, `list_tasks` and
+`my_inbox` with `cursor`; pgTAP: missed, expired, snooze, the allowance rule.
+
+**Build.** The main session: the migration (tasks 'missed' and `missed_at`, `issues.snoozed_until`, `office_prefs`), the
+server (attention groups and critical, the expiry and missed rules in the issue sync, snooze, the allowance rule, limit /
+cursor / next / total on the list tools, `my_trips` include, `my_inbox` archived, `my_prefs`), the shared list kit for the
+web (`ui/ListKit.tsx`: the paged query, the header with the count, Load more, page numbers, the URL filters, the empty
+line) and the tests. Subagents in worktrees, three at a time: W1 the Overview by role, Needs attention, the tray and the
+menu (L1, L2 web, L4, L5); W2 the list pattern on Tasks, History, Requests, My trips, Issues, Reminders, notifications;
+W3 (when a slot frees) the list pattern on Duty log, Mileage, Fuel, Places, Drivers, Vehicles, Users; D1 the driver app
+(L6). A fresh reviewer at the checkpoint.
+
+**Questions, with my defaults (they do not hold up the build):**
+1. The Overview's collapsed sections and the menu's are kept per person on the server (they follow the person to their
+   phone), not per browser.
+2. A missed task is a new status ('missed'), not a flag on an assigned task.
+3. An expired issue is resolved by the system with the note "Expired" (no new issue status).
+4. Desktop tables page by numbers (25 a page); phones and the board's columns use Load more.
+5. Snooze "until tomorrow" means 07:00 Colombo the next day.
+6. The phone's bottom bar for each role: approver Home, Requests, Tasks, Live; dispatcher Home, Tasks, Live, Issues;
+   requester Home, My trips, Vehicles, Live; viewer Home, Live, Vehicles, Drivers; More holds the rest.
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
