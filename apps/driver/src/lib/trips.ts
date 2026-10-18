@@ -527,6 +527,8 @@ export function localTrip(input: {
     id: request.id,
     kind: 'self',
     purpose: request.purpose,
+    // Part 6: the server sets it from the driver (the stores' demo driver); the phone's copy only shows the trip.
+    demo: false,
     title: tripTitle(request.purpose, pick.name),
     label: null,
     employee_id: input.employeeId,

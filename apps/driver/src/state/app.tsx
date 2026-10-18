@@ -1441,7 +1441,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     enqueue({ kind: 'report', row });
     for (const photo of photos) queuePhoto(photo, 'vehicle_report', current.id, id);
     setReports((list) => {
-      const next = [{ ...row, needs_vehicle: needsVehicle, status: 'open', closed_at: null, office_note: null }, ...list];
+      // The phone's copy for the list (demo is the server's, set from the driver; never sent).
+      const next = [{ ...row, needs_vehicle: needsVehicle, status: 'open', closed_at: null, office_note: null, demo: current.demo }, ...list];
       setJson(KEYS.reports, next);
       return next;
     });
