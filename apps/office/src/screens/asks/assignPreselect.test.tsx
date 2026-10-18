@@ -146,9 +146,16 @@ describe("Assign on a Yes fills the driver in", () => {
     expect((screen.getByLabelText("Leave by") as HTMLInputElement).value).toBe("09:00");
   });
 
-  it("?driver=1 on the change page keeps its old meaning", async () => {
-    await mount(transport(), "/tasks/t1/edit?driver=1", <Route path="/tasks/:id/edit" element={<TaskEdit />} />);
+  it("?driver=1 is Give it a driver, never a driver called \"1\" (Hotfix 4: a task that has its driver says so)", async () => {
+    await mount(transport({ task_detail: () => ({ ...TASK, task: { ...TASK.task, status: "declined", needs_driver: { since: "08:14", reason: "declined" } } }) }),
+      "/tasks/t1/edit?driver=1", <Route path="/tasks/:id/edit" element={<TaskEdit />} />);
+    expect(screen.getByTestId("give-driver")).toBeTruthy();
     expect(driverField().value).toBe("");
+  });
+
+  it("?driver=1 for a task that has its driver again: the page says so", async () => {
+    await mount(transport(), "/tasks/t1/edit?driver=1", <Route path="/tasks/:id/edit" element={<TaskEdit />} />);
+    expect(screen.getByTestId("give-driver-done").textContent).toContain("Nothing to do here");
   });
 
   it("a task already under way takes only the words: the linked driver is never sent with them", async () => {
