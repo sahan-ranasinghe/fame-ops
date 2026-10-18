@@ -120,6 +120,8 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "my_inbox",
     "mark_inbox_read",
     "update_my_profile",
+    "my_prefs",
+    "set_my_prefs",
   ]);
   assertEquals(toolsFor(PRESETS.viewer.permissions, names), [
     "fleet_overview",
@@ -141,6 +143,8 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
     "my_inbox",
     "mark_inbox_read",
     "update_my_profile",
+    "my_prefs",
+    "set_my_prefs",
   ]);
   assertEquals(allows(PRESETS.dispatcher.permissions, "plan_task"), true);
   // Hotfix 2: "reviewing" is the approvers'; My trips is for those who ask or assign.
