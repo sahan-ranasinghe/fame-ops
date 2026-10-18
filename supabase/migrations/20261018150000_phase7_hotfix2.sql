@@ -198,17 +198,23 @@ alter table public.vehicle_requests
   add column proposed_vehicle_type text,
   add constraint vehicle_requests_proposed_vehicle_mode_check check (proposed_vehicle_mode is null or proposed_vehicle_mode in ('specific', 'driver_day', 'any_type'));
 
--- The driver confirms the vehicle of a task made without one, before Start task: the one they hold, or one of the type.
-create function public.confirm_task_vehicle(p_task uuid, p_vehicle uuid)
+-- The driver confirms the vehicle of a task chosen on the day, at Start task: the one they hold, or one of the type.
+-- Online (p_queued false) the rules refuse in words before anything else is sent. From the offline queue (p_queued true)
+-- the vehicle was driven already: it is taken and what would have been refused is noted on the task for the office
+-- (tasks.warnings, task_detail's warnings_saved), so the start and the readings behind it are never lost. Only a task no
+-- longer the driver's (not_yours) or one under way (started) is answered without a change.
+create function public.confirm_task_vehicle(p_task uuid, p_vehicle uuid, p_queued boolean default false)
 returns text
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  v_me   uuid := public.current_employee_id();
-  v_task public.tasks%rowtype;
-  v_car  public.vehicles%rowtype;
+  v_me    uuid := public.current_employee_id();
+  v_task  public.tasks%rowtype;
+  v_car   public.vehicles%rowtype;
+  v_issue text;
+  v_name  text;
 begin
   select * into v_task from public.tasks where id = p_task for update;
   if not found or v_me is null or v_task.employee_id <> v_me then
@@ -217,25 +223,60 @@ begin
   if v_task.status not in ('assigned', 'declined') then
     return 'started';
   end if;
-  if v_task.vehicle_mode = 'specific' and v_task.vehicle_id is not null and v_task.vehicle_id <> p_vehicle then
-    return 'has_vehicle';
-  end if;
   select * into v_car from public.vehicles where id = p_vehicle;
-  if not found or not v_car.active then
+  if not found then
     return 'inactive';
   end if;
-  if v_car.in_garage then
-    return 'in_garage';
+  v_issue := case
+    when v_task.vehicle_mode = 'specific' and v_task.vehicle_id is not null and v_task.vehicle_id <> p_vehicle then 'has_vehicle'
+    when not v_car.active then 'inactive'
+    when v_car.in_garage then 'in_garage'
+    when v_task.vehicle_mode = 'any_type' and v_car.vehicle_type is distinct from v_task.vehicle_type_wanted then 'wrong_type'
+  end;
+  if v_issue is not null and not p_queued then
+    return v_issue;
   end if;
-  if v_task.vehicle_mode = 'any_type' and v_car.vehicle_type is distinct from v_task.vehicle_type_wanted then
-    return 'wrong_type';
+  if v_issue is not null then
+    select name into v_name from public.employees where id = v_me;
+    update public.tasks
+    set vehicle_id = p_vehicle,
+        warnings = coalesce(warnings, '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+          'text', 'Started offline on ' || v_car.reg_no || case v_issue
+            when 'has_vehicle' then ', not the vehicle the office set meanwhile'
+            when 'inactive' then ', a vehicle no longer in the fleet list'
+            when 'in_garage' then ', a vehicle in the garage'
+            else ', not a ' || replace(coalesce(v_task.vehicle_type_wanted, 'vehicle'), '_', ' ') || ' as the task asked'
+          end,
+          'by', coalesce(v_name, 'the driver')))
+    where id = p_task;
+    return 'ok';
   end if;
   update public.tasks set vehicle_id = p_vehicle where id = p_task;
   return 'ok';
 end;
 $$;
-revoke all on function public.confirm_task_vehicle(uuid, uuid) from public, anon;
-grant execute on function public.confirm_task_vehicle(uuid, uuid) to authenticated;
+revoke all on function public.confirm_task_vehicle(uuid, uuid, boolean) from public, anon;
+grant execute on function public.confirm_task_vehicle(uuid, uuid, boolean) to authenticated;
+
+-- A vehicle confirmed by a driver belongs to that driver's start: when a task chosen on the day goes to another driver, or
+-- the driver declines it, the confirmed vehicle is cleared (the next driver confirms theirs). A vehicle the office sets in
+-- the same change (the mode becomes specific) stays.
+create function public.tasks_vehicle_on_the_day_reset()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  if new.vehicle_mode <> 'specific' and new.vehicle_id is not null and new.status in ('assigned', 'declined')
+     and new.vehicle_id is not distinct from old.vehicle_id
+     and (new.employee_id is distinct from old.employee_id or (new.status = 'declined' and old.status <> 'declined')) then
+    new.vehicle_id := null;
+  end if;
+  return new;
+end;
+$$;
+create trigger tasks_vehicle_on_the_day_reset before update on public.tasks
+  for each row execute function public.tasks_vehicle_on_the_day_reset();
 
 -- K. Who approved, and who is reviewing ---------------------------------------------------------------------------------------
 alter table public.tasks
@@ -254,6 +295,7 @@ create table public.request_viewers (
 );
 alter table public.request_viewers enable row level security;
 comment on table public.request_viewers is 'Who has a request''s decide page open (reviewing, every 20 s; shown while under 45 s old). Service role only.';
+select cron.schedule('prune-request-viewers', '55 21 * * *', $$delete from public.request_viewers where seen_at < now() - interval '1 day'$$);
 
 -- J, K. The task is saved with its vehicle mode and who approved it ---------------------------------------------------------
 create or replace function public.office_create_task(

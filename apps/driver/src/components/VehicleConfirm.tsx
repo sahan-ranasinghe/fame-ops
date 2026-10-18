@@ -28,7 +28,12 @@ const fromSaved = (v: Vehicle, mine: string | null): Choice => ({
   mine_now: v.id === mine,
 });
 
-export function VehicleConfirm({ task, onBusy }: { task: TaskWithStops; onBusy?: (busy: boolean) => void }) {
+export function VehicleConfirm({ task, onBusy, onConfirmed }: {
+  task: TaskWithStops;
+  onBusy?: (busy: boolean) => void;
+  /** The vehicle is set (or kept on the phone to be sent first): the odometer step takes this card's place. */
+  onConfirmed?: () => void;
+}) {
   const app = useApp();
   const { t } = app;
   const type = wantedType(task);
@@ -62,8 +67,9 @@ export function VehicleConfirm({ task, onBusy }: { task: TaskWithStops; onBusy?:
     const outcome = await app.confirmTaskVehicle(task, vehicle.id);
     setBusy(false);
     onBusy?.(false);
-    if (outcome.kind === 'refused') setProblem(t('vehicleConfirm.failed', { reason: refusalWords(t, outcome.answer, vehicle.reg_no, type) }));
+    if (outcome.kind === 'refused') return setProblem(t('vehicleConfirm.failed', { reason: refusalWords(t, outcome.answer, vehicle.reg_no, type) }));
     // 'ok' / 'queued': the task has its vehicle now (the phone's copy too) and the odometer step takes this card's place.
+    onConfirmed?.();
   }
 
   return (

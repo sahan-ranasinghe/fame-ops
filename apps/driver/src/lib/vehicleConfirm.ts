@@ -1,14 +1,18 @@
 // A task made with no vehicle (Hotfix 2, J): the driver confirms one at Start task, before the odometer. Pure: no
 // React, so scripts/test-preview.ts runs it.
 //
-//   - Which tasks: no vehicle_id while still to start (vehicle_mode driver_day = the vehicle the driver holds on the day,
-//     any_type = any vehicle of vehicle_type_wanted).
+//   - Which tasks: every task still to start whose vehicle is chosen on the day (vehicle_mode driver_day = the vehicle the
+//     driver holds on the day, any_type = any vehicle of vehicle_type_wanted), every time Start task is pressed, also when
+//     a vehicle was confirmed before (the driver backed out, or the task came from another driver): the vehicle in hand
+//     today is the one that counts.
 //   - Use the vehicle the driver holds when it fits (the right type for any_type, not in the garage), else pick one of
 //     the list (my_vehicle_choices; any_type: that type only).
 //   - The server decides (confirm_task_vehicle): 'ok', or a refusal said in words. It refuses a task going in progress
-//     with no vehicle, so the confirm goes first: online it is called at once; offline it is a queue op (task_vehicle)
-//     put in the queue before the start's ops, so it reaches the server first. A refusal is kept as failed (Me can try
-//     it again) and the driver is told; the start behind it is refused too and kept.
+//     with no vehicle, so the confirm goes first: online it is called at once (a refusal is said on the screen, nothing
+//     else is sent); offline it is a queue op (task_vehicle) put in the queue before the start's ops and sent as queued:
+//     the server then takes the vehicle the driver really drove and notes what it would have refused (in the garage, the
+//     wrong type, the office's vehicle set meanwhile) for the office, so the start and the readings behind it are kept.
+//     Only a task no longer theirs is refused (not_yours).
 
 import type { Op } from '../sync/engine';
 import { typeWord, vehicleMode, type Translate } from './taskPreview';
@@ -25,9 +29,9 @@ export function confirmAnswer(value: unknown): ConfirmAnswer | null {
 
 type TaskOf = Pick<TaskWithStops, 'status' | 'vehicle_id' | 'vehicle_mode' | 'vehicle_type_wanted'>;
 
-/** The task needs its vehicle confirmed before it starts. */
+/** The task's vehicle is confirmed at Start task (chosen on the day), or set by the office (specific). */
 export function needsVehicle(task: TaskOf): boolean {
-  return !task.vehicle_id && (task.status === 'assigned' || task.status === 'declined');
+  return (vehicleMode(task) !== 'specific' || !task.vehicle_id) && (task.status === 'assigned' || task.status === 'declined');
 }
 
 /** The type the task wants (any_type), else null (any vehicle will do). */

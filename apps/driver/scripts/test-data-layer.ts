@@ -703,16 +703,20 @@ async function main() {
   result = await syncE.flush();
   const startedE = must(await admin.from('tasks').select('status, vehicle_id').eq('id', onDay).single(), 'started');
   check(result.failed === 0 && startedE.status === 'in_progress' && startedE.vehicle_id === carE.id, 'the queue in order: the vehicle confirmed, then the task starts on it', { result, startedE });
-  // A car for "any van": refused and kept; the start behind it is refused by the database too (never retried for ever).
+  // Offline, a car for "any van": the car was driven, so the server keeps it and notes the wrong type for the office; the
+  // start behind it goes through (nothing the driver did is lost).
   queueE.add(
     { kind: 'task_vehicle', id: anyVan, vehicle_id: carE.id, at: new Date().toISOString() },
     { kind: 'task_patch', id: anyVan, patch: { status: 'in_progress', start_odometer_km: 5000, started_at: new Date().toISOString() } },
   );
   result = await syncE.flush();
-  const failedE = queueE.failed();
-  check(failedE.length === 2 && failedE.some((f) => f.startsWith('task_vehicle') && /wrong_type/.test(f))
-    && must(await admin.from('tasks').select('status').eq('id', anyVan).single(), 'any van').status === 'assigned',
-    'a car for "any van": refused (wrong_type) and kept; the start behind it is kept as failed; the task waits', failedE);
+  const vanRow = must(await admin.from('tasks').select('status, vehicle_id, warnings').eq('id', anyVan).single(), 'any van');
+  const note = (vanRow.warnings as { text?: string }[] | null)?.at(-1)?.text ?? '';
+  check(result.failed === 0 && vanRow.status === 'in_progress' && vanRow.vehicle_id === carE.id && note.includes('not a van as the task asked'),
+    'offline, a car for "any van": kept with a note for the office; the start goes through', { result, vanRow, failed: queueE.failed() });
+  // Online the same is refused in words before anything else is sent.
+  const onlineAnswer = await api.confirmTaskVehicle(clientE, await taskWithout(`Any van online ${run}`, 'any_type', 'van'), carE.id);
+  check(onlineAnswer === 'wrong_type', 'online, a car for "any van" is refused (wrong_type) and nothing is sent', onlineAnswer);
   const contacts = await api.fetchTaskContacts(clientE, onDay);
   check(contacts?.officePhone === '+94112345678', 'my_task_contacts: the office number on my own task', contacts);
   check((await api.fetchTaskContacts(clientE, taskOfB)) === null, "nothing for another driver's task", null);

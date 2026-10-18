@@ -87,6 +87,11 @@ select lives_ok($$ update public.tasks set status = 'cancelled', cancelled_reaso
 
 -- The accept window (Phase 7): the reminder 5 minutes after sending; "needs a driver" 15 minutes after sending or
 -- 30 minutes before leaving, whichever comes first.
+-- Hotfix 2 (E): the accept window runs only while the driver is at work: the drivers with tasks here started work 3 hours ago.
+insert into public.duty_sessions (employee_id, started_at)
+select distinct t.employee_id, now() - interval '3 hours' from public.tasks t join public.employees e on e.id = t.employee_id
+where t.status = 'assigned' and e.role = 'driver'
+  and not exists (select 1 from public.duty_sessions d where d.employee_id = t.employee_id and d.ended_at is null);
 select is(public.queue_accept_reminders(), 2, 'the task sent 31 minutes ago: its reminder and, past its window, needs a driver');
 select is((select count(*) from public.tasks where accept_reminder_sent_at is not null), 1::bigint, 'one reminder (the others were sent just now)');
 select is((select needs_driver_reason from public.tasks where id = '50000000-0000-0000-0000-0000000000a5'), 'not_accepted', 'it needs a driver: not accepted');

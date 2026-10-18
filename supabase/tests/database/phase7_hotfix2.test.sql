@@ -144,6 +144,38 @@ set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-000000000bd1","
 select is(public.confirm_task_vehicle('30000000-0000-0000-0000-000000000bd4', '20000000-0000-0000-0000-000000000bd1'), 'started',
   'a started task: started (the queue counts it done)');
 
+-- From the offline queue the driven vehicle is kept and what was wrong is noted for the office; a confirmed vehicle goes
+-- with its driver (cleared when the task changes driver or is declined).
+reset role;
+set local request.jwt.claims to '{}';
+insert into public.tasks (id, title, employee_id, start_at, status, sent_at, created_by, vehicle_mode, vehicle_type_wanted) values
+  ('30000000-0000-0000-0000-000000000bd6', 'HF2 offline van', '10000000-0000-0000-0000-000000000bd1', now() + interval '1 day', 'assigned', now(), 'test', 'any_type', 'van'),
+  ('30000000-0000-0000-0000-000000000bd7', 'HF2 handed on', '10000000-0000-0000-0000-000000000bd1', now() + interval '1 day', 'assigned', now(), 'test', 'driver_day', null),
+  ('30000000-0000-0000-0000-000000000bd8', 'HF2 declined', '10000000-0000-0000-0000-000000000bd1', now() + interval '1 day', 'assigned', now(), 'test', 'driver_day', null);
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-000000000bd1","role":"authenticated"}';
+select is(public.confirm_task_vehicle('30000000-0000-0000-0000-000000000bd6', '20000000-0000-0000-0000-000000000bd1', true), 'ok',
+  'from the offline queue a car for "any van" is taken (it was driven already)');
+select is(public.confirm_task_vehicle('30000000-0000-0000-0000-000000000bd7', '20000000-0000-0000-0000-000000000bd1'), 'ok', 'Amal confirms the car');
+select is(public.confirm_task_vehicle('30000000-0000-0000-0000-000000000bd8', '20000000-0000-0000-0000-000000000bd1'), 'ok', 'and on another task');
+select is(public.decline_task('30000000-0000-0000-0000-000000000bd8', 'vehicle_problem', 'Brakes', now()), 'declined', 'then declines that one');
+reset role;
+set local request.jwt.claims to '{}';
+select is((select vehicle_id::text || ' | ' || (warnings -> -1 ->> 'text') || ' | ' || (warnings -> -1 ->> 'by') from public.tasks
+           where id = '30000000-0000-0000-0000-000000000bd6'),
+  '20000000-0000-0000-0000-000000000bd1 | Started offline on WP HF2-0001, not a van as the task asked | Amal Silva',
+  'the office sees why: noted on the task with the driver''s name');
+update public.tasks set employee_id = '10000000-0000-0000-0000-000000000bd2' where id = '30000000-0000-0000-0000-000000000bd7';
+select is((select vehicle_id from public.tasks where id = '30000000-0000-0000-0000-000000000bd7'), null::uuid,
+  'given to Sunil: Amal''s confirmed car is cleared (Sunil confirms his own)');
+select is((select vehicle_id from public.tasks where id = '30000000-0000-0000-0000-000000000bd8'), null::uuid,
+  'declined: the confirmed car is cleared too');
+update public.tasks set employee_id = '10000000-0000-0000-0000-000000000bd1', vehicle_id = '20000000-0000-0000-0000-000000000bd2', vehicle_mode = 'specific'
+  where id = '30000000-0000-0000-0000-000000000bd7';
+select is((select vehicle_id from public.tasks where id = '30000000-0000-0000-0000-000000000bd7'), '20000000-0000-0000-0000-000000000bd2'::uuid,
+  'a vehicle the office sets with the new driver stays');
+select is((select count(*) from cron.job where jobname = 'prune-request-viewers'), 1::bigint, '"reviewing" rows are pruned nightly');
+
 -- 4. The driver's contacts: their own task only (F, I, K) --------------------------------------------------------------------
 reset role;
 set local request.jwt.claims to '{}';

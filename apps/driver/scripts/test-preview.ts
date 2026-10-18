@@ -206,7 +206,10 @@ async function main() {
   console.log('\nThe vehicle at Start task (J):');
   const anyVan = task({ vehicle_id: null, vehicle_mode: 'any_type', vehicle_type_wanted: 'van' });
   const onDay = task({ vehicle_id: null, vehicle_mode: 'driver_day' });
-  check(needsVehicle(anyVan) && needsVehicle(onDay) && !needsVehicle(v1) && !needsVehicle({ ...anyVan, status: 'in_progress' }), 'only a task still to start with no vehicle asks');
+  check(needsVehicle(anyVan) && needsVehicle(onDay) && !needsVehicle(v1) && !needsVehicle({ ...anyVan, status: 'in_progress' }),
+    'a task chosen on the day asks at Start task; one with the office\'s vehicle, or under way, does not');
+  check(needsVehicle({ ...onDay, vehicle_id: 'v-confirmed-before' }),
+    'asked again at the next Start task although a vehicle was confirmed before (the driver backed out, or it came from another driver)');
   check(wantedType(anyVan) === 'van' && wantedType(onDay) === null, 'any_type wants its type; on the day any vehicle');
   check(vehicleFits(anyVan, van) === 'ok' && vehicleFits(anyVan, car) === 'wrong_type' && vehicleFits(onDay, car) === 'ok', 'the type rule');
   check(vehicleFits(onDay, { ...van, in_garage: true }) === 'in_garage', 'a vehicle in the garage never fits');

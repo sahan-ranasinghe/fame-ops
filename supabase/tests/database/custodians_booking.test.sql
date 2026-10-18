@@ -71,6 +71,11 @@ insert into public.tasks (id, title, employee_id, vehicle_id, start_at, leave_by
    now() + interval '20 minutes', now() + interval '20 minutes', now() - interval '2 hours', 'test');
 select is(public.queue_task_reminders(), 1, 'the leave-in-30-minutes reminder goes to the driver only');
 select is((select reminder_30_sent_at is null from public.tasks where id = '50000000-0000-0000-0000-0000000000e1'), true, 'the custodian task is left alone');
+-- Hotfix 2 (E): the accept window runs only while the driver is at work: the drivers with tasks here started work 3 hours ago.
+insert into public.duty_sessions (employee_id, started_at)
+select distinct t.employee_id, now() - interval '3 hours' from public.tasks t join public.employees e on e.id = t.employee_id
+where t.status = 'assigned' and e.role = 'driver'
+  and not exists (select 1 from public.duty_sessions d where d.employee_id = t.employee_id and d.ended_at is null);
 select is(public.queue_accept_reminders(), 2, 'the accept reminder and, past its window, "needs a driver" go to the driver''s task only');
 select ok((select accept_reminder_sent_at is null and needs_driver_since is null from public.tasks where id = '50000000-0000-0000-0000-0000000000e1'),
   'the custodian task gets neither');

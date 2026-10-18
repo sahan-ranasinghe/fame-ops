@@ -420,7 +420,8 @@ export function createSync(deps: SyncDeps) {
         return;
       }
       case 'task_vehicle': {
-        const answer = await api.confirmTaskVehicle(client, op.id, op.vehicle_id);
+        // Sent as queued: the vehicle was driven already; the server keeps it and notes for the office what it would refuse.
+        const answer = await api.confirmTaskVehicle(client, op.id, op.vehicle_id, true);
         if (answer === 'ok' || answer === 'started') return;
         throw new ApiError(`task vehicle: ${answer || 'no answer'}`, true, answer);
       }

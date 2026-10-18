@@ -14,3 +14,6 @@ playwright-report/
 
 # Real site lists (data/sites/*.xlsx) and anything else dropped in data/: never in git
 /data/
+
+# Python bytecode (the test scripts)
+__pycache__/

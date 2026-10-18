@@ -416,8 +416,9 @@ check(cu["created"]["permissions"] == ["view", "request"] and cu["created"]["rol
 cv = tool("create_office_user", {"name": "Test Viewer", "email": f"viewer.{uuid.uuid4().hex[:6]}@fame.test", "role": "viewer"})
 check(cv["created"]["permissions"] == ["view"], "create_office_user with a role only: the role's permissions", json.dumps(cv["created"]))
 up = tool("update_office_user", {"email": REQ_EMAIL, "permissions": ["request", "view"], "phone": "0712223334"})
-check(up["updated"]["permissions"] == ["view", "request"] and up["updated"]["role"] == "staff" and up["updated"]["phone"] == "0712223334",
-      "update_office_user replaces the permissions (in the table's order) and the phone", json.dumps(up))
+check(up["updated"]["permissions"] == ["view", "request"] and up["updated"]["role"] == "staff" and up["updated"]["phone"] == "+94712223334"
+      and up["updated"].get("phone_display") == "071 222 3334",
+      "update_office_user replaces the permissions (in the table's order) and the phone (stored +94…, shown 071 222 3334)", json.dumps(up))
 lu = tool("list_office_users", {})
 req_row = next((u for u in lu["users"] if u["email"] == REQ_EMAIL), None)
 check(req_row is not None and req_row["permissions"] == ["view", "request"] and req_row["role"] == "staff", "list_office_users shows the permissions", json.dumps(req_row))
@@ -596,7 +597,8 @@ check(psql(f"select status || '|' || decided_by || '|' || (task_id = '{T4}') fro
       and psql(f"select request_id = '{R1}' and passengers = 6 and (select percent from task_projects where task_id = t.id) = 100 from tasks t where id='{T4}'") == "t",
       "request and task are linked both ways; pax and 100 % project carried over")
 r = tool("decide_request", {"request_id": R1, "decision": "approve", "vehicle": "WP PH-2087", "driver": "kasun.s"}, expect_error=True)
-check("already approved" in r and psql(f"select count(*) from tasks where request_id='{R1}'") == "1", "a request cannot be approved twice", r)
+check(r.startswith("Already approved by ") and psql(f"select count(*) from tasks where request_id='{R1}'") == "1",
+      "a request cannot be approved twice (Hotfix 2: who approved it and when)", r)
 r = tool("decide_request", {"request_id": R2, "decision": "decline"}, expect_error=True)
 check("reason" in r.lower(), "decline without a reason is refused", r)
 dc = tool("decide_request", {"request_id": R2, "decision": "decline", "reason": "No car free that afternoon"})
@@ -792,9 +794,9 @@ fleet_jobs()
 check(any(a.get("what", "").startswith("Changed booking needs re-approval") for a in tool("fleet_overview", {"date": day(6)})["needs_attention"]) or True,
       "fleet_overview counts the changed booking among the requests waiting (the issue appears after the waiting minutes)")
 r = tool("redecide_request", {"request_id": R6, "version": 2, "decision": "keep"}, expect_error=True)
-check("version 3, you have 2" in r, "redecide_request with a stale version is refused", r)
+check(r.startswith("Changed again by ") and "since you opened it" in r, "redecide_request with a stale version is refused (who changed it, when)", r)
 r = tool("redecide_request", {"request_id": R1, "version": 0, "decision": "keep"}, expect_error=True)
-check("version 1, you have 0" in r, "redecide_request checks the version of an approved request too (the approval bumped it to 1)", r)
+check(r.startswith("Already approved by "), "redecide_request checks the version of an approved request too (the approval bumped it to 1)", r)
 rd = tool("redecide_request", {"request_id": R6, "version": 3, "decision": "keep"})
 check(rd["decision"] == "kept" and rd["request"]["status"] == "approved" and rd["request"]["version"] == 4 and "changed" not in rd["request"]
       and rd["task"]["changes"]["time"]["to"].endswith("09:30") and rd["task"]["changes"]["route"]["to"] == "Head office, Colombo 05 → Matara" and rd["task"]["plan_version"] == 2
@@ -942,7 +944,7 @@ running = {c["id"]: c for c in board["in_progress"]}
 check(T1 in running and running[T1]["status"].startswith("Started ") and running[T1]["status"].endswith("sharing location"), "task_board: 'Started HH:MM · sharing location'", str(running.get(T1)))
 ld = tool("live_drivers")
 d = ld["drivers"][0]
-check(ld["counts"]["sharing"] == 1 and d["location"] in ("Live · 2 min", "Live · 3 min") and d["near"] == "Polgahawela" and d["speed_kmh"] == 54,
+check(ld["counts"]["sharing"] == 1 and d["location"] in ("Live · 2 min ago", "Live · 3 min ago") and d["near"] == "Polgahawela" and d["speed_kmh"] == 54,
       "live_drivers: Live · 2 min, near Polgahawela, 54 km/h", json.dumps(d)[:300])
 
 check(d["vehicle"] == "WP CAB-4521 · Toyota HiAce" and d["task"] == "Team drop · Kurunegala site" and d["going_to"] == "Kurunegala tower site"
@@ -1450,7 +1452,8 @@ psql(f"insert into web_push_subscriptions (employee_id, endpoint, p256dh, auth) 
 psql(f"update web_push_subscriptions set removed_at = now(), removed_reason = 'user' where endpoint = '{SINK}/push/ok'")
 tool("decide_request", {"request_id": RQ, "decision": "decline", "reason": "No van that day"})
 row = outbox(f"event = 'request.decided' and recipient_employee_id = '{APPROVER}'")
-check(row.endswith(f"|queued|Request declined|No van that day|/requests/{RQ}"), "the decision queues a row for the requester (an office person) with the reason and the request's link", row)
+check("|queued|Request declined by " in row and row.endswith(f"|No van that day|/requests/{RQ}"),
+      "the decision queues a row for the requester (an office person) with who declined, the reason and the request's link", row)
 NID2 = row.split("|")[0]
 code, body = notify_office({"id": int(NID2)})
 if VAPID:
@@ -1780,7 +1783,7 @@ check(any(c["kind"] == "driver" and c.get("task", {}).get("id") == TD for c in p
 code, ans = saman.post("rpc/decline_task", {"p_task_id": TD, "p_reason": "vehicle_problem", "p_note": "Brakes"}, prefer="return=representation")
 nd = next((n for n in tool("task_board", {"date": day(5)}).get("needs_driver", []) if n["task_id"] == TD), {})
 check(ans == "declined" and nd.get("kind") == "declined" and nd.get("line") == "Saman declined · Vehicle problem" and nd.get("note") == "Brakes"
-      and nd.get("when", "").startswith("in "), "task_board.needs_driver: declined, the reason, the time to the start", json.dumps(nd)[:300])
+      and "in " in nd.get("when", ""), "task_board.needs_driver: declined, the reason, the time to the start", json.dumps(nd)[:300])
 ovw = tool("fleet_overview")
 check(ovw.get("needs_driver", {}).get("count", 0) >= 1 and any(n["task_id"] == TD for n in ovw["needs_driver"]["tasks"]),
       "fleet_overview.needs_driver lists it", json.dumps(ovw.get("needs_driver"))[:300])
@@ -1819,6 +1822,14 @@ tool("cancel_request", {"request_id": rq["request"]["id"], "reason": "suite: req
 tn = tool("create_task", {"title": "P7b not accepted", "date": day(5), "start_time": "11:00", "driver": "ruwan.j", "vehicle": "WP P7-1002",
                           "pickup": "Head office", "dropoff": "Kurunegala tower site"})
 TN = tn["task_id"]
+# Hotfix 2 (E): off duty, the window does not run however long ago it was sent; it runs from Start work.
+RUWAN_DUTY = ""
+if psql(f"select count(*) from duty_sessions where ended_at is null and employee_id = '{RU}'") == "0":
+    psql(f"update tasks set sent_at = now() - interval '40 minutes' where id = '{TN}'")
+    psql("select queue_accept_reminders()")
+    check(psql(f"select (accept_reminder_sent_at is null and needs_driver_since is null)::text from tasks where id = '{TN}'") == "true",
+          "E: Ruwan off duty: no reminder and no 'needs a driver', sent 40 minutes ago")
+    RUWAN_DUTY = psql(f"insert into duty_sessions (employee_id, started_at) values ('{RU}', now() - interval '3 hours') returning id").split("\n")[0]
 psql(f"update tasks set sent_at = now() - interval '6 minutes' where id = '{TN}'")
 psql("select queue_accept_reminders()")
 check(psql(f"select (accept_reminder_sent_at is not null)::text || '|' || coalesce(needs_driver_reason, '-') from tasks where id = '{TN}'") == "true|-",
@@ -1830,6 +1841,8 @@ check(psql(f"select needs_driver_reason from tasks where id = '{TN}'") == "not_a
       "16 minutes: needs a driver (not accepted), the approver told", row)
 code, ans = ruwan.post("rpc/accept_task", {"p_task_id": TN, "p_at": iso(dt.datetime.now(dt.timezone.utc))}, prefer="return=representation")
 check(ans == "accepted" and psql(f"select coalesce(needs_driver_reason, 'cleared') from tasks where id = '{TN}'") == "cleared", "accepting late clears it", str(ans))
+if RUWAN_DUTY:
+    psql(f"update duty_sessions set ended_at = now(), end_reason = 'admin' where id = '{RUWAN_DUTY}'")
 tool("cancel_task", {"task_id": TN, "reason": "suite: accept window checked"})
 
 # The swap during a task (§2 addition): readings typed by the office, km per stretch, mileage per vehicle.
@@ -2301,7 +2314,7 @@ check(tool("list_requests", {"status": "all", "id": HR})["requests"][0].get("off
 # J. A task without a named vehicle: only once vehicle_on_the_day is on; the driver's vehicle on the day or any van.
 r = tool("create_task", {"title": f"6k on the day {hk}", "date": day(4), "start_time": "08:00", "driver": f"trip.{tag}", "vehicle": "on the day",
                          "pickup": "Head office", "dropoff": "Negombo"}, expect_error=True)
-check("vehicle_on_the_day" in r, "J: with the setting off a vehicle 'on the day' is refused, in words (phones on the old update)", r)
+check("switched off" in r and "Vehicle on the day" in r, "J: with the setting off a vehicle 'on the day' is refused, in words (phones on the old update)", r)
 tool("update_settings", {"key": "vehicle_on_the_day", "value": True})
 od = tool("create_task", {"title": f"6k on the day {hk}", "date": day(4), "start_time": "08:00", "driver": f"trip.{tag}", "vehicle": "on the day",
                           "pickup": "Head office", "dropoff": "Negombo"})
@@ -2334,7 +2347,7 @@ if other:
 tool("update_task", {"task_id": AV, "plan_version": int(psql(f"select plan_version from tasks where id = '{AV}'")), "vehicle": "on the day"})
 body = psql(f"select convert_from(body, 'UTF8') from net.http_request_queue where url like '%/push-task' and convert_from(body, 'UTF8')::jsonb ->> 'task_id' = '{AV}' "
             f"and convert_from(body, 'UTF8')::jsonb ->> 'kind' = 'changed' order by id desc limit 1")
-check('"vehicle_day": true' in body, "J: back to 'on the day': the changed push says vehicle_day", body[:300])
+check(bool(body) and json.loads(body).get("changes", {}).get("vehicle_day") is True, "J: back to 'on the day': the changed push says vehicle_day", body[:300])
 code, row = tripper.get(f"tasks?id=eq.{OD}&select=vehicle_mode,vehicle_type_wanted,approved_by_employee_id,approved_at")
 check(code == 200 and row and row[0].get("vehicle_mode") == "driver_day", "J: the driver's app reads vehicle_mode on its own task", f"{code} {row}")
 for t in (OD, AV):

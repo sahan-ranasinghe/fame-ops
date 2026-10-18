@@ -118,6 +118,11 @@ select is((select payload ->> 'tag' from public.notifications where event = 'tas
 
 -- task.not_accepted: the accept reminder (sent 2 hours after the task) tells the office too.
 update public.tasks set status = 'assigned', declined_at = null, declined_by = null, declined_reason = null, declined_note = null where id = '50000000-0000-0000-0000-0000000000d1';
+-- Hotfix 2 (E): the accept window runs only while the driver is at work: the drivers with tasks here started work 3 hours ago.
+insert into public.duty_sessions (employee_id, started_at)
+select distinct t.employee_id, now() - interval '3 hours' from public.tasks t join public.employees e on e.id = t.employee_id
+where t.status = 'assigned' and e.role = 'driver'
+  and not exists (select 1 from public.duty_sessions d where d.employee_id = t.employee_id and d.ended_at is null);
 select is(public.queue_accept_reminders(), 2, 'the accept reminder goes out and the window has passed (sent two hours ago, not accepted)');
 select is((select count(*) from public.notifications where event = 'task.not_accepted'), 1::bigint, 'and one task.not_accepted row for the approver');
 select is((select payload ->> 'title' || ' | ' || (payload ->> 'body') from public.notifications where event = 'task.not_accepted'),

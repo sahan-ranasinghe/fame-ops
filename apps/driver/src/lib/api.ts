@@ -467,8 +467,8 @@ export async function fetchMyAssignments(client: Client, limit = 5): Promise<Ass
  * The vehicle of a task made without one, before Start task (confirm_task_vehicle): 'ok', or the refusal
  * ('not_yours' | 'started' | 'has_vehicle' | 'inactive' | 'in_garage' | 'wrong_type'). Only the task's own driver.
  */
-export async function confirmTaskVehicle(client: Client, taskId: string, vehicleId: string): Promise<string> {
-  const res = await client.rpc('confirm_task_vehicle', { p_task: taskId, p_vehicle: vehicleId });
+export async function confirmTaskVehicle(client: Client, taskId: string, vehicleId: string, queued = false): Promise<string> {
+  const res = await client.rpc('confirm_task_vehicle', { p_task: taskId, p_vehicle: vehicleId, p_queued: queued });
   if (res.error) fail(res, 'task vehicle');
   return typeof res.data === 'string' ? res.data : '';
 }

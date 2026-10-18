@@ -176,7 +176,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByRole("button", { name: /^Problems · \d+$/ })).toBeVisible();
   // A fresh point: live again at once, the marker moves, the speed shows.
   expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(2), lat: 6.9, lng: 79.95, accuracy_m: 8, speed_mps: 20, battery_pct: 76 }])).toBe(201);
-  await expect(live).toContainText(/Live · \d+ min/, { timeout: 8000 });
+  await expect(live).toContainText(/Live · (now|\d+ min ago)/, { timeout: 8000 });
   await expect(live).toContainText("72 km/h");
   // The position time with seconds, from the Realtime row: on the card and under the marker.
   await expect(live.getByTestId("live-position")).toHaveText(/^\d\d:\d\d:\d\d$/);
@@ -431,10 +431,11 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   await expect(page.getByRole("heading", { name: "My requests" })).toBeVisible();
   // Their notifications: their decided and redecided request events, a task of theirs that needs a driver (declined, not
   // accepted), the three booking events everyone can get, and (Phase 7, §4, §33) not decided 30 minutes before leaving and
-  // the trip's four moments (on the way, arrived, driver changed, cancelled).
+  // the trip's four moments (on the way, arrived, driver changed, cancelled); and Hotfix 2's "Play sounds".
   await page.goto("/settings/notifications");
   await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
-  await expect(page.getByRole("checkbox")).toHaveCount(12);
+  await expect(page.getByRole("checkbox")).toHaveCount(13);
+  await expect(page.getByRole("checkbox", { name: "Play sounds" })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Your driver is on the way" })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Your request is decided" })).toBeChecked();
 
@@ -1682,7 +1683,7 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   expect(tasks.tasks.filter((t) => t.title.includes("Galle")).length).toBeGreaterThanOrEqual(1);
 
   // 5. The requester: the notification centre has it (count, banner) and My trips says who approved, the driver with Call.
-  await expect(page.getByTestId("inbox-count")).toHaveText(/^[1-9]\d*$/, { timeout: 20000 });
+  await expect(page.getByTestId("inbox-count").first()).toHaveText(/^[1-9]\d*$/, { timeout: 20000 });
   await expect(page.getByTestId("inbox-banner").first()).toContainText("Request approved by E2E HF2 One", { timeout: 20000 });
   await page.reload();
   const approved = page.getByTestId("trip-row").filter({ hasText: "Galle" }).first();

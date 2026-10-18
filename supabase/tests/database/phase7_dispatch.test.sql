@@ -211,6 +211,11 @@ insert into public.tasks (id, title, employee_id, vehicle_id, start_at, leave_by
    now() - interval '2 days', now() - interval '2 days', now() - interval '3 days', 'test'),
   ('30000000-0000-0000-0000-0000000008a6', 'Late accept', '10000000-0000-0000-0000-0000000008e1', '20000000-0000-0000-0000-0000000008a3',
    now() + interval '5 hours', now() + interval '5 hours', now() - interval '20 minutes', 'test');
+-- Hotfix 2 (E): the accept window runs only while the driver is at work: the drivers with tasks here started work 3 hours ago.
+insert into public.duty_sessions (employee_id, started_at)
+select distinct t.employee_id, now() - interval '3 hours' from public.tasks t join public.employees e on e.id = t.employee_id
+where t.status = 'assigned' and e.role = 'driver'
+  and not exists (select 1 from public.duty_sessions d where d.employee_id = t.employee_id and d.ended_at is null);
 select ok(public.queue_accept_reminders() >= 1, 'the minute job runs');
 select is((select string_agg(title || ':' || coalesce(needs_driver_reason, '-'), ' ' order by title) from public.tasks
            where id in ('30000000-0000-0000-0000-0000000008a5', '30000000-0000-0000-0000-0000000008a6')),

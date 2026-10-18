@@ -94,7 +94,7 @@ insert into public.vehicle_reports (id, vehicle_id, employee_id, category, note)
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind = 'r'),
-  53::bigint, 'there are 53 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included, geocode_cache; Part 4b: site_import_presets, place_imports, place_import_changes, api_minute_calls; Part 5: google_calls, google_pins; 5b: route_gap_lines; Phase 7: vehicle_assignments, task_vehicle_segments; Part 3: request_stops, vehicle_documents, media_links)');
+  57::bigint, 'there are 57 tables in public (the dispatch tables of Phase 5, the route-quality tables and request_events included, geocode_cache; Part 4b: site_import_presets, place_imports, place_import_changes, api_minute_calls; Part 5: google_calls, google_pins; 5b: route_gap_lines; Phase 7: vehicle_assignments, task_vehicle_segments; Part 3: request_stops, vehicle_documents, media_links; Hotfix 2: office_inbox, notification_prefs, employee_changes, request_viewers)');
 
 select is(
   (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -118,7 +118,7 @@ select is(
 -- task_vehicle_segments_select_own; 40 with Part 3: vehicle_documents_driver_held.
 select is(
   (select count(*) from pg_policies where schemaname = 'public'),
-  40::bigint, 'there are 40 policies on public tables (Part 3: vehicle_documents_driver_held)');
+  41::bigint, 'there are 41 policies on public tables (Part 3: vehicle_documents_driver_held; Hotfix 2: office_inbox_select_own)');
 
 select is(
   (select count(*) from pg_policies

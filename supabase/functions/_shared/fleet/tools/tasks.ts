@@ -721,6 +721,8 @@ export interface NewTask {
   vehicleType?: string | null;
   /** Hotfix 2 (K): who sent it to the driver (an approver deciding, or a person with approve making it). */
   approvedBy?: string | null;
+  /** When (the tool's clock, as decided_at). */
+  approvedAt?: string;
   startAt: string;
   endBy: string | null;
   passengers: number | null;
@@ -801,7 +803,7 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
     vehicle_mode: t.vehicle ? "specific" : t.vehicleMode ?? "driver_day",
     vehicle_type_wanted: t.vehicle ? null : t.vehicleType ?? null,
     approved_by_employee_id: t.approvedBy ?? null,
-    approved_at: t.approvedBy ? new Date().toISOString() : null,
+    approved_at: t.approvedBy ? t.approvedAt ?? new Date().toISOString() : null,
     start_at: t.startAt,
     end_by: t.endBy,
     passengers: t.passengers,
@@ -1267,6 +1269,7 @@ export const createTask = tool({
       vehicleType: picked.type,
       // Hotfix 2 (K): made by a person who approves: they sent it to the driver.
       approvedBy: actor.permissions.includes("approve") ? actor.employeeId : null,
+      approvedAt: now.toISOString(),
     }, warnings);
     return { ...saved, result: { ...saved.result, conflicts: conflicts.length ? conflicts : undefined } };
   },

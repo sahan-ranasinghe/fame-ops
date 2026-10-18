@@ -1259,6 +1259,7 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
     vehicleMode: chosen.mode,
     vehicleType: chosen.type,
     approvedBy: actor.employeeId,
+    approvedAt: now.toISOString(),
   }, warnings);
   // Every decision bumps the version (the approval itself is written by office_create_task), with who decided (K).
   unwrap(
@@ -1412,6 +1413,7 @@ async function approveTrip(
     vehicleMode: chosen.mode,
     vehicleType: chosen.type,
     approvedBy: actor.employeeId,
+    approvedAt: now.toISOString(),
   }, warnings);
   unwrap(
     await db.from("vehicle_requests").update({ version: request.version + 1, decided_by_employee_id: actor.employeeId })
@@ -1604,6 +1606,7 @@ export const bookVehicle = tool({
       vehicleMode: chosen.mode,
       vehicleType: chosen.type,
       approvedBy: actor.employeeId,
+      approvedAt: now.toISOString(),
       savedWarnings: warnings,
       assignedBy: actor.employeeId,
       vehicleWhy: chosen.why,
@@ -2202,13 +2205,16 @@ export const redecideRequest = tool({
     if (word && !settings.vehicle_on_the_day) throw new ToolError(ON_THE_DAY_OFF);
     const current = task.vehicle_id ? refs.veh.get(task.vehicle_id) ?? null : null;
     if (task.vehicle_id && !current) throw new ToolError("The task's vehicle no longer exists.");
-    const vehicle: Vehicle | null = word
+    // A vehicle named, or a new driver's own on a task with a set vehicle; otherwise (undefined) the task keeps its choice:
+    // a vehicle chosen on the day stays so (a new driver confirms theirs at Start task).
+    const named: Vehicle | null | undefined = word
       ? null
       : change && args.vehicle
       ? activeVehicle(refs, args.vehicle)
-      : change && args.driver
-      ? defaultVehicleFor(refs, activeDriver(refs, args.driver))?.vehicle ?? current
-      : current;
+      : change && args.driver && task.vehicle_mode === "specific"
+      ? defaultVehicleFor(refs, activeDriver(refs, args.driver))?.vehicle ?? undefined
+      : undefined;
+    const vehicle: Vehicle | null = named === undefined ? current : named;
     const shownVehicle = vehicle?.reg_no ??
       (word
         ? vehicleText(word.mode, word.mode === "any_type" ? word.type : null)
@@ -2231,7 +2237,7 @@ export const redecideRequest = tool({
       startAt,
       endBy,
       driver,
-      vehicle: vehicle ?? undefined,
+      vehicle: named ?? undefined,
       vehicleMode: word ? { mode: word.mode, type: word.mode === "any_type" ? word.type : null } : undefined,
       passengers: asked[FIELD_LABEL.pax] ? request.pax : undefined,
       route: routeAsked ? routeOf(request) : undefined,

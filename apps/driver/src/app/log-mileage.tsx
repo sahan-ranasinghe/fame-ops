@@ -116,6 +116,8 @@ export default function LogMileageScreen() {
   const baseKm = endsStretch ? startKm ?? lastKm : lastKm;
 
   const [step, setStep] = useState<Step>({ kind: 'none' });
+  // J: the vehicle confirmed on this visit (asked again on the next Start task: the vehicle in hand counts).
+  const [vehicleConfirmed, setVehicleConfirmed] = useState(false);
   const [attempts, setAttempts] = useState(0);
   const [failures, setFailures] = useState(0);
   const [odometer, setOdometer] = useState('');
@@ -151,7 +153,7 @@ export default function LogMileageScreen() {
   if (swapMode && !swapVehicleId) return <Redirect href="/" />;
 
   // J: a task made without a vehicle confirms one before the odometer.
-  const confirming = mode === 'start' && !!task && needsVehicle(task);
+  const confirming = mode === 'start' && !!task && needsVehicle(task) && !vehicleConfirmed;
   const needsOdometer = mode !== 'fuel' && !confirming;
   const showFuel = mode === 'finish' || mode === 'fuel';
   const typedKm = parseWhole(odometer);
@@ -332,7 +334,7 @@ export default function LogMileageScreen() {
           </View>
         </View>
 
-        {confirming && task && <VehicleConfirm task={task} onBusy={setConfirmBusy} />}
+        {confirming && task && <VehicleConfirm task={task} onBusy={setConfirmBusy} onConfirmed={() => setVehicleConfirmed(true)} />}
 
         {needsOdometer && step.kind === 'none' && (
           <Pressable accessibilityRole="button" onPress={photographOdometer} style={styles.photoCard}>
