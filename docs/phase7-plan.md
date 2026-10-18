@@ -2432,6 +2432,33 @@ that never reach a phone.
 Left as it is, said here: the Hotfix 2 "what changed" lines of a push that arrived while the app was in the background are
 not recovered either (Android keeps no data with it). That is older than Part 6.
 
+**The fresh reviewer (Part 6 additions; no blocker, four to fix, eight minor; fixed or said here).**
+1. The demo's arrivals away from the stop opened office issues with the reviewer's position. **Fixed:** the flagged-stops
+   query leaves demo tasks out.
+2. Seeding 30 days would have queued about 180 new-task pushes and an accept-reminder burst at Start work. **Fixed:** quiet
+   inserts (`fleet.quiet`), the reminders marked sent, 3 days kept ahead by the nightly `demo-tasks` job.
+3. The demo's stops showed in the office's "Used before". **Fixed:** `recent_places` leaves demo tasks out. This is built on
+   its latest version (Part 4's, which also leaves personal trips out); the first copy took an older one, and pgTAP caught it.
+4. "Off duty, nothing is recorded" was not quite true: a photo keeps where it was taken, and the Arrived point stays with the
+   task. **Fixed:** in the disclosure and the policy.
+5. The policy's "who sees it" was narrower than the code. **Fixed.**
+6. The seed missed some history (a held vehicle, assignments, heartbeats, logs, a switched-off driver). **Fixed.**
+7. The account tools could not find the demo driver. **Fixed:** `findDriver(…, { demoToo: true })` for reset_pin,
+   set_driver_active and update_driver.
+8. The odometer step was missing from the reviewers' notes. **Added.** `eas submit` needs a submit profile: **upload by
+   hand.** The store build shares the update channel: **said.** What is not apart: **said** (store-release.md 6.4).
+
+Left as they are, said here:
+- the office's own texts and the WhatsApp message still say "Fame Driver" until every phone has 1.3.0;
+- the disclosure is agreed per driver on the phone, in one slot (the last driver to agree).
+
+**The first full chain** also found that the vehicles policy's read of `employees` looped with the employees update policy
+("infinite recursion"): a driver could not take a vehicle. **Fixed** with `current_employee_demo()`, a security definer. The
+connector suite, pgTAP (1032) and the driver data tests pass. The office e2e: 22 of 24 passed. The two failures (the Part 4
+trip's "Personal" tag and a user row) also fail on their own on this laptop. Part 4's case reads the first "trip-tags" on the
+page, the board's card beside the panel, before the board's own refresh. The server answers right (`set_trip_purpose` audit,
+`task_detail` → personal). See the checkpoint for the run on main's code.
+
 ## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
 
 What Sahan asked:
@@ -2558,8 +2585,7 @@ Office web only: no migration, no function, no driver app change, the connector'
    seconds, with "Use this driver"; it fills the driver and the vehicle.
 5. The same on Approve, Give it a driver and the Drivers board (there a Yes has "Assign →").
 6. As an approver without assign_tasks: a request page, an issue or a fuel fill. **See:** no "Open task" link (before, it
-   led to No access).
-## Sinhala
+   led to No access).## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
 the boss or a driver). The table is completed with every key as built at each checkpoint.
