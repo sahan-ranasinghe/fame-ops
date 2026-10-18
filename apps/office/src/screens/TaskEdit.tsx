@@ -10,7 +10,7 @@
 // who asked, notes, the map), Who can take it below, "Give to <driver> · <plate>"; Open task and Change the time or the trip
 // go forward and say so; back returns to wherever the person came from (the Overview when opened from a push).
 import { type FormEvent, useEffect, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
 import { flashWarnings } from "../data/flash";
@@ -22,7 +22,7 @@ import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { firstName } from "../ui/driverRowLogic";
-import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
+import { cameFromTask, PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
 import { linkedDriver } from "./asks/askLogic";
@@ -111,6 +111,8 @@ export function TaskEdit() {
   const { me, store, transport } = useFleet();
   const navigate = useNavigate();
   const afterSave = useAfterSave();
+  // Opened from the task's own page: a save goes back to it (with any warnings waiting there).
+  const openedFromTask = cameFromTask(useLocation().state);
   const toast = useToast();
   const lists = useLists();
   const { p, err } = useTask(id);
@@ -195,12 +197,11 @@ export function TaskEdit() {
       void store.invalidate();
       setBusy(false);
       const warnings = warnList(out);
-      // New warnings are read on the task page; without any, back to where the person came from.
-      if (warnings.length) navigate(back, { replace: true, state: { warnings } });
-      else {
-        flashWarnings(id, []);
-        afterSave(back);
-      }
+      // Back to where the person came from. New warnings must be read on the task page: from it, they wait there (data/flash);
+      // from anywhere else, the task page takes this page's place so they are seen.
+      flashWarnings(id, warnings);
+      if (warnings.length && !openedFromTask) navigate(back, { replace: true, state: { warnings } });
+      else afterSave(back);
       return;
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);

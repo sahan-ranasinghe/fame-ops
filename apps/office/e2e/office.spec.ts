@@ -165,6 +165,10 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByLabel("Cancel this task").fill("E2E test over");
   await page.getByRole("button", { name: "Cancel task" }).click();
   await expect(page.getByRole("status")).toHaveText("Task cancelled");
+  // Back to the task's page it was opened from (Hotfix 4 b): cancelled, with the reason; Esc returns to the board without it.
+  await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+(\?date=.*)?$/);
+  await expect(detail.getByText("E2E test over").first()).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page).toHaveURL(/\/tasks$/);
   await expect(card).toHaveCount(0);
 

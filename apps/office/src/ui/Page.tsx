@@ -44,6 +44,10 @@ export function useAfterSave(): (fallback: string, state?: unknown) => void {
   };
 }
 
+/** The navigation state of a link from a task's page to its change pages: a save there goes back to that page. */
+export const FROM_TASK = { fromTask: true } as const;
+export const cameFromTask = (state: unknown): boolean => (state as { fromTask?: unknown } | null)?.fromTask === true;
+
 /** Cancel or Back on a page: the same as the back arrow (Hotfix 4 b), never a link forward to a fixed page. */
 export function BackButton({ fallback, className = "btn", children, testId }: { fallback?: string; className?: string; children: ReactNode; testId?: string }) {
   const back = useBack(fallback);

@@ -9,6 +9,7 @@ import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
 import type { Availability, AvailableDriver, TaskDetail as TaskDetailData } from "../data/types";
 import type { Me, Transport, WatchEvent } from "../transport/types";
+import { readFlashWarnings } from "../data/flash";
 import { ToastProvider } from "../ui/Toast";
 import { TaskEdit } from "./TaskEdit";
 
@@ -17,6 +18,8 @@ type Args = Record<string, unknown>;
 class Fake implements Transport {
   readonly kind = "api" as const;
   calls: { tool: string; args: Args }[] = [];
+  /** update_task's warnings. */
+  warnings: string[] = [];
   me(): Promise<Me> {
     return Promise.resolve(dispatcher);
   }
@@ -24,7 +27,7 @@ class Fake implements Transport {
     this.calls.push({ tool, args });
     if (tool === "task_detail") return Promise.resolve(structuredClone(detail) as T);
     if (tool === "availability") return Promise.resolve(structuredClone(available) as T);
-    if (tool === "update_task") return Promise.resolve({ task_id: "t1", driver: "Kamal Perera", warnings: [] } as T);
+    if (tool === "update_task") return Promise.resolve({ task_id: "t1", driver: "Kamal Perera", warnings: this.warnings } as T);
     return Promise.reject({ code: "not_found", message: `No answer for ${tool}` });
   }
   watch<T>(tool: string, args: Args, cb: (ev: WatchEvent<T>) => void): () => void {
@@ -78,8 +81,9 @@ const settle = async (ms = 0) => {
   await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 };
 
-async function mount(entries: string[]) {
+async function mount(entries: (string | { pathname: string; search?: string; state?: unknown })[], warnings: string[] = []) {
   const t = new Fake();
+  t.warnings = warnings;
   render(
     <FleetProvider value={{ store: new FleetStore(t), transport: t, me: dispatcher, noConnector: false }}>
       <ToastProvider>
@@ -103,6 +107,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-10-21T08:18:00+05:30"));
   localStorage.clear();
+  sessionStorage.clear();
 });
 afterEach(() => vi.useRealTimers());
 
@@ -134,6 +139,23 @@ describe("Give it a driver (Hotfix 4 b)", () => {
     await settle();
     expect(t.calls.find((c) => c.tool === "update_task")?.args).toMatchObject({ task_id: "t1", plan_version: 3, driver: "kamal.p" });
     expect(screen.getByTestId("where").textContent).toBe("/");
+  });
+
+  it("opened from the task's own page, with warnings: back to that page, the warnings waiting there", async () => {
+    await mount(["/tasks", "/tasks/t1", { pathname: "/tasks/t1/edit", search: "?driver=1", state: { fromTask: true } }], ["WP CAB-4521 has another task then"]);
+    fireEvent.click(screen.getByTestId("avail-row"));
+    fireEvent.click(screen.getByTestId("give-to"));
+    await settle();
+    expect(screen.getByTestId("where").textContent).toBe("/tasks/t1");
+    expect(readFlashWarnings("t1")).toEqual(["WP CAB-4521 has another task then"]);
+  });
+
+  it("opened from the Overview, with warnings: the task page takes its place so they are read", async () => {
+    await mount(["/", "/tasks/t1/edit?driver=1"], ["WP CAB-4521 has another task then"]);
+    fireEvent.click(screen.getByTestId("avail-row"));
+    fireEvent.click(screen.getByTestId("give-to"));
+    await settle();
+    expect(screen.getByTestId("where").textContent).toBe("/tasks/t1");
   });
 
   it("opened from a push: after Give the task page takes its place", async () => {
