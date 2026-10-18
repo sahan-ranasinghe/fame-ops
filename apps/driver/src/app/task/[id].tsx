@@ -19,6 +19,8 @@
 // contact beside Navigate as designed, then Call requester / fleet admin / office with WhatsApp (F), "Approved by
 // Palitha · 10:42" with Call (K), and the time at a stop as a duration ("1 h 30 min there", lib/durations.ts).
 // Hotfix 3: a missed task (lib/lists.ts isMissed) is not shown: "This task is no longer assigned to you."
+// Part 3b (H4): "Running late" under way (components/LateSheet.tsx: 10 · 15 · 30 · Other, queued), with "You said 15 min
+// late at 08:52"; before the start it is on the preview, with "Can't make it" once accepted. Never on a self trip.
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -30,6 +32,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrivalButton, useHere } from '@/components/ArrivalButton';
 import { ApprovedLine, CallButtons } from '@/components/CallButtons';
 import { GoogleCredit } from '@/components/GoogleCredit';
+import { RunningLate } from '@/components/LateSheet';
 import { SkipSheet } from '@/components/SkipSheet';
 import { GOOGLE_MAP_BUILD, TaskMap } from '@/components/TaskMap';
 import { TaskPreview } from '@/components/TaskPreview';
@@ -42,6 +45,7 @@ import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { arrivalCheck, arrivalRecord, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/dayRules';
 import { approvedBy, taskCalls } from '@/lib/contacts';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
+import { canReportLate } from '@/lib/late';
 import { isMissed } from '@/lib/lists';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { canAddStop } from '@/lib/trips';
@@ -303,6 +307,8 @@ export default function TaskScreen() {
             <CallButtons calls={calls} callHidden={['contact']} />
             {/* Hotfix 2 (K): who approved the task, with Call (the office when they have no number). */}
             {approvedText && <ApprovedLine text={approvedText} call={approved?.call ?? null} />}
+            {/* Part 3b (H4): running late during the task (not on a trip the driver started). */}
+            {canReportLate(task) && <RunningLate task={task} />}
             {lastOpen && <Notice tone="warn" text={t('complete.needsLastStop')} />}
             <Button
               kind="dark"

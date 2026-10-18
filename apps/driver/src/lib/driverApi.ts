@@ -4,16 +4,44 @@
 //                                          the google package, credit "Google Maps")
 //   /trips {id, purpose, destination, …}   Start a trip (idempotent by the phone's id: the queue can send it again)
 //   /trips/:id/stops {id, destination}     a stop added on the way
+//   /profile {phone?, whatsapp?, …}         Part 3b (G): the driver's own profile (only the fields that changed; null
+//                                          clears one, never the phone); answers {saved, profile} with the numbers +94…
 // No phone-only code here (the token and fetch are passed in), so scripts/test-trips.ts runs it with a fake server.
 // The answers become ApiError like everything else the queue sends: permanent for a refusal (409, its words in the
 // message, code 'refused') and any other 4xx; not permanent for no answer, 401, 408, 429 and 5xx.
 
 import { ApiError } from './api';
+import type { ProfilePatch } from './profile';
 import { answerKind, errorWords, parseSearchAnswer, parseTripAnswer, type SearchAnswer, type StopRequest, type TripAnswer, type TripRequest } from './trips';
 
 /** A search waits this long for its answer; a trip a little longer (it may fetch a Google pin first). */
 export const SEARCH_TIMEOUT_MS = 10_000;
 export const TRIP_TIMEOUT_MS = 20_000;
+/** The profile's save waits this long (the screen then says "No connection"). */
+export const PROFILE_TIMEOUT_MS = 15_000;
+
+/** The profile as driver-api /profile answers it (the numbers +94…; a cleared field null). */
+export type SavedProfile = Required<ProfilePatch>;
+
+/** driver-api /profile's answer, read defensively: the fields saved and the profile now (null when it had none). */
+export function parseProfileAnswer(raw: unknown): { saved: string[]; profile: SavedProfile } | null {
+  const o = (raw ?? {}) as { saved?: unknown; profile?: unknown };
+  if (!o.profile || typeof o.profile !== 'object') return null;
+  const p = o.profile as Record<string, unknown>;
+  const field = (key: keyof ProfilePatch): string | null => (typeof p[key] === 'string' && p[key] !== '' ? (p[key] as string) : null);
+  return {
+    saved: Array.isArray(o.saved) ? o.saved.filter((s): s is string => typeof s === 'string') : [],
+    profile: {
+      phone: field('phone'),
+      whatsapp: field('whatsapp'),
+      emergency_name: field('emergency_name'),
+      emergency_relation: field('emergency_relation'),
+      emergency_phone: field('emergency_phone'),
+      licence_no: field('licence_no'),
+      licence_expiry: field('licence_expiry'),
+    },
+  };
+}
 
 export interface DriverApiDeps {
   /** `${SUPABASE_URL}/functions/v1/driver-api`. */
@@ -73,6 +101,12 @@ export function createDriverApi(deps: DriverApiDeps) {
     addTripStop: (taskId: string, request: StopRequest): Promise<TripAnswer> => trip(`/trips/${taskId}/stops`, request, 'trip stop'),
     /** A trip started by mistake, cancelled before it starts (online only: it must be on the server). */
     cancelTrip: (taskId: string): Promise<TripAnswer> => trip(`/trips/${taskId}/cancel`, {}, 'cancel trip'),
+    /** Part 3b (G): my profile's changed fields (online only). A rule broken comes back as a refusal in words. */
+    saveProfile: async (patch: ProfilePatch): Promise<{ saved: string[]; profile: SavedProfile }> => {
+      const answer = parseProfileAnswer(await post('/profile', patch, 'profile', PROFILE_TIMEOUT_MS));
+      if (!answer) throw new ApiError('profile: the answer had no profile', false);
+      return answer;
+    },
   };
 }
 

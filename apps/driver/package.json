@@ -72,7 +72,8 @@
     "test:rules": "tsx scripts/test-rules.ts",
     "test:trips": "tsx scripts/test-trips.ts",
     "test:preview": "tsx scripts/test-preview.ts",
-    "test:lists": "tsx scripts/test-lists.ts"
+    "test:lists": "tsx scripts/test-lists.ts",
+    "test:asks": "tsx scripts/test-asks.ts"
   },
   "private": true,
   "expo": {

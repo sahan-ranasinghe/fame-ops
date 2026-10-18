@@ -30,7 +30,8 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
   const { booted, me, rememberPush } = useApp();
   const ready = fontsReady && booted;
   const router = useRouter();
-  // The notification the app was opened with (or tapped while running): a task notification opens that task.
+  // The notification the app was opened with (or tapped while running): a task notification opens that task, a question
+  // from the office (Part 3b) that question.
   const response = Notifications.useLastNotificationResponse();
   const handled = useRef<string | null>(null);
 
@@ -44,7 +45,16 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
     if (handled.current === id) return;
     handled.current = id;
     const data = tapData(response);
-    const { taskId } = data;
+    const { taskId, askId } = data;
+    // Part 3b (H3): a question from the office opens the question, the same way as a task (Today underneath).
+    if (data.kind === 'ask' && askId) {
+      if (!anyFormDirty()) {
+        if (router.canGoBack()) router.dismissAll();
+        router.navigate('/');
+      }
+      router.push({ pathname: '/ask/[id]', params: { id: askId } });
+      return;
+    }
     if (!taskId) return;
     // Hotfix 2 (I): a "Task changed" push's changes are kept first, so the task opens with them marked.
     rememberPush(data);

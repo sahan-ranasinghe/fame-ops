@@ -8,7 +8,11 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 
 import type { Database, Json } from './database.types';
+import { ASK_SELECT, type AskAnswer, type AskReply, type AskRow, parseAskRow } from './asks';
+import { type AvailArgs, parseAvailAnswer, type UnavailabilityRow } from './availability';
 import { type OfficeContacts, parseOfficeContacts, parseTaskContacts, type TaskContacts } from './contacts';
+import type { LateReply } from './late';
+import type { LicenceSide } from './profile';
 import { parsePersonalTrips, type PersonalTrips } from './trips';
 import type { Employee, FuelLog, Language, OdometerLog, TaskWithStops, Vehicle, VehicleReport } from './types';
 
@@ -100,6 +104,8 @@ export interface DriverSettings {
   fuel_video_quality: '480p' | '720p';
   /** Phase 7 §13: whether Start a trip offers Personal (allowed, default = preselected, off; ask_first behaves as allowed). */
   driver_personal_trips: PersonalTrips;
+  /** Part 3b (H1): a morning ends and an afternoon starts here (HH:MM, 13:00 by default). */
+  half_day_split: string;
 }
 export const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { key: 'plate', en: 'Number plate', si: 'අංක තහඩුව' },
@@ -114,6 +120,7 @@ export const DEFAULT_DRIVER_SETTINGS: DriverSettings = {
   fuel_video_checklist: DEFAULT_CHECKLIST,
   fuel_video_quality: '480p',
   driver_personal_trips: 'allowed',
+  half_day_split: '13:00',
 };
 
 export async function fetchDriverSettings(client: Client): Promise<DriverSettings> {
@@ -127,12 +134,16 @@ export async function fetchDriverSettings(client: Client): Promise<DriverSetting
       .map((i) => ({ key: i.key, en: i.en, si: typeof i.si === 'string' && i.si ? i.si : i.en }))
     : [];
   const quality = value?.fuel_video_quality === '720p' ? '720p' : '480p';
+  const split = typeof value?.half_day_split === 'string' && /^\d{2}:\d{2}/.test(value.half_day_split)
+    ? value.half_day_split.slice(0, 5)
+    : DEFAULT_DRIVER_SETTINGS.half_day_split;
   return {
     shift_start: start,
     shift_days: days,
     fuel_video_checklist: list.length ? list : DEFAULT_CHECKLIST,
     fuel_video_quality: quality,
     driver_personal_trips: parsePersonalTrips(value?.driver_personal_trips),
+    half_day_split: split,
   };
 }
 
@@ -642,4 +653,106 @@ export async function fetchVehicleDocuments(client: Client): Promise<VehicleDocu
       .order('uploaded_at', { ascending: false }),
     'documents',
   );
+}
+
+// ---------------------------------------------------------------------------
+// Part 3b: the driver's profile (G), availability (H1), questions from the office (H3), running late (H4).
+// ---------------------------------------------------------------------------
+
+/** Me's "This month": my completed tasks since the month began (their km). */
+export async function fetchMonthTasks(client: Client, employeeId: string, monthStart: Date): Promise<{ km: number | null }[]> {
+  return check(
+    await client.from('tasks').select('id, km').eq('employee_id', employeeId).eq('status', 'completed')
+      .gte('completed_at', monthStart.toISOString()).limit(1000),
+    'month',
+  );
+}
+
+/** A licence photo is set when its file is in my folder, its row in photos (kind licence) and the RPC answered 'ok'. */
+export type LicencePhotoAnswer = 'ok' | 'not_yours';
+
+export async function setMyLicencePhoto(client: Client, side: LicenceSide, photoId: string): Promise<LicencePhotoAnswer> {
+  const res = await client.rpc('set_my_licence_photo', { p_side: side, p_photo_id: photoId });
+  return check(res, 'licence photo') as LicencePhotoAnswer;
+}
+
+/** The licence's front or back from Me → Edit: sent at once (online only), like the profile photo; each step repeats safely. */
+export async function saveLicencePhoto(
+  client: Client,
+  photo: { id: string; employee_id: string; storage_path: string; taken_at: string },
+  side: LicenceSide,
+  upload: (storagePath: string) => Promise<void>,
+): Promise<LicencePhotoAnswer> {
+  await upload(photo.storage_path);
+  await insertPhoto(client, { ...photo, kind: 'licence', lat: null, lng: null, vehicle_report_id: null });
+  return setMyLicencePhoto(client, side, photo.id);
+}
+
+const UNAVAILABILITY_COLUMNS = 'id, starts_at, ends_at, part, reason, note, created_by_name, created_by_employee_id, channel, removed_at' as const;
+
+/** My entries still ahead (or running now), soonest first (Me → Availability). */
+export async function fetchMyUnavailability(client: Client, employeeId: string, now: Date): Promise<UnavailabilityRow[]> {
+  return check(
+    await client.from('driver_unavailability').select(UNAVAILABILITY_COLUMNS).eq('employee_id', employeeId)
+      .gt('ends_at', now.toISOString()).is('removed_at', null).order('starts_at').limit(100),
+    'availability',
+  );
+}
+
+/** Adds (p_id null) or changes one of my entries: ok with its id, or the refusal's words. */
+export async function setMyUnavailability(client: Client, args: AvailArgs): Promise<{ result: 'ok'; id: string | null } | { result: 'refused'; reason: string }> {
+  // The function has no defaults: null goes as null (the generated types say string).
+  const res = await client.rpc('set_my_unavailability', args as unknown as Database['public']['Functions']['set_my_unavailability']['Args']);
+  return parseAvailAnswer(check(res, 'availability'));
+}
+
+/** Removes one of my entries (kept on the server as removed): 'ok', or 'not_found' when it is gone already. */
+export async function removeMyUnavailability(client: Client, id: string): Promise<'ok' | 'not_found'> {
+  const res = await client.rpc('remove_my_unavailability', { p_id: id });
+  return check(res, 'availability') === 'ok' ? 'ok' : 'not_found';
+}
+
+/** The questions I was asked that are still open (or closed since `since`), newest first. */
+export async function fetchMyAsks(client: Client, employeeId: string, since: Date): Promise<AskRow[]> {
+  const rows = check(
+    await client.from('driver_ask_answers').select(ASK_SELECT).eq('employee_id', employeeId)
+      .gt('driver_asks.expires_at', since.toISOString()).order('sent_at', { ascending: false }).limit(20),
+    'questions',
+  ) as unknown[];
+  return rows.map(parseAskRow).filter((row): row is AskRow => row !== null);
+}
+
+/** One question I was asked, open or closed (the ask screen), or null when it is not mine (or gone after 30 days). */
+export async function fetchMyAsk(client: Client, employeeId: string, askId: string): Promise<AskRow | null> {
+  const row = checkMaybe(
+    await client.from('driver_ask_answers').select(ASK_SELECT).eq('employee_id', employeeId).eq('ask_id', askId).maybeSingle(),
+    'question',
+  );
+  return parseAskRow(row);
+}
+
+/** Answers (or, with 'seen', opens) a question at the phone's time. */
+export async function answerAsk(
+  client: Client,
+  askId: string,
+  answer: AskAnswer | 'seen',
+  fields: { answer_at?: string | null; lat?: number | null; lng?: number | null; accuracy_m?: number | null },
+  at: string,
+): Promise<AskReply> {
+  const res = await client.rpc('answer_ask', {
+    p_ask_id: askId,
+    p_answer: answer,
+    p_answer_at: fields.answer_at ?? undefined,
+    p_lat: fields.lat ?? undefined,
+    p_lng: fields.lng ?? undefined,
+    p_accuracy: fields.accuracy_m ?? undefined,
+    p_at: at,
+  });
+  return check(res, 'answer') as AskReply;
+}
+
+/** "Running late" by `minutes`, said at the phone's time (the server keeps the latest report). */
+export async function reportRunningLate(client: Client, taskId: string, minutes: number, at: string): Promise<LateReply> {
+  const res = await client.rpc('report_running_late', { p_task_id: taskId, p_minutes: minutes, p_at: at });
+  return check(res, 'running late') as LateReply;
 }

@@ -3,7 +3,9 @@
 // server refuses (kept, marked, tried again), the heartbeat history after the
 // points, ops blocking points, and the fuel video upload (chunks of exactly
 // 6 MB, resume from the server's offset after a drop, a new upload after 410,
-// Wi-Fi only, the row patched at the end). Pure code, no stack needed:
+// Wi-Fi only, the row patched at the end), a vehicle's first photo, and Part 3b's "Running late" (task_late) and answers
+// to the office's questions (ask_answer): in order with the phone's times, kept offline, final replies never sent
+// again. Pure code, no stack needed:
 //
 //   npm run test:sync          (from apps/driver)
 
@@ -564,6 +566,117 @@ async function main() {
     q.add(photoOp('v7'));
     r = await sync.flush();
     check(r.sent === 1 && r.failed === 1 && answers.join() === 'gone:has_photo', "a vehicle no longer active: done; the RPC's 'not_this_vehicle': failed", { r, answers });
+  }
+
+  // --- Part 3b: "Running late" (task_late) and an answer to the office's question (ask_answer) ------------------------
+  console.log('\nRunning late and answers (Part 3b):');
+  {
+    const q = memoryStore();
+    const s = fakeServer();
+    const sent: string[] = [];
+    const lateReplies: string[] = [];
+    const askReplies: string[] = [];
+    const refused: string[] = [];
+    let network = false;
+    let lateReply: string = 'ok';
+    let askReply: string = 'ok';
+    let lastAskArgs: unknown[] = [];
+    const api = {
+      ...s.api,
+      reportRunningLate: async (_c: unknown, taskId: string, minutes: number, at: string) => {
+        if (network) throw new ApiError('running late: Network request failed', false);
+        sent.push(`late:${taskId}:${minutes}:${at}`);
+        return lateReply;
+      },
+      answerAsk: async (_c: unknown, askId: string, answer: string, fields: { answer_at?: string | null; lat?: number | null; lng?: number | null; accuracy_m?: number | null }, at: string) => {
+        if (network) throw new ApiError('answer: Network request failed', false);
+        sent.push(`ask:${askId}:${answer}:${at}`);
+        lastAskArgs = [askId, answer, fields.answer_at ?? null, fields.lat ?? null, fields.lng ?? null, fields.accuracy_m ?? null, at];
+        return askReply;
+      },
+    } as unknown as typeof realApi;
+    const sync = createSync({
+      client: {} as realApi.Client,
+      store: q.store,
+      employeeId: () => 'e1',
+      uploadFile: async () => undefined,
+      removeFile: () => undefined,
+      api,
+      now: () => clock.now,
+      onLate: (op, reply) => void lateReplies.push(`${op.client_id}:${reply}`),
+      onAsk: (op, reply) => void askReplies.push(`${op.client_id}:${reply}`),
+      onRefused: (op, message) => void refused.push(`${op.kind}:${message}`),
+    });
+    const late = (task: string, minutes: number, at: string): Op => ({ kind: 'task_late', id: task, client_id: `c-${task}-${minutes}`, minutes, at });
+    const answer = (ask: string, value: 'yes' | 'no' | 'call_me' | 'time' | 'location', at: string, extra: Partial<Extract<Op, { kind: 'ask_answer' }>> = {}): Op => ({
+      kind: 'ask_answer', id: ask, client_id: `c-${ask}-${value}`, answer: value, answer_at: null, lat: null, lng: null, accuracy_m: null, at, ...extra,
+    });
+
+    // In the order they happened, with the phone's times.
+    q.add(late('t1', 15, '2026-10-19T03:10:00.000Z'), answer('a1', 'yes', '2026-10-19T03:11:00.000Z'), late('t1', 30, '2026-10-19T03:20:00.000Z'));
+    let r = await sync.flush();
+    check(r.sent === 3 && r.failed === 0 && q.ops() === 0
+      && sent.join() === 'late:t1:15:2026-10-19T03:10:00.000Z,ask:a1:yes:2026-10-19T03:11:00.000Z,late:t1:30:2026-10-19T03:20:00.000Z',
+      'queued in order, each with the time it was said (the server keeps the latest late report)', { r, sent });
+    check(lateReplies.join() === 'c-t1-15:ok,c-t1-30:ok' && askReplies.join() === 'c-a1-yes:ok', 'the screens hear each reply by the op\'s client id', { lateReplies, askReplies });
+
+    // The time and the location answers carry what they need.
+    sent.length = 0;
+    q.add(answer('a2', 'time', '2026-10-19T03:12:00.000Z', { answer_at: '2026-10-19T04:15:00.000Z' }));
+    r = await sync.flush();
+    check(r.sent === 1 && JSON.stringify(lastAskArgs) === JSON.stringify(['a2', 'time', '2026-10-19T04:15:00.000Z', null, null, null, '2026-10-19T03:12:00.000Z']),
+      'a time answer sends the time picked', lastAskArgs);
+    q.add(answer('a3', 'location', '2026-10-19T03:13:00.000Z', { lat: 6.9271, lng: 79.8612, accuracy_m: 12 }));
+    r = await sync.flush();
+    check(r.sent === 1 && JSON.stringify(lastAskArgs) === JSON.stringify(['a3', 'location', null, 6.9271, 79.8612, 12, '2026-10-19T03:13:00.000Z']),
+      'a location answer sends the one point (lat, lng, accuracy)', lastAskArgs);
+
+    // No connection: both wait, in order, nothing failed; they go once the connection is back.
+    network = true;
+    sent.length = 0;
+    q.add(late('t2', 10, '2026-10-19T05:00:00.000Z'), answer('a4', 'no', '2026-10-19T05:01:00.000Z'));
+    r = await sync.flush();
+    check(r.offline && r.failed === 0 && q.ops() === 2 && q.opAt(0).op.kind === 'task_late' && q.opAt(1).op.kind === 'ask_answer',
+      'no connection: kept on the phone in order (works offline)', { r, ops: q.ops() });
+    network = false;
+    clock.now = sync.backoff().nextTryAt;
+    r = await sync.flush();
+    check(r.sent === 2 && q.ops() === 0 && sent.join() === 'late:t2:10:2026-10-19T05:00:00.000Z,ask:a4:no:2026-10-19T05:01:00.000Z', 'the connection is back: both go, in order', sent);
+
+    // Final answers: done, never sent again.
+    sent.length = 0;
+    lateReplies.length = 0;
+    lateReply = 'closed';
+    q.add(late('t3', 15, '2026-10-19T06:00:00.000Z'));
+    r = await sync.flush();
+    check(r.sent === 1 && r.failed === 0 && q.ops() === 0 && lateReplies.join() === 'c-t3-15:closed', "'closed' (the task is over): done, the screen hears it", { r, lateReplies });
+    lateReply = 'not_yours';
+    q.add(late('t4', 15, '2026-10-19T06:01:00.000Z'));
+    r = await sync.flush();
+    check(r.sent === 1 && r.failed === 0 && q.ops() === 0, "'not_yours' (given to someone else): done", r);
+    lateReply = 'ok';
+
+    askReplies.length = 0;
+    askReply = 'expired';
+    q.add(answer('a5', 'yes', '2026-10-19T07:00:00.000Z'));
+    r = await sync.flush();
+    check(r.sent === 1 && r.failed === 0 && q.ops() === 0 && askReplies.join() === 'c-a5-yes:expired', "'expired': done (the screen says the question closed)", { r, askReplies });
+
+    askReply = 'bad';
+    refused.length = 0;
+    q.add(answer('a6', 'time', '2026-10-19T07:01:00.000Z'), late('t5', 15, '2026-10-19T07:02:00.000Z'));
+    r = await sync.flush();
+    check(r.failed === 1 && r.sent === 1 && q.ops() === 0 && refused.join() === 'ask_answer:answer: bad' && askReplies.includes('c-a6-time:bad'),
+      "'bad': kept as failed with its words (not retried), and the late report behind it still goes", { r, refused, askReplies });
+    askReply = 'not_yours';
+    q.add(answer('a7', 'yes', '2026-10-19T07:03:00.000Z'));
+    r = await sync.flush();
+    check(r.failed === 1 && q.ops() === 0, "'not_yours': kept as failed", r);
+
+    sent.length = 0;
+    clock.now += 24 * 3600_000;
+    r = await sync.flush({ force: true });
+    check(r.sent === 0 && r.failed === 0 && sent.length === 0, 'the next runs send none of them again (final answers are never retried by themselves)', { r, sent });
   }
 
   console.log(failures === 0 ? '\nAll sync tests passed.' : `\n${failures} sync test(s) failed.`);

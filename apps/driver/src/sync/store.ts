@@ -237,6 +237,15 @@ export function pendingVehiclePhotos(): Record<string, string> {
   return found;
 }
 
+/** Part 3b (H3): the questions with an answer still waiting on the phone (ask ids): the ask screen says "Will be sent". */
+export function waitingAskAnswers(): Set<string> {
+  const ids = new Set<string>();
+  for (const row of db.getAllSync<{ op: string }>("SELECT op FROM ops WHERE failed = 0 AND op LIKE '{\"kind\":\"ask_answer\"%' ORDER BY seq")) {
+    ids.add((JSON.parse(row.op) as { id: string }).id);
+  }
+  return ids;
+}
+
 /** Puts one refused video back in line ("Failed · tap to retry"). */
 export function retryVideo(fuelLogId: string): boolean {
   const found = videoUploads().find((v) => v.op.fuel_log_id === fuelLogId && v.failed);

@@ -31,4 +31,4 @@ export type Vehicle = Pick<
 
 export type Language = 'en' | 'si';
 export type ReportCategory = 'breakdown' | 'accident' | 'tyre' | 'warning_light' | 'other';
-export type PhotoKind = 'odometer' | 'fuel_receipt' | 'vehicle_report' | 'profile';
+export type PhotoKind = 'odometer' | 'fuel_receipt' | 'vehicle_report' | 'profile' | 'licence';

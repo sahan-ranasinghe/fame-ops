@@ -6,6 +6,10 @@
 //                   importance, a long vibration, heads-up, the whole text on the lock
 //                   screen (lib/channels.ts). Its name is in the driver's language.
 //                   push-task uses it for the phones that registered it (lib/push.ts).
+//   driver-asks     Part 3b (H3): the office's questions (free for a trip, a time, where
+//                   you are), maximum importance, four short pulses, general.wav; its name
+//                   in the driver's language; registered with the token like new-tasks.
+//                   A tap opens the question (app/ask/[id].tsx) with Today underneath.
 //   tasks-new       a new task: loud ring, strong vibration (push from the server; phones
 //                   on an older update)
 //   tasks-changed   a task changed or cancelled (push; phones on an older update)
@@ -26,13 +30,15 @@
 import * as Notifications from 'expo-notifications';
 
 import { translate } from '../i18n';
-import { newTasksChannel } from './channels';
+import { asksChannel, type ChannelSpec, type ChannelsReady, newTasksChannel } from './channels';
 import { getJson, KEYS, remove, setJson } from './kv';
 import type { Language } from './types';
 
 export const CHANNELS = {
   /** Hotfix 2 (B): the loud one, for every task push on phones that registered it. */
   newTasks: 'new-tasks',
+  /** Part 3b (H3): the office's questions. */
+  asks: 'driver-asks',
   tasksNew: 'tasks-new',
   tasksChanged: 'tasks-changed',
   general: 'general',
@@ -74,10 +80,19 @@ export async function requestNotifications(): Promise<boolean> {
 
 let channelsReady = false;
 let newTasksReady = false;
+let asksReady = false;
 
 /** The "New tasks" channel in a language (Android lets an existing channel's name and description change, nothing else). */
 async function setNewTasksChannel(language: Language): Promise<boolean> {
-  const spec = newTasksChannel((key, vars) => translate(language, key, vars));
+  return setChannel(newTasksChannel((key, vars) => translate(language, key, vars)));
+}
+
+/** Part 3b: the questions' channel in a language. */
+async function setAsksChannel(language: Language): Promise<boolean> {
+  return setChannel(asksChannel((key, vars) => translate(language, key, vars)));
+}
+
+async function setChannel(spec: ChannelSpec): Promise<boolean> {
   try {
     await Notifications.setNotificationChannelAsync(spec.id, {
       name: spec.name,
@@ -97,9 +112,10 @@ async function setNewTasksChannel(language: Language): Promise<boolean> {
   }
 }
 
-/** The driver changed the language: the "New tasks" channel's name in Android's settings follows. */
+/** The driver changed the language: the "New tasks" and questions channels' names in Android's settings follow. */
 export async function renameChannels(language: Language): Promise<void> {
   if (newTasksReady) await setNewTasksChannel(language);
+  if (asksReady) await setAsksChannel(language);
 }
 
 /** Whether the "New tasks" channel exists (the push token is registered with it only then). */
@@ -108,12 +124,14 @@ export function newTasksChannelReady(): boolean {
 }
 
 /**
- * Creates the channels once per app start (Android keeps them; a channel's sound cannot change later). Answers whether
- * the "New tasks" channel is there, so the push token can be registered with it.
+ * Creates the channels once per app start (Android keeps them; a channel's sound cannot change later). Answers which of
+ * the app's own channels ("New tasks", the questions) are there, so the push token can be registered with them.
  */
-export async function ensureChannels(): Promise<boolean> {
-  if (channelsReady) return newTasksReady;
-  newTasksReady = await setNewTasksChannel(getJson<Language>(KEYS.language) === 'si' ? 'si' : 'en');
+export async function ensureChannels(): Promise<ChannelsReady> {
+  if (channelsReady) return { newTasks: newTasksReady, asks: asksReady };
+  const language = getJson<Language>(KEYS.language) === 'si' ? 'si' : 'en';
+  newTasksReady = await setNewTasksChannel(language);
+  asksReady = await setAsksChannel(language);
   await Notifications.setNotificationChannelAsync(CHANNELS.tasksNew, {
     name: 'New tasks',
     importance: Notifications.AndroidImportance.MAX,
@@ -140,14 +158,14 @@ export async function ensureChannels(): Promise<boolean> {
     vibrationPattern: [0, 400, 200, 400],
   });
   channelsReady = true;
-  return newTasksReady;
+  return { newTasks: newTasksReady, asks: asksReady };
 }
 
 /** Shows a new-task notification from the app itself (used when the phone has no push token), on the "New tasks" channel. */
 export async function notifyNewTask(title: string, body: string, taskId: string): Promise<void> {
   try {
     if (!(await notificationsAllowed())) return;
-    const ready = await ensureChannels();
+    const ready = (await ensureChannels()).newTasks;
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { taskId, kind: 'new' } },
       trigger: { channelId: ready ? CHANNELS.newTasks : CHANNELS.tasksNew },
@@ -174,7 +192,7 @@ export async function notifyArrival(title: string, body: string, taskId: string)
 /** Plays the new-task ring once, on the channel the task pushes use, so the driver can check the volume. */
 export async function showTestNotification(title: string, body: string): Promise<void> {
   try {
-    const ready = await ensureChannels();
+    const ready = (await ensureChannels()).newTasks;
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { kind: 'test' } },
       trigger: { channelId: ready ? CHANNELS.newTasks : CHANNELS.tasksNew },
@@ -261,6 +279,8 @@ export async function disarmWatchdog(): Promise<void> {
 export interface TapData {
   kind?: string;
   taskId?: string;
+  /** Part 3b (H3): a question from the office (push kind ask): the tap opens it. */
+  askId?: string;
   /** A "Task changed" push: what changed (Hotfix 2, I: the preview marks it). */
   changes?: unknown;
   /** When the notification came (ms). */
@@ -272,6 +292,7 @@ function dataOf(notification: Notifications.Notification | null | undefined): Ta
   return {
     kind: typeof data?.kind === 'string' ? data.kind : undefined,
     taskId: typeof data?.taskId === 'string' ? data.taskId : undefined,
+    askId: typeof data?.askId === 'string' ? data.askId : undefined,
     changes: data?.changes,
     at: typeof notification?.date === 'number' ? notification.date : undefined,
   };

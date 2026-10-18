@@ -15,7 +15,11 @@
 //               driver confirmed for a task made without one (task_vehicle),
 //               put in the queue before that task's start, so the server has
 //               the vehicle when the start arrives (it refuses a start
-//               without one).
+//               without one). Part 3b: "Running late" (task_late:
+//               report_running_late; every answer is final) and an answer to
+//               the office's question (ask_answer: answer_ask; 'ok' and
+//               'expired' are done, 'bad' and 'not_yours' refused and kept,
+//               none of them tried again by itself).
 //   points      location points. Sent in batches of up to 500, oldest first,
 //               once no op is waiting, so the sharing period they belong to is
 //               already on the server. A batch that gets no answer is sent
@@ -38,7 +42,9 @@
 import * as realApi from '../lib/api';
 import { ApiError, type Client } from '../lib/api';
 import type { Json } from '../lib/database.types';
+import { type AskAnswerOp, type AskReply, replyDone } from '../lib/asks';
 import type { TripsApi } from '../lib/driverApi';
+import type { LateReply, TaskLateOp } from '../lib/late';
 import { vehiclePhotoDone } from '../lib/photoRules';
 import type { TripAnswer, TripCreateOp, TripStopOp } from '../lib/trips';
 import type { Language, PhotoKind } from '../lib/types';
@@ -84,9 +90,13 @@ export type Op =
   /** Phase 7 §13: a trip started with no connection (POST /trips, idempotent by its id); the Start task follows it in the queue. */
   | TripCreateOp
   /** Phase 7 §13: a stop added on the way with no connection (POST /trips/:id/stops, idempotent by the stop's id). */
-  | TripStopOp;
+  | TripStopOp
+  /** Part 3b (H4): "Running late" (report_running_late at the phone's time; the server keeps the latest). */
+  | TaskLateOp
+  /** Part 3b (H3): an answer to the office's question (answer_ask at the phone's time; the last answer given wins). */
+  | AskAnswerOp;
 
-export type { TripCreateOp, TripStopOp };
+export type { AskAnswerOp, TaskLateOp, TripCreateOp, TripStopOp };
 
 export interface VideoUploadOp {
   kind: 'video_upload';
@@ -219,6 +229,10 @@ export interface SyncDeps {
   onTrip?: (op: TripCreateOp | TripStopOp, answer: TripAnswer) => void;
   /** The server refused an op for good (it is kept, failed): the screens tell the driver about a trip. */
   onRefused?: (op: Op, message: string) => void;
+  /** Part 3b: the server's reply to "Running late" ('ok', 'closed', 'not_yours': all final). */
+  onLate?: (op: TaskLateOp, reply: LateReply) => void;
+  /** Part 3b: the server's reply to an answer ('ok', 'expired', or a refusal: 'bad', 'not_yours'). */
+  onAsk?: (op: AskAnswerOp, reply: AskReply) => void;
 }
 
 export interface FlushResult {
@@ -469,6 +483,19 @@ export function createSync(deps: SyncDeps) {
       case 'trip_create':
       case 'trip_stop':
         return sendTrip(op);
+      case 'task_late': {
+        // 'closed' (the task is over) and 'not_yours' (given to someone else) leave nothing to do: done, not retried.
+        const reply = await api.reportRunningLate(client, op.id, op.minutes, op.at);
+        deps.onLate?.(op, reply);
+        return;
+      }
+      case 'ask_answer': {
+        const reply = await api.answerAsk(client, op.id, op.answer, op, op.at);
+        deps.onAsk?.(op, reply);
+        // 'expired': the question closed before the answer was given (the screen says so); never sent again.
+        if (replyDone(reply)) return;
+        throw new ApiError(`answer: ${reply || 'no answer'}`, true, reply);
+      }
     }
   }
 

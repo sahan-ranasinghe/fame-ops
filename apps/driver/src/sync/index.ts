@@ -8,6 +8,8 @@ import * as Network from 'expo-network';
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 import { type AcceptAnswer, ApiError, type HeartbeatAnswer, type HeartbeatRow } from '../lib/api';
+import type { AskReply } from '../lib/asks';
+import type { LateReply } from '../lib/late';
 import { driverApi } from '../lib/driverApiClient';
 import { getJson, KEYS, setJson } from '../lib/kv';
 import { supabase } from '../lib/supabase';
@@ -15,7 +17,17 @@ import { currentTrack, setWatched } from '../lib/tracking';
 import { rememberStopId, type TripAnswer } from '../lib/trips';
 import type { Employee } from '../lib/types';
 import { base64Decode, SupabaseTusStore } from '../lib/videoStore';
-import { type BackoffState, type Connection, createSync, type FlushResult, type Op, type TripCreateOp, type TripStopOp } from './engine';
+import {
+  type AskAnswerOp,
+  type BackoffState,
+  type Connection,
+  createSync,
+  type FlushResult,
+  type Op,
+  type TaskLateOp,
+  type TripCreateOp,
+  type TripStopOp,
+} from './engine';
 import { addHeartbeatLog, addOp, queueCounts, queueStore, replaceOp, retryRejectedHeartbeats, retryRejectedPoints } from './store';
 
 const PHOTO_BUCKET = 'driver-photos';
@@ -155,6 +167,28 @@ export function onOpRefused(listener: RefusedListener): () => void {
   };
 }
 
+type LateListener = (op: TaskLateOp, reply: LateReply) => void;
+const lateListeners = new Set<LateListener>();
+
+/** Hears the server's reply to a queued "Running late" (Part 3b, H4). */
+export function onLateSent(listener: LateListener): () => void {
+  lateListeners.add(listener);
+  return () => {
+    lateListeners.delete(listener);
+  };
+}
+
+type AskListener = (op: AskAnswerOp, reply: AskReply) => void;
+const askListeners = new Set<AskListener>();
+
+/** Hears the server's reply to a queued answer to the office's question (Part 3b, H3). */
+export function onAskSent(listener: AskListener): () => void {
+  askListeners.add(listener);
+  return () => {
+    askListeners.delete(listener);
+  };
+}
+
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
@@ -210,6 +244,12 @@ const sync = createSync({
   },
   onRefused: (op, message) => {
     for (const listener of refusedListeners) listener(op, message);
+  },
+  onLate: (op, reply) => {
+    for (const listener of lateListeners) listener(op, reply);
+  },
+  onAsk: (op, reply) => {
+    for (const listener of askListeners) listener(op, reply);
   },
 });
 
@@ -295,4 +335,4 @@ export function maybeRetryRejected(reason: 'refresh' | 'start', updateId: string
   return n;
 }
 
-export { opsBeforeTrip, pendingFuelLogs, pendingVehiclePhotos, queueCounts, retryVideo, videoUploads } from './store';
+export { opsBeforeTrip, pendingFuelLogs, pendingVehiclePhotos, queueCounts, retryVideo, videoUploads, waitingAskAnswers } from './store';

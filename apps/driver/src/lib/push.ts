@@ -9,7 +9,8 @@
 //
 // Hotfix 2 (B): the token is registered AFTER the channels are made, naming the
 // "New tasks" channel (p_channels ['new-tasks']): push-task then sends this phone's
-// task pushes on it; a phone that never named it keeps the old channels. A server
+// task pushes on it; a phone that never named it keeps the old channels. Part 3b: also
+// "driver-asks" (the office's questions) once made. A server
 // without p_channels yet (the update reached the phone first) gets the call
 // without it, as before.
 

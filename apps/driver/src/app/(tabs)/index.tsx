@@ -14,10 +14,13 @@
 // Hotfix 3 (L6): after the card at most 3 later tasks (later today first, then coming up) and the row "All today's tasks"
 // ("2 more later today" when Today leaves some out), which pushes app/today-tasks.tsx; a missed task is shown nowhere
 // (lib/lists.ts). Only the rows on screen count as seen (components/TaskRows.tsx).
+// Part 3b: a banner while a question from the office is open and not answered (H3: "The office asked you a question ·
+// Answer", pushed app/ask/[id].tsx; refreshed with Today, by the question's push and by Realtime); on an accepted task
+// "Running late" and "Can't make it" (H4; never on a trip the driver started).
 
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronRight, Play, Route } from '@/components/icons';
+import { Check, ChevronRight, MessageCircle, Play, Route } from '@/components/icons';
 import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { DeclineSheet } from '@/components/DeclineSheet';
 import { DutyHeader, DutyNotices } from '@/components/DutyCard';
+import { RunningLate } from '@/components/LateSheet';
 import { CallButtons } from '@/components/CallButtons';
 import { ChangedTag, leaveTime, StopTimeline, useDateLabel, useDurations, useNow, usePeopleLine } from '@/components/task';
 import { Thumb, useVehicleThumbs } from '@/components/Photos';
@@ -34,8 +38,10 @@ import { swapCard, taskTitle } from '@/components/taskLines';
 import { TaskList, useMarkShown } from '@/components/TaskRows';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
+import { bannerAsk } from '@/lib/asks';
 import { taskCalls } from '@/lib/contacts';
 import { firstName } from '@/lib/format';
+import { canReportLate, declineKey } from '@/lib/late';
 import { todayLists } from '@/lib/lists';
 import { hasChanges, vehicleLine, vehicleWords } from '@/lib/taskPreview';
 import { colomboDate, colomboHour, colomboTime } from '@/lib/time';
@@ -96,6 +102,9 @@ export default function TodayScreen() {
   const thumbs = useVehicleThumbs(nextVehicle ? [nextVehicle.id] : []);
   // The office swapped the running task's vehicle: the readings wait on the task screen (Open task).
   const swap = next?.status === 'in_progress' ? swapCard(next) : null;
+  // Part 3b (H3): the open question not answered yet that closes soonest.
+  const ask = bannerAsk(app.asks, now);
+  const decline = next ? declineKey(next) : null;
 
   return (
     <View style={styles.page}>
@@ -134,6 +143,15 @@ export default function TodayScreen() {
             </Pressable>
           )}
           <TrackingNotice />
+          {ask && (
+            <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/ask/[id]', params: { id: ask.ask_id } })} style={styles.askBanner}>
+              <MessageCircle size={26} color="#ffffff" />
+              <Txt variant="strong" size={18} color="#ffffff" style={{ flex: 1 }}>{t('ask.banner')}</Txt>
+              <View style={styles.askButton}>
+                <Txt variant="button" size={17}>{t('ask.answer')}</Txt>
+              </View>
+            </Pressable>
+          )}
           {app.queue.points > 0 && (!app.dataAvailable || app.offline) && (
             <Txt variant="small" color={colors.amberText}>{t('today.offlineWaiting', { n: app.queue.points })}</Txt>
           )}
@@ -200,8 +218,15 @@ export default function TodayScreen() {
                   style={{ marginTop: 18 }}
                 />
               )}
-              {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list). */}
-              {next.status === 'assigned' && !isSelfTrip(next) && <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(next)} />}
+              {/* Part 3b (H4): running late once accepted, before the start (under way it is on the task screen). */}
+              {next.status === 'assigned' && next.accepted_at && canReportLate(next) && (
+                <View style={{ marginTop: 10 }}>
+                  <RunningLate task={next} />
+                </View>
+              )}
+              {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list). Once
+                  accepted it reads "Can't make it" (H4). */}
+              {next.status === 'assigned' && !isSelfTrip(next) && decline && <Button kind="danger-text" label={t(decline)} onPress={() => setDeclining(next)} />}
             </View>
           ) : (
             <Card style={{ alignItems: 'center', paddingVertical: 34, gap: 6 }}>
@@ -241,6 +266,11 @@ const styles = StyleSheet.create({
   nextCard: { backgroundColor: colors.card, borderWidth: 2.5, borderColor: colors.ink, borderRadius: 22, padding: 20 },
   nextTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   vehicleLine: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
+  askBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.blue, borderRadius: 18, paddingHorizontal: 16,
+    paddingVertical: 14, minHeight: 72,
+  },
+  askButton: { backgroundColor: colors.amber, borderRadius: 12, paddingHorizontal: 16, minHeight: 48, justifyContent: 'center' },
   allRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderRadius: 18, borderWidth: 1,
     borderColor: colors.line, paddingHorizontal: 16, paddingVertical: 16, minHeight: 72,
