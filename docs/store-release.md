@@ -52,9 +52,14 @@ state, vibrate, wake lock, audio settings (task sounds), storage read/write only
 2. The reviewers' driver:
    - in Claude or on the site: `create_driver` name "Store Reviewer", code `DEMO-01`, username `store.review`, a PIN, a phone
      number;
-   - then once: `npx supabase db query --linked "select public.seed_demo_driver('store.review', 30)"` (it refuses any driver
-     with real history; run it again every few weeks to top up the tasks).
-3. `eas build -p android --profile store` (the .aab). For the phones as today: `--profile drivers` (the .apk).
+   - then once: `npx supabase db query --linked "select public.seed_demo_driver('store.review', 3)"`. It refuses any driver
+     with real history (a vehicle, tasks, duty, locations, logs). The seeding is quiet (no pushes, no reminder bursts), and
+     the nightly job `demo-tasks` keeps three days of tasks ahead from then on.
+   - The account tools find the reviewer's driver like any other (`reset_pin`, `set_driver_active`, `update_driver`);
+     every other office tool and page leaves it out.
+3. `eas build -p android --profile store` (the .aab). For the phones as today: `--profile drivers` (the .apk). Both are on
+   the same update channel (`preview`) and runtime (`1.3.0-gmaps`), so one `eas update` reaches the Play-installed and the
+   sideloaded phones alike.
 4. Play Console (section 4), first release on **Internal testing**.
 5. Later, iOS (section 5) with Phase 8.
 
@@ -79,7 +84,9 @@ state, vibrate, wake lock, audio settings (task sounds), storage read/write only
    - Privacy policy: `https://fame-fleet.pages.dev/privacy`.
    - **App access**: "All or some functionality is restricted". Give the reviewers' account: username `store.review` and its
      PIN, with: "Sign in as a driver. Tap Start work to go on duty (location is recorded only while on duty). Open a task on
-     Today, Accept, Start task. The places are in Colombo, Sri Lanka, so Arrived asks to confirm when you are far away."
+     Today, Accept, Start task. Start task asks for a photo of the vehicle's odometer: without a vehicle, take any photo
+     three times, then tap "Type the reading" and type a number. The places are in Colombo, Sri Lanka, so Arrived asks to
+     confirm when you are far away."
    - Ads: no ads.
    - Content rating: the questionnaire (a business tool; no user content shared publicly).
    - Target audience: 18 and over; not for children.
@@ -87,8 +94,9 @@ state, vibrate, wake lock, audio settings (task sounds), storage read/write only
    - Government app: no. Financial features: none. Health: none. News: no.
    - **Sensitive permissions**: Location permissions (background), with the declaration (6.3) and a video; Foreground
      service type **location**, with the same description and video.
-5. Testing → Internal testing → create a release, upload the .aab (or `eas submit -p android --profile store`), release
-   notes "First store release of Fame Fleet", add the testers' list, roll out.
+5. Testing → Internal testing → create a release, upload the .aab by hand (`eas submit` needs a Play service account key
+   and a `submit` profile in eas.json first), release notes "First store release of Fame Fleet", add the testers' list,
+   roll out.
 6. When the review is through: the testers open the opt-in link, install from Play. A phone with Fame Driver 1.2.0 sideloaded
    updates in place only when the signing key is the same (2.2).
 
@@ -148,6 +156,11 @@ point.
 
 ### 6.4 What the reviewers' account can do
 It signs in like any driver and sees only its own demo tasks and the demo vehicle `DEMO-0001`. Everything it does is kept
-apart: the office's lists, searches, suggestions, issues and notifications leave it out, a real driver never sees its vehicle,
-and it can never be given a real task (the database refuses the mix). Its location points are deleted after 90 days like
-everyone's.
+apart: the office's lists, searches ("Used before" too), suggestions, issues and notifications leave it out, a real driver
+never sees its vehicle, and it can never be given a real task (the database refuses the mix). Its location points are deleted
+after 90 days like everyone's.
+
+What is not apart, said here: its actions are in the audit log like everyone's; its searches, photos and odometer reads use
+the same daily Google, openrouteservice and Gemini allowances (60 odometer reads a day per driver); a push that fails to reach
+its phone counts towards the "push failed" issue; and office people could read its rows directly in the database (no page
+shows them).

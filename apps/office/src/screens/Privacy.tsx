@@ -45,8 +45,10 @@ export function Privacy() {
               <b>Your location, only while you are on duty.</b> From the moment you tap Start work (or start a task) until
               you tap Finish work, or the day ends at the cut-off time, the app records where the vehicle is, about every 5
               seconds while it moves and once a minute while it stands. This includes when the app is closed or not in use,
-              because a trip goes on while the phone is in a pocket. Off duty, nothing is recorded. When the office asks
-              "Where are you now?", the app sends one position only if you tap to answer.
+              because a trip goes on while the phone is in a pocket. Off duty, the app does not follow where you are. A photo
+              you take in the app (the odometer, a receipt, a problem) keeps the place where it was taken, on duty or not, and
+              when you mark a stop Arrived the point where you were is kept with the task. When the office asks "Where are
+              you now?", the app sends one position only if you tap to answer.
             </li>
             <li>
               <b>Photos and videos you take in the app:</b> the odometer, fuel receipts, the video of a fuel fill, vehicle
@@ -72,9 +74,10 @@ export function Privacy() {
         <Section title="Who sees it">
           <ul>
             <li>
-              <b>The Fame Global Solutions office.</b> Each person sees only what their work needs: the people who plan
-              trips see positions, trips and tasks; your phone numbers, emergency contact and licence are seen only by the
-              fleet admin and the people who manage drivers or vehicles.
+              <b>The Fame Global Solutions office.</b> Everyone in the office who works with the fleet sees where the vehicles
+              are, the trips and the tasks. Your mobile number is seen by the office people who plan, approve or manage
+              trips, vehicles or problems, and by the person who asked for a trip you drive. Your emergency contact, licence
+              number and licence photos are seen only by the fleet admin and the people who manage drivers or vehicles.
             </li>
             <li>
               <b>Service providers that run parts of the system for us,</b> each only for that job: Supabase (the database
@@ -89,6 +92,7 @@ export function Privacy() {
         <Section title="How long it is kept">
           <ul>
             <li>Location points: 90 days. The last known position of each driver stays until the next one replaces it.</li>
+            <li>Where a photo was taken, and where you were when you marked a stop Arrived, stay with the photo and the task.</li>
             <li>The phone's status reports: 30 days.</li>
             <li>Fuel videos: 12 months (or 6 months if the company sets it so).</li>
             <li>Answers to the office's questions: 30 days. Read office notifications: 90 days.</li>

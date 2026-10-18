@@ -75,8 +75,12 @@ function pickOne<T>(matches: T[], what: string, typed: string, show: (item: T) =
 }
 
 /** By username, employee code or name. */
-export function findDriver(refs: Refs, typed: string): Employee {
-  const drivers = refs.employees.filter((e) => e.role === "driver");
+/**
+ * A driver by username, code or name. `demoToo`: the account tools (new PIN, switch off, the phone) also find the stores'
+ * demo driver, which every other tool leaves out (Part 6).
+ */
+export function findDriver(refs: Refs, typed: string, opts: { demoToo?: boolean } = {}): Employee {
+  const drivers = (opts.demoToo ? [...refs.emp.values()] : refs.employees).filter((e) => e.role === "driver");
   const want = typed.trim().toLowerCase();
   const exact = drivers.filter((e) => e.username === want || e.code.toLowerCase() === want || e.name.toLowerCase() === want);
   const show = (e: Employee) => `${e.name} (${e.username ?? e.code})`;

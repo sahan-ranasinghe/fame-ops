@@ -197,7 +197,7 @@ export const resetPin = tool({
   readOnly: false,
   input: z.object({ username: zDriverRef, pin: zPin }),
   async run({ username, pin }, { db }) {
-    const driver = findDriver(await loadRefs(db), username);
+    const driver = findDriver(await loadRefs(db), username, { demoToo: true });
     if (!driver.auth_user_id) throw new ToolError(`${driver.name} has no sign-in yet. Use create_driver.`);
     const { error } = await db.auth.admin.updateUserById(driver.auth_user_id, { password: pin });
     if (error) throw new ToolError(`Could not set the PIN: ${error.message}`);
@@ -216,7 +216,7 @@ export const setDriverActive = tool({
   readOnly: false,
   input: z.object({ username: zDriverRef, active: z.boolean() }),
   async run({ username, active }, { db, now }) {
-    const driver = findDriver(await loadRefs(db), username);
+    const driver = findDriver(await loadRefs(db), username, { demoToo: true });
     unwrap(await db.from("employees").update({ active }).eq("id", driver.id).select("id"), "employee");
 
     const notes: string[] = [];
@@ -321,7 +321,7 @@ export const updateDriver = tool({
   async run({ username, ...typed }, { db, actor }) {
     const patch = profilePatch(typed);
     const refs = await loadRefs(db);
-    const driver = findDriver(refs, username);
+    const driver = findDriver(refs, username, { demoToo: true });
     if (Object.keys(patch).length === 0) {
       throw new ToolError("Nothing to change: give phone, whatsapp, the emergency contact, licence_no or licence_expiry.");
     }

@@ -607,7 +607,8 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     const flaggedStops = unwrap(stopsRes, "stops");
     const stopTasks = flaggedStops.length
       ? unwrap(
-        await db.from("tasks").select("id, title, employee_id, vehicle_id").in("id", [...new Set(flaggedStops.map((x) => x.task_id))]),
+        await db.from("tasks").select("id, title, employee_id, vehicle_id").in("id", [...new Set(flaggedStops.map((x) => x.task_id))])
+          .eq("demo", false),
         "tasks",
       )
       : [];

@@ -798,7 +798,7 @@
   "disclosure": {
     "title": "Your location while you are on duty",
     "body": "Fame Fleet collects location data to show the office where your vehicle is, to record your trips and the km of each task, and to mark when you reach each stop, while you are on duty (from Start work to Finish work), even when the app is closed or not in use.",
-    "offDuty": "Off duty, nothing is recorded.",
+    "offDuty": "Off duty, the app does not follow where you are. A photo you take keeps the place it was taken.",
     "whoSees": "The Fame Global Solutions office sees it. The points are kept for 90 days.",
     "settings": "You can turn location off in the phone's settings at any time; then trips are not recorded.",
     "next": "Next, Android asks for your permission.",

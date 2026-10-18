@@ -8,7 +8,9 @@
 --     duty_sessions refuse it), a real driver never sees the demo vehicle (my_vehicle_choices, the vehicles policy).
 --   - Quiet: queue_notification tells the office nothing about a demo task or a demo vehicle's report.
 --   - seed_demo_driver(username, days): marks a driver made with create_driver as the demo (refused for a driver with any
---     real task, duty period or location point), makes the demo vehicle, and adds the tasks of the next days.
+--     real history), makes the demo vehicle, and adds the tasks of the next days, quietly (no pushes, no reminders);
+--     top_up_demo_tasks (pg_cron demo-tasks, nightly) keeps three days ahead.
+--   - The office's "Used before" search leaves the demo's stops out (recent_places).
 
 alter table public.employees add column demo boolean not null default false;
 alter table public.vehicles add column demo boolean not null default false;
@@ -79,12 +81,25 @@ create trigger vehicle_assignments_no_demo_mix before insert or update of employ
 revoke all on function public.set_demo_from_employee() from public, anon, authenticated;
 revoke all on function public.vehicle_assignments_no_demo_mix() from public, anon, authenticated;
 
+-- Is the signed-in person the demo driver? Security definer: the vehicles policy reads it without reading employees through
+-- RLS (the employees update policy reads vehicles: reading employees back from the vehicles policy loops).
+create function public.current_employee_demo()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce((select e.demo from public.employees e where e.id = public.current_employee_id()), false)
+$$;
+revoke all on function public.current_employee_demo() from public, anon;
+grant execute on function public.current_employee_demo() to authenticated;
+
 -- A real driver never sees the demo vehicle; the demo driver sees only it.
 drop policy vehicles_select_active on public.vehicles;
 create policy vehicles_select_active on public.vehicles
   for select to authenticated
-  using (active and (select public.current_employee_id()) is not null
-         and demo = coalesce((select e.demo from public.employees e where e.id = (select public.current_employee_id())), false));
+  using (active and (select public.current_employee_id()) is not null and demo = (select public.current_employee_demo()));
 
 -- my_vehicle_choices (Phase 7 Part 1, 20261015190000_phase7_duty.sql) with the same rule.
 create or replace function public.my_vehicle_choices()
@@ -211,14 +226,20 @@ begin
     raise exception 'p_days: 1 to 60';
   end if;
   select * into v_driver from public.employees e where e.username = lower(btrim(p_username));
-  if v_driver.id is null or v_driver.role <> 'driver' then
-    raise exception 'No driver with the username %: make them with create_driver first', p_username;
+  if v_driver.id is null or v_driver.role <> 'driver' or not v_driver.active then
+    raise exception 'No active driver with the username %: make them with create_driver first', p_username;
   end if;
   if not v_driver.demo then
-    if exists (select 1 from public.tasks t where t.employee_id = v_driver.id)
+    if v_driver.current_vehicle_id is not null
+       or exists (select 1 from public.tasks t where t.employee_id = v_driver.id)
        or exists (select 1 from public.duty_sessions d where d.employee_id = v_driver.id)
-       or exists (select 1 from public.location_points l where l.employee_id = v_driver.id) then
-      raise exception '% already has real tasks, duty or locations: a live driver is never made the demo', v_driver.name;
+       or exists (select 1 from public.vehicle_assignments a where a.employee_id = v_driver.id)
+       or exists (select 1 from public.location_points l where l.employee_id = v_driver.id)
+       or exists (select 1 from public.driver_heartbeats h where h.employee_id = v_driver.id)
+       or exists (select 1 from public.fuel_logs f where f.employee_id = v_driver.id)
+       or exists (select 1 from public.odometer_logs o where o.employee_id = v_driver.id)
+       or exists (select 1 from public.vehicle_reports r where r.employee_id = v_driver.id) then
+      raise exception '% already has real history (a vehicle, tasks, duty, locations, logs): a live driver is never made the demo', v_driver.name;
     end if;
     update public.employees set demo = true where id = v_driver.id;
   end if;
@@ -230,6 +251,8 @@ begin
     returning id into v_vehicle;
   end if;
 
+  -- Quiet: no "new task" push for each seeded task (tasks_notify_push), and no reminder bursts at Start work.
+  perform set_config('fleet.quiet', 'on', true);
   for v_day in select generate_series((now() at time zone 'Asia/Colombo')::date,
                                       (now() at time zone 'Asia/Colombo')::date + (p_days - 1), interval '1 day')::date loop
     continue when exists (select 1 from public.tasks t where t.employee_id = v_driver.id and t.kind = 'dispatch'
@@ -239,9 +262,11 @@ begin
       continue when v_start < now();
       v_trip := v_trips -> (v_slot % 3);
       insert into public.tasks (title, label, employee_id, vehicle_id, start_at, leave_by, leave_by_source, end_by,
-                                passengers, contact_name, notes, created_by)
+                                passengers, contact_name, notes, created_by,
+                                accept_reminder_sent_at, reminder_30_sent_at, reminder_0_sent_at)
       values (v_trip ->> 'title', 'Demo', v_driver.id, v_vehicle, v_start, v_start, 'manual', v_start + interval '2 hours',
-              2, 'Demo contact', 'A demo task for the store review. Nothing here is real.', 'seed_demo_driver')
+              2, 'Demo contact', 'A demo task for the store review. Nothing here is real.', 'seed_demo_driver',
+              now(), now(), now())
       returning id into v_task;
       insert into public.task_stops (task_id, seq, type, place_name, lat, lng, what)
       values (v_task, 1, 'pickup', v_trip ->> 'from', (v_trip ->> 'flat')::double precision, (v_trip ->> 'flng')::double precision, 'people'),
@@ -250,6 +275,7 @@ begin
     end loop;
   end loop;
 
+  perform set_config('fleet.quiet', 'off', true);
   return jsonb_build_object('driver', v_driver.username, 'vehicle', 'DEMO-0001', 'tasks_added', v_added,
                             'days', p_days);
 end;
@@ -257,3 +283,73 @@ $$;
 
 revoke all on function public.seed_demo_driver(text, integer) from public, anon, authenticated;
 grant execute on function public.seed_demo_driver(text, integer) to service_role;
+
+-- Nightly: every active demo driver keeps three days of tasks ahead (a reviewer may come back days later).
+create function public.top_up_demo_tasks()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_username text;
+  v_added    integer := 0;
+begin
+  for v_username in select e.username from public.employees e where e.demo and e.active and e.username is not null loop
+    v_added := v_added + coalesce((public.seed_demo_driver(v_username, 3) ->> 'tasks_added')::integer, 0);
+  end loop;
+  return v_added;
+end;
+$$;
+revoke all on function public.top_up_demo_tasks() from public, anon, authenticated;
+select cron.schedule('demo-tasks', '20 21 * * *', $$select public.top_up_demo_tasks()$$);
+
+-- recent_places (as in 20261018090000_phase7_trips.sql, which left personal trips out): the office's "Used before" layer
+-- also leaves the demo's stops and starts out.
+create or replace function public.recent_places(p_text text, p_since timestamptz, p_limit integer default 5)
+returns table (name text, address text, lat double precision, lng double precision, last_used timestamptz, uses bigint)
+language sql
+stable
+set search_path = public, extensions
+as $$
+  with q as (select replace(replace(replace(lower(trim(p_text)), '\', '\\'), '%', '\%'), '_', '\_') as e),
+  used as (
+    select s.place_name as name, s.address, s.lat, s.lng, t.start_at as at
+    from public.task_stops s join public.tasks t on t.id = s.task_id, q
+    where s.place_id is null and s.google_place_id is null and s.status <> 'removed' and t.start_at >= p_since
+      and t.purpose <> 'personal' and not t.demo
+      and s.place_name ilike '%' || q.e || '%'
+    union all
+    select t.start_name, null, t.start_lat, t.start_lng, t.start_at
+    from public.tasks t, q
+    where t.start_place_id is null and t.start_google_place_id is null and t.start_name is not null and t.start_at >= p_since
+      and t.purpose <> 'personal' and not t.demo
+      and t.start_name ilike '%' || q.e || '%'
+    union all
+    select r.route_from, null, null::double precision, null::double precision, r.created_at
+    from public.vehicle_requests r, q
+    where r.created_at >= p_since and r.route_from ilike '%' || q.e || '%'
+    union all
+    select r.route_to, null, null::double precision, null::double precision, r.created_at
+    from public.vehicle_requests r, q
+    where r.created_at >= p_since and r.route_to ilike '%' || q.e || '%'
+  ),
+  grouped as (
+    select lower(trim(u.name)) as k,
+           (array_agg(trim(u.name) order by (u.lat is null), u.at desc))[1] as name,
+           (array_agg(u.address order by (u.address is null), u.at desc))[1] as address,
+           (array_agg(u.lat order by (u.lat is null), u.at desc))[1] as lat,
+           (array_agg(u.lng order by (u.lat is null), u.at desc))[1] as lng,
+           max(u.at) as last_used,
+           count(*) as uses
+    from used u
+    where trim(coalesce(u.name, '')) <> ''
+    group by lower(trim(u.name))
+  )
+  select g.name, g.address, g.lat, g.lng, g.last_used, g.uses
+  from grouped g, q
+  -- not the name of one of our places (those show in the first layer)
+  where not exists (select 1 from public.places p where lower(p.name) = g.k)
+  order by (g.k like q.e || '%') desc, g.uses desc, g.last_used desc
+  limit greatest(1, least(p_limit, 20))
+$$;

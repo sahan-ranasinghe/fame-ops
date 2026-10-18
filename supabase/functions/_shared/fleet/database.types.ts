@@ -1545,6 +1545,9 @@ isOneToOne: false
 "confirm_task_vehicle":
 { Args: { "p_queued"?: boolean,"p_task": string,"p_vehicle": string }; Returns: string
                            },
+"current_employee_demo":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
 "current_employee_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -1742,6 +1745,9 @@ isOneToOne: false
                            },
 "task_km":
 { Args: { "p_end": number,"p_start": number,"p_task": string }; Returns: number
+                           },
+"top_up_demo_tasks":
+{ Args: Record<PropertyKey, never>; Returns: number
                            },
 "unavailability_window":
 { Args: { "p_end": string,"p_from": string,"p_part": string,"p_split": string,"p_start": string,"p_to": string }; Returns: {

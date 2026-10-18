@@ -1137,7 +1137,8 @@ You should see:
 You should see:
 - Before Android's own question, a full screen "Your location while you are on duty" saying the app collects location to
   show the office where the vehicle is, record the trips and km and mark the stops, while on duty, "even when the app is
-  closed or not in use"; "Off duty, nothing is recorded"; the 90 days; a "Privacy policy" link; Agree and Not now.
+  closed or not in use"; "Off duty, the app does not follow where you are" (a photo keeps the place it was taken); the 90
+  days; a "Privacy policy" link; Agree and Not now.
 - Not now: back to Permissions, nothing asked.
 - Agree: Android's question follows at once.
 - The other driver sees the disclosure again (it is agreed per driver).

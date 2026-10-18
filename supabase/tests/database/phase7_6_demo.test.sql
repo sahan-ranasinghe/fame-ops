@@ -35,6 +35,10 @@ select throws_like($$ select public.seed_demo_driver('p6d.kamal', 7) $$, '%a liv
   'a driver with real tasks is never made the demo');
 select throws_ok($$ select public.seed_demo_driver('p6d.review', 0) $$, 'P0001', 'p_days: 1 to 60', 'the number of days is checked');
 select ok((public.seed_demo_driver('p6d.review', 3) ->> 'tasks_added')::int > 0, 'a fresh driver is made the demo, with tasks');
+select is((select count(*) from net.http_request_queue q where q.url like '%push-task%'), 0::bigint,
+  'seeding is quiet: no new-task push for the seeded tasks');
+select is((select count(*) from public.tasks where employee_id = '10000000-0000-0000-0000-0000000006d2' and accept_reminder_sent_at is null), 0::bigint,
+  'and no accept reminder burst at Start work');
 select is((select demo from public.employees where username = 'p6d.review'), true, 'the reviewer is marked demo');
 select is((select count(*) from public.vehicles where demo and reg_no = 'DEMO-0001'), 1::bigint, 'one demo vehicle');
 select is((select count(*) from public.tasks where employee_id = '10000000-0000-0000-0000-0000000006d2' and not demo), 0::bigint,
@@ -44,6 +48,9 @@ select ok((select bool_and(n = 2) from (select count(*) n from public.task_stops
 select ok((select min(start_at) from public.tasks where employee_id = '10000000-0000-0000-0000-0000000006d2') > now(),
   'none in the past');
 select is((public.seed_demo_driver('p6d.review', 3) ->> 'tasks_added')::int, 0, 'run again: nothing added twice');
+select is(public.top_up_demo_tasks(), 0, 'the nightly top-up adds nothing for days that have their tasks');
+select is((select count(*) from public.recent_places('Galle Face', now() - interval '1 day')), 0::bigint,
+  'the office''s "Used before" search leaves the demo''s stops out');
 select is((select demo from public.tasks where id = '30000000-0000-0000-0000-0000000006d1'), false, 'the live driver''s task stays real');
 
 -- 2. Never mixed ----------------------------------------------------------------------------------------------------------
@@ -62,6 +69,9 @@ select throws_ok($$ insert into public.vehicle_assignments (employee_id, vehicle
 -- 3. What the phones see and send --------------------------------------------------------------------------------------------
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000006d1","role":"authenticated"}';
+select lives_ok($$ update public.employees set current_vehicle_id = '20000000-0000-0000-0000-0000000006d1'
+                   where id = '10000000-0000-0000-0000-0000000006d1' $$,
+  'a real driver still takes a vehicle (the vehicles policy reads the demo flag without looping through employees)');
 select is((select count(*) from public.vehicles where reg_no = 'DEMO-0001'), 0::bigint, 'a real driver never sees the demo vehicle');
 select ok(not (public.my_vehicle_choices() @> '[{"reg_no": "DEMO-0001"}]'), 'nor is it offered to them');
 select ok(public.my_vehicle_choices() @> '[{"reg_no": "WP P6D-0001"}]', 'their own vehicles still are');

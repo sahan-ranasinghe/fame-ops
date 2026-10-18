@@ -3012,7 +3012,7 @@ is removed on 1.3.0). No other key changed.
 |---|---|---|
 | `disclosure.title` | Your location while you are on duty | රාජකාරියේ සිටින විට ඔබේ ස්ථානය |
 | `disclosure.body` | Fame Fleet collects location data to show the office where your vehicle is, to record your trips and the km of each task, and to mark when you reach each stop, while you are on duty (from Start work to Finish work), even when the app is closed or not in use. | Fame Fleet ඔබ රාජකාරියේ සිටින විට (වැඩ ආරම්භ කළ සිට වැඩ අවසන් කරන තුරු), යෙදුම වසා ඇති විට හෝ භාවිත නොකරන විට පවා, ඔබේ වාහනය ඇති තැන කාර්යාලයට පෙන්වීමට, ඔබේ ගමන් සහ එක් එක් කාර්යයේ කිලෝමීටර් සටහන් කිරීමට සහ ඔබ එක් එක් නැවතුමට පැමිණි වේලාව සටහන් කිරීමට ස්ථාන දත්ත එකතු කරයි. |
-| `disclosure.offDuty` | Off duty, nothing is recorded. | රාජකාරියෙන් පිටත කිසිවක් සටහන් නොවේ. |
+| `disclosure.offDuty` | Off duty, the app does not follow where you are. A photo you take keeps the place it was taken. | රාජකාරියෙන් පිටත යෙදුම ඔබ සිටින තැන අනුගමනය නොකරයි. ඔබ ගන්නා ඡායාරූපයක් එය ගත් ස්ථානය තබා ගනී. |
 | `disclosure.whoSees` | The Fame Global Solutions office sees it. The points are kept for 90 days. | Fame Global Solutions කාර්යාලයට එය පෙනේ. ස්ථාන සටහන් දින 90 ක් තබා ගනී. |
 | `disclosure.settings` | You can turn location off in the phone's settings at any time; then trips are not recorded. | ඔබට ඕනෑම වේලාවක දුරකථනයේ සැකසුම් තුළින් ස්ථානය අක්‍රිය කළ හැක; එවිට ගමන් සටහන් නොවේ. |
 | `disclosure.next` | Next, Android asks for your permission. | ඊළඟට Android ඔබේ අවසරය අසයි. |
