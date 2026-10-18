@@ -120,3 +120,17 @@ alter table public.office_prefs enable row level security;
 comment on table public.office_prefs is
   'An office person''s page preferences (the Overview''s collapsed sections, the menu''s): my_prefs / set_my_prefs. '
   'Service role only.';
+
+-- L2. A missed task is the dispatcher's too (as in 20261016090000_phase7_dispatch.sql, with missed_task).
+create or replace function public.issue_visible(p_kind text)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select (select public.office_can('issues'))
+      or (p_kind in ('signal', 'late_start', 'running_late', 'not_accepted', 'declined',
+                     'vehicle_conflict', 'arrival_override', 'completed_early', 'vehicle_needed', 'missed_task')
+          and (select public.office_can('assign_tasks')))
+$$;

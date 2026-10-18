@@ -8,7 +8,7 @@
 
 import type { Db, Row } from "./db.ts";
 import { notify, officePeople, recipientsFor } from "./notifications.ts";
-import { unwrap, unwrapMaybe } from "./db.ts";
+import { inChunks, unwrap, unwrapMaybe } from "./db.ts";
 import { DECLINE_TEXT } from "./decline.ts";
 import { taskEta } from "./eta.ts";
 import {
@@ -51,6 +51,7 @@ export const TASK_KINDS = new Set([
   "arrival_override",
   "completed_early",
   "vehicle_needed",
+  "missed_task",
 ]);
 
 /** Kinds whose own push already went to a wider group when they happened (Phase 7, §19): no second "critical issue" push. */
@@ -84,6 +85,7 @@ export const KIND_TEXT: Record<string, string> = {
   arrival_override: "Arrived away from the stop",
   completed_early: "Completed early",
   vehicle_needed: "Another vehicle needed",
+  missed_task: "Missed task",
   push_failed: "Push failed",
   routing_failed: "Routing failed",
 };
@@ -184,6 +186,11 @@ export const APP_STOPS_PER_DAY = 2;
 export const NO_FIX_MIN = 30;
 
 const ms = (days: number) => days * 86400000;
+/** Hotfix 3 (L2): a missed task keeps its issue this long (a person resolving it quiets it for 30 days). */
+const MISSED_KEEP_DAYS = 30;
+/** An issue about a task that is over (completed, cancelled, missed) expires this long after its leave-by. */
+const EXPIRE_AFTER_MS = 24 * 3600_000;
+const OVER = new Set(["completed", "cancelled", "missed"]);
 /** "1 h 15 min", or "?" when the number is missing. */
 const minText = (minutes: number | null | undefined) => (minutes == null ? "?" : duration(minutes));
 
@@ -265,7 +272,8 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         });
       }
       const used = km.get(v.id) ?? 0;
-      if (v.monthly_km_allowance != null && used > v.monthly_km_allowance) {
+      // Hotfix 3 (L2): no allowance set (null or 0) means no check.
+      if (v.monthly_km_allowance != null && v.monthly_km_allowance > 0 && used > v.monthly_km_allowance) {
         wanted.push({
           kind: "allowance",
           ref_key: `allowance:${v.id}:${today.slice(0, 7)}`,
@@ -491,6 +499,28 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         detail: [who(t), t.declined_note].filter(Boolean).join(" · "),
         due: `leave by ${colomboDayTime(leaveBy)} · needs a driver`,
         sort_key: soonLeave ? -3 : -2,
+        vehicle_id: t.vehicle_id,
+        employee_id: t.employee_id,
+        task_id: t.id,
+      });
+    }
+  }
+
+  // --- Hotfix 3 (L2): a task never started, its leave-by over a day ago, is missed: one issue until someone resolves it --
+  if (taskScope) {
+    let q = db.from("tasks").select("id, title, employee_id, vehicle_id, leave_by, start_at, missed_at").eq("status", "missed")
+      .gte("missed_at", new Date(now.getTime() - ms(MISSED_KEEP_DAYS)).toISOString());
+    if (scope.task_id) q = q.eq("id", scope.task_id);
+    for (const t of unwrap(await q, "missed tasks")) {
+      const leaveBy = t.leave_by ?? t.start_at;
+      wanted.push({
+        kind: "missed_task",
+        ref_key: `missed:${t.id}`,
+        severity: "warning",
+        title: "Missed task",
+        detail: [refs.emp.get(t.employee_id)?.name, t.title].filter(Boolean).join(" · "),
+        due: `was to leave ${colomboDayTime(leaveBy)}`,
+        sort_key: -1,
         vehicle_id: t.vehicle_id,
         employee_id: t.employee_id,
         task_id: t.id,
@@ -817,10 +847,15 @@ function scoped<Q extends { eq: (c: string, v: string) => Q; not: (c: string, op
 export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Promise<SyncResult> {
   const full = !scope.task_id && !scope.report_id && !scope.request_id && !scope.vehicle_id;
   if (full) unwrap(await db.from("job_runs").upsert({ job: SYNC_JOB, started_at: now.toISOString() }, { onConflict: "job" }), "job runs");
+  // Hotfix 3 (L2): tasks never started whose leave-by passed over a day ago become missed (no push), first.
+  if (full) {
+    const { error } = await db.rpc("mark_missed_tasks");
+    if (error) console.error(`mark_missed_tasks: ${error.message}`);
+  }
   const mutedSince = new Date(now.getTime() - ms(30)).toISOString();
-  const [wanted, activeRes, mutedRes] = await Promise.all([
+  const [wantedAll, activeRes, mutedRes] = await Promise.all([
     computeWanted(db, now, scope),
-    scoped(db.from("issues").select("id, ref_key, kind, status, severity, title, detail, due, sort_key").in("status", ACTIVE), scope),
+    scoped(db.from("issues").select("id, ref_key, kind, status, severity, title, detail, due, sort_key, task_id").in("status", ACTIVE), scope),
     scoped(
       db.from("issues").select("ref_key, severity, resolved_at").in("status", ["resolved", "dismissed"]).neq("resolved_by", "system").gte(
         "resolved_at",
@@ -829,7 +864,11 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
       scope,
     ),
   ]);
-  const active = unwrap(activeRes, "issues") as ActiveRow[];
+  const active = unwrap(activeRes, "issues") as (ActiveRow & { task_id: string | null })[];
+  // Hotfix 3 (L2): an issue about a task that is over and left over a day ago expires (resolved by the system, "Expired"),
+  // except the missed-task issue itself, which waits for a person.
+  const expired = await expiredTasks(db, [...active.map((r) => r.task_id), ...wantedAll.map((w) => w.task_id)], now);
+  const wanted = wantedAll.filter((w) => !(w.task_id && expired.has(w.task_id) && w.kind !== "missed_task"));
   const muted = new Map<string, Severity>();
   for (const r of unwrap(mutedRes, "issues")) if (!muted.has(r.ref_key)) muted.set(r.ref_key, r.severity as Severity);
 
@@ -885,13 +924,27 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
     updated += 1;
   }
   for (const row of plan.resolve) {
+    const taskId = (row as ActiveRow & { task_id?: string | null }).task_id;
+    const note = taskId && expired.has(taskId) && row.kind !== "missed_task" ? EXPIRED_NOTE : null;
     const done = unwrap(
-      await db.from("issues").update({ status: "resolved", resolved_at: nowIso, resolved_by: "system", updated_at: nowIso })
+      await db.from("issues").update({
+        status: "resolved",
+        resolved_at: nowIso,
+        resolved_by: "system",
+        updated_at: nowIso,
+        ...(note && { resolution_note: note }),
+      })
         .eq("id", row.id).in("status", ACTIVE).select("id"),
       "issues",
     );
     if (done.length === 0) continue;
-    await writeEvent(db, row.id, "auto_resolved", { actor: "system", from_status: row.status, to_status: "resolved", at: now });
+    await writeEvent(db, row.id, "auto_resolved", {
+      actor: "system",
+      from_status: row.status,
+      to_status: "resolved",
+      at: now,
+      ...(note && { note }),
+    });
     resolved += 1;
   }
   // A critical issue (opened so, or raised to it) tells the people with the issues permission.
@@ -914,6 +967,23 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
     );
   }
   return result;
+}
+
+/** The note on an issue that expired with its task. */
+export const EXPIRED_NOTE = "Expired: the task is over and its leave-by passed over 24 hours ago";
+
+/** The tasks among these that are over (completed, cancelled, missed) and left over a day ago. */
+async function expiredTasks(db: Db, ids: (string | null | undefined)[], now: Date): Promise<Set<string>> {
+  const unique = [...new Set(ids.filter((x): x is string => !!x))];
+  const out = new Set<string>();
+  if (unique.length === 0) return out;
+  const rows = (await Promise.all(
+    inChunks(unique).map(async (chunk) => unwrap(await db.from("tasks").select("id, status, leave_by, start_at").in("id", chunk), "tasks")),
+  )).flat();
+  for (const t of rows) {
+    if (OVER.has(t.status) && Date.parse(t.leave_by ?? t.start_at) < now.getTime() - EXPIRE_AFTER_MS) out.add(t.id);
+  }
+  return out;
 }
 
 /**

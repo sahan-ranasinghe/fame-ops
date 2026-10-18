@@ -12,8 +12,9 @@ import { ACTIVE, type IssueRow, type IssueStatus, KIND_TEXT, scopeOf, syncIssues
 import { notifyEvent } from "../notifications.ts";
 import { PHOTO_LINK_NOTE, photoLinks } from "../photos.ts";
 import type { Actor } from "../roles.ts";
-import { colomboDateTime, colomboDayTime } from "../time.ts";
-import { daySpan, tool, zDate, zId, zText } from "../tool.ts";
+import { addDays, colomboDate, colomboDateTime, colomboDayTime, utcIso } from "../time.ts";
+import { daySpan, tool, zDate, zId, zPaging, zSearch, zText } from "../tool.ts";
+import { pageInfo, pageWindow } from "../paging.ts";
 
 const STATUS = z.enum(["open", "in_progress", "resolved", "dismissed"]);
 const KINDS = Object.keys(KIND_TEXT) as [string, ...string[]];
@@ -31,11 +32,20 @@ interface WhoDid {
   takenAt?: string;
 }
 
-function issueCard(i: IssueRow, refs: Refs, who?: WhoDid) {
+/** Hotfix 3 (L2): when a snooze ends: 07:00 Colombo tomorrow, or a week from now. */
+export function snoozeEnd(word: "tomorrow" | "week", now: Date): string {
+  return word === "tomorrow" ? utcIso(addDays(colomboDate(now), 1), "07:00") : new Date(now.getTime() + 7 * 86400_000).toISOString();
+}
+
+function issueCard(i: IssueRow, refs: Refs, who?: WhoDid, now = new Date()) {
   const driver = i.employee_id ? refs.emp.get(i.employee_id) : undefined;
   const assignee = i.assigned_to ? refs.emp.get(i.assigned_to) : undefined;
+  const snoozed = i.snoozed_until && Date.parse(i.snoozed_until) > now.getTime();
   return {
     id: i.id,
+    // Hotfix 3 (L2): snoozed until then, by whom (only while it lasts).
+    snoozed_until: snoozed ? colomboDateTime(i.snoozed_until!) : undefined,
+    snoozed_by: snoozed ? i.snoozed_by ?? undefined : undefined,
     kind: i.kind,
     kind_text: KIND_TEXT[i.kind] ?? i.kind,
     scope: scopeOf(i.kind),
@@ -99,16 +109,34 @@ export const listIssues = tool({
     kind: z.enum(KINDS).optional(),
     vehicle: zText(20).optional().describe("A number plate"),
     assigned_to: zText(120).optional().describe('An office e-mail, or "me"'),
-    limit: z.number().int().min(1).max(200).optional().describe("Default 50"),
+    limit: z.number().int().min(1).max(500).optional().describe("Default 50 (the answer has total and next)"),
+    cursor: zPaging.cursor,
+    // Hotfix 3 (L2, L3).
+    severity: z.enum(["critical", "warning", "info"]).optional(),
+    snoozed: z.boolean().optional().describe("true = only the snoozed ones; false = leave them out; default both"),
+    search: zSearch,
     from: zDate.optional().describe("Opened on or after this Colombo day, YYYY-MM-DD (with to)"),
     to: zDate.optional().describe("Opened on or before this day"),
     sort: z.enum(["urgent", "newest"]).optional().describe("urgent (the default: most urgent, then newest) or newest first"),
   }),
-  async run({ status = "active", kind, vehicle, assigned_to, limit = 50, from, to, sort = "urgent" }, { db, actor }) {
+  async run({ status = "active", kind, vehicle, assigned_to, limit = 50, cursor, from, to, sort = "urgent", severity, snoozed, search }, {
+    db,
+    actor,
+    now,
+  }) {
     const kinds = kindsFor(actor);
     const span = daySpan(from, to);
     const refs = await loadRefs(db);
-    let q = db.from("issues").select("*");
+    const w = pageWindow(limit, cursor);
+    const nowIso = now.toISOString();
+    let q = db.from("issues").select("*", { count: "exact" });
+    if (severity) q = q.eq("severity", severity);
+    if (snoozed === true) q = q.gt("snoozed_until", nowIso);
+    if (snoozed === false) q = q.or(`snoozed_until.is.null,snoozed_until.lte.${nowIso}`);
+    if (search) {
+      const words = search.replace(/[%_,()*]/g, " ").trim();
+      if (words) q = q.or(`title.ilike.*${words}*,detail.ilike.*${words}*`);
+    }
     if (span) q = q.gte("opened_at", span.start).lt("opened_at", span.end);
     if (status === "active") q = q.in("status", ACTIVE);
     else if (status !== "all") q = q.eq("status", status);
@@ -120,11 +148,12 @@ export const listIssues = tool({
       q = q.eq("assigned_to", id);
     }
     if (kinds !== "all") q = q.in("kind", kinds);
-    const rows = unwrap(
-      await (sort === "newest" ? q.order("opened_at", { ascending: false }) : q.order("sort_key").order("opened_at", { ascending: false }))
-        .order("id").limit(limit),
-      "issues",
-    );
+    const res = await (sort === "newest"
+      ? q.order("opened_at", { ascending: false })
+      : q.order("sort_key").order("opened_at", { ascending: false }))
+      .order("id").range(w.offset, w.offset + (w.limit ?? 50) - 1);
+    const rows = unwrap(res, "issues");
+    const total = res.count ?? rows.length;
     // Who opened and who took each listed issue (one query for all).
     const events = rows.length
       ? unwrap(
@@ -145,20 +174,24 @@ export const listIssues = tool({
         takenAt: taken ? colomboDateTime(taken.at) : undefined,
       };
     };
-    // The counts of everything active the person may see, whatever the filters (the bell).
-    let countQ = db.from("issues").select("status").in("status", ACTIVE);
+    // The counts of everything active the person may see, whatever the filters (the bell); a snoozed one is not counted.
+    let countQ = db.from("issues").select("status, snoozed_until").in("status", ACTIVE);
     if (kinds !== "all") countQ = countQ.in("kind", kinds);
-    const counts = unwrap(await countQ, "issues");
+    const all = unwrap(await countQ, "issues");
+    const isSnoozed = (r: { snoozed_until: string | null }) => !!r.snoozed_until && Date.parse(r.snoozed_until) > now.getTime();
+    const counts = all.filter((r) => !isSnoozed(r));
     return {
       result: {
         status,
         count: rows.length,
         open: counts.filter((r) => r.status === "open").length,
         in_progress: counts.filter((r) => r.status === "in_progress").length,
+        snoozed: all.filter(isSnoozed).length,
+        ...pageInfo(w, rows.length, total),
         from: span?.from,
         to: span?.to,
         sort,
-        issues: rows.map((i) => issueCard(i, refs, whoOf(i.id))),
+        issues: rows.map((i) => issueCard(i, refs, whoOf(i.id), now)),
       },
       summary: `${rows.length} issues (${status}); ${counts.length} active`,
     };
@@ -184,9 +217,13 @@ export const updateIssue = tool({
     status: STATUS.optional(),
     note: zText(500).optional(),
     assign_to: zText(120).optional().describe('An office e-mail, "me" or "none"'),
+    // Hotfix 3 (L2): out of the Overview and the counts until 07:00 tomorrow or for a week; null wakes it now.
+    snooze: z.enum(["tomorrow", "week"]).nullable().optional(),
   }),
-  async run({ id, status, note, assign_to }, { db, actor, now }) {
-    if (!status && !note && !assign_to) throw new ToolError("Nothing to change: give a status, a note or assign_to.");
+  async run({ id, status, note, assign_to, snooze }, { db, actor, now }) {
+    if (!status && !note && !assign_to && snooze === undefined) {
+      throw new ToolError("Nothing to change: give a status, a note, assign_to or snooze.");
+    }
     const issue = await getIssue(db, id, actor);
     const nowIso = now.toISOString();
     const actorFields = { actor: actor.name, actor_employee_id: actor.employeeId ?? null, at: now };
@@ -212,6 +249,16 @@ export const updateIssue = tool({
           tag: `issue:${id}`,
         }, { actor: actor.employeeId, assignee: assignee.id });
       }
+    }
+    if (snooze !== undefined) {
+      const until = snooze ? snoozeEnd(snooze, now) : null;
+      unwrap(
+        await db.from("issues").update({ snoozed_until: until, snoozed_by: until ? actor.name : null, updated_at: nowIso }).eq("id", id),
+        "issue",
+      );
+      const text = until ? `Snoozed until ${colomboDayTime(until)}` : "Snooze ended";
+      await writeEvent(db, id, "note", { ...actorFields, note: text });
+      events.push(text.toLowerCase());
     }
     if (note && !status) {
       await writeEvent(db, id, "note", { ...actorFields, note });
@@ -256,7 +303,7 @@ export const updateIssue = tool({
       loadRefs(db),
     ]);
     return {
-      result: { issue: issueCard(updated ?? issue, refs), changed: events },
+      result: { issue: issueCard(updated ?? issue, refs, undefined, now), changed: events },
       summary: `issue ${id} (${issue.kind}): ${events.join(", ")}`,
     };
   },

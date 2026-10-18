@@ -6,7 +6,8 @@ import { z } from "zod";
 import { unwrap } from "../db.ts";
 import { loadLatest, loadRefs, nearestTown, sharing, statusOf } from "../fleet.ts";
 import { contactLinks, mapsPoint } from "../format.ts";
-import { ACTIVE, scopeOf, syncIssuesIfStale } from "../issues.ts";
+import { ACTIVE, KIND_TEXT, scopeOf, syncIssuesIfStale } from "../issues.ts";
+import { attentionGroups, criticalItems } from "../attention.ts";
 import { colomboDate, colomboDateTime, dayRange, minutesSince } from "../time.ts";
 import { duration } from "../durations.ts";
 import { realDate, tool, zDate } from "../tool.ts";
@@ -73,8 +74,10 @@ export const fleetOverview = tool({
 
     // --- Needs attention: the active issues, brought in line with the data first (unless a sync is under a minute old) ---
     await syncIssuesIfStale(db, now);
+    // Hotfix 3 (L2): a snoozed issue is left out until its snooze ends.
     const issues = unwrap(
       await db.from("issues").select("id, kind, severity, title, detail, due, sort_key, vehicle_id").in("status", ACTIVE)
+        .or(`snoozed_until.is.null,snoozed_until.lte.${now.toISOString()}`)
         .order("sort_key").order("opened_at"),
       "issues",
     );
@@ -97,6 +100,11 @@ export const fleetOverview = tool({
       ? attention.filter((a) => a.scope === "task")
       : [];
 
+    const sections = {
+      requests: actor.permissions.includes("approve"),
+      needsDriver: hasAny(actor.permissions, ["approve", "assign_tasks"]),
+      critical: actor.permissions.includes("approve"),
+    };
     const onRoadVehicles = new Set(running.map((t) => t.vehicle_id)).size;
     const count = (status: string) => tasks.filter((t) => t.status === status).length;
     const result = {
@@ -119,6 +127,9 @@ export const fleetOverview = tool({
       reminders: { count: shown.length, window_days: REMINDER_DAYS, red: shown.filter((a) => a.level === "red").length },
       on_the_road: onTheRoad,
       needs_attention: shown.map(({ scope: _scope, ...item }) => item),
+      // Hotfix 3 (L1, L2): the page's sections: Needs attention grouped with no repeats, and the critical issues.
+      attention: attentionGroups(shown, sections, KIND_TEXT),
+      critical: sections.critical ? criticalItems(shown, sections) : undefined,
     };
     // Phase 7 (§19): the tasks that need a driver, for the people who can give them one (the red block at the top).
     const needsDriver = hasAny(actor.permissions, ["approve", "assign_tasks"]) ? await needsDriverList(db, refs, now) : [];
