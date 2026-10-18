@@ -30,7 +30,7 @@ describe("the desktop menu in sections (Hotfix 3, L5)", () => {
     expect(new Set(inSections).size).toBe(inSections.length);
     const admin = menuFor(me(PRESETS.fleet_admin.permissions));
     expect(admin.map((s) => [s.key, keys(s.items)])).toEqual([
-      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues"]],
+      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board"]],
       ["fleet", ["vehicles", "drivers", "places", "maintenance"]],
       ["reports", ["mileage", "fuel", "duty"]],
       ["admin", ["projects", "settings"]],
@@ -43,12 +43,21 @@ describe("the desktop menu in sections (Hotfix 3, L5)", () => {
       ["admin", ["projects", "settings"]],
     ]);
     expect(menuFor(me(PRESETS.dispatcher.permissions)).map((s) => [s.key, keys(s.items)])).toEqual([
-      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues"]],
+      ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board"]],
       ["fleet", ["vehicles", "drivers"]],
       ["reports", ["duty"]],
       ["admin", ["projects", "settings"]],
     ]);
     expect(menuFor(me(["request"])).map((s) => [s.key, keys(s.items)])).toEqual([["today", ["requests", "my_trips"]], ["admin", ["projects", "settings"]]]);
+  });
+  it("Part 3b (H5): the Drivers board in Today for approve or assign_tasks, never a phone tab", () => {
+    const board = NAV.find((n) => n.key === "drivers_board");
+    expect(board).toEqual({ key: "drivers_board", label: "Drivers board", need: ["approve", "assign_tasks"], path: "/drivers/board" });
+    expect(keys(allowed(NAV, me(["view", "request", "approve"])))).toContain("drivers_board");
+    expect(keys(allowed(NAV, me(["view", "assign_tasks"])))).toContain("drivers_board");
+    expect(keys(allowed(NAV, me(PRESETS.viewer.permissions)))).not.toContain("drivers_board");
+    expect(keys(allowed(NAV, me(PRESETS.requester.permissions)))).not.toContain("drivers_board");
+    for (const preset of Object.values(PRESETS)) expect(keys(tabsFor(me(preset.permissions)))).not.toContain("drivers_board");
   });
 });
 
@@ -84,8 +93,8 @@ describe("the phone tab bar: Home, the four most used for the role, More", () =>
       expect(bar[bar.length - 1]).toBe("more");
     }
     // In the menu's order; Task history sits where Tasks is. An approver finds My trips under More.
-    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["task_history", "my_trips", "issues", "vehicles", "drivers", "places", "maintenance", "mileage", "fuel", "duty", "projects", "settings"]);
-    expect(keys(moreFor(me(PRESETS.dispatcher.permissions)))).toEqual(["task_history", "requests", "my_trips", "vehicles", "drivers", "duty", "projects", "settings"]);
+    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["task_history", "my_trips", "issues", "drivers_board", "vehicles", "drivers", "places", "maintenance", "mileage", "fuel", "duty", "projects", "settings"]);
+    expect(keys(moreFor(me(PRESETS.dispatcher.permissions)))).toEqual(["task_history", "requests", "my_trips", "drivers_board", "vehicles", "drivers", "duty", "projects", "settings"]);
     expect(moreFor(me(PRESETS.dispatcher.permissions)).find((n) => n.key === "task_history")).toEqual({ key: "task_history", label: "Task history", need: ["assign_tasks"], path: "/tasks/history" });
     // Not in the rail: the desktop opens it from the Tasks page.
     expect(keys(NAV)).not.toContain("task_history");

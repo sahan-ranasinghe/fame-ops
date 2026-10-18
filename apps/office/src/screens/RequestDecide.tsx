@@ -314,7 +314,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             </div>
             <p className="hint" style={{ margin: 0 }}>Now {q.when}{q.back_by ? ` · back by ${q.back_by}` : ""}. A new time alone postpones the booking.</p>
           </div>
-          <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
+          <AvailabilityPanel args={availArgs} askFor={{ request: id }} picked={f.driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
           <div className="confirm" style={{ borderColor: "var(--line)" }}>
             <div className="field">
               <label htmlFor="rq-reason">Decline with a reason</label>
@@ -383,7 +383,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             </>
           )}
         </div>
-        {!custodianDrives && <AvailabilityPanel args={availArgs} picked={driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />}
+        {!custodianDrives && <AvailabilityPanel args={availArgs} askFor={{ request: id }} picked={driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />}
         <div className="card card-b form" data-testid="decide-stops">
           <div className="section-t" style={{ marginBottom: 2 }}>Stops</div>
           <p className="muted small" style={{ margin: 0 }}>Start from {base ? base.name : "the base place"} (the base place). Passengers get in at Stop 1.</p>

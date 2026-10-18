@@ -54,7 +54,7 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   await tabs(page).filter({ hasText: "More" }).click();
   const more = page.getByTestId("more-list");
   // Hotfix 3 (L5): in the menu's section order: Today, Fleet, Reports, Admin.
-  await expect(more.getByRole("link")).toHaveText(["Task history", "My trips", /^Issues\d*$/, "Vehicles", "Drivers", "Places", "Maintenance", "Mileage", "Fuel", "Duty log", "Projects", "Settings"]);
+  await expect(more.getByRole("link")).toHaveText(["Task history", "My trips", /^Issues\d*$/, "Drivers board", "Vehicles", "Drivers", "Places", "Maintenance", "Mileage", "Fuel", "Duty log", "Projects", "Settings"]);
 
   // The big action opens its page; Assign a task is a page of its own, its stops rows numbered within their type.
   await tabs(page).filter({ hasText: "Home" }).click();

@@ -249,7 +249,7 @@ export function TaskEdit() {
           </form>
         )}
         {canChange && !running && (
-          <AvailabilityPanel args={availArgs} picked={pickedDriver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }}
+          <AvailabilityPanel args={availArgs} askFor={{ task: id }} picked={pickedDriver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }}
             onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
         )}
         {p.suggestions && canChange && (

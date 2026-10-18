@@ -743,3 +743,99 @@ a.bell-btn { text-decoration: none }
   .ask-trip > :first-child { grid-column: 1 / -1 }
   .ask-row .acts { flex: 1 1 100% }
 }
+
+/* Part 3b W1 */
+/* The one driver row (ui/DriverRow): the tick box, the main part (a toggle button where a page picks a driver), the
+   right-hand slot and Call / WhatsApp under it, never inside the button. Hover and picked from the theme's tokens. */
+.drow { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 4px; min-width: 0 }
+.drow-tick { flex: none; display: flex; align-items: center; padding: 22px 0 0 10px }
+.drow-main { flex: 1 1 260px; min-width: 0; display: flex; align-items: flex-start; gap: 12px; padding: 10px; border: 0; background: none; font: inherit; color: var(--ink); text-align: left; border-radius: 10px }
+button.drow-main { cursor: pointer }
+button.drow-main:hover { background: var(--surface-2) }
+.drow-main.picked, button.drow-main.picked:hover { background: var(--live-bg); box-shadow: inset 4px 0 0 var(--live) }
+.drow-main.picked .pill.live { box-shadow: inset 0 0 0 1px var(--live) }
+button.drow-main:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px }
+.drow-main > .avatar { margin-top: 2px }
+.drow-main > .pill { flex: none; align-self: center }
+.drow-rank { flex: none; min-width: 20px; font-weight: 700; padding-top: 6px }
+.drow-text { display: grid; gap: 2px; flex: 1 1 0 }
+.drow-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px }
+.drow-status .pill { padding: 1px 9px; font-size: 12px; line-height: 1.5 }
+.drow-status .status { font-size: 13px }
+.drow-line { display: block }
+.drow-right { flex: none; align-self: center; display: flex; gap: 8px; padding: 0 10px }
+.drow-contact { flex: 1 1 100%; padding: 0 10px 10px 66px }
+.drow.has-tick .drow-contact { padding-left: 100px }
+.avail-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px }
+.avail-h .btn .muted, .ph-actions .btn .muted { font-weight: 500 }
+
+/* The Drivers board (/drivers/board): the view and the search, the filter chips, the rows, the week. */
+.board-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px }
+.board-tools .list-search { flex: 1 1 260px; max-width: 460px }
+.board-filters { margin-bottom: 16px }
+.board-rows .drow + .drow { border-top: 1px solid var(--line) }
+.week-h { flex-wrap: wrap }
+.week-nav { display: flex; align-items: center; gap: 10px }
+.week-nav h2 { min-width: 0 }
+.wk-wrap { overflow-x: auto }
+.wk { min-width: 860px; table-layout: fixed }
+.wk th, .wk td { padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top }
+.wk thead th { white-space: nowrap; text-transform: none; letter-spacing: 0; font-size: 13px }
+.wk thead th:first-child { width: 180px }
+.wk tbody th { text-align: left; font-weight: 600; font-size: 14px }
+.wk-who { display: flex; align-items: center; gap: 8px; min-width: 0 }
+.wk-who > span:last-child { overflow-wrap: anywhere }
+.wk .wk-today { background: var(--live-bg) }
+.wk thead .wk-today { color: var(--live) }
+.wk .wk-past { background: var(--surface-2) }
+.wk-cell { display: grid; gap: 4px; align-content: start; min-height: 36px }
+.wk-task { display: block; font-size: 12px; line-height: 1.35; color: var(--ink); text-decoration: none; padding: 3px 6px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); overflow-wrap: anywhere }
+a.wk-task:hover { border-color: var(--ink) }
+.wk-task.in_progress { border-color: var(--live); color: var(--live) }
+.wk-task.completed { color: var(--muted) }
+.wk-off { display: block; width: 100%; text-align: left; font: inherit; font-size: 12px; font-weight: 600; line-height: 1.35; padding: 3px 6px; border-radius: 6px; border: 1px solid transparent; background: var(--warn-bg); color: var(--warn) }
+button.wk-off { cursor: pointer }
+button.wk-off:hover { border-color: var(--warn) }
+.wk-add { justify-self: start; width: 28px; height: 28px; border-radius: 8px; border: 1px dashed var(--line-strong); background: transparent; color: var(--muted); font: 700 16px/1 var(--font-body); cursor: pointer }
+.wk-add:hover { border-color: var(--ink); color: var(--ink) }
+.wk-phone { display: grid; gap: 12px }
+.wk-days { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px }
+.wk-day { display: grid; gap: 6px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px }
+.wk-day.wk-today { border-color: var(--live); background: var(--live-bg) }
+.wk-day.wk-past { background: var(--surface-2) }
+.wk-day .wk-add { width: 44px; height: 40px }
+
+/* The not-available editor (in the page, no dialog). */
+.unav-editor { border-color: var(--line-strong) }
+.unav-editor-h { display: grid; gap: 2px }
+.unav-editor-h h3 { font: 700 17px/1.25 var(--font-body) }
+
+/* The driver's profile on the manage page. */
+.pf-h { display: flex; align-items: center; justify-content: space-between; gap: 12px }
+.pf-facts { margin: 0 }
+.pf-photos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px }
+.pf-photo { margin: 0; display: grid; gap: 6px }
+.pf-photo img { display: block; width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-2) }
+.pf-photo-none { display: grid; place-items: center; aspect-ratio: 3 / 2; border-radius: 10px; border: 1px dashed var(--line-strong); padding: 8px; text-align: center }
+.pf-photo figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap }
+.pf-changes, .pf-off { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px }
+.pf-changes li { font-size: 14px; border-top: 1px solid var(--line); padding-top: 8px }
+.pf-changes li:first-child { border-top: 0; padding-top: 0 }
+.pf-by-driver { color: var(--warn) }
+.pf-off-row { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap }
+
+@media (max-width: 768px) {
+  /* Compact rows: a smaller gap, Call under the text from the left edge; the board's rows as cards. */
+  .drow-main { gap: 10px; padding: 10px 8px }
+  .drow-tick { padding: 20px 0 0 8px }
+  .drow-contact, .drow.has-tick .drow-contact { padding: 0 8px 10px }
+  .drow-right { flex: 1 1 100%; padding: 0 8px 8px }
+  .board-tools .list-search { max-width: none }
+  .board-rows { display: grid; gap: 10px; padding: 10px }
+  .board-rows .drow { border: 1px solid var(--line); border-radius: 12px; background: var(--surface) }
+  .board-rows .drow + .drow { border-top: 1px solid var(--line) }
+  .rows.board-rows > * + * { border-top: 1px solid var(--line) }
+  .pf-photos { grid-template-columns: minmax(0, 1fr) }
+  .wk-day .wk-off { padding: 8px 10px; font-size: 14px }
+  .wk-day .wk-task { padding: 6px 8px; font-size: 14px }
+}

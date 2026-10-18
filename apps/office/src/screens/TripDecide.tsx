@@ -214,7 +214,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
             hint={driver && !def && knownVehicle === null && !onDay ? "This driver holds no vehicle today and has no regular one: pick one." : undefined} />
         </div>
         {!custodianDrives && (
-          <AvailabilityPanel args={availArgs} picked={driver} onPick={(d) => { if (d.username) takeDriver(d.username); }} onUse={(b) => { if (b.username) takeDriver(b.username); }} />
+          <AvailabilityPanel args={availArgs} askFor={{ request: id }} picked={driver} onPick={(d) => { if (d.username) takeDriver(d.username); }} onUse={(b) => { if (b.username) takeDriver(b.username); }} />
         )}
         <div className="card card-b form" data-testid="decide-times">
           <div className="section-t" style={{ marginBottom: 2 }}>Day and times</div>

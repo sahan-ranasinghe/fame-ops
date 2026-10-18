@@ -130,3 +130,24 @@ export function steadyAvailability(prev: Availability, next: Availability): Avai
   const best = held ? { ...held, vehicle: row?.vehicle, why: row?.match_why ?? held.why } : next.best;
   return { ...next, drivers, best };
 }
+
+/**
+ * Part 3b (H2): the window's line under a driver row. The row's chip already says the status now; when the window's
+ * status is the same words ("On duty since 07:12" now and then) it is said once, by the chip.
+ */
+export function windowLine(d: AvailableDriver): string {
+  if (!d.now_status || d.now_status.text !== d.status_text) return driverLine(d);
+  return driverLine({ ...d, status_text: "" });
+}
+
+/**
+ * Part 3b (H3): the trip window Who's available asks about, for the Ask drivers link: the day and the time from the
+ * availability arguments ({at: "YYYY-MM-DD HH:MM", until?: "HH:MM"}), else the answer's day.
+ */
+export function askWindow(args: Record<string, unknown> | null, day?: string): { date?: string; from?: string; to?: string } {
+  const at = typeof args?.at === "string" ? args.at : "";
+  const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/.exec(at);
+  const until = typeof args?.until === "string" && /^\d{2}:\d{2}$/.test(args.until) ? args.until : undefined;
+  if (!m) return day ? { date: day } : {};
+  return { date: m[1], from: m[2], to: until };
+}
