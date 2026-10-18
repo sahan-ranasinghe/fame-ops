@@ -13,7 +13,8 @@
     "discardTitle": "Discard changes?",
     "discardBody": "What you entered on this screen will be lost.",
     "discard": "Discard",
-    "close": "Close"
+    "close": "Close",
+    "badTime": "Enter the time as HH:MM, e.g. 14:30."
   },
   "days": [
     "Sun",
@@ -767,7 +768,10 @@
     "change": "Change answer",
     "expired": "This question has closed.",
     "locationFailed": "Couldn't get your location: {reason}",
-    "failed": "Couldn't send: {reason}"
+    "failed": "Couldn't send: {reason}",
+    "otherTime": "Another time",
+    "noFix": "no GPS signal yet. Try again in the open.",
+    "noConnection": "No connection: the question shows when you are online."
   },
   "late": {
     "button": "Running late",
@@ -779,6 +783,8 @@
     "sent": "The office knows: {n} min late",
     "queued": "Will be sent when you are online",
     "lastSaid": "You said {n} min late at {time}",
-    "bad": "Enter minutes between 5 and 180."
+    "bad": "Enter minutes between 5 and 180.",
+    "closed": "This task is over: nothing was sent.",
+    "failed": "Couldn't send: {reason}"
   }
 }

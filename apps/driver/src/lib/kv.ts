@@ -89,6 +89,14 @@ export const KEYS = {
   taskSeen: 'cache.taskSeen',
   /** Hotfix 2 (I): what each task's newest "Task changed" push named ({taskId: PushChanges}), until the driver opens it. */
   pushChanges: 'cache.pushChanges',
+  /** Part 3b (H3): the office's questions to this driver as last read, with the answers given on the phone (AskRow[]). */
+  asks: 'cache.asks',
+  /** Part 3b (G): the licence photos kept on the phone ({front?, back?}: {photoId, uri}), so Me shows them at once and offline. */
+  licencePhotos: 'me.licencePhotos',
+  /** Part 3b (G): Me's "This month" as last read ({month: "2026-10", tasks, km}). */
+  monthTotals: 'me.monthTotals',
+  /** Part 3b (H1): my availability entries as last read (UnavailabilityRow[]): Me → Availability shows them offline. */
+  availability: 'cache.availability',
   /** When the refused points were last put back in line (ms), and for which app update. */
   rejectedRetryAt: 'sync.rejectedRetryAt',
   rejectedRetryUpdate: 'sync.rejectedRetryUpdate',

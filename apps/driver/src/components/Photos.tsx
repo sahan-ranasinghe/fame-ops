@@ -6,13 +6,13 @@
 import { useEffect, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 
-import { User, Van } from '@/components/icons';
+import { IdCard, User, Van } from '@/components/icons';
 import { BUCKETS, fetchPhotoPath } from '@/lib/api';
 import { getJson, KEYS } from '@/lib/kv';
 import { fileExists } from '@/lib/photos';
 import { signedUrl, useSignedUrls } from '@/lib/signedUrls';
 import { supabase } from '@/lib/supabase';
-import { type KeptProfilePhoto, useApp } from '@/state/app';
+import { type KeptLicencePhotos, type KeptProfilePhoto, useApp } from '@/state/app';
 import { colors } from '@/theme';
 
 /** A square picture with rounded corners, or the placeholder icon when there is none. */
@@ -20,11 +20,11 @@ export function Thumb({ uri, size = 56, round = false, kind = 'vehicle' }: {
   uri: string | null | undefined;
   size?: number;
   round?: boolean;
-  kind?: 'vehicle' | 'person';
+  kind?: 'vehicle' | 'person' | 'card';
 }) {
   const box = { width: size, height: size, borderRadius: round ? size / 2 : 10 };
   if (uri) return <Image source={{ uri }} style={[styles.thumb, box]} resizeMode="cover" accessibilityIgnoresInvertColors />;
-  const Icon = kind === 'person' ? User : Van;
+  const Icon = kind === 'person' ? User : kind === 'card' ? IdCard : Van;
   return (
     <View style={[styles.thumb, styles.empty, box]}>
       <Icon size={Math.round(size * 0.45)} color={colors.muted} />
@@ -58,8 +58,21 @@ export function useNeedsVehiclePhoto(): (vehicleId: string) => boolean {
 /** The driver's own photo: the copy kept on the phone when it is the current one, else a link to the server's. */
 export function useMyPhoto(): string | null {
   const { me } = useApp();
-  const photoId = me?.photo_id ?? null;
-  const kept = getJson<KeptProfilePhoto>(KEYS.profilePhoto);
+  return useOwnPhoto(me?.photo_id ?? null, getJson<KeptProfilePhoto>(KEYS.profilePhoto));
+}
+
+/** Part 3b (G): the licence's front and back on Me, the same way (the copy kept on the phone, else a link). */
+export function useLicencePhotos(): { front: string | null; back: string | null } {
+  const { me } = useApp();
+  const kept = getJson<KeptLicencePhotos>(KEYS.licencePhotos);
+  return {
+    front: useOwnPhoto(me?.licence_front_photo_id ?? null, kept?.front),
+    back: useOwnPhoto(me?.licence_back_photo_id ?? null, kept?.back),
+  };
+}
+
+/** One of the driver's own photos in driver-photos: the copy kept on the phone when it is that photo, else a 1-hour link. */
+function useOwnPhoto(photoId: string | null, kept: KeptProfilePhoto | null | undefined): string | null {
   const local = kept && photoId && kept.photoId === photoId && fileExists(kept.uri) ? kept.uri : null;
   const [remote, setRemote] = useState<{ id: string; url: string } | null>(null);
   useEffect(() => {

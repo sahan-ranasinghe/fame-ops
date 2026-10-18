@@ -32,3 +32,8 @@ export { default as Square } from 'lucide-react-native/icons/square';
 export { default as Check } from 'lucide-react-native/icons/check';
 export { default as FileText } from 'lucide-react-native/icons/file-text';
 export { default as Images } from 'lucide-react-native/icons/images';
+export { default as CalendarX } from 'lucide-react-native/icons/calendar-x';
+export { default as Clock } from 'lucide-react-native/icons/clock';
+export { default as IdCard } from 'lucide-react-native/icons/id-card';
+export { default as LocateFixed } from 'lucide-react-native/icons/locate-fixed';
+export { default as Pencil } from 'lucide-react-native/icons/pencil';

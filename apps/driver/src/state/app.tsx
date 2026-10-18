@@ -38,6 +38,8 @@ import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
 import { type LocalPhoto, type LocalProfilePhoto, prepareOdometerReader, queuePhoto, removeFile } from '@/lib/photos';
 import { profilePhotoPath } from '@/lib/photoRules';
+import { type AskAnswerInput, askAnswerOp, type AskRow, mergeAsk, withAnswer } from '@/lib/asks';
+import { licencePhotoPath, type LicenceSide, type ProfilePatch } from '@/lib/profile';
 import { queueVideoUpload, type RecordedVideo, videoSegmentRows, videoStoragePath } from '@/lib/video';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
@@ -64,7 +66,20 @@ import {
 } from '@/lib/trips';
 import type { Employee, Language, ReportCategory, TaskStop, TaskWithStops, Vehicle, VehicleReport } from '@/lib/types';
 import { applyDownloadedUpdate, checkForUpdate, forgetDownloadedUpdate, runningUpdateId, type UpdateOutcome } from '@/lib/updates';
-import { enqueue, flushNow, maybeRetryRejected, onAnswer, onOpRefused, onQueueChange, onTripSent, onVehiclePhotoAnswer, uploadPhotoFile } from '@/sync';
+import {
+  enqueue,
+  flushNow,
+  maybeRetryRejected,
+  onAnswer,
+  onAskSent,
+  onLateSent,
+  onOpRefused,
+  onQueueChange,
+  onTripSent,
+  onVehiclePhotoAnswer,
+  uploadPhotoFile,
+  waitingAskAnswers,
+} from '@/sync';
 import type { VehiclePhotoOp } from '@/sync/engine';
 import { clearQueue, opsBeforeTrip, pendingVehiclePhotos, queueCounts, type QueueCounts, retryFailed, tasksWaiting } from '@/sync/store';
 
@@ -89,6 +104,16 @@ export interface KeptProfilePhoto {
   photoId: string;
   uri: string;
 }
+/** Part 3b (G): the licence photos kept on the phone (KEYS.licencePhotos), each as the profile photo is. */
+export type KeptLicencePhotos = Partial<Record<LicenceSide, KeptProfilePhoto>>;
+/**
+ * Part 3b (H3, H4): an answer or a "Running late" went to the server now ('sent'), waits in the queue ('queued': no
+ * connection, or no answer in time), the question had closed ('expired'), the task is over ('closed'), or the server
+ * refused it ('failed', with the words).
+ */
+export type SendOutcome = { kind: 'sent' } | { kind: 'queued' } | { kind: 'expired' } | { kind: 'closed' } | { kind: 'failed'; message: string };
+/** Part 3b (G): the profile was saved, or why not (online only). */
+export type ProfileSaveOutcome = { kind: 'ok' } | { kind: 'network' } | { kind: 'refused'; message: string };
 
 /** The "Turn on Location" cover (components/LocationGate.tsx): why it is up and what for. */
 export interface GateState {
@@ -151,6 +176,10 @@ interface KeptContacts {
 const CONTACTS_MAX_AGE_MS = 30 * 60_000;
 /** Me's office contacts are read again after this long. */
 const OFFICE_CONTACTS_MAX_AGE_MS = 10 * 60_000;
+/** Part 3b: an answer or a late report gets this long to reach the server before the screen says "Will be sent". */
+const SEND_WAIT_MS = 8_000;
+/** Part 3b (H3): questions closed less than this long ago stay on the phone (a late tap on the push still shows them). */
+const ASKS_KEEP_CLOSED_MS = 24 * 3600_000;
 
 /** Waiting for the queue to send what must go before a trip: at most this long, then the trip is queued behind it. */
 const TRIP_FLUSH_WAIT_MS = 8_000;
@@ -309,6 +338,22 @@ interface AppValue {
     vehicleId?: string,
     needsVehicle?: boolean,
   ) => void;
+  /** Part 3b (H3): the office's questions as last read (open and closed today), with the answers given on this phone. */
+  asks: AskRow[];
+  /** The questions with an answer still waiting on the phone (ask ids). */
+  asksWaiting: Set<string>;
+  /** Reads the questions again (refresh, a question's push, Realtime). */
+  loadAsks: () => Promise<void>;
+  /** One question (the ask screen): the server's copy, else the phone's; null = not mine or gone; 'offline' = not on the phone. */
+  loadAsk: (askId: string) => Promise<AskRow | null | 'offline'>;
+  /** The driver opened a question: 'seen' on the server (online, best effort). */
+  markAskSeen: (askId: string) => void;
+  /** Answers a question through the queue (offline too); the last answer given before it closes wins. */
+  answerAsk: (ask: AskRow, input: AskAnswerInput) => Promise<SendOutcome>;
+  /** Part 3b (H4): "Running late" by `minutes` (queued; the server keeps the latest report). */
+  reportLate: (task: TaskWithStops, minutes: number) => Promise<SendOutcome>;
+  /** Part 3b (G): my profile's changed fields, then new licence photos (online only; each part saved stays saved). */
+  saveProfile: (patch: ProfilePatch, photos: Partial<Record<LicenceSide, LocalPhoto>>) => Promise<ProfileSaveOutcome>;
 }
 
 const AppContext = createContext<AppValue | null>(null);
@@ -360,6 +405,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [pickedPlaces, setPickedPlaces] = useState<KnownPlace[]>(() => getJson<KnownPlace[]>(KEYS.tripPicked) ?? []);
   const [tripProblem, setTripProblem] = useState<TripProblem | null>(null);
   const clearTripProblem = useCallback(() => setTripProblem(null), []);
+  // Part 3b (H3): the office's questions, and the ones with an answer still waiting on the phone.
+  const [asks, setAsks] = useState<AskRow[]>(() => getJson<AskRow[]>(KEYS.asks) ?? []);
+  const asksRef = useRef(asks);
+  asksRef.current = asks;
+  const [asksWaiting, setAsksWaiting] = useState<Set<string>>(() => waitingAskAnswers());
+  /** The server's replies to answers and late reports, by the op's client id (the screen waits a moment for its own). */
+  const replies = useRef(new Map<string, SendOutcome>());
   // Hotfix 2: who to call (per task, and the office), and the copies that show what changed in a task.
   const [keptContacts, setKeptContacts] = useState<Record<string, KeptContacts>>(() => getJson<Record<string, KeptContacts>>(KEYS.taskContacts) ?? {});
   const [officeContacts, setOfficeContacts] = useState<OfficeContacts | null>(() => getJson<{ at: number; contacts: OfficeContacts | null }>(KEYS.officeContacts)?.contacts ?? null);
@@ -419,11 +471,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else remove(KEYS.me);
   }, []);
 
+  const saveAsks = useCallback((next: AskRow[]) => {
+    asksRef.current = next;
+    setAsks(next);
+    setJson(KEYS.asks, next);
+  }, []);
+
   const forgetEverything = useCallback(() => {
     saveMe(null);
     setMeFresh(false);
     removeFile(getJson<KeptProfilePhoto>(KEYS.profilePhoto)?.uri);
     remove(KEYS.profilePhoto);
+    const licence = getJson<KeptLicencePhotos>(KEYS.licencePhotos);
+    removeFile(licence?.front?.uri);
+    removeFile(licence?.back?.uri);
+    remove(KEYS.licencePhotos);
+    remove(KEYS.monthTotals);
+    remove(KEYS.availability);
+    remove(KEYS.asks);
+    asksRef.current = [];
+    setAsks([]);
     remove(KEYS.documents);
     saveTasks([]);
     setVehicles([]);
@@ -571,6 +638,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const seenCopyOf = useCallback((taskId: string) => seenRef.current[taskId] ?? null, []);
   const pushChangesOf = useCallback((taskId: string) => pushedRef.current[taskId] ?? null, []);
 
+  // --- Part 3b (H3): questions from the office -----------------------------------------------------
+  const loadAsks = useCallback(async () => {
+    const current = meRef.current;
+    if (!current) return;
+    try {
+      const rows = await api.fetchMyAsks(supabase, current.id, new Date(Date.now() - ASKS_KEEP_CLOSED_MS));
+      // An answer still waiting on the phone keeps the phone's copy of its question.
+      const waiting = waitingAskAnswers();
+      saveAsks(rows.map((row) => (waiting.has(row.ask_id) ? asksRef.current.find((a) => a.ask_id === row.ask_id) ?? row : row)));
+    } catch {
+      // No connection (or the server has no questions yet): the copy kept on the phone.
+    }
+  }, [saveAsks]);
+  const loadAsksRef = useRef(loadAsks);
+  loadAsksRef.current = loadAsks;
+
+  const loadAsk = useCallback(async (askId: string): Promise<AskRow | null | 'offline'> => {
+    const current = meRef.current;
+    const kept = asksRef.current.find((a) => a.ask_id === askId) ?? null;
+    if (!current) return kept;
+    try {
+      const row = await api.fetchMyAsk(supabase, current.id, askId);
+      if (!row) return null;
+      if (waitingAskAnswers().has(askId) && kept) return kept;
+      saveAsks(mergeAsk(asksRef.current, row));
+      return row;
+    } catch {
+      return kept ?? 'offline';
+    }
+  }, [saveAsks]);
+
+  const markAskSeen = useCallback((askId: string) => {
+    const kept = asksRef.current.find((a) => a.ask_id === askId);
+    if (kept?.seen_at) return;
+    const at = new Date().toISOString();
+    void api.answerAsk(supabase, askId, 'seen', {}, at)
+      .then(() => saveAsks(asksRef.current.map((a) => (a.ask_id === askId ? { ...a, seen_at: a.seen_at ?? at } : a))))
+      .catch(() => undefined); // best effort: an answer marks it seen too
+  }, [saveAsks]);
+
   const refresh = useCallback(async () => {
     if (!meRef.current) return;
     setRefreshing(true);
@@ -614,6 +721,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       setOffline(sent.offline);
       void loadOurPlaces(OUR_PLACES_REFRESH_MS);
+      // Part 3b (H3): the office's questions (Today's banner).
+      void loadAsksRef.current();
       // Phase 7: another driver took my vehicle while I am on duty → the banner (until I choose or close it).
       const rows = await api.fetchMyAssignments(supabase, 1).catch(() => null);
       const last = rows?.[0];
@@ -710,6 +819,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setGpsKm(kmCounters());
         const photos = pendingVehiclePhotos();
         setVehiclePhotos((old) => (JSON.stringify(old) === JSON.stringify(photos) ? old : photos));
+        const waitingAsks = waitingAskAnswers();
+        setAsksWaiting((old) => ([...old].join() === [...waitingAsks].join() ? old : waitingAsks));
         void applyDownloadedUpdate(safeToApplyUpdate);
       }),
     [safeToApplyUpdate],
@@ -789,7 +900,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Phase 7: a push about the driver's day while the app runs: the vehicle was taken or moved → refresh;
   // a clock-out → a heartbeat now (its answer stops location, lib/duty.ts), then refresh.
   useEffect(() => onPushReceived((kind) => {
-    if (kind === 'vehicle_taken' || kind === 'vehicle_moved' || kind === 'reopened') void refresh();
+    if (kind === 'ask') void loadAsksRef.current(); // Part 3b (H3): Today's banner
+    else if (kind === 'vehicle_taken' || kind === 'vehicle_moved' || kind === 'reopened') void refresh();
     else if (kind === 'duty_auto_out' || kind === 'duty_office_out') void sendHeartbeat().then(() => refresh());
   }), [refresh]);
 
@@ -841,6 +953,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
           void notifyNewTask(t('today.newTask'), [task.start_at ? colomboTime(task.start_at) : '', task.title ?? ''].join(' ').trim(), task.id ?? '');
         }
         void refresh();
+      })
+      // Part 3b (H3): a question from the office (the driver reads their own rows): Today's banner at once.
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'driver_ask_answers', filter: `employee_id=eq.${myId}` }, () => {
+        void loadAsksRef.current();
       })
       .subscribe((status) => {
         const next: LiveStatus = status === 'SUBSCRIBED' ? 'connected' : status === 'CLOSED' ? 'off' : 'connecting';
@@ -1509,6 +1625,81 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }), []);
 
+  // --- Part 3b: answers to the office's questions (H3), Running late (H4), the profile (G) ------------------------
+  useEffect(() => onAskSent((op, reply) => {
+    replies.current.set(op.client_id, reply === 'ok' ? { kind: 'sent' } : reply === 'expired' ? { kind: 'expired' } : { kind: 'failed', message: reply });
+    // Closed before the answer was given, or not taken: the server's copy again.
+    if (reply !== 'ok') void loadAsksRef.current();
+  }), []);
+  useEffect(() => onLateSent((op, reply) => {
+    replies.current.set(op.client_id, reply === 'ok' ? { kind: 'sent' } : { kind: 'closed' });
+    if (reply !== 'ok') void refreshRef.current();
+  }), []);
+  useEffect(() => onOpRefused((op, message) => {
+    if (op.kind === 'ask_answer' || op.kind === 'task_late') replies.current.set(op.client_id, { kind: 'failed', message });
+  }), []);
+
+  /** Sends what waits (a moment at most, with a connection) and says what became of the op with this client id. */
+  const waitForReply = useCallback(async (clientId: string): Promise<SendOutcome> => {
+    if (dataRef.current) await Promise.race([flushNow(true), new Promise((resolve) => setTimeout(resolve, SEND_WAIT_MS))]);
+    else void flushNow();
+    const reply = replies.current.get(clientId);
+    replies.current.delete(clientId);
+    return reply ?? { kind: 'queued' };
+  }, []);
+
+  const answerAsk = useCallback(async (ask: AskRow, input: AskAnswerInput): Promise<SendOutcome> => {
+    const at = new Date().toISOString();
+    const clientId = Crypto.randomUUID();
+    enqueue(askAnswerOp(ask.ask_id, clientId, input, at));
+    // The phone's copy at once (offline too): the banner goes, the screen shows the answer.
+    const known = asksRef.current.some((a) => a.ask_id === ask.ask_id) ? asksRef.current : mergeAsk(asksRef.current, ask);
+    saveAsks(withAnswer(known, ask.ask_id, input, at));
+    setAsksWaiting(waitingAskAnswers());
+    return waitForReply(clientId);
+  }, [saveAsks, waitForReply]);
+
+  const reportLate = useCallback(async (task: TaskWithStops, minutes: number): Promise<SendOutcome> => {
+    const at = new Date().toISOString();
+    const clientId = Crypto.randomUUID();
+    enqueue({ kind: 'task_late', id: task.id, client_id: clientId, minutes, at });
+    patchLocalTask(task.id, (item) => ({ ...item, late_report_min: minutes, late_report_at: at }));
+    return waitForReply(clientId);
+  }, [patchLocalTask, waitForReply]);
+
+  const saveProfile = useCallback(async (patch: ProfilePatch, photos: Partial<Record<LicenceSide, LocalPhoto>>): Promise<ProfileSaveOutcome> => {
+    const current = meRef.current;
+    if (!current) return { kind: 'refused', message: '' };
+    try {
+      if (Object.keys(patch).length > 0) {
+        const answer = await driverApi.saveProfile(patch);
+        const now = meRef.current;
+        if (now) saveMe({ ...now, ...answer.profile });
+      }
+      for (const side of ['front', 'back'] as const) {
+        const photo = photos[side];
+        if (!photo) continue;
+        const answer = await api.saveLicencePhoto(
+          supabase,
+          { id: photo.id, employee_id: current.id, storage_path: licencePhotoPath(current.id, photo.id), taken_at: photo.takenAt },
+          side,
+          (path) => uploadPhotoFile(photo.uri, path),
+        );
+        if (answer !== 'ok') return { kind: 'refused', message: answer };
+        // The new photo stays on the phone for Me; the one before it goes.
+        const kept = getJson<KeptLicencePhotos>(KEYS.licencePhotos) ?? {};
+        const before = kept[side];
+        if (before && before.uri !== photo.uri) removeFile(before.uri);
+        setJson(KEYS.licencePhotos, { ...kept, [side]: { photoId: photo.id, uri: photo.uri } } satisfies KeptLicencePhotos);
+        const now = meRef.current;
+        if (now) saveMe({ ...now, ...(side === 'front' ? { licence_front_photo_id: photo.id } : { licence_back_photo_id: photo.id }) });
+      }
+      return { kind: 'ok' };
+    } catch (error) {
+      return error instanceof api.ApiError && error.permanent ? { kind: 'refused', message: error.message } : { kind: 'network' };
+    }
+  }, [saveMe]);
+
   const knownPlaces = useMemo(() => mergeKnown(pickedPlaces, knownFromTasks(tasks), ourPlaces), [pickedPlaces, tasks, ourPlaces]);
   const taskContacts = useMemo(
     () => Object.fromEntries(Object.entries(keptContacts).flatMap(([id, kept]) => (kept.contacts ? [[id, kept.contacts]] : []))) as Record<string, TaskContacts>,
@@ -1536,6 +1727,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     knownPlaces, loadKnownPlaces, startTrip, addTripStop, cancelTrip, tripProblem, clearTripProblem,
     confirmTaskVehicle, taskContacts, loadTaskContacts, officeContacts, loadOfficeContacts,
     changesFor, seenCopyOf, pushChangesOf, rememberShown, markPreviewed, rememberPush,
+    asks, asksWaiting, loadAsks, loadAsk, markAskSeen, answerAsk, reportLate, saveProfile,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

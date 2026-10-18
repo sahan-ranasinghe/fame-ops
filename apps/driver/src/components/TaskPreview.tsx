@@ -10,6 +10,8 @@
 //   - a changed task: "Task changed", what changed marked in amber (since the copy the driver last saw, plus what the
 //     office's push named); the copy is kept when the driver leaves the screen;
 //   - Accept / Can't do this task at the bottom; once accepted, Start task.
+//   - Part 3b (H4): once accepted, "Running late" (components/LateSheet.tsx) and "Can't make it" (the same reasons sheet:
+//     a decline after accepting); never on a trip the driver started.
 // It works offline from the copy on the phone (the tasks and the contacts are kept), and says so.
 
 import { useRouter } from 'expo-router';
@@ -20,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ApprovedLine, CallButtons } from '@/components/CallButtons';
 import { DeclineSheet } from '@/components/DeclineSheet';
+import { RunningLate } from '@/components/LateSheet';
 import { Check, ChevronLeft, Play } from '@/components/icons';
 import { Thumb, useVehicleThumbs } from '@/components/Photos';
 import { ChangedTag, leaveTime, StopTimeline, useDateLabel, useDurations, useNow } from '@/components/task';
@@ -27,6 +30,7 @@ import { GOOGLE_MAP_BUILD, TaskMap } from '@/components/TaskMap';
 import { taskTitle } from '@/components/taskLines';
 import { Button, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { approvedBy, askedBy, phoneDisplay, taskCalls } from '@/lib/contacts';
+import { canReportLate, declineKey } from '@/lib/late';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { type ChangeField, hasChanges, planTotals, taskChanges, totalKmText, vehicleLine, vehicleWords } from '@/lib/taskPreview';
 import { isSelfTrip } from '@/lib/trips';
@@ -89,6 +93,8 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
   const otherRunning = app.tasks.some((item) => item.status === 'in_progress' && item.id !== task.id);
   const selfTrip = isSelfTrip(task);
   const accepted = task.accepted_at !== null;
+  // "Can't make it" once accepted, "Can't do this task" before (H4).
+  const decline = declineKey(task);
   const leave = leaveTime(task);
   const mark = (field: ChangeField) => changes.fields.includes(field);
   const googleNote = !GOOGLE_MAP_BUILD && task.task_stops.some((s) => !!s.google_place_id) ? t('task.googleNotOnMap') : null;
@@ -183,11 +189,12 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
         <CallButtons calls={calls} />
 
         {accepted && !selfTrip && <Txt variant="strong" color={colors.blue}>{t('task.accepted', { time: colomboTime(task.accepted_at ?? '') })}</Txt>}
+        {accepted && canReportLate(task) && <RunningLate task={task} />}
         {/* Starting a task accepts it too: Start task stays here before Accept. */}
         {!accepted && <Button kind="outline" icon={Play} label={t('today.startTask')} disabled={otherRunning} onPress={start} />}
         {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list): a trip
             started by mistake is cancelled instead, before it starts. */}
-        {!isSelfTrip(task) && <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(true)} />}
+        {!isSelfTrip(task) && decline && <Button kind="danger-text" label={t(decline)} onPress={() => setDeclining(true)} />}
         {selfTrip && (
           <Button
             kind="danger-text"

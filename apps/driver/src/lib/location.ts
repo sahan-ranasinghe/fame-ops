@@ -317,6 +317,39 @@ export async function askIgnoreBatteryOptimisation(): Promise<void> {
   }
 }
 
+/** "Share my location": one position, or why there is none (not allowed, Location off, no fix in time). */
+export type OneFix = { lat: number; lng: number; accuracyM: number | null } | { error: 'denied' | 'off' | 'no_fix' };
+
+/**
+ * Part 3b (H3): the answer to "Where are you now?". One position, taken once with the driver's consent (even off duty):
+ * the foreground permission is asked for when it is missing, Location is offered to be switched on. It never starts
+ * the location service or recording, and the point is not a location point (it goes with the answer, kept 30 days).
+ */
+export async function oneFix(timeoutMs = 20_000): Promise<OneFix> {
+  try {
+    let permission = await Location.getForegroundPermissionsAsync();
+    if (!permission.granted) permission = await Location.requestForegroundPermissionsAsync();
+    if (!permission.granted) return { error: 'denied' };
+    if (!(await Location.hasServicesEnabledAsync().catch(() => true))) {
+      try {
+        await Location.enableNetworkProviderAsync();
+      } catch {
+        return { error: 'off' };
+      }
+    }
+    const fresh = await Promise.race([
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }).catch(() => null),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+    ]);
+    // No fix in time: a position from the last 2 minutes will do.
+    const position = fresh ?? (await Location.getLastKnownPositionAsync({ maxAge: 2 * 60_000 }).catch(() => null));
+    if (!position) return { error: 'no_fix' };
+    return { lat: position.coords.latitude, lng: position.coords.longitude, accuracyM: position.coords.accuracy ?? null };
+  } catch {
+    return { error: 'no_fix' };
+  }
+}
+
 /** The phone's last known position, when location is allowed. */
 export async function lastPosition(): Promise<{ lat: number; lng: number } | null> {
   try {
