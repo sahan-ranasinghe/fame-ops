@@ -2838,3 +2838,22 @@ the tasks a person created).
 6. main fast-forwarded to `08d45f5`.
 7. The Teams artifact: the file and the message for Sahan (`docs/teams-artifact-update.md`, Hotfix 3); 78 tools declared.
 Next: `vehicle_on_the_day` is switched on once Sahan says both phones have the update; then Part 3b (G–H) from main.
+
+**Round Part 3b, 18 October 2026** (branch `phase7-3b` at `9312e4e`, the commit shown at the checkpoint; main
+fast-forwarded to it), with Sahan's go (defaults 1–8 accepted).
+1. `npx supabase db push --linked --yes` (a dry run first): `20261019120000_phase7_3b`. Checked after (read only): the
+   three tables with RLS, the seven employee columns and the two task columns, the nine functions (`save_unavailability`
+   for the service role only), `get_driver_settings()` with `half_day_split` 13:00 and `driver_personal_trips` kept, the
+   answers in Realtime, the job `prune-driver-asks`.
+2. `npx supabase functions deploy office-mcp office-api fleet-jobs driver-api push-task` (notify-office: no change).
+   `availability` through the live connector: now_status, "Last seen 13:45 near Peliyagoda Pattiya" (`nearest_towns`),
+   usual_start, next_task.
+3. Web: `npm run build:web`, the key scan on its own (one JWT, role anon; no secret value or name), then `wrangler pages
+   deploy --branch main`; https://fame-fleet.pages.dev serves `index-DnwYdJCo.js`.
+4. `npx eas update --channel preview --environment preview`: update group `a52b6a41-d49b-489c-b946-981b60b9d514`,
+   runtime `1.2.0-gmaps`, commit `9312e4e` (no native change).
+5. main fast-forwarded to `9312e4e`.
+6. The Teams artifact: the file and the message for Sahan (`docs/teams-artifact-update.md`, Part 3b); 85 tools declared.
+Next: `vehicle_on_the_day` once Sahan says both phones have the update; Part 5 and Part 6 (1.3.0) built and tested
+locally, no EAS build without his go.
+

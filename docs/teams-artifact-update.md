@@ -1,8 +1,8 @@
 # Updating the Teams copy of the Fame Fleet artifact
 
-## Part 3b (18 October 2026, branch `phase7-3b`)
+## Part 3b (18 October 2026, main at `9312e4e`)
 
-Build from main once Part 3b is merged, with `npm run build:artifact` (`apps/office`):
+Build from main at `9312e4e` with `npm run build:artifact` (`apps/office`):
 
 - `apps/office/dist-artifact/index.html` (one file, no Supabase code, no key) and
   `apps/office/dist-artifact/capabilities.json`, pasted unchanged: the connector **Fame Fleet** with 85 tools. New since
