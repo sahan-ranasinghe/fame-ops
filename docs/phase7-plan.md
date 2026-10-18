@@ -939,6 +939,14 @@ What the measurement shows:
 - **A 32-bit phone.** The test plan gets a line on how to tell: installing the arm64 APK ends with
   "App not installed" on a 32-bit Android (typically an Android Go phone); Settings → About phone
   or a CPU-info app shows armeabi-v7a only. Then Sahan asks for a `drivers-32` build.
+- **The new-task ringtone (Hotfix 2, B; Sahan, 18 October).** The 1.3.0 build bundles:
+  - a loud ringtone for a new task that rings until the driver opens it or 30 seconds pass, like a ride-hailing app
+    (a full-screen-intent style notification on its own channel, the sound looping; stopped when the task is opened or
+    after 30 s);
+  - a shorter, distinct sound for task changes and cancellations;
+  - the channels set up for them (new channel ids, since Android fixes a channel's sound when it is first made), push-task
+    sending each kind on its channel. No CALL_PHONE or other new permission beyond what a ringing notification needs
+    (checked against the Play policy when built).
 - **Nothing lost.** Every 1.2.0 function is checked on the OPPO with 1.3.0: Today, the task map, the
   fuel video, odometer OCR, photos, push and sounds, background location, and updates.
 - **At Round B:**
