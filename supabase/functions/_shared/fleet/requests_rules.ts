@@ -140,7 +140,7 @@ export function alreadyDecidedText(
   const at = (iso: string | null) => iso ? ` at ${atText(iso, now)}` : "";
   switch (r.status) {
     case "approved":
-      return `Already ${again ? "decided again" : "approved"} by ${r.decided_by ?? "another approver"}${at(r.decided_at)}.`;
+      return `Already approved by ${r.decided_by ?? "another approver"}${at(r.decided_at)}.`;
     case "declined":
       return `Already declined by ${r.decided_by ?? "another approver"}${at(r.decided_at)}${
         r.decline_reason ? `: ${r.decline_reason}` : ""

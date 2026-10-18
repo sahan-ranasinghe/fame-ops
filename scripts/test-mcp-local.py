@@ -2345,9 +2345,15 @@ if other:
           "J: another driver's task: not_yours, nothing changed", f"{code} {ans}")
 # The office moves a task back to "on the day": the driver hears it (vehicle_day in the changed push).
 tool("update_task", {"task_id": AV, "plan_version": int(psql(f"select plan_version from tasks where id = '{AV}'")), "vehicle": "on the day"})
-body = psql(f"select convert_from(body, 'UTF8') from net.http_request_queue where url like '%/push-task' and convert_from(body, 'UTF8')::jsonb ->> 'task_id' = '{AV}' "
-            f"and convert_from(body, 'UTF8')::jsonb ->> 'kind' = 'changed' order by id desc limit 1")
-check(bool(body) and json.loads(body).get("changes", {}).get("vehicle_day") is True, "J: back to 'on the day': the changed push says vehicle_day", body[:300])
+# pg_net sends the queued request and drops it from its queue; push-task writes push_log (the words are pgTAP's check).
+pushed = ""
+for _ in range(15):
+    pushed = psql(f"select count(*) from push_log where task_id = '{AV}' and kind = 'changed'")
+    if pushed != "0":
+        break
+    time.sleep(1)
+check(pushed != "0" and psql(f"select vehicle_mode || '|' || coalesce(vehicle_id::text, '-') from tasks where id = '{AV}'") == "driver_day|-",
+      "J: back to 'on the day': the vehicle is cleared and the driver gets a 'Task changed' push", pushed)
 code, row = tripper.get(f"tasks?id=eq.{OD}&select=vehicle_mode,vehicle_type_wanted,approved_by_employee_id,approved_at")
 check(code == 200 and row and row[0].get("vehicle_mode") == "driver_day", "J: the driver's app reads vehicle_mode on its own task", f"{code} {row}")
 for t in (OD, AV):

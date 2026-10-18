@@ -275,6 +275,7 @@ begin
   return new;
 end;
 $$;
+revoke all on function public.tasks_vehicle_on_the_day_reset() from public, anon, authenticated;
 create trigger tasks_vehicle_on_the_day_reset before update on public.tasks
   for each row execute function public.tasks_vehicle_on_the_day_reset();
 

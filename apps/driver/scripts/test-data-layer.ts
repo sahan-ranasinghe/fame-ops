@@ -703,6 +703,8 @@ async function main() {
   result = await syncE.flush();
   const startedE = must(await admin.from('tasks').select('status, vehicle_id').eq('id', onDay).single(), 'started');
   check(result.failed === 0 && startedE.status === 'in_progress' && startedE.vehicle_id === carE.id, 'the queue in order: the vehicle confirmed, then the task starts on it', { result, startedE });
+  // The first is done with (one task under way at a time).
+  must(await admin.from('tasks').update({ status: 'cancelled', cancelled_reason: 'test' }).eq('id', onDay).select('id'), 'cancel on the day');
   // Offline, a car for "any van": the car was driven, so the server keeps it and notes the wrong type for the office; the
   // start behind it goes through (nothing the driver did is lost).
   queueE.add(
