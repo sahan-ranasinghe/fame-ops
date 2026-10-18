@@ -79,6 +79,13 @@
   the setting `driver_personal_trips`, `set_trip_purpose`, personal km apart), the date range everywhere (§8: Mileage, Fuel,
   the driver page, Issues, Tasks → History with `list_tasks`), the Issues page as list + panel (§9) and the Overview's tiles
   opening their lists with a Reminders page (§16).
+- **Hotfix 2 (18 October 2026, branch `phase7-hotfix-2`)**: the notification centre (`office_inbox`, `my_inbox`,
+  `mark_inbox_read`) and My trips (`my_trips`), the office's sounds and the app's `new-tasks` channel, one time field
+  (`TimeInput`), one duration formatter (`_shared/fleet/durations.ts`, `@fleet/durations`, the app's `lib/durations.ts`), the
+  accept window only at work, phones stored +94… with `employee_changes` and the call buttons (`ContactButtons`,
+  `my_task_contacts`), the whole task before accepting (`TaskPreview`), a task's vehicle on the day (`vehicle_mode`,
+  `confirm_task_vehicle`, setting `vehicle_on_the_day`, off), several approvers (`approved_by`, `reviewing`, the version
+  check). As built: `docs/phase7-plan.md` "Hotfix 2 as built".
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
