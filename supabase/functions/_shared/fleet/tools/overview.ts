@@ -103,7 +103,8 @@ export const fleetOverview = tool({
     const sections = {
       requests: actor.permissions.includes("approve"),
       needsDriver: hasAny(actor.permissions, ["approve", "assign_tasks"]),
-      critical: actor.permissions.includes("approve"),
+      // The page shows Critical issues to the people who handle issues (its own rule, screens/overview/overviewLogic.ts).
+      critical: actor.permissions.includes("issues"),
     };
     const plainItems = shown.map(({ scope: _scope, ...item }) => item);
     const onRoadVehicles = new Set(running.map((t) => t.vehicle_id)).size;
