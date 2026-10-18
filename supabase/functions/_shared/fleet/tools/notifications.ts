@@ -315,7 +315,7 @@ export const setMyPrefs = tool({
     if (Object.keys(given).length === 0) throw new ToolError("Nothing to keep: give overview_collapsed or menu_collapsed.");
     const merged = { ...(await prefsOf(db, id)), ...given };
     unwrap(
-      await db.from("office_prefs").upsert({ employee_id: id, prefs: merged as Json, updated_at: now.toISOString() }, {
+      await db.from("office_prefs").upsert({ employee_id: id, prefs: merged as NonNullable<Json>, updated_at: now.toISOString() }, {
         onConflict: "employee_id",
       }),
       "preferences",
