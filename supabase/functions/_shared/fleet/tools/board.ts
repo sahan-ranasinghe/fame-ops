@@ -35,7 +35,7 @@ export const driversBoard = tool({
       to: new Date(now.getTime() + 60_000).toISOString(),
       day_end: dayRange(today).to,
     };
-    const { rows } = await driverRows(db, refs, w, now, null);
+    const { rows } = await driverRows(db, refs, w, now, null, undefined, { presence: true });
     const byName = new Map(refs.employees.map((e) => [e.username ?? e.name, e]));
     const all = rows.map((r) => {
       const e = byName.get(r.username ?? r.name);

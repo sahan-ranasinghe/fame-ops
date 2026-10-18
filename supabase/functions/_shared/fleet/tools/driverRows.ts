@@ -14,7 +14,7 @@ import {
 import type { Db } from "../db.ts";
 import { unwrap } from "../db.ts";
 import { taskEta } from "../eta.ts";
-import { loadLatest, nearestTown, type Refs } from "../fleet.ts";
+import { loadLatest, type Refs } from "../fleet.ts";
 import { haversineKm } from "../geo.ts";
 import type { Plan } from "../plan.ts";
 import { type BoardStatus, lastSeenText, notAvailableNow, overlapping, type Unavailable, usualStart } from "../presence.ts";
@@ -49,12 +49,19 @@ export async function presenceOf(
   ]);
   const starts = unwrap(startsRes, "duty sessions");
   const next = unwrap(nextRes, "tasks");
-  const towns = new Map(
-    await Promise.all(ids.map(async (id) => {
-      const p = latest.get(id);
-      return [id, withTowns && p?.lat != null && p?.lng != null ? await nearestTown(db, p.lat, p.lng) : null] as const;
-    })),
-  );
+  // One call for every driver's nearest town (the database picks it; only the names come back).
+  const placed = withTowns ? ids.filter((id) => latest.get(id)?.lat != null && latest.get(id)?.lng != null) : [];
+  const towns = new Map<string, string>();
+  if (placed.length) {
+    const found = unwrap(
+      await db.rpc("nearest_towns", {
+        p_lat: placed.map((id) => latest.get(id)!.lat!),
+        p_lng: placed.map((id) => latest.get(id)!.lng!),
+      }),
+      "towns",
+    ) as { i: number; name: string }[];
+    for (const f of found) towns.set(placed[f.i - 1], f.name);
+  }
   return new Map(ids.map((id) => {
     const n = next.find((t) => t.employee_id === id);
     const at = n ? n.leave_by ?? n.start_at : null;
@@ -79,6 +86,9 @@ export async function driverRows(
   now: Date,
   firstStop: { lat: number; lng: number } | null,
   exclude?: string,
+  /** Part 3b (H2): the rows' last seen, usual start and next task, for the lists that show them (Who's available, the
+   * board). The needs-a-driver list and the asks only need free or busy: they leave it out (it costs a town each). */
+  opts: { presence?: boolean } = {},
 ) {
   const day = colomboDate(w.from);
   const today = colomboDate(now);
@@ -198,11 +208,14 @@ export async function driverRows(
   const top = ranked[0];
   const bestRow = top ? withRank.find((r) => (r.username ?? r.name) === (top.username ?? top.name)) : undefined;
   // Phase 7 (§5): each driver's photo (Who's available on Approve and Assign); Part 3b (H2): last seen, usual start, next task.
-  const [photos, presence] = await Promise.all([driverPhotoLinks(db, drivers, now), presenceOf(db, ids, now, latest)]);
+  const [photos, presence] = await Promise.all([
+    driverPhotoLinks(db, drivers, now),
+    opts.presence ? presenceOf(db, ids, now, latest) : Promise.resolve(null),
+  ]);
   return {
     rows: rankAvailability(withRank.map(({ employee_id, ...r }) => {
       const photo = photos.get(employee_id);
-      return { ...r, ...presence.get(employee_id), ...(photo ? { photo_url: photo } : {}) };
+      return { ...r, ...presence?.get(employee_id), ...(photo ? { photo_url: photo } : {}) };
     })),
     best: top ? { name: top.name, username: top.username, vehicle: bestRow?.vehicle, why: top.why } : undefined,
   };

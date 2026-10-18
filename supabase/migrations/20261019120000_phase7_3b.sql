@@ -241,6 +241,30 @@ $$;
 revoke all on function public.remove_my_unavailability(uuid) from public, anon;
 grant execute on function public.remove_my_unavailability(uuid) to authenticated;
 
+-- H2. Every driver's nearest town in one call ("Last seen 17:42 near Kadawatha"): for each point (in order, i from 1) the
+-- nearest town within 0.4° (as nearestTown in fleet.ts: the boxes 0.03, 0.1, 0.4 find the same nearest town), by an
+-- equirectangular distance. The tools ask it (service role only).
+create function public.nearest_towns(p_lat double precision[], p_lng double precision[])
+returns table (i integer, name text)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select p.i::integer, t.name
+  from unnest(p_lat, p_lng) with ordinality as p(lat, lng, i)
+  cross join lateral (
+    select tw.name
+    from public.towns tw
+    where tw.lat between p.lat - 0.4 and p.lat + 0.4
+      and tw.lng between p.lng - 0.4 and p.lng + 0.4
+    order by (tw.lat - p.lat) ^ 2 + ((tw.lng - p.lng) * cos(radians(p.lat))) ^ 2
+    limit 1
+  ) t
+$$;
+revoke all on function public.nearest_towns(double precision[], double precision[]) from public, anon, authenticated;
+grant execute on function public.nearest_towns(double precision[], double precision[]) to service_role;
+
 -- H3. Asking drivers ------------------------------------------------------------------------------------------------------
 -- One question to some drivers, one row per driver asked with their answer. The trip question expires at the trip's
 -- start, the others two hours after they are asked (the tool sets expires_at).

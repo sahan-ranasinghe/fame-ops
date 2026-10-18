@@ -59,7 +59,7 @@ export const availability = tool({
       : args.first_stop
       ? await findPlace(db, args.first_stop).then((p) => (p?.lat != null && p?.lng != null ? { lat: p.lat, lng: p.lng } : null))
       : null;
-    const { rows: ranked, best } = await driverRows(db, refs, w, now, place);
+    const { rows: ranked, best } = await driverRows(db, refs, w, now, place, undefined, { presence: true });
 
     const vehicles = await availabilityFor(db, refs, {
       neededAt: from,

@@ -1602,6 +1602,11 @@ isOneToOne: false
 "nearest_town_name":
 { Args: { "p_lat": number,"p_lng": number }; Returns: string
                            },
+"nearest_towns":
+{ Args: { "p_lat": (number)[],"p_lng": (number)[] }; Returns: {
+              "i": number,"name": string
+            }[]
+                           },
 "notify_needs_driver":
 { Args: { "p_body": string,"p_task": string,"p_title": string }; Returns: undefined
                            },
