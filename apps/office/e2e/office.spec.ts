@@ -192,7 +192,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   const dp = page.getByTestId("driver-page");
   await expect(dp.getByRole("heading", { name: driver.name })).toBeVisible();
   await expect(dp).toContainText("Km (GPS)");
-  await expect(dp).toContainText(/Live · \d+ min/);
+  await expect(dp).toContainText(/Live · (now|\d+ min ago)/);
   const timeline = page.getByTestId("timeline");
   await expect(timeline).toContainText("Driving", { timeout: 10000 });
   await expect(page.getByTestId("playback")).toBeVisible();

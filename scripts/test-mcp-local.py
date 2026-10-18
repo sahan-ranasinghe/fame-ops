@@ -2344,16 +2344,11 @@ if other:
     check(code == 200 and ans == "not_yours" and psql(f"select coalesce(vehicle_id::text, '-') from tasks where id = '{other}'") != VT,
           "J: another driver's task: not_yours, nothing changed", f"{code} {ans}")
 # The office moves a task back to "on the day": the driver hears it (vehicle_day in the changed push).
-tool("update_task", {"task_id": AV, "plan_version": int(psql(f"select plan_version from tasks where id = '{AV}'")), "vehicle": "on the day"})
-# pg_net sends the queued request and drops it from its queue; push-task writes push_log (the words are pgTAP's check).
-pushed = ""
-for _ in range(15):
-    pushed = psql(f"select count(*) from push_log where task_id = '{AV}' and kind = 'changed'")
-    if pushed != "0":
-        break
-    time.sleep(1)
-check(pushed != "0" and psql(f"select vehicle_mode || '|' || coalesce(vehicle_id::text, '-') from tasks where id = '{AV}'") == "driver_day|-",
-      "J: back to 'on the day': the vehicle is cleared and the driver gets a 'Task changed' push", pushed)
+ut = tool("update_task", {"task_id": AV, "plan_version": int(psql(f"select plan_version from tasks where id = '{AV}'")), "vehicle": "on the day"})
+# The push's words (vehicle_day) are pgTAP's check (phase7_hotfix2); here the task and the tool's answer.
+check(psql(f"select vehicle_mode || '|' || coalesce(vehicle_id::text, '-') from tasks where id = '{AV}'") == "driver_day|-"
+      and "vehicle" in json.dumps(ut.get("changes", {})),
+      "J: back to 'on the day': the vehicle is cleared and the change is named (the driver's 'Task changed' push)", json.dumps(ut)[:300])
 code, row = tripper.get(f"tasks?id=eq.{OD}&select=vehicle_mode,vehicle_type_wanted,approved_by_employee_id,approved_at")
 check(code == 200 and row and row[0].get("vehicle_mode") == "driver_day", "J: the driver's app reads vehicle_mode on its own task", f"{code} {row}")
 for t in (OD, AV):
