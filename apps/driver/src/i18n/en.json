@@ -641,5 +641,12 @@
     "minutes": "{n} min",
     "hours": "{h} h {m} min",
     "hoursOnly": "{h} h"
+  },
+  "vehicleType": {
+    "car": "car",
+    "van": "van",
+    "double_cab": "double cab",
+    "lorry": "lorry",
+    "other": "vehicle"
   }
 }

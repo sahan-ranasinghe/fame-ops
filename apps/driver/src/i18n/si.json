@@ -641,5 +641,12 @@
     "minutes": "මිනිත්තු {n}",
     "hours": "පැය {h} මිනිත්තු {m}",
     "hoursOnly": "පැය {h}"
+  },
+  "vehicleType": {
+    "car": "කාර්",
+    "van": "වෑන්",
+    "double_cab": "ඩබල් කැබ්",
+    "lorry": "ලොරි",
+    "other": "වාහන"
   }
 }

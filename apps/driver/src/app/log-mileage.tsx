@@ -21,6 +21,9 @@
 // it (back to the reading, nothing saved) or Go on (saved as it is; the server flags it too).
 // After a swap, Save & finish checks the end against the start of the stretch in the vehicle now,
 // and "N km this task" adds the stretches up.
+// Hotfix 2 (J): Start task on a task made without a vehicle asks "Which vehicle?" first
+// (components/VehicleConfirm.tsx); the odometer step follows once the vehicle is set (or kept on the
+// phone to be sent before the start).
 
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -31,12 +34,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
 import { PlateText } from '@/components/PlateText';
+import { VehicleConfirm } from '@/components/VehicleConfirm';
 import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/ui';
 import { earlyFinish, stretchStartKm, swapReadingsWaiting, taskKmSoFar } from '@/lib/dayRules';
 import { parseDecimal, parseWhole, thousands } from '@/lib/format';
 import { readOdometerPhoto, type ReadStatus } from '@/lib/odometerAi';
 import { discardPhoto, type LocalPhoto, takePhoto } from '@/lib/photos';
 import { clockOf, discardVideo, megabytes, type RecordedVideo, takePendingVideo } from '@/lib/video';
+import { needsVehicle } from '@/lib/vehicleConfirm';
 import { type FuelEntry, type OdometerEntry, type OdometerEntryKind, useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -123,9 +128,10 @@ export default function LogMileageScreen() {
   const [video, setVideo] = useState<RecordedVideo | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   // Unsaved input asks "Discard changes?" on back; nothing is asked after a save or while one runs.
   const dirty = step.kind !== 'none' || typedFuelKm !== '' || litres.trim() !== '' || amount.trim() !== '' || receipt !== null || video !== null;
-  const { allowLeave } = useLeaveGuard(dirty, saving);
+  const { allowLeave } = useLeaveGuard(dirty, saving || confirmBusy);
   // Back from the recording screen: take what it left.
   useFocusEffect(
     useCallback(() => {
@@ -144,7 +150,9 @@ export default function LogMileageScreen() {
   if ((mode === 'finish' || mode === 'start' || swapMode) && !task) return <Redirect href="/" />;
   if (swapMode && !swapVehicleId) return <Redirect href="/" />;
 
-  const needsOdometer = mode !== 'fuel';
+  // J: a task made without a vehicle confirms one before the odometer.
+  const confirming = mode === 'start' && !!task && needsVehicle(task);
+  const needsOdometer = mode !== 'fuel' && !confirming;
   const showFuel = mode === 'finish' || mode === 'fuel';
   const typedKm = parseWhole(odometer);
   const stepPhoto = step.kind === 'none' ? null : step.photo;
@@ -323,6 +331,8 @@ export default function LogMileageScreen() {
             )}
           </View>
         </View>
+
+        {confirming && task && <VehicleConfirm task={task} onBusy={setConfirmBusy} />}
 
         {needsOdometer && step.kind === 'none' && (
           <Pressable accessibilityRole="button" onPress={photographOdometer} style={styles.photoCard}>

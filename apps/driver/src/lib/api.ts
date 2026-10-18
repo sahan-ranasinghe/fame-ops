@@ -8,6 +8,7 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 
 import type { Database, Json } from './database.types';
+import { type OfficeContacts, parseOfficeContacts, parseTaskContacts, type TaskContacts } from './contacts';
 import { parsePersonalTrips, type PersonalTrips } from './trips';
 import type { Employee, FuelLog, Language, OdometerLog, TaskWithStops, Vehicle, VehicleReport } from './types';
 
@@ -456,6 +457,34 @@ export async function fetchMyAssignments(client: Client, limit = 5): Promise<Ass
       .order('from_at', { ascending: false }).order('created_at', { ascending: false }).limit(limit),
     'vehicle history',
   );
+}
+
+// ---------------------------------------------------------------------------
+// Hotfix 2: the vehicle of a task made without one (J), and who to call (F, K).
+// ---------------------------------------------------------------------------
+
+/**
+ * The vehicle of a task made without one, before Start task (confirm_task_vehicle): 'ok', or the refusal
+ * ('not_yours' | 'started' | 'has_vehicle' | 'inactive' | 'in_garage' | 'wrong_type'). Only the task's own driver.
+ */
+export async function confirmTaskVehicle(client: Client, taskId: string, vehicleId: string): Promise<string> {
+  const res = await client.rpc('confirm_task_vehicle', { p_task: taskId, p_vehicle: vehicleId });
+  if (res.error) fail(res, 'task vehicle');
+  return typeof res.data === 'string' ? res.data : '';
+}
+
+/** Who to call about one of my tasks (my_task_contacts): null when the server has nothing for me. */
+export async function fetchTaskContacts(client: Client, taskId: string): Promise<TaskContacts | null> {
+  const res = await client.rpc('my_task_contacts', { p_task: taskId });
+  if (res.error) fail(res, 'task contacts');
+  return parseTaskContacts(res.data);
+}
+
+/** Me → Call office and Call fleet admin (my_office_contacts). */
+export async function fetchOfficeContacts(client: Client): Promise<OfficeContacts | null> {
+  const res = await client.rpc('my_office_contacts');
+  if (res.error) fail(res, 'office contacts');
+  return parseOfficeContacts(res.data);
 }
 
 /** The heartbeat history: a batch of rows into driver_heartbeats; one already there (same time) is ignored. */

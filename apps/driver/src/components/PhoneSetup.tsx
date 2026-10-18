@@ -10,6 +10,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { useDateLabel } from '@/components/task';
 import { Button, Txt } from '@/components/ui';
+import { durationText } from '@/lib/durations';
 import { getJson, KEYS } from '@/lib/kv';
 import { openBrandSettings } from '@/lib/location';
 import { brandName, type Gap, openSettingsLabel, setupBrand, type StoppedNote, stepsKey, stoppedNote } from '@/lib/phoneSetup';
@@ -66,9 +67,11 @@ export function useStoppedText(): (note: StoppedNote) => string {
     const phone = name ? t('phoneSetup.yourBrand', { brand: name }) : t('phoneSetup.yourPhone');
     const at = new Date(note.at);
     const when = colomboDate(at) === colomboDate(new Date()) ? colomboTime(at) : `${dateLabel(at)} ${colomboTime(at)}`;
+    // {duration} is the one formatter's "1 h 35 min" (Hotfix 2, D); {minutes} stays for the sentences that still say "min".
+    const duration = durationText(t, note.minutes);
     return note.key === 'phoneSetup.stoppedOnce'
-      ? t(note.key, { phone, minutes: note.minutes, when })
-      : t(note.key, { phone, count: note.count, minutes: note.minutes, when });
+      ? t(note.key, { phone, minutes: note.minutes, duration, when })
+      : t(note.key, { phone, count: note.count, minutes: note.minutes, duration, when });
   };
 }
 

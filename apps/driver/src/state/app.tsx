@@ -16,7 +16,21 @@ import * as api from '@/lib/api';
 import { getJson, KEYS, remove, setJson } from '@/lib/kv';
 import { sendHeartbeat, startHeartbeatLoop } from '@/lib/heartbeat';
 import { checkTracking, getSharing, readiness, type StartResult, startSharing, stopSharing, type TrackingStatus } from '@/lib/location';
-import { armShiftNudge, disarmShiftNudge, ensureChannels, notifyNewTask, onNotificationTap, onPushReceived } from '@/lib/notifications';
+import {
+  armShiftNudge,
+  disarmShiftNudge,
+  ensureChannels,
+  notifyNewTask,
+  onNotificationTap,
+  onPushReceived,
+  onTaskPushReceived,
+  presentedTaskPushes,
+  renameChannels,
+  type TapData,
+} from '@/lib/notifications';
+import type { OfficeContacts, TaskContacts } from '@/lib/contacts';
+import { type PushChanges, pushChanges, type SeenCopy, seenCopy, type TaskChanges, taskChanges } from '@/lib/taskPreview';
+import { type ConfirmAnswer, refusalWords, refusedAnswer, taskVehicleOp, wantedType } from '@/lib/vehicleConfirm';
 import { type DutyEnded, onDutyEnded } from '@/lib/duty';
 import { type ArrivalFlag, canMarkDone, taskKmSoFar, withSwapReading } from '@/lib/dayRules';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
@@ -114,11 +128,29 @@ export type StartTripOutcome =
 /** Add a stop on the way: added now, or kept on the phone; refused with the server's words; or the trip has 12 stops. */
 export type AddStopOutcome = { kind: 'added'; queued: boolean; offline: boolean } | { kind: 'refused'; message: string } | { kind: 'full' };
 export type CancelTripOutcome = { kind: 'cancelled' } | { kind: 'offline' } | { kind: 'refused'; message: string };
-/** A queued trip or stop the server refused for good: Today and the task screen say why (trip.failed / trip.stopFailed). */
+/**
+ * A queued trip or stop the server refused for good: Today and the task screen say why (trip.failed / trip.stopFailed).
+ * Hotfix 2 (J): also a vehicle confirmed offline for a task and refused (vehicleConfirm.failed, the refusal in words).
+ */
 export interface TripProblem {
-  key: 'trip.failed' | 'trip.stopFailed';
+  key: 'trip.failed' | 'trip.stopFailed' | 'vehicleConfirm.failed';
   reason: string;
 }
+
+/** Hotfix 2 (J): the vehicle of a task made without one: set now, kept on the phone for the queue, or refused (the word). */
+export type ConfirmVehicleOutcome = { kind: 'ok' } | { kind: 'queued' } | { kind: 'refused'; answer: ConfirmAnswer | string };
+
+/** Who to call about a task, as last read, with the task's updated_at then (read again when the task changes). */
+interface KeptContacts {
+  at: number;
+  updatedAt: string;
+  contacts: TaskContacts | null;
+}
+
+/** Contacts are read again after this long even when the task did not change (a number the office edited). */
+const CONTACTS_MAX_AGE_MS = 30 * 60_000;
+/** Me's office contacts are read again after this long. */
+const OFFICE_CONTACTS_MAX_AGE_MS = 10 * 60_000;
 
 /** Waiting for the queue to send what must go before a trip: at most this long, then the trip is queued behind it. */
 const TRIP_FLUSH_WAIT_MS = 8_000;
@@ -245,6 +277,27 @@ interface AppValue {
   addTripStop: (task: TaskWithStops, pick: Choice) => Promise<AddStopOutcome>;
   /** A self trip that has not started, cancelled by the driver (online only). */
   cancelTrip: (task: TaskWithStops) => Promise<CancelTripOutcome>;
+  /** Hotfix 2 (J): confirms the vehicle of a task made without one, before Start task (online at once, else queued first). */
+  confirmTaskVehicle: (task: TaskWithStops, vehicleId: string) => Promise<ConfirmVehicleOutcome>;
+  /** Hotfix 2 (F, K): who to call about each task, as last read (kept on the phone: shown offline). */
+  taskContacts: Record<string, TaskContacts>;
+  /** Reads a task's contacts (when the copy is old or the task changed; `force` when a screen opens with a connection). */
+  loadTaskContacts: (taskId: string, force?: boolean) => void;
+  /** Hotfix 2 (F): Me's Call office and Call fleet admin, as last read. */
+  officeContacts: OfficeContacts | null;
+  loadOfficeContacts: (force?: boolean) => void;
+  /** Hotfix 2 (I): what changed in a task since the driver last saw it (and what the newest "Task changed" push named). */
+  changesFor: (task: TaskWithStops) => TaskChanges;
+  /** The copy the driver last saw of a task (the preview keeps it while open, so its marks stay until it is left). */
+  seenCopyOf: (taskId: string) => SeenCopy | null;
+  /** The push changes kept for a task (the preview keeps them while open). */
+  pushChangesOf: (taskId: string) => PushChanges | null;
+  /** The tasks are on screen: the first copy of each is kept (what later changes are measured against). */
+  rememberShown: (tasks: TaskWithStops[]) => void;
+  /** The driver opened the task: this is the copy seen now; the push's marks are done. */
+  markPreviewed: (task: TaskWithStops) => void;
+  /** A task notification (tapped, received, or still in the tray): a "Task changed" push's changes are kept. */
+  rememberPush: (data: TapData) => void;
   tripProblem: TripProblem | null;
   clearTripProblem: () => void;
   /** needsVehicle: "I need another vehicle" (a breakdown or accident during a task, Phase 7). */
@@ -307,6 +360,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [pickedPlaces, setPickedPlaces] = useState<KnownPlace[]>(() => getJson<KnownPlace[]>(KEYS.tripPicked) ?? []);
   const [tripProblem, setTripProblem] = useState<TripProblem | null>(null);
   const clearTripProblem = useCallback(() => setTripProblem(null), []);
+  // Hotfix 2: who to call (per task, and the office), and the copies that show what changed in a task.
+  const [keptContacts, setKeptContacts] = useState<Record<string, KeptContacts>>(() => getJson<Record<string, KeptContacts>>(KEYS.taskContacts) ?? {});
+  const [officeContacts, setOfficeContacts] = useState<OfficeContacts | null>(() => getJson<{ at: number; contacts: OfficeContacts | null }>(KEYS.officeContacts)?.contacts ?? null);
+  const [seen, setSeen] = useState<Record<string, SeenCopy>>(() => getJson<Record<string, SeenCopy>>(KEYS.taskSeen) ?? {});
+  const [pushed, setPushed] = useState<Record<string, PushChanges>>(() => getJson<Record<string, PushChanges>>(KEYS.pushChanges) ?? {});
+  // The newest copies, written at once (a notification tap records its changes and opens the task in the same moment).
+  const seenRef = useRef(seen);
+  const pushedRef = useRef(pushed);
+  const contactsRef = useRef(keptContacts);
+  contactsRef.current = keptContacts;
+  const contactsLoading = useRef(new Set<string>());
   /** Trips this phone made that the server's task list may not have yet (lib/trips.ts keepLocalTrips). */
   const pendingTrips = useRef(new Set<string>());
   const lastVehicleRef = useRef(lastVehicleId);
@@ -321,10 +385,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   meRef.current = me;
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
+  const vehiclesRef = useRef(vehicles);
+  vehiclesRef.current = vehicles;
   const seenQueued = useRef(new Set<string>());
   const liveRef = useRef<LiveStatus>('off');
 
   const t = useCallback((key: string, vars?: Vars) => translate(language, key, vars), [language]);
+  const tRef = useRef(t);
+  tRef.current = t;
   const tList = useCallback((key: string) => translateList(language, key), [language]);
   const [notice, setNotice] = useState<string | null>(null);
   const clearNotice = useCallback(() => setNotice(null), []);
@@ -373,6 +441,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOurPlaces([]);
     setPickedPlaces([]);
     setTripProblem(null);
+    remove(KEYS.taskContacts);
+    remove(KEYS.officeContacts);
+    remove(KEYS.taskSeen);
+    remove(KEYS.pushChanges);
+    setKeptContacts({});
+    setOfficeContacts(null);
+    seenRef.current = {};
+    pushedRef.current = {};
+    setSeen({});
+    setPushed({});
     pendingTrips.current.clear();
     clearQueue();
     seenQueued.current.clear();
@@ -397,6 +475,101 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
   const loadKnownPlaces = useCallback(() => void loadOurPlaces(OUR_PLACES_MAX_AGE_MS), [loadOurPlaces]);
+
+  // --- Hotfix 2: who to call (F, K), and what changed in a task (I) --------------------------------
+  const keepContacts = useCallback((next: Record<string, KeptContacts>) => {
+    contactsRef.current = next;
+    setKeptContacts(next);
+    setJson(KEYS.taskContacts, next);
+  }, []);
+
+  const loadTaskContacts = useCallback((taskId: string, force = false) => {
+    const task = tasksRef.current.find((item) => item.id === taskId);
+    if (!task || contactsLoading.current.has(taskId)) return;
+    const had = contactsRef.current[taskId];
+    if (!force && had && had.updatedAt === task.updated_at && Date.now() - had.at < CONTACTS_MAX_AGE_MS) return;
+    contactsLoading.current.add(taskId);
+    void api.fetchTaskContacts(supabase, taskId)
+      .then((contacts) => keepContacts({ ...contactsRef.current, [taskId]: { at: Date.now(), updatedAt: task.updated_at, contacts } }))
+      .catch(() => undefined) // no connection: the copy kept on the phone stays
+      .finally(() => contactsLoading.current.delete(taskId));
+  }, [keepContacts]);
+
+  const loadOfficeContacts = useCallback((force = false) => {
+    const had = getJson<{ at: number; contacts: OfficeContacts | null }>(KEYS.officeContacts);
+    if (!force && had && Date.now() - had.at < OFFICE_CONTACTS_MAX_AGE_MS) return;
+    void api.fetchOfficeContacts(supabase)
+      .then((contacts) => {
+        setJson(KEYS.officeContacts, { at: Date.now(), contacts });
+        setOfficeContacts(contacts);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const keepSeen = useCallback((next: Record<string, SeenCopy>) => {
+    seenRef.current = next;
+    setSeen(next);
+    setJson(KEYS.taskSeen, next);
+  }, []);
+  const keepPushed = useCallback((next: Record<string, PushChanges>) => {
+    pushedRef.current = next;
+    setPushed(next);
+    setJson(KEYS.pushChanges, next);
+  }, []);
+
+  /** What the phone keeps per task (contacts, the copy seen, the push's marks) goes with the task from the list. */
+  const pruneTaskMemory = useCallback((ids: Set<string>) => {
+    const keep = <T,>(all: Record<string, T>) => Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id)));
+    const size = (o: object) => Object.keys(o).length;
+    const contacts = keep(contactsRef.current);
+    if (size(contacts) !== size(contactsRef.current)) keepContacts(contacts);
+    const copies = keep(seenRef.current);
+    if (size(copies) !== size(seenRef.current)) keepSeen(copies);
+    const marks = keep(pushedRef.current);
+    if (size(marks) !== size(pushedRef.current)) keepPushed(marks);
+  }, [keepContacts, keepSeen, keepPushed]);
+
+  const rememberShown = useCallback((list: TaskWithStops[]) => {
+    const old = seenRef.current;
+    const missing = list.filter((task) => !old[task.id]);
+    if (missing.length === 0) return;
+    const now = Date.now();
+    const next = { ...old };
+    for (const task of missing) next[task.id] = seenCopy(task, now);
+    keepSeen(next);
+  }, [keepSeen]);
+
+  const markPreviewed = useCallback((task: TaskWithStops) => {
+    keepSeen({ ...seenRef.current, [task.id]: seenCopy(task, Date.now(), true) });
+    if (pushedRef.current[task.id]) {
+      const rest = { ...pushedRef.current };
+      delete rest[task.id];
+      keepPushed(rest);
+    }
+  }, [keepSeen, keepPushed]);
+
+  const rememberPush = useCallback((data: TapData) => {
+    const taskId = data.taskId;
+    if (!taskId || data.kind !== 'changed') return;
+    const found = pushChanges(data.changes, data.at ?? Date.now());
+    if (!found) return;
+    const had = pushedRef.current[taskId];
+    if (had && had.at >= found.at) return; // this push (or a newer one) is kept already
+    // A push the driver saw already (older than the copy kept when the task was opened) marks nothing.
+    const copy = seenRef.current[taskId];
+    const read = (at: number) => !!copy?.opened && at <= copy.at;
+    if (read(found.at)) return;
+    // An older push not read yet adds its marks.
+    const before = had && !read(had.at) ? had : null;
+    const merged: PushChanges = before
+      ? { at: found.at, fields: [...new Set([...before.fields, ...found.fields])], stops: [...(before.stops ?? []), ...(found.stops ?? [])] }
+      : found;
+    keepPushed({ ...pushedRef.current, [taskId]: merged });
+  }, [keepPushed]);
+
+  const changesFor = useCallback((task: TaskWithStops) => taskChanges(seen[task.id] ?? null, task, pushed[task.id] ?? null), [seen, pushed]);
+  const seenCopyOf = useCallback((taskId: string) => seenRef.current[taskId] ?? null, []);
+  const pushChangesOf = useCallback((taskId: string) => pushedRef.current[taskId] ?? null, []);
 
   const refresh = useCallback(async () => {
     if (!meRef.current) return;
@@ -432,7 +605,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       // While something is still waiting on the phone, keep what the driver did rather than the older server copy.
       // A trip this phone just made stays until the list has it (the list may have been read a moment before).
-      if (!sent.offline) saveTasks(keepLocalTrips(taskRows, tasksRef.current, pendingTrips.current));
+      if (!sent.offline) {
+        saveTasks(keepLocalTrips(taskRows, tasksRef.current, pendingTrips.current));
+        // Hotfix 2: what the phone keeps per task follows the list; the open tasks' contacts are read when they changed.
+        pruneTaskMemory(new Set(tasksRef.current.map((task) => task.id)));
+        for (const task of tasksRef.current) if (task.status === 'assigned' || task.status === 'in_progress') loadTaskContacts(task.id);
+        loadOfficeContacts();
+      }
       setOffline(sent.offline);
       void loadOurPlaces(OUR_PLACES_REFRESH_MS);
       // Phase 7: another driver took my vehicle while I am on duty → the banner (until I choose or close it).
@@ -450,7 +629,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setRefreshing(false);
     }
-  }, [forgetEverything, saveMe, saveTasks, setLastVehicleId, loadOurPlaces]);
+  }, [forgetEverything, saveMe, saveTasks, setLastVehicleId, loadOurPlaces, pruneTaskMemory, loadTaskContacts, loadOfficeContacts]);
+
+  const refreshRef = useRef(refresh);
+  refreshRef.current = refresh;
 
   /** Looks at the location service and tells the screens what it found. */
   const checkTrackingNow = useCallback(async () => {
@@ -611,6 +793,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
     else if (kind === 'duty_auto_out' || kind === 'duty_office_out') void sendHeartbeat().then(() => refresh());
   }), [refresh]);
 
+  // Hotfix 2 (I): a "Task changed" push keeps what it named (also the ones still in the tray when the app starts or comes
+  // back), so the preview marks it, offline too.
+  useEffect(() => onTaskPushReceived(rememberPush), [rememberPush]);
+  useEffect(() => {
+    if (!signedIn) return;
+    const look = () => void presentedTaskPushes().then((list) => list.forEach(rememberPush));
+    look();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') look();
+    });
+    return () => sub.remove();
+  }, [signedIn, rememberPush]);
+
   // The server ended the duty (lib/duty.ts stopped location): the screens follow.
   useEffect(() => onDutyEnded((ended, silent) => {
     setSharingState(false);
@@ -663,6 +858,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setLanguage = useCallback((next: Language) => {
     setLanguageState(next);
     setJson(KEYS.language, next);
+    void renameChannels(next); // the "New tasks" channel's name in Android's settings
     const current = meRef.current;
     if (current && current.language !== next) {
       saveMe({ ...current, language: next });
@@ -911,54 +1107,60 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }), [refresh]);
 
   const startTask = useCallback(
-    (task: TaskWithStops, reading: OdometerEntry) => requireLocation('start', async () => {
-      const current = meRef.current;
-      if (!current) return;
-      const now = new Date().toISOString();
-      const odometerKm = reading.km;
-      queuePhoto(reading.photo, 'odometer', current.id);
-      enqueue(
-        {
-          kind: 'odometer_log',
-          row: {
-            id: Crypto.randomUUID(),
-            vehicle_id: task.vehicle_id,
-            employee_id: current.id,
-            task_id: task.id,
-            reading_km: odometerKm,
-            ocr_value: reading.ocrKm,
-            photo_id: reading.photo.id,
-            kind: 'task_start',
-            logged_at: now,
-            entry: reading.entry,
-            photo_attempts: reading.attempts,
+    (task: TaskWithStops, reading: OdometerEntry) => {
+      // Hotfix 2 (J): a task made without a vehicle starts only once one is confirmed (the phone's copy has it then).
+      const vehicleId = task.vehicle_id ?? tasksRef.current.find((item) => item.id === task.id)?.vehicle_id ?? null;
+      if (!vehicleId) return Promise.resolve(false);
+      return requireLocation('start', async () => {
+        const current = meRef.current;
+        if (!current) return;
+        const now = new Date().toISOString();
+        const odometerKm = reading.km;
+        queuePhoto(reading.photo, 'odometer', current.id);
+        enqueue(
+          {
+            kind: 'odometer_log',
+            row: {
+              id: Crypto.randomUUID(),
+              vehicle_id: vehicleId,
+              employee_id: current.id,
+              task_id: task.id,
+              reading_km: odometerKm,
+              ocr_value: reading.ocrKm,
+              photo_id: reading.photo.id,
+              kind: 'task_start',
+              logged_at: now,
+              entry: reading.entry,
+              photo_attempts: reading.attempts,
+            },
           },
-        },
-        { kind: 'task_patch', id: task.id, patch: { status: 'in_progress', start_odometer_km: odometerKm, started_at: now } },
-      );
-      // The start stop (passengers get in where the trip starts) is arrived with the start, as the server marks it
-      // (trigger tasks_start_stop_arrived): no Arrived button and no arrival nudge for it.
-      patchLocalTask(task.id, (item) => ({
-        ...item,
-        status: 'in_progress',
-        start_odometer_km: odometerKm,
-        started_at: now,
-        task_stops: item.task_stops.map((stop) => (stop.is_start && stop.status === 'pending' ? { ...stop, status: 'arrived', arrived_at: now } : stop)),
-      }));
-      bumpOdometer(task.vehicle_id, odometerKm);
-      void playSound('start');
-      beginTaskKm(task.id);
-      setGpsKm(kmCounters());
-      // The task's vehicle is now the one being driven: the server records it from the task's start (Phase 7);
-      // the duty session opened below (when off duty) carries it too.
-      if (current.current_vehicle_id !== task.vehicle_id) saveMe({ ...current, current_vehicle_id: task.vehicle_id });
-      // Starting a task turns location sharing on (clocks in when off duty).
-      const result = await startSharing(serviceTexts);
-      setSharingState(result === 'on');
-      setDutySince(getSharing()?.startedAt ?? null);
-      void checkTrackingNow();
-      void flushNow();
-    }),
+          { kind: 'task_patch', id: task.id, patch: { status: 'in_progress', start_odometer_km: odometerKm, started_at: now } },
+        );
+        // The start stop (passengers get in where the trip starts) is arrived with the start, as the server marks it
+        // (trigger tasks_start_stop_arrived): no Arrived button and no arrival nudge for it.
+        patchLocalTask(task.id, (item) => ({
+          ...item,
+          vehicle_id: vehicleId,
+          status: 'in_progress',
+          start_odometer_km: odometerKm,
+          started_at: now,
+          task_stops: item.task_stops.map((stop) => (stop.is_start && stop.status === 'pending' ? { ...stop, status: 'arrived', arrived_at: now } : stop)),
+        }));
+        bumpOdometer(vehicleId, odometerKm);
+        void playSound('start');
+        beginTaskKm(task.id);
+        setGpsKm(kmCounters());
+        // The task's vehicle is now the one being driven: the server records it from the task's start (Phase 7);
+        // the duty session opened below (when off duty) carries it too.
+        if (current.current_vehicle_id !== vehicleId) saveMe({ ...current, current_vehicle_id: vehicleId });
+        // Starting a task turns location sharing on (clocks in when off duty).
+        const result = await startSharing(serviceTexts);
+        setSharingState(result === 'on');
+        setDutySince(getSharing()?.startedAt ?? null);
+        void checkTrackingNow();
+        void flushNow();
+      });
+    },
     [bumpOdometer, patchLocalTask, saveMe, serviceTexts, checkTrackingNow, requireLocation],
   );
 
@@ -1000,6 +1202,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     (task: TaskWithStops, reading: OdometerEntry, fuel: FuelEntry | null) => {
       const current = meRef.current;
       if (!current) return;
+      // A task under way always has its vehicle (the server refuses a start without one); the held one is a fallback.
+      const vehicleId = task.vehicle_id ?? current.current_vehicle_id ?? lastVehicleRef.current;
+      if (!vehicleId) return;
       const now = new Date().toISOString();
       const odometerKm = reading.km;
       queuePhoto(reading.photo, 'odometer', current.id);
@@ -1007,7 +1212,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         kind: 'odometer_log',
         row: {
           id: Crypto.randomUUID(),
-          vehicle_id: task.vehicle_id,
+          vehicle_id: vehicleId,
           employee_id: current.id,
           task_id: task.id,
           reading_km: odometerKm,
@@ -1019,7 +1224,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           photo_attempts: reading.attempts,
         },
       });
-      if (fuel) queueFuel(fuel, task.vehicle_id, task.id, odometerKm, now);
+      if (fuel) queueFuel(fuel, vehicleId, task.id, odometerKm, now);
       // Stops can only be marked while the task is running: the ones still open are
       // skipped as "not visited" first (the driver confirmed finishing without them).
       const open = task.task_stops.filter((stop) => stop.status === 'pending' || stop.status === 'arrived');
@@ -1040,7 +1245,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ),
         task_stops: item.task_stops.map((stop) => (open.includes(stop) ? { ...stop, ...skipped } : stop)),
       }));
-      bumpOdometer(task.vehicle_id, odometerKm);
+      bumpOdometer(vehicleId, odometerKm);
       void playSound('done');
       endTaskKm();
       setGpsKm(kmCounters());
@@ -1171,6 +1376,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return opsBeforeTrip() === 0;
   }, []);
 
+  // Hotfix 2 (J): the vehicle of a task made without one, before its start. Online the server answers at once (a
+  // refusal is said on the screen); with no connection (or no answer) it is queued, so it goes before the start's ops.
+  const confirmTaskVehicle = useCallback(async (task: TaskWithStops, vehicleId: string): Promise<ConfirmVehicleOutcome> => {
+    const setLocal = () => patchLocalTask(task.id, (item) => ({ ...item, vehicle_id: vehicleId }));
+    const queue = (): ConfirmVehicleOutcome => {
+      enqueue(taskVehicleOp(task.id, vehicleId, new Date().toISOString()));
+      setLocal();
+      void flushNow();
+      return { kind: 'queued' };
+    };
+    if (!dataRef.current) return queue();
+    try {
+      const answer = await api.confirmTaskVehicle(supabase, task.id, vehicleId);
+      if (answer === 'ok') {
+        setLocal();
+        return { kind: 'ok' };
+      }
+      // The task moved on meanwhile (another driver, started, a vehicle set by the office): the list is read again.
+      if (answer === 'not_yours' || answer === 'started' || answer === 'has_vehicle') void refresh();
+      return { kind: 'refused', answer };
+    } catch (error) {
+      if (error instanceof api.ApiError && error.permanent) return { kind: 'refused', answer: error.message };
+      return queue();
+    }
+  }, [patchLocalTask, refresh]);
+
   const rememberPick = useCallback((pick: Choice) => {
     const place = knownFromPick(pick);
     if (!place) return;
@@ -1268,10 +1499,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setTripProblem({ key: 'trip.failed', reason: message });
     } else if (op.kind === 'trip_stop') {
       setTripProblem({ key: 'trip.stopFailed', reason: message });
+    } else if (op.kind === 'task_vehicle') {
+      // Hotfix 2 (J): the vehicle confirmed offline was refused (the start behind it is refused too and kept): why, in
+      // words, and the server's copy of the task again (no vehicle: Start task asks for one again).
+      const task = tasksRef.current.find((item) => item.id === op.id);
+      const plate = vehiclesRef.current.find((v) => v.id === op.vehicle_id)?.reg_no ?? '';
+      setTripProblem({ key: 'vehicleConfirm.failed', reason: refusalWords(tRef.current, refusedAnswer(message), plate, task ? wantedType(task) : null) });
+      void refreshRef.current();
     }
   }), []);
 
   const knownPlaces = useMemo(() => mergeKnown(pickedPlaces, knownFromTasks(tasks), ourPlaces), [pickedPlaces, tasks, ourPlaces]);
+  const taskContacts = useMemo(
+    () => Object.fromEntries(Object.entries(keptContacts).flatMap(([id, kept]) => (kept.contacts ? [[id, kept.contacts]] : []))) as Record<string, TaskContacts>,
+    [keptContacts],
+  );
 
   const vehicle = useMemo(
     () => vehicles.find((item) => item.id === me?.current_vehicle_id) ?? null,
@@ -1292,6 +1534,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     startTask, completeTask, logOdometer, logFuel, sendReport,
     saveProfilePhoto, pendingVehiclePhotos: vehiclePhotos, addVehiclePhoto,
     knownPlaces, loadKnownPlaces, startTrip, addTripStop, cancelTrip, tripProblem, clearTripProblem,
+    confirmTaskVehicle, taskContacts, loadTaskContacts, officeContacts, loadOfficeContacts,
+    changesFor, seenCopyOf, pushChangesOf, rememberShown, markPreviewed, rememberPush,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

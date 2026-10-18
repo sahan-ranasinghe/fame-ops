@@ -2,8 +2,13 @@
 //
 // Channels (Android plays the channel's sound; the sounds are made by
 // scripts/make-sounds.sh and bundled by the expo-notifications plugin):
-//   tasks-new       a new task: loud ring, strong vibration (push from the server)
-//   tasks-changed   a task changed or cancelled (push)
+//   new-tasks       Hotfix 2 (B): new, changed, reassigned and cancelled tasks, maximum
+//                   importance, a long vibration, heads-up, the whole text on the lock
+//                   screen (lib/channels.ts). Its name is in the driver's language.
+//                   push-task uses it for the phones that registered it (lib/push.ts).
+//   tasks-new       a new task: loud ring, strong vibration (push from the server; phones
+//                   on an older update)
+//   tasks-changed   a task changed or cancelled (push; phones on an older update)
 //   general         a task given to someone else (push)
 //   tracking        the location-sharing watchdog (local)
 //
@@ -20,9 +25,14 @@
 
 import * as Notifications from 'expo-notifications';
 
+import { translate } from '../i18n';
+import { newTasksChannel } from './channels';
 import { getJson, KEYS, remove, setJson } from './kv';
+import type { Language } from './types';
 
 export const CHANNELS = {
+  /** Hotfix 2 (B): the loud one, for every task push on phones that registered it. */
+  newTasks: 'new-tasks',
   tasksNew: 'tasks-new',
   tasksChanged: 'tasks-changed',
   general: 'general',
@@ -63,10 +73,47 @@ export async function requestNotifications(): Promise<boolean> {
 }
 
 let channelsReady = false;
+let newTasksReady = false;
 
-/** Creates the channels once per app start (Android keeps them; a channel's sound cannot change later). */
-export async function ensureChannels(): Promise<void> {
-  if (channelsReady) return;
+/** The "New tasks" channel in a language (Android lets an existing channel's name and description change, nothing else). */
+async function setNewTasksChannel(language: Language): Promise<boolean> {
+  const spec = newTasksChannel((key, vars) => translate(language, key, vars));
+  try {
+    await Notifications.setNotificationChannelAsync(spec.id, {
+      name: spec.name,
+      description: spec.description,
+      importance: Notifications.AndroidImportance.MAX,
+      sound: spec.sound,
+      vibrationPattern: spec.vibrationPattern,
+      enableVibrate: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      enableLights: true,
+      lightColor: spec.lightColor,
+      showBadge: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The driver changed the language: the "New tasks" channel's name in Android's settings follows. */
+export async function renameChannels(language: Language): Promise<void> {
+  if (newTasksReady) await setNewTasksChannel(language);
+}
+
+/** Whether the "New tasks" channel exists (the push token is registered with it only then). */
+export function newTasksChannelReady(): boolean {
+  return newTasksReady;
+}
+
+/**
+ * Creates the channels once per app start (Android keeps them; a channel's sound cannot change later). Answers whether
+ * the "New tasks" channel is there, so the push token can be registered with it.
+ */
+export async function ensureChannels(): Promise<boolean> {
+  if (channelsReady) return newTasksReady;
+  newTasksReady = await setNewTasksChannel(getJson<Language>(KEYS.language) === 'si' ? 'si' : 'en');
   await Notifications.setNotificationChannelAsync(CHANNELS.tasksNew, {
     name: 'New tasks',
     importance: Notifications.AndroidImportance.MAX,
@@ -93,16 +140,17 @@ export async function ensureChannels(): Promise<void> {
     vibrationPattern: [0, 400, 200, 400],
   });
   channelsReady = true;
+  return newTasksReady;
 }
 
-/** Shows a new-task notification from the app itself (used when the phone has no push token). */
+/** Shows a new-task notification from the app itself (used when the phone has no push token), on the "New tasks" channel. */
 export async function notifyNewTask(title: string, body: string, taskId: string): Promise<void> {
   try {
     if (!(await notificationsAllowed())) return;
-    await ensureChannels();
+    const ready = await ensureChannels();
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { taskId, kind: 'new' } },
-      trigger: { channelId: CHANNELS.tasksNew },
+      trigger: { channelId: ready ? CHANNELS.newTasks : CHANNELS.tasksNew },
     });
   } catch {
     // A missed banner is not worth an error: the task is on the Today screen.
@@ -123,13 +171,13 @@ export async function notifyArrival(title: string, body: string, taskId: string)
   }
 }
 
-/** Plays the new-task ring once, so the driver can check the volume. */
+/** Plays the new-task ring once, on the channel the task pushes use, so the driver can check the volume. */
 export async function showTestNotification(title: string, body: string): Promise<void> {
   try {
-    await ensureChannels();
+    const ready = await ensureChannels();
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { kind: 'test' } },
-      trigger: { channelId: CHANNELS.tasksNew },
+      trigger: { channelId: ready ? CHANNELS.newTasks : CHANNELS.tasksNew },
     });
   } catch {
     // Nothing to do: notifications are not allowed.
@@ -213,12 +261,43 @@ export async function disarmWatchdog(): Promise<void> {
 export interface TapData {
   kind?: string;
   taskId?: string;
+  /** A "Task changed" push: what changed (Hotfix 2, I: the preview marks it). */
+  changes?: unknown;
+  /** When the notification came (ms). */
+  at?: number;
+}
+
+function dataOf(notification: Notifications.Notification | null | undefined): TapData {
+  const data = notification?.request.content.data as Record<string, unknown> | undefined;
+  return {
+    kind: typeof data?.kind === 'string' ? data.kind : undefined,
+    taskId: typeof data?.taskId === 'string' ? data.taskId : undefined,
+    changes: data?.changes,
+    at: typeof notification?.date === 'number' ? notification.date : undefined,
+  };
 }
 
 /** What a notification carried, from a response to a tap. */
 export function tapData(response: Notifications.NotificationResponse | null | undefined): TapData {
-  const data = response?.notification.request.content.data as TapData | undefined;
-  return { kind: typeof data?.kind === 'string' ? data.kind : undefined, taskId: typeof data?.taskId === 'string' ? data.taskId : undefined };
+  return dataOf(response?.notification);
+}
+
+/** A task push arrived while the app runs (Hotfix 2, I): its data, so a "Task changed" push's changes are kept. */
+export function onTaskPushReceived(listener: (data: TapData) => void): () => void {
+  const sub = Notifications.addNotificationReceivedListener((notification) => {
+    const data = dataOf(notification);
+    if (data.taskId) listener(data);
+  });
+  return () => sub.remove();
+}
+
+/** The task pushes still in the tray (the app was closed when they came): their changes are kept the same way. */
+export async function presentedTaskPushes(): Promise<TapData[]> {
+  try {
+    return (await Notifications.getPresentedNotificationsAsync()).map(dataOf).filter((d) => !!d.taskId);
+  } catch {
+    return [];
+  }
 }
 
 /** Runs `callback` when the driver taps a notification while the app is running. */

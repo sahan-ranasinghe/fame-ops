@@ -11,7 +11,11 @@
 //               fuel videos (one resumable upload each, sent a chunk at a time
 //               with the offset kept after every chunk). Sent strictly in the
 //               order they happened; a video waiting for Wi-Fi is stepped over
-//               so it never blocks the rest.
+//               so it never blocks the rest. Hotfix 2 (J): the vehicle the
+//               driver confirmed for a task made without one (task_vehicle),
+//               put in the queue before that task's start, so the server has
+//               the vehicle when the start arrives (it refuses a start
+//               without one).
 //   points      location points. Sent in batches of up to 500, oldest first,
 //               once no op is waiting, so the sharing period they belong to is
 //               already on the server. A batch that gets no answer is sent
@@ -47,6 +51,11 @@ export type Op =
   /** Accept / decline go through RPCs that answer a word; an 'already_*' answer is done, not an error. */
   | { kind: 'task_accept'; id: string; at: string }
   | { kind: 'task_decline'; id: string; reason: realApi.DeclineReason; note: string | null; at: string }
+  /**
+   * Hotfix 2 (J): the vehicle confirmed for a task made without one (confirm_task_vehicle), when Start task found no
+   * connection; id = the task. 'ok' (or 'started': the task is under way) is done; any other answer is a refusal, kept.
+   */
+  | { kind: 'task_vehicle'; id: string; vehicle_id: string; at: string }
   | { kind: 'stop_patch'; id: string; patch: realApi.StopPatch }
   | {
     kind: 'photo';
@@ -409,6 +418,11 @@ export function createSync(deps: SyncDeps) {
         const answer = await api.declineTask(client, op.id, op.reason, op.note, op.at);
         deps.onAnswer?.(op, answer);
         return;
+      }
+      case 'task_vehicle': {
+        const answer = await api.confirmTaskVehicle(client, op.id, op.vehicle_id);
+        if (answer === 'ok' || answer === 'started') return;
+        throw new ApiError(`task vehicle: ${answer || 'no answer'}`, true, answer);
       }
       case 'stop_patch':
         // A trip's first stop made from the queue has the server's id now (sendTrip).

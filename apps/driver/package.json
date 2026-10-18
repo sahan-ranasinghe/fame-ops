@@ -70,7 +70,8 @@
     "test:setup": "tsx scripts/test-phone-setup.ts",
     "test:nav": "tsx scripts/test-nav.ts",
     "test:rules": "tsx scripts/test-rules.ts",
-    "test:trips": "tsx scripts/test-trips.ts"
+    "test:trips": "tsx scripts/test-trips.ts",
+    "test:preview": "tsx scripts/test-preview.ts"
   },
   "private": true,
   "expo": {
