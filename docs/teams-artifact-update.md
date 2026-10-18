@@ -1,5 +1,32 @@
 # Updating the Teams copy of the Fame Fleet artifact
 
+## Part 3b (18 October 2026, branch `phase7-3b`)
+
+Build from main once Part 3b is merged, with `npm run build:artifact` (`apps/office`):
+
+- `apps/office/dist-artifact/index.html` (one file, no Supabase code, no key) and
+  `apps/office/dist-artifact/capabilities.json`, pasted unchanged: the connector **Fame Fleet** with 85 tools. New since
+  Hotfix 3: `driver_profile`, `set_driver_licence_photo`, `set_unavailability`, `remove_unavailability`, `drivers_board`,
+  `ask_drivers`, `ask_answers`. In the artifact the answers to a question refresh every 10 s (the web app gets them at
+  once); a question asked through the shared key has no person to notify, so its answers show only on its page.
+- Changed for callers: `create_driver` needs the driver's phone number (asked for by the boss).
+
+The message for the Teams chat:
+
+> Fame Fleet is updated. What is new for the office:
+>
+> - A Drivers board (in the menu under Today): every driver with where they are (on a task until when, on duty, off
+>   duty, not available), when they were last seen and near which town, their next task and when they usually start,
+>   with Call and WhatsApp. The Week view shows each driver's tasks and the days they are not available.
+> - Ask drivers instead of calling around: "Free for a trip tomorrow 09:00–12:00?", "When can you be at the office?" or
+>   "Where are you now?". The drivers answer with one tap in their app; a Yes can be given the trip in one tap.
+> - Drivers (and the office) can mark when a driver is not available: a day, a morning, an afternoon or a few hours.
+>   Who's available, the best match and the warnings when you assign a task take it into account.
+> - A driver can say "Running late" (10, 15, 30 minutes or more) or "Can't make it"; it shows on the task and on Live,
+>   and the person who asked for the trip is told.
+> - Each driver has a profile: WhatsApp number, emergency contact and driving licence with photos, and every change they
+>   make is shown. A new driver now needs a phone number.
+
 ## Hotfix 3 (18 October 2026, main at `08d45f5`)
 
 Build from main at `08d45f5` with `npm run build:artifact` (`apps/office`):

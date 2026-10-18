@@ -8,7 +8,7 @@
 //   OFFICE_MCP_URL   http://127.0.0.1:54321/functions/v1/office-mcp
 //   OFFICE_MCP_KEY   the local shared key (never the real one)
 //   API_URL, ANON_KEY  the local stack (scripts/test-office-local.sh sets them)
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { totp } from "./totp";
@@ -18,6 +18,22 @@ const KEY = process.env.OFFICE_MCP_KEY || "";
 const API = (process.env.API_URL || "http://127.0.0.1:54321").replace(/\/$/, "");
 const ANON = process.env.ANON_KEY || "";
 const stamp = Date.now().toString(36);
+
+/**
+ * A task's card on the board. Hotfix 3 (L3): a column shows 25 cards, and late in the evening every test's task is on
+ * tomorrow's board, so the card can be under a column's "Load more": the columns load their next cards until it shows.
+ */
+async function boardCard(page: Page, text: string) {
+  const card = page.locator(".tcard", { hasText: text });
+  await expect(page.locator('[data-testid^="board-col-"]').first()).toBeVisible();
+  for (let i = 0; i < 8 && (await card.count()) === 0; i++) {
+    const more = page.locator('[data-testid^="board-col-"]').getByRole("button", { name: "Load more" });
+    const n = await more.count();
+    for (let k = 0; k < n; k++) await more.nth(k).click().catch(() => undefined);
+    await page.waitForTimeout(n ? 800 : 400);
+  }
+  return card;
+}
 
 /** The driver's side, as the Fame Driver app does it: sign in with the PIN, then REST with that session. */
 async function driverRest(username: string, pin: string) {
@@ -570,7 +586,7 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await page.keyboard.press("Escape");
   await expect(detail).toHaveCount(0);
   await expect(page).toHaveURL(/\/tasks/);
-  await expect(card).toContainText("Sent · not opened yet");
+  await expect(await boardCard(page, `E2E decline ${stamp}`)).toContainText("Sent · not opened yet");
   // This task left the "Needs a driver" column (another run's declined task may still sit there).
   await expect(page.locator(".col", { hasText: "Needs a driver" }).locator(".tcard", { hasText: `E2E decline ${stamp}` })).toHaveCount(0);
 
@@ -933,7 +949,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
 
   // The task is on that day's board with its leave-by time.
   await page.goto(`/tasks?date=${day}`);
-  await expect(page.locator(".tcard", { hasText: "Trip · Galle" }).first()).toContainText("Leave by");
+  await expect((await boardCard(page, "Trip · Galle")).first()).toContainText("Leave by");
 
   // The request is approved, booked directly; its timeline says so; Cancel booking with a reason.
   await page.goto("/requests");

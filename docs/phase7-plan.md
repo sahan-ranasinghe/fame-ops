@@ -2293,7 +2293,12 @@ Running late on the task page and the board; D1 the driver app.
   lists; Vitest (100 files); the e2e "Part 3b" (the board and its week view, a question answered live, the profile); the
   driver app's `test:asks` and `test:sync` (the two ops).
 - **Found while testing:** the board's week view compared the database's times as strings ("+00:00" against ".000Z"), so
-  a full day also showed on the day before: compared as times now (the suite checks the one day).
+  a full day also showed on the day before: compared as times now (the suite checks the one day). And a cost: the rows'
+  presence (last seen with its town, usual start, next task) was built for every `driverRows` call, so the Overview's
+  needs-a-driver list (one call per waiting task) looked up a town for every driver per task, and on a cold office-api
+  worker the Overview ran past the CPU limit ("didn't answer", a loop of cold starts on the local stack). Now only Who's
+  available and the board ask for it, and every town comes from one database call (`nearest_towns`): the Overview 0.28 s
+  warm and 0.76 s cold on the test data (86 drivers, 174 open issues), before 0.85–1.3 s warm and failing cold.
 - **The fresh reviewer (no blocker; one to fix, five minor; all done):**
   1. A late report stayed on a task given to another driver ("Running late 30 min" under Nuwan for Kamal's report, on
      the office's pages and in Nuwan's app). **Fixed:** the trigger `tasks_late_report_reset` clears it when the task
