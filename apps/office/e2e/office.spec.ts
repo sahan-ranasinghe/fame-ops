@@ -90,7 +90,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   // Set up through the connector, as the admin would in Claude.
   const email = `e2e.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Admin", email, role: "admin" });
-  const driver = { name: `E2E Driver ${stamp}`, code: `E2E-${stamp}`, username: `e2e.${stamp}`, pin: "246810" };
+  const driver = { name: `E2E Driver ${stamp}`, code: `E2E-${stamp}`, username: `e2e.${stamp}`, pin: "246810", phone: "0771234500" };
   await tool("create_driver", driver);
   const plate = `WP E2E-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
@@ -334,7 +334,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
 test("a driver's day in the office (Phase 7): on duty on Live, moved to another vehicle, clocked out on the card, the duty log with its dates", async ({ page }) => {
   const email = `e2e.duty.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Duty Desk", email, permissions: ["view", "assign_tasks"] });
-  const driver = { name: `E2E Dutyman ${stamp}`, code: `E2U-${stamp}`, username: `e2u.${stamp}`, pin: "246813" };
+  const driver = { name: `E2E Dutyman ${stamp}`, code: `E2U-${stamp}`, username: `e2u.${stamp}`, pin: "246813", phone: "0771234500" };
   await tool("create_driver", driver);
   const plateA = `WP E2U-${stamp.slice(-4).toUpperCase()}`;
   const plateB = `WP E2V-${stamp.slice(-4).toUpperCase()}`;
@@ -516,8 +516,8 @@ test("a dispatcher (view + assign tasks) gets the tasks board, not mileage or th
 test("a driver accepts one task and declines another; the office gives it to a free driver from the suggestions", async ({ page }) => {
   const email = `e2e.dispatch2.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Dispatcher Two", email, permissions: ["view", "assign_tasks"] });
-  const d1 = { name: `E2E Decliner ${stamp}`, code: `E2D-${stamp}`, username: `e2d.${stamp}`, pin: "135790" };
-  const d2 = { name: `E2E Standby ${stamp}`, code: `E2S-${stamp}`, username: `e2s.${stamp}`, pin: "135791" };
+  const d1 = { name: `E2E Decliner ${stamp}`, code: `E2D-${stamp}`, username: `e2d.${stamp}`, pin: "135790", phone: "0771234500" };
+  const d2 = { name: `E2E Standby ${stamp}`, code: `E2S-${stamp}`, username: `e2s.${stamp}`, pin: "135791", phone: "0771234500" };
   await tool("create_driver", d1);
   await tool("create_driver", d2);
   const plate = `WP E2D-${stamp.slice(-4).toUpperCase()}`;
@@ -582,8 +582,8 @@ test("a task that needs a driver can't be missed; the decide page fills the vehi
   test.setTimeout(240_000);
   const email = `e2e.needs.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Needs Driver", email, permissions: ["view", "request", "approve", "assign_tasks"] });
-  const d1 = { name: `E2E Nope ${stamp}`, code: `E2N-${stamp}`, username: `e2n.${stamp}`, pin: "246801" };
-  const d2 = { name: `E2E Ready ${stamp}`, code: `E2Y-${stamp}`, username: `e2y.${stamp}`, pin: "246802" };
+  const d1 = { name: `E2E Nope ${stamp}`, code: `E2N-${stamp}`, username: `e2n.${stamp}`, pin: "246801", phone: "0771234500" };
+  const d2 = { name: `E2E Ready ${stamp}`, code: `E2Y-${stamp}`, username: `e2y.${stamp}`, pin: "246802", phone: "0771234500" };
   await tool("create_driver", d1);
   await tool("create_driver", d2);
   const plate = `WP E2N-${stamp.slice(-4).toUpperCase()}`;
@@ -653,8 +653,8 @@ for (const scheme of ["light", "dark"] as const) {
     // duty with today's vehicle, parked side by side near it.
     const depot = { name: `Twins depot ${tag}`, lat: 7.1 + (parseInt(stamp.slice(-3), 36) % 1000) / 5000 + (scheme === "dark" ? 0.3 : 0), lng: 80.2 };
     await tool("add_place", { ...depot, kind: "office" });
-    const a = { name: `Twin ${tag}`, code: `TWA-${tag}`, username: `twa.${tag}`, pin: "135791" };
-    const b = { name: `Twin ${tag} Two`, code: `TWB-${tag}`, username: `twb.${tag}`, pin: "135792" };
+    const a = { name: `Twin ${tag}`, code: `TWA-${tag}`, username: `twa.${tag}`, pin: "135791", phone: "0771234501" };
+    const b = { name: `Twin ${tag} Two`, code: `TWB-${tag}`, username: `twb.${tag}`, pin: "135792", phone: "0771234501" };
     const plateA = `WP TWA-${scheme[0].toUpperCase()}${stamp.slice(-4).toUpperCase()}`;
     const plateB = `WP TWB-${scheme[0].toUpperCase()}${stamp.slice(-4).toUpperCase()}`;
     const phones: { app: Awaited<ReturnType<typeof driverRest>>; id: string; session: string }[] = [];
@@ -807,7 +807,7 @@ for (const scheme of ["light", "dark"] as const) {
 test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note, Resolve closes the driver's report", async ({ page }) => {
   const email = `e2e.issues.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Fleet Admin", email, permissions: ["view", "issues", "vehicles"] });
-  const driver = { name: `E2E Reporter ${stamp}`, code: `E2R-${stamp}`, username: `e2r.${stamp}`, pin: "975310" };
+  const driver = { name: `E2E Reporter ${stamp}`, code: `E2R-${stamp}`, username: `e2r.${stamp}`, pin: "975310", phone: "0771234500" };
   await tool("create_driver", driver);
   const plate = `WP E2R-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 500 });
@@ -896,7 +896,7 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
 test("an approver books a vehicle in one step from the Free group; the task is on the board with Leave by; the booking is cancelled", async ({ page }) => {
   const email = `e2e.book.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Booker", email, permissions: ["view", "request", "approve", "assign_tasks", "users"] });
-  const driver = { name: `E2E Pool Driver ${stamp}`, code: `E2B-${stamp}`, username: `e2b.${stamp}`, pin: "246810" };
+  const driver = { name: `E2E Pool Driver ${stamp}`, code: `E2B-${stamp}`, username: `e2b.${stamp}`, pin: "246810", phone: "0771234500" };
   await tool("create_driver", driver);
   const plate = `WP E2B-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Suzuki Every", vehicle_type: "van", seats: 7, current_odometer_km: 100 });
@@ -968,7 +968,7 @@ test("a requester changes an approved booking; the approver sees who is availabl
   const approverEmail = `e2e.p6a.${stamp}@fame.test`;
   const requesterEmail = `e2e.p6r.${stamp}@fame.test`;
   const requester = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E P6 Requester", email: requesterEmail, permissions: ["request"] });
-  const driver = { name: `E2E P6 Driver ${stamp}`, code: `E2P-${stamp}`, username: `e2p.${stamp}`, pin: "864209" };
+  const driver = { name: `E2E P6 Driver ${stamp}`, code: `E2P-${stamp}`, username: `e2p.${stamp}`, pin: "864209", phone: "0771234500" };
   await tool("create_driver", driver);
   const plate = `WP E2P-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 9, current_odometer_km: 300 });
@@ -1073,7 +1073,7 @@ test("a requester changes an approved booking; the approver sees who is availabl
 test("the Fuel page: a fill with its video uploaded from the phone plays in the office; the checklist is edited in Fleet settings", async ({ page }) => {
   const email = `e2e.fuel.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Fuel Admin", email, permissions: ["view", "vehicles", "assign_tasks", "users"] });
-  const driver = { name: `E2E Fuel Driver ${stamp}`, code: `E2F-${stamp}`, username: `e2f.${stamp}`, pin: "357913" };
+  const driver = { name: `E2E Fuel Driver ${stamp}`, code: `E2F-${stamp}`, username: `e2f.${stamp}`, pin: "357913", phone: "0771234500" };
   await tool("create_driver", driver);
   const plate = `WP E2F-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 9, current_odometer_km: 900 });
@@ -1358,7 +1358,7 @@ test("Phase 7, Part 2b: the plan on the map beside the timeline; a route's gaps 
   test.setTimeout(180_000);
   const email = `e2e.maps.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Maps", email, permissions: ["view", "assign_tasks"] });
-  const driver = { name: `E2E Mapper ${stamp}`, code: `E2M-${stamp}`, username: `e2m.${stamp}`, pin: "864201" };
+  const driver = { name: `E2E Mapper ${stamp}`, code: `E2M-${stamp}`, username: `e2m.${stamp}`, pin: "864201", phone: "0771234500" };
   await tool("create_driver", driver);
   const verify = await fetch(user.set_password_link, { redirect: "manual" });
   const landing = verify.headers.get("location") ?? "";
@@ -1427,7 +1427,7 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   const requester = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E P3 Requester", email: `e2e.p3req.${stamp}@fame.test`, permissions: ["view", "request"] });
   const dispatcher = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E P3 Dispatcher", email: `e2e.p3disp.${stamp}@fame.test`, permissions: ["view", "request", "assign_tasks"] });
   const approver = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E P3 Approver", email: `e2e.p3appr.${stamp}@fame.test`, permissions: ["view", "request", "approve", "assign_tasks"] });
-  const driver = { name: `E2E P3 Driver ${stamp}`, code: `EP3-${stamp}`, username: `ep3.${stamp}`, pin: "357913" };
+  const driver = { name: `E2E P3 Driver ${stamp}`, code: `EP3-${stamp}`, username: `ep3.${stamp}`, pin: "357913", phone: "0771234500" };
   await tool("create_driver", driver);
   const plate = `WP EP3-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
@@ -1510,7 +1510,7 @@ test("Phase 7, Part 4: a trip a driver started is tagged and switched to persona
   const user = await tool<{ set_password_link: string }>("create_office_user", {
     name: "E2E Trips Desk", email: `e2e.trips.${stamp}@fame.test`, permissions: ["view", "assign_tasks", "approve", "vehicles", "issues", "users"],
   });
-  const driver = { name: `E2E Tripper ${stamp}`, code: `E2T-${stamp}`, username: `e2t.${stamp}`, pin: "864201" };
+  const driver = { name: `E2E Tripper ${stamp}`, code: `E2T-${stamp}`, username: `e2t.${stamp}`, pin: "864201", phone: "0771234500" };
   await tool("create_driver", driver);
   const plate = `WP ETR-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 2000 });

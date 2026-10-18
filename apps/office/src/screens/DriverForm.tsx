@@ -69,7 +69,7 @@ export function DriverForm() {
           <div className="field"><label htmlFor="nd-name">Full name</label><input id="nd-name" maxLength={120} value={f.name} onChange={(e) => set("name", e.target.value)} data-focus /></div>
           <div className="grid2">
             <div className="field"><label htmlFor="nd-code">Employee code</label><input id="nd-code" maxLength={30} placeholder="E0123" value={f.code} onChange={(e) => set("code", e.target.value)} /></div>
-            <div className="field"><label htmlFor="nd-phone">Mobile</label><input id="nd-phone" maxLength={30} inputMode="tel" placeholder="0771234567" value={f.phone} onChange={(e) => set("phone", e.target.value)} /></div>
+            <div className="field"><label htmlFor="nd-phone">Mobile (needed)</label><input id="nd-phone" maxLength={30} inputMode="tel" placeholder="0771234567" value={f.phone} onChange={(e) => set("phone", e.target.value)} /></div>
           </div>
           <div className="grid2">
             <div className="field"><label htmlFor="nd-user">Username</label><input id="nd-user" maxLength={40} placeholder="nuwan.p" autoComplete="off" value={f.username} onChange={(e) => set("username", e.target.value)} /><span className="hint">Letters, numbers, dot, dash, underscore.</span></div>

@@ -26,6 +26,7 @@ import {
   type Vehicle,
 } from "../fleet.ts";
 import { contactLinks, phoneLinks, plain } from "../format.ts";
+import { unavailableText } from "../presence.ts";
 import { driverPhotoLinks, profilePaths, vehiclePhotoLinks } from "../media.ts";
 import { momentOf, tellLink, tellMessage } from "../requesterUpdates.ts";
 import { notifyEvent } from "../notifications.ts";
@@ -1095,11 +1096,15 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
   const busy = (t: Task) => new Date(t.start_at).getTime() < to && from < (t.end_by ? new Date(t.end_by).getTime() : dayEnd);
 
   const vehicles = refs.vehicles.filter((v) => v.active);
-  const [tasks, km, settings] = await Promise.all([
+  const [tasks, km, settings, offRes] = await Promise.all([
     openTasksOn(db, day),
     monthKm(db, vehicles.map((v) => v.id), day.slice(0, 7)),
     loadSettings(db),
+    // Part 3b (H1): a driver who is not available then is not free.
+    db.from("driver_unavailability").select("employee_id, starts_at, ends_at, part, reason").is("removed_at", null)
+      .lt("starts_at", new Date(to).toISOString()).gt("ends_at", new Date(from).toISOString()),
   ]);
+  const away = new Map(unwrap(offRes, "availability").map((u) => [u.employee_id, u]));
 
   const ranked = vehicles.map((v) => {
     const mine = tasks.filter((t) => t.vehicle_id === v.id);
@@ -1154,15 +1159,18 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
   const drivers = refs.employees.filter((e) => e.role === "driver" && e.active).map((e) => {
     const mine = tasks.filter((t) => t.employee_id === e.id);
     const clash = mine.find(busy);
+    const off = away.get(e.id);
     return {
       name: e.name,
       username: e.username,
       availability: clash
         ? `task ${taskWindow(clash)} · ${clash.title}`
+        : off
+        ? unavailableText(off)
         : mine.length === 0
         ? "free all day"
         : `free at that time (other task ${taskWindow(mine[0])})`,
-      free: !clash,
+      free: !clash && !off,
     };
   }).sort((a, b) => Number(b.free) - Number(a.free));
   const groups = {

@@ -299,7 +299,7 @@ check(d1["created"]["username"] == "nuwan.p" and d1["created"]["has_login"] and 
       "create_driver lower-cases the username, creates the sign-in, and does not echo the PIN")
 check(d1["created"]["whatsapp"] == "https://wa.me/94771234567" and d1["created"]["call"] == "tel:+94771234567", "phone links: wa.me/9477… and tel:+9477…")
 tool("create_driver", {"name": "Kasun Silva", "code": "E102", "username": "kasun.s", "pin": PIN2, "phone": "+94 71 555 0102"})
-r = tool("create_driver", {"name": "Other", "code": "E103", "username": "nuwan.p", "pin": "111111"}, expect_error=True)
+r = tool("create_driver", {"name": "Other", "code": "E103", "username": "nuwan.p", "pin": "111111", "phone": "0771234599"}, expect_error=True)
 check("already used" in r, "a duplicate username is refused", r)
 code, answer = mcp("tools/call", {"name": "create_driver", "arguments": {"name": "Bad", "code": "E104", "username": "bad.pin", "pin": "12345"}})
 check(answer.get("result", {}).get("isError") is True or "error" in answer, "a 5-digit PIN is rejected before anything runs")
@@ -1507,9 +1507,10 @@ check(code == 200 and f3 > f1, "the job's own sync runs regardless and records i
 if CHANNEL == "api":
     # The admin's own settings and devices through office-api (what Settings → Notifications does).
     ms = tool("my_notification_settings")
-    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.vehicle_needed", "trip.personal", "task.stop_skipped", "issue.opened", "issue.assigned",
+    check([e["event"] for e in ms["events"]] == ["request.created", "request.decided", "task.declined", "task.not_accepted", "task.vehicle_needed",
+                                                 "task.running_late", "ask.answered", "trip.personal", "task.stop_skipped", "issue.opened", "issue.assigned",
                                                  "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed",
-                                                 "request.not_decided", "request.late", "request.on_the_way", "request.arrived",
+                                                 "request.not_decided", "request.late", "request.on_the_way", "request.running_late", "request.arrived",
                                                  "request.driver_changed", "request.cancelled"]
           and all(e["enabled"] for e in ms["events"]) and ms["devices"] == [] and ms["push"]["configured"] is VAPID and (("public_key" in ms["push"]) is VAPID),
           "my_notification_settings: every event on (the admin holds every permission), no devices, push.configured says whether the server has the keys", json.dumps(ms)[:300])
@@ -2130,7 +2131,7 @@ if CHANNEL == "mcp":
 print("\n== 6j. Phase 7, Part 4: trips a driver starts (driver-api), task history, date ranges, issues (§8, §9, §13) ==")
 tag = uuid.uuid4().hex[:6]
 PIN_T = "593017"
-tool("create_driver", {"name": f"Trip Driver {tag}", "code": f"T{tag}", "username": f"trip.{tag}", "pin": PIN_T})
+tool("create_driver", {"name": f"Trip Driver {tag}", "code": f"T{tag}", "username": f"trip.{tag}", "pin": PIN_T, "phone": "0771230099"})
 code, ses_t = sign_in(f"trip.{tag}", PIN_T)
 tripper = Driver(ses_t["access_token"])
 TD = tripper.get("employees?select=id")[1][0]["id"]
@@ -2300,7 +2301,8 @@ check(card.get("live", {}).get("state") == "waiting" and card["live"]["text"] ==
 tool("update_driver", {"username": f"trip.{tag}", "phone": "077 123 4567"})
 check(psql(f"select phone from employees where id = '{TD}'") == "+94771234567", "F: a driver's number typed 077 123 4567 is stored +94771234567")
 ch = psql(f"select coalesce(old_value, '-') || '|' || new_value || '|' || field || '|' || channel from employee_changes where employee_id = '{TD}' order by id desc limit 1")
-check(ch == f"-|+94771234567|phone|{'web' if CHANNEL == 'api' else 'claude'}", "F: the change is logged (from, to, the channel)", ch)
+# Part 3b: the trip driver was made with a number (create_driver needs one).
+check(ch == f"+94771230099|+94771234567|phone|{'web' if CHANNEL == 'api' else 'claude'}", "F: the change is logged (from, to, the channel)", ch)
 r = tool("update_driver", {"username": f"trip.{tag}", "phone": "12345"}, expect_error=True)
 check("Sri Lankan number" in r and psql(f"select phone from employees where id = '{TD}'") == "+94771234567", "F: a number that is not Sri Lankan is refused in words, nothing changed", r)
 drv = next(d for d in tool("list_drivers")["drivers"] if d.get("username") == f"trip.{tag}")
@@ -2623,6 +2625,129 @@ if CHANNEL == "api":
     check(not any(i["title"] == f"6l old {hl}" for i in tray["items"]) and any(i["title"] == f"6l old {hl}" for i in hist_in["items"]),
           "L4: a read notification over 30 days old leaves the tray, stays in the history")
 
+print("\n== 6m. Part 3b: the driver's profile, availability, the Drivers board, asking drivers, running late ==")
+pb = uuid.uuid4().hex[:6]
+PIN_B = "604213"
+
+
+def rpc_as(drv, fn, args):
+    """A driver's RPC, as the app calls it (PostgREST /rpc)."""
+    return http("POST", f"{API}/rest/v1/rpc/{fn}", drv.h, args)
+
+
+# G. A driver always has a number; the driver keeps their own profile (driver-api /profile), every change logged as theirs.
+r = tool("create_driver", {"name": f"P3b {pb}", "code": f"B{pb}", "username": f"p3b.{pb}", "pin": PIN_B}, expect_error=True)
+check("phone" in r.lower(), "G: create_driver without a phone is refused", r[:200])
+# Named so the contract snapshot's first driver (by name) stays Kasun Silva.
+tool("create_driver", {"name": f"Ruwan P3b {pb}", "code": f"B{pb}", "username": f"p3b.{pb}", "pin": PIN_B, "phone": "0771112233"})
+code, ses_b = sign_in(f"p3b.{pb}", PIN_B)
+kb = Driver(ses_b["access_token"])
+KB = kb.get("employees?select=id")[1][0]["id"]
+UB = f"p3b.{pb}"
+code, ans = dapi("/profile", {"whatsapp": "0712223344", "emergency_name": "Nimali", "emergency_relation": "wife",
+                              "emergency_phone": "0773334455", "licence_no": "B7654321", "licence_expiry": day(200)}, token=ses_b["access_token"])
+check(code == 200 and ans["profile"]["whatsapp"] == "+94712223344" and ans["profile"]["emergency_phone"] == "+94773334455"
+      and set(ans["saved"]) == {"whatsapp", "emergency_name", "emergency_relation", "emergency_phone", "licence_no", "licence_expiry"},
+      "G: the driver saves their profile through driver-api (numbers stored +94…)", json.dumps(ans)[:300])
+code, ans = dapi("/profile", {"phone": None}, token=ses_b["access_token"])
+check(code == 409 and "phone" in ans.get("message", ""), "G: the driver cannot clear their phone", json.dumps(ans)[:200])
+code, ans = dapi("/profile", {"whatsapp": "12"}, token=ses_b["access_token"])
+check(code == 409 and "whatsapp" in ans.get("message", ""), "G: a number that is not Sri Lankan is refused in words", json.dumps(ans)[:200])
+lic = f"{KB}/licence/{uuid.uuid4()}.jpg"
+c1, _ = kb.upload(lic, TINY_JPEG)
+pid = str(uuid.uuid4())
+c2, _ = kb.post("photos", {"id": pid, "employee_id": KB, "kind": "licence", "storage_path": lic})
+c3, res = rpc_as(kb, "set_my_licence_photo", {"p_side": "front", "p_photo_id": pid})
+check((c1, c2, c3, res) == (200, 201, 200, "ok"), "G: the driver adds the front of their licence (their own licence folder)", f"{c1} {c2} {c3} {res}")
+prof = tool("driver_profile", {"driver": UB})
+check(prof.get("emergency", {}).get("name") == "Nimali" and prof.get("licence", {}).get("number") == "B7654321"
+      and (prof.get("licence", {}).get("front_url") or "").startswith("http")
+      and any(c.get("by_driver") and c["field"] == "whatsapp" for c in prof.get("changes", []))
+      and prof["driver"]["links"]["whatsapp"] == "https://wa.me/94712223344" and "licence expiry" not in prof["missing"],
+      "G: driver_profile: the emergency contact, the licence with its photo, 'changed by the driver', WhatsApp to the WhatsApp number",
+      json.dumps({k: prof.get(k) for k in ("emergency", "licence", "missing")})[:400])
+upd = tool("update_driver", {"username": UB, "emergency_relation": "brother"})
+check(psql(f"select changed_by_name || '|' || channel from employee_changes where employee_id = '{KB}' and field = 'emergency_relation' "
+           "order by at desc limit 1").endswith("|" + ("web" if CHANNEL == "api" else "claude")),
+      "G: an office change is logged with the office person's name and channel")
+
+# H1. Not available: the driver's own entry, the office's, Who's available, the warning, the board's week.
+code, res = rpc_as(kb, "set_my_unavailability", {"p_id": None, "p_from": day(1), "p_to": None, "p_part": "morning", "p_start": None,
+                                                 "p_end": None, "p_reason": "half_day", "p_note": "doctor"})
+check(code == 200 and res.get("result") == "ok", "H1: the driver is not available tomorrow morning", json.dumps(res)[:200])
+code, res = rpc_as(kb, "set_my_unavailability", {"p_id": None, "p_from": day(-1), "p_to": None, "p_part": "full_day", "p_start": None,
+                                                 "p_end": None, "p_reason": "leave", "p_note": None})
+check(res.get("result") == "refused" and "passed" in res.get("reason", ""), "H1: a day that has passed is refused in words", json.dumps(res)[:200])
+av = tool("availability", {"at": f"{day(1)} 10:00", "until": "12:00"})
+row = next((d for d in av["drivers"] if d.get("username") == UB), {})
+check(row.get("free") is False and row.get("not_available") == "Not available · half day, back 13:00"
+      and (av.get("best") or {}).get("username") != UB and not any(d["username"] == UB for d in av["vehicles"]["drivers_free"]),
+      "H1: Who's available: not free then, never the best match, not among the free drivers", json.dumps(row)[:300])
+av2 = tool("availability", {"at": f"{day(1)} 14:00", "until": "16:00"})
+check(next(d for d in av2["drivers"] if d.get("username") == UB).get("free") is True, "H1: free again in the afternoon")
+tk = tool("create_task", {"title": f"6m late {pb}", "date": day(1), "start_time": "10:00", "driver": UB, "vehicle": "cab4521",
+                          "pickup": "Head office", "dropoff": "Kandy"})
+TKB = tk["task_id"]
+check(any(w.startswith("Ruwan is not available then · half day, back 13:00") for w in tk.get("warnings", [])),
+      "H1: the assign warning names it ('Ruwan is not available then · half day, back 13:00')", json.dumps(tk.get("warnings"))[:300])
+se = tool("set_unavailability", {"driver": UB, "date": day(3), "to_date": day(4), "part": "full_day", "reason": "leave", "note": "wedding"})
+check(se["entry"]["text"].startswith("Not available · leave until") and se["saved"] == "added", "H1: the office adds two days of leave",
+      json.dumps(se)[:300])
+code, mine = kb.get("driver_unavailability?select=id,part,channel&removed_at=is.null&order=starts_at")
+check(code == 200 and len(mine) == 2 and mine[1]["channel"] != "driver", "H1: the driver reads both entries, one added by the office", str(mine)[:200])
+check(tool("unavailability", {"from": day(0), "to": day(7), "driver": UB})["count"] == 2, "H1: unavailability lists them")
+tool("remove_unavailability", {"id": se["entry"]["id"]})
+check(tool("unavailability", {"from": day(0), "to": day(7), "driver": UB})["count"] == 1
+      and psql(f"select removed_by_name is not null from driver_unavailability where id = '{se['entry']['id']}'") == "t",
+      "H1: removed, and kept as removed with who removed it")
+bd = tool("drivers_board", {"week_from": day(0), "search": UB})
+brow = next((d for d in bd["drivers"] if d.get("username") == UB), {})
+wk = next((d for d in bd["week"]["drivers"] if d.get("username") == UB), {"days": []})
+check(brow.get("status", {}).get("kind") == "off_duty" and brow.get("links", {}).get("whatsapp") == "https://wa.me/94712223344"
+      and any(dd["not_available"] for dd in wk["days"]) and any(dd["tasks"] for dd in wk["days"]) and bd["counts"]["all"] >= 1,
+      "H5: the board's row (status, WhatsApp) and the week view (the task and the morning off)", json.dumps({"row": brow, "week": wk})[:400])
+
+# H3. A question with one-tap answers: the push, the answer, ask_answers, the asker's notification.
+ask = tool("ask_drivers", {"kind": "free_for_trip", "drivers": [UB], "date": day(1), "from": "14:00", "to": "16:00", "note": "Kandy, 3 people"})
+AID = ask["ask"]["id"]
+check(ask["ask"]["question"].startswith("Free for a trip") and ask["ask"]["counts"]["asked"] == 1, "H3: ask_drivers asks one driver",
+      json.dumps(ask)[:300])
+# The database sends it (driver_ask_answers_push → send_push; pgTAP checks that); here push-task is called the same way.
+code, res = http("POST", f"{API}/functions/v1/push-task", {"Content-Type": "application/json", "x-server-key": SERVER_KEY},
+                 {"task_id": None, "kind": "ask", "employee_id": KB, "ask_id": AID})
+code_bad, _ = http("POST", f"{API}/functions/v1/push-task", {"Content-Type": "application/json", "x-server-key": SERVER_KEY},
+                   {"task_id": None, "kind": "ask", "employee_id": KB, "ask_id": str(uuid.uuid4())})
+check(code == 200 and res.get("reason") == "no_token" and code_bad == 404
+      and psql(f"select count(*) from push_log where kind = 'ask' and employee_id = '{KB}'") == "1",
+      "H3: push-task takes the question (kind ask; this driver has no phone registered); an unknown question is 404", f"{code} {res} {code_bad}")
+code, res = rpc_as(kb, "answer_ask", {"p_ask_id": AID, "p_answer": "yes"})
+check(res == "ok", "H3: the driver answers Yes", str(res))
+aa = tool("ask_answers", {"ask_id": AID})["ask"]
+check(aa["drivers"][0].get("answer") == "yes" and aa["drivers"][0].get("assignable") is True and aa["counts"]["yes"] == 1,
+      "H3: ask_answers shows the Yes, ready to assign", json.dumps(aa)[:300])
+ask2 = tool("ask_drivers", {"kind": "where_now", "drivers": [UB]})["ask"]
+code, res = rpc_as(kb, "answer_ask", {"p_ask_id": ask2["id"], "p_answer": "location", "p_lat": 6.9271, "p_lng": 79.8612, "p_accuracy": 12})
+loc = tool("ask_answers", {"ask_id": ask2["id"]})["ask"]["drivers"][0].get("location", {})
+check(res == "ok" and loc.get("map", "").startswith("https://www.google.com/maps") and loc.get("near"),
+      "H3: 'Where are you now?': one point shared, with the nearest town and a map link", json.dumps(loc)[:200])
+r = tool("ask_drivers", {"kind": "free_for_trip", "drivers": [UB], "date": day(-1), "from": "09:00"}, expect_error=True)
+check("passed" in r, "H3: a trip time that has passed is refused", r[:200])
+recent = tool("ask_answers", {"limit": 5})
+check(recent.get("total", 0) >= 2 and recent["asks"][0]["id"] == ask2["id"], "H3: the questions of the last 7 days, newest first")
+if CHANNEL == "api":
+    check(psql(f"select count(*) from office_inbox where employee_id = '{ADMIN_ID}' and event = 'ask.answered'") == "2",
+          "H3: the person who asked hears each answer (the notification centre)")
+
+# H4. Running late: kept on the task, on the board and the task page, a history event.
+code, res = rpc_as(kb, "report_running_late", {"p_task_id": TKB, "p_minutes": 15})
+check(res == "ok", "H4: the driver says they are running late 15 min", str(res))
+td = tool("task_detail", {"task_id": TKB})
+card = next((c for c in tool("task_board", {"date": day(1)})["assigned"] if c["id"] == TKB), {})
+check(td["task"].get("late_report", {}).get("text", "").startswith("Running late 15 min · said") and card.get("late_report", {}).get("min") == 15
+      and psql(f"select count(*) from task_assignment_events where task_id = '{TKB}' and action = 'running_late'") == "1",
+      "H4: on the task page and the board's card, with a history event", json.dumps(td["task"].get("late_report")))
+tool("cancel_task", {"task_id": TKB, "reason": "suite: 6m"})
+
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")
     shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
@@ -2658,7 +2783,7 @@ if CHANNEL == "api":
     code, body = api_call(staff_token, "my_notification_settings", {})
     check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "task.declined", "task.not_accepted", "vehicle.booked", "vehicle.booking_cancelled",
                                                                           "request.redecided", "booking.changed", "request.not_decided",
-                                                                          "request.on_the_way", "request.arrived", "request.driver_changed",
+                                                                          "request.on_the_way", "request.running_late", "request.arrived", "request.driver_changed",
                                                                           "request.cancelled"],
           "a requester's notification settings hold their request events (with a task of theirs that needs a driver) and the three booking events", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})

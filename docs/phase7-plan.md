@@ -2533,6 +2533,118 @@ Added in Hotfix 3 (18 October: Today's short list, the lists 20 at a time):
 | `list.loading` | Loading… | පූරණය වෙමින්… |
 | `list.empty` | Nothing here yet. | තවම කිසිවක් නැත. |
 
+Added in Part 3b (18 October: the profile, the phone prompt, availability, the office's questions, Running late):
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `me.profile` | My profile | මගේ පැතිකඩ |
+| `me.availability` | Availability | නිදහස් බව |
+| `me.emergency` | Emergency contact | හදිසි සම්බන්ධතා |
+| `me.licence` | Driving licence | රියදුරු බලපත්‍රය |
+| `me.thisMonth` | This month | මෙම මාසය |
+| `me.monthLine` | {tasks} tasks · {km} km | කාර්යයන් {tasks} · කි.මී. {km} |
+| `me.whatsapp` | WhatsApp | WhatsApp |
+| `me.notSet` | Not set | සකසා නැත |
+| `me.edit` | Edit | සංස්කරණය |
+| `me.missingPhone` | Add your phone number | ඔබේ දුරකථන අංකය එක් කරන්න |
+| `profile.title` | My profile | මගේ පැතිකඩ |
+| `profile.phone` | Mobile number | ජංගම අංකය |
+| `profile.whatsapp` | WhatsApp number | WhatsApp අංකය |
+| `profile.whatsappHint` | Only if it is not your mobile number | ඔබේ ජංගම අංකයට වෙනස් නම් පමණක් |
+| `profile.emergency` | Emergency contact | හදිසි සම්බන්ධතා |
+| `profile.emergencyName` | Name | නම |
+| `profile.emergencyRelation` | Relationship | ඥාතිත්වය |
+| `profile.emergencyRelationHint` | e.g. wife, brother | උදා. බිරිඳ, සහෝදරයා |
+| `profile.emergencyPhone` | Phone | දුරකථනය |
+| `profile.licence` | Driving licence | රියදුරු බලපත්‍රය |
+| `profile.licenceNo` | Licence number | බලපත්‍ර අංකය |
+| `profile.licenceExpiry` | Expiry date | කල් ඉකුත් වන දිනය |
+| `profile.licenceExpiryHint` | YYYY-MM-DD | YYYY-MM-DD |
+| `profile.licenceFront` | Front | ඉදිරිපස |
+| `profile.licenceBack` | Back | පිටුපස |
+| `profile.addPhoto` | Add photo | ඡායාරූපයක් එක් කරන්න |
+| `profile.changePhoto` | Change photo | ඡායාරූපය වෙනස් කරන්න |
+| `profile.save` | Save | සුරකින්න |
+| `profile.saving` | Saving… | සුරකිමින්… |
+| `profile.saved` | Saved | සුරැකුණා |
+| `profile.failed` | Couldn't save: {reason} | සුරැකිය නොහැකි විය: {reason} |
+| `profile.noConnection` | No connection: try again when you are online. | සම්බන්ධතාවක් නැත: සම්බන්ධ වූ පසු නැවත උත්සාහ කරන්න. |
+| `profile.badPhone` | Enter a Sri Lankan number, e.g. 077 123 4567. | ශ්‍රී ලංකා අංකයක් ඇතුළත් කරන්න, උදා. 077 123 4567. |
+| `profile.badDate` | Enter the date as YYYY-MM-DD. | දිනය YYYY-MM-DD ලෙස ඇතුළත් කරන්න. |
+| `profile.officeSees` | The office sees these details. Every change is shown to them. | කාර්යාලයට මෙම විස්තර පෙනේ. සෑම වෙනසක්ම ඔවුන්ට පෙන්වයි. |
+| `phonePrompt.title` | Your phone number | ඔබේ දුරකථන අංකය |
+| `phonePrompt.body` | The office and the people you drive need it to reach you. | කාර්යාලයට සහ ඔබ රැගෙන යන අයට ඔබව සම්බන්ධ කර ගැනීමට එය අවශ්‍යයි. |
+| `phonePrompt.label` | Mobile number | ජංගම අංකය |
+| `phonePrompt.save` | Save | සුරකින්න |
+| `phonePrompt.offline` | No connection. The app asks again when you are online. | සම්බන්ධතාවක් නැත. ඔබ සම්බන්ධ වූ විට යෙදුම නැවත අසයි. |
+| `phonePrompt.continue` | Continue | ඉදිරියට |
+| `avail.title` | Availability | නිදහස් බව |
+| `avail.intro` | Tell the office when you can't take trips. This is not leave: ask HR for leave. | ඔබට ගමන් ගත නොහැකි කාලය කාර්යාලයට කියන්න. මෙය නිවාඩු නොවේ: නිවාඩු සඳහා HR අසන්න. |
+| `avail.add` | Add a time I'm not available | මට නොහැකි කාලයක් එක් කරන්න |
+| `avail.none` | You are available every day. | ඔබ සෑම දිනකම නිදහස්. |
+| `avail.day` | Day | දිනය |
+| `avail.lastDay` | Last day (for several days) | අවසන් දිනය (දින කිහිපයක් සඳහා) |
+| `avail.when` | When | කවදාද |
+| `avail.full` | Full day | මුළු දිනය |
+| `avail.morning` | Morning (until {time}) | උදේ ({time} දක්වා) |
+| `avail.afternoon` | Afternoon (from {time}) | දහවල් ({time} සිට) |
+| `avail.hours` | From – to | සිට – දක්වා |
+| `avail.from` | From | සිට |
+| `avail.to` | To | දක්වා |
+| `avail.reason` | Reason | හේතුව |
+| `avail.leave` | Leave | නිවාඩු |
+| `avail.halfDay` | Half day | අර්ධ දින |
+| `avail.personal` | Personal | පෞද්ගලික |
+| `avail.other` | Other | වෙනත් |
+| `avail.note` | Note (optional) | සටහන (අවශ්‍ය නම්) |
+| `avail.save` | Save | සුරකින්න |
+| `avail.remove` | Remove | ඉවත් කරන්න |
+| `avail.removeConfirm` | Remove this? The office will see you as available. | මෙය ඉවත් කරනවාද? කාර්යාලයට ඔබ නිදහස් ලෙස පෙනේ. |
+| `avail.addedBy` | Added by {name} | {name} එක් කළා |
+| `avail.lineFull` | {day} · full day | {day} · මුළු දිනය |
+| `avail.lineDays` | {day} – {last} | {day} – {last} |
+| `avail.lineMorning` | {day} · until {time} | {day} · {time} දක්වා |
+| `avail.lineAfternoon` | {day} · from {time} | {day} · {time} සිට |
+| `avail.lineHours` | {day} · {from}–{to} | {day} · {from}–{to} |
+| `avail.failed` | Couldn't save: {reason} | සුරැකිය නොහැකි විය: {reason} |
+| `avail.noConnection` | No connection: try again when you are online. | සම්බන්ධතාවක් නැත: සම්බන්ධ වූ පසු නැවත උත්සාහ කරන්න. |
+| `ask.title` | Question from the office | කාර්යාලයෙන් ප්‍රශ්නයක් |
+| `ask.from` | {name} asks | {name} අසයි |
+| `ask.banner` | The office asked you a question | කාර්යාලය ඔබෙන් ප්‍රශ්නයක් ඇසුවා |
+| `ask.answer` | Answer | පිළිතුරු දෙන්න |
+| `ask.freeForTrip` | Free for a trip? | ගමනකට නිදහස්ද? |
+| `ask.officeTime` | When can you be at the office? | කාර්යාලයට පැමිණිය හැක්කේ කීයටද? |
+| `ask.whereNow` | Where are you now? | ඔබ දැන් කොහෙද? |
+| `ask.yes` | Yes | ඔව් |
+| `ask.no` | No | නැහැ |
+| `ask.callMe` | Call me | මට කතා කරන්න |
+| `ask.pickTime` | Pick a time | වේලාවක් තෝරන්න |
+| `ask.sendTime` | Send {time} | {time} යවන්න |
+| `ask.shareLocation` | Share my location | මගේ ස්ථානය යවන්න |
+| `ask.shareNote` | Sends where you are now, once. It does not turn on location sharing. | ඔබ දැන් සිටින තැන එක් වරක් යවයි. ස්ථානය බෙදාගැනීම ක්‍රියාත්මක නොකරයි. |
+| `ask.sent` | Answer sent | පිළිතුර යැව්වා |
+| `ask.queued` | Will be sent when you are online | සම්බන්ධ වූ විට යවනු ලැබේ |
+| `ask.yourAnswer` | Your answer: {answer} | ඔබේ පිළිතුර: {answer} |
+| `ask.answerTime` | At the office at {time} | {time} ට කාර්යාලයට |
+| `ask.answerLocation` | Location shared | ස්ථානය යැව්වා |
+| `ask.change` | Change answer | පිළිතුර වෙනස් කරන්න |
+| `ask.expired` | This question has closed. | මෙම ප්‍රශ්නය අවසන්. |
+| `ask.locationFailed` | Couldn't get your location: {reason} | ඔබේ ස්ථානය ලබාගත නොහැකි විය: {reason} |
+| `ask.failed` | Couldn't send: {reason} | යැවිය නොහැකි විය: {reason} |
+| `late.button` | Running late | ප්‍රමාදයි |
+| `late.title` | How late? | කොපමණ ප්‍රමාදද? |
+| `late.min` | {n} min | මිනිත්තු {n} |
+| `late.other` | Other | වෙනත් |
+| `late.minutes` | Minutes late | ප්‍රමාද මිනිත්තු |
+| `late.send` | Send | යවන්න |
+| `late.sent` | The office knows: {n} min late | කාර්යාලය දනී: මිනිත්තු {n} ප්‍රමාදයි |
+| `late.queued` | Will be sent when you are online | සම්බන්ධ වූ විට යවනු ලැබේ |
+| `late.lastSaid` | You said {n} min late at {time} | ඔබ {time} ට මිනිත්තු {n} ප්‍රමාද බව කීවා |
+| `late.bad` | Enter minutes between 5 and 180. | මිනිත්තු 5 ත් 180 ත් අතර අගයක් ඇතුළත් කරන්න. |
+| `channel.asks` | Questions from the office | කාර්යාලයේ ප්‍රශ්න |
+| `channel.asksDesc` | Questions the office asks you (free for a trip, a time, where you are) | කාර්යාලය ඔබෙන් අසන ප්‍රශ්න (ගමනකට නිදහස්ද, වේලාවක්, ඔබ සිටින තැන) |
+| `task.cantMakeIt` | Can't make it | එන්න බැහැ |
+
 ## Deployment log
 
 **Round A, 16 October 2026** (Parts 1, 2 and 2b; main at `21b1d9a`), in the plan's order, with Sahan's go:

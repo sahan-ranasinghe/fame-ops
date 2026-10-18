@@ -27,6 +27,8 @@ describe("New driver", () => {
     expect(validateNewDriver(emptyDriver())).toEqual({ error: "Add the name, code and username." });
     expect(validateNewDriver({ ...emptyDriver(), name: "A", code: "E1", username: "a b", pin: "123456" })).toEqual({ error: "The username needs 3–40 letters, numbers, dots, dashes or underscores." });
     expect(validateNewDriver({ ...emptyDriver(), name: "A", code: "E1", username: "nuwan.p", pin: "12345" })).toEqual({ error: "The PIN must be exactly 6 digits." });
+    // Part 3b (G): the mobile number is needed.
+    expect(validateNewDriver({ ...emptyDriver(), name: "A", code: "E1", username: "nuwan.p", pin: "123456" })).toEqual({ error: "Add the driver's mobile number." });
     expect(validateNewDriver({ ...emptyDriver(), name: " Nuwan Perera ", code: "E0123", username: "nuwan.p", pin: "123456", phone: "0771234567" })).toEqual({
       input: { name: "Nuwan Perera", code: "E0123", username: "nuwan.p", pin: "123456", phone: "0771234567" },
     });
