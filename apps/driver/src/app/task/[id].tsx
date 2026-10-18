@@ -14,36 +14,40 @@
 // has "Add a stop" while under way (app/add-stop.tsx) and no "Can't do this task". Item 18's stop rules are the same;
 // with no plan there is no odometer check at Complete (lib/dayRules.ts earlyFinish). A Google stop stays off the
 // OpenFreeMap map (lib/mapRule.ts), also on the phone's own copy of a trip (its google_place_id is set from the pick).
+// Hotfix 2: a task still to start is the whole-task preview (components/TaskPreview.tsx: every stop, the map, the
+// totals, the vehicle or "Your vehicle on the day", who asked and who approved, Accept / Can't do). Under way: Call
+// contact beside Navigate as designed, then Call requester / fleet admin / office with WhatsApp (F), "Approved by
+// Palitha · 10:42" with Call (K), and the time at a stop as a duration ("1 h 30 min there", lib/durations.ts).
 
-import Constants from 'expo-constants';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronLeft, MapPin, Navigation, Phone, Play, Plus } from '@/components/icons';
-import { useMemo, useState } from 'react';
-import { Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Check, ChevronLeft, MapPin, Navigation, Phone, Plus } from '@/components/icons';
+import { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ArrivalButton, useHere } from '@/components/ArrivalButton';
-import { DeclineSheet } from '@/components/DeclineSheet';
+import { ApprovedLine, CallButtons } from '@/components/CallButtons';
 import { GoogleCredit } from '@/components/GoogleCredit';
 import { SkipSheet } from '@/components/SkipSheet';
-import { TaskMap } from '@/components/TaskMap';
+import { GOOGLE_MAP_BUILD, TaskMap } from '@/components/TaskMap';
+import { TaskPreview } from '@/components/TaskPreview';
 import { hasRouteLine, kmText, roadKmLeft, type LatLng } from '@/components/taskMapLogic';
 import { Stretches, SwapCard } from '@/components/SwapCard';
-import { leaveTime, nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
+import { leaveTime, nextStop, StopTimeline, useDateLabel, useDurations, usePeopleLine } from '@/components/task';
 import { shownTaskKm, stopLabel, stopTimeAt, taskTitle } from '@/components/taskLines';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { arrivalCheck, arrivalRecord, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/dayRules';
+import { approvedBy, taskCalls } from '@/lib/contacts';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
-import { colomboTime } from '@/lib/time';
-import { canAddStop, isSelfTrip } from '@/lib/trips';
+import { colomboDate, colomboTime } from '@/lib/time';
+import { canAddStop } from '@/lib/trips';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
-/** The build carries the Google key (app.config.ts): the task map is Google's (Part 5). */
-const GOOGLE_MAP = (Constants.expoConfig?.extra as { googleMapsAndroid?: boolean } | undefined)?.googleMapsAndroid === true;
+const GOOGLE_MAP = GOOGLE_MAP_BUILD;
 
 export default function TaskScreen() {
   const app = useApp();
@@ -54,6 +58,7 @@ export default function TaskScreen() {
   const { height } = useWindowDimensions();
   const dateLabel = useDateLabel();
   const peopleLine = usePeopleLine();
+  const { duration } = useDurations();
 
   const task: TaskWithStops | undefined = tasks.find((item) => item.id === id);
   const running = task?.status === 'in_progress';
@@ -63,7 +68,12 @@ export default function TaskScreen() {
   const hereLng = here.fix?.lng;
   const me = useMemo((): LatLng | null => (hereLat != null && hereLng != null ? { lat: hereLat, lng: hereLng } : null), [hereLat, hereLng]);
   const [skipping, setSkipping] = useState<TaskStop | null>(null);
-  const [declining, setDeclining] = useState(false);
+  // Who to call about the task (F, K): read when the screen opens; the copy on the phone shows meanwhile and offline.
+  const { loadTaskContacts } = app;
+  const found = task !== undefined;
+  useEffect(() => {
+    if (found && id) loadTaskContacts(id, true);
+  }, [found, id, loadTaskContacts]);
 
   if (!app.me) return <Redirect href="/login" />;
 
@@ -74,6 +84,16 @@ export default function TaskScreen() {
     router.navigate('/');
   };
 
+  // Opened from a notification before the list has the task: it is being read.
+  if (!task && app.refreshing) {
+    return (
+      <View style={[styles.page, { padding: 20, paddingTop: insets.top + 80, alignItems: 'center' }]}>
+        <StatusBar style="dark" />
+        <ActivityIndicator size="large" color={colors.ink} />
+      </View>
+    );
+  }
+
   if (!task) {
     return (
       <View style={[styles.page, { padding: 20, paddingTop: insets.top + 40, gap: 16 }]}>
@@ -83,6 +103,9 @@ export default function TaskScreen() {
       </View>
     );
   }
+
+  // Hotfix 2 (I): a task still to start is shown whole before it is accepted.
+  if (task.status === 'assigned') return <TaskPreview task={task} />;
 
   const stop = nextStop(task);
   // Distance left by road (the plan's road km, §20); the straight line to the current stop only when the plan has none.
@@ -103,7 +126,16 @@ export default function TaskScreen() {
   };
   const call = telLink(task.contact_phone);
   const people = peopleLine(task);
-  const otherRunning = tasks.some((item) => item.status === 'in_progress' && item.id !== task.id);
+  const contacts = app.taskContacts[task.id] ?? null;
+  const calls = taskCalls(task, contacts);
+  const approved = approvedBy(contacts);
+  const approvedAt = approved?.at ?? task.approved_at;
+  const approvedText = approved
+    ? t('preview.approvedBy', {
+      name: approved.name,
+      time: approvedAt ? (colomboDate(approvedAt) === colomboDate() ? colomboTime(approvedAt) : `${dateLabel(approvedAt)} ${colomboTime(approvedAt)}`) : '',
+    }).replace(/\s*·\s*$/, '')
+    : null;
   // Complete task waits for the last stop (Done or Skipped); open stops before it become "not visited".
   const lastOpen = running ? lastStopOpen(task) : null;
   // After a vehicle swap: the start of the stretch in the vehicle now (null until its start reading is logged).
@@ -209,7 +241,7 @@ export default function TaskScreen() {
                 const timeAt = stopTimeAt(t, item);
                 const detail = [
                   item.arrive_by ? t('task.arriveBy', { time: colomboTime(item.arrive_by) }) : null,
-                  timeAt === null && item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min }) : null,
+                  timeAt === null && item.dwell_min != null ? t('task.minutesThere', { n: item.dwell_min, duration: duration(item.dwell_min) }) : null,
                   item.status === 'skipped' ? t('task.skipped') : item.status === 'arrived' && item.arrived_at ? `${t('task.arrived')} ${colomboTime(item.arrived_at)}` : null,
                 ].filter(Boolean).join(' · ');
                 // A stop further down (visited out of order): Done once arrived, Arrived only when the phone is there.
@@ -264,6 +296,10 @@ export default function TaskScreen() {
               <Button kind="outline" icon={Phone} label={t('task.callContact')} disabled={!call} onPress={() => call && Linking.openURL(call)} style={{ flex: 1 }} />
             </View>
             {allStops && <Button kind="outline" icon={MapPin} label={t('task.allStops')} onPress={openAllStops} />}
+            {/* Hotfix 2 (F): the contact's WhatsApp (Call contact is beside Navigate), then the requester, the fleet admin, the office. */}
+            <CallButtons calls={calls} callHidden={['contact']} />
+            {/* Hotfix 2 (K): who approved the task, with Call (the office when they have no number). */}
+            {approvedText && <ApprovedLine text={approvedText} call={approved?.call ?? null} />}
             {lastOpen && <Notice tone="warn" text={t('complete.needsLastStop')} />}
             <Button
               kind="dark"
@@ -285,7 +321,7 @@ export default function TaskScreen() {
             <Button
               kind="danger-text"
               label={t('task.reportProblem')}
-              onPress={() => router.push({ pathname: '/report-problem', params: { taskId: task.id, vehicleId: task.vehicle_id } })}
+              onPress={() => router.push({ pathname: '/report-problem', params: { taskId: task.id, ...(task.vehicle_id ? { vehicleId: task.vehicle_id } : {}) } })}
             />
           </>
         ) : (
@@ -301,58 +337,13 @@ export default function TaskScreen() {
             )}
             {task.status === 'cancelled' && task.cancelled_reason && <Notice tone="warn" text={task.cancelled_reason} />}
             {task.status === 'declined' && <Notice tone="warn" text={t('task.declinedBody')} />}
-            {task.status === 'assigned' && task.accepted_at && (
-              <Txt variant="strong" color={colors.blue}>{t('task.accepted', { time: colomboTime(task.accepted_at) })}</Txt>
-            )}
-            {task.status === 'assigned' && !task.accepted_at && (
-              <Button label={t('task.accept')} icon={Check} onPress={() => app.acceptTask(task)} />
-            )}
             {(task.status === 'completed' || task.status === 'cancelled' || task.status === 'declined') && (
               <Button label={t('task.backToToday')} onPress={goHome} style={{ marginTop: 8 }} />
-            )}
-            {task.status === 'assigned' && (
-              <>
-                {otherRunning && <Notice tone="warn" text={t('today.finishFirst')} />}
-                <Button
-                  icon={Play}
-                  label={t('today.startTask')}
-                  disabled={otherRunning}
-                  onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: task.id, from: 'task' } })}
-                />
-                {call && <Button kind="outline" icon={Phone} label={t('task.callContact')} onPress={() => Linking.openURL(call)} />}
-                {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list): a trip
-                    started by mistake is cancelled instead, before it starts. */}
-                {!isSelfTrip(task) && <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(true)} />}
-                {isSelfTrip(task) && (
-                  <Button
-                    kind="danger-text"
-                    label={t('trip.cancel')}
-                    onPress={() => Alert.alert(t('trip.cancelConfirm'), '', [
-                      { text: t('common.no'), style: 'cancel' },
-                      {
-                        text: t('common.yes'),
-                        style: 'destructive',
-                        onPress: () => void app.cancelTrip(task).then((out) => {
-                          if (out.kind === 'cancelled') {
-                            Alert.alert(t('trip.cancelled'));
-                            goHome();
-                          } else if (out.kind === 'offline') {
-                            Alert.alert(t('trip.cancelOffline'));
-                          } else if (out.message) {
-                            Alert.alert(t('trip.cancelFailed', { reason: out.message }));
-                          }
-                        }),
-                      },
-                    ])}
-                  />
-                )}
-              </>
             )}
           </>
         )}
       </ScrollView>
       <SkipSheet stop={skipping} onClose={() => setSkipping(null)} />
-      <DeclineSheet task={declining ? task : null} onClose={() => setDeclining(false)} onDeclined={goHome} />
     </View>
   );
 }

@@ -27,7 +27,7 @@ import { colors } from '@/theme';
 SplashScreen.preventAutoHideAsync();
 
 function Screens({ fontsReady }: { fontsReady: boolean }) {
-  const { booted, me } = useApp();
+  const { booted, me, rememberPush } = useApp();
   const ready = fontsReady && booted;
   const router = useRouter();
   // The notification the app was opened with (or tapped while running): a task notification opens that task.
@@ -43,15 +43,18 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
     const id = response.notification.request.identifier;
     if (handled.current === id) return;
     handled.current = id;
-    const { taskId } = tapData(response);
+    const data = tapData(response);
+    const { taskId } = data;
     if (!taskId) return;
+    // Hotfix 2 (I): a "Task changed" push's changes are kept first, so the task opens with them marked.
+    rememberPush(data);
     // A form with unsaved input stays underneath (back returns to it); otherwise Today does.
     if (!anyFormDirty()) {
       if (router.canGoBack()) router.dismissAll();
       router.navigate('/');
     }
     router.push({ pathname: '/task/[id]', params: { id: taskId } });
-  }, [ready, me, response, router]);
+  }, [ready, me, response, router, rememberPush]);
 
   if (!ready) return null;
   return (

@@ -251,12 +251,13 @@ export function opsWaiting(kind: Op['kind']): number {
   return row?.n ?? 0;
 }
 
-/** Ids of tasks that have a change waiting to be sent (a start or finish, or a trip started with no connection). */
+/** Ids of tasks that have a change waiting to be sent (a start or finish, a trip started or a vehicle confirmed with no connection). */
 export function tasksWaiting(): Set<string> {
   const ids = new Set<string>();
   for (const { op } of queueStore.nextOps(500)) {
     if (op.kind === 'task_patch' && op.patch.status !== undefined) ids.add(op.id);
     if (op.kind === 'trip_create') ids.add(op.id);
+    if (op.kind === 'task_vehicle') ids.add(op.id);
   }
   return ids;
 }

@@ -3,20 +3,24 @@
 // permissions, Phone setup (Phase 7 item 7: the brand's battery and auto-start
 // steps on their own page, amber when the phone stopped the app lately), app
 // version, sign out (not while on duty: Finish work first, Phase 7).
+// Hotfix 2 (F): Call office and Call fleet admin with WhatsApp (my_office_contacts, kept on the phone: offline too);
+// the driver's own number reads "077 123 4567".
 
 import Constants from 'expo-constants';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { BatteryCharging, Camera, ChevronRight, FileText, LogOut, RefreshCw, Wifi } from '@/components/icons';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CallButtons } from '@/components/CallButtons';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
 import { useStoppedNote } from '@/components/PhoneSetup';
 import { Thumb, useMyPhoto } from '@/components/Photos';
 import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
+import { officeCalls, phoneDisplay } from '@/lib/contacts';
 import { colomboTime } from '@/lib/time';
 import { runningUpdate } from '@/lib/updates';
 import { megabytes } from '@/lib/video';
@@ -37,6 +41,10 @@ export default function MeScreen() {
   const photo = useMyPhoto();
   // The phone stopped the app on one of the last 3 days: the Phone setup row is amber (the page says when).
   const stopped = useStoppedNote().note !== null;
+  // Who to call at the office (read again when Me opens, at most every 10 minutes; the last copy shows offline).
+  const { loadOfficeContacts } = app;
+  useFocusEffect(useCallback(() => loadOfficeContacts(), [loadOfficeContacts]));
+  const calls = officeCalls(app.officeContacts);
 
   async function checkUpdate() {
     setChecking(true);
@@ -95,7 +103,7 @@ export default function MeScreen() {
 
         <Card style={{ gap: 14 }}>
           <Line label={t('me.code')}><Mono size={17} bold>{me?.code}</Mono></Line>
-          {me?.phone && <Line label={t('me.phone')}><Mono size={17}>{me.phone}</Mono></Line>}
+          {me?.phone && <Line label={t('me.phone')}><Mono size={17}>{phoneDisplay(me.phone)}</Mono></Line>}
           <Line label={t('me.vehicle')}>
             {vehicle ? <Plate regNo={vehicle.reg_no} /> : <Txt variant="muted">{t(sharing ? 'duty.noVehicle' : 'duty.offDuty')}</Txt>}
           </Line>
@@ -104,6 +112,8 @@ export default function MeScreen() {
           {/* Phase 7 §28: the held vehicle's revenue licence, insurance and emission test, for roadside checks. */}
           <Button kind="outline" icon={FileText} label={t('docs.title')} onPress={() => router.push('/documents')} />
         </Card>
+
+        {calls.length > 0 && <CallButtons calls={calls} />}
 
         <Card style={{ gap: 12 }}>
           <Txt variant="big">{t('me.language')}</Txt>

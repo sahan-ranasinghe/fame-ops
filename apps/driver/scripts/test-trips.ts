@@ -239,7 +239,7 @@ async function main() {
   const here = dirname(fileURLToPath(import.meta.url));
   const en = JSON.parse(readFileSync(join(here, '../src/i18n/en.json'), 'utf8')) as Record<string, Record<string, unknown>>;
   const si = JSON.parse(readFileSync(join(here, '../src/i18n/si.json'), 'utf8')) as Record<string, Record<string, unknown>>;
-  const files = ['src/app/start-trip.tsx', 'src/app/add-stop.tsx', 'src/components/PlaceSearch.tsx', 'src/app/(tabs)/index.tsx', 'src/app/task/[id].tsx', 'src/state/app.tsx', 'src/lib/trips.ts', 'src/components/taskLines.ts'];
+  const files = ['src/app/start-trip.tsx', 'src/app/add-stop.tsx', 'src/components/PlaceSearch.tsx', 'src/app/(tabs)/index.tsx', 'src/app/task/[id].tsx', 'src/components/TaskPreview.tsx', 'src/state/app.tsx', 'src/lib/trips.ts', 'src/components/taskLines.ts'];
   const keys = new Set<string>();
   for (const file of files) for (const m of readFileSync(join(here, '..', file), 'utf8').matchAll(/'((?:trip|common|today|task|log)\.[A-Za-z.]+)'/g)) keys.add(m[1]);
   const lookup = (src: Record<string, Record<string, unknown>>, key: string) => key.split('.').reduce<unknown>((n, p) => (n as Record<string, unknown> | undefined)?.[p], src);
@@ -254,7 +254,8 @@ async function main() {
   const today = source('src/app/(tabs)/index.tsx');
   const startTrip = source('src/app/start-trip.tsx');
   const addStop = source('src/app/add-stop.tsx');
-  const taskScreen = source('src/app/task/[id].tsx');
+  // Hotfix 2 (I): a task still to start is the preview (components/TaskPreview.tsx), opened by the task screen.
+  const taskScreen = source('src/app/task/[id].tsx') + source('src/components/TaskPreview.tsx');
   check(/app\.sharing && !running && \(\s*<Button [^\n]*t\('trip\.start'\)[^\n]*router\.push\('\/start-trip'\)/.test(today), 'Today: Start a trip only on duty with no task in progress, pushed (back returns to Today)');
   check(/useLeaveGuard\(dirty, busy\)/.test(startTrip) && /const dirty = text\.trim\(\) !== '' \|\| note\.trim\(\) !== '' \|\| pick !== null/.test(startTrip), 'Start a trip: "Discard changes?" only when something was typed or picked; nothing while it starts');
   check(/allowLeave\(\);[\s\S]*router\.replace\(\{ pathname: '\/log-mileage', params: \{ mode: 'start', taskId: outcome\.taskId/.test(startTrip), 'after Start: the normal Start task flow takes the page\'s place (no question asked)');

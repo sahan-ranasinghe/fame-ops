@@ -8,6 +8,7 @@
 // turned or tilted, the compass button turns it north-up again. The rules are in taskMapLogic.ts.
 
 import { Camera, Map, Marker, type CameraRef, type CameraStop } from '@maplibre/maplibre-react-native';
+import Constants from 'expo-constants';
 import Flag from 'lucide-react-native/icons/flag';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
@@ -20,6 +21,9 @@ import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { MapCompass } from './MapCompass';
 import { fitKey, frameOf, mapStops, routeLines, startPoint, type Frame, type LatLng, type MapStop, type RouteLeg } from './taskMapLogic';
+
+/** The build carries the Google key (app.config.ts): the task map is Google's (Part 5). */
+export const GOOGLE_MAP_BUILD = (Constants.expoConfig?.extra as { googleMapsAndroid?: boolean } | undefined)?.googleMapsAndroid === true;
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 const SRI_LANKA: LatLng = { lat: 7.75, lng: 80.7 };

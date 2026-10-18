@@ -572,6 +572,11 @@ export function localTrip(input: {
     needs_driver_reason: null,
     needs_driver_since: null,
     vehicle_choice: null,
+    // Hotfix 2: a trip of the driver's own is in the vehicle they hold (never "on the day"); nobody approves it.
+    vehicle_mode: 'specific',
+    vehicle_type_wanted: null,
+    approved_by_employee_id: null,
+    approved_at: null,
     start_place_id: null,
     start_name: null,
     start_lat: null,

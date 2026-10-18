@@ -81,6 +81,14 @@ export const KEYS = {
   tripPicked: 'trips.picked',
   /** Phase 7 §13: a queued trip's first stop, the phone's id → the server's ({local: server}); stop changes go to the server's. */
   tripStopIds: 'trips.stopIds',
+  /** Hotfix 2 (F, K): who to call about each task, as last read ({taskId: {at, updatedAt, contacts}}): the buttons show offline. */
+  taskContacts: 'cache.taskContacts',
+  /** Hotfix 2 (F): Me's Call office and Call fleet admin, as last read ({at, contacts}). */
+  officeContacts: 'cache.officeContacts',
+  /** Hotfix 2 (I): each task as the driver last saw it ({taskId: SeenCopy}): a changed task shows what changed. */
+  taskSeen: 'cache.taskSeen',
+  /** Hotfix 2 (I): what each task's newest "Task changed" push named ({taskId: PushChanges}), until the driver opens it. */
+  pushChanges: 'cache.pushChanges',
   /** When the refused points were last put back in line (ms), and for which app update. */
   rejectedRetryAt: 'sync.rejectedRetryAt',
   rejectedRetryUpdate: 'sync.rejectedRetryUpdate',
