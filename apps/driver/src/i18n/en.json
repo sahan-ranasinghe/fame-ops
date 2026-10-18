@@ -645,7 +645,11 @@
     "newTasks": "New tasks",
     "newTasksDesc": "New, changed and cancelled tasks",
     "asks": "Questions from the office",
-    "asksDesc": "Questions the office asks you (free for a trip, a time, where you are)"
+    "asksDesc": "Questions the office asks you (free for a trip, a time, where you are)",
+    "ring": "New tasks (ringing)",
+    "ringDesc": "A new task rings for up to 30 seconds, until you open it",
+    "updates": "Task changes",
+    "updatesDesc": "A task changed, cancelled or given to someone else"
   },
   "dur": {
     "now": "now",

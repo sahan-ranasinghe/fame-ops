@@ -25,39 +25,14 @@
 // (and, for the two clock-outs, to stop location).
 
 import { createClient } from "@supabase/supabase-js";
+import { channelFor, DAY_KINDS, type DayKind, type Kind, TASK_KINDS, type TaskKind } from "./channels.ts";
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const COLOMBO_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-type TaskKind = "new" | "changed" | "cancelled" | "removed" | "leave_30" | "leave_now" | "accept_reminder" | "reopened";
-/** About the driver's day, with no task (Phase 7); Part 3b: ask = a question from the office (ask_drivers). */
-type DayKind = "vehicle_taken" | "vehicle_moved" | "duty_auto_out" | "duty_office_out" | "ask";
-type Kind = TaskKind | DayKind;
-const TASK_KINDS: TaskKind[] = ["new", "changed", "cancelled", "removed", "leave_30", "leave_now", "accept_reminder", "reopened"];
-const DAY_KINDS: DayKind[] = ["vehicle_taken", "vehicle_moved", "duty_auto_out", "duty_office_out", "ask"];
 type Language = "en" | "si";
-
-const CHANNEL: Record<Kind, string> = {
-  new: "tasks-new",
-  changed: "tasks-changed",
-  cancelled: "tasks-changed",
-  removed: "general",
-  leave_30: "tasks-changed",
-  leave_now: "tasks-new",
-  accept_reminder: "tasks-new",
-  reopened: "tasks-changed",
-  vehicle_taken: "general",
-  vehicle_moved: "general",
-  duty_auto_out: "general",
-  duty_office_out: "general",
-  // Part 3b (H3): the "driver-asks" channel on a phone that made it (below); else the loud new-task channel.
-  ask: "tasks-new",
-};
-
-/** Part 3b (H3): the office's questions have their own channel (maximum importance, its own vibration). */
-const ASKS_CHANNEL = "driver-asks";
 
 /** The question in the driver's language: the title by the ask's kind, the line under it. */
 const ASK_TEXT: Record<Language, Record<string, { title: string; body: string }>> = {
@@ -72,13 +47,6 @@ const ASK_TEXT: Record<Language, Record<string, { title: string; body: string }>
     where_now: { title: "ඔබ දැන් කොහෙද?", body: "{asker} අසයි · ඔබේ ස්ථානය එක් වරක් යැවීමට තට්ටු කරන්න" },
   },
 };
-
-/**
- * Hotfix 2 (B): new, changed, cancelled and reassigned tasks go to the "New tasks" channel (maximum importance, a long
- * vibration) on a phone whose app has made it (device_tokens.channels); an older phone keeps the channels above.
- */
-const NEW_TASKS_CHANNEL = "new-tasks";
-const ON_NEW_TASKS: ReadonlySet<Kind> = new Set<Kind>(["new", "changed", "cancelled", "removed"]);
 
 /** The words for each changed field ("Task changed: new time 09:30 · vehicle WP KL-1234"). */
 const CHANGE_TEXT: Record<Language, Record<string, string>> = {
@@ -321,11 +289,7 @@ Deno.serve(async (request) => {
       : askId
       ? { kind, askId }
       : { kind },
-    channelId: kind === "ask" && (t.channels ?? []).includes(ASKS_CHANNEL)
-      ? ASKS_CHANNEL
-      : ON_NEW_TASKS.has(kind) && (t.channels ?? []).includes(NEW_TASKS_CHANNEL)
-      ? NEW_TASKS_CHANNEL
-      : CHANNEL[kind],
+    channelId: channelFor(kind, t.channels ?? []),
     priority: "high",
     sound: "default",
     ttl: 3600,

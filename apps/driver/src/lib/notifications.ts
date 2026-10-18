@@ -10,6 +10,10 @@
 //                   you are), maximum importance, four short pulses, general.wav; its name
 //                   in the driver's language; registered with the token like new-tasks.
 //                   A tap opens the question (app/ask/[id].tsx) with Today underneath.
+//   task-ring       Part 6 (the 1.3.0 build): a new task rings for 30 s (task_ring.ogg) until the driver opens
+//                   the app or the task (stopRinging clears the notification, and its sound with it).
+//   task-updates    Part 6: a task changed, cancelled or given to someone else (task_update.ogg).
+//   office-asks     Part 6: the office's questions with their own tone (office_ask.ogg).
 //   tasks-new       a new task: loud ring, strong vibration (push from the server; phones
 //                   on an older update)
 //   tasks-changed   a task changed or cancelled (push; phones on an older update)
@@ -30,7 +34,18 @@
 import * as Notifications from 'expo-notifications';
 
 import { translate } from '../i18n';
-import { asksChannel, type ChannelSpec, type ChannelsReady, newTasksChannel } from './channels';
+import { AppState } from 'react-native';
+
+import {
+  asksChannel,
+  type ChannelSpec,
+  type ChannelsReady,
+  newTasksChannel,
+  officeAsksChannel,
+  RING_CHANNEL,
+  ringChannel,
+  updatesChannel,
+} from './channels';
 import { getJson, KEYS, remove, setJson } from './kv';
 import type { Language } from './types';
 
@@ -52,13 +67,36 @@ export const WATCHDOG_AFTER_MS = 12 * 60_000;
 /** It is pushed back only when it would fire within this long, so the task does not reschedule it on every position. */
 const WATCHDOG_REARM_WITHIN_MS = 7 * 60_000;
 
+/** With the app open, a new task's ring stops after a few seconds: the driver is already looking at the phone. */
+export const RING_IN_APP_MS = 6000;
+
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (n) => {
+    if ((n.request.content.data as { kind?: string } | null)?.kind === 'new') setTimeout(() => void stopRinging(), RING_IN_APP_MS);
+    return { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false };
+  },
+});
+
+/**
+ * Part 6: clears the new-task notifications still on show, which stops a ring still going (Android stops a notification's
+ * sound when it is cleared). Called when the app comes to the front, when a notification is opened and a few seconds
+ * after a new task arrives with the app open. Only new tasks: the "On duty" notification and the rest stay.
+ */
+export async function stopRinging(): Promise<void> {
+  try {
+    const shown = await Notifications.getPresentedNotificationsAsync();
+    await Promise.all(
+      shown
+        .filter((n) => (n.request.content.data as { kind?: string } | null)?.kind === 'new')
+        .map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
+    );
+  } catch {
+    // Nothing on show, or the notification is gone already.
+  }
+}
+
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') void stopRinging();
 });
 
 export async function notificationsAllowed(): Promise<boolean> {
@@ -81,6 +119,9 @@ export async function requestNotifications(): Promise<boolean> {
 let channelsReady = false;
 let newTasksReady = false;
 let asksReady = false;
+let ringReady = false;
+let updatesReady = false;
+let officeAsksReady = false;
 
 /** The "New tasks" channel in a language (Android lets an existing channel's name and description change, nothing else). */
 async function setNewTasksChannel(language: Language): Promise<boolean> {
@@ -112,10 +153,19 @@ async function setChannel(spec: ChannelSpec): Promise<boolean> {
   }
 }
 
-/** The driver changed the language: the "New tasks" and questions channels' names in Android's settings follow. */
+/** Part 6: the 1.3.0 build's three channels in a language. */
+async function setPart6Channels(language: Language): Promise<void> {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(language, key, vars);
+  ringReady = await setChannel(ringChannel(t));
+  updatesReady = await setChannel(updatesChannel(t));
+  officeAsksReady = await setChannel(officeAsksChannel(t));
+}
+
+/** The driver changed the language: the app's own channels' names in Android's settings follow. */
 export async function renameChannels(language: Language): Promise<void> {
   if (newTasksReady) await setNewTasksChannel(language);
   if (asksReady) await setAsksChannel(language);
+  if (ringReady || updatesReady || officeAsksReady) await setPart6Channels(language);
 }
 
 /** Whether the "New tasks" channel exists (the push token is registered with it only then). */
@@ -128,10 +178,18 @@ export function newTasksChannelReady(): boolean {
  * the app's own channels ("New tasks", the questions) are there, so the push token can be registered with them.
  */
 export async function ensureChannels(): Promise<ChannelsReady> {
-  if (channelsReady) return { newTasks: newTasksReady, asks: asksReady };
+  const ready = (): ChannelsReady => ({
+    newTasks: newTasksReady,
+    asks: asksReady,
+    ring: ringReady,
+    updates: updatesReady,
+    officeAsks: officeAsksReady,
+  });
+  if (channelsReady) return ready();
   const language = getJson<Language>(KEYS.language) === 'si' ? 'si' : 'en';
   newTasksReady = await setNewTasksChannel(language);
   asksReady = await setAsksChannel(language);
+  await setPart6Channels(language);
   await Notifications.setNotificationChannelAsync(CHANNELS.tasksNew, {
     name: 'New tasks',
     importance: Notifications.AndroidImportance.MAX,
@@ -158,17 +216,17 @@ export async function ensureChannels(): Promise<ChannelsReady> {
     vibrationPattern: [0, 400, 200, 400],
   });
   channelsReady = true;
-  return { newTasks: newTasksReady, asks: asksReady };
+  return ready();
 }
 
 /** Shows a new-task notification from the app itself (used when the phone has no push token), on the "New tasks" channel. */
 export async function notifyNewTask(title: string, body: string, taskId: string): Promise<void> {
   try {
     if (!(await notificationsAllowed())) return;
-    const ready = (await ensureChannels()).newTasks;
+    const ready = await ensureChannels();
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { taskId, kind: 'new' } },
-      trigger: { channelId: ready ? CHANNELS.newTasks : CHANNELS.tasksNew },
+      trigger: { channelId: ready.ring ? RING_CHANNEL : ready.newTasks ? CHANNELS.newTasks : CHANNELS.tasksNew },
     });
   } catch {
     // A missed banner is not worth an error: the task is on the Today screen.
@@ -323,7 +381,11 @@ export async function presentedTaskPushes(): Promise<TapData[]> {
 
 /** Runs `callback` when the driver taps a notification while the app is running. */
 export function onNotificationTap(callback: (data: TapData) => void): () => void {
-  const subscription = Notifications.addNotificationResponseReceivedListener((response) => callback(tapData(response)));
+  const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+    // Part 6: opening any notification stops a new task's ring still going.
+    void stopRinging();
+    callback(tapData(response));
+  });
   return () => subscription.remove();
 }
 

@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import * as realApi from '../src/lib/api';
-import { channelsToRegister, NEW_TASKS_CHANNEL, NEW_TASKS_SOUND, NEW_TASKS_VIBRATION, newTasksChannel } from '../src/lib/channels';
+import { channelsToRegister, NEW_TASKS_CHANNEL, NEW_TASKS_SOUND, NEW_TASKS_VIBRATION, newTasksChannel, officeAsksChannel, ringChannel, updatesChannel } from '../src/lib/channels';
 import { approvedBy, askedBy, officeCalls, parseOfficeContacts, parseTaskContacts, phoneDisplay, taskCalls, whatsappLink } from '../src/lib/contacts';
 import { colomboDayDiff, durationText, relativeTime, type Translate } from '../src/lib/durations';
 import {
@@ -290,8 +290,16 @@ async function main() {
   const bundled = (plugin?.[1].sounds ?? []).map((path) => path.split('/').pop());
   const spec = newTasksChannel(en);
   check(spec.id === 'new-tasks' && NEW_TASKS_CHANNEL === 'new-tasks', 'a new channel id: new-tasks (Android fixes a channel\'s settings when it is made)');
-  check(bundled.includes(NEW_TASKS_SOUND) && existsSync(join(here, '..', 'assets', 'sounds', NEW_TASKS_SOUND)) && appJson.expo.version === '1.2.0',
-    `its sound ${NEW_TASKS_SOUND} is one the 1.2.0 build bundles (app.json's expo-notifications sounds)`, bundled);
+  check(bundled.includes(NEW_TASKS_SOUND) && existsSync(join(here, '..', 'assets', 'sounds', NEW_TASKS_SOUND)) && appJson.expo.version === '1.3.0',
+    `its sound ${NEW_TASKS_SOUND} is one the build bundles (app.json's expo-notifications sounds)`, bundled);
+  // Part 6 (the 1.3.0 build): three channels with sounds of their own, bundled, and registered with the token once made.
+  const part6 = [ringChannel(en), updatesChannel(en), officeAsksChannel(en)];
+  check(part6.map((c) => `${c.id}:${c.sound}`).join(' ') === 'task-ring:task_ring.ogg task-updates:task_update.ogg office-asks:office_ask.ogg'
+    && part6.every((c) => bundled.includes(c.sound) && existsSync(join(here, '..', 'assets', 'sounds', c.sound)) && c.name && !c.name.startsWith('channel.')),
+    'Part 6: task-ring, task-updates and office-asks, each with its own bundled sound and a name in the language', part6.map((c) => c.id));
+  check(channelsToRegister({ newTasks: true, asks: true, ring: true, updates: true, officeAsks: true }).join(',') === 'new-tasks,driver-asks,task-ring,task-updates,office-asks'
+    && channelsToRegister({ newTasks: true, asks: true }).join(',') === 'new-tasks,driver-asks',
+    'the phone registers each channel it has made (a 1.2.0 app: the two it had)');
   check(spec.importance === 'max' && spec.lockscreen === 'public', 'maximum importance (heads-up) and the whole notification on the lock screen');
   check(NEW_TASKS_VIBRATION.length >= 6 && NEW_TASKS_VIBRATION.filter((_, i) => i % 2 === 1).every((ms) => ms >= 800), 'a long vibration: three pulses of 800 ms', NEW_TASKS_VIBRATION);
   check(spec.name === 'New tasks' && newTasksChannel(si).name === 'නව කාර්යයන්' && newTasksChannel(si).description !== '', 'the name and description in the driver\'s language');

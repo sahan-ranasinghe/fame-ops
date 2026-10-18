@@ -1,4 +1,4 @@
-// The task map on the running task's screen (Phase 7, §20 and §24), in both builds:
+// The task map on the running task's screen (Phase 7, §20 and §24), in both builds (the OpenFreeMap one in OpenTaskMap.tsx):
 //   - Google's map (the gmaps build, react-native-maps with PROVIDER_GOOGLE): every stop numbered with its time, the
 //     planned road line decoded from the plan's Google polylines (legs[].line), and the phone.
 //   - The OpenFreeMap map (MapLibre): the stops that are not Google places, and the phone. Never Google's line or a
@@ -7,31 +7,30 @@
 // office changes the stops (the task is fetched again on Realtime), never on each new position. While the map is
 // turned or tilted, the compass button turns it north-up again. The rules are in taskMapLogic.ts.
 
-import { Camera, Map, Marker, type CameraRef, type CameraStop } from '@maplibre/maplibre-react-native';
 import Constants from 'expo-constants';
-import Flag from 'lucide-react-native/icons/flag';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import GoogleMapView, { Marker as GoogleMarker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Mono, Txt } from '@/components/ui';
 import type { TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { MapCompass } from './MapCompass';
-import { fitKey, frameOf, mapStops, routeLines, startPoint, type Frame, type LatLng, type MapStop, type RouteLeg } from './taskMapLogic';
+import { type Fit, type MapParts, MePin, nextTurn, ONE_PLACE_ZOOM, PADDING, SHEET_OVERLAP, SRI_LANKA, StartPin, StopPin, type Turn } from './mapPins';
+import { fitKey, frameOf, mapStops, routeLines, startPoint, type LatLng, type RouteLeg } from './taskMapLogic';
 
 /** The build carries the Google key (app.config.ts): the task map is Google's (Part 5). */
 export const GOOGLE_MAP_BUILD = (Constants.expoConfig?.extra as { googleMapsAndroid?: boolean } | undefined)?.googleMapsAndroid === true;
 
-const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
-const SRI_LANKA: LatLng = { lat: 7.75, lng: 80.7 };
-/** Room for the back button and the duty pill above, the sheet's rounded top below, and the pins' labels. */
-const PADDING = { top: 120, right: 60, bottom: 60, left: 60 };
-/** The sheet covers the map's bottom edge: Google's logo and the framing stay above it. */
-const SHEET_OVERLAP = 24;
-const ONE_PLACE_ZOOM = 14;
+/**
+ * The OpenFreeMap map's module, required only by a build without the Google map (Part 6): the Google-map build leaves
+ * MapLibre out, so even loading that module there would fail.
+ */
+const OpenTaskMap: typeof import('./OpenTaskMap').OpenTaskMap | null = GOOGLE_MAP_BUILD
+  ? null
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  : (require('./OpenTaskMap') as typeof import('./OpenTaskMap')).OpenTaskMap;
 
 interface Props {
   task: TaskWithStops;
@@ -41,16 +40,6 @@ interface Props {
   googleMap: boolean;
   /** A line over the bottom of the map (the OpenFreeMap map: the current stop is a Google place, not drawn). */
   note?: string | null;
-}
-
-interface Fit {
-  key: string;
-  frame: Frame;
-}
-
-interface Turn {
-  heading: number;
-  pitch: number;
 }
 
 export function TaskMap({ task, me, googleMap, note }: Props) {
@@ -76,76 +65,9 @@ export function TaskMap({ task, me, googleMap, note }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return googleMap
+  return googleMap || !OpenTaskMap
     ? <GoogleTaskMap stops={stops} lines={lines} start={start} me={me} fit={fit} />
     : <OpenTaskMap stops={stops} start={start} me={me} fit={fit} note={note} />;
-}
-
-interface MapParts {
-  stops: MapStop[];
-  start: LatLng | null;
-  me: LatLng | null;
-  fit: Fit;
-}
-
-/** Only the changes a person can see: a re-render per pan would be wasted. */
-function nextTurn(prev: Turn, heading: number, pitch: number): Turn {
-  return Math.abs(prev.heading - heading) < 0.5 && Math.abs(prev.pitch - pitch) < 0.5 ? prev : { heading, pitch };
-}
-
-/** The OpenFreeMap map (MapLibre): the stops that are not Google places, and the phone. No line (rule 10). */
-function OpenTaskMap({ stops, start, me, fit, note }: MapParts & { note?: string | null }) {
-  const { t } = useApp();
-  const insets = useSafeAreaInsets();
-  const camera = useRef<CameraRef>(null);
-  const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
-
-  const stop = useMemo((): Partial<CameraStop> => {
-    const f = fit.frame;
-    if (f.kind === 'box') return { bounds: [f.sw.lng, f.sw.lat, f.ne.lng, f.ne.lat], padding: { ...PADDING, bottom: PADDING.bottom + SHEET_OVERLAP } };
-    if (f.kind === 'point') return { center: [f.center.lng, f.center.lat], zoom: ONE_PLACE_ZOOM };
-    return { center: [SRI_LANKA.lng, SRI_LANKA.lat], zoom: 6.4 };
-  }, [fit]);
-
-  const northUp = () => {
-    setTurn({ heading: 0, pitch: 0 });
-    void camera.current?.setStop({ bearing: 0, pitch: 0, duration: 400, easing: 'ease' });
-  };
-
-  return (
-    <>
-      <Map
-        style={StyleSheet.absoluteFill}
-        mapStyle={MAP_STYLE}
-        logo={false}
-        compass={false}
-        onRegionDidChange={(e) => setTurn((prev) => nextTurn(prev, e.nativeEvent.bearing, e.nativeEvent.pitch))}
-      >
-        <Camera ref={camera} {...stop} duration={600} easing="ease" />
-        {start && (
-          <Marker id="start" lngLat={[start.lng, start.lat]} anchor="center">
-            <StartPin />
-          </Marker>
-        )}
-        {stops.map((s) => (
-          <Marker key={`${s.id}:${s.state}:${s.time ?? ''}`} id={`stop-${s.id}`} lngLat={[s.lng, s.lat]} anchor="bottom">
-            <StopPin stop={s} />
-          </Marker>
-        ))}
-        {me && (
-          <Marker id="me" lngLat={[me.lng, me.lat]} anchor="center">
-            <MePin />
-          </Marker>
-        )}
-      </Map>
-      <MapCompass heading={turn.heading} pitch={turn.pitch} label={t('map.northUp')} onPress={northUp} style={{ top: insets.top + 68, right: 16 }} />
-      {note ? (
-        <View style={styles.mapNote} pointerEvents="none">
-          <Txt variant="strong" size={14} color="#ffffff">{note}</Txt>
-        </View>
-      ) : null}
-    </>
-  );
 }
 
 /**
@@ -234,73 +156,3 @@ function GoogleTaskMap({ stops, lines, start, me, fit }: MapParts & { lines: Rou
 function at(p: LatLng): { latitude: number; longitude: number } {
   return { latitude: p.lat, longitude: p.lng };
 }
-
-/** A stop: its number (a flag on the start stop) and its time, on a stem to the point. */
-function StopPin({ stop }: { stop: MapStop }) {
-  const current = stop.state === 'current';
-  const done = stop.state === 'done';
-  const fill = current ? colors.blue : done ? colors.card : colors.ink;
-  const ink = done ? colors.muted : '#ffffff';
-  const size = current ? 16 : 14;
-  return (
-    <View style={{ alignItems: 'center', opacity: done ? 0.75 : 1 }}>
-      <View style={[styles.pin, { backgroundColor: fill, borderColor: done ? colors.line : '#ffffff' }, current && styles.pinCurrent]}>
-        <View style={[styles.pinNumber, current && styles.pinNumberCurrent, done && { backgroundColor: colors.page }]}>
-          <Mono size={size} bold color={current ? colors.blue : colors.ink}>{String(stop.n)}</Mono>
-        </View>
-        {stop.isStart && <Flag size={size} color={ink} strokeWidth={2.6} />}
-        {stop.time !== null && <Mono size={size} bold color={ink}>{stop.time}</Mono>}
-      </View>
-      <View style={[styles.stem, { backgroundColor: current ? colors.blue : done ? colors.muted : colors.ink }]} />
-    </View>
-  );
-}
-
-/** Where the trip starts when it is not a stop: a small flag, muted (the driver has left it). */
-function StartPin() {
-  return (
-    <View style={styles.start}>
-      <Flag size={14} color="#ffffff" strokeWidth={2.6} />
-    </View>
-  );
-}
-
-/** The phone. */
-function MePin() {
-  return (
-    <View style={styles.meHalo}>
-      <View style={styles.meDot} />
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  mapNote: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: SHEET_OVERLAP + 10,
-    backgroundColor: colors.ink,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  pin: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingLeft: 3,
-    paddingRight: 9,
-    paddingVertical: 3,
-    borderRadius: 16,
-    borderWidth: 2,
-    elevation: 3,
-  },
-  pinCurrent: { paddingVertical: 4, paddingRight: 11, borderRadius: 18 },
-  pinNumber: { minWidth: 24, height: 24, borderRadius: 12, paddingHorizontal: 4, backgroundColor: '#ffffff', alignItems: 'center', justifyContent: 'center' },
-  pinNumberCurrent: { minWidth: 28, height: 28, borderRadius: 14 },
-  stem: { width: 10, height: 10, borderRadius: 5, marginTop: 2, borderWidth: 2, borderColor: '#ffffff' },
-  start: { width: 26, height: 26, borderRadius: 7, backgroundColor: colors.ink, opacity: 0.8, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#ffffff' },
-  meHalo: { width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(30,79,160,0.22)', alignItems: 'center', justifyContent: 'center' },
-  meDot: { width: 24, height: 24, borderRadius: 7, backgroundColor: colors.blue, borderWidth: 3, borderColor: '#ffffff' },
-});

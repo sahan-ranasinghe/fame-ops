@@ -29,9 +29,19 @@
 // laptop could not read it, worked out 1.2.0 against EAS's 1.2.0-gmaps, and EAS
 // stopped the build on the mismatch.)
 
+//
+// The drivers build (Phase 7, Part 6; docs/phase7-plan.md §27): the EAS profiles drivers and drivers-32 (or
+// FAME_LEAN_BUILD=1 for the local test build) leave out the dev client's plugin and, with the Google map, MapLibre's,
+// and add plugins/withLeanAndroid.js. Their autolinking exclusions are written by scripts/lean-build.mjs.
+
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+
+const LEAN_PROFILES = ['drivers', 'drivers-32'];
+
+/** A plugin entry's name ("expo-dev-client" or ["expo-camera", {…}]). */
+const pluginName = (p: unknown): string => (Array.isArray(p) ? String(p[0]) : String(p));
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   const fromEnv = process.env.GOOGLE_SERVICES_JSON?.trim();
@@ -42,8 +52,14 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   if (mapsOn && process.env.EAS_BUILD === 'true' && !mapsKey) {
     throw new Error('GOOGLE_ANDROID_MAPS is on but this EAS build has no GOOGLE_ANDROID_MAPS_KEY: set the secret in its environment');
   }
+  const lean = LEAN_PROFILES.includes(process.env.EAS_BUILD_PROFILE ?? '') || process.env.FAME_LEAN_BUILD === '1';
+  const leftOut = lean ? ['expo-dev-client', ...(mapsOn ? ['@maplibre/maplibre-react-native'] : [])] : [];
+  const plugins = lean
+    ? [...(config.plugins ?? []).filter((p) => !leftOut.includes(pluginName(p))), './plugins/withLeanAndroid']
+    : config.plugins;
   return {
     ...config,
+    plugins,
     name: config.name ?? 'Fame Driver',
     slug: config.slug ?? 'fame-driver',
     android: {

@@ -67,10 +67,63 @@ export function asksChannel(t: Translate): ChannelSpec {
   };
 }
 
+// The 1.3.0 build (Phase 7, Part 6) bundles three sounds of its own (scripts/make-sounds.sh, OGG), so three new channel ids
+// (a channel's sound is fixed when it is first made):
+//   task-ring     a new task: the 30-second ringtone, like a ride-hailing app; the app clears the notification, and the
+//                 ring with it, when the driver opens the app or the task (lib/notifications.ts stopRinging)
+//   task-updates  a task changed, cancelled or given to someone else: a short falling tone of its own
+//   office-asks   a question from the office: a rising question-like tone
+// push-task sends each kind on its channel to the phones that registered it, else on the channels before.
+
+export const RING_CHANNEL = 'task-ring';
+export const RING_SOUND = 'task_ring.ogg';
+/** Five long pulses (the ring itself goes on for 30 s). */
+export const RING_VIBRATION = [0, 800, 400, 800, 400, 800, 400, 800, 400, 800];
+export const UPDATES_CHANNEL = 'task-updates';
+export const UPDATES_SOUND = 'task_update.ogg';
+export const UPDATES_VIBRATION = [0, 200, 100, 200, 100, 200];
+export const OFFICE_ASKS_CHANNEL = 'office-asks';
+export const OFFICE_ASKS_SOUND = 'office_ask.ogg';
+
+/** The 1.3.0 channels in the driver's language. */
+export function ringChannel(t: Translate): ChannelSpec {
+  return {
+    id: RING_CHANNEL,
+    name: t('channel.ring'),
+    description: t('channel.ringDesc'),
+    importance: 'max',
+    sound: RING_SOUND,
+    vibrationPattern: RING_VIBRATION,
+    lockscreen: 'public',
+    lightColor: '#f2a900',
+  };
+}
+
+export function updatesChannel(t: Translate): ChannelSpec {
+  return {
+    id: UPDATES_CHANNEL,
+    name: t('channel.updates'),
+    description: t('channel.updatesDesc'),
+    importance: 'max',
+    sound: UPDATES_SOUND,
+    vibrationPattern: UPDATES_VIBRATION,
+    lockscreen: 'public',
+    lightColor: '#f2a900',
+  };
+}
+
+export function officeAsksChannel(t: Translate): ChannelSpec {
+  return { ...asksChannel(t), id: OFFICE_ASKS_CHANNEL, sound: OFFICE_ASKS_SOUND };
+}
+
 /** Which of the app's own channels exist on this phone (lib/notifications.ts ensureChannels). */
 export interface ChannelsReady {
   newTasks: boolean;
   asks: boolean;
+  /** Part 6 (the 1.3.0 build). */
+  ring?: boolean;
+  updates?: boolean;
+  officeAsks?: boolean;
 }
 
 /**
@@ -78,6 +131,12 @@ export interface ChannelsReady {
  * boolean is the "New tasks" channel alone (as before Part 3b).
  */
 export function channelsToRegister(ready: boolean | ChannelsReady): string[] {
-  const r = typeof ready === 'boolean' ? { newTasks: ready, asks: false } : ready;
-  return [...(r.newTasks ? [NEW_TASKS_CHANNEL] : []), ...(r.asks ? [ASKS_CHANNEL] : [])];
+  const r: ChannelsReady = typeof ready === 'boolean' ? { newTasks: ready, asks: false } : ready;
+  return [
+    ...(r.newTasks ? [NEW_TASKS_CHANNEL] : []),
+    ...(r.asks ? [ASKS_CHANNEL] : []),
+    ...(r.ring ? [RING_CHANNEL] : []),
+    ...(r.updates ? [UPDATES_CHANNEL] : []),
+    ...(r.officeAsks ? [OFFICE_ASKS_CHANNEL] : []),
+  ];
 }

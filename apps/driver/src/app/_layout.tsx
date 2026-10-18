@@ -1,5 +1,4 @@
 import { Archivo_800ExtraBold } from '@expo-google-fonts/archivo/800ExtraBold';
-import { GemunuLibre_700Bold } from '@expo-google-fonts/gemunu-libre/700Bold';
 import { GemunuLibre_800ExtraBold } from '@expo-google-fonts/gemunu-libre/800ExtraBold';
 import { IBMPlexMono_500Medium } from '@expo-google-fonts/ibm-plex-mono/500Medium';
 import { IBMPlexMono_600SemiBold } from '@expo-google-fonts/ibm-plex-mono/600SemiBold';
@@ -7,7 +6,6 @@ import { IBMPlexSans_400Regular } from '@expo-google-fonts/ibm-plex-sans/400Regu
 import { IBMPlexSans_500Medium } from '@expo-google-fonts/ibm-plex-sans/500Medium';
 import { IBMPlexSans_600SemiBold } from '@expo-google-fonts/ibm-plex-sans/600SemiBold';
 import { IBMPlexSans_700Bold } from '@expo-google-fonts/ibm-plex-sans/700Bold';
-import { NotoSansSinhala_400Regular } from '@expo-google-fonts/noto-sans-sinhala/400Regular';
 import { Yaldevi_400Regular } from '@expo-google-fonts/yaldevi/400Regular';
 import { Yaldevi_600SemiBold } from '@expo-google-fonts/yaldevi/600SemiBold';
 import { useFonts } from 'expo-font';
@@ -86,9 +84,7 @@ export default function RootLayout() {
     Archivo_800ExtraBold,
     Yaldevi_400Regular,
     Yaldevi_600SemiBold,
-    GemunuLibre_700Bold,
     GemunuLibre_800ExtraBold,
-    NotoSansSinhala_400Regular,
   });
 
   return (

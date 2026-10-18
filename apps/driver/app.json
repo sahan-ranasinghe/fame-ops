@@ -3,7 +3,7 @@
     "name": "Fame Driver",
     "slug": "fame-driver",
     "owner": "fame-global",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "scheme": "famedriver",
     "platforms": [
       "android"
@@ -62,7 +62,10 @@
           "sounds": [
             "./assets/sounds/new_task.wav",
             "./assets/sounds/task_changed.wav",
-            "./assets/sounds/general.wav"
+            "./assets/sounds/general.wav",
+            "./assets/sounds/task_ring.ogg",
+            "./assets/sounds/task_update.ogg",
+            "./assets/sounds/office_ask.ogg"
           ]
         }
       ],

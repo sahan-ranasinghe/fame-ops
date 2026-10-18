@@ -26,7 +26,5 @@ export const fonts = {
   heading: 'Archivo_800ExtraBold',
   sinhalaBody: 'Yaldevi_400Regular',
   sinhalaBodySemiBold: 'Yaldevi_600SemiBold',
-  sinhalaHeading: 'GemunuLibre_700Bold',
   sinhalaHeadingExtraBold: 'GemunuLibre_800ExtraBold',
-  sinhalaFallback: 'NotoSansSinhala_400Regular',
 } as const;
