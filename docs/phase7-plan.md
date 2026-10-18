@@ -1637,6 +1637,8 @@ as off) and the tests.
   still read the request as first asked; the page's lined trip went stale after an office edit; the tasks query's cap;
   the name clash; three clicks to remove; a switched-off place; the Sinhala table (`me.phoneSetup` is
   `phoneSetup.title`; `phoneSetup.meHint` and Huawei's steps added).
+- The issues e2e was flaky since §28: the test's new vehicle gets "Documents missing" once a full sync has run, and the
+  test counted every open row with its plate. It now looks only for the vehicle problem.
 
 **The fresh reviewer at checkpoint 3** found no security gap. Its findings, all fixed:
 - A one-step booking writes its trip after its own approval, so a later Keep would have put the request's stops back
