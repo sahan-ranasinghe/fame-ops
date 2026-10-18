@@ -826,12 +826,13 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   await page.getByRole("button", { name: "Save password" }).click();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
-  // The bell counts it; the dropdown names it; the issue page shows the report.
-  await expect(page.getByTestId("bell-count").first()).toBeVisible();
-  const before = Number(await page.getByTestId("bell-count").first().textContent());
+  // Hotfix 3 (L4): one notification icon; the issues count is a badge on the Issues menu item; the list names it; the
+  // issue page shows the report.
+  await expect(page.getByTestId("nav-badge-issues").first()).toBeVisible();
+  const before = Number(await page.getByTestId("nav-badge-issues").first().textContent());
   expect(before).toBeGreaterThan(0);
-  await page.getByRole("button", { name: /^Issues: \d+ open$/ }).first().click();
-  await page.getByTestId("bell-menu").getByRole("menuitem", { name: /Vehicle problem: breakdown/ }).first().click();
+  await page.goto("/issues");
+  await page.getByText(/Vehicle problem: breakdown/).first().click();
   await expect(page.getByTestId("issue-page")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Vehicle problem: breakdown" })).toBeVisible();
   await expect(page.getByTestId("issue-report")).toContainText("Engine stalls at idle");

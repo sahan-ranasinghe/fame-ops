@@ -43,16 +43,18 @@ test.beforeAll(() => {
 test("a fleet admin on a phone: five tabs, the big action, a task as a page, a detail as a full screen with a back arrow, the stops editor, pull to refresh", async ({ page }) => {
   await signIn(page, "Phone Admin", `phone.admin.${stamp}@fame.test`, ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"]);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  // The rail is gone; the tab bar has Home, Requests, Tasks, Map, More and nothing else.
+  // The rail is gone; the tab bar has Home, Requests, Tasks, Live, More and nothing else (Hotfix 3: the approver's four).
   await expect(page.locator("aside.rail")).toBeHidden();
-  await expect(tabs(page)).toHaveText(["Home", /^Requests\d*$/, "Tasks", "Map", "More"]); // the digits are the waiting badge
+  // The digits are the badges: the requests waiting, and on More the issues (Issues lives under More).
+  await expect(tabs(page)).toHaveText(["Home", /^Requests\d*$/, "Tasks", "Live", /^More\d*$/]);
   // The big action: Requests to approve (N) while any wait (other tests leave some), else Assign a task.
   const big = page.getByTestId("home-action");
   await expect(big).toHaveText(/^(Assign a task|Requests to approve \(\d+\))$/);
   // More lists what is not on the bar, once.
   await tabs(page).filter({ hasText: "More" }).click();
   const more = page.getByTestId("more-list");
-  await expect(more.getByRole("link")).toHaveText(["Task history", "Issues", "My trips", "Vehicles", "Projects", "Maintenance", "Mileage", "Fuel", "Places", "Drivers", "Duty log", "Settings"]);
+  // Hotfix 3 (L5): in the menu's section order: Today, Fleet, Reports, Admin.
+  await expect(more.getByRole("link")).toHaveText(["Task history", "My trips", /^Issues\d*$/, "Vehicles", "Drivers", "Places", "Maintenance", "Mileage", "Fuel", "Duty log", "Projects", "Settings"]);
 
   // The big action opens its page; Assign a task is a page of its own, its stops rows numbered within their type.
   await tabs(page).filter({ hasText: "Home" }).click();
@@ -133,10 +135,10 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
 test("a requester on a phone: four tabs, New request as the big action, the request as a page, the detail full screen, the draft kept", async ({ page }) => {
   await signIn(page, "Phone Requester", `phone.req.${stamp}@fame.test`, ["view", "request"]);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await expect(tabs(page)).toHaveText(["Home", "My trips", "Map", "Vehicles", "More"]);
+  await expect(tabs(page)).toHaveText(["Home", "My trips", "Vehicles", "Live", "More"]);
   await expect(page.getByTestId("home-action")).toHaveText("New request");
   await tabs(page).filter({ hasText: "More" }).click();
-  await expect(page.getByTestId("more-list").getByRole("link")).toHaveText(["Requests", "Projects", "Drivers", "Settings"]);
+  await expect(page.getByTestId("more-list").getByRole("link")).toHaveText(["Requests", "Drivers", "Projects", "Settings"]);
 
   // The request page from the big action; a draft survives leaving through the tab bar.
   await tabs(page).filter({ hasText: "Home" }).click();
@@ -145,7 +147,7 @@ test("a requester on a phone: four tabs, New request as the big action, the requ
   await expect(page.getByLabel("Who needs it")).toHaveCount(0);
   await expect(page.getByLabel("On behalf of")).toBeVisible();
   await page.getByLabel("Note").fill("Phone draft");
-  await tabs(page).filter({ hasText: "Map" }).click();
+  await tabs(page).filter({ hasText: "Live" }).click();
   await expect(page.getByRole("heading", { name: "Live locations" })).toBeVisible();
   await page.goto("/requests/new");
   await expect(page.getByTestId("draft-banner")).toContainText("Resume draft from");
