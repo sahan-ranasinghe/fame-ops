@@ -5,7 +5,9 @@
 //
 //   ops         start/stop sharing, task and stop changes, photos, odometer and
 //               fuel logs, vehicle reports, the driver_latest heartbeat, a
-//               vehicle's first photo (Phase 7 §6), and the
+//               vehicle's first photo (Phase 7 §6), a trip the driver started
+//               or a stop added to it with no connection (Phase 7 §13: sent to
+//               driver-api before the Start task that follows it), and the
 //               fuel videos (one resumable upload each, sent a chunk at a time
 //               with the offset kept after every chunk). Sent strictly in the
 //               order they happened; a video waiting for Wi-Fi is stepped over
@@ -32,7 +34,9 @@
 import * as realApi from '../lib/api';
 import { ApiError, type Client } from '../lib/api';
 import type { Json } from '../lib/database.types';
+import type { TripsApi } from '../lib/driverApi';
 import { vehiclePhotoDone } from '../lib/photoRules';
+import type { TripAnswer, TripCreateOp, TripStopOp } from '../lib/trips';
 import type { Language, PhotoKind } from '../lib/types';
 import { CHUNK_BYTES, type VideoStore } from '../lib/videoStore';
 
@@ -67,7 +71,13 @@ export type Op =
   /** Phase 7 §6: a vehicle's first photo from this phone, both files to vehicle-photos, then the RPC. */
   | VehiclePhotoOp
   /** A fuel video: the file on the phone, its place in the bucket, and how far the upload got (url + offset, kept after every chunk). */
-  | VideoUploadOp;
+  | VideoUploadOp
+  /** Phase 7 §13: a trip started with no connection (POST /trips, idempotent by its id); the Start task follows it in the queue. */
+  | TripCreateOp
+  /** Phase 7 §13: a stop added on the way with no connection (POST /trips/:id/stops, idempotent by the stop's id). */
+  | TripStopOp;
+
+export type { TripCreateOp, TripStopOp };
 
 export interface VideoUploadOp {
   kind: 'video_upload';
@@ -189,6 +199,17 @@ export interface SyncDeps {
   onHeartbeat?: (answer: realApi.HeartbeatAnswer) => void;
   /** A vehicle photo is done: 'ok' (it is the vehicle's photo now) or 'has_photo' (another one was there first). */
   onVehiclePhoto?: (op: VehiclePhotoOp, answer: 'ok' | 'has_photo') => void;
+  /** driver-api's trips (Phase 7 §13). Without it trip ops wait. */
+  trips?: TripsApi;
+  /**
+   * The first stop of a trip made from the queue: the server names it, the phone's copy had its own id. Kept here so
+   * a stop change queued with the phone's id (Arrived, Done, Skip) goes to the server's stop. Memory when not given.
+   */
+  stopIds?: { get(localId: string): string | null; set(localId: string, serverId: string): void };
+  /** A trip or its stop reached the server: its answer (the phone's copy takes the server's ids). */
+  onTrip?: (op: TripCreateOp | TripStopOp, answer: TripAnswer) => void;
+  /** The server refused an op for good (it is kept, failed): the screens tell the driver about a trip. */
+  onRefused?: (op: Op, message: string) => void;
 }
 
 export interface FlushResult {
@@ -228,6 +249,37 @@ export function createSync(deps: SyncDeps) {
     },
   };
   let running: Promise<FlushResult> | null = null;
+  const stopMemory = new Map<string, string>();
+  const stopIds = deps.stopIds ?? {
+    get: (id: string) => stopMemory.get(id) ?? null,
+    set: (localId: string, serverId: string) => void stopMemory.set(localId, serverId),
+  };
+
+  /**
+   * A trip or a stop from the queue. The same id again is harmless (the server answers what it made). Our place
+   * refused (removed while the trip waited on the phone): once more with its pin or its words, so the trip is not lost.
+   */
+  async function sendTrip(op: TripCreateOp | TripStopOp): Promise<void> {
+    const trips = deps.trips;
+    if (!trips) throw new ApiError('trip: no driver-api client', false);
+    const call = (destination: TripCreateOp['request']['destination']) =>
+      op.kind === 'trip_create'
+        ? trips.createTrip({ ...op.request, destination })
+        : trips.addTripStop(op.task_id, { id: op.id, destination });
+    const first = op.kind === 'trip_create' ? op.request.destination : op.destination;
+    let answer: TripAnswer;
+    try {
+      answer = await call(first);
+    } catch (error) {
+      if (!(error instanceof ApiError) || !error.permanent || error.code !== 'refused' || !op.fallback) throw error;
+      answer = await call(op.fallback);
+    }
+    if (op.kind === 'trip_create') {
+      const server = answer.trip.stops[0]?.stop_id;
+      if (server && server !== op.local_stop_id) stopIds.set(op.local_stop_id, server);
+    }
+    deps.onTrip?.(op, answer);
+  }
 
   /**
    * One video, chunk by chunk, keeping the server's offset in the op after
@@ -357,7 +409,8 @@ export function createSync(deps: SyncDeps) {
         return;
       }
       case 'stop_patch':
-        return api.patchStop(client, op.id, op.patch);
+        // A trip's first stop made from the queue has the server's id now (sendTrip).
+        return api.patchStop(client, stopIds.get(op.id) ?? op.id, op.patch);
       case 'employee_patch':
         return api.patchEmployee(client, op.id, op.patch);
       case 'vehicle_change':
@@ -396,6 +449,9 @@ export function createSync(deps: SyncDeps) {
         return sendVideo(seq, op);
       case 'vehicle_photo':
         return sendVehiclePhoto(op);
+      case 'trip_create':
+      case 'trip_stop':
+        return sendTrip(op);
     }
   }
 
@@ -480,6 +536,7 @@ export function createSync(deps: SyncDeps) {
         if (error instanceof ApiError && error.permanent) {
           store.failOp(next.seq, error.message);
           if (next.op.kind === 'video_upload') await api.patchFuelVideo(client, next.op.fuel_log_id, { video_status: 'failed' }).catch(() => undefined);
+          deps.onRefused?.(next.op, error.message);
           result.failed += 1;
           continue;
         }

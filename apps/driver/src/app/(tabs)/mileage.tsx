@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Stretches } from '@/components/SwapCard';
 import { useDateLabel } from '@/components/task';
-import { shownTaskKm } from '@/components/taskLines';
+import { shownTaskKm, taskTitle } from '@/components/taskLines';
 import { Button, Card, Mono, Plate, Txt } from '@/components/ui';
 import { fetchMileage, type Mileage } from '@/lib/api';
 import { thousands } from '@/lib/format';
@@ -123,7 +123,7 @@ export default function MileageScreen() {
                 >
                   <Mono size={17} bold style={{ width: 58 }}>{colomboTime(task.start_at)}</Mono>
                   <View style={{ flex: 1, gap: 4 }}>
-                    <Txt variant="strong" numberOfLines={2}>{task.title}</Txt>
+                    <Txt variant="strong" numberOfLines={2}>{taskTitle(t, task, true)}</Txt>
                     {km !== null && <Stretches task={task} size={14} />}
                   </View>
                   {km !== null

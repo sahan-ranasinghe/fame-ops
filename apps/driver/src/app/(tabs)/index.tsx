@@ -5,11 +5,13 @@
 // Part 3 (§6): the card shows the task's vehicle with its photo.
 // Part 4 (item 7): no Phone setup card here any more; the brand's steps are in the first-run Permissions
 // flow and on Me → Phone setup (app/phone-setup.tsx).
+// Part 4 (§13): on duty with no task in progress, "Start a trip" (app/start-trip.tsx); a trip of the driver's own
+// reads "Your trip · Company work" where the office's title would be, and has no "Can't do this task".
 
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GoogleCredit } from '@/components/GoogleCredit';
-import { Check, ChevronRight, Play } from '@/components/icons';
+import { Check, ChevronRight, Play, Route } from '@/components/icons';
 import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -21,11 +23,12 @@ import { leaveTime, StopTimeline, useDateLabel, usePeopleLine } from '@/componen
 import { Thumb, useVehicleThumbs } from '@/components/Photos';
 import { PlateText } from '@/components/PlateText';
 import { plateOf } from '@/components/SwapCard';
-import { swapCard } from '@/components/taskLines';
+import { swapCard, taskTitle } from '@/components/taskLines';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
 import { colomboDate, colomboHour, colomboTime } from '@/lib/time';
+import { isSelfTrip } from '@/lib/trips';
 import type { TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -110,6 +113,12 @@ export default function TodayScreen() {
               <Notice tone="info" text={t(app.notice)} />
             </Pressable>
           )}
+          {/* A trip or stop the phone kept and the server refused (Phase 7 §13): why, until tapped. */}
+          {app.tripProblem && (
+            <Pressable accessibilityRole="button" onPress={app.clearTripProblem}>
+              <Notice tone="danger" text={t(app.tripProblem.key, { reason: app.tripProblem.reason })} />
+            </Pressable>
+          )}
           <TrackingNotice />
           {app.queue.points > 0 && (!app.dataAvailable || app.offline) && (
             <Txt variant="small" color={colors.amberText}>{t('today.offlineWaiting', { n: app.queue.points })}</Txt>
@@ -124,7 +133,7 @@ export default function TodayScreen() {
                 <Mono size={24} bold>{colomboTime(leaveTime(next))}</Mono>
               </View>
               <Txt variant="muted">{[colomboDate(next.start_at) !== today ? dateLabel(next.start_at) : null, next.status === 'assigned' ? t('today.leaveBy', { time: colomboTime(leaveTime(next)) }) : null].filter(Boolean).join(' · ')}</Txt>
-              <Txt variant="title" size={27} style={{ marginTop: 4, marginBottom: 14 }}>{next.title}</Txt>
+              <Txt variant="title" size={27} style={{ marginTop: 4, marginBottom: 14 }}>{taskTitle(t, next)}</Txt>
               <StopTimeline stops={next.task_stops} compact />
               {people && <Txt variant="muted" style={{ marginTop: 14 }}>{people}</Txt>}
               {/* Phase 7 §6: the task's vehicle, with its photo when it has one. */}
@@ -157,13 +166,19 @@ export default function TodayScreen() {
                   style={{ marginTop: 18 }}
                 />
               )}
-              {next.status === 'assigned' && <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(next)} />}
+              {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list). */}
+              {next.status === 'assigned' && !isSelfTrip(next) && <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(next)} />}
             </View>
           ) : (
             <Card style={{ alignItems: 'center', paddingVertical: 34, gap: 6 }}>
               <Txt variant="heading">{t('today.noTasks')}</Txt>
               <Txt variant="muted" style={{ textAlign: 'center' }}>{t('today.noTasksHint')}</Txt>
             </Card>
+          )}
+
+          {/* Phase 7 §13: on duty with nothing under way, a trip of the driver's own (the main action when there is no task). */}
+          {app.sharing && !running && (
+            <Button kind={next ? 'dark' : 'primary'} icon={Route} label={t('trip.start')} onPress={() => router.push('/start-trip')} />
           )}
 
           <TaskList title={t('today.laterToday')} tasks={laterToday} />
@@ -196,8 +211,11 @@ function TaskList({ title, tasks, showDate = false }: { title: string; tasks: Ta
               {showDate && <Txt variant="small">{dateLabel(task.start_at)}</Txt>}
             </View>
             <View style={{ flex: 1 }}>
-              <Txt variant="strong" size={18}>{task.title}</Txt>
-              {task.task_stops[0] && <Txt variant="muted">{t('today.from', { place: task.task_stops[0].place_name })}</Txt>}
+              <Txt variant="strong" size={18}>{taskTitle(t, task)}</Txt>
+              {/* A trip of the driver's own goes to its stop: there is no "from". */}
+              {isSelfTrip(task)
+                ? task.task_stops.length > 0 && <Txt variant="muted">{task.task_stops[task.task_stops.length - 1].place_name}</Txt>
+                : task.task_stops[0] && <Txt variant="muted">{t('today.from', { place: task.task_stops[0].place_name })}</Txt>}
               <GoogleCredit show={task.task_stops.some((s) => !!s.google_place_id)} />
               {task.status === 'assigned' && (
                 <Txt variant="small" color={task.accepted_at ? colors.blue : colors.amberText}>{t(task.accepted_at ? 'today.accepted' : 'today.notAccepted')}</Txt>

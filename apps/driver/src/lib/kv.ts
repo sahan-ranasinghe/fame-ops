@@ -75,6 +75,12 @@ export const KEYS = {
   profilePhoto: 'me.profilePhoto',
   /** Phase 7 §28: the held vehicle's documents as last read ({vehicleId, rows}): the expiries show offline; the files never stay. */
   documents: 'docs.lastRead',
+  /** Phase 7 §13: our places as last read ({at, rows}), so Start a trip offers them with no connection. */
+  tripPlaces: 'trips.places',
+  /** Phase 7 §13: our places the driver picked for a trip, newest first (offered again offline). */
+  tripPicked: 'trips.picked',
+  /** Phase 7 §13: a queued trip's first stop, the phone's id → the server's ({local: server}); stop changes go to the server's. */
+  tripStopIds: 'trips.stopIds',
   /** When the refused points were last put back in line (ms), and for which app update. */
   rejectedRetryAt: 'sync.rejectedRetryAt',
   rejectedRetryUpdate: 'sync.rejectedRetryUpdate',

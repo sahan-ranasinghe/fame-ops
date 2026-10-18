@@ -251,13 +251,25 @@ export function opsWaiting(kind: Op['kind']): number {
   return row?.n ?? 0;
 }
 
-/** Ids of tasks that have a change waiting to be sent. */
+/** Ids of tasks that have a change waiting to be sent (a start or finish, or a trip started with no connection). */
 export function tasksWaiting(): Set<string> {
   const ids = new Set<string>();
   for (const { op } of queueStore.nextOps(500)) {
     if (op.kind === 'task_patch' && op.patch.status !== undefined) ids.add(op.id);
+    if (op.kind === 'trip_create') ids.add(op.id);
   }
   return ids;
+}
+
+/**
+ * Ops waiting that must reach the server before a trip is started there (Phase 7 §13): a finish, a vehicle change, a
+ * duty period. Fuel videos (they may wait for Wi-Fi) and the driver_latest heartbeat do not count.
+ */
+export function opsBeforeTrip(): number {
+  const row = db.getFirstSync<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM ops WHERE failed = 0 AND op NOT LIKE '{"kind":"video_upload"%' AND op NOT LIKE '{"kind":"heartbeat"%'`,
+  );
+  return row?.n ?? 0;
 }
 
 export function failedErrors(): string[] {

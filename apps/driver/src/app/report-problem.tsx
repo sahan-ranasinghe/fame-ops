@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
 import { ReportForm } from '@/components/ReportForm';
+import { taskTitle } from '@/components/taskLines';
 import { Txt } from '@/components/ui';
 import { OFFICE_PHONE } from '@/config';
 import { useApp } from '@/state/app';
@@ -65,7 +66,7 @@ export default function ReportProblemScreen() {
           </Pressable>
           <View style={{ flex: 1 }}>
             <Txt variant="title" size={28}>{t('report.title')}</Txt>
-            {task && <Txt variant="muted" numberOfLines={1}>{task.title}</Txt>}
+            {task && <Txt variant="muted" numberOfLines={1}>{taskTitle(t, task, true)}</Txt>}
           </View>
         </View>
         <ReportForm vehicle={vehicle} taskId={task?.id ?? null} onSent={sent} onDirtyChange={onDirtyChange} />

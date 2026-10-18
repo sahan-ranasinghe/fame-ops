@@ -7,6 +7,7 @@
 
 import { stopNumber, swapReadingsWaiting, taskKmSoFar } from '../lib/dayRules';
 import { colomboTime } from '../lib/time';
+import { purposeKey } from '../lib/trips';
 import type { TaskSegment, TaskStop, TaskWithStops } from '../lib/types';
 
 /** The app's t() (useApp): a key and its {placeholders}. */
@@ -79,6 +80,22 @@ export function stretches(task: Segments & Pick<TaskWithStops, 'end_odometer_km'
 export function shownTaskKm(task: Segments & Pick<TaskWithStops, 'km' | 'start_odometer_km' | 'end_odometer_km'>): number | null {
   if ((task.task_vehicle_segments?.length ?? 0) >= 2 && task.end_odometer_km != null) return taskKmSoFar(task, task.end_odometer_km) ?? task.km;
   return task.km;
+}
+
+/** A trip the driver started (Phase 7 §13): "Your trip · Personal" where the office's title would be; null for the office's tasks. */
+export function tripLabel(t: Translate, task: Pick<TaskWithStops, 'kind' | 'purpose'>): string | null {
+  return task.kind === 'self' ? `${t('trip.yours')} · ${t(purposeKey(task.purpose))}` : null;
+}
+
+/**
+ * The line that names a task: the office's title, or for a trip of the driver's own "Your trip · Company work" (the
+ * server's title is English data: "Trip · Kadawatha"); `withPlace` adds where the trip goes (its last stop).
+ */
+export function taskTitle(t: Translate, task: Pick<TaskWithStops, 'kind' | 'purpose' | 'title' | 'task_stops'>, withPlace = false): string {
+  const label = tripLabel(t, task);
+  if (label === null) return task.title;
+  const last = task.task_stops.filter((s) => s.status !== 'removed').sort((a, b) => a.seq - b.seq).at(-1);
+  return withPlace && last ? `${label} · ${last.place_name}` : label;
 }
 
 /** The place a sentence's plate goes ("{plate}: end reading"): the screens draw the plate there in its mono chip. */

@@ -28,11 +28,30 @@ import { queueVideoUpload, type RecordedVideo, videoSegmentRows, videoStoragePat
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
+import { driverApi } from '@/lib/driverApiClient';
+import {
+  type Choice,
+  canAddStop,
+  keepLocalTrips,
+  type KnownPlace,
+  knownFromPick,
+  knownFromTasks,
+  localTrip,
+  mergeKnown,
+  type Purpose,
+  rememberPlace,
+  stopRequest,
+  tripCreateOp,
+  tripRequest,
+  tripStopOp,
+  withAddedStop,
+  withCard,
+} from '@/lib/trips';
 import type { Employee, Language, ReportCategory, TaskStop, TaskWithStops, Vehicle, VehicleReport } from '@/lib/types';
 import { applyDownloadedUpdate, checkForUpdate, forgetDownloadedUpdate, runningUpdateId, type UpdateOutcome } from '@/lib/updates';
-import { enqueue, flushNow, maybeRetryRejected, onAnswer, onQueueChange, onVehiclePhotoAnswer, uploadPhotoFile } from '@/sync';
+import { enqueue, flushNow, maybeRetryRejected, onAnswer, onOpRefused, onQueueChange, onTripSent, onVehiclePhotoAnswer, uploadPhotoFile } from '@/sync';
 import type { VehiclePhotoOp } from '@/sync/engine';
-import { clearQueue, pendingVehiclePhotos, queueCounts, type QueueCounts, retryFailed, tasksWaiting } from '@/sync/store';
+import { clearQueue, opsBeforeTrip, pendingVehiclePhotos, queueCounts, type QueueCounts, retryFailed, tasksWaiting } from '@/sync/store';
 
 export type SignInOutcome = 'ok' | 'wrong' | 'network' | 'switched_off' | 'not_configured';
 /** Why a stop was skipped (task_stops.skip_reason); not_visited = the task was finished with the stop still open. */
@@ -81,6 +100,29 @@ export interface SwapReading {
   vehicleId: string;
   taskId: string;
 }
+
+/**
+ * Start a trip (Phase 7 §13): made on the server at once (`queued` false), or kept on the phone and sent by the queue
+ * (`offline` true when there was no connection: the driver is told). A refusal carries the server's words.
+ */
+export type StartTripOutcome =
+  | { kind: 'started'; taskId: string; queued: boolean; offline: boolean }
+  | { kind: 'refused'; message: string }
+  | { kind: 'no_vehicle' }
+  | { kind: 'task_running' };
+/** Add a stop on the way: added now, or kept on the phone; refused with the server's words; or the trip has 12 stops. */
+export type AddStopOutcome = { kind: 'added'; queued: boolean; offline: boolean } | { kind: 'refused'; message: string } | { kind: 'full' };
+/** A queued trip or stop the server refused for good: Today and the task screen say why (trip.failed / trip.stopFailed). */
+export interface TripProblem {
+  key: 'trip.failed' | 'trip.stopFailed';
+  reason: string;
+}
+
+/** Waiting for the queue to send what must go before a trip: at most this long, then the trip is queued behind it. */
+const TRIP_FLUSH_WAIT_MS = 8_000;
+/** Our places for Start a trip offline are read again after this long (on the trip page), or 12 hours (on refresh). */
+const OUR_PLACES_MAX_AGE_MS = 3600_000;
+const OUR_PLACES_REFRESH_MS = 12 * 3600_000;
 
 export interface OdometerEntry {
   km: number;
@@ -191,6 +233,16 @@ interface AppValue {
   pendingVehiclePhotos: Record<string, string>;
   /** Queues a vehicle's first photo (made by lib/photos.ts takeVehiclePhoto); works offline. */
   addVehiclePhoto: (op: VehiclePhotoOp) => void;
+  /** Phase 7 §13: our places the phone can offer for a trip with no connection (picked before, on my tasks, the office's own). */
+  knownPlaces: KnownPlace[];
+  /** Reads our places again when the copy on the phone is older than an hour (and there is a connection). */
+  loadKnownPlaces: () => void;
+  /** Start a trip: driver-api at once when online and nothing must go first, else the queue (works offline). */
+  startTrip: (input: { purpose: Purpose; pick: Choice; note: string }) => Promise<StartTripOutcome>;
+  /** Add a stop to my trip under way (the same two ways). */
+  addTripStop: (task: TaskWithStops, pick: Choice) => Promise<AddStopOutcome>;
+  tripProblem: TripProblem | null;
+  clearTripProblem: () => void;
   /** needsVehicle: "I need another vehicle" (a breakdown or accident during a task, Phase 7). */
   sendReport: (
     category: ReportCategory,
@@ -247,6 +299,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [vehicleTaken, setVehicleTaken] = useState<VehicleTaken | null>(null);
   const [dutyEnded, setDutyEnded] = useState<DutyEnded | null>(() => getJson<DutyEnded>(KEYS.dutyEnded));
   const [lastVehicleId, setLastVehicleIdState] = useState<string | null>(() => getJson<string>(KEYS.lastVehicle));
+  const [ourPlaces, setOurPlaces] = useState<KnownPlace[]>(() => getJson<{ at: number; rows: KnownPlace[] }>(KEYS.tripPlaces)?.rows ?? []);
+  const [pickedPlaces, setPickedPlaces] = useState<KnownPlace[]>(() => getJson<KnownPlace[]>(KEYS.tripPicked) ?? []);
+  const [tripProblem, setTripProblem] = useState<TripProblem | null>(null);
+  const clearTripProblem = useCallback(() => setTripProblem(null), []);
+  /** Trips this phone made that the server's task list may not have yet (lib/trips.ts keepLocalTrips). */
+  const pendingTrips = useRef(new Set<string>());
   const lastVehicleRef = useRef(lastVehicleId);
   const setLastVehicleId = useCallback((id: string) => {
     lastVehicleRef.current = id;
@@ -305,6 +363,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     remove(KEYS.lastVehicle);
     lastVehicleRef.current = null;
     setLastVehicleIdState(null);
+    remove(KEYS.tripPlaces);
+    remove(KEYS.tripPicked);
+    remove(KEYS.tripStopIds);
+    setOurPlaces([]);
+    setPickedPlaces([]);
+    setTripProblem(null);
+    pendingTrips.current.clear();
     clearQueue();
     seenQueued.current.clear();
   }, [saveMe, saveTasks]);
@@ -314,6 +379,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const counts = queueCounts();
     return !tasksRef.current.some((task) => task.status === 'in_progress') && counts.ops === 0 && counts.points === 0;
   }, []);
+
+  /** Our places for Start a trip with no connection: read again when the phone's copy is older than `maxAgeMs`. */
+  const loadOurPlaces = useCallback(async (maxAgeMs: number) => {
+    const cached = getJson<{ at: number; rows: KnownPlace[] }>(KEYS.tripPlaces);
+    if (cached && Date.now() - cached.at < maxAgeMs) return;
+    try {
+      const rows = (await api.fetchOurPlaces(supabase)).map((p): KnownPlace => ({ id: p.id, name: p.name, address: p.address, lat: p.lat, lng: p.lng, site_id: p.site_id }));
+      setJson(KEYS.tripPlaces, { at: Date.now(), rows });
+      setOurPlaces(rows);
+    } catch {
+      // The list as it was (or none: the typed words still work).
+    }
+  }, []);
+  const loadKnownPlaces = useCallback(() => void loadOurPlaces(OUR_PLACES_MAX_AGE_MS), [loadOurPlaces]);
 
   const refresh = useCallback(async () => {
     if (!meRef.current) return;
@@ -348,8 +427,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setJson(KEYS.shift, shiftSettings);
       }
       // While something is still waiting on the phone, keep what the driver did rather than the older server copy.
-      if (!sent.offline) saveTasks(taskRows);
+      // A trip this phone just made stays until the list has it (the list may have been read a moment before).
+      if (!sent.offline) saveTasks(keepLocalTrips(taskRows, tasksRef.current, pendingTrips.current));
       setOffline(sent.offline);
+      void loadOurPlaces(OUR_PLACES_REFRESH_MS);
       // Phase 7: another driver took my vehicle while I am on duty → the banner (until I choose or close it).
       const rows = await api.fetchMyAssignments(supabase, 1).catch(() => null);
       const last = rows?.[0];
@@ -365,7 +446,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setRefreshing(false);
     }
-  }, [forgetEverything, saveMe, saveTasks, setLastVehicleId]);
+  }, [forgetEverything, saveMe, saveTasks, setLastVehicleId, loadOurPlaces]);
 
   /** Looks at the location service and tells the screens what it found. */
   const checkTrackingNow = useCallback(async () => {
@@ -554,8 +635,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const channel = supabase
       .channel(`my-tasks-${myId}-${liveGeneration}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter: `employee_id=eq.${myId}` }, (change) => {
-        // A phone with a push token hears about the task from the server; the others from here.
-        if (change.eventType === 'INSERT' && !pushToken()) {
+        // A phone with a push token hears about the task from the server; the others from here. A trip the driver
+        // started (kind self, Phase 7 §13) is not news to them.
+        if (change.eventType === 'INSERT' && !pushToken() && (change.new as { kind?: string }).kind !== 'self') {
           const task = change.new as { id?: string; title?: string; start_at?: string };
           void notifyNewTask(t('today.newTask'), [task.start_at ? colomboTime(task.start_at) : '', task.title ?? ''].join(' ').trim(), task.id ?? '');
         }
@@ -1069,6 +1151,107 @@ export function AppProvider({ children }: { children: ReactNode }) {
     void flushNow();
   }, []);
 
+  // --- Phase 7 §13: trips the driver starts ------------------------------------------
+  const dataRef = useRef(dataAvailable);
+  dataRef.current = dataAvailable;
+
+  /**
+   * Whether a trip (or its stop) can go straight to driver-api: a connection, and nothing waiting in the queue that must
+   * reach the server first (a finish, a vehicle change, a duty period). What waits gets a short chance to go first.
+   */
+  const canGoDirect = useCallback(async (): Promise<boolean> => {
+    if (!dataRef.current) return false;
+    if (opsBeforeTrip() > 0) {
+      await Promise.race([flushNow(true), new Promise((resolve) => setTimeout(resolve, TRIP_FLUSH_WAIT_MS))]);
+    }
+    return opsBeforeTrip() === 0;
+  }, []);
+
+  const rememberPick = useCallback((pick: Choice) => {
+    const place = knownFromPick(pick);
+    if (!place) return;
+    setPickedPlaces((list) => {
+      const next = rememberPlace(list, place);
+      setJson(KEYS.tripPicked, next);
+      return next;
+    });
+  }, []);
+
+  const startTrip = useCallback(async ({ purpose, pick, note }: { purpose: Purpose; pick: Choice; note: string }): Promise<StartTripOutcome> => {
+    const current = meRef.current;
+    if (!current) return { kind: 'refused', message: '' };
+    if (tasksRef.current.some((task) => task.status === 'in_progress')) return { kind: 'task_running' };
+    const vehicleId = current.current_vehicle_id;
+    if (!vehicleId) return { kind: 'no_vehicle' };
+    const request = tripRequest({ id: Crypto.randomUUID(), purpose, pick, note, vehicleId, at: new Date().toISOString() });
+    const localStopId = Crypto.randomUUID();
+    const local = localTrip({ request, pick, employeeId: current.id, employeeName: current.name, vehicleId, localStopId });
+    const keep = (task: TaskWithStops) => {
+      pendingTrips.current.add(task.id);
+      saveTasks([...tasksRef.current.filter((item) => item.id !== task.id), task].sort((a, b) => a.start_at.localeCompare(b.start_at)));
+      rememberPick(pick);
+    };
+    let offline = !dataRef.current;
+    if (await canGoDirect()) {
+      try {
+        const answer = await driverApi.createTrip(request);
+        keep(withCard(local, answer.trip, localStopId));
+        return { kind: 'started', taskId: request.id, queued: false, offline: false };
+      } catch (error) {
+        if (error instanceof api.ApiError && error.permanent) return { kind: 'refused', message: error.message };
+        // No answer: kept on the phone below. If the server did make it, the same id makes the queue's send harmless.
+        offline = true;
+      }
+    }
+    // The queue sends it before the Start task that follows (queue order); the phone's copy lets that start run now.
+    enqueue(tripCreateOp(request, localStopId, pick));
+    keep(local);
+    void flushNow();
+    return { kind: 'started', taskId: request.id, queued: true, offline };
+  }, [canGoDirect, rememberPick, saveTasks]);
+
+  const addTripStop = useCallback(async (task: TaskWithStops, pick: Choice): Promise<AddStopOutcome> => {
+    if (!canAddStop(task)) return { kind: 'full' };
+    const request = stopRequest(Crypto.randomUUID(), pick);
+    let offline = !dataRef.current;
+    if (await canGoDirect()) {
+      try {
+        const answer = await driverApi.addTripStop(task.id, request);
+        patchLocalTask(task.id, (item) => withCard(withAddedStop(item, request.id, pick), answer.trip));
+        rememberPick(pick);
+        return { kind: 'added', queued: false, offline: false };
+      } catch (error) {
+        if (error instanceof api.ApiError && error.permanent) return { kind: 'refused', message: error.message };
+        offline = true;
+      }
+    }
+    enqueue(tripStopOp(task.id, request, pick));
+    patchLocalTask(task.id, (item) => withAddedStop(item, request.id, pick));
+    rememberPick(pick);
+    void flushNow();
+    return { kind: 'added', queued: true, offline };
+  }, [canGoDirect, patchLocalTask, rememberPick]);
+
+  // A queued trip or stop reached the server: the phone's copy takes its ids (the first stop's) and pins.
+  useEffect(() => onTripSent((op, answer) => {
+    if (!tasksRef.current.some((task) => task.id === answer.trip.task_id)) return;
+    patchLocalTask(answer.trip.task_id, (item) => withCard(item, answer.trip, op.kind === 'trip_create' ? op.local_stop_id : null));
+  }), [patchLocalTask]);
+
+  // The server refused a queued trip or stop for good (kept, failed: Me can try it again): the driver is told why.
+  useEffect(() => onOpRefused((op, message) => {
+    if (op.kind === 'trip_create') {
+      // Not on the server: the next refresh leaves the phone's copy out.
+      pendingTrips.current.delete(op.id);
+      if (kmCounters().taskId === op.id) endTaskKm();
+      setTripProblem({ key: 'trip.failed', reason: message });
+    } else if (op.kind === 'trip_stop') {
+      setTripProblem({ key: 'trip.stopFailed', reason: message });
+    }
+  }), []);
+
+  const knownPlaces = useMemo(() => mergeKnown(pickedPlaces, knownFromTasks(tasks), ourPlaces), [pickedPlaces, tasks, ourPlaces]);
+
   const vehicle = useMemo(
     () => vehicles.find((item) => item.id === me?.current_vehicle_id) ?? null,
     [vehicles, me?.current_vehicle_id],
@@ -1087,6 +1270,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     acceptTask, declineTask, notice, clearNotice,
     startTask, completeTask, logOdometer, logFuel, sendReport,
     saveProfilePhoto, pendingVehiclePhotos: vehiclePhotos, addVehiclePhoto,
+    knownPlaces, loadKnownPlaces, startTrip, addTripStop, tripProblem, clearTripProblem,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

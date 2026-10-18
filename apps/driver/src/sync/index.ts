@@ -8,12 +8,14 @@ import * as Network from 'expo-network';
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 import { type AcceptAnswer, ApiError, type HeartbeatAnswer, type HeartbeatRow } from '../lib/api';
+import { driverApi } from '../lib/driverApiClient';
 import { getJson, KEYS, setJson } from '../lib/kv';
 import { supabase } from '../lib/supabase';
 import { currentTrack, setWatched } from '../lib/tracking';
+import { rememberStopId, type TripAnswer } from '../lib/trips';
 import type { Employee } from '../lib/types';
 import { base64Decode, SupabaseTusStore } from '../lib/videoStore';
-import { type BackoffState, type Connection, createSync, type FlushResult, type Op } from './engine';
+import { type BackoffState, type Connection, createSync, type FlushResult, type Op, type TripCreateOp, type TripStopOp } from './engine';
 import { addHeartbeatLog, addOp, queueCounts, queueStore, replaceOp, retryRejectedHeartbeats, retryRejectedPoints } from './store';
 
 const PHOTO_BUCKET = 'driver-photos';
@@ -131,6 +133,28 @@ export function onVehiclePhotoAnswer(listener: VehiclePhotoListener): () => void
   };
 }
 
+type TripListener = (op: TripCreateOp | TripStopOp, answer: TripAnswer) => void;
+const tripListeners = new Set<TripListener>();
+
+/** Hears when a queued trip or stop reached the server (Phase 7 §13): the phone's copy takes the server's ids. */
+export function onTripSent(listener: TripListener): () => void {
+  tripListeners.add(listener);
+  return () => {
+    tripListeners.delete(listener);
+  };
+}
+
+type RefusedListener = (op: Op, message: string) => void;
+const refusedListeners = new Set<RefusedListener>();
+
+/** Hears when the server refused an op for good (kept, failed): Today tells the driver about a trip. */
+export function onOpRefused(listener: RefusedListener): () => void {
+  refusedListeners.add(listener);
+  return () => {
+    refusedListeners.delete(listener);
+  };
+}
+
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
@@ -175,6 +199,17 @@ const sync = createSync({
   },
   onVehiclePhoto: (op, answer) => {
     for (const listener of vehiclePhotoListeners) listener(op.vehicle_id, answer);
+  },
+  trips: driverApi,
+  stopIds: {
+    get: (localId) => getJson<Record<string, string>>(KEYS.tripStopIds)?.[localId] ?? null,
+    set: (localId, serverId) => setJson(KEYS.tripStopIds, rememberStopId(getJson<Record<string, string>>(KEYS.tripStopIds) ?? {}, localId, serverId)),
+  },
+  onTrip: (op, answer) => {
+    for (const listener of tripListeners) listener(op, answer);
+  },
+  onRefused: (op, message) => {
+    for (const listener of refusedListeners) listener(op, message);
   },
 });
 
@@ -260,4 +295,4 @@ export function maybeRetryRejected(reason: 'refresh' | 'start', updateId: string
   return n;
 }
 
-export { pendingFuelLogs, pendingVehiclePhotos, queueCounts, retryVideo, videoUploads } from './store';
+export { opsBeforeTrip, pendingFuelLogs, pendingVehiclePhotos, queueCounts, retryVideo, videoUploads } from './store';

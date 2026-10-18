@@ -8,6 +8,7 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js';
 
 import type { Database, Json } from './database.types';
+import { parsePersonalTrips, type PersonalTrips } from './trips';
 import type { Employee, FuelLog, Language, OdometerLog, TaskWithStops, Vehicle, VehicleReport } from './types';
 
 export type Client = SupabaseClient<Database>;
@@ -96,6 +97,8 @@ export interface DriverSettings {
   fuel_video_checklist: ChecklistItem[];
   /** The recording quality the office chose: 480p (default) or 720p. */
   fuel_video_quality: '480p' | '720p';
+  /** Phase 7 §13: whether Start a trip offers Personal (allowed, default = preselected, off; ask_first behaves as allowed). */
+  driver_personal_trips: PersonalTrips;
 }
 export const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { key: 'plate', en: 'Number plate', si: 'අංක තහඩුව' },
@@ -104,7 +107,13 @@ export const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { key: 'final', en: 'Final pump display: litres and amount', si: 'අවසාන පොම්ප තිරය: ලීටර් සහ මුදල' },
 ];
 /** Monday to Friday by default (the office is closed on Saturday and Sunday). */
-export const DEFAULT_DRIVER_SETTINGS: DriverSettings = { shift_start: '08:00', shift_days: [1, 2, 3, 4, 5], fuel_video_checklist: DEFAULT_CHECKLIST, fuel_video_quality: '480p' };
+export const DEFAULT_DRIVER_SETTINGS: DriverSettings = {
+  shift_start: '08:00',
+  shift_days: [1, 2, 3, 4, 5],
+  fuel_video_checklist: DEFAULT_CHECKLIST,
+  fuel_video_quality: '480p',
+  driver_personal_trips: 'allowed',
+};
 
 export async function fetchDriverSettings(client: Client): Promise<DriverSettings> {
   const res = await client.rpc('get_driver_settings');
@@ -117,7 +126,13 @@ export async function fetchDriverSettings(client: Client): Promise<DriverSetting
       .map((i) => ({ key: i.key, en: i.en, si: typeof i.si === 'string' && i.si ? i.si : i.en }))
     : [];
   const quality = value?.fuel_video_quality === '720p' ? '720p' : '480p';
-  return { shift_start: start, shift_days: days, fuel_video_checklist: list.length ? list : DEFAULT_CHECKLIST, fuel_video_quality: quality };
+  return {
+    shift_start: start,
+    shift_days: days,
+    fuel_video_checklist: list.length ? list : DEFAULT_CHECKLIST,
+    fuel_video_quality: quality,
+    driver_personal_trips: parsePersonalTrips(value?.driver_personal_trips),
+  };
 }
 
 export type FuelVideoPatch = Pick<Tables['fuel_logs']['Update'], 'video_status' | 'video_uploaded_at' | 'video_bytes'>;
@@ -154,6 +169,17 @@ export async function fetchTasks(client: Client, since: Date): Promise<TaskWithS
     task_stops: task.task_stops.filter((stop) => stop.status !== 'removed').sort((a, b) => a.seq - b.seq),
     task_vehicle_segments: [...(task.task_vehicle_segments ?? [])].sort((a, b) => a.seq - b.seq),
   }));
+}
+
+/** Our own places (offices, stores, saved places; not the operators' sites), for Start a trip with no connection (Phase 7 §13). */
+export type OurPlace = Pick<Tables['places']['Row'], 'id' | 'name' | 'address' | 'lat' | 'lng' | 'site_id'>;
+
+export async function fetchOurPlaces(client: Client, limit = 500): Promise<OurPlace[]> {
+  return check(
+    await client.from('places').select('id, name, address, lat, lng, site_id').eq('active', true).is('removed_at', null)
+      .neq('kind', 'site').order('name').limit(limit),
+    'places',
+  );
 }
 
 export async function fetchTaskStatus(client: Client, id: string): Promise<string | null> {

@@ -10,11 +10,15 @@
 // Phase 7 Part 2b (§20, §24): the task map (components/TaskMap.tsx): every stop numbered with its time, Google's planned
 // road line on Google's map only, the phone, the compass; "Distance left by road" from the plan's road km
 // (components/taskMapLogic.ts), the straight line only when the plan has no km.
+// Phase 7 Part 4 (§13): a trip the driver started reads "Your trip · Company work" where the office's title would be,
+// has "Add a stop" while under way (app/add-stop.tsx) and no "Can't do this task". Item 18's stop rules are the same;
+// with no plan there is no odometer check at Complete (lib/dayRules.ts earlyFinish). A Google stop stays off the
+// OpenFreeMap map (lib/mapRule.ts), also on the phone's own copy of a trip (its google_place_id is set from the pick).
 
 import Constants from 'expo-constants';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Check, ChevronLeft, MapPin, Navigation, Phone, Play } from '@/components/icons';
+import { Check, ChevronLeft, MapPin, Navigation, Phone, Play, Plus } from '@/components/icons';
 import { useMemo, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,12 +31,13 @@ import { TaskMap } from '@/components/TaskMap';
 import { hasRouteLine, kmText, roadKmLeft, type LatLng } from '@/components/taskMapLogic';
 import { Stretches, SwapCard } from '@/components/SwapCard';
 import { leaveTime, nextStop, StopTimeline, useDateLabel, usePeopleLine } from '@/components/task';
-import { shownTaskKm, stopLabel, stopTimeAt } from '@/components/taskLines';
+import { shownTaskKm, stopLabel, stopTimeAt, taskTitle } from '@/components/taskLines';
 import { TrackingNotice } from '@/components/tracking';
 import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { arrivalCheck, arrivalRecord, canMarkDone, lastStopOpen, stretchStartKm } from '@/lib/dayRules';
 import { allStopsLink, distanceKm, navigateLink, telLink, thousands } from '@/lib/format';
 import { colomboTime } from '@/lib/time';
+import { canAddStop, isSelfTrip } from '@/lib/trips';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -152,10 +157,17 @@ export default function TaskScreen() {
         </View>
 
         <View>
-          <Txt variant="title" size={28}>{running ? stop?.place_name ?? task.title : task.title}</Txt>
+          <Txt variant="title" size={28}>{running ? stop?.place_name ?? taskTitle(t, task) : taskTitle(t, task)}</Txt>
           {running && <GoogleCredit show={!!stop?.google_place_id} />}
-          {running && <Txt variant="muted" size={18}>{[task.title, people].filter(Boolean).join(' · ')}</Txt>}
+          {running && <Txt variant="muted" size={18}>{[taskTitle(t, task), people].filter(Boolean).join(' · ')}</Txt>}
         </View>
+
+        {/* A trip or stop the phone kept and the server refused (Phase 7 §13): why, until tapped. */}
+        {app.tripProblem && (
+          <Pressable accessibilityRole="button" onPress={app.clearTripProblem}>
+            <Notice tone="danger" text={t(app.tripProblem.key, { reason: app.tripProblem.reason })} />
+          </Pressable>
+        )}
 
         {running ? (
           <>
@@ -242,6 +254,11 @@ export default function TaskScreen() {
               })}
             </View>
 
+            {/* Phase 7 §13: a trip of the driver's own takes stops on the way (the new one comes last). */}
+            {canAddStop(task) && (
+              <Button kind="outline" icon={Plus} label={t('trip.addStop')} onPress={() => router.push({ pathname: '/add-stop', params: { taskId: task.id } })} />
+            )}
+
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Button kind="outline" icon={Navigation} label={t('task.navigate')} disabled={!navigate} onPress={() => navigate && Linking.openURL(navigate)} style={{ flex: 1 }} />
               <Button kind="outline" icon={Phone} label={t('task.callContact')} disabled={!call} onPress={() => call && Linking.openURL(call)} style={{ flex: 1 }} />
@@ -303,7 +320,8 @@ export default function TaskScreen() {
                   onPress={() => router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: task.id, from: 'task' } })}
                 />
                 {call && <Button kind="outline" icon={Phone} label={t('task.callContact')} onPress={() => Linking.openURL(call)} />}
-                <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(true)} />
+                {/* A trip the driver started is not declined (it would land in the office's "needs a driver" list). */}
+                {!isSelfTrip(task) && <Button kind="danger-text" label={t('task.cantDo')} onPress={() => setDeclining(true)} />}
               </>
             )}
           </>
