@@ -40,6 +40,11 @@ async function driverRest(username: string, pin: string) {
       const r = await fetch(`${API}/rest/v1/${path}`, { method: "PATCH", headers, body: JSON.stringify(body) });
       return r.status;
     },
+    /** The driver app's own server (Phase 7, §13): Start a trip, a stop on the way, the place search. */
+    async driverApi<T>(path: string, body: unknown): Promise<{ status: number; body: T }> {
+      const r = await fetch(`${API}/functions/v1/driver-api${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+      return { status: r.status, body: (await r.json()) as T };
+    },
     /** The resumable upload the app uses for fuel videos (TUS): one chunk, as the phone would for a small file. */
     async tusUpload(bucket: string, path: string, bytes: Uint8Array, contentType: string): Promise<number> {
       const b64 = (t: string) => Buffer.from(t).toString("base64");
@@ -831,16 +836,37 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   await expect(page.getByTestId("issue-report")).toContainText("Engine stalls at idle");
   await expect(page.getByTestId("issue-history")).toContainText("Opened by system");
 
-  // Take, a note, resolve: the driver's report is closed with the note.
+  // Phase 7 (§9): the issue is a panel beside the list: who opened it; Esc and the X close it; it opens again from its row.
+  await expect(page.getByTestId("issue-facts")).toContainText("System · Vehicle problem");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("issue-page")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/issues(\?.*)?$/);
+  const ourRow = () => page.getByTestId("issues-list").getByRole("link").filter({ hasText: plate }).filter({ hasText: "Vehicle problem" });
+  await ourRow().click();
+  await expect(page.getByTestId("issue-page")).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByTestId("issue-page")).toHaveCount(0);
+  await ourRow().click();
+
+  // Take, a note, resolve: the driver's report is closed with the note. Take and Resolve close the panel; the row moves.
   await page.getByRole("button", { name: "Take" }).click();
   await expect(page.getByRole("status")).toHaveText("Taken");
+  await expect(page.getByTestId("issue-page")).toHaveCount(0);
+  await page.getByRole("tab", { name: "In progress" }).click();
+  await ourRow().click();
+  await expect(page.getByTestId("issue-facts")).toContainText("E2E Fleet Admin");
   await expect(page.getByTestId("issue-history")).toContainText("assigned it to E2E Fleet Admin");
   await page.getByLabel(/^Note/).fill("Towed to the garage");
   await page.getByRole("button", { name: "Add note" }).click();
   await expect(page.getByRole("status")).toHaveText("Note added");
+  await expect(page.getByTestId("issue-page")).toBeVisible();
   await page.getByLabel(/^Note/).fill("Fuel pump replaced");
   await page.getByRole("button", { name: "Resolve" }).click();
   await expect(page.getByRole("status")).toHaveText("Issue resolved");
+  await expect(page.getByTestId("issue-page")).toHaveCount(0);
+  await expect(page).toHaveURL(/status=in_progress/);
+  await page.getByRole("tab", { name: "Resolved" }).click();
+  await ourRow().click();
   await expect(page.getByText(/Resolved by E2E Fleet Admin/)).toBeVisible();
   await expect(page.getByTestId("issue-report")).toContainText("closed");
   const reports = await tool<{ reports: { id: string; status: string; office_note?: string }[] }>("list_vehicle_reports", { status: "closed" });
@@ -849,7 +875,7 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   expect(closed?.office_note).toBe("Fuel pump replaced");
 
   // The Issues page: the resolved tab has it; the open tab no longer.
-  await page.goto("/issues?tab=resolved");
+  await page.goto("/issues?status=resolved");
   await expect(page.getByTestId("issues-list")).toContainText("Vehicle problem: breakdown");
   await page.goto("/issues");
   await expect(page.getByRole("heading", { name: "Issues" })).toBeVisible();
@@ -1467,6 +1493,79 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   const board = await tool<{ assigned: { title: string; driver?: string }[]; waiting_approval?: { title: string }[] }>("task_board", { date: day });
   expect(board.assigned.some((c) => c.title === title && c.driver === driver.name)).toBe(true);
   expect((board.waiting_approval ?? []).some((c) => c.title === title)).toBe(false);
+});
+
+test("Phase 7, Part 4: a trip a driver started is tagged and switched to personal; task history; the Overview's tiles open their lists; personal trips in Fleet settings", async ({ page }) => {
+  test.setTimeout(180_000);
+  const user = await tool<{ set_password_link: string }>("create_office_user", {
+    name: "E2E Trips Desk", email: `e2e.trips.${stamp}@fame.test`, permissions: ["view", "assign_tasks", "approve", "vehicles", "issues", "users"],
+  });
+  const driver = { name: `E2E Tripper ${stamp}`, code: `E2T-${stamp}`, username: `e2t.${stamp}`, pin: "864201" };
+  await tool("create_driver", driver);
+  const plate = `WP ETR-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota Axio", vehicle_type: "car", seats: 4, current_odometer_km: 2000 });
+  // The driver starts work and a trip in the app (driver-api, as the phone does).
+  const app = await driverRest(driver.username, driver.pin);
+  const [me] = await app.get<{ id: string }[]>("employees?select=id");
+  const [vehicle] = await app.get<{ id: string }[]>(`vehicles?select=id&reg_no=eq.${encodeURIComponent(plate)}`);
+  expect(await app.post("duty_sessions", { id: randomUUID(), employee_id: me.id, vehicle_id: vehicle.id, device_info: { brand: "OPPO" } })).toBe(201);
+  const tripId = randomUUID();
+  const place = `Kadawatha ${stamp}`;
+  const made = await app.driverApi<{ trip: { title: string } }>("/trips", { id: tripId, purpose: "company", destination: { text: place } });
+  expect(made.status).toBe(201);
+  expect(made.body.trip.title).toBe(`Trip · ${place}`);
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.getByLabel("New password").fill(`Trips desk for ${stamp}!`);
+  await page.getByLabel("Again").fill(`Trips desk for ${stamp}!`);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  // §16: a tile opens its list in a panel beside the Overview, kept in the URL (a reload opens it again); Esc closes it.
+  await page.getByRole("link", { name: /Free now/ }).click();
+  await expect(page).toHaveURL(/[?&]open=free/);
+  const panel = page.getByTestId("overview-panel");
+  await expect(panel).toHaveAttribute("data-open", "free");
+  await expect(panel.getByTestId("panel-row").first()).toBeVisible();
+  await page.reload();
+  await expect(page.getByTestId("overview-panel")).toHaveAttribute("data-open", "free");
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("overview-panel")).toHaveCount(0);
+  await page.getByRole("link", { name: /Reminders due/ }).click();
+  await expect(page.getByTestId("overview-panel")).toHaveAttribute("data-open", "reminders");
+  await page.goto("/reminders");
+  await expect(page.getByTestId("reminders-page")).toBeVisible();
+  // The new vehicle has no documents yet: its reminder links to it (once a full sync has run; then it is listed).
+  await expect(page.getByTestId("reminders")).toBeVisible();
+
+  // §13: the board tags the trip; its page switches it to personal.
+  await page.goto("/tasks");
+  const card = page.locator(".tcard").filter({ hasText: `Trip · ${place}` }).first();
+  await expect(card.getByTestId("trip-tags")).toContainText("Driver-started");
+  await page.goto(`/tasks/${tripId}`);
+  const purpose = page.getByTestId("trip-purpose");
+  await purpose.getByRole("button", { name: "Personal" }).click();
+  await purpose.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByTestId("trip-tags").first()).toContainText("Personal");
+  const detail = await tool<{ task: { kind: string; purpose: string } }>("task_detail", { task_id: tripId });
+  expect([detail.task.kind, detail.task.purpose]).toEqual(["self", "personal"]);
+
+  // §8: Tasks → History for the day, with the tags.
+  await page.goto("/tasks/history?range=today");
+  const row = page.getByTestId("history-row").filter({ hasText: place });
+  await expect(row).toContainText("Driver-started");
+  await expect(row).toContainText("Personal");
+  await expect(page.getByTestId("history-totals")).toBeVisible();
+
+  // Settings → Fleet: personal trips off, saved; back to allowed for the rest.
+  await page.goto("/settings/fleet");
+  const trips = page.getByTestId("personal-trips-settings");
+  await trips.getByRole("radio", { name: /Off: no Personal choice/ }).check();
+  await expect.poll(async () => (await tool<{ settings: { driver_personal_trips?: string } }>("get_settings", {})).settings.driver_personal_trips).toBe("off");
+  await tool("update_settings", { key: "driver_personal_trips", value: "allowed" });
+  await tool("cancel_task", { task_id: tripId, reason: "e2e: done" });
 });
 
 test("a vehicle's documents: upload with its expiry, view, replace, remove with a second step, restore (Phase 7, §28)", async ({ page }) => {
