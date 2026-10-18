@@ -142,7 +142,7 @@
     "stopsLeftTitle": "නැවතුම් {n} ක් අවසන් කර නැත",
     "stopsLeftBody": "කෙසේ වෙතත් කාර්යය අවසන් කරනවාද? ඒවා නොගිය ලෙස සලකුණු වේ.",
     "finishAnyway": "කෙසේ වෙතත් අවසන් කරන්න",
-    "minutesThere": "එහි විනාඩි {n}",
+    "minutesThere": "එහි {duration}",
     "accept": "පිළිගන්න",
     "accepted": "පිළිගත්තා ✓ {time}",
     "cantDo": "මෙම කාර්යය කළ නොහැක",
@@ -417,8 +417,8 @@
     "title": "දුරකථන සැකසුම",
     "yourBrand": "ඔබගේ {brand} දුරකථනය",
     "yourPhone": "ඔබගේ දුරකථනය",
-    "stoppedOnce": "{phone} Fame Driver විනාඩි {minutes} ක් නවත්වා තැබුවා ({when}). එය නවතා ඇති විට ගමන සටහන් නොවේ.",
-    "stoppedMany": "{phone} {when} සිට Fame Driver {count} වතාවක් නවත්වා තැබුවා, මුළු විනාඩි {minutes}. එය නවතා ඇති විට ගමන සටහන් නොවේ.",
+    "stoppedOnce": "{phone} Fame Driver {duration} ක් නවත්වා තැබුවා ({when}). එය නවතා ඇති විට ගමන සටහන් නොවේ.",
+    "stoppedMany": "{phone} {when} සිට Fame Driver {count} වතාවක් නවත්වා තැබුවා, මුළු {duration}. එය නවතා ඇති විට ගමන සටහන් නොවේ.",
     "doOnce": "මේ සැකසුම් එක් වරක් වෙනස් කරන්න:",
     "open": "{brand} සැකසුම් විවෘත කරන්න",
     "openApp": "යෙදුමේ සැකසුම් විවෘත කරන්න",
@@ -603,7 +603,9 @@
     "approvedBy": "අනුමත කළේ {name} · {time}",
     "changed": "වෙනස් විය",
     "lastCopy": "සම්බන්ධතාවක් නැත: මෙම දුරකථනයේ අවසන් පිටපතින් පෙන්වයි.",
-    "passengers": "මගීන් {n}"
+    "passengers": "මගීන් {n}",
+    "backBy": "{time} ට ආපසු",
+    "removed": "ඉවත් කළා"
   },
   "call": {
     "contact": "සම්බන්ධීකරුට අමතන්න",
@@ -620,7 +622,9 @@
     "pick": "වෙනත් වාහනයක් තෝරන්න",
     "wrongType": "{plate} {type} එකක් නොවේ.",
     "inGarage": "{plate} ගරාජයේ ඇත.",
-    "failed": "වාහනය සැකසිය නොහැකි විය: {reason}"
+    "failed": "වාහනය සැකසිය නොහැකි විය: {reason}",
+    "hasVehicle": "කාර්යාලය මෙම කාර්යයට වාහනය සකසා ඇත.",
+    "inactive": "{plate} තවදුරටත් වාහන ලැයිස්තුවේ නැත."
   },
   "channel": {
     "newTasks": "නව කාර්යයන්",
@@ -640,7 +644,9 @@
     "earlier": "{date} {time} (දින {days} කට පෙර)",
     "minutes": "මිනිත්තු {n}",
     "hours": "පැය {h} මිනිත්තු {m}",
-    "hoursOnly": "පැය {h}"
+    "hoursOnly": "පැය {h}",
+    "days": "දින {d} පැය {h}",
+    "daysOnly": "දින {d}"
   },
   "vehicleType": {
     "car": "කාර්",

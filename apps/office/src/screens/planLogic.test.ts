@@ -56,7 +56,7 @@ describe("why there is no plan", () => {
 describe("the plan as a timeline (Phase 7, §17)", () => {
   it("a stop: arrive, the time there (usual here), leave; the start stop: leave and passengers", () => {
     expect(stopTimes({ kind: "stop", n: 2, label: "Stop 2 · Drop · Kurunegala site", place: "Kurunegala site", planned_arrive: "09:00", planned_leave: "10:30", dwell_min: 90, dwell_source: "place" }))
-      .toBe("arrive 09:00 · 1 h 30 (usual here) · leave 10:30");
+      .toBe("arrive 09:00 · 1 h 30 min (usual here) · leave 10:30");
     expect(stopTimes({ kind: "stop", n: 1, label: "Stop 1 · Pickup · Head office", place: "Head office", planned_arrive: "07:24", planned_leave: "07:29", dwell_min: 5, is_start: true }))
       .toBe("leave 07:29 · passengers get in here");
   });

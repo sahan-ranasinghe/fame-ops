@@ -44,6 +44,9 @@
       ],
       "@fleet/sites": [
         "../../supabase/functions/_shared/fleet/sites.ts"
+      ],
+      "@fleet/durations": [
+        "../../supabase/functions/_shared/fleet/durations.ts"
       ]
     },
     "allowImportingTsExtensions": true

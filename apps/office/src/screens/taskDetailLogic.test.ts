@@ -16,14 +16,14 @@ describe("a stop on the task page", () => {
   it("the time there: planned against what happened", () => {
     expect(stayText(30)).toBe("30 min");
     expect(stayText(60)).toBe("1 h");
-    expect(stayText(90)).toBe("1 h 30");
-    expect(stayText(125)).toBe("2 h 05");
+    expect(stayText(90)).toBe("1 h 30 min");
+    expect(stayText(125)).toBe("2 h 5 min");
     expect(stayText(undefined)).toBe("");
     expect(stayLine(stop({
       status: "done",
       planned_stay: { arrive: "09:00", leave: "10:30", minutes: 90 },
       actual_stay: { arrived: "09:04", done: "10:41", minutes: 97 },
-    }))).toBe("planned 09:00–10:30 (1 h 30) · actual 09:04–10:41 (1 h 37)");
+    }))).toBe("planned 09:00–10:30 (1 h 30 min) · actual 09:04–10:41 (1 h 37 min)");
     expect(stayLine(stop({ status: "arrived", planned_stay: { arrive: "09:00", leave: "09:05", minutes: 5 }, actual_stay: { arrived: "09:12" } })))
       .toBe("planned 09:00–09:05 (5 min) · actual from 09:12 (there now)");
     expect(stayLine(stop({ status: "skipped", actual_stay: { arrived: "09:12" } }))).toBe("arrived 09:12");

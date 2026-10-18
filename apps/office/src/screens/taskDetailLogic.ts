@@ -4,14 +4,12 @@
 import type { Stop, TaskDetail, TaskSegment } from "../data/types";
 import { cap, joinDots, num, plateOf } from "../lib/format";
 import { TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
+import { duration } from "@fleet/durations";
 
-/** A time at a stop: "45 min", "1 h", "1 h 30", "2 h 05". */
+/** A time at a stop: "45 min", "1 h", "1 h 30 min", "2 h 5 min". */
 export function stayText(minutes: number | null | undefined): string {
   if (minutes == null || !Number.isFinite(minutes)) return "";
-  const m = Math.max(0, Math.round(minutes));
-  if (m < 60) return `${m} min`;
-  const rest = m % 60;
-  return `${Math.floor(m / 60)} h${rest ? ` ${String(rest).padStart(2, "0")}` : ""}`;
+  return duration(Math.max(0, minutes));
 }
 
 /** "Stop 2 · Drop · Kurunegala site" from the answer; else the type, what is carried and the place, as before. */

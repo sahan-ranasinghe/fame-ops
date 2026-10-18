@@ -6,6 +6,7 @@
 // time, else the default by type (the server decides and says which).
 
 export type StopType = "pickup" | "drop" | "visit";
+import { duration } from "@fleet/durations";
 export type What = "" | "people" | "goods" | "documents" | "other";
 
 export interface StopDraft {
@@ -91,12 +92,9 @@ export function parseDwell(text: string): number | null | "bad" {
   return min > DWELL_MAX ? "bad" : min;
 }
 
-/** 5 → "5 min", 60 → "1 h", 90 → "1 h 30", 135 → "2 h 15". */
+/** 5 → "5 min", 60 → "1 h", 90 → "1 h 30 min" (Hotfix 2, D: the shared words). */
 export function dwellText(min: number): string {
-  const m = Math.max(0, Math.round(min));
-  if (m < 60) return `${m} min`;
-  const h = Math.floor(m / 60);
-  return m % 60 ? `${h} h ${m % 60}` : `${h} h`;
+  return duration(Math.max(0, min));
 }
 
 /** The default time at a stop by type, from the fleet setting dwell_min ({"pickup":5,"drop":5,"visit":60,"default":5}). */
@@ -163,9 +161,7 @@ export function draftsFromStops(stops: { type: string; what?: string; place?: st
 
 /** "2 h 35 min" */
 export function driveText(minutes: number | undefined | null): string {
-  if (minutes == null) return "—";
-  const m = Math.round(minutes);
-  return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60 ? `${m % 60} min` : ""}`.trim();
+  return minutes == null ? "—" : duration(minutes);
 }
 
 // ---------------------------------------------------------------------------

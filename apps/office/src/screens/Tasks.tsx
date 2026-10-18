@@ -17,6 +17,7 @@ import { decidedText } from "./approversLogic";
 import { NeedsDriverList } from "./NeedsDriverList";
 import { TripTags } from "./TripPurpose";
 import { WaitingApprovalColumn } from "./WaitingApprovalColumn";
+import { duration } from "@fleet/durations";
 
 const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
@@ -32,7 +33,7 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
         <span className="leave">
           {t.leave_by && <span className="num">Leave by {t.leave_by}</span>}
           {t.eta_final && <span className="muted"> · ETA {t.eta_final}</span>}
-          {t.late_min ? <span className="status bad"> · late by {t.late_min} min</span> : null}
+          {t.late_min ? <span className="status bad"> · late by {duration(t.late_min)}</span> : null}
         </span>
       )}
       <span className="who"><Avatar name={t.driver} src={t.driver_photo_url} small /><span className="grow">{t.driver || ""}</span><VehicleThumb src={t.vehicle_thumb_url} />{t.vehicle ? <Plate v={t.vehicle} /> : t.vehicle_text ? <span className="muted small" data-testid="vehicle-text">{t.vehicle_text}</span> : null}</span>

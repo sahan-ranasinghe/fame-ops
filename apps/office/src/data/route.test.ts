@@ -32,7 +32,7 @@ describe("routeOf", () => {
     const r = routeOf("nuwan.p", answer);
     expect(r.points).toHaveLength(6);
     expect(r.points[1]).toEqual({ at: ms("09:55"), lat: 6.96, lng: 79.89, kmh: 38 });
-    expect(r.stops[0].text).toBe("09:55–15:38 · near Peliyagoda · 343 min");
+    expect(r.stops[0].text).toBe("09:55–15:38 · near Peliyagoda · 5 h 43 min");
     expect(r.timeline.map((t) => t.kind)).toEqual(["driving", "stopped", "no_data", "stopped", "driving"]);
     expect(r.timeline[2].fromAt).toBe(ms("14:00"));
     expect(r).toMatchObject({ km: 41.2, count: 830, drivingMinutes: 95, stoppedMinutes: 343, stopsCount: 1, first: "08:01", last: "16:31" });

@@ -142,7 +142,7 @@
     "stopsLeftTitle": "{n} stops are not done",
     "stopsLeftBody": "Finish the task anyway? They will be marked as not visited.",
     "finishAnyway": "Finish anyway",
-    "minutesThere": "{n} min there",
+    "minutesThere": "{duration} there",
     "accept": "Accept",
     "accepted": "Accepted ✓ {time}",
     "cantDo": "Can't do this task",
@@ -417,8 +417,8 @@
     "title": "Phone setup",
     "yourBrand": "Your {brand} phone",
     "yourPhone": "Your phone",
-    "stoppedOnce": "{phone} stopped Fame Driver for {minutes} min ({when}). No trip is recorded while it is stopped.",
-    "stoppedMany": "{phone} stopped Fame Driver {count} times since {when}, {minutes} min in all. No trip is recorded while it is stopped.",
+    "stoppedOnce": "{phone} stopped Fame Driver for {duration} ({when}). No trip is recorded while it is stopped.",
+    "stoppedMany": "{phone} stopped Fame Driver {count} times since {when}, {duration} in all. No trip is recorded while it is stopped.",
     "doOnce": "Change these settings once:",
     "open": "Open {brand} settings",
     "openApp": "Open app settings",
@@ -603,7 +603,9 @@
     "approvedBy": "Approved by {name} · {time}",
     "changed": "Changed",
     "lastCopy": "No connection: shown from the last copy on this phone.",
-    "passengers": "{n} passengers"
+    "passengers": "{n} passengers",
+    "backBy": "Back by {time}",
+    "removed": "Removed"
   },
   "call": {
     "contact": "Call contact",
@@ -620,7 +622,9 @@
     "pick": "Choose another vehicle",
     "wrongType": "{plate} is not a {type}.",
     "inGarage": "{plate} is in the garage.",
-    "failed": "Couldn't set the vehicle: {reason}"
+    "failed": "Couldn't set the vehicle: {reason}",
+    "hasVehicle": "The office has set the vehicle for this task.",
+    "inactive": "{plate} is no longer in the fleet list."
   },
   "channel": {
     "newTasks": "New tasks",
@@ -640,7 +644,9 @@
     "earlier": "{date} {time} ({days} days ago)",
     "minutes": "{n} min",
     "hours": "{h} h {m} min",
-    "hoursOnly": "{h} h"
+    "hoursOnly": "{h} h",
+    "days": "{d} d {h} h",
+    "daysOnly": "{d} d"
   },
   "vehicleType": {
     "car": "car",

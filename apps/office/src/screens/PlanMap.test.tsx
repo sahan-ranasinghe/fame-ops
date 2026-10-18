@@ -77,7 +77,7 @@ describe("the plan map", () => {
     fireEvent.click(screen.getAllByTestId("plan-leg")[0]); // the leg from the start is the start's row
     expect(seen.props?.plan?.selected).toBe("start");
     // The text of the rows is unchanged by the highlight.
-    expect(rows[0].textContent).toBe("Stop 1 · Drop · Kurunegala sitearrive 09:00 · 1 h 30 · leave 10:30 · by 09:00");
+    expect(rows[0].textContent).toBe("Stop 1 · Drop · Kurunegala sitearrive 09:00 · 1 h 30 min · leave 10:30 · by 09:00");
   });
 
   it("on a phone the map is a fixed-height block above the timeline", async () => {

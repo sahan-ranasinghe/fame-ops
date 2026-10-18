@@ -55,8 +55,8 @@ describe("the one status rule (shared with the connector)", () => {
 });
 
 const card: LiveDriver = {
-  driver: "Nuwan Perera", username: "nuwan.p", employee_id: "emp-1", state: "sharing", location: "Live · 2 min",
-  status: "live", status_text: "Live · 2 min", last_position_at: "11:58",
+  driver: "Nuwan Perera", username: "nuwan.p", employee_id: "emp-1", state: "sharing", location: "Live · 2 min ago",
+  status: "live", status_text: "Live · 2 min ago", last_position_at: "11:58",
   signal: { sharing: true, point_at: ago(2), heartbeat_at: ago(1), location_on: true, permission: "always", location_off_since: null },
   updated: "2026-10-12 11:58", vehicle: "WP CAB-4521 · Toyota HiAce", speed_kmh: 36, battery_pct: 80,
   links: { maps: "https://www.google.com/maps/search/?api=1&query=6.9,79.9", call: "tel:0771" },
@@ -173,7 +173,7 @@ describe("the cards age with the clock", () => {
   });
   it("computes the fields of a card from its signal", () => {
     const fields = statusFields({ sharing: true, point_at: ago(1), heartbeat_at: null, location_on: null, permission: null, location_off_since: null }, now);
-    expect(fields).toMatchObject({ status: "live", status_text: "Live · 1 min", status_since: "2026-10-12 11:59", last_position_at: "11:59" });
+    expect(fields).toMatchObject({ status: "live", status_text: "Live · 1 min ago", status_since: "2026-10-12 11:59", last_position_at: "11:59" });
     expect(fields.last_position_time).toMatch(/^11:59:\d\d$/);
   });
 });

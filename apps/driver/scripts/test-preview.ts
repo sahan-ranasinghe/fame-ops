@@ -1,5 +1,5 @@
 // Tests of Hotfix 2 in the driver app (B, D, F, I, J, K): the one duration formatter in English and Sinhala (59 min,
-// 60 min, 23 h 59, across midnight, tomorrow, 2 days, ago), the card's stops (four and "Show all"), the preview's data
+// 60 min, the same day, tomorrow morning, across midnight, 2 days, ago), the card's stops (four and "Show all"), the preview's data
 // (totals, the vehicle words, what changed: fields, stops matched across the office's re-made rows, the push's
 // changes and when they count), who to call (which buttons show, the fallbacks, one button per number), the vehicle
 // confirm (the type rules, the words of each refusal, the queue: task_vehicle before the start's ops, a refusal kept),
@@ -69,10 +69,12 @@ async function main() {
   check(rel(59) === 'in 59 min', '59 min: still minutes', rel(59));
   check(rel(60) === 'in 1 h' && rel(59.6) === 'in 1 h', '60 min (and 59.6, rounded): "in 1 h"', [rel(60), rel(59.6)]);
   check(rel(200) === 'in 3 h 20 min', '200 min: "in 3 h 20 min"', rel(200));
-  check(rel(23 * 60 + 59) === 'in 23 h 59 min', '23 h 59: still hours', rel(23 * 60 + 59));
+  check(rel(10 * 60 + 15) === 'in 10 h 15 min', 'later the same day: hours', rel(10 * 60 + 15));
+  check(rel(23 * 60 + 59) === 'tomorrow 08:59', '23 h 59 ahead is tomorrow morning: "tomorrow 08:59", not "in 23 h 59 min"', rel(23 * 60 + 59));
+  check(rel(-(5 * 60)) === '5 h ago' && rel(-(15 * 60)) === 'yesterday 18:00', 'back in time: hours the same day, else yesterday', [rel(-(5 * 60)), rel(-(15 * 60))]);
   const lateEvening = Date.parse('2026-10-18T23:50:00+05:30');
   check(rel(20, 'en', lateEvening) === 'in 20 min', 'across midnight under an hour: minutes, not "tomorrow"', rel(20, 'en', lateEvening));
-  check(rel(5 * 60, 'en', lateEvening) === 'in 5 h', 'across midnight under 24 h: hours', rel(5 * 60, 'en', lateEvening));
+  check(rel(5 * 60, 'en', lateEvening) === 'in 5 h', 'across midnight under 6 h: hours', rel(5 * 60, 'en', lateEvening));
   check(rel(24 * 60) === 'tomorrow 09:00', '24 h ahead, the next day: "tomorrow 09:00"', rel(24 * 60));
   check(rel(24 * 60 + 30, 'en', Date.parse('2026-10-18T23:00:00+05:30')) === 'tomorrow 23:30', 'the next day late: "tomorrow 23:30"');
   check(rel(48 * 60) === 'Tue 20 Oct 09:00 (in 2 days)', 'two days: "Tue 20 Oct 09:00 (in 2 days)"', rel(48 * 60));
@@ -86,6 +88,8 @@ async function main() {
   check(durationText(en, 45) === '45 min' && durationText(en, 90) === '1 h 30 min' && durationText(en, 120) === '2 h' && durationText(en, 0) === '0 min',
     'a length of time: "45 min", "1 h 30 min", "2 h"', [durationText(en, 90), durationText(en, 120)]);
   check(durationText(si, 90) === 'පැය 1 මිනිත්තු 30' && durationText(si, 45) === 'මිනිත්තු 45', 'a length of time in Sinhala', durationText(si, 90));
+  check(durationText(en, 26 * 60 + 10) === '1 d 2 h' && durationText(en, 48 * 60) === '2 d' && durationText(si, 26 * 60) === 'දින 1 පැය 2',
+    'a day or more: "1 d 2 h", "2 d" (the server says it the same way)', [durationText(en, 26 * 60 + 10), durationText(si, 26 * 60)]);
   check(colomboDayDiff(Date.parse('2026-10-18T23:59:00+05:30'), Date.parse('2026-10-19T00:01:00+05:30')) === 1, 'the calendar day is Colombo\'s (23:59 → 00:01 is the next day)');
 
   // --- 2. I: the card's stops ----------------------------------------------------------------------------------------

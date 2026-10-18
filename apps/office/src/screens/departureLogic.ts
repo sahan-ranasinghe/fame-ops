@@ -13,6 +13,7 @@
 // - 20 minutes or more earlier: "Arrives 25 min early".
 // Never blocks anything.
 import type { PlanTimeline } from "../data/types";
+import { duration } from "@fleet/durations";
 
 export interface DepartureStop {
   /** The stop's number in the timeline (Stop 2). */
@@ -129,7 +130,7 @@ export function checkDeparture(departure: string, plan: DeparturePlan | null): D
     return {
       kind: "late",
       tone: "bad",
-      text: `Leaving ${fromMin(d)} ${where}, ${endNeed} min after ${e.by}. Leave by ${leaveBy}.`,
+      text: `Leaving ${fromMin(d)} ${where}, ${duration(endNeed)} after ${e.by}. Leave by ${leaveBy}.`,
       leaveBy,
       n: e.n,
       place: e.place,
@@ -147,7 +148,7 @@ export function checkDeparture(departure: string, plan: DeparturePlan | null): D
       return {
         kind: "late",
         tone: "bad",
-        text: `Leaving ${fromMin(d)} you reach ${s.place} at ${fromMin(arrival)}, ${-slack} min after ${by}. Leave by ${leaveBy}.`,
+        text: `Leaving ${fromMin(d)} you reach ${s.place} at ${fromMin(arrival)}, ${duration(-slack)} after ${by}. Leave by ${leaveBy}.`,
         leaveBy,
         n: s.n,
         place: s.place,
@@ -157,12 +158,12 @@ export function checkDeparture(departure: string, plan: DeparturePlan | null): D
     return {
       kind: "late",
       tone: "warn",
-      text: `Leaving ${fromMin(d)} you reach ${s.place} at ${fromMin(arrival)}, ${slack === 0 ? "just at" : `only ${slack} min before`} ${by}. Leave by ${leaveBy}.`,
+      text: `Leaving ${fromMin(d)} you reach ${s.place} at ${fromMin(arrival)}, ${slack === 0 ? "just at" : `only ${duration(slack)} before`} ${by}. Leave by ${leaveBy}.`,
       leaveBy,
       n: s.n,
       place: s.place,
     };
   }
-  if (-need >= EARLY_NOTE_MIN) return { kind: "early", text: `Arrives ${slack} min early`, minutes: slack };
+  if (-need >= EARLY_NOTE_MIN) return { kind: "early", text: `Arrives ${duration(slack)} early`, minutes: slack };
   return null;
 }

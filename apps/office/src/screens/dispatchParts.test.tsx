@@ -40,7 +40,7 @@ describe("the plan as a timeline", () => {
     const stops = screen.getAllByTestId("plan-stop").map((s) => s.textContent);
     expect(stops).toEqual([
       "Stop 1 · Pickup · Head officeleave 07:29 · passengers get in here",
-      "Stop 2 · Drop · Kurunegala sitearrive 09:00 · 1 h 30 (usual here) · leave 10:30 · by 09:00",
+      "Stop 2 · Drop · Kurunegala sitearrive 09:00 · 1 h 30 min (usual here) · leave 10:30 · by 09:00",
       "Stop 3 · Visit · Kurunegala townarrive 10:55 · 1 h · leave 11:55 · by 10:30 · 25 min late",
     ]);
     const legs = screen.getAllByTestId("plan-leg").map((l) => l.textContent);
@@ -93,7 +93,7 @@ describe("Time at this stop", () => {
     render(<Picker fallback={{ min: 30, source: "place" }} />);
     expect(screen.getByTestId("dwell-fallback").textContent).toBe("30 min · usual here");
     expect(screen.getByRole("button", { name: "30 min" }).getAttribute("aria-pressed")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "1 h 30" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 h 30 min" }));
     expect(screen.getByTestId("value").textContent).toBe("90");
     fireEvent.click(screen.getByRole("button", { name: "Other" }));
     fireEvent.change(screen.getByLabelText("Time at this stop: other"), { target: { value: "2:45" } });

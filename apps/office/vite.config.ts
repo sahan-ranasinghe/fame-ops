@@ -49,6 +49,8 @@ export default defineConfig(({ mode }) => {
         "@fleet/names": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/names.ts", import.meta.url)),
         // The site-list presets (Part 4): the import page reads the spreadsheet in the browser with the same rules Deno tests.
         "@fleet/sites": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/sites.ts", import.meta.url)),
+        // Hotfix 2 (D): one way to say how long and when ("in 45 min", "tomorrow 09:00"), the words the connector uses.
+        "@fleet/durations": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/durations.ts", import.meta.url)),
       },
     },
     build: {

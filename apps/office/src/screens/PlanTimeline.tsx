@@ -15,6 +15,7 @@ import { Notice } from "../ui/basics";
 import { legText, type PlanReason, shiftLabel, stopTimes } from "./planLogic";
 import { START_PIN, stopPin } from "./planMapLogic";
 import { driveText } from "./stopsLogic";
+import { duration } from "@fleet/durations";
 
 export interface PlanTimelineProps {
   timeline?: Timeline | null;
@@ -99,7 +100,7 @@ export function PlanTimeline({ timeline, plan, startName, reasons = [], warnings
                   <span className="num small">
                     {stopTimes(x)}
                     {x.arrive_by && (
-                      <span className={late ? "status bad" : "muted"} style={{ fontSize: 13 }}> · by {x.arrive_by}{late ? ` · ${x.late_min} min late` : ""}</span>
+                      <span className={late ? "status bad" : "muted"} style={{ fontSize: 13 }}> · by {x.arrive_by}{late ? ` · ${duration(x.late_min ?? 0)} late` : ""}</span>
                     )}
                   </span>
                 </li>

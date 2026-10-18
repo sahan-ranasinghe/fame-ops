@@ -5,6 +5,7 @@
 import type { PlannedStop, PlanPreview, PlanTimeline, TimelineItem } from "../data/types";
 import type { DwellFallback } from "./DwellPicker";
 import { driveText, hasDeadline, type StopDraft, stopsInput, typeDwell, usedRow } from "./stopsLogic";
+import { duration } from "@fleet/durations";
 
 export const SOURCE_LABEL: Record<string, string> = { ors: "OpenRouteService", google: "Google", estimate: "estimate" };
 /** Where a leg's road time came from, in the timeline's words. */
@@ -72,11 +73,9 @@ export function planReasons(f: PlanFields, preview: PlanPreview | null | undefin
   return out;
 }
 
-/** "1 h 30" / "45 min" for a time at a stop in the timeline. */
+/** "1 h 30 min" / "45 min" for a time at a stop in the timeline. */
 export function stayText(min: number): string {
-  const m = Math.max(0, Math.round(min));
-  if (m < 60) return `${m} min`;
-  return m % 60 ? `${Math.floor(m / 60)} h ${m % 60}` : `${Math.floor(m / 60)} h`;
+  return duration(Math.max(0, min));
 }
 
 /** A stop item's line: "arrive 09:00 · 1 h 30 · leave 10:30" (the start stop: "leave 07:24"). */

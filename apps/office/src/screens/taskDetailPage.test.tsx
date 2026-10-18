@@ -76,7 +76,7 @@ describe("the task page (Part 2)", () => {
     expect(stops[0].textContent).toContain("Start · passengers get in here");
     expect(stops[0].textContent).toContain("People");
     expect(stops[1].textContent).toContain("Stop 2 · Drop · Kurunegala site");
-    expect(stops[1].textContent).toContain("planned 09:00–10:30 (1 h 30)");
+    expect(stops[1].textContent).toContain("planned 09:00–10:30 (1 h 30 min)");
     expect(stops[1].textContent).toContain("usual here");
   });
 

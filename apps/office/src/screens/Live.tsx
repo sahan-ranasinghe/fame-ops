@@ -55,6 +55,7 @@ import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote, 
 import { ContactButtons } from "../ui/ContactButtons";
 import { Icon } from "../ui/icons";
 import { linksFromCall } from "../ui/phoneLinks";
+import { duration } from "@fleet/durations";
 
 /** The trails and the shown route are fetched again this often (the fallback when Realtime is not delivering). */
 const TRAIL_REFRESH_MS = 60000;
@@ -350,7 +351,7 @@ function Detail({ x, routes, route, busy, err, onRoute, onHide, snap, onRecorded
       </dl>
       {(x.eta_next || x.eta_final) && (
         <p className="small" style={{ margin: "0 0 12px" }} data-testid="eta-line">
-          ETA{x.next_stop ? ` ${x.next_stop}` : " next"} {x.eta_next ?? "—"} · final {x.eta_final ?? "—"} (live){x.late_min ? <span className="status bad"> · running late by {x.late_min} min</span> : null}
+          ETA{x.next_stop ? ` ${x.next_stop}` : " next"} {x.eta_next ?? "—"} · final {x.eta_final ?? "—"} (live){x.late_min ? <span className="status bad"> · running late by {duration(x.late_min)}</span> : null}
         </p>
       )}
       {x.heartbeat_at && (

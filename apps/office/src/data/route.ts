@@ -13,6 +13,7 @@ import { joinDots } from "../lib/format";
 import type { MapRoute, RoutePoint as MapPoint } from "../map/types";
 import type { PointRow } from "./realtime";
 import type { DriverRoute, GapKind, SegmentKind } from "./types";
+import { duration } from "@fleet/durations";
 
 export { positionAt, speedClass };
 
@@ -126,7 +127,7 @@ function pointsOf(date: string, route: DriverRoute["route"] | undefined): (Route
 /** The tool's answer → the route the screens use. Older answers (four columns, no timeline) still work. */
 export function routeOf(username: string, p: DriverRoute): Route {
   const points = pointsOf(p.date, p.route);
-  const stops: StopView[] = (p.stops_over_10_min ?? []).map((s) => ({ ...s, text: joinDots([`${s.from}–${s.to}`, s.near && `near ${s.near}`, `${s.minutes} min`]) }));
+  const stops: StopView[] = (p.stops_over_10_min ?? []).map((s) => ({ ...s, text: joinDots([`${s.from}–${s.to}`, s.near && `near ${s.near}`, duration(s.minutes)]) }));
   const timeline: TimelineRow[] = (p.timeline ?? []).map((s) => ({
     kind: s.kind, from: s.from, to: s.to, fromAt: Date.parse(s.from_at), toAt: Date.parse(s.to_at), minutes: s.minutes, km: s.km, near: s.near, lat: s.lat, lng: s.lng,
     uploaded: s.uploaded, text: s.text,
@@ -218,7 +219,7 @@ function gapEnds(points: RoutePoint[], fromAt: number, toAt: number): RoutePoint
 }
 
 /** "1 h 5 min", "45 min". */
-export const minutesText = (m: number | undefined | null) => m == null ? "—" : m >= 60 ? `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ""}` : `${m} min`;
+export const minutesText = (m: number | undefined | null) => (m == null ? "—" : duration(m));
 
 export const KIND_LABEL: Record<SegmentKind, string> = { driving: "Driving", stopped: "Stopped", no_gps: "Stopped · no GPS signal", no_data: "App not running" };
 const HOLE_LABEL: Record<GapKind, string> = { no_gps: "No GPS signal", no_data: "App not running" };
@@ -233,7 +234,7 @@ export function holesOf(route: Route, points: RoutePoint[]): { from: MapPoint; t
   const out: { from: MapPoint; to: MapPoint; label: string; fromAt: number; toAt: number }[] = [];
   const add = (a: RoutePoint, b: RoutePoint, kind: GapKind | undefined) => {
     if ((a.lat === b.lat && a.lng === b.lng) || b.at - a.at < HOLE_MINUTES * 60000) return;
-    out.push({ from: a, to: b, label: `${kind ? HOLE_LABEL[kind] : "No position"} · ${Math.round((b.at - a.at) / 60000)} min`, fromAt: a.at, toAt: b.at });
+    out.push({ from: a, to: b, label: `${kind ? HOLE_LABEL[kind] : "No position"} · ${duration((b.at - a.at) / 60000)}`, fromAt: a.at, toAt: b.at });
   };
   for (const h of route.holes) {
     const inside = points.filter((p) => p.at >= h.fromAt && p.at <= h.toAt);

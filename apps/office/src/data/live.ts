@@ -8,6 +8,7 @@
 import { colomboClock, colomboClockS, driverStatus, statusText } from "@fleet/status";
 import { hhmm, joinDots, latLng, type Tone } from "../lib/format";
 import type { DriverStatus, DutyState, LiveDriver, ShareState, Signal } from "./types";
+import { whenText } from "@fleet/durations";
 
 export const STALE_AFTER_MINUTES = 15;
 
@@ -36,19 +37,13 @@ export interface LatestRow {
 
 export const minutesSince = (at: string, now: Date) => Math.max(0, Math.floor((now.getTime() - new Date(at).getTime()) / 60000));
 
-export function ago(at: string, now: Date): string {
-  const minutes = minutesSince(at, now);
-  if (minutes < 60) return `${minutes} min`;
-  if (minutes < 48 * 60) return `${Math.floor(minutes / 60)} h`;
-  return `${Math.floor(minutes / (24 * 60))} d`;
-}
 
 /** The old 15-minute rule, kept for the fields the Teams artifact reads. */
 export function shareOf(sharing: boolean, recordedAt: string | null | undefined, now: Date): { state: ShareState; text: string } {
   if (!sharing) return { state: "not_sharing", text: "Off duty" };
   if (!recordedAt) return { state: "stale", text: "Sharing · no location yet" };
-  if (minutesSince(recordedAt, now) < STALE_AFTER_MINUTES) return { state: "sharing", text: `Live · ${ago(recordedAt, now)}` };
-  return { state: "stale", text: `Last seen ${ago(recordedAt, now)}` };
+  if (minutesSince(recordedAt, now) < STALE_AFTER_MINUTES) return { state: "sharing", text: `Live · ${whenText(recordedAt, now)}` };
+  return { state: "stale", text: `Last seen ${whenText(recordedAt, now)}` };
 }
 
 const colomboDay = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo", year: "numeric", month: "2-digit", day: "2-digit" });
@@ -132,7 +127,7 @@ export function applyLatest(drivers: LiveDriver[], row: LatestRow, now: Date): L
   });
 }
 
-/** Every 30 s the cards age: "Live · 2 min" becomes "Live · 3 min", live turns into no signal after 3 minutes. */
+/** Every 30 s the cards age: "Live · 2 min ago" becomes "Live · 3 min ago", live turns into no signal after 3 minutes. */
 export function refreshStates(drivers: LiveDriver[], now: Date): LiveDriver[] {
   let changed = false;
   const next = drivers.map((d) => {

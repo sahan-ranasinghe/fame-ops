@@ -16,6 +16,7 @@ import { GenericTable } from "../../ui/GenericTable";
 import { useToast } from "../../ui/Toast";
 import { PERSONAL_TRIPS_OPTIONS, personalTripsValue } from "../tripPurposeLogic";
 import { officePhoneValue, samePhone } from "./profileLogic";
+import { duration } from "@fleet/durations";
 
 /** The time at a stop by its type (Phase 7, §17); "default" is any other. */
 const DWELL_KEYS: [string, string][] = [["pickup", "Pickup"], ["drop", "Drop"], ["visit", "Visit"], ["default", "Any other"]];
@@ -179,7 +180,7 @@ export function FleetSettings() {
             ))}
           </div>
           {otherDwell.length > 0 && (
-            <span className="hint" data-testid="dwell-other">Also stored, and used before the type: {otherDwell.map(([k, v]) => `${k} ${v} min`).join(", ")}.</span>
+            <span className="hint" data-testid="dwell-other">Also stored, and used before the type: {otherDwell.map(([k, v]) => `${k} ${duration(v)}`).join(", ")}.</span>
           )}
           <div><button className="btn dark" type="submit" disabled={busy !== null || !changed("dwell_min")}>Save</button></div>
         </form>

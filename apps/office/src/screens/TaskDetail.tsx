@@ -35,6 +35,7 @@ import { PlanWithMap } from "./PlanMap";
 import { videoWords } from "./fuelLogic";
 import { driveText } from "./stopsLogic";
 import { dwellNote, needsDriverText, segmentRows, segmentsTotal, stayLine, stopTitle, whatOf } from "./taskDetailLogic";
+import { duration } from "@fleet/durations";
 
 export const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
 /** The arrival flags shown in amber (an override, no GPS fix, Done without Arrived); "no pin" is plain. */
@@ -148,7 +149,7 @@ export function TaskDetail() {
               <dt>ETA (live)</dt>
               <dd>
                 {eta.next_stop ? `${eta.next_stop} ` : "next "}{eta.next ?? "—"} · final {eta.final ?? "—"}
-                {eta.late_min ? <span className="status bad"> · running late by {eta.late_min} min</span> : <span className="status live"> · on time</span>}
+                {eta.late_min ? <span className="status bad"> · running late by {duration(eta.late_min)}</span> : <span className="status live"> · on time</span>}
                 <span className="muted small"> · as of {eta.as_of}</span>
               </dd>
             </div>
@@ -220,7 +221,7 @@ export function TaskDetail() {
                     whatOf(s),
                     s.arrive_by ? `by ${s.arrive_by}` : null,
                     // The time there: in the planned line already when the answer has it.
-                    !s.planned_stay && s.dwell_min != null ? `${s.dwell_min} min there` : null,
+                    !s.planned_stay && s.dwell_min != null ? `${duration(s.dwell_min)} there` : null,
                     dwellNote(s),
                     s.status === "pending" ? null : cap(s.status),
                     // Arrived and Done are in the actual line when the answer has it.

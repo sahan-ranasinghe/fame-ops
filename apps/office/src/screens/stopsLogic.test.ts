@@ -93,7 +93,7 @@ describe("the time at each stop (Phase 7, §17)", () => {
   it("reads minutes or h:mm up to 12 h, and says it back", () => {
     expect([parseDwell(""), parseDwell("45"), parseDwell("1:30"), parseDwell("2.15"), parseDwell("12:00")]).toEqual([null, 45, 90, 135, 720]);
     expect([parseDwell("12:01"), parseDwell("800"), parseDwell("1h"), parseDwell("1:75")]).toEqual(["bad", "bad", "bad", "bad"]);
-    expect([dwellText(5), dwellText(60), dwellText(90), dwellText(135)]).toEqual(["5 min", "1 h", "1 h 30", "2 h 15"]);
+    expect([dwellText(5), dwellText(60), dwellText(90), dwellText(135)]).toEqual(["5 min", "1 h", "1 h 30 min", "2 h 15 min"]);
   });
   it("sends dwell_min only when chosen, and refuses what is not a time", () => {
     const a = { ...newStop("drop"), place: "Galle", dwell: "1:30" };
