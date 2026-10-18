@@ -104,7 +104,7 @@ export function Vehicles() {
             <Chips options={FILTERS} value={filter} onChange={setFilter} counts={c ? { all: c.all, on_task: c.on_task, available: c.available, in_garage: c.in_garage, documents_expiring: c.documents_expiring, inactive: c.inactive } : undefined} />
           </div>
           <div className="list-tools">
-            <SearchBox label="Find a vehicle" placeholder="Plate, make, driver or custodian" value={box.text} onChange={box.setText} />
+            <SearchBox label="Find a vehicle" placeholder="Plate, make, driver or custodian" value={box.text} onChange={box.setText} onBlur={box.flush} />
           </div>
           {!noConnector && <ListWaiting q={q} loading="Loading vehicles…" />}
           {d && (

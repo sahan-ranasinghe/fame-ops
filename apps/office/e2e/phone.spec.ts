@@ -94,7 +94,7 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   await expect(save).toBeInViewport();
 
   // A task made through the connector: the board's card opens the detail as a full screen; Back returns to the board.
-  const driver = { name: `Phone Driver ${stamp}`, code: `PH-${stamp}`, username: `ph.${stamp}`, pin: "246810" };
+  const driver = { name: `Phone Driver ${stamp}`, code: `PH-${stamp}`, username: `ph.${stamp}`, pin: "246810", phone: "0771234504" };
   await tool("create_driver", driver);
   const plate = `WP PH-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });

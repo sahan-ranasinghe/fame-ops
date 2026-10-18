@@ -2289,9 +2289,29 @@ Running late on the task page and the board; D1 the driver app.
   on; on a phone one driver at a time).
 - **H6.** Requesters see neither the board, Ask, the answers nor Who's available (approve or assign_tasks); the Drivers
   list and Live stay as they were for them (question 4).
-- **Tests.** pgTAP `phase7_3b` (40); the connector suite's 6m on both channels; Deno `presence_test.ts` (6) and the event
+- **Tests.** pgTAP `phase7_3b` (44); the connector suite's 6m on both channels; Deno `presence_test.ts` (6) and the event
   lists; Vitest (100 files); the e2e "Part 3b" (the board and its week view, a question answered live, the profile); the
   driver app's `test:asks` and `test:sync` (the two ops).
+- **Found while testing:** the board's week view compared the database's times as strings ("+00:00" against ".000Z"), so
+  a full day also showed on the day before: compared as times now (the suite checks the one day).
+- **The fresh reviewer (no blocker; one to fix, five minor; all done):**
+  1. A late report stayed on a task given to another driver ("Running late 30 min" under Nuwan for Kamal's report, on
+     the office's pages and in Nuwan's app). **Fixed:** the trigger `tasks_late_report_reset` clears it when the task
+     changes driver (pgTAP).
+  2. `update_driver` refused `phone: null` even for a driver with none (the Teams artifact's manage page sends it with a
+     licence date, and all three live drivers have no number). **Fixed:** refused only when the driver has a number.
+  3. The phone prompt could keep a driver from Today when the server refused the save (or before driver-api has
+     `/profile`). **Fixed:** Continue after any refused save too; it asks again at the next start. The round deploys
+     the functions before the app update in any case.
+  4. `photo_upload_url` gave users every kind and the profile page needed vehicles. **Fixed:** users upload only a licence
+     photo; the page opens with vehicles or users.
+  5. A driver could remove the office's entry ("leave" set by the office) and show as free again. **Decided:** the
+     driver changes and removes only the entries they added; the office's show "The office added this: ask them to change
+     it." (`remove_my_unavailability` answers office / past; pgTAP; two strings `avail.officeAdded`, `avail.past`).
+  6. A switched-off driver could be asked or marked; a failed insert of the answers left an empty question. **Fixed:**
+     refused in words; such a question is closed at once.
+  Left as they are, said here: Live keeps its own cards with the row's lines added (not the DriverRow component); Running
+  late is offered once the task is accepted (before that the driver accepts or says Can't do).
 
 ## Sinhala
 
@@ -2714,6 +2734,8 @@ Added in Part 3b (18 October: the profile, the phone prompt, availability, the o
 | `ask.noConnection` | No connection: the question shows when you are online. | සම්බන්ධතාවක් නැත: සම්බන්ධ වූ විට ප්‍රශ්නය පෙන්වයි. |
 | `late.closed` | This task is over: nothing was sent. | මෙම කාර්යය අවසන්: කිසිවක් යැව්වේ නැත. |
 | `late.failed` | Couldn't send: {reason} | යැවිය නොහැකි විය: {reason} |
+| `avail.officeAdded` | The office added this: ask them to change it. | මෙය කාර්යාලය එක් කළා: වෙනස් කිරීමට ඔවුන්ගෙන් අසන්න. |
+| `avail.past` | It has ended: nothing to remove. | මෙය අවසන්: ඉවත් කිරීමට දෙයක් නැත. |
 
 ## Deployment log
 

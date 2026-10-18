@@ -53,7 +53,7 @@ export function Drivers() {
         </div>
       </div>
       <div className="list-tools">
-        <SearchBox label="Find a driver" placeholder="Name, username, code or plate" value={box.text} onChange={box.setText} />
+        <SearchBox label="Find a driver" placeholder="Name, username, code or plate" value={box.text} onChange={box.setText} onBlur={box.flush} />
         <span className="check"><input type="checkbox" id="drv-inactive" checked={inactive} onChange={(e) => setInactiveFlag(e.target.checked ? "1" : "0")} /> <label htmlFor="drv-inactive">Show switched-off drivers</label></span>
       </div>
       {!noConnector && <ListWaiting q={q} loading="Loading drivers…" />}

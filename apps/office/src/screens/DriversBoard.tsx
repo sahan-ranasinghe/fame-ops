@@ -94,7 +94,7 @@ export function DriversBoard() {
       </div>
       <div className="board-tools">
         <div role="group" aria-label="View"><Chips options={[["now", "Now"], ["week", "Week"]]} value={view} onChange={setView} /></div>
-        <SearchBox label="Find a driver" placeholder="Name or username" value={box.text} onChange={box.setText} />
+        <SearchBox label="Find a driver" placeholder="Name or username" value={box.text} onChange={box.setText} onBlur={box.flush} />
       </div>
       <div className="board-filters" role="group" aria-label="Filter">
         <Chips options={BOARD_FILTERS} value={filter} onChange={setFilter} counts={q.data ? counts : undefined} />

@@ -29,7 +29,13 @@ export function useDebounced<T>(value: T, ms: number): T {
  * A list's search box: `text` is what is typed, `search` what the list asks the server for (trimmed, after typing pauses;
  * an emptied box at once). The search is kept in the URL (?q=), so a reload, Back or a shared link shows the same rows.
  */
-export function useSearchBox(name = "q", ms = SEARCH_DEBOUNCE_MS): { text: string; setText: (text: string) => void; search: string } {
+export function useSearchBox(name = "q", ms = SEARCH_DEBOUNCE_MS): {
+  text: string;
+  setText: (text: string) => void;
+  search: string;
+  /** Leaving the box: the typed words go to the URL at once (a late write would land on the next page's URL). */
+  flush: () => void;
+} {
   const [inUrl, setInUrl] = useUrlFilter<string>(name, "");
   const [text, setText] = useState(inUrl);
   const typed = text.trim();
@@ -45,14 +51,28 @@ export function useSearchBox(name = "q", ms = SEARCH_DEBOUNCE_MS): { text: strin
     if (inUrl !== search) setText(inUrl);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inUrl]);
-  return { text, setText, search };
+  return {
+    text,
+    setText,
+    search,
+    flush: () => {
+      if (typed !== inUrl) setInUrl(typed);
+    },
+  };
 }
 
 /** The search input itself (a search field: Esc clears it in the browser). */
-export function SearchBox({ value, onChange, label, placeholder }: { value: string; onChange: (text: string) => void; label: string; placeholder?: string }) {
+export function SearchBox({ value, onChange, onBlur, label, placeholder }: {
+  value: string;
+  onChange: (text: string) => void;
+  /** useSearchBox's flush. */
+  onBlur?: () => void;
+  label: string;
+  placeholder?: string;
+}) {
   return (
     <input type="search" className="list-search" aria-label={label} placeholder={placeholder ?? label} value={value}
-      onChange={(e) => onChange(e.target.value)} data-testid="list-search" />
+      onChange={(e) => onChange(e.target.value)} onBlur={onBlur} data-testid="list-search" />
   );
 }
 

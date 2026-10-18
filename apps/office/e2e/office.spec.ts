@@ -242,7 +242,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByLabel("New 6-digit PIN").fill("111222");
   await page.getByRole("button", { name: "Set PIN" }).click();
   await expect(page.getByTestId("driver-manage")).toContainText("New PIN 111222 is active");
-  await page.getByRole("button", { name: "Back" }).click();
+  // The page's back arrow (Part 3b: the licence's "Add back" photo button is on the page too).
+  await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page).toHaveURL(/\/drivers$/);
 
   await page.getByRole("link", { name: "Maintenance" }).first().click();
@@ -309,7 +310,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(requestBox).toBeChecked();
   // Phase 7: "A driver skips a stop", "A driver needs another vehicle"; Part 3: not decided, leave-by passed, and the
   // trip's four moments for the asker; Part 4: a driver starts a personal trip; Hotfix 2: Play sounds.
-  await expect(page.getByRole("checkbox")).toHaveCount(21);
+  // Part 3b: a driver running late, a driver's answer, your driver running late.
+  await expect(page.getByRole("checkbox")).toHaveCount(24);
   await requestBox.uncheck();
   await expect(page.getByRole("status")).toHaveText("Saved");
   await page.reload();
@@ -429,7 +431,7 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   await expect(page.getByRole("link", { name: "Live locations" }).first()).toBeVisible();
   await expect(page.getByRole("link", { name: "Requests" }).first()).toBeVisible();
   await page.goto("/vehicles");
-  await expect(page.getByRole("heading", { name: "Vehicles" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Vehicles", exact: true })).toBeVisible();
   await page.goto("/maintenance");
   await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
   await page.goto("/settings/users");
@@ -441,7 +443,8 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   // the trip's four moments (on the way, arrived, driver changed, cancelled); and Hotfix 2's "Play sounds".
   await page.goto("/settings/notifications");
   await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
-  await expect(page.getByRole("checkbox")).toHaveCount(13);
+  // Part 3b: "Your driver is running late" too.
+  await expect(page.getByRole("checkbox")).toHaveCount(14);
   await expect(page.getByRole("checkbox", { name: "Play sounds" })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Your driver is on the way" })).toBeChecked();
   await expect(page.getByRole("checkbox", { name: "Your request is decided" })).toBeChecked();
@@ -1046,7 +1049,7 @@ test("a requester changes an approved booking; the approver sees who is availabl
   await expect(page.getByRole("heading", { name: "Decide the change" })).toBeVisible();
   await expect(page.getByTestId("changes")).toContainText("to Galle → Matara");
   await expect(page.getByTestId("availability")).toContainText(driver.name, { timeout: 15000 });
-  await expect(page.getByTestId("availability").locator(".avail-row", { hasText: driver.name })).toContainText(/Busy|Free/);
+  await expect(page.getByTestId("availability").getByTestId("avail-row").filter({ hasText: driver.name })).toContainText(/Busy|Free/);
   await page.getByRole("button", { name: "Keep as asked" }).click();
   await expect(page.getByText("Kept as asked.")).toBeVisible();
   const after = await tool<{ task: { start: string; plan_version: number }; stops: { place: string }[]; assignment_history: { action: string; changes?: Record<string, { to?: string }> }[] }>("task_detail", { task_id: approved.task_id });

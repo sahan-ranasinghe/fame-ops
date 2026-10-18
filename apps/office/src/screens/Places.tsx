@@ -104,7 +104,7 @@ export function Places() {
       </div>
       <ListWithDetail>
         <div className="card card-b form" style={{ gap: 10 }}>
-          <SearchBox label="Find a place" placeholder="Name, site id or other id (MT0184, COL018)" value={box.text} onChange={box.setText} />
+          <SearchBox label="Find a place" placeholder="Name, site id or other id (MT0184, COL018)" value={box.text} onChange={box.setText} onBlur={box.flush} />
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
             <Chips options={whoOptions(me.tools)} value={who} onChange={(w) => set({ who: w === "ours" ? "" : w })} />
             <label className="check"><input type="checkbox" checked={nopin} onChange={(e) => set({ nopin: e.target.checked ? "1" : "" })} /> Without a pin</label>

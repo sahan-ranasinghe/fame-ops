@@ -37,7 +37,7 @@ export function Users() {
         <div className="ph-actions"><Link className="btn primary" to="/settings/users/new">Add office user</Link></div>
       </div>
       <div className="list-tools">
-        <SearchBox label="Find a person" placeholder="Name, e-mail or role" value={box.text} onChange={box.setText} />
+        <SearchBox label="Find a person" placeholder="Name, e-mail or role" value={box.text} onChange={box.setText} onBlur={box.flush} />
       </div>
       {!noConnector && <ListWaiting q={q} loading="Loading users…" />}
       {d && (

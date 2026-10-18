@@ -319,6 +319,10 @@ export function SearchBox({ value, onChange, label = "Search", placeholder, dela
         onKeyDown={(e) => {
           if (e.key === "Enter" && draft.trim() !== value) send.current(draft.trim());
         }}
+        // Leaving the box (a click on a link included) sends it at once: a late send would land on the next page's URL.
+        onBlur={() => {
+          if (draft.trim() !== value) send.current(draft.trim());
+        }}
       />
     </label>
   );
