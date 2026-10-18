@@ -73,7 +73,8 @@ export function asksChannel(t: Translate): ChannelSpec {
 //                 ring with it, when the driver opens the app or the task (lib/notifications.ts stopRinging)
 //   task-updates  a task changed, cancelled or given to someone else: a short falling tone of its own
 //   office-asks   a question from the office: a rising question-like tone
-// push-task sends each kind on its channel to the phones that registered it, else on the channels before.
+// push-task sends each kind on its channel to the phones that registered it, else on the channels before. They replace
+// new-tasks and driver-asks, which the app then removes (lib/notifications.ts ensureChannels).
 
 export const RING_CHANNEL = 'task-ring';
 export const RING_SOUND = 'task_ring.ogg';
@@ -139,4 +140,29 @@ export function channelsToRegister(ready: boolean | ChannelsReady): string[] {
     ...(r.updates ? [UPDATES_CHANNEL] : []),
     ...(r.officeAsks ? [OFFICE_ASKS_CHANNEL] : []),
   ];
+}
+
+/**
+ * Part 6: whether the installed build carries the three sounds (1.3.0 or later). This code also runs in an older build
+ * (a development build on live reload): there the channels would be made with the phone's default sound, for good.
+ */
+export function hasPart6Sounds(nativeVersion: string | null | undefined): boolean {
+  const [major, minor] = (nativeVersion ?? '').split('.').map((n) => Number.parseInt(n, 10));
+  if (!Number.isFinite(major) || !Number.isFinite(minor)) return false;
+  return major > 1 || (major === 1 && minor >= 3);
+}
+
+/** The start of push-task's title of a new task ("New task Sat 09:30"), in both languages. */
+export const NEW_TASK_TITLES = ['New task', 'නව කාර්යය'];
+
+/**
+ * Part 6: a notification whose ring the app stops (lib/notifications.ts stopRinging): a new task or the sound test. A push
+ * that Android showed by itself while the app was in the background keeps no data, only its title and text, so a new
+ * task's push is also known by its title.
+ */
+export function isRinging(content: { title?: string | null; data?: unknown }): boolean {
+  const kind = (content.data as { kind?: unknown } | null | undefined)?.kind;
+  if (kind === 'new' || kind === 'test') return true;
+  const title = content.title ?? '';
+  return NEW_TASK_TITLES.some((start) => title.startsWith(start));
 }

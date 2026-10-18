@@ -14,6 +14,7 @@
 //                   the app or the task (stopRinging clears the notification, and its sound with it).
 //   task-updates    Part 6: a task changed, cancelled or given to someone else (task_update.ogg).
 //   office-asks     Part 6: the office's questions with their own tone (office_ask.ogg).
+//                   The three are made only on a 1.3.0 build; there new-tasks and driver-asks are removed.
 //   tasks-new       a new task: loud ring, strong vibration (push from the server; phones
 //                   on an older update)
 //   tasks-changed   a task changed or cancelled (push; phones on an older update)
@@ -31,6 +32,7 @@
 //     shift_start on each of shift_days, armed while the driver is off duty
 //     and disarmed when On duty is switched on. Tapping it opens Today.
 
+import * as Application from 'expo-application';
 import * as Notifications from 'expo-notifications';
 
 import { translate } from '../i18n';
@@ -40,6 +42,8 @@ import {
   asksChannel,
   type ChannelSpec,
   type ChannelsReady,
+  hasPart6Sounds,
+  isRinging,
   newTasksChannel,
   officeAsksChannel,
   RING_CHANNEL,
@@ -50,9 +54,9 @@ import { getJson, KEYS, remove, setJson } from './kv';
 import type { Language } from './types';
 
 export const CHANNELS = {
-  /** Hotfix 2 (B): the loud one, for every task push on phones that registered it. */
+  /** Hotfix 2 (B): the loud one, for every task push on phones that registered it (1.2.0; removed on 1.3.0). */
   newTasks: 'new-tasks',
-  /** Part 3b (H3): the office's questions. */
+  /** Part 3b (H3): the office's questions (1.2.0; removed on 1.3.0, office-asks instead). */
   asks: 'driver-asks',
   tasksNew: 'tasks-new',
   tasksChanged: 'tasks-changed',
@@ -72,23 +76,22 @@ export const RING_IN_APP_MS = 6000;
 
 Notifications.setNotificationHandler({
   handleNotification: async (n) => {
-    if ((n.request.content.data as { kind?: string } | null)?.kind === 'new') setTimeout(() => void stopRinging(), RING_IN_APP_MS);
+    if (isRinging(n.request.content)) setTimeout(() => void stopRinging(), RING_IN_APP_MS);
     return { shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false };
   },
 });
 
 /**
  * Part 6: clears the new-task notifications still on show, which stops a ring still going (Android stops a notification's
- * sound when it is cleared). Called when the app comes to the front, when a notification is opened and a few seconds
- * after a new task arrives with the app open. Only new tasks: the "On duty" notification and the rest stay.
+ * sound when it is cleared). Called when the app starts or comes to the front, when a notification is opened and a few
+ * seconds after a new task arrives with the app open. Only new tasks and the sound test (channels.ts isRinging): the "On
+ * duty" notification and the rest stay.
  */
 export async function stopRinging(): Promise<void> {
   try {
     const shown = await Notifications.getPresentedNotificationsAsync();
     await Promise.all(
-      shown
-        .filter((n) => (n.request.content.data as { kind?: string } | null)?.kind === 'new')
-        .map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
+      shown.filter((n) => isRinging(n.request.content)).map((n) => Notifications.dismissNotificationAsync(n.request.identifier)),
     );
   } catch {
     // Nothing on show, or the notification is gone already.
@@ -98,6 +101,8 @@ export async function stopRinging(): Promise<void> {
 AppState.addEventListener('change', (state) => {
   if (state === 'active') void stopRinging();
 });
+// Opened from the launcher while it rang: a cold start sends no 'change'.
+if (AppState.currentState === 'active') void stopRinging();
 
 export async function notificationsAllowed(): Promise<boolean> {
   try {
@@ -153,6 +158,15 @@ async function setChannel(spec: ChannelSpec): Promise<boolean> {
   }
 }
 
+/** Part 6: a channel the app no longer uses (gone already, or never made: nothing to do). */
+async function removeChannel(id: string): Promise<void> {
+  try {
+    await Notifications.deleteNotificationChannelAsync(id);
+  } catch {
+    // Not there.
+  }
+}
+
 /** Part 6: the 1.3.0 build's three channels in a language. */
 async function setPart6Channels(language: Language): Promise<void> {
   const t = (key: string, vars?: Record<string, string | number>) => translate(language, key, vars);
@@ -187,9 +201,13 @@ export async function ensureChannels(): Promise<ChannelsReady> {
   });
   if (channelsReady) return ready();
   const language = getJson<Language>(KEYS.language) === 'si' ? 'si' : 'en';
-  newTasksReady = await setNewTasksChannel(language);
-  asksReady = await setAsksChannel(language);
-  await setPart6Channels(language);
+  if (hasPart6Sounds(Application.nativeApplicationVersion)) await setPart6Channels(language);
+  // The 1.3.0 channels replace "New tasks" and the questions' first channel: those go once their replacements are made
+  // (one name each in Android's settings); an older build keeps them.
+  if (ringReady && updatesReady) await removeChannel(CHANNELS.newTasks);
+  else newTasksReady = await setNewTasksChannel(language);
+  if (officeAsksReady) await removeChannel(CHANNELS.asks);
+  else asksReady = await setAsksChannel(language);
   await Notifications.setNotificationChannelAsync(CHANNELS.tasksNew, {
     name: 'New tasks',
     importance: Notifications.AndroidImportance.MAX,
@@ -247,13 +265,16 @@ export async function notifyArrival(title: string, body: string, taskId: string)
   }
 }
 
-/** Plays the new-task ring once, on the channel the task pushes use, so the driver can check the volume. */
+/**
+ * Plays the new-task ring once, on the channel the new tasks use, so the driver can check the volume (on 1.3.0 the ring,
+ * stopped after a few seconds like a new task with the app open).
+ */
 export async function showTestNotification(title: string, body: string): Promise<void> {
   try {
-    const ready = (await ensureChannels()).newTasks;
+    const ready = await ensureChannels();
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { kind: 'test' } },
-      trigger: { channelId: ready ? CHANNELS.newTasks : CHANNELS.tasksNew },
+      trigger: { channelId: ready.ring ? RING_CHANNEL : ready.newTasks ? CHANNELS.newTasks : CHANNELS.tasksNew },
     });
   } catch {
     // Nothing to do: notifications are not allowed.

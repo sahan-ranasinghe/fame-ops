@@ -36,8 +36,9 @@
 - Amber text `#8a5a00`: stale / warnings. Red `#b3261e`: danger, not sharing, expired.
 - Fonts: closest Google Fonts to the PNGs: IBM Plex Sans (body), IBM Plex Mono (plates,
   times, odometer numbers), a heavy grotesque for big headings (e.g. Archivo ExtraBold);
-  compare with the PNGs. Sinhala: Yaldevi (body), Gemunu Libre (headings, big buttons),
-  Noto Sans Sinhala as fallback. Plates are shown in mono inside a thin bordered chip.
+  compare with the PNGs. Sinhala: Yaldevi (body), Gemunu Libre ExtraBold (headings, big buttons);
+  since 1.3.0 no fallback font is bundled (Gemunu Libre Bold and Noto Sans Sinhala were unused). Plates are shown in
+  mono inside a thin bordered chip.
 - Numbers, plates, times and LKR amounts always in Latin digits, in both languages.
 
 ## Phases
@@ -125,6 +126,14 @@
   32-bit phone. Three sounds of its own on new channel ids: `task-ring` (a new task rings 30 s, cleared when the app or the
   task opens), `task-updates` (changed, cancelled, removed) and `office-asks` (push-task `channels.ts`). As built:
   `docs/phase7-plan.md` "Part 6 as built"; test plan: `docs/phase7-test-plan.md` "Part 6".
+  without ML Kit's barcode scanner (`scripts/lean-build.mjs`, run by EAS as `eas-build-pre-install`; `app.config.ts`
+  stops an EAS drivers build without its exclusions), the unused BouncyCastle tables out (`plugins/withLeanAndroid.js`);
+  `drivers-32` for a 32-bit phone. Every build keeps the notification sounds by name (`plugins/withKeptSounds.js`). Three
+  sounds of its own on new channel ids, made only on a 1.3.0 build: `task-ring` (a new task's 30 s ring, played once;
+  cleared when the app starts or comes to the front, or the task opens: `stopRinging`, a push Android showed itself is
+  known by its title), `task-updates` (changed, cancelled, removed) and `office-asks`; there the app removes `new-tasks`
+  and `driver-asks` (push-task `channels.ts`). As built: `docs/phase7-plan.md` "Part 6 as built"; test plan:
+  `docs/phase7-test-plan.md` "Part 6".
 - **Phase 8 (planned 19 October 2026)**: Office mode, the office's interface in the same Expo app for office sign-ins, by
   permission (view, request, approve, assign_tasks, vehicles, issues, users), never by role name; the web build of the same
   screens becomes the phone version of the office site. Design first (Part 8.0, a clickable prototype from

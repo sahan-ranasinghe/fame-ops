@@ -35,7 +35,7 @@
 // and add plugins/withLeanAndroid.js. Their autolinking exclusions are written by scripts/lean-build.mjs.
 
 import type { ConfigContext, ExpoConfig } from 'expo/config';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const LEAN_PROFILES = ['drivers', 'drivers-32'];
@@ -53,6 +53,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     throw new Error('GOOGLE_ANDROID_MAPS is on but this EAS build has no GOOGLE_ANDROID_MAPS_KEY: set the secret in its environment');
   }
   const lean = LEAN_PROFILES.includes(process.env.EAS_BUILD_PROFILE ?? '') || process.env.FAME_LEAN_BUILD === '1';
+  if (lean && process.env.EAS_BUILD === 'true') {
+    const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf8')) as { expo?: { autolinking?: { exclude?: string[] } } };
+    if (!pkg.expo?.autolinking?.exclude?.length) {
+      throw new Error('A drivers build without scripts/lean-build.mjs\'s exclusions in package.json: eas-build-pre-install did not run');
+    }
+  }
   const leftOut = lean ? ['expo-dev-client', ...(mapsOn ? ['@maplibre/maplibre-react-native'] : [])] : [];
   const plugins = lean
     ? [...(config.plugins ?? []).filter((p) => !leftOut.includes(pluginName(p))), './plugins/withLeanAndroid']

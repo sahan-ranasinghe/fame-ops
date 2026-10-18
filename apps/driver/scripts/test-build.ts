@@ -41,13 +41,14 @@ const configFor = (env: Record<string, string>) => {
   }
 };
 const camera = (appJson.expo.plugins ?? []).find((p) => Array.isArray(p) && p[0] === 'expo-camera') as [string, { barcodeScannerEnabled?: boolean }] | undefined;
-const lean8 = read('plugins/withLeanAndroid.js');
-check(camera?.[1].barcodeScannerEnabled === false && /-dontwarn com\.google\.mlkit\.vision\.barcode\.\*\*/.test(lean8)
-  && /-dontwarn com\.google\.mlkit\.vision\.codescanner\.\*\*/.test(lean8),
+const leanPlugin = read('plugins/withLeanAndroid.js');
+check(camera?.[1].barcodeScannerEnabled === false && /-dontwarn com\.google\.mlkit\.vision\.barcode\.\*\*/.test(leanPlugin)
+  && /-dontwarn com\.google\.mlkit\.vision\.codescanner\.\*\*/.test(leanPlugin),
   'app.json turns the camera\'s barcode scanner off; withLeanAndroid tells R8 its classes are left out');
-const { soundNames } = require('../plugins/withLeanAndroid') as { soundNames: (c: unknown) => string[] };
+const { soundNames } = require('../plugins/withKeptSounds') as { soundNames: (c: unknown) => string[] };
+const kept = read('plugins/withKeptSounds.js');
 check(JSON.stringify(soundNames(appJson.expo)) === JSON.stringify(['new_task', 'task_changed', 'general', 'task_ring', 'task_update', 'office_ask'])
-  && /fame_sounds_keep\.xml/.test(lean8) && /tools:keep=/.test(lean8),
+  && /fame_sounds_keep\.xml/.test(kept) && /tools:keep=/.test(kept),
   'every notification sound is kept through resource shrinking (raw/fame_sounds_keep.xml)', soundNames(appJson.expo));
 const names = (c: ReturnType<typeof appConfig>) => (c.plugins ?? []).map((p) => (Array.isArray(p) ? String(p[0]) : String(p)));
 const lean = configFor({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' });
@@ -57,6 +58,8 @@ check(!names(lean).includes('expo-dev-client') && !names(lean).includes('@maplib
   'the drivers config: no dev client or MapLibre plugin, withLeanAndroid added, runtime 1.3.0-gmaps', { plugins: names(lean), runtime: lean.runtimeVersion });
 check(names(dev).includes('expo-dev-client') && names(dev).includes('@maplibre/maplibre-react-native') && !names(dev).includes('./plugins/withLeanAndroid'),
   'the development config is as before');
+check(names(dev).includes('./plugins/withKeptSounds') && names(lean).includes('./plugins/withKeptSounds'),
+  'every build keeps the notification sounds (a preview build from main too)');
 
 const eas = JSON.parse(read('eas.json')) as { build: Record<string, { environment?: string; extends?: string; channel?: string; android?: { gradleCommand?: string } }> };
 const drivers = eas.build.drivers;

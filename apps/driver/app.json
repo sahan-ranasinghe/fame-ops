@@ -99,6 +99,7 @@
         }
       ],
       "./plugins/withMlKitFromPlayServices",
+      "./plugins/withKeptSounds",
       "expo-asset",
       [
         "expo-audio",

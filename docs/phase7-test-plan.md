@@ -1076,7 +1076,7 @@ You should see:
 2. Then cancel it.
 
 You should see:
-- Both times a short falling tone (three notes, twice) under "Task changes", not the ring.
+- Both times a short falling tone (three notes, twice) under "Changed and cancelled tasks", not the ring.
 - A reassigned task that test.driver had accepted gives the same tone.
 
 ### P4. A question has its own tone
@@ -1100,8 +1100,9 @@ You should see:
 - Everything as on 1.2.0, with no error and no "Something went wrong".
 - The day's line on the driver page without new holes.
 - In the notification settings: "New tasks (ringing)" ("A new task rings for up to 30 seconds, until you open it"),
-  "Task changes" and "Questions from the office", in Sinhala on a Sinhala phone ("නව කාර්යයන් (නාද වන)",
-  "කාර්ය වෙනස්කම්"). The older channels stay in the list; they are no longer used for these pushes.
+  "Changed and cancelled tasks" and "Questions from the office" once each, in Sinhala on a Sinhala phone ("නව කාර්යයන්
+  (නාද වන)", "වෙනස් කළ සහ අවලංගු කළ කාර්යයන්"). The 1.2.0 "New tasks" ("New, changed and cancelled tasks") is gone;
+  the older English ones ("New tasks", "Task changes", "General", "On duty") stay for reminders and the rest.
 - The app's next update arrives: after the office says an update is out, open the app twice on Wi-Fi.
 
 ### P6. A 32-bit phone

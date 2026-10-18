@@ -11,7 +11,7 @@
 // profiles only. EAS runs it as the package.json script "eas-build-pre-install"; on the laptop the local
 // test build runs it with FAME_LEAN_BUILD=1. Any other build: it changes nothing.
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -47,4 +47,5 @@ const main = () => {
   console.log(`lean-build: autolinking leaves out ${autolinking.exclude.join(', ')}; builds ${FROM_SOURCE.join(', ')} from source`);
 };
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) main();
+// Run as a script (a symlink in the path must not skip it: app.config.ts stops an EAS drivers build without the exclusions).
+if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) main();

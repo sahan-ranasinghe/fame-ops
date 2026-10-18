@@ -12,7 +12,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import * as realApi from '../src/lib/api';
-import { channelsToRegister, NEW_TASKS_CHANNEL, NEW_TASKS_SOUND, NEW_TASKS_VIBRATION, newTasksChannel, officeAsksChannel, ringChannel, updatesChannel } from '../src/lib/channels';
+import {
+  channelsToRegister, hasPart6Sounds, isRinging, NEW_TASK_TITLES, NEW_TASKS_CHANNEL, NEW_TASKS_SOUND, NEW_TASKS_VIBRATION, newTasksChannel,
+  officeAsksChannel, ringChannel, updatesChannel,
+} from '../src/lib/channels';
 import { approvedBy, askedBy, officeCalls, parseOfficeContacts, parseTaskContacts, phoneDisplay, taskCalls, whatsappLink } from '../src/lib/contacts';
 import { colomboDayDiff, durationText, relativeTime, type Translate } from '../src/lib/durations';
 import {
@@ -300,13 +303,28 @@ async function main() {
   check(channelsToRegister({ newTasks: true, asks: true, ring: true, updates: true, officeAsks: true }).join(',') === 'new-tasks,driver-asks,task-ring,task-updates,office-asks'
     && channelsToRegister({ newTasks: true, asks: true }).join(',') === 'new-tasks,driver-asks',
     'the phone registers each channel it has made (a 1.2.0 app: the two it had)');
+  check(channelsToRegister({ newTasks: false, asks: false, ring: true, updates: true, officeAsks: true }).join(',') === 'task-ring,task-updates,office-asks',
+    'a 1.3.0 phone registers its three (new-tasks and driver-asks are removed there)');
+  check(hasPart6Sounds('1.3.0') && hasPart6Sounds('1.10.2') && hasPart6Sounds('2.0.0') && !hasPart6Sounds('1.2.0') && !hasPart6Sounds('1.1.0')
+    && !hasPart6Sounds(null) && !hasPart6Sounds(''),
+    'the three channels only on a 1.3.0 build (an older build would fix them to the default sound)');
+  const pushSource = readFileSync(join(here, '..', '..', '..', 'supabase', 'functions', 'push-task', 'index.ts'), 'utf8');
+  const newTitles = [...pushSource.matchAll(/^\s+new: \{ title: "([^"{]+?) ?\{when\}"/gm)].map((m) => m[1]);
+  check(same(newTitles, NEW_TASK_TITLES), 'the app knows push-task\'s new-task titles in both languages', newTitles);
+  check(isRinging({ title: 'New task Sat 09:30', data: { 'android.title': 'New task Sat 09:30' } })
+    && isRinging({ title: 'නව කාර්යය අද 14:00', data: {} }) && isRinging({ title: 'x', data: { kind: 'new' } }) && isRinging({ data: { kind: 'test' } })
+    && !isRinging({ title: 'Task changed Sat 09:30', data: {} }) && !isRinging({ title: 'Sharing my location', data: {} })
+    && !isRinging({ title: 'Free for a trip?', data: { kind: 'ask' } }) && !isRinging({ title: null, data: null }),
+    'the ring stops for a new task shown by the app (its data) or by Android in the background (its title), and the sound test; nothing else');
   check(spec.importance === 'max' && spec.lockscreen === 'public', 'maximum importance (heads-up) and the whole notification on the lock screen');
   check(NEW_TASKS_VIBRATION.length >= 6 && NEW_TASKS_VIBRATION.filter((_, i) => i % 2 === 1).every((ms) => ms >= 800), 'a long vibration: three pulses of 800 ms', NEW_TASKS_VIBRATION);
   check(spec.name === 'New tasks' && newTasksChannel(si).name === 'නව කාර්යයන්' && newTasksChannel(si).description !== '', 'the name and description in the driver\'s language');
   check(same(channelsToRegister(true), ['new-tasks']) && same(channelsToRegister(false), []), 'the token names the channel only once it exists (register_device_token p_channels)');
   const source = (file: string) => readFileSync(join(here, '..', file), 'utf8');
   const notifications = source('src/lib/notifications.ts');
-  check(/notifyNewTask[\s\S]*?ready \? CHANNELS\.newTasks/.test(notifications), 'the local new-task notification (no push token) uses it too');
+  check(/notifyNewTask[\s\S]*?ready\.ring \? RING_CHANNEL : ready\.newTasks \? CHANNELS\.newTasks/.test(notifications)
+    && /showTestNotification[\s\S]*?ready\.ring \? RING_CHANNEL : ready\.newTasks \? CHANNELS\.newTasks/.test(notifications),
+    'the local new-task notification (no push token) and the sound test use it too (on 1.3.0 the ring)');
   check(/channelsToRegister\(await ensureChannels\(\)\)/.test(source('src/lib/push.ts')), 'the channels are made before the token is registered with them');
 
   // --- 7. Strings and screens --------------------------------------------------------------------------------------------
