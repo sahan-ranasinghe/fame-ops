@@ -8,6 +8,8 @@
 // ("Stop 2 · Drop · Kurunegala site") with the time there planned against what
 // happened, the vehicle swap's stretches and their total, the vehicle chosen
 // against the default, the warnings saved past, and "Needs a driver" at the top.
+// Part 4 (§13): a trip the driver started is tagged "Driver-started" (and "Personal"), with Company work ↔ Personal and
+// "Attach a project" (set_trip_purpose) on the page.
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -21,6 +23,7 @@ import { MapView } from "../map/MapView";
 import type { RoutePoint } from "../map/types";
 import { GapsList, useGaps } from "./GapsList";
 import { StopArrival } from "./StopArrival";
+import { TripPurposeCard, TripTags } from "./TripPurpose";
 import { Avatar, Empty, Loading, Notice, Pill, VehicleThumb, WarningsNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { PageTop } from "../ui/Page";
@@ -101,7 +104,7 @@ export function TaskDetail() {
     <div data-testid="task-detail">
       <PageTop
         title={t.title || "Task"}
-        sub={<><Pill tone={TONE[t.status] ?? ""}>{cap(t.status)}</Pill> <span className="mono">{t.start}</span></>}
+        sub={<><Pill tone={TONE[t.status] ?? ""}>{cap(t.status)}</Pill> <TripTags t={t} /> <span className="mono">{t.start}</span></>}
         backTo={backTo}
         actions={(canChange || canCancel) ? <Link className="btn small" to={`/tasks/${id}/edit${q}`}>{declined ? "Give it to a driver" : "Change"}</Link> : undefined}
       />
@@ -150,7 +153,7 @@ export function TaskDetail() {
               )}
             </dd>
           </div>
-          <div><dt>Charged to</dt><dd>{projects || "Fame internal"}</dd></div>
+          <div><dt>Charged to</dt><dd>{t.purpose === "personal" ? "Personal · not charged to a job" : projects || "Fame internal"}</dd></div>
           <div><dt>Sent · seen</dt><dd className="mono">{joinDots([hhmm(t.sent), t.seen === "not opened yet" ? "not opened yet" : hhmm(t.seen)]) || "—"}</dd></div>
           <div><dt>Started · done</dt><dd className="mono">{joinDots([hhmm(t.started), hhmm(t.completed)]) || "—"}</dd></div>
           <div><dt>Odometer</dt><dd className="num">{t.start_odometer_km != null ? num(t.start_odometer_km) : "—"}{t.end_odometer_km != null ? " → " + num(t.end_odometer_km) : ""}</dd></div>
@@ -160,6 +163,8 @@ export function TaskDetail() {
           {t.notes && <div style={{ gridColumn: "1/-1" }}><dt>Notes</dt><dd style={{ fontWeight: 400 }}>{t.notes}</dd></div>}
         </dl>
       </div>
+      {/* Phase 7 (§13): a trip the driver started: company or personal, and the project it is charged to. */}
+      {t.kind === "self" && <TripPurposeCard key={id} taskId={id} purpose={t.purpose} driver={t.driver} charged={projects || "Fame internal"} onSaved={reload} />}
       {t.can_reopen && me.tools.includes("reopen_task") && <ReopenTask id={id} onDone={reload} />}
       {p.unlogged_km && (
         <Notice>

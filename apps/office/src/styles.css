@@ -534,3 +534,17 @@ button.avail-row:focus-visible { outline: 3px solid var(--ink); outline-offset: 
 .assigned-vehicle { display: flex; flex-wrap: wrap; align-items: center; gap: 14px }
 .tell-msg { margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface-2); color: var(--ink); white-space: pre-line }
 @media (max-width: 768px) { .doc-date input { flex: 1 1 100% } .photo-cell { width: auto } }
+/* Phase 7 (§16): an Overview tile opens its list (a panel beside the Overview on a desktop, the full page on a phone). */
+a.tile { color: var(--ink); text-decoration: none; cursor: pointer }
+a.tile:hover { border-color: var(--line-strong) }
+a.tile[aria-current="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink) }
+a.tile .lbl::after { content: " ›"; color: var(--muted) }
+.split.has-detail .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+.split.has-detail .two { grid-template-columns: minmax(0, 1fr) }
+.panel-top { display: flex; align-items: flex-start; gap: 12px }
+.panel-top .grow { flex: 1 1 auto }
+a.link-row { color: var(--ink); text-decoration: none }
+a.link-row:hover { background: var(--surface-2) }
+.panel-group { padding: 10px 22px 4px; color: var(--muted); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600 }
+/* Phase 7 (§13): a driver-started trip, a personal one. */
+.trip-tags { display: inline-flex; flex-wrap: wrap; gap: 6px }

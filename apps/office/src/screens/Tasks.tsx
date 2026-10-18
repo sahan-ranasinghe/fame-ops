@@ -3,6 +3,7 @@
 // Phase 7 (§19): the tasks that need a driver (today and later) above the
 // columns; /tasks?filter=needs_driver shows only them, with the way back.
 // §33: the day's proposed tasks waiting for an approver as the first column.
+// §13: a card tags a trip the driver started ("Driver-started") and a personal one ("Personal").
 import { useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -13,6 +14,7 @@ import { Avatar, Dot, ErrBox, Loading, Plate, StaleNote, Updated, VehicleThumb }
 import { Icon } from "../ui/icons";
 import { ListWithDetail } from "../ui/Page";
 import { NeedsDriverList } from "./NeedsDriverList";
+import { TripTags } from "./TripPurpose";
 import { WaitingApprovalColumn } from "./WaitingApprovalColumn";
 
 const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
@@ -22,6 +24,8 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
     <button type="button" className="tcard" onClick={() => onOpen(t.id)}>
       <span className="top"><b>{t.time}</b><span>{t.label || ""}</span></span>
       <span className="title">{t.title}</span>
+      {/* Phase 7 (§13): a trip the driver started in the app, a personal one. */}
+      <TripTags t={t} />
       <span className="route">From {t.from || "—"}<br />To {t.to || "—"}{t.stops_count && t.stops_count > 2 ? ` · ${t.stops_count} stops` : ""}</span>
       {(t.leave_by || t.late_min || t.eta_final) && (
         <span className="leave">

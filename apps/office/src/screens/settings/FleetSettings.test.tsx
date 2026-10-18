@@ -111,6 +111,29 @@ describe("FleetSettings", () => {
     await waitFor(() => expect(transport.saves).toEqual([{ key: "accept_reminder_min", value: 7 }]));
   });
 
+  it("driver-started trips (Phase 7, §13): the four values in plain words, saved when one is picked", async () => {
+    const transport = new Settings(false, { driver_personal_trips: "allowed" });
+    await mount(transport);
+    const card = within(screen.getByTestId("personal-trips-settings"));
+    const radios = card.getAllByRole<HTMLInputElement>("radio");
+    expect(radios.map((r) => r.closest("label")?.textContent?.trim())).toEqual([
+      "Allowed: Company work preselected, Personal offered",
+      "Personal preselected",
+      "Off: no Personal choice",
+      "Ask first (not built yet: works as Allowed)",
+    ]);
+    expect(radios.map((r) => r.checked)).toEqual([true, false, false, false]);
+    fireEvent.click(card.getByLabelText("Off: no Personal choice"));
+    await waitFor(() => expect(transport.saves).toEqual([{ key: "driver_personal_trips", value: "off" }]));
+    await waitFor(() => expect(card.getByLabelText<HTMLInputElement>("Off: no Personal choice").checked).toBe(true));
+  });
+
+  it("driver-started trips: an older server with no value shows its default", async () => {
+    const transport = new Settings();
+    await mount(transport);
+    expect(within(screen.getByTestId("personal-trips-settings")).getByLabelText<HTMLInputElement>("Allowed: Company work preselected, Personal offered").checked).toBe(true);
+  });
+
   it("the time at a stop by type, with plain labels; an older kind still stored is named", async () => {
     const transport = new Settings(false, { dwell_min: { pickup: 5, drop: 5, visit: 60, default: 5, "pickup.goods": 15 } });
     await mount(transport);

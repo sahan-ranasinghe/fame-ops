@@ -2,7 +2,8 @@
 // (docs/dispatch-plan.md, section 6) and the routing provider's usage.
 // Phase 7: the time at a stop by type (pickup, drop, visit, any other) and the
 // accept window with the driver's reminder (when it ends, the task needs a driver),
-// and (§33) whether a task made without the approve permission waits for an approver.
+// and (§33) whether a task made without the approve permission waits for an approver; (§13) whether a driver may
+// mark a trip they start in the app as personal (driver_personal_trips).
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useFleet } from "../../app/FleetContext";
 import { useLists } from "../../data/hooks";
@@ -12,6 +13,7 @@ import type { FleetError } from "../../transport/types";
 import { Loading, Notice, Pill } from "../../ui/basics";
 import { GenericTable } from "../../ui/GenericTable";
 import { useToast } from "../../ui/Toast";
+import { PERSONAL_TRIPS_OPTIONS, personalTripsValue } from "../tripPurposeLogic";
 
 /** The time at a stop by its type (Phase 7, §17); "default" is any other. */
 const DWELL_KEYS: [string, string][] = [["pickup", "Pickup"], ["drop", "Drop"], ["visit", "Visit"], ["default", "Any other"]];
@@ -105,6 +107,7 @@ export function FleetSettings() {
   const beforeLeave = data.settings.accept_before_leave_min ?? FALLBACK.accept_before_leave_min;
   // Stored keys the card does not show (the old "pickup.people" kind, set before Phase 7 or through Claude): they come before the type.
   const otherDwell = Object.entries(draft.dwell_min ?? {}).filter(([k]) => !DWELL_KEYS.some(([d]) => d === k));
+  const personalTrips = personalTripsValue(draft.driver_personal_trips, data.defaults.driver_personal_trips);
 
   return (
     <section className="view" data-testid="fleet-settings">
@@ -263,6 +266,23 @@ export function FleetSettings() {
               <span className="sub" style={{ display: "block" }}>A task made by someone without the approve permission waits in the Requests queue and is sent to the driver only when approved. Off: every task is sent at once.</span>
             </span>
           </label>
+        </div>
+
+        {/* Phase 7 (§13): whether a driver may mark a trip they start in the app as personal. */}
+        <div className="card card-b form" data-testid="personal-trips-settings">
+          <h2>Driver-started trips</h2>
+          <p className="muted small" style={{ margin: 0 }}>
+            A driver on duty can start a trip in the app (Start a trip). Personal km are counted apart and never charged to a job; the fleet admins are told
+            when a personal trip starts.
+          </p>
+          <div className="field" role="radiogroup" aria-label="Personal trips">
+            {PERSONAL_TRIPS_OPTIONS.map(([value, label]) => (
+              <label key={value} className="check">
+                <input type="radio" name="fs-personal-trips" value={value} checked={personalTrips === value} disabled={busy !== null}
+                  onChange={() => { setDraft({ ...draft, driver_personal_trips: value }); void save("driver_personal_trips", value); }} /> {label}
+              </label>
+            ))}
+          </div>
         </div>
 
         <div className="card card-b form">
