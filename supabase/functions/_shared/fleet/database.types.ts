@@ -1468,6 +1468,9 @@ isOneToOne: false
 "my_held_vehicle":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
+"my_office_contacts":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
 "my_task_contacts":
 { Args: { "p_task": string }; Returns: Json
                            },

@@ -384,3 +384,30 @@ end;
 $$;
 revoke all on function public.my_task_contacts(uuid) from public, anon;
 grant execute on function public.my_task_contacts(uuid) to authenticated;
+
+-- F. Me → Call office and Call fleet admin, with no task at hand: the office's number and the approvers with a number.
+-- Drivers only (an office person reads these through the tools).
+create function public.my_office_contacts()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_me uuid := public.current_employee_id();
+begin
+  if v_me is null or not exists (select 1 from public.employees e where e.id = v_me and e.role = 'driver' and e.active) then
+    return null;
+  end if;
+  return jsonb_strip_nulls(jsonb_build_object(
+    'office_phone', (select value #>> '{}' from public.fleet_settings where key = 'office_phone'),
+    'approvers', (select jsonb_agg(jsonb_build_object('name', e.name, 'phone', e.phone) order by e.name)
+                  from public.employees e
+                  where e.active and e.phone is not null and 'approve' = any (e.permissions)
+                    and e.role in ('admin', 'fleet_admin', 'office'))
+  ));
+end;
+$$;
+revoke all on function public.my_office_contacts() from public, anon;
+grant execute on function public.my_office_contacts() to authenticated;
