@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Home · Fleet admin</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+body{margin:0;background:#f3f2ee;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181c;-webkit-font-smoothing:antialiased}
+a{color:#1e4fa0;text-decoration:none}a:hover{color:#163b78}
+*{box-sizing:border-box}
+.scr{width:390px;height:844px;display:flex;flex-direction:column;background:#f3f2ee;overflow:hidden;position:relative}
+.hdr{background:#15181c;color:#fff;padding:20px 20px 18px;display:flex;flex-direction:column;gap:10px}
+.hd{font-family:Archivo,'IBM Plex Sans',sans-serif;font-weight:800;font-size:28px;line-height:1.05;letter-spacing:-.01em;margin:0;color:#fff}
+.meta{font-size:13px;color:#b9bec6}
+.body{flex:1;overflow:hidden;padding:14px 16px 0;display:flex;flex-direction:column;gap:12px}
+.card{background:#fff;border:1px solid #e6e4de;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.08em;color:#6b7079;text-transform:uppercase}
+.mono{font-family:'IBM Plex Mono',monospace;font-weight:600}
+.plate{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;border:1px solid #15181c;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:4px 10px;white-space:nowrap}
+.blue{background:#e6edf8;color:#1e4fa0}.amber{background:#fdf1cc;color:#8a5a00}.red{background:#fbe4e2;color:#b3261e}.grey{background:#e8e7e2;color:#3c4148}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:56px;border-radius:14px;background:#f2a900;color:#15181c;font-weight:700;font-size:17px;border:0;width:100%;font-family:inherit;cursor:pointer}
+.btn2{display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border-radius:14px;background:#fff;color:#15181c;font-weight:600;font-size:16px;border:1.5px solid #15181c;width:100%;font-family:inherit;cursor:pointer}
+.sm{height:40px;font-size:14px;border-radius:10px;width:auto;padding:0 14px}
+.ib{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:12px;border:1px solid #e6e4de;background:#fff;color:#15181c;cursor:pointer;flex:none}
+.av{width:40px;height:40px;border-radius:50%;background:#22272c;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
+.tabbar{height:76px;background:#fff;border-top:1px solid #e6e4de;display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:#6b7079;padding:8px 10px;border-radius:999px;min-width:58px;position:relative}
+.tab.on{background:#f2a900;color:#15181c}
+.badge{position:absolute;top:0;right:4px;background:#b3261e;color:#fff;font-size:10px;font-weight:700;border-radius:999px;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+.rowi{display:flex;align-items:center;gap:12px}
+.t15{font-size:15px}.t13{font-size:13px}.t12{font-size:12px}.b{font-weight:600}.mu{color:#6b7079}
+.sec{display:flex;align-items:center;justify-content:space-between}
+.sec a{font-size:13px;font-weight:600}
+.item{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid #efede8}
+.item:first-of-type{border-top:0;padding-top:0}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+</style>
+</helmet>
+<div class="scr">
+  <div class="hdr">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span class="meta">Mon 19 Oct · Fleet admin</span>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="chip" style="background:#22272c;color:#fff;font-weight:600">සිං · <b style="color:#f2a900">EN</b></span>
+        <a href="Notifications.dc.html" aria-label="Notifications, 3 unread" style="position:relative;display:inline-flex;width:40px;height:40px;border-radius:12px;background:#22272c;color:#fff;align-items:center;justify-content:center">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span class="badge" style="top:-4px;right:-4px">3</span>
+        </a>
+      </div>
+    </div>
+    <h1 class="hd">Morning, Palitha</h1>
+    <div style="display:flex;gap:8px">
+      <span class="chip blue">3 on the road</span>
+      <span class="chip grey">2 free</span>
+      <span class="chip grey">1 in garage</span>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="card" style="border-color:#f2a900;background:#fffaf0">
+      <div class="sec"><span class="lbl" style="color:#8a5a00">Requests to approve · 2</span><a href="Approve.dc.html">View all</a></div>
+      <a href="Approve.dc.html" class="item" style="color:inherit">
+        <div class="av" style="background:#8a5a00">N</div>
+        <div style="flex:1;min-width:0">
+          <div class="t15 b">Site visit · Kurunegala site</div>
+          <div class="t13 mu">Nimali · <span class="mono">Tue 20 Oct 08:30</span> · 3 passengers · any van</div>
+        </div>
+        <span class="chip amber">waiting 2 h</span>
+      </a>
+      <a href="Approve.dc.html" class="item" style="color:inherit">
+        <div class="av" style="background:#8a5a00">S</div>
+        <div style="flex:1;min-width:0">
+          <div class="t15 b">Documents · Head office → Kandy</div>
+          <div class="t13 mu">Sahan · <span class="mono">Tue 20 Oct 11:00</span> · proposed Kamal · <span class="plate">WP CAB-4521</span></div>
+        </div>
+        <span class="chip amber">15 min</span>
+      </a>
+    </div>
+
+    <div class="card" style="border-color:#b3261e">
+      <div class="sec"><span class="lbl" style="color:#b3261e">Needs a driver · 1</span><a href="GiveDriver.dc.html">View all</a></div>
+      <div class="item">
+        <div style="flex:1;min-width:0">
+          <div class="t15 b">Trip · SLTC Research University</div>
+          <div class="t13 mu"><span class="mono">Today 09:00</span> · Kamal declined · not available</div>
+        </div>
+        <a href="GiveDriver.dc.html" class="btn sm" style="background:#b3261e;color:#fff">Give a driver</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec"><span class="lbl" style="color:#b3261e">Critical · 1</span><a href="TaskDetail.dc.html">Open</a></div>
+      <div class="item">
+        <div class="dot" style="background:#b3261e"></div>
+        <div style="flex:1;min-width:0">
+          <div class="t15 b">Breakdown · needs another vehicle</div>
+          <div class="t13 mu">Nimal · <span class="plate">WP KV-7788</span> · <span class="mono">08:12</span> · near Kadawatha</div>
+        </div>
+        <a href="tel:+94770000000" class="ib" aria-label="Call Nimal"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6.2 6.2l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="sec"><span class="lbl">On the road · 3</span><a href="Live.dc.html">Live map</a></div>
+      <div class="item">
+        <div class="av">S</div>
+        <div style="flex:1;min-width:0"><div class="t15 b">Sunil · <span class="plate">WP CAB-4521</span></div><div class="t13 mu">Team drop · Kurunegala · arrives about <span class="mono">10:40</span></div></div>
+        <span class="chip blue">on a task</span>
+      </div>
+      <div class="item">
+        <div class="av">R</div>
+        <div style="flex:1;min-width:0"><div class="t15 b">Ruwan · <span class="plate">WP PA-1200</span></div><div class="t13 mu">On duty since <span class="mono">08:02</span> · near Kelaniya</div></div>
+        <span class="chip grey">free</span>
+      </div>
+    </div>
+  </div>
+
+  <nav class="tabbar" aria-label="Main">
+    <a href="Main.dc.html" class="tab on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>Home</a>
+    <a href="Approve.dc.html" class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Approve<span class="badge">2</span></a>
+    <a href="Live.dc.html" class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s7-7.1 7-12a7 7 0 1 0-14 0c0 4.9 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg>Live</a>
+    <a href="DriversBoard.dc.html" class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg>Drivers</a>
+    <a href="Profile.dc.html" class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>More</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

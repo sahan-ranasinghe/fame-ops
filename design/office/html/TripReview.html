@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New trip · Review</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+body{margin:0;background:#e9e7e0;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181c;-webkit-font-smoothing:antialiased}
+a{color:#1e4fa0;text-decoration:none}a:hover{color:#163b78}
+*{box-sizing:border-box}
+.scr{width:390px;height:844px;display:flex;flex-direction:column;background:#e9e7e0;overflow:hidden;position:relative}
+.mono{font-family:'IBM Plex Mono',monospace;font-weight:600}
+.plate{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;border:1px solid #15181c;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:4px 10px;white-space:nowrap}
+.blue{background:#e6edf8;color:#1e4fa0}.amber{background:#fdf1cc;color:#8a5a00}.grey{background:#e8e7e2;color:#3c4148}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:56px;border-radius:14px;background:#f2a900;color:#15181c;font-weight:700;font-size:17px;border:0;width:100%;font-family:inherit;cursor:pointer}
+.ibk{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:12px;background:#15181c;color:#fff;flex:none;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.ibw{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:#fff;color:#15181c;flex:none;border:1px solid #d9d6cd;cursor:pointer}
+.t15{font-size:15px}.t13{font-size:13px}.t12{font-size:12px}.b{font-weight:600}.mu{color:#6b7079}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.08em;color:#6b7079;text-transform:uppercase}
+.pin{position:absolute;width:28px;height:28px;border-radius:50%;background:#15181c;color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.25);font-family:'IBM Plex Mono',monospace}
+.plbl{position:absolute;background:#fff;border-radius:8px;padding:4px 8px;font-size:12px;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,.18);white-space:nowrap}
+.sheet{background:#fff;border-radius:22px 22px 0 0;box-shadow:0 -6px 24px rgba(0,0,0,.12);padding:10px 16px 0;display:flex;flex-direction:column;gap:12px;flex:1}
+.hdl{width:44px;height:5px;border-radius:3px;background:#d9d6cd;align-self:center}
+.leg{display:flex;gap:12px;align-items:flex-start}
+.tm{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px;width:44px;flex:none;padding-top:1px}
+.rail{width:22px;display:flex;flex-direction:column;align-items:center;flex:none}
+.dotp{width:22px;height:22px;border-radius:50%;background:#15181c;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace}
+.line{width:3px;flex:1;background:#1e4fa0;min-height:18px;border-radius:2px}
+.sticky{padding:10px 16px 18px;background:#fff;border-top:1px solid #efede8}
+</style>
+</helmet>
+<div class="scr">
+  <div style="position:relative;height:380px;flex:none">
+    <svg viewBox="0 0 390 380" width="390" height="380" role="img" aria-label="Map of the planned route from Head office to Kurunegala site" style="display:block">
+      <rect width="390" height="380" fill="#e9e7e0"/>
+      <path d="M-10 300 C 60 280, 90 320, 150 290 S 250 240, 300 250 S 380 230, 400 210" fill="none" stroke="#d6d3c8" stroke-width="12" stroke-linecap="round"/>
+      <path d="M-10 300 C 60 280, 90 320, 150 290 S 250 240, 300 250 S 380 230, 400 210" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
+      <path d="M40 390 C 70 300, 60 220, 120 160 S 210 80, 260 60 S 330 20, 400 10" fill="none" stroke="#d6d3c8" stroke-width="12" stroke-linecap="round"/>
+      <path d="M40 390 C 70 300, 60 220, 120 160 S 210 80, 260 60 S 330 20, 400 10" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/>
+      <path d="M-10 120 C 60 130, 120 110, 190 140 S 300 180, 400 150" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/>
+      <path d="M200 390 C 210 330, 230 300, 300 290 S 370 300, 400 280" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/>
+      <path d="M70 320 C 90 300, 100 250, 130 190 S 200 100, 260 60 S 320 40, 348 48" fill="none" stroke="#1e4fa0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span class="pin" style="left:56px;top:306px;background:#f2a900;color:#15181c">S</span>
+    <span class="plbl" style="left:92px;top:306px">Head office · leave <b class="mono">07:24</b></span>
+    <span class="pin" style="left:334px;top:34px">1</span>
+    <span class="plbl" style="left:214px;top:70px">Kurunegala site · <b class="mono">10:30</b></span>
+    <a href="TripWho.dc.html" class="ibk" aria-label="Back" style="position:absolute;left:16px;top:16px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></a>
+    <div style="position:absolute;right:16px;top:16px;display:flex;flex-direction:column;gap:6px">
+      <button class="ibw" type="button" aria-label="Fit route"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>
+      <button class="ibw" type="button" aria-label="Zoom in"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="ibw" type="button" aria-label="Zoom out"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+    </div>
+    <span class="chip" style="position:absolute;left:16px;bottom:14px;background:#fff;color:#3c4148;box-shadow:0 1px 4px rgba(0,0,0,.15)">Road time · Google traffic · Tue 07:24</span>
+  </div>
+
+  <div class="sheet">
+    <div class="hdl" aria-hidden="true"></div>
+    <div style="display:flex;align-items:baseline;justify-content:space-between">
+      <div><span class="lbl">Leave by</span><div style="font-family:Archivo,sans-serif;font-weight:800;font-size:34px;line-height:1">07:24</div></div>
+      <div style="text-align:right"><div class="t15 b">94 km · 2 h 51 min</div><div class="t13 mu">back at Head office <span class="mono">15:40</span></div></div>
+    </div>
+
+    <div style="display:flex;flex-direction:column">
+      <div class="leg">
+        <span class="tm">07:24</span>
+        <div class="rail"><span class="dotp" style="background:#f2a900;color:#15181c">S</span><span class="line"></span></div>
+        <div style="flex:1;padding-bottom:10px"><div class="t15 b">Head office, Kelaniya</div><div class="t13 mu">Passengers get in here · 3 pax</div><div class="t13 mu" style="margin-top:6px">2 h 51 min · 94 km · Kandy Rd, expressway · rush hour ×1.2</div></div>
+      </div>
+      <div class="leg">
+        <span class="tm">10:15</span>
+        <div class="rail"><span class="dotp">1</span><span class="line" style="background:#d9d6cd"></span></div>
+        <div style="flex:1;padding-bottom:10px"><div class="t15 b">Kurunegala site <span class="chip blue" style="margin-left:4px">15 min early</span></div><div class="t13 mu">arrive by <span class="mono">10:30</span> · 1 h 30 there · leave <span class="mono">11:45</span></div></div>
+      </div>
+      <div class="leg">
+        <span class="tm">14:36</span>
+        <div class="rail"><span class="dotp" style="background:#fff;color:#15181c;border:2px solid #15181c">B</span></div>
+        <div style="flex:1"><div class="t15 b">Back at Head office</div><div class="t13 mu">back by <span class="mono">17:00</span> · ok</div></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <span class="chip grey">Kamal · <span class="plate" style="font-size:11px">WP CAB-4521</span></span>
+      <span class="chip grey">Contact: Nimali · 077 123 4567</span>
+      <span class="chip grey">Notes: bring the site keys</span>
+    </div>
+  </div>
+
+  <div class="sticky">
+    <a href="TaskDetail.dc.html" class="btn">Send to Kamal</a>
+    <div class="t12 mu" style="text-align:center;margin-top:8px">You approve your own tasks. A dispatcher sees "Send for approval".</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

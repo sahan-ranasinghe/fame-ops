@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Needs a driver</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+body{margin:0;background:#f3f2ee;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181c;-webkit-font-smoothing:antialiased}
+a{color:#1e4fa0;text-decoration:none}a:hover{color:#163b78}
+*{box-sizing:border-box}
+.scr{width:390px;height:844px;display:flex;flex-direction:column;background:#f3f2ee;overflow:hidden;position:relative}
+.hdr{background:#15181c;color:#fff;padding:14px 20px 16px;display:flex;flex-direction:column;gap:10px}
+.hd{font-family:Archivo,'IBM Plex Sans',sans-serif;font-weight:800;font-size:24px;line-height:1.05;letter-spacing:-.01em;margin:0;color:#fff}
+.meta{font-size:13px;color:#b9bec6}
+.body{flex:1;overflow:hidden;padding:14px 16px 0;display:flex;flex-direction:column;gap:12px}
+.card{background:#fff;border:1px solid #e6e4de;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.08em;color:#6b7079;text-transform:uppercase}
+.mono{font-family:'IBM Plex Mono',monospace;font-weight:600}
+.plate{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;border:1px solid #15181c;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;border-radius:999px;padding:4px 10px;white-space:nowrap}
+.blue{background:#e6edf8;color:#1e4fa0}.amber{background:#fdf1cc;color:#8a5a00}.red{background:#fbe4e2;color:#b3261e}.grey{background:#e8e7e2;color:#3c4148}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:56px;border-radius:14px;background:#f2a900;color:#15181c;font-weight:700;font-size:17px;border:0;width:100%;font-family:inherit;cursor:pointer}
+.btn2{display:flex;align-items:center;justify-content:center;gap:8px;height:44px;border-radius:10px;background:#fff;color:#15181c;font-weight:600;font-size:14px;border:1.5px solid #15181c;width:100%;font-family:inherit;cursor:pointer}
+.ib{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;border:1px solid #e6e4de;background:#fff;color:#15181c;cursor:pointer;flex:none}
+.ibk{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;background:#22272c;color:#fff;flex:none}
+.av{width:40px;height:40px;border-radius:50%;background:#22272c;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex:none}
+.t15{font-size:15px}.t13{font-size:13px}.b{font-weight:600}.mu{color:#6b7079}
+.drv{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;border:1px solid #e6e4de;background:#fff;width:100%;text-align:left;font-family:inherit;cursor:pointer;color:#15181c}
+.drv.on{border:2px solid #1e4fa0;background:#f4f7fc}
+.stop{display:flex;gap:10px;align-items:flex-start}
+.pin{width:22px;height:22px;border-radius:50%;background:#15181c;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none;font-family:'IBM Plex Mono',monospace}
+.sticky{padding:10px 16px 18px;background:#f3f2ee;border-top:1px solid #e6e4de;display:flex;flex-direction:column;gap:8px}
+</style>
+</helmet>
+<div class="scr">
+  <div class="hdr">
+    <div style="display:flex;align-items:center;gap:12px">
+      <a href="Main.dc.html" class="ibk" aria-label="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></a>
+      <div style="flex:1;min-width:0"><div class="meta" style="color:#f4a09a">Needs a driver · leaves in 42 min</div><h1 class="hd">Trip · SLTC Research University</h1></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span class="chip red">Kamal declined · not available · <span class="mono">08:14</span></span>
+      <a href="TaskDetail.dc.html" class="meta" style="color:#f2a900;font-weight:600">Open task →</a>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div><span class="lbl">Today</span><div style="font-family:Archivo,sans-serif;font-weight:800;font-size:26px;line-height:1">Leave by 09:00</div></div>
+        <span class="chip grey">2 pax · any car</span>
+      </div>
+      <div class="stop"><span class="pin" style="background:#f2a900;color:#15181c">S</span><div style="flex:1"><div class="t15 b">Head office, Kelaniya</div><div class="t13 mu">passengers get in here</div></div></div>
+      <div class="stop"><span class="pin">1</span><div style="flex:1"><div class="t15 b">SLTC Research University, Padukka</div><div class="t13 mu">arrive by <span class="mono">10:00</span> · 2 h there · 38 km · 58 min</div></div></div>
+      <div style="display:flex;align-items:center;gap:10px;padding-top:2px">
+        <div class="av" style="background:#8a5a00;width:32px;height:32px;font-size:12px">S</div>
+        <div class="t13" style="flex:1">Asked by Sahan · approved by you <span class="mono">Sun 16:40</span></div>
+        <a href="tel:+94770000000" class="ib" aria-label="Call Sahan"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6.2 6.2l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z"/></svg></a>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span class="lbl">Who can take it · now</span>
+      <a href="AskDrivers.dc.html" style="font-size:13px;font-weight:600">Ask drivers</a>
+    </div>
+    <button class="drv on" type="button" aria-pressed="true">
+      <div class="av">R</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px"><span class="t15 b">Ruwan</span><span class="chip amber" style="padding:2px 8px">best match</span></div>
+        <div class="t13 mu">On duty · free till <span class="mono">13:00</span> · <span class="plate">WP PA-1200</span> · 2.4 km away</div>
+        <div class="t13 mu">Would be back <span class="mono">12:50</span> · 10 min before his next task</div>
+      </div>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1e4fa0" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+    </button>
+    <button class="drv" type="button" aria-pressed="false">
+      <div class="av">S</div>
+      <div style="flex:1;min-width:0"><div class="t15 b">Sunil</div><div class="t13 mu">On a task till <span class="mono">10:40</span> · Kurunegala</div></div>
+      <span class="chip blue">busy</span>
+    </button>
+    <button class="drv" type="button" aria-pressed="false">
+      <div class="av">N</div>
+      <div style="flex:1;min-width:0"><div class="t15 b">Nimal</div><div class="t13 mu">Off duty · usually starts <span class="mono">08:30</span> · last seen Ja-Ela</div></div>
+      <span class="chip grey">off duty</span>
+    </button>
+    <button class="drv" type="button" aria-pressed="false" style="opacity:.6">
+      <div class="av">K</div>
+      <div style="flex:1;min-width:0"><div class="t15 b">Kamal</div><div class="t13 mu">Declined this task · not available</div></div>
+      <span class="chip red">declined</span>
+    </button>
+  </div>
+
+  <div class="sticky">
+    <a href="TaskDetail.dc.html" class="btn">Give to Ruwan · <span class="plate" style="border-color:#15181c">WP PA-1200</span></a>
+    <div style="display:flex;gap:8px">
+      <a href="TripWhen.dc.html" class="btn2">Move the time</a>
+      <a href="Main.dc.html" class="btn2" style="border-color:#b3261e;color:#b3261e">Cancel task…</a>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

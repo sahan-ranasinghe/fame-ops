@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Notifications</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@800&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+body{margin:0;background:#f3f2ee;font-family:'IBM Plex Sans',system-ui,sans-serif;color:#15181c;-webkit-font-smoothing:antialiased}
+a{color:#1e4fa0;text-decoration:none}a:hover{color:#163b78}
+*{box-sizing:border-box}
+.scr{width:390px;height:844px;display:flex;flex-direction:column;background:#f3f2ee;overflow:hidden;position:relative}
+.hdr{background:#15181c;color:#fff;padding:20px 20px 14px;display:flex;flex-direction:column;gap:12px}
+.hd{font-family:Archivo,'IBM Plex Sans',sans-serif;font-weight:800;font-size:28px;line-height:1.05;letter-spacing:-.01em;margin:0;color:#fff}
+.meta{font-size:13px;color:#b9bec6}
+.body{flex:1;overflow:hidden;padding:12px 16px 0;display:flex;flex-direction:column;gap:8px}
+.lbl{font-size:11px;font-weight:700;letter-spacing:.08em;color:#6b7079;text-transform:uppercase;padding:6px 0 2px}
+.mono{font-family:'IBM Plex Mono',monospace;font-weight:600}
+.plate{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;border:1px solid #15181c;border-radius:6px;padding:2px 6px;white-space:nowrap}
+.seg{display:flex;background:#22272c;border-radius:10px;padding:3px;gap:3px}
+.seg a{flex:1;text-align:center;padding:7px 0;border-radius:8px;font-weight:600;font-size:13px;color:#b9bec6}
+.seg a.on{background:#fff;color:#15181c}
+.n{display:flex;gap:12px;align-items:flex-start;background:#fff;border:1px solid #e6e4de;border-radius:14px;padding:12px;color:#15181c;position:relative}
+.n.un{border-left:4px solid #f2a900}
+.ic{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex:none}
+.t15{font-size:15px}.t13{font-size:13px}.t12{font-size:12px}.b{font-weight:600}.mu{color:#6b7079}
+.tabbar{height:76px;background:#fff;border-top:1px solid #e6e4de;display:flex;align-items:center;justify-content:space-around;padding:0 6px}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;font-weight:600;color:#6b7079;padding:8px 14px;border-radius:999px;min-width:64px;position:relative}
+.tab.on{background:#f2a900;color:#15181c}
+.sm{display:inline-flex;align-items:center;justify-content:center;height:32px;border-radius:8px;background:#f2a900;color:#15181c;font-weight:700;font-size:12px;padding:0 10px}
+</style>
+</helmet>
+<div class="scr">
+  <div class="hdr">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <h1 class="hd">Notifications</h1>
+      <a href="Notifications.dc.html" class="meta" style="font-weight:600;color:#f2a900">Mark all read</a>
+    </div>
+    <div class="seg" role="tablist" aria-label="Filter"><a href="Notifications.dc.html" class="on" role="tab" aria-selected="true">All</a><a href="Notifications.dc.html" role="tab" aria-selected="false">Unread · 3</a></div>
+  </div>
+
+  <div class="body">
+    <span class="lbl">Today</span>
+    <a href="GiveDriver.dc.html" class="n un">
+      <span class="ic" style="background:#fbe4e2;color:#b3261e"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span>
+      <div style="flex:1;min-width:0">
+        <div class="t15 b">Kamal declined · needs a driver</div>
+        <div class="t13 mu">Trip · SLTC Research University · today <span class="mono">09:00</span> · "not available"</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><span class="t12 mu"><span class="mono">08:14</span> · 48 min ago</span><span class="sm">Give a driver</span></div>
+      </div>
+    </a>
+    <a href="Approve.dc.html" class="n un">
+      <span class="ic" style="background:#fdf1cc;color:#8a5a00"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+      <div style="flex:1;min-width:0">
+        <div class="t15 b">Request to approve</div>
+        <div class="t13 mu">Nimali · Site visit · Kurunegala site · <span class="mono">Tue 20 Oct 08:30</span> · 3 pax</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px"><span class="t12 mu"><span class="mono">07:02</span> · 2 h ago</span><span class="sm">Approve</span></div>
+      </div>
+    </a>
+    <a href="TaskDetail.dc.html" class="n un">
+      <span class="ic" style="background:#e6edf8;color:#1e4fa0"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14M3 12l2-6h14l2 6v5h-2M5 17v-5h14"/><circle cx="7.5" cy="17" r="1.5"/><circle cx="16.5" cy="17" r="1.5"/></svg></span>
+      <div style="flex:1;min-width:0">
+        <div class="t15 b">Sunil is on the way · running late 15 min</div>
+        <div class="t13 mu">Team drop · Kurunegala site · arrives about <span class="mono">10:38</span></div>
+        <div class="t12 mu" style="margin-top:6px"><span class="mono">08:50</span> · 12 min ago</div>
+      </div>
+    </a>
+    <a href="TaskDetail.dc.html" class="n">
+      <span class="ic" style="background:#e8e7e2;color:#3c4148"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></span>
+      <div style="flex:1;min-width:0">
+        <div class="t15 b">Kamal answered: Yes</div>
+        <div class="t13 mu">Free for a trip Tue 20 Oct 07:24–15:40</div>
+        <div class="t12 mu" style="margin-top:6px"><span class="mono">09:14</span></div>
+      </div>
+    </a>
+
+    <span class="lbl">Yesterday</span>
+    <a href="MyTrips.dc.html" class="n">
+      <span class="ic" style="background:#e8e7e2;color:#3c4148"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg></span>
+      <div style="flex:1;min-width:0">
+        <div class="t15 b">Request approved by Palitha</div>
+        <div class="t13 mu">Team drop · Kurunegala · Sunil · <span class="plate">WP CAB-4521</span></div>
+        <div class="t12 mu" style="margin-top:6px"><span class="mono">Sun 16:40</span></div>
+      </div>
+    </a>
+    <a href="TaskDetail.dc.html" class="n">
+      <span class="ic" style="background:#e8e7e2;color:#3c4148"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s7-7.1 7-12a7 7 0 1 0-14 0c0 4.9 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+      <div style="flex:1;min-width:0">
+        <div class="t15 b">App stopped by the phone · Test Driver</div>
+        <div class="t13 mu">2 times · OPPO CPH2119 · Phone setup in Me</div>
+        <div class="t12 mu" style="margin-top:6px"><span class="mono">Sun 12:33</span></div>
+      </div>
+    </a>
+  </div>
+
+  <nav class="tabbar" aria-label="Main">
+    <a href="HomeRequester.dc.html" class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-7H9v7H5a2 2 0 0 1-2-2z"/></svg>Home</a>
+    <a href="MyTrips.dc.html" class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 17h14M3 12l2-6h14l2 6v5h-2M5 17v-5h14"/><circle cx="7.5" cy="17" r="1.5"/><circle cx="16.5" cy="17" r="1.5"/></svg>My trips</a>
+    <a href="Notifications.dc.html" class="tab on"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>Alerts</a>
+    <a href="Profile.dc.html" class="tab"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Me</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

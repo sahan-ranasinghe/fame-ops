@@ -1,0 +1,276 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "AdminMore.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "19 More · management (by permission)",
+      "w": 390,
+      "x": 0,
+      "y": 4400
+    },
+    "AdminPerson.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "20 Manage a driver (users permission)",
+      "w": 390,
+      "x": 470,
+      "y": 4400
+    },
+    "Approve.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "10 Approve a request",
+      "w": 390,
+      "x": 0,
+      "y": 2200
+    },
+    "AskDrivers.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "13 Ask drivers (sheet)",
+      "w": 390,
+      "x": 1410,
+      "y": 2200
+    },
+    "DriversBoard.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "12 Drivers board",
+      "w": 390,
+      "x": 940,
+      "y": 2200
+    },
+    "GiveDriver.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "11 Needs a driver",
+      "w": 390,
+      "x": 470,
+      "y": 2200
+    },
+    "HomeAdminSi.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "05 Home · Fleet admin · සිංහල",
+      "w": 390,
+      "x": 1880,
+      "y": 0
+    },
+    "HomeDispatcher.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "03 Home · Dispatcher",
+      "w": 390,
+      "x": 940,
+      "y": 0
+    },
+    "HomeRequester.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "02 Home · Requester",
+      "w": 390,
+      "x": 470,
+      "y": 0
+    },
+    "Live.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "15 Live",
+      "w": 390,
+      "x": 470,
+      "y": 3300
+    },
+    "Main.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "04 Home · Fleet admin",
+      "w": 390,
+      "x": 1410,
+      "y": 0
+    },
+    "MyTrips.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "17 My trips",
+      "w": 390,
+      "x": 1410,
+      "y": 3300
+    },
+    "Notifications.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "16 Notifications",
+      "w": 390,
+      "x": 940,
+      "y": 3300
+    },
+    "Profile.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "18 Profile",
+      "w": 390,
+      "x": 1880,
+      "y": 3300
+    },
+    "SignIn.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "01 Sign in",
+      "w": 390,
+      "x": 0,
+      "y": 0
+    },
+    "TaskDetail.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "14 Task detail",
+      "w": 390,
+      "x": 0,
+      "y": 3300
+    },
+    "TripReview.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "09 Trip · 4 Review",
+      "w": 390,
+      "x": 1410,
+      "y": 1100
+    },
+    "TripWhen.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "07 Trip · 2 When",
+      "w": 390,
+      "x": 470,
+      "y": 1100
+    },
+    "TripWhere.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "06 Trip · 1 Where",
+      "w": 390,
+      "x": 0,
+      "y": 1100
+    },
+    "TripWho.dc.html": {
+      "h": 844,
+      "is_interactive": true,
+      "radius": 24,
+      "title": "08 Trip · 3 Who (dispatcher)",
+      "w": 390,
+      "x": 940,
+      "y": 1100
+    }
+  },
+  "createdOnFiles": {
+    "at": "2026-10-18T20:25:00Z",
+    "v": 1
+  },
+  "designSystems": [],
+  "launch": {
+    "view": "canvas"
+  },
+  "notes": {
+    "s1": {
+      "fill": "orange",
+      "maxH": 844,
+      "text": "Fame Fleet · Office mode\n\nSame app as Fame Driver, a second interface for office sign-ins. Same tokens as the driver screens: ink #15181c, surface #22272c, page #f3f2ee, amber #f2a900 (primary + active tab), blue #1e4fa0 (live / in progress), amber text #8a5a00 (warnings), red #b3261e (danger). IBM Plex Sans body, IBM Plex Mono for plates, times and numbers, Archivo ExtraBold headings. Sinhala: Yaldevi body, Gemunu Libre headings. Digits always Latin.\n\nTabs by role\nRequester: Home · My trips · Notifications · Me\nDispatcher: Home · Tasks · Live · Drivers · More\nFleet admin: Home · Approve · Live · Drivers · More\n\nPatterns\nOne job per screen, steps with a sticky primary button. Map-first trip screens with a bottom sheet. Cards and chips, never tables. 48 px tap targets. Back always goes back; forward links are labelled. Plates in mono inside a thin chip.\n\nPlay mode: tap the amber buttons and tabs to move between screens.",
+      "w": 380,
+      "x": 2350,
+      "y": 148
+    },
+    "s2": {
+      "fill": "blue",
+      "maxH": 600,
+      "text": "Management screens follow PERMISSIONS, not job titles. Whoever holds a permission sees its section: the fleet admin (Palitha) does this work daily; the boss has the same access.\n\nvehicles: add, edit, switch off, photos and documents by camera.\nusers: drivers (add, reset PIN, switch off) and office users (permissions, set-password link).\nQuick settings and reports: the same permission as on the site.\n\nLaptop only: site import, projects, map package and Google caps, fuel-video checklist and other detailed settings, audit log.",
+      "w": 380,
+      "x": 940,
+      "y": 4400
+    },
+    "t1": {
+      "kind": "title1",
+      "maxW": 2270,
+      "text": "Sign in & Home, one per role",
+      "w": 240,
+      "x": 0,
+      "y": -240
+    },
+    "t2": {
+      "kind": "title1",
+      "maxW": 1800,
+      "text": "New request / Assign a task: one job per screen, 4 steps",
+      "w": 240,
+      "x": 0,
+      "y": 860
+    },
+    "t3": {
+      "kind": "title1",
+      "maxW": 1800,
+      "text": "Approve · Needs a driver · Drivers board · Ask drivers",
+      "w": 240,
+      "x": 0,
+      "y": 1960
+    },
+    "t4": {
+      "kind": "title1",
+      "maxW": 2270,
+      "text": "Task detail · Live · Notifications · My trips · Profile",
+      "w": 240,
+      "x": 0,
+      "y": 3060
+    },
+    "t5": {
+      "kind": "title1",
+      "maxW": 860,
+      "text": "Management (under More, by permission)",
+      "w": 240,
+      "x": 0,
+      "y": 4160
+    }
+  },
+  "order": [
+    "SignIn.dc.html",
+    "HomeRequester.dc.html",
+    "HomeDispatcher.dc.html",
+    "Main.dc.html",
+    "HomeAdminSi.dc.html",
+    "TripWhere.dc.html",
+    "TripWhen.dc.html",
+    "TripWho.dc.html",
+    "TripReview.dc.html",
+    "Approve.dc.html",
+    "GiveDriver.dc.html",
+    "DriversBoard.dc.html",
+    "AskDrivers.dc.html",
+    "TaskDetail.dc.html",
+    "Live.dc.html",
+    "Notifications.dc.html",
+    "MyTrips.dc.html",
+    "Profile.dc.html",
+    "AdminMore.dc.html",
+    "AdminPerson.dc.html"
+  ],
+  "pages": [],
+  "title": "Fame Fleet Office Mode"
+}

@@ -20,6 +20,13 @@
   Vehicles / Project costs.png`, `Office · Home.png`, `Office · Approve request.png`.
 - Match layout, wording, hierarchy and style. Screens not designed yet (login, permissions,
   Mileage tab, Report tab, Me tab) must be built in the same style.
+- **Office mode (Phase 8): `design/office/`.** `png/` has the 20 screens ("01 Sign in.png" to "20 Manage a driver (users
+  permission).png"): what each screen looks like. `html/` has one source file per screen plus `canvas.json` (the order and
+  titles). These are design source, not runnable: a link like "Approve.dc.html" means `html/Approve.html`, and
+  `support.js` is not included. Read them for the exact text, spacing, colours and the flow between screens.
+  `office-mode.pdf` has the same screens with selectable text. A role word in a design (e.g. "Admin" on More, a Home per
+  role) is an example: the app decides by permission. The sample names in the designs are not real people: never seed
+  them. The plan and what each design leaves open: `docs/phase8-plan.md`.
 
 ### Design tokens (sampled from the PNGs)
 - Ink / dark header `#15181c`, dark surface `#22272c`, page background `#f3f2ee`,
@@ -101,6 +108,11 @@
   (`presence.ts`, `ui/DriverRow.tsx`), Ask drivers (`driver_asks` / `driver_ask_answers`, `ask_drivers`, `ask_answers`, the
   `driver-asks` channel, one location fix), Running late (`report_running_late`) and Can't make it, the Drivers board
   (`drivers_board`, `/drivers/board` with its week view). As built: `docs/phase7-plan.md` "Part 3b as built".
+- **Phase 8 (planned 19 October 2026)**: Office mode, the office's interface in the same Expo app for office sign-ins, by
+  permission (view, request, approve, assign_tasks, vehicles, issues, users), never by role name; the web build of the same
+  screens becomes the phone version of the office site. Design first (Part 8.0, a clickable prototype from
+  `design/office/`), then Parts 8.1–8.6. No dead UI: `docs/phase8-parity.md` (every site function and its app screen) and
+  an automated tap test per permission set. Plan: `docs/phase8-plan.md`.
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
