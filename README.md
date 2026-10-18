@@ -5,16 +5,26 @@ This repository is private: `docs/` contains internal company IDs.
 
 - `CLAUDE.md`: the specification (what we build, hard rules, data model).
 - `design/`: the Fame Fleet screens (PNG and PDF).
-- `docs/`: how the existing Allowance Desk artifact works.
+- `docs/`: each phase's plan with its as-built notes and test plan
+  (`dispatch-plan.md` and `phase5-test-plan.md`, `phase6-plan.md` and
+  `phase6-test-plan.md`, `phase7-plan.md` and `phase7-test-plan.md`), the driver
+  strings for the Sinhala check, the Google set-up (`google-maps-setup.md`), the
+  Teams artifact's update (`teams-artifact-update.md`), and how the existing
+  Allowance Desk artifact works.
 - `supabase/migrations/`: the database (tables, Row Level Security, the private
-  `driver-photos` bucket, towns).
-- `supabase/tests/`: database tests for the access rules.
+  buckets `driver-photos`, `fuel-videos`, `vehicle-photos` and `vehicle-docs`,
+  towns).
+- `supabase/tests/`: database tests for the access rules (pgTAP, one file per
+  part).
 - `supabase/functions/_shared/fleet/`: the office rules and tools, shared by
   `office-mcp` (Claude) and `office-api` (the web app).
 - `supabase/functions/office-mcp/`: the office connector (Edge Function).
 - `supabase/functions/office-api/`: the same tools over HTTP for the web app.
-- `apps/office/fame-fleet.html`: the Fame Fleet artifact's source, as published
-  in Claude; `scripts/tool-shapes.json` is the contract its calls rely on.
+- `supabase/functions/driver-api/`: the driver app's own server calls (the place
+  search, the trips a driver starts, the profile).
+- `apps/office/`: the office web app and the Fame Fleet artifact, one source
+  (`npm run build:artifact` makes the artifact's file); `scripts/tool-shapes.json`
+  is the contract the artifact's calls rely on.
 - `scripts/`: connector tests.
 - `apps/driver/`: the Fame Driver Android app (Expo).
 
@@ -102,7 +112,9 @@ eas update --channel preview --environment preview --message "What changed"
   needed for a native change, raise the version first, so older builds do not
   receive code they cannot run. Phones on 1.1.0 got their last update from
   commit d63c838 (Google stops kept off their OpenFreeMap map); the 1.2.0 build
-  adds react-native-maps.
+  adds react-native-maps. Everything of Phase 7 so far reached the phones as
+  updates to `1.2.0-gmaps` (no native change); the one new build of Phase 7 is
+  1.3.0 (Part 6: a smaller APK and the new-task ringtone).
 - `eas update` does not read `apps/driver/.env`. The app therefore also takes
   the Supabase URL and publishable key from `extra` in `app.json`.
 - The app also looks for an update each time it comes back to the front, at
@@ -112,9 +124,22 @@ eas update --channel preview --environment preview --message "What changed"
 
 How the app is put together (`apps/driver/src`):
 
-- `app/`: the screens. `login`, `permissions`, the four tabs in `(tabs)/`
-  (Today, Mileage, Report, Me), `task/[id]` (a task, with the map while it is
-  in progress), `log-mileage` (odometer and fuel), `vehicle` (choose vehicle).
+- `app/`: the screens. `login`, `permissions`, the five tabs in `(tabs)/`
+  (Today, Mileage, Fuel, Report, Me), `task/[id]` (a task, with the map while it
+  is in progress), `log-mileage` (odometer and fuel), `record-video` (the fuel
+  fill), `vehicle` (today's vehicle). Phase 7 adds `start-trip` and `add-stop`
+  (trips a driver starts), `today-tasks`, `profile-photo`, `phone-prompt`,
+  `profile-edit`, `availability` and `availability-edit`, `ask/[id]` (a question
+  from the office), `documents` (the held vehicle's papers) and `phone-setup`.
+- What a driver's day looks like since Phase 7 (`docs/phase7-plan.md`): **Start
+  work** with today's vehicle (one vehicle, one driver: taking a vehicle someone
+  holds tells them), **Finish work**, or the server's clock-out at the end of the
+  day (21:00); a new task's full preview before Accept; Arrived only within 300 m
+  of the stop (or flagged), Done after Arrived, the odometer checked against the
+  plan at Complete; Running late and Can't make it; "I need another vehicle";
+  trips the driver starts (company work or personal); the profile, availability
+  and one-tap answers to the office's questions. The test steps:
+  `docs/phase7-test-plan.md`.
 - `state/app.tsx`: who is signed in, the language, tasks, and every action a
   screen can trigger.
 - `components/navigation.ts`: the back rules of the forms ("Discard changes?"
@@ -166,6 +191,11 @@ made-up drives. It needs no stack:
 cd apps/driver && npm run test:track
 ```
 
+The other scripts in `apps/driver/package.json` need no phone either:
+`test:sync`, `test:setup`, `test:nav`, `test:rules`, `test:trips`,
+`test:preview`, `test:lists` and `test:asks` (`test:trips` and `test:asks` with
+the local stack, like `test:data`).
+
 The parts that only exist on a phone (location service, camera, map) have no
 automated test; they are checked by hand on the development build.
 
@@ -214,6 +244,39 @@ app; the driver's accept and decline with "Needs a driver" and reassign from
 suggestions; custodians, the request timeline, booking by vehicle type in one step
 ("Assign now"), cancelling a booking, and the self-drive switch in Settings → Fleet.
 
+Phase 6 (docs/phase6-plan.md) made every form a page with its own address and a
+phone layout, and added request edits and approvals again, task changes, the fuel
+videos, the site lists and the location search, and the Google map package with
+its daily and monthly caps.
+
+Phase 7 (docs/phase7-plan.md, test plan docs/phase7-test-plan.md) is a driver's
+day, seen from the office:
+
+- **Duty.** Live shows each driver On a task, On duty or Off duty, with the
+  vehicle held and since when; the office clocks a driver out or moves them to
+  another vehicle (during a task: the swap, with both odometers); Drivers → Duty
+  log; Reopen a task finished too soon.
+- **Dispatch.** The driver first, the vehicle fills itself; Who's available with
+  the best match; the plan as a timeline with the time at each stop and the
+  leave-by check in words; overlaps as cards; "Needs a driver" in red on the
+  Overview and every Tasks page. A task made without the approve permission
+  waits for the fleet admin; requests use the same trip editor; two approvers
+  see who is reviewing.
+- **Maps.** The plan's Google road line, grey gap markers with a Gaps list,
+  playback at 1–60×, one control cluster with the compass, snap to roads within
+  the free usage.
+- **Photos and documents.** The driver's photo, vehicle photos, and the vehicle's
+  papers (revenue licence, insurance, emission test, CR, the rent or lease
+  agreement) with their expiry dates.
+- **Trips a driver starts** (company work or personal; personal km are never
+  charged to a job), Tasks → History, one date-range control on every report,
+  the Issues page as a list with a panel, the Overview's tiles opening their
+  lists, Reminders.
+- **Reaching people.** The notification centre (the tray, with sounds), My trips,
+  phone numbers with Call and WhatsApp everywhere, the Overview by role, lists of
+  25 with Load more, the Drivers board with its week view and the driver's
+  availability, Ask drivers with one-tap answers, Running late.
+
 ```bash
 cd apps/office && npm install && cp .env.example .env.local   # add the publishable key
 npm run dev                                                   # http://localhost:5173
@@ -224,7 +287,9 @@ See `apps/office/README.md`.
 
 ## Driver status and heartbeats
 
-One rule decides what the office sees for a driver, in
+Since Phase 7 a driver is first **On a task**, **On duty** or **Off duty**
+(Start work → Finish work, `vehicle_assignments` for the vehicle held). For a
+driver on duty, one rule decides the signal the office sees, in
 `supabase/functions/_shared/fleet/status.ts`, used by the connector tools, the
 web app and the artifact alike: **Live** (a GPS point under 3 minutes old),
 **Location off** (the phone's heartbeat says Location services are off or the
@@ -240,7 +305,8 @@ dialog, and a task in progress is covered until Location is back.
 ## Office rules, connector and API
 
 Everything the office can do is a tool in `supabase/functions/_shared/fleet`
-(49 tools, no raw SQL, no deletes). `permissions.ts` says which permission each
+(99 tools, no raw SQL, no deletes; three of them, the file uploads, only for the
+web app). `permissions.ts` says which permission each
 tool needs (view, request, approve, assign_tasks, vehicles, issues, users; a
 person holds any set of them, `roles.ts` keeps the role as a label); `run.ts`
 runs a call for a person: the permission check, the audit row (with the
@@ -268,6 +334,12 @@ it:
   the API refuse those roles until their session has done the second step.
   120 calls a minute per person; CORS allows `OFFICE_WEB_URL`.
 
+The driver app has its own small server, `driver-api` (Phase 7): the place
+search for a trip, the trips a driver starts (`/trips`, idempotent so the
+offline queue can send twice) and the driver's profile (`/profile`). It checks
+the driver's session and role on every call, allows 60 calls a minute and
+writes each call to the audit log with the channel `driver`.
+
 Permissions per person (Settings → Users, with the presets Fleet admin, Dispatcher,
 Requester, Viewer): the table is in `docs/dispatch-plan.md`, section 4.1. The role
 (admin, fleet_admin, office, staff, viewer, driver) is a label derived from them.
@@ -292,6 +364,7 @@ npx supabase functions deploy push-task --no-verify-jwt      # called by the dat
 npx supabase functions deploy office-api --no-verify-jwt     # checks the office user's session and role itself
 npx supabase functions deploy fleet-jobs --no-verify-jwt     # the issue sync, called by the database with the server key
 npx supabase functions deploy notify-office --no-verify-jwt  # web push to the office, called by the database with the server key
+npx supabase functions deploy driver-api --no-verify-jwt     # checks the driver's session and role itself
 ```
 
 Secrets for office-api: `OFFICE_WEB_URL` (the web app's origin, for CORS and
@@ -307,7 +380,12 @@ closed (docs/dispatch-plan.md, section 9): a new vehicle request (to everyone
 who approves), a request decided (to the one who asked), a task declined or not
 accepted in time (to everyone who approves or assigns), a critical issue (to the
 issues permission), an issue given to you. The sender never hears about their
-own action.
+own action. Phase 7 adds the asker's trip updates (on the way, arrived, driver
+changed, running late, cancelled), a task to approve, a driver who needs another
+vehicle, a skipped stop, a personal trip and a driver's answer, and the
+notification centre: everyone told gets a row in `office_inbox` (the tray in the
+web app, with a sound per kind while the page is open), with or without a
+browser for web push.
 
 1. The tools and the database write one row per recipient into the outbox
    `notifications` through `queue_notification`, which skips a person who
@@ -361,7 +439,10 @@ app is closed:
    Expo's push API (which talks to FCM with the service-account key uploaded
    to EAS), deletes tokens Expo reports as gone, and logs to `push_log`.
 4. On the phone, Android plays the channel's sound: `tasks-new` (loud ring),
-   `tasks-changed`, `general`. Tapping the notification opens the task. The
+   `tasks-changed`, `general`; since Phase 7 a phone that registered them gets
+   new, changed and cancelled tasks on `new-tasks` (maximum importance, on the
+   lock screen) and the office's questions on `driver-asks`. Tapping the
+   notification opens the task (or the question). The
    app plays its own short sounds on Start task and Save & finish task
    (expo-audio). All sounds are made by `apps/driver/scripts/make-sounds.sh`
    (pure tones with ffmpeg, nothing downloaded).
@@ -444,7 +525,9 @@ scripts/test-read-odometer-local.sh ~/odo-test --last-km 195049
 
 Location points are kept for 90 days. A pg_cron job (`prune-location-points`,
 03:00 Colombo every night) deletes older ones in batches; sharing periods and
-the latest position per driver stay.
+the latest position per driver stay. Heartbeats are kept 30 days, fuel videos
+12 months (or 6, a setting), read notifications in the office's inbox 90 days,
+and the drivers' answers to the office's questions 30 days.
 
 `OFFICE_MCP_KEY` is an Edge Function secret (at least 32 characters). Sahan
 sets it himself with `npx supabase secrets set`; it is never committed.
@@ -468,7 +551,9 @@ npx supabase start
 
 # 1. Database rules, pgTAP (needs an empty local database): access rules, permissions, the
 #    task plan, accept/decline, issues, notifications, custodians and booking, Phase 6's
-#    requests, fuel videos, sites and imports, the Google call counter and the arrival points
+#    requests, fuel videos, sites and imports, the Google call counter and the arrival points,
+#    and Phase 7's phase7_*.test.sql (duty, dispatch, maps, approval, photos, places, trips,
+#    the two hotfixes and Part 3b)
 npx supabase db reset --local
 npx supabase test db                 # last line: Result: PASS
 
@@ -499,7 +584,8 @@ docker run --rm --cpus 2 --memory 2g -v deno-cache:/deno-dir -v "$PWD/supabase/f
          && cd /fn/read-odometer && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/push-task && deno check index.ts && deno lint && deno fmt --check \
          && cd /fn/fleet-jobs && deno check index.ts && deno lint && deno fmt --check \
-         && cd /fn/notify-office && deno check index.ts && deno lint && deno fmt --check'
+         && cd /fn/notify-office && deno check index.ts && deno lint && deno fmt --check \
+         && cd /fn/driver-api && deno check index.ts && deno lint && deno fmt --check'
 ```
 
 ## Data credits

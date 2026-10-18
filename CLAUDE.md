@@ -74,33 +74,36 @@
   hotfix 17 October (Who's available steady and readable, Google day caps = the month ÷ 22: 430 / 215). Part 3
   (`phase7-3`): tasks go to the fleet admin first (§33: a task made without approve is a request of kind task until an
   approver sends it), requests get the full planner (§34: one trip editor; a request's own stops), requester updates,
-  the driver's photo, vehicle photos and vehicle documents (§4, §5, §6, §28); Round A2 deployed it 18 October. Part 4
-  (`phase7-4`): trips a driver starts (§13: `tasks.kind` self, `purpose` company | personal, the Edge Function `driver-api`,
-  the setting `driver_personal_trips`, `set_trip_purpose`, personal km apart), the date range everywhere (§8: Mileage, Fuel,
+  the driver's photo, vehicle photos and vehicle documents (§4, §5, §6, §28); Round A2 deployed it 18 October 2026.
+  Part 4 (`phase7-4`): trips a driver starts (§13: `tasks.kind` self, `purpose` company | personal, the Edge Function
+  `driver-api`, the setting `driver_personal_trips`, `set_trip_purpose`, personal km apart), the date range everywhere (§8: Mileage, Fuel,
   the driver page, Issues, Tasks → History with `list_tasks`), the Issues page as list + panel (§9) and the Overview's tiles
-  opening their lists with a Reminders page (§16).
-- **Hotfix 2 (18 October 2026, branch `phase7-hotfix-2`)**: the notification centre (`office_inbox`, `my_inbox`,
-  `mark_inbox_read`) and My trips (`my_trips`), the office's sounds and the app's `new-tasks` channel, one time field
-  (`TimeInput`), one duration formatter (`_shared/fleet/durations.ts`, `@fleet/durations`, the app's `lib/durations.ts`), the
+  opening their lists with a Reminders page (§16); Round A3 deployed it 18 October 2026.
+- **Hotfix 2 (18 October 2026, branch `phase7-hotfix-2`, deployed 18 October 2026, Round Hotfix 2)**: the notification
+  centre (`office_inbox`, `my_inbox`, `mark_inbox_read`) and My trips (`my_trips`), the office's sounds and the app's
+  `new-tasks` channel, one time field (`TimeInput`), one duration formatter (`_shared/fleet/durations.ts`, `@fleet/durations`, the app's `lib/durations.ts`), the
   accept window only at work, phones stored +94… with `employee_changes` and the call buttons (`ContactButtons`,
   `my_task_contacts`), the whole task before accepting (`TaskPreview`), a task's vehicle on the day (`vehicle_mode`,
   `confirm_task_vehicle`, setting `vehicle_on_the_day`, off), several approvers (`approved_by`, `reviewing`, the version
   check). As built: `docs/phase7-plan.md` "Hotfix 2 as built".
-- **Hotfix 3 (18 October 2026, branch `phase7-hotfix-3`)**: no endless lists. The Overview by role, 5 rows a section (3 on a
-  phone) with View all, collapsed sections per person (`office_prefs`, `my_prefs` / `set_my_prefs`); Needs attention as
-  groups (`attention.ts`: no repeats, no info, snooze `issues.snoozed_until`); missed tasks (`tasks.status` 'missed',
+- **Hotfix 3 (18 October 2026, branch `phase7-hotfix-3`, deployed 18 October 2026, Round Hotfix 3)**: no endless lists.
+  The Overview by role, 5 rows a section (3 on a phone) with View all, collapsed sections per person (`office_prefs`,
+  `my_prefs` / `set_my_prefs`); Needs attention as groups (`attention.ts`: no repeats, no info, snooze `issues.snoozed_until`); missed tasks (`tasks.status` 'missed',
   `mark_missed_tasks` at the full sync, a Missed task issue) and issues about tasks that are over expire after 24 h; no
   allowance = no check; every list tool takes `limit` + `cursor` and answers `total` + `next` (`@fleet/paging`; without
   `limit` as before); the web's `ui/ListKit.tsx` (25 a page); one notification icon (the tray, archived after 30 days); the
   menu in sections and the phone bar per role; the driver app's Today with 3 later tasks and lists 20 at a time. As built:
   `docs/phase7-plan.md` "Hotfix 3 as built".
-- **Part 3b (18 October 2026, branch `phase7-3b`)**: the driver's profile (WhatsApp, emergency contact, licence number and
-  photos; `driver_profile`, `update_driver`, driver-api `/profile`, every change in `employee_changes`; the private part only
-  for users or vehicles; `create_driver` needs a phone; the app's phone prompt), availability for dispatch
+- **Part 3b (18 October 2026, branch `phase7-3b`, deployed 18 October 2026, Round Part 3b)**: the driver's profile
+  (WhatsApp, emergency contact, licence number and photos; `driver_profile`, `update_driver`, driver-api `/profile`,
+  every change in `employee_changes`; the private part only for users or vehicles; `create_driver` needs a phone; the app's phone prompt), availability for dispatch
   (`driver_unavailability`, `half_day_split`; Who's available, the best match and the warnings skip it), one driver row
   (`presence.ts`, `ui/DriverRow.tsx`), Ask drivers (`driver_asks` / `driver_ask_answers`, `ask_drivers`, `ask_answers`, the
   `driver-asks` channel, one location fix), Running late (`report_running_late`) and Can't make it, the Drivers board
   (`drivers_board`, `/drivers/board` with its week view). As built: `docs/phase7-plan.md` "Part 3b as built".
+- **Part 5 (docs, branch `phase7-5`)**: the Phase 7 test plan per role, as built: `docs/phase7-test-plan.md`; the
+  Sinhala table checked against every driver key of Phase 7 (`docs/phase7-plan.md` §Sinhala, "Checked at Part 5"); the
+  README brought up to date.
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
