@@ -2140,6 +2140,95 @@ history; D1 the driver app (L6).
   (TypeScript), tested in the connector suite, not pgTAP; `my_inbox` hides read items older than 30 days and
   `fleet_overview.needs_attention` leaves snoozed issues out (both as the plan says).
 
+## Part 3b: the driver's profile, availability and reaching drivers (Sahan, items G and H; branch `phase7-3b` from main `9ca8d55`)
+
+Its own round after Hotfix 3, shown before any deploy. No in-app chat: free talk stays on WhatsApp; the office asks with
+structured questions and one-tap answers. HR leave stays a separate project: this is availability for dispatch only. No
+native change (the 1.2.0 build has every module used here).
+
+**G. A proper driver profile.**
+- Driver app: the Me tab becomes the profile: photo, name, employee code, phone, WhatsApp (when different), emergency
+  contact (name, relationship, phone), driving licence (number, expiry, front and back photos), language, current
+  vehicle, this month's tasks and km, app version, Availability, Phone setup, Documents, Sign out. The driver edits their
+  phone, WhatsApp, emergency contact and licence (`app/profile-edit.tsx`; the server is `driver-api /profile`, which
+  stores numbers +94… as the office does and writes every change to `employee_changes` with channel driver). The licence
+  photos are `photos` rows of kind licence in `<id>/licence/` with `set_my_licence_photo(side, photo)`.
+- A driver with no phone number is asked for it when the app starts (a full screen, no skip). With no connection the
+  screen says so and lets the driver work; it asks again at the next start until a number is saved.
+- Office: `driver_profile(driver)` (the profile, the licence photos as 1-hour links, the changes with "changed by the
+  driver" and who/when); `update_driver` also takes whatsapp, the emergency contact and the licence number;
+  `set_driver_licence_photo(driver, side, path)` after `photo_upload_url` (web). The Drivers page's driver (manage) page
+  shows and edits all of it. The emergency contact and the licence (number, photos) reach only people with users or
+  vehicles; never a requester. The licence expiry keeps feeding the licence chips and reminders.
+- `create_driver` needs a phone from now on (an input that becomes required: asked for by Sahan). Drivers without one on
+  the live data (18 October, read only): Kanishka (kanishka), Test Driver (test.driver), Test Driver 2 (test.driver2):
+  all three; each is asked at the next app start.
+
+**H1. Availability for dispatch.** `driver_unavailability`: a driver is not available on a day (or several days) for the
+full day, the morning (until 13:00), the afternoon (from 13:00) or from–to, with a reason (leave, half day, personal,
+other) and a note. The driver adds and removes their own (Me → Availability; RPCs `set_my_unavailability`,
+`remove_my_unavailability`, online); people with approve or assign_tasks add, change and remove anyone's
+(`unavailability(from, to, driver?)`, `set_unavailability`, `remove_unavailability`; who added it is kept). It feeds Who's
+available (status "Not available · half day, back 13:00", never free), the best match (skips them), `availability`, the
+needs-a-driver suggestions, `suggest_vehicles`' free drivers, the assign warnings ("Kamal is not available that day ·
+half day, back 13:00") and the board's week view.
+
+**H2. One driver row** everywhere a driver is listed for dispatch (Who's available, Live, the Drivers board): photo;
+status (On a task until 15:40 · On duty · Off duty · Not available, back 13:00); last seen with the time and the town (the
+last point, which is the one before Finish work when sharing is off); the next task; the usual start time (the median first
+Start work of the last 20 days on duty, from 3 days on); Call and WhatsApp. Built once on the server (`driverRows` gains
+the fields; `live_drivers` cards carry them for approve and assign_tasks) and once on the web (`ui/DriverRow.tsx`).
+
+**H3. Ask drivers.** From Who's available (decide, new task, task edit) and the Drivers board, people with approve or
+assign_tasks pick drivers (or "all free ones") and send one question with one-tap answers:
+- "Free for a trip <date> <from–to>?" → Yes / No / Call me;
+- "When can you be at the office?" → the driver picks a time;
+- "Where are you now?" → Share my location: one point, taken once with the driver's consent (even off duty; it never starts
+  recording and is not a location point; kept with the answer, 30 days).
+Tables `driver_asks` and `driver_ask_answers` (one row per driver asked: sent, seen, the answer). The push goes on a new
+channel `driver-asks` (maximum importance, its own vibration; the sound is general.wav, the 1.2.0 build's: a sound of its
+own comes with Part 6's native build). Answers show live beside each driver (Realtime on the web, every 10 s in the
+artifact) and in the notification centre (event `ask.answered`, to the asker); a Yes on a page with a task or request gets
+"Assign" (one tap fills the driver); on the board "New task with Kamal". A trip question expires at the trip's start; the
+other two after 2 hours. Connector tools `ask_drivers` and `ask_answers`.
+
+**H4. Running late and Can't make it** on the driver's task screen. Running late: 10, 15, 30 min or a number (5–180),
+before or during the task; `report_running_late(task, minutes, at)` (queued offline) keeps the last report on the task
+("Running late 15 min · said 08:52"), a history event, a notification to approve and assign_tasks and the person who
+assigned it (event `task.running_late`), a push to the requester; shown on the task page, the board's card and Live. Can't
+make it: before Start task only; the reasons sheet (vehicle problem, not available, unwell, other, a note) = decline after
+accepting, which already starts the needs-a-driver path and tells the office; the requester is now told too.
+
+**H5. Drivers board** (`/drivers/board`, menu Today, for approve or assign_tasks): every driver as the H2 row, filters
+(free now, on a task, off duty, not available), Call and WhatsApp, Ask drivers, and the week view (`?view=week`: drivers ×
+7 days, each day's tasks and unavailability; a cell adds or changes an entry). Tool `drivers_board(at?, filter?)`.
+
+**H6.** Requesters see neither the board nor Ask nor Who's available; after approval they have Call and WhatsApp for their
+trip's driver (Hotfix 2, F), as now.
+
+**Tests.** pgTAP: the driver's own unavailability and answers only, the expiry, the licence photo folder, the RPCs'
+refusals; the connector suite: profile edits and the change log, the privacy of the emergency contact and licence,
+unavailability in Who's available / best match / warnings, ask → answer → ask_answers → inbox, running late, create_driver
+without a phone refused; Vitest for the row, the board and the ask page; the e2e: the board with its week view, an ask and
+its answer arriving live, the profile on the manage page; the driver app's offline scripts (the late report and the answer
+in the queue, the profile prompt).
+
+**Build.** The main session: the migration, the server (the tools, driver-api `/profile`, push-task's ask kind, the
+notification events), the shared types, the driver strings (en, si), the suites. Subagents in worktrees: W1 the office's
+driver profile on the manage page, the driver row, the board and its week view (G, H1, H2, H5); W2 the office's Ask
+drivers and its answers, and running late on the task, the board and Live (H3, H4); D1 the driver app (G, H1, H3, H4). A
+fresh reviewer at the checkpoint.
+
+**Questions, with my defaults (they do not hold up the build):**
+1. Morning = until 13:00, afternoon = from 13:00 (the setting `half_day_split`).
+2. A trip question expires at the trip's start; the time and location questions after 2 hours.
+3. The ask's sound is general.wav with its own vibration until the Part 6 native build adds one.
+4. H6 read narrowly: requesters keep the Drivers list and Live as they are today (no numbers); say if requesters should
+   lose the Drivers page too.
+5. Can't make it is offered before Start task only; during a task the driver has "I need another vehicle" and Report a
+   problem.
+6. The phone prompt does not block a driver who has no connection (it asks again at the next start).
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
