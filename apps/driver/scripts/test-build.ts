@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import appConfig from '../app.config';
-import { leanExclusions } from './lean-build.mjs';
+import { leanAutolinking, leanExclusions } from './lean-build.mjs';
 
 const here = __dirname;
 let failed = 0;
@@ -25,6 +25,9 @@ check(JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDRO
   'drivers with the Google map: the dev client (and its barcode scanner) and MapLibre out', leanExclusions({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' }));
 check(JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'drivers-32' })) === JSON.stringify(DEV),
   'drivers without the Google map keeps MapLibre (the OpenFreeMap task map)');
+const linking = leanAutolinking({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' });
+check(leanAutolinking({}) === null && JSON.stringify(linking?.android) === JSON.stringify({ buildFromSource: ['expo-camera'] }),
+  'drivers builds expo-camera from source (its build.gradle leaves the barcode scanner out); other builds unchanged', linking);
 
 const appJson = JSON.parse(read('app.json')) as { expo: Parameters<typeof appConfig>[0]['config'] };
 const configFor = (env: Record<string, string>) => {
@@ -37,6 +40,15 @@ const configFor = (env: Record<string, string>) => {
     process.env = keep;
   }
 };
+const camera = (appJson.expo.plugins ?? []).find((p) => Array.isArray(p) && p[0] === 'expo-camera') as [string, { barcodeScannerEnabled?: boolean }] | undefined;
+const lean8 = read('plugins/withLeanAndroid.js');
+check(camera?.[1].barcodeScannerEnabled === false && /-dontwarn com\.google\.mlkit\.vision\.barcode\.\*\*/.test(lean8)
+  && /-dontwarn com\.google\.mlkit\.vision\.codescanner\.\*\*/.test(lean8),
+  'app.json turns the camera\'s barcode scanner off; withLeanAndroid tells R8 its classes are left out');
+const { soundNames } = require('../plugins/withLeanAndroid') as { soundNames: (c: unknown) => string[] };
+check(JSON.stringify(soundNames(appJson.expo)) === JSON.stringify(['new_task', 'task_changed', 'general', 'task_ring', 'task_update', 'office_ask'])
+  && /fame_sounds_keep\.xml/.test(lean8) && /tools:keep=/.test(lean8),
+  'every notification sound is kept through resource shrinking (raw/fame_sounds_keep.xml)', soundNames(appJson.expo));
 const names = (c: ReturnType<typeof appConfig>) => (c.plugins ?? []).map((p) => (Array.isArray(p) ? String(p[0]) : String(p)));
 const lean = configFor({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' });
 const dev = configFor({});

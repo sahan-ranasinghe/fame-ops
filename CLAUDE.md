@@ -118,6 +118,13 @@
 - **Part 5 (docs, branch `phase7-5`)**: the Phase 7 test plan per role, as built: `docs/phase7-test-plan.md`; the
   Sinhala table checked against every driver key of Phase 7 (`docs/phase7-plan.md` §Sinhala, "Checked at Part 5"); the
   README brought up to date.
+- **Part 6 (the 1.3.0 build, branch `phase7-6`)**: the EAS profile `drivers` (§27): arm64-v8a only, R8 and resource
+  shrinking, the dev client and (with the Google map) MapLibre left out of autolinking and expo-camera built from source
+  without ML Kit's barcode scanner (`scripts/lean-build.mjs`, run by EAS as `eas-build-pre-install`), the unused
+  BouncyCastle tables out and the notification sounds kept by name (`plugins/withLeanAndroid.js`); `drivers-32` for a
+  32-bit phone. Three sounds of its own on new channel ids: `task-ring` (a new task rings 30 s, cleared when the app or the
+  task opens), `task-updates` (changed, cancelled, removed) and `office-asks` (push-task `channels.ts`). As built:
+  `docs/phase7-plan.md` "Part 6 as built"; test plan: `docs/phase7-test-plan.md` "Part 6".
 - **Phase 8 (planned 19 October 2026)**: Office mode, the office's interface in the same Expo app for office sign-ins, by
   permission (view, request, approve, assign_tasks, vehicles, issues, users), never by role name; the web build of the same
   screens becomes the phone version of the office site. Design first (Part 8.0, a clickable prototype from
@@ -216,6 +223,10 @@
   workers; an EAS build with the switch on and no key stops); switch off: runtime `1.2.0` and the
   OpenFreeMap map. A Google stop is never drawn on the OpenFreeMap map (`lib/mapRule.ts`).
   Phones still on 1.1.0 got their last update from d63c838; updates from later commits target 1.2.0.
+  1.3.0 (Phase 7 Part 6) is the `drivers` profile (runtime `1.3.0-gmaps`), installed once; once it is on main, updates
+  target 1.3.0 only. A release build shrinks resources: anything named only at run time (a channel's sound, a
+  `getIdentifier` name) needs a keep rule (the 1.2.0 build lost `new_task.wav` and `general.wav`: those channels play the
+  phone's default sound).
 - ALL native modules are installed before the first development build, so the rest of the
   day is live reload (`npx expo start --dev-client`) without new builds.
 - Background location does not work properly in Expo Go: always use the dev build.

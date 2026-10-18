@@ -2882,6 +2882,16 @@ The three keys whose English changed in Phase 7 (`task.minutesThere`, `phoneSetu
 `phoneSetup.stoppedMany`) are in the Hotfix 2 table. Planned rows that were built under other names: `photo.*` and
 `me.changePhoto` are `profilePhoto.*` (Part 3's table), `vehicle.addPhoto` is `vehiclePhoto.add`.
 
+**Part 6** (the 1.3.0 build): the names of the two new channels, shown in Android Settings → Apps → Fame Driver →
+Notifications. The question tone's channel keeps `channel.asks` / `channel.asksDesc`. No other key changed.
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `channel.ring` | New tasks (ringing) | නව කාර්යයන් (නාද වන) |
+| `channel.ringDesc` | A new task rings for up to 30 seconds, until you open it | නව කාර්යයක් ඔබ එය විවෘත කරන තුරු තත්පර 30 ක් දක්වා නාද වේ |
+| `channel.updates` | Task changes | කාර්ය වෙනස්කම් |
+| `channel.updatesDesc` | A task changed, cancelled or given to someone else | වෙනස් වූ, අවලංගු කළ හෝ වෙනත් අයෙකුට දුන් කාර්යයක් |
+
 ## Deployment log
 
 **Round A, 16 October 2026** (Parts 1, 2 and 2b; main at `21b1d9a`), in the plan's order, with Sahan's go:

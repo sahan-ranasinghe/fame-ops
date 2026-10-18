@@ -1,8 +1,8 @@
 # Phase 7 test plan: a driver's day, as built, per role
 
 18 October 2026, after Round Part 3b. Everything below is live: Parts 1, 2 and 2b (Round A), the hotfix after Round A,
-Part 3 (Round A2), Part 4 (Round A3), Hotfix 2, Hotfix 3 and Part 3b. Part 6 (the 1.3.0 build) is not built yet; its
-section is filled in at checkpoint 6.
+Part 3 (Round A2), Part 4 (Round A3), Hotfix 2, Hotfix 3 and Part 3b. Part 6 (the 1.3.0 build, installed once) has its
+own section at the end, for after the install.
 
 Where: the office web app at https://fame-fleet.pages.dev (laptop and phone), the Fame Driver app on the test phones,
 and Claude with the "Fame Fleet" connector. Write down what you saw next to each test; "as expected" is enough when it
@@ -384,7 +384,7 @@ You should see:
 
 You should see:
 - The channels "New tasks" ("New, changed and cancelled tasks") and "Questions from the office".
-- The new task rings loud and shows on the lock screen. (The ringtone that rings until opened comes with Part 6.)
+- The new task rings loud and shows on the lock screen. (The ringtone that rings until opened: 1.3.0, Part 6 P2.)
 
 ## B. The requester (staff: request + view)
 
@@ -1041,7 +1041,74 @@ Ask in Claude Teams. The shared key is an admin key: it sees everything and its 
 
 ## Part 6 (the 1.3.0 build)
 
-Filled in at checkpoint 6.
+The 1.3.0 build is the `drivers` profile: a smaller app (only what a 64-bit phone needs) with three sounds of its own.
+It is installed once on each phone, over 1.2.0. Everything above is tested on 1.2.0; after the install, P5 runs the
+driver's tests again on 1.3.0.
+
+### P1. Install over 1.2.0
+1. On the OPPO, open the EAS link of the `drivers` build in Chrome, download it and open the file. Allow installs from
+   Chrome if Android asks.
+2. Android asks "Do you want to install an update to this existing app?": Install.
+3. Open Fame Driver.
+
+You should see:
+- The download is about 47 MB (1.2.0 was 89 MB).
+- Still signed in, the same duty state and vehicle; Me: "Everything is sent" (or the same "Waiting to be sent" as
+  before), App version `1.3.0+…`.
+- Today's task map is Google's map, as on 1.2.0.
+- If Android says "App not installed" instead, the phone may be 32-bit: see P6.
+
+### P2. A new task rings until it is opened
+1. Turn the ring and notification volume up. Lock the OPPO.
+2. From the office, send test.driver a new task.
+3. Let it ring. Then send a second task and, while it rings, unlock the phone and tap the notification.
+
+You should see:
+- A two-tone ring, repeating, with a strong vibration, on the lock screen: "New tasks (ringing)".
+- Left alone it rings for 30 seconds, then stops; the notification stays in the tray.
+- Tapping it opens the task and the ring stops at once. Opening the app from its icon also stops it.
+- With the app open on Today when a task comes, it rings for about 6 seconds and the task shows on Today.
+- In Do not disturb the phone stays silent, as for every app.
+- Note it if the OPPO cuts the ring after a few seconds.
+
+### P3. A change and a cancellation have their own tone
+1. From the office, change the time of test.driver's accepted task.
+2. Then cancel it.
+
+You should see:
+- Both times a short falling tone (three notes, twice) under "Task changes", not the ring.
+- A reassigned task that test.driver had accepted gives the same tone.
+
+### P4. A question has its own tone
+1. From the office, ask the free drivers if they are free tomorrow 09:00–12:00 (C12).
+
+You should see:
+- A short rising tone (two notes, twice) under "Questions from the office", and the question opens as before (A19).
+
+### P5. Nothing lost on 1.3.0
+Repeat on the OPPO, now on 1.3.0:
+1. A3, A6, A8 and A9: start work, a new task, Accept, Start task, the map, Arrived, Done, Save & finish.
+2. The odometer photo with its suggestion, once with mobile data off.
+3. A fuel fill with its video (the camera opens, records and saves).
+4. A2 (your photo) and A20 (a vehicle photo).
+5. An hour on duty with the screen off, then the driver page in the office.
+6. Me → Language: සිංහල, then back.
+7. The start and finish sounds on Start task and Save & finish.
+8. Settings → Apps → Fame Driver → Notifications.
+
+You should see:
+- Everything as on 1.2.0, with no error and no "Something went wrong".
+- The day's line on the driver page without new holes.
+- In the notification settings: "New tasks (ringing)" ("A new task rings for up to 30 seconds, until you open it"),
+  "Task changes" and "Questions from the office", in Sinhala on a Sinhala phone ("නව කාර්යයන් (නාද වන)",
+  "කාර්ය වෙනස්කම්"). The older channels stay in the list; they are no longer used for these pushes.
+- The app's next update arrives: after the office says an update is out, open the app twice on Wi-Fi.
+
+### P6. A 32-bit phone
+- The 1.3.0 build is for 64-bit phones only (every phone we know, the OPPO CPH2119 and the Samsung SM-A226B, is 64-bit).
+- On a 32-bit phone (typically an Android Go phone) installing ends with "App not installed". A CPU-info app shows
+  armeabi-v7a only.
+- Then ask for a `drivers-32` build: the same app for that phone.
 
 ## If something looks wrong
 
