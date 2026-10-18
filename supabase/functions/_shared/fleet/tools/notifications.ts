@@ -240,7 +240,10 @@ export const myInbox = tool({
   async run({ limit = 30, cursor, unread, archived }, { db, actor, now }) {
     const id = person(actor);
     const w = pageWindow(limit, cursor);
-    let q = db.from("office_inbox").select("id, event, title, body, url, who, created_at, read_at", { count: "exact" }).eq("employee_id", id);
+    let q = db.from("office_inbox").select("id, event, title, body, url, who, created_at, read_at", { count: "exact" }).eq(
+      "employee_id",
+      id,
+    );
     if (unread) q = q.is("read_at", null);
     if (!archived) {
       const cut = new Date(now.getTime() - ARCHIVE_AFTER_DAYS * 86400_000).toISOString();

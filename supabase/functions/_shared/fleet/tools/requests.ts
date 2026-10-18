@@ -892,7 +892,9 @@ async function createdTaskCards(db: Db, tasks: Task[], now: Date) {
       kind: t.kind,
       when: colomboDayTime(leave),
       back_by: t.end_by ? (sameDay ? colomboTime(t.end_by) : colomboDayTime(t.end_by)) : undefined,
-      route: stops.length ? [stops[0].place_name, stops.length > 1 ? stops[stops.length - 1].place_name : null].filter(Boolean).join(" → ") : undefined,
+      route: stops.length
+        ? [stops[0].place_name, stops.length > 1 ? stops[stops.length - 1].place_name : null].filter(Boolean).join(" → ")
+        : undefined,
       stops_count: stops.length || undefined,
       status: t.status,
       live: taskLive(t, trip, now),
@@ -910,7 +912,9 @@ async function createdTaskCards(db: Db, tasks: Task[], now: Date) {
           task_status: t.status,
         }
         : undefined,
-      approved_by: approver && t.approved_at ? personAt(approver.name, t.approved_at, now, { phone: approver.phone, photo: photos.get(approver.id) }) : undefined,
+      approved_by: approver && t.approved_at
+        ? personAt(approver.name, t.approved_at, now, { phone: approver.phone, photo: photos.get(approver.id) })
+        : undefined,
       created: colomboDateTime(t.created_at),
       at: leave,
     };
@@ -925,7 +929,11 @@ function taskLive(t: Task, trip: TripOutcome | undefined, now: Date) {
     case "completed":
       return { state: "completed" as const, text: dot("Completed", t.completed_at), at: at(t.completed_at) };
     case "cancelled":
-      return { state: "cancelled" as const, text: t.cancelled_reason ? `Cancelled · ${t.cancelled_reason}` : "Cancelled", at: at(t.updated_at) };
+      return {
+        state: "cancelled" as const,
+        text: t.cancelled_reason ? `Cancelled · ${t.cancelled_reason}` : "Cancelled",
+        at: at(t.updated_at),
+      };
     case "missed":
       return { state: "missed" as const, text: dot("Missed", t.missed_at), at: at(t.missed_at) };
     case "declined":
@@ -996,7 +1004,10 @@ export const myTrips = tool({
     ]);
     // Newest trip first, requests and tasks together.
     const all = [
-      ...requestRows.map((c) => ({ card: c as Record<string, unknown> & { live: { state: string } }, at: rows.find((r) => r.id === c.id)!.needed_at })),
+      ...requestRows.map((c) => ({
+        card: c as Record<string, unknown> & { live: { state: string } },
+        at: rows.find((r) => r.id === c.id)!.needed_at,
+      })),
       ...taskRows.map((c) => ({ card: c as Record<string, unknown> & { live: { state: string } }, at: c.at })),
     ].sort((a, b) => b.at.localeCompare(a.at));
     const wanted = status === "all" ? null : TRIP_FILTER[status];

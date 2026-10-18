@@ -16,9 +16,10 @@ import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
 import { normalisePermissions, PERMISSIONS, permissionsForRole, roleForPermissions } from "../permissions.ts";
 import { isRole, OFFICE_ROLES, type Role } from "../roles.ts";
 import { colomboDateTime } from "../time.ts";
-import { phoneDisplay } from "../format.ts";
+import { phoneDisplay, plain } from "../format.ts";
 import { logPhoneChange, storedPhone } from "../phones.ts";
-import { tool, zText } from "../tool.ts";
+import { tool, zPaging, zSearch, zText } from "../tool.ts";
+import { pageOf, pageWindow } from "../paging.ts";
 
 const zEmail = z.string().trim().toLowerCase().email().max(160);
 const zOfficeRole = z.enum(["admin", "fleet_admin", "office", "staff", "viewer"]);
@@ -76,8 +77,9 @@ export const listOfficeUsers = tool({
   description: "The people with an office sign-in, active or not, with their permissions (view, request, approve, assign_tasks, " +
     "vehicles, issues, users), the role label and their connector keys.",
   readOnly: true,
-  input: z.object({}),
-  async run(_args, { db }) {
+  // Hotfix 3 (L3): the search box (name, e-mail, role) and a page at a time.
+  input: z.object({ search: zSearch, ...zPaging }),
+  async run({ search, limit, cursor }, { db }) {
     const [users, keys] = await Promise.all([
       fetchAll(
         (a, b) =>
@@ -91,10 +93,15 @@ export const listOfficeUsers = tool({
         "connector keys",
       ),
     ]);
+    const key = search ? plain(search) : "";
+    const found = key ? users.filter((u) => [u.name, u.email ?? "", u.role].some((x) => plain(x).includes(key))) : users;
+    const page = pageOf(found, pageWindow(limit, cursor));
     return {
       result: {
-        count: users.length,
-        users: users.map((u) => ({
+        count: page.rows.length,
+        total: page.total,
+        next: page.next,
+        users: page.rows.map((u) => ({
           name: u.name,
           email: u.email,
           phone: u.phone,

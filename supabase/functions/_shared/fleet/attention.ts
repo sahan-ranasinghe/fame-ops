@@ -75,9 +75,7 @@ export function attentionGroups(
   s: Sections,
   kindText: Record<string, string>,
 ): { count: number; groups: AttentionGroup[] } {
-  const kept = items.filter((i) =>
-    RANK[i.severity] >= RANK.warning && !elsewhere(i, s) && !(s.critical && i.severity === "critical")
-  );
+  const kept = items.filter((i) => RANK[i.severity] >= RANK.warning && !elsewhere(i, s) && !(s.critical && i.severity === "critical"));
   const byKind = new Map<string, AttentionItem[]>();
   for (const i of kept) byKind.set(i.kind, [...(byKind.get(i.kind) ?? []), i]);
   const groups: AttentionGroup[] = [];

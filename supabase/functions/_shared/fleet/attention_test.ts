@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { type AttentionItem, attentionGroups, criticalItems } from "./attention.ts";
+import { attentionGroups, type AttentionItem, criticalItems } from "./attention.ts";
 
 const item = (kind: string, severity: string, extra: Partial<AttentionItem> = {}): AttentionItem => ({
   what: `${kind} item`,

@@ -148,10 +148,9 @@ export const listIssues = tool({
       q = q.eq("assigned_to", id);
     }
     if (kinds !== "all") q = q.in("kind", kinds);
-    const res = await (sort === "newest"
-      ? q.order("opened_at", { ascending: false })
-      : q.order("sort_key").order("opened_at", { ascending: false }))
-      .order("id").range(w.offset, w.offset + (w.limit ?? 50) - 1);
+    const res =
+      await (sort === "newest" ? q.order("opened_at", { ascending: false }) : q.order("sort_key").order("opened_at", { ascending: false }))
+        .order("id").range(w.offset, w.offset + (w.limit ?? 50) - 1);
     const rows = unwrap(res, "issues");
     const total = res.count ?? rows.length;
     // Who opened and who took each listed issue (one query for all).

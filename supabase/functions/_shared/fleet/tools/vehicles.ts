@@ -17,12 +17,13 @@ import {
   type Vehicle,
   vehicleStatus,
 } from "../fleet.ts";
-import { centsToLkr, contactLinks, lkrToCents } from "../format.ts";
+import { centsToLkr, contactLinks, lkrToCents, plain } from "../format.ts";
 import { colomboDate, colomboTime } from "../time.ts";
 import { vehiclePhotoLinks } from "../media.ts";
 import { documentsOf } from "./media.ts";
 import { missingText, requiredKinds } from "../docs.ts";
-import { realDate, tool, zDate, zText, zVehicleType } from "../tool.ts";
+import { realDate, tool, zDate, zPaging, zSearch, zText, zVehicleType } from "../tool.ts";
+import { pageOf, pageWindow } from "../paging.ts";
 
 const vehicleFields = {
   make_model: zText(80).describe('Make and model, e.g. "Toyota HiAce"'),
@@ -186,8 +187,11 @@ export const listVehicles = tool({
   input: z.object({
     filter: z.enum(["all", "on_task", "available", "in_garage", "documents_expiring", "inactive"]).optional()
       .describe("Default: all active vehicles"),
+    // Hotfix 3 (L3): the search box (plate, make, regular driver, custodian) and a page at a time.
+    search: zSearch,
+    ...zPaging,
   }),
-  async run({ filter = "all" }, { db, now }) {
+  async run({ filter = "all", search, limit, cursor }, { db, now }) {
     const today = colomboDate(now);
     const refs = await loadRefs(db);
     const active = refs.vehicles.filter((v) => v.active);
@@ -274,10 +278,24 @@ export const listVehicles = tool({
         ? c.expiring
         : true
     ).map(({ expiring: _expiring, ...card }) => card);
+    const key = search ? plain(search) : "";
+    const found = key
+      ? shown.filter((c) =>
+        [c.reg_no, c.make_model ?? "", c.regular_driver ?? "", c.assigned_to ?? "", c.held_by ?? ""].some((x) => plain(x).includes(key))
+      )
+      : shown;
+    const page = pageOf(found, pageWindow(limit, cursor));
 
     return {
-      result: { month: today.slice(0, 7), filter, counts: filter === "inactive" ? undefined : counts, vehicles: shown },
-      summary: `${shown.length} vehicles (${filter})`,
+      result: {
+        month: today.slice(0, 7),
+        filter,
+        counts: filter === "inactive" ? undefined : counts,
+        total: page.total,
+        next: page.next,
+        vehicles: page.rows,
+      },
+      summary: `${page.rows.length} vehicles (${filter})`,
     };
   },
 });

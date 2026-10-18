@@ -59,10 +59,10 @@ import {
   myInbox,
   myNotificationSettings,
   myPrefs,
-  setMyPrefs,
   registerWebPush,
   removeWebPush,
   setMyNotificationSettings,
+  setMyPrefs,
 } from "./tools/notifications.ts";
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
 import {

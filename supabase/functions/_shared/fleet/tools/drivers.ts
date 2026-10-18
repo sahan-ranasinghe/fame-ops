@@ -4,11 +4,12 @@ import { z } from "zod";
 import type { Db } from "../db.ts";
 import { ToolError, unwrap } from "../db.ts";
 import { docChip, type Employee, findDriver, loadLatest, loadRefs, sharing } from "../fleet.ts";
-import { contactLinks, phoneDisplay } from "../format.ts";
+import { contactLinks, phoneDisplay, plain } from "../format.ts";
 import { logPhoneChange, seesDriverPhones, storedPhone } from "../phones.ts";
 import { colomboDate, colomboTime, dayRange } from "../time.ts";
 import { driverPhotoLinks } from "../media.ts";
-import { realDate, tool, zDate, zText } from "../tool.ts";
+import { realDate, tool, zDate, zPaging, zSearch, zText } from "../tool.ts";
+import { pageOf, pageWindow } from "../paging.ts";
 
 // Drivers sign in with a username and a 6-digit PIN. Supabase Auth needs an
 // email, so each driver gets one that can never receive mail.
@@ -57,8 +58,11 @@ export const listDrivers = tool({
   readOnly: true,
   input: z.object({
     include_inactive: z.boolean().optional().describe("Also show drivers who have been switched off"),
+    // Hotfix 3 (L3): the search box (name, username, code, plate) and a page at a time.
+    search: zSearch,
+    ...zPaging,
   }),
-  async run({ include_inactive }, { db, now, actor }) {
+  async run({ include_inactive, search, limit, cursor }, { db, now, actor }) {
     const since = new Date(now.getTime() - 30 * 86400000).toISOString();
     const today = colomboDate(now);
     const [refs, latest, eventsRes, openRes, endedRes] = await Promise.all([
@@ -83,7 +87,15 @@ export const listDrivers = tool({
       else row.declined += 1;
       last30.set(e.employee_id, row);
     }
-    const shown = refs.employees.filter((e) => e.role === "driver" && (include_inactive || e.active));
+    const key = search ? plain(search) : "";
+    const matches = (e: Employee) =>
+      !key || [e.name, e.username ?? "", e.code, e.current_vehicle_id ? refs.veh.get(e.current_vehicle_id)?.reg_no ?? "" : ""]
+        .some((x) => plain(x).includes(key));
+    const page = pageOf(
+      refs.employees.filter((e) => e.role === "driver" && (include_inactive || e.active) && matches(e)),
+      pageWindow(limit, cursor),
+    );
+    const shown = page.rows;
     // Phase 7 (§5): each driver's photo (a link that works for at least an hour; the same link while it lasts).
     const photos = await driverPhotoLinks(db, shown, now);
     const drivers = shown
@@ -101,7 +113,7 @@ export const listDrivers = tool({
         off_duty_since: !onDuty.has(e.id) && offDuty.has(e.id) ? colomboTime(offDuty.get(e.id)!) : undefined,
         photo_url: photos.get(e.id),
       }));
-    return { result: { count: drivers.length, drivers }, summary: `${drivers.length} drivers` };
+    return { result: { count: drivers.length, total: page.total, next: page.next, drivers }, summary: `${drivers.length} drivers` };
   },
 });
 

@@ -9,7 +9,8 @@ import { syncIssues } from "../issues.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { taskPieces } from "../segments.ts";
 import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
-import { daySpan, tool, zDate, zId, zMonth, zText } from "../tool.ts";
+import { daySpan, tool, zDate, zId, zMonth, zPaging, zText } from "../tool.ts";
+import { pageInfo, pageWindow } from "../paging.ts";
 
 /** A start reading this far from the last logged one means unlogged driving. */
 const UNLOGGED_KM = 2;
@@ -260,22 +261,27 @@ export const listVehicleReports = tool({
   readOnly: true,
   input: z.object({
     status: z.enum(["not_closed", "open", "in_garage", "closed", "all"]).optional().describe("Default: not_closed"),
+    // Hotfix 3 (L3): a page at a time (without limit the newest 50, as before).
+    ...zPaging,
   }),
-  async run({ status = "not_closed" }, { db }) {
-    let query = db.from("vehicle_reports").select("*");
+  async run({ status = "not_closed", limit, cursor }, { db }) {
+    const w = pageWindow(limit, cursor);
+    let query = db.from("vehicle_reports").select("*", { count: "exact" });
     if (status === "not_closed") query = query.neq("status", "closed");
     else if (status !== "all") query = query.eq("status", status);
     const [refs, reports] = await Promise.all([
       loadRefs(db),
-      query.order("created_at", { ascending: false }).limit(50),
+      query.order("created_at", { ascending: false }).order("id").range(w.offset, w.offset + (w.limit ?? 50) - 1),
     ]);
     const rows = unwrap(reports, "vehicle reports");
+    const paging = pageInfo(w, rows.length, reports.count ?? rows.length);
     const links = await photoLinks(db, { reportIds: rows.map((r) => r.id) });
 
     return {
       result: {
         status,
         count: rows.length,
+        ...paging,
         reports: rows.map((r) => {
           const driver = refs.emp.get(r.employee_id);
           const vehicle = refs.veh.get(r.vehicle_id);

@@ -855,7 +855,10 @@ export async function syncIssues(db: Db, now: Date, scope: SyncScope = {}): Prom
   const mutedSince = new Date(now.getTime() - ms(30)).toISOString();
   const [wantedAll, activeRes, mutedRes] = await Promise.all([
     computeWanted(db, now, scope),
-    scoped(db.from("issues").select("id, ref_key, kind, status, severity, title, detail, due, sort_key, task_id").in("status", ACTIVE), scope),
+    scoped(
+      db.from("issues").select("id, ref_key, kind, status, severity, title, detail, due, sort_key, task_id").in("status", ACTIVE),
+      scope,
+    ),
     scoped(
       db.from("issues").select("ref_key, severity, resolved_at").in("status", ["resolved", "dismissed"]).neq("resolved_by", "system").gte(
         "resolved_at",

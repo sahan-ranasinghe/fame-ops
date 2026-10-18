@@ -16,7 +16,8 @@ import { pastedPin } from "../pasted.ts";
 import { BUILT_IN, type Field, FIELDS, type Mapping, type Preset } from "../sites.ts";
 import { loadSettings, saveSetting } from "../settings.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, dayRange } from "../time.ts";
-import { tool, zId, zText } from "../tool.ts";
+import { tool, zId, zPaging, zText } from "../tool.ts";
+import { offsetOf, pageInfo } from "../paging.ts";
 
 export type Place = Row<"places">;
 
@@ -127,13 +128,19 @@ export const listPlaces = tool({
     kind: z.enum(["office", "store", "site", "other"]).optional(),
     operator: z.enum(["dialog", "mobitel", "other"]).optional(),
     pinned: z.boolean().optional().describe("Only places with (true) or without (false) a pin"),
-    limit: z.number().int().min(1).max(1000).optional().describe("Default 200"),
+    limit: z.number().int().min(1).max(1000).optional().describe("Default 200 (the answer has total and next)"),
     removed: z.boolean().optional().describe("true = only the places the office removed (restore_place brings one back)"),
+    // Hotfix 3 (L3): a page at a time (the answer has total and next).
+    cursor: zPaging.cursor,
   }),
-  async run({ search, kind, operator, pinned, limit = 200, removed }, { db }) {
+  async run({ search, kind, operator, pinned, limit = 200, removed, cursor }, { db }) {
+    // Up to 1,000 a page, as before (the shared window stops at 500).
+    const w = { offset: offsetOf(cursor), limit };
+    const end = w.offset + limit - 1;
     let q = removed
-      ? db.from("places").select("*").not("removed_at", "is", null).order("removed_at", { ascending: false }).limit(limit)
-      : db.from("places").select("*").eq("active", true).order("name").limit(limit);
+      ? db.from("places").select("*", { count: "exact" }).not("removed_at", "is", null).order("removed_at", { ascending: false })
+        .order("id").range(w.offset, end)
+      : db.from("places").select("*", { count: "exact" }).eq("active", true).order("name").order("id").range(w.offset, end);
     if (kind) q = q.eq("kind", kind);
     if (operator) q = q.eq("operator", operator);
     if (!kind && !operator && !search && !removed) q = q.neq("kind", "site");
@@ -143,9 +150,13 @@ export const listPlaces = tool({
       const like = `%${escapeLike(text)}%`;
       q = q.or(`name.ilike."${like}",address.ilike."${like}",ids_text.ilike."${like.toLowerCase()}"`);
     }
-    const rows = unwrap(await q, "places");
+    const res = await q;
+    const rows = unwrap(res, "places");
     const places = rows.map((p) => removed ? { ...placeCard(p), removed: detailCard(p).removed } : placeCard(p));
-    return { result: { count: places.length, places }, summary: `${places.length} ${removed ? "removed " : ""}places` };
+    return {
+      result: { count: places.length, ...pageInfo(w, places.length, res.count ?? places.length), places },
+      summary: `${places.length} ${removed ? "removed " : ""}places`,
+    };
   },
 });
 

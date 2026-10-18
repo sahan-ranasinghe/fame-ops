@@ -7,7 +7,8 @@ import { type Db, fetchAll, ToolError, unwrap } from "../db.ts";
 import { findDriver, findVehicle, loadRefs, vehicleLabel } from "../fleet.ts";
 import { buildRoute } from "../route.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, colomboTime, dayRange } from "../time.ts";
-import { realDate, tool, zDate, zId, zText } from "../tool.ts";
+import { realDate, tool, zDate, zId, zPaging, zText } from "../tool.ts";
+import { pageOf, pageWindow } from "../paging.ts";
 
 /** GPS km come from the route builder; over a longer range the log leaves them out (the odometer km stay). */
 export const DUTY_LOG_GPS_DAYS = 7;
@@ -38,8 +39,10 @@ export const dutyLog = tool({
     from: zDate.optional().describe("First day of a range (with to)"),
     to: zDate.optional().describe("Last day of a range"),
     driver: zText(80).optional().describe("Username, code or name"),
+    // Hotfix 3 (L3): a page of periods at a time (the totals stay the whole range's, the GPS km the page's).
+    ...zPaging,
   }),
-  async run({ date, from, to, driver }, { db, now }) {
+  async run({ date, from, to, driver, limit, cursor }, { db, now }) {
     const first = realDate(from ?? date ?? colomboDate(now), from ? "from" : "date");
     const last = realDate(to ?? (from ? colomboDate(now) : first), "to");
     if (last < first) throw new ToolError("to is before from.");
@@ -69,8 +72,20 @@ export const dutyLog = tool({
     const assignments = unwrap(assignRes, "vehicle assignments");
     const tasks = unwrap(taskRes, "tasks");
 
-    const withGps = days <= DUTY_LOG_GPS_DAYS && sessions.length <= 60;
-    const rows = await Promise.all(sessions.map(async (s) => {
+    const page = pageOf(sessions, pageWindow(limit, cursor));
+    const withGps = days <= DUTY_LOG_GPS_DAYS && page.rows.length <= 60;
+    // The whole range's hours and task km (cheap); a page's rows carry the rest.
+    const hoursOf = (s: (typeof sessions)[number]) =>
+      Math.round(
+        Math.max(0, Math.round((new Date(s.ended_at ?? now.toISOString()).getTime() - new Date(s.started_at).getTime()) / 60000)) / 6,
+      ) /
+      10;
+    const kmOf = (s: (typeof sessions)[number]) => {
+      const end = s.ended_at ?? now.toISOString();
+      return tasks.filter((t) => t.employee_id === s.employee_id && t.started_at && t.started_at >= s.started_at && t.started_at <= end)
+        .reduce((sum, t) => sum + (t.km ?? 0), 0);
+    };
+    const rows = await Promise.all(page.rows.map(async (s) => {
       const end = s.ended_at ?? now.toISOString();
       const inside = (at: string) => at >= s.started_at && at <= end;
       const held = assignments.filter((a) =>
@@ -144,11 +159,16 @@ export const dutyLog = tool({
         to: last,
         driver: who?.name,
         periods: rows,
+        total: page.total,
+        next: page.next,
         totals: {
-          periods: rows.length,
-          hours: Math.round(rows.reduce((h, r) => h + r.hours, 0) * 10) / 10,
-          task_km: rows.reduce((k, r) => k + r.task_km, 0),
-          gps_km: withGps ? Math.round(rows.reduce((k, r) => k + (r.gps_km ?? 0), 0) * 10) / 10 : undefined,
+          periods: sessions.length,
+          hours: Math.round(sessions.reduce((h, s) => h + hoursOf(s), 0) * 10) / 10,
+          task_km: sessions.reduce((k, s) => k + kmOf(s), 0),
+          // GPS km for the periods shown; the whole range's when it is all on one page.
+          gps_km: withGps && rows.length === sessions.length
+            ? Math.round(rows.reduce((k, r) => k + (r.gps_km ?? 0), 0) * 10) / 10
+            : undefined,
         },
         gps_note: withGps
           ? undefined

@@ -8,7 +8,8 @@ import { centsToLkr } from "../format.ts";
 import { PHOTO_LINK_NOTE, photoLinks, photoOrNote } from "../photos.ts";
 import { loadSettings } from "../settings.ts";
 import { colomboDate, colomboDateTime, monthRange } from "../time.ts";
-import { daySpan, tool, zDate, zMonth, zText } from "../tool.ts";
+import { daySpan, tool, zDate, zMonth, zPaging, zText } from "../tool.ts";
+import { pageOf, pageWindow } from "../paging.ts";
 import { VIDEO_LINK_NOTE, videoCard, videoLinks, videoStatusOf } from "../videos.ts";
 
 export const listFuel = tool({
@@ -28,8 +29,10 @@ export const listFuel = tool({
     to: zDate.optional().describe("Last day of the range"),
     vehicle: zText(20).optional().describe("Plate"),
     driver: zText(80).optional().describe("Username, code or name"),
+    // Hotfix 3 (L3): a page at a time (the totals stay the whole range's; links are made for the page only).
+    ...zPaging,
   }),
-  async run({ month, from: fromDay, to: toDay, vehicle, driver }, { db, now }) {
+  async run({ month, from: fromDay, to: toDay, vehicle, driver, limit, cursor }, { db, now }) {
     const span = daySpan(fromDay, toDay);
     const which = span ? span.to.slice(0, 7) : month ?? colomboDate(now).slice(0, 7);
     const { from, to } = span ? { from: span.start, to: span.end } : monthRange(which);
@@ -42,11 +45,12 @@ export const listFuel = tool({
       if (onlyDriver) q = q.eq("employee_id", onlyDriver.id);
       return q.order("logged_at", { ascending: false }).order("id").range(a, b);
     }, "fuel logs");
+    const page = pageOf(logs, pageWindow(limit, cursor));
     const [photos, videos] = await Promise.all([
-      photoLinks(db, { ids: logs.flatMap((l) => l.receipt_photo_id ? [l.receipt_photo_id] : []) }),
-      videoLinks(db, logs),
+      photoLinks(db, { ids: page.rows.flatMap((l) => l.receipt_photo_id ? [l.receipt_photo_id] : []) }),
+      videoLinks(db, page.rows),
     ]);
-    const entries = logs.map((l) => ({
+    const entries = page.rows.map((l) => ({
       id: l.id,
       at: colomboDateTime(l.logged_at),
       vehicle: refs.veh.get(l.vehicle_id)?.reg_no,
@@ -60,9 +64,9 @@ export const listFuel = tool({
       video: videoCard(l, videos, l.video_uploaded_at ? colomboDateTime(l.video_uploaded_at) : undefined, settings.fuel_video_checklist),
     }));
     const totals = {
-      entries: entries.length,
-      litres: Math.round(entries.reduce((s, e) => s + (e.litres ?? 0), 0) * 100) / 100,
-      lkr: entries.reduce((s, e) => s + (e.lkr ?? 0), 0),
+      entries: logs.length,
+      litres: Math.round(logs.reduce((s, l) => s + (l.litres === null ? 0 : Number(l.litres)), 0) * 100) / 100,
+      lkr: centsToLkr(logs.reduce((s, l) => s + (l.amount_cents ?? 0), 0)) ?? 0,
       videos: logs.filter((l) => videoStatusOf(l) === "uploaded").length,
       interrupted: logs.filter((l) => l.video_interrupted).length,
       videos_waiting: logs.filter((l) => ["recorded", "uploading"].includes(videoStatusOf(l))).length,
@@ -94,6 +98,8 @@ export const listFuel = tool({
         driver: onlyDriver?.name,
         totals,
         month_totals: monthTotals,
+        total: page.total,
+        next: page.next,
         entries,
         links: `${PHOTO_LINK_NOTE} ${VIDEO_LINK_NOTE}`,
       },
