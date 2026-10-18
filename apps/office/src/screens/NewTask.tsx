@@ -26,6 +26,7 @@ import { Icon } from "../ui/icons";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { type AssignFields, assignOutcome, driverWhatsApp, emptyAssign, planInput, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
+import { linkedDriver, linkedTime } from "./asks/askLogic";
 import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
@@ -52,7 +53,12 @@ export function NewTask() {
   const base = basePlace(settings.data);
   const [params] = useSearchParams();
   const date = isDate(params.get("date")) ? params.get("date")! : today();
-  const [state, setState, draft] = useFormDraft<Form>("task-new", null, () => ({ f: emptyAssign(date), rows: [] }));
+  // Part 3b (H3): Assign on a driver's Yes opens this page with ?driver= and the trip's ?time= (the fresh form takes
+  // them; a draft is still offered and, resumed, wins).
+  const [state, setState, draft] = useFormDraft<Form>("task-new", null, () => ({
+    f: { ...emptyAssign(date), driver: linkedDriver(params), leaveBy: linkedTime(params) },
+    rows: [],
+  }));
   const { f, rows } = state;
   const setF = (patch: Partial<AssignFields> | ((x: AssignFields) => AssignFields)) =>
     setState((s) => ({ ...s, f: typeof patch === "function" ? patch(s.f) : { ...s.f, ...patch } }));

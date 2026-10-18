@@ -24,6 +24,7 @@ import { PageTop, StickyActions } from "../ui/Page";
 import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
 import { askedTimes, decideLabel, emptyTripDecision, isProposal, requestView, shownTimes, type TripDecision, tripDecideInput, tripPick } from "./approvalLogic";
+import { linkedDriver } from "./asks/askLogic";
 import { availabilityArgs, type DefaultVehicle, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
@@ -41,7 +42,8 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   const toast = useToast();
   const lists = useLists();
   const [params] = useSearchParams();
-  const [f, setF, draft] = useFormDraft<TripDecision>("request-decide-trip", id, emptyTripDecision);
+  // Part 3b (H3): Assign on a driver's Yes opens the page with ?driver=<username> (the fresh form takes them).
+  const [f, setF, draft] = useFormDraft<TripDecision>("request-decide-trip", id, () => ({ ...emptyTripDecision(), driver: linkedDriver(params) }));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "bad" | "ok"; text: ReactNode; warnings?: string[]; conflicts?: Conflict[] } | null>(null);
   // Sent: the answer stays on this page (the request is approved now).

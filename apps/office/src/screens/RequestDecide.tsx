@@ -27,6 +27,7 @@ import { PageTop, StickyActions } from "../ui/Page";
 import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
 import { decidesTrip } from "./approvalLogic";
+import { linkedDriver } from "./asks/askLogic";
 import { availabilityArgs, driverVehicle, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
@@ -89,7 +90,8 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
   const lists = useLists();
   const settings = useFleetSettings();
   const base = basePlace(settings.data);
-  const [f, setF, draft] = useFormDraft<Decision>("request-decide", id, { vehicle: "", driver: "", reason: "", date: "", time: "", back: "" });
+  // Part 3b (H3): Assign on a driver's Yes opens the page with ?driver=<username> (the fresh form takes them).
+  const [f, setF, draft] = useFormDraft<Decision>("request-decide", id, () => ({ vehicle: "", driver: linkedDriver(params), reason: "", date: "", time: "", back: "" }));
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "bad" | "ok"; text: React.ReactNode; warnings?: string[] } | null>(null);
   const suggests = me.tools.includes("suggest_vehicles");

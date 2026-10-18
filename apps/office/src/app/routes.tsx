@@ -1,6 +1,9 @@
 import type { Permission } from "@fleet/permissions";
 import { lazy, type ReactNode, Suspense } from "react";
 import { Navigate, type RouteObject } from "react-router";
+import { AskAnswers } from "../screens/asks/AskAnswers";
+import { AskDrivers } from "../screens/asks/AskDrivers";
+import { AskList } from "../screens/asks/AskList";
 import { DriverForm } from "../screens/DriverForm";
 import { DriverManage } from "../screens/DriverManage";
 import { DriverPage } from "../screens/DriverPage";
@@ -51,6 +54,12 @@ function Guard({ need, children }: { need: Permission[]; children: ReactNode }) 
   return can(me, ...need) ? <>{children}</> : <NoAccess need={need} />;
 }
 
+/** Part 3b (H3): the screen when the person may call the tool (me.tools mirrors the server), else "No access". */
+function ToolGuard({ tool, need, children }: { tool: string; need: Permission[]; children: ReactNode }) {
+  const { me } = useFleet();
+  return me.tools.includes(tool) ? <>{children}</> : <NoAccess need={need} />;
+}
+
 /** Overview when the person may see the fleet; otherwise their requests; otherwise Settings. */
 function Home() {
   const { me } = useFleet();
@@ -76,6 +85,8 @@ function SettingsRoute() {
 
 const VR: Permission[] = ["view", "request"];
 const RA: Permission[] = ["request", "approve"];
+/** Part 3b (H3): asking drivers and their answers (approve or assign_tasks, as the server's permission table). */
+const ASK_NEED: Permission[] = ["approve", "assign_tasks"];
 
 /**
  * Every form is a page with its own URL; a detail is a child route of its list
@@ -147,6 +158,11 @@ export const routes: RouteObject[] = [
       { path: "drivers/new", element: <Guard need={["vehicles"]}><DriverForm /></Guard> },
       // Phase 7: the duty log and the office's "Move to vehicle" (a static segment outranks :username).
       { path: "drivers/duty", element: <Guard need={DUTY_NEED}><DutyLog /></Guard> },
+      // Part 3b (H3): Ask drivers, the questions of the last 7 days and one question's answers (the ask.answered
+      // notification's link); listed before :username so "ask" and "asks" are never read as a driver.
+      { path: "drivers/ask", element: <ToolGuard tool="ask_drivers" need={ASK_NEED}><AskDrivers /></ToolGuard> },
+      { path: "drivers/asks", element: <ToolGuard tool="ask_answers" need={ASK_NEED}><AskList /></ToolGuard> },
+      { path: "drivers/asks/:id", element: <ToolGuard tool="ask_answers" need={ASK_NEED}><AskAnswers /></ToolGuard> },
       { path: "drivers/:username/vehicle", element: <Guard need={DUTY_NEED}><MoveVehicle /></Guard> },
       { path: "drivers/:username", element: <Guard need={ROUTES_NEED}><DriverPage /></Guard> },
       { path: "drivers/:username/edit", element: <Guard need={["vehicles"]}><DriverManage /></Guard> },

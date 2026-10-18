@@ -20,6 +20,7 @@ import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
 import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
+import { linkedDriver } from "./asks/askLogic";
 import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { checkDeparture, departurePlan } from "./departureLogic";
@@ -59,6 +60,9 @@ const fromTask = (t: TaskFields): EditForm => ({
 });
 const untouched = (f: EditForm) => JSON.stringify(f) === JSON.stringify(EMPTY);
 
+/** Part 3b (H3): the form with the driver a link names (?driver=<username>); as it was without one. Pure. */
+export const withLinkedDriver = (f: EditForm, driver: string): EditForm => (driver ? { ...f, driver } : f);
+
 /** update_task takes only what differs from the task. Pure. */
 export function updateTaskInput(id: string, version: number, f: EditForm, t: TaskFields): { error: string } | { input: Record<string, unknown> } {
   const s = (x: string) => x.trim();
@@ -96,6 +100,8 @@ export function TaskEdit() {
   const { id = "" } = useParams();
   const [params] = useSearchParams();
   const driverMode = params.get("driver") === "1";
+  // Part 3b (H3): Assign on a driver's Yes opens the page with ?driver=<username>: the form loaded from the task takes them.
+  const linked = linkedDriver(params);
   const { me, store, transport } = useFleet();
   const navigate = useNavigate();
   const toast = useToast();
@@ -111,9 +117,10 @@ export function TaskEdit() {
   useEffect(() => {
     if (location.hash === "#cancel") setTimeout(() => document.getElementById("cx-reason")?.focus(), 50);
   }, []);
-  // The fields start from the task once it is loaded (a draft resumed later replaces them).
+  // The fields start from the task once it is loaded, with the linked driver unless it is under way (it takes only the
+  // words then); a draft resumed later replaces them.
   useEffect(() => {
-    if (p && untouched(f)) draft.reset(fromTask(p.task));
+    if (p && untouched(f)) draft.reset(withLinkedDriver(fromTask(p.task), p.task.status === "in_progress" ? "" : linked));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p?.task.id, p?.task.plan_version]);
 

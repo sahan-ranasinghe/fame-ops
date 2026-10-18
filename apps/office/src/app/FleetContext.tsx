@@ -28,6 +28,8 @@ export interface Fleet {
     issues?: (cb: () => void) => () => void;
     /** Hotfix 2 (A): a new or read item in the signed-in person's notification centre (office_inbox). */
     inbox?: (cb: () => void) => () => void;
+    /** Part 3b (H3): a driver's row on one question changed (seen, answered): the answers page reloads. */
+    askAnswers?: (askId: string, cb: () => void) => () => void;
   };
   /** Web build only (Phase 7): a photo or document goes up through the signed upload a tool handed out. None = no upload buttons. */
   files?: { upload: (ticket: UploadTicket, file: Blob, contentType: string) => Promise<void> };
