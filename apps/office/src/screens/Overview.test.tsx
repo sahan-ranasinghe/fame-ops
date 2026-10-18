@@ -11,7 +11,7 @@ const overview = {
   date: "2026-10-12",
   vehicles: { on_the_road: 2, total: 5, parked: 3, in_garage: 1 },
   tasks: { total: 4, in_progress: 1, done: 2 },
-  requests: { waiting: 1, oldest: "3 h" },
+  requests: { waiting: 1, oldest_waiting: "3 h" },
   reminders: { count: 2, red: 1, window_days: 14 },
   on_the_road: [{ driver: "Nuwan Perera", vehicle: "WP CAB-4521", task: "Team drop", near: "Kurunegala", location: "Live · 2 min", links: { maps: "https://maps", call: "tel:0771" } }],
   needs_attention: [{ what: "Revenue licence expires", subject: "WP CAB-4521 · Toyota HiAce", due: "in 4 days", level: "red" }],

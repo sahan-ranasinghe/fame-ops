@@ -100,4 +100,17 @@ describe("the reminders", () => {
     expect(reminderGroups([{ what: "Something", subject: "x" }]).other).toEqual([{ what: "Something", subject: "x", key: "0", due: undefined, level: undefined, plate: undefined, to: undefined }]);
     expect(reminderGroups(undefined)).toEqual({ due: [], other: [] });
   });
+
+  it("the plate the server names (vehicle) wins over the subject; a vehicle problem still opens its issue", () => {
+    const g = reminderGroups([
+      { what: "Emission test expires", subject: "Toyota Axio", vehicle: "WP CAR-1182", due: "in 3 days", kind: "document", issue_id: "i6" },
+      { what: "Service due", subject: "WP CAB-4521 · 300 km to go", vehicle: "WP CAB-4521", kind: "service_due", issue_id: "i7" },
+      { what: "Vehicle problem: breakdown", subject: "Engine stalls", vehicle: "WP CAB-4521", kind: "vehicle_report", issue_id: "i8" },
+    ]);
+    expect(g.due.map((r) => [r.plate, r.subject, r.to])).toEqual([
+      ["WP CAR-1182", "Toyota Axio", "/vehicles/WP%20CAR-1182"],
+      ["WP CAB-4521", "300 km to go", "/vehicles/WP%20CAB-4521"],
+    ]);
+    expect(g.other.map((r) => [r.plate, r.to])).toEqual([[undefined, "/issues/i8"]]);
+  });
 });

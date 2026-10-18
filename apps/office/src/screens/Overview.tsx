@@ -94,7 +94,7 @@ export function Overview() {
                 <Tile label="In garage" value={o.vehicles.in_garage ?? 0} unit="vehicles" sub={o.vehicles.in_garage ? "off the road" : "none"} tone={o.vehicles.in_garage ? "warn" : ""} link={linkOf("garage")} />
                 <Tile label="Tasks today" value={o.tasks.total ?? 0} unit="jobs" sub={`${o.tasks.in_progress ?? 0} in progress · ${o.tasks.done ?? 0} done`} link={linkOf("tasks")} />
                 {approves && (
-                  <Tile label="Requests to approve" value={o.requests.waiting ?? 0} unit="open" sub={o.requests.oldest ? `Oldest waiting ${o.requests.oldest}` : "Nothing waiting"} tone={o.requests.waiting ? "warn" : ""} link={linkOf("requests")} />
+                  <Tile label="Requests to approve" value={o.requests.waiting ?? 0} unit="open" sub={o.requests.oldest_waiting ? `Oldest waiting ${o.requests.oldest_waiting}` : "Nothing waiting"} tone={o.requests.waiting ? "warn" : ""} link={linkOf("requests")} />
                 )}
                 {attention && (
                   <Tile label="Reminders due" value={o.reminders.count ?? 0} unit={`in ${o.reminders.window_days ?? 14} days`} sub={o.reminders.red ? `${o.reminders.red} need action now` : "Nothing urgent"} tone={o.reminders.red ? "bad" : ""} link={linkOf("reminders")} />

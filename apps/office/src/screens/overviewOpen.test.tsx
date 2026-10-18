@@ -19,7 +19,7 @@ const overview = {
   date: "2026-10-18",
   vehicles: { on_the_road: 1, total: 4, parked: 3, in_garage: 1 },
   tasks: { total: 2, in_progress: 1, done: 0 },
-  requests: { waiting: 1, oldest: "2 h" },
+  requests: { waiting: 1, oldest_waiting: "2 h" },
   reminders: { count: 2, red: 1, window_days: 14 },
   on_the_road: [{ driver: "Nuwan Perera", username: "nuwan", vehicle: "WP CAB-4521", task: "Team drop", near: "Kurunegala", location: "Live · 2 min" }],
   needs_attention: [

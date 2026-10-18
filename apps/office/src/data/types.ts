@@ -55,6 +55,8 @@ export interface RoadDriver extends StatusFields {
 export interface Attention {
   what: string;
   subject?: string;
+  /** Phase 7 (§16): the plate of the vehicle it is about. */
+  vehicle?: string;
   due?: string;
   level?: string;
   /** Phase 5: the issue behind the item (opens /issues/:id). */
@@ -68,7 +70,7 @@ export interface Overview {
   as_of?: string;
   vehicles: { on_the_road: number; total: number; parked: number; in_garage?: number };
   tasks: { total: number; in_progress: number; done: number; assigned?: number; cancelled?: number };
-  requests: { waiting: number; oldest?: string };
+  requests: { waiting: number; oldest_waiting?: string };
   reminders: { count: number; red?: number; window_days?: number };
   on_the_road: RoadDriver[];
   needs_attention: Attention[];

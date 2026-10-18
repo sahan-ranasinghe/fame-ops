@@ -70,13 +70,15 @@ export const fleetOverview = tool({
     // --- Needs attention: the active issues, brought in line with the data first (unless a sync is under a minute old) ---
     await syncIssuesIfStale(db, now);
     const issues = unwrap(
-      await db.from("issues").select("id, kind, severity, title, detail, due, sort_key").in("status", ACTIVE)
+      await db.from("issues").select("id, kind, severity, title, detail, due, sort_key, vehicle_id").in("status", ACTIVE)
         .order("sort_key").order("opened_at"),
       "issues",
     );
     const attention = issues.map((i) => ({
       what: i.title,
       subject: i.detail ?? "",
+      // Phase 7 (§16): the plate of the vehicle it is about, for the Reminders list.
+      vehicle: i.vehicle_id ? refs.veh.get(i.vehicle_id)?.reg_no : undefined,
       due: i.due ?? "",
       level: i.severity === "critical" ? "red" : "amber",
       issue_id: i.id,

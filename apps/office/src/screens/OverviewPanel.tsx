@@ -184,7 +184,7 @@ export function OverviewPanel({ open, overview, rq, onClose }: { open: OverviewO
       body = <TaskRows />;
       break;
     case "requests":
-      eyebrow = o?.requests.oldest ? `Oldest waiting ${o.requests.oldest}` : "Waiting for a decision";
+      eyebrow = o?.requests.oldest_waiting ? `Oldest waiting ${o.requests.oldest_waiting}` : "Waiting for a decision";
       body = <RequestRows rq={rq} />;
       break;
     case "reminders":

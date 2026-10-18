@@ -139,13 +139,15 @@ export interface ReminderGroups {
 export function reminderGroups(items: Attention[] | undefined): ReminderGroups {
   const out: ReminderGroups = { due: [], other: [] };
   (items ?? []).forEach((a, i) => {
-    const vehicle = !!a.kind && VEHICLE_KINDS.has(a.kind) && !!a.subject;
-    const [head, ...rest] = vehicle ? String(a.subject).split(" · ") : [];
-    const plate = vehicle && head?.trim() ? head.trim() : undefined;
+    const vehicleKind = !!a.kind && VEHICLE_KINDS.has(a.kind);
+    const [head, ...rest] = a.subject ? String(a.subject).split(" · ") : [];
+    // A vehicle reminder: the server names the plate (vehicle); an older answer has it first in the subject ("WP CAB-4521 · …").
+    const plate = vehicleKind ? a.vehicle ?? (head?.trim() || undefined) : undefined;
+    const subject = plate && head?.trim() === plate ? rest.join(" · ") || undefined : a.subject || undefined;
     const row: ReminderRow = {
       what: a.what,
       plate,
-      subject: plate ? rest.join(" · ") || undefined : a.subject || undefined,
+      subject,
       due: a.due || undefined,
       level: a.level,
       to: plate ? `/vehicles/${encodeURIComponent(plate)}` : a.issue_id ? `/issues/${a.issue_id}` : undefined,
