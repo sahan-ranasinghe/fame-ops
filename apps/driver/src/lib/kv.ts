@@ -31,6 +31,8 @@ export const KEYS = {
   vehicles: 'cache.vehicles',
   reports: 'cache.reports',
   permissionsSeen: 'permissionsSeen',
+  /** Part 6: who agreed to the location disclosure on this phone, and when ({employeeId, at}). */
+  locationDisclosure: 'location.disclosure',
   /** When the location service last delivered a position (ms). */
   lastFix: 'tracking.lastFix',
   /** The GPS filter's state and the km counters (see lib/tracking.ts). */

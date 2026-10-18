@@ -132,7 +132,7 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     leave_30: { title: "Leave by {leave}", body: "{title} · leave in 30 min · {pickup} → {dropoff}" },
     leave_now: { title: "Time to leave", body: "{title} · leave by {leave} · {pickup} → {dropoff}" },
     // Phase 7 (§19): one reminder 5 minutes after sending; the office is told when the accept window ends.
-    accept_reminder: { title: "Accept or decline: {title} {leave}", body: "{pickup} → {dropoff} · open Fame Driver" },
+    accept_reminder: { title: "Accept or decline: {title} {leave}", body: "{pickup} → {dropoff} · open the app" },
     reopened: { title: "Task reopened", body: "{title} · finish it again in the app" },
     vehicle_taken: { title: "Your vehicle was taken", body: "{plate} is now with {name} · choose your vehicle" },
     vehicle_moved: { title: "The office changed your vehicle", body: "Your vehicle is now {plate}" },
@@ -147,7 +147,7 @@ const TEXT: Record<Language, Record<Kind, { title: string; body: string }>> = {
     removed: { title: "කාර්යය වෙනත් අයෙකුට පැවරිණි", body: "{title} තවදුරටත් ඔබගේ නොවේ." },
     leave_30: { title: "{leave} ට පිටත් වන්න", body: "{title} · මිනිත්තු 30 කින් පිටත් වන්න · {pickup} → {dropoff}" },
     leave_now: { title: "පිටත් වීමට වෙලාවයි", body: "{title} · {leave} ට පිටත් වන්න · {pickup} → {dropoff}" },
-    accept_reminder: { title: "පිළිගන්න හෝ ප්‍රතික්ෂේප කරන්න: {title} {leave}", body: "{pickup} → {dropoff} · Fame Driver විවෘත කරන්න" },
+    accept_reminder: { title: "පිළිගන්න හෝ ප්‍රතික්ෂේප කරන්න: {title} {leave}", body: "{pickup} → {dropoff} · යෙදුම විවෘත කරන්න" },
     reopened: { title: "කාර්යය නැවත විවෘත කළා", body: "{title} · යෙදුමෙන් නැවත අවසන් කරන්න" },
     vehicle_taken: { title: "ඔබේ වාහනය වෙනත් අයෙකු ගත්තා", body: "{plate} දැන් {name} ළඟ · ඔබේ වාහනය තෝරන්න" },
     vehicle_moved: { title: "කාර්යාලය ඔබේ වාහනය වෙනස් කළා", body: "ඔබේ වාහනය දැන් {plate}" },

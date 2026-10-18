@@ -71,6 +71,12 @@ check(drivers?.environment === 'preview' && drivers.channel === 'preview'
   'the drivers profile: arm64-v8a only, R8 and resource shrinking, the preview environment and channel', drivers);
 check(eas.build['drivers-32']?.extends === 'drivers' && /-PreactNativeArchitectures=armeabi-v7a /.test(eas.build['drivers-32']?.android?.gradleCommand ?? ''),
   'drivers-32: the same for a 32-bit phone, built only when asked');
+const store = eas.build.store as typeof drivers & { distribution?: string; autoIncrement?: boolean; android?: { buildType?: string; gradleCommand?: string } };
+check(store?.extends === 'drivers' && store.android?.buildType === 'app-bundle' && /^:app:bundleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a /.test(store.android?.gradleCommand ?? '')
+  && store.autoIncrement === true && (drivers as { autoIncrement?: boolean }).autoIncrement === true
+  && (JSON.parse(read('eas.json')) as { cli?: { appVersionSource?: string } }).cli?.appVersionSource === 'remote'
+  && JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'store', GOOGLE_ANDROID_MAPS: 'on' })) === JSON.stringify([...DEV, '@maplibre/maplibre-react-native']),
+  'store: an .aab with both ABIs (Play gives each phone its own), lean; EAS raises the version code at every drivers and store build');
 check(/arm64-v8a,armeabi-v7a/.test(eas.build.preview?.android?.gradleCommand ?? '') && !eas.build.preview?.environment,
   'the preview profile is as it was (1.2.0)');
 const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string>; expo?: { autolinking?: unknown } };
@@ -84,6 +90,35 @@ check(!/@maplibre\/maplibre-react-native/.test(taskMap) && /from '@maplibre\/map
   'MapLibre is imported only by OpenTaskMap.tsx, which TaskMap requires only without the Google map');
 const layout = read('src/app/_layout.tsx');
 check(!/GemunuLibre_700Bold|NotoSansSinhala/.test(layout), 'the two fonts no screen uses are not loaded');
+
+console.log('\n== Part 6 additions: store readiness ==');
+check(appJson.expo.name === 'Fame Fleet' && (appJson.expo as { android?: { package?: string } }).android?.package === 'com.fameglobal.driver'
+  && lean.name === 'Fame Fleet' && dev.name === 'Fame Fleet',
+  'the app is "Fame Fleet"; the package stays com.fameglobal.driver');
+const strings = { en: read('src/i18n/en.json'), si: read('src/i18n/si.json') };
+check(!/Fame Driver/.test(strings.en) && !/Fame Driver/.test(strings.si), 'no string the driver sees says "Fame Driver" any more');
+const pngSize = (path: string) => {
+  const b = readFileSync(join(here, '..', path));
+  return b.toString('ascii', 1, 4) === 'PNG' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null;
+};
+const sizes = Object.fromEntries(['assets/icon.png', 'assets/android-icon-foreground.png', 'assets/android-icon-monochrome.png', 'assets/splash-icon.png',
+  'assets/notification-icon.png', 'store/play-icon-512.png', 'store/feature-graphic.png'].map((f) => [f, pngSize(f)?.join('x')]));
+check(Object.values(sizes).join(' ') === '1024x1024 1024x1024 1024x1024 1024x1024 96x96 512x512 1024x500',
+  'the icon, adaptive icon, splash, notification icon and the store\'s icon and feature graphic (scripts/make-icons.mjs)', sizes);
+const permissionsScreen = read('src/app/permissions.tsx');
+const askScreen = read('src/app/ask/[id].tsx');
+check(/if \(!locationDisclosureAgreed\(me\?\.id\)\) \{\s*setDisclosure\(true\);\s*return;\s*\}\s*setAskedLocation\(true\);\s*await requestLocationPermissions\(\)/.test(permissionsScreen)
+  && /!locationDisclosureAgreed\(app\.me\?\.id\)[\s\S]{0,160}setDisclosure\(true\);\s*return;[\s\S]{0,200}await oneFix\(\)/.test(askScreen),
+  'Android\'s location question comes only after the disclosure\'s Agree (Permissions, "Where are you now?")');
+const lookup = (json: string, key: string) => key.split('.').reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], JSON.parse(json));
+const keys = ['disclosure.title', 'disclosure.body', 'disclosure.offDuty', 'disclosure.whoSees', 'disclosure.settings', 'disclosure.next',
+  'disclosure.agree', 'disclosure.notNow', 'common.privacy', 'login.version'];
+check(keys.every((k) => typeof lookup(strings.en, k) === 'string' && typeof lookup(strings.si, k) === 'string')
+  && /even when the app is closed or not in use/.test(String(lookup(strings.en, 'disclosure.body'))),
+  'the disclosure in en and si, with "even when the app is closed or not in use"');
+check(/"privacyUrl": "https:\/\/fame-fleet\.pages\.dev\/privacy"/.test(read('app.json')) && /PRIVACY_URL/.test(read('src/app/login.tsx'))
+  && /PRIVACY_URL/.test(read('src/app/(tabs)/me.tsx')) && /PRIVACY_URL/.test(read('src/components/LocationDisclosure.tsx')),
+  'the privacy policy from sign-in, Me and the disclosure');
 
 console.log(failed ? `\n${failed} build check(s) failed.` : '\nAll build checks passed.');
 process.exit(failed ? 1 : 0);

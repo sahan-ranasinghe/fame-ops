@@ -4,10 +4,11 @@ import Constants from 'expo-constants';
 import { Redirect } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LanguageSwitch } from '@/components/LanguageSwitch';
+import { PRIVACY_URL } from '@/config';
 import { Button, Card, Field, Notice, Txt } from '@/components/ui';
 import { type SignInOutcome, useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
@@ -82,6 +83,13 @@ export default function LoginScreen() {
             <Button label={t('login.signIn')} onPress={submit} disabled={!ready} busy={busy} />
           </Card>
           <Txt variant="muted" style={{ textAlign: 'center', paddingHorizontal: 12 }}>{t('login.help')}</Txt>
+          {/* Part 6: the app's name and version, and the privacy policy (design/office 01 Sign in). */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, paddingTop: 8 }}>
+            <Txt variant="muted" size={15}>{t('login.version', { version: Constants.expoConfig?.version ?? '' })}</Txt>
+            <Txt variant="muted" size={15} accessibilityRole="link" style={{ textDecorationLine: 'underline', minHeight: 48 }} onPress={() => void Linking.openURL(PRIVACY_URL)}>
+              {t('common.privacy')}
+            </Txt>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

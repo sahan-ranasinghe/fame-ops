@@ -9,12 +9,13 @@
     "onePassenger": "මගීන් 1",
     "seats": "ආසන {n}",
     "savedOffline": "සම්බන්ධතාවක් නැත. දුරකථනයේ සුරැකිණි; සම්බන්ධතාව ලැබුණු විට යවනු ලැබේ.",
-    "cameraDenied": "දුරකථනයේ සැකසුම් තුළින් Fame Driver සඳහා කැමරාවට ඉඩ දෙන්න.",
+    "cameraDenied": "දුරකථනයේ සැකසුම් තුළින් Fame Fleet සඳහා කැමරාවට ඉඩ දෙන්න.",
     "discardTitle": "වෙනස්කම් ඉවත දමනවාද?",
     "discardBody": "මෙම තිරයේ ඔබ ඇතුළත් කළ දේ නැති වේ.",
     "discard": "ඉවත දමන්න",
     "close": "වසන්න",
-    "badTime": "වේලාව HH:MM ලෙස ඇතුළත් කරන්න, උදා. 14:30."
+    "badTime": "වේලාව HH:MM ලෙස ඇතුළත් කරන්න, උදා. 14:30.",
+    "privacy": "පෞද්ගලිකත්ව ප්‍රතිපත්තිය"
   },
   "days": [
     "ඉරිදා",
@@ -48,12 +49,13 @@
     "switchedOff": "මෙම ගිණුම අක්‍රිය කර ඇත. කාර්යාලයට කතා කරන්න.",
     "network": "සම්බන්ධතාවක් නැත. ජංගම දත්ත පරීක්ෂා කර නැවත උත්සාහ කරන්න.",
     "notConfigured": "මෙම යෙදුමේ සේවාදායක සැකසුම් නැත. කාර්යාලයට දන්වන්න.",
-    "help": "ඔබේ පරිශීලක නාමය සහ PIN අංකය කාර්යාලයෙන් ලැබේ."
+    "help": "ඔබේ පරිශීලක නාමය සහ PIN අංකය කාර්යාලයෙන් ලැබේ.",
+    "version": "Fame Fleet {version}"
   },
   "permissions": {
     "title": "ආරම්භ කිරීමට මේවාට ඉඩ දෙන්න",
     "location": "ස්ථානය",
-    "locationWhy": "ගමන් සහ කිලෝමීටර් සටහන් කිරීමට Fame Driver හට සෑම විටම ස්ථානය අවශ්‍යයි.",
+    "locationWhy": "ගමන් සහ කිලෝමීටර් සටහන් කිරීමට Fame Fleet හට සෑම විටම ස්ථානය අවශ්‍යයි.",
     "locationAlways": "ඊළඟ තිරයේ \"සැමවිටම ඉඩ දෙන්න\" තෝරන්න.",
     "notifications": "දැනුම්දීම්",
     "notificationsWhy": "නව කාර්යයක් ලැබුණු විට ඔබට දැන්වීමට.",
@@ -299,7 +301,7 @@
     "signOut": "ඉවත් වන්න",
     "signOutTask": "ඉවත් වීමට පෙර දැන් කෙරෙන කාර්යය අවසන් කරන්න.",
     "signOutQueue": "තවම නොයැවූ දේ ඇත. අන්තර්ජාලයට සම්බන්ධ වී \"දැන් යවන්න\" තට්ටු කර, පසුව ඉවත් වන්න.",
-    "signOutConfirm": "Fame Driver වෙතින් ඉවත් වන්නද?",
+    "signOutConfirm": "Fame Fleet වෙතින් ඉවත් වන්නද?",
     "live": "සජීවී යාවත්කාලීන",
     "liveOn": "සම්බන්ධයි",
     "liveConnecting": "සම්බන්ධ වෙමින්…",
@@ -336,14 +338,14 @@
   "tracking": {
     "locationOff": "මෙම දුරකථනයේ ස්ථානය (Location) වසා ඇත. ගමන් සටහන් නොවේ.",
     "turnOnLocation": "ස්ථානය සක්‍රිය කරන්න",
-    "noPermission": "Fame Driver හට ඔබේ ස්ථානය භාවිත කිරීමට අවසර නැත.",
+    "noPermission": "Fame Fleet හට ඔබේ ස්ථානය භාවිත කිරීමට අවසර නැත.",
     "noBackground": "ස්ථානයට අවසර ඇත්තේ යෙදුම විවෘතව ඇති විට පමණි. \"සැමවිටම ඉඩ දෙන්න\" තෝරන්න.",
     "battery": "බැටරි ඉතිරිකිරීම නිසා තිරය වසා ඇති විට සටහන් කිරීම නතර විය හැක.",
     "fix": "නිවැරදි කරන්න",
     "restarted": "සටහන් කිරීම නතර වී තිබුණි. දැන් නැවත ක්‍රියාත්මකයි.",
     "taskNotSharing": "කාර්යයක් සිදුවෙමින් පවතී, නමුත් ඔබ රාජකාරියෙන් බැහැරයි.",
     "shareNow": "රාජකාරියට යන්න",
-    "stoppedTitle": "Fame Driver · සටහන් කිරීම නතර විය",
+    "stoppedTitle": "Fame Fleet · සටහන් කිරීම නතර විය",
     "stoppedBody": "නැවත රාජකාරියට යාමට තට්ටු කරන්න.",
     "lastFix": "අවසන් ස්ථානය {time}",
     "gpsKm": "ධාවනය (GPS)",
@@ -355,7 +357,7 @@
     "testBody": "නව කාර්යයක් ලැබෙන විට ශබ්දය මෙසේය. වසා දැමීමට තට්ටු කරන්න."
   },
   "service": {
-    "title": "Fame Driver · රාජකාරියේ",
+    "title": "Fame Fleet · රාජකාරියේ",
     "body": "ගමන් සටහන් වෙමින්"
   },
   "gate": {
@@ -364,7 +366,7 @@
     "startBody": "කාර්යය ආරම්භ කිරීමට ස්ථානය සක්‍රිය කරන්න.",
     "sharingBody": "රාජකාරියට යාමට ස්ථානය සක්‍රිය කරන්න.",
     "taskBody": "ස්ථානය වසා ඇත. කාර්යය දිගටම කරගෙන යාමට එය සක්‍රිය කරන්න.",
-    "permissionBody": "Fame Driver හට ස්ථාන අවසරය \"සැමවිටම ඉඩ දෙන්න\" ලෙස අවශ්‍යයි. යෙදුම් සැකසුම් විවෘත කර ඉඩ දෙන්න.",
+    "permissionBody": "Fame Fleet හට ස්ථාන අවසරය \"සැමවිටම ඉඩ දෙන්න\" ලෙස අවශ්‍යයි. යෙදුම් සැකසුම් විවෘත කර ඉඩ දෙන්න.",
     "turnOn": "ස්ථානය සක්‍රිය කරන්න",
     "openSettings": "යෙදුම් සැකසුම් විවෘත කරන්න",
     "callOffice": "කාර්යාලය අමතන්න",
@@ -400,7 +402,7 @@
     "start": "පටන් ගන්න",
     "stop": "නවත්වන්න",
     "maxLength": "අවම තත්පර 30 · උපරිම විනාඩි 12",
-    "cameraDenied": "Fame Driver ට කැමරාව භාවිතා කිරීමට අවසර නැත.",
+    "cameraDenied": "Fame Fleet ට කැමරාව භාවිතා කිරීමට අවසර නැත.",
     "recordFailed": "පටිගත කිරීම සාර්ථක වුණේ නැත. නැවත උත්සාහ කරන්න.",
     "tooShort": "අවම වශයෙන් තත්පර 30 ක් පටිගත කරන්න.",
     "checklist": {
@@ -432,49 +434,49 @@
     "title": "දුරකථන සැකසුම",
     "yourBrand": "ඔබගේ {brand} දුරකථනය",
     "yourPhone": "ඔබගේ දුරකථනය",
-    "stoppedOnce": "{phone} Fame Driver {duration} ක් නවත්වා තැබුවා ({when}). එය නවතා ඇති විට ගමන සටහන් නොවේ.",
-    "stoppedMany": "{phone} {when} සිට Fame Driver {count} වතාවක් නවත්වා තැබුවා, මුළු {duration}. එය නවතා ඇති විට ගමන සටහන් නොවේ.",
+    "stoppedOnce": "{phone} Fame Fleet {duration} ක් නවත්වා තැබුවා ({when}). එය නවතා ඇති විට ගමන සටහන් නොවේ.",
+    "stoppedMany": "{phone} {when} සිට Fame Fleet {count} වතාවක් නවත්වා තැබුවා, මුළු {duration}. එය නවතා ඇති විට ගමන සටහන් නොවේ.",
     "doOnce": "මේ සැකසුම් එක් වරක් වෙනස් කරන්න:",
     "open": "{brand} සැකසුම් විවෘත කරන්න",
     "openApp": "යෙදුමේ සැකසුම් විවෘත කරන්න",
     "done": "කළා",
     "steps": {
       "oppo": [
-        "Settings → Apps → Fame Driver → Battery usage: \"Allow background activity\" සහ \"Allow auto launch\" ක්‍රියාත්මක කරන්න.",
-        "Settings → Battery → More settings → Optimise battery use: Fame Driver → \"Don't optimise\" තෝරන්න.",
-        "Recent apps තුළ Fame Driver පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ."
+        "Settings → Apps → Fame Fleet → Battery usage: \"Allow background activity\" සහ \"Allow auto launch\" ක්‍රියාත්මක කරන්න.",
+        "Settings → Battery → More settings → Optimise battery use: Fame Fleet → \"Don't optimise\" තෝරන්න.",
+        "Recent apps තුළ Fame Fleet පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ."
       ],
       "realme": [
-        "Settings → Apps → Fame Driver → Battery usage: \"Allow background activity\" සහ \"Allow auto launch\" ක්‍රියාත්මක කරන්න.",
-        "Settings → Battery → App battery management: Fame Driver පසුබිමේ ක්‍රියාත්මක වීමට ඉඩ දෙන්න.",
-        "Recent apps තුළ Fame Driver පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ."
+        "Settings → Apps → Fame Fleet → Battery usage: \"Allow background activity\" සහ \"Allow auto launch\" ක්‍රියාත්මක කරන්න.",
+        "Settings → Battery → App battery management: Fame Fleet පසුබිමේ ක්‍රියාත්මක වීමට ඉඩ දෙන්න.",
+        "Recent apps තුළ Fame Fleet පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ."
       ],
       "xiaomi": [
-        "Settings → Apps → Fame Driver: \"Autostart\" ක්‍රියාත්මක කරන්න.",
+        "Settings → Apps → Fame Fleet: \"Autostart\" ක්‍රියාත්මක කරන්න.",
         "එම පිටුවේම → Battery saver: \"No restrictions\" තෝරන්න.",
-        "Recent apps තුළ Fame Driver ඔබාගෙන සිට අගුල තට්ටු කරන්න."
+        "Recent apps තුළ Fame Fleet ඔබාගෙන සිට අගුල තට්ටු කරන්න."
       ],
       "vivo": [
-        "Settings → Battery → Background power consumption management: Fame Driver → \"Allow\" තෝරන්න.",
-        "i Manager → App manager → Autostart: Fame Driver ක්‍රියාත්මක කරන්න.",
-        "Recent apps තුළ Fame Driver පහළට අදින්න, එවිට එය අගුළු වී තිබේ."
+        "Settings → Battery → Background power consumption management: Fame Fleet → \"Allow\" තෝරන්න.",
+        "i Manager → App manager → Autostart: Fame Fleet ක්‍රියාත්මක කරන්න.",
+        "Recent apps තුළ Fame Fleet පහළට අදින්න, එවිට එය අගුළු වී තිබේ."
       ],
       "samsung": [
-        "Settings → Apps → Fame Driver → Battery: \"Unrestricted\" තෝරන්න.",
-        "Settings → Battery → Background usage limits: Fame Driver \"Sleeping apps\" හෝ \"Deep sleeping apps\" තුළ නොතිබිය යුතුයි; එය \"Never sleeping apps\" වලට එක් කරන්න.",
-        "Recent apps තුළ Fame Driver අයිකනය තට්ටු කර → \"Keep open\" තෝරන්න."
+        "Settings → Apps → Fame Fleet → Battery: \"Unrestricted\" තෝරන්න.",
+        "Settings → Battery → Background usage limits: Fame Fleet \"Sleeping apps\" හෝ \"Deep sleeping apps\" තුළ නොතිබිය යුතුයි; එය \"Never sleeping apps\" වලට එක් කරන්න.",
+        "Recent apps තුළ Fame Fleet අයිකනය තට්ටු කර → \"Keep open\" තෝරන්න."
       ],
       "other": [
-        "Settings → Apps → Fame Driver → Battery: පසුබිම් ක්‍රියාකාරිත්වයට ඉඩ දෙන්න, සීමා නැතිව.",
-        "දුරකථනයේ \"Autostart\" හෝ \"Auto launch\" ඇත්නම්, Fame Driver සඳහා එය ක්‍රියාත්මක කරන්න.",
-        "Recent apps තුළ Fame Driver අගුළු දමන්න, එවිට එය විවෘතව පවතී."
+        "Settings → Apps → Fame Fleet → Battery: පසුබිම් ක්‍රියාකාරිත්වයට ඉඩ දෙන්න, සීමා නැතිව.",
+        "දුරකථනයේ \"Autostart\" හෝ \"Auto launch\" ඇත්නම්, Fame Fleet සඳහා එය ක්‍රියාත්මක කරන්න.",
+        "Recent apps තුළ Fame Fleet අගුළු දමන්න, එවිට එය විවෘතව පවතී."
       ],
       "huawei": [
-        "Settings → Battery → App launch → Fame Driver: \"Manage automatically\" අක්‍රිය කර, ස්විච තුනම ක්‍රියාත්මක කරන්න.",
-        "Recent apps තුළ Fame Driver පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ."
+        "Settings → Battery → App launch → Fame Fleet: \"Manage automatically\" අක්‍රිය කර, ස්විච තුනම ක්‍රියාත්මක කරන්න.",
+        "Recent apps තුළ Fame Fleet පහළට අදින්න (හෝ අගුල තට්ටු කරන්න), එවිට එය අගුළු වී තිබේ."
       ]
     },
-    "meHint": "දුරකථනය Fame Driver තනිවම නතර කරන්නේ නම්, මෙම සැකසුම් එක් වරක් වෙනස් කරන්න."
+    "meHint": "දුරකථනය Fame Fleet තනිවම නතර කරන්නේ නම්, මෙම සැකසුම් එක් වරක් වෙනස් කරන්න."
   },
   "arrival": {
     "title": "{stop} වෙත ළඟා වුණාද?",
@@ -792,5 +794,15 @@
     "bad": "මිනිත්තු 5 ත් 180 ත් අතර අගයක් ඇතුළත් කරන්න.",
     "closed": "මෙම කාර්යය අවසන්: කිසිවක් යැව්වේ නැත.",
     "failed": "යැවිය නොහැකි විය: {reason}"
+  },
+  "disclosure": {
+    "title": "රාජකාරියේ සිටින විට ඔබේ ස්ථානය",
+    "body": "Fame Fleet ඔබ රාජකාරියේ සිටින විට (වැඩ ආරම්භ කළ සිට වැඩ අවසන් කරන තුරු), යෙදුම වසා ඇති විට හෝ භාවිත නොකරන විට පවා, ඔබේ වාහනය ඇති තැන කාර්යාලයට පෙන්වීමට, ඔබේ ගමන් සහ එක් එක් කාර්යයේ කිලෝමීටර් සටහන් කිරීමට සහ ඔබ එක් එක් නැවතුමට පැමිණි වේලාව සටහන් කිරීමට ස්ථාන දත්ත එකතු කරයි.",
+    "offDuty": "රාජකාරියෙන් පිටත කිසිවක් සටහන් නොවේ.",
+    "whoSees": "Fame Global Solutions කාර්යාලයට එය පෙනේ. ස්ථාන සටහන් දින 90 ක් තබා ගනී.",
+    "settings": "ඔබට ඕනෑම වේලාවක දුරකථනයේ සැකසුම් තුළින් ස්ථානය අක්‍රිය කළ හැක; එවිට ගමන් සටහන් නොවේ.",
+    "next": "ඊළඟට Android ඔබේ අවසරය අසයි.",
+    "agree": "එකඟයි",
+    "notNow": "දැන් නොවේ"
   }
 }

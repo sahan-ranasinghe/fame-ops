@@ -37,6 +37,7 @@ export function SignIn() {
         {error && <Notice tone="bad">{error}</Notice>}
         <button className="btn primary wide" type="submit" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
         <p className="hint" style={{ margin: 0 }}>Forgot your password? Ask the fleet admin for a new set-password link.</p>
+        <p className="hint" style={{ margin: 0 }}><a href="/privacy">Privacy policy</a></p>
       </form>
     </AuthPage>
   );

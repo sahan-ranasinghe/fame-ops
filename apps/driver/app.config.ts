@@ -38,7 +38,7 @@ import type { ConfigContext, ExpoConfig } from 'expo/config';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const LEAN_PROFILES = ['drivers', 'drivers-32'];
+const LEAN_PROFILES = ['drivers', 'drivers-32', 'store'];
 
 /** A plugin entry's name ("expo-dev-client" or ["expo-camera", {…}]). */
 const pluginName = (p: unknown): string => (Array.isArray(p) ? String(p[0]) : String(p));
@@ -66,7 +66,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   return {
     ...config,
     plugins,
-    name: config.name ?? 'Fame Driver',
+    name: config.name ?? 'Fame Fleet',
     slug: config.slug ?? 'fame-driver',
     android: {
       ...config.android,

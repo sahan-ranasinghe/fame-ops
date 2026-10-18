@@ -12,8 +12,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { AppState, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { LocationDisclosure } from '@/components/LocationDisclosure';
 import { PhoneSetupSteps } from '@/components/PhoneSetup';
 import { Button, Card, Txt } from '@/components/ui';
+import { agreeLocationDisclosure, locationDisclosureAgreed } from '@/lib/disclosure';
 import { KEYS, setJson } from '@/lib/kv';
 import { askIgnoreBatteryOptimisation, locationPermissions, requestLocationPermissions } from '@/lib/location';
 import { notificationsAllowed, requestNotifications, showTestNotification } from '@/lib/notifications';
@@ -72,6 +74,7 @@ export default function PermissionsScreen() {
   const insets = useSafeAreaInsets();
   const [status, setStatus] = useState<Status | null>(null);
   const [askedLocation, setAskedLocation] = useState(false);
+  const [disclosure, setDisclosure] = useState(false);
 
   const check = useCallback(() => {
     readStatus().then(setStatus).catch(() => undefined);
@@ -95,6 +98,11 @@ export default function PermissionsScreen() {
       await Linking.openSettings();
       return;
     }
+    // Part 6: the disclosure first, its own screen; Android's question only after Agree.
+    if (!locationDisclosureAgreed(me?.id)) {
+      setDisclosure(true);
+      return;
+    }
     setAskedLocation(true);
     await requestLocationPermissions();
     check();
@@ -111,6 +119,15 @@ export default function PermissionsScreen() {
   return (
     <View style={styles.page}>
       <StatusBar style="dark" />
+      <LocationDisclosure
+        visible={disclosure}
+        onClose={() => setDisclosure(false)}
+        onAgree={() => {
+          if (me) agreeLocationDisclosure(me.id);
+          setDisclosure(false);
+          void askLocation();
+        }}
+      />
       <ScrollView contentContainerStyle={{ padding: 16, paddingTop: insets.top + 24, paddingBottom: 24, gap: 14 }}>
         <Txt variant="title" style={{ marginBottom: 6 }}>{t('permissions.title')}</Txt>
         <Row

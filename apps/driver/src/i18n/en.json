@@ -9,12 +9,13 @@
     "onePassenger": "1 passenger",
     "seats": "{n} seats",
     "savedOffline": "No connection. Saved on the phone; it is sent when the connection is back.",
-    "cameraDenied": "Allow the camera for Fame Driver in the phone's settings.",
+    "cameraDenied": "Allow the camera for Fame Fleet in the phone's settings.",
     "discardTitle": "Discard changes?",
     "discardBody": "What you entered on this screen will be lost.",
     "discard": "Discard",
     "close": "Close",
-    "badTime": "Enter the time as HH:MM, e.g. 14:30."
+    "badTime": "Enter the time as HH:MM, e.g. 14:30.",
+    "privacy": "Privacy policy"
   },
   "days": [
     "Sun",
@@ -48,12 +49,13 @@
     "switchedOff": "This account is switched off. Call the office.",
     "network": "No connection. Check mobile data and try again.",
     "notConfigured": "This copy of the app has no server settings. Tell the office.",
-    "help": "The office gives you your username and PIN."
+    "help": "The office gives you your username and PIN.",
+    "version": "Fame Fleet {version}"
   },
   "permissions": {
     "title": "Allow these to start",
     "location": "Location",
-    "locationWhy": "Fame Driver needs Location all the time to record trips and mileage.",
+    "locationWhy": "Fame Fleet needs Location all the time to record trips and mileage.",
     "locationAlways": "On the next screen choose \"Allow all the time\".",
     "notifications": "Notifications",
     "notificationsWhy": "To tell you when a new task arrives.",
@@ -299,7 +301,7 @@
     "signOut": "Sign out",
     "signOutTask": "Finish the task in progress before signing out.",
     "signOutQueue": "Some things are not sent yet. Connect to the internet, tap \"Send now\", then sign out.",
-    "signOutConfirm": "Sign out of Fame Driver?",
+    "signOutConfirm": "Sign out of Fame Fleet?",
     "live": "Live updates",
     "liveOn": "Connected",
     "liveConnecting": "Connecting…",
@@ -336,14 +338,14 @@
   "tracking": {
     "locationOff": "Location is switched off on this phone. Trips are not recorded.",
     "turnOnLocation": "Turn on location",
-    "noPermission": "Fame Driver is not allowed to use your location.",
+    "noPermission": "Fame Fleet is not allowed to use your location.",
     "noBackground": "Location is allowed only while the app is open. Choose \"Allow all the time\".",
     "battery": "Battery saving may stop recording when the screen is off.",
     "fix": "Fix",
     "restarted": "Recording had stopped. It is running again.",
     "taskNotSharing": "A task is in progress but you are off duty.",
     "shareNow": "Go on duty",
-    "stoppedTitle": "Fame Driver · recording stopped",
+    "stoppedTitle": "Fame Fleet · recording stopped",
     "stoppedBody": "Tap to go on duty again.",
     "lastFix": "Last position {time}",
     "gpsKm": "Driven (GPS)",
@@ -355,7 +357,7 @@
     "testBody": "This is how a new task sounds. Tap to close."
   },
   "service": {
-    "title": "Fame Driver · On duty",
+    "title": "Fame Fleet · On duty",
     "body": "Recording trips"
   },
   "gate": {
@@ -364,7 +366,7 @@
     "startBody": "Turn on Location to start the task.",
     "sharingBody": "Turn on Location to go on duty.",
     "taskBody": "Location is off. Turn it on to continue the task.",
-    "permissionBody": "Fame Driver needs location set to \"Allow all the time\". Open the app settings and allow it.",
+    "permissionBody": "Fame Fleet needs location set to \"Allow all the time\". Open the app settings and allow it.",
     "turnOn": "Turn on Location",
     "openSettings": "Open app settings",
     "callOffice": "Call office",
@@ -400,7 +402,7 @@
     "start": "Start",
     "stop": "Stop",
     "maxLength": "At least 30 s · up to 12 minutes",
-    "cameraDenied": "Fame Driver is not allowed to use the camera.",
+    "cameraDenied": "Fame Fleet is not allowed to use the camera.",
     "recordFailed": "Recording did not work. Try again.",
     "tooShort": "Record at least 30 seconds.",
     "checklist": {
@@ -432,49 +434,49 @@
     "title": "Phone setup",
     "yourBrand": "Your {brand} phone",
     "yourPhone": "Your phone",
-    "stoppedOnce": "{phone} stopped Fame Driver for {duration} ({when}). No trip is recorded while it is stopped.",
-    "stoppedMany": "{phone} stopped Fame Driver {count} times since {when}, {duration} in all. No trip is recorded while it is stopped.",
+    "stoppedOnce": "{phone} stopped Fame Fleet for {duration} ({when}). No trip is recorded while it is stopped.",
+    "stoppedMany": "{phone} stopped Fame Fleet {count} times since {when}, {duration} in all. No trip is recorded while it is stopped.",
     "doOnce": "Change these settings once:",
     "open": "Open {brand} settings",
     "openApp": "Open app settings",
     "done": "Done",
     "steps": {
       "oppo": [
-        "Settings → Apps → Fame Driver → Battery usage: turn on \"Allow background activity\" and \"Allow auto launch\".",
-        "Settings → Battery → More settings → Optimise battery use: Fame Driver → \"Don't optimise\".",
-        "Recent apps: pull Fame Driver down (or tap the lock) so it stays locked."
+        "Settings → Apps → Fame Fleet → Battery usage: turn on \"Allow background activity\" and \"Allow auto launch\".",
+        "Settings → Battery → More settings → Optimise battery use: Fame Fleet → \"Don't optimise\".",
+        "Recent apps: pull Fame Fleet down (or tap the lock) so it stays locked."
       ],
       "realme": [
-        "Settings → Apps → Fame Driver → Battery usage: turn on \"Allow background activity\" and \"Allow auto launch\".",
-        "Settings → Battery → App battery management: Fame Driver → allow running in the background.",
-        "Recent apps: pull Fame Driver down (or tap the lock) so it stays locked."
+        "Settings → Apps → Fame Fleet → Battery usage: turn on \"Allow background activity\" and \"Allow auto launch\".",
+        "Settings → Battery → App battery management: Fame Fleet → allow running in the background.",
+        "Recent apps: pull Fame Fleet down (or tap the lock) so it stays locked."
       ],
       "xiaomi": [
-        "Settings → Apps → Fame Driver: turn on \"Autostart\".",
+        "Settings → Apps → Fame Fleet: turn on \"Autostart\".",
         "Same page → Battery saver: \"No restrictions\".",
-        "Recent apps: hold Fame Driver and tap the lock."
+        "Recent apps: hold Fame Fleet and tap the lock."
       ],
       "vivo": [
-        "Settings → Battery → Background power consumption management: Fame Driver → \"Allow\".",
-        "i Manager → App manager → Autostart: turn on Fame Driver.",
-        "Recent apps: pull Fame Driver down so it stays locked."
+        "Settings → Battery → Background power consumption management: Fame Fleet → \"Allow\".",
+        "i Manager → App manager → Autostart: turn on Fame Fleet.",
+        "Recent apps: pull Fame Fleet down so it stays locked."
       ],
       "samsung": [
-        "Settings → Apps → Fame Driver → Battery: \"Unrestricted\".",
-        "Settings → Battery → Background usage limits: Fame Driver must not be in \"Sleeping apps\" or \"Deep sleeping apps\"; add it to \"Never sleeping apps\".",
-        "Recent apps: tap the Fame Driver icon → \"Keep open\"."
+        "Settings → Apps → Fame Fleet → Battery: \"Unrestricted\".",
+        "Settings → Battery → Background usage limits: Fame Fleet must not be in \"Sleeping apps\" or \"Deep sleeping apps\"; add it to \"Never sleeping apps\".",
+        "Recent apps: tap the Fame Fleet icon → \"Keep open\"."
       ],
       "other": [
-        "Settings → Apps → Fame Driver → Battery: allow background activity, no restrictions.",
-        "If the phone has \"Autostart\" or \"Auto launch\", turn it on for Fame Driver.",
-        "Recent apps: lock Fame Driver so it stays open."
+        "Settings → Apps → Fame Fleet → Battery: allow background activity, no restrictions.",
+        "If the phone has \"Autostart\" or \"Auto launch\", turn it on for Fame Fleet.",
+        "Recent apps: lock Fame Fleet so it stays open."
       ],
       "huawei": [
-        "Settings → Battery → App launch → Fame Driver: turn off \"Manage automatically\", then turn on all three switches.",
-        "Recent apps: pull Fame Driver down (or tap the lock) so it stays locked."
+        "Settings → Battery → App launch → Fame Fleet: turn off \"Manage automatically\", then turn on all three switches.",
+        "Recent apps: pull Fame Fleet down (or tap the lock) so it stays locked."
       ]
     },
-    "meHint": "If the phone stops Fame Driver by itself, change these settings once."
+    "meHint": "If the phone stops Fame Fleet by itself, change these settings once."
   },
   "arrival": {
     "title": "Arrived at {stop}?",
@@ -792,5 +794,15 @@
     "bad": "Enter minutes between 5 and 180.",
     "closed": "This task is over: nothing was sent.",
     "failed": "Couldn't send: {reason}"
+  },
+  "disclosure": {
+    "title": "Your location while you are on duty",
+    "body": "Fame Fleet collects location data to show the office where your vehicle is, to record your trips and the km of each task, and to mark when you reach each stop, while you are on duty (from Start work to Finish work), even when the app is closed or not in use.",
+    "offDuty": "Off duty, nothing is recorded.",
+    "whoSees": "The Fame Global Solutions office sees it. The points are kept for 90 days.",
+    "settings": "You can turn location off in the phone's settings at any time; then trips are not recorded.",
+    "next": "Next, Android asks for your permission.",
+    "agree": "Agree",
+    "notNow": "Not now"
   }
 }

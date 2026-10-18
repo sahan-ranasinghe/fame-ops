@@ -15,11 +15,13 @@ import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, StyleSh
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Check, ChevronLeft, LocateFixed, Phone, X } from '@/components/icons';
+import { LocationDisclosure } from '@/components/LocationDisclosure';
 import { useLeaveGuard } from '@/components/navigation';
 import { useDateLabel, useNow } from '@/components/task';
 import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
 import { type AskAnswer, type AskAnswerInput, answerWords, isOpen, questionKey, timeChoices, tripWhen, typedTime } from '@/lib/asks';
-import { oneFix } from '@/lib/location';
+import { agreeLocationDisclosure, locationDisclosureAgreed } from '@/lib/disclosure';
+import { locationPermissions, oneFix } from '@/lib/location';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
@@ -40,6 +42,7 @@ export default function AskScreen() {
   const [found, setFound] = useState<'loading' | 'ready' | 'gone' | 'offline'>(ask ? 'ready' : 'loading');
   const [changing, setChanging] = useState(false);
   const [busy, setBusy] = useState<AskAnswer | null>(null);
+  const [disclosure, setDisclosure] = useState(false);
   const [result, setResult] = useState<{ text: string; tone: Tone } | null>(null);
   // The office time: a button picked (ISO), or a typed time.
   const [picked, setPicked] = useState<string | null>(null);
@@ -94,6 +97,11 @@ export default function AskScreen() {
 
   async function shareLocation() {
     if (busy) return;
+    // Part 6: Android is about to ask for location: the disclosure first (once per driver), only Agree goes on.
+    if (!locationDisclosureAgreed(app.me?.id) && !(await locationPermissions().catch(() => ({ location: false }))).location) {
+      setDisclosure(true);
+      return;
+    }
     setBusy('location');
     setProblem(null);
     const fix = await oneFix();
@@ -148,6 +156,15 @@ export default function AskScreen() {
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.page}>
       <StatusBar style="dark" />
+      <LocationDisclosure
+        visible={disclosure}
+        onClose={() => setDisclosure(false)}
+        onAgree={() => {
+          if (app.me) agreeLocationDisclosure(app.me.id);
+          setDisclosure(false);
+          void shareLocation();
+        }}
+      />
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 16, paddingTop: insets.top + 18, paddingBottom: insets.bottom + 28, gap: 16 }}>
         {header}
 

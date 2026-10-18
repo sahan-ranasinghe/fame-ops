@@ -15,7 +15,7 @@ import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const LEAN_PROFILES = ['drivers', 'drivers-32'];
+export const LEAN_PROFILES = ['drivers', 'drivers-32', 'store'];
 const DEV_CLIENT = ['expo-dev-client', 'expo-dev-launcher', 'expo-dev-menu', 'expo-dev-menu-interface'];
 const MAPLIBRE = '@maplibre/maplibre-react-native';
 const FROM_SOURCE = ['expo-camera'];

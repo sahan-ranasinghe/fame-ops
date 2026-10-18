@@ -12,7 +12,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { BatteryCharging, CalendarX, Camera, ChevronRight, FileText, type LucideIcon, LogOut, Pencil, RefreshCw, ShieldCheck, Wifi } from '@/components/icons';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CallButtons } from '@/components/CallButtons';
@@ -21,6 +21,7 @@ import { useStoppedNote } from '@/components/PhoneSetup';
 import { Thumb, useLicencePhotos, useMyPhoto } from '@/components/Photos';
 import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Notice, Plate, Txt } from '@/components/ui';
+import { PRIVACY_URL } from '@/config';
 import { fetchMonthTasks } from '@/lib/api';
 import { availLine, type UnavailabilityRow, upcomingEntries } from '@/lib/availability';
 import { officeCalls, phoneDisplay } from '@/lib/contacts';
@@ -287,6 +288,8 @@ export default function MeScreen() {
         <Row icon={FileText} title={t('docs.title')} hint={vehicle ? t('docs.open', { plate: vehicle.reg_no }) : null} onPress={() => router.push('/documents')} />
 
         <Row icon={ShieldCheck} title={t('me.permissions')} onPress={() => router.push('/permissions')} />
+        {/* Part 6: the privacy policy on the office site, in the browser. */}
+        <Row icon={FileText} title={t('common.privacy')} onPress={() => void Linking.openURL(PRIVACY_URL)} />
 
         {problem && <Notice tone="danger" text={problem} />}
         {signOutBlocked && <Txt variant="muted" style={{ textAlign: 'center' }}>{t(signOutBlocked)}</Txt>}

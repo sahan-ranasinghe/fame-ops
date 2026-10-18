@@ -11,6 +11,7 @@ import { subscribeAskAnswers, subscribeDriverLatest, subscribeDriverPoints, subs
 import { FleetStore } from "../data/store";
 import { uploadToTicket } from "../data/upload";
 import { registerServiceWorker } from "../push";
+import { Privacy } from "../screens/Privacy";
 import type { Me } from "../transport/types";
 import { watchRouterPath } from "../ui/ListKit";
 import { ToastProvider } from "../ui/Toast";
@@ -83,7 +84,11 @@ function Gate() {
   }
 }
 
+/** Part 6: the privacy policy opens without signing in (the stores and the driver app link to it). */
+export const isPrivacyPath = (path: string) => path.replace(/\/+$/, "") === "/privacy";
+
 export function WebApp() {
+  if (isPrivacyPath(window.location.pathname)) return <Privacy />;
   return (
     <AuthProvider>
       <Gate />
