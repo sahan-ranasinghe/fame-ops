@@ -496,6 +496,14 @@ export interface TaskDetail {
   task: {
     id: string;
     title: string;
+    /** Hotfix 2 (J): specific, or chosen on the day (driver_day) or any vehicle of a type; vehicle_text "Vehicle: on the day". */
+    vehicle_mode?: "specific" | "driver_day" | "any_type";
+    vehicle_type_wanted?: string;
+    vehicle_text?: string;
+    /** Hotfix 2 (K): who sent it to the driver, and when. */
+    approved_by?: PersonAt;
+    /** Hotfix 2 (F): the driver's number for people who may see it (Call driver, WhatsApp driver). */
+    driver_phone?: PhoneLinks;
     label?: string;
     kind?: TaskKind;
     purpose?: TripPurpose;
@@ -725,7 +733,9 @@ export interface RequestCard {
     call?: string | null;
     whatsapp?: string | null;
     photo_url?: string;
+    /** Hotfix 2 (J): "" when the vehicle is chosen on the day; vehicle_text says so ("Vehicle: on the day", "Any van"). */
     vehicle: string;
+    vehicle_text?: string;
     make_model?: string;
     vehicle_photo_url?: string;
     vehicle_thumb_url?: string;
@@ -733,6 +743,82 @@ export interface RequestCard {
   };
   /** For a person without an office account: the message for the trip's current moment and its WhatsApp link. */
   tell_requester?: { moment: "approved" | "driver_changed" | "on_the_way" | "arrived" | "cancelled"; message: string; whatsapp: string };
+  /** Hotfix 2 (K): who decided it, with their number when they have one (else office_phone). */
+  approved_by?: PersonAt;
+  declined_by?: PersonAt & { reason?: string };
+  cancelled_by?: PersonAt & { reason?: string };
+  /** The approvers who have its decide page open right now ("Palitha is reviewing"). */
+  reviewing?: { name: string; since: string }[];
+  /** Hotfix 2 (A): the trip's live state, from its task (My trips). */
+  live?: TripLive;
+  /** Hotfix 2 (F): the office's own number (Call office), for the requester's pages. */
+  office_phone?: PhoneLinks;
+}
+
+/** A person and when (Hotfix 2, K): "Approved by Palitha · 10:42". */
+export interface PersonAt {
+  name: string;
+  /** "10:42" today, "Sat 17 Oct 10:42" another day. */
+  at: string;
+  photo_url?: string;
+  /** Their number (E.164), "07X XXX XXXX", tel: and wa.me; absent when they have none (the page offers Call office). */
+  phone?: string;
+  phone_display?: string;
+  call?: string;
+  whatsapp?: string;
+}
+
+export interface PhoneLinks {
+  phone: string;
+  phone_display: string;
+  call: string;
+  whatsapp: string;
+}
+
+/** A trip's live state on My trips (Hotfix 2, A), from the request and its task. */
+export interface TripLive {
+  state: "waiting" | "approved" | "accepted" | "on_the_way" | "arrived" | "completed" | "declined" | "cancelled";
+  /** "Waiting", "Approved", "Driver accepted · 09:12", "On the way · 09:30", "Arrived · 10:05", "Completed · 11:40",
+   * "Declined · no vehicle that day", "Cancelled · not needed". */
+  text: string;
+  at?: string;
+}
+
+/** my_trips (Hotfix 2, A): the person's requests and proposed tasks over a range of days, newest first. */
+export interface MyTrips {
+  from: string;
+  to: string;
+  count: number;
+  trips: RequestCard[];
+}
+
+/** One item of the notification centre (Hotfix 2, A): my_inbox. */
+export interface InboxItem {
+  id: number;
+  event: string;
+  title: string;
+  body?: string;
+  url?: string;
+  who?: string;
+  /** "2026-10-18 10:42" (Colombo) and the same as words ("5 min ago"). */
+  at: string;
+  ago: string;
+  read: boolean;
+  /** The sound and the banner (B): urgent (a task to approve, needs a driver), alert (decided, declined), soft (on the
+   * way, arrived), alarm (a critical issue), info (everything else: no sound). */
+  kind: "urgent" | "alert" | "soft" | "alarm" | "info";
+}
+
+export interface Inbox {
+  unread: number;
+  items: InboxItem[];
+}
+
+/** The office site's sound settings per person (Hotfix 2, B), in my_notification_settings. */
+export interface SoundPrefs {
+  on: boolean;
+  /** 0 to 100 (default 70). */
+  volume: number;
 }
 
 export interface RequestsList {
@@ -1021,6 +1107,10 @@ export interface UpdateStopsResult {
 }
 
 export interface FleetSettings {
+  /** Hotfix 2 (F): the office's own number, E.164 (+94…) (Call office). */
+  office_phone?: string | null;
+  /** Hotfix 2 (J): a task may be made with its vehicle chosen on the day or of a type (switched on after every phone has the update). */
+  vehicle_on_the_day?: boolean;
   /** Phase 7 (§13): Start a trip in the app: allowed (Company preselected), default (Personal preselected), off; ask_first = allowed for now. */
   driver_personal_trips?: "allowed" | "default" | "off" | "ask_first";
   dwell_min: Record<string, number>;
@@ -1400,7 +1490,9 @@ export interface OfficeKey {
 export interface OfficeUser {
   name: string;
   email?: string | null;
+  /** Hotfix 2 (F): E.164 (+94…); phone_display "07X XXX XXXX". */
   phone?: string | null;
+  phone_display?: string;
   role: string;
   permissions?: string[];
   active: boolean;
@@ -1513,6 +1605,8 @@ export interface NotificationSettings {
   events: NotificationEvent[];
   devices: NotificationDevice[];
   push: { configured: boolean; public_key?: string };
+  /** Hotfix 2 (B): the office site's sounds (set_my_notification_settings({ sound })). */
+  sound?: SoundPrefs;
   registered?: { id: string; device: string; endpoint_hash: string };
   removed?: number;
 }
@@ -1551,6 +1645,10 @@ export interface RedecideResult {
 export interface AvailableDriver {
   name: string;
   username?: string | null;
+  /** Hotfix 2 (F): Call and WhatsApp for people who may see drivers' numbers (approve, assign_tasks, vehicles, issues). */
+  phone?: PhoneLinks;
+  /** Hotfix 2 (J): information only, never a block: "no vehicle yet · regular: WP CAB-4521". */
+  vehicle_note?: string;
   state: "on_task" | "on_duty" | "off_duty";
   status_text: string;
   on_duty_since?: string;

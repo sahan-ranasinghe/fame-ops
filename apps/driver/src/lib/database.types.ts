@@ -215,6 +215,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"employee_changes": {
+                  Row: {
+                    "at": string,"changed_by_employee_id": string | null,"changed_by_name": string,"channel": string,"employee_id": string,"field": string,"id": number,"new_value": string | null,"old_value": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "at"?: string,"changed_by_employee_id"?: string | null,"changed_by_name": string,"channel": string,"employee_id": string,"field": string,"id"?: never,"new_value"?: string | null,"old_value"?: string | null
+                  }
+                  Update: {
+                    "at"?: string,"changed_by_employee_id"?: string | null,"changed_by_name"?: string,"channel"?: string,"employee_id"?: string,"field"?: string,"id"?: never,"new_value"?: string | null,"old_value"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "employee_changes_changed_by_employee_id_fkey"
+      columns: ["changed_by_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "employee_changes_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"employees": {
                   Row: {
                     "active": boolean,"auth_user_id": string | null,"code": string,"created_at": string,"current_vehicle_id": string | null,"email": string | null,"id": string,"language": string,"licence_expiry": string | null,"name": string,"permissions": (string)[],"phone": string | null,"photo_id": string | null,"photo_updated_at": string | null,"role": string,"updated_at": string,"username": string | null
@@ -465,6 +491,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"notification_prefs": {
+                  Row: {
+                    "employee_id": string,"sound_on": boolean,"updated_at": string,"volume": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "employee_id": string,"sound_on"?: boolean,"updated_at"?: string,"volume"?: number
+                  }
+                  Update: {
+                    "employee_id"?: string,"sound_on"?: boolean,"updated_at"?: string,"volume"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "notification_prefs_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: true
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"notification_settings": {
                   Row: {
                     "employee_id": string,"enabled": boolean,"event": string,"updated_at": string
@@ -590,6 +636,26 @@ isOneToOne: false
                     {
       foreignKeyName: "office_audit_actor_employee_id_fkey"
       columns: ["actor_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"office_inbox": {
+                  Row: {
+                    "body": string | null,"created_at": string,"employee_id": string,"event": string,"id": number,"read_at": string | null,"title": string,"url": string | null,"who": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "body"?: string | null,"created_at"?: string,"employee_id": string,"event": string,"id"?: never,"read_at"?: string | null,"title": string,"url"?: string | null,"who"?: string | null
+                  }
+                  Update: {
+                    "body"?: string | null,"created_at"?: string,"employee_id"?: string,"event"?: string,"id"?: never,"read_at"?: string | null,"title"?: string,"url"?: string | null,"who"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "office_inbox_employee_id_fkey"
+      columns: ["employee_id"]
 isOneToOne: false
       referencedRelation: "employees"
       referencedColumns: ["id"]
@@ -819,6 +885,32 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"request_viewers": {
+                  Row: {
+                    "employee_id": string,"name": string,"request_id": string,"seen_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "employee_id": string,"name": string,"request_id": string,"seen_at"?: string
+                  }
+                  Update: {
+                    "employee_id"?: string,"name"?: string,"request_id"?: string,"seen_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "request_viewers_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "request_viewers_request_id_fkey"
+      columns: ["request_id"]
+isOneToOne: false
+      referencedRelation: "vehicle_requests"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"route_gap_lines": {
                   Row: {
                     "fetched_at": string,"from_lat": number,"from_lng": number,"geometry": NonNullable<Json>,"km": number | null,"provider": string,"to_lat": number,"to_lng": number
@@ -1033,17 +1125,23 @@ isOneToOne: false
                   ]
                 },"tasks": {
                   Row: {
-                    "accept_reminder_sent_at": string | null,"accepted_at": string | null,"assigned_by_employee_id": string | null,"avoid_expressway": boolean,"buffer_min": number | null,"cancelled_reason": string | null,"completed_at": string | null,"contact_name": string | null,"contact_phone": string | null,"created_at": string,"created_by": string | null,"declined_after_accept": boolean,"declined_at": string | null,"declined_by": string | null,"declined_note": string | null,"declined_reason": string | null,"employee_id": string,"end_by": string | null,"end_odometer_km": number | null,"finish_flag": Json | null,"id": string,"kind": string,"km": number | null,"label": string | null,"leave_by": string | null,"leave_by_source": string | null,"needs_driver_reason": string | null,"needs_driver_since": string | null,"notes": string | null,"passengers": number | null,"plan_json": Json | null,"plan_version": number,"purpose": string,"reminder_0_sent_at": string | null,"reminder_30_sent_at": string | null,"request_id": string | null,"return_to_base": boolean,"seen_at": string | null,"sent_at": string,"start_at": string,"start_google_fetched_at": string | null,"start_google_place_id": string | null,"start_lat": number | null,"start_lng": number | null,"start_name": string | null,"start_odometer_km": number | null,"start_place_id": string | null,"started_at": string | null,"status": string,"title": string,"updated_at": string,"vehicle_choice": Json | null,"vehicle_id": string,"warnings": Json | null
+                    "accept_reminder_sent_at": string | null,"accepted_at": string | null,"approved_at": string | null,"approved_by_employee_id": string | null,"assigned_by_employee_id": string | null,"avoid_expressway": boolean,"buffer_min": number | null,"cancelled_reason": string | null,"completed_at": string | null,"contact_name": string | null,"contact_phone": string | null,"created_at": string,"created_by": string | null,"declined_after_accept": boolean,"declined_at": string | null,"declined_by": string | null,"declined_note": string | null,"declined_reason": string | null,"employee_id": string,"end_by": string | null,"end_odometer_km": number | null,"finish_flag": Json | null,"id": string,"kind": string,"km": number | null,"label": string | null,"leave_by": string | null,"leave_by_source": string | null,"needs_driver_reason": string | null,"needs_driver_since": string | null,"notes": string | null,"passengers": number | null,"plan_json": Json | null,"plan_version": number,"purpose": string,"reminder_0_sent_at": string | null,"reminder_30_sent_at": string | null,"request_id": string | null,"return_to_base": boolean,"seen_at": string | null,"sent_at": string,"start_at": string,"start_google_fetched_at": string | null,"start_google_place_id": string | null,"start_lat": number | null,"start_lng": number | null,"start_name": string | null,"start_odometer_km": number | null,"start_place_id": string | null,"started_at": string | null,"status": string,"title": string,"updated_at": string,"vehicle_choice": Json | null,"vehicle_id": string | null,"vehicle_mode": string,"vehicle_type_wanted": string | null,"warnings": Json | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"assigned_by_employee_id"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id": string,"end_by"?: string | null,"end_odometer_km"?: number | null,"finish_flag"?: Json | null,"id"?: string,"kind"?: string,"km"?: number | null,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"needs_driver_reason"?: string | null,"needs_driver_since"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"purpose"?: string,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at": string,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title": string,"updated_at"?: string,"vehicle_choice"?: Json | null,"vehicle_id": string,"warnings"?: Json | null
+                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"approved_at"?: string | null,"approved_by_employee_id"?: string | null,"assigned_by_employee_id"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id": string,"end_by"?: string | null,"end_odometer_km"?: number | null,"finish_flag"?: Json | null,"id"?: string,"kind"?: string,"km"?: number | null,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"needs_driver_reason"?: string | null,"needs_driver_since"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"purpose"?: string,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at": string,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title": string,"updated_at"?: string,"vehicle_choice"?: Json | null,"vehicle_id"?: string | null,"vehicle_mode"?: string,"vehicle_type_wanted"?: string | null,"warnings"?: Json | null
                   }
                   Update: {
-                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"assigned_by_employee_id"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id"?: string,"end_by"?: string | null,"end_odometer_km"?: number | null,"finish_flag"?: Json | null,"id"?: string,"kind"?: string,"km"?: number | null,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"needs_driver_reason"?: string | null,"needs_driver_since"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"purpose"?: string,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at"?: string,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string,"vehicle_choice"?: Json | null,"vehicle_id"?: string,"warnings"?: Json | null
+                    "accept_reminder_sent_at"?: string | null,"accepted_at"?: string | null,"approved_at"?: string | null,"approved_by_employee_id"?: string | null,"assigned_by_employee_id"?: string | null,"avoid_expressway"?: boolean,"buffer_min"?: number | null,"cancelled_reason"?: string | null,"completed_at"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"created_by"?: string | null,"declined_after_accept"?: boolean,"declined_at"?: string | null,"declined_by"?: string | null,"declined_note"?: string | null,"declined_reason"?: string | null,"employee_id"?: string,"end_by"?: string | null,"end_odometer_km"?: number | null,"finish_flag"?: Json | null,"id"?: string,"kind"?: string,"km"?: number | null,"label"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"needs_driver_reason"?: string | null,"needs_driver_since"?: string | null,"notes"?: string | null,"passengers"?: number | null,"plan_json"?: Json | null,"plan_version"?: number,"purpose"?: string,"reminder_0_sent_at"?: string | null,"reminder_30_sent_at"?: string | null,"request_id"?: string | null,"return_to_base"?: boolean,"seen_at"?: string | null,"sent_at"?: string,"start_at"?: string,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_odometer_km"?: number | null,"start_place_id"?: string | null,"started_at"?: string | null,"status"?: string,"title"?: string,"updated_at"?: string,"vehicle_choice"?: Json | null,"vehicle_id"?: string | null,"vehicle_mode"?: string,"vehicle_type_wanted"?: string | null,"warnings"?: Json | null
                   }
                   Relationships: [
                     {
+      foreignKeyName: "tasks_approved_by_employee_id_fkey"
+      columns: ["approved_by_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "tasks_assigned_by_employee_id_fkey"
       columns: ["assigned_by_employee_id"]
 isOneToOne: false
@@ -1187,17 +1285,23 @@ isOneToOne: false
                   ]
                 },"vehicle_requests": {
                   Row: {
-                    "arrived_push_sent_at": string | null,"avoid_expressway": boolean,"back_by": string | null,"buffer_min": number | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"change_note": string | null,"changed_at": string | null,"changed_by": string | null,"contact_name": string | null,"contact_phone": string | null,"created_at": string,"decide_reminder_sent_at": string | null,"decided_at": string | null,"decided_by": string | null,"decline_reason": string | null,"driver_required": boolean,"from_dwell_min": number | null,"id": string,"kind": string,"label": string | null,"late_push_sent_at": string | null,"leave_by": string | null,"leave_by_source": string | null,"need_type": string | null,"needed_at": string,"note": string | null,"on_behalf_of": string | null,"one_step": boolean,"pax": number | null,"plan_json": Json | null,"previous": Json | null,"project_id": string | null,"project_label": string | null,"projects_json": Json | null,"proposal_json": Json | null,"proposed_employee_id": string | null,"proposed_vehicle_id": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"requested_by_user_id": string | null,"requester_phone": string | null,"return_to_base": boolean,"route_from": string | null,"route_to": string | null,"seen_at": string | null,"seen_by": string | null,"start_google_fetched_at": string | null,"start_google_place_id": string | null,"start_lat": number | null,"start_lng": number | null,"start_name": string | null,"start_place_id": string | null,"status": string,"task_id": string | null,"task_notes": string | null,"title": string | null,"to_dwell_min": number | null,"tools": boolean,"trip_edited_at": string | null,"version": number
+                    "arrived_push_sent_at": string | null,"avoid_expressway": boolean,"back_by": string | null,"buffer_min": number | null,"cancel_reason": string | null,"cancelled_at": string | null,"cancelled_by": string | null,"change_note": string | null,"changed_at": string | null,"changed_by": string | null,"contact_name": string | null,"contact_phone": string | null,"created_at": string,"decide_reminder_sent_at": string | null,"decided_at": string | null,"decided_by": string | null,"decided_by_employee_id": string | null,"decline_reason": string | null,"driver_required": boolean,"from_dwell_min": number | null,"id": string,"kind": string,"label": string | null,"late_push_sent_at": string | null,"leave_by": string | null,"leave_by_source": string | null,"need_type": string | null,"needed_at": string,"note": string | null,"on_behalf_of": string | null,"one_step": boolean,"pax": number | null,"plan_json": Json | null,"previous": Json | null,"project_id": string | null,"project_label": string | null,"projects_json": Json | null,"proposal_json": Json | null,"proposed_employee_id": string | null,"proposed_vehicle_id": string | null,"proposed_vehicle_mode": string | null,"proposed_vehicle_type": string | null,"requested_by_employee_id": string | null,"requested_by_name": string,"requested_by_user_id": string | null,"requester_phone": string | null,"return_to_base": boolean,"route_from": string | null,"route_to": string | null,"seen_at": string | null,"seen_by": string | null,"start_google_fetched_at": string | null,"start_google_place_id": string | null,"start_lat": number | null,"start_lng": number | null,"start_name": string | null,"start_place_id": string | null,"status": string,"task_id": string | null,"task_notes": string | null,"title": string | null,"to_dwell_min": number | null,"tools": boolean,"trip_edited_at": string | null,"version": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "arrived_push_sent_at"?: string | null,"avoid_expressway"?: boolean,"back_by"?: string | null,"buffer_min"?: number | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"decide_reminder_sent_at"?: string | null,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"kind"?: string,"label"?: string | null,"late_push_sent_at"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"plan_json"?: Json | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"projects_json"?: Json | null,"proposal_json"?: Json | null,"proposed_employee_id"?: string | null,"proposed_vehicle_id"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"requested_by_user_id"?: string | null,"requester_phone"?: string | null,"return_to_base"?: boolean,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_place_id"?: string | null,"status"?: string,"task_id"?: string | null,"task_notes"?: string | null,"title"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"trip_edited_at"?: string | null,"version"?: number
+                    "arrived_push_sent_at"?: string | null,"avoid_expressway"?: boolean,"back_by"?: string | null,"buffer_min"?: number | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"decide_reminder_sent_at"?: string | null,"decided_at"?: string | null,"decided_by"?: string | null,"decided_by_employee_id"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"kind"?: string,"label"?: string | null,"late_push_sent_at"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"need_type"?: string | null,"needed_at": string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"plan_json"?: Json | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"projects_json"?: Json | null,"proposal_json"?: Json | null,"proposed_employee_id"?: string | null,"proposed_vehicle_id"?: string | null,"proposed_vehicle_mode"?: string | null,"proposed_vehicle_type"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name": string,"requested_by_user_id"?: string | null,"requester_phone"?: string | null,"return_to_base"?: boolean,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_place_id"?: string | null,"status"?: string,"task_id"?: string | null,"task_notes"?: string | null,"title"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"trip_edited_at"?: string | null,"version"?: number
                   }
                   Update: {
-                    "arrived_push_sent_at"?: string | null,"avoid_expressway"?: boolean,"back_by"?: string | null,"buffer_min"?: number | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"decide_reminder_sent_at"?: string | null,"decided_at"?: string | null,"decided_by"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"kind"?: string,"label"?: string | null,"late_push_sent_at"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"plan_json"?: Json | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"projects_json"?: Json | null,"proposal_json"?: Json | null,"proposed_employee_id"?: string | null,"proposed_vehicle_id"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"requested_by_user_id"?: string | null,"requester_phone"?: string | null,"return_to_base"?: boolean,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_place_id"?: string | null,"status"?: string,"task_id"?: string | null,"task_notes"?: string | null,"title"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"trip_edited_at"?: string | null,"version"?: number
+                    "arrived_push_sent_at"?: string | null,"avoid_expressway"?: boolean,"back_by"?: string | null,"buffer_min"?: number | null,"cancel_reason"?: string | null,"cancelled_at"?: string | null,"cancelled_by"?: string | null,"change_note"?: string | null,"changed_at"?: string | null,"changed_by"?: string | null,"contact_name"?: string | null,"contact_phone"?: string | null,"created_at"?: string,"decide_reminder_sent_at"?: string | null,"decided_at"?: string | null,"decided_by"?: string | null,"decided_by_employee_id"?: string | null,"decline_reason"?: string | null,"driver_required"?: boolean,"from_dwell_min"?: number | null,"id"?: string,"kind"?: string,"label"?: string | null,"late_push_sent_at"?: string | null,"leave_by"?: string | null,"leave_by_source"?: string | null,"need_type"?: string | null,"needed_at"?: string,"note"?: string | null,"on_behalf_of"?: string | null,"one_step"?: boolean,"pax"?: number | null,"plan_json"?: Json | null,"previous"?: Json | null,"project_id"?: string | null,"project_label"?: string | null,"projects_json"?: Json | null,"proposal_json"?: Json | null,"proposed_employee_id"?: string | null,"proposed_vehicle_id"?: string | null,"proposed_vehicle_mode"?: string | null,"proposed_vehicle_type"?: string | null,"requested_by_employee_id"?: string | null,"requested_by_name"?: string,"requested_by_user_id"?: string | null,"requester_phone"?: string | null,"return_to_base"?: boolean,"route_from"?: string | null,"route_to"?: string | null,"seen_at"?: string | null,"seen_by"?: string | null,"start_google_fetched_at"?: string | null,"start_google_place_id"?: string | null,"start_lat"?: number | null,"start_lng"?: number | null,"start_name"?: string | null,"start_place_id"?: string | null,"status"?: string,"task_id"?: string | null,"task_notes"?: string | null,"title"?: string | null,"to_dwell_min"?: number | null,"tools"?: boolean,"trip_edited_at"?: string | null,"version"?: number
                   }
                   Relationships: [
                     {
+      foreignKeyName: "vehicle_requests_decided_by_employee_id_fkey"
+      columns: ["decided_by_employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    },{
       foreignKeyName: "vehicle_requests_project_id_fkey"
       columns: ["project_id"]
 isOneToOne: false
@@ -1319,6 +1423,9 @@ isOneToOne: false
 "colombo_when":
 { Args: { "p_at": string }; Returns: string
                            },
+"confirm_task_vehicle":
+{ Args: { "p_task": string,"p_vehicle": string }; Returns: string
+                           },
 "current_employee_id":
 { Args: Record<PropertyKey, never>; Returns: string
                            },
@@ -1360,6 +1467,9 @@ isOneToOne: false
                            },
 "my_held_vehicle":
 { Args: Record<PropertyKey, never>; Returns: string
+                           },
+"my_task_contacts":
+{ Args: { "p_task": string }; Returns: Json
                            },
 "my_vehicle_choices":
 { Args: Record<PropertyKey, never>; Returns: Json
@@ -1405,6 +1515,9 @@ isOneToOne: false
                            },
 "office_update_task_stops":
 { Args: { "p_stops": Json,"p_task": Json,"p_task_id": string,"p_version": number }; Returns: number
+                           },
+"on_duty_since":
+{ Args: { "p_employee": string }; Returns: string
                            },
 "prune_driver_heartbeats":
 { Args: { "p_batch"?: number,"p_keep_days"?: number }; Returns: number

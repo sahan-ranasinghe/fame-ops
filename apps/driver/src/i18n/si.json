@@ -585,5 +585,61 @@
     "cancelled": "ගමන අවලංගු කළා",
     "cancelOffline": "සම්බන්ධතාවක් නැත: සම්බන්ධතාවය ලැබුණු විට අවලංගු කරන්න.",
     "cancelFailed": "ගමන අවලංගු කළ නොහැකි විය: {reason}"
+  },
+  "preview": {
+    "title": "නව කාර්යය",
+    "changedTitle": "කාර්යය වෙනස් විය",
+    "stops": "නැවතුම්",
+    "showAll": "නැවතුම් {n} ම පෙන්වන්න",
+    "arriveLeave": "පැමිණීම {arrive} · පිටවීම {leave}",
+    "arriveBy": "{time} ට පෙර",
+    "totals": "කි.මී. {km} · රිය පැදවීම {drive}",
+    "leaveBy": "{time} ට පිටත් වන්න",
+    "vehicle": "වාහනය",
+    "vehicleOnDay": "එදින ඔබ ළඟ ඇති වාහනය",
+    "vehicleAny": "ඕනෑම {type}",
+    "askedBy": "ඉල්ලුවේ {name}",
+    "assignedBy": "ලබා දුන්නේ {name}",
+    "approvedBy": "අනුමත කළේ {name} · {time}",
+    "changed": "වෙනස් විය",
+    "lastCopy": "සම්බන්ධතාවක් නැත: මෙම දුරකථනයේ අවසන් පිටපතින් පෙන්වයි.",
+    "passengers": "මගීන් {n}"
+  },
+  "call": {
+    "contact": "සම්බන්ධීකරුට අමතන්න",
+    "requester": "ඉල්ලූ අයට අමතන්න",
+    "fleetAdmin": "වාහන කළමනාකරුට අමතන්න",
+    "office": "කාර්යාලයට අමතන්න",
+    "whatsapp": "WhatsApp"
+  },
+  "vehicleConfirm": {
+    "title": "කුමන වාහනයද?",
+    "body": "මෙම කාර්යයට තවම වාහනයක් නැත. ඔබ පදවන වාහනය තහවුරු කරන්න.",
+    "needsType": "මෙම කාර්යයට {type} එකක් අවශ්‍යයි.",
+    "use": "{plate} භාවිත කරන්න",
+    "pick": "වෙනත් වාහනයක් තෝරන්න",
+    "wrongType": "{plate} {type} එකක් නොවේ.",
+    "inGarage": "{plate} ගරාජයේ ඇත.",
+    "failed": "වාහනය සැකසිය නොහැකි විය: {reason}"
+  },
+  "channel": {
+    "newTasks": "නව කාර්යයන්",
+    "newTasksDesc": "නව, වෙනස් වූ සහ අවලංගු කළ කාර්යයන්"
+  },
+  "dur": {
+    "now": "දැන්",
+    "inMin": "මිනිත්තු {n} කින්",
+    "inHours": "පැය {h} මිනිත්තු {m} කින්",
+    "inHoursOnly": "පැය {h} කින්",
+    "tomorrow": "හෙට {time}",
+    "later": "{date} {time} (දින {days} කින්)",
+    "agoMin": "මිනිත්තු {n} කට පෙර",
+    "agoHours": "පැය {h} මිනිත්තු {m} කට පෙර",
+    "agoHoursOnly": "පැය {h} කට පෙර",
+    "yesterday": "ඊයේ {time}",
+    "earlier": "{date} {time} (දින {days} කට පෙර)",
+    "minutes": "මිනිත්තු {n}",
+    "hours": "පැය {h} මිනිත්තු {m}",
+    "hoursOnly": "පැය {h}"
   }
 }

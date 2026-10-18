@@ -585,5 +585,61 @@
     "cancelled": "Trip cancelled",
     "cancelOffline": "No connection: cancel it when the connection is back.",
     "cancelFailed": "Couldn't cancel the trip: {reason}"
+  },
+  "preview": {
+    "title": "New task",
+    "changedTitle": "Task changed",
+    "stops": "Stops",
+    "showAll": "Show all {n} stops",
+    "arriveLeave": "arrive {arrive} · leave {leave}",
+    "arriveBy": "by {time}",
+    "totals": "{km} km · {drive} driving",
+    "leaveBy": "Leave by {time}",
+    "vehicle": "Vehicle",
+    "vehicleOnDay": "Your vehicle on the day",
+    "vehicleAny": "Any {type}",
+    "askedBy": "Asked by {name}",
+    "assignedBy": "Given by {name}",
+    "approvedBy": "Approved by {name} · {time}",
+    "changed": "Changed",
+    "lastCopy": "No connection: shown from the last copy on this phone.",
+    "passengers": "{n} passengers"
+  },
+  "call": {
+    "contact": "Call contact",
+    "requester": "Call requester",
+    "fleetAdmin": "Call fleet admin",
+    "office": "Call office",
+    "whatsapp": "WhatsApp"
+  },
+  "vehicleConfirm": {
+    "title": "Which vehicle?",
+    "body": "This task has no vehicle yet. Confirm the one you are driving.",
+    "needsType": "This task needs a {type}.",
+    "use": "Use {plate}",
+    "pick": "Choose another vehicle",
+    "wrongType": "{plate} is not a {type}.",
+    "inGarage": "{plate} is in the garage.",
+    "failed": "Couldn't set the vehicle: {reason}"
+  },
+  "channel": {
+    "newTasks": "New tasks",
+    "newTasksDesc": "New, changed and cancelled tasks"
+  },
+  "dur": {
+    "now": "now",
+    "inMin": "in {n} min",
+    "inHours": "in {h} h {m} min",
+    "inHoursOnly": "in {h} h",
+    "tomorrow": "tomorrow {time}",
+    "later": "{date} {time} (in {days} days)",
+    "agoMin": "{n} min ago",
+    "agoHours": "{h} h {m} min ago",
+    "agoHoursOnly": "{h} h ago",
+    "yesterday": "yesterday {time}",
+    "earlier": "{date} {time} ({days} days ago)",
+    "minutes": "{n} min",
+    "hours": "{h} h {m} min",
+    "hoursOnly": "{h} h"
   }
 }

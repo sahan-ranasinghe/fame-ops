@@ -24,6 +24,11 @@ export interface Me {
   mfa_required?: boolean;
   /** Which map the web shows (Part 5): google = Google's map after register_map_load; places = Google's place search for stops. */
   map?: { package: "google" | "open"; places: boolean };
+  /** Hotfix 2 (F): the person's own number, E.164 (+94…), and "07X XXX XXXX" to show; web only (GET /me). */
+  phone?: string;
+  phone_display?: string;
+  /** Approve or assign_tasks and no number yet: the banner "Add your phone number so drivers can call you". */
+  phone_required?: boolean;
 }
 
 /** True when the person holds any one of the permissions (none asked = everyone). */
@@ -78,5 +83,5 @@ export const ALL_TOOLS = [
   // Phase 7, Part 3: photos and documents (the uploads photo_upload_url, vehicle_document_upload_url and
   // save_vehicle_document are the web app's only, so neither the connector nor the artifact has them).
   "set_driver_photo", "set_vehicle_photo", "vehicle_documents", "remove_vehicle_document", "restore_vehicle_document",
-  "remove_place", "restore_place", "list_tasks", "set_trip_purpose",
+  "remove_place", "restore_place", "list_tasks", "set_trip_purpose", "my_trips", "my_inbox", "mark_inbox_read", "update_my_profile", "reviewing",
 ];
