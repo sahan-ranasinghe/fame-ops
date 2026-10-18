@@ -1,55 +1,100 @@
-// One issue (/issues/:id): the details, the linked task / report / request with
-// its photos, the timeline, and the office's actions with the issues permission:
-// Take (assign to me), Add note, Resolve with a note, Dismiss, Reopen.
-import { type FormEvent, useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+// One issue (/issues/:id, a child of the list; Phase 7 §9): a panel beside the
+// list on a desktop with an X (Esc closes it too), a full page with Back on a
+// phone. The facts (opened, opened by, taken by, resolved or dismissed at and
+// by), the linked task / report / request with its photos, the timeline, and
+// the office's actions with the issues permission: Take (assign to me), Add
+// note, Resolve with a note, Dismiss, Reopen. Take, Resolve and Dismiss close
+// the panel; the list's row and the bell are patched in place at once and
+// fetched again quietly (no reload flash).
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
-import type { IssueHistory } from "../data/types";
-import { attIcon, cap } from "../lib/format";
+import type { Issue, IssueHistory, IssuesList } from "../data/types";
+import { useQuery } from "../data/useQuery";
+import { attIcon, cap, clock } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { Loading, Notice, Pill, Plate } from "../ui/basics";
+import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
+import { useIsPhone } from "../ui/phone";
 import { useToast } from "../ui/Toast";
-import { eventText, kindText, severityTone, statusTone } from "./issuesLogic";
+import { BELL_KEY, eventText, isActive, issueFacts, ISSUES_KEY, kindText, patchIssues, severityTone, statusTone } from "./issuesLogic";
+
+/** update_issue's answer (not in data/types.ts yet). */
+interface UpdateIssueAnswer {
+  issue: Issue;
+  changed?: string[];
+}
+
+/** The panel's top: Back on a phone, an X on a desktop; Esc closes it (not while typing in a field). */
+function PanelTop({ title, sub, side, onClose }: { title: ReactNode; sub?: ReactNode; side?: ReactNode; onClose: () => void }) {
+  const phone = useIsPhone();
+  const close = useRef(onClose);
+  close.current = onClose;
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== "Escape" || ev.defaultPrevented) return;
+      const t = ev.target as HTMLElement | null;
+      if (t && (t.tagName === "SELECT" || t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
+      close.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  return (
+    <div className="page-top">
+      {phone && <button type="button" className="btn icon-btn back" onClick={onClose} aria-label="Back"><Icon name="back" /></button>}
+      <div className="grow">
+        {sub && <div className="eyebrow">{sub}</div>}
+        <h2 className="page-title">{title}</h2>
+      </div>
+      {side}
+      {!phone && <button type="button" className="btn icon-btn" onClick={onClose} aria-label="Close" title="Close (Esc)"><Icon name="close" /></button>}
+    </div>
+  );
+}
 
 export default function IssuePage() {
   const { id = "" } = useParams();
-  const { me, store, transport } = useFleet();
+  const { search } = useLocation();
+  const navigate = useNavigate();
+  const { me, store, transport, noConnector } = useFleet();
   const toast = useToast();
-  const [h, setH] = useState<IssueHistory | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const q = useQuery<IssueHistory>("issue", "issue_history", { id }, { enabled: !noConnector && !!id });
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const canEdit = me.tools.includes("update_issue");
+  // A note half-typed for one issue never moves to the next one opened.
+  useEffect(() => {
+    setNote("");
+    setMsg(null);
+  }, [id]);
 
-  async function load() {
-    try {
-      setH(await transport.call<IssueHistory>("issue_history", { id }));
-      setErr(null);
-    } catch (e) {
-      setErr(errText(e as FleetError)[0]);
-    }
-  }
-  useEffect(() => { void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id]);
+  /** Back to the list with its filters. */
+  const close = () => navigate(`/issues${search}`);
 
-  async function change(input: Record<string, unknown>, done: string) {
+  async function change(input: Record<string, unknown>, done: string, closes: boolean) {
+    const was = q.data?.issue.status ?? "";
     setBusy(true);
     setMsg(null);
     try {
-      await transport.call("update_issue", { id, ...input });
+      const r = await transport.call<UpdateIssueAnswer>("update_issue", { id, ...input });
+      // The row and the bell change at once; the quiet refresh after brings the server's own words.
+      const takenAt = `${colomboDay()} ${clock(Date.now())}`;
+      store.patch<IssuesList>(ISSUES_KEY, (d) => patchIssues(d, r.issue, was, { takenAt }));
+      store.patch<IssuesList>(BELL_KEY, (d) => patchIssues(d, r.issue, was, { activeOnly: true, takenAt }));
       toast(done);
       setNote("");
-      await load();
-      void store.load("issuesAll", "list_issues", { status: "all", limit: 200 });
-      void store.load("issues", "list_issues", { status: "active", limit: 10 });
-      void store.load("overview", "fleet_overview", {});
+      setBusy(false);
+      if (closes) close();
+      void store.invalidate();
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);
+      setBusy(false);
     }
-    setBusy(false);
   }
   function addNote(ev: FormEvent) {
     ev.preventDefault();
@@ -57,91 +102,101 @@ export default function IssuePage() {
       setMsg("Write the note first.");
       return;
     }
-    void change({ note: note.trim() }, "Note added");
+    void change({ note: note.trim() }, "Note added", false);
   }
   function resolve() {
     if (!note.trim()) {
       setMsg("Write what was done first: it becomes the resolution.");
       return;
     }
-    void change({ status: "resolved", note: note.trim() }, "Issue resolved");
+    void change({ status: "resolved", note: note.trim() }, "Issue resolved", true);
   }
 
-  if (err) return <section className="view"><div className="ph"><div><h1>Issue</h1></div></div><Notice tone="bad">{err}</Notice></section>;
-  if (!h) return <section className="view"><div className="ph"><div><h1>Issue</h1></div></div><Loading>Loading the issue…</Loading></section>;
+  // The answer for another issue (a click on the next row) is never shown under this one.
+  const h = q.data && q.data.issue.id === id ? q.data : undefined;
+  if (!h) {
+    return (
+      <div data-testid="issue-page">
+        <PanelTop title="Issue" onClose={close} />
+        {q.err ? <Notice tone="bad">{errText(q.err)[0]}</Notice> : <Loading>Loading the issue…</Loading>}
+      </div>
+    );
+  }
   const i = h.issue;
-  const active = i.status === "open" || i.status === "in_progress";
+  const active = isActive(i.status);
   const driverLink = i.driver_username && can(me, ...ROUTES_NEED) ? `/drivers/${i.driver_username}` : null;
 
   return (
-    <section className="view" data-testid="issue-page">
-      <div className="ph">
-        <div>
-          <div className="eyebrow"><Link to="/issues">Issues</Link> · {kindText(i)}</div>
-          <h1>{i.title}</h1>
+    <div className="stack" data-testid="issue-page">
+      <PanelTop
+        title={i.title}
+        sub={kindText(i)}
+        side={<Pill tone={statusTone(i.status)}>{i.status.replace("_", " ")}</Pill>}
+        onClose={close}
+      />
+      <div className="card card-b">
+        <div className="row" style={{ padding: 0 }}>
+          <span className={`att-ic ${severityTone(i.severity)}`}><Icon name={attIcon(i.title)} /></span>
+          <div className="grow">
+            <div className="name">{i.detail || "—"}</div>
+            <div className="sub">{[cap(i.severity), i.due].filter(Boolean).join(" · ")}</div>
+          </div>
+          {i.vehicle && <Plate v={i.vehicle} />}
         </div>
-        <Pill tone={statusTone(i.status)}>{i.status.replace("_", " ")}</Pill>
-      </div>
-      <div className="stack" style={{ maxWidth: 820 }}>
-        <div className="card card-b">
-          <div className="row" style={{ padding: 0 }}>
-            <span className={`att-ic ${severityTone(i.severity)}`}><Icon name={attIcon(i.title)} /></span>
-            <div className="grow">
-              <div className="name">{i.detail || "—"}</div>
-              <div className="sub">{[cap(i.severity), i.due, `opened ${i.opened}`, i.assigned_to ? `assigned to ${i.assigned_to.name}` : "nobody assigned"].filter(Boolean).join(" · ")}</div>
-            </div>
-            {i.vehicle && <Plate v={i.vehicle} />}
-          </div>
-          {i.resolution_note && <Notice tone="ok">Resolved by {i.resolved_by ?? "?"} {i.resolved ? `at ${i.resolved}` : ""}: {i.resolution_note}</Notice>}
-          <div className="chips">
-            {h.task && me.tools.includes("task_detail") && <Link className="btn small" to={`/tasks/${h.task.id}`}>Task · {h.task.title}</Link>}
-            {driverLink && <Link className="btn small" to={driverLink}>Driver · {i.driver}</Link>}
-            {i.driver_links?.call && <a className="btn small" href={i.driver_links.call}>Call driver</a>}
-            {i.driver_links?.whatsapp && <a className="btn small" href={i.driver_links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}
-            {h.request && <Link className="btn small" to="/requests">Request · {h.request.requested_by}</Link>}
-          </div>
-        </div>
-
-        {h.report && (
-          <div className="card card-b" data-testid="issue-report">
-            <h2>The driver's report</h2>
-            <p style={{ margin: 0 }}>{cap(h.report.category)} · {h.report.driver ?? "?"} · reported {h.report.reported} · <b>{h.report.status.replace("_", " ")}</b></p>
-            {h.report.note && <p style={{ margin: 0 }}>{h.report.note}</p>}
-            {h.report.office_note && <p className="muted" style={{ margin: 0 }}>Office: {h.report.office_note}</p>}
-            <div className="photos">{h.report.photos.map((u, n) => <a key={n} className="btn small" href={u} target="_blank" rel="noopener">Photo {n + 1}</a>)}</div>
-          </div>
-        )}
-
-        {canEdit && (
-          <form className="card card-b form" onSubmit={addNote} data-testid="issue-actions">
-            <h2>{active ? "Deal with it" : "Reopen"}</h2>
-            <div className="field">
-              <label htmlFor="issue-note">Note{active ? " (the resolution when you resolve)" : ""}</label>
-              <input id="issue-note" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What was done, or what the driver should know" />
-            </div>
-            {msg && <Notice tone="bad">{msg}</Notice>}
-            <div className="acts">
-              {active && !i.assigned_to && <button type="button" className="btn" disabled={busy} onClick={() => void change({ assign_to: "me", status: "in_progress" }, "Taken")}>Take</button>}
-              {active && <button className="btn" type="submit" disabled={busy}>Add note</button>}
-              {active && <button type="button" className="btn dark" disabled={busy} onClick={resolve}>Resolve</button>}
-              {active && <button type="button" className="btn" disabled={busy} onClick={() => void change({ status: "dismissed", ...(note.trim() && { note: note.trim() }) }, "Issue dismissed")}>Dismiss</button>}
-              {!active && <button type="button" className="btn dark" disabled={busy} onClick={() => void change({ status: "open", ...(note.trim() && { note: note.trim() }) }, "Issue reopened")}>Reopen</button>}
-            </div>
-          </form>
-        )}
-
-        <div className="card card-b" data-testid="issue-history">
-          <h2>History</h2>
-          <dl className="kv">
-            {h.events.map((e, n) => (
-              <div key={n} style={{ gridColumn: "1/-1" }}>
-                <dt>{e.at}</dt>
-                <dd>{eventText(e)}</dd>
-              </div>
-            ))}
-          </dl>
+        <dl className="kv" data-testid="issue-facts" style={{ marginTop: 12 }}>
+          {issueFacts(i).map(([label, value]) => (
+            <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+          ))}
+        </dl>
+        {i.resolution_note && <Notice tone="ok">{i.status === "dismissed" ? "Dismissed" : "Resolved"} by {i.resolved_by ?? "?"} {i.resolved ? `at ${i.resolved}` : ""}: {i.resolution_note}</Notice>}
+        <div className="chips">
+          {h.task && me.tools.includes("task_detail") && <Link className="btn small" to={`/tasks/${h.task.id}`}>Task · {h.task.title}</Link>}
+          {driverLink && <Link className="btn small" to={driverLink}>Driver · {i.driver}</Link>}
+          {i.driver_links?.call && <a className="btn small" href={i.driver_links.call}>Call driver</a>}
+          {i.driver_links?.whatsapp && <a className="btn small" href={i.driver_links.whatsapp} target="_blank" rel="noopener">WhatsApp</a>}
+          {h.request && <Link className="btn small" to={`/requests/${h.request.id}`}>Request · {h.request.requested_by}</Link>}
         </div>
       </div>
-    </section>
+
+      {h.report && (
+        <div className="card card-b" data-testid="issue-report">
+          <h2>The driver's report</h2>
+          <p style={{ margin: 0 }}>{cap(h.report.category)} · {h.report.driver ?? "?"} · reported {h.report.reported} · <b>{h.report.status.replace("_", " ")}</b></p>
+          {h.report.note && <p style={{ margin: 0 }}>{h.report.note}</p>}
+          {h.report.office_note && <p className="muted" style={{ margin: 0 }}>Office: {h.report.office_note}</p>}
+          <div className="photos">{h.report.photos.map((u, n) => <a key={n} className="btn small" href={u} target="_blank" rel="noopener">Photo {n + 1}</a>)}</div>
+        </div>
+      )}
+
+      {canEdit && (
+        <form className="card card-b form" onSubmit={addNote} data-testid="issue-actions">
+          <h2>{active ? "Deal with it" : "Reopen"}</h2>
+          <div className="field">
+            <label htmlFor="issue-note">Note{active ? " (the resolution when you resolve)" : ""}</label>
+            <input id="issue-note" maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} placeholder="What was done, or what the driver should know" />
+          </div>
+          {msg && <Notice tone="bad">{msg}</Notice>}
+          <div className="acts">
+            {active && !i.assigned_to && <button type="button" className="btn" disabled={busy} onClick={() => void change({ assign_to: "me", status: "in_progress" }, "Taken", true)}>Take</button>}
+            {active && <button className="btn" type="submit" disabled={busy}>Add note</button>}
+            {active && <button type="button" className="btn dark" disabled={busy} onClick={resolve}>Resolve</button>}
+            {active && <button type="button" className="btn" disabled={busy} onClick={() => void change({ status: "dismissed", ...(note.trim() && { note: note.trim() }) }, "Issue dismissed", true)}>Dismiss</button>}
+            {!active && <button type="button" className="btn dark" disabled={busy} onClick={() => void change({ status: "open", ...(note.trim() && { note: note.trim() }) }, "Issue reopened", false)}>Reopen</button>}
+          </div>
+        </form>
+      )}
+
+      <div className="card card-b" data-testid="issue-history">
+        <h2>History</h2>
+        <dl className="kv">
+          {h.events.map((e, n) => (
+            <div key={n} style={{ gridColumn: "1/-1" }}>
+              <dt>{e.at}</dt>
+              <dd>{eventText(e)}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
   );
 }

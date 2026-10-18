@@ -78,10 +78,21 @@ export function tabsFor(me: Pick<Me, "permissions">): NavItem[] {
   return [...picked, MORE_TAB];
 }
 
+/**
+ * Pages under a section, not in the rail (a desktop opens them from the section's page): the phone's More list shows
+ * them right after their section's place. Phase 7 (§8): Tasks → History.
+ */
+export const SUB_PAGES: (NavItem & { after: string })[] = [
+  { key: "task_history", label: "Task history", need: ["assign_tasks"], path: "/tasks/history", after: "tasks" },
+];
+
+/** NAV with the sub-pages in place, for the More list. */
+const MORE_ORDER: NavItem[] = NAV.flatMap((n) => [n, ...SUB_PAGES.filter((s) => s.after === n.key).map(({ after: _after, ...s }) => s)]);
+
 /** What the More page lists on a phone: every screen the person may open that is not on the tab bar. On a desktop the rail has them all. */
 export function moreFor(me: Pick<Me, "permissions">): NavItem[] {
   const onBar = new Set(tabsFor(me).map((t) => t.key));
-  return allowed(NAV, me).filter((n) => !onBar.has(n.key));
+  return allowed(MORE_ORDER, me).filter((n) => !onBar.has(n.key));
 }
 
 /** The driver page (route history) and everything that calls driver_route. */

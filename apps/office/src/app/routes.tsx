@@ -27,6 +27,7 @@ import { RequestEdit } from "../screens/RequestEdit";
 import { Requests } from "../screens/Requests";
 import { TaskDetail } from "../screens/TaskDetail";
 import { TaskEdit } from "../screens/TaskEdit";
+import { TaskHistory } from "../screens/TaskHistory";
 import { Tasks } from "../screens/Tasks";
 import { TaskStops } from "../screens/TaskStops";
 import { FleetSettings } from "../screens/settings/FleetSettings";
@@ -91,12 +92,18 @@ export const routes: RouteObject[] = [
         children: [{ path: ":id", element: <TaskDetail /> }],
       },
       { path: "tasks/new", element: <Guard need={["assign_tasks"]}><NewTask /></Guard> },
+      // Phase 7 (§8): Tasks → History (list_tasks); a static segment outranks the board's /tasks/:id.
+      { path: "tasks/history", element: <Guard need={["assign_tasks"]}><TaskHistory /></Guard> },
       { path: "tasks/:id/edit", element: <Guard need={["assign_tasks"]}><TaskEdit /></Guard> },
       { path: "tasks/:id/stops", element: <Guard need={["assign_tasks"]}><TaskStops /></Guard> },
       // Phase 7 (§16): the Overview's "Reminders due" as a page (the same permission as the Overview's block).
       { path: "reminders", element: <Guard need={ISSUES_NEED}><Reminders /></Guard> },
-      { path: "issues", element: <Guard need={ISSUES_NEED}><Suspense fallback={<div className="loading">Opening issues…</div>}><Issues /></Suspense></Guard> },
-      { path: "issues/:id", element: <Guard need={ISSUES_NEED}><Suspense fallback={<div className="loading">Opening the issue…</div>}><IssuePage /></Suspense></Guard> },
+      // Phase 7 (§9): an issue is a child of the list (a panel beside it on a desktop, a full page on a phone).
+      {
+        path: "issues",
+        element: <Guard need={ISSUES_NEED}><Suspense fallback={<div className="loading">Opening issues…</div>}><Issues /></Suspense></Guard>,
+        children: [{ path: ":id", element: <Suspense fallback={<div className="loading">Opening the issue…</div>}><IssuePage /></Suspense> }],
+      },
       {
         path: "requests",
         element: <Guard need={VR}><Requests /></Guard>,

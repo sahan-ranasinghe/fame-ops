@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
@@ -70,13 +70,18 @@ class FakeTransport implements Transport {
   }
 }
 
-async function mount() {
+function Where() {
+  const { search } = useLocation();
+  return <div data-testid="where">{search}</div>;
+}
+
+async function mount(url = "/drivers/nuwan.p") {
   const transport = new FakeTransport();
   const store = new FleetStore(transport);
   const me = await transport.me();
   render(
     <FleetProvider value={{ store, transport, me, noConnector: false }}>
-      <MemoryRouter initialEntries={["/drivers/nuwan.p"]}><Routes><Route path="/drivers/:username" element={<DriverPage />} /></Routes></MemoryRouter>
+      <MemoryRouter initialEntries={[url]}><Routes><Route path="/drivers/:username" element={<DriverPage />} /></Routes><Where /></MemoryRouter>
     </FleetProvider>,
   );
   await act(async () => { await Promise.resolve(); });
@@ -115,6 +120,20 @@ describe("DriverPage", () => {
     expect(transport.calls.some((c) => c.tool === "driver_route" && c.args.date === addDays(day, -1))).toBe(true);
     expect(await screen.findByText("No location was shared on this day.")).toBeTruthy();
     expect(screen.getByTestId("map").textContent).toBe("no route");
+    // The day is in the URL (Phase 7 §8: the date-range control in one-day mode).
+    expect(screen.getByTestId("where").textContent).toBe("?range=yesterday");
+  });
+  it("opens on the day in the URL; Custom day picks one day (no From–To)", async () => {
+    const past = addDays(day, -3);
+    const transport = await mount(`/drivers/nuwan.p?range=custom&from=${past}`);
+    expect(transport.calls.find((c) => c.tool === "driver_route")?.args.date).toBe(past);
+    expect(screen.queryByRole("button", { name: "This week" })).toBeNull();
+    const field = screen.getByLabelText("Day", { selector: "input" }) as HTMLInputElement;
+    expect(field.value).toBe(past);
+    fireEvent.change(field, { target: { value: addDays(day, -5) } });
+    await act(async () => { await Promise.resolve(); });
+    expect(transport.calls.some((c) => c.tool === "driver_route" && c.args.date === addDays(day, -5))).toBe(true);
+    expect(screen.getByTestId("where").textContent).toBe(`?range=custom&from=${addDays(day, -5)}`);
   });
 });
 

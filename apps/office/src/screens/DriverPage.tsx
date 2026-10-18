@@ -22,6 +22,7 @@ import { addDays, longDate, num, today, waLink } from "../lib/format";
 import { MapView } from "../map/MapView";
 import { ESTIMATED_COLOR, type MapMarker, type RoutePoint, SPEED_COLORS } from "../map/types";
 import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, Tile, VehicleThumb } from "../ui/basics";
+import { DateRange, useDateRange } from "../ui/DateRange";
 import { Icon } from "../ui/icons";
 import { GapsList, useGaps } from "./GapsList";
 import { clockText, gapWindowsOf, playbackPath } from "./playbackLogic";
@@ -37,7 +38,10 @@ export function DriverPage() {
   const { username = "" } = useParams();
   const { store, noConnector, realtime } = useFleet();
   const lists = useLists(!noConnector);
-  const [date, setDate] = useState(today());
+  // A route is one day (Phase 7 §8): the date-range control in one-day mode, the day in the URL (?range=yesterday, or
+  // ?range=custom&from=YYYY-MM-DD).
+  const day = useDateRange("today", { oneDay: true });
+  const date = day.from;
   const isToday = date === today();
   const isTodayRef = useRef(isToday);
   isTodayRef.current = isToday;
@@ -149,11 +153,7 @@ export function DriverPage() {
 
         <div className="ph" style={{ marginBottom: 0 }}>
           <div><div className="eyebrow">{dayLabel}{route?.first ? ` · ${route.first}–${route.last}` : ""}</div><h2 style={{ margin: 0 }}>Route</h2></div>
-          <div className="datebar" role="group" aria-label="Day">
-            <button type="button" className="chip" aria-pressed={isToday} onClick={() => setDate(today())}>Today</button>
-            <button type="button" className="chip" aria-pressed={date === addDays(today(), -1)} onClick={() => setDate(addDays(today(), -1))}>Yesterday</button>
-            <input type="date" aria-label="Date" value={date} max={today()} onChange={(e) => { if (e.target.value) setDate(e.target.value); }} />
-          </div>
+          <DateRange value={day} label="Day" />
         </div>
 
         <div className="tiles">

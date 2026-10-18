@@ -37,8 +37,12 @@ describe("the phone tab bar: at most five, chosen from the permissions, More alw
       expect(bar.length).toBeLessThanOrEqual(5);
       expect(bar[bar.length - 1]).toBe("more");
     }
-    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["issues", "vehicles", "projects", "maintenance", "mileage", "fuel", "places", "drivers", "duty", "settings"]);
-    expect(keys(moreFor(me(PRESETS.requester.permissions)))).toEqual(["projects", "drivers", "settings"]);
+    // Task history (Phase 7 §8) sits where Tasks is in the order: Tasks itself is on the bar.
+    expect(keys(moreFor(me(PRESETS.fleet_admin.permissions)))).toEqual(["task_history", "issues", "vehicles", "projects", "maintenance", "mileage", "fuel", "places", "drivers", "duty", "settings"]);
+    expect(moreFor(me(PRESETS.dispatcher.permissions)).find((n) => n.key === "task_history")).toEqual({ key: "task_history", label: "Task history", need: ["assign_tasks"], path: "/tasks/history" });
+    // Not in the rail: the desktop opens it from the Tasks page.
+    expect(keys(NAV)).not.toContain("task_history");
+    expect(keys(moreFor(me(PRESETS.requester.permissions)))).toEqual(["projects", "drivers", "settings"]); // no task history without assign_tasks
     expect(keys(moreFor(me(["request"])))).toEqual(["projects", "settings"]);
   });
   it("the big Home action is the one thing the person does most", () => {

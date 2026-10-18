@@ -7,6 +7,8 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
+import { queryKey } from "../data/useQuery";
+import { FUEL_QUERY, useFuelArgs } from "./Fuel";
 import type { FuelEntry, FuelList, SettingsResult, VideoMark } from "../data/types";
 import { joinDots, num } from "../lib/format";
 import { Loading, Notice, Pill } from "../ui/basics";
@@ -17,7 +19,9 @@ export function FuelDetail() {
   const { id = "" } = useParams();
   const [params] = useSearchParams();
   const { me, transport } = useFleet();
-  const list = useEntry<FuelList>("fuel");
+  // The list's answer for the dates and filters in the URL (Fuel keeps it while this page is open; nothing is fetched here).
+  const { args } = useFuelArgs();
+  const list = useEntry<FuelList>(queryKey(FUEL_QUERY, args));
   const e: FuelEntry | undefined = list.data?.entries.find((x) => x.id === id);
   const [items, setItems] = useState<{ key: string; en: string }[] | undefined>();
   const [piece, setPiece] = useState(0);

@@ -115,6 +115,8 @@ export function Tasks() {
         <div className="ph">
           <div><div className="eyebrow">{(date === today() ? "Today · " : "") + longDate(date, true)}</div><h1>Tasks</h1></div>
           <div className="ph-actions">
+            {/* Phase 7 (§8): Tasks → History, the tasks over a range of days. */}
+            {me.tools.includes("list_tasks") && <Link className="btn" to="/tasks/history">History</Link>}
             {canAssign && <Link className="btn primary" to={`/tasks/new${q}`}><Icon name="plus" />Assign a task</Link>}
           </div>
         </div>
