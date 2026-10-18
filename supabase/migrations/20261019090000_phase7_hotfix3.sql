@@ -134,3 +134,156 @@ as $$
                      'vehicle_conflict', 'arrival_override', 'completed_early', 'vehicle_needed', 'missed_task')
           and (select public.office_can('assign_tasks')))
 $$;
+
+-- L2. A missed task and the driver's own calls: accept and decline answer "cancelled" (the app drops it; no needs-a-driver
+-- for an old task, no push), and a vehicle confirmed offline for it still counts (its queued start un-misses it).
+-- As in 20261016090000_phase7_dispatch.sql (decline_task), 20261014120000_task_accept_decline.sql (accept_task) and
+-- 20261018150000_phase7_hotfix2.sql (confirm_task_vehicle), with the missed status.
+create or replace function public.decline_task(p_task_id uuid, p_reason text, p_note text default null, p_at timestamptz default now())
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_me   uuid := public.current_employee_id();
+  v_task public.tasks%rowtype;
+  v_at   timestamptz := least(coalesce(p_at, now()), now());
+  v_note text := nullif(btrim(coalesce(p_note, '')), '');
+  v_name text;
+  v_reason_text text;
+begin
+  if v_me is null then
+    raise exception 'Not signed in as a driver' using errcode = '42501';
+  end if;
+  if p_reason is null or p_reason not in ('vehicle_problem', 'not_available', 'unwell', 'other') then
+    raise exception 'reason must be vehicle_problem, not_available, unwell or other' using errcode = '22023';
+  end if;
+  select * into v_task from public.tasks where id = p_task_id for update;
+  if not found or v_task.employee_id <> v_me then
+    return 'already_reassigned';
+  end if;
+  if v_task.status in ('in_progress', 'completed') then return 'already_started'; end if;
+  if v_task.status = 'declined' then return 'already_declined'; end if;
+  if v_task.status = 'cancelled' then return 'cancelled'; end if;
+  -- Hotfix 3: a missed task is gone for the driver too (an answer the app already knows).
+  if v_task.status = 'missed' then return 'cancelled'; end if;
+
+  update public.tasks
+  set status = 'declined',
+      declined_at = v_at,
+      declined_by = v_me,
+      declined_reason = p_reason,
+      declined_note = v_note,
+      declined_after_accept = (v_task.accepted_at is not null),
+      needs_driver_since = v_at,
+      needs_driver_reason = 'declined'
+  where id = p_task_id;
+  select e.name into v_name from public.employees e where e.id = v_me;
+  insert into public.task_assignment_events (task_id, at, action, employee_id, vehicle_id, actor, note)
+  values (p_task_id, v_at, 'declined', v_me, v_task.vehicle_id, v_name,
+          p_reason || case when v_note is null then '' else ': ' || v_note end);
+
+  v_reason_text := case p_reason
+    when 'vehicle_problem' then 'Vehicle problem'
+    when 'not_available' then 'Not available'
+    when 'unwell' then 'Unwell'
+    else 'Other' end || case when v_note is null then '' else ': ' || v_note end;
+  perform public.notify_needs_driver(
+    p_task_id,
+    split_part(coalesce(v_name, 'The driver'), ' ', 1) || ' declined ''' || v_task.title || ''' '
+      || to_char(coalesce(v_task.leave_by, v_task.start_at) at time zone 'Asia/Colombo', 'HH24:MI'),
+    v_reason_text || ' · needs a driver');
+  return 'declined';
+end;
+$$;
+
+create or replace function public.accept_task(p_task_id uuid, p_at timestamptz default now())
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_me   uuid := public.current_employee_id();
+  v_task public.tasks%rowtype;
+  v_at   timestamptz := least(coalesce(p_at, now()), now());
+begin
+  if v_me is null then
+    raise exception 'Not signed in as a driver' using errcode = '42501';
+  end if;
+  select * into v_task from public.tasks where id = p_task_id for update;
+  if not found or v_task.employee_id <> v_me then
+    return 'already_reassigned';
+  end if;
+  if v_task.status in ('in_progress', 'completed') then return 'already_started'; end if;
+  if v_task.status = 'declined' then return 'already_declined'; end if;
+  if v_task.status = 'cancelled' then return 'cancelled'; end if;
+  -- Hotfix 3: a missed task is gone for the driver too (an answer the app already knows).
+  if v_task.status = 'missed' then return 'cancelled'; end if;
+
+  -- The earliest acceptance wins: a replay of the same tap changes nothing.
+  if v_task.accepted_at is null or v_at < v_task.accepted_at then
+    update public.tasks set accepted_at = v_at where id = p_task_id;
+  end if;
+  if v_task.accepted_at is null then
+    insert into public.task_assignment_events (task_id, at, action, employee_id, vehicle_id, actor)
+    select p_task_id, v_at, 'accepted', v_me, v_task.vehicle_id, e.name from public.employees e where e.id = v_me;
+  end if;
+  return 'accepted';
+end;
+$$;
+
+create or replace function public.confirm_task_vehicle(p_task uuid, p_vehicle uuid, p_queued boolean default false)
+returns text
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_me    uuid := public.current_employee_id();
+  v_task  public.tasks%rowtype;
+  v_car   public.vehicles%rowtype;
+  v_issue text;
+  v_name  text;
+begin
+  select * into v_task from public.tasks where id = p_task for update;
+  if not found or v_me is null or v_task.employee_id <> v_me then
+    return 'not_yours';
+  end if;
+  -- Hotfix 3: a missed task may still be started (a start queued offline), so its vehicle is still confirmed.
+  if v_task.status not in ('assigned', 'declined', 'missed') then
+    return 'started';
+  end if;
+  select * into v_car from public.vehicles where id = p_vehicle;
+  if not found then
+    return 'inactive';
+  end if;
+  v_issue := case
+    when v_task.vehicle_mode = 'specific' and v_task.vehicle_id is not null and v_task.vehicle_id <> p_vehicle then 'has_vehicle'
+    when not v_car.active then 'inactive'
+    when v_car.in_garage then 'in_garage'
+    when v_task.vehicle_mode = 'any_type' and v_car.vehicle_type is distinct from v_task.vehicle_type_wanted then 'wrong_type'
+  end;
+  if v_issue is not null and not p_queued then
+    return v_issue;
+  end if;
+  if v_issue is not null then
+    select name into v_name from public.employees where id = v_me;
+    update public.tasks
+    set vehicle_id = p_vehicle,
+        warnings = coalesce(warnings, '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+          'text', 'Started offline on ' || v_car.reg_no || case v_issue
+            when 'has_vehicle' then ', not the vehicle the office set meanwhile'
+            when 'inactive' then ', a vehicle no longer in the fleet list'
+            when 'in_garage' then ', a vehicle in the garage'
+            else ', not a ' || replace(coalesce(v_task.vehicle_type_wanted, 'vehicle'), '_', ' ') || ' as the task asked'
+          end,
+          'by', coalesce(v_name, 'the driver')))
+    where id = p_task;
+    return 'ok';
+  end if;
+  update public.tasks set vehicle_id = p_vehicle where id = p_task;
+  return 'ok';
+end;
+$$;

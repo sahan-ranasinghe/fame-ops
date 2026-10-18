@@ -52,10 +52,18 @@ select throws_like($$ update public.tasks set status = 'missed' where id = '3000
 select lives_ok($$ update public.tasks set status = 'in_progress', start_odometer_km = 1000, started_at = now() - interval '47 hours'
                    where id = '30000000-0000-0000-0000-000000000ce1' $$,
   'a start the phone sends late is taken');
+-- The driver's other calls on a missed task: accept and decline answer "cancelled" and change nothing; a vehicle
+-- confirmed offline still counts.
+select is(public.accept_task('30000000-0000-0000-0000-000000000ce2', now()), 'cancelled', 'accepting a missed task: cancelled (the app drops it)');
+select is(public.decline_task('30000000-0000-0000-0000-000000000ce2', 'other', null), 'cancelled', 'declining it: the same, nothing changes');
+select is(public.confirm_task_vehicle('30000000-0000-0000-0000-000000000ce2', '20000000-0000-0000-0000-000000000ce1', true), 'ok',
+  'a vehicle confirmed offline for a missed task still counts');
 reset role;
 set local request.jwt.claims to '{}';
 select is((select status || '|' || coalesce(missed_at::text, '-') from public.tasks where id = '30000000-0000-0000-0000-000000000ce1'),
   'in_progress|-', 'the task is under way again, no longer missed');
+select is((select status || '|' || coalesce(needs_driver_reason, '-') from public.tasks where id = '30000000-0000-0000-0000-000000000ce2'),
+  'missed|-', 'the declined call left the missed task as it was (no needs-a-driver for an old task)');
 
 -- 3. Who sees a missed-task issue; snooze; the preferences --------------------------------------------------------------------
 select ok(position('missed_task' in pg_get_functiondef('public.issue_visible(text)'::regprocedure)) > 0,
