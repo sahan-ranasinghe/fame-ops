@@ -1,21 +1,24 @@
 import { describe, expect, it } from "vitest";
 import type { Issue, IssuesList } from "../data/types";
 import {
-  answerFor,
   bellCount,
+  defaultSort,
   emptyText,
   eventText,
   filterOptions,
   issueFacts,
   issuesArgs,
+  KIND_TEXT,
   kindText,
-  limitNote,
   listRows,
   mergeIssue,
   outsideNote,
   patchIssues,
+  readSeverity,
+  readSort,
   readStatus,
   severityTone,
+  snoozeLine,
   whoLine,
 } from "./issuesLogic";
 
@@ -34,23 +37,34 @@ const list = (issues: Issue[], over: Partial<IssuesList> = {}): IssuesList => ({
   status: "open", from: "2026-10-01", to: "2026-10-31", sort: "newest", count: issues.length, open: 0, in_progress: 0, issues, ...over,
 });
 
-describe("the issues list's filters (§9)", () => {
-  it("reads the status from the URL; the old tab= links still land; anything else is Open", () => {
-    expect(readStatus(new URLSearchParams(""))).toBe("open");
+describe("the issues list's filters (§9, Hotfix 3)", () => {
+  it("reads the status from the URL; the old tab= links still land; anything else is Active", () => {
+    expect(readStatus(new URLSearchParams(""))).toBe("active");
     expect(readStatus(new URLSearchParams("status=dismissed"))).toBe("dismissed");
+    expect(readStatus(new URLSearchParams("status=snoozed"))).toBe("snoozed");
     expect(readStatus(new URLSearchParams("status=all"))).toBe("all");
     expect(readStatus(new URLSearchParams("tab=resolved"))).toBe("resolved");
     expect(readStatus(new URLSearchParams("tab=in_progress"))).toBe("in_progress");
-    expect(readStatus(new URLSearchParams("status=closed"))).toBe("open");
+    expect(readStatus(new URLSearchParams("status=closed"))).toBe("active");
   });
 
-  it("asks list_issues for the status and the opened days, newest first, and knows its own answer", () => {
-    expect(issuesArgs("open", "2026-10-01", "2026-10-31")).toEqual({ status: "open", from: "2026-10-01", to: "2026-10-31", sort: "newest", limit: 200 });
-    const d = list([]);
-    expect(answerFor(d, { status: "open", from: "2026-10-01", to: "2026-10-31" })).toBe(true);
-    expect(answerFor(d, { status: "all", from: "2026-10-01", to: "2026-10-31" })).toBe(false);
-    expect(answerFor(d, { status: "open", from: "2026-10-12", to: "2026-10-18" })).toBe(false);
-    expect(answerFor({ ...d, sort: "urgent" }, { status: "open", from: "2026-10-01", to: "2026-10-31" })).toBe(false);
+  it("the order: the most urgent first for what is still to do, the newest first for the closed ones; ?sort= wins", () => {
+    expect(["active", "open", "in_progress", "snoozed"].map((s) => defaultSort(s as never))).toEqual(["urgent", "urgent", "urgent", "urgent"]);
+    expect(["resolved", "dismissed", "all"].map((s) => defaultSort(s as never))).toEqual(["newest", "newest", "newest"]);
+    expect(readSort(new URLSearchParams(""), "active")).toBe("urgent");
+    expect(readSort(new URLSearchParams("sort=newest"), "active")).toBe("newest");
+    expect(readSort(new URLSearchParams("sort=oldest"), "resolved")).toBe("newest");
+    expect(readSeverity(new URLSearchParams("severity=critical"))).toBe("critical");
+    expect(readSeverity(new URLSearchParams("severity=loud"))).toBe("");
+  });
+
+  it("asks list_issues for the status, the opened days, the order and only the filters chosen; snoozed ones on their own tab", () => {
+    const days = { from: "2026-10-01", to: "2026-10-31" };
+    expect(issuesArgs({ status: "active", ...days, sort: "urgent" })).toEqual({ status: "active", ...days, sort: "urgent", snoozed: false });
+    expect(issuesArgs({ status: "snoozed", ...days, sort: "urgent" })).toEqual({ status: "active", ...days, sort: "urgent", snoozed: true });
+    expect(issuesArgs({ status: "resolved", ...days, sort: "newest", kind: "km_gap", vehicle: "WP CAB-4521", severity: "warning", search: "gap" }))
+      .toEqual({ status: "resolved", ...days, sort: "newest", kind: "km_gap", vehicle: "WP CAB-4521", severity: "warning", search: "gap" });
+    expect(issuesArgs({ status: "all", ...days, sort: "newest", kind: "", severity: "" })).toEqual({ status: "all", ...days, sort: "newest" });
   });
 
   it("narrows by status (a patched row leaves at once), kind and vehicle, in the server's order", () => {
@@ -61,36 +75,47 @@ describe("the issues list's filters (§9)", () => {
       issue({ id: "d", status: "dismissed" }),
       issue({ id: "e", kind: "declined", vehicle: "WP PH-2087" }),
     ];
+    expect(listRows(rows, { status: "active" }).map((i) => i.id)).toEqual(["a", "b", "e"]);
+    expect(listRows(rows, { status: "snoozed" }).map((i) => i.id)).toEqual(["a", "b", "e"]);
     expect(listRows(rows, { status: "open" }).map((i) => i.id)).toEqual(["a", "e"]);
     expect(listRows(rows, { status: "all" }).map((i) => i.id)).toEqual(["a", "b", "c", "d", "e"]);
     expect(listRows(rows, { status: "dismissed" }).map((i) => i.id)).toEqual(["d"]);
     expect(listRows(rows, { status: "open", kind: "declined" }).map((i) => i.id)).toEqual(["e"]);
     expect(listRows(rows, { status: "all", vehicle: "WP CAB-4521" }).map((i) => i.id)).toEqual(["a", "b"]);
-    expect(filterOptions(rows)).toEqual({
-      kinds: [["declined", "Declined"], ["service_due", "Service"], ["document", "Vehicle document"]],
-      vehicles: ["WP CAB-4521", "WP PH-2087"],
-    });
-    // A kind or vehicle chosen that no row has stays in its select.
-    expect(filterOptions([], { kind: "km_gap", vehicle: "WP KL-1234" })).toEqual({ kinds: [["km_gap", "Km outside tasks"]], vehicles: ["WP KL-1234"] });
+    // Every kind the centre knows, by name; the vehicles on screen when the fleet's are not known.
+    const o = filterOptions(rows);
+    expect(o.kinds.length).toBe(Object.keys(KIND_TEXT).length);
+    expect(o.kinds.find(([k]) => k === "km_gap")).toEqual(["km_gap", "Km outside tasks"]);
+    expect(o.vehicles).toEqual(["WP CAB-4521", "WP PH-2087"]);
+    // The fleet's vehicles when known; a kind or vehicle chosen that nothing has stays in its select.
+    expect(filterOptions(rows, {}, ["WP KL-1234", "WP CAB-4521"]).vehicles).toEqual(["WP CAB-4521", "WP KL-1234"]);
+    const chosen = filterOptions([], { kind: "missed_task", vehicle: "WP XX-0001" });
+    expect(chosen.kinds.find(([k]) => k === "missed_task")).toEqual(["missed_task", "missed_task"]);
+    expect(chosen.vehicles).toEqual(["WP XX-0001"]);
   });
 
-  it("says how many active issues were opened outside the days, and when the list was cut", () => {
+  it("says how many active issues were opened outside the days (from the list's total)", () => {
     const rows = [issue({ id: "a" }), issue({ id: "b", status: "in_progress" })];
-    expect(outsideNote(list(rows, { open: 4, in_progress: 1 }), "open")).toBe("3 more open issues were opened outside these dates.");
-    expect(outsideNote(list(rows, { open: 1, in_progress: 2 }), "in_progress")).toBe("1 more in progress issue was opened outside these dates.");
-    expect(outsideNote(list(rows, { open: 2, in_progress: 2 }), "all")).toBe("2 more active issues were opened outside these dates.");
-    expect(outsideNote(list(rows, { open: 1, in_progress: 1 }), "open")).toBeUndefined();
+    expect(outsideNote(list(rows, { open: 4, in_progress: 1, count: 1 }), "open")).toBe("3 more open issues were opened outside these dates.");
+    expect(outsideNote(list(rows, { open: 1, in_progress: 2, count: 1 }), "in_progress")).toBe("1 more in progress issue was opened outside these dates.");
+    // A paged answer: its total, not the page's rows.
+    expect(outsideNote(list(rows, { open: 30, in_progress: 2, count: 25, total: 30 }), "active")).toBe("2 more active issues were opened outside these dates.");
+    expect(outsideNote(list(rows, { open: 1, in_progress: 1 }), "active")).toBeUndefined();
     expect(outsideNote(list(rows, { open: 9 }), "resolved")).toBeUndefined();
-    // Cut at the limit: the in-range count is unknown.
-    expect(outsideNote(list(rows, { open: 9, count: 200 }), "open")).toBeUndefined();
-    expect(limitNote({ count: 200 })).toBe("Showing the newest 200: pick fewer days or a status to see the rest.");
-    expect(limitNote({ count: 12 })).toBeUndefined();
+    expect(outsideNote(list(rows, { open: 9 }), "all")).toBeUndefined();
+    // Narrowed by kind, vehicle or severity: the counts do not compare.
+    expect(outsideNote(list(rows, { open: 9 }), "open", true)).toBeUndefined();
   });
 
-  it("says nothing was found in words that fit", () => {
+  it("says nothing was found in words that fit; a snoozed row says until when", () => {
+    expect(emptyText("active", "2026-10-01", "2026-10-31", false)).toBe("Nothing needs attention (Thu 1 Oct – Sat 31 Oct 2026). The fleet is in order.");
     expect(emptyText("open", "2026-10-01", "2026-10-31", false)).toBe("Nothing open (Thu 1 Oct – Sat 31 Oct 2026). The fleet is in order.");
+    expect(emptyText("snoozed", "2026-10-18", "2026-10-18", false)).toBe("Nothing is snoozed (Sun 18 Oct 2026).");
     expect(emptyText("dismissed", "2026-10-18", "2026-10-18", false)).toBe("Nothing dismissed (Sun 18 Oct 2026).");
-    expect(emptyText("all", "2026-10-12", "2026-10-18", true)).toBe("No issue matches the kind and vehicle chosen (Mon 12 Oct – Sun 18 Oct 2026).");
+    expect(emptyText("all", "2026-10-12", "2026-10-18", true)).toBe("No issue matches the filters chosen (Mon 12 Oct – Sun 18 Oct 2026).");
+    expect(emptyText("active", "2026-10-18", "2026-10-18", false, "CAB")).toBe('No issue matches "CAB" (Sun 18 Oct 2026).');
+    expect(snoozeLine(issue({ snoozed_until: "2026-10-19 07:00", snoozed_by: "Sahan" }))).toBe("Snoozed until 2026-10-19 07:00 · by Sahan");
+    expect(snoozeLine(issue({}))).toBeUndefined();
   });
 });
 

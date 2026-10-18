@@ -1,20 +1,22 @@
 // Tasks → History (/tasks/history, Phase 7 §8; assign_tasks, the tool
 // list_tasks): every task that starts in the chosen days (default this week),
 // newest first, narrowed by driver, vehicle, status and kind (the office's
-// tasks or the trips drivers started). A desktop shows a table; on a phone
-// each task is a card (the table's phone layout, at ui/phone.ts's 768 px). A
-// row opens the task beside the board of its day. The previous answer stays on
-// screen, marked "Updating…", while other days or filters load.
+// tasks or the trips drivers started), and by the words searched for. A desktop
+// shows a table with page numbers; on a phone each task is a card (the table's
+// phone layout, at ui/phone.ts's 768 px) with "Load more" (Hotfix 3, L3: 25 at a
+// time, the count in the header, every filter in the URL). A row opens the task
+// beside the board of its day. The previous answer stays on screen, marked
+// "Updating…", while other days or filters load.
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useLists } from "../data/hooks";
-import type { TaskHistory as TaskHistoryData } from "../data/types";
-import { useQuery } from "../data/useQuery";
+import type { HistoryTask, TaskHistory as TaskHistoryData } from "../data/types";
 import { num } from "../lib/format";
 import { errText } from "../transport/errors";
-import { Empty, Loading, Notice, Pill, Plate } from "../ui/basics";
+import { Loading, Notice, Pill, Plate } from "../ui/basics";
 import { DateRange, useDateRange } from "../ui/DateRange";
 import { colomboDay } from "../ui/dateRange";
+import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, usePagedList, useUrlSearch } from "../ui/ListKit";
 import { PageTop } from "../ui/Page";
 import { emptyText, historyArgs, type HistoryFilters, KIND_OPTIONS, readFilters, routeText, STATUS_OPTIONS, statusOf, tagsOf, taskLink, totalsLine } from "./taskHistoryLogic";
 
@@ -28,6 +30,7 @@ export function TaskHistory() {
   const dates = useDateRange("week", { maxDays: MAX_DAYS });
   const [params, setParams] = useSearchParams();
   const f = readFilters(params);
+  const [search, setSearch] = useUrlSearch();
   const set = (key: keyof HistoryFilters, value: string) => setParams((p) => {
     const next = new URLSearchParams(p);
     if (value) next.set(key, value);
@@ -38,11 +41,11 @@ export function TaskHistory() {
   const today = colomboDay();
   const allowed = me.tools.includes("list_tasks");
   // Days that reach today change while people work: fetched again every minute; past days once.
-  const q = useQuery<TaskHistoryData>("taskHistory", "list_tasks", historyArgs(from, to, f), {
-    keep: true,
+  const list = usePagedList<HistoryTask, TaskHistoryData>("taskHistory", "list_tasks", historyArgs(from, to, f, search), (a) => a.tasks, {
     enabled: !noConnector && allowed && !dates.error,
     every: to >= today ? 60000 : undefined,
   });
+  const q = list.query;
   const d = q.data;
   const narrowed = !!(f.driver || f.vehicle || f.status || f.kind);
   const updating = q.updating || q.stale;
@@ -54,6 +57,7 @@ export function TaskHistory() {
         <div className="card card-b" style={{ display: "grid", gap: 12 }}>
           <DateRange value={dates} />
           <div className="filters" style={{ marginBottom: 0 }}>
+            <SearchBox value={search} onChange={setSearch} placeholder="Title, driver, plate or place" />
             <label className="field"><span>Driver</span>
               <select aria-label="Driver" value={f.driver} onChange={(e) => set("driver", e.target.value)}>
                 <option value="">All drivers</option>
@@ -104,12 +108,13 @@ export function TaskHistory() {
             </div>
             {d.more && <div style={{ marginBottom: 12 }}><Notice tone="info">{d.more}</Notice></div>}
             <div className="card">
-              {d.tasks.length ? (
+              <ListHeader title="Tasks" count={list.total} />
+              {list.items.length ? (
                 <div className="tbl-wrap">
                   <table data-testid="history-table">
                     <thead><tr><th>When</th><th>Task</th><th>Driver</th><th>Vehicle</th><th>Route</th><th>Status</th><th className="r">Km</th></tr></thead>
                     <tbody>
-                      {d.tasks.map((t) => {
+                      {list.items.map((t) => {
                         const st = statusOf(t);
                         const link = taskLink(t, today);
                         return (
@@ -138,8 +143,10 @@ export function TaskHistory() {
                   </table>
                 </div>
               ) : (
-                <Empty>{q.stale ? "Loading…" : emptyText(d.from, d.to, narrowed)}</Empty>
+                <EmptyLine>{q.stale ? "Loading…" : emptyText(d.from, d.to, narrowed, search)}</EmptyLine>
               )}
+              <LoadMore list={list} />
+              <Pager list={list} />
             </div>
           </div>
         )}

@@ -2,7 +2,7 @@
 // its own). First the documents and services due (and the rental ends, garage bookings, km allowances and driver
 // licences): what, the vehicle and the date, each row to the vehicle's page; then everything else the tile counts, each
 // row to its issue. The server's order: the soonest due first, overdue at the top. The same list is the Overview's
-// side panel on a desktop.
+// side panel on a desktop. Hotfix 3 (L3): each group 25 at a time, paged on the page (the overview's list is whole).
 import { useEffect } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -10,8 +10,9 @@ import { useEntry } from "../data/hooks";
 import type { Attention, Overview } from "../data/types";
 import { attIcon, levelTone } from "../lib/format";
 import { can } from "../transport/types";
-import { Empty, ErrBox, Loading, StaleNote } from "../ui/basics";
+import { ErrBox, Loading, StaleNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
+import { EmptyLine, ListHeader, LoadMore, Pager, useLocalPagedList } from "../ui/ListKit";
 import { PageTop } from "../ui/Page";
 import { type ReminderRow, reminderGroups } from "./overviewLinks";
 
@@ -35,26 +36,32 @@ function Row({ r }: { r: ReminderRow }) {
     : <div className="row" data-testid="reminder-row">{inner}</div>;
 }
 
+/**
+ * One group of reminders (Hotfix 3, L3): its count in the header, 25 at a time ("Load more" on a phone, page numbers
+ * on a desktop), paged here: the rows come with the overview (fleet_overview has no paging of its own).
+ */
+function ReminderGroup({ title, rows, testId }: { title: string; rows: ReminderRow[]; testId: string }) {
+  const list = useLocalPagedList(rows);
+  return (
+    <div className="card" data-testid={testId}>
+      <ListHeader title={title} count={rows.length} />
+      <div className="rows">{list.items.map((r) => <Row key={r.key} r={r} />)}</div>
+      <LoadMore list={list} />
+      <Pager list={list} />
+    </div>
+  );
+}
+
 /** The reminders in two groups; `issues` = the person reads every kind (else only the task kinds reach them). */
 export function ReminderList({ items, issues }: { items: Attention[]; issues: boolean }) {
   const g = reminderGroups(items);
   if (!g.due.length && !g.other.length) {
-    return <div className="card"><Empty>{issues ? "Nothing is due. Documents, services and km allowances are in order." : "No task needs attention right now."}</Empty></div>;
+    return <div className="card"><EmptyLine>{issues ? "Nothing is due. Documents, services and km allowances are in order." : "No task needs attention right now."}</EmptyLine></div>;
   }
   return (
     <div className="stack" data-testid="reminders">
-      {g.due.length > 0 && (
-        <div className="card">
-          <div className="card-h"><h2>Documents and services due</h2><span className="muted">{g.due.length}</span></div>
-          <div className="rows">{g.due.map((r) => <Row key={r.key} r={r} />)}</div>
-        </div>
-      )}
-      {g.other.length > 0 && (
-        <div className="card">
-          <div className="card-h"><h2>{g.due.length ? "Also needs attention" : "Needs attention"}</h2><span className="muted">{g.other.length}</span></div>
-          <div className="rows">{g.other.map((r) => <Row key={r.key} r={r} />)}</div>
-        </div>
-      )}
+      {g.due.length > 0 && <ReminderGroup title="Documents and services due" rows={g.due} testId="reminders-due" />}
+      {g.other.length > 0 && <ReminderGroup title={g.due.length ? "Also needs attention" : "Needs attention"} rows={g.other} testId="reminders-other" />}
     </div>
   );
 }

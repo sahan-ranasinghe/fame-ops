@@ -80,7 +80,7 @@ async function mount(person: Me = dispatcher, url = "/tasks/history") {
 describe("Tasks → History", () => {
   it("asks for this week; shows each task with its tags, the totals and the more sentence; a row opens the task", async () => {
     const t = await mount();
-    expect(t.argsOf("list_tasks")[0]).toEqual({ from: week.from, to: week.to });
+    expect(t.argsOf("list_tasks")[0]).toEqual({ from: week.from, to: week.to, limit: 25 });
     const rows = await screen.findAllByTestId("history-row");
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain("Team drop · Kurunegala site");
@@ -103,7 +103,7 @@ describe("Tasks → History", () => {
     t.hold = true;
     fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "self" } });
     await act(async () => { await Promise.resolve(); });
-    expect(t.argsOf("list_tasks").at(-1)).toEqual({ from: week.from, to: week.to, kind: "self" });
+    expect(t.argsOf("list_tasks").at(-1)).toEqual({ from: week.from, to: week.to, kind: "self", limit: 25 });
     expect(screen.getByTestId("where").textContent).toBe("/tasks/history?kind=self");
     expect(screen.getAllByTestId("history-row")).toHaveLength(2);
     expect(screen.getByTestId("history-totals").textContent).toContain("Updating…");
@@ -114,12 +114,26 @@ describe("Tasks → History", () => {
 
   it("the dates and filters of a link are used as they are", async () => {
     const t = await mount(dispatcher, "/tasks/history?range=custom&from=2026-09-01&to=2026-09-30&driver=nuwan.p&status=completed");
-    expect(t.argsOf("list_tasks")[0]).toEqual({ from: "2026-09-01", to: "2026-09-30", driver: "nuwan.p", status: "completed" });
+    expect(t.argsOf("list_tasks")[0]).toEqual({ from: "2026-09-01", to: "2026-09-30", driver: "nuwan.p", status: "completed", limit: 25 });
   });
 
   it("someone without list_tasks is told, and nothing is asked", async () => {
     const t = await mount({ ...dispatcher, tools: ["list_drivers"] });
     expect(screen.getByText(/Task history needs the list_tasks tool/)).toBeTruthy();
     expect(t.argsOf("list_tasks")).toEqual([]);
+  });
+
+  it("Hotfix 3: the count in the header, the search into the URL and the tool, Missed among the statuses", async () => {
+    const t = await mount(dispatcher, "/tasks/history?status=missed");
+    expect(t.argsOf("list_tasks")[0]).toEqual({ from: week.from, to: week.to, status: "missed", limit: 25 });
+    expect((screen.getByLabelText("Status") as HTMLSelectElement).value).toBe("missed");
+    await screen.findAllByTestId("history-row");
+    expect(screen.getByTestId("list-count").textContent).toBe(" · 2");
+    const box = screen.getByLabelText("Search");
+    fireEvent.change(box, { target: { value: "Kandy" } });
+    fireEvent.keyDown(box, { key: "Enter" });
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("where").textContent).toBe("/tasks/history?status=missed&q=Kandy");
+    expect(t.argsOf("list_tasks").at(-1)).toEqual({ from: week.from, to: week.to, status: "missed", search: "Kandy", limit: 25 });
   });
 });

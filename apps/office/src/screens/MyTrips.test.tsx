@@ -2,12 +2,14 @@
 // driver and vehicle with Call driver, "Not assigned yet"), the status filter in the URL and into my_trips (the old
 // rows dimmed until the new come), the minute's refresh re-rendering nothing when nothing changed, a row opening the
 // request page beside the list from the list's own card (no second call), and back to the same list.
+// Hotfix 3: All · Requests · Tasks I created (into my_trips' include and the URL); a task the person created is a row
+// with its title, when, route, live state and the driver with Call, and opens the task; the count in the header.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
-import type { MyTrips as MyTripsData, RequestCard } from "../data/types";
+import type { CreatedTaskCard, MyTrips as MyTripsData, RequestCard } from "../data/types";
 import type { Me, Transport, WatchEvent } from "../transport/types";
 import { colomboDay, rangeDates } from "../ui/dateRange";
 import { ToastProvider } from "../ui/Toast";
@@ -34,9 +36,16 @@ const TRIPS: RequestCard[] = [
   },
   { id: "r1", requested_by: "Dilini", when: "Mon 19 Oct 08:00", route: "Head office → Negombo", status: "waiting", live: { state: "waiting", text: "Waiting" } },
 ];
-const answer = (args: Record<string, unknown>): MyTripsData => {
-  const trips = args.status === "declined" ? TRIPS.filter((t) => t.status === "declined") : TRIPS;
-  return { from: String(args.from), to: String(args.to), count: trips.length, trips };
+/** A task the person created directly (Hotfix 3): it opens the task. */
+const CREATED: CreatedTaskCard = {
+  source: "task", id: "t7", task_id: "t7", title: "Team drop · Kandy", when: "Mon 19 Oct 08:00", route: "Head office → Kandy site", stops_count: 3,
+  status: "in_progress", live: { state: "on_the_way", text: "On the way · 08:10" }, created: "2026-10-18 10:42",
+  assigned: { driver: "Ruwan Silva", phone: "+94771112223", call: "tel:+94771112223", whatsapp: "https://wa.me/94771112223", vehicle: "WP CAB-4521" },
+};
+const answer = (args: Record<string, unknown>, created: CreatedTaskCard[]): MyTripsData => {
+  const requests = args.status === "declined" ? TRIPS.filter((t) => t.status === "declined") : TRIPS;
+  const trips = args.include === "tasks" ? created : args.include === "requests" ? requests : [...created, ...requests];
+  return { from: String(args.from), to: String(args.to), count: trips.length, total: trips.length, trips };
 };
 
 class FakeTransport implements Transport {
@@ -44,6 +53,7 @@ class FakeTransport implements Transport {
   calls: { tool: string; args: Record<string, unknown> }[] = [];
   held: (() => void)[] = [];
   hold = false;
+  created: CreatedTaskCard[] = [];
   constructor(private person: Me) {}
   me(): Promise<Me> {
     return Promise.resolve(this.person);
@@ -54,7 +64,7 @@ class FakeTransport implements Transport {
   call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {
     this.calls.push({ tool, args });
     if (tool === "my_trips") {
-      const data = structuredClone(answer(args)) as T;
+      const data = structuredClone(answer(args, this.created)) as T;
       if (this.hold) return new Promise((resolve) => this.held.push(() => resolve(data)));
       return Promise.resolve(data);
     }
@@ -77,14 +87,16 @@ function Where() {
 
 const requester: Me = { name: "Dilini", role: "staff", permissions: ["view", "request"], tools: ["my_trips", "list_requests", "create_request", "update_request", "cancel_request"] };
 
-async function mount(person: Me = requester, url = "/my-trips") {
+async function mount(person: Me = requester, url = "/my-trips", created: CreatedTaskCard[] = []) {
   const transport = new FakeTransport(person);
+  transport.created = created;
   render(
     <FleetProvider value={{ store: new FleetStore(transport), transport, me: person, noConnector: false }}>
       <ToastProvider>
         <MemoryRouter initialEntries={[url]}>
           <Routes>
             <Route path="/my-trips" element={<MyTrips />}><Route path=":id" element={<RequestDetail />} /></Route>
+            <Route path="/tasks/:id" element={<div>The task page</div>} />
           </Routes>
           <Where />
         </MemoryRouter>
@@ -100,7 +112,7 @@ afterEach(() => vi.useRealTimers());
 describe("My trips", () => {
   it("this month and All by default: every trip with its live state, who decided it, the driver with Call driver", async () => {
     const t = await mount();
-    expect(t.argsOf("my_trips")).toEqual([{ from: month.from, to: month.to }]);
+    expect(t.argsOf("my_trips")).toEqual([{ from: month.from, to: month.to, include: "all", limit: 25 }]);
     expect(screen.getByRole("heading", { name: "My trips" })).toBeTruthy();
     const rows = screen.getAllByTestId("trip-row");
     expect(rows).toHaveLength(3);
@@ -128,7 +140,7 @@ describe("My trips", () => {
     fireEvent.click(screen.getByRole("button", { name: "Declined" }));
     expect(screen.getByTestId("where").textContent).toBe("/my-trips?status=declined");
     await act(async () => { await Promise.resolve(); });
-    expect(t.argsOf("my_trips").at(-1)).toEqual({ from: month.from, to: month.to, status: "declined" });
+    expect(t.argsOf("my_trips").at(-1)).toEqual({ from: month.from, to: month.to, status: "declined", include: "all", limit: 25 });
     // Still the three rows, dimmed, "Updating…".
     expect(screen.getAllByTestId("trip-row")).toHaveLength(3);
     expect(screen.getByTestId("trips-totals").textContent).toContain("Updating…");
@@ -182,5 +194,53 @@ describe("My trips", () => {
     const t = await mount({ ...requester, tools: ["list_requests"] });
     expect(screen.getByText(/needs the my_trips tool/)).toBeTruthy();
     expect(t.argsOf("my_trips")).toEqual([]);
+  });
+});
+
+describe("My trips: the tasks I created (Hotfix 3, Hotfix 2's decision 2)", () => {
+  it("a created task's row: title, when, route, live state, the driver with Call; it opens the task", async () => {
+    await mount(requester, "/my-trips", [CREATED]);
+    const rows = screen.getAllByTestId("trip-row");
+    expect(rows).toHaveLength(4);
+    expect(screen.getByTestId("list-count").textContent).toBe(" · 4");
+    const row = rows.find((r) => r.getAttribute("data-source") === "task")!;
+    expect(row.textContent).toContain("Task I created");
+    expect(row.textContent).toContain("Team drop · Kandy");
+    expect(row.textContent).toContain("Mon 19 Oct 08:00");
+    expect(row.textContent).toContain("Head office → Kandy site");
+    expect(row.textContent).toContain("3 stops");
+    expect(within(row).getByTestId("trip-live").textContent).toBe("On the way · 08:10");
+    expect(within(row).getByTestId("trip-driver").textContent).toContain("Ruwan Silva");
+    expect(within(within(row).getByTestId("call-driver")).getByText("077 111 2223")).toBeTruthy();
+    // The Call button does its own thing; the row opens the task (not the request page).
+    fireEvent.click(row);
+    expect(screen.getByTestId("where").textContent).toBe("/tasks/t7");
+    expect(screen.getByText("The task page")).toBeTruthy();
+  });
+
+  it("All · Requests · Tasks I created: into my_trips' include and the URL; the empty line says what it means", async () => {
+    const t = await mount(requester, "/my-trips", [CREATED]);
+    expect(screen.getByRole("tab", { name: "All" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("tab", { name: "Tasks I created" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("where").textContent).toBe("/my-trips?show=tasks");
+    expect(t.argsOf("my_trips").at(-1)).toEqual({ from: month.from, to: month.to, include: "tasks", limit: 25 });
+    expect(screen.getAllByTestId("trip-row")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("tab", { name: "Requests" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(t.argsOf("my_trips").at(-1)).toMatchObject({ include: "requests" });
+    expect(screen.getAllByTestId("trip-row").every((r) => r.getAttribute("data-source") === "request")).toBe(true);
+    // No created task in the days: the line says so.
+    t.created = [];
+    fireEvent.click(screen.getByRole("tab", { name: "Tasks I created" }));
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("empty-line").textContent).toBe("You created no task in these dates.");
+  });
+
+  it("a request opened beside the list is found among the rows shown (the paged list hands them over)", async () => {
+    const t = await mount(requester, "/my-trips/r1", [CREATED]);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByTestId("request-detail")).toBeTruthy();
+    expect(t.argsOf("list_requests")).toEqual([]);
   });
 });

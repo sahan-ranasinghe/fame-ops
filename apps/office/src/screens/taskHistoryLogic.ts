@@ -1,5 +1,7 @@
 // Tasks → History (Phase 7 §8), pure: the filters as the URL keeps them, the
 // tool's input, and the words of a row (tags, route, status) and of the totals.
+// Hotfix 3 (L3): a page at a time (ui/ListKit.tsx), the search box (?q= → search)
+// and the missed tasks (never started, their leave-by over a day ago).
 import type { HistoryTask, TaskHistory, TaskKind } from "../data/types";
 import { cap, num, type Tone } from "../lib/format";
 import { rangeText } from "../ui/dateRange";
@@ -7,7 +9,7 @@ import { rangeText } from "../ui/dateRange";
 export type KindFilter = "" | TaskKind;
 export const KIND_OPTIONS: [KindFilter, string][] = [["", "All"], ["dispatch", "Office tasks"], ["self", "Driver-started"]];
 
-export type StatusFilter = "" | "assigned" | "in_progress" | "completed" | "cancelled" | "declined";
+export type StatusFilter = "" | "assigned" | "in_progress" | "completed" | "cancelled" | "declined" | "missed";
 export const STATUS_OPTIONS: [StatusFilter, string][] = [
   ["", "All statuses"],
   ["assigned", "Assigned"],
@@ -15,6 +17,7 @@ export const STATUS_OPTIONS: [StatusFilter, string][] = [
   ["completed", "Completed"],
   ["cancelled", "Cancelled"],
   ["declined", "Declined"],
+  ["missed", "Missed"],
 ];
 
 export interface HistoryFilters {
@@ -36,8 +39,8 @@ export function readFilters(params: Pick<URLSearchParams, "get">): HistoryFilter
   };
 }
 
-/** list_tasks' input: the days and only the filters chosen. */
-export function historyArgs(from: string, to: string, f: HistoryFilters): Record<string, unknown> {
+/** list_tasks' input: the days and only the filters chosen (and the words searched for). */
+export function historyArgs(from: string, to: string, f: HistoryFilters, search = ""): Record<string, unknown> {
   return {
     from,
     to,
@@ -45,16 +48,20 @@ export function historyArgs(from: string, to: string, f: HistoryFilters): Record
     ...(f.vehicle ? { vehicle: f.vehicle } : {}),
     ...(f.status ? { status: f.status } : {}),
     ...(f.kind ? { kind: f.kind } : {}),
+    ...(search ? { search } : {}),
   };
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${num(n)} ${n === 1 ? one : many}`;
 
-/** "14 tasks · 9 completed · 2 cancelled · 184 km · 3 driver-started · 1 personal" (the parts that are not zero). */
-export function totalsLine(d: Pick<TaskHistory, "count" | "totals">): string {
+/**
+ * "14 tasks · 9 completed · 2 cancelled · 184 km · 3 driver-started · 1 personal" (the parts that are not zero). A paged
+ * answer counts every task the filters match (`total`), not only the page's.
+ */
+export function totalsLine(d: Pick<TaskHistory, "count" | "totals" | "total">): string {
   const t = d.totals;
   return [
-    plural(d.count, "task"),
+    plural(d.total ?? d.count, "task"),
     t.completed ? `${num(t.completed)} completed` : "",
     t.cancelled ? `${num(t.cancelled)} cancelled` : "",
     t.km ? `${num(t.km)} km` : "",
@@ -77,7 +84,7 @@ export function routeText(t: Pick<HistoryTask, "from" | "to" | "stops_count">): 
   return t.stops_count > 2 ? `${line} · ${t.stops_count} stops` : line;
 }
 
-export const STATUS_TONE: Record<string, Tone> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
+export const STATUS_TONE: Record<string, Tone> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad", missed: "bad" };
 
 /** The status chip and the line under it: when it started and finished, or why it was cancelled. */
 export function statusOf(t: Pick<HistoryTask, "status" | "started" | "completed" | "cancelled_reason">): { text: string; tone: Tone; sub?: string } {
@@ -93,7 +100,9 @@ export function statusOf(t: Pick<HistoryTask, "status" | "started" | "completed"
 /** A row opens the task beside the board of its day (as the duty log does). */
 export const taskLink = (t: Pick<HistoryTask, "id" | "date">, today: string) => `/tasks/${t.id}${t.date !== today ? `?date=${t.date}` : ""}`;
 
-/** Nothing found, in words. */
-export function emptyText(from: string, to: string, narrowed: boolean): string {
-  return narrowed ? `No task matches these filters (${rangeText(from, to)}).` : `No tasks (${rangeText(from, to)}).`;
+/** Nothing found, in words: the words searched for, the filters, the days. */
+export function emptyText(from: string, to: string, narrowed: boolean, search = ""): string {
+  const days = rangeText(from, to);
+  if (search) return `No task matches "${search}"${narrowed ? " with these filters" : ""} (${days}).`;
+  return narrowed ? `No task matches these filters (${days}).` : `No tasks (${days}).`;
 }

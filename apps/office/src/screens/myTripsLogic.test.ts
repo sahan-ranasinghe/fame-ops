@@ -1,8 +1,28 @@
 // My trips' rules (Hotfix 2, A): the status filter in the URL (All by default), the tool's arguments, the live state's
 // pill, who decided it, and the phone links.
 import { describe, expect, it } from "vitest";
-import type { RequestCard } from "../data/types";
-import { decisionLines, driverPhone, emptyText, liveOf, liveTone, officePhoneOf, personPhone, readStatus, totalsLine, TRIP_STATUS_OPTIONS, tripsArgs, vehicleOf, writeStatus } from "./myTripsLogic";
+import type { CreatedTaskCard, RequestCard } from "../data/types";
+import {
+  createdLive,
+  createdTaskLink,
+  decisionLines,
+  driverPhone,
+  emptyText,
+  isCreatedTask,
+  isRequestTrip,
+  liveOf,
+  liveTone,
+  officePhoneOf,
+  personPhone,
+  readShow,
+  readStatus,
+  totalsLine,
+  TRIP_SHOW_OPTIONS,
+  TRIP_STATUS_OPTIONS,
+  tripsArgs,
+  vehicleOf,
+  writeStatus,
+} from "./myTripsLogic";
 
 const card = (extra: Partial<RequestCard> = {}): RequestCard => ({ id: "r1", requested_by: "Dilini", when: "Sun 18 Oct 09:00", status: "waiting", ...extra });
 
@@ -79,5 +99,33 @@ describe("words", () => {
     expect(totalsLine(3, "2026-10-18", "2026-10-18")).toBe("3 trips · Sun 18 Oct 2026");
     expect(emptyText("all", true)).toBe("No trips in these dates. Ask for a vehicle with New request.");
     expect(emptyText("under_way", true)).toBe("No under way trips in these dates.");
+  });
+});
+
+describe("Hotfix 3: what is shown, the search, the tasks I created", () => {
+  it("?show= into include (always said by the page), the search; anything unknown is All", () => {
+    expect(TRIP_SHOW_OPTIONS.map(([, l]) => l)).toEqual(["All", "Requests", "Tasks I created"]);
+    expect(readShow(new URLSearchParams("show=tasks"))).toBe("tasks");
+    expect(readShow(new URLSearchParams("show=mine"))).toBe("all");
+    expect(tripsArgs("2026-10-01", "2026-10-31", "all", "all")).toEqual({ from: "2026-10-01", to: "2026-10-31", include: "all" });
+    expect(tripsArgs("2026-10-01", "2026-10-31", "completed", "tasks", "Kandy")).toEqual({ from: "2026-10-01", to: "2026-10-31", status: "completed", include: "tasks", search: "Kandy" });
+  });
+  it("a created task: told apart from a request, its link, its live state from its status when the server gives none", () => {
+    const task: CreatedTaskCard = { source: "task", id: "t7", task_id: "t7", title: "Drop", when: "09:00", status: "missed", live: undefined as unknown as CreatedTaskCard["live"], created: "2026-10-18 10:42" };
+    expect(isCreatedTask(task)).toBe(true);
+    expect(isRequestTrip(task)).toBe(false);
+    expect(isCreatedTask(card())).toBe(false);
+    expect(createdTaskLink(task)).toBe("/tasks/t7");
+    expect(createdLive(task)).toEqual({ state: "cancelled", text: "Missed · never started" });
+    expect(createdLive({ ...task, status: "in_progress" }).state).toBe("on_the_way");
+    expect(createdLive({ ...task, live: { state: "arrived", text: "Arrived · 10:05" } }).text).toBe("Arrived · 10:05");
+  });
+  it("the empty list for what is shown and the words searched for", () => {
+    expect(emptyText("all", true, "tasks")).toBe("You created no task in these dates.");
+    expect(emptyText("completed", true, "tasks")).toBe("No completed tasks you created in these dates.");
+    expect(emptyText("all", true, "requests")).toBe("No requests in these dates. Ask for a vehicle with New request.");
+    expect(emptyText("declined", false, "requests")).toBe("No declined requests in these dates.");
+    expect(emptyText("all", true, "all", "Galle")).toBe('No trip matches "Galle" in these dates.');
+    expect(emptyText("waiting", true, "tasks", "Galle")).toBe('No waiting task you created matches "Galle" in these dates.');
   });
 });

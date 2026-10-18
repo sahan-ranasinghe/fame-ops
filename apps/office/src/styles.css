@@ -684,4 +684,14 @@ a.bell-btn { text-decoration: none }
   .ov-sec[data-section="tiles"] .tile { padding: 12px 14px; gap: 4px }
   .ov-sec[data-section="tiles"] .tile .val b { font-size: 30px }
   .ov-sec[data-section="tiles"] .tile .lbl, .ov-sec[data-section="tiles"] .tile .sub { font-size: 13px }
+
+/* Hotfix 3 W2 (L3): the search box (ui/ListKit SearchBox), the list header holding it, Load more under a board column. */
+.list-h { flex-wrap: wrap; }
+.list-search { min-width: 200px; }
+.list-search input { width: 100%; }
+.list-h .list-search { flex: 0 1 320px; }
+.list-h .list-search > span { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.col .load-more { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 6px; text-align: center; }
+@media (max-width: 768px) {
+  .list-h .list-search, .filters .list-search { flex: 1 1 100%; }
 }

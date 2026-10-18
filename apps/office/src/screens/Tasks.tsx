@@ -4,14 +4,20 @@
 // columns; /tasks?filter=needs_driver shows only them, with the way back.
 // §33: the day's proposed tasks waiting for an approver as the first column.
 // §13: a card tags a trip the driver started ("Driver-started") and a personal one ("Personal").
-import { useEffect } from "react";
+// Hotfix 3 (L3): each column holds 25 cards (task_board's limit), its count is
+// every card of the column (totals), and "Load more" under it asks that column's
+// next cards (task_board(date, column, limit, cursor)), refreshed with the board.
+import { cursorAt } from "@fleet/paging";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { Board, BoardCard } from "../data/types";
+import { useQuery } from "../data/useQuery";
 import { addDays, cap, longDate, statusTone, today } from "../lib/format";
 import { Avatar, Dot, ErrBox, Loading, Plate, StaleNote, Updated, VehicleThumb } from "../ui/basics";
 import { Icon } from "../ui/icons";
+import { LoadMore, PAGE_SIZE, type PagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import { decidedText } from "./approversLogic";
 import { NeedsDriverList } from "./NeedsDriverList";
@@ -46,6 +52,50 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
   );
 }
 
+type ColumnKey = "assigned" | "in_progress" | "completed" | "declined";
+type Tone = "warn" | "live" | "bad" | "";
+
+/** task_board's arguments for the day: 25 cards a column (every column's count in `totals`). */
+const boardArgs = (date: string) => ({ date, limit: PAGE_SIZE });
+
+/**
+ * One column of the board: the board's first 25 cards, and with "Load more" the column's next ones
+ * (task_board(date, column, limit, cursor) from the 26th card on, the limit growing a page at a time, fetched again
+ * with the board every 30 s), merged under them. Its count is every card of the column.
+ */
+function BoardColumn({ b, k, label, dot, onOpen }: { b: Board; k: ColumnKey; label: string; dot: Tone; onOpen: (id: string) => void }) {
+  const base = b[k] ?? [];
+  const [extra, setExtra] = useState(0);
+  const more = useQuery<Board>(
+    "boardColumn",
+    "task_board",
+    extra > 0 ? { date: b.date, column: k, limit: PAGE_SIZE * extra, cursor: cursorAt(PAGE_SIZE) } : null,
+    { keep: true, every: 30000 },
+  );
+  const seen = new Set(base.map((c) => c.id));
+  const cards = [...base, ...(extra > 0 ? (more.data?.[k] ?? []).filter((c) => !seen.has(c.id)) : [])];
+  const total = Math.max(b.totals?.[k] ?? base.length, cards.length);
+  const list: PagedList<BoardCard, Board> = {
+    items: cards,
+    total,
+    mode: "more",
+    hasMore: cards.length < total,
+    loadMore: () => setExtra((n) => n + 1),
+    page: 1,
+    pages: 1,
+    setPage: () => {},
+    answer: more.data,
+    query: more,
+  };
+  return (
+    <div className="col" data-testid={`board-col-${k}`}>
+      <div className="col-h"><span><Dot tone={dot} />{label}</span><span className="num" data-testid="col-count">{total}</span></div>
+      {cards.length ? cards.map((t) => <TaskCard key={t.id} t={t} col={k} onOpen={onOpen} />) : <p className="col-empty">No tasks</p>}
+      <LoadMore list={list} />
+    </div>
+  );
+}
+
 export function Tasks() {
   const { me, store, noConnector, managePermissions } = useFleet();
   const navigate = useNavigate();
@@ -63,14 +113,14 @@ export function Tasks() {
   useEffect(() => {
     if (noConnector) return;
     store.reset("board");
-    store.watch("board", "task_board", { date }, 30000);
+    store.watch("board", "task_board", boardArgs(date), 30000);
     return () => store.unwatch("board");
   }, [store, date, noConnector]);
 
   const b = board.data && board.data.date === date ? board.data : undefined;
   // needs_driver covers today and later whatever the day: any answer will do.
   const needs = board.data?.needs_driver ?? [];
-  const cols: [keyof Pick<Board, "assigned" | "in_progress" | "completed" | "declined">, string, "warn" | "live" | "bad" | ""][] = [
+  const cols: [ColumnKey, string, Tone][] = [
     ["assigned", "Assigned", "warn"], ["in_progress", "In progress", "live"], ["completed", "Completed", ""],
     // Declined by the driver, waiting for the office (Phase 5): shown only when there is one.
     ...(b?.declined?.length ? [["declined", "Needs a driver", "bad"] as ["declined", string, "bad"]] : []),
@@ -94,7 +144,7 @@ export function Tasks() {
           </div>
           {!board.data && !noConnector && (
             <>
-              <ErrBox entry={board} onRetry={() => void store.load("board", "task_board", { date })} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
+              <ErrBox entry={board} onRetry={() => void store.load("board", "task_board", boardArgs(date))} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
               {!board.err && <Loading>Loading tasks…</Loading>}
             </>
           )}
@@ -138,19 +188,14 @@ export function Tasks() {
         <div className="board">
           {!b && !noConnector && (
             <div style={{ gridColumn: "1/-1" }}>
-              <ErrBox entry={board} onRetry={() => void store.load("board", "task_board", { date })} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
+              <ErrBox entry={board} onRetry={() => void store.load("board", "task_board", boardArgs(date))} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
               {!board.err && <Loading>Loading tasks…</Loading>}
             </div>
           )}
           {b && board.err && <div style={{ gridColumn: "1/-1" }}><StaleNote entry={board} /></div>}
           {/* Proposed tasks of the day that wait for an approver (§33): first, shown only when there is one. */}
           {b?.waiting_approval?.length ? <WaitingApprovalColumn cards={b.waiting_approval} /> : null}
-          {b && cols.map(([k, label, dot]) => (
-            <div className="col" key={k}>
-              <div className="col-h"><span><Dot tone={dot} />{label}</span><span className="num">{(b[k] ?? []).length}</span></div>
-              {b[k]?.length ? b[k].map((t) => <TaskCard key={t.id} t={t} col={k} onOpen={openTask} />) : <p className="col-empty">No tasks</p>}
-            </div>
-          ))}
+          {b && cols.map(([k, label, dot]) => <BoardColumn key={`${date}:${k}`} b={b} k={k} label={label} dot={dot} onOpen={openTask} />)}
           {b && (
             <div className="muted small" style={{ alignSelf: "end" }}>
               {b.counts.cancelled ? `${b.counts.cancelled} cancelled · ` : ""}<Updated entry={board} />
