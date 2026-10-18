@@ -2454,10 +2454,10 @@ Left as they are, said here:
 
 **The first full chain** also found that the vehicles policy's read of `employees` looped with the employees update policy
 ("infinite recursion"): a driver could not take a vehicle. **Fixed** with `current_employee_demo()`, a security definer. The
-connector suite, pgTAP (1032) and the driver data tests pass. The office e2e: 22 of 24 passed. The two failures (the Part 4
-trip's "Personal" tag and a user row) also fail on their own on this laptop. Part 4's case reads the first "trip-tags" on the
-page, the board's card beside the panel, before the board's own refresh. The server answers right (`set_trip_purpose` audit,
-`task_detail` → personal). See the checkpoint for the run on main's code.
+connector suite, pgTAP (1032) and the driver data tests pass. The office suite, run again alone on a quiet laptop: the 729
+unit tests, both builds and all 24 e2e pass. Two e2e had failed while unit tests ran beside the chain: the Part 4 trip's tag
+check reads the first "trip-tags" on the page, the board's card, before the board refreshed. Both passed on their own and in
+the quiet run.
 
 ## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
 
