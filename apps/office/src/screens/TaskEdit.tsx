@@ -13,6 +13,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
+import { flashWarnings } from "../data/flash";
 import { useLists } from "../data/hooks";
 import type { TaskDetail, UpdateTaskResult } from "../data/types";
 import { cap, joinDots, plateOf, today, warnList } from "../lib/format";
@@ -21,7 +22,7 @@ import type { FleetError } from "../transport/types";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { firstName } from "../ui/driverRowLogic";
-import { PageTop, StickyActions } from "../ui/Page";
+import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
 import { linkedDriver } from "./asks/askLogic";
@@ -109,6 +110,7 @@ export function TaskEdit() {
   const linked = linkedDriver(params);
   const { me, store, transport } = useFleet();
   const navigate = useNavigate();
+  const afterSave = useAfterSave();
   const toast = useToast();
   const lists = useLists();
   const { p, err } = useTask(id);
@@ -188,7 +190,8 @@ export function TaskEdit() {
       const vehicleWords = !f.vehicle && def && input.vehicle === def.reg_no ? ` · ${def.reg_no} (${def.why})` : "";
       toast((needsDriver && f.driver ? `Task sent to ${out.driver ?? "the driver"}` : "Task changed") + vehicleWords);
       void store.invalidate();
-      navigate(back, { replace: true, state: { warnings: warnList(out) } });
+      flashWarnings(id, warnList(out));
+      afterSave(back, { warnings: warnList(out) });
       return;
     } catch (e) {
       setMsg(errText(e as FleetError)[0]);

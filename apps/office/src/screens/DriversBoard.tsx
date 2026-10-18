@@ -1,7 +1,8 @@
 // Part 3b (H5): the Drivers board (/drivers/board, menu Today, for approve or assign_tasks). Every active driver as the one
 // driver row (the status now, last seen, the next task, the usual start, Call and WhatsApp), drivers_board watched every
-// 30 s; filter chips with their counts (?filter=), a search box (?q=), a tick box on each row and "Ask drivers" (the ticked
-// ones, or all the free ones), "New task" on each row (/tasks/new?driver=…).
+// 30 s; filter chips with their counts (?filter=), a search box (?q=), "New task" on each row (/tasks/new?driver=…).
+// Hotfix 4 (c): no tick boxes; "Ask drivers" opens the sheet (asks/AskSheet: its own list, the free ones ticked) and the
+// answers come back as chips under the rows; a Yes has Assign → (a new task for that driver at the asked time).
 // The week view (?view=week&from=YYYY-MM-DD, this week's Monday by default, ‹ › a week at a time): drivers × 7 days, each
 // day's tasks (time and title) and when the driver is not available; "+" adds an entry for that driver and day, an
 // entry's chip opens it to change or remove it (the editor sits under the week, no dialog). On a phone the rows are cards
@@ -24,7 +25,6 @@ import {
   BOARD_FILTER_KEYS,
   BOARD_FILTERS,
   BOARD_VIEWS,
-  boardAskLink,
   boardCounts,
   boardEmpty,
   type BoardView,
@@ -39,6 +39,8 @@ import {
   weekStart,
   weekTaskText,
 } from "./boardLogic";
+import { assignLink, countsLine } from "./asks/askLogic";
+import { AnswerLine, AskSheet, useAskAnswers, usePageAsk } from "./asks/AskSheet";
 import { SearchBox, useSearchBox } from "./listLocal";
 import { UnavailabilityEditor } from "./UnavailabilityEditor";
 import { entryChip, shortDay } from "./unavailabilityLogic";
@@ -71,12 +73,12 @@ export function DriversBoard() {
   const all = q.data?.drivers ?? [];
   const counts = boardCounts(all, box.search);
   const shown = filterBoard(all, filter, box.search);
-  const [ticked, setTicked] = useState<string[]>([]);
-  const listed = new Set(all.map((d) => d.username).filter((u): u is string => !!u));
-  const asking = ticked.filter((u) => listed.has(u));
+  const [sheet, setSheet] = useState(false);
+  const [sent, keepSent] = usePageAsk("board");
+  const ask = useAskAnswers(sent);
+  const answers = new Map((ask?.drivers ?? []).map((r) => [r.username ?? r.name, r]));
   const canAsk = me.tools.includes("ask_drivers");
   const canTask = can(me, "assign_tasks");
-  const tick = (u: string, on: boolean) => setTicked((t) => (on ? [...t.filter((x) => x !== u), u] : t.filter((x) => x !== u)));
   const goWeek = (f: string) => setFromParam(f === mondayOf(day) ? "" : f);
 
   return (
@@ -84,11 +86,7 @@ export function DriversBoard() {
       <div className="ph">
         <div><div className="eyebrow">Who can drive now and this week</div><h1>Drivers board</h1></div>
         <div className="ph-actions">
-          {canAsk && (
-            <Link className="btn" to={boardAskLink(asking)} data-testid="board-ask">
-              Ask drivers<span className="muted"> · {asking.length ? `${asking.length} ticked` : "all free"}</span>
-            </Link>
-          )}
+          {canAsk && q.data && <button type="button" className="btn" onClick={() => setSheet(true)} data-testid="board-ask">Ask drivers</button>}
           {me.tools.includes("ask_answers") && <Link className="btn" to="/drivers/asks">Questions</Link>}
         </div>
       </div>
@@ -99,6 +97,20 @@ export function DriversBoard() {
       <div className="board-filters" role="group" aria-label="Filter">
         <Chips options={BOARD_FILTERS} value={filter} onChange={setFilter} counts={q.data ? counts : undefined} />
       </div>
+      {ask && (
+        <p className="ask-status sub" data-testid="board-ask-status">
+          <span>{ask.question} · {countsLine(ask)}</span>
+          {me.tools.includes("ask_answers") && <Link to={`/drivers/asks/${ask.id}`}>All answers →</Link>}
+        </p>
+      )}
+      {sheet && q.data && (
+        <AskSheet
+          candidates={all.filter((d) => !!d.username).map((d) => ({ username: d.username!, name: d.name, photo_url: d.photo_url, line: d.status.text, free: d.free_now }))}
+          window={{}}
+          onSent={keepSent}
+          onClose={() => setSheet(false)}
+        />
+      )}
       {q.loading && <Loading>Loading the drivers…</Loading>}
       {q.err && !q.data && <Notice tone="bad">{errText(q.err)[0]}</Notice>}
       {q.data && !week && (
@@ -106,13 +118,17 @@ export function DriversBoard() {
           <ListHeader title={filter === "all" ? "Drivers" : BOARD_FILTERS.find(([k]) => k === filter)?.[1] ?? "Drivers"} count={shown.length} updating={q.updating} />
           {shown.length ? (
             <div className="rows board-rows">
-              {shown.map((d) => (
+              {shown.map((d) => {
+                const answer = d.username ? answers.get(d.username) : undefined;
+                const assign = ask && answer ? assignLink(ask, answer, me.tools) : null;
+                return (
                 <DriverRow
                   key={driverKey(d)}
                   d={{ ...d, now_status: d.status }}
                   phone={toPhoneLinks(d.links)}
-                  tick={canAsk && d.username ? { checked: asking.includes(d.username), onChange: (v) => tick(d.username!, v), label: `Ask ${d.name}` } : undefined}
-                  right={canTask && d.username ? <Link className="btn small" to={`/tasks/new?driver=${encodeURIComponent(d.username)}`}>New task</Link> : undefined}
+                  right={assign
+                    ? <Link className="btn small primary" to={assign} data-testid="board-assign">Assign →</Link>
+                    : canTask && d.username ? <Link className="btn small" to={`/tasks/new?driver=${encodeURIComponent(d.username)}`}>New task</Link> : undefined}
                   nameExtra={d.licence.chip === "red" || d.licence.chip === "orange"
                     ? <Pill tone={licenceTone(d.licence.chip)}>licence {d.licence.chip === "red" ? "expired or due" : "expiring"}</Pill>
                     : null}
@@ -120,8 +136,10 @@ export function DriversBoard() {
                   contactTestId="board-contact"
                 >
                   <BoardVehicle d={d} />
+                  {answer && <AnswerLine row={answer} testId="board-answer" />}
                 </DriverRow>
-              ))}
+                );
+              })}
             </div>
           ) : <EmptyLine>{boardEmpty(filter, box.search)}</EmptyLine>}
         </div>

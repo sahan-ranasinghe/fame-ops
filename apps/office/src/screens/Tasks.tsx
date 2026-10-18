@@ -143,7 +143,7 @@ export function Tasks() {
         <ListWithDetail>
           <div className="ph">
             <div><div className="eyebrow">Today and later</div><h1>Tasks that need a driver</h1></div>
-            <div className="ph-actions"><Link className="btn" to={`/tasks${q}`}>Back to the board</Link></div>
+            <div className="ph-actions"><Link className="btn" to={`/tasks${q}`}>The whole board</Link></div>
           </div>
           {!board.data && !noConnector && (
             <>

@@ -162,7 +162,7 @@ describe("the trip decide page (§33, §34)", () => {
     await settle();
     expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r9", decision: "approve", version: 1, decided_by: "Palitha" }]);
     expect(screen.getByTestId("request-decided").textContent).toContain("Sent as proposed.");
-    expect(screen.getByRole("link", { name: "Open task" }).getAttribute("href")).toBe("/tasks/t9");
+    expect(screen.getByRole("link", { name: "Open task →" }).getAttribute("href")).toBe("/tasks/t9");
   }, 20_000);
 
   it("a moved leave-by and another driver from Who's available: Approve and send, only those sent; a refresh resets neither", async () => {

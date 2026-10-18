@@ -1,33 +1,43 @@
 // Part 3b (H2, H3): Who's available with the one driver row (the status now, the window's "Not available · …", last seen,
-// the usual start, the next task) and Ask drivers in its header: the window, the page's task or request, the ticked drivers
-// or all the free ones. The ticks sit beside the row's button, never inside it.
+// the usual start, the next task). Hotfix 4 (c): no tick boxes on the rows; Ask drivers opens a sheet with its own list (the
+// free ones ticked), the window and the page's task; the answers come back as chips under the rows, a Yes with "Use this
+// driver".
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
-import type { Availability, AvailableDriver } from "../data/types";
+import type { Ask, Availability, AvailableDriver } from "../data/types";
 import type { Me, Transport, WatchEvent } from "../transport/types";
 import { ToastProvider } from "../ui/Toast";
 import { askWindow, windowLine } from "./availabilityLogic";
-import { AvailabilityPanel, panelAskLink } from "./AvailabilityPanel";
+import { AvailabilityPanel } from "./AvailabilityPanel";
 
 type Args = Record<string, unknown>;
 
 class FakeTransport implements Transport {
   readonly kind = "api" as const;
   calls: { tool: string; args: Args }[] = [];
+  /** ask_answers' answer once a driver has answered. */
+  answered: Ask | null = null;
   constructor(private answer: Availability) {}
   me(): Promise<Me> {
     return Promise.resolve(dispatcher);
   }
   call<T>(tool: string, args: Args = {}): Promise<T> {
     this.calls.push({ tool, args });
+    if (tool === "ask_drivers") return Promise.resolve({ ask: sentAsk, next: "" } as T);
+    if (tool === "ask_answers") return Promise.resolve({ ask: this.answered ?? sentAsk, total: 1 } as T);
     return Promise.resolve(structuredClone(this.answer) as T);
   }
-  watch<T>(tool: string, args: Args, cb: (ev: WatchEvent<T>) => void): () => void {
-    void this.call<T>(tool, args).then((data) => cb({ type: "data", data, at: Date.now() }));
-    return () => {};
+  watch<T>(tool: string, args: Args, cb: (ev: WatchEvent<T>) => void, intervalMs = 0): () => void {
+    const once = () => void this.call<T>(tool, args).then((data) => cb({ type: "data", data, at: Date.now() }));
+    once();
+    // Asked again on its interval, as the real transports do.
+    const timer = intervalMs > 0 ? setInterval(once, intervalMs) : null;
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }
   invalidate(): Promise<void> {
     return Promise.resolve();
@@ -62,6 +72,13 @@ const answer: Availability = {
   vehicles: { groups: { free_pool: [], free_assigned: [], busy: [], in_garage: [] }, drivers_free: [] },
 };
 
+const sentAsk: Ask = {
+  id: "a1", kind: "free_for_trip", question: "Free for a trip Wed 21 Oct 09:00–12:00?", trip: { date: "2026-10-21", from: "09:00", to: "12:00" },
+  task_id: "t9", asked_by: "Palitha", asked: "08:00", asked_day: "Today", expires: "Wed 21 Oct 09:00",
+  counts: { asked: 1, seen: 0, answered: 0, yes: 0 },
+  drivers: [{ name: "Kamal Perera", username: "kamal.p", sent: "08:00", state: "sent" }],
+};
+
 const settle = async (ms = 0) => {
   await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 };
@@ -90,20 +107,37 @@ describe("Who's available: the one driver row and Ask drivers (H2, H3)", () => {
     expect(within(ruwan).getByTestId("drow-not-available").textContent).toBe("Not available · half day, back 13:00");
     expect(ruwan.textContent).toContain("Busy");
 
-    // Ask drivers: all the free ones for the window and the task; then the ticked ones.
-    const ask = screen.getByTestId("avail-ask");
-    expect(ask.getAttribute("href")).toBe("/drivers/ask?kind=free_for_trip&all_free=1&date=2026-10-21&from=09%3A00&to=12%3A00&task=t9");
-    const tick = screen.getByLabelText("Ask Ruwan Jaya");
-    expect(kamal.contains(tick) || ruwan.contains(tick)).toBe(false);
-    fireEvent.click(tick);
-    expect(onPick).not.toHaveBeenCalled();
-    expect(screen.getByTestId("avail-ask").getAttribute("href")).toBe("/drivers/ask?kind=free_for_trip&drivers=ruwan.j&date=2026-10-21&from=09%3A00&to=12%3A00&task=t9");
-    expect(screen.getByTestId("avail-ask").textContent).toBe("Ask drivers · 1 ticked");
+    // No tick boxes on the rows; a click picks.
+    expect(screen.queryByRole("checkbox")).toBeNull();
     fireEvent.click(kamal);
     expect(onPick).toHaveBeenCalledTimes(1);
+
+    // Ask drivers: a sheet with its own list, the free one ticked, the window and the task.
+    fireEvent.click(screen.getByTestId("avail-ask"));
+    const sheet = screen.getByRole("dialog", { name: "Ask drivers" });
+    expect((within(sheet).getByLabelText("Ask Kamal Perera") as HTMLInputElement).checked).toBe(true);
+    expect((within(sheet).getByLabelText("Ask Ruwan Jaya") as HTMLInputElement).checked).toBe(false);
+    expect((within(sheet).getByLabelText("Day") as HTMLInputElement).value).toBe("2026-10-21");
+    vi.setSystemTime(new Date("2026-10-20T08:00:00+05:30"));
+    fireEvent.click(within(sheet).getByTestId("sheet-send"));
+    await settle();
+    expect(t.calls.find((c) => c.tool === "ask_drivers")?.args).toEqual({ kind: "free_for_trip", date: "2026-10-21", from: "09:00", to: "12:00", drivers: ["kamal.p"], task_id: "t9" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByTestId("avail-ask-status").textContent).toContain("Free for a trip Wed 21 Oct 09:00–12:00?");
+    expect(within(screen.getAllByTestId("avail-answer")[0]).getByText(/waiting/)).toBeTruthy();
+
+    // Kamal says Yes: the chip under his row and "Use this driver", which picks him.
+    t.answered = { ...sentAsk, counts: { asked: 1, seen: 1, answered: 1, yes: 1 },
+      drivers: [{ name: "Kamal Perera", username: "kamal.p", sent: "08:00", seen: "08:02", answered: "08:03", answer: "yes", answer_text: "Yes", answer_time: "08:03", assignable: true, state: "answered" }] };
+    await settle(60_000);
+    await settle();
+    expect(screen.getAllByTestId("avail-answer")[0].textContent).toContain("Yes");
+    fireEvent.click(screen.getByTestId("avail-use"));
+    expect(onPick).toHaveBeenCalledTimes(2);
+    expect(onPick.mock.calls[1][0].username).toBe("kamal.p");
   });
 
-  it("no ask_drivers: no ticks and no Ask link", async () => {
+  it("no ask_drivers: no ticks and no Ask button", async () => {
     const me: Me = { ...dispatcher, tools: ["availability"] };
     const t = new FakeTransport(answer);
     render(
@@ -127,10 +161,9 @@ describe("the panel's pure parts", () => {
     expect(windowLine({ ...d, now_status: { kind: "on_task", text: "On a task until 10:40" } })).toBe("On duty since 07:12 · next task 13:00 · 1 accepted");
   });
 
-  it("the Ask link's window: the day and time asked, back by when given; else the answer's day", () => {
+  it("the question's window: the day and time asked, back by when given; else the answer's day", () => {
     expect(askWindow({ at: "2026-10-21 09:00", until: "12:00" })).toEqual({ date: "2026-10-21", from: "09:00", to: "12:00" });
     expect(askWindow({ at: "2026-10-21 09:00" })).toEqual({ date: "2026-10-21", from: "09:00", to: undefined });
     expect(askWindow(null, "2026-10-21")).toEqual({ date: "2026-10-21" });
-    expect(panelAskLink({ at: "2026-10-21 09:00" }, undefined, ["kamal.p"], { request: "r1" })).toBe("/drivers/ask?kind=free_for_trip&drivers=kamal.p&date=2026-10-21&from=09%3A00&request=r1");
   });
 });

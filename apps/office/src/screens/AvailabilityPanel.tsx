@@ -11,8 +11,11 @@
 // refresh for the same day and time keeps the ranking and the best match
 // (steadyAvailability), so nothing jumps, swaps or resets.
 // Part 3b (H2, H3): every row is the one driver row (ui/DriverRow: the status now, the window's "Not available · …", last
-// seen, the usual start, the next task, Call and WhatsApp); people who may ask drivers tick rows and "Ask drivers" in the
-// header opens the Ask page with the window, the task or request of the page, and the ticked drivers (or all free ones).
+// seen, the usual start, the next task, Call and WhatsApp).
+// Hotfix 4 (c): no tick boxes on the rows (a click picks, as before). "Ask drivers" is its own step: a sheet (asks/
+// AskSheet) with its own list, the free drivers ticked, the question and Send; the answers come back live as chips under
+// the rows, and a Yes has "Use this driver" (it picks that driver as a click on the row does). The question is kept for the
+// page's task or request while the tab is open (sessionStorage), so a refresh keeps the answers.
 import { useState } from "react";
 import { Link } from "react-router";
 import type { Availability, AvailableDriver, BestMatch } from "../data/types";
@@ -23,7 +26,8 @@ import { Loading, Notice, Pill } from "../ui/basics";
 import { DriverRow } from "../ui/DriverRow";
 import { firstName, toPhoneLinks } from "../ui/driverRowLogic";
 import { askWindow, bestRow, type DefaultVehicle, defaultVehicle, driverTone, licenceTone, rankedRows, steadyAvailability, windowLine } from "./availabilityLogic";
-import { askLink } from "./asks/askLink";
+import { countsLine } from "./asks/askLogic";
+import { AnswerLine, AskSheet, useAskAnswers, usePageAsk } from "./asks/AskSheet";
 
 export const AVAILABILITY_REFRESH_MS = 60_000;
 export const AVAILABILITY_SETTLE_MS = 400;
@@ -59,17 +63,6 @@ export function bestVehicle(data: Availability | undefined): DefaultVehicle | nu
 
 export const scrollToAvailability = () => document.getElementById(AVAILABILITY_ID)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
-/** The Ask drivers link of the panel: the ticked drivers, else all the free ones, with the window and the page's task or request. */
-export function panelAskLink(args: Record<string, unknown> | null, day: string | undefined, ticked: string[], askFor?: { task?: string; request?: string }): string {
-  return askLink({
-    kind: "free_for_trip",
-    ...(ticked.length ? { drivers: ticked } : { allFree: true }),
-    ...askWindow(args, day),
-    task: askFor?.task,
-    request: askFor?.request,
-  });
-}
-
 export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's available", askFor }: {
   /** availabilityArgs(...); null = the day and time are not known yet. */
   args: Record<string, unknown> | null;
@@ -85,17 +78,16 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
 }) {
   const { me } = useFleet();
   const q = useAvailability(args);
-  const [ticked, setTicked] = useState<string[]>([]);
+  const [sheet, setSheet] = useState(false);
+  const [sent, keepSent] = usePageAsk(askFor?.task ? `task.${askFor.task}` : askFor?.request ? `request.${askFor.request}` : null);
+  const ask = useAskAnswers(sent);
   if (!me.tools.includes("availability")) return null;
   const canAsk = me.tools.includes("ask_drivers");
   const { data, err, updating } = q;
   const best = data?.best;
   const bestVeh = bestVehicle(data);
   const names = data ? namesOf(data) : [];
-  // Only drivers still listed count as ticked (one who left the answer is not asked).
-  const listed = new Set((data?.drivers ?? []).map((d) => d.username).filter((u): u is string => !!u));
-  const asking = ticked.filter((u) => listed.has(u));
-  const tick = (username: string, on: boolean) => setTicked((t) => (on ? [...t.filter((u) => u !== username), username] : t.filter((u) => u !== username)));
+  const answers = new Map((ask?.drivers ?? []).map((r) => [r.username ?? r.name, r]));
   return (
     <div className="card card-b form" data-testid="availability" id={AVAILABILITY_ID} aria-busy={updating || undefined}>
       <div className="avail-h">
@@ -105,11 +97,30 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
           {updating ? <span className="updated" data-testid="avail-updating" style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}> · Updating…</span> : null}
         </div>
         {canAsk && data && (
-          <Link className="btn small" to={panelAskLink(args, data.window.day, asking, askFor)} data-testid="avail-ask">
-            Ask drivers<span className="muted"> · {asking.length ? `${asking.length} ticked` : "all free"}</span>
-          </Link>
+          <button type="button" className="btn small" onClick={() => setSheet(true)} data-testid="avail-ask">Ask drivers</button>
         )}
       </div>
+      {ask && (
+        <p className="ask-status sub" data-testid="avail-ask-status">
+          <span>{ask.question} · {countsLine(ask)}</span>
+          {me.tools.includes("ask_answers") && <Link to={`/drivers/asks/${ask.id}`}>All answers →</Link>}
+        </p>
+      )}
+      {sheet && data && (
+        <AskSheet
+          candidates={data.drivers.filter((d) => !!d.username).map((d) => ({
+            username: d.username!,
+            name: d.name,
+            photo_url: d.photo_url,
+            line: windowLine(d) || d.now_status?.text,
+            free: d.free,
+          }))}
+          window={askWindow(args, data.window.day)}
+          askFor={askFor}
+          onSent={keepSent}
+          onClose={() => setSheet(false)}
+        />
+      )}
       {!args && <p className="muted small" style={{ margin: 0 }}>Fill in the day and the time to see who is free then.</p>}
       {args && q.loading && <Loading>Looking who is free…</Loading>}
       {err && <Notice tone="bad">{errText(err)[0]}</Notice>}
@@ -133,6 +144,7 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
             const veh = defaultVehicle(d, names);
             const on = !!picked && d.username === picked;
             const user = d.username;
+            const answer = user ? answers.get(user) : undefined;
             return (
               <DriverRow
                 key={user ?? d.name}
@@ -147,11 +159,14 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
                   ? <Pill tone={licenceTone(d.licence.chip)}>licence {d.licence.chip === "red" ? "expired or due" : "expiring"}</Pill>
                   : null}
                 badge={<Pill tone={driverTone(d)}>{d.free ? (d.state === "off_duty" ? "Free · off duty" : "Free") : "Busy"}</Pill>}
-                tick={canAsk && user ? { checked: asking.includes(user), onChange: (v) => tick(user, v), label: `Ask ${d.name}` } : undefined}
+                right={answer?.answer === "yes" && onPick && user
+                  ? <button type="button" className="btn small primary" onClick={() => onPick(d, veh)} data-testid="avail-use">Use this driver</button>
+                  : undefined}
                 testId="avail-row"
                 contactTestId="avail-contact"
               >
                 {windowLine(d) && <span className="sub drow-line">{windowLine(d)}</span>}
+                {answer && <AnswerLine row={answer} testId="avail-answer" />}
                 {/* Hotfix 2 (J): "no vehicle yet · regular: WP CAB-4521" says it in words (information only, never a block). */}
                 {d.vehicle_note
                   ? <span className="sub drow-line" data-testid="avail-vehicle-note">{d.vehicle_note}</span>

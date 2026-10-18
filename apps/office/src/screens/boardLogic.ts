@@ -4,7 +4,6 @@
 // tasks and its not-available entries, a past day marked (nothing is added to a day that has passed). Pure.
 import type { BoardDriver, BoardFilter, DriversBoard, UnavailableEntry } from "../data/types";
 import { addDays } from "../lib/format";
-import { askLink } from "./asks/askLink";
 
 export const BOARD_FILTERS: [BoardFilter, string][] = [
   ["all", "All"],
@@ -165,8 +164,3 @@ export function weekGrid(board: Pick<DriversBoard, "week"> | undefined, shown: P
 
 /** "09:00–11:30 Team drop", or "09:00 Team drop" with no end. */
 export const weekTaskText = (t: WeekTask) => `${t.time}${t.end ? `–${t.end}` : ""} ${t.title}`;
-
-/** The board's Ask drivers link: the ticked drivers, else all the free ones. */
-export function boardAskLink(ticked: string[]): string {
-  return ticked.length ? askLink({ drivers: ticked }) : askLink({ allFree: true });
-}

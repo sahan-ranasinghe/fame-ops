@@ -1,7 +1,7 @@
 // Part 3b (H5): the Drivers board's filters and counts, the search, the week's days and the week grid.
 import { describe, expect, it } from "vitest";
 import { boardAnswer, BOARD_DAYS, HALF, KAMAL, LEAVE, NUWAN, RUWAN, SUNIL } from "./__fixtures__/driversBoard";
-import { boardAskLink, boardCounts, boardEmpty, dayHead, filterBoard, matchesFilter, mondayOf, weekGrid, weekLabel, weekStart, weekTaskText } from "./boardLogic";
+import { boardCounts, boardEmpty, dayHead, filterBoard, matchesFilter, mondayOf, weekGrid, weekLabel, weekStart, weekTaskText } from "./boardLogic";
 
 const names = (rows: { name: string }[]) => rows.map((r) => r.name);
 
@@ -37,10 +37,6 @@ describe("the board's filters (the server's rules)", () => {
     expect(boardEmpty("on_task", "zz")).toBe('No driver matches "zz" (name or username) among "On a task".');
   });
 
-  it("Ask drivers: the ticked ones, else all the free ones", () => {
-    expect(boardAskLink(["kamal.p", "nuwan.s"])).toBe("/drivers/ask?drivers=kamal.p%2Cnuwan.s");
-    expect(boardAskLink([])).toBe("/drivers/ask?all_free=1");
-  });
 });
 
 describe("the week", () => {

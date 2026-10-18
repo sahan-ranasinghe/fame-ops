@@ -34,9 +34,14 @@ class FakeTransport implements Transport {
     if (!a) return Promise.reject({ code: "not_found", message: `No answer for ${tool}` });
     return Promise.resolve(structuredClone(a(args)) as T);
   }
-  watch<T>(tool: string, args: Args, cb: (ev: WatchEvent<T>) => void): () => void {
-    void this.call<T>(tool, args).then((data) => cb({ type: "data", data, at: Date.now() }));
-    return () => {};
+  watch<T>(tool: string, args: Args, cb: (ev: WatchEvent<T>) => void, intervalMs = 0): () => void {
+    const once = () => void this.call<T>(tool, args).then((data) => cb({ type: "data", data, at: Date.now() })).catch(() => undefined);
+    once();
+    // Asked again on its interval, as the real transports do.
+    const timer = intervalMs > 0 ? setInterval(once, intervalMs) : null;
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }
   invalidate(): Promise<void> {
     return Promise.resolve();
@@ -55,8 +60,9 @@ const settle = async (ms = 0) => {
   await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
 };
 
-function transport() {
+function transport(extra: Record<string, Answer> = {}) {
   return new FakeTransport({
+    ...extra,
     drivers_board: (a) => boardAnswer(!!a.week_from),
     get_settings: () => ({ settings: { half_day_split: "12:30" }, defaults: {}, about: {}, base_place: null, routing_provider: "estimate" }),
     set_unavailability: (a) => ({ saved: a.id ? "changed" : "added", entry: { ...LEAVE, id: (a.id as string) ?? "u9", text: "Not available · leave" } }),
@@ -129,17 +135,39 @@ describe("the Drivers board: now", () => {
     expect(filters.getAllByRole("button").map((b) => b.textContent)).toEqual(["All · 1", "Free now · 0", "On a task · 1", "Off duty · 0", "Not available · 0"]);
   });
 
-  it("Ask drivers: all the free ones until some are ticked, then the ticked ones", async () => {
-    await mount(transport(), "/drivers/board");
-    const ask = screen.getByTestId("board-ask");
-    expect(ask.getAttribute("href")).toBe("/drivers/ask?all_free=1");
-    expect(ask.textContent).toBe("Ask drivers · all free");
-    fireEvent.click(screen.getByLabelText("Ask Kamal Perera"));
-    fireEvent.click(screen.getByLabelText("Ask Ruwan Jaya"));
-    expect(screen.getByTestId("board-ask").getAttribute("href")).toBe("/drivers/ask?drivers=kamal.p%2Cruwan.j");
-    expect(screen.getByTestId("board-ask").textContent).toBe("Ask drivers · 2 ticked");
-    fireEvent.click(screen.getByLabelText("Ask Kamal Perera"));
-    expect(screen.getByTestId("board-ask").getAttribute("href")).toBe("/drivers/ask?drivers=ruwan.j");
+  it("Ask drivers (Hotfix 4 c): no ticks on the rows; a sheet with the free ones ticked; the answers under the rows, Assign on a Yes", async () => {
+    vi.setSystemTime(new Date("2026-10-20T08:00:00+05:30"));
+    const asked = {
+      id: "a1", kind: "free_for_trip", question: "Free for a trip Tue 20 Oct from 09:00?", trip: { date: "2026-10-20", from: "09:00" },
+      asked_by: "Palitha", asked: "08:00", asked_day: "Today", expires: "Tue 20 Oct 09:00",
+      counts: { asked: 1, seen: 0, answered: 0, yes: 0 },
+      drivers: [{ name: "Kamal Perera", username: "kamal.p", sent: "08:00", state: "sent" }],
+    };
+    let answered: unknown = null;
+    const t = transport({
+      ask_drivers: () => ({ ask: asked, next: "" }),
+      ask_answers: () => ({ ask: answered ?? asked, total: 1 }),
+    });
+    await mount(t, "/drivers/board");
+    expect(screen.queryByRole("checkbox")).toBeNull();
+    fireEvent.click(screen.getByTestId("board-ask"));
+    const sheet = screen.getByRole("dialog", { name: "Ask drivers" });
+    expect((within(sheet).getByLabelText("Ask Kamal Perera") as HTMLInputElement).checked).toBe(true);
+    expect((within(sheet).getByLabelText("Ask Ruwan Jaya") as HTMLInputElement).checked).toBe(false);
+    const from = within(sheet).getByLabelText("From");
+    fireEvent.change(from, { target: { value: "09:00" } });
+    fireEvent.blur(from);
+    fireEvent.click(within(sheet).getByTestId("sheet-send"));
+    await settle();
+    expect(t.argsOf("ask_drivers")[0]).toEqual({ kind: "free_for_trip", date: "2026-10-20", from: "09:00", drivers: ["kamal.p"] });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByTestId("board-ask-status").textContent).toContain("Free for a trip Tue 20 Oct from 09:00?");
+    answered = { ...asked, counts: { asked: 1, seen: 1, answered: 1, yes: 1 },
+      drivers: [{ name: "Kamal Perera", username: "kamal.p", sent: "08:00", answered: "08:03", answer: "yes", answer_text: "Yes", answer_time: "08:03", assignable: true, state: "answered" }] };
+    await settle(10_000);
+    await settle();
+    expect(screen.getByTestId("board-answer").textContent).toContain("Yes");
+    expect(screen.getByTestId("board-assign").getAttribute("href")).toBe("/tasks/new?driver=kamal.p&date=2026-10-20&time=09%3A00");
   });
 
   it("is fetched again every 30 s while open", async () => {

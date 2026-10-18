@@ -35,6 +35,7 @@ import { useToast } from "../ui/Toast";
 import { PlanWithMap } from "./PlanMap";
 import { videoWords } from "./fuelLogic";
 import { driveText } from "./stopsLogic";
+import { readFlashWarnings } from "../data/flash";
 import { findDriverPath } from "./needsDriverLogic";
 import { dwellNote, needsDriverText, segmentRows, segmentsTotal, stayLine, stopTitle, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
@@ -87,8 +88,9 @@ export function TaskDetail() {
   const officePhone = linksOf(settings.data?.settings.office_phone);
   const backTo = useBoardBack();
   const q = useBoardQuery();
-  // The warnings of a change just made on /tasks/:id/edit (passed in the navigation state).
-  const flash = (useLocation().state as { warnings?: string[] } | null)?.warnings ?? [];
+  // The warnings of a change just made on /tasks/:id/edit or its stops (passed in the navigation state, or, after a save
+  // that went back in the history, left in data/flash).
+  const flash = (useLocation().state as { warnings?: string[] } | null)?.warnings ?? readFlashWarnings(id);
 
   if (err) return <><PageTop title="Task" backTo={backTo} /><Notice tone="bad">{err}</Notice></>;
   if (!p) return <><PageTop title="Task" backTo={backTo} /><Loading>Loading the task…</Loading></>;

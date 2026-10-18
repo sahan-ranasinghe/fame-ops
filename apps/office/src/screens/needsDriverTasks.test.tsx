@@ -54,7 +54,7 @@ describe("Tasks and the tasks that need a driver", () => {
     expect(screen.getByRole("heading", { name: "Tasks that need a driver" })).toBeTruthy();
     const rows = screen.getAllByTestId("needs-driver-row");
     expect(rows.map((r) => r.getAttribute("href"))).toEqual(["/tasks/t1/edit?driver=1", "/tasks/t2/edit?driver=1"]);
-    expect(screen.getByRole("link", { name: "Back to the board" }).getAttribute("href")).toBe("/tasks");
+    expect(screen.getByRole("link", { name: "The whole board" }).getAttribute("href")).toBe("/tasks");
     expect(screen.queryByText("Documents to Kandy")).toBeNull();
   });
 

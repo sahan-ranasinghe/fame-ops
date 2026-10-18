@@ -31,6 +31,19 @@ export function hasAppPageBefore(historyState: unknown, key: string): boolean {
   return typeof idx === "number" ? idx > 0 : key !== "default";
 }
 
+/**
+ * After a save: back to wherever the person came from (one step in the history), so the page saved from is not in the
+ * history twice; opened straight (a push, a link), to `fallback`, replacing the form.
+ */
+export function useAfterSave(): (fallback: string, state?: unknown) => void {
+  const navigate = useNavigate();
+  const { key } = useLocation();
+  return (fallback, state) => {
+    if (hasAppPageBefore(typeof window === "undefined" ? null : window.history.state, key)) navigate(-1);
+    else navigate(fallback, { replace: true, state });
+  };
+}
+
 /** Cancel or Back on a page: the same as the back arrow (Hotfix 4 b), never a link forward to a fixed page. */
 export function BackButton({ fallback, className = "btn", children, testId }: { fallback?: string; className?: string; children: ReactNode; testId?: string }) {
   const back = useBack(fallback);

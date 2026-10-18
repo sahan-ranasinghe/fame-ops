@@ -150,7 +150,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByTestId("plan-line")).toContainText("estimated times");
   await page.getByRole("button", { name: "Assign & send" }).click();
   await expect(page.getByText(`Sent to ${driver.name}.`)).toBeVisible();
-  await page.getByRole("link", { name: "The board" }).click();
+  await page.getByRole("link", { name: "The board →" }).click();
   const card = page.locator(".tcard", { hasText: title });
   await expect(card).toBeVisible();
   await expect(card).toContainText("Leave by 09:30");
@@ -569,15 +569,18 @@ test("a driver accepts one task and declines another; the office gives it to a f
   const card = page.locator(".tcard", { hasText: `E2E decline ${stamp}` });
   await expect(card).toContainText("Declined (Vehicle problem) · Flat tyre");
 
-  // The detail: the reason; the edit page: who is free, one click fills the driver, Reassign; back to the detail with the history.
+  // The detail: the reason; Give it a driver (Hotfix 4 b): the task on top, Who can take it below, a row fills the driver,
+  // Give to …; then back where it came from (the detail, with the history).
   await card.click();
   const detail = page.getByTestId("detail");
   await expect(detail.getByText(/Flat tyre/).first()).toBeVisible();
-  await detail.getByRole("link", { name: "Give it to a driver" }).first().click();
-  await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+\/edit(\?date=.*)?$/);
-  await page.getByTestId("suggestions").getByRole("button", { name: d2.name }).click();
+  await detail.getByRole("link", { name: "Give it a driver" }).first().click();
+  await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+\/edit\?driver=1$/);
+  await expect(page.getByTestId("task-summary")).toContainText("Leave by");
+  await page.getByTestId("avail-row").filter({ hasText: d2.name }).click();
   await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(d2.username);
-  await page.getByRole("button", { name: "Reassign" }).click();
+  await expect(page.getByTestId("give-to")).toContainText(`Give to ${d2.name.split(" ")[0]}`);
+  await page.getByTestId("give-to").click();
   await expect(page.getByRole("status")).toHaveText(`Task sent to ${d2.name}`);
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+(\?date=.*)?$/);
   await expect(detail.getByTestId("history")).toContainText("Declined");
@@ -1859,28 +1862,33 @@ test("Part 3b: the Drivers board and its week view, a question answered live, th
   await editor.getByRole("button", { name: "Save", exact: true }).click();
   await expect(weekRow).toContainText("Leave · all day");
 
-  // H3. Ask the driver from the board: free for a trip tomorrow 14:00–16:00; the answer arrives live; Assign.
+  // H3, Hotfix 4 (c). Ask the driver from the board: no tick boxes on the rows; the sheet with its own list; free for a trip
+  // tomorrow 14:00–16:00; the answer arrives live under the driver's row, with Assign →.
   await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Now" }).click();
-  await page.getByRole("checkbox", { name: `Ask ${driver.name}` }).check();
+  await expect(page.getByTestId("board-list").getByRole("checkbox")).toHaveCount(0);
   await page.getByTestId("board-ask").click();
-  await expect(page.getByTestId("ask-picked")).toContainText(driver.name);
-  await page.getByTestId("ask-kind-free_for_trip").click();
+  const sheet = page.getByRole("dialog", { name: "Ask drivers" });
+  await sheet.getByRole("button", { name: "None", exact: true }).click();
+  await sheet.getByRole("checkbox", { name: `Ask ${driver.name}` }).check();
+  await sheet.getByTestId("sheet-kind-free_for_trip").click();
   const tomorrow = new Date(Date.now() + 5.5 * 3600_000 + 86400_000).toISOString().slice(0, 10);
-  await page.getByLabel("Day").fill(tomorrow);
-  await page.getByLabel("From").fill("14:00");
-  await page.getByLabel("From").press("Tab");
-  await page.getByLabel(/^To/).fill("16:00");
-  await page.getByLabel(/^To/).press("Tab");
-  await page.getByTestId("ask-send").click();
-  await expect(page).toHaveURL(/\/drivers\/asks\/[0-9a-f-]{36}$/);
-  const answer = page.getByTestId("ask-row").filter({ hasText: driver.name });
-  await expect(answer).toHaveAttribute("data-state", "sent");
-  const askId = page.url().split("/").pop()!;
+  await sheet.getByLabel("Day").fill(tomorrow);
+  await sheet.getByLabel("From").fill("14:00");
+  await sheet.getByLabel("From").press("Tab");
+  await sheet.getByLabel(/^To/).fill("16:00");
+  await sheet.getByLabel(/^To/).press("Tab");
+  await expect(sheet.getByTestId("sheet-send")).toHaveText("Send to 1 driver");
+  await sheet.getByTestId("sheet-send").click();
+  await expect(sheet).toHaveCount(0);
+  const status = page.getByTestId("board-ask-status");
+  await expect(status).toContainText("Free for a trip");
+  const answer = page.getByTestId("board-list").locator(".drow", { hasText: driver.name });
+  await expect(answer.getByTestId("board-answer")).toContainText("waiting");
+  const askId = ((await status.getByRole("link", { name: "All answers →" }).getAttribute("href")) ?? "").split("/").pop()!;
   const app = await driverRest(driver.username, driver.pin);
   expect(await app.post("rpc/answer_ask", { p_ask_id: askId, p_answer: "yes" })).toBe(200);
-  await expect(answer).toHaveAttribute("data-state", "answered", { timeout: 20_000 });
-  await expect(answer).toContainText("Yes");
-  await expect(answer.getByTestId("ask-assign")).toBeVisible();
+  await expect(answer.getByTestId("board-answer")).toContainText("Yes", { timeout: 20_000 });
+  await expect(answer.getByTestId("board-assign")).toBeVisible();
 
   // G. The profile on the manage page: the emergency contact saved, its change logged.
   await page.goto(`/drivers/${driver.username}/edit`);

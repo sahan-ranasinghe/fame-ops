@@ -5,16 +5,17 @@
 // update_task_stops with the loaded plan version (a stale one is refused with
 // "changed since you loaded it").
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
+import { flashWarnings } from "../data/flash";
 import type { UpdateStopsResult } from "../data/types";
 import { hhmm, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Loading, Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
-import { PageTop, StickyActions } from "../ui/Page";
+import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { TimeInput } from "../ui/TimeInput";
 import { useToast } from "../ui/Toast";
 import { checkDeparture, departurePlan } from "./departureLogic";
@@ -37,7 +38,7 @@ interface StopsForm extends Pick<StartFields, "startWhat" | "startNote" | "start
 export function TaskStops() {
   const { id: taskId = "" } = useParams();
   const { store, transport } = useFleet();
-  const navigate = useNavigate();
+  const afterSave = useAfterSave();
   const toast = useToast();
   const { p, err } = useTask(taskId);
   const back = `/tasks/${taskId}${useBoardQuery()}`;
@@ -131,7 +132,8 @@ export function TaskStops() {
       draft.clear();
       toast(`Stops saved · leave by ${out.leave_by?.slice(-5) ?? "—"}`);
       void store.invalidate();
-      navigate(back, { replace: true, state: { warnings: out.warnings ?? [] } });
+      flashWarnings(taskId, out.warnings ?? []);
+      afterSave(back, { warnings: out.warnings ?? [] });
     } catch (e) {
       const text = errText(e as FleetError)[0];
       setMsg(/changed since/i.test(text) ? `${text} Go back to the task and open the stops again.` : text);
