@@ -1858,6 +1858,82 @@ D's server and web switch-over is the main session's. A fresh reviewer at the ch
 3. The office sound volume default 70 %.
 4. `vehicle_on_the_day` stays off until Sahan switches it on in Settings → Fleet after the update.
 
+### Hotfix 2 as built (branch `phase7-hotfix-2`, 18 October)
+
+Built by the main session (the migration, the server, the shared types, the strings, the suites and the e2e) and three
+subagents in worktrees: W1 the office's My trips, notification centre and sounds; W2 the office's time fields, phones and
+call buttons, the vehicle choice and the approvers; D1 the driver app. Merged into the branch with the integration commit
+(the web's and the app's durations).
+
+- **A.** `office_inbox` written by `queue_notification` for everyone told (with or without a browser; a driver never); RLS
+  select own, Realtime; read rows pruned after 90 days (`prune-office-inbox`). Tools `my_inbox(limit?, unread?)` (items with
+  `kind` for the sound: urgent = something to approve or a task that needs a driver, alert = a decision about your own
+  request or booking or an issue given to you, soft = your driver on the way or arrived and a skipped stop, alarm = a
+  critical issue, info = a personal trip) and `mark_inbox_read(ids? | all)`. The web: a tray icon with the unread count
+  beside the issues bell (which stays as it was), a panel on a computer, `/inbox` on a phone, Realtime on the web and every
+  30 s in the artifact. `my_trips(from, to, status?)`: the person's own requests and proposed tasks by trip day, newest first,
+  each card with `live` (waiting, approved, accepted, on_the_way, arrived, completed, declined, cancelled; from its task),
+  `approved_by` / `declined_by` / `cancelled_by` and `office_phone`. `/my-trips` (and `/my-trips/:id`, the request page); on a
+  phone My trips takes the requester's "My requests" tab (Requests moves to More).
+- **B.** Web Audio patterns per kind (no files), a banner per new item, "Click to turn on sounds" until the page has had a
+  click, Settings → Notifications → Sounds (on/off, volume, Test sound) stored in `notification_prefs` (default on, 70) through
+  `my_notification_settings` / `set_my_notification_settings({sound})`. Driver app: channel `new-tasks` (maximum importance,
+  vibration 0-800-400-800-400-800, lock screen public, `new_task.wav` from the 1.2.0 build); the phone registers its token with
+  `p_channels: ['new-tasks']` after making it (`device_tokens.channels`), and push-task uses it for new, changed, cancelled and
+  reassigned tasks only on such phones. `docs/office-notifications-android.md` for Palitha.
+- **C.** `ui/TimeInput.tsx` on the dispatch time fields (Leave by and Back by in the trip editor, every Arrive by, the stops
+  page, the task edit page, both decide pages): a value counts on blur, Enter or 1 s after the last change when it is a whole
+  time. Not switched: Settings → Fleet's shift start, end of day and rush-hour bands (they plan nothing; their Save buttons
+  wait for a change).
+- **D.** `_shared/fleet/durations.ts` (`@fleet/durations` on the web; the driver app's copy `lib/durations.ts` with the
+  `dur.*` strings): `duration(min)` "45 min", "1 h 15 min", "2 h", "1 d 2 h"; `whenText(at, now)` "now", "in 45 min",
+  "3 h 20 min ago", "tomorrow 09:00", "Mon 19 Oct 09:00 (in 2 days)". **One reading to confirm:** the plan said "under 24 h"
+  for hours; built as "the same Colombo day, or under 6 hours away" in hours, otherwise by the day ("tomorrow 09:00" at 14:00
+  rather than "in 19 h"). Switched over: the issues' due lines (reported, logged, ended, for, waiting, sent, leave by), "Running
+  late by", completed early, "no GPS fix for", a route hole, a request's "asked" and the changed dwell times, Overview's
+  "Oldest waiting", the old Live text ("Live · 2 min ago", "Last seen …"), the long-day warning, the plan summary, the
+  needs-a-driver "in 45 min" / "… late", a task's "location N old", the push "leave in 30 min" (si මිනිත්තු, as the app);
+  on the web the stay, dwell and drive times ("1 h 30" became "1 h 30 min"), late by on the board, Live, the task page and the
+  plan timeline, the route stops and holes, the departure notes, the other dwell times in Fleet settings; in the app the
+  time at a stop, Phone setup's stopped time, the card's and the preview's leave-by and drive time.
+- **E.** `queue_accept_reminders`: the reminder and the accept window count from the later of the sending and the driver's
+  Start work, only while they are at work; 30 minutes before leave-by a task needs a driver in any case. (Found while writing
+  its test: `greatest()` skips a null, so an off-duty driver had to be left out explicitly.)
+- **F.** Phones stored +94… (`phones.ts`: `storedPhone`, `logPhoneChange`), shown "07X XXX XXXX"; every change is a row in
+  `employee_changes`. The live data: three numbers convert, none stays as it was; two admins and three drivers have none.
+  `update_my_profile(phone)` (Settings → My profile; the banner for approve / assign_tasks without a number from `GET /me`
+  `phone_required`); `update_office_user` and `update_driver` take any number and log it; Settings → Fleet "Office phone
+  number" (`office_phone`). Privacy: drivers' numbers on Live, Overview's on-the-road list and the drivers list only for
+  approve, assign_tasks, vehicles, issues or users (`seesDriverPhones`); a requester sees the driver's number on their own
+  trip only (My trips, the request page); `my_task_contacts(task)` answers only the task's own driver, `my_office_contacts()`
+  only drivers. Calls: `ui/ContactButtons.tsx` (a phone: tel: and wa.me; a computer: the number, Copy and WhatsApp web) on My
+  trips, the request page, task detail, Live and Who's available; the app's call rows on the task card, the task screen, the
+  preview and Me. No CALL_PHONE, nothing dials by itself.
+- **I.** The app's new-task card lists every stop (four, then "Show all"), opens the preview (`components/TaskPreview.tsx`):
+  the map with the route line and numbered pins, every stop's arrive / leave, the totals, leave-by, passengers, contact, notes,
+  the vehicle or "Your vehicle on the day" / "Any van", asked by / given by / approved by with Call, Accept and Can't do at the
+  bottom; changes marked from the push's `changes` and the copy kept on the phone; works offline from the last copy.
+- **J.** `tasks.vehicle_id` optional with `vehicle_mode` (specific, driver_day, any_type) and `vehicle_type_wanted`; the check
+  `tasks_vehicle_present_check` (a specific task has its vehicle; any needs its type; nothing starts without one). The tools
+  take "on the day" or "any van" as the vehicle (create_task, plan_task, update_task, reassign_task, decide_request,
+  redecide_request, book_vehicle, proposals), refused in words while `vehicle_on_the_day` is off (the default: switch it on in
+  Settings → Fleet once every phone has this update). At Start task the app shows "Which vehicle?" and calls
+  `confirm_task_vehicle` (ok, wrong_type, in_garage, inactive, not_yours, started, has_vehicle), queued as `task_vehicle` before
+  the start when there is no connection; a refusal is kept and shown in words. The vehicle checks run when the vehicle is set
+  (the issue sync's overlap check). Who's available: "no vehicle yet · regular: WP CAB-4521"; the board, task detail, the
+  waiting column and proposals: "Vehicle: on the day" / "Any van"; the changed push says `vehicle_day` / `vehicle_any`.
+- **K.** `tasks.approved_by_employee_id` / `approved_at`, `vehicle_requests.decided_by_employee_id`; cards carry
+  `approved_by` (name, "10:42", photo, Call and WhatsApp), `declined_by` and `cancelled_by` with the reason; the pushes and
+  the notification centre name who decided ("Request approved by Palitha · …"). `reviewing(request_id)` every 20 s from the
+  decide pages (`request_viewers`, shown 45 s); the queue rows and the decide page say "Palitha is reviewing".
+  `decide_request(…, version)` and `redecide_request`: a request decided or changed since it was loaded is refused with "Already
+  approved by Palitha at 10:42." (office_create_task holds the request while it approves, so two approvals at once make one
+  task).
+- **My trips for a dispatcher (question 1):** built as the requests and proposed tasks the person made; tasks a fleet admin
+  made directly stay on Tasks (they are not requests). Say if they should be listed too.
+- **The artifact's declaration** adds `my_trips`, `my_inbox`, `mark_inbox_read`, `update_my_profile` and `reviewing`: the
+  Teams artifact needs the new file to use them.
+
 ## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
@@ -2081,6 +2157,74 @@ Added in Part 4 (18 October: Start a trip, Add a stop, Cancel this trip; as buil
 Unchanged, already in the family: `log.photoTitle` (මීටරයේ ඡායාරූපය), `log.needPhoto`, `log.photo.covered`,
 `log.photo.notDashboard`, `mileage.logOdometer` (මීටරය සටහන් කරන්න), `mileage.odometer` (මීටරය). The trip meter
 stays ට්‍රිප් මීටරය.
+
+Added in Hotfix 2 (18 October: the preview, the call buttons, "Which vehicle?", the channel, durations; changed: the time at a
+stop and Phone setup now take `{duration}`; as built):
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `task.minutesThere` | {duration} there | එහි {duration} |
+| `phoneSetup.stoppedOnce` | {phone} stopped Fame Driver for {duration} ({when}). No trip is recorded while it is stopped. | {phone} Fame Driver {duration} ක් නවත්වා තැබුවා ({when}). එය නවතා ඇති විට ගමන සටහන් නොවේ. |
+| `phoneSetup.stoppedMany` | {phone} stopped Fame Driver {count} times since {when}, {duration} in all. No trip is recorded while it is stopped. | {phone} {when} සිට Fame Driver {count} වතාවක් නවත්වා තැබුවා, මුළු {duration}. එය නවතා ඇති විට ගමන සටහන් නොවේ. |
+| `preview.title` | New task | නව කාර්යය |
+| `preview.changedTitle` | Task changed | කාර්යය වෙනස් විය |
+| `preview.stops` | Stops | නැවතුම් |
+| `preview.showAll` | Show all {n} stops | නැවතුම් {n} ම පෙන්වන්න |
+| `preview.arriveLeave` | arrive {arrive} · leave {leave} | පැමිණීම {arrive} · පිටවීම {leave} |
+| `preview.arriveBy` | by {time} | {time} ට පෙර |
+| `preview.totals` | {km} km · {drive} driving | කි.මී. {km} · රිය පැදවීම {drive} |
+| `preview.leaveBy` | Leave by {time} | {time} ට පිටත් වන්න |
+| `preview.vehicle` | Vehicle | වාහනය |
+| `preview.vehicleOnDay` | Your vehicle on the day | එදින ඔබ ළඟ ඇති වාහනය |
+| `preview.vehicleAny` | Any {type} | ඕනෑම {type} |
+| `preview.askedBy` | Asked by {name} | ඉල්ලුවේ {name} |
+| `preview.assignedBy` | Given by {name} | ලබා දුන්නේ {name} |
+| `preview.approvedBy` | Approved by {name} · {time} | අනුමත කළේ {name} · {time} |
+| `preview.changed` | Changed | වෙනස් විය |
+| `preview.lastCopy` | No connection: shown from the last copy on this phone. | සම්බන්ධතාවක් නැත: මෙම දුරකථනයේ අවසන් පිටපතින් පෙන්වයි. |
+| `preview.passengers` | {n} passengers | මගීන් {n} |
+| `preview.backBy` | Back by {time} | {time} ට ආපසු |
+| `preview.removed` | Removed | ඉවත් කළා |
+| `call.contact` | Call contact | සම්බන්ධීකරුට අමතන්න |
+| `call.requester` | Call requester | ඉල්ලූ අයට අමතන්න |
+| `call.fleetAdmin` | Call fleet admin | වාහන කළමනාකරුට අමතන්න |
+| `call.office` | Call office | කාර්යාලයට අමතන්න |
+| `call.whatsapp` | WhatsApp | WhatsApp |
+| `vehicleConfirm.title` | Which vehicle? | කුමන වාහනයද? |
+| `vehicleConfirm.body` | This task has no vehicle yet. Confirm the one you are driving. | මෙම කාර්යයට තවම වාහනයක් නැත. ඔබ පදවන වාහනය තහවුරු කරන්න. |
+| `vehicleConfirm.needsType` | This task needs a {type}. | මෙම කාර්යයට {type} එකක් අවශ්‍යයි. |
+| `vehicleConfirm.use` | Use {plate} | {plate} භාවිත කරන්න |
+| `vehicleConfirm.pick` | Choose another vehicle | වෙනත් වාහනයක් තෝරන්න |
+| `vehicleConfirm.wrongType` | {plate} is not a {type}. | {plate} {type} එකක් නොවේ. |
+| `vehicleConfirm.inGarage` | {plate} is in the garage. | {plate} ගරාජයේ ඇත. |
+| `vehicleConfirm.failed` | Couldn't set the vehicle: {reason} | වාහනය සැකසිය නොහැකි විය: {reason} |
+| `vehicleConfirm.hasVehicle` | The office has set the vehicle for this task. | කාර්යාලය මෙම කාර්යයට වාහනය සකසා ඇත. |
+| `vehicleConfirm.inactive` | {plate} is no longer in the fleet list. | {plate} තවදුරටත් වාහන ලැයිස්තුවේ නැත. |
+| `channel.newTasks` | New tasks | නව කාර්යයන් |
+| `channel.newTasksDesc` | New, changed and cancelled tasks | නව, වෙනස් වූ සහ අවලංගු කළ කාර්යයන් |
+| `dur.now` | now | දැන් |
+| `dur.inMin` | in {n} min | මිනිත්තු {n} කින් |
+| `dur.inHours` | in {h} h {m} min | පැය {h} මිනිත්තු {m} කින් |
+| `dur.inHoursOnly` | in {h} h | පැය {h} කින් |
+| `dur.tomorrow` | tomorrow {time} | හෙට {time} |
+| `dur.later` | {date} {time} (in {days} days) | {date} {time} (දින {days} කින්) |
+| `dur.agoMin` | {n} min ago | මිනිත්තු {n} කට පෙර |
+| `dur.agoHours` | {h} h {m} min ago | පැය {h} මිනිත්තු {m} කට පෙර |
+| `dur.agoHoursOnly` | {h} h ago | පැය {h} කට පෙර |
+| `dur.yesterday` | yesterday {time} | ඊයේ {time} |
+| `dur.earlier` | {date} {time} ({days} days ago) | {date} {time} (දින {days} කට පෙර) |
+| `dur.minutes` | {n} min | මිනිත්තු {n} |
+| `dur.hours` | {h} h {m} min | පැය {h} මිනිත්තු {m} |
+| `dur.hoursOnly` | {h} h | පැය {h} |
+| `dur.days` | {d} d {h} h | දින {d} පැය {h} |
+| `dur.daysOnly` | {d} d | දින {d} |
+| `vehicleType.car` | car | කාර් |
+| `vehicleType.van` | van | වෑන් |
+| `vehicleType.double_cab` | double cab | ඩබල් කැබ් |
+| `vehicleType.lorry` | lorry | ලොරි |
+| `vehicleType.other` | vehicle | වාහන |
+| push `changed`, vehicle | vehicle: yours on the day / vehicle: any {type} | වාහනය: එදින ඔබ ළඟ ඇති වාහනය / වාහනය: ඕනෑම {type} |
+| push `leave_30` (changed) | {title} · leave in 30 min · {pickup} → {dropoff} | {title} · මිනිත්තු 30 කින් පිටත් වන්න · {pickup} → {dropoff} |
 
 ## Deployment log
 
