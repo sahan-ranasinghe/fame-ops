@@ -607,3 +607,14 @@ a.bell-btn { text-decoration: none }
 .load-more { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; }
 .pager { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 16px; flex-wrap: wrap; }
 .pager .btn[aria-current="page"] { pointer-events: none; }
+
+/* Hotfix 3 W3 (L3): the search row above a list (Drivers, Vehicles, Users), the search box in it, a note beside a list's
+   title (Mileage's tables), a header that wraps on a phone. */
+.list-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-bottom: 12px }
+.list-tools .list-search { flex: 1 1 260px; max-width: 460px }
+.list-h > .muted.small { font-weight: 400; text-align: right }
+@media (max-width: 768px) {
+  .list-tools .list-search { max-width: none }
+  .list-h { flex-wrap: wrap; padding: 14px 16px }
+  .list-h > .muted.small { text-align: left }
+}

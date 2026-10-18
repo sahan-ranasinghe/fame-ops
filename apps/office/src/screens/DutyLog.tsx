@@ -3,48 +3,43 @@
 // (?range=… , default today) and driver (?driver=<username>). A desktop shows a
 // table; on a phone each period is a card (the table's phone layout). The
 // previous rows stay on screen, marked "Updating…", while another range loads.
-import { Link, useSearchParams } from "react-router";
+// Hotfix 3 (L3): 25 periods at a time (page numbers on a desktop, Load more on a phone) with the count in the header; the
+// totals row is the whole range's (the server adds them up), GPS km only when the whole range is on the page.
+import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
-import { useLists, useWatch } from "../data/hooks";
+import { useLists } from "../data/hooks";
 import type { DutyLog as DutyLogData, DutyPeriod } from "../data/types";
 import { cap, num } from "../lib/format";
-import { errText } from "../transport/errors";
 import { can } from "../transport/types";
 import { DateRange, useDateRange } from "../ui/DateRange";
 import { colomboDay } from "../ui/dateRange";
-import { Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
+import { Pill, Plate } from "../ui/basics";
+import { EmptyLine, ListHeader, usePagedList, useUrlFilter } from "../ui/ListKit";
 import { PageTop } from "../ui/Page";
-import { answerFor, clockOut, dutyArgs, emptyText, vehicleLine } from "./dutyLogic";
+import { clockOut, dutyArgs, emptyText, vehicleLine } from "./dutyLogic";
+import { ListFooter, ListStale, ListWaiting } from "./listLocal";
 
 /** duty_log answers up to 62 days at a time (GPS km up to 7). */
 const MAX_DAYS = 62;
+/** The list's query key. */
+export const DUTY_QUERY = "dutyLog";
 
 export function DutyLog() {
-  const { me, store, noConnector, managePermissions } = useFleet();
+  const { me, noConnector } = useFleet();
   const lists = useLists(!noConnector);
   const dates = useDateRange("today", { maxDays: MAX_DAYS });
-  const [params, setParams] = useSearchParams();
-  const driver = params.get("driver") || "";
-  const setDriver = (d: string) => setParams((p) => {
-    const next = new URLSearchParams(p);
-    if (d) next.set("driver", d);
-    else next.delete("driver");
-    return next;
-  }, { replace: true });
+  const [driver, setDriver] = useUrlFilter<string>("driver", "");
   const { from, to } = dates;
   const today = colomboDay();
-  const args = dutyArgs(from, to, driver || undefined);
-  // A range that reaches today is watched (people clock in and out); a past one is loaded once.
+  // A range that reaches today is refreshed (people clock in and out); a past one is loaded once in a while.
   const every = to >= today ? 60000 : 30 * 60000;
-  const entry = useWatch<DutyLogData>("dutyLog", "duty_log", args, every, !noConnector && !dates.error);
+  const list = usePagedList<DutyPeriod, DutyLogData>(DUTY_QUERY, "duty_log", dates.error ? null : dutyArgs(from, to, driver || undefined), (d) => d.periods,
+    { every, enabled: !noConnector });
+  const q = list.query;
+  const d = q.data;
   const routes = can(me, ...ROUTES_NEED);
-
-  const d = entry.data;
-  const driverName = lists.drivers?.find((x) => x.username === driver)?.name;
-  const current = d ? answerFor(d, { from, to, driver: driver || undefined, driverName }) : false;
-  const updating = !!d && !current && !entry.err && !dates.error;
-  const retry = () => void store.load("dutyLog", "duty_log", args);
+  const updating = q.updating || q.stale;
   const taskLink = (p: DutyPeriod, id: string) => `/tasks/${id}${p.day !== today ? `?date=${p.day}` : ""}`;
 
   return (
@@ -64,24 +59,22 @@ export function DutyLog() {
           </div>
         </div>
 
-        {dates.error ? null : !d && !noConnector ? (
-          <>
-            <ErrBox entry={entry} onRetry={retry} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-            {!entry.err && <Loading>Loading the duty log…</Loading>}
-          </>
-        ) : d && !current && entry.err ? (
+        {dates.error || noConnector ? null : !d ? (
+          <ListWaiting q={q} loading="Loading the duty log…" />
+        ) : q.stale && q.err ? (
           // The rows on screen are another range's: say what went wrong instead.
-          <Notice tone="bad" action={<button type="button" className="btn small" onClick={retry}>Try again</button>}>{errText(entry.err)[0]}</Notice>
-        ) : d ? (
-          <div style={updating ? { opacity: 0.6 } : undefined} aria-busy={updating || undefined}>
-            {updating ? <div className="updated" style={{ paddingBottom: 10 }}>Updating…</div> : <StaleNote entry={entry} />}
+          <ListStale q={q} />
+        ) : (
+          <div style={q.stale ? { opacity: 0.6 } : undefined} aria-busy={updating || undefined}>
             <div className="card">
-              {d.periods.length ? (
+              <ListHeader title="Duty periods" count={list.total} updating={updating} />
+              <ListStale q={q} />
+              {list.items.length ? (
                 <div className="tbl-wrap">
                   <table data-testid="duty-table">
                     <thead><tr><th>Driver</th><th>Clock in</th><th>Clock out</th><th className="r">Hours</th><th>Vehicles</th><th>Tasks</th><th className="r">Task km</th><th className="r">GPS km</th></tr></thead>
                     <tbody>
-                      {d.periods.map((p, i) => {
+                      {list.items.map((p, i) => {
                         const out = clockOut(p);
                         return (
                           <tr key={`${p.username ?? p.driver}-${p.clock_in}-${i}`} data-testid="duty-row">
@@ -123,7 +116,7 @@ export function DutyLog() {
                         );
                       })}
                       <tr data-testid="duty-totals" style={{ fontWeight: 700 }}>
-                        <td data-label="Total"><div>{d.totals.periods} period{d.totals.periods === 1 ? "" : "s"}</div></td>
+                        <td data-label="Total"><div>{d.totals.periods} period{d.totals.periods === 1 ? "" : "s"}{list.total > list.items.length ? <div className="sub">the whole range, every page</div> : null}</div></td>
                         <td></td>
                         <td></td>
                         <td data-label="Hours" className="r num">{num(d.totals.hours)} h</td>
@@ -136,12 +129,13 @@ export function DutyLog() {
                   </table>
                 </div>
               ) : (
-                <Empty>{emptyText(d, today)}</Empty>
+                <EmptyLine>{q.stale ? "Loading…" : emptyText(d, today)}</EmptyLine>
               )}
+              <ListFooter list={list} />
             </div>
             {d.gps_note && <p className="muted small" style={{ margin: "10px 0 0" }}>{d.gps_note}</p>}
           </div>
-        ) : null}
+        )}
       </div>
     </section>
   );

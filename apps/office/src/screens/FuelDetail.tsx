@@ -3,14 +3,14 @@
 // the video there: the right piece, then the second within it), the litres,
 // LKR, odometer, receipt, and the task it belongs to. A panel beside the list
 // on a desktop, a full screen on a phone.
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import { useEntry } from "../data/hooks";
-import { queryKey } from "../data/useQuery";
-import { FUEL_QUERY, useFuelArgs } from "./Fuel";
+import { useQuery } from "../data/useQuery";
+import { FuelShown, useFuelArgs } from "./Fuel";
 import type { FuelEntry, FuelList, SettingsResult, VideoMark } from "../data/types";
 import { joinDots, num } from "../lib/format";
+import { errText } from "../transport/errors";
 import { Loading, Notice, Pill } from "../ui/basics";
 import { PageTop } from "../ui/Page";
 import { checklistWords, clockOf, megabytes, pieceAt, videoChip, videoTone } from "./fuelLogic";
@@ -19,10 +19,15 @@ export function FuelDetail() {
   const { id = "" } = useParams();
   const [params] = useSearchParams();
   const { me, transport } = useFleet();
-  // The list's answer for the dates and filters in the URL (Fuel keeps it while this page is open; nothing is fetched here).
+  // The fill from the rows the list shows (Fuel keeps them while this page is open). Hotfix 3 (L3): the list shows a page
+  // at a time, so a fill on another page (a link, a reload) is found by asking for the whole range once, as before.
   const { args } = useFuelArgs();
-  const list = useEntry<FuelList>(queryKey(FUEL_QUERY, args));
-  const e: FuelEntry | undefined = list.data?.entries.find((x) => x.id === id);
+  const shown = useContext(FuelShown);
+  const fromList: FuelEntry | undefined = shown?.entries.find((x) => x.id === id);
+  const lookUp = !fromList && !!shown?.loaded && shown.total > shown.entries.length;
+  const found = useQuery<FuelList>("fuel-fill", "list_fuel", lookUp ? args : null, { onWrite: false });
+  const e: FuelEntry | undefined = fromList ?? found.data?.entries.find((x) => x.id === id);
+  const missing = !e && !!shown?.loaded && (!lookUp || (found.data !== undefined && !found.stale));
   const [items, setItems] = useState<{ key: string; en: string }[] | undefined>();
   const [piece, setPiece] = useState(0);
   /** The second to open once the piece's metadata is loaded (a bookmark in another piece). */
@@ -37,7 +42,16 @@ export function FuelDetail() {
     return () => { alive = false; };
   }, [transport, me.tools]);
 
-  if (!e) return <><PageTop title="Fill" backTo={backTo} /><Loading>Loading the fill…</Loading></>;
+  if (!e) {
+    return (
+      <>
+        <PageTop title="Fill" backTo={backTo} />
+        {found.err ? <Notice tone="bad">{errText(found.err)[0]}</Notice>
+          : missing ? <Notice tone="info">This fill is not in the days and filters chosen.</Notice>
+          : <Loading>Loading the fill…</Loading>}
+      </>
+    );
+  }
   const v = e.video;
   const pieces = v.segments?.length ? v.segments : v.url ? [{ url: v.url, duration_s: v.duration_s, bytes: v.bytes }] : [];
 

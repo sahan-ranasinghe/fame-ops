@@ -2,7 +2,9 @@
 // the issues permission, which the reports tool needs) and the service and
 // document reminders of the next 14 days (from the overview's needs-attention
 // list when the person holds issues; otherwise read off the vehicles list).
-import { type FormEvent, useEffect, useState } from "react";
+// Hotfix 3 (L3): the reports' status is in the URL (?status=, default Not closed), newest first, 25 at a time with the
+// count in the header; the reminders are shown 25 at a time the same way.
+import { type FormEvent, useState } from "react";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry, useLists } from "../data/hooks";
@@ -10,9 +12,11 @@ import type { Overview, VehicleReport, VehicleReports } from "../data/types";
 import { attIcon, cap, levelTone, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
-import { Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
+import { Chips, Notice, Pill, Plate } from "../ui/basics";
 import { Icon } from "../ui/icons";
+import { EmptyLine, ListHeader, usePagedList, useUrlFilter } from "../ui/ListKit";
 import { useToast } from "../ui/Toast";
+import { ListFooter, ListStale, ListWaiting, useLocalPages } from "./listLocal";
 import { dueFromVehicles } from "./maintenanceLogic";
 
 type Filter = "not_closed" | "open" | "in_garage" | "closed" | "all";
@@ -78,26 +82,39 @@ function ReportCard({ r }: { r: VehicleReport }) {
   );
 }
 
+/** The list's query key. */
+export const REPORTS_QUERY = "reports";
+
+const FILTER_WORDS: Record<Filter, string> = {
+  not_closed: "No problem reports waiting: every report is closed.",
+  open: "No open problem reports.",
+  in_garage: "No reported vehicle is in the garage.",
+  closed: "No closed problem reports yet.",
+  all: "No driver has reported a problem yet.",
+};
+
+/** What an empty list of reports means, in words. */
+export const reportsEmpty = (filter: Filter): string => FILTER_WORDS[filter];
+
 export function Maintenance() {
-  const { me, store, noConnector, managePermissions } = useFleet();
-  const [filter, setFilter] = useState<Filter>("not_closed");
+  const { me, noConnector } = useFleet();
+  const [filter, setFilter] = useUrlFilter<Filter>("status", "not_closed", FILTERS.map(([k]) => k));
   const canReports = me.tools.includes("list_vehicle_reports");
   const fromOverview = can(me, "issues");
-  const entry = useEntry<VehicleReports>("reports");
   const overview = useEntry<Overview>("overview");
   const lists = useLists(!noConnector && !fromOverview);
+  // Hotfix 3 (L3): the newest reports first, 25 at a time (Load more on a phone, page numbers on a desktop).
+  const list = usePagedList<VehicleReport, VehicleReports>(REPORTS_QUERY, "list_vehicle_reports", { status: filter }, (d) => d.reports,
+    { every: 60000, enabled: !noConnector && canReports });
+  const q = list.query;
+  const d = q.data;
 
-  useEffect(() => {
-    if (noConnector || !canReports) return;
-    store.reset("reports");
-    store.watch("reports", "list_vehicle_reports", { status: filter }, 60000);
-    return () => store.unwatch("reports");
-  }, [store, filter, noConnector, canReports]);
-
-  const d = entry.data && entry.data.status === filter ? entry.data : undefined;
   const att = fromOverview
     ? (overview.data?.needs_attention ?? []).filter((a) => !/problem/i.test(a.what || ""))
     : dueFromVehicles(lists.vehicles ?? [], today());
+  // The reminders are in memory already: shown 25 at a time the same way.
+  const reminders = useLocalPages(att, fromOverview ? "overview" : "vehicles");
+  const label = FILTERS.find(([k]) => k === filter)?.[1] ?? "";
   return (
     <section className="view">
       <div className="ph">
@@ -105,27 +122,33 @@ export function Maintenance() {
         {canReports && <Chips options={FILTERS} value={filter} onChange={setFilter} />}
       </div>
       <div className="stack">
-        {d && <StaleNote entry={entry} />}
         <div className="section-t">Problems reported by drivers</div>
         {!canReports && <Notice tone="info">Problem reports need the Issues permission. Ask an admin for access if you handle them.</Notice>}
-        {canReports && !d && !noConnector && (
-          <>
-            <ErrBox entry={entry} onRetry={() => void store.load("reports", "list_vehicle_reports", { status: filter })} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-            {!entry.err && <Loading>Loading reports…</Loading>}
-          </>
+        {canReports && !noConnector && <ListWaiting q={q} loading="Loading reports…" />}
+        {canReports && d && (
+          <div className="stack" style={q.stale ? { opacity: 0.6 } : undefined} aria-busy={q.updating || q.stale || undefined} data-testid="reports-list">
+            <div className="card">
+              <ListHeader title={label} count={list.total} updating={q.updating || q.stale} />
+              <ListStale q={q} />
+              {!list.items.length && <EmptyLine>{q.stale ? "Loading…" : reportsEmpty(filter)}</EmptyLine>}
+            </div>
+            {list.items.map((r) => <ReportCard key={r.id} r={r} />)}
+            {list.total > list.items.length || list.pages > 1 ? <div className="card"><ListFooter list={list} /></div> : null}
+          </div>
         )}
-        {d && (d.reports.length ? d.reports.map((r) => <ReportCard key={r.id} r={r} />) : <div className="card"><Empty>No problem reports here.</Empty></div>)}
         <div className="section-t">Service and documents</div>
         <div className="card">
+          <ListHeader title="Reminders" count={reminders.total} />
           <div className="rows">
-            {att.length ? att.map((a, i) => (
-              <div className="row" key={i}>
+            {reminders.items.length ? reminders.items.map((a, i) => (
+              <div className="row" key={`${a.what}-${a.subject ?? ""}-${i}`}>
                 <span className={`att-ic ${levelTone(a.level)}`}><Icon name={attIcon(a.what)} /></span>
                 <div className="grow"><div className="name">{a.what}</div><div className="sub">{a.subject || ""}</div></div>
                 <span className={`due ${levelTone(a.level)}`}>{a.due || ""}</span>
               </div>
-            )) : <Empty>No service or document reminders in the next 14 days. Add dates on each vehicle to get reminders.</Empty>}
+            )) : <EmptyLine>No service or document reminders in the next 14 days. Add dates on each vehicle to get reminders.</EmptyLine>}
           </div>
+          <ListFooter list={reminders} />
         </div>
       </div>
     </section>

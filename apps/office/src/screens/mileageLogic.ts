@@ -89,6 +89,16 @@ export function monthLine(t: MileageTotals): string {
   ].filter(Boolean).join(" · ");
 }
 
+/**
+ * The Fuel page's link from Mileage (Hotfix 3): the same days and filters. Mileage opens on this month and Fuel on this
+ * week, so Mileage's default is named in the link ("?range=month").
+ */
+export function fuelSearch(search: string): string {
+  const p = new URLSearchParams(search);
+  if (!p.get("range")) p.set("range", "month");
+  return `?${p.toString()}`;
+}
+
 /** Fuel: the chosen days in words, from the answer. */
 export function fuelLabel(d: Pick<FuelList, "month" | "from" | "to">): string {
   if (d.from && d.to) return rangeText(d.from, d.to);

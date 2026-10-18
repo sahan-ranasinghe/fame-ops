@@ -96,14 +96,16 @@ describe("Mileage over a range of days", () => {
     expect(screen.queryByTestId("month-allowance")).toBeNull();
     expect(screen.queryByTestId("personal-km")).toBeNull();
     expect(screen.getByText("Completed tasks").parentElement?.textContent).toContain(monthName(ym));
-    expect(screen.getByRole("link", { name: "Fuel entries and videos" }).getAttribute("href")).toBe("/fuel");
+    expect(screen.getByRole("link", { name: "Fuel entries and videos" }).getAttribute("href")).toBe("/fuel?range=month");
   }, 20_000);
 
   it("one day: its rows and totals (personal km apart), and the month that contains it with the allowance", async () => {
     const t = await mount("/mileage?range=today&vehicle=WP+CAB-4521");
     expect(t.argsOf("mileage_summary")[0]).toEqual({ from: today, to: today, vehicle: "WP CAB-4521" });
     const month = await screen.findByTestId("month-allowance");
-    expect(within(month).getByRole("heading", { name: `${monthName(ym)} (allowance)` })).toBeTruthy();
+    // The header with its count (Hotfix 3: "October 2026 (allowance) · 1").
+    expect(within(month).getByRole("heading", { name: new RegExp(`^${monthName(ym)} \\(allowance\\)`) })).toBeTruthy();
+    expect(within(month).getByTestId("list-count").textContent).toBe(" · 1");
     expect(within(month).getByText("Allowance (km)")).toBeTruthy();
     expect(within(month).getByText("12 tasks · 840 task km · 35 km outside tasks · 310 litres · LKR 120,500")).toBeTruthy();
     // The day's own table: no allowance column (the allowance is monthly), the personal km column.
@@ -119,7 +121,7 @@ describe("Fuel over a range of days", () => {
   it("this week: the fills and their totals, the month in one line; a fill opens beside the list from the same answer", async () => {
     const week = rangeDates("week", today);
     const t = await mount("/fuel?range=week");
-    expect(t.argsOf("list_fuel")[0]).toEqual({ from: week.from, to: week.to });
+    expect(t.argsOf("list_fuel")[0]).toEqual({ from: week.from, to: week.to, limit: 25 });
     const line = await screen.findByTestId("fuel-month");
     expect(line.textContent).toBe(`${monthName(week.to.slice(0, 7))}: 9 fills · 310 litres · LKR 120,500`);
     const row = within(screen.getByTestId("fuel-table")).getByText("28.5").closest("tr")!;
@@ -130,9 +132,17 @@ describe("Fuel over a range of days", () => {
     expect(t.argsOf("list_fuel")).toHaveLength(1);
   });
 
-  it("this month is asked as the month, with no month line", async () => {
+  it("opens on this week (Hotfix 3), 25 fills a page", async () => {
+    const week = rangeDates("week", today);
     const t = await mount("/fuel");
-    expect(t.argsOf("list_fuel")[0]).toEqual({ month: monthOf(today).from.slice(0, 7) });
+    expect(t.argsOf("list_fuel")[0]).toEqual({ from: week.from, to: week.to, limit: 25 });
+    expect(await screen.findByTestId("fuel-month")).toBeTruthy();
+    expect(screen.getByTestId("list-count").textContent).toBe(" · 1");
+  });
+
+  it("this month (Mileage's link) is asked as the month, with no month line", async () => {
+    const t = await mount("/fuel?range=month");
+    expect(t.argsOf("list_fuel")[0]).toEqual({ month: monthOf(today).from.slice(0, 7), limit: 25 });
     await screen.findByTestId("fuel-table");
     expect(screen.queryByTestId("fuel-month")).toBeNull();
   });
