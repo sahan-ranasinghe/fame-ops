@@ -1636,6 +1636,8 @@ export const taskBoard = tool({
       stops_count: stopCounts.get(r.id)?.length ?? 0,
       driver: r.proposed_employee_id ? refs.emp.get(r.proposed_employee_id)?.name : undefined,
       vehicle: r.proposed_vehicle_id ? refs.veh.get(r.proposed_vehicle_id)?.reg_no : undefined,
+      // Hotfix 2 (J): proposed with the vehicle chosen on the day, or any vehicle of a type.
+      vehicle_text: r.proposed_vehicle_id ? undefined : vehicleText(r.proposed_vehicle_mode, r.proposed_vehicle_type),
       proposed_by: r.requested_by_name,
       status: new Date(r.needed_at) <= now ? "Leave-by passed · not decided" : `Waiting for approval · proposed by ${r.requested_by_name}`,
       late: new Date(r.needed_at) <= now ? true : undefined,

@@ -122,6 +122,8 @@ begin
       and t.accepted_at is null
       and t.accept_reminder_sent_at is null
       and coalesce(t.leave_by, t.start_at) > now()
+      -- greatest() skips a null: an off-duty driver (no open duty period) is left out explicitly.
+      and public.on_duty_since(t.employee_id) is not null
       and greatest(t.sent_at, public.on_duty_since(t.employee_id)) + make_interval(mins => v_remind) < now()
       and exists (select 1 from public.employees e where e.id = t.employee_id and e.role = 'driver')
     returning t.id, t.employee_id
@@ -138,7 +140,8 @@ begin
       and t.needs_driver_since is null
       -- Today's and later tasks only (the list the office sees): no burst of pushes for old unaccepted tasks.
       and coalesce(t.leave_by, t.start_at) >= (date_trunc('day', now() at time zone 'Asia/Colombo') at time zone 'Asia/Colombo')
-      and (greatest(t.sent_at, public.on_duty_since(t.employee_id)) + make_interval(mins => v_within) < now()
+      and ((public.on_duty_since(t.employee_id) is not null
+            and greatest(t.sent_at, public.on_duty_since(t.employee_id)) + make_interval(mins => v_within) < now())
            or coalesce(t.leave_by, t.start_at) - make_interval(mins => v_before) < now())
       and exists (select 1 from public.employees e where e.id = t.employee_id and e.role = 'driver')
     returning t.id, t.employee_id, t.title, coalesce(t.leave_by, t.start_at) as leave_at

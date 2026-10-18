@@ -1605,3 +1605,112 @@ test("a vehicle's documents: upload with its expiry, view, replace, remove with 
   await expect(insurance).toContainText("Uploaded by E2E Docs Desk");
   await expect(docs.getByTestId("removed-doc")).toHaveCount(1);
 });
+
+test("Hotfix 2: two approvers at once, the phone banner, the requester's notification centre and My trips; a time field plans once", async ({ page, browser }) => {
+  test.setTimeout(300_000);
+  const tag = `hf2${stamp}`;
+  const requester = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E HF2 Requester", email: `e2e.hf2req.${stamp}@fame.test`, permissions: ["view", "request"] });
+  const one = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E HF2 One", email: `e2e.hf2one.${stamp}@fame.test`, permissions: ["view", "request", "approve", "assign_tasks"], phone: "0771230001" });
+  const two = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E HF2 Two", email: `e2e.hf2two.${stamp}@fame.test`, permissions: ["view", "request", "approve", "assign_tasks"] });
+  const driver = { name: `E2E HF2 Driver ${stamp}`, code: `EH2-${stamp}`, username: `eh2.${stamp}`, pin: "246813", phone: "0779998888" };
+  await tool("create_driver", driver);
+  const plate = `WP EH2-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
+  await tool("update_vehicle", { reg_no: plate, regular_driver: driver.username });
+  const day = new Date(Date.now() + 5.5 * 3600000 + 86400000).toISOString().slice(0, 10); // tomorrow in Colombo
+  const signIn = async (p: import("@playwright/test").Page, link: string, password: string) => {
+    const verify = await fetch(link, { redirect: "manual" });
+    const landing = verify.headers.get("location") ?? "";
+    await p.goto("/" + landing.slice(landing.indexOf("#")));
+    await p.getByLabel("New password").fill(password);
+    await p.getByLabel("Again").fill(password);
+    await p.getByRole("button", { name: "Save password" }).click();
+    await expect(p.getByRole("heading", { name: "Overview" })).toBeVisible();
+  };
+
+  // 1. The requester asks for a vehicle; My trips lists it as waiting.
+  await signIn(page, requester.set_password_link, `HF2 requester ${stamp}!`);
+  await page.goto("/requests/new");
+  await page.getByLabel("Day").fill(day);
+  await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
+  await page.getByLabel("Arrive by").nth(1).fill("16:00");
+  await expect(page.getByTestId("plan-card")).toContainText("Leave by", { timeout: 20000 });
+  await page.getByLabel("Note").fill(`HF2 trip ${tag}`);
+  await page.getByRole("button", { name: "Save request" }).click();
+  await expect(page.getByRole("status")).toHaveText("Sent to the fleet admin · you'll be notified.");
+  const waiting = await tool<{ requests: { id: string; note?: string }[] }>("list_requests", { status: "waiting" });
+  const asked = waiting.requests.find((r) => r.note === `HF2 trip ${tag}`)!;
+  await page.goto("/my-trips");
+  const row = page.getByTestId("trip-row").filter({ hasText: "Galle" }).first();
+  await expect(row.getByTestId("trip-live")).toContainText("Waiting");
+
+  // 2. Approver Two has no number: the banner asks for it until it is saved in My profile.
+  const twoPage = await (await browser.newContext()).newPage();
+  await signIn(twoPage, two.set_password_link, `HF2 two ${stamp}!`);
+  await expect(twoPage.getByTestId("phone-banner")).toBeVisible();
+  await twoPage.getByRole("link", { name: "Add my number" }).click();
+  await twoPage.getByLabel("My phone number").fill("077 123 0002");
+  await twoPage.getByRole("button", { name: "Save" }).click();
+  await expect(twoPage.getByTestId("my-profile")).toContainText("Saved: 077 123 0002");
+  await twoPage.goto("/requests");
+  await expect(twoPage.getByTestId("phone-banner")).toHaveCount(0);
+
+  // 3. Both approvers open the decide page: each sees the other reviewing.
+  const onePage = await (await browser.newContext()).newPage();
+  await signIn(onePage, one.set_password_link, `HF2 one ${stamp}!`);
+  await expect(onePage.getByTestId("phone-banner")).toHaveCount(0);
+  await onePage.goto(`/requests/${asked.id}/decide`);
+  await expect(onePage.getByTestId("request-decide-trip")).toBeVisible();
+  await twoPage.goto(`/requests/${asked.id}/decide`);
+  await expect(twoPage.getByTestId("reviewing")).toContainText("E2E HF2 One", { timeout: 30000 });
+  await expect(onePage.getByTestId("reviewing")).toContainText("E2E HF2 Two", { timeout: 30000 });
+
+  // 4. One approves; the other, a moment later, is told who did: never a second decision.
+  for (const p of [onePage, twoPage]) {
+    await p.getByTestId("availability").getByTestId("avail-row").filter({ hasText: driver.name }).click();
+    await expect(p.getByLabel("Driver", { exact: true })).toHaveValue(driver.username);
+  }
+  await onePage.getByTestId("decide-send").click();
+  await expect(onePage.getByTestId("request-decided")).toBeVisible();
+  await twoPage.getByTestId("decide-send").click();
+  await expect(twoPage.getByText(/Already approved by E2E HF2 One at \d\d:\d\d/).first()).toBeVisible();
+  await expect(twoPage.getByTestId("decided-by").first()).toContainText("Approved by E2E HF2 One");
+  const decided = await tool<{ requests: { task_id?: string; status: string }[] }>("list_requests", { status: "all", id: asked.id });
+  expect(decided.requests[0].status).toBe("approved");
+  const tasks = await tool<{ tasks: { request_id?: string; title: string }[] }>("list_tasks", { from: day, to: day });
+  expect(tasks.tasks.filter((t) => t.title.includes("Galle")).length).toBeGreaterThanOrEqual(1);
+
+  // 5. The requester: the notification centre has it (count, banner) and My trips says who approved, the driver with Call.
+  await expect(page.getByTestId("inbox-count")).toHaveText(/^[1-9]\d*$/, { timeout: 20000 });
+  await expect(page.getByTestId("inbox-banner").first()).toContainText("Request approved by E2E HF2 One", { timeout: 20000 });
+  await page.reload();
+  const approved = page.getByTestId("trip-row").filter({ hasText: "Galle" }).first();
+  await expect(approved.getByTestId("trip-live")).toContainText("Approved");
+  await expect(approved.getByTestId("trip-decision")).toContainText("Approved by E2E HF2 One");
+  await expect(approved.getByTestId("trip-driver")).toContainText(driver.name);
+  await expect(approved.getByTestId("trip-driver")).toContainText("077 999 8888");
+
+  // 6. A time field counts when it is done: hours, minutes, then PM plan once, for 14:00, never for 02:00.
+  const planned: string[] = [];
+  onePage.on("request", (r) => {
+    if (r.url().includes("/office-api/tools/plan_task")) planned.push(r.postData() ?? "");
+  });
+  await onePage.goto("/tasks/new");
+  await onePage.getByLabel("Task", { exact: true }).fill(`E2E time field ${tag}`);
+  await onePage.getByLabel("Date", { exact: true }).fill(day);
+  await onePage.getByLabel("Stop 1", { exact: true }).fill("Head office");
+  await onePage.getByLabel("Stop 2", { exact: true }).fill("Kandy");
+  await onePage.getByLabel("Driver", { exact: true }).selectOption(driver.username);
+  const leave = onePage.getByLabel("Leave by", { exact: true });
+  await leave.fill("09:30");
+  await leave.blur();
+  await expect(onePage.getByTestId("plan-line")).toContainText("Leave by 09:30", { timeout: 15000 });
+  planned.length = 0;
+  await leave.focus();
+  await onePage.keyboard.type("0200P", { delay: 150 });
+  await expect(onePage.getByTestId("plan-line")).toContainText("Leave by 14:00", { timeout: 15000 });
+  await onePage.waitForTimeout(2500);
+  expect(planned.filter((b) => b.includes('"leave_by":"02:00"'))).toHaveLength(0);
+  expect(planned.filter((b) => b.includes('"leave_by":"14:00"'))).toHaveLength(1);
+});

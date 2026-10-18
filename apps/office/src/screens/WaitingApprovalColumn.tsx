@@ -18,7 +18,7 @@ function WaitingCard({ c, to }: { c: WaitingApprovalCard; to: string | null }) {
       <span className="title">{c.title}</span>
       <span className="route">From {c.from || "—"}<br />To {c.to || "—"}{c.stops_count > 2 ? ` · ${c.stops_count} stops` : ""}</span>
       <span className="leave"><span className="num">Leave by {c.leave_by || c.time}</span><span className="muted"> · proposed by {c.proposed_by}</span></span>
-      <span className="who"><Avatar name={c.driver} small /><span className="grow">{c.driver || "No driver proposed"}</span><Plate v={c.vehicle} /></span>
+      <span className="who"><Avatar name={c.driver} small /><span className="grow">{c.driver || "No driver proposed"}</span>{c.vehicle ? <Plate v={c.vehicle} /> : c.vehicle_text ? <span className="muted">{c.vehicle_text}</span> : null}</span>
       <span className={`status ${c.late ? "bad" : "muted"}`}>{c.status}</span>
       {c.late && <span><span className="pill bad">{LATE_BADGE}</span></span>}
     </>

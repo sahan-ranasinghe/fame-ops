@@ -133,10 +133,10 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
 test("a requester on a phone: four tabs, New request as the big action, the request as a page, the detail full screen, the draft kept", async ({ page }) => {
   await signIn(page, "Phone Requester", `phone.req.${stamp}@fame.test`, ["view", "request"]);
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
-  await expect(tabs(page)).toHaveText(["Home", "My requests", "Map", "Vehicles", "More"]);
+  await expect(tabs(page)).toHaveText(["Home", "My trips", "Map", "Vehicles", "More"]);
   await expect(page.getByTestId("home-action")).toHaveText("New request");
   await tabs(page).filter({ hasText: "More" }).click();
-  await expect(page.getByTestId("more-list").getByRole("link")).toHaveText(["Projects", "Drivers", "Settings"]);
+  await expect(page.getByTestId("more-list").getByRole("link")).toHaveText(["Requests", "Projects", "Drivers", "Settings"]);
 
   // The request page from the big action; a draft survives leaving through the tab bar.
   await tabs(page).filter({ hasText: "Home" }).click();

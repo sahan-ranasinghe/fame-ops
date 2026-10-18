@@ -173,6 +173,8 @@ export interface WaitingApprovalCard {
   stops_count: number;
   driver?: string;
   vehicle?: string;
+  /** Hotfix 2 (J): "Vehicle: on the day" or "Any van" when the proposal names no vehicle. */
+  vehicle_text?: string;
   proposed_by: string;
   /** "Waiting for approval · proposed by Nimal" or "Leave-by passed · not decided". */
   status: string;
@@ -678,6 +680,8 @@ export interface RequestProposal {
   driver?: string;
   username?: string;
   vehicle?: string;
+  /** Hotfix 2 (J): "Vehicle: on the day" or "Any van" when the proposal names no vehicle. */
+  vehicle_text?: string;
   vehicle_why?: string;
   warnings?: string[];
   conflicts?: Conflict[];

@@ -483,6 +483,8 @@ function requestCard(
         driver: r.proposed_employee_id ? refs?.people.get(r.proposed_employee_id)?.name : undefined,
         username: r.proposed_employee_id ? refs?.people.get(r.proposed_employee_id)?.username ?? undefined : undefined,
         vehicle: r.proposed_vehicle_id ? refs?.plates.get(r.proposed_vehicle_id) : undefined,
+        // Hotfix 2 (J): "Vehicle: on the day" / "Any van" when none was named.
+        vehicle_text: r.proposed_vehicle_id ? undefined : vehicleText(r.proposed_vehicle_mode, r.proposed_vehicle_type),
         vehicle_why: (r.proposal_json as { vehicle_why?: string } | null)?.vehicle_why ?? undefined,
         warnings: (r.proposal_json as { warnings?: string[] } | null)?.warnings?.length
           ? (r.proposal_json as { warnings: string[] }).warnings

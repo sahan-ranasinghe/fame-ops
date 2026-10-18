@@ -669,6 +669,62 @@ async function main() {
   queueD.add({ kind: 'session_end', id: sessionD, ended_at: new Date().toISOString(), end_reason: 'driver' });
   await syncD.flush();
 
+  console.log('\n== Hotfix 2: a task with its vehicle on the day, confirmed through the queue; the contacts; the push channel ==');
+  const e = await makeDriver(5);
+  const clientE = driverClient({ value: true });
+  check((await api.signIn(clientE, e.username, e.pin)) === 'ok', 'driver E signs in');
+  const carE = must(await admin.from('vehicles').insert({ reg_no: `TEST ${run.toUpperCase()}-E`, make_model: 'Toyota Axio', vehicle_type: 'car', seats: 4, current_odometer_km: 5000 }).select('*').single(), 'car E');
+  await admin.from('fleet_settings').upsert({ key: 'office_phone', value: '+94112345678', updated_by: 'test' }, { onConflict: 'key' });
+  async function taskWithout(title: string, mode: 'driver_day' | 'any_type', type: string | null) {
+    return must(
+      await admin.rpc('office_create_task', {
+        p_task: { title, employee_id: e.row.id, vehicle_id: null, vehicle_mode: mode, vehicle_type_wanted: type, start_at: new Date(Date.now() + 30 * 60000).toISOString(), created_by: 'test' },
+        p_stops: [{ seq: 1, type: 'pickup', place_name: 'Head office, Colombo 05', lat: 6.8868, lng: 79.8612 }, { seq: 2, type: 'drop', place_name: 'Negombo', lat: 7.2083, lng: 79.8358 }],
+        p_projects: [],
+      }),
+      'task without a vehicle',
+    );
+  }
+  const onDay = await taskWithout(`On the day ${run}`, 'driver_day', null);
+  const anyVan = await taskWithout(`Any van ${run}`, 'any_type', 'van');
+  const tasksE = await api.fetchTasks(clientE, since);
+  const onDayRow = tasksE.find((t) => t.id === onDay);
+  check(onDayRow?.vehicle_id === null && onDayRow.vehicle_mode === 'driver_day' && tasksE.find((t) => t.id === anyVan)?.vehicle_type_wanted === 'van',
+    'the app reads a task with no vehicle: driver_day, and any_type with its type', onDayRow);
+  const queueE = memoryStore();
+  const syncE = createSync({ client: clientE, store: queueE.store, employeeId: () => e.row.id, uploadFile: uploader(clientE, []), removeFile: () => undefined });
+  const sessionE = randomUUID();
+  queueE.add({ kind: 'session_start', id: sessionE, employee_id: e.row.id, vehicle_id: carE.id, started_at: new Date().toISOString(), device_info: { model: 'test phone' } });
+  // Start task with no connection: the vehicle confirmed first, then the start.
+  queueE.add(
+    { kind: 'task_vehicle', id: onDay, vehicle_id: carE.id, at: new Date().toISOString() },
+    { kind: 'task_patch', id: onDay, patch: { status: 'in_progress', start_odometer_km: 5000, started_at: new Date().toISOString() } },
+  );
+  result = await syncE.flush();
+  const startedE = must(await admin.from('tasks').select('status, vehicle_id').eq('id', onDay).single(), 'started');
+  check(result.failed === 0 && startedE.status === 'in_progress' && startedE.vehicle_id === carE.id, 'the queue in order: the vehicle confirmed, then the task starts on it', { result, startedE });
+  // A car for "any van": refused and kept; the start behind it is refused by the database too (never retried for ever).
+  queueE.add(
+    { kind: 'task_vehicle', id: anyVan, vehicle_id: carE.id, at: new Date().toISOString() },
+    { kind: 'task_patch', id: anyVan, patch: { status: 'in_progress', start_odometer_km: 5000, started_at: new Date().toISOString() } },
+  );
+  result = await syncE.flush();
+  const failedE = queueE.failed();
+  check(failedE.length === 2 && failedE.some((f) => f.startsWith('task_vehicle') && /wrong_type/.test(f))
+    && must(await admin.from('tasks').select('status').eq('id', anyVan).single(), 'any van').status === 'assigned',
+    'a car for "any van": refused (wrong_type) and kept; the start behind it is kept as failed; the task waits', failedE);
+  const contacts = await api.fetchTaskContacts(clientE, onDay);
+  check(contacts?.officePhone === '+94112345678', 'my_task_contacts: the office number on my own task', contacts);
+  check((await api.fetchTaskContacts(clientE, taskOfB)) === null, "nothing for another driver's task", null);
+  const office = await api.fetchOfficeContacts(clientE);
+  check(JSON.stringify(office).includes('+94112345678'), 'Me: Call office (my_office_contacts)', office);
+  const reg = await clientE.rpc('register_device_token', { p_token: `ExponentPushToken[${run}-e]`, p_platform: 'android', p_app_version: '1.2.0', p_language: 'en', p_channels: ['new-tasks'] });
+  const tok = must(await admin.from('device_tokens').select('channels').eq('token', `ExponentPushToken[${run}-e]`).single(), 'token');
+  check(!reg.error && JSON.stringify(tok.channels) === '["new-tasks"]', 'the phone registers its token with the new-tasks channel', { error: reg.error, tok });
+  await admin.from('tasks').update({ status: 'cancelled', cancelled_reason: 'test' }).in('id', [onDay, anyVan]);
+  queueE.add({ kind: 'session_end', id: sessionE, ended_at: new Date().toISOString(), end_reason: 'driver' });
+  await syncE.flush();
+
   console.log('\n== The other driver ==');
   const clientB = driverClient({ value: true });
   await api.signIn(clientB, b.username, b.pin);

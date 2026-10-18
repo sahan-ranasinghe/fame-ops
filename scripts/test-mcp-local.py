@@ -2271,6 +2271,213 @@ taken = [i for i in il["issues"] if i.get("assigned_to")]
 check(all(i.get("taken_by", {}).get("name") == i["assigned_to"]["name"] for i in taken), "taken_by names the assignee (with when)", json.dumps(taken[:1])[:300])
 check(any(i.get("opened_by", "").startswith("System · ") for i in il["issues"]), "the system's issues say 'System · <kind>'")
 
+print("\n== 6k. Hotfix 2: phones, durations, a vehicle on the day, who decided, My trips, the notification centre ==")
+import re
+import threading
+
+hk = uuid.uuid4().hex[:6]
+# D. One way to say when: a request card says when it was asked as "now", "4 min ago", "yesterday 09:00"…
+hk_req = tool("create_request", {"requested_by": "Hotfix Two", "date": day(6), "time": "09:30", "route_from": "Head office", "route_to": "Negombo"})
+HR = hk_req["request"]["id"]
+card = tool("list_requests", {"status": "all", "id": HR})["requests"][0]
+check(re.fullmatch(r"now|\d+ min ago", card.get("asked", "")) is not None, "D: a request card says when it was asked in the one formatter's words", card.get("asked"))
+check(card.get("live", {}).get("state") == "waiting" and card["live"]["text"] == "Waiting", "A: a waiting request's live state", json.dumps(card.get("live")))
+
+# F. Phones are stored +94…, shown 07X XXX XXXX; every change is logged with who and from / to.
+tool("update_driver", {"username": f"trip.{tag}", "phone": "077 123 4567"})
+check(psql(f"select phone from employees where id = '{TD}'") == "+94771234567", "F: a driver's number typed 077 123 4567 is stored +94771234567")
+ch = psql(f"select coalesce(old_value, '-') || '|' || new_value || '|' || field || '|' || channel from employee_changes where employee_id = '{TD}' order by id desc limit 1")
+check(ch == f"-|+94771234567|phone|{'web' if CHANNEL == 'api' else 'claude'}", "F: the change is logged (from, to, the channel)", ch)
+r = tool("update_driver", {"username": f"trip.{tag}", "phone": "12345"}, expect_error=True)
+check("Sri Lankan number" in r and psql(f"select phone from employees where id = '{TD}'") == "+94771234567", "F: a number that is not Sri Lankan is refused in words, nothing changed", r)
+drv = next(d for d in tool("list_drivers")["drivers"] if d.get("username") == f"trip.{tag}")
+check(drv.get("phone_display") == "077 123 4567" and drv.get("call") == "tel:+94771234567" and drv.get("whatsapp") == "https://wa.me/94771234567",
+      "F: list_drivers shows 077 123 4567 with tel: and wa.me (the shared key / an admin may see drivers' numbers)", json.dumps({k: drv.get(k) for k in ("phone", "phone_display", "call")}))
+r = tool("update_settings", {"key": "office_phone", "value": "011 234 5678"})
+check(tool("get_settings")["settings"].get("office_phone") == "+94112345678", "F: Settings → Fleet stores the office's number +94…", json.dumps(r)[:200])
+check(tool("list_requests", {"status": "all", "id": HR})["requests"][0].get("office_phone", {}).get("phone_display") == "011 234 5678",
+      "F: request cards carry the office's number for Call office")
+
+# J. A task without a named vehicle: only once vehicle_on_the_day is on; the driver's vehicle on the day or any van.
+r = tool("create_task", {"title": f"6k on the day {hk}", "date": day(4), "start_time": "08:00", "driver": f"trip.{tag}", "vehicle": "on the day",
+                         "pickup": "Head office", "dropoff": "Negombo"}, expect_error=True)
+check("vehicle_on_the_day" in r, "J: with the setting off a vehicle 'on the day' is refused, in words (phones on the old update)", r)
+tool("update_settings", {"key": "vehicle_on_the_day", "value": True})
+od = tool("create_task", {"title": f"6k on the day {hk}", "date": day(4), "start_time": "08:00", "driver": f"trip.{tag}", "vehicle": "on the day",
+                          "pickup": "Head office", "dropoff": "Negombo"})
+OD = od["task_id"]
+check(psql(f"select coalesce(vehicle_id::text, '-') || '|' || vehicle_mode from tasks where id = '{OD}'") == "-|driver_day" and od.get("vehicle_text") == "Vehicle: on the day",
+      "J: a task with the driver's vehicle on the day: no vehicle, mode driver_day, 'Vehicle: on the day'", json.dumps({k: od.get(k) for k in ("vehicle", "vehicle_text")}))
+bc = next((c for col in ("assigned", "in_progress") for c in tool("task_board", {"date": day(4)}).get(col, []) if c["id"] == OD), {})
+check(bc.get("vehicle_text") == "Vehicle: on the day" and not bc.get("vehicle"), "J: the board card says 'Vehicle: on the day'", json.dumps(bc)[:300])
+check(tool("task_detail", {"task_id": OD})["task"].get("vehicle_text") == "Vehicle: on the day", "J: task_detail says it too")
+plate_v = f"WP HF-{int(hk, 16) % 9000 + 1000}"
+tool("register_vehicle", {"reg_no": plate_v, "make_model": "Toyota HiAce", "vehicle_type": "van", "seats": 14, "current_odometer_km": 2000})
+VV = psql(f"select id from vehicles where reg_no = '{plate_v}'")
+av = tool("create_task", {"title": f"6k any van {hk}", "date": day(4), "start_time": "13:00", "driver": f"trip.{tag}", "vehicle": "any van",
+                          "pickup": "Head office", "dropoff": "Kandy"})
+AV = av["task_id"]
+check(psql(f"select coalesce(vehicle_id::text, '-') || '|' || vehicle_mode || '|' || vehicle_type_wanted from tasks where id = '{AV}'") == "-|any_type|van"
+      and av.get("vehicle_text") == "Any van", "J: 'any van': no vehicle, any_type van, 'Any van'", json.dumps({k: av.get(k) for k in ("vehicle", "vehicle_text")}))
+code, ans = tripper.post("rpc/confirm_task_vehicle", {"p_task": AV, "p_vehicle": VT}, prefer="return=representation")
+check(code == 200 and ans == "wrong_type", "J: the driver confirms a car for 'any van': wrong_type", f"{code} {ans}")
+code, ans = tripper.post("rpc/confirm_task_vehicle", {"p_task": AV, "p_vehicle": VV}, prefer="return=representation")
+check(code == 200 and ans == "ok" and psql(f"select vehicle_id from tasks where id = '{AV}'") == VV, "J: a van: ok, the task takes it", f"{code} {ans}")
+code, ans = tripper.post("rpc/confirm_task_vehicle", {"p_task": OD, "p_vehicle": VT}, prefer="return=representation")
+check(code == 200 and ans == "ok", "J: the vehicle the driver holds, for 'on the day': ok", f"{code} {ans}")
+other = psql("select id from tasks where employee_id <> '" + TD + "' and status = 'assigned' limit 1")
+if other:
+    code, ans = tripper.post("rpc/confirm_task_vehicle", {"p_task": other, "p_vehicle": VT}, prefer="return=representation")
+    check(code == 200 and ans == "not_yours" and psql(f"select coalesce(vehicle_id::text, '-') from tasks where id = '{other}'") != VT,
+          "J: another driver's task: not_yours, nothing changed", f"{code} {ans}")
+# The office moves a task back to "on the day": the driver hears it (vehicle_day in the changed push).
+tool("update_task", {"task_id": AV, "plan_version": int(psql(f"select plan_version from tasks where id = '{AV}'")), "vehicle": "on the day"})
+body = psql(f"select convert_from(body, 'UTF8') from net.http_request_queue where url like '%/push-task' and convert_from(body, 'UTF8')::jsonb ->> 'task_id' = '{AV}' "
+            f"and convert_from(body, 'UTF8')::jsonb ->> 'kind' = 'changed' order by id desc limit 1")
+check('"vehicle_day": true' in body, "J: back to 'on the day': the changed push says vehicle_day", body[:300])
+code, row = tripper.get(f"tasks?id=eq.{OD}&select=vehicle_mode,vehicle_type_wanted,approved_by_employee_id,approved_at")
+check(code == 200 and row and row[0].get("vehicle_mode") == "driver_day", "J: the driver's app reads vehicle_mode on its own task", f"{code} {row}")
+for t in (OD, AV):
+    tool("cancel_task", {"task_id": t, "reason": "suite: 6k"})
+tool("update_settings", {"key": "vehicle_on_the_day", "value": False})
+
+# F, I, K. The driver's contacts for their own task only.
+code, cts = tripper.post("rpc/my_task_contacts", {"p_task": OD}, prefer="return=representation")
+check(code == 200 and isinstance(cts, dict) and cts.get("office_phone") == "+94112345678", "F: my_task_contacts on the driver's own task: the office's number", f"{code} {str(cts)[:200]}")
+if other:
+    code, cts2 = tripper.post("rpc/my_task_contacts", {"p_task": other}, prefer="return=representation")
+    check(code == 200 and cts2 is None, "F: another driver's task: nothing (no numbers)", f"{code} {cts2}")
+code, oc = tripper.post("rpc/my_office_contacts", {}, prefer="return=representation")
+check(code == 200 and oc.get("office_phone") == "+94112345678", "F: my_office_contacts for Me: the office's number", f"{code} {str(oc)[:200]}")
+
+# K. One decision per request: a version loaded before someone decided is refused with who decided and when.
+v0 = card["version"]
+ok = tool("decide_request", {"request_id": HR, "decision": "approve", "driver": f"trip.{tag}", "vehicle": plate_t, "version": v0})
+r = tool("decide_request", {"request_id": HR, "decision": "approve", "driver": f"trip.{tag}", "vehicle": plate_t, "version": v0}, expect_error=True)
+decider = "Test Admin" if CHANNEL == "api" else psql(f"select decided_by from vehicle_requests where id = '{HR}'")
+check(re.fullmatch(rf"Already approved by {re.escape(decider)} at \d\d:\d\d\.", r) is not None, "K: a second decision: 'Already approved by … at HH:MM'", r)
+check(psql(f"select count(*) from tasks where request_id = '{HR}'") == "1", "K: one task, never two")
+card = tool("list_requests", {"status": "all", "id": HR})["requests"][0]
+check(card.get("approved_by", {}).get("name") == decider and re.fullmatch(r"\d\d:\d\d", card["approved_by"].get("at", "")) is not None
+      and card.get("live", {}).get("state") == "approved",
+      "K: the card says who approved and when; A: its live state is approved", json.dumps({k: card.get(k) for k in ("approved_by", "live")}))
+tb = next((c for c in tool("task_board", {"date": day(6)}).get("assigned", []) if c.get("request_id") == HR or c["id"] == card.get("task_id")), {})
+if CHANNEL == "api":
+    check(tb.get("approved_by", {}).get("name") == "Test Admin", "K: the board card says who sent it", json.dumps(tb.get("approved_by")))
+r = tool("decide_request", {"request_id": HR, "decision": "decline", "reason": "late", "version": v0}, expect_error=True)
+check(r.startswith(f"Already approved by {decider}"), "K: declining it after it was approved: the same words", r)
+tool("cancel_request", {"request_id": HR, "reason": "suite: 6k"})
+card = tool("list_requests", {"status": "all", "id": HR})["requests"][0]
+check(card.get("cancelled_by", {}).get("reason") == "suite: 6k" and card.get("live", {}).get("state") == "cancelled",
+      "K: a cancelled booking says who cancelled it and why", json.dumps({k: card.get(k) for k in ("cancelled_by", "live")}))
+# reviewing with the shared key records nothing (no person) but answers.
+rv = tool("reviewing", {"request_id": HR})
+check(rv.get("reviewing") == [] and rv.get("status") == "cancelled", "K: reviewing answers the others reviewing (none)", json.dumps(rv))
+
+if CHANNEL == "api":
+    print("\n== 6k (office-api). Two approvers, My trips, the notification centre, my phone ==")
+
+    def person(name, perms):
+        email = f"{name.lower().replace(' ', '.')}.{uuid.uuid4().hex[:5]}@fame.test"
+        tool("create_office_user", {"name": name, "email": email, "permissions": perms})
+        uid = psql(f"select auth_user_id from employees where email = '{email}'")
+        pw = "Hf2-" + uuid.uuid4().hex[:12]
+        http("PUT", f"{API}/auth/v1/admin/users/{uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": pw})
+        return email, office_sign_in(email, pw, enrol_totp=False)
+
+    a2_email, a2 = person("Palitha Approver", ["view", "request", "approve", "assign_tasks"])
+    rq_email, rq = person("Ruwan Requester", ["view", "request"])
+    code, me2 = http("GET", f"{API}/functions/v1/office-api/me", api_headers(a2))
+    check(code == 200 and me2.get("phone_required") is True and "phone" not in me2, "F: an approver with no number: /me says phone_required (the banner)", str(me2)[:200])
+    code, me3 = http("GET", f"{API}/functions/v1/office-api/me", api_headers(rq))
+    check(code == 200 and "phone_required" not in me3 and {"my_trips", "my_inbox", "mark_inbox_read", "update_my_profile"} <= set(me3.get("tools", []))
+          and "reviewing" not in me3.get("tools", []),
+          "F, A: a requester is not asked for a number; has My trips and the notification centre; no reviewing", str(me3)[:300])
+    code, up = api_call(a2, "update_my_profile", {"phone": "0712345678"})
+    code2, me2 = http("GET", f"{API}/functions/v1/office-api/me", api_headers(a2))
+    check(code == 200 and up["result"].get("phone_display") == "071 234 5678" and me2.get("phone") == "+94712345678" and "phone_required" not in me2,
+          "F: My phone number saved +94…; the banner goes", f"{code} {str(up)[:200]}")
+    A2 = psql(f"select id from employees where email = '{a2_email}'")
+    check(psql(f"select changed_by_name || '|' || new_value from employee_changes where employee_id = '{A2}' order by id desc limit 1") == "Palitha Approver|+94712345678",
+          "F: the person's own change is logged in their name")
+    # Privacy: a requester sees no driver's number on Live or the drivers list.
+    code, ld = api_call(rq, "live_drivers", {})
+    code2, dl = api_call(rq, "list_drivers", {})
+    check(code == 200 and code2 == 200 and not any(d.get("links", {}).get("call") for d in ld["result"]["drivers"])
+          and not any(d.get("phone") or d.get("call") for d in dl["result"]["drivers"]),
+          "F: someone who only views and asks sees no driver's number on Live or the drivers list", f"{code} {code2}")
+    # The requester asks; both approvers have it in their notification centre (no browser needed); urgent.
+    code, made = api_call(rq, "create_request", {"date": day(7), "time": "10:00", "route_from": "Head office", "route_to": "Galle"})
+    RR = made["result"]["request"]["id"]
+    code, inbox = api_call(a2, "my_inbox", {"limit": 5})
+    it = next((i for i in inbox["result"]["items"] if i.get("url") == f"/requests/{RR}"), {})
+    check(code == 200 and it.get("event") == "request.created" and it.get("kind") == "urgent" and it.get("read") is False and inbox["result"]["unread"] >= 1
+          and re.fullmatch(r"now|\d+ min ago", it.get("ago", "")) is not None,
+          "A: a new request is in every approver's notification centre (urgent, unread, 'now')", json.dumps(it)[:300])
+    check(psql(f"select count(*) from office_inbox i join employees e on e.id = i.employee_id where i.url = '/requests/{RR}' and e.email in ('{a2_email}', '{admin_email}')") == "2",
+          "A: both approvers have the row, with or without a browser")
+    # Two approvers on the decide page: each sees the other reviewing.
+    api_call(API_TOKEN, "reviewing", {"request_id": RR})
+    code, rv2 = api_call(a2, "reviewing", {"request_id": RR})
+    check(code == 200 and [x["name"] for x in rv2["result"]["reviewing"]] == ["Test Admin"], "K: Palitha sees 'Test Admin is reviewing'", json.dumps(rv2)[:200])
+    code, lr = api_call(API_TOKEN, "list_requests", {"id": RR, "status": "all"})
+    check([x["name"] for x in lr["result"]["requests"][0].get("reviewing", [])] == ["Palitha Approver"],
+          "K: the admin's queue card says Palitha is reviewing (not themselves)", json.dumps(lr["result"]["requests"][0].get("reviewing")))
+    ver = lr["result"]["requests"][0]["version"]
+    # Both approve at the same moment: one decision, the other told who.
+    answers = {}
+
+    def decide_as(who, token):
+        answers[who] = api_call(token, "decide_request", {"request_id": RR, "decision": "approve", "driver": f"trip.{tag}", "vehicle": plate_t, "version": ver})
+
+    threads = [threading.Thread(target=decide_as, args=(w, t)) for w, t in (("admin", API_TOKEN), ("palitha", a2))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    codes = sorted(a[0] for a in answers.values())
+    loser = next((a[1] for a in answers.values() if a[0] == 409), {})
+    winner = psql(f"select decided_by from vehicle_requests where id = '{RR}'")
+    check(codes == [200, 409] and psql(f"select count(*) from tasks where request_id = '{RR}'") == "1"
+          and re.fullmatch(rf"Already approved by {re.escape(winner)} at \d\d:\d\d\.", loser.get("error", "")) is not None,
+          "K: two approvers at once: one decision, one task; the other gets 'Already approved by … at …'", f"{codes} {loser}")
+    # The requester: told in their notification centre, My trips shows it approved with who and the driver.
+    code, rin = api_call(rq, "my_inbox", {"unread": True})
+    dec = next((i for i in rin["result"]["items"] if i.get("event") == "request.decided"), {})
+    check(code == 200 and dec.get("title", "").startswith(f"Request approved by {winner}") and dec.get("who") == winner and dec.get("kind") == "alert",
+          "A: the requester's notification centre: 'Request approved by …' (alert, who)", json.dumps(dec)[:300])
+    code, mt = api_call(rq, "my_trips", {"from": day(0), "to": day(10)})
+    trip_c = next((t for t in mt["result"]["trips"] if t["id"] == RR), {})
+    check(code == 200 and trip_c.get("live", {}).get("state") == "approved" and trip_c.get("approved_by", {}).get("name") == winner
+          and trip_c.get("assigned", {}).get("driver") == f"Trip Driver {tag}" and trip_c["assigned"].get("call") == "tel:+94771234567",
+          "A, F: My trips: approved, by whom, the driver with Call (their own trip)", json.dumps({k: trip_c.get(k) for k in ("live", "approved_by", "assigned")})[:400])
+    code, mt_w = api_call(rq, "my_trips", {"from": day(0), "to": day(10), "status": "waiting"})
+    check(code == 200 and not any(t["id"] == RR for t in mt_w["result"]["trips"]), "A: My trips filtered to waiting leaves it out")
+    code, mt_bad = api_call(rq, "my_trips", {"from": "2024-01-01", "to": day(10)})
+    check(code == 409 and "year" in mt_bad.get("error", ""), "A: My trips takes at most a year", f"{code} {mt_bad}")
+    # The driver accepts, starts: the live state follows.
+    TT = psql(f"select id from tasks where request_id = '{RR}'")
+    tripper.post("rpc/accept_task", {"p_task_id": TT, "p_at": iso(dt.datetime.now(dt.timezone.utc))})
+    code, mt = api_call(rq, "my_trips", {"from": day(0), "to": day(10)})
+    st = next((t for t in mt["result"]["trips"] if t["id"] == RR), {}).get("live", {})
+    check(st.get("state") == "accepted" and st.get("text", "").startswith("Driver accepted · "), "A: the driver accepts: 'Driver accepted · HH:MM'", json.dumps(st))
+    # Read: one item, then all.
+    code, mk = api_call(rq, "mark_inbox_read", {"ids": [dec["id"]]})
+    check(code == 200 and mk["result"]["marked"] == 1, "A: opening an item marks it read", str(mk)[:200])
+    code, mk = api_call(rq, "mark_inbox_read", {"all": True})
+    code2, rin = api_call(rq, "my_inbox", {})
+    check(code == 200 and rin["result"]["unread"] == 0 and all(i["read"] for i in rin["result"]["items"]), "A: Mark all read: nothing unread", str(rin)[:200])
+    # RLS: a person reads their own inbox rows only (the web's Realtime bell).
+    code, rows = http("GET", f"{API}/rest/v1/office_inbox?select=employee_id", api_headers(rq))
+    RQ_ID = psql(f"select id from employees where email = '{rq_email}'")
+    check(code == 200 and rows and all(r["employee_id"] == RQ_ID for r in rows), "A: the requester reads only their own notification rows", f"{code} {len(rows or [])}")
+    # B. The office site's sounds per person.
+    code, ns = api_call(rq, "my_notification_settings", {})
+    check(code == 200 and ns["result"].get("sound") == {"on": True, "volume": 70}, "B: sounds on at 70 by default", str(ns["result"].get("sound")))
+    code, ns = api_call(rq, "set_my_notification_settings", {"sound": {"volume": 40}})
+    check(code == 200 and ns["result"].get("sound") == {"on": True, "volume": 40}, "B: the volume saved (sound stays on)", str(ns["result"].get("sound")))
+    api_call(API_TOKEN, "cancel_request", {"request_id": RR, "reason": "suite: 6k api"})
+
 if CHANNEL == "api":
     print("\n== 7. The same answers through office-api as through the connector ==")
     shapes = subprocess.run([sys.executable, "-I", os.path.join(os.path.dirname(os.path.abspath(__file__)), "snapshot-tool-shapes.py"), "--check"],
@@ -2291,9 +2498,10 @@ if CHANNEL == "api":
     code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(code == 200 and me.get("role") == "staff" and me.get("permissions") == ["view", "request"]
           and sorted(me.get("tools", [])) == ["cancel_request", "create_request", "find_project", "fleet_overview", "get_settings", "google_place",
-                                             "list_drivers", "list_places", "list_requests", "list_vehicles", "live_drivers", "my_notification_settings",
-                                             "place_detail", "plan_task", "register_map_load", "register_web_push", "remove_web_push", "save_place",
-                                             "search_places", "set_my_notification_settings", "task_detail", "update_request", "watch_drivers"]
+                                             "list_drivers", "list_places", "list_requests", "list_vehicles", "live_drivers", "mark_inbox_read",
+                                             "my_inbox", "my_notification_settings", "my_trips", "place_detail", "plan_task", "register_map_load",
+                                             "register_web_push", "remove_web_push", "save_place", "search_places", "set_my_notification_settings",
+                                             "task_detail", "update_my_profile", "update_request", "watch_drivers"]
           and me.get("map") == {"package": "open", "places": False},
           "a requester signs in without a second step and sees the request tools plus view's (any permission implies view, Phase 7 §12; the map: open with no keys)",
           f"{code} {str(me)[:200]}")

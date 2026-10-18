@@ -198,7 +198,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
           <div className="section-t" style={{ marginBottom: 2 }}>Driver and vehicle{updating}</div>
           {proposed?.driver && (
             <p className="muted small" style={{ margin: 0 }} data-testid="proposed-pick">
-              Proposed by {q.requested_by}: {proposed.driver}{proposed.vehicle ? ` with ${proposed.vehicle}` : ""}{proposed.vehicle_why && proposed.vehicle_why !== "chosen" ? ` (${proposed.vehicle_why})` : ""}.
+              Proposed by {q.requested_by}: {proposed.driver}{proposed.vehicle ? ` with ${proposed.vehicle}` : proposed.vehicle_text ? ` · ${proposed.vehicle_text}` : ""}{proposed.vehicle_why && proposed.vehicle_why !== "chosen" ? ` (${proposed.vehicle_why})` : ""}.
             </p>
           )}
           <DriverSelect id="rq-driver" value={driver} drivers={withPicked(active, driver, driverName(driver))} onChange={(u) => set("driver", u)}
