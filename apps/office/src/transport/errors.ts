@@ -81,3 +81,9 @@ export function errText(e: FleetError | undefined): [string, Fix] {
       return [cleanMsg(e?.message) || "Something went wrong talking to Fame Fleet.", "retry"];
   }
 }
+
+/** A read that failed because the request was dropped is asked again this soon, once, before the page hears of it (Part 6). */
+export const QUICK_RETRY_MS = 2_000;
+/** Dropped on the way (no connection, or the server gave up: a 5xx), not refused: worth asking again at once. */
+export const dropped = (e: FleetError | undefined | null) =>
+  e?.code === "network" || e?.code === "upstream_error" || e?.code === "server_unavailable";

@@ -66,4 +66,37 @@ describe("ApiTransport", () => {
     expect(seen.length).toBe(3);
     vi.useRealTimers();
   });
+
+  it("Part 6: a dropped request is asked again after 2 s, once, before the page hears of it; a second failure is shown", async () => {
+    vi.useFakeTimers();
+    let n = 0;
+    const answers = [() => { throw new TypeError("connection reset"); }, () => reply(200, { result: { ok: 1 } }), () => reply(502, { error: "x" }), () => reply(502, { error: "x" })];
+    const fetchFn = vi.fn(async () => answers[Math.min(n++, answers.length - 1)]());
+    const seen: string[] = [];
+    const stop = transport(fetchFn as unknown as typeof fetch).watch("fleet_overview", {}, (ev) => seen.push(ev.type === "data" ? "data" : `error:${ev.error.code}`), 30000);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(seen).toEqual([]);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(seen).toEqual(["data"]);
+    // The interval's call at 30 s fails (dropped): not shown yet; its quick retry at 32 s fails too: shown.
+    await vi.advanceTimersByTimeAsync(28000);
+    expect(seen).toEqual(["data"]);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(seen).toEqual(["data", "error:upstream_error"]);
+    expect(fetchFn).toHaveBeenCalledTimes(4);
+    stop();
+    vi.useRealTimers();
+  });
+
+  it("Part 6: a refusal (4xx) is shown at once, never retried early", async () => {
+    vi.useFakeTimers();
+    const fetchFn = vi.fn(async () => reply(409, { error: "no" }));
+    const seen: string[] = [];
+    const stop = transport(fetchFn as unknown as typeof fetch).watch("fleet_overview", {}, (ev) => seen.push(ev.type === "data" ? "data" : `error:${ev.error.code}`), 30000);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(seen).toEqual(["error:tool_error"]);
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    stop();
+    vi.useRealTimers();
+  });
 });

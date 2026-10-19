@@ -2,6 +2,7 @@
 // the person's Supabase session. office-api checks the session, the role and
 // the second step on every call and audits it with the person's name.
 import { normalisePermissions, permissionsForRole } from "@fleet/permissions";
+import { dropped, QUICK_RETRY_MS } from "./errors";
 import type { FleetError, Me, Transport, WatchEvent } from "./types";
 
 type TokenSource = () => Promise<string | null>;
@@ -76,14 +77,24 @@ export class ApiTransport implements Transport {
   watch<T>(tool: string, args: Record<string, unknown>, cb: (ev: WatchEvent<T>) => void, intervalMs: number): () => void {
     let stopped = false;
     let running = false;
+    // Part 6: a dropped request (no connection, or the server gave up: a 5xx) is asked again after QUICK_RETRY_MS, once,
+    // before the page says "didn't answer"; only a second failure is shown, and then the next try is the interval's.
+    // Before, a page waited its whole interval (30–60 s) after one dropped request.
+    let quickTried = false;
+    let quick: ReturnType<typeof setTimeout> | null = null;
     const tick = async () => {
       if (stopped || running) return;
       running = true;
       try {
         const data = await this.call<T>(tool, args);
+        quickTried = false;
         if (!stopped) cb({ type: "data", data, at: Date.now() });
       } catch (e) {
-        if (!stopped) cb({ type: "error", error: e as FleetError });
+        const error = e as FleetError;
+        if (!stopped && !quickTried && dropped(error)) {
+          quickTried = true;
+          quick = setTimeout(() => { quick = null; void tick(); }, QUICK_RETRY_MS);
+        } else if (!stopped) cb({ type: "error", error });
       } finally {
         running = false;
       }
@@ -94,6 +105,7 @@ export class ApiTransport implements Transport {
     return () => {
       stopped = true;
       clearInterval(timer);
+      if (quick) clearTimeout(quick);
       this.watchers.delete(tick);
     };
   }

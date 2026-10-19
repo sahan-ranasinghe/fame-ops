@@ -2569,6 +2569,25 @@ the quiet run.
   uncompressed libraries, the R8 lines, the permissions removed; autolinking: no dev client, MapLibre and
   react-native-maps in, expo-camera from source; `expo-doctor`; `test:build`) and the drivers APK is built on EAS.
 
+#### The second round (Sahan, 19 October afternoon; nothing deployed but the EAS build)
+
+- **The EAS build** of the drivers profile (go given): build `16e041a0-c77b-47c3-847f-f89a87ebf00c`, versionCode 2,
+  about 20 minutes on EAS. The downloaded APK, checked with a script (no Android tools on the laptop): 79.1 MB; 28 native
+  libraries for arm64-v8a and the same 28 for armeabi-v7a, all stored uncompressed, each one's data on a 16 KB boundary,
+  every arm64-v8a library's LOAD segments 16 KB-aligned; the six sounds in the resource table; MapLibre in, no barcode
+  scanner, no BouncyCastle post-quantum tables; the Google map key's entry present; no `RECORD_AUDIO`. Not installed
+  anywhere. The phone-side changes after it (B's report of every failed try, the plan drawn leg by leg) ship as the first
+  EAS update once the phones have 1.3.0.
+- **A, the website like the phones**, **B, the two-try rule**: §27b and `docs/google-maps-setup.md` §7–8.
+- **C, the e2e:** one full run with only the Supabase stack: 21 of 25. The local functions server cut 373 office-api
+  requests off when its shared worker's CPU budget ran out ("CPU time soft limit reached", "connection aborted"); a page
+  then said "Fame Fleet didn't answer" and tried again only at its next poll (20–60 s), past the tests' look. **Fixed in the
+  app, not the test's time limit:** a read that was dropped (no connection, or a 5xx) is asked again after 2 s, once, before
+  the page hears of it (`transport/api.ts` watch, `data/store.ts` fetch; `dropped`, `QUICK_RETRY_MS` in
+  `transport/errors.ts`). "Who's available stays still" (dark and light) then passed. The Part 4 trip check read the board's
+  card instead of the task's panel: fixed, passes. Two still failed twice, the same cause in pages that make a one-off call
+  (the Notifications page's load, the decide page's "reviewing" every 20 s): reported to Sahan, not retried.
+
 ## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
 
 What Sahan asked:

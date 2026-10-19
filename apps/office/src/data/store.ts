@@ -7,7 +7,7 @@
 // `fetch`, kept while someone shows them (`retain` / `release`) and fetched
 // again quietly after a write (`invalidate`).
 import type { FleetError, Transport } from "../transport/types";
-import { AUTHZ } from "../transport/errors";
+import { AUTHZ, dropped, QUICK_RETRY_MS } from "../transport/errors";
 
 export interface Entry<T = unknown> {
   data?: T;
@@ -117,7 +117,12 @@ export class FleetStore {
     if (!quiet) this.set(key, { loading: true });
     const p = (async () => {
       try {
-        const fresh = await this.transport.call<T>(tool, args);
+        // Part 6: a dropped request is asked again after QUICK_RETRY_MS, once, before the entry shows the error.
+        const fresh = await this.transport.call<T>(tool, args).catch(async (e: FleetError) => {
+          if (!dropped(e)) throw e;
+          await new Promise((r) => setTimeout(r, QUICK_RETRY_MS));
+          return this.transport.call<T>(tool, args);
+        });
         const prev = this.get<T>(key).data;
         const merge = this.queries.get(key)?.merge;
         const data = merge && prev !== undefined ? merge(prev, fresh) as T : fresh;

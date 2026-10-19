@@ -1586,7 +1586,9 @@ test("Phase 7, Part 4: a trip a driver started is tagged and switched to persona
   const purpose = page.getByTestId("trip-purpose");
   await purpose.getByRole("button", { name: "Personal" }).click();
   await purpose.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByTestId("trip-tags").first()).toContainText("Personal");
+  // The task's own panel, not the board's card beside it (the list comes first on the page and keeps its last answer until
+  // the board's next refresh, 30 s): the test read that card and failed while the save had worked.
+  await expect(page.getByTestId("task-detail").getByTestId("trip-tags")).toContainText("Personal");
   const detail = await tool<{ task: { kind: string; purpose: string } }>("task_detail", { task_id: tripId });
   expect([detail.task.kind, detail.task.purpose]).toEqual(["self", "personal"]);
 
