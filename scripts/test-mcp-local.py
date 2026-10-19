@@ -3028,6 +3028,8 @@ check(code == 200 and "email" not in pc and pc.get("phone") == "011 234 5678" an
 tool("update_settings", {"key": "privacy_email", "value": "privacy@fame.test"})
 code, pc = http("GET", f"{API}/functions/v1/office-api/public/privacy")
 check(pc.get("email") == "privacy@fame.test", "added again: the page shows it again", str(pc)[:200])
+# Removed again at the end: the contract's get_settings answer then has the same fields in both channels' runs.
+tool("update_settings", {"key": "privacy_email", "value": None})
 check(int(psql("select count(*) from office_audit where tool = 'update_settings' and args_summary like '%privacy_email%'")) >= 3,
       "every change of the privacy e-mail is in the audit log")
 

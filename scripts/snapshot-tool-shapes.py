@@ -111,6 +111,12 @@ def main():
             board = alt
             skipped.add("task_board {}")
     task_id = next((t["id"] for col in ("in_progress", "assigned", "completed") for t in board.get(col, [])), None)
+    # availability's window around one of the board's own tasks (a fixed 09:00–12:00 found no busy vehicle when the suite ran
+    # late in the morning, and the recorded busy group then went "missing"): from its time, three hours.
+    import re
+    task_time = next((t.get("time") or t.get("leave_by") for col in ("assigned", "in_progress") for t in board.get(col, [])
+                      if re.fullmatch(r"\d{2}:\d{2}", str(t.get("time") or t.get("leave_by") or ""))), "09:00")
+    until = f"{min(int(task_time[:2]) + 3, 23):02d}:{task_time[3:]}" if int(task_time[:2]) < 21 else "23:59"
     # A request with a project when there is one, so the recorded shape keeps request.project.
     rows = requests.get("requests") or []
     request_id = next((r["id"] for r in rows if r.get("project")), (rows[0] if rows else {}).get("id"))
@@ -136,7 +142,7 @@ def main():
         ("list_requests", {"status": "all"}),
         ("list_requests", {"status": "waiting"}),
         ("list_requests", {"status": "changed"}),
-        ("availability", {"at": f"{board.get('date')} 09:00", "until": "12:00"}),
+        ("availability", {"at": f"{board.get('date')} {task_time}", "until": until}),
         ("mileage_summary", {}),
         ("mileage_summary", {"vehicle": reg_no}),
         ("mileage_summary", {"driver": driver}),
@@ -162,7 +168,8 @@ def main():
 
     def label_of(tool, args):
         # Ids and dates differ every run: the label names the argument, not the value.
-        shown = {k: ("<id>" if k == "id" or k.endswith("_id") else "<date>" if k == "date" else v) for k, v in args.items()}
+        shown = {k: ("<id>" if k == "id" or k.endswith("_id") else "<date>" if k == "date" else "<time>" if k in ("at", "until") else v)
+                 for k, v in args.items()}
         return f"{tool} {json.dumps(shown, sort_keys=True)}"
 
     shapes = {}

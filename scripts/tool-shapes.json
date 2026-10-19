@@ -1,5 +1,5 @@
 {
- "availability {\"at\": \"2026-10-17 09:00\", \"until\": \"12:00\"}": [
+ "availability {\"at\": \"<time>\", \"until\": \"<time>\"}": [
   "as_of: string",
   "best.name: string",
   "best.username: string",
@@ -46,7 +46,6 @@
   "vehicles.groups.busy[].reg_no: string",
   "vehicles.groups.busy[].seats: number",
   "vehicles.groups.busy[].type: string",
-  "vehicles.groups.busy[]: empty",
   "vehicles.groups.free_assigned[]: empty",
   "vehicles.groups.free_pool[].availability: string",
   "vehicles.groups.free_pool[].make_model: string",
@@ -330,7 +329,6 @@
   "settings.ors_autocomplete_per_minute: number",
   "settings.ors_gap_daily_cap: number",
   "settings.phone_map_wait_s: number",
-  "settings.privacy_email: string",
   "settings.road_factor: number",
   "settings.rush_hour.bands[].days[]: number",
   "settings.rush_hour.bands[].from: string",
