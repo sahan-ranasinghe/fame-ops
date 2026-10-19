@@ -127,6 +127,9 @@ export function reassignInput(taskId: string, d: Pick<AvailableDriver, 'username
   return input;
 }
 
+/** The cancel reasons' words for the office (the site and Claude read them), whatever the phone's language. */
+export const CANCEL_TEXT: Record<'not_needed' | 'plans_changed' | 'no_vehicle' | 'other', string> = { not_needed: 'Not needed any more', plans_changed: 'Plans changed', no_vehicle: 'No vehicle', other: 'Other' };
+
 /** cancel_task's input: the reason's words and the note. */
 export function cancelInput(taskId: string, label: string, note: string): { task_id: string; reason: string } {
   return { task_id: taskId, reason: [label, note.trim()].filter(Boolean).join(' — ').slice(0, 300) };

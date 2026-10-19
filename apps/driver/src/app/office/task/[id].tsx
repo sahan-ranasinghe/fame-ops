@@ -13,7 +13,7 @@ import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
 import { useOffice, useTool } from '@/office/state';
-import { allowedActions, cancelInput, plateOf, stopLateMin, stopParts, steps, taskStatusKey } from '@/office/taskLogic';
+import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, stopLateMin, stopParts, steps, taskStatusKey } from '@/office/taskLogic';
 import type { FleetError, TaskDetail } from '@/office/types';
 import { Avatar, BackHeader, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { statusTone } from '@/office/homeLogic';
@@ -33,7 +33,7 @@ const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 export default function TaskDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useApp();
-  const { api, signOut } = useOffice();
+  const { api, me, signOut } = useOffice();
   const router = useRouter();
   const q = useTool<TaskDetail>('task_detail', { task_id: id }, { every: 30_000 });
   const p = q.data;
@@ -69,7 +69,8 @@ export default function TaskDetailScreen() {
     skipped: (why: string) => t('office.task.skipped', { why }),
   };
   const stops = (p?.stops ?? []).filter((s) => s.status !== 'removed');
-  const actions = task ? allowedActions(task) : { reassign: false, cancel: false };
+  const may = allowedActions(task ?? { status: 'cancelled' });
+  const actions = { reassign: may.reassign && me.tools.includes('reassign_task'), cancel: may.cancel && me.tools.includes('cancel_task') };
   const statusKey = task ? taskStatusKey(task) : '';
 
   return (
@@ -133,7 +134,7 @@ export default function TaskDetailScreen() {
               )}
             </View>
             {task.status === 'in_progress' && (
-              <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/office/(tabs)/live', params: { driver: task.driver ?? '' } })} style={styles.now}>
+              <Pressable accessibilityRole="button" onPress={() => router.navigate({ pathname: '/office/(tabs)/live', params: { driver: task.driver ?? '' } })} style={styles.now}>
                 <MapPin size={22} color={colors.blue} />
                 <Txt variant="body" size={15} style={{ flex: 1 }}>{[task.eta?.next_stop ? t('office.task.nextStop', { place: task.eta.next_stop }) : '', task.eta?.next ? t('office.request.about', { time: task.eta.next }) : '', task.eta?.final ? t('office.task.backAbout', { time: task.eta.final }) : ''].filter(Boolean).join(' · ') || task.status_line || t('office.task.onTheWayNow')}</Txt>
                 <Txt variant="strong" size={16} color={colors.blue}>{t('office.home.liveMap')}</Txt>
@@ -206,7 +207,7 @@ export default function TaskDetailScreen() {
             )}
           </View>
         )}
-        {problem && <ErrorNotice error={problem} />}
+        {problem && <ErrorNotice error={problem} onRetry={() => void q.reload()} />}
       </Screen>
       <ReasonSheet<CancelReasonKey>
         visible={cancelling}
@@ -218,7 +219,7 @@ export default function TaskDetailScreen() {
         reasons={CANCEL_REASONS}
         onConfirm={(reason, note) => {
           setCancelling(false);
-          void cancel(t(CANCEL_REASONS.find((r) => r.value === reason)?.label ?? ''), note);
+          void cancel(CANCEL_TEXT[reason], note);
         }}
         onClose={() => setCancelling(false)}
       />

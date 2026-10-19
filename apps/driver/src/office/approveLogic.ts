@@ -161,6 +161,7 @@ export function decideCall(q: Pick<RequestCard, 'id' | 'status' | 'version' | 'd
     return { tool: 'redecide_request', input: { ...input, decision: 'keep' } };
   }
   const input: Record<string, unknown> = { request_id: q.id, decision };
+  if (q.version !== undefined) input.version = q.version;
   if (decision === 'decline') input.reason = pick.reason ?? '';
   else {
     if (pick.driver) input.driver = pick.driver;
@@ -173,7 +174,11 @@ export function decideCall(q: Pick<RequestCard, 'id' | 'status' | 'version' | 'd
 export const canApprove = (q: Pick<RequestCard, 'driver_required'>, driver: string): boolean => driver !== '' || q.driver_required === false;
 
 /** The server refused because the request is decided already (its words say by whom): the card is read again. */
-export const alreadyDecided = (e: FleetError | null | undefined): boolean => e?.code === 'tool_error' && /already|decided|just now/i.test(e.message);
+export const alreadyDecided = (e: FleetError | null | undefined): boolean =>
+  e?.code === 'tool_error' && /already|decided|just now|opened it|edited|changed again/i.test(e.message);
+
+/** The decline reasons' words for the office (the site and Claude read them), whatever the phone's language. */
+export const DECLINE_TEXT: Record<'no_vehicle' | 'not_approved' | 'other', string> = { no_vehicle: 'No vehicle free then', not_approved: 'Not approved', other: 'Other' };
 
 /** What a declined reason sends: the reason's words and the note. */
 export function declineReason(label: string, note: string): string {

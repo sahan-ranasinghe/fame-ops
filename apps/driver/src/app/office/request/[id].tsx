@@ -15,7 +15,7 @@ import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { telLink } from '@/lib/format';
-import { alreadyDecided, availabilityArgs, canApprove, decideCall, declineReason, driverParts, driverPill, firstPick, rankedDrivers, tripView } from '@/office/approveLogic';
+import { alreadyDecided, availabilityArgs, canApprove, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, rankedDrivers, tripView } from '@/office/approveLogic';
 import { requestTitle } from '@/office/homeLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { Availability, AvailableDriver, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList } from '@/office/types';
@@ -90,8 +90,8 @@ export default function ApproveRequest() {
     } catch (e) {
       const error = e as FleetError;
       setProblem(error);
-      // Decided by someone else meanwhile: the card again, with who did it.
-      if (alreadyDecided(error)) void q.reload();
+      // Decided by someone else, or edited since the page opened (the version): the card again, with who did what.
+      if (error.code === 'tool_error' || alreadyDecided(error)) void q.reload();
     } finally {
       setBusy(null);
     }
@@ -209,7 +209,7 @@ export default function ApproveRequest() {
             })}
           </Section>
         )}
-        {problem && <ErrorNotice error={problem} onRetry={problem.write ? undefined : refresh} />}
+        {problem && <ErrorNotice error={problem} onRetry={refresh} />}
       </Screen>
       {card && open && (
         <StickyActions>
@@ -232,7 +232,7 @@ export default function ApproveRequest() {
         reasons={DECLINE_REASONS}
         onConfirm={(reason, note) => {
           setDeclining(false);
-          void decide('decline', declineReason(t(DECLINE_REASONS.find((r) => r.value === reason)?.label ?? ''), note));
+          void decide('decline', declineReason(DECLINE_TEXT[reason], note));
         }}
         onClose={() => setDeclining(false)}
       />

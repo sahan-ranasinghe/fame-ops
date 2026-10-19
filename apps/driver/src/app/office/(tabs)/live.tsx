@@ -52,10 +52,12 @@ export default function LiveTab() {
   // Opened with a driver (Home's rows and its on-the-road chip): select them once, then forget the parameter so the tab
   // does not reselect them every time it comes back.
   useEffect(() => {
-    if (!param) return;
-    setSelected(param);
+    if (!param || all.length === 0) return;
+    // The parameter is a username (Home's rows) or the driver's name (Task detail's Live map).
+    const found = all.find((d) => d.username === param || d.driver === param);
+    if (found) setSelected(found.username);
     router.setParams({ driver: '' });
-  }, [param, router]);
+  }, [param, all, router]);
 
   const select = (username: string) => {
     setSelected(username);

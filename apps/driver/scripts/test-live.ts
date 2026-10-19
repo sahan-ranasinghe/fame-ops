@@ -147,8 +147,8 @@ console.log('\n== The screen and the two engines ==');
 {
   const screen = read('src/app/office/(tabs)/live.tsx');
   check(/useTool<LiveDrivers>\('live_drivers', \{\}, \{ every: 30_000 \}\)/.test(screen), 'live_drivers with no arguments, every 30 s while in front');
-  check(/useLocalSearchParams<\{ driver\?: string \}>\(\)/.test(screen) && /setSelected\(param\)/.test(screen) && /router\.setParams\(\{ driver: '' \}\)/.test(screen),
-    '?driver=<username> selects that driver once, then the parameter is forgotten');
+  check(/useLocalSearchParams<\{ driver\?: string \}>\(\)/.test(screen) && /d\.username === param \|\| d\.driver === param/.test(screen) && /setSelected\(found\.username\)/.test(screen) && /router\.setParams\(\{ driver: '' \}\)/.test(screen),
+    '?driver=<username or name> selects that driver once, then the parameter is forgotten');
   check(/<DriversMap markers=\{markers\} fit=\{fit\} focus=\{focus\} onPressMarker=\{select\} mapPackage=\{me\.map\?\.package\} \/>/.test(screen), 'the map gets the markers, the frame, the selected driver and the office\'s map package');
   check(/links\.call && <Action/.test(screen) && /links\.whatsapp && <Action/.test(screen) && /links\.maps && <Action/.test(screen), 'Call, WhatsApp and Open in Maps only when the server gave the link (no dead button)');
   check(!/trail|playback/i.test(screen.replace(/^\/\/.*$/gm, '')), 'no trails or playback button (not built in O1)');

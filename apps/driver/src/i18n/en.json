@@ -15,7 +15,8 @@
     "discard": "Discard",
     "close": "Close",
     "badTime": "Enter the time as HH:MM, e.g. 14:30.",
-    "privacy": "Privacy policy"
+    "privacy": "Privacy policy",
+    "back": "Back"
   },
   "days": [
     "Sun",

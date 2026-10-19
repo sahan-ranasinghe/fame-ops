@@ -14,7 +14,7 @@ import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { driverParts, driverPill, rankedDrivers } from '@/office/approveLogic';
 import { useOffice, useTool } from '@/office/state';
-import { availabilityArgsForTask, cancelInput, declinedThisTask, firstPickForTask, leaveIn, plateOf, reassignInput } from '@/office/taskLogic';
+import { availabilityArgsForTask, CANCEL_TEXT, cancelInput, declinedThisTask, firstPickForTask, leaveIn, plateOf, reassignInput } from '@/office/taskLogic';
 import type { Availability, FleetError, TaskDetail } from '@/office/types';
 import { Avatar, BackHeader, Divider, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -31,7 +31,7 @@ const CANCEL_REASONS: { value: CancelReasonKey; label: string }[] = [
 export default function GiveDriverScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t, tList } = useApp();
-  const { api, signOut } = useOffice();
+  const { api, me, signOut } = useOffice();
   const router = useRouter();
   const q = useTool<TaskDetail>('task_detail', { task_id: id });
   const p = q.data;
@@ -90,6 +90,8 @@ export default function GiveDriverScreen() {
   const leave = task ? leaveIn(task.date, task.leave_by ?? task.time, Date.now()) : null;
   const stops = (p?.stops ?? []).filter((s) => s.status !== 'removed');
   const over = task && (task.status === 'completed' || task.status === 'cancelled' || task.status === 'in_progress');
+  const mayGive = me.tools.includes('reassign_task');
+  const mayCancel = me.tools.includes('cancel_task');
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -204,7 +206,7 @@ export default function GiveDriverScreen() {
             })}
           </Section>
         )}
-        {problem && <ErrorNotice error={problem} />}
+        {problem && <ErrorNotice error={problem} onRetry={refresh} />}
       </Screen>
       {task && !over && (
         <StickyActions>
@@ -212,12 +214,12 @@ export default function GiveDriverScreen() {
             <Button
               label={pickedDriver ? t('office.give.giveTo', { name: pickedDriver.name, plate: pickedDriver.vehicle?.reg_no ?? '' }).replace(/\s·\s*$/, '') : t('office.give.pickDriver')}
               onPress={() => void give()}
-              disabled={!pickedDriver || busy === 'cancel'}
+              disabled={!pickedDriver || !mayGive || busy === 'cancel'}
               busy={busy === 'give'}
               style={{ flex: 1 }}
             />
           </View>
-          <Button kind="outline" label={t('office.task.cancel')} onPress={() => setCancelling(true)} disabled={busy !== null} style={{ borderColor: colors.red, minHeight: 56 }} />
+          {mayCancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => setCancelling(true)} disabled={busy !== null} style={{ borderColor: colors.red, minHeight: 56 }} />}
         </StickyActions>
       )}
       <ReasonSheet<CancelReasonKey>
@@ -230,7 +232,7 @@ export default function GiveDriverScreen() {
         reasons={CANCEL_REASONS}
         onConfirm={(reason, note) => {
           setCancelling(false);
-          void cancel(t(CANCEL_REASONS.find((r) => r.value === reason)?.label ?? ''), note);
+          void cancel(CANCEL_TEXT[reason], note);
         }}
         onClose={() => setCancelling(false)}
       />

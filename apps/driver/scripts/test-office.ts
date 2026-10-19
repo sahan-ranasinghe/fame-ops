@@ -82,7 +82,7 @@ async function main() {
     const { api } = fakeServer([[409, { error: 'Already approved by Palitha at 10:42' }]]);
     const err = await api.call('decide_request', { request_id: 'r', decision: 'approve' }).catch((e) => e as FleetError);
     check((err as FleetError).code === 'tool_error' && (err as FleetError).message.includes('Palitha') && (err as FleetError).write === true, 'a refusal (409) carries the server\'s words', err);
-    check(alreadyDecided(err as FleetError), 'and "Already approved by …" reads as already decided');
+    check(alreadyDecided(err as FleetError) && alreadyDecided({ code: 'tool_error', message: 'This request was edited since you opened it: open it again.' }) && !alreadyDecided({ code: 'tool_error', message: 'No driver named x' }), 'and "Already approved by …" or "edited since you opened it" read as already decided');
   }
   check(mapHttpError(403, { error: 'mfa_required' }).code === 'mfa_required' && mapHttpError(403, { error: 'Your role cannot' }).code === 'forbidden', '403: mfa_required / forbidden');
   check(mapHttpError(400, { error: 'bad_input', issues: [{ path: 'date', message: 'YYYY-MM-DD' }] }).message === 'Check date: YYYY-MM-DD', '400 names the field');
@@ -161,8 +161,8 @@ async function main() {
   check(firstPick({ proposed: { driver: 'Ruwan', username: 'ruwan' } }, avail) === 'ruwan' && firstPick({ proposed: { driver: 'Ruwan' } }, avail) === 'ruwan', 'a proposal\'s driver is picked first');
   check(firstPick({}, null) === '', 'nobody yet without Who\'s available');
   check(driverPill(drivers[1], 'kamal') === 'best' && driverPill(drivers[2], 'kamal') === 'busy' && driverPill(drivers[0], 'kamal') === 'off_duty' && driverPill({ ...drivers[1], not_available: 'Not available · leave' }, 'kamal') === 'not_available', 'the row pills');
-  check(same(decideCall(card, 'approve', { driver: 'kamal', vehicle: 'WP CAB-4521' }), { tool: 'decide_request', input: { request_id: 'r1', decision: 'approve', driver: 'kamal', vehicle: 'WP CAB-4521' } }), 'approve a waiting request: decide_request with the driver and vehicle');
-  check(same(decideCall(card, 'decline', { reason: 'No vehicle free then' }), { tool: 'decide_request', input: { request_id: 'r1', decision: 'decline', reason: 'No vehicle free then' } }), 'decline: decide_request with the reason');
+  check(same(decideCall(card, 'approve', { driver: 'kamal', vehicle: 'WP CAB-4521' }), { tool: 'decide_request', input: { request_id: 'r1', decision: 'approve', version: 3, driver: 'kamal', vehicle: 'WP CAB-4521' } }), 'approve a waiting request: decide_request with the driver and vehicle');
+  check(same(decideCall(card, 'decline', { reason: 'No vehicle free then' }), { tool: 'decide_request', input: { request_id: 'r1', decision: 'decline', version: 3, reason: 'No vehicle free then' } }), 'decline: decide_request with the reason');
   const changed = { ...card, status: 'changed' as const };
   check(same(decideCall(changed, 'approve', {}), { tool: 'redecide_request', input: { request_id: 'r1', version: 3, decision: 'keep' } }), 'a changed booking kept: redecide_request keep with the version');
   check(same(decideCall(changed, 'approve', { driver: 'ruwan' }), { tool: 'redecide_request', input: { request_id: 'r1', version: 3, decision: 'change', driver: 'ruwan' } }), 'a changed booking with another driver: change');

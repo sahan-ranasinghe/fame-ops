@@ -204,6 +204,8 @@ export default function OfficeProfile() {
               <Txt variant="strong" size={17}>{t('office.profile.officePhone')}</Txt>
               {officePhone
                 ? <Mono size={17}>{phoneDisplay(officePhone)}</Mono>
+                : settings.error && !settings.data
+                ? <ErrorNotice error={settings.error} onRetry={() => void settings.reload()} />
                 : <Txt variant="muted" size={15}>{settings.data ? t('office.profile.officePhoneNone') : t('office.common.loading')}</Txt>}
             </View>
             {officeTel && (

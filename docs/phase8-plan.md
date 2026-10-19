@@ -406,7 +406,36 @@ Built in the brief's order; the trip editor (06–09) is round O2.
   hold), Cancel task…. Back means back. Not shown: Move the time, Ask drivers (not wired in the hour).
 - **More** (19, `(tabs)/more.tsx`): the person with the permission chips, My profile → 18, Work (the built screens not on
   the bar), the laptop-only line, Sign out (asks first), the version.
-- **Live** (15), **Alerts** (16), **My trips** (17), **Profile** (18): see "The subagents' screens" below.
+- **Live** (15, `(tabs)/live.tsx`, `components/DriversMap.tsx` + `GoogleDriversMap.tsx` + `OpenDriversMap.tsx`,
+  `office/liveLogic.ts`): live_drivers every 30 s; the map first, a marker per driver with a position (initials; blue on
+  a task, green free, grey off duty; the selected one labelled "Sunil · 62 km/h"), the chips All · On a task · Free ·
+  Off duty, the rows (the plate, the server's words, a pill); a tap on a row or a marker selects: the map animates to
+  the driver and a card shows the name, the plate, the status line and Call / WhatsApp / Open in Maps when the links
+  exist; `?driver=` preselects (Home's rows). The engines as the task map: Google first (the package from /me, read
+  again every minute), the free map after `phone_map_wait_s` while online or on an error (the session's flag, as the
+  task map's), "Map not available" with Try again when both fail; the free map's credit. No trails, playback or
+  controls (later). An office sign-in does not report a Google failure (report_map_state is the driver's RPC).
+- **Alerts** (16, `(tabs)/alerts.tsx`, `office/inboxLogic.ts`): "Notifications" (the tab is Alerts, decision 3),
+  my_inbox (50, every minute), All / Unread · N, by day (Today / Yesterday / Earlier), the kind's colour, bold while
+  unread; a tap marks it read (optimistic, mark_inbox_read) and opens the screen its link maps to (`nav.routeForUrl`:
+  a request → Approve, a task → Task detail, a task to give → Needs a driver; "Open ›" only on those); Mark all read.
+- **My trips** (17, `(tabs)/trips.tsx`, `office/tripsLogic.ts`): my_trips over the last 30 to the next 60 days, All /
+  Waiting / Coming up / Done, the live state pill, "Changed by the office", "Approved by … · …" with Call; Withdraw on an
+  own waiting request (a reason sheet, cancel_request); a row opens Approve for an approver. Edit is O2.
+- **Profile** (18, `profile.tsx`): the permission chips, "Add your phone number…" while the server asks for it, My
+  phone number with Edit → update_my_profile then /me again, the work e-mail, a switch per notification event
+  (set_my_notification_settings, optimistic, reverted on a refusal), Language, Office phone with Call (get_settings),
+  Privacy, the version, Sign out. No sound switch or Test sound until the phone has office push (item 9).
+
+### Tests
+- `npm run test:office` (84): the client with a fake server (a dropped /me and read asked again once, a 401 at once and
+  signed out, a dropped write once and marked, the keyed write, the 409's words, the error mapping), the tabs, Home's
+  sections and chips and More for every preset and the odd sets, the notification links by permission, Home's words,
+  Approve's trip rows / availability arguments / first pick / decide inputs / already-decided, the task screens' steps,
+  stop lines, "leaves in", Who can take it, reassign and cancel inputs. `test:live` (69) and `test:inbox` (88): the
+  Live rules and the strings, the inbox grouping, the trip buckets, Withdraw, the links. The driver's own suites
+  unchanged. The strings: every `office.*` key in both languages, checked by script.
+- A fresh reviewer's findings and the full run: below, "The checkpoint".
 
 ### What moved to O2 or later
 - O2 (the trip editor, 06–09): New request, Assign a task, Change the trip / time / stops, Edit a request, Book now, the

@@ -150,7 +150,12 @@
   permission (view, request, approve, assign_tasks, vehicles, issues, users), never by role name; the web build of the same
   screens becomes the phone version of the office site. Design first (Part 8.0, a clickable prototype from
   `design/office/`), then Parts 8.1–8.6. No dead UI: `docs/phase8-parity.md` (every site function and its app screen) and
-  an automated tap test per permission set. Plan: `docs/phase8-plan.md`.
+  an automated tap test per permission set. Plan: `docs/phase8-plan.md`. **O1 (19–20 October 2026, branch `phase8-o1`,
+  a pilot before 8.0)**: the approver's and dispatcher's side in the app, JavaScript only (an EAS update to 1.3.0):
+  `src/office/` (the site's client, types and permission table copied; `nav.ts` tabs by permission; `state.tsx`
+  `useTool`), `src/app/office/` (Home, the Approve queue, Approve a request, the Tasks board, Task detail, Give it a
+  driver, Live on both engines, Alerts, My trips, Profile, More) and the Driver | Office sign-in. The trip editor is O2.
+  As built: `docs/phase8-plan.md` section 14; the phone test: `docs/phase8-test-plan.md`.
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).
