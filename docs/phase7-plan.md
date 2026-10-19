@@ -2628,6 +2628,14 @@ the quiet run.
   `create_driver`, `register_vehicle`, `create_office_user` and the like): the page makes one id per form and sends it; the
   server keeps it with the row (unique) and answers a repeat with the row already made. Then Try again after a lost answer
   can never make a second task, request or driver, and a create may join `IDEMPOTENT_WRITES`.
+- The e2e against a hosted test environment (a Supabase branch, or a second project once Fame is on Pro) instead of the
+  laptop's emulator: the local functions server gives each worker 1 s soft / 2 s hard of CPU for all its requests (fixed
+  in the Supabase CLI; `oneshot` starts a worker per request and is slower still), so it cuts 20–30 requests off per full
+  run and a cut save fails its test; the hosted runtime counts CPU per request. Until then the gate runs the e2e with one
+  retry and checks each flaky test against the functions log (CLAUDE.md, the deploy gate).
+- The drawn map on a phone (the artifact, and the web's fallback when the free map's style cannot load) puts the control
+  cluster 28 px from the bottom corner; the free map keeps the 40 px of §25. Seen 19 October in the phone e2e when the
+  free map's style was blocked; not changed.
 
 ## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
 

@@ -1088,7 +1088,13 @@ iOS; Play Store.
 - JS, server and web changes need no build: the app gets them through EAS Update, after Sahan's go.
 - Tests in two tiers. After each fix, only the fast tests for what changed (typecheck, the related unit tests, the related
   pgTAP file). The full suite (all pgTAP, the connector suite, the e2e, Deno) runs once, right before the checkpoint.
-- If the same test fails twice, stop and report it instead of re-running it in a loop. A flaky test gets fixed, not retried.
+- The deploy gate (Sahan, 19 October 2026). The deterministic suites must pass fully: pgTAP, Deno, the connector suite, the
+  office typecheck + unit tests + both builds, the driver suites. The e2e runs with Playwright `retries: 1` (one worker): a
+  test that passes on its retry is flaky, not failed, and the gate is zero failed tests. For every flaky test, check the
+  local functions log (`functions-serve.log`) for a CPU cut at its time ("CPU time soft limit reached", "connection
+  aborted", "early termination", a 503/546) and list it; a flaky test with no such cut is a failure to investigate. The
+  local functions server's per-worker CPU budget (1 s soft / 2 s hard, fixed in the Supabase CLI) is not our code: 25/25 in
+  one run against it is not a fair gate.
 - Time limits: if any single step runs more than 30 minutes, or the same error comes back 3 times, stop and tell Sahan what
   is wrong.
 - At most 2 subagents at a time, and none while the full e2e run is going. One fresh reviewer per checkpoint.

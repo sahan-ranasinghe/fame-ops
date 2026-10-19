@@ -15,7 +15,10 @@ export default defineConfig({
   testDir: "e2e",
   timeout: 120_000,
   expect: { timeout: 15_000 },
-  retries: 0,
+  // The gate (Sahan, 19 October 2026): zero failed tests; a test that passes on its one retry is flaky, and each flaky test
+  // is checked against the local functions log for a CPU cut at its time (the local runtime's fixed per-worker budget drops
+  // requests; a write is never repeated by the app, so a dropped save fails its first try). Still one worker.
+  retries: 1,
   workers: 1,
   reporter: [["list"]],
   use: {
