@@ -43,7 +43,7 @@ const TIME = /^\d{2}:\d{2}$/;
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
 export function AskDriversSheet({ visible, onClose, drivers, preticked: given, context, onUse, kind: firstKind = 'free_for_trip' }: Props) {
-  const { t, tList, language } = useApp();
+  const { t, tList } = useApp();
   const { api } = useOffice();
   const insets = useSafeAreaInsets();
   const names = { days: tList('days'), months: tList('months') };
@@ -67,7 +67,10 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listKey, givenKey, visible]);
 
-  const ctx: AskContext = { ...context, from: from.trim() || undefined, to: to.trim() || undefined };
+  // The end only when it is after the start (the server refuses `to` at or before `from`; a task's end may be unset or odd).
+  const fromText = from.trim();
+  const toText = to.trim();
+  const ctx: AskContext = { ...context, from: fromText || undefined, to: toText && (!fromText || toText > fromText) ? toText : undefined };
   const window = windowText(ctx, dayLabel);
   const windowGiven = !!context.from;
 
@@ -135,8 +138,8 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
                 <KindChip kind="free_for_trip" on={kind === 'free_for_trip'} onPress={() => setKind('free_for_trip')} label={t('office.ask.kind.free_for_trip')} detail={window ?? undefined} />
                 {kind === 'free_for_trip' && !windowGiven && (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TimeBox label={t('office.ask.tripFrom')} value={from} onChange={setFrom} mono={language !== 'si'} />
-                    <TimeBox label={t('office.ask.tripTo')} value={to} onChange={setTo} mono={language !== 'si'} />
+                    <TimeBox label={t('office.ask.tripFrom')} value={from} onChange={setFrom} />
+                    <TimeBox label={t('office.ask.tripTo')} value={to} onChange={setTo} />
                   </View>
                 )}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -249,8 +252,8 @@ function KindChip({ kind, on, onPress, label, detail, small = false }: { kind: A
   );
 }
 
-/** "From 09:00" / "To 12:00": the trip's time when the caller gave none. */
-function TimeBox({ label, value, onChange, mono }: { label: string; value: string; onChange: (v: string) => void; mono: boolean }) {
+/** "From 09:00" / "To 12:00": the trip's time when the caller gave none (times are always mono, Latin digits). */
+function TimeBox({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <Txt variant="strong" size={15}>{label}</Txt>
@@ -262,7 +265,7 @@ function TimeBox({ label, value, onChange, mono }: { label: string; value: strin
         keyboardType="numbers-and-punctuation"
         maxLength={5}
         accessibilityLabel={label}
-        style={[styles.time, { fontFamily: mono ? fonts.mono : fonts.mono }, value && !TIME.test(value) && { borderColor: colors.red }]}
+        style={[styles.time, { fontFamily: fonts.mono }, value && !TIME.test(value) && { borderColor: colors.red }]}
       />
     </View>
   );

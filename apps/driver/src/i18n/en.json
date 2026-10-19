@@ -1452,6 +1452,46 @@
         "routing_failed": "Routing failed",
         "map_fallback": "Google map failed"
       }
+    },
+    "ask": {
+      "title": "Ask drivers",
+      "open": "Ask drivers",
+      "question": "Question",
+      "kind": {
+        "free_for_trip": "Free for a trip?",
+        "office_time": "When at the office?",
+        "where_now": "Where are you?"
+      },
+      "tripFrom": "From",
+      "tripTo": "To",
+      "tripTimeNeeded": "Enter the trip's time (from, and to if known).",
+      "pickedCount": "Send to · {n} picked",
+      "allFree": "All free",
+      "none": "None",
+      "noAccount": "no app sign-in",
+      "send": "Send",
+      "sendOne": "Send to 1 driver",
+      "sendMany": "Send to {n} drivers",
+      "waiting": "waiting…",
+      "seen": "seen",
+      "seenAt": "seen {time}",
+      "yes": "Yes",
+      "yesAt": "Yes · {time}",
+      "no": "No",
+      "noAt": "No · {time}",
+      "callMe": "Call me",
+      "time": "A time",
+      "location": "Shared where they are",
+      "use": "Use",
+      "maps": "Map",
+      "notAsked": "not asked",
+      "sent": "Sent {time} · {answered} of {asked} answered",
+      "closed": "This question has closed.",
+      "askAnother": "Ask another question",
+      "footer": "They answer with one tap. Answers show here and in Notifications.",
+      "footerTrip": "This question closes when the trip starts.",
+      "nobody": "No drivers to ask.",
+      "close": "Close"
     }
   }
 }

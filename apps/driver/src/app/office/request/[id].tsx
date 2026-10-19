@@ -11,11 +11,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { Check, Phone } from '@/components/icons';
+import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { telLink } from '@/lib/format';
 import { alreadyDecided, availabilityArgs, canApprove, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, rankedDrivers, tripView } from '@/office/approveLogic';
+import { askTargets } from '@/office/askLogic';
 import { requestTitle } from '@/office/homeLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { Availability, AvailableDriver, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList } from '@/office/types';
@@ -48,6 +50,9 @@ export default function ApproveRequest() {
   const [busy, setBusy] = useState<'approve' | 'decline' | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
   const [declining, setDeclining] = useState(false);
+  // Ask drivers (design 13, O2): the sheet beside Who's available, only for someone who may ask.
+  const [asking, setAsking] = useState(false);
+  const mayAsk = me.tools.includes('ask_drivers');
   const names = { days: tList('days'), months: tList('months') };
 
   // The first pick once the card and Who's available are known: the proposal's driver, else the best match.
@@ -175,7 +180,12 @@ export default function ApproveRequest() {
           </View>
         )}
         {card && open && (
-          <Section title={t('office.request.whosAvailable')} count={avail.data ? avail.data.counts.free : undefined}>
+          <Section
+            title={t('office.request.whosAvailable')}
+            count={avail.data ? avail.data.counts.free : undefined}
+            link={mayAsk && drivers.length > 0 ? t('office.ask.open') : undefined}
+            onLink={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined}
+          >
             {!availArgs && <Empty text={t('office.request.noTime')} />}
             {avail.loading && <Loading text={t('office.common.loading')} />}
             {avail.error && !avail.data && <ErrorNotice error={avail.error} onRetry={refresh} />}
@@ -221,6 +231,21 @@ export default function ApproveRequest() {
           />
           <Button kind="outline" label={t('office.request.decline')} onPress={() => setDeclining(true)} disabled={busy !== null} style={{ borderColor: colors.red, minHeight: 56 }} />
         </StickyActions>
+      )}
+      {mayAsk && card && open && (
+        <AskDriversSheet
+          visible={asking}
+          onClose={() => setAsking(false)}
+          drivers={askTargets(drivers)}
+          context={{
+            date: trip?.date ?? card.fields?.date,
+            from: trip?.leaveBy,
+            to: card.fields?.back_by && trip?.leaveBy && card.fields.back_by > trip.leaveBy ? card.fields.back_by : undefined,
+            note: trip?.rows.find((r) => r.kind === 'stop')?.place,
+            request_id: card.id,
+          }}
+          onUse={(username) => setPicked(username)}
+        />
       )}
       <ReasonSheet<DeclineReasonKey>
         visible={declining}

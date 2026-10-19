@@ -9,9 +9,11 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { Check } from '@/components/icons';
+import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Field, Plate, Txt } from '@/components/ui';
 import { driverParts, driverPill, rankedDrivers } from '@/office/approveLogic';
+import { askTargets } from '@/office/askLogic';
 import { useOffice, useTool } from '@/office/state';
 import { updateDraft, useTripDraft } from '@/office/trip/draft';
 import { whoArgs } from '@/office/trip/whoLogic';
@@ -33,6 +35,8 @@ export default function TripWho() {
   const args = d && isTask ? whoArgs(d.fields) : null;
   const avail = useTool<Availability>('availability', args ?? {}, { enabled: !!args && me.tools.includes('availability'), every: 60_000 });
   const [choosing, setChoosing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const mayAsk = me.tools.includes('ask_drivers');
   const drivers0 = avail.data ? rankedDrivers(avail.data.drivers) : [];
   const best0 = avail.data?.best?.username ?? drivers0.find((x) => x.name === avail.data?.best?.name)?.username ?? '';
   // The best match is ticked first, once Who's available answers and nobody was picked.
@@ -60,7 +64,12 @@ export default function TripWho() {
         {isTask && (
           <>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Txt variant="label" color={colors.muted}>{`${t('office.request.whosAvailable').toUpperCase()}${avail.data ? ` · ${t('office.trip.nOfMFree', { free: avail.data.counts.free, all: avail.data.counts.all })}` : ''}`}</Txt>
+              <Txt variant="label" color={colors.muted} style={{ flex: 1 }}>{`${t('office.request.whosAvailable').toUpperCase()}${avail.data ? ` · ${t('office.trip.nOfMFree', { free: avail.data.counts.free, all: avail.data.counts.all })}` : ''}`}</Txt>
+              {mayAsk && drivers.length > 0 && (
+                <Pressable accessibilityRole="button" onPress={() => setAsking(true)} hitSlop={8} style={{ minHeight: 44, justifyContent: 'center' }}>
+                  <Txt variant="strong" size={15} color={colors.blue}>{t('office.ask.open')}</Txt>
+                </Pressable>
+              )}
             </View>
             {!args && <Empty text={t('office.trip.needLeaveFirst')} />}
             {avail.loading && <Loading text={t('office.common.loading')} />}
@@ -183,6 +192,20 @@ export default function TripWho() {
         )}
       </Screen>
       <TripFooter label={t('office.trip.nextReview')} onPress={() => { updateDraft((x) => ({ ...x, step: 'review' })); router.push('/office/trip/review'); }} disabled={!!problem} problem={problem} />
+      {isTask && mayAsk && (
+        <AskDriversSheet
+          visible={asking}
+          onClose={() => setAsking(false)}
+          drivers={askTargets(drivers)}
+          context={{
+            date: f.date,
+            from: f.leaveBy || undefined,
+            to: f.end && f.end > f.leaveBy ? f.end : undefined,
+            note: f.stops.find((s) => s.place.trim())?.place.trim() || undefined,
+          }}
+          onUse={(username) => setF({ driver: username, vehicle: '' })}
+        />
+      )}
     </View>
   );
 }

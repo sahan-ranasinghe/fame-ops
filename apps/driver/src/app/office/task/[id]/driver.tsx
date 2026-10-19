@@ -9,10 +9,12 @@ import { useCallback, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { Check, Phone } from '@/components/icons';
+import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { driverParts, driverPill, rankedDrivers } from '@/office/approveLogic';
+import { askTargets } from '@/office/askLogic';
 import { useOffice, useTool } from '@/office/state';
 import { availabilityArgsForTask, CANCEL_TEXT, cancelInput, declinedThisTask, firstPickForTask, leaveIn, plateOf, reassignInput } from '@/office/taskLogic';
 import type { Availability, FleetError, TaskDetail } from '@/office/types';
@@ -42,6 +44,9 @@ export default function GiveDriverScreen() {
   const [busy, setBusy] = useState<'give' | 'cancel' | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  // Ask drivers (design 13, O2): the sheet beside Who can take it, only for someone who may ask.
+  const [asking, setAsking] = useState(false);
+  const mayAsk = me.tools.includes('ask_drivers');
   const done = useRef(false);
   const names = { days: tList('days'), months: tList('months') };
 
@@ -171,7 +176,12 @@ export default function GiveDriverScreen() {
         )}
         {task && over && <ErrorNotice error={{ code: 'tool_error', message: t('office.give.over') }} />}
         {task && !over && (
-          <Section title={t('office.give.whoCanTakeIt')} count={avail.data?.counts.free}>
+          <Section
+            title={t('office.give.whoCanTakeIt')}
+            count={avail.data?.counts.free}
+            link={mayAsk && drivers.length > 0 ? t('office.ask.open') : undefined}
+            onLink={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined}
+          >
             {!availArgs && <Empty text={t('office.request.noTime')} />}
             {avail.loading && <Loading text={t('office.common.loading')} />}
             {avail.error && !avail.data && <ErrorNotice error={avail.error} onRetry={refresh} />}
@@ -221,6 +231,21 @@ export default function GiveDriverScreen() {
           </View>
           {mayCancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => setCancelling(true)} disabled={busy !== null} style={{ borderColor: colors.red, minHeight: 56 }} />}
         </StickyActions>
+      )}
+      {mayAsk && task && !over && (
+        <AskDriversSheet
+          visible={asking}
+          onClose={() => setAsking(false)}
+          drivers={askTargets(drivers)}
+          context={{
+            date: task.date,
+            from: (task.leave_by ?? task.time ?? task.start).match(/\d{2}:\d{2}/)?.[0],
+            to: task.end_by?.match(/\d{2}:\d{2}/)?.[0],
+            note: stops.find((s) => !s.is_start)?.place ?? stops[0]?.place,
+            task_id: task.id,
+          }}
+          onUse={(username) => setPicked(username)}
+        />
       )}
       <ReasonSheet<CancelReasonKey>
         visible={cancelling}
