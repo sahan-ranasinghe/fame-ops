@@ -8,7 +8,8 @@
 //   OFFICE_MCP_URL   http://127.0.0.1:54321/functions/v1/office-mcp
 //   OFFICE_MCP_KEY   the local shared key (never the real one)
 //   API_URL, ANON_KEY  the local stack (scripts/test-office-local.sh sets them)
-import { expect, type Page, test } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./offline";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { totp } from "./totp";

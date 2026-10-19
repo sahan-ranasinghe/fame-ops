@@ -31,10 +31,12 @@ function files(dir) {
 // web, live in notificationsActions.ts and are left out, with the browser-side push.ts. The site
 // import (SheetJS in the browser) is web only too: the artifact's route says so (import_places).
 const WEB_ONLY = new Set(["src/screens/settings/notificationsActions.ts", "src/push.ts", "src/screens/settings/ImportSites.tsx"]);
+// Lists that name tools without calling them: the master list and the retry rule's read tools (transport/retryRule.ts).
+const LISTS = new Set(["src/transport/types.ts", "src/transport/retryRule.ts"]);
 const used = new Set();
 for (const file of files(join(root, "src"))) {
   const rel = relative(root, file);
-  if (!/\.(ts|tsx)$/.test(rel) || /\.test\.(ts|tsx)$/.test(rel) || rel === "src/transport/types.ts" || WEB_ONLY.has(rel)) continue;
+  if (!/\.(ts|tsx)$/.test(rel) || /\.test\.(ts|tsx)$/.test(rel) || LISTS.has(rel) || WEB_ONLY.has(rel)) continue;
   const text = readFileSync(file, "utf8");
   for (const m of text.matchAll(/"([a-z_]+)"/g)) if (allTools.includes(m[1])) used.add(m[1]);
 }

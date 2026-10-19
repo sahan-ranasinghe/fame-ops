@@ -6,7 +6,7 @@ import { defineConfig } from "@playwright/test";
 
 // The e2e never depends on the internet (Sahan, 19 October 2026): in the test browser every host but this laptop fails at
 // once (every context, also those a test opens itself). The fonts are the site's own (public/fonts); the free map's style
-// (OpenFreeMap) cannot load, so it falls back to the drawn map, which draws the same pins and marks (map/domMarks.ts);
+// (OpenFreeMap) is faked by e2e/offline.ts, so the free map runs on the land colour with no tiles;
 // Google's map is never asked for (the local functions have no Google key); the map search's public places
 // (openrouteservice) are faked in their own test; the local functions have no openrouteservice key (road times estimated).
 const OFFLINE = "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1";

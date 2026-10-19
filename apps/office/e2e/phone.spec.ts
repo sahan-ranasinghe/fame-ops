@@ -2,7 +2,8 @@
 // most five tabs, the one big action on Home, every form as a page, a detail
 // as a full screen with a back arrow, drafts, the stops editor's rows, pull to
 // refresh. Runs under the "phone" Playwright project only.
-import { expect, test, type Page } from "@playwright/test";
+import type { Page } from "@playwright/test";
+import { expect, test } from "./offline";
 
 const MCP = (process.env.OFFICE_MCP_URL || "http://127.0.0.1:54321/functions/v1/office-mcp").replace(/\/$/, "");
 const KEY = process.env.OFFICE_MCP_KEY || "";
