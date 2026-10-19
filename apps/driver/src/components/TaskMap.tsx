@@ -65,8 +65,8 @@ export function TaskMap({ task, me, googleNoteFor }: Props) {
     mountRef.current = step.state;
     setMount(step.state);
     if (step.googleFailed) {
-      mapSession.markGoogleFailed(Date.now());
-      noteMapOutcome({ googleFailed: step.googleFailed });
+      // One report per try (an app open): a second map failing in the same try is not another failure.
+      if (mapSession.markGoogleFailed(Date.now())) noteMapOutcome({ googleFailed: step.googleFailed });
     } else if (step.googleLoaded) {
       noteMapOutcome({ googleLoaded: true });
     }

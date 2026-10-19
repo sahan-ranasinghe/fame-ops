@@ -68,16 +68,16 @@ describe("the plan's pins", () => {
 });
 
 describe("rule 10: Google's pins and lines on Google's map only", () => {
-  it("on Google's map: every leg's road line, decoded", () => {
+  it("on Google's map: every leg's road line, decoded, leg by leg with its ends", () => {
     const v = planMapOf({ timeline, stops, start, google: true })!;
-    expect(v.plan.lines).toHaveLength(2);
-    expect(v.plan.lines![0][0]).toEqual(head);
-    expect(v.plan.lines![0][2]).toEqual(kur);
+    expect(v.plan.legs!.map((l) => `${l.from}>${l.to}:${l.points.length}:${l.google}`)).toEqual([`${START_PIN}>${stopPin(1)}:3:true`, `${stopPin(1)}>${stopPin(2)}:2:true`]);
+    expect(v.plan.legs![0].points[0]).toEqual(head);
+    expect(v.plan.legs![0].points[2]).toEqual(kur);
   });
 
-  it("on any other map: no line, no Google pin; the Google place is listed instead", () => {
+  it("on any other map: Google's lines are not even decoded, no Google pin; the Google place is listed instead", () => {
     const v = planMapOf({ timeline, stops, start, google: false })!;
-    expect(v.plan.lines).toBeUndefined();
+    expect(v.plan.legs!.every((l) => l.points.length === 0 && l.google)).toBe(true);
     expect(v.plan.pins.map((p) => p.id)).toEqual([START_PIN, stopPin(1)]);
     expect(v.plan.pins.some((p) => p.google)).toBe(false);
     expect(v.googleNotDrawn).toEqual(["2 · Kurunegala town"]);
@@ -95,3 +95,12 @@ describe("rule 10: Google's pins and lines on Google's map only", () => {
     expect(planMapOf({ timeline: t, stops, start, google: true })!.plan.lines).toBeUndefined();
   });
 });
+
+describe("Part 6: openrouteservice's road line is ours (any map)", () => {
+  it("an ors leg keeps its line on the free map; a google leg does not", () => {
+    const t: PlanTimeline = { ...timeline, items: timeline.items.map((x) => (x.kind === "leg" && x.to_n === 1 ? { ...x, source: "ors" } : x)) };
+    const v = planMapOf({ timeline: t, stops, start, google: false })!;
+    expect(v.plan.legs!.map((l) => `${l.points.length}:${l.google}`)).toEqual(["3:false", "0:true"]);
+  });
+});
+

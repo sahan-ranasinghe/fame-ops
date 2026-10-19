@@ -75,7 +75,10 @@ export interface LegResult {
   via_expressway: boolean | null;
   /** The rush-hour factor applied (1 when none). */
   factor: number;
-  /** Google's road line for the leg (encoded polyline, the Routes call of the road times): kept 30 days, drawn on Google's maps only. */
+  /**
+   * The leg's road line (encoded polyline). `source` says whose: google (the Routes call of the road times; kept 30 days,
+   * drawn on Google's maps only) or ors (openrouteservice's, ours: drawn on any map). The estimate has none.
+   */
   line?: string;
 }
 

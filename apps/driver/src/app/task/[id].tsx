@@ -36,7 +36,7 @@ import { RunningLate } from '@/components/LateSheet';
 import { SkipSheet } from '@/components/SkipSheet';
 import { TaskMap, useMapEngine } from '@/components/TaskMap';
 import { TaskPreview } from '@/components/TaskPreview';
-import { hasRouteLine, kmText, roadKmLeft, type LatLng } from '@/components/taskMapLogic';
+import { kmText, lineNote, roadKmLeft, type LatLng } from '@/components/taskMapLogic';
 import { Stretches, SwapCard } from '@/components/SwapCard';
 import { leaveTime, nextStop, StopTimeline, useDateLabel, useDurations, usePeopleLine } from '@/components/task';
 import { shownTaskKm, stopLabel, stopTimeAt, taskTitle } from '@/components/taskLines';
@@ -178,8 +178,8 @@ export default function TaskScreen() {
 
       <ScrollView style={styles.sheet} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 24, gap: 16 }}>
         <View style={styles.grabber} />
-        {running && (!hasRouteLine(task) || engine !== 'google') && (
-          <Txt variant="small" style={{ marginTop: -6 }}>{t(hasRouteLine(task) ? 'task.lineGoogleOnly' : 'task.noRouteLine')}</Txt>
+        {running && lineNote(task, engine === 'google') && (
+          <Txt variant="small" style={{ marginTop: -6 }}>{t(lineNote(task, engine === 'google') === 'googleOnly' ? 'task.lineGoogleOnly' : 'task.noRouteLine')}</Txt>
         )}
 
         <View style={styles.topRow}>

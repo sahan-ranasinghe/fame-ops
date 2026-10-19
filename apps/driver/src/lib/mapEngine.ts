@@ -110,10 +110,12 @@ export function createMapSession() {
   const emit = () => listeners.forEach((l) => l());
   return {
     googleFailed: () => failedAt !== null,
-    markGoogleFailed(now: number) {
-      if (failedAt !== null) return;
+    /** True when this marks a new failure (the first of this try); a second map failing in the same try is not another. */
+    markGoogleFailed(now: number): boolean {
+      if (failedAt !== null) return false;
       failedAt = now;
       emit();
+      return true;
     },
     /** The app came to the front: Google is tried again once its failure is 30 minutes old. True when it is. */
     appOpened(now: number): boolean {
@@ -143,12 +145,13 @@ export interface MapReport {
 }
 
 /**
- * The report to send after an outcome, or null: every failure the server has not heard yet (the last report said OK, or
- * there was none), and a good load only when the last report was a failure or there was none (once, after the phone
- * forgot what it sent). `last` is the pending report's google_ok, else the last one the server took, else null.
+ * The report to send after an outcome, or null: every failed try (the server counts them in a row: the office hears of the
+ * second, or of two phones within an hour), and a good load only when the last report was a failure or there was none
+ * (once, after the phone forgot what it sent). `last` is the pending report's google_ok, else the last one the server
+ * took, else null.
  */
 export function nextReport(last: boolean | null, outcome: { googleFailed?: FailReason; googleLoaded?: true }, at: string): MapReport | null {
-  if (outcome.googleFailed) return last === false ? null : { google_ok: false, reason: outcome.googleFailed, at };
+  if (outcome.googleFailed) return { google_ok: false, reason: outcome.googleFailed, at };
   if (outcome.googleLoaded) return last === true ? null : { google_ok: true, reason: null, at };
   return null;
 }

@@ -20,6 +20,7 @@ import type { DriverRoute } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { addDays, longDate, num, today, waLink } from "../lib/format";
 import { MapView } from "../map/MapView";
+import { snapAllowed, useGoogleMap } from "../map/google/useGoogleMap";
 import { ESTIMATED_COLOR, type MapMarker, type RoutePoint, SPEED_COLORS } from "../map/types";
 import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, Tile, VehicleThumb } from "../ui/basics";
 import { DateRange, useDateRange } from "../ui/DateRange";
@@ -48,7 +49,11 @@ export function DriverPage() {
   const [route, setRoute] = useState<Route | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [focus, setFocus] = useState<RoutePoint[] | null>(null);
-  const [snap, setSnap] = useState(true);
+  // Snap to roads only while Google's map is the one drawn, or under the open package (Part 6): never for the free map shown
+  // instead of Google's, and never a Roads call for a line that is not drawn.
+  const [snapWanted, setSnap] = useState(true);
+  const mapChoice = useGoogleMap();
+  const snap = snapWanted && snapAllowed(mapChoice);
   const [pointsRt, setPointsRt] = useState<"none" | "connecting" | "live" | "error">("none");
 
   const key = `route.${username}.${date}.${snap ? "snap" : "raw"}`;

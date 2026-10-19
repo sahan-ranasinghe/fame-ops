@@ -76,6 +76,15 @@ export interface PlanPin {
   google?: boolean;
 }
 
+/** One leg of a plan for the map (Part 6): its ends (pin ids; "base" for the drive back) and its road line, if any. */
+export interface PlanLegLine {
+  from: string;
+  to: string;
+  points: { lat: number; lng: number }[];
+  /** The line is Google's (Routes): drawn on Google's map only (rule 10). */
+  google: boolean;
+}
+
 /** The plan on the map (Phase 7, §20). */
 export interface MapPlan {
   pins: PlanPin[];
@@ -84,6 +93,12 @@ export interface MapPlan {
    * map draws thin straight dashed connectors between the pins instead, with the note "not the road".
    */
   lines?: { lat: number; lng: number }[][];
+  /**
+   * Part 6: the plan leg by leg, with each leg's road line and whose it is (planMapOf). planFor then draws, per leg, its
+   * line where the map may show it (Google's on Google's map only; openrouteservice's on any) and a dashed straight
+   * connector otherwise. When given, `lines` is not read.
+   */
+  legs?: PlanLegLine[];
   /** The pin highlighted from the timeline (a row under the pointer or tapped). */
   selected?: string | null;
 }

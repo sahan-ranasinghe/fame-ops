@@ -249,14 +249,14 @@ isOneToOne: false
                   ]
                 },"driver_map_state": {
                   Row: {
-                    "app_version": string | null,"employee_id": string,"google_failed_at": string | null,"google_ok": boolean,"google_ok_at": string | null,"reason": string | null,"updated_at": string
+                    "app_version": string | null,"employee_id": string,"failures": number,"google_failed_at": string | null,"google_ok": boolean,"google_ok_at": string | null,"last_failed_at": string | null,"reason": string | null,"updated_at": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "app_version"?: string | null,"employee_id": string,"google_failed_at"?: string | null,"google_ok": boolean,"google_ok_at"?: string | null,"reason"?: string | null,"updated_at"?: string
+                    "app_version"?: string | null,"employee_id": string,"failures"?: number,"google_failed_at"?: string | null,"google_ok": boolean,"google_ok_at"?: string | null,"last_failed_at"?: string | null,"reason"?: string | null,"updated_at"?: string
                   }
                   Update: {
-                    "app_version"?: string | null,"employee_id"?: string,"google_failed_at"?: string | null,"google_ok"?: boolean,"google_ok_at"?: string | null,"reason"?: string | null,"updated_at"?: string
+                    "app_version"?: string | null,"employee_id"?: string,"failures"?: number,"google_failed_at"?: string | null,"google_ok"?: boolean,"google_ok_at"?: string | null,"last_failed_at"?: string | null,"reason"?: string | null,"updated_at"?: string
                   }
                   Relationships: [
                     {
@@ -1063,14 +1063,14 @@ isOneToOne: false
                   ]
                 },"route_legs": {
                   Row: {
-                    "avoid_expressway": boolean,"computed_at": string,"from_lat": number,"from_lng": number,"id": number,"km": number,"minutes": number,"provider": string,"to_lat": number,"to_lng": number,"via_expressway": boolean | null
+                    "avoid_expressway": boolean,"computed_at": string,"from_lat": number,"from_lng": number,"id": number,"km": number,"line": string | null,"minutes": number,"provider": string,"to_lat": number,"to_lng": number,"via_expressway": boolean | null
                   }
                   ComputedFields: never
                   Insert: {
-                    "avoid_expressway": boolean,"computed_at"?: string,"from_lat": number,"from_lng": number,"id"?: never,"km": number,"minutes": number,"provider": string,"to_lat": number,"to_lng": number,"via_expressway"?: boolean | null
+                    "avoid_expressway": boolean,"computed_at"?: string,"from_lat": number,"from_lng": number,"id"?: never,"km": number,"line"?: string | null,"minutes": number,"provider": string,"to_lat": number,"to_lng": number,"via_expressway"?: boolean | null
                   }
                   Update: {
-                    "avoid_expressway"?: boolean,"computed_at"?: string,"from_lat"?: number,"from_lng"?: number,"id"?: never,"km"?: number,"minutes"?: number,"provider"?: string,"to_lat"?: number,"to_lng"?: number,"via_expressway"?: boolean | null
+                    "avoid_expressway"?: boolean,"computed_at"?: string,"from_lat"?: number,"from_lng"?: number,"id"?: never,"km"?: number,"line"?: string | null,"minutes"?: number,"provider"?: string,"to_lat"?: number,"to_lng"?: number,"via_expressway"?: boolean | null
                   }
                   Relationships: [
                     

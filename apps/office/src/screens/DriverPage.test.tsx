@@ -230,3 +230,31 @@ describe("playback on the driver page (§22)", () => {
     expect(c?.heading).not.toBeNull();
   });
 });
+
+describe("Part 6: no Roads call for a line the free map draws", () => {
+  it("Google's map refused (the cap): every route request is unsnapped, the raw line drawn", async () => {
+    class GoogleRefused extends FakeTransport {
+      override me(): Promise<Me> {
+        return super.me().then((m) => ({ ...m, tools: [...m.tools, "register_map_load"], map: { package: "google" as const, places: true } }));
+      }
+      override answer(tool: string, args: Record<string, unknown>): unknown {
+        if (tool === "register_map_load") return { allowed: false, note: "Google map limit reached for today: back tomorrow" };
+        return super.answer(tool, args);
+      }
+    }
+    const transport = new GoogleRefused();
+    const store = new FleetStore(transport);
+    const me = await transport.me();
+    render(
+      <FleetProvider value={{ store, transport, me, noConnector: false }}>
+        <MemoryRouter initialEntries={["/drivers/nuwan.p"]}><Routes><Route path="/drivers/:username" element={<DriverPage />} /></Routes></MemoryRouter>
+      </FleetProvider>,
+    );
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    const routes = transport.calls.filter((c) => c.tool === "driver_route");
+    expect(transport.calls.some((c) => c.tool === "register_map_load")).toBe(true);
+    expect(routes.length).toBeGreaterThan(0);
+    expect(routes.every((c) => c.args.snap === false)).toBe(true);
+  });
+});
+

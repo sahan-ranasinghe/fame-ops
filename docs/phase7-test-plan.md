@@ -1256,13 +1256,30 @@ You should see:
 - Within a minute of Open: the free map (OpenStreetMap's look) with the same stops, times, phone and Follow me; dashed
   straight lines join the stops; a Google place is not drawn and "A Google place: Navigate shows it in Google Maps" shows
   over the map. Within a minute of Google: Google's map again.
-- With the 1 s wait: the free map by itself, and the office's issue "Google map failed on <the driver's name>'s phone;
-  using the free map" (within 5 minutes). Back at 30 s and the app opened again: Google's map, and the issue resolves by itself.
+- With the 1 s wait: the free map by itself. The office's issue "Google map failed on <the driver's name>'s phone; using
+  the free map" opens only after a second try: close the app fully, start it again and open the task (or do the same on
+  the second phone within the hour); then the issue within 5 minutes.
+- Note how long Google's map takes to appear on each phone (on mobile data, with a stopwatch): it tells whether 30 s is
+  right there. Back at 30 s and the app opened again: Google's map, and the issue resolves by itself.
 - Offline: "Map not available" with the stops and "≈ N km straight line" to each stop still to do, and Try again; Start,
   Complete, the odometer, fuel, Report and Navigate all still work. With the connection back the map returns by itself.
   (A map can still draw offline from the tiles it kept: if it does, open a task in a place the phone has not shown before,
   or note it and go on.)
 - The same on both phones, in English and in Sinhala.
+
+### P12. The website's map works like the phones (laptop, after the web deploy)
+1. Signed in as the admin, open Live, a driver's page and a task's route: Google's map.
+2. In Claude: "set the Google caps for map_loads to 0 for the day" (`update_settings google_caps`, map_loads day 0), then
+   reload the website (a new tab) and open the same pages. Put the caps back after.
+3. Settings → Fleet → Map package → Open; reload. Then back to Google.
+
+You should see:
+- At the cap: the free map (OpenStreetMap's look) with "The free map: Google map limit reached for today: back tomorrow."
+  above it; the lists as before; a driver's route as the raw GPS line ("Recorded points"), never snapped; a plan with
+  Google's road line shows dashed straight lines between its stops ("Straight lines, not the road"), and a Google place
+  is listed under the map, not drawn.
+- With Open: the free map, no line above it.
+- With Google again: Google's map, snapped routes and Google's road lines as before.
 
 ## If something looks wrong
 

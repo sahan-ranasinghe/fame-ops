@@ -20,14 +20,24 @@ export function MapView(props: MapProps) {
   const loading = <Loading height={props.height} />;
   if (choice.kind === "loading") return loading;
   if (choice.kind === "google") {
-    // The google package: Google's map, or no map with the reason (never another map: Google's terms).
-    if (choice.state !== "ready" || !GoogleMap) return <NoMap height={props.height} note={choice.state === "ready" ? "Google's map is web only" : choice.note} />;
+    if (!GoogleMap) return <NoMap height={props.height} note="Google's map is web only" />;
     return <Suspense fallback={loading}><GoogleMap {...props} maps={choice.maps} /></Suspense>;
   }
-  if (!MapLibre || failed) return <DrawnMap {...props} />;
+  // The open package, or Google's map refused or failed (Part 6): the free map, with no Google content on it (the pages
+  // leave Google's pins, lines and snapped roads out for it: googleDrawn, snapAllowed).
+  const why = choice.kind === "free" ? <FreeMapNote note={choice.note} /> : null;
+  if (!MapLibre || failed) return <>{why}<DrawnMap {...props} /></>;
   return (
-    <Suspense fallback={loading}>
-      <MapLibre {...props} onFail={() => setFailed(true)} />
-    </Suspense>
+    <>
+      {why}
+      <Suspense fallback={loading}>
+        <MapLibre {...props} onFail={() => setFailed(true)} />
+      </Suspense>
+    </>
   );
+}
+
+/** Why the free map shows instead of Google's (a cap, a refused key, a slow load): one quiet line above it. */
+export function FreeMapNote({ note }: { note: string }) {
+  return <div className="muted small" data-testid="free-map-note" role="note">The free map: {note}.</div>;
 }

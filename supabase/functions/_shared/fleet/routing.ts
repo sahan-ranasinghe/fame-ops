@@ -53,6 +53,8 @@ export interface LegAnswer {
   km: number;
   minutes: number;
   via_expressway: boolean | null;
+  /** openrouteservice's road line (encoded polyline, precision 5, as Google's): ours to draw on any map (Part 6). */
+  line?: string;
 }
 
 /** openrouteservice wants [lng, lat] pairs. */
@@ -77,7 +79,14 @@ export function orsResponse(json: unknown): LegAnswer {
   }
   const values = route.extras?.waycategory?.values ?? [];
   const via = values.some((row) => Array.isArray(row) && typeof row[2] === "number" && (row[2] & ORS_HIGHWAY_BIT) === ORS_HIGHWAY_BIT);
-  return { km: Math.round(route.summary.distance / 100) / 10, minutes: Math.round(route.summary.duration / 6) / 10, via_expressway: via };
+  // The JSON endpoint answers the road as an encoded polyline (the same format as Google's): kept with the leg (Part 6).
+  const geometry = (route as { geometry?: unknown }).geometry;
+  return {
+    km: Math.round(route.summary.distance / 100) / 10,
+    minutes: Math.round(route.summary.duration / 6) / 10,
+    via_expressway: via,
+    ...(typeof geometry === "string" && geometry.length > 1 ? { line: geometry } : {}),
+  };
 }
 
 /** Straight line × road_factor at avg_speed_kmh. */
@@ -130,10 +139,10 @@ export const orsMinute = minuteLimiter(ORS_PER_MINUTE);
 async function cached(db: Db, key: CacheKey): Promise<LegAnswer | null> {
   const since = new Date(Date.now() - CACHE_DAYS * 86400000).toISOString();
   const row = unwrapMaybe(
-    await db.from("route_legs").select("km, minutes, via_expressway").match(key).gte("computed_at", since).maybeSingle(),
+    await db.from("route_legs").select("km, minutes, via_expressway, line").match(key).gte("computed_at", since).maybeSingle(),
     "route cache",
   );
-  return row ? { km: row.km, minutes: row.minutes, via_expressway: row.via_expressway } : null;
+  return row ? { km: row.km, minutes: row.minutes, via_expressway: row.via_expressway, ...(row.line ? { line: row.line } : {}) } : null;
 }
 
 async function store(db: Db, key: CacheKey, leg: LegAnswer): Promise<void> {
@@ -143,6 +152,7 @@ async function store(db: Db, key: CacheKey, leg: LegAnswer): Promise<void> {
       km: leg.km,
       minutes: leg.minutes,
       via_expressway: leg.via_expressway,
+      line: leg.line ?? null,
       computed_at: new Date().toISOString(),
     }, {
       onConflict: "from_lat,from_lng,to_lat,to_lng,avoid_expressway,provider",
@@ -210,6 +220,7 @@ export async function legMinutes(
     source,
     via_expressway: leg.via_expressway,
     factor,
+    ...(leg.line ? { line: leg.line } : {}),
     cached: isCached,
   } as LegResult & { cached: boolean });
 

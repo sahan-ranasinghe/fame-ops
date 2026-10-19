@@ -530,7 +530,7 @@ export async function makePlan(db: Db, settings: Settings, p: PlanRequest): Prom
     if ("legs" in got) {
       plan = await runPlanner(input, settings, memoLegFn(got.legs, open));
       // The legs carry Google's road lines (the same call as the road times): kept 30 days from now.
-      if (plan.legs.some((l) => l.line)) plan = { ...plan, line_fetched_at: p.now.toISOString() };
+      if (plan.legs.some((l) => l.line && l.source === "google")) plan = { ...plan, line_fetched_at: p.now.toISOString() };
     } else {
       googleNote = got.note;
       plan = await runPlanner(input, settings, open);
@@ -623,7 +623,10 @@ export type TimelineItem =
     source: string;
     rush_factor?: number;
     via_expressway?: boolean;
-    /** Google's road line (encoded polyline), only with with_line: drawn on Google's map only (rule 10). */
+    /**
+     * The leg's road line (encoded polyline), only with with_line: Google's (source google) drawn on Google's map only
+     * (rule 10); openrouteservice's (source ors) on any map.
+     */
     line?: string;
   };
 
@@ -1290,7 +1293,7 @@ export const planTask = tool({
     driver: zText(80).optional(),
     vehicle: zText(20).optional(),
     end_time: zTime.optional(),
-    with_line: z.boolean().optional().describe("The web's plan map: each leg's Google road line in the timeline (encoded polyline)"),
+    with_line: z.boolean().optional().describe("The web's plan map: each leg's road line in the timeline (encoded polyline; Google's or openrouteservice's, by the leg's source)"),
   }),
   async run(args, { db, now, actor }) {
     realDate(args.date);
@@ -1710,7 +1713,7 @@ export const taskDetail = tool({
   readOnly: true,
   input: z.object({
     task_id: zId,
-    with_line: z.boolean().optional().describe("The web's plan map: each leg's Google road line in the timeline (encoded polyline)"),
+    with_line: z.boolean().optional().describe("The web's plan map: each leg's road line in the timeline (encoded polyline; Google's or openrouteservice's, by the leg's source)"),
   }),
   async run({ task_id, with_line }, { db, now, actor }) {
     const task = await getTask(db, task_id);

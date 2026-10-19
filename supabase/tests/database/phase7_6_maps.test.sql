@@ -59,5 +59,40 @@ set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000006e3","
 select throws_ok($$ select public.report_map_state(false, 'error', now(), '1.3.0') $$, '42501', null, 'a sign-in that is no employee cannot report');
 reset role;
 
+-- 4. Tries in a row (the office hears of a failure on the second, issues.ts mapAlarms) -----------------------------------
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000006e2","role":"authenticated"}';
+select is(public.report_map_state(false, 'timeout', now() - interval '3 hours', '1.3.0'), 'ok', 'Nuwan''s first try fails');
+reset role;
+select is((select failures from public.driver_map_state where employee_id = '10000000-0000-0000-0000-0000000006e2'), 1, 'one failure');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000006e2","role":"authenticated"}';
+select is(public.report_map_state(false, 'error', now() - interval '1 hour', '1.3.0'), 'ok', 'the next try fails too');
+reset role;
+select results_eq($$ select failures, reason, google_failed_at < last_failed_at from public.driver_map_state
+                     where employee_id = '10000000-0000-0000-0000-0000000006e2' $$,
+  $$ values (2, 'error'::text, true) $$, 'two in a row: the first failure''s time kept, the last one''s beside it');
+set local role authenticated;
+set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-0000000006e2","role":"authenticated"}';
+select is(public.report_map_state(true, '', now(), '1.3.0'), 'ok', 'Google loads again');
+reset role;
+select is((select failures from public.driver_map_state where employee_id = '10000000-0000-0000-0000-0000000006e2'), 0, 'a good load ends the run');
+
+-- 5. The 30-day clean-up strips Google's leg lines only; openrouteservice's stay -------------------------------------------
+insert into public.vehicles (id, reg_no, vehicle_type, current_odometer_km, active) values
+  ('20000000-0000-0000-0000-0000000006e1', 'WP P6M-0001', 'van', 1000, true);
+insert into public.tasks (id, title, employee_id, vehicle_id, start_at, leave_by, status, created_by, plan_json) values
+  ('30000000-0000-0000-0000-0000000006e1', 'P6M lines', '10000000-0000-0000-0000-0000000006e1', '20000000-0000-0000-0000-0000000006e1',
+   now() + interval '1 day', now() + interval '1 day', 'assigned', 'test',
+   jsonb_build_object('line_fetched_at', (now() - interval '40 days')::text,
+     'legs', jsonb_build_array(jsonb_build_object('from_seq', 0, 'to_seq', 1, 'source', 'google', 'line', 'gline'),
+                               jsonb_build_object('from_seq', 1, 'to_seq', 2, 'source', 'ors', 'line', 'oline'))));
+select lives_ok($$ select public.prune_google_content(30) $$, 'the clean-up runs');
+select results_eq($$ select l ->> 'source', l ->> 'line' from public.tasks t, jsonb_array_elements(t.plan_json -> 'legs') l
+                     where t.id = '30000000-0000-0000-0000-0000000006e1' order by l ->> 'source' $$,
+  $$ values ('google'::text, null::text), ('ors'::text, 'oline'::text) $$, 'Google''s line gone after 30 days, openrouteservice''s kept');
+select ok(not (select plan_json ? 'line_fetched_at' from public.tasks where id = '30000000-0000-0000-0000-0000000006e1'), 'the mark goes with Google''s lines');
+select ok(exists (select 1 from information_schema.columns where table_name = 'route_legs' and column_name = 'line'), 'the leg cache keeps a line');
+
 select * from finish();
 rollback;

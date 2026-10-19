@@ -9,7 +9,7 @@
 // planned (the preview keeps its last answer), so the map never flickers.
 import { useMemo, useState } from "react";
 import { MapView } from "../map/MapView";
-import { useGoogleMap } from "../map/google/useGoogleMap";
+import { googleDrawn, useGoogleMap } from "../map/google/useGoogleMap";
 import { useIsPhone } from "../ui/phone";
 import { type PlanMapStart, type PlanMapStop, planMapOf } from "./planMapLogic";
 import { PlanTimeline, type PlanTimelineProps } from "./PlanTimeline";
@@ -20,8 +20,7 @@ export const PLAN_MAP_DESKTOP_PX = 360;
 
 /** Is Google's map the one drawn (the google package, its load counted and allowed): only then Google's pins and lines go on it. */
 export function useGoogleMapInUse(): boolean {
-  const choice = useGoogleMap();
-  return choice.kind === "google" && choice.state === "ready";
+  return googleDrawn(useGoogleMap());
 }
 
 export function PlanWithMap({ stops, start, ...props }: PlanTimelineProps & {

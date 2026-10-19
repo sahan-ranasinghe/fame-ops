@@ -1,7 +1,8 @@
 // The plan on a map (Phase 7, §20) and rule 10: what each map may draw of it. Google's map draws
-// every pin and Google's road line of each leg. Every other map (MapLibre, the drawn map) leaves
-// Google's pins out and never draws Google's lines: our pins joined by thin straight dashed
-// connectors, with a small note that they are not the road.
+// every pin and every leg's road line. Every other map (MapLibre, the drawn map) leaves Google's
+// pins out and never draws Google's lines; Part 6: it draws openrouteservice's road lines (ours),
+// and thin straight dashed connectors for the legs it has no line for, with a small note that
+// those are not the road.
 import type { MapPlan, PlanPin } from "./types";
 
 type LatLng = { lat: number; lng: number };
@@ -29,12 +30,25 @@ export function planFor(plan: MapPlan | null | undefined, google: boolean): Draw
   const drawable = (p: PlanPin) => Number.isFinite(p.lat) && Number.isFinite(p.lng) && (google || !p.google);
   const pins = plan.pins.filter(drawable);
   const hidden = plan.pins.filter((p) => !google && p.google).length;
-  const lines = google ? (plan.lines ?? []).filter((l) => l.length > 1) : [];
+  const lines: LatLng[][] = [];
   const links: [PlanPin, PlanPin][] = [];
-  if (!lines.length) {
-    for (let i = 1; i < plan.pins.length; i++) {
-      const a = plan.pins[i - 1], b = plan.pins[i];
-      if (drawable(a) && drawable(b)) links.push([a, b]);
+  if (plan.legs?.length) {
+    // Leg by leg (Part 6): its own line where this map may show it, else a straight connector between its two pins.
+    const byId = new Map(pins.map((p) => [p.id, p]));
+    for (const leg of plan.legs) {
+      if (leg.points.length > 1 && (google || !leg.google)) lines.push(leg.points);
+      else {
+        const a = byId.get(leg.from), b = byId.get(leg.to);
+        if (a && b) links.push([a, b]);
+      }
+    }
+  } else {
+    if (google) lines.push(...(plan.lines ?? []).filter((l) => l.length > 1));
+    if (!lines.length) {
+      for (let i = 1; i < plan.pins.length; i++) {
+        const a = plan.pins[i - 1], b = plan.pins[i];
+        if (drawable(a) && drawable(b)) links.push([a, b]);
+      }
     }
   }
   const parts = [

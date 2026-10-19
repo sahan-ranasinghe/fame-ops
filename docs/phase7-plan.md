@@ -978,16 +978,22 @@ the other map without a new build. The first Part 6 build even left MapLibre out
   (setting, 30 s by default, 1 to 120) while the phone has internet (expo-network asked at that moment) = Google failed;
   a render error of the map (an error boundary) too. The phone then shows the free map, reports it
   (`report_map_state`), and the office gets the issue "Google map failed on <driver>'s phone; using the free map"
-  (kind `map_fallback`, the full sync every 5 minutes; none while the package is `open`). The phone tries Google again
+  (kind `map_fallback`, the full sync every 5 minutes; none while the package is `open`; since the second round only
+  after a second failed try, or two phones within an hour). The phone tries Google again
   the next time the app opens (started afresh, or brought to the front 30 minutes or more after the failure); the next
   good load is reported and the issue resolves itself.
 - **Both fail** (OpenFreeMap down: `onDidFailLoadingMap` or no load within 30 s; or no network): the "Map not available"
   card (`components/MapUnavailable.tsx`, English and Sinhala) with the stops and the straight-line distance to each
   stop still to do, and Try again; it goes by itself when the network is back. Start, Complete, the odometer, fuel,
   Report and Navigate (the Google Maps app) are outside the map and work as before.
-- The office website is unchanged: Google's map under the google package, the free map when the setting is `open`,
-  and at the map-load cap (or a failed Google load) no map with "The lists show everything" (`NoMap`), never the free
-  map, because its pages may carry Google content.
+- **The website, since the second round (Sahan, 19 October):** like the phones. Google's map by default; at the map-load
+  cap, when Google refuses the key (`gm_authFailure`) or its script is not ready within 15 s, the free map with one line
+  saying why (before: no map, "The lists show everything"); the setting `open` always the free map. On the free map never
+  Google's content: openrouteservice's road line where a plan leg has one (plans now keep it, also from the leg cache),
+  else dashed straight lines between the stops; a recorded route's raw GPS line. Snapping (Google's Roads) is asked only
+  while Google's map is drawn (`snapAllowed`). The phones draw plans the same way, leg by leg.
+- **The office's issue** opens only on a second failed try of the same phone, or two phones within an hour
+  (`report_map_state` counts the tries in a row: `driver_map_state.failures`; `mapAlarms` in issues.ts).
 - From now on every round tests both engines (`npm run test:maps`, and the phone tests in the test plan), and the
   fresh reviewer checks map changes against both.
 

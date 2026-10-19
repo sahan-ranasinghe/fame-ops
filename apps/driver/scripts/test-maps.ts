@@ -10,7 +10,7 @@ import {
 } from '../src/lib/mapEngine';
 import { encodePolyline } from '../src/lib/polyline';
 import type { TaskStop } from '../src/lib/types';
-import { mapLines, mapStops, startPoint } from '../src/components/taskMapLogic';
+import { lineNote, mapLines, mapStops, startPoint } from '../src/components/taskMapLogic';
 
 let failed = 0;
 function check(ok: unknown, label: string, detail?: unknown) {
@@ -39,9 +39,10 @@ console.log('\n== A forced Google failure moves the phone to the free map ==');
   let s: MountState = startMount(engineFor(true, 'google', session.googleFailed()));
   const step = mapStep(s, { type: 'timeout', online: true, attempt: s.attempt, engine: s.engine });
   check(step.googleFailed === 'timeout' && step.state.engine === 'google', 'no onMapLoaded within the wait while online: Google failed (timeout)', step);
-  session.markGoogleFailed(1_000);
+  check(session.markGoogleFailed(1_000) && !session.markGoogleFailed(2_000), 'one failure per try: a second map failing in the same try is not another');
   const engine = engineFor(true, 'google', session.googleFailed());
   check(session.googleFailed() && heard === 1 && engine === 'open', 'the session marks it and the engine becomes the free map', { heard, engine });
+  check(/if \(mapSession\.markGoogleFailed\(Date\.now\(\)\)\) noteMapOutcome/.test(read('src/components/TaskMap.tsx')), 'the phone reports a failure only when it marks a new one');
   s = mapStep(step.state, { type: 'engine', engine }).state;
   check(s.engine === 'open' && s.status === 'loading' && s.attempt === 1, 'the free map mounts afresh', s);
   const loaded = mapStep(s, { type: 'loaded' });
@@ -114,7 +115,7 @@ console.log('\n== Both maps fail: the card ==');
 
 console.log('\n== What the server hears ==');
 check(JSON.stringify(nextReport(null, { googleFailed: 'timeout' }, 'T')) === JSON.stringify({ google_ok: false, reason: 'timeout', at: 'T' }), 'a first failure is reported');
-check(nextReport(false, { googleFailed: 'error' }, 'T') === null, 'a failure the server already has is not sent again');
+check(nextReport(false, { googleFailed: 'error' }, 'T')?.google_ok === false, 'every failed try is reported (the server counts them in a row)');
 check(nextReport(false, { googleLoaded: true }, 'T')?.google_ok === true, 'the next good load after a failure is reported (the issue resolves)');
 check(nextReport(true, { googleLoaded: true }, 'T') === null, 'good loads after a good report: nothing');
 check(nextReport(null, { googleLoaded: true }, 'T')?.google_ok === true, 'a phone that forgot what it sent says OK once');
@@ -167,8 +168,24 @@ console.log('\n== Both engines draw the same task ==');
   check(oLines.length === 2 && oLines.every((l) => l.dashed && l.points.length === 2) && oLines[0].done && !oLines[1].done
     && JSON.stringify(oLines[1].points) === JSON.stringify([B, C]),
     'the free map: dashed straight lines start → Stop 1 → Stop 2, the driven one muted (never Google\'s line)', oLines);
-  const noLine = { ...task, plan_json: { legs: [{ from_seq: 0, to_seq: 1, km: 12 }] } as never };
-  check(mapLines(noLine, true, gStops, startPoint(noLine, true)).every((l) => l.dashed), "Google's map with no road line stored: the same dashed lines");
+  const noLine = { ...task, plan_json: { legs: [{ from_seq: 0, to_seq: 1, km: 12 }, { from_seq: 1, to_seq: 2, km: 9 }] } as never };
+  check(mapLines(noLine, true, gStops, startPoint(noLine, true)).every((l) => l.dashed) && mapLines(noLine, true, gStops, startPoint(noLine, true)).length === 2,
+    "Google's map with no road line stored: the same dashed lines, one per leg");
+  // Sahan, 19 October: openrouteservice's line is ours, drawn on either map; dashed straight only where the line is Google's.
+  const orsPlan = { legs: [
+    { from_seq: 0, to_seq: 1, km: 12, source: 'ors', line: encodePolyline([A, { lat: 7.05, lng: 80.02 }, B]) },
+    { from_seq: 1, to_seq: 2, km: 9, source: 'google', line: encodePolyline([B, C]) },
+  ] };
+  const mixed = { ...task, plan_json: orsPlan as never };
+  const mixedOpen = mapLines(mixed, false, oStops, startPoint(mixed, false));
+  const mixedGoogle = mapLines(mixed, true, gStops, startPoint(mixed, true));
+  check(mixedOpen.length === 2 && mixedOpen.filter((l) => !l.dashed).length === 1 && mixedOpen.find((l) => !l.dashed)!.points.length === 3
+    && mixedOpen.filter((l) => l.dashed).length === 1 && JSON.stringify(mixedOpen.find((l) => l.dashed)!.points) === JSON.stringify([B, C]),
+    "the free map: openrouteservice's road line for leg 1, a dashed straight line for leg 2 (its line is Google's)", mixedOpen);
+  check(mixedGoogle.length === 2 && mixedGoogle.every((l) => !l.dashed), "Google's map: both road lines (Google's and openrouteservice's)", mixedGoogle);
+  check(lineNote(mixed, false) === 'googleOnly' && lineNote(mixed, true) === null && lineNote(noLine, true) === 'none'
+    && lineNote({ ...task, plan_json: { legs: [orsPlan.legs[0]] } as never }, false) === null,
+    'the line under the map: Google\'s only on the free map; nothing when every leg has its line here; "no road line" when none has');
   const withGoogle = { ...task, task_stops: [...task.task_stops, st('s3', 3, G, { google_place_id: 'gp' })] };
   const g3 = mapStops(withGoogle, true);
   const o3 = mapStops(withGoogle, false);

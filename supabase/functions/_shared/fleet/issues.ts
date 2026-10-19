@@ -746,16 +746,19 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   }
 
   // --- Google's map failed on a phone (Part 6): the phone shows the free map until Google's loads again -------
-  // The phone reports it (report_map_state): no "map loaded" within phone_map_wait_s while online, or an error. While the
-  // map package is open no phone asks Google, so nothing is open then. Resolved by the phone's next good load.
+  // The phone reports each try that fails (report_map_state: no "map loaded" within phone_map_wait_s while online, or an
+  // error). The office hears of it only when it is not one weak-signal trip (Sahan, 19 October): the same phone failed
+  // again on its next try (failures ≥ 2), or two phones failed within an hour (mapAlarms). While the map package is open no
+  // phone asks Google, so nothing is open then. Resolved by the phone's next good load.
   if (full && settings.map_package === "google") {
     const drivers = new Map(refs.employees.filter((e) => e.active).map((e) => [e.id, e]));
     // Read on its own: a functions deploy ahead of the migration (no table yet) must not stop the whole sync.
-    const res = await db.from("driver_map_state").select("employee_id, reason, google_failed_at, app_version").eq("google_ok", false);
+    const res = await db.from("driver_map_state").select("employee_id, reason, google_failed_at, last_failed_at, failures, app_version")
+      .eq("google_ok", false);
     if (res.error) console.error(`issues: map reports skipped: ${res.error.message}`);
-    for (const r of res.data ?? []) {
-      const e = drivers.get(r.employee_id);
-      if (!e) continue;
+    const rows = (res.data ?? []).filter((r) => drivers.has(r.employee_id));
+    for (const { row: r, why } of mapAlarms(rows, now)) {
+      const e = drivers.get(r.employee_id)!;
       wanted.push({
         kind: "map_fallback",
         ref_key: `map_fallback:${e.id}`,
@@ -763,6 +766,7 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         title: `Google map failed on ${e.name}'s phone; using the free map`,
         detail: [
           r.reason === "timeout" ? "Google's map did not finish loading while the phone was online" : "Google's map reported an error",
+          why === "again" ? `${r.failures} tries in a row` : "another phone too, within the hour",
           r.google_failed_at ? `since ${colomboDayTime(r.google_failed_at)}` : null,
           r.app_version ? `app ${r.app_version}` : null,
           "if more phones show this, check the Android key and billing (docs/google-maps-setup.md)",
@@ -806,6 +810,28 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
     }
   }
   return wanted;
+}
+
+/** A phone's map report that the office hears of (Part 6): the same phone failed twice in a row, or two phones within an hour. Pure. */
+export interface MapReportRow {
+  employee_id: string;
+  failures: number;
+  last_failed_at: string | null;
+  google_failed_at: string | null;
+  reason?: string | null;
+  app_version?: string | null;
+}
+export const MAP_ALARM_WINDOW_MS = 60 * 60_000;
+
+export function mapAlarms<R extends MapReportRow>(rows: readonly R[], now: Date): { row: R; why: "again" | "two_phones" }[] {
+  const recent = rows.filter((r) => {
+    const at = Date.parse(r.last_failed_at ?? r.google_failed_at ?? "");
+    return Number.isFinite(at) && now.getTime() - at <= MAP_ALARM_WINDOW_MS;
+  });
+  const twoPhones = recent.length >= 2 ? new Set(recent.map((r) => r.employee_id)) : new Set<string>();
+  return rows.flatMap((r): { row: R; why: "again" | "two_phones" }[] =>
+    (r.failures ?? 1) >= 2 ? [{ row: r, why: "again" }] : twoPhones.has(r.employee_id) ? [{ row: r, why: "two_phones" }] : []
+  );
 }
 
 /** The "notified" line of an issue told at its source: who got the push (the outbox) and when. */

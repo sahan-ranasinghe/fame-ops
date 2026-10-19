@@ -20,6 +20,7 @@ import { cap, hhmm, joinDots, num, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { MapView } from "../map/MapView";
+import { snapAllowed, useGoogleMap } from "../map/google/useGoogleMap";
 import type { RoutePoint } from "../map/types";
 import { GapsList, useGaps } from "./GapsList";
 import { LateReportLine } from "./LateReport";
@@ -499,7 +500,10 @@ function TaskRoute({ id, started }: { id: string; started?: string | null }) {
   const [route, setRoute] = useState<Route | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [snap, setSnap] = useState(true);
+  // Snap to roads only while Google's map is the one drawn, or under the open package (Part 6).
+  const [snapWanted, setSnap] = useState(true);
+  const mapChoice = useGoogleMap();
+  const snap = snapWanted && snapAllowed(mapChoice);
   const [focus, setFocus] = useState<RoutePoint[] | null>(null);
   useEffect(() => {
     if (!started) return;

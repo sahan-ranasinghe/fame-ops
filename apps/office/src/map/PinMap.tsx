@@ -23,9 +23,10 @@ export function PinMap({ lat, lng, onMove }: { lat: number; lng: number; onMove?
   );
   if (choice.kind === "loading") return loading;
   if (choice.kind === "google") {
-    if (choice.state !== "ready" || !GooglePin) return <NoMap small note={choice.state === "ready" ? "Google's map is web only" : choice.note} />;
+    if (!GooglePin) return <NoMap small note="Google's map is web only" />;
     return <Suspense fallback={loading}><GooglePin lat={lat} lng={lng} onMove={onMove} maps={choice.maps} /></Suspense>;
   }
+  // The open package, or Google's map refused or failed (Part 6): the free map (the pin is ours: a pasted pin or a place).
   if (!MapLibrePin || failed) return drawn;
   return (
     <Suspense fallback={loading}>

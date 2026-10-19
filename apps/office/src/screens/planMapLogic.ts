@@ -116,12 +116,20 @@ export function planMapOf({ timeline, stops = [], start, google, offset = 0, sel
   }
 
   const plan: MapPlan = { pins, selected };
-  if (google) {
-    const lines = items
-      .filter((x): x is LegWithLine => x.kind === "leg")
-      .map((l) => (l.line ? decodePolyline(l.line) : []))
-      .filter((l) => l.length > 1);
-    if (lines.length) plan.lines = lines;
+  // Part 6: the plan leg by leg, each with its road line and whose it is. planFor draws Google's on Google's map only and
+  // openrouteservice's on any map; a leg with no line it may show gets a dashed straight connector. A Google line is not
+  // even decoded for a map that may not show it.
+  const legs = items.filter((x): x is LegWithLine => x.kind === "leg");
+  if (legs.length) {
+    plan.legs = legs.map((l) => {
+      const isGoogle = l.source === "google" || (!!l.line && !l.source);
+      return {
+        from: l.from_n === "start" ? START_PIN : stopPin(l.from_n),
+        to: l.to_n === "base" ? "base" : stopPin(l.to_n),
+        points: l.line && (google || !isGoogle) ? decodePolyline(l.line) : [],
+        google: isGoogle,
+      };
+    });
   }
   return { plan, googleNotDrawn, noPin };
 }

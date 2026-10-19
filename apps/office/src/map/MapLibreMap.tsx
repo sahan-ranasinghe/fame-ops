@@ -27,6 +27,8 @@ const SRI_LANKA: [number, number] = [80.7, 7.8];
 
 /** The plan's connectors: thin, dashed, never read as a road (§20). */
 const PLAN_LINK_COLOR = "#15181c";
+/** A plan leg's own road line (openrouteservice's on this map), as Google's map draws its lines. */
+const PLAN_LINE_COLOR = "#15181c";
 
 interface Live {
   marker: maplibregl.Marker;
@@ -139,6 +141,15 @@ export default function MapLibreMap({
       const empty = (): FeatureCollection => ({ type: "FeatureCollection", features: [] });
       m.addSource("trails", { type: "geojson", data: empty() });
       m.addLayer({ id: "trails-line", type: "line", source: "trails", paint: { "line-color": "#1e4fa0", "line-width": 3, "line-opacity": 0.45 }, layout: { "line-join": "round", "line-cap": "round" } });
+      // Part 6: a plan leg's own road line where this map may show it (openrouteservice's, never Google's: planFor).
+      m.addSource("plan-lines", { type: "geojson", data: empty() });
+      m.addLayer({
+        id: "plan-lines-line",
+        type: "line",
+        source: "plan-lines",
+        paint: { "line-color": PLAN_LINE_COLOR, "line-width": 4, "line-opacity": 0.75 },
+        layout: { "line-join": "round", "line-cap": "round" },
+      });
       m.addSource("plan-links", { type: "geojson", data: empty() });
       m.addLayer({
         id: "plan-links-line",
@@ -416,10 +427,15 @@ export default function MapLibreMap({
     } else if (!fitKey) fittedPlan.current = "";
   }, [drawnPlan, plan?.selected]);
 
-  // The plan's straight dashed connectors (never Google's line on this map).
+  // The plan's road lines this map may show (openrouteservice's) and the straight dashed connectors for the other legs
+  // (never Google's line on this map: planFor).
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
+    (m.getSource("plan-lines") as maplibregl.GeoJSONSource | undefined)?.setData({
+      type: "FeatureCollection",
+      features: drawnPlan.lines.map((l) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: l.map((q) => [q.lng, q.lat]) } })),
+    });
     (m.getSource("plan-links") as maplibregl.GeoJSONSource | undefined)?.setData({
       type: "FeatureCollection",
       features: drawnPlan.links.map(([a, b]) => ({ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: [[a.lng, a.lat], [b.lng, b.lat]] } })),

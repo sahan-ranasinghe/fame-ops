@@ -68,3 +68,10 @@ Deno.test("the cache key rounds to 3 decimals; the limiter allows n a minute", (
   const allow = minuteLimiter(2);
   assertEquals([allow(), allow(), allow()], [true, true, false]);
 });
+
+Deno.test("Part 6: openrouteservice's answer keeps its road line (encoded polyline) with the leg; none, no line", () => {
+  const json = { routes: [{ summary: { distance: 12345, duration: 1500 }, geometry: "_p~iF~ps|U_ulLnnqC" }] };
+  const leg = orsResponse(json);
+  assertEquals([leg.km, leg.minutes, leg.line], [12.3, 25, "_p~iF~ps|U_ulLnnqC"]);
+  assertEquals("line" in orsResponse({ routes: [{ summary: { distance: 1000, duration: 60 } }] }), false);
+});

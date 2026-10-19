@@ -83,3 +83,35 @@ describe("fitting and chips", () => {
     expect(pinChip({ id: "x", n: 3, lat: 0, lng: 0, label: "Depot" })).toBe("Depot");
   });
 });
+
+describe("Part 6: leg by leg (Sahan, 19 October: the free map like the phones)", () => {
+  const a = { lat: 6.9, lng: 79.86 }, b = { lat: 7.2, lng: 80.0 }, c = { lat: 7.48, lng: 80.36 };
+  const legPlan: MapPlan = {
+    pins: [pin("start", "S", a.lat, a.lng), pin("a", 1, b.lat, b.lng), pin("b", 2, c.lat, c.lng)],
+    legs: [
+      { from: "start", to: "a", points: [a, { lat: 7.0, lng: 79.9 }, b], google: false },
+      { from: "a", to: "b", points: [b, c], google: true },
+      { from: "b", to: "base", points: [c, a], google: true },
+    ],
+    selected: null,
+  };
+  it("the free map: openrouteservice's line drawn; a Google leg becomes a dashed straight connector; never Google's line", () => {
+    const d = planFor(legPlan, false);
+    expect(d.lines).toEqual([[a, { lat: 7.0, lng: 79.9 }, b]]);
+    expect(d.links.map(([x, y]) => `${x.id}>${y.id}`)).toEqual(["a>b"]);
+    expect(d.lines.flat().some((q) => q.lat === c.lat && q.lng === c.lng)).toBe(false);
+    expect(d.note).toBe("Straight lines, not the road");
+  });
+  it("Google's map: every leg's line, no connector", () => {
+    const d = planFor(legPlan, true);
+    expect(d.lines).toHaveLength(3);
+    expect(d.links).toEqual([]);
+    expect(d.note).toBeNull();
+  });
+  it("a leg with no line at all (the estimate): a connector on either map", () => {
+    const none: MapPlan = { ...legPlan, legs: legPlan.legs!.map((l) => ({ ...l, points: [] })) };
+    expect(planFor(none, true).links.map(([x, y]) => `${x.id}>${y.id}`)).toEqual(["start>a", "a>b"]);
+    expect(planFor(none, false).links.map(([x, y]) => `${x.id}>${y.id}`)).toEqual(["start>a", "a>b"]);
+  });
+});
+

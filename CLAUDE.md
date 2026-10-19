@@ -128,7 +128,9 @@
   (`components/TaskMap.tsx`) with Google's map (`GoogleTaskMap.tsx`) and the free map (`OpenTaskMap.tsx`, MapLibre +
   OpenFreeMap), chosen by `lib/mapEngine.ts`: Google unless the setting `map_package` is open (the phones read it every
   minute) or Google's map did not load on this phone within `phone_map_wait_s` while online (then the free map,
-  `report_map_state`, the issue `map_fallback`); both failing = "Map not available" (`MapUnavailable.tsx`); every round
+  `report_map_state`, the issue `map_fallback` after a second failed try or two phones within an hour); a plan drawn leg by
+  leg (Google's line on Google's map only, openrouteservice's on either, else dashed straight); both failing = "Map not
+  available" (`MapUnavailable.tsx`); the website's map the same way (the free map at the cap or a failed load); every round
   tests both engines (`npm run test:maps`). Four channels of its own, made only on a 1.3.0 build: `task-ring` "New tasks" (a
   30 s ring, cleared when the app starts or comes to the front, or the task opens: `stopRinging`; a push Android showed
   itself is known by its title), `task-updates` (changed, cancelled, removed, reopened), `task-reminders` (leave in 30,
@@ -339,7 +341,9 @@
   package the web shows Google's map (`src/map/google`: `googleMapOnce` counts the tab's one map
   load through `register_map_load`, which hands out the browser key, then loads the Maps
   JavaScript API; one `google.maps.Map` per tab moved between pages; HTML overlays, no map id;
-  `GoogleMap`, `GooglePin`); a refused load shows `NoMap` (the lists, never OpenFreeMap). The
+  `GoogleMap`, `GooglePin`); a refused load (the cap) or a failed one (`gm_authFailure`, not ready within 15 s) shows the free
+  map since Part 6 (MapLibre, OpenFreeMap; `useGoogleMap` kind free, with the reason; no Google content on it, no Roads
+  call for it: `snapAllowed`). The
   stops' and the start's search box (`LocationSearch google`) adds Google's results (badge
   Google, the credit "Google Maps", one session token per typing session; a pick calls
   `google_place`); a request's From and To never ask Google. Settings → Fleet has the Map package

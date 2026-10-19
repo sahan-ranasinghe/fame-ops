@@ -45,6 +45,7 @@ import type { DriverRoute, LiveDriver } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
 import { joinDots, num, plateOf } from "../lib/format";
 import { MapView } from "../map/MapView";
+import { snapAllowed, useGoogleMap } from "../map/google/useGoogleMap";
 import type { MapMarker, MapRoute, RoutePoint } from "../map/types";
 import { GapsList, useGaps } from "./GapsList";
 import { filterFromWord, LIVE_FILTER_WORDS, withParam } from "./overviewLinks";
@@ -83,7 +84,11 @@ export function Live() {
   const [routeBusy, setRouteBusy] = useState(false);
   const [routeErr, setRouteErr] = useState<string | null>(null);
   // The shown route is snapped to roads by default where the server allows it; "Recorded points" asks for the raw line.
-  const [shownSnap, setShownSnap] = useState(true);
+  // Part 6: only while Google's map is the one drawn (or under the open package): the free map shown instead of Google's
+  // gets the raw line, and no Roads call is made for it.
+  const [shownSnapWanted, setShownSnap] = useState(true);
+  const mapChoice = useGoogleMap();
+  const shownSnap = shownSnapWanted && snapAllowed(mapChoice);
   const shownSnapRef = useRef(shownSnap);
   shownSnapRef.current = shownSnap;
   const [focus, setFocus] = useState<RoutePoint[] | null>(null);
@@ -202,7 +207,7 @@ export function Live() {
   /** "Recorded points" on the shown route: asked again with or without snap to roads, the line drawn kept meanwhile. */
   function setRecorded(raw: boolean) {
     setShownSnap(!raw);
-    if (route) void showRoute(route.username, !raw);
+    if (route) void showRoute(route.username, !raw && snapAllowed(mapChoice));
   }
 
   const counts = useMemo(() => (d ? filterCounts(all) : undefined), [d, all]);

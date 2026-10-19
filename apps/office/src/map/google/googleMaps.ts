@@ -20,9 +20,19 @@ interface MapLoadAnswer {
 }
 
 const READY_CALLBACK = "__fameGoogleMapsReady";
+/** Google's map must be ready this long after its load was counted, or this tab shows the free map (Part 6). */
+export const GOOGLE_LOAD_TIMEOUT_MS = 15_000;
 let scriptLoad: Promise<GoogleMapsApi> | null = null;
 let once: Promise<GoogleMapState> | null = null;
-let authFailed: ((note: string) => void) | null = null;
+/** Google's map failed in this tab (the key refused, billing, the script, the time limit): the free map until a reload. */
+let failedNote: string | null = null;
+const authListeners = new Set<(note: string) => void>();
+
+/** Google's map failed in this tab: kept, and every page showing a map is told (it then shows the free map). */
+function markFailed(note: string) {
+  failedNote = note;
+  for (const fn of authListeners) fn(note);
+}
 
 /** The Maps JavaScript API with the key, once per tab (weekly channel, the async loader). */
 function loadScript(key: string): Promise<GoogleMapsApi> {
@@ -32,8 +42,8 @@ function loadScript(key: string): Promise<GoogleMapsApi> {
     w[READY_CALLBACK] = () => {
       google.maps.importLibrary("maps").then(() => resolve(google.maps), reject);
     };
-    // Google calls this when it refuses the key (a referrer not on the key's list, the API not enabled).
-    w.gm_authFailure = () => authFailed?.("Google refused the map key for this address");
+    // Google calls this when it refuses the key (a referrer not on the key's list, the API not enabled, billing).
+    w.gm_authFailure = () => markFailed("Google refused the map key");
     const s = document.createElement("script");
     s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&loading=async&callback=${READY_CALLBACK}`;
     s.async = true;
@@ -46,16 +56,33 @@ function loadScript(key: string): Promise<GoogleMapsApi> {
   return scriptLoad;
 }
 
+/** The script, or a failure after the time limit (a slow or blocked network: the free map instead). */
+function withinLimit<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Google's map did not load in time")), ms);
+    p.then((v) => { clearTimeout(timer); resolve(v); }, (e: unknown) => { clearTimeout(timer); reject(e); });
+  });
+}
+
 /**
- * The tab's one Google map load: counted by the server first; refused (the open package, a cap, the
- * counter) = no map, with the server's note. A failure to load is not kept, so a later page tries again.
+ * The tab's one Google map load: counted by the server first; refused (a cap, the counter) = the free map with the server's
+ * note (Part 6: never no map). The script not ready within GOOGLE_LOAD_TIMEOUT_MS, or Google refusing the key
+ * (gm_authFailure), is kept for the tab: the free map until a reload, with no second load counted. A failed call to our
+ * own server (offline) is not kept, so a later page asks again.
  */
 export function googleMapOnce(transport: Transport): Promise<GoogleMapState> {
+  if (failedNote) return Promise.resolve({ state: "failed", note: failedNote });
   if (once) return once;
   once = transport.call<MapLoadAnswer>("register_map_load", {})
     .then(async (a): Promise<GoogleMapState> => {
       if (!a.allowed || !a.key) return { state: "refused", note: a.note ?? "Google's map is not available" };
-      return { state: "ready", maps: await loadScript(a.key) };
+      try {
+        return { state: "ready", maps: await withinLimit(loadScript(a.key), GOOGLE_LOAD_TIMEOUT_MS) };
+      } catch (e) {
+        const note = e instanceof Error ? e.message : "Google's map could not load";
+        markFailed(note);
+        return { state: "failed", note };
+      }
     })
     .catch((e: unknown): GoogleMapState => {
       once = null;
@@ -65,9 +92,18 @@ export function googleMapOnce(transport: Transport): Promise<GoogleMapState> {
   return once;
 }
 
-/** Tell the page when Google refuses the key after the script loaded. */
-export function onGoogleAuthFailure(fn: ((note: string) => void) | null) {
-  authFailed = fn;
+/** Tell a page when Google's map fails after it was ready (the key refused): it then shows the free map. */
+export function onGoogleMapFailure(fn: (note: string) => void): () => void {
+  authListeners.add(fn);
+  return () => authListeners.delete(fn);
+}
+
+/** Tests only: forget this tab's Google map. */
+export function resetGoogleMapForTests() {
+  scriptLoad = null;
+  once = null;
+  failedNote = null;
+  authListeners.clear();
 }
 
 // ---- The tab's one map ------------------------------------------------------------------------------

@@ -8,16 +8,19 @@ Checked against Google's pages on 15 October 2026 (links below; most show "Last 
 
 | Feature | Google (map package `google`) | Open package (the fallback, and the default with no keys) |
 |---|---|---|
-| Office map (web) | Maps JavaScript API, one map per browser tab | OpenFreeMap (MapLibre) |
+| Office map (web) | Maps JavaScript API, one map per browser tab | OpenFreeMap (MapLibre): with the setting open, and (Part 6) at the map-load cap or when Google's map fails (`gm_authFailure`, or not ready within 15 s) |
 | Place search for stops and the start | Places Autocomplete (New) + Place Details (New), Essentials fields | openrouteservice (Pelias) autocomplete |
 | Road times (plans, live ETA) | Routes API `computeRoutes`, TRAFFIC_AWARE | openrouteservice directions, else the estimate |
 | Snap to roads (driver page) | Roads API `snapToRoads` | OSRM if `OSRM_URL` is set, else the raw GPS line |
 | Driver app task map | Maps SDK for Android (`react-native-maps`, a build with the key; free, uncounted) | OpenFreeMap (MapLibre), in the same build: the map package setting switches the phones, and a phone whose Google map fails switches by itself (section 8) |
 
-Never mixed on one map: under `google` the web shows Google's map only. If a Google map load is
-refused (a cap, the counter), the page shows its lists without a map, never OpenFreeMap. On any
-map that is not Google's (the Teams artifact's drawn map, the driver app's OpenFreeMap map), a
-stop that is a Google place is listed, not drawn.
+Never mixed on one map: Google's content goes on Google's map only. Since Part 6 (Sahan, 19 October) the website works like
+the phones: Google's map by default; refused (the map-load cap, the counter) or failed (Google refuses the key:
+`gm_authFailure`; the script not ready within 15 s) the page shows the free map (MapLibre with OpenFreeMap) with one line
+saying why, the lists as they were; the setting `open` always the free map. On any map that is not Google's (the free
+map, the Teams artifact's drawn map, the driver app's free map) a stop that is a Google place is listed, not drawn, and
+neither Google's road line nor snapped roads are drawn: openrouteservice's road line where the plan has one (ours), else
+dashed straight lines between the stops, and for a recorded route the raw GPS line.
 
 **Google place search is asked for, never the default.** `search_places` answers Google's places
 only when the call passes `google: true` (with an optional `session` token); without it the map layer
@@ -233,12 +236,12 @@ plan. The only Google products on the phone are the Maps SDK for Android (free) 
 
 | Google product (SKU) | Called from | Key | Cap a day / a month | At the cap or on a counter error | The test that proves it |
 |---|---|---|---|---|---|
-| Maps JavaScript API (Dynamic Maps) | the office website (web build only): each map load counted by `register_map_load` before the script loads; one map per tab | `GOOGLE_MAPS_JS_KEY` (browser, websites only) | `map_loads` 430 / 9,500 | no map: "No map: Google map limit reached for today: back tomorrow. The lists show everything." (`NoMap`; never the free map: the pages may carry Google content) | Vitest `MapView.test.tsx` "a refused map load shows the lists without a map"; pgTAP `google_package`; connector suite |
+| Maps JavaScript API (Dynamic Maps) | the office website (web build only): each map load counted by `register_map_load` before the script loads; one map per tab | `GOOGLE_MAPS_JS_KEY` (browser, websites only) | `map_loads` 430 / 9,500 | the free map (OpenFreeMap), with "The free map: Google map limit reached for today: back tomorrow."; Google's content never on it; the same when Google refuses the key or the script is not ready in 15 s (Part 6) | Vitest `MapView.test.tsx` (the cap, the key refused, the time limit, the setting open); pgTAP `google_package`; connector suite |
 | Places API (New) Autocomplete (Autocomplete Requests) | `search_places` with `google: true`: the office's stops and start, Claude, driver-api `/places/search` (Start a trip, Add a stop) | `GOOGLE_SERVER_KEY` | `places_autocomplete` 430 / 9,500 | openrouteservice's search answers instead, with the note | Deno `google_test.ts` "autocomplete at its cap: no call reaches Google, and openrouteservice's search answers instead" |
 | Places API (New) Place Details (Place Details Essentials: location, formattedAddress, shortFormattedAddress, addressComponents) | `google_place`; a stop or start with `google_place_id` (create_task, plan_task, update_task_stops, create_request, decide_request, book_vehicle, update_request); driver-api `/trips` and its stops; the nightly `google_content` refresh | `GOOGLE_SERVER_KEY` | `places_details` 430 / 9,500 | refused in words ("Pick one of our places, paste a pin or type the address"; a driver's trip 409); the nightly refresh skips the place | Deno `google_test.ts` "Place Details: 400 calls a day are made; call 401 is refused", "a counter error refuses the call" |
 | Places API (New) Text Search, Nearby Search | not used | | | | grep: no `searchText`, `searchNearby` |
-| Routes API `computeRoutes`, TRAFFIC_AWARE (Compute Routes Pro) | plans (create_task, plan_task, update_task_stops, update_task and redecide_request when the route changes, create_request with stops, decide_request, book_vehicle, update_request); a running task's ETA, asked only by `task_detail`, at most every 15 min a task | `GOOGLE_SERVER_KEY` | `routes` 215 / 4,750 | openrouteservice (when `ROUTING_PROVIDER` is ors), else the estimate; the plan says why (`google_note`) | Deno `google_test.ts` "Routes at its cap: no call reaches Google; the plan's legs come from the open chain"; `eta_test.ts` |
-| Roads API `snapToRoads` (Roads) | `driver_route` with snap, from the website only (the driver page, Live, task detail) | `GOOGLE_SERVER_KEY` | `roads` 215 / 4,750 (0 = off) | the raw GPS line, tried again after 2 min | Deno `google_test.ts` "a refused Roads call is never sent"; `matching_test.ts` |
+| Routes API `computeRoutes`, TRAFFIC_AWARE (Compute Routes Pro) | plans (create_task, plan_task, update_task_stops, update_task and redecide_request when the route changes, create_request with stops, decide_request, book_vehicle, update_request); a running task's ETA, asked only by `task_detail`, at most every 15 min a task. Only for road times: never called for a line (the line comes with the times; a map that may not show it draws openrouteservice's line or dashed straight lines) | `GOOGLE_SERVER_KEY` | `routes` 215 / 4,750 | openrouteservice (when `ROUTING_PROVIDER` is ors), else the estimate; the plan says why (`google_note`) | Deno `google_test.ts` "Routes at its cap: no call reaches Google; the plan's legs come from the open chain"; `eta_test.ts` |
+| Roads API `snapToRoads` (Roads) | `driver_route` with snap, from the website only (the driver page, Live, task detail), and since Part 6 only while Google's map is the one drawn (`snapAllowed`): never for the free map shown instead of Google's | `GOOGLE_SERVER_KEY` | `roads` 215 / 4,750 (0 = off) | the raw GPS line, tried again after 2 min | Deno `google_test.ts` "a refused Roads call is never sent"; `matching_test.ts`; Vitest `DriverPage.test.tsx` "Google's map refused (the cap): every route request is unsnapped" |
 | Distance Matrix, Directions API (legacy), Geocoding API, Static Maps, Street View, Navigation SDK | not used | | | | grep: none; pgTAP: `google_take('street_view')` is an unknown feature |
 | Maps SDK for Android (Mobile Native Dynamic Maps: no charge, unlimited; no map id) | the driver app's task map, the Google engine | `GOOGLE_ANDROID_MAPS_KEY` (in the APK; Android apps + SHA-1; Maps SDK for Android only) | none: free | the phone shows the free map by itself (section 8) | `npm run test:maps` |
 | Google Maps URLs (Navigate, All stops) | the driver app's buttons, the office's links | none | free | | `npm run test:nav` |
@@ -246,13 +249,11 @@ plan. The only Google products on the phone are the Maps SDK for Android (free) 
 Not Maps Platform, listed for completeness: Gemini (`read-odometer`, `GEMINI_API_KEY`, 60 reads a driver a day), Firebase
 Cloud Messaging (push, free) and Google Fonts (the website's CSS, no key).
 
-Every fallback works on either phone map: the server's fallbacks (openrouteservice, the estimate) answer the same whatever
-map a phone shows; a plan made without Google has no Google road line, so both engines draw the dashed straight lines; a
-Google place found before the cap stays on Google's map only and is listed on the free map.
-
-One thing to know: the website's pages ask for snapped lines (`snap`) whatever map they show, so after the map-load cap
-the driver page, Live and task detail can still spend Roads calls (within the Roads cap) on lines that `NoMap` does not
-draw. Not changed (Sahan asked to leave the website's fallback as it is); it can be tied to the map load later.
+Every fallback works on either map, on the phones and the website: the server's fallbacks (openrouteservice, the estimate)
+answer the same whatever map shows; a plan leg's line is drawn where that map may show it (Google's on Google's map only,
+openrouteservice's on any: since Part 6 a plan keeps openrouteservice's line with its leg, also from the leg cache), and a
+leg with no line it may show gets a dashed straight line; a Google place found before the cap stays on Google's map only and
+is listed on the free map. No Roads call is made for a line the free map draws or no map draws (Part 6).
 
 ## 8. The phones' two maps (Part 6, 1.3.0)
 
@@ -264,10 +265,20 @@ draw. Not changed (Sahan asked to leave the website's fallback as it is); it can
 - **The automatic switch.** Android's SDK gives no "key refused" signal. A refused key, a billing or authorisation problem,
   Google Play services missing or Google down all leave a grey map that never finishes loading, so the phone waits for
   Google's "map loaded" signal (`onMapLoaded`, every tile drawn): none within `phone_map_wait_s` (30 s) while the phone
-  is online, or the map failing to draw, and the phone shows the free map, tells the server, and the office gets the
-  issue "Google map failed on <driver>'s phone; using the free map". The phone tries Google again the next time the app
-  opens (started afresh, or brought to the front 30 minutes or more later); the issue resolves when Google's map loads
-  again. Offline, nothing is blamed on Google: the card below shows until the network is back.
+  is online and the map on screen, or the map failing to draw, and the phone shows the free map at once and tells the
+  server. The phone tries Google again the next time the app opens (started afresh, or brought to the front 30 minutes or
+  more later); a good load is reported. Offline, nothing is blamed on Google: the card below shows until the network is back.
+- **The office's issue** "Google map failed on <driver>'s phone; using the free map" opens only when it is not one
+  weak-signal trip (Sahan, 19 October): the same phone failed again on its next try, or two phones failed within an hour
+  (a key or billing problem shows on every phone). It resolves when that phone's Google map loads again.
+- **Is 30 s right on slow mobile data?** For 3G and 4G, yes, with room. `onMapLoaded` waits until every tile in view is
+  drawn: a task's view is about 10 to 20 vector tiles, a few hundred KB the first time (less from the SDK's cache), plus
+  1–3 s for the SDK to start. At 1 Mbit/s (ordinary 3G) that is about 2–5 s; at a weak 4G or a busy 3G cell (about
+  250 kbit/s) about 6–20 s. It is not enough on EDGE/2G only (50–100 kbit/s: 25–100 s), which still counts as online:
+  there the phone switches to the free map for that trip, whose tiles are no smaller, so the driver may see the card. With
+  the two-try rule that no longer reaches the office. These are estimates, not measurements from our phones: P11 notes how
+  long Google's map takes on each phone, and `phone_map_wait_s` (1 to 120) can be raised without a build if the free map
+  shows too often.
 - **Both fail** (OpenFreeMap down, or no network): "Map not available" with the stops and the straight-line distance;
   every button of the task still works, and Navigate opens the Google Maps app.
 - To test the switch on a phone: `update_settings phone_map_wait_s 1` (Google cannot finish in 1 s), close the app fully

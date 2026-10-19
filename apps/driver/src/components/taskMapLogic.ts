@@ -1,10 +1,10 @@
 // The task map's rules (Phase 7, §20 and §24). Pure: no React, so scripts/test-rules.ts runs it.
 //   - The stops on the map: numbered by their place in the order (the start stop marked), each with its arrive-by time,
 //     else its planned arrival (HH:MM, Colombo); reached, done and skipped stops muted, the current one standing out.
-//   - The planned road line: each plan leg's Google polyline (legs[].line), on Google's map only (rule 10,
-//     lib/mapRule.ts). Where there is none to draw (the free map, or a plan without Google's line) dashed straight lines
-//     join the start and the stops the map draws, in order (Part 6: the same map on both engines). The free map never
-//     gets a Google stop.
+//   - The planned road line, leg by leg (Part 6): a leg's own line (legs[].line) where this map may show it: Google's
+//     (source google) on Google's map only (rule 10, lib/mapRule.ts), openrouteservice's (source ors) on either map;
+//     otherwise a dashed straight line between the leg's two ends. With no plan, dashed straight lines join the start
+//     and the stops in order. The free map never gets a Google stop.
 //   - "Distance left by road": the current leg's road km in proportion to the straight distance still to go, plus the
 //     road km of the later legs to stops still to do (never the leg back to base).
 //   - The compass shows while the map is turned or tilted.
@@ -25,8 +25,10 @@ export interface PlanLeg {
   /** A stop's seq; -1 = back to base. */
   to_seq: number;
   km: number | null;
-  /** Google's encoded polyline (only when the plan came from Google's Routes call; removed after 30 days). */
+  /** The leg's road line (encoded polyline): Google's (removed after 30 days) or openrouteservice's, by `source`. */
   line: string | null;
+  /** google | ors | estimate (an older plan may not say: its line, if any, was Google's). */
+  source: string | null;
 }
 
 export function planLegs(plan: unknown): PlanLeg[] {
@@ -34,13 +36,14 @@ export function planLegs(plan: unknown): PlanLeg[] {
   if (!Array.isArray(legs)) return [];
   return legs.flatMap((leg): PlanLeg[] => {
     if (leg === null || typeof leg !== 'object') return [];
-    const { from_seq, to_seq, km, line } = leg as Record<string, unknown>;
+    const { from_seq, to_seq, km, line, source } = leg as Record<string, unknown>;
     if (typeof from_seq !== 'number' || typeof to_seq !== 'number') return [];
     return [{
       from_seq,
       to_seq,
       km: typeof km === 'number' && Number.isFinite(km) && km >= 0 ? km : null,
       line: typeof line === 'string' && line !== '' ? line : null,
+      source: typeof source === 'string' ? source : null,
     }];
   });
 }
@@ -65,6 +68,8 @@ export type StopState = 'current' | 'todo' | 'done';
 
 export interface MapStop {
   id: string;
+  /** The stop's seq on the task (the plan's legs name their ends by it). */
+  seq: number;
   /** The stop's number by its place in the order ("Stop 2"). */
   n: number;
   lat: number;
@@ -84,7 +89,7 @@ export function mapStops(task: StopsOf, googleMap: boolean): MapStop[] {
     if (!point) return [];
     const at = s.arrive_by ?? s.planned_arrive_at;
     const state: StopState = current?.id === s.id ? 'current' : s.status === 'pending' ? 'todo' : 'done';
-    return [{ id: s.id, n: stopNumber(task, s.id), lat: point[1], lng: point[0], time: at ? colomboTime(at) : null, isStart: s.is_start === true, state }];
+    return [{ id: s.id, seq: s.seq, n: stopNumber(task, s.id), lat: point[1], lng: point[0], time: at ? colomboTime(at) : null, isStart: s.is_start === true, state }];
   });
 }
 
@@ -111,26 +116,31 @@ export interface RouteLeg {
 
 type PlanOf = Pick<TaskWithStops, 'task_stops' | 'plan_json'>;
 
+/** A leg's line may be drawn on this map: Google's on Google's map only (rule 10); openrouteservice's on any. */
+export function lineDrawable(leg: Pick<PlanLeg, 'line' | 'source'>, googleMap: boolean): boolean {
+  if (!leg.line) return false;
+  return googleMap || (leg.source !== null && leg.source !== 'google');
+}
+
 /**
- * The planned road line, leg by leg, decoded from the plan's Google polylines. Google's content: none at all unless
- * the map is Google's (rule 10). A leg to a stop no longer on the task is left out.
+ * The planned road lines this map may draw, leg by leg: Google's on Google's map only, openrouteservice's on any map. A
+ * leg to a stop no longer on the task is left out.
  */
 export function routeLines(task: PlanOf, googleMap: boolean): RouteLeg[] {
-  if (!googleMap) return [];
   const bySeq = new Map(ordered(task).map((s) => [s.seq, s]));
   return planLegs(task.plan_json).flatMap((leg, i): RouteLeg[] => {
-    if (!leg.line) return [];
+    if (!lineDrawable(leg, googleMap)) return [];
     const to = leg.to_seq === -1 ? null : bySeq.get(leg.to_seq);
     if (leg.to_seq !== -1 && !to) return [];
-    const points = decodePolyline(leg.line);
+    const points = decodePolyline(leg.line!);
     if (points.length < 2) return [];
     return [{ key: `${i}:${leg.from_seq}-${leg.to_seq}`, done: to ? to.status !== 'pending' : false, points }];
   });
 }
 
 /**
- * Dashed straight lines from the start through the stops the map draws, in order: what both maps show when there is no
- * road line to draw. A leg is muted once its stop is reached. Ours only (our pins, never Google's line).
+ * Dashed straight lines from the start through the stops the map draws, in order: what both maps show when the task has
+ * no plan. A leg is muted once its stop is reached. Ours only (our pins, never Google's line).
  */
 export function straightLines(stops: readonly MapStop[], start: LatLng | null): RouteLeg[] {
   const points: { id: string; p: LatLng; done: boolean }[] = [
@@ -144,15 +154,40 @@ export function straightLines(stops: readonly MapStop[], start: LatLng | null): 
   return legs;
 }
 
-/** The lines a map draws: Google's road line on Google's map when the plan has it, else the dashed straight lines. */
+/**
+ * The lines a map draws, leg by leg: the leg's road line where this map may show it, else a dashed straight line between
+ * the leg's two ends (the start or a stop this map draws; never a Google pin on the free map; never the leg back to base).
+ * With no plan legs, dashed straight lines join the start and the stops in order.
+ */
 export function mapLines(task: PlanOf, googleMap: boolean, stops: readonly MapStop[], start: LatLng | null): RouteLeg[] {
+  const legs = planLegs(task.plan_json);
+  if (!legs.length) return straightLines(stops, start);
   const road = routeLines(task, googleMap);
-  return road.length > 0 ? road : straightLines(stops, start);
+  const roadKeys = new Set(road.map((l) => l.key));
+  const drawnStop = new Map(stops.map((s) => [s.seq, s]));
+  const out: RouteLeg[] = [...road];
+  legs.forEach((leg, i) => {
+    const key = `${i}:${leg.from_seq}-${leg.to_seq}`;
+    if (roadKeys.has(key) || leg.to_seq === -1) return;
+    const to = drawnStop.get(leg.to_seq);
+    const from = leg.from_seq === 0 ? start : drawnStop.get(leg.from_seq) ?? null;
+    if (!to || !from) return;
+    out.push({ key: `straight:${key}`, done: to.state === 'done', points: [{ lat: from.lat, lng: from.lng }, { lat: to.lat, lng: to.lng }], dashed: true });
+  });
+  return out;
 }
 
-/** The task has a planned road line stored (any leg with a usable polyline). */
+/** The task has a planned road line stored (any leg with a usable polyline, whoever drew it). */
 export function hasRouteLine(task: Pick<TaskWithStops, 'plan_json'>): boolean {
   return planLegs(task.plan_json).some((leg) => leg.line !== null && decodePolyline(leg.line).length >= 2);
+}
+
+/** The line under the map: nothing (every leg has its road line on this map), no road line at all, or Google's only. */
+export function lineNote(task: Pick<TaskWithStops, 'plan_json'>, googleMap: boolean): 'none' | 'googleOnly' | null {
+  const legs = planLegs(task.plan_json).filter((l) => l.to_seq !== -1);
+  if (!legs.some((l) => l.line)) return 'none';
+  if (legs.every((l) => lineDrawable(l, googleMap))) return null;
+  return legs.some((l) => l.line && !lineDrawable(l, googleMap)) ? 'googleOnly' : 'none';
 }
 
 type RoadOf = Pick<TaskWithStops, 'task_stops' | 'plan_json' | 'start_lat' | 'start_lng'>;
