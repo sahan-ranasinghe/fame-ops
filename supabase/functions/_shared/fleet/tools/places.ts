@@ -373,6 +373,9 @@ const near = (a: { lat?: number; lng?: number }, b: { lat?: number; lng?: number
   a.lat !== undefined && b.lat !== undefined && a.lng !== undefined && b.lng !== undefined &&
   Math.hypot((a.lat - b.lat) * 111320, (a.lng - b.lng) * 111320 * Math.cos((a.lat * Math.PI) / 180)) <= metres;
 
+/** The open package's map search answers when Google was not asked, or when it was and refused or failed (a note). */
+export const openSearchAnswers = (googleAsked: boolean, googleNote: string | undefined): boolean => !googleAsked || !!googleNote;
+
 export const searchPlaces = tool({
   name: "search_places",
   title: "Find a place",
@@ -441,7 +444,7 @@ export const searchPlaces = tool({
       }));
     }
     // The open package's map search: always without google, and when Google refused or failed.
-    if (map && typed.length >= PUBLIC_MIN_CHARS && (!googleAsked || mapNote)) {
+    if (map && typed.length >= PUBLIC_MIN_CHARS && openSearchAnswers(googleAsked, mapNote)) {
       const base = await basePoint(db, settings);
       const found = await orsAutocomplete(typed, {
         db,

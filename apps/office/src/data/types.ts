@@ -1225,6 +1225,10 @@ export interface FleetSettings {
   map_package?: "google" | "open";
   /** Google calls a day and a month per feature; the month at most 95 % of the free usage. */
   google_caps?: Record<GoogleFeature, { day: number; month: number }>;
+  /** Part 6: seconds a phone waits for Google's map (while online) before it shows the free map. */
+  phone_map_wait_s?: number;
+  /** Part 6: the public privacy page's contact e-mail; absent = the page shows the office phone. */
+  privacy_email?: string | null;
 }
 
 export type GoogleFeature = "map_loads" | "places_autocomplete" | "places_details" | "routes" | "roads";

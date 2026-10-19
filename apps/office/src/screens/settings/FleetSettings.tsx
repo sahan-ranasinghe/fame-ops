@@ -15,7 +15,7 @@ import { phoneDisplay } from "../../ui/ContactButtons";
 import { GenericTable } from "../../ui/GenericTable";
 import { useToast } from "../../ui/Toast";
 import { PERSONAL_TRIPS_OPTIONS, personalTripsValue } from "../tripPurposeLogic";
-import { officePhoneValue, samePhone } from "./profileLogic";
+import { officePhoneValue, privacyEmailValue, samePhone } from "./profileLogic";
 import { duration } from "@fleet/durations";
 
 /** The time at a stop by its type (Phase 7, §17); "default" is any other. */
@@ -53,6 +53,8 @@ export function FleetSettings() {
   // Hotfix 2 (F): the office's number as typed (null = as saved, shown 011 234 5678) and what is wrong with it.
   const [officePhone, setOfficePhone] = useState<string | null>(null);
   const [phoneMsg, setPhoneMsg] = useState<string | null>(null);
+  const [privacyEmail, setPrivacyEmail] = useState<string | null>(null);
+  const [privacyMsg, setPrivacyMsg] = useState<string | null>(null);
 
   async function load(saved?: keyof Values) {
     try {
@@ -165,6 +167,40 @@ export function FleetSettings() {
               {phoneMsg ? <span className="hint" style={{ color: "var(--bad)" }}>{phoneMsg}</span> : <span className="hint">{data.settings.office_phone ? `Saved: ${phoneDisplay(data.settings.office_phone)}` : "None saved: Call office is not shown."}</span>}
             </div>
             <div><button className="btn dark" type="submit" disabled={busy !== null || officePhone === null || samePhone(officePhone, data.settings.office_phone)}>Save</button></div>
+          </div>
+        </form>
+
+        {/* Part 6 (store readiness): the public privacy page's contact. */}
+        <form className="card card-b form" data-testid="privacy-email-settings" onSubmit={(ev) => {
+          ev.preventDefault();
+          const v = privacyEmailValue(privacyEmail ?? data.settings.privacy_email ?? "");
+          if ("error" in v) {
+            setPrivacyMsg(v.error);
+            return;
+          }
+          setPrivacyMsg(null);
+          void save("privacy_email", v.value).then((ok) => { if (ok) setPrivacyEmail(null); });
+        }}>
+          <h2>Privacy contact e-mail</h2>
+          <div className="grid2" style={{ alignItems: "end" }}>
+            <div className="field">
+              <label htmlFor="fs-privacy-email">Privacy contact e-mail</label>
+              <input id="fs-privacy-email" type="email" maxLength={254} inputMode="email" autoComplete="off" placeholder="privacy@example.com"
+                value={privacyEmail ?? data.settings.privacy_email ?? ""}
+                onChange={(e) => { setPrivacyEmail(e.target.value); setPrivacyMsg(null); }} />
+              <span className="hint">Shown on the public privacy page. Use Fame's shared address before the store submission.</span>
+              {privacyMsg
+                ? <span className="hint" style={{ color: "var(--bad)" }}>{privacyMsg}</span>
+                : <span className="hint" data-testid="privacy-email-saved">{data.settings.privacy_email ? `Saved: ${data.settings.privacy_email}` : "None saved: the page shows the office phone."}</span>}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn dark" type="submit"
+                disabled={busy !== null || privacyEmail === null || privacyEmail.trim().toLowerCase() === (data.settings.privacy_email ?? "")}>Save</button>
+              {data.settings.privacy_email && (
+                <button className="btn" type="button" disabled={busy !== null}
+                  onClick={() => { setPrivacyMsg(null); void save("privacy_email", null).then((ok) => { if (ok) setPrivacyEmail(null); }); }}>Remove</button>
+              )}
+            </div>
           </div>
         </form>
 
@@ -392,6 +428,9 @@ export function FleetSettings() {
                 <option value="google">Google, where its keys are set</option>
                 <option value="open">Open: OpenFreeMap, openrouteservice, the estimate</option>
               </select>
+              <span className="hint">
+                The drivers' phones follow it within a minute. A phone whose Google map does not load shows the free map by itself, and an issue says so.
+              </span>
             </div>
             <div className="tbl-wrap">
               <table data-testid="google-usage">

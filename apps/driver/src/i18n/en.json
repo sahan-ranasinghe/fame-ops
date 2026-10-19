@@ -170,8 +170,9 @@
     "allStopsLeftTitle": "Google Maps takes 10 stops at a time",
     "allStopsLeftBody": "The first 10 stops are in; {n} more come after them. Open All stops again when you reach stop 10.",
     "distanceLeftRoad": "Distance left by road",
-    "noRouteLine": "Stops only: no planned road line for this task",
-    "cantMakeIt": "Can't make it"
+    "noRouteLine": "Dashed lines join the stops: no planned road line for this task",
+    "cantMakeIt": "Can't make it",
+    "lineGoogleOnly": "Dashed lines join the stops: the road line shows on Google's map only"
   },
   "log": {
     "title": "Log mileage",
@@ -531,7 +532,11 @@
     "stretches": "{km} km in {plate}"
   },
   "map": {
-    "northUp": "North up"
+    "northUp": "North up",
+    "followMe": "Follow me",
+    "unavailable": "Map not available",
+    "unavailableBody": "No map can load now: no internet, or the map service is down. The stops are below; Navigate and every button still work.",
+    "tryAgain": "Try again"
   },
   "profilePhoto": {
     "title": "Add your photo",
@@ -648,10 +653,12 @@
     "newTasksDesc": "New, changed and cancelled tasks",
     "asks": "Questions from the office",
     "asksDesc": "Questions the office asks you (free for a trip, a time, where you are)",
-    "ring": "New tasks (ringing)",
+    "ring": "New tasks",
     "ringDesc": "A new task rings for up to 30 seconds, until you open it",
     "updates": "Changed and cancelled tasks",
-    "updatesDesc": "A task changed, cancelled or given to someone else"
+    "updatesDesc": "A task changed, cancelled or given to someone else",
+    "reminders": "Task reminders",
+    "remindersDesc": "Time to leave, a task still to accept, and arrived at a stop"
   },
   "dur": {
     "now": "now",

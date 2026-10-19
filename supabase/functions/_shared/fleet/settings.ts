@@ -66,6 +66,10 @@ export interface Settings {
   map_package: MapPackage;
   /** Google calls a day and a month per feature (Colombo time); the month never above 95 % of Google's free usage. */
   google_caps: GoogleCaps;
+  /** Part 6: how long a phone waits for Google's map to finish loading while online before it shows the free map (seconds). */
+  phone_map_wait_s: number;
+  /** Part 6: the contact e-mail on the public privacy page (/privacy); null = the page shows the office phone instead. */
+  privacy_email: string | null;
 }
 
 export type MapPackage = "google" | "open";
@@ -162,6 +166,8 @@ export const SETTINGS_DEFAULTS: Settings = {
     // Google asks (docs/google-maps-setup.md).
     roads: { ...ROADS_CAPS_PLANNED },
   },
+  phone_map_wait_s: 30,
+  privacy_email: null,
 };
 
 export type SettingKey = keyof Settings;
@@ -211,9 +217,15 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "The map package: google (Google's map, place search, traffic-aware road times and snap to roads, each where its key is set and under its caps) or open (OpenFreeMap, openrouteservice, the estimate); never mixed on one map",
   google_caps:
     "Google calls a day and a month per feature (map_loads, places_autocomplete, places_details, routes, roads; Colombo time): each call is counted before it is made (every autocomplete request, since a session ending in a pick still pays for its first 12) and refused at either cap, and the open package takes over until the next day or the 1st; the month at most 95 % of Google's free usage (9,500 for maps, autocomplete and place details; 4,750 for routes and roads); by default a day is the month ÷ 22 working days (430; 215), weekends the same",
+  phone_map_wait_s:
+    "The driver app's map: how many seconds a phone waits for Google's map to finish loading while it is online (1 to 120, 30 by default; 1 forces the free map for a test); after that the phone shows the free map (OpenFreeMap), the office gets an issue, and the phone tries Google again the next time the app opens",
+  privacy_email:
+    "The contact e-mail on the public privacy page (/privacy), shown as a mailto: link; null removes it and the page shows the office phone instead. Use Fame's shared address before the store submission",
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+/** One address, name@domain.tld, no spaces (what a mailto: link and the stores' listing take). */
+export const isEmail = (s: unknown) => typeof s === "string" && s.length <= 254 && /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[a-z]{2,}$/i.test(s);
 const isUuid = (s: unknown) => typeof s === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
 function number(value: unknown, key: string, min: number, max: number, integer = false): number {
@@ -341,6 +353,14 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
         out[f] = { day: number(c.day, `google_caps.${f}.day`, 0, month, true), month };
       }
       return out;
+    }
+    case "phone_map_wait_s":
+      return number(value, key, 1, 120, true);
+    case "privacy_email": {
+      if (value === null || value === "") return null;
+      const email = typeof value === "string" ? value.trim().toLowerCase() : "";
+      if (!isEmail(email)) throw new ToolError("privacy_email: an e-mail address such as privacy@example.com, or null to remove it.");
+      return email;
     }
     case "fuel_video_keep_months":
       if (value !== 6 && value !== 12) throw new ToolError("fuel_video_keep_months: 6 or 12.");

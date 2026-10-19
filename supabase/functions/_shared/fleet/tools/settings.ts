@@ -58,7 +58,8 @@ export const updateSettings = tool({
     "map pin, or null), avg_speed_kmh, road_factor, accept_within_min, accept_before_leave_min, rush_hour (factor, centre, radius_km, bands), " +
     "self_drive_allowed (true or false: may a vehicle's custodian drive it with no driver), map_package (google or open), " +
     "google_caps ({ feature: { day, month } } for map_loads, places_autocomplete, places_details, routes, roads; the month at " +
-    "most 95 % of Google's free usage).",
+    "most 95 % of Google's free usage), phone_map_wait_s (seconds a phone waits for Google's map before the free map, 1 to 120), " +
+    "privacy_email (the public privacy page's contact e-mail, or null to show the office phone instead).",
   readOnly: false,
   input: z.object({
     key: z.enum(SETTING_KEYS as [SettingKey, ...SettingKey[]]),

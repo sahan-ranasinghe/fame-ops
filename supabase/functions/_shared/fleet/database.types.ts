@@ -247,6 +247,26 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"driver_map_state": {
+                  Row: {
+                    "app_version": string | null,"employee_id": string,"google_failed_at": string | null,"google_ok": boolean,"google_ok_at": string | null,"reason": string | null,"updated_at": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "app_version"?: string | null,"employee_id": string,"google_failed_at"?: string | null,"google_ok": boolean,"google_ok_at"?: string | null,"reason"?: string | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "app_version"?: string | null,"employee_id"?: string,"google_failed_at"?: string | null,"google_ok"?: boolean,"google_ok_at"?: string | null,"reason"?: string | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "driver_map_state_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: true
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"driver_unavailability": {
                   Row: {
                     "channel": string,"created_at": string,"created_by_employee_id": string | null,"created_by_name": string,"employee_id": string,"ends_at": string,"id": string,"note": string | null,"part": string,"reason": string,"removed_at": string | null,"removed_by_name": string | null,"starts_at": string,"updated_at": string,"updated_by_name": string | null
@@ -1698,6 +1718,9 @@ isOneToOne: false
                            },
 "remove_my_unavailability":
 { Args: { "p_id": string }; Returns: string
+                           },
+"report_map_state":
+{ Args: { "p_app_version": string,"p_at": string,"p_google_ok": boolean,"p_reason": string }; Returns: string
                            },
 "report_running_late":
 { Args: { "p_at"?: string,"p_minutes": number,"p_task_id": string }; Returns: string

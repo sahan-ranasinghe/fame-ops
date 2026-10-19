@@ -1,53 +1,104 @@
-// The task map on the running task's screen (Phase 7, §20 and §24), in both builds (the OpenFreeMap one in OpenTaskMap.tsx):
-//   - Google's map (the gmaps build, react-native-maps with PROVIDER_GOOGLE): every stop numbered with its time, the
-//     planned road line decoded from the plan's Google polylines (legs[].line), and the phone.
-//   - The OpenFreeMap map (MapLibre): the stops that are not Google places, and the phone. Never Google's line or a
-//     Google place's pin (rule 10, lib/mapRule.ts).
-// It frames the route (stops, line, the phone) when the screen opens, when the first position comes and when the
-// office changes the stops (the task is fetched again on Realtime), never on each new position. While the map is
-// turned or tilted, the compass button turns it north-up again. The rules are in taskMapLogic.ts.
+// The task map (Phase 7, §20 and §24; Part 6: one map, two engines, every build). Used by the running task's screen and
+// the whole task before accepting (TaskPreview). Both engines draw the same things from the same parts: the stops numbered
+// with their time, the line, where the trip starts, the phone, follow me and the compass. What differs is only Google's
+// content (rule 10, lib/mapRule.ts): Google's road line and a Google place's pin are drawn on Google's map only; on the
+// free map dashed straight lines join the stops it draws, and a line over the map says a Google place opens in Navigate.
+//
+//   - Google's map (GoogleTaskMap.tsx: react-native-maps, the Maps SDK for Android, free, no map id).
+//   - The free map (OpenTaskMap.tsx: MapLibre with OpenFreeMap's tiles, no key).
+//   - Neither: the "Map not available" card (MapUnavailable.tsx) with the stops and the straight-line distance; the
+//     screen's buttons (Start, Complete, odometer, fuel, Report, Navigate) are outside the map and work as before.
+// Which one, and when Google counts as failed: lib/mapEngine.ts. The map frames the route when it opens, when the first
+// position comes and when the office changes the stops, never on each new position unless Follow me is on (a pan or a
+// pinch turns it off). The rules are in taskMapLogic.ts.
 
 import Constants from 'expo-constants';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet } from 'react-native';
-import GoogleMapView, { Marker as GoogleMarker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import * as Network from 'expo-network';
+import { Component, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Txt } from '@/components/ui';
+import { type Engine, engineFor, type MountEvent, mapSession, mapStep, type MountState, startMount, waitFor } from '@/lib/mapEngine';
+import { noteMapOutcome } from '@/lib/mapReport';
 import type { TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
-import { MapCompass } from './MapCompass';
-import { type Fit, type MapParts, MePin, nextTurn, ONE_PLACE_ZOOM, PADDING, SHEET_OVERLAP, SRI_LANKA, StartPin, StopPin, type Turn } from './mapPins';
-import { fitKey, frameOf, mapStops, routeLines, startPoint, type LatLng, type RouteLeg } from './taskMapLogic';
+import { GoogleTaskMap } from './GoogleTaskMap';
+import { FollowButton } from './MapCompass';
+import { MapUnavailable } from './MapUnavailable';
+import { type Fit, mapStyles, type EngineProps } from './mapPins';
+import { OpenTaskMap } from './OpenTaskMap';
+import { currentStop, fitKey, frameOf, mapLines, mapStops, startPoint, type LatLng } from './taskMapLogic';
 
-/** The build carries the Google key (app.config.ts): the task map is Google's (Part 5). */
+/** The build carries the Android Maps key (app.config.ts): Google's map can be used (Part 5). */
 export const GOOGLE_MAP_BUILD = (Constants.expoConfig?.extra as { googleMapsAndroid?: boolean } | undefined)?.googleMapsAndroid === true;
 
-/**
- * The OpenFreeMap map's module, required only by a build without the Google map (Part 6): the Google-map build leaves
- * MapLibre out, so even loading that module there would fail.
- */
-const OpenTaskMap: typeof import('./OpenTaskMap').OpenTaskMap | null = GOOGLE_MAP_BUILD
-  ? null
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  : (require('./OpenTaskMap') as typeof import('./OpenTaskMap')).OpenTaskMap;
+/** The engine for this phone now: the build, the office's map package (read every minute) and Google's failure since the app opened. */
+export function useMapEngine(): Engine {
+  const { settings } = useApp();
+  const failed = useSyncExternalStore(mapSession.subscribe, mapSession.googleFailed);
+  return engineFor(GOOGLE_MAP_BUILD, settings.map_package, failed);
+}
 
 interface Props {
   task: TaskWithStops;
-  /** The phone's position (null until a fresh fix). */
+  /** The phone's position (null until a fresh fix; the preview has none). */
   me: LatLng | null;
-  /** The build's map is Google's (the gmaps build). */
-  googleMap: boolean;
-  /** A line over the bottom of the map (the OpenFreeMap map: the current stop is a Google place, not drawn). */
-  note?: string | null;
+  /** Which Google place the free map's line speaks about: the stop being driven to (the task screen) or any (the preview). */
+  googleNoteFor: 'current' | 'any';
 }
 
-export function TaskMap({ task, me, googleMap, note }: Props) {
-  const stops = useMemo(() => mapStops(task, googleMap), [task, googleMap]);
-  const lines = useMemo(() => routeLines(task, googleMap), [task, googleMap]);
-  const start = useMemo(() => startPoint(task, googleMap), [task, googleMap]);
+export function TaskMap({ task, me, googleNoteFor }: Props) {
+  const { t, settings, dataAvailable } = useApp();
+  const insets = useSafeAreaInsets();
+  const engine = useMapEngine();
+  const google = engine === 'google';
+  const stops = useMemo(() => mapStops(task, google), [task, google]);
+  const start = useMemo(() => startPoint(task, google), [task, google]);
+  const lines = useMemo(() => mapLines(task, google, stops, start), [task, google, stops, start]);
 
-  // The phone counts in the framing from its first position on; later positions don't move the camera.
+  // One mount of the map: loading → loaded, or the card (lib/mapEngine.ts mapStep).
+  const [mount, setMount] = useState<MountState>(() => startMount(engine));
+  const mountRef = useRef(mount);
+  mountRef.current = mount;
+  const dispatch = (e: MountEvent) => {
+    const step = mapStep(mountRef.current, e);
+    mountRef.current = step.state;
+    setMount(step.state);
+    if (step.googleFailed) {
+      mapSession.markGoogleFailed(Date.now());
+      noteMapOutcome({ googleFailed: step.googleFailed });
+    } else if (step.googleLoaded) {
+      noteMapOutcome({ googleLoaded: true });
+    }
+  };
+  const dispatchRef = useRef(dispatch);
+  dispatchRef.current = dispatch;
+
+  // The setting, or Google's failure, changed the engine: mount the other one.
+  useEffect(() => { dispatchRef.current({ type: 'engine', engine }); }, [engine]);
+
+  // The wait: a map that has not said it loaded by then is judged, online or not (asked at that moment).
+  const waitS = waitFor(mount.engine, settings.phone_map_wait_s);
+  useEffect(() => {
+    if (mount.status !== 'loading') return;
+    const timer = setTimeout(() => {
+      void Network.getNetworkStateAsync()
+        .then((s) => s.isInternetReachable ?? s.isConnected ?? false)
+        .catch(() => false)
+        .then((online) => dispatchRef.current({ type: 'timeout', online }));
+    }, waitS * 1000);
+    return () => clearTimeout(timer);
+  }, [mount.status, mount.attempt, mount.engine, waitS]);
+
+  // The card goes by itself when the network comes back.
+  const wasOnline = useRef(dataAvailable);
+  useEffect(() => {
+    if (dataAvailable && !wasOnline.current && mountRef.current.status === 'unavailable') dispatchRef.current({ type: 'retry' });
+    wasOnline.current = dataAvailable;
+  }, [dataAvailable]);
+
+  // The phone counts in the framing from its first position on; later positions don't move the camera (but Follow me).
   const [firstMe, setFirstMe] = useState<LatLng | null>(null);
   const latestMe = useRef<LatLng | null>(null);
   useEffect(() => {
@@ -55,6 +106,7 @@ export function TaskMap({ task, me, googleMap, note }: Props) {
     latestMe.current = me;
     setFirstMe((had) => had ?? me);
   }, [me]);
+  const [follow, setFollow] = useState(false);
 
   const key = fitKey(stops, lines, start, firstMe !== null);
   const fit = useMemo((): Fit => {
@@ -65,94 +117,51 @@ export function TaskMap({ task, me, googleMap, note }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  return googleMap || !OpenTaskMap
-    ? <GoogleTaskMap stops={stops} lines={lines} start={start} me={me} fit={fit} />
-    : <OpenTaskMap stops={stops} start={start} me={me} fit={fit} note={note} />;
-}
+  if (mount.status === 'unavailable') {
+    return <MapUnavailable task={task} me={me} onRetry={() => dispatch({ type: 'retry' })} />;
+  }
 
-/**
- * Google's map (the gmaps build): the stops (Google places too), the planned road line from the plan's polylines and
- * the phone. No map id, so Android's map loads stay free.
- */
-function GoogleTaskMap({ stops, lines, start, me, fit }: MapParts & { lines: RouteLeg[] }) {
-  const { t } = useApp();
-  const insets = useSafeAreaInsets();
-  const map = useRef<GoogleMapView>(null);
-  const [ready, setReady] = useState(false);
-  const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
-
-  useEffect(() => {
-    if (!ready) return;
-    const f = fit.frame;
-    if (f.kind === 'box') map.current?.fitToCoordinates([at(f.sw), at(f.ne)], { edgePadding: PADDING, animated: true });
-    else if (f.kind === 'point') map.current?.animateCamera({ center: at(f.center), zoom: ONE_PLACE_ZOOM, heading: 0, pitch: 0 }, { duration: 600 });
-  }, [fit, ready]);
-
-  const readTurn = () => {
-    map.current?.getCamera()
-      .then((c) => setTurn((prev) => nextTurn(prev, c.heading ?? 0, c.pitch ?? 0)))
-      .catch(() => undefined);
+  const hiddenGoogle = mount.engine === 'open' && (googleNoteFor === 'current'
+    ? !!currentStop(task)?.google_place_id
+    : task.task_stops.some((s) => s.status !== 'removed' && !!s.google_place_id));
+  const parts: EngineProps = {
+    stops,
+    start,
+    me,
+    fit,
+    lines,
+    follow,
+    onUserMove: () => setFollow(false),
+    onLoaded: () => dispatchRef.current({ type: 'loaded' }),
+    onFailed: () => dispatchRef.current({ type: 'error' }),
   };
-  const northUp = () => {
-    setTurn({ heading: 0, pitch: 0 });
-    map.current?.animateCamera({ heading: 0, pitch: 0 }, { duration: 400 });
-  };
-
-  // Driven legs first, so the line still to drive lies on top where they meet.
-  const ordered = useMemo(() => [...lines].sort((a, b) => Number(b.done) - Number(a.done)).map((l) => ({ ...l, coords: l.points.map(at) })), [lines]);
-
   return (
     <>
-      <GoogleMapView
-        ref={map}
-        provider={PROVIDER_GOOGLE}
-        style={StyleSheet.absoluteFill}
-        initialRegion={{ latitude: SRI_LANKA.lat, longitude: SRI_LANKA.lng, latitudeDelta: 3.5, longitudeDelta: 3.5 }}
-        mapPadding={{ top: 0, right: 0, bottom: SHEET_OVERLAP, left: 0 }}
-        toolbarEnabled={false}
-        showsCompass={false}
-        onMapReady={() => setReady(true)}
-        onRegionChangeComplete={readTurn}
-      >
-        {ordered.map((l) => (
-          <Polyline
-            key={l.key}
-            coordinates={l.coords}
-            strokeColor={l.done ? colors.muted : colors.blue}
-            strokeWidth={l.done ? 4 : 6}
-            lineCap="round"
-            lineJoin="round"
-            zIndex={l.done ? 1 : 2}
-          />
-        ))}
-        {start && (
-          <GoogleMarker coordinate={at(start)} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false} zIndex={3}>
-            <StartPin />
-          </GoogleMarker>
-        )}
-        {stops.map((s) => (
-          // A marker's picture is taken once (tracksViewChanges off): a new state or time makes a new marker.
-          <GoogleMarker
-            key={`${s.id}:${s.state}:${s.time ?? ''}`}
-            coordinate={at(s)}
-            anchor={{ x: 0.5, y: 1 }}
-            tracksViewChanges={false}
-            zIndex={s.state === 'current' ? 6 : s.state === 'todo' ? 5 : 4}
-          >
-            <StopPin stop={s} />
-          </GoogleMarker>
-        ))}
-        {me && (
-          <GoogleMarker coordinate={at(me)} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false} zIndex={7}>
-            <MePin />
-          </GoogleMarker>
-        )}
-      </GoogleMapView>
-      <MapCompass heading={turn.heading} pitch={turn.pitch} label={t('map.northUp')} onPress={northUp} style={{ top: insets.top + 68, right: 16 }} />
+      <MapBoundary key={`${mount.engine}:${mount.attempt}`} onError={() => dispatchRef.current({ type: 'error' })}>
+        {mount.engine === 'google' ? <GoogleTaskMap {...parts} /> : <OpenTaskMap {...parts} />}
+      </MapBoundary>
+      {me && (
+        <FollowButton on={follow} label={t('map.followMe')} onPress={() => setFollow((on) => !on)} style={{ top: insets.top + 124, right: 16 }} />
+      )}
+      {hiddenGoogle ? (
+        <View style={mapStyles.mapNote} pointerEvents="none">
+          <Txt variant="strong" size={14} color="#ffffff">{t('task.googleNotOnMap')}</Txt>
+        </View>
+      ) : null}
     </>
   );
 }
 
-function at(p: LatLng): { latitude: number; longitude: number } {
-  return { latitude: p.lat, longitude: p.lng };
+/** A map that throws while drawing is a failed map (Google's: the phone moves to the free map), never a broken screen. */
+class MapBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    this.props.onError();
+  }
+  render() {
+    return this.state.failed ? <View style={StyleSheet.absoluteFill} /> : this.props.children;
+  }
 }

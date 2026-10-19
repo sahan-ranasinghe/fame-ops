@@ -106,6 +106,10 @@ export interface DriverSettings {
   driver_personal_trips: PersonalTrips;
   /** Part 3b (H1): a morning ends and an afternoon starts here (HH:MM, 13:00 by default). */
   half_day_split: string;
+  /** Part 6: the office's map package; the phone's map follows it (google: Google's map while it loads; open: the free map). */
+  map_package: 'google' | 'open';
+  /** Part 6: seconds to wait for Google's map to finish loading while online before showing the free map (30 by default). */
+  phone_map_wait_s: number;
 }
 export const DEFAULT_CHECKLIST: ChecklistItem[] = [
   { key: 'plate', en: 'Number plate', si: 'අංක තහඩුව' },
@@ -121,6 +125,8 @@ export const DEFAULT_DRIVER_SETTINGS: DriverSettings = {
   fuel_video_quality: '480p',
   driver_personal_trips: 'allowed',
   half_day_split: '13:00',
+  map_package: 'google',
+  phone_map_wait_s: 30,
 };
 
 export async function fetchDriverSettings(client: Client): Promise<DriverSettings> {
@@ -144,7 +150,17 @@ export async function fetchDriverSettings(client: Client): Promise<DriverSetting
     fuel_video_quality: quality,
     driver_personal_trips: parsePersonalTrips(value?.driver_personal_trips),
     half_day_split: split,
+    map_package: value?.map_package === 'open' ? 'open' : 'google',
+    phone_map_wait_s: typeof value?.phone_map_wait_s === 'number' && Number.isInteger(value.phone_map_wait_s) && value.phone_map_wait_s >= 1 && value.phone_map_wait_s <= 120
+      ? value.phone_map_wait_s
+      : DEFAULT_DRIVER_SETTINGS.phone_map_wait_s,
   };
+}
+
+/** Part 6: whether Google's map loaded on this phone (lib/mapEngine.ts); the office's issue follows it. */
+export async function reportMapState(client: Client, report: { google_ok: boolean; reason: 'timeout' | 'error' | null; at: string; app_version: string }): Promise<string> {
+  const res = await client.rpc('report_map_state', { p_google_ok: report.google_ok, p_reason: report.reason ?? '', p_at: report.at, p_app_version: report.app_version });
+  return check(res, 'map report') as string;
 }
 
 export type FuelVideoPatch = Pick<Tables['fuel_logs']['Update'], 'video_status' | 'video_uploaded_at' | 'video_bytes'>;

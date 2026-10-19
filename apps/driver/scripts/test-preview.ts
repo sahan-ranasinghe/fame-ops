@@ -13,9 +13,10 @@ import { fileURLToPath } from 'node:url';
 
 import * as realApi from '../src/lib/api';
 import {
-  channelsToRegister, hasPart6Sounds, isRinging, NEW_TASK_TITLES, NEW_TASKS_CHANNEL, NEW_TASKS_SOUND, NEW_TASKS_VIBRATION, newTasksChannel,
+  channelsToRegister, hasPart6Sounds, isRinging, NEW_TASK_TITLES, NEW_TASKS_CHANNEL, NEW_TASKS_SOUND, NEW_TASKS_VIBRATION, newTasksChannel, remindersChannel, replacedChannels,
   officeAsksChannel, ringChannel, updatesChannel,
 } from '../src/lib/channels';
+import { channelFor as pushChannelFor, DAY_KINDS as PUSH_DAY_KINDS, TASK_KINDS as PUSH_TASK_KINDS } from '../../../supabase/functions/push-task/channels';
 import { approvedBy, askedBy, officeCalls, parseOfficeContacts, parseTaskContacts, phoneDisplay, taskCalls, whatsappLink } from '../src/lib/contacts';
 import { colomboDayDiff, durationText, relativeTime, type Translate } from '../src/lib/durations';
 import {
@@ -303,8 +304,32 @@ async function main() {
   check(channelsToRegister({ newTasks: true, asks: true, ring: true, updates: true, officeAsks: true }).join(',') === 'new-tasks,driver-asks,task-ring,task-updates,office-asks'
     && channelsToRegister({ newTasks: true, asks: true }).join(',') === 'new-tasks,driver-asks',
     'the phone registers each channel it has made (a 1.2.0 app: the two it had)');
-  check(channelsToRegister({ newTasks: false, asks: false, ring: true, updates: true, officeAsks: true }).join(',') === 'task-ring,task-updates,office-asks',
-    'a 1.3.0 phone registers its three (new-tasks and driver-asks are removed there)');
+  check(channelsToRegister({ newTasks: false, asks: false, ring: true, updates: true, officeAsks: true, reminders: true }).join(',') === 'task-ring,task-updates,office-asks,task-reminders',
+    'a 1.3.0 phone registers its four (it no longer makes the 1.2.0 ones)');
+  const source = (file: string) => readFileSync(join(here, '..', file), 'utf8');
+  const reminders = remindersChannel(en);
+  check(reminders.id === 'task-reminders' && bundled.includes(reminders.sound) && reminders.name === 'Task reminders' && remindersChannel(si).name !== reminders.name,
+    'Part 6: task-reminders (leave in 30, leave now, accept, the arrival nudge) with a bundled sound and a name in each language');
+  // Every kind push-task sends, for every set a phone may register: never on a channel that phone has deleted.
+  const kinds = [...PUSH_TASK_KINDS, ...PUSH_DAY_KINDS];
+  const sets: string[][] = [
+    [], ['new-tasks'], ['new-tasks', 'driver-asks'],
+    ['task-ring', 'task-updates', 'office-asks'],
+    ['task-ring', 'task-updates', 'office-asks', 'task-reminders'],
+    channelsToRegister({ newTasks: false, asks: false, ring: true, updates: true, officeAsks: true, reminders: true }),
+  ];
+  const onDeleted = sets.flatMap((set) => kinds.map((k) => [set.join('+') || 'none', k, pushChannelFor(k, set)] as const)
+    .filter(([, , ch]) => replacedChannels(set).includes(ch)));
+  check(onDeleted.length === 0, 'push-task never sends a kind on a channel the phone deleted (every registered set, every kind)', onDeleted);
+  check(same(replacedChannels(channelsToRegister({ newTasks: false, asks: false, ring: true, updates: true, officeAsks: true, reminders: true })),
+    ['new-tasks', 'driver-asks', 'tasks-new', 'tasks-changed']) && replacedChannels(['new-tasks', 'driver-asks']).length === 0,
+    'a 1.3.0 phone deletes new-tasks, driver-asks, tasks-new ("New tasks") and tasks-changed; a 1.2.0 phone deletes nothing');
+  const setNames = [ringChannel(en), updatesChannel(en), officeAsksChannel(en), remindersChannel(en)].map((c) => c.name);
+  check(new Set(setNames).size === 4 && setNames.filter((n) => /new tasks/i.test(n)).length === 1 && !setNames.includes('Task changes'),
+    'on 1.3.0 one "New tasks" in the phone\'s settings (the ring), and no "Task changes" beside "Changed and cancelled tasks"', setNames);
+  const pushTs = source('src/lib/push.ts');
+  check(/if \(named\) await removeReplacedChannels\(channels\)/.test(pushTs) && /named = false/.test(pushTs),
+    'the old channels go only after the server took the token with the new ones (not on a server without p_channels)');
   check(hasPart6Sounds('1.3.0') && hasPart6Sounds('1.10.2') && hasPart6Sounds('2.0.0') && !hasPart6Sounds('1.2.0') && !hasPart6Sounds('1.1.0')
     && !hasPart6Sounds(null) && !hasPart6Sounds(''),
     'the three channels only on a 1.3.0 build (an older build would fix them to the default sound)');
@@ -320,7 +345,6 @@ async function main() {
   check(NEW_TASKS_VIBRATION.length >= 6 && NEW_TASKS_VIBRATION.filter((_, i) => i % 2 === 1).every((ms) => ms >= 800), 'a long vibration: three pulses of 800 ms', NEW_TASKS_VIBRATION);
   check(spec.name === 'New tasks' && newTasksChannel(si).name === 'නව කාර්යයන්' && newTasksChannel(si).description !== '', 'the name and description in the driver\'s language');
   check(same(channelsToRegister(true), ['new-tasks']) && same(channelsToRegister(false), []), 'the token names the channel only once it exists (register_device_token p_channels)');
-  const source = (file: string) => readFileSync(join(here, '..', file), 'utf8');
   const notifications = source('src/lib/notifications.ts');
   check(/notifyNewTask[\s\S]*?ready\.ring \? RING_CHANNEL : ready\.newTasks \? CHANNELS\.newTasks/.test(notifications)
     && /showTestNotification[\s\S]*?ready\.ring \? RING_CHANNEL : ready\.newTasks \? CHANNELS\.newTasks/.test(notifications),

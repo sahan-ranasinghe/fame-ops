@@ -26,7 +26,7 @@ import { RunningLate } from '@/components/LateSheet';
 import { Check, ChevronLeft, Play } from '@/components/icons';
 import { Thumb, useVehicleThumbs } from '@/components/Photos';
 import { ChangedTag, leaveTime, StopTimeline, useDateLabel, useDurations, useNow } from '@/components/task';
-import { GOOGLE_MAP_BUILD, TaskMap } from '@/components/TaskMap';
+import { TaskMap } from '@/components/TaskMap';
 import { taskTitle } from '@/components/taskLines';
 import { Button, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { approvedBy, askedBy, phoneDisplay, taskCalls } from '@/lib/contacts';
@@ -97,7 +97,6 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
   const decline = declineKey(task);
   const leave = leaveTime(task);
   const mark = (field: ChangeField) => changes.fields.includes(field);
-  const googleNote = !GOOGLE_MAP_BUILD && task.task_stops.some((s) => !!s.google_place_id) ? t('task.googleNotOnMap') : null;
   // "Back by 12:00" once the strings have it (preview.backBy); a changed end time is marked with it.
   const backBy = task.end_by && t('preview.backBy') !== 'preview.backBy' ? t('preview.backBy', { time: colomboTime(task.end_by) }) : null;
   const start = () => router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: task.id, from: 'task' } });
@@ -106,7 +105,7 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
     <View style={styles.page}>
       <StatusBar style="dark" />
       <View style={{ height: Math.round(height * 0.32), backgroundColor: colors.mapLand }}>
-        <TaskMap task={task} me={null} googleMap={GOOGLE_MAP_BUILD} note={googleNote} />
+        <TaskMap task={task} me={null} googleNoteFor="any" />
         <Pressable accessibilityRole="button" accessibilityLabel={t('common.cancel')} onPress={goBack} style={[styles.back, { top: insets.top + 12 }]}>
           <ChevronLeft size={26} color={colors.ink} strokeWidth={2.6} />
         </Pressable>

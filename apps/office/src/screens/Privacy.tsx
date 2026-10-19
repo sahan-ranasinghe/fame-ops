@@ -1,8 +1,12 @@
 // The privacy policy (Phase 7 Part 6, store readiness): /privacy on the office site, open without signing in (WebApp
 // shows it before the sign-in gate), linked from the driver app's sign-in and Me screens and from the site's sign-in.
 // Plain English, and only what the system really does: the retention periods are the database's jobs (README "Data
-// retention"). Fame Global Solutions reviews the text before the app goes to a store.
-import type { CSSProperties, ReactNode } from "react";
+// retention"). Fame Global Solutions reviews the text before the app goes to a store; the same text is in
+// docs/privacy-policy.md (Privacy.test.tsx keeps the two alike).
+// The contact comes from the settings (office-api GET /public/privacy: privacy_email as a mailto: link, else the office
+// phone); no address is written here.
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { apiBase } from "../auth/supabase";
 
 export const PRIVACY_UPDATED = "19 October 2026";
 
@@ -19,7 +23,55 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
-export function Privacy() {
+/** The page's contact, from the settings: the privacy e-mail, else the office phone. */
+export interface PrivacyContact {
+  email?: string;
+  phone?: string;
+  phone_e164?: string;
+}
+
+/** Asks office-api for the contact (no session needed); null while it loads, {} when it cannot be read. */
+export async function loadPrivacyContact(fetcher: typeof fetch = fetch): Promise<PrivacyContact> {
+  try {
+    const res = await fetcher(`${apiBase}/public/privacy`, { cache: "no-store" });
+    if (!res.ok) return {};
+    const body = (await res.json()) as PrivacyContact;
+    return {
+      ...(typeof body.email === "string" && body.email ? { email: body.email } : {}),
+      ...(typeof body.phone === "string" && body.phone ? { phone: body.phone, phone_e164: body.phone_e164 } : {}),
+    };
+  } catch {
+    return {};
+  }
+}
+
+function Contact({ contact }: { contact: PrivacyContact | null }) {
+  if (contact === null) return <p data-testid="privacy-contact" style={{ color: "var(--muted)" }}>Loading the contact…</p>;
+  if (contact.email) {
+    return (
+      <p data-testid="privacy-contact">
+        Write to <a href={`mailto:${contact.email}`}>{contact.email}</a>, or ask the fleet admin of Fame Global Solutions.
+      </p>
+    );
+  }
+  if (contact.phone) {
+    return (
+      <p data-testid="privacy-contact">
+        Call the office on <a href={`tel:${contact.phone_e164 ?? contact.phone.replace(/\s+/g, "")}`}>{contact.phone}</a>, or ask
+        the fleet admin of Fame Global Solutions.
+      </p>
+    );
+  }
+  return <p data-testid="privacy-contact">Ask the fleet admin of Fame Global Solutions.</p>;
+}
+
+export function Privacy({ load = loadPrivacyContact }: { load?: () => Promise<PrivacyContact> } = {}) {
+  const [contact, setContact] = useState<PrivacyContact | null>(null);
+  useEffect(() => {
+    let live = true;
+    void load().then((c) => { if (live) setContact(c); });
+    return () => { live = false; };
+  }, [load]);
   return (
     <div style={page}>
       <main style={column}>
@@ -82,8 +134,8 @@ export function Privacy() {
             <li>
               <b>Service providers that run parts of the system for us,</b> each only for that job: Supabase (the database
               and file storage), Google (maps, place search, road routes, push notifications through Firebase, and reading
-              the number from an odometer photo), Expo (push notifications) and openrouteservice (road routes and the
-              likely road over a gap in a recorded trip).
+              the number from an odometer photo), Expo (push notifications), openrouteservice (road routes and the
+              likely road over a gap in a recorded trip) and OpenFreeMap (the free map, when Google's map is not used).
             </li>
             <li>Nobody else, unless the law requires it.</li>
           </ul>
@@ -125,7 +177,7 @@ export function Privacy() {
         </Section>
 
         <Section title="Questions">
-          <p>Ask the fleet admin of Fame Global Solutions, or the office through the phone number in the app.</p>
+          <Contact contact={contact} />
         </Section>
       </main>
     </div>

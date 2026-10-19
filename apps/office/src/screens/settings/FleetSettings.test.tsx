@@ -169,4 +169,23 @@ describe("FleetSettings", () => {
     fireEvent.click(box);
     await waitFor(() => expect(transport.saves).toContainEqual({ key: "vehicle_on_the_day", value: true }));
   });
+  it("Part 6: the privacy contact e-mail: the format checked, saved, removed (the page then shows the office phone)", async () => {
+    const transport = new Settings(false);
+    await mount(transport);
+    const card = within(screen.getByTestId("privacy-email-settings"));
+    expect(card.getByText("Shown on the public privacy page. Use Fame's shared address before the store submission.")).toBeTruthy();
+    expect(card.getByText("None saved: the page shows the office phone.")).toBeTruthy();
+    fireEvent.change(card.getByLabelText("Privacy contact e-mail"), { target: { value: "not an address" } });
+    fireEvent.submit(card.getByLabelText("Privacy contact e-mail").closest("form")!);
+    expect(card.getByText("An e-mail address such as privacy@example.com.")).toBeTruthy();
+    expect(transport.saves).toEqual([]);
+    fireEvent.change(card.getByLabelText("Privacy contact e-mail"), { target: { value: " Privacy@Fame.Test " } });
+    fireEvent.submit(card.getByLabelText("Privacy contact e-mail").closest("form")!);
+    await waitFor(() => expect(transport.saves).toEqual([{ key: "privacy_email", value: "privacy@fame.test" }]));
+    await waitFor(() => expect(card.getByTestId("privacy-email-saved").textContent).toBe("Saved: privacy@fame.test"));
+    fireEvent.click(card.getByRole("button", { name: "Remove" }));
+    await waitFor(() => expect(transport.saves).toContainEqual({ key: "privacy_email", value: null }));
+    await waitFor(() => expect(card.getByTestId("privacy-email-saved").textContent).toBe("None saved: the page shows the office phone."));
+    expect(card.queryByRole("button", { name: "Remove" })).toBeNull();
+  });
 });

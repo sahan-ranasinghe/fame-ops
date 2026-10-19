@@ -46,6 +46,9 @@ import {
   isRinging,
   newTasksChannel,
   officeAsksChannel,
+  REMINDERS_CHANNEL,
+  remindersChannel,
+  replacedChannels,
   RING_CHANNEL,
   ringChannel,
   updatesChannel,
@@ -127,6 +130,7 @@ let asksReady = false;
 let ringReady = false;
 let updatesReady = false;
 let officeAsksReady = false;
+let remindersReady = false;
 
 /** The "New tasks" channel in a language (Android lets an existing channel's name and description change, nothing else). */
 async function setNewTasksChannel(language: Language): Promise<boolean> {
@@ -173,13 +177,23 @@ async function setPart6Channels(language: Language): Promise<void> {
   ringReady = await setChannel(ringChannel(t));
   updatesReady = await setChannel(updatesChannel(t));
   officeAsksReady = await setChannel(officeAsksChannel(t));
+  remindersReady = await setChannel(remindersChannel(t));
+}
+
+/**
+ * Part 6: deletes the 1.2.0 channels whose pushes all have a 1.3.0 channel the server now knows (lib/push.ts calls it once
+ * the token is registered with them), so the phone's settings list each kind once. Never before: a push sent on an old
+ * channel id would otherwise land on a deleted channel.
+ */
+export async function removeReplacedChannels(registered: readonly string[]): Promise<void> {
+  for (const id of replacedChannels(registered)) await removeChannel(id);
 }
 
 /** The driver changed the language: the app's own channels' names in Android's settings follow. */
 export async function renameChannels(language: Language): Promise<void> {
   if (newTasksReady) await setNewTasksChannel(language);
   if (asksReady) await setAsksChannel(language);
-  if (ringReady || updatesReady || officeAsksReady) await setPart6Channels(language);
+  if (ringReady || updatesReady || officeAsksReady || remindersReady) await setPart6Channels(language);
 }
 
 /** Whether the "New tasks" channel exists (the push token is registered with it only then). */
@@ -198,31 +212,18 @@ export async function ensureChannels(): Promise<ChannelsReady> {
     ring: ringReady,
     updates: updatesReady,
     officeAsks: officeAsksReady,
+    reminders: remindersReady,
   });
   if (channelsReady) return ready();
   const language = getJson<Language>(KEYS.language) === 'si' ? 'si' : 'en';
   if (hasPart6Sounds(Application.nativeApplicationVersion)) await setPart6Channels(language);
-  // The 1.3.0 channels replace "New tasks" and the questions' first channel: those go once their replacements are made
-  // (one name each in Android's settings); an older build keeps them.
-  if (ringReady && updatesReady) await removeChannel(CHANNELS.newTasks);
-  else newTasksReady = await setNewTasksChannel(language);
-  if (officeAsksReady) await removeChannel(CHANNELS.asks);
-  else asksReady = await setAsksChannel(language);
-  await Notifications.setNotificationChannelAsync(CHANNELS.tasksNew, {
-    name: 'New tasks',
-    importance: Notifications.AndroidImportance.MAX,
-    sound: 'new_task.wav',
-    vibrationPattern: [0, 500, 200, 500, 200, 500],
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-    enableLights: true,
-    lightColor: '#f2a900',
-  });
-  await Notifications.setNotificationChannelAsync(CHANNELS.tasksChanged, {
-    name: 'Task changes',
-    importance: Notifications.AndroidImportance.HIGH,
-    sound: 'task_changed.wav',
-    vibrationPattern: [0, 300, 150, 300],
-  });
+  // The 1.3.0 channels replace the 1.2.0 ones for tasks and questions: a 1.3.0 phone no longer makes those, and deletes the
+  // ones a 1.2.0 build left once the server has its token with the new channels (removeReplacedChannels, lib/push.ts).
+  // An older build makes them as before.
+  if (!(ringReady && updatesReady)) newTasksReady = await setNewTasksChannel(language);
+  if (!officeAsksReady) asksReady = await setAsksChannel(language);
+  if (!(ringReady && remindersReady && officeAsksReady)) await setOldTasksNew();
+  if (!(updatesReady && remindersReady)) await setOldTasksChanged();
   await Notifications.setNotificationChannelAsync(CHANNELS.general, {
     name: 'General',
     importance: Notifications.AndroidImportance.DEFAULT,
@@ -235,6 +236,28 @@ export async function ensureChannels(): Promise<ChannelsReady> {
   });
   channelsReady = true;
   return ready();
+}
+
+/** The 1.2.0 build's channels for tasks, as they were (a build before 1.3.0 still makes them). */
+async function setOldTasksNew(): Promise<void> {
+  await Notifications.setNotificationChannelAsync(CHANNELS.tasksNew, {
+    name: 'New tasks',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'new_task.wav',
+    vibrationPattern: [0, 500, 200, 500, 200, 500],
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+    enableLights: true,
+    lightColor: '#f2a900',
+  });
+}
+
+async function setOldTasksChanged(): Promise<void> {
+  await Notifications.setNotificationChannelAsync(CHANNELS.tasksChanged, {
+    name: 'Task changes',
+    importance: Notifications.AndroidImportance.HIGH,
+    sound: 'task_changed.wav',
+    vibrationPattern: [0, 300, 150, 300],
+  });
 }
 
 /** Shows a new-task notification from the app itself (used when the phone has no push token), on the "New tasks" channel. */
@@ -255,10 +278,10 @@ export async function notifyNewTask(title: string, body: string, taskId: string)
 export async function notifyArrival(title: string, body: string, taskId: string): Promise<void> {
   try {
     if (!(await notificationsAllowed())) return;
-    await ensureChannels();
+    const ready = await ensureChannels();
     await Notifications.scheduleNotificationAsync({
       content: { title, body, data: { taskId, kind: 'arrival' } },
-      trigger: { channelId: CHANNELS.tasksChanged },
+      trigger: { channelId: ready.reminders ? REMINDERS_CHANNEL : CHANNELS.tasksChanged },
     });
   } catch {
     // The stop's Arrived button is on the task screen either way.

@@ -64,3 +64,15 @@ Deno.test("the fuel video quality and the keep months take only their two values
   assertEquals(validateSetting("fuel_video_keep_months", 6), 6);
   assertThrows(() => validateSetting("fuel_video_keep_months", 9), ToolError, "6 or 12");
 });
+
+Deno.test("Part 6: the privacy contact e-mail (one address or null) and the phones' wait for Google's map (1 to 120 s)", () => {
+  assertEquals(validateSetting("privacy_email", " Privacy@Fame.Global "), "privacy@fame.global");
+  assertEquals(validateSetting("privacy_email", null), null);
+  assertEquals(validateSetting("privacy_email", ""), null);
+  for (const bad of ["fame", "a@b", "two@fame.lk three@fame.lk", "<x@fame.lk>", 42]) {
+    assertThrows(() => validateSetting("privacy_email", bad), Error, "privacy_email");
+  }
+  assertEquals([SETTINGS_DEFAULTS.privacy_email, SETTINGS_DEFAULTS.phone_map_wait_s], [null, 30]);
+  assertEquals([validateSetting("phone_map_wait_s", 1), validateSetting("phone_map_wait_s", 120)], [1, 120]);
+  for (const bad of [0, 121, 2.5, "30"]) assertThrows(() => validateSetting("phone_map_wait_s", bad), Error, "phone_map_wait_s");
+});

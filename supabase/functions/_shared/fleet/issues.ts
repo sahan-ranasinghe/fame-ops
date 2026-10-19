@@ -88,6 +88,7 @@ export const KIND_TEXT: Record<string, string> = {
   missed_task: "Missed task",
   push_failed: "Push failed",
   routing_failed: "Routing failed",
+  map_fallback: "Google map failed",
 };
 
 /** A thing that should be an active issue now. */
@@ -740,6 +741,36 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
         sort_key: -1,
         request_id: r.id,
         employee_id: r.requested_by_employee_id,
+      });
+    }
+  }
+
+  // --- Google's map failed on a phone (Part 6): the phone shows the free map until Google's loads again -------
+  // The phone reports it (report_map_state): no "map loaded" within phone_map_wait_s while online, or an error. While the
+  // map package is open no phone asks Google, so nothing is open then. Resolved by the phone's next good load.
+  if (full && settings.map_package === "google") {
+    const drivers = new Map(refs.employees.filter((e) => e.active).map((e) => [e.id, e]));
+    const failed = unwrap(
+      await db.from("driver_map_state").select("employee_id, reason, google_failed_at, app_version").eq("google_ok", false),
+      "map reports",
+    );
+    for (const r of failed) {
+      const e = drivers.get(r.employee_id);
+      if (!e) continue;
+      wanted.push({
+        kind: "map_fallback",
+        ref_key: `map_fallback:${e.id}`,
+        severity: "warning",
+        title: `Google map failed on ${e.name}'s phone; using the free map`,
+        detail: [
+          r.reason === "timeout" ? "Google's map did not finish loading while the phone was online" : "Google's map reported an error",
+          r.google_failed_at ? `since ${colomboDayTime(r.google_failed_at)}` : null,
+          r.app_version ? `app ${r.app_version}` : null,
+          "if more phones show this, check the Android key and billing (docs/google-maps-setup.md)",
+        ].filter(Boolean).join(" · "),
+        due: null,
+        sort_key: 0,
+        employee_id: e.id,
       });
     }
   }

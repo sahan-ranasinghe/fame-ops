@@ -2972,6 +2972,65 @@ if CHANNEL == "api":
     check("not that driver" in r, "a photo uploaded for one driver cannot be set on another", r)
 
 
+print("\n== 6n. Part 6 after the checkpoint: the phones' two maps, the Google-map issue, the privacy contact ==")
+pm = uuid.uuid4().hex[:6]
+PIN_M = "605214"
+MAPS_NAME = f"Ruwan Maps {pm}"
+tool("create_driver", {"name": MAPS_NAME, "code": f"M{pm}", "username": f"maps.{pm}", "pin": PIN_M, "phone": "0771112244"})
+code, ses_m = sign_in(f"maps.{pm}", PIN_M)
+km = Driver(ses_m["access_token"])
+code, ds = rpc_as(km, "get_driver_settings", {})
+check(code == 200 and ds.get("map_package") == "google" and ds.get("phone_map_wait_s") == 30,
+      "the phones read the map package (google) and a 30 s wait for Google's map", f"{code} {str(ds)[:200]}")
+r = tool("update_settings", {"key": "phone_map_wait_s", "value": 0}, expect_error=True)
+check("1 to 120" in r, "phone_map_wait_s: 1 to 120 seconds", r[:200])
+tool("update_settings", {"key": "phone_map_wait_s", "value": 1})
+code, ds = rpc_as(km, "get_driver_settings", {})
+check(ds.get("phone_map_wait_s") == 1, "a 1 s wait reaches the phones (forces the free map for the phone test)", str(ds)[:200])
+tool("update_settings", {"key": "phone_map_wait_s", "value": 30})
+now_m = dt.datetime.now(dt.timezone.utc)
+code, res = rpc_as(km, "report_map_state", {"p_google_ok": False, "p_reason": "timeout", "p_at": iso(now_m - dt.timedelta(minutes=1)), "p_app_version": "1.3.0+abcd1234"})
+check(code == 200 and res == "ok", "the phone reports that Google's map did not load", f"{code} {res}")
+code, res = rpc_as(km, "report_map_state", {"p_google_ok": False, "p_reason": "grey", "p_at": iso(now_m), "p_app_version": "1.3.0"})
+check(code >= 400, "a failure without timeout or error is refused", f"{code} {str(res)[:200]}")
+fleet_jobs()
+mapped = lambda status="active": [i for i in tool("list_issues", {"status": status, "kind": "map_fallback"})["issues"] if MAPS_NAME in i["title"]]
+mi = mapped()
+check(len(mi) == 1 and mi[0]["title"] == f"Google map failed on {MAPS_NAME}'s phone; using the free map" and mi[0]["severity"] == "warning"
+      and "app 1.3.0+abcd1234" in (mi[0].get("detail") or ""),
+      "an issue opens: \"Google map failed on <driver>'s phone; using the free map\"", json.dumps(mi)[:400])
+tool("update_settings", {"key": "map_package", "value": "open"})
+code, ds = rpc_as(km, "get_driver_settings", {})
+fleet_jobs()
+check(ds.get("map_package") == "open" and not mapped(), "the map package set to open: the phones follow it and no phone asks Google (no issue)", str(ds)[:120])
+tool("update_settings", {"key": "map_package", "value": "google"})
+fleet_jobs()
+check(len(mapped()) == 1, "back to google: the phone still on the free map shows again")
+code, res = rpc_as(km, "report_map_state", {"p_google_ok": True, "p_reason": "", "p_at": iso(now_m + dt.timedelta(seconds=1)), "p_app_version": "1.3.0+abcd1234"})
+fleet_jobs()
+check(code == 200 and res == "ok" and not mapped() and any(i["title"].startswith("Google map failed") for i in mapped("resolved")),
+      "Google's map loads again on that phone: the issue resolves by itself", f"{code} {res}")
+code, res = rpc_as(km, "report_map_state", {"p_google_ok": False, "p_reason": "error", "p_at": iso(now_m - dt.timedelta(hours=1)), "p_app_version": "1.3.0"})
+check(res == "older", "a report older than the stored one is ignored", str(res))
+
+# Item 8: the privacy contact e-mail, a setting (audited), on the public privacy page.
+r = tool("update_settings", {"key": "privacy_email", "value": "not an address"}, expect_error=True)
+check("privacy_email" in r and "e-mail" in r, "privacy_email: the e-mail format is checked", r[:200])
+tool("update_settings", {"key": "privacy_email", "value": " Privacy@Fame.TEST "})
+check(tool("get_settings")["settings"].get("privacy_email") == "privacy@fame.test", "get_settings answers the privacy e-mail (trimmed, lower case)")
+code, pc = http("GET", f"{API}/functions/v1/office-api/public/privacy")
+check(code == 200 and pc.get("email") == "privacy@fame.test" and set(pc) <= {"email", "phone", "phone_e164"},
+      "the public privacy page's contact, without signing in: the e-mail (and nothing but the contact)", f"{code} {str(pc)[:200]}")
+tool("update_settings", {"key": "privacy_email", "value": None})
+code, pc = http("GET", f"{API}/functions/v1/office-api/public/privacy")
+check(code == 200 and "email" not in pc and pc.get("phone") == "011 234 5678" and "privacy_email" not in tool("get_settings")["settings"],
+      "removed: the page gets the office phone instead", f"{code} {str(pc)[:200]}")
+tool("update_settings", {"key": "privacy_email", "value": "privacy@fame.test"})
+code, pc = http("GET", f"{API}/functions/v1/office-api/public/privacy")
+check(pc.get("email") == "privacy@fame.test", "added again: the page shows it again", str(pc)[:200])
+check(int(psql("select count(*) from office_audit where tool = 'update_settings' and args_summary like '%privacy_email%'")) >= 3,
+      "every change of the privacy e-mail is in the audit log")
+
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:
     print("  - " + f)

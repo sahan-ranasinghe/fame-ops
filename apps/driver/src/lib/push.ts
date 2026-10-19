@@ -12,7 +12,8 @@
 // task pushes on it; a phone that never named it keeps the old channels. Part 3b: also
 // "driver-asks" (the office's questions) once made. A server
 // without p_channels yet (the update reached the phone first) gets the call
-// without it, as before.
+// without it, as before. Part 6: once the server has taken the token with the
+// 1.3.0 channels, the 1.2.0 channels they replace are deleted (never before).
 
 import * as Application from 'expo-application';
 import Constants from 'expo-constants';
@@ -21,7 +22,7 @@ import * as Notifications from 'expo-notifications';
 
 import { channelsToRegister } from './channels';
 import { getJson, KEYS, remove, setJson } from './kv';
-import { ensureChannels, notificationsAllowed } from './notifications';
+import { ensureChannels, notificationsAllowed, removeReplacedChannels } from './notifications';
 import { supabase } from './supabase';
 import type { Language } from './types';
 
@@ -49,10 +50,16 @@ export async function registerPush(): Promise<boolean> {
     let { error } = channels.length > 0
       ? await supabase.rpc('register_device_token', { ...args, p_channels: channels } as typeof args)
       : await supabase.rpc('register_device_token', args);
+    let named = channels.length > 0 && !error;
     // PGRST202: no such function with these arguments (a server without p_channels): as before.
-    if (error && channels.length > 0 && error.code === 'PGRST202') ({ error } = await supabase.rpc('register_device_token', args));
+    if (error && channels.length > 0 && error.code === 'PGRST202') {
+      ({ error } = await supabase.rpc('register_device_token', args));
+      named = false;
+    }
     if (error) return false;
     setJson(KEYS.pushToken, token);
+    // Part 6: the server now sends on the 1.3.0 channels, so the 1.2.0 ones they replace can go (only then).
+    if (named) await removeReplacedChannels(channels);
     return true;
   } catch {
     // No Firebase in this build, no connection, or notifications refused: nothing to register.

@@ -8,7 +8,7 @@
 // odometers (components/SwapCard.tsx), the start odo of the stretch in the vehicle now, and on the
 // finished task each vehicle's km.
 // Phase 7 Part 2b (§20, §24): the task map (components/TaskMap.tsx): every stop numbered with its time, Google's planned
-// road line on Google's map only, the phone, the compass; "Distance left by road" from the plan's road km
+// road line on Google's map only, the phone, the compass (Part 6: Google's map or the free map, components/TaskMap.tsx); "Distance left by road" from the plan's road km
 // (components/taskMapLogic.ts), the straight line only when the plan has no km.
 // Phase 7 Part 4 (§13): a trip the driver started reads "Your trip · Company work" where the office's title would be,
 // has "Add a stop" while under way (app/add-stop.tsx) and no "Can't do this task". Item 18's stop rules are the same;
@@ -34,7 +34,7 @@ import { ApprovedLine, CallButtons } from '@/components/CallButtons';
 import { GoogleCredit } from '@/components/GoogleCredit';
 import { RunningLate } from '@/components/LateSheet';
 import { SkipSheet } from '@/components/SkipSheet';
-import { GOOGLE_MAP_BUILD, TaskMap } from '@/components/TaskMap';
+import { TaskMap, useMapEngine } from '@/components/TaskMap';
 import { TaskPreview } from '@/components/TaskPreview';
 import { hasRouteLine, kmText, roadKmLeft, type LatLng } from '@/components/taskMapLogic';
 import { Stretches, SwapCard } from '@/components/SwapCard';
@@ -53,11 +53,10 @@ import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
-const GOOGLE_MAP = GOOGLE_MAP_BUILD;
-
 export default function TaskScreen() {
   const app = useApp();
   const { t, tasks, sharing, gpsKm } = app;
+  const engine = useMapEngine();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -172,19 +171,16 @@ export default function TaskScreen() {
       <StatusBar style="dark" />
       <View style={{ height: running ? Math.round(height * 0.4) : insets.top + 76, backgroundColor: colors.mapLand }}>
         {running && (
-          <TaskMap
-            task={task}
-            me={me}
-            googleMap={GOOGLE_MAP}
-            note={!GOOGLE_MAP && stop?.google_place_id ? t('task.googleNotOnMap') : null}
-          />
+          <TaskMap task={task} me={me} googleNoteFor="current" />
         )}
         {overlay}
       </View>
 
       <ScrollView style={styles.sheet} contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 24, gap: 16 }}>
         <View style={styles.grabber} />
-        {running && !hasRouteLine(task) && <Txt variant="small" style={{ marginTop: -6 }}>{t('task.noRouteLine')}</Txt>}
+        {running && (!hasRouteLine(task) || engine !== 'google') && (
+          <Txt variant="small" style={{ marginTop: -6 }}>{t(hasRouteLine(task) ? 'task.lineGoogleOnly' : 'task.noRouteLine')}</Txt>
+        )}
 
         <View style={styles.topRow}>
           <Txt variant="label" color={running ? colors.blue : colors.amberText}>

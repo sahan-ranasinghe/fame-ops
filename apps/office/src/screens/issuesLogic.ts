@@ -65,6 +65,7 @@ export const KIND_TEXT: Record<string, string> = {
   request_waiting: "Request waiting",
   push_failed: "Push failed",
   routing_failed: "Routing failed",
+  map_fallback: "Google map failed",
   // Phase 7.
   vehicle_conflict: "Vehicle taken",
   app_stopped: "App stopped",

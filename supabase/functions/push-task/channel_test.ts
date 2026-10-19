@@ -20,8 +20,8 @@ Deno.test("each push goes on its 1.3.0 channel once the phone has it, else as be
     "new-tasks",
     "driver-asks",
   ]);
-  // A 1.3.0 phone registers only its three (the app removes new-tasks and driver-asks there); the other kinds keep the
-  // original channels, which every phone has.
+  // A phone with the first three 1.3.0 channels only (no task-reminders): the reminders and the day's pushes keep the
+  // original channels, which such a phone still has (it deletes tasks-new and tasks-changed only with task-reminders).
   const only13 = ["task-ring", "task-updates", "office-asks"];
   const all = [
     "new",
@@ -46,7 +46,24 @@ Deno.test("each push goes on its 1.3.0 channel once the phone has it, else as be
     "tasks-changed",
     "tasks-new",
     "tasks-new",
-    "tasks-changed",
+    "task-updates",
+    "general",
+    "general",
+    "general",
+    "general",
+    "office-asks",
+  ]);
+  // The 1.3.0 app with task-reminders (Part 6, after the checkpoint): every task push on a 1.3.0 channel; the 1.2.0
+  // channels for tasks are gone from such a phone.
+  assertEquals(all.map((k) => channelFor(k as never, [...only13, "task-reminders"])), [
+    "task-ring",
+    "task-updates",
+    "task-updates",
+    "task-updates",
+    "task-reminders",
+    "task-reminders",
+    "task-reminders",
+    "task-updates",
     "general",
     "general",
     "general",

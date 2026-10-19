@@ -4,6 +4,8 @@
 //   GET  /office-api/me                 who is signed in, their permissions and role, whether the second step is done, the tools they may call,
 //                                       and map { package, places } (google: load Google's map after register_map_load; open: OpenFreeMap)
 //   GET  /office-api/tools              the tools with their input schemas (for the forms)
+//   GET  /office-api/public/privacy     no session (the public privacy page, /privacy): { email?, phone? } from the settings
+//                                       privacy_email and office_phone, nothing else; 60 a minute per address
 //   POST /office-api/tools/<name>       body = the tool's arguments; 200 { result } exactly as the connector returns it
 //                                       400 { error: "bad_input", issues } · 403 { error } · 404 · 409 { error } (the tool said no)
 //                                       429 too many calls · 500 { error }
@@ -39,6 +41,8 @@ import {
 } from "../_shared/fleet/index.ts";
 
 const CALLS_PER_MINUTE = 120;
+/** The public privacy contact: per caller address. */
+const PUBLIC_PER_MINUTE = 60;
 const db = adminClient();
 /** Roles that must have done the second step; empty unless the secret REQUIRE_MFA_ROLES says otherwise. */
 const MFA_ROLES = mfaRequiredRoles(Deno.env.get("REQUIRE_MFA_ROLES"));
@@ -123,12 +127,14 @@ async function resolvePerson(request: Request): Promise<Resolved> {
   };
 }
 
-function overLimit(employeeId: string): boolean {
+function overLimit(key: string, perMinute = CALLS_PER_MINUTE): boolean {
   const now = Date.now();
-  const recent = (calls.get(employeeId) ?? []).filter((t) => now - t < 60_000);
+  // The public page's callers are many addresses: forget the quiet ones now and then.
+  if (calls.size > 2000) for (const [k, v] of calls) if (v.every((t) => now - t >= 60_000)) calls.delete(k);
+  const recent = (calls.get(key) ?? []).filter((t) => now - t < 60_000);
   recent.push(now);
-  calls.set(employeeId, recent);
-  return recent.length > CALLS_PER_MINUTE;
+  calls.set(key, recent);
+  return recent.length > perMinute;
 }
 
 Deno.serve(async (request) => {
@@ -136,6 +142,26 @@ Deno.serve(async (request) => {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
 
   const path = new URL(request.url).pathname.replace(/^.*?\/office-api/, "").replace(/\/$/, "");
+  // Part 6: the privacy page opens without signing in and shows the contact from the settings (privacy_email, else the
+  // office phone). The only answer without a session.
+  if (request.method === "GET" && path === "/public/privacy") {
+    const from = (request.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
+    if (overLimit(`public:${from}`, PUBLIC_PER_MINUTE)) return json(429, { error: "too_many_calls" }, cors);
+    try {
+      const settings = await loadSettings(db);
+      const body = {
+        ...(settings.privacy_email ? { email: settings.privacy_email } : {}),
+        ...(settings.office_phone ? { phone: phoneDisplay(settings.office_phone), phone_e164: settings.office_phone } : {}),
+      };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { ...cors, "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
+      });
+    } catch (e) {
+      console.error(`office-api: privacy contact: ${e instanceof Error ? e.message : String(e)}`);
+      return json(500, { error: "settings_failed" }, cors);
+    }
+  }
   const person = await resolvePerson(request);
   if (!person.ok) return json(person.status, { error: person.error }, cors);
   const { actor } = person;

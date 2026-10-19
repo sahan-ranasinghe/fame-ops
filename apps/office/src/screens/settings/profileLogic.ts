@@ -36,6 +36,15 @@ export function profileInput(text: string, saved: string | null | undefined): { 
 }
 
 /** update_settings for the office's number: +94… or null; an error for anything else. */
+/** The privacy contact e-mail as typed: empty = remove it; else one address (the server checks the same). */
+export function privacyEmailValue(text: string): { error: string } | { value: string | null } {
+  const v = text.trim().toLowerCase();
+  if (v === "") return { value: null };
+  return /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[a-z]{2,}$/i.test(v) && v.length <= 254
+    ? { value: v }
+    : { error: "An e-mail address such as privacy@example.com." };
+}
+
 export function officePhoneValue(text: string): { error: string } | { value: string | null } {
   const v = phoneE164(text);
   return v === "bad" ? { error: PHONE_BAD } : { value: v };

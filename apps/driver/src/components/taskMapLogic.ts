@@ -2,7 +2,9 @@
 //   - The stops on the map: numbered by their place in the order (the start stop marked), each with its arrive-by time,
 //     else its planned arrival (HH:MM, Colombo); reached, done and skipped stops muted, the current one standing out.
 //   - The planned road line: each plan leg's Google polyline (legs[].line), on Google's map only (rule 10,
-//     lib/mapRule.ts). The OpenFreeMap map gets no line and no Google stop.
+//     lib/mapRule.ts). Where there is none to draw (the free map, or a plan without Google's line) dashed straight lines
+//     join the start and the stops the map draws, in order (Part 6: the same map on both engines). The free map never
+//     gets a Google stop.
 //   - "Distance left by road": the current leg's road km in proportion to the straight distance still to go, plus the
 //     road km of the later legs to stops still to do (never the leg back to base).
 //   - The compass shows while the map is turned or tilted.
@@ -103,6 +105,8 @@ export interface RouteLeg {
   /** The leg's stop is reached (arrived, done or skipped): drawn muted. */
   done: boolean;
   points: LatLng[];
+  /** A straight line between two points (no road line to draw): dashed. */
+  dashed?: boolean;
 }
 
 type PlanOf = Pick<TaskWithStops, 'task_stops' | 'plan_json'>;
@@ -122,6 +126,28 @@ export function routeLines(task: PlanOf, googleMap: boolean): RouteLeg[] {
     if (points.length < 2) return [];
     return [{ key: `${i}:${leg.from_seq}-${leg.to_seq}`, done: to ? to.status !== 'pending' : false, points }];
   });
+}
+
+/**
+ * Dashed straight lines from the start through the stops the map draws, in order: what both maps show when there is no
+ * road line to draw. A leg is muted once its stop is reached. Ours only (our pins, never Google's line).
+ */
+export function straightLines(stops: readonly MapStop[], start: LatLng | null): RouteLeg[] {
+  const points: { id: string; p: LatLng; done: boolean }[] = [
+    ...(start ? [{ id: 'start', p: start, done: true }] : []),
+    ...stops.map((s) => ({ id: s.id, p: { lat: s.lat, lng: s.lng }, done: s.state === 'done' })),
+  ];
+  const legs: RouteLeg[] = [];
+  for (let i = 1; i < points.length; i++) {
+    legs.push({ key: `straight:${points[i - 1].id}-${points[i].id}`, done: points[i].done, points: [points[i - 1].p, points[i].p], dashed: true });
+  }
+  return legs;
+}
+
+/** The lines a map draws: Google's road line on Google's map when the plan has it, else the dashed straight lines. */
+export function mapLines(task: PlanOf, googleMap: boolean, stops: readonly MapStop[], start: LatLng | null): RouteLeg[] {
+  const road = routeLines(task, googleMap);
+  return road.length > 0 ? road : straightLines(stops, start);
 }
 
 /** The task has a planned road line stored (any leg with a usable polyline). */

@@ -77,6 +77,9 @@ export const KEYS = {
   profilePhoto: 'me.profilePhoto',
   /** Phase 7 §28: the held vehicle's documents as last read ({vehicleId, rows}): the expiries show offline; the files never stay. */
   documents: 'docs.lastRead',
+  /** Part 6: the map report waiting to reach the server ({google_ok, reason, at}) and the last one it took (lib/mapEngine.ts). */
+  mapReportPending: 'map.reportPending',
+  mapReported: 'map.reported',
   /** Phase 7 §13: our places as last read ({at, rows}), so Start a trip offers them with no connection. */
   tripPlaces: 'trips.places',
   /** Phase 7 §13: our places the driver picked for a trip, newest first (offered again offline). */

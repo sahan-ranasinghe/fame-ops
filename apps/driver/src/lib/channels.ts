@@ -85,6 +85,17 @@ export const UPDATES_SOUND = 'task_update.ogg';
 export const UPDATES_VIBRATION = [0, 200, 100, 200, 100, 200];
 export const OFFICE_ASKS_CHANNEL = 'office-asks';
 export const OFFICE_ASKS_SOUND = 'office_ask.ogg';
+/**
+ * Part 6, after the checkpoint: the reminders (leave in 30 min, leave now, accept or decline, the arrival nudge) on a 1.3.0
+ * channel of their own, so the phone needs none of the 1.2.0 channels for tasks: with new_task.wav (in every build, kept
+ * through resource shrinking since 1.3.0).
+ */
+export const REMINDERS_CHANNEL = 'task-reminders';
+export const REMINDERS_SOUND = 'new_task.wav';
+export const REMINDERS_VIBRATION = [0, 500, 200, 500, 200, 500];
+/** The 1.2.0 build's own channels for tasks (made by lib/notifications.ts before 1.3.0, named "New tasks" and "Task changes"). */
+export const OLD_TASKS_NEW_CHANNEL = 'tasks-new';
+export const OLD_TASKS_CHANGED_CHANNEL = 'tasks-changed';
 
 /** The 1.3.0 channels in the driver's language. */
 export function ringChannel(t: Translate): ChannelSpec {
@@ -117,6 +128,19 @@ export function officeAsksChannel(t: Translate): ChannelSpec {
   return { ...asksChannel(t), id: OFFICE_ASKS_CHANNEL, sound: OFFICE_ASKS_SOUND };
 }
 
+export function remindersChannel(t: Translate): ChannelSpec {
+  return {
+    id: REMINDERS_CHANNEL,
+    name: t('channel.reminders'),
+    description: t('channel.remindersDesc'),
+    importance: 'max',
+    sound: REMINDERS_SOUND,
+    vibrationPattern: REMINDERS_VIBRATION,
+    lockscreen: 'public',
+    lightColor: '#f2a900',
+  };
+}
+
 /** Which of the app's own channels exist on this phone (lib/notifications.ts ensureChannels). */
 export interface ChannelsReady {
   newTasks: boolean;
@@ -125,6 +149,7 @@ export interface ChannelsReady {
   ring?: boolean;
   updates?: boolean;
   officeAsks?: boolean;
+  reminders?: boolean;
 }
 
 /**
@@ -139,6 +164,26 @@ export function channelsToRegister(ready: boolean | ChannelsReady): string[] {
     ...(r.ring ? [RING_CHANNEL] : []),
     ...(r.updates ? [UPDATES_CHANNEL] : []),
     ...(r.officeAsks ? [OFFICE_ASKS_CHANNEL] : []),
+    ...(r.reminders ? [REMINDERS_CHANNEL] : []),
+  ];
+}
+
+/**
+ * Part 6: the 1.2.0 channels a phone deletes once the server has taken its token with these channels (lib/push.ts): each
+ * only when every push it carried has a registered replacement, so push-task never sends to a deleted channel
+ * (scripts/test-preview.ts checks this against push-task's channelFor for every kind).
+ *   new-tasks      new, changed, cancelled, removed       → task-ring, task-updates
+ *   driver-asks    a question                             → office-asks
+ *   tasks-new      new, leave now, accept, a question     → task-ring, task-reminders, office-asks
+ *   tasks-changed  changed, cancelled, leave in 30, reopened → task-updates, task-reminders
+ */
+export function replacedChannels(registered: readonly string[]): string[] {
+  const has = (c: string) => registered.includes(c);
+  return [
+    ...(has(RING_CHANNEL) && has(UPDATES_CHANNEL) ? [NEW_TASKS_CHANNEL] : []),
+    ...(has(OFFICE_ASKS_CHANNEL) ? [ASKS_CHANNEL] : []),
+    ...(has(RING_CHANNEL) && has(REMINDERS_CHANNEL) && has(OFFICE_ASKS_CHANNEL) ? [OLD_TASKS_NEW_CHANNEL] : []),
+    ...(has(UPDATES_CHANNEL) && has(REMINDERS_CHANNEL) ? [OLD_TASKS_CHANGED_CHANNEL] : []),
   ];
 }
 

@@ -35,13 +35,21 @@ export const ASKS_CHANNEL = "driver-asks";
 export const RING_CHANNEL = "task-ring";
 export const UPDATES_CHANNEL = "task-updates";
 export const OFFICE_ASKS_CHANNEL = "office-asks";
-const ON_UPDATES: ReadonlySet<Kind> = new Set<Kind>(["changed", "cancelled", "removed"]);
+/**
+ * Part 6, after the checkpoint (Sahan, 19 October): the reminders (leave in 30 min, leave now, accept or decline) get a
+ * 1.3.0 channel of their own, so a 1.3.0 phone needs none of the 1.2.0 channels for tasks and deletes them once the
+ * server has its new ones (the app's lib/push.ts): one "New tasks" in the phone's settings, not two.
+ */
+export const REMINDERS_CHANNEL = "task-reminders";
+const ON_UPDATES: ReadonlySet<Kind> = new Set<Kind>(["changed", "cancelled", "removed", "reopened"]);
+const ON_REMINDERS: ReadonlySet<Kind> = new Set<Kind>(["leave_30", "leave_now", "accept_reminder"]);
 
 /** The channel a push of this kind goes on, for a phone with these channels. Pure (channel_test.ts). */
 export function channelFor(kind: Kind, channels: readonly string[]): string {
   const has = (c: string) => channels.includes(c);
   if (kind === "new" && has(RING_CHANNEL)) return RING_CHANNEL;
   if (ON_UPDATES.has(kind) && has(UPDATES_CHANNEL)) return UPDATES_CHANNEL;
+  if (ON_REMINDERS.has(kind) && has(REMINDERS_CHANNEL)) return REMINDERS_CHANNEL;
   if (kind === "ask") return has(OFFICE_ASKS_CHANNEL) ? OFFICE_ASKS_CHANNEL : has(ASKS_CHANNEL) ? ASKS_CHANNEL : CHANNEL.ask;
   if (ON_NEW_TASKS.has(kind) && has(NEW_TASKS_CHANNEL)) return NEW_TASKS_CHANNEL;
   return CHANNEL[kind];

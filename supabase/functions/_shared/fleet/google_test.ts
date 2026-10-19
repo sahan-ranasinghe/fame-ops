@@ -16,10 +16,10 @@ import {
   routesResponse,
   takeGoogleCall,
 } from "./google.ts";
-import { fetchPin, googlePin } from "./googlePlaces.ts";
+import { fetchPin, googlePin, googleSuggestions } from "./googlePlaces.ts";
 import { matchPoints } from "./matching.ts";
 import { legSequence } from "./plan.ts";
-import { googleLegs, legKey, memoLegFn } from "./routing.ts";
+import { googleLegs, legKey, legMinutes, memoLegFn } from "./routing.ts";
 import {
   GOOGLE_HARD_CEILING,
   type GoogleCaps,
@@ -30,6 +30,7 @@ import {
   validateSetting,
 } from "./settings.ts";
 import { snapProvider } from "./tools/locations.ts";
+import { openSearchAnswers } from "./tools/places.ts";
 
 const NOW = new Date("2026-10-16T04:30:00Z"); // 10:00 Colombo
 const KANDY = { lat: 7.2906, lng: 80.6337 };
@@ -401,4 +402,39 @@ Deno.test("Routes: each leg's line comes from the same answer (Phase 7, §20); a
     { km: 5, minutes: 10, line: "_p~iF~ps|U_ulLnnqC" },
     { km: 2, minutes: 5 },
   ]);
+});
+
+// Part 6 after the checkpoint (Sahan, item 5: "the test that proves the fallback" for every Google call).
+Deno.test("autocomplete at its cap: no call reaches Google, and openrouteservice's search answers instead", async () => {
+  await withKeys({ GOOGLE_SERVER_KEY: "server-key" }, async () => {
+    const { db, seed, refused } = fakeDb();
+    seed("places_autocomplete", 430);
+    const { fetchFn, seen } = counted({ suggestions: [] });
+    const got = await googleSuggestions(db, settingsWith(), "Kandy City", { session: "s1" }, fetchFn);
+    assertEquals([got.places.length, seen.length, refused.get("places_autocomplete|2026-10-16")], [0, 0, 1]);
+    assertEquals(got.note, "Google place search limit reached for today: the open package until tomorrow");
+    // search_places then asks the open package's map search (tools/places.ts), as it does without Google.
+    assertEquals([openSearchAnswers(true, got.note), openSearchAnswers(false, undefined), openSearchAnswers(true, undefined)], [true, true, false]);
+  });
+});
+
+Deno.test("Routes at its cap: no call reaches Google; the plan's legs come from the open chain (here the estimate)", async () => {
+  await withKeys({ GOOGLE_SERVER_KEY: "server-key" }, async () => {
+    const { db, seed } = fakeDb();
+    seed("routes", 215);
+    const { fetchFn, seen } = counted({ routes: [] });
+    const got = await googleLegs(db, settingsWith(), [COLOMBO, KANDY], "2026-10-16T05:00:00Z", { avoid_expressway: false }, NOW, fetchFn);
+    assertEquals([("note" in got) && got.note, seen.length], ["Google road times limit reached for today: the open package until tomorrow", 0]);
+    // makePlan (tools/tasks.ts) then plans with legFnFor's chain: openrouteservice when ROUTING_PROVIDER is ors, else the
+    // estimate (straight line × road_factor ÷ avg_speed_kmh), which needs no call at all.
+    const before = Deno.env.get("ROUTING_PROVIDER");
+    Deno.env.delete("ROUTING_PROVIDER");
+    try {
+      const leg = await legMinutes(db, COLOMBO, KANDY, "2026-10-16T05:00:00Z", { avoid_expressway: false }, settingsWith());
+      assertEquals(leg.source, "estimate");
+      assert(leg.km > 90 && leg.minutes > 0);
+    } finally {
+      if (before !== undefined) Deno.env.set("ROUTING_PROVIDER", before);
+    }
+  });
 });

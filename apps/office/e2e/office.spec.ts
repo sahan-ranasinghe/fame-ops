@@ -1606,6 +1606,55 @@ test("Phase 7, Part 4: a trip a driver started is tagged and switched to persona
   await tool("cancel_task", { task_id: tripId, reason: "e2e: done" });
 });
 
+test("Part 6: the privacy contact e-mail in Fleet settings; the public /privacy page follows it: set, removed (the office phone), added again", async ({ page, browser }) => {
+  test.setTimeout(120_000);
+  const before = (await tool<{ settings: { office_phone?: string; privacy_email?: string } }>("get_settings", {})).settings;
+  await tool("update_settings", { key: "office_phone", value: "011 234 5678" });
+  const user = await tool<{ set_password_link: string }>("create_office_user", {
+    name: "E2E Privacy Admin", email: `e2e.privacy.${stamp}@fame.test`, permissions: ["view", "users"],
+  });
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  await page.getByLabel("New password").fill(`Privacy desk ${stamp}!`);
+  await page.getByLabel("Again").fill(`Privacy desk ${stamp}!`);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  const address = `privacy.${stamp}@fame.test`;
+  await page.goto("/settings/fleet");
+  const card = page.getByTestId("privacy-email-settings");
+  await expect(card).toContainText("Shown on the public privacy page. Use Fame's shared address before the store submission.");
+  await card.getByLabel("Privacy contact e-mail").fill("not an address");
+  await card.getByRole("button", { name: "Save" }).click();
+  await expect(card).toContainText("An e-mail address such as privacy@example.com.");
+  await card.getByLabel("Privacy contact e-mail").fill(address);
+  await card.getByRole("button", { name: "Save" }).click();
+  await expect(card.getByTestId("privacy-email-saved")).toHaveText(`Saved: ${address}`);
+
+  // The public page, in a second tab that has not signed in.
+  const anon = await browser.newContext();
+  const pub = await anon.newPage();
+  await pub.goto("/privacy");
+  await expect(pub.getByRole("link", { name: address })).toHaveAttribute("href", `mailto:${address}`);
+
+  await card.getByRole("button", { name: "Remove" }).click();
+  await expect(card.getByTestId("privacy-email-saved")).toHaveText("None saved: the page shows the office phone.");
+  await pub.reload();
+  await expect(pub.getByRole("link", { name: "011 234 5678" })).toHaveAttribute("href", "tel:+94112345678");
+  await expect(pub.getByRole("link", { name: address })).toHaveCount(0);
+
+  await card.getByLabel("Privacy contact e-mail").fill(address);
+  await card.getByRole("button", { name: "Save" }).click();
+  await expect(card.getByTestId("privacy-email-saved")).toHaveText(`Saved: ${address}`);
+  await pub.reload();
+  await expect(pub.getByRole("link", { name: address })).toHaveAttribute("href", `mailto:${address}`);
+  await anon.close();
+
+  await tool("update_settings", { key: "privacy_email", value: before.privacy_email ?? null });
+  await tool("update_settings", { key: "office_phone", value: before.office_phone ?? null });
+});
+
 test("a vehicle's documents: upload with its expiry, view, replace, remove with a second step, restore (Phase 7, §28)", async ({ page }) => {
   test.setTimeout(180_000);
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Docs Desk", email: `e2e.docs.${stamp}@fame.test`, permissions: ["view", "vehicles"] });

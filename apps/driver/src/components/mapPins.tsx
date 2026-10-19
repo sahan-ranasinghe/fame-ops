@@ -1,12 +1,12 @@
-// The task map's shared parts (Part 6 split them out of TaskMap.tsx): the pins, the framing constants and the turn, used by
-// Google's map (TaskMap.tsx) and the OpenFreeMap map (OpenTaskMap.tsx, MapLibre: left out of the Google-map build).
+// The task map's shared parts: the pins, the framing constants, the turn and what both engines are given (Part 6: Google's
+// map in GoogleTaskMap.tsx and the free map in OpenTaskMap.tsx, chosen by TaskMap.tsx).
 
 import Flag from 'lucide-react-native/icons/flag';
 import { StyleSheet, View } from 'react-native';
 
 import { Mono } from '@/components/ui';
 import { colors } from '@/theme';
-import type { Frame, LatLng, MapStop } from './taskMapLogic';
+import type { Frame, LatLng, MapStop, RouteLeg } from './taskMapLogic';
 
 export const SRI_LANKA: LatLng = { lat: 7.75, lng: 80.7 };
 /** Room for the back button and the duty pill above, the sheet's rounded top below, and the pins' labels. */
@@ -14,6 +14,8 @@ export const PADDING = { top: 120, right: 60, bottom: 60, left: 60 };
 /** The sheet covers the map's bottom edge: Google's logo and the framing stay above it. */
 export const SHEET_OVERLAP = 24;
 export const ONE_PLACE_ZOOM = 14;
+/** Follow me: the zoom when it is turned on (a street or two around the phone). */
+export const FOLLOW_ZOOM = 16;
 
 export interface Fit {
   key: string;
@@ -30,6 +32,19 @@ export interface MapParts {
   start: LatLng | null;
   me: LatLng | null;
   fit: Fit;
+}
+
+/** What each engine is given (TaskMap.tsx): the same parts, Follow me, and how it says it loaded or failed. */
+export interface EngineProps extends MapParts {
+  lines: RouteLeg[];
+  /** Keep the phone in the middle on every new position. */
+  follow: boolean;
+  /** The person moved the map (a pan or a pinch): Follow me turns off. */
+  onUserMove: () => void;
+  /** The map finished loading (Google: onMapLoaded; MapLibre: onDidFinishLoadingMap). */
+  onLoaded: () => void;
+  /** The map said it failed (MapLibre: onDidFailLoadingMap). */
+  onFailed: () => void;
 }
 
 /** Only the changes a person can see: a re-render per pan would be wasted. */

@@ -36,6 +36,8 @@ import { type ArrivalFlag, canMarkDone, taskKmSoFar, withSwapReading } from '@/l
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
+import { mapSession, SETTINGS_EVERY_MS } from '@/lib/mapEngine';
+import { flushMapReport } from '@/lib/mapReport';
 import { type LocalPhoto, type LocalProfilePhoto, prepareOdometerReader, queuePhoto, removeFile } from '@/lib/photos';
 import { profilePhotoPath } from '@/lib/photoRules';
 import { type AskAnswerInput, askAnswerOp, type AskRow, mergeAsk, withAnswer } from '@/lib/asks';
@@ -505,6 +507,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     remove(KEYS.tripPlaces);
     remove(KEYS.tripPicked);
     remove(KEYS.tripStopIds);
+    remove(KEYS.mapReportPending);
+    remove(KEYS.mapReported);
     setOurPlaces([]);
     setPickedPlaces([]);
     setTripProblem(null);
@@ -720,6 +724,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         loadOfficeContacts();
       }
       setOffline(sent.offline);
+      // Part 6: a map report that did not reach the server yet.
+      void flushMapReport();
       void loadOurPlaces(OUR_PLACES_REFRESH_MS);
       // Part 3b (H3): the office's questions (Today's banner).
       void loadAsksRef.current();
@@ -806,6 +812,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Once signed in, get the odometer reader ready in the background.
   const signedIn = me !== null;
+
+  // Part 6: the settings again every minute while the app is open, so the office's map package reaches the phone's map
+  // within a minute (lib/mapEngine.ts); the other settings come along. A failed read keeps the last ones.
+  useEffect(() => {
+    if (!signedIn) return;
+    const timer = setInterval(() => {
+      if (AppState.currentState !== 'active') return;
+      void api.fetchDriverSettings(supabase).then((next) => {
+        if (JSON.stringify(next) === JSON.stringify(getJson<api.DriverSettings>(KEYS.shift))) return;
+        setShift(next);
+        setJson(KEYS.shift, next);
+      }).catch(() => undefined);
+    }, SETTINGS_EVERY_MS);
+    return () => clearInterval(timer);
+  }, [signedIn]);
   useEffect(() => {
     if (signedIn) void prepareOdometerReader();
   }, [signedIn]);
@@ -835,6 +856,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const appState = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
+      // Part 6: Google's map is tried again when the app opens 30 minutes or more after it failed.
+      mapSession.appOpened(Date.now());
       void checkTrackingNow();
       if (liveRef.current !== 'connected') setLiveGeneration((n) => n + 1);
       void refresh();
