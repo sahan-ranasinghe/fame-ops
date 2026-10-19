@@ -14,7 +14,7 @@ import { Button, Mono, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
 import { addDays, colomboDate } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
-import { updateDraft, useTripDraft } from '@/office/trip/draft';
+import { nextStep, updateDraft, useTripDraft } from '@/office/trip/draft';
 import { dwellFallbacks } from '@/office/trip/planLogic';
 import { dwellText, parseDwell, type StopDraft, stopsInput } from '@/office/trip/stopsLogic';
 import { useTrip } from '@/office/trip/useTrip';
@@ -48,7 +48,7 @@ export default function TripWhen() {
   const check = trip.check;
   const lateLabel = lateByText(t, check, f.leaveBy);
   const startName = f.start.trim() || trip.base?.name || '';
-  const above = draft.mode === 'task' ? t('office.trip.assignAbove', { n: 2 }) : draft.mode === 'edit' ? t('office.trip.editAbove') : t('office.trip.newAbove', { n: 2 });
+  const above = draft.mode === 'task' ? t('office.trip.assignAbove', { n: 2 }) : draft.mode === 'edit' ? t('office.trip.editAbove') : draft.mode === 'stops' ? t('office.trip.stopsAbove') : t('office.trip.newAbove', { n: 2 });
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -75,7 +75,7 @@ export default function TripWhen() {
           return (
             <View key={s.key} style={styles.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={styles.mark}><Mono size={14} bold color="#ffffff">{String(i + 1 + (f.startPax ? 1 : 0))}</Mono></View>
+                <View style={styles.mark}><Mono size={14} bold color="#ffffff">{String(i + 1 + (f.startPax ? 1 : 0) + (draft.reached ?? 0))}</Mono></View>
                 <View style={{ flex: 1 }}>
                   <Txt variant="strong" numberOfLines={2}>{s.place || t('office.trip.stopNoPlace')}</Txt>
                   <Txt variant="small">{t(`office.trip.type_${s.type}`)}</Txt>
@@ -132,7 +132,7 @@ export default function TripWhen() {
           )}
         </View>
       </Screen>
-      <TripFooter label={t('office.trip.nextWho')} onPress={() => { updateDraft((x) => ({ ...x, step: 'who' })); router.push('/office/trip/who'); }} disabled={!!problem} problem={problem} />
+      <TripFooter label={t(nextStep('when', draft.mode) === 'review' ? 'office.trip.nextReview' : 'office.trip.nextWho')} onPress={() => { const next = nextStep('when', draft.mode) ?? 'who'; updateDraft((x) => ({ ...x, step: next })); router.push(`/office/trip/${next}` as never); }} disabled={!!problem} problem={problem} />
     </View>
   );
 }

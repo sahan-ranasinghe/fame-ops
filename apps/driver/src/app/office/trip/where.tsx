@@ -12,14 +12,15 @@ import { ChevronDown, ChevronUp, X } from '@/components/icons';
 import { PlaceSearch, type Picked } from '@/components/office/PlaceSearch';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Mono, Txt } from '@/components/ui';
-import { colomboTime } from '@/lib/time';
+import { colomboDate, colomboTime } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
 import { draftWorthKeeping, getDraft, newDraft, setDraft, type TripMode, updateDraft, useTripDraft } from '@/office/trip/draft';
 import { pinText } from '@/office/trip/locationLogic';
 import { editFields } from '@/office/trip/requestLogic';
 import { moveStop, newStop, type StopDraft, stopsInput, type StopType, type What } from '@/office/trip/stopsLogic';
 import { reasonText } from '@/office/trip/words';
-import type { RequestsList, SettingsResult } from '@/office/types';
+import type { RequestsList, SettingsResult, TaskDetail } from '@/office/types';
+import { draftsFromStops } from '@/office/trip/stopsLogic';
 import { Empty, ErrorNotice, Loading, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -39,13 +40,15 @@ export default function TripWhere() {
   const [asked, setAsked] = useState(false);
   // edit: the request as list_requests answers it now.
   const req = useTool<RequestsList>('list_requests', { status: 'all', id: id ?? '', limit: 1 }, { enabled: mode === 'edit' && !!id });
+  // stops: the task as task_detail answers it now (the pending stops become the rows; the reached ones keep their numbers).
+  const taskQ = useTool<TaskDetail>('task_detail', { task_id: id ?? '' }, { enabled: mode === 'stops' && !!id });
 
   // Starting a flow: a draft of the same kind worth keeping is offered; else a fresh one.
   useEffect(() => {
     if (!mode || asked) return;
     setAsked(true);
     const current = getDraft();
-    if (mode === 'edit') return; // loaded below from the request
+    if (mode === 'edit' || mode === 'stops') return; // loaded below from the request or the task
     if (current && current.mode === mode && draftWorthKeeping(current)) {
       Alert.alert(t('office.trip.resumeTitle'), t('office.trip.resumeBody', { time: colomboTime(current.at) }), [
         { text: t('office.trip.discard'), style: 'destructive', onPress: () => setDraft(newDraft(mode)) },
@@ -68,6 +71,39 @@ export default function TripWhere() {
     });
   }, [mode, id, req.data]);
 
+  useEffect(() => {
+    if (mode !== 'stops' || !id) return;
+    const p = taskQ.data;
+    if (!p) return;
+    const current = getDraft();
+    if (current?.mode === 'stops' && current.taskId === id && current.planVersion === p.task.plan_version) return;
+    const pending = p.stops.filter((s) => s.status === 'pending');
+    const own = pending.find((s) => s.is_start);
+    const reached = p.stops.filter((s) => s.status !== 'pending' && s.status !== 'removed').length;
+    const date = p.task.date ?? (p.task.leave_by && /^\d{4}-\d{2}-\d{2}/.test(p.task.leave_by) ? p.task.leave_by.slice(0, 10) : colomboDate());
+    const hhmm = (v?: string) => v?.match(/\d{2}:\d{2}$/)?.[0] ?? '';
+    setDraft({
+      mode: 'stops', taskId: id, planVersion: p.task.plan_version ?? 0, reached, step: 'where', at: Date.now(), rows: [],
+      fields: {
+        date, leaveBy: p.task.leave_by_source === 'manual' && p.task.status === 'assigned' ? hhmm(p.task.leave_by) : '', end: hhmm(p.task.end_by),
+        stops: draftsFromStops(pending.filter((s) => !s.is_start).map((s) => ({ type: s.type, what: s.what, place: s.place, place_id: s.place_id, google_place_id: s.google_place_id, lat: s.lat, lng: s.lng, dwell_min: s.dwell_min, arrive_by: s.arrive_by, note: s.note }))),
+        start: p.task.start_place ?? '', startPlaceId: p.task.start_place_id, startGooglePlaceId: p.task.start_google_place_id, startLat: p.task.start_lat, startLng: p.task.start_lng,
+        startPax: !!own, startWhat: (own?.what as never) ?? '', startNote: own?.note ?? '', startDwell: own?.dwell_min != null ? String(own.dwell_min) : '',
+        returnToBase: !!p.task.return_to_base, avoidExpressway: !!p.task.avoid_expressway,
+        title: p.task.title, buffer: '', driver: p.task.driver ?? '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false,
+      },
+      req: { behalf: '', project: '', need: '', tools: false, note: '', driverRequired: true, requesterPhone: '' },
+    });
+  }, [mode, id, taskQ.data]);
+
+  if (mode === 'stops' && !d) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.page }}>
+        <TripHeader step="where" above={t('office.trip.stopsAbove')} onBack={() => router.back()} />
+        <Screen>{taskQ.loading ? <Loading text={t('office.common.loading')} /> : taskQ.error ? <ErrorNotice error={taskQ.error} onRetry={() => void taskQ.reload()} onSignIn={() => void signOut()} /> : <Empty text={t('office.task.notFound')} />}</Screen>
+      </View>
+    );
+  }
   if (mode === 'edit' && !d) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -93,7 +129,7 @@ export default function TripWhere() {
   const startName = f.start.trim() || base?.name || '';
   const check = stopsInput(f.stops, f.startPax ? 1 : 0);
   const problem = 'error' in check ? reasonText(t, check.error) : null;
-  const above = d.mode === 'task' ? t('office.trip.assignAbove', { n: 1 }) : d.mode === 'edit' ? t('office.trip.editAbove') : t('office.trip.newAbove', { n: 1 });
+  const above = d.mode === 'task' ? t('office.trip.assignAbove', { n: 1 }) : d.mode === 'edit' ? t('office.trip.editAbove') : d.mode === 'stops' ? t('office.trip.stopsAbove') : t('office.trip.newAbove', { n: 1 });
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -135,7 +171,7 @@ export default function TripWhere() {
             return (
               <View key={s.key} style={{ gap: 10, paddingTop: i > 0 ? 12 : 0, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: colors.line }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={styles.mark}><Mono size={14} bold color="#ffffff">{String(i + 1 + (f.startPax ? 1 : 0))}</Mono></View>
+                  <View style={styles.mark}><Mono size={14} bold color="#ffffff">{String(i + 1 + (f.startPax ? 1 : 0) + (d.reached ?? 0))}</Mono></View>
                   <View style={{ flex: 1 }}>
                     {s.place.trim() ? <Txt variant="strong" numberOfLines={2}>{s.place}</Txt> : <Txt variant="muted">{t('office.trip.stopNoPlace')}</Txt>}
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>

@@ -1,8 +1,9 @@
 // Office mode (Phase 8, O1): Task detail (design 14), from task_detail: the status pills, the five steps with their
 // times, the driver and the vehicle with Call and WhatsApp, where the driver is now (the ETA) with Live map, the stops
 // planned against what happened, Reassign driver (Needs a driver, design 11, through reassign_task), Cancel task… with
-// a reason (cancel_task), the requester's line with Call. Not in O1 and not shown: Change time or stops, Swap vehicle,
-// Reopen.
+// a reason (cancel_task), the requester's line with Call. O2 (item 5): Change time (task/[id]/time, update_task), Change
+// stops (the editor's Where and When in mode stops, update_task_stops), Swap vehicle while it runs (task/[id]/swap,
+// move_driver_vehicle) and Reopen with a reason (reopen_task, a task completed today); each only with its tool.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
@@ -13,6 +14,7 @@ import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
 import { useOffice, useTool } from '@/office/state';
+import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
 import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, stopLateMin, stopParts, steps, taskStatusKey } from '@/office/taskLogic';
 import type { FleetError, TaskDetail } from '@/office/types';
 import { Avatar, BackHeader, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
@@ -28,6 +30,12 @@ const CANCEL_REASONS: { value: CancelReasonKey; label: string }[] = [
   { value: 'other', label: 'office.task.cancelOther' },
 ];
 
+const REOPEN_REASONS: { value: ReopenReasonKey; label: string }[] = [
+  { value: 'finished_early', label: 'office.task.reopenFinishedEarly' },
+  { value: 'wrong_reading', label: 'office.task.reopenWrongReading' },
+  { value: 'other', label: 'office.task.cancelOther' },
+];
+
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
 export default function TaskDetailScreen() {
@@ -39,6 +47,7 @@ export default function TaskDetailScreen() {
   const p = q.data;
   const task = p?.task;
   const [cancelling, setCancelling] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<FleetError | null>(null);
 
@@ -49,6 +58,22 @@ export default function TaskDetailScreen() {
     try {
       await api.call('cancel_task', cancelInput(task.id, label, note));
       Alert.alert(t('office.task.cancelledTitle'), undefined, [{ text: t('office.common.ok'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/office')) }]);
+    } catch (e) {
+      setProblem(e as FleetError);
+      void q.reload();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reopen(label: string, note: string) {
+    if (!task || busy) return;
+    setBusy(true);
+    setProblem(null);
+    try {
+      await api.call('reopen_task', reopenInput(task.id, label, note));
+      Alert.alert(t('office.task.reopenedTitle'), t('office.task.reopenedBody'), [{ text: t('office.common.ok') }]);
+      await q.reload();
     } catch (e) {
       setProblem(e as FleetError);
       void q.reload();
@@ -71,6 +96,7 @@ export default function TaskDetailScreen() {
   const stops = (p?.stops ?? []).filter((s) => s.status !== 'removed');
   const may = allowedActions(task ?? { status: 'cancelled' });
   const actions = { reassign: may.reassign && me.tools.includes('reassign_task'), cancel: may.cancel && me.tools.includes('cancel_task') };
+  const extras = task ? extrasFor(task, me.tools) : { time: false, stops: false, swap: false, reopen: false };
   const statusKey = task ? taskStatusKey(task) : '';
 
   return (
@@ -197,6 +223,22 @@ export default function TaskDetailScreen() {
             {actions.cancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => setCancelling(true)} disabled={busy} style={{ flex: 1, minHeight: 56, borderColor: colors.red }} />}
           </View>
         )}
+        {task && (extras.time || extras.stops) && (
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {extras.time && <Button kind="outline" label={t('office.task.changeTime')} onPress={() => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } })} disabled={busy} style={{ flex: 1, minHeight: 56 }} />}
+            {extras.stops && <Button kind="outline" label={t('office.task.changeStops')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } })} disabled={busy} style={{ flex: 1, minHeight: 56 }} />}
+          </View>
+        )}
+        {task && extras.swap && (
+          <Button kind="outline" label={t('office.task.swapVehicle')} onPress={() => router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } })} disabled={busy} style={{ minHeight: 56 }} />
+        )}
+        {task && extras.reopen && (
+          <View style={styles.card}>
+            <Txt variant="strong">{t('office.task.reopenTitle')}</Txt>
+            <Txt variant="muted" size={15}>{t('office.task.reopenIntro')}</Txt>
+            <Button kind="outline" label={t('office.task.reopen')} onPress={() => setReopening(true)} disabled={busy} style={{ minHeight: 56 }} />
+          </View>
+        )}
         {task && (task.contact?.name || p?.from_request) && (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Txt variant="small">{t('office.task.requesterPush', { name: p?.from_request?.requested_by ?? task.contact?.name ?? '' })}</Txt>
@@ -223,7 +265,21 @@ export default function TaskDetailScreen() {
         }}
         onClose={() => setCancelling(false)}
       />
-      {busy && <StickyActions><Loading text={t('office.task.cancelling')} /></StickyActions>}
+      <ReasonSheet<ReopenReasonKey>
+        visible={reopening}
+        title="office.task.reopenTitle"
+        question="office.task.reopenQuestion"
+        notePlaceholder="office.task.reopenNote"
+        confirmLabel="office.task.reopen"
+        subtitle={task?.title ?? null}
+        reasons={REOPEN_REASONS}
+        onConfirm={(reason, note) => {
+          setReopening(false);
+          void reopen(REOPEN_TEXT[reason], note);
+        }}
+        onClose={() => setReopening(false)}
+      />
+      {busy && <StickyActions><Loading text={t(reopening || !cancelling ? 'office.task.working' : 'office.task.cancelling')} /></StickyActions>}
     </View>
   );
 }

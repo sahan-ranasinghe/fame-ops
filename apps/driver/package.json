@@ -80,9 +80,9 @@
     "test:office": "tsx scripts/test-office.ts",
     "test:live": "tsx scripts/test-live.ts",
     "test:inbox": "tsx scripts/test-inbox.ts",
-    "test:asks-office": "tsx scripts/test-asks-office.ts",
-    "test:drivers": "tsx scripts/test-drivers.ts",
-    "test:issues": "tsx scripts/test-issues.ts"
+    "test:issues": "tsx scripts/test-issues.ts",
+    "test:trip": "tsx scripts/test-trip.ts",
+    "test:task-extras": "tsx scripts/test-task-extras.ts"
   },
   "private": true,
   "expo": {

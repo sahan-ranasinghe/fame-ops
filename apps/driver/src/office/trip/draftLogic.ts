@@ -11,7 +11,7 @@ import { type AssignFields, emptyAssign, type ProjectRow } from './assignLogic';
 import { type RequestFields } from './requestLogic';
 import type { TripFields } from './tripLogic';
 
-export type TripMode = 'request' | 'task' | 'edit';
+export type TripMode = 'request' | 'task' | 'edit' | 'stops';
 export type Step = 'where' | 'when' | 'who' | 'review';
 export const STEPS: Step[] = ['where', 'when', 'who', 'review'];
 
@@ -33,6 +33,10 @@ export interface TripDraft {
   requestId?: string;
   version?: number;
   was?: RequestFields;
+  /** stops: the task whose stops are changed, the plan version it was shown with, and the stops already reached (they keep their numbers). */
+  taskId?: string;
+  planVersion?: number;
+  reached?: number;
   /** The trip and the task's own fields (the request mode leaves the task's empty). */
   fields: AssignFields;
   req: RequestExtras;
@@ -63,7 +67,9 @@ export function draftWorthKeeping(d: TripDraft | null, now = Date.now()): boolea
   return f.stops.some((s) => s.place.trim() || s.placeId || s.googlePlaceId || s.arriveBy) || !!f.leaveBy || !!f.title.trim() || !!f.start.trim();
 }
 
-/** The step after this one, and the one before: Who is skipped nowhere (a request's Who holds its passengers and notes). */
-export const nextStep = (s: Step): Step | null => (s === 'where' ? 'when' : s === 'when' ? 'who' : s === 'who' ? 'review' : null);
-export const prevStep = (s: Step): Step | null => (s === 'review' ? 'who' : s === 'who' ? 'when' : s === 'when' ? 'where' : null);
+/** The step after this one, and the one before; a task's stops (mode stops) have no Who: When goes straight to Review. */
+export const nextStep = (s: Step, mode: TripMode = 'request'): Step | null =>
+  s === 'where' ? 'when' : s === 'when' ? (mode === 'stops' ? 'review' : 'who') : s === 'who' ? 'review' : null;
+export const prevStep = (s: Step, mode: TripMode = 'request'): Step | null =>
+  s === 'review' ? (mode === 'stops' ? 'when' : 'who') : s === 'who' ? 'when' : s === 'when' ? 'where' : null;
 export const stepIndex = (s: Step): number => STEPS.indexOf(s);

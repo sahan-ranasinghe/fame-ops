@@ -20,6 +20,7 @@ import { requestFieldsOf, setDraft, useTripDraft } from '@/office/trip/draft';
 import { previewTask } from '@/office/trip/planMap';
 import { legText, stopTimes } from '@/office/trip/planLogic';
 import { updateRequestInput, validateNewRequest } from '@/office/trip/requestLogic';
+import { stopsInput, startInput, hasDeadline } from '@/office/trip/stopsLogic';
 import { useTrip } from '@/office/trip/useTrip';
 import { ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
 import { reasonLines, reasonText } from '@/office/trip/words';
@@ -44,14 +45,25 @@ export default function TripReview() {
   const mapTask = p ? previewTask(p) : null;
   const needsApproval = d.mode === 'task' && !has(me.permissions, 'approve') && settings.data?.settings.tasks_need_approval !== false;
   const driverName = f.driver;
-  const label = d.mode === 'edit' ? t('office.trip.saveChanges') : d.mode === 'request' ? t('office.trip.sendRequest') : needsApproval ? t('office.trip.sendForApproval') : t('office.trip.sendTo', { name: driverName });
-  const above = d.mode === 'task' ? t('office.trip.assignAbove', { n: 4 }) : d.mode === 'edit' ? t('office.trip.editAbove') : t('office.trip.newAbove', { n: 4 });
+  const label = d.mode === 'edit' || d.mode === 'stops' ? t('office.trip.saveChanges') : d.mode === 'request' ? t('office.trip.sendRequest') : needsApproval ? t('office.trip.sendForApproval') : t('office.trip.sendTo', { name: driverName });
+  const above = d.mode === 'task' ? t('office.trip.assignAbove', { n: 4 }) : d.mode === 'edit' ? t('office.trip.editAbove') : d.mode === 'stops' ? t('office.trip.stopsAbove') : t('office.trip.newAbove', { n: 4 });
 
   // The call for this draft, or what is missing (the site's rules).
   const call = (): { tool: string; input: Record<string, unknown> } | { error: string } => {
     if (d.mode === 'task') {
       const v = validateAssign({ ...f, vehicle: f.vehicle === ON_THE_DAY ? ON_THE_DAY : f.vehicle }, d.rows, me.name, { defaultVehicle: undefined, base: trip.base });
       return 'error' in v ? v : { tool: 'create_task', input: v.input };
+    }
+    if (d.mode === 'stops') {
+      // update_task_stops: the rows after the reached stops, the start, the switches, a leave time typed by hand (the site's TaskStops).
+      const s = stopsInput(f.stops, (d.reached ?? 0) + (f.startPax ? 1 : 0));
+      if ('error' in s) return s;
+      if (!f.leaveBy.trim() && !hasDeadline(f.stops)) return { error: t('office.trip.reasonLeave') };
+      const input: Record<string, unknown> = { task_id: d.taskId, plan_version: d.planVersion ?? 0, stops: s.stops, return_to_base: f.returnToBase, avoid_expressway: f.avoidExpressway };
+      const start = startInput(f, trip.base);
+      if (start) input.start = start;
+      if (f.leaveBy.trim()) input.leave_by = f.leaveBy.trim();
+      return { tool: 'update_task_stops', input };
     }
     const rf = requestFieldsOf(d);
     if (d.mode === 'edit') {
@@ -72,13 +84,14 @@ export default function TripReview() {
       const out = await api.call<CreateTaskResult & UpdateRequestResult & { next?: string }>(planned.tool, planned.input);
       setDraft(null);
       const warnings = [...(out.warnings ?? []), ...(((out as CreateTaskResult).conflicts ?? []).map((c) => c.text))];
-      const title = d!.mode === 'task' ? (assignOutcome(out, driverName).head) : d!.mode === 'edit' ? t('office.trip.savedTitle') : t('office.trip.requestSentTitle');
+      const title = d!.mode === 'task' ? assignOutcome(out, driverName).head : d!.mode === 'edit' || d!.mode === 'stops' ? t('office.trip.savedTitle') : t('office.trip.requestSentTitle');
       const body = [out.next, ...warnings].filter(Boolean).join('\n');
       Alert.alert(title, body || undefined, [{
         text: t('office.common.ok'),
         onPress: () => {
           router.dismissAll();
-          router.replace(d!.mode === 'task' && has(me.permissions, 'assign_tasks') ? '/office/(tabs)/tasks' : has(me.permissions, 'request') ? '/office/(tabs)/trips' : '/office');
+          if (d!.mode === 'stops' && d!.taskId) router.replace({ pathname: '/office/task/[id]', params: { id: d!.taskId } });
+          else router.replace(d!.mode === 'task' && has(me.permissions, 'assign_tasks') ? '/office/(tabs)/tasks' : has(me.permissions, 'request') ? '/office/(tabs)/trips' : '/office');
         },
       }]);
     } catch (e) {
