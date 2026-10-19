@@ -12,6 +12,7 @@ import { FleetStore } from "../data/store";
 import { uploadToTicket } from "../data/upload";
 import { registerServiceWorker } from "../push";
 import type { Me } from "../transport/types";
+import { watchRouterPath } from "../ui/ListKit";
 import { ToastProvider } from "../ui/Toast";
 import { FleetProvider } from "./FleetContext";
 import { routes } from "./routes";
@@ -52,6 +53,12 @@ function Gate() {
   useEffect(() => {
     if (!router) return;
     return registerServiceWorker((path) => void router.navigate(path));
+  }, [router]);
+  // Hotfix 4: the lists' URL filters check the router's path before they write (ui/ListKit useUrlFilter).
+  useEffect(() => {
+    if (!router) return;
+    watchRouterPath(() => router.state.location.pathname);
+    return () => watchRouterPath(null);
   }, [router]);
 
   switch (auth.state.step) {

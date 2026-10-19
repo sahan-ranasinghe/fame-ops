@@ -10,7 +10,7 @@
 // useLocalPagedList pages rows already in memory (Reminders) with the same look.
 import { cursorAt, MAX_LIMIT } from "@fleet/paging";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useLocation, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { Entry } from "../data/store";
@@ -266,11 +266,22 @@ export function EmptyLine({ children }: { children: ReactNode }) {
  * A filter kept in the URL (?name=value; the default leaves no trace), so a reload, Back or a shared link shows the same
  * list.
  */
+/** The app's router's current path (WebApp, ArtifactApp register it); none in tests. */
+let routerPath: (() => string) | null = null;
+export function watchRouterPath(get: (() => string) | null): void {
+  routerPath = get;
+}
+
 export function useUrlFilter<V extends string>(name: string, fallback: V, allowed?: readonly V[]): [V, (value: V) => void] {
   const [params, setParams] = useSearchParams();
+  const { pathname } = useLocation();
   const raw = params.get(name);
   const value = raw !== null && (!allowed || (allowed as readonly string[]).includes(raw)) ? (raw as V) : fallback;
   const set = (next: V) => {
+    // Hotfix 4: a write that comes after the page was left (a search settling as a link is followed) would land on the next
+    // page's address ("?q=" goes with wherever the router is now): dropped.
+    const now = routerPath?.();
+    if (now && now !== pathname) return;
     setParams((old) => {
       const out = new URLSearchParams(old);
       if (next === fallback || next === "") out.delete(name);

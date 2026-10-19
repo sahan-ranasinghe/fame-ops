@@ -8,6 +8,7 @@ import { PERMISSIONS } from "@fleet/permissions";
 import { ALL_TOOLS, type Me, type Transport } from "../transport/types";
 import { ToastProvider } from "../ui/Toast";
 import { FleetProvider } from "./FleetContext";
+import { watchRouterPath } from "../ui/ListKit";
 import { routes } from "./routes";
 
 /** Outside Claude every call fails with not_granted, and the banner says to open the page in Claude. */
@@ -52,6 +53,12 @@ export function ArtifactApp() {
     };
   }, [state]);
   const router = useMemo(() => (fleet ? createHashRouter(routes) : null), [fleet]);
+  // Hotfix 4: the lists' URL filters check the router's path before they write (ui/ListKit useUrlFilter).
+  useEffect(() => {
+    if (!router) return;
+    watchRouterPath(() => router.state.location.pathname);
+    return () => watchRouterPath(null);
+  }, [router]);
 
   if (!fleet || !router) return <div className="loading" style={{ padding: 40 }}>Opening Fame Fleet…</div>;
   return (

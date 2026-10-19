@@ -2423,6 +2423,14 @@ Office web only: no migration, no function, no driver app change, the connector'
   that had not refreshed yet.
 - All three pass on their own after the fixes.
 
+**One more race the e2e found (older than this hotfix):**
+- A list's search that settles just as a link is followed wrote its `?q=` onto the next page's address
+  ("/settings/users/new?q=…"): a search-only address goes with wherever the router is by then.
+- **Fixed:** the app registers its router (`watchRouterPath`), and a URL filter written after its page was left is dropped
+  (`ui/ListKit` `useUrlFilter`; `urlFilterGuard.test.tsx`).
+- The final run: the 740 unit tests, both builds and 23 of 24 e2e; the 24th passed on its own on a fresh functions server
+  (it had run out of its 2 minutes at its last step).
+
 **Test steps** (they go into `docs/phase7-test-plan.md` when this branch and Part 6's meet):
 1. Requests, as a fleet admin on a laptop and on a phone. **See:** one "New request" (the header's on a laptop, the big
    button on a phone).
