@@ -341,6 +341,80 @@ checkpoint.
 7. **A job title:** none (the permission chips say what the person does).
 8. **"App stopped" in Notifications:** no (it stays an issue).
 
+## 14. O1 as built (19–20 October 2026, branch `phase8-o1`): the approver's and dispatcher's side, a pilot
+
+Sahan's brief (19 October, evening): a pilot on his phone, signed in as an office user against the live server, for Charuka
+the next morning; everything shown is real, nothing not built is shown; JavaScript only (an EAS update to the 1.3.0
+runtime, no build); the app's navigation as it is (expo-router, no packages/shared yet: the site's client and types
+copied); every screen by permission; an office sign-in starts nothing driver-side; the designs' look and both languages.
+Built in the brief's order; the trip editor (06–09) is round O2.
+
+### The foundation (`apps/driver/src/office/`)
+- `api.ts`: the site's ApiTransport copied for the phone (GET /me, POST /tools/<name> with the session's token and the
+  publishable key; no phone-only code, so `scripts/test-office.ts` runs it with a fake server). The retry rule as on the
+  site: a read (READ_TOOLS, the server's readOnly tools, and /me) that was dropped is asked again once after 2 s; a write
+  never, its error marked `write` ("may not have been saved"); `reviewing` is the one keyed write. Signed out only on a
+  401 or 403 (`signedOut`).
+- `auth.ts`: the Office sign-in (Supabase Auth with the e-mail and password, then /me); `loadMe` → ok | signed_out (a
+  401 or 403 only: no office role, switched off, the session gone) | unreachable (the session kept, Try again); a token
+  that could not be refreshed offline is offline, not signed out (`lib/session.ts`); one person per phone (an office
+  sign-in clears a driver's, and the other way round in `login.tsx`); `bootOffice` at start. `client.ts` wires it.
+- `store.ts`: the office person on the phone (`office.me` in the kv store), read by the route layouts: the driver's tabs
+  send an office sign-in to `/office`, `/office` sends nobody to `/login`. `types.ts` and `permissions.ts`: copies of the
+  site's `data/types.ts` and the server's permission table (noted at their top; copied again when they change).
+- `nav.ts` (pure, tested): the bottom tabs by permission (Home, then Approve for approve, Tasks for assign_tasks, My
+  trips for request, Live for view, Alerts, More; never a tab twice; the Drivers tab waits for the Drivers board), Home's
+  sections and header chips, More's Work list, and a notification's site link → the app's screen by permission.
+- `state.tsx`: `OfficeProvider` (the person, the client, sign-out, the unread count every minute for the badge) and
+  `useTool` (a tool's answer with loading, error, reload; read again when the screen comes to the front, on pull to
+  refresh and on a timer). `ui.tsx`: the shared pieces in the app's tokens (the dark header with the bell, section cards,
+  rows, pills, chips, the back header, the error notice with Try again, the sticky actions). `text.ts`: the error
+  sentences as i18n keys. The status green `#2e7d32` (decision 6) in `theme.ts`.
+- Strings under `office.*` in `i18n/en.json` and `si.json` (the Sinhala from design 05 where it had the word).
+
+### The screens (`apps/driver/src/app/office/`)
+- **Sign in** (01, `app/login.tsx`): Driver | Office under "Sign in"; Office = work e-mail, password with the eye,
+  "Forgot password?" → "Ask the fleet admin for a new sign-in link." (decision 2), the help line, the version and the
+  privacy link; the last office e-mail is filled in next time.
+- **Home** (02–05, `(tabs)/index.tsx`): the date, "Morning / Afternoon / Evening, <first name>", the chips (on the road,
+  free = parked, waiting for OK with approve, in garage with vehicles or issues) from fleet_overview; the sections by
+  permission: Requests to approve (list_requests waiting, 5 rows, View all → the Approve tab), Needs a driver (red, Give
+  a driver → design 11), Critical (read only until the issues screen), Today's tasks (task_board, Board → the Tasks
+  tab, "All today's tasks (N)"), On the road (rows → Live on that driver, Live map), My trips (my_trips, View all).
+  No big action button (the trip editor is O2).
+- **The Approve queue** (`(tabs)/approve.tsx`, not designed as a list): the waiting and changed requests with "<name> is
+  reviewing" and "Leave-by passed"; a row → design 10.
+- **Approve a request** (10, `request/[id].tsx`): the request (list_requests by id), "<name> is also looking" (reviewing
+  every 20 s), the trip card from the request's plan (`approveLogic.tripView`: S / 1 / B rows with the times, the totals,
+  needs, notes, Call the requester when their number is known), Who's available (availability at the leave-by until the
+  back-by, the type and passengers, nearest the first stop; the proposal's driver, else the best match, picked first; a
+  tap picks another; the vehicle fills itself from the driver), Approve · send to <driver> (decide_request; a changed
+  booking: redecide_request keep / change / decline with the version), Decline… with a reason sheet; the server's
+  "Already approved by … at …" shown and the card read again. Not shown: Plan on map, Change the trip, Change time, Ask
+  drivers.
+- **The Tasks board** (`(tabs)/tasks.tsx`, not designed as a list): ‹ a day › with today's name, the sections Needs a
+  driver (Give a driver), On the way, Sent to the driver, Waiting for approval (→ Approve for an approver), Done.
+- **Task detail** (14, `task/[id].tsx`): the pills (status, running late, the label, driver-started, completed early),
+  the five steps with their times (`taskLogic.steps`: "~10:38" planned, "—" not yet), "Approved by … · plan vN", the
+  driver with the plate, the make and the start odometer, Call and WhatsApp, "next: <stop> · about HH:MM · back about
+  HH:MM" with Live map while on the way, Stops · planned vs actual (`stopParts`, "8 min late" from the arrive-by), the
+  notes, the km, Reassign driver (→ 11) and Cancel task… (cancel_task with a reason) while the task allows them, the
+  requester's line with Call. Not shown: Change time or stops, Swap vehicle, Reopen.
+- **Needs a driver / Give it a driver** (11, `task/[id]/driver.tsx`): "leaves in 42 min" / "leave-by passed", the red
+  "<driver> declined · <why> · HH:MM", Open task →, the trip card, "asked by · approved by" with Call, Who can take it
+  (never the driver who declined: their row says so), Give to <driver> · <plate> (reassign_task with the vehicle they
+  hold), Cancel task…. Back means back. Not shown: Move the time, Ask drivers (not wired in the hour).
+- **More** (19, `(tabs)/more.tsx`): the person with the permission chips, My profile → 18, Work (the built screens not on
+  the bar), the laptop-only line, Sign out (asks first), the version.
+- **Live** (15), **Alerts** (16), **My trips** (17), **Profile** (18): see "The subagents' screens" below.
+
+### What moved to O2 or later
+- O2 (the trip editor, 06–09): New request, Assign a task, Change the trip / time / stops, Edit a request, Book now, the
+  Home's big action buttons, the chips' panels.
+- Later Parts: the Drivers board and its tab (12), Ask drivers (13), Live's trails, playback and controls, the issues
+  screen, vehicles, the management under More (8.5), 2-step sign-in in the app, the office push on the phone (item 9:
+  server work behind Sahan's go, listed apart in the checkpoint).
+
 ## 13. Risks
 
 - **Scope.** 138 site functions, about 45 screens. Mitigation:

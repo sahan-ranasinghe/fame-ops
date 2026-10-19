@@ -34,6 +34,8 @@ export function useOffice(): OfficeValue {
 }
 
 const UNREAD_EVERY_MS = 60_000;
+/** /me again every minute while the app is open: the office's map package, the permissions and the number follow (a dropped one keeps everything). */
+const ME_EVERY_MS = 60_000;
 
 export function OfficeProvider({ me, children }: { me: Me; children: ReactNode }) {
   const [unread, setUnread] = useState(0);
@@ -45,11 +47,15 @@ export function OfficeProvider({ me, children }: { me: Me; children: ReactNode }
     const timer = setInterval(() => {
       if (AppState.currentState === 'active') reloadUnread();
     }, UNREAD_EVERY_MS);
+    const meTimer = setInterval(() => {
+      if (AppState.currentState === 'active') void refreshOfficeMe();
+    }, ME_EVERY_MS);
     const sub = AppState.addEventListener('change', (s) => {
       if (s === 'active') reloadUnread();
     });
     return () => {
       clearInterval(timer);
+      clearInterval(meTimer);
       sub.remove();
     };
   }, [reloadUnread]);

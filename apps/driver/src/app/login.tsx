@@ -14,7 +14,7 @@ import { LanguagePill } from '@/components/LanguageSwitch';
 import { PRIVACY_URL } from '@/config';
 import { Button, Card, Field, Notice, Txt } from '@/components/ui';
 import { getJson } from '@/lib/kv';
-import { type OfficeSignInOutcome, signInOffice } from '@/office/auth';
+import { type OfficeSignInOutcome, signInOffice, signOutOffice } from '@/office/auth';
 import { OFFICE_KEYS, useOfficeMe } from '@/office/store';
 import { type SignInOutcome, useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
@@ -61,6 +61,8 @@ export default function LoginScreen() {
     setBusy(true);
     setProblem(null);
     if (side === 'driver') {
+      // One person per phone: an office sign-in on this phone goes first.
+      if (officeMe) await signOutOffice();
       const outcome = await signIn(username, pin);
       if (outcome !== 'ok') {
         setProblem(PROBLEM[outcome]);

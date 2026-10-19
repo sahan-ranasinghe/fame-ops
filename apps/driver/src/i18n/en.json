@@ -949,7 +949,23 @@
       "signOutBody": "Sign out of Fame Fleet on this phone?"
     },
     "trips": {
-      "backBy": "back by"
+      "backBy": "back by",
+      "above": "The last 30 days and the next 60",
+      "waiting": "Waiting",
+      "coming": "Coming up",
+      "done": "Done",
+      "none": "No trips in the last 30 days or the next 60.",
+      "approvedBy": "Approved by {name} · {at}",
+      "callName": "Call {name}",
+      "withdraw": "Withdraw",
+      "withdrawTitle": "Withdraw this request",
+      "withdrawQuestion": "Why?",
+      "withdrawNote": "A word for the office (optional)",
+      "withdrawConfirm": "Withdraw the request",
+      "withdrawn": "Request withdrawn.",
+      "reasonNotNeeded": "Not needed any more",
+      "reasonPlansChanged": "Plans changed",
+      "reasonOther": "Other"
     },
     "request": {
       "title": "Approve a request",
@@ -1057,6 +1073,64 @@
       "giveTo": "Give to {name} · {plate}",
       "pickDriver": "Pick a driver",
       "givenTitle": "Given to {name}"
+    },
+    "alerts": {
+      "above": "What happened, for you",
+      "title": "Notifications",
+      "markAllRead": "Mark all read",
+      "unread": "Unread",
+      "none": "No notifications in the last 30 days.",
+      "noneUnread": "Nothing unread.",
+      "open": "Open"
+    },
+    "profile": {
+      "contact": "Contact",
+      "myPhone": "My phone number · drivers can call this",
+      "noPhone": "Not set",
+      "edit": "Edit",
+      "phoneLabel": "Phone number",
+      "phonePlaceholder": "07X XXX XXXX · empty removes it",
+      "phoneNeeded": "Add your phone number so drivers can call you.",
+      "saved": "Saved.",
+      "email": "Work email",
+      "notifications": "Notifications",
+      "noEvents": "No notification settings for this account.",
+      "app": "App",
+      "language": "Language",
+      "officePhone": "Office phone",
+      "officePhoneNone": "Not set · Settings → Fleet on the office site",
+      "privacyHint": "What the app collects"
+    },
+    "live": {
+      "title": "Live",
+      "count": "{n} drivers",
+      "countOne": "1 driver",
+      "filter": {
+        "all": "All",
+        "on_task": "On a task",
+        "on_duty": "Free",
+        "off_duty": "Off duty"
+      },
+      "pill": {
+        "onTask": "on a task",
+        "free": "free",
+        "offDuty": "off duty"
+      },
+      "onTask": "On a task",
+      "onDuty": "On duty",
+      "offDuty": "Off duty",
+      "near": "near {town}",
+      "seen": "seen {time}",
+      "lastSeen": "last seen {time}",
+      "about": "about {time}",
+      "late": "late {min} min",
+      "kmh": "{n} km/h",
+      "noPosition": "No position yet.",
+      "openMaps": "Open in Maps",
+      "close": "Close",
+      "empty": "No drivers.",
+      "noneInFilter": "Nobody under this filter.",
+      "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The drivers are listed below."
     }
   }
 }

@@ -146,7 +146,7 @@ async function main() {
   check(tv.rows[1].mark === '2' && same(tv.rows[1].parts, ['arrive by 10:30', '90 min there', 'leave 11:45']), 'the stop: arrive by · there · leave', tv.rows[1]);
   check(tv.rows[2].kind === 'back' && tv.rows[2].place === 'Back at Head office, Kelaniya' && same(tv.rows[2].parts, ['about 14:36', 'back by 17:00']), 'B: about · back by', tv.rows[2]);
   check(tv.totals?.km === 188 && tv.totals?.driveMin === 342, 'the totals');
-  const old = tripView({ fields: { date: '2026-10-20', time: '09:00', back_by: '12:00', route_from: 'Head office', route_to: 'Kandy' } }, words);
+  const old = tripView({ when: 'Tue 20 Oct 09:00', fields: { date: '2026-10-20', time: '09:00', back_by: '12:00', route_from: 'Head office', route_to: 'Kandy' } }, words);
   check(old.rows.length === 3 && old.rows[0].place === 'Head office' && old.rows[1].place === 'Kandy' && same(old.rows[2].parts, ['back by 12:00']), 'the old From → To shape', old);
   check(same(availabilityArgs(card), { at: '2026-10-20 07:24', until: '17:00', need_type: 'van', pax: 3, lat: 7.48, lng: 80.36 }), 'availability: at the leave-by until back-by, the type and pax, the first stop\'s pin', availabilityArgs(card));
   check(availabilityArgs({ fields: { date: '', time: '' } }) === null, 'no day and time: no call');

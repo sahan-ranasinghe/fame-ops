@@ -13,6 +13,7 @@ import { LanguagePill } from '@/components/LanguageSwitch';
 import { Button, Mono, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { useOffice } from './state';
 import { errorText, initials } from './text';
 import type { FleetError } from './types';
 
@@ -52,12 +53,13 @@ export function Chip({ n, text, tone = 'muted', onPress }: { n: number | string;
 export function DarkHeader({ above, title, children, bell = true }: { above: string; title: string; children?: ReactNode; bell?: boolean }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { unread } = useOffice();
   return (
     <View style={[styles.dark, { paddingTop: insets.top + 12 }]}>
       <View style={styles.darkTop}>
         <Txt variant="muted" size={15} color="#c9ccd1" style={{ flex: 1 }} numberOfLines={1}>{above}</Txt>
         <LanguagePill />
-        {bell && <BellButton onPress={() => router.push('/office/(tabs)/alerts')} />}
+        {bell && <BellButton count={unread} onPress={() => router.push('/office/(tabs)/alerts')} />}
       </View>
       <Txt variant="title" color="#ffffff" style={{ marginTop: 14 }} numberOfLines={1}>{title}</Txt>
       {children}
@@ -65,7 +67,7 @@ export function DarkHeader({ above, title, children, bell = true }: { above: str
   );
 }
 
-/** The bell with the unread count (the Alerts badge). The count comes from the office state through `useUnread`. */
+/** The bell with the unread count (the Alerts badge; DarkHeader reads it from the office state). */
 export function BellButton({ onPress, count = 0 }: { onPress: () => void; count?: number }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.bell}>
@@ -258,5 +260,5 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.line },
   errorBox: { backgroundColor: colors.redChip, borderRadius: 12, padding: 14, gap: 10 },
   sticky: { backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 16, paddingTop: 12, gap: 10 },
-  filter: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, paddingHorizontal: 14, minHeight: 40 },
+  filter: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, paddingHorizontal: 14, minHeight: 48 },
 });

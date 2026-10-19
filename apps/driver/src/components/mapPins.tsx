@@ -121,3 +121,79 @@ export const mapStyles = StyleSheet.create({
   meHalo: { width: 46, height: 46, borderRadius: 14, backgroundColor: 'rgba(30,79,160,0.22)', alignItems: 'center', justifyContent: 'center' },
   meDot: { width: 24, height: 24, borderRadius: 7, backgroundColor: colors.blue, borderWidth: 3, borderColor: '#ffffff' },
 });
+
+// --- Office mode (Phase 8, O1): the Live tab's drivers map (DriversMap.tsx; GoogleDriversMap.tsx, OpenDriversMap.tsx) ----
+// Appended for Live; nothing above changes. One marker per driver with a position: the initials in a dark ring coloured
+// by duty (design 15: blue on a task, green free, grey off duty), the selected one with "Sunil · 62 km/h" above it.
+
+import { Txt } from '@/components/ui';
+import type { DriverMarker, Focus, LiveFit, LiveTone } from '../office/liveLogic';
+
+/** The zoom when a driver is selected (a few streets around them). */
+export const DRIVER_ZOOM = 15;
+/** Room around the drivers when the map frames them all (the labels and the chips are not over this map). */
+export const DRIVERS_PADDING = { top: 56, right: 48, bottom: 48, left: 48 };
+/** The pin's sizes, so Google's anchor (a fraction of the view) lands on the ring's centre under the label. */
+export const DRIVER_PIN = { size: 44, labelHeight: 24, gap: 4 } as const;
+
+/** Google's anchor y: the ring's centre, under the label when there is one. */
+export function driverPinAnchorY(labelled: boolean): number {
+  if (!labelled) return 0.5;
+  const total = DRIVER_PIN.labelHeight + DRIVER_PIN.gap + DRIVER_PIN.size;
+  return (DRIVER_PIN.labelHeight + DRIVER_PIN.gap + DRIVER_PIN.size / 2) / total;
+}
+
+/** What each drivers engine is given (DriversMap.tsx): the markers, the frame around them, the selected driver, and how it says it loaded or failed. */
+export interface DriversEngineProps {
+  markers: DriverMarker[];
+  fit: LiveFit;
+  /** The selected driver with a position: the map moves to them once per selection (`nonce`: the same row tapped again). */
+  focus: (Focus & { nonce: number }) | null;
+  onPressMarker: (username: string) => void;
+  /** The map finished loading (Google: onMapLoaded; MapLibre: onDidFinishLoadingMap). */
+  onLoaded: () => void;
+  /** The map said it failed (MapLibre: onDidFailLoadingMap). */
+  onFailed: () => void;
+}
+
+const RING: Record<LiveTone, string> = { blue: colors.blue, green: colors.green, muted: colors.muted };
+
+/** The initials in a dark ring coloured by duty; the row's avatar and the marker's body. */
+export function DriverDot({ initials, tone, dim = false, selected = false, size = DRIVER_PIN.size }: {
+  initials: string;
+  tone: LiveTone;
+  dim?: boolean;
+  selected?: boolean;
+  size?: number;
+}) {
+  return (
+    <View
+      style={[
+        driverStyles.dot,
+        { width: size, height: size, borderRadius: size / 2, borderColor: RING[tone], borderWidth: selected ? 4 : 3 },
+        dim && { opacity: 0.7 },
+      ]}
+    >
+      <Txt variant="strong" size={Math.round(size * 0.34)} color="#ffffff">{initials}</Txt>
+    </View>
+  );
+}
+
+/** A driver on the map: the label (the selected one) above the ring. */
+export function DriverPin({ marker }: { marker: DriverMarker }) {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      {marker.label !== null && (
+        <View style={[driverStyles.label, { height: DRIVER_PIN.labelHeight, marginBottom: DRIVER_PIN.gap }]}>
+          <Txt variant="strong" size={12} numberOfLines={1}>{marker.label}</Txt>
+        </View>
+      )}
+      <DriverDot initials={marker.initials} tone={marker.tone} dim={marker.dim} selected={marker.selected} />
+    </View>
+  );
+}
+
+const driverStyles = StyleSheet.create({
+  dot: { backgroundColor: colors.darkSurface, alignItems: 'center', justifyContent: 'center', elevation: 3 },
+  label: { backgroundColor: colors.card, borderRadius: 8, paddingHorizontal: 8, justifyContent: 'center', elevation: 2 },
+});
