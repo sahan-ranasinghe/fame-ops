@@ -1060,3 +1060,23 @@ iOS; Play Store.
   migration that has already been pushed.
 - After building something, give Sahan exact test steps and what he should see.
 - Keep the driver app simple: big buttons, few words, works in sunlight.
+- **No local native builds** (Sahan, 19 October 2026): no Docker, Gradle or R8 builds on this laptop. Android builds run only
+  on EAS, only after Sahan's go, and only on office or home Wi-Fi.
+- Before asking for an EAS build, check the native config without compiling: `expo prebuild` into a scratch folder (nothing
+  committed), `expo-doctor`, and the config tests (`npm run test:build`: the R8 rules, the kept sounds, the profiles).
+- Start EAS builds with `--no-wait`, so nothing on the laptop waits, and check them with `eas build:view`. When a build
+  finishes, download the APK and check it: its size, an arm64-v8a and an armeabi-v7a copy of every native library, 16 KB
+  alignment, and all six sounds.
+- The free plan gives 15 Android builds a month, a low-priority queue and a 45-minute limit per build. Before each go, count
+  this month's builds (`eas build:list`) and say how many are left. One build per native change, never a build just to
+  try something.
+- JS, server and web changes need no build: the app gets them through EAS Update, after Sahan's go.
+- Tests in two tiers. After each fix, only the fast tests for what changed (typecheck, the related unit tests, the related
+  pgTAP file). The full suite (all pgTAP, the connector suite, the e2e, Deno) runs once, right before the checkpoint.
+- If the same test fails twice, stop and report it instead of re-running it in a loop. A flaky test gets fixed, not retried.
+- Time limits: if any single step runs more than 30 minutes, or the same error comes back 3 times, stop and tell Sahan what
+  is wrong.
+- At most 2 subagents at a time, and none while the full e2e run is going. One fresh reviewer per checkpoint.
+- Before ending a turn, stop every background server started (functions serve, the local Supabase stack, dev servers),
+  unless Sahan needs it running, and list any that stay.
+- Every checkpoint says how long it took and what took the longest.
