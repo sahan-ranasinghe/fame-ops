@@ -15,6 +15,7 @@ import { Privacy } from "../screens/Privacy";
 import type { Me } from "../transport/types";
 import { watchRouterPath } from "../ui/ListKit";
 import { ToastProvider } from "../ui/Toast";
+import { WriteRetry } from "../ui/WriteRetry";
 import { FleetProvider } from "./FleetContext";
 import { routes } from "./routes";
 
@@ -78,6 +79,7 @@ function Gate() {
         <FleetProvider value={fleet!}>
           <ToastProvider>
             <RouterProvider router={router!} />
+            <WriteRetry />
           </ToastProvider>
         </FleetProvider>
       );

@@ -16,7 +16,7 @@ import Constants from 'expo-constants';
 import * as Network from 'expo-network';
 import { useIsFocused } from 'expo-router';
 import { Component, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { AppState, StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Txt } from '@/components/ui';
@@ -29,7 +29,7 @@ import { FollowButton } from './MapCompass';
 import { MapUnavailable } from './MapUnavailable';
 import { type Fit, mapStyles, type EngineProps } from './mapPins';
 import { OpenTaskMap } from './OpenTaskMap';
-import { currentStop, fitKey, frameOf, mapLines, mapStops, startPoint, type LatLng } from './taskMapLogic';
+import { currentStop, fitKey, frameOf, mapCredit, mapLines, mapStops, startPoint, type LatLng } from './taskMapLogic';
 
 /** The build carries the Android Maps key (app.config.ts): Google's map can be used (Part 5). */
 export const GOOGLE_MAP_BUILD = (Constants.expoConfig?.extra as { googleMapsAndroid?: boolean } | undefined)?.googleMapsAndroid === true;
@@ -139,6 +139,7 @@ export function TaskMap({ task, me, googleNoteFor }: Props) {
     return <MapUnavailable task={task} me={me} onRetry={() => dispatch({ type: 'retry' })} />;
   }
 
+  const credit = mapCredit(mount.engine === 'google', lines);
   const hiddenGoogle = mount.engine === 'open' && (googleNoteFor === 'current'
     ? !!currentStop(task)?.google_place_id
     : task.task_stops.some((s) => s.status !== 'removed' && !!s.google_place_id));
@@ -161,11 +162,15 @@ export function TaskMap({ task, me, googleNoteFor }: Props) {
       {me && (
         <FollowButton on={follow} label={t('map.followMe')} onPress={() => setFollow((on) => !on)} style={{ top: insets.top + 124, right: 16 }} />
       )}
-      {hiddenGoogle ? (
-        <View style={mapStyles.mapNote} pointerEvents="none">
-          <Txt variant="strong" size={14} color="#ffffff">{t('task.googleNotOnMap')}</Txt>
-        </View>
-      ) : null}
+      <View style={mapStyles.mapBottom} pointerEvents="none">
+        {hiddenGoogle ? (
+          <View style={mapStyles.mapNote}>
+            <Txt variant="strong" size={14} color="#ffffff">{t('task.googleNotOnMap')}</Txt>
+          </View>
+        ) : null}
+        {/* The providers' credits, in their own words (never translated, as Google's own). */}
+        {credit ? <Text style={mapStyles.credit} accessibilityLanguage="en" testID="map-credit">{credit}</Text> : null}
+      </View>
     </>
   );
 }

@@ -291,11 +291,18 @@ export function mapRouteOf(route: Route | null, cursor?: Cursor | null, snap = f
 }
 
 /** The legend line for the estimated lines, when the route has any (or a note why some gaps stay straight). */
+/** openrouteservice's credit, wherever one of its lines is drawn (its terms; Part 6): never translated, as Google's. */
+export const ORS_CREDIT = "Route © openrouteservice.org by HeiGIT · map data © OpenStreetMap contributors";
+
 export function estimatedLegend(route: Route | null): string | null {
   if (!route) return null;
   const n = route.estimated?.length ?? 0;
   if (!n && !route.estimatedNote) return null;
-  return [n ? `Dashed slate: ${n} gap${n > 1 ? "s" : ""} in the GPS drawn along the likely road (estimated, not counted in km)` : null, route.estimatedNote].filter(Boolean).join(" · ");
+  return [
+    n ? `Dashed slate: ${n} gap${n > 1 ? "s" : ""} in the GPS drawn along the likely road (estimated, not counted in km)` : null,
+    route.estimatedNote,
+    n ? ORS_CREDIT : null,
+  ].filter(Boolean).join(" · ");
 }
 
 /** The lighter line of another driver on the live map. */

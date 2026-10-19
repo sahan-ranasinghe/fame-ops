@@ -112,6 +112,8 @@ export interface RouteLeg {
   points: LatLng[];
   /** A straight line between two points (no road line to draw): dashed. */
   dashed?: boolean;
+  /** openrouteservice's road line: its credit shows with the map. */
+  ors?: boolean;
 }
 
 type PlanOf = Pick<TaskWithStops, 'task_stops' | 'plan_json'>;
@@ -134,8 +136,16 @@ export function routeLines(task: PlanOf, googleMap: boolean): RouteLeg[] {
     if (leg.to_seq !== -1 && !to) return [];
     const points = decodePolyline(leg.line!);
     if (points.length < 2) return [];
-    return [{ key: `${i}:${leg.from_seq}-${leg.to_seq}`, done: to ? to.status !== 'pending' : false, points }];
+    return [{ key: `${i}:${leg.from_seq}-${leg.to_seq}`, done: to ? to.status !== 'pending' : false, points, ...(leg.source === 'ors' ? { ors: true } : {}) }];
   });
+}
+
+/** The credits a map owes under it (never translated: the providers' own words). Google's map shows Google's itself. */
+export const OSM_CREDIT = '© OpenStreetMap contributors · OpenFreeMap';
+export const ORS_CREDIT = 'Route © openrouteservice.org by HeiGIT';
+export function mapCredit(googleMap: boolean, lines: readonly RouteLeg[]): string | null {
+  const parts = [googleMap ? null : OSM_CREDIT, lines.some((l) => l.ors) ? ORS_CREDIT : null].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
 }
 
 /**

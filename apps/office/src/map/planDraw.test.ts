@@ -100,13 +100,14 @@ describe("Part 6: leg by leg (Sahan, 19 October: the free map like the phones)",
     expect(d.lines).toEqual([[a, { lat: 7.0, lng: 79.9 }, b]]);
     expect(d.links.map(([x, y]) => `${x.id}>${y.id}`)).toEqual(["a>b"]);
     expect(d.lines.flat().some((q) => q.lat === c.lat && q.lng === c.lng)).toBe(false);
-    expect(d.note).toBe("Straight lines, not the road");
+    expect(d.note).toBe("Straight lines, not the road · Route © openrouteservice.org by HeiGIT · map data © OpenStreetMap contributors");
   });
-  it("Google's map: every leg's line, no connector", () => {
+  it("Google's map: every leg's line, no connector; openrouteservice's line still credited", () => {
     const d = planFor(legPlan, true);
     expect(d.lines).toHaveLength(3);
     expect(d.links).toEqual([]);
-    expect(d.note).toBeNull();
+    expect(d.note).toBe("Route © openrouteservice.org by HeiGIT · map data © OpenStreetMap contributors");
+    expect(planFor({ ...legPlan, legs: legPlan.legs!.map((l) => ({ ...l, google: true })) }, true).note).toBeNull();
   });
   it("a leg with no line at all (the estimate): a connector on either map", () => {
     const none: MapPlan = { ...legPlan, legs: legPlan.legs!.map((l) => ({ ...l, points: [] })) };
@@ -114,4 +115,3 @@ describe("Part 6: leg by leg (Sahan, 19 October: the free map like the phones)",
     expect(planFor(none, false).links.map(([x, y]) => `${x.id}>${y.id}`)).toEqual(["start>a", "a>b"]);
   });
 });
-

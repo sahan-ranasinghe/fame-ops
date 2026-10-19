@@ -300,6 +300,8 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 
 #toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--surface); padding: 12px 18px; border-radius: 12px; font-weight: 600; z-index: 80; max-width: calc(100% - 32px) }
 @media (max-width: 768px) { #toast { bottom: calc(96px + env(safe-area-inset-bottom, 0px)) } }
+/* The retry rule's Try again (ui/WriteRetry): a write that may not have been saved, at the top so a toast never covers it. */
+.write-retry { position: fixed; left: 50%; top: calc(16px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 81; display: flex; align-items: center; gap: 10px; background: var(--surface); color: var(--ink); border: 1.5px solid var(--bad); border-radius: 12px; padding: 10px 12px 10px 16px; box-shadow: 0 6px 24px rgba(0, 0, 0, .14); max-width: calc(100% - 32px); font-weight: 600 }
 
 /* ---------- pages (Phase 6): the back arrow, list + detail, sticky actions, drafts, pull to refresh ---------- */
 .page-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px }

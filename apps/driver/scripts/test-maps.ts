@@ -10,7 +10,7 @@ import {
 } from '../src/lib/mapEngine';
 import { encodePolyline } from '../src/lib/polyline';
 import type { TaskStop } from '../src/lib/types';
-import { lineNote, mapLines, mapStops, startPoint } from '../src/components/taskMapLogic';
+import { lineNote, mapCredit, mapLines, mapStops, ORS_CREDIT, OSM_CREDIT, startPoint } from '../src/components/taskMapLogic';
 
 let failed = 0;
 function check(ok: unknown, label: string, detail?: unknown) {
@@ -183,6 +183,13 @@ console.log('\n== Both engines draw the same task ==');
     && mixedOpen.filter((l) => l.dashed).length === 1 && JSON.stringify(mixedOpen.find((l) => l.dashed)!.points) === JSON.stringify([B, C]),
     "the free map: openrouteservice's road line for leg 1, a dashed straight line for leg 2 (its line is Google's)", mixedOpen);
   check(mixedGoogle.length === 2 && mixedGoogle.every((l) => !l.dashed), "Google's map: both road lines (Google's and openrouteservice's)", mixedGoogle);
+  // The credits (Sahan, 19 October): the free map always names OpenStreetMap and OpenFreeMap; an openrouteservice line its own.
+  check(mapCredit(false, mixedOpen) === `${OSM_CREDIT} · ${ORS_CREDIT}` && mapCredit(true, mixedGoogle) === ORS_CREDIT
+    && mapCredit(false, oLines) === OSM_CREDIT && mapCredit(true, gLines) === null,
+    'the credits: OpenStreetMap / OpenFreeMap on the free map; openrouteservice where its line is drawn; Google\'s map shows its own',
+    [mapCredit(false, mixedOpen), mapCredit(true, mixedGoogle)]);
+  check(/testID="map-credit">\{credit\}/.test(read('src/components/TaskMap.tsx')) && /const credit = mapCredit\(mount\.engine === 'google', lines\)/.test(read('src/components/TaskMap.tsx')),
+    'TaskMap shows the credit under both maps');
   check(lineNote(mixed, false) === 'googleOnly' && lineNote(mixed, true) === null && lineNote(noLine, true) === 'none'
     && lineNote({ ...task, plan_json: { legs: [orsPlan.legs[0]] } as never }, false) === null,
     'the line under the map: Google\'s only on the free map; nothing when every leg has its line here; "no road line" when none has');

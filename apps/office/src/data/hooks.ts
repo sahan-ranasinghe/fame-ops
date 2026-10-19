@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { useFleet } from "../app/FleetContext";
 import type { Driver, Place, Vehicle } from "./types";
+import { mayRetry } from "../transport/retryRule";
 import type { Entry } from "./store";
 
 export function useEntry<T>(key: string): Entry<T> {
@@ -39,8 +40,7 @@ const LIST_TOOLS: Record<string, [tool: string, args: Record<string, unknown>]> 
   "lists.vehicles": ["list_vehicles", { filter: "all" }],
   "lists.places": ["list_places", {}],
 };
-/** A dropped connection or a busy server: worth one more try (a read, so nothing happens twice). */
-const RETRY_CODES = new Set(["network", "server_unavailable", "rate_limited", "upstream_error"]);
+/** The lists are reads: under the retry rule (transport/retryRule.ts mayRetry) a dropped load is tried again, twice. */
 const RETRY_AFTER_MS = [1500, 5000];
 /** Retries made per key since the last success, per store. */
 const retriesByStore = new WeakMap<object, Map<string, number>>();
@@ -83,8 +83,7 @@ export function useLists(enabled = true): Lists {
     const timers: number[] = [];
     const entries: [string, Entry<unknown>][] = [["lists.drivers", d], ["lists.vehicles", v], ["lists.places", p]];
     for (const [key, e] of entries) {
-      const code = e.err?.code;
-      if (e.data || e.loading || !code || !RETRY_CODES.has(code)) continue;
+      if (e.data || e.loading || !e.err || !mayRetry(LIST_TOOLS[key][0], e.err)) continue;
       const n = retries.get(key) ?? 0;
       if (n >= RETRY_AFTER_MS.length) continue;
       retries.set(key, n + 1);

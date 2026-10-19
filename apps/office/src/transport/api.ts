@@ -2,7 +2,8 @@
 // the person's Supabase session. office-api checks the session, the role and
 // the second step on every call and audits it with the person's name.
 import { normalisePermissions, permissionsForRole } from "@fleet/permissions";
-import { dropped, QUICK_RETRY_MS } from "./errors";
+import { emitWriteDropped, gestureOrigin } from "./gesture";
+import { BACKGROUND_WRITES, dropped, isWrite, mayRetry, QUICK_RETRY_MS } from "./retryRule";
 import type { FleetError, Me, Transport, WatchEvent } from "./types";
 
 type TokenSource = () => Promise<string | null>;
@@ -70,8 +71,19 @@ export class ApiTransport implements Transport {
   }
 
   async call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {
-    const out = await this.request<{ result: T }>("POST", `/tools/${tool}`, args);
-    return out.result;
+    // What the person pressed to start it (a write they may want to try again), taken before the call waits.
+    const origin = isWrite(tool) && !BACKGROUND_WRITES.has(tool) ? gestureOrigin() : null;
+    try {
+      const out = await this.request<{ result: T }>("POST", `/tools/${tool}`, args);
+      return out.result;
+    } catch (e) {
+      const error = e as FleetError;
+      if (!isWrite(tool)) throw error;
+      // A write is never repeated on its own: the page says it may not have been saved, and Try again (ui/WriteRetry)
+      // presses the same button again when the person chooses to.
+      if (dropped(error) && origin) emitWriteDropped(tool, origin);
+      throw { ...error, write: true } satisfies FleetError;
+    }
   }
 
   watch<T>(tool: string, args: Record<string, unknown>, cb: (ev: WatchEvent<T>) => void, intervalMs: number): () => void {
@@ -91,7 +103,7 @@ export class ApiTransport implements Transport {
         if (!stopped) cb({ type: "data", data, at: Date.now() });
       } catch (e) {
         const error = e as FleetError;
-        if (!stopped && !quickTried && dropped(error)) {
+        if (!stopped && !quickTried && mayRetry(tool, error)) {
           quickTried = true;
           quick = setTimeout(() => { quick = null; void tick(); }, QUICK_RETRY_MS);
         } else if (!stopped) cb({ type: "error", error });

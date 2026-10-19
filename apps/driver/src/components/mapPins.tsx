@@ -92,16 +92,16 @@ export function MePin() {
 }
 
 export const mapStyles = StyleSheet.create({
+  /** Under the map, above the sheet's rounded top: the Google-place line and the credits. */
+  mapBottom: { position: 'absolute', left: 16, right: 16, bottom: SHEET_OVERLAP + 6, gap: 6, alignItems: 'flex-start' },
   mapNote: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    bottom: SHEET_OVERLAP + 10,
+    alignSelf: 'stretch',
     backgroundColor: colors.ink,
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
+  credit: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, fontSize: 10, color: colors.ink },
   pin: {
     flexDirection: 'row',
     alignItems: 'center',

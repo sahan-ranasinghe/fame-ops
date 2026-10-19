@@ -12,6 +12,7 @@ import { Empty, Loading, Notice, Pill } from "../../ui/basics";
 import { useToast } from "../../ui/Toast";
 import { removeDevice, setEvent, turnOffHere, turnOnHere } from "./notificationsActions";
 import { DEVICE_NOTE, type PushState, stateText } from "./notificationsLogic";
+import { callWithRetry } from "../../transport/retryRule";
 import { SoundCard } from "./SoundCard";
 
 const TOOL_ARGS = {};
@@ -28,7 +29,7 @@ export default function Notifications() {
 
   async function load() {
     try {
-      setData(await transport.call<NotificationSettings>("my_notification_settings", TOOL_ARGS));
+      setData(await callWithRetry<NotificationSettings>(transport, "my_notification_settings", TOOL_ARGS));
       setErr(null);
     } catch (e) {
       setErr(errText(e as FleetError)[0]);

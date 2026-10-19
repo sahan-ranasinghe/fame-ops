@@ -58,6 +58,8 @@ export function errText(e: FleetError | undefined): [string, Fix] {
     case "rate_limited":
     case "upstream_error":
     case "network":
+      // A write is never repeated on its own (transport/retryRule.ts): the person is told, and Try again repeats it.
+      if (e.write) return ["Fame Fleet didn’t answer, so this may not have been saved. Try again.", "retry"];
       return ["Fame Fleet didn’t answer. The page tries again by itself.", "retry"];
     case "not_granted":
     case "capability_disabled":
@@ -82,8 +84,3 @@ export function errText(e: FleetError | undefined): [string, Fix] {
   }
 }
 
-/** A read that failed because the request was dropped is asked again this soon, once, before the page hears of it (Part 6). */
-export const QUICK_RETRY_MS = 2_000;
-/** Dropped on the way (no connection, or the server gave up: a 5xx), not refused: worth asking again at once. */
-export const dropped = (e: FleetError | undefined | null) =>
-  e?.code === "network" || e?.code === "upstream_error" || e?.code === "server_unavailable";

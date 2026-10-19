@@ -3,6 +3,7 @@
 // pins out and never draws Google's lines; Part 6: it draws openrouteservice's road lines (ours),
 // and thin straight dashed connectors for the legs it has no line for, with a small note that
 // those are not the road.
+import { ORS_CREDIT } from "../data/route";
 import type { MapPlan, PlanPin } from "./types";
 
 type LatLng = { lat: number; lng: number };
@@ -32,11 +33,15 @@ export function planFor(plan: MapPlan | null | undefined, google: boolean): Draw
   const hidden = plan.pins.filter((p) => !google && p.google).length;
   const lines: LatLng[][] = [];
   const links: [PlanPin, PlanPin][] = [];
+  let ors = false;
   if (plan.legs?.length) {
     // Leg by leg (Part 6): its own line where this map may show it, else a straight connector between its two pins.
     const byId = new Map(pins.map((p) => [p.id, p]));
     for (const leg of plan.legs) {
-      if (leg.points.length > 1 && (google || !leg.google)) lines.push(leg.points);
+      if (leg.points.length > 1 && (google || !leg.google)) {
+        lines.push(leg.points);
+        if (!leg.google) ors = true;
+      }
       else {
         const a = byId.get(leg.from), b = byId.get(leg.to);
         if (a && b) links.push([a, b]);
@@ -54,6 +59,7 @@ export function planFor(plan: MapPlan | null | undefined, google: boolean): Draw
   const parts = [
     links.length ? "Straight lines, not the road" : null,
     hidden ? `${hidden} Google stop${hidden > 1 ? "s" : ""} listed, not drawn` : null,
+    ors ? ORS_CREDIT : null,
   ].filter(Boolean);
   return { pins, links, lines, hidden, note: parts.length ? parts.join(" · ") : null };
 }

@@ -39,7 +39,7 @@ import {
 } from "../data/live";
 import { megabytes } from "./fuelLogic";
 import { moveMode } from "./moveLogic";
-import { insertPoint, mapRouteOf, mergeRoute, type Route, routeOf, snapControl, trailOf } from "../data/route";
+import { estimatedLegend, insertPoint, mapRouteOf, mergeRoute, type Route, routeOf, snapControl, trailOf } from "../data/route";
 import { useWatchDrivers } from "../data/watchDrivers";
 import type { DriverRoute, LiveDriver } from "../data/types";
 import { useLiveDrivers } from "../data/useLive";
@@ -278,11 +278,14 @@ export function Live() {
 /** The shown route's line: "Recorded points" (ticked = the raw line) where snapping is possible, and what the line is. */
 function RouteSnap({ route, snap, busy, onRecorded }: { route: Route; snap: boolean; busy: boolean; onRecorded: (raw: boolean) => void }) {
   const ui = snapControl(route, snap);
-  if (!ui.toggle && !ui.note) return null;
+  // The gaps' estimated lines are openrouteservice's: their legend carries its credit (Part 6).
+  const estimated = estimatedLegend(route);
+  if (!ui.toggle && !ui.note && !estimated) return null;
   return (
     <div className="legend" data-testid="snap-legend">
       {ui.toggle && <label><input type="checkbox" checked={!snap} disabled={busy} onChange={(e) => onRecorded(e.target.checked)} /> Recorded points</label>}
       {ui.note && <span>{ui.note}</span>}
+      {estimated && <span data-testid="estimated-legend">{estimated}</span>}
     </div>
   );
 }

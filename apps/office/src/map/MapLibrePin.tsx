@@ -21,7 +21,7 @@ export default function MapLibrePin({ lat, lng, onMove, onFail }: { lat: number;
   useEffect(() => {
     if (!box.current) return;
     let alive = true;
-    const m = new maplibregl.Map({ container: box.current, style: STYLE_URL, center: [lng, lat], zoom: 16, attributionControl: { compact: true }, cooperativeGestures: false });
+    const m = new maplibregl.Map({ container: box.current, style: STYLE_URL, center: [lng, lat], zoom: 16, attributionControl: { compact: false }, cooperativeGestures: false });
     m.on("error", (e) => { if (alive && !m.isStyleLoaded() && String(e.error?.message ?? "").match(/style|fetch|load/i)) onFail?.(); });
     const turned = () => {
       const bearing = Math.round(m.getBearing() * 10) / 10, pitch = Math.round(m.getPitch() * 10) / 10;

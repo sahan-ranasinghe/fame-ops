@@ -3,6 +3,7 @@
 import { PERMISSIONS } from "@fleet/permissions";
 import connector from "../connector.json";
 import { asFleetError } from "./errors";
+import { isWrite } from "./retryRule";
 import { ALL_TOOLS, type Me, type Transport, type WatchEvent } from "./types";
 
 /**
@@ -67,7 +68,9 @@ export class ClaudeTransport implements Transport {
     try {
       return payloadOf(await this.mcp.callTool(SERVER, tool, args)) as T;
     } catch (e) {
-      throw asFleetError(e);
+      // The retry rule (retryRule.ts): the artifact repeats nothing; a write's error says it may not have been saved.
+      const error = asFleetError(e);
+      throw isWrite(tool) ? { ...error, write: true } : error;
     }
   }
 

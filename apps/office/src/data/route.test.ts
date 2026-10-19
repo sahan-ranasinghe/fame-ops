@@ -183,7 +183,7 @@ describe("estimated lines over gaps (Part 5b)", () => {
     expect(m.estimated![0].points).toEqual([{ lat: 6.88, lng: 79.86 }, { lat: 6.92, lng: 79.875 }, { lat: 6.96, lng: 79.89 }]);
   });
   it("the legend says what the dashed slate lines are, and why some gaps stay straight", () => {
-    expect(estimatedLegend(routeOf("nuwan.p", withGaps))).toBe("Dashed slate: 2 gaps in the GPS drawn along the likely road (estimated, not counted in km)");
+    expect(estimatedLegend(routeOf("nuwan.p", withGaps))).toBe("Dashed slate: 2 gaps in the GPS drawn along the likely road (estimated, not counted in km) · Route © openrouteservice.org by HeiGIT · map data © OpenStreetMap contributors");
     expect(estimatedLegend(routeOf("nuwan.p", { ...answer, estimated_note: "Estimated line limit reached for today: the other gaps are straight" })))
       .toBe("Estimated line limit reached for today: the other gaps are straight");
     expect(estimatedLegend(routeOf("nuwan.p", answer))).toBeNull();

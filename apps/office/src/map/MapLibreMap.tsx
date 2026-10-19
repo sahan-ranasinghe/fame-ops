@@ -120,7 +120,7 @@ export default function MapLibreMap({
     let m: maplibregl.Map;
     try {
       // §23: no cooperative gestures (one finger moves the map, the wheel zooms).
-      m = new maplibregl.Map({ container: box.current, style: STYLE_URL, center: SRI_LANKA, zoom: 6.6, attributionControl: { compact: true }, cooperativeGestures: false });
+      m = new maplibregl.Map({ container: box.current, style: STYLE_URL, center: SRI_LANKA, zoom: 6.6, attributionControl: { compact: false }, cooperativeGestures: false });
     } catch {
       onFail();
       return;

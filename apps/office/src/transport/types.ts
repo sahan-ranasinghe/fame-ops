@@ -43,6 +43,8 @@ export interface FleetError {
   code: string;
   message: string;
   status?: number;
+  /** The call was a write (transport/retryRule.ts): never repeated on its own; the person may try again. */
+  write?: boolean;
 }
 
 export type WatchEvent<T> = { type: "data"; data: T; at: number } | { type: "error"; error: FleetError };

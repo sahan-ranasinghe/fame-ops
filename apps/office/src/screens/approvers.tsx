@@ -10,6 +10,7 @@ import type { PersonAt, PhoneLinks, RequestCard, RequestsList } from "../data/ty
 import type { Transport } from "../transport/types";
 import { Avatar } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
+import { callWithRetry } from "../transport/retryRule";
 import { callWho, type Decision, decidedText, REVIEWING_EVERY_MS, reviewingText } from "./approversLogic";
 
 type Reviewer = { name: string; since: string };
@@ -26,7 +27,8 @@ export function useReviewing(requestId: string, active: boolean): Reviewer[] {
     if (!on) return;
     let alive = true;
     const ping = () => {
-      void transport.call<{ reviewing?: Reviewer[] }>("reviewing", { request_id: requestId }).then((r) => {
+      // A keyed write (retryRule IDEMPOTENT_WRITES): a dropped one is asked again after 2 s, not at the next 20 s.
+      void callWithRetry<{ reviewing?: Reviewer[] }>(transport, "reviewing", { request_id: requestId }).then((r) => {
         if (!alive) return;
         const next = r?.reviewing ?? [];
         // The same people: no new render (nothing moves on the page).
