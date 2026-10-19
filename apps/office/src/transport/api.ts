@@ -3,7 +3,7 @@
 // the second step on every call and audits it with the person's name.
 import { normalisePermissions, permissionsForRole } from "@fleet/permissions";
 import { emitWriteDropped, gestureOrigin } from "./gesture";
-import { BACKGROUND_WRITES, dropped, isWrite, mayRetry, QUICK_RETRY_MS } from "./retryRule";
+import { BACKGROUND_WRITES, dropped, isWrite, mayRetry, onceMore, QUICK_RETRY_MS } from "./retryRule";
 import type { FleetError, Me, Transport, WatchEvent } from "./types";
 
 type TokenSource = () => Promise<string | null>;
@@ -65,7 +65,8 @@ export class ApiTransport implements Transport {
   }
 
   async me(): Promise<Me> {
-    const m = await this.request<Me & { permissions?: unknown[] }>("GET", "/me");
+    // A read under the retry rule (retryRule.ts): a dropped /me is asked again once, after QUICK_RETRY_MS.
+    const m = await onceMore(() => this.request<Me & { permissions?: unknown[] }>("GET", "/me"), dropped);
     // An office-api from before the permissions column answers none: the role's defaults then.
     return { ...m, permissions: m.permissions ? normalisePermissions(m.permissions) : permissionsForRole(m.role) };
   }

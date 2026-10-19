@@ -43,6 +43,7 @@ import { profilePhotoPath } from '@/lib/photoRules';
 import { type AskAnswerInput, askAnswerOp, type AskRow, mergeAsk, withAnswer } from '@/lib/asks';
 import { licencePhotoPath, type LicenceSide, type ProfilePatch } from '@/lib/profile';
 import { queueVideoUpload, type RecordedVideo, videoSegmentRows, videoStoragePath } from '@/lib/video';
+import { sessionKind } from '@/lib/session';
 import { supabase } from '@/lib/supabase';
 import { colomboDate, colomboTime, startOfColomboDay } from '@/lib/time';
 import { beginTaskKm, endTaskKm, type KmCounters, kmCounters, resetOdometerKm } from '@/lib/tracking';
@@ -697,6 +698,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         api.fetchDriverSettings(supabase).catch(() => null),
       ]);
       if (!row) {
+        // No row: the office switched this account off, or the request went without a session because an expired token
+        // could not be refreshed (no connection to Auth; lib/session.ts). Only the first signs the driver out.
+        if (sessionKind(await supabase.auth.getSession()) === 'offline') {
+          setOffline(true);
+          return;
+        }
         // The office switched this account off.
         await stopSharing('auto');
         setSharingState(false);
@@ -789,9 +796,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       forgetDownloadedUpdate();
-      const { data } = await supabase.auth.getSession();
+      // 'offline' = the session is stored but its token could not be refreshed (no connection): still signed in.
+      const session = sessionKind(await supabase.auth.getSession());
       if (cancelled) return;
-      if (!data.session) {
+      if (session === 'none') {
         if (meRef.current) forgetEverything();
       } else if (meRef.current) {
         maybeRetryRejected('start', runningUpdateId());

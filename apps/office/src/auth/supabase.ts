@@ -1,5 +1,6 @@
 // The browser holds only the Supabase URL and the publishable (anon) key.
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { tokenOf } from "./session";
 
 const url = import.meta.env.VITE_SUPABASE_URL ?? "";
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
@@ -21,8 +22,8 @@ export const supabase: SupabaseClient | null = configured
 
 export const apiBase = (import.meta.env.VITE_OFFICE_API_URL || `${url.replace(/\/$/, "")}/functions/v1/office-api`).replace(/\/$/, "");
 
+/** The session's token; null when signed out; a refresh that did not get through throws a dropped call (auth/session.ts). */
 export async function accessToken(): Promise<string | null> {
   if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token ?? null;
+  return tokenOf(await supabase.auth.getSession());
 }

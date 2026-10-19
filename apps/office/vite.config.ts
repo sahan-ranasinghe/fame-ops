@@ -27,10 +27,38 @@ const pwaTags = (): Plugin => ({
   },
 });
 
+/**
+ * The fonts (Sahan, 19 October 2026). The web build serves its own (public/fonts, scripts/fetch-fonts.mjs): no page waits
+ * on fonts.googleapis.com and no browser contacts Google for fonts. The artifact runs on claude.ai, which cannot reach the
+ * site's files and allows Google Fonts' stylesheets: it keeps the link it always had.
+ */
+const fontTags = (artifact: boolean): Plugin => ({
+  name: "fame-font-tags",
+  transformIndexHtml: {
+    order: "pre",
+    handler: (html) => ({
+      html,
+      tags: artifact
+        ? [
+          { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" }, injectTo: "head" },
+          { tag: "link", attrs: { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: true }, injectTo: "head" },
+          { tag: "link", attrs: { rel: "stylesheet", href: GOOGLE_FONTS }, injectTo: "head" },
+        ]
+        : [
+          // The body font's Latin file first (one file holds every weight): text appears in it, not in a stand-in.
+          { tag: "link", attrs: { rel: "preload", href: "/fonts/ibm-plex-sans-400-latin.woff2", as: "font", type: "font/woff2", crossorigin: true }, injectTo: "head" },
+          { tag: "link", attrs: { rel: "stylesheet", href: "/fonts/fonts.css" }, injectTo: "head" },
+        ],
+    }),
+  },
+});
+const GOOGLE_FONTS =
+  "https://fonts.googleapis.com/css2?family=Archivo:wght@700;800&family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap";
+
 export default defineConfig(({ mode }) => {
   const artifact = mode === "artifact";
   return {
-    plugins: [react(), ...(artifact ? [viteSingleFile({ removeViteModuleLoader: true })] : [pwaTags()])],
+    plugins: [react(), fontTags(artifact), ...(artifact ? [viteSingleFile({ removeViteModuleLoader: true })] : [pwaTags()])],
     define: {
       __BUILD__: JSON.stringify(artifact ? "artifact" : "web"),
       __VERSION__: JSON.stringify(pkg.version),

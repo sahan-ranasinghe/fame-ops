@@ -5,12 +5,15 @@
 // 6 MB, resume from the server's offset after a drop, a new upload after 410,
 // Wi-Fi only, the row patched at the end), a vehicle's first photo, and Part 3b's "Running late" (task_late) and answers
 // to the office's questions (ask_answer): in order with the phone's times, kept offline, final replies never sent
-// again. Pure code, no stack needed:
+// again, and when the phone counts as signed out (lib/session.ts). Pure code, no stack needed:
 //
 //   npm run test:sync          (from apps/driver)
 
+import { AuthApiError, AuthRetryableFetchError } from '@supabase/supabase-js';
+
 import * as realApi from '../src/lib/api';
 import { ApiError, type HeartbeatRow } from '../src/lib/api';
+import { sessionKind } from '../src/lib/session';
 import { CHUNK_BYTES, type UploadMeta, type VideoStore } from '../src/lib/videoStore';
 import {
   BACKOFF_MOVING_MS,
@@ -677,6 +680,20 @@ async function main() {
     clock.now += 24 * 3600_000;
     r = await sync.flush({ force: true });
     check(r.sent === 0 && r.failed === 0 && sent.length === 0, 'the next runs send none of them again (final answers are never retried by themselves)', { r, sent });
+  }
+
+  // Sahan, 19 October 2026: a server or network error never signs a driver out (lib/session.ts). getSession() gives no
+  // session both when there is none and when an expired token could not be refreshed offline; only the first is signed out.
+  {
+    console.log('\nSigned in or not (lib/session.ts):');
+    check(sessionKind({ data: { session: { access_token: 't' } }, error: null }) === 'ok', 'a session: signed in');
+    check(sessionKind({ data: { session: null }, error: null }) === 'none', 'no session, no error: signed out');
+    check(sessionKind({ data: { session: null }, error: new AuthApiError('Invalid Refresh Token', 400, 'refresh_token_not_found') }) === 'none',
+      'Auth refused the refresh token (revoked, switched off): signed out');
+    check(sessionKind({ data: { session: null }, error: new AuthRetryableFetchError('Network request failed', 0) }) === 'offline',
+      'the refresh did not get through (no connection): still signed in, nothing forgotten');
+    check(sessionKind({ data: { session: null }, error: new AuthRetryableFetchError('Bad Gateway', 502) }) === 'offline',
+      "Auth's 502–504: still signed in");
   }
 
   console.log(failures === 0 ? '\nAll sync tests passed.' : `\n${failures} sync test(s) failed.`);

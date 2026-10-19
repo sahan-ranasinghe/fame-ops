@@ -612,3 +612,9 @@ credit on the map) and the location search credits Google's results as
 "Google Maps". Google's content is never shown on another map, a Google place
 is never saved as one of ours, and every Google call is counted against a cap
 before it is made: `docs/google-maps-setup.md`.
+
+The office site serves its own fonts (`apps/office/public/fonts`, fetched once
+by `apps/office/scripts/fetch-fonts.mjs`): IBM Plex Sans and IBM Plex Mono,
+Archivo, Yaldevi and Gemunu Libre, all under the SIL Open Font License 1.1
+(each family's licence is beside its files). The driver app bundles its fonts
+through `@expo-google-fonts`, under the same licence.

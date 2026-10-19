@@ -24,6 +24,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { sessionFailure } from "../_shared/fleet/sessionCheck.ts";
 import {
   type Actor,
   adminClient,
@@ -99,7 +100,8 @@ async function resolvePerson(request: Request): Promise<Resolved> {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   const { data, error } = await asCaller.auth.getUser(token);
-  if (error || !data.user) return { ok: false, status: 401, error: "not_signed_in" };
+  // Signed out only when Auth refused the token; Auth not answering is a 503 the app asks again (sessionCheck.ts).
+  if (error || !data.user) return { ok: false, ...sessionFailure(error) };
 
   const { data: row, error: lookup } = await db.from("employees").select("id, name, email, phone, role, permissions, active")
     .eq("auth_user_id", data.user.id).maybeSingle();

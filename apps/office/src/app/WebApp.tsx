@@ -7,6 +7,7 @@ import { Blocked } from "../auth/Blocked";
 import { SecondStep } from "../auth/SecondStep";
 import { SetPassword } from "../auth/SetPassword";
 import { SignIn } from "../auth/SignIn";
+import { Unreachable } from "../auth/Unreachable";
 import { subscribeAskAnswers, subscribeDriverLatest, subscribeDriverPoints, subscribeDriversPoints, subscribeInbox, subscribeIssues } from "../data/realtime";
 import { FleetStore } from "../data/store";
 import { uploadToTicket } from "../data/upload";
@@ -19,7 +20,7 @@ import { WriteRetry } from "../ui/WriteRetry";
 import { FleetProvider } from "./FleetContext";
 import { routes } from "./routes";
 
-function Gate() {
+export function Gate() {
   const auth = useAuth();
   const signedIn = auth.state.step === "ready" ? auth.state.me : null;
   // Hotfix 2 (F): /me asked again after a change to the person's own details (their phone number). The store and the
@@ -74,6 +75,8 @@ function Gate() {
       return <SecondStep />;
     case "blocked":
       return <Blocked />;
+    case "unreachable":
+      return <Unreachable />;
     case "ready":
       return (
         <FleetProvider value={fleet!}>

@@ -54,6 +54,12 @@ Sources:
   - A driver's account opens the driver app.
   - An office account opens Office mode, built from `GET /me` (name, permissions, tools, phone, the map package).
   - An account that is both does not exist (the server keeps drivers and office people apart).
+  - **Signed out only on a 401 or 403** (Sahan, 19 October 2026). A `GET /me` that is dropped (no connection, a 5xx) is
+    asked again once after 2 s, then the app says "Fame Fleet did not answer" with Try again and keeps the session. A token
+    that could not be refreshed for want of a connection (supabase-js: no session with `AuthRetryableFetchError`, the
+    session still stored) is offline, not signed out: the app opens with what it has and refreshes later, as the driver
+    app does (`lib/session.ts`). The office site's rule is `apps/office/src/auth/session.ts` and the `unreachable` step of
+    `AuthProvider`; the app uses the same (in `packages/shared` with the API client).
 - **Bottom tabs per permission set (4–5)**, from `me.permissions`, by the rule of the site's `tabsFor` and the designs:
 
 | Permission set | Tabs |

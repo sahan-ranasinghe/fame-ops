@@ -26,6 +26,40 @@ describe("ApiTransport", () => {
     expect(await transport(fetchFn as typeof fetch).me()).toMatchObject({ name: "Sahan", role: "admin" });
   });
 
+  // Sahan, 19 October 2026: GET /me is a read under the retry rule, and only a 401 or 403 means signed out.
+  it("/me dropped once (a 503) is asked again after 2 s and loads", async () => {
+    vi.useFakeTimers();
+    try {
+      const answers = [reply(503, {}), reply(200, { name: "Sahan", role: "admin", tools: [] })];
+      const fetchFn = vi.fn(async () => answers.shift()!);
+      const me = transport(fetchFn as typeof fetch).me();
+      await vi.advanceTimersByTimeAsync(1_999);
+      expect(fetchFn).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await me).toMatchObject({ name: "Sahan" });
+      expect(fetchFn).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("/me dropped twice fails as 'did not answer' (not signed out); a 401 fails at once, never asked again", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchFn = vi.fn(async () => reply(503, {}));
+      const me = transport(fetchFn as typeof fetch).me();
+      const caught = me.catch((e) => e);
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(await caught).toMatchObject({ code: "upstream_error", status: 503 });
+      expect(fetchFn).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+    const refused = vi.fn(async () => reply(401, { error: "not_signed_in" }));
+    await expect(transport(refused as typeof fetch).me()).rejects.toMatchObject({ code: "not_signed_in" });
+    expect(refused).toHaveBeenCalledTimes(1);
+  });
+
   it("refuses without a session before calling", async () => {
     const fetchFn = vi.fn();
     await expect(transport(fetchFn as typeof fetch, null).call("fleet_overview")).rejects.toMatchObject({ code: "not_signed_in" });

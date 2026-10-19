@@ -4,9 +4,13 @@
 // 2-step sign-in is optional: a person turns it on in Settings. If the office
 // makes it compulsory for a role (secret REQUIRE_MFA_ROLES), office-api answers
 // mfa_required and the person is asked to set it up before anything loads.
+// Only a 401 or 403 is "signed out" (Sahan, 19 October 2026): a /me that is dropped (no connection, a 5xx) is asked again
+// once (ApiTransport.me) and then shows "Fame Fleet did not answer" with Try again, the person still signed in.
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { ApiTransport } from "../transport/api";
 import type { FleetError, Me } from "../transport/types";
+import { dropped } from "../transport/retryRule";
+import { sessionKind } from "./session";
 import { accessToken, apiBase, configured, recoveryLink, supabase } from "./supabase";
 
 export type AuthState =
@@ -16,6 +20,8 @@ export type AuthState =
   | { step: "second_step"; mode: "verify"; factorId: string }
   | { step: "second_step"; mode: "enrol" }
   | { step: "blocked"; reason: "not_an_office_user" | "switched_off" | "not_configured" }
+  /** Signed in, but Fame Fleet did not answer (or refused for another reason): Try again; the session is kept. */
+  | { step: "unreachable"; message: string }
   | { step: "ready"; me: Me };
 
 interface AuthApi {
@@ -24,12 +30,15 @@ interface AuthApi {
   signIn(email: string, password: string): Promise<string | null>;
   setPassword(password: string): Promise<string | null>;
   verifyCode(code: string): Promise<string | null>;
-  /** After the person set up 2-step on the second-step page: ask office-api again. */
+  /** After the person set up 2-step on the second-step page, or Try again after Fame Fleet did not answer: ask office-api again. */
   recheck(): Promise<void>;
   signOut(): Promise<void>;
 }
 
 const Ctx = createContext<AuthApi | null>(null);
+
+/** What the page says when Fame Fleet did not answer /me (or the token's refresh did not get through). */
+export const UNREACHABLE = "Fame Fleet did not answer.";
 
 export function useAuth(): AuthApi {
   const a = useContext(Ctx);
@@ -71,7 +80,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setState(factor ? { step: "second_step", mode: "verify", factorId: factor.id } : { step: "second_step", mode: "enrol" });
       } else if (err.code === "not_an_office_user" || err.code === "switched_off") setState({ step: "blocked", reason: err.code });
       else if (err.code === "not_signed_in") setState({ step: "signed_out" });
-      else setState({ step: "signed_out", notice: err.message });
+      else if (err.code === "forbidden") setState({ step: "signed_out", notice: err.message });
+      else setState({ step: "unreachable", message: dropped(err) ? UNREACHABLE : err.message });
     }
   }, [transport]);
 
@@ -95,11 +105,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setState({ step: "signed_out" });
       }
     });
-    void supabase.auth.getSession().then(({ data }) => {
+    void supabase.auth.getSession().then((answer) => {
+      const kind = sessionKind(answer);
       if (recovering.current) {
         setState({ step: "set_password" });
-      } else if (data.session) {
+      } else if (kind === "ok") {
         void check();
+      } else if (kind === "offline") {
+        // The session is stored but its token could not be refreshed (no connection): still signed in.
+        setState({ step: "unreachable", message: UNREACHABLE });
       } else {
         setState({ step: "signed_out" });
       }

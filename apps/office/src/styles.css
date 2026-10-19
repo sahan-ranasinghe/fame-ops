@@ -6,8 +6,8 @@
   --live: #1e4fa0; --live-bg: #e6edf8; --warn: #8a5a00; --warn-bg: #fbf0d9;
   --bad: #b3261e; --bad-bg: #fae3e1; --ok: #1d7a4a; --ok-bg: #e1f1e7;
   --sea: #d4e1ea; --land: #e9e7e0; --coast: #c3c0b5; --grid: rgba(21,24,28,.07); --shade: rgba(10,12,14,.45);
-  --font-display: "Archivo", "Arial Black", system-ui, sans-serif;
-  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Archivo", "Gemunu Libre", "Arial Black", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "Yaldevi", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {

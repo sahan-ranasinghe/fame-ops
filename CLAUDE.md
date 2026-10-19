@@ -263,6 +263,9 @@
 - Vite 7 + React 19 + TypeScript + react-router 7, no UI library; the artifact's CSS is
   `src/styles.css` unchanged (design tokens from this file). Node from `.nvmrc`; run
   everything with `./node_modules/.bin/<tool>` or `npm run` from `apps/office`.
+- Fonts: the web build serves its own (`public/fonts`: IBM Plex Sans and Mono, Archivo, Yaldevi, Gemunu Libre; Latin and
+  Sinhala subsets; OFL; made once by `scripts/fetch-fonts.mjs`, linked by `fontTags` in `vite.config.ts`); the artifact keeps
+  Google Fonts' link (claude.ai cannot reach the site's files).
 - One source, two builds: `npm run build:web` → `dist/` (Cloudflare Pages, code-split,
   `public/_redirects` for the SPA) and `npm run build:artifact` → `dist-artifact/index.html`
   (vite-plugin-singlefile, no Supabase code inside; `__BUILD__` from `vite.config.ts`).
@@ -281,6 +284,12 @@
   refetchInterval) and `ApiTransport` (office-api with the session; `watch` polls on the
   same intervals: overview and board 30 s, requests 60 s; `invalidate` refetches every watch).
   Errors become `{ code, message }` and `errors.ts` turns them into one sentence + a fix.
+  One retry rule (`transport/retryRule.ts`, 19 October 2026): only reads (`READ_TOOLS` = the server's readOnly flags, and
+  `GET /me`) are asked again by themselves, once after 2 s when dropped (no connection, a 5xx); the one keyed write is
+  `reviewing`; any other write shows "may not have been saved" with Try again (`ui/WriteRetry`, the same press again).
+  Signed out only on a 401 or 403: a /me that still fails shows "Fame Fleet did not answer" with Try again
+  (`auth/Unreachable.tsx`), and a token that could not be refreshed offline is not "signed out" (`auth/session.ts`; the
+  driver app's `lib/session.ts`; office-api and driver-api answer 503 when Auth does not answer, `sessionCheck.ts`).
 - Phase 6 Part 1 (14 October 2026): every form is a page with its own URL (`/requests/new`,
   `/requests/:id/decide`, `/tasks/new`, `/tasks/:id/edit`, `/tasks/:id/stops`, `/vehicles/new`,
   `/vehicles/:reg/edit`, `/drivers/new`, `/drivers/:username/edit`, `/settings/users/new`,
@@ -456,7 +465,9 @@
   `scripts/test-office-local.sh <functions env file>` (before the e2e it waits until Realtime
   delivers a driver_latest change: a `db reset` restarts the Realtime container and its change
   stream takes about half a minute more, during which subscriptions succeed but deliver nothing). The e2e uses the snap Chromium
-  (`PW_CHROMIUM=/snap/bin/chromium`, profile under `~/snap/chromium/common`); no browser download.
+  (`PW_CHROMIUM=/snap/bin/chromium`, profile under `~/snap/chromium/common`); no browser download. It never uses the
+  internet: the test browser resolves no host but this laptop (`OFFLINE` in `playwright.config.ts`; the free map falls back
+  to the drawn map), and a test about an outside service fakes it (the map search's public places).
 - Local Auth redirects for the dev server are in `supabase/config.toml` (`site_url`
   localhost:5173); the real project's Site URL and redirect URLs are set in the dashboard.
 

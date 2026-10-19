@@ -14,6 +14,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
+import { sessionFailure } from "../_shared/fleet/sessionCheck.ts";
 import { auditFinish, auditStart } from "../_shared/fleet/audit.ts";
 import { adminClient, ToolError } from "../_shared/fleet/db.ts";
 import type { Actor } from "../_shared/fleet/roles.ts";
@@ -87,7 +88,8 @@ async function resolveDriver(request: Request): Promise<{ ok: true; driver: Driv
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   const { data, error } = await asCaller.auth.getUser(token);
-  if (error || !data.user) return { ok: false, status: 401, error: "not_signed_in" };
+  // Signed out only when Auth refused the token; Auth not answering is a 503 the app asks again (sessionCheck.ts).
+  if (error || !data.user) return { ok: false, ...sessionFailure(error) };
   const row = await driverRow(data.user.id);
   if (!row || row.role !== "driver") return { ok: false, status: 403, error: "not_a_driver" };
   if (!row.active) return { ok: false, status: 403, error: "switched_off" };

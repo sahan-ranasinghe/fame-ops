@@ -2588,6 +2588,47 @@ the quiet run.
   card instead of the task's panel: fixed, passes. Two still failed twice, the same cause in pages that make a one-off call
   (the Notifications page's load, the decide page's "reviewing" every 20 s): reported to Sahan, not retried.
 
+#### The third round (Sahan, 19 October evening)
+
+- **One retry rule** (`transport/retryRule.ts`, both builds): only reads are asked again by themselves. `READ_TOOLS` is the
+  server's readOnly flag of every tool (a test reads the tool files); a read dropped on the way (no connection, a 5xx) is
+  asked again once after 2 s (`QUICK_RETRY_MS`, `onceMore`): the page loads (`data/store.ts`), the polled pages
+  (`ApiTransport.watch`), the form lists (`data/hooks.ts`, also after 1.5 s and 5 s), the Notifications page and `GET /me`.
+  The one keyed write asked again is `reviewing` (upserted on request and person). Every other write is never repeated by
+  itself: "Fame Fleet didn't answer, so this may not have been saved." and `ui/WriteRetry` offers Try again, which presses
+  the same button or submits the same form again (`transport/gesture.ts`); the page's background writes offer nothing.
+- **Signed in or not:** only a 401 or 403 means signed out. Found and fixed in four places:
+  - The office site: a /me that still fails after its retry shows "Fame Fleet did not answer" with Try again, the person
+    still signed in (`auth/Unreachable.tsx`, the `unreachable` step of `AuthProvider`). The e2e's failure at 17:23 was a 503
+    on /me that put a signed-in approver on the sign-in page.
+  - supabase-js gives no session both when there is none and when an expired token could not be refreshed for want of a
+    connection (`AuthRetryableFetchError`, the session kept in storage). The office site (`auth/session.ts`: the token
+    source throws a dropped call, the start-up shows Not reachable) and the driver app (`lib/session.ts`) now tell them
+    apart. Before it, a phone opened offline an hour after its last use forgot the driver's data and showed Login, and a
+    driver could not sign in again until back online. The driver app's "no employee row = switched off" now first checks
+    that the request went with a session. Phone side: ships with the first EAS update after 1.3.0.
+  - office-api and driver-api answered 401 when Auth itself did not answer the session check; now 503 `auth_unavailable`
+    (`_shared/fleet/sessionCheck.ts`), which the apps ask again.
+  - Phase 8: the same rule for Office mode (`docs/phase8-plan.md` section 1).
+- **Fonts served by the site** (`public/fonts`, `scripts/fetch-fonts.mjs`, `fontTags` in `vite.config.ts`): IBM Plex Sans
+  and Mono, Archivo (Latin subsets), Yaldevi and Gemunu Libre (Sinhala), woff2, `font-display: swap`, OFL licences beside
+  them; no browser contacts Google for fonts. Checked against Google's: the same files and faces, every pixel of /privacy and
+  the sign-in page (desktop and phone) and of a specimen of every family and weight equal; only Sinhala text changes (Yaldevi
+  and Gemunu Libre instead of the system's font, as in the driver app). The artifact keeps Google Fonts' link (claude.ai
+  cannot reach the site's files). The privacy policy never named Google Fonts: unchanged.
+- **The e2e without the internet:** the test browser resolves no host but this laptop (`OFFLINE` in `playwright.config.ts`);
+  the free map falls back to the drawn map; the map search's public places are faked in their test; the local functions
+  have no Google or openrouteservice key.
+- **Credits:** the free web map's attribution in full (not folded); openrouteservice's credit wherever its line is drawn
+  (the plan's note, the gaps' legend on the driver page, task detail and Live); the phones' maps show "© OpenStreetMap
+  contributors · OpenFreeMap" and openrouteservice's credit with its line (`mapCredit`; with the first EAS update).
+
+**Follow-ups (next round, not built):**
+- A client request id on every create action (`create_task`, `create_request`, `book_vehicle`, `add_place`, `save_place`,
+  `create_driver`, `register_vehicle`, `create_office_user` and the like): the page makes one id per form and sends it; the
+  server keeps it with the row (unique) and answers a repeat with the row already made. Then Try again after a lost answer
+  can never make a second task, request or driver, and a create may join `IDEMPOTENT_WRITES`.
+
 ## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
 
 What Sahan asked:
