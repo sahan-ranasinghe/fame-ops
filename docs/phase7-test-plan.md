@@ -1039,44 +1039,93 @@ Ask in Claude Teams. The shared key is an admin key: it sees everything and its 
     drawn map with gap markers and plan pins ("Straight lines, not the road"). Each new tool asks the connector's
     permission once.
 
+## Hotfix 4 (office web: one New request, back means back, Ask drivers as its own step)
+
+Run on a laptop and on a phone's browser, after the web deploy.
+
+### H4-1. One "New request"
+1. Requests, as a fleet admin, on a laptop and on a phone.
+
+You should see:
+- One "New request": the header's on a laptop, the big button on a phone.
+
+### H4-2. Give it a driver is one page
+1. Make a driver decline a task. Open it from the Overview's Needs a driver.
+2. Pick a driver by clicking their row, then tap "Give to <name> · <plate>".
+
+You should see:
+- The task on top (leave-by, stops with arrive-by, who asked, notes, the map), Who can take it below, "Open task →".
+- After Give: back on the Overview; the task has left Needs a driver.
+
+### H4-3. Back means back
+1. Open Give it a driver from the push on a phone, then tap back.
+2. Open it from Tasks, then tap back.
+
+You should see:
+- From the push: the Overview, never the task page. From Tasks: back to Tasks.
+
+### H4-4. Ask drivers as its own step
+1. Assign a task: Who's available has no tick boxes. Tap Ask drivers, then Send.
+2. On the driver's phone answer Yes.
+3. The same on Approve, Give it a driver and the Drivers board.
+
+You should see:
+- A sheet with the free drivers ticked and the trip's day and time filled in.
+- "Yes" under that driver's row within seconds, with "Use this driver" (it fills the driver and the vehicle); on the board
+  "Assign →".
+
+### H4-5. No dead task links
+1. As an approver without assign_tasks: open a request page, an issue and a fuel fill.
+
+You should see:
+- No "Open task" link (before, it led to No access).
+
 ## Part 6 (the 1.3.0 build)
 
-The 1.3.0 build is the `drivers` profile: a smaller app (only what a 64-bit phone needs) with three sounds of its own,
-now called **Fame Fleet**, with what the stores ask for. It is installed once on each phone, over 1.2.0. Everything above
-is tested on 1.2.0; after the install, P5 runs the driver's tests again on 1.3.0.
+The 1.3.0 build is the `drivers` profile: **one APK for every phone** (64-bit and 32-bit Android), with both maps (Google's
+and the free map), four notification channels with sounds of their own, now called **Fame Fleet**, with what the stores ask
+for. It is installed once on each phone, over 1.2.0. Everything above is tested on 1.2.0; after the install the tests below
+run on 1.3.0.
+
+**Every test below runs on the release build (the `drivers` APK from EAS), on both phones** (the OPPO CPH2119 and the
+Samsung SM-A226B). If a phone running 32-bit Android is at the office, install the APK there too and run P1, P5 and P11 on it
+(P6).
 
 Android versions: **minSdkVersion 24** (Android 7.0 Nougat and later install it) and **targetSdkVersion 36** (built for
 Android 16's rules). A phone older than Android 7.0 cannot install it; the store build (`store`, an .aab) has the same two
 levels.
 
-### P1. Install over 1.2.0
-1. On the OPPO, open the EAS link of the `drivers` build in Chrome, download it and open the file. Allow installs from
+### P1. Install over 1.2.0, still signed in
+1. On the phone, open the EAS link of the `drivers` build in Chrome, download it and open the file. Allow installs from
    Chrome if Android asks.
 2. Android asks "Do you want to install an update to this existing app?": Install.
-3. Open Fame Driver.
+3. Open Fame Fleet.
 
 You should see:
-- The download is about 25 MB (1.2.0 was 89 MB).
-- Still signed in, the same duty state and vehicle; Me: "Everything is sent" (or the same "Waiting to be sent" as
+- The download is about {APK_MB} MB (one file for every phone; 1.2.0 was 89 MB).
+- **Still signed in**, the same duty state and vehicle; Me: "Everything is sent" (or the same "Waiting to be sent" as
   before), App version `1.3.0+…`.
 - Today's task map is Google's map, as on 1.2.0.
-- If Android says "App not installed" instead, the phone may be 32-bit: see P6.
 
 ### P2. A new task rings until it is opened
 1. Turn the ring and notification volume up. Lock the OPPO.
 2. From the office, send test.driver a new task.
 3. Let it ring. Then send a second task and, while it rings, unlock the phone and tap the notification.
+4. Send a third with the app open on Today, a fourth with the app in the background (Home), and a fifth after swiping the
+   app away from the recent apps.
 
 You should see:
-- A two-tone ring, repeating, with a strong vibration, on the lock screen: "New tasks (ringing)".
+- A two-tone ring, repeating, with a strong vibration, on the lock screen: "New tasks".
 - Left alone it rings for 30 seconds, then stops; the notification stays in the tray.
 - Tapping it opens the task and the ring stops at once. Opening the app from its icon also stops it.
 - With the app open on Today when a task comes, it rings for about 6 seconds and the task shows on Today.
+- In the background and swiped away it rings the same as locked; opening the task stops it.
 - In Do not disturb the phone stays silent, as for every app.
 - Note it if the OPPO cuts the ring after a few seconds.
 
 ### P3. A change and a cancellation have their own tone
-1. From the office, change the time of test.driver's accepted task.
+1. From the office, change the time of test.driver's accepted task: once with the app open, once in the background, once
+   swiped away.
 2. Then cancel it.
 
 You should see:
@@ -1084,37 +1133,53 @@ You should see:
 - A reassigned task that test.driver had accepted gives the same tone.
 
 ### P4. A question has its own tone
-1. From the office, ask the free drivers if they are free tomorrow 09:00–12:00 (C12).
+1. From the office, ask the free drivers if they are free tomorrow 09:00–12:00 (C12): with the app open, in the background
+   and swiped away.
 
 You should see:
 - A short rising tone (two notes, twice) under "Questions from the office", and the question opens as before (A19).
 
+### P4b. Reminders have their own channel
+1. Give test.driver a task that leaves in 35 minutes and do not accept it.
+
+You should see:
+- The accept reminder and then the 30-minute leave reminder under **"Task reminders"**, with the new-task sound (not the
+  ring), with the app open, in the background and swiped away.
+
 ### P5. Nothing lost on 1.3.0
-Repeat on the OPPO, now on 1.3.0:
+Repeat on each phone, now on 1.3.0:
 1. A3, A6, A8 and A9: start work, a new task, Accept, Start task, the map, Arrived, Done, Save & finish.
-2. The odometer photo with its suggestion, once with mobile data off.
-3. A fuel fill with its video (the camera opens, records and saves).
+2. **The odometer photo's suggestion:** at Start task the photo suggests a number (ML Kit), once with mobile data on and
+   once with it off.
+3. **The fuel video:** a fuel fill with its video (the camera opens, records muted, saves); then Me → "Everything is sent"
+   and the office's Fuel page plays it.
 4. A2 (your photo) and A20 (a vehicle photo).
-5. An hour on duty with the screen off, then the driver page in the office.
-6. Me → Language: සිංහල, then back.
-7. The start and finish sounds on Start task and Save & finish.
-8. Settings → Apps → Fame Driver → Notifications.
+5. **Background location:** Start work, lock the phone and leave it 15 minutes with the screen off (in a vehicle that
+   moves, or walking); then the driver page in the office.
+6. **The offline queue:** airplane mode on, log a fuel fill (with its video), Me shows "Waiting to be sent"; airplane mode
+   off. It uploads by itself within a minute ("Everything is sent"), and the office's Fuel page has it.
+7. **Navigate, Call and WhatsApp:** on a running task, Navigate opens the Google Maps app with the route to the stop; Call
+   contact rings the contact; the WhatsApp button opens the chat.
+8. Me → Language: සිංහල, then back.
+9. The start and finish sounds on Start task and Save & finish.
+10. Settings → Apps → Fame Fleet → Notifications.
+11. **An update for its runtime:** after the office says an update is out (`eas update` to the 1.3.0 runtime), open the app
+    twice on Wi-Fi; Me → App version shows the new `1.3.0+…` id.
 
 You should see:
 - Everything as on 1.2.0, with no error and no "Something went wrong".
-- The day's line on the driver page without new holes.
-- In the notification settings: "New tasks (ringing)" ("A new task rings for up to 30 seconds, until you open it"),
-  "Changed and cancelled tasks" and "Questions from the office" once each, in Sinhala on a Sinhala phone ("නව කාර්යයන්
-  (නාද වන)", "වෙනස් කළ සහ අවලංගු කළ කාර්යයන්"). The 1.2.0 "New tasks" ("New, changed and cancelled tasks") is gone;
-  the older English ones ("New tasks", "Task changes", "General", "On duty") stay for reminders and the rest.
-- The app's next update arrives: after the office says an update is out, open the app twice on Wi-Fi.
+- 15 minutes with the screen off: the line on the driver page has no new hole, and the points arrived as they were
+  recorded (not "uploaded later").
+- In the notification settings, once each: **"New tasks"** ("A new task rings for up to 30 seconds, until you open it"),
+  **"Changed and cancelled tasks"**, **"Task reminders"**, **"Questions from the office"**, "General" and "On duty"; in
+  Sinhala on a Sinhala phone ("නව කාර්යයන්", "වෙනස් කළ සහ අවලංගු කළ කාර්යයන්", "කාර්ය සිහිකැඳවීම්"). The 1.2.0 "New
+  tasks" (two of them), "Task changes" and the first "Questions from the office" are gone once the phone has registered
+  with the office (the first open with a connection).
 
-### P6. A 32-bit phone
-- The 1.3.0 build is for 64-bit phones only (every phone we know, the OPPO CPH2119 and the Samsung SM-A226B, is 64-bit).
-- On a 32-bit phone (typically an Android Go phone) installing ends with "App not installed". A CPU-info app shows
-  armeabi-v7a only.
-- Then ask for a `drivers-32` build: the same app for that phone (the profile is ready in eas.json). Through Play (the
-  `store` .aab) a 32-bit phone gets its own part by itself.
+### P6. A 32-bit phone (if one is at the office)
+- The same APK installs on 32-bit Android (armeabi-v7a; typically an Android Go phone). A CPU-info app shows the phone's
+  ABI.
+- Install it there and run P1, P5 and P11. Through Play (the `store` .aab) each phone gets only its own part.
 
 ### P7. The name, the icon and the splash
 1. Look at the phone's home screen and app drawer, then open the app.
@@ -1149,12 +1214,16 @@ You should see:
 1. The sign-in screen: the line under the form.
 2. Me → Privacy policy.
 3. On a laptop, signed out: https://fame-fleet.pages.dev/privacy, and the site's sign-in page.
+4. Signed in as the admin: Settings → Fleet → Privacy contact e-mail: type an address, Save; open /privacy again. Remove it;
+   open /privacy again. Add it again; open /privacy again.
 
 You should see:
 - Sign-in: "Fame Fleet 1.3.0" and "Privacy policy"; the link opens the policy in the browser.
 - The policy opens without signing in: what is collected (location only while on duty, photos and videos, phone numbers),
   who sees it, how long it is kept (location points 90 days, fuel videos 12 months …), your choices, security, questions.
 - The site's sign-in has a "Privacy policy" link.
+- Questions: "Write to <the address>" as a mailto: link; after Remove, "Call the office on 011 …" instead; after adding it
+  again, the address again. A wrong address ("fame@") is refused with "An e-mail address such as privacy@example.com."
 
 ### P10. The reviewers' account (after the round and docs/store-release.md step 3.2)
 1. On the second phone, sign in as `store.review`. Start work, Accept a task, Start task.
@@ -1167,6 +1236,27 @@ You should see:
 - test.driver is never offered DEMO-0001.
 - The office never shows the reviewer, their tasks or DEMO-0001 anywhere, and a decline or Running late from the reviewer
   brings no notification.
+
+### P11. The same task on Google's map and on the free map
+1. Open a running task (Start task) on the phone: the map.
+2. In the office: Settings → Fleet → Map package → Open. Wait a minute on the task screen.
+3. Map package → Google again. Wait a minute.
+4. In Claude: "set phone_map_wait_s to 1" (`update_settings`). On the phone close the app (swipe it away), open it and the
+   task. Then in the office: Issues. Then set it back to 30, close and open the app again, open the task; after 5
+   minutes, Issues again.
+5. Turn on airplane mode, close and open the app, open the task. Then airplane mode off.
+
+You should see:
+- Google's map: the stops numbered with their times, the planned road line (blue; driven legs grey), the phone's blue
+  dot, the compass when turned, **Follow me** (the round target button: the map follows the phone; a pan stops it).
+- Within a minute of Open: the free map (OpenStreetMap's look) with the same stops, times, phone and Follow me; dashed
+  straight lines join the stops; a Google place is not drawn and "A Google place: Navigate shows it in Google Maps" shows
+  over the map. Within a minute of Google: Google's map again.
+- With the 1 s wait: the free map by itself, and the office's issue "Google map failed on <the driver's name>'s phone;
+  using the free map" (within 5 minutes). Back at 30 s and the app opened again: Google's map, and the issue resolves by itself.
+- Offline: "Map not available" with the stops and "≈ N km straight line" to each stop still to do, and Try again; Start,
+  Complete, the odometer, fuel, Report and Navigate all still work. With the connection back the map returns by itself.
+- The same on both phones, in English and in Sinhala.
 
 ## If something looks wrong
 

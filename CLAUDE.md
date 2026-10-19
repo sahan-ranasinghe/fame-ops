@@ -119,26 +119,31 @@
 - **Part 5 (docs, branch `phase7-5`)**: the Phase 7 test plan per role, as built: `docs/phase7-test-plan.md`; the
   Sinhala table checked against every driver key of Phase 7 (`docs/phase7-plan.md` §Sinhala, "Checked at Part 5"); the
   README brought up to date.
-- **Part 6 (the 1.3.0 build, branch `phase7-6`)**: the EAS profile `drivers` (§27): arm64-v8a only, R8 and resource
-  shrinking, the dev client and (with the Google map) MapLibre left out of autolinking and expo-camera built from source
-  without ML Kit's barcode scanner (`scripts/lean-build.mjs`, run by EAS as `eas-build-pre-install`), the unused
-  BouncyCastle tables out and the notification sounds kept by name (`plugins/withLeanAndroid.js`); `drivers-32` for a
-  32-bit phone. Three sounds of its own on new channel ids: `task-ring` (a new task rings 30 s, cleared when the app or the
-  task opens), `task-updates` (changed, cancelled, removed) and `office-asks` (push-task `channels.ts`). As built:
-  `docs/phase7-plan.md` "Part 6 as built"; test plan: `docs/phase7-test-plan.md` "Part 6".
-  without ML Kit's barcode scanner (`scripts/lean-build.mjs`, run by EAS as `eas-build-pre-install`; `app.config.ts`
-  stops an EAS drivers build without its exclusions), the unused BouncyCastle tables out (`plugins/withLeanAndroid.js`);
-  `drivers-32` for a 32-bit phone. Every build keeps the notification sounds by name (`plugins/withKeptSounds.js`). Three
-  sounds of its own on new channel ids, made only on a 1.3.0 build: `task-ring` (a new task's 30 s ring, played once;
-  cleared when the app starts or comes to the front, or the task opens: `stopRinging`, a push Android showed itself is
-  known by its title), `task-updates` (changed, cancelled, removed) and `office-asks`; there the app removes `new-tasks`
-  and `driver-asks` (push-task `channels.ts`). As built: `docs/phase7-plan.md` "Part 6 as built"; test plan:
-  `docs/phase7-test-plan.md` "Part 6". Store readiness (nothing published): the app's name Fame Fleet with the FF icon and
-  splash (`scripts/make-icons.mjs`), the privacy policy at `/privacy` on the office site (open without signing in; linked
-  from the app's sign-in and Me), the location disclosure before Android's question (`components/LocationDisclosure.tsx`),
-  the `store` profile (.aab, both ABIs, EAS raises the version code), the reviewers' demo driver (`employees.demo` /
+- **Part 6 (the 1.3.0 build, branch `phase7-6`, on local main since 19 October)**: the EAS profile `drivers` (§27): one APK
+  for every phone (arm64-v8a and armeabi-v7a; `drivers-32` retired), native libraries uncompressed (Android's default, 16 KB
+  aligned), R8 and resource shrinking, the dev client left out of autolinking and expo-camera built from source without ML
+  Kit's barcode scanner (`scripts/lean-build.mjs`, run by EAS as `eas-build-pre-install`; `app.config.ts` stops an EAS
+  drivers build without its exclusions), the unused BouncyCastle tables out (`plugins/withLeanAndroid.js`). Every build
+  keeps the notification sounds by name (`plugins/withKeptSounds.js`). Both maps on every phone (§27b): one task map
+  (`components/TaskMap.tsx`) with Google's map (`GoogleTaskMap.tsx`) and the free map (`OpenTaskMap.tsx`, MapLibre +
+  OpenFreeMap), chosen by `lib/mapEngine.ts`: Google unless the setting `map_package` is open (the phones read it every
+  minute) or Google's map did not load on this phone within `phone_map_wait_s` while online (then the free map,
+  `report_map_state`, the issue `map_fallback`); both failing = "Map not available" (`MapUnavailable.tsx`); every round
+  tests both engines (`npm run test:maps`). Four channels of its own, made only on a 1.3.0 build: `task-ring` "New tasks" (a
+  30 s ring, cleared when the app starts or comes to the front, or the task opens: `stopRinging`; a push Android showed
+  itself is known by its title), `task-updates` (changed, cancelled, removed, reopened), `task-reminders` (leave in 30,
+  leave now, accept, the arrival nudge) and `office-asks`; push-task picks by the channels a phone registered
+  (`channels.ts`), and the phone deletes the 1.2.0 channels they replace (`new-tasks`, `driver-asks`, `tasks-new`,
+  `tasks-changed`) only after the server took its token with the new ones (`replacedChannels`, `lib/push.ts`). As built:
+  `docs/phase7-plan.md` "Part 6 as built"; test plan: `docs/phase7-test-plan.md` "Part 6". Store readiness (nothing
+  published): the app's name Fame Fleet with the FF icon and splash (`scripts/make-icons.mjs`), the privacy policy at
+  `/privacy` on the office site (open without signing in; linked from the app's sign-in and Me; the same text in
+  `docs/privacy-policy.md`; its contact is the setting `privacy_email`, else the office phone, through office-api's public
+  `GET /public/privacy`), the location disclosure before Android's question (`components/LocationDisclosure.tsx`), the
+  `store` profile (.aab, both ABIs, EAS raises the version code), the reviewers' demo driver (`employees.demo` /
   `vehicles.demo` and a `demo` column set by trigger on tasks, fuel, odometer, reports and duty; never mixed with real rows;
-  left out of every office list and notification; `seed_demo_driver`). Play and App Store steps: `docs/store-release.md`.
+  left out of every office list and notification; `seed_demo_driver`). Play and App Store steps: `docs/store-release.md`;
+  every Google call with its cap and fallback: `docs/google-maps-setup.md` section 7.
 - **Phase 8 (planned 19 October 2026)**: Office mode, the office's interface in the same Expo app for office sign-ins, by
   permission (view, request, approve, assign_tasks, vehicles, issues, users), never by role name; the web build of the same
   screens becomes the phone version of the office site. Design first (Part 8.0, a clickable prototype from

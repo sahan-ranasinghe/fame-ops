@@ -922,23 +922,22 @@ What the measurement shows:
 
 | Change | Expected saving on the arm64 APK (MB) |
 |---|---|
-| arm64-v8a only. A ready `drivers-32` profile (armeabi-v7a) is kept in eas.json, built only when Sahan asks | 28.6 |
-| MapLibre out of the Google-map build: excluded from autolinking when `GOOGLE_ANDROID_MAPS=on`, and the OpenFreeMap map loaded only when the switch is off. A switch-off build keeps it, so the no-Google fallback is not lost | 10.8, plus its dex |
+| ~~arm64-v8a only, `drivers-32` for a 32-bit phone~~ (undone 19 October: one APK with both) | 28.6 |
+| ~~MapLibre out of the Google-map build~~ (undone 19 October: both maps on every phone) | 10.8, plus its dex |
 | expo-dev-client out of the drivers build (dev launcher and dev menu) | dex, measured |
 | R8 and resource shrinking really on, with keep rules tested for ML Kit text recognition, react-native-maps, the camera and the fuel video, expo-updates, notifications and SQLite | part of the 9.7 dex |
 | ML Kit barcode out (a Gradle exclude of `com.google.mlkit:barcode-scanning`; the scanner is never called), tested with the fuel video | 5.8 |
 | Fonts cut to the weights in use | up to 1.4 |
 | BouncyCastle post-quantum tables (a packaging exclude, if nothing loads them) | 1.2 |
 
-- **Expected result:** an arm64 APK of about 35 MB, under the 40 MB target, without compressing the
-  native libraries.
-  - If it is still over, the native libraries go compressed (`useLegacyPackaging`): a smaller
-    download, but the libraries are extracted on install.
-  - Each change is measured on its own. The report gives before and after, and what each change
-    saved.
-- **A 32-bit phone.** The test plan gets a line on how to tell: installing the arm64 APK ends with
-  "App not installed" on a 32-bit Android (typically an Android Go phone); Settings → About phone
-  or a CPU-info app shows armeabi-v7a only. Then Sahan asks for a `drivers-32` build.
+- **Changed 19 October (Sahan, after the Part 6 checkpoint): size is not the priority any more.**
+  - One APK for every phone: arm64-v8a and armeabi-v7a (only x86 and x86_64, emulators and Chromebooks, are left out).
+    `drivers-32` is retired. The store .aab carries both; Play sends each phone only its own part.
+  - MapLibre is back in every build: both maps on every phone (§27b below).
+  - The native libraries are never compressed: Android's default, stored uncompressed and 16 KB page-aligned (Play
+    requires 16 KB pages for apps targeting Android 15+). The earlier rule "still over 40 MB → compress them" is removed.
+  - The barcode scanner and BouncyCastle's post-quantum tables stay out: nothing uses them (Part 6 as built). No other
+    size cuts. The final size is in Part 6 as built.
 - **The new-task ringtone (Hotfix 2, B; Sahan, 18 October).** The 1.3.0 build bundles:
   - a loud ringtone for a new task that rings until the driver opens it or 30 seconds pass, like a ride-hailing app
     (a full-screen-intent style notification on its own channel, the sound looping; stopped when the task is opened or
@@ -952,6 +951,45 @@ What the measurement shows:
 - **At Round B:**
   - First the last `1.2.0-gmaps` update, from the commit before Part 6 (as d63c838 was for 1.1.0).
   - Then the 1.3.0 build. Phones install it once; later updates target 1.3.0 only.
+
+## 27b. Both maps on every phone (Sahan, 19 October, after the Part 6 checkpoint)
+
+**How 1.2.0 chose.** At build time only. The EAS variable `GOOGLE_ANDROID_MAPS=on` (with the secret
+`GOOGLE_ANDROID_MAPS_KEY`) made a `1.2.0-gmaps` build whose task map was Google's (`extra.googleMapsAndroid`); a build
+with the switch off showed the OpenFreeMap map. It did **not** follow the map package setting: a phone could not move to
+the other map without a new build. The first Part 6 build even left MapLibre out of the Google-map build.
+
+**1.3.0.** One map component (`components/TaskMap.tsx`) with two engines underneath, in every build:
+- Google's map (`GoogleTaskMap.tsx`: react-native-maps, the Maps SDK for Android, no map id, free on a phone) and the free
+  map (`OpenTaskMap.tsx`: MapLibre with OpenFreeMap's tiles, no key). Both draw the same parts from the same rules
+  (`taskMapLogic.ts`): the stops numbered with their time, the start, the phone, the line, Follow me (a pan or a pinch
+  turns it off), the compass, and the app's own labels in English and Sinhala. The base map's place names are the
+  provider's (Google's follow the phone's language; OpenFreeMap shows OpenStreetMap's names).
+- Google's content stays on Google's map (rule 10): its road line and a Google place's pin. On the free map dashed straight
+  lines join the stops it draws, and "A Google place: Navigate shows it in Google Maps" shows over the map. With no road
+  line stored, Google's map draws the same dashed lines.
+- **Which engine** (`lib/mapEngine.ts`): Google's when the build has the key, the setting `map_package` is `google` and
+  Google has not failed on this phone since the app opened; else the free map. The phones read `map_package` with the
+  settings they already load (`get_driver_settings`), again every minute while the app is open, so a change reaches
+  them within a minute, with no build or update.
+- **Automatic switch.** Android's Maps SDK has no "key refused" callback: a refused key, billing or authorisation, Google
+  Play services missing or Google down all leave a grey map that never finishes loading. react-native-maps passes on
+  Google's `OnMapLoadedCallback` ("every tile drawn") as `onMapLoaded`. No `onMapLoaded` within `phone_map_wait_s`
+  (setting, 30 s by default, 1 to 120) while the phone has internet (expo-network asked at that moment) = Google failed;
+  a render error of the map (an error boundary) too. The phone then shows the free map, reports it
+  (`report_map_state`), and the office gets the issue "Google map failed on <driver>'s phone; using the free map"
+  (kind `map_fallback`, the full sync every 5 minutes; none while the package is `open`). The phone tries Google again
+  the next time the app opens (started afresh, or brought to the front 30 minutes or more after the failure); the next
+  good load is reported and the issue resolves itself.
+- **Both fail** (OpenFreeMap down: `onDidFailLoadingMap` or no load within 30 s; or no network): the "Map not available"
+  card (`components/MapUnavailable.tsx`, English and Sinhala) with the stops and the straight-line distance to each
+  stop still to do, and Try again; it goes by itself when the network is back. Start, Complete, the odometer, fuel,
+  Report and Navigate (the Google Maps app) are outside the map and work as before.
+- The office website is unchanged: Google's map under the google package, the free map when the setting is `open`,
+  and at the map-load cap (or a failed Google load) no map with "The lists show everything" (`NoMap`), never the free
+  map, because its pages may carry Google content.
+- From now on every round tests both engines (`npm run test:maps`, and the phone tests in the test plan), and the
+  fresh reviewer checks map changes against both.
 
 ## 28. Vehicle documents (item 28, Part 3, added 15 October)
 
@@ -2325,14 +2363,15 @@ Nothing is deployed or built on EAS. Checked with local Docker builds (`reactnat
 
 **The drivers build (§27).**
 - `apps/driver/eas.json`:
-  - `drivers`: an APK of arm64-v8a only, R8 and resource shrinking, the preview environment and channel, runtime
-    `1.3.0-gmaps`, the native libraries compressed.
-  - `drivers-32`: armeabi-v7a, built only when asked.
+  - `drivers`: one APK for every phone, arm64-v8a and armeabi-v7a (since 19 October; before, arm64 only with a
+    `drivers-32` beside it, now retired), R8 and resource shrinking, the preview environment and channel, runtime
+    `1.3.0-gmaps`, the native libraries uncompressed (Android's default).
   - `store`: an .aab with both ABIs.
   - EAS raises the version code at every drivers and store build (`appVersionSource: remote`, `autoIncrement`).
 - `scripts/lean-build.mjs` (EAS runs it as `eas-build-pre-install`; `FAME_LEAN_BUILD=1` on the laptop) writes
   package.json's `expo.autolinking`:
-  - it leaves out the dev client (expo-dev-client, -launcher, -menu, -menu-interface) and, with the Google map, MapLibre;
+  - it leaves out the dev client (expo-dev-client, -launcher, -menu, -menu-interface); MapLibre stays (19 October: both maps
+    on every phone, §27b);
   - it builds expo-camera from source.
 
   `app.config.ts` drops the same plugins and stops an EAS drivers build that lacks the exclusions.
@@ -2378,14 +2417,10 @@ that never reach a phone.
      (expo-notifications falls back to it, and Android fixes it when the channel is made).
    - Every build now keeps all the sounds (`raw/fame_sounds_keep.xml`). On 1.3.0 those two kinds go to the new channels.
 3. **R8 refuses a `//` line in proguard-rules.pro** (ProGuard comments start with `#`): the first rebuild stopped there.
-4. **The 40 MB target.**
-   - 41.5 MB with the libraries stored uncompressed. Android loads them straight from the file, so that is also the space
-     the app takes.
-   - §27's rule for "still over" applies: the APKs compress them (`-Pexpo.useLegacyPackaging=true`). That makes about
-     25 MB to download (measured by compressing the built file's libraries) and about 8 MB more on the phone once
-     installed, where they are unpacked.
-   - The .aab leaves it to Play.
-   - Decision for Sahan: keep this, or take the flag out for the smaller footprint.
+4. **The 40 MB target (dropped 19 October).** The arm64-only build was 41.5 MB with the libraries uncompressed; compressing
+   them (about 25 MB to download) was the checkpoint's proposal. Sahan: size is not the priority. One APK for every phone
+   with both ABIs, MapLibre back, the libraries uncompressed and 16 KB-aligned, no other cuts. The final size: "After the
+   checkpoint" below.
 5. **Android versions:** minSdkVersion 24 (Android 7.0), targetSdkVersion 36 (Android 16).
 
 **The sounds (Hotfix 2 B, item 27).**
@@ -2393,8 +2428,10 @@ that never reach a phone.
   - `task_ring.ogg`: 30 s, a two-tone ring 1.2 s in every 2 s;
   - `task_update.ogg`: three falling notes, twice;
   - `office_ask.ogg`: two rising notes, twice.
-- They play on new channel ids, made only on a 1.3.0 build: `task-ring` "New tasks (ringing)", `task-updates` "Changed and
-  cancelled tasks", `office-asks` "Questions from the office". On 1.3.0 the app removes `new-tasks` and `driver-asks`.
+- They play on new channel ids, made only on a 1.3.0 build: `task-ring` "New tasks", `task-updates` "Changed and
+  cancelled tasks", `office-asks` "Questions from the office", and since 19 October `task-reminders` "Task reminders"
+  (new_task.wav). On 1.3.0 the app no longer makes `new-tasks`, `driver-asks`, `tasks-new` or `tasks-changed`, and deletes
+  them once the server has its token with the new channels ("After the checkpoint" below).
 - push-task sends:
   - `new` → `task-ring`;
   - `changed`, `cancelled` and `removed` → `task-updates`;
@@ -3054,6 +3091,21 @@ languages): `common.cameraDenied`, `fuel.cameraDenied`, `gate.permissionBody`, `
 `phoneSetup.meHint`, `phoneSetup.stoppedOnce`, `phoneSetup.stoppedMany`, `phoneSetup.steps.*` (huawei, oppo, other, realme,
 samsung, vivo, xiaomi), `service.title`, `tracking.noPermission`, `tracking.stoppedTitle`. push-task's accept reminder now
 says "open the app" / "යෙදුම විවෘත කරන්න" (it reaches 1.2.0 phones, still called Fame Driver, too).
+
+**Part 6 after the checkpoint** (Sahan's items 4 and 6, 19 October): the two maps and the reminders' channel. `channel.ring`
+is now plain "New tasks" (the 1.2.0 "New tasks" channels are deleted on 1.3.0, so there is only one).
+
+| key | English | Sinhala (draft) |
+|---|---|---|
+| `map.followMe` | Follow me | මගේ ස්ථානය අනුගමනය කරන්න |
+| `map.unavailable` | Map not available | සිතියම ලබා ගත නොහැක |
+| `map.unavailableBody` | No map can load now: no internet, or the map service is down. The stops are below; Navigate and every button still work. | දැන් සිතියමක් පූරණය කළ නොහැක: අන්තර්ජාලය නැත, නැතහොත් සිතියම් සේවාව ක්‍රියා නොකරයි. නැවතුම් පහතින් ඇත; මග පෙන්වන්න සහ සියලු බොත්තම් තවමත් ක්‍රියා කරයි. |
+| `map.tryAgain` | Try again | නැවත උත්සාහ කරන්න |
+| `task.noRouteLine` (changed) | Dashed lines join the stops: no planned road line for this task | කඩ ඉරි නැවතුම් යා කරයි: මෙම කාර්යයට සැලසුම් කළ මාර්ග රේඛාවක් නැත |
+| `task.lineGoogleOnly` | Dashed lines join the stops: the road line shows on Google's map only | කඩ ඉරි නැවතුම් යා කරයි: මාර්ග රේඛාව Google සිතියමේ පමණක් පෙන්වයි |
+| `channel.ring` (changed) | New tasks | නව කාර්යයන් |
+| `channel.reminders` | Task reminders | කාර්ය සිහිකැඳවීම් |
+| `channel.remindersDesc` | Time to leave, a task still to accept, and arrived at a stop | පිටත් වීමට කාලය, තවම පිළිගත යුතු කාර්යයක්, සහ නැවතුමකට පැමිණීම |
 
 ## Deployment log
 

@@ -93,6 +93,7 @@ fuel-video checklist and the detailed settings, the audit log"):
 - the site import and its history;
 - Projects;
 - the map package and Google caps;
+- the privacy contact e-mail (set once before the store submission);
 - the fuel-video checklist, buffer, speeds and rush hours;
 - dwell times;
 - the accept-window details beyond the quick ones;
@@ -158,11 +159,23 @@ has the same access.
 - **New native screens** with Expo Router in `apps/driver/src/app/(office)/…`, built for Android, iOS and web
   (react-native-web). The driver app's components are reused where they fit: buttons, cards, chips, the plate chip, Txt
   with the Sinhala fonts, sheets, the task map, the phone setup.
-- **Maps.**
-  - Android: Google's map (react-native-maps) as in 1.3.0.
-  - iOS: Google Maps SDK (a key restricted to the bundle id: an EAS secret).
-  - Web: Google's Maps JavaScript API through `register_map_load` as the site does, else the open package.
-  - Hard rule 10 holds everywhere: Google's content only on Google's map, every call counted.
+- **Maps: both engines, the same rules as the driver app** (Sahan, 19 October; Phase 7 §27b).
+  - Office mode uses the driver app's map component (`components/TaskMap.tsx`, grown into a general map with the same two
+    engines: Google's map and the free map, MapLibre with OpenFreeMap). Every Office-mode map screen uses it: Live (the
+    trails and playback), the trip planner's map with the route line (Review, the plan timeline), task detail, and the
+    places search (its pin map).
+  - The same rules: Google by default; a phone whose Google map does not load switches to the free map by itself (the
+    issue "Google map failed on <person>'s phone"); the map package setting switches every phone, office and driver alike,
+    within a minute; neither loading = "Map not available" with the lists.
+  - **In the native app (Android and iOS)** Google's map is the free Maps SDK (Android; iOS: Google Maps SDK for iOS, a key
+    restricted to the bundle id as an EAS secret), so office use in the app does **not** count against the website's
+    map-load cap (`map_loads`).
+  - **The web build of Office mode (the mobile website)** uses Google's web map (Maps JavaScript API through
+    `register_map_load`), so it **counts** against the cap, and at the cap it does what the website does: no map, the
+    lists (`NoMap`); with the package open, the free map.
+  - Hard rule 10 holds everywhere: Google's content (road lines, a Google place's pin, Places results) only on Google's
+    map, listed on the free map; every paid Google call through the server, counted (`docs/google-maps-setup.md` §7).
+  - Every round tests both engines; the reviewer checks map changes against both.
 - **Notifications.**
   - Office people get native push in the app on the Part 6 channels (loud ones for a request to approve and a task that
     needs a driver, the question tone for answers).
@@ -220,7 +233,7 @@ Each Part:
 
 | Part | What | Checkpoint shows |
 |---|---|---|
-| **8.0 Design first** | A clickable prototype of the 20 designs plus the missing screens (section 11) with sample data, reusing the driver app's components, served as a web link for Sahan and Charuka on their phones. Corrections go in before anything is wired. | the link; every screen against the designs; the corrections list; a fresh reviewer's check of every screen against the designs and these rules |
+| **8.0 Design first** | A clickable prototype of the 20 designs plus the missing screens (section 11) with sample data, reusing the driver app's components, served as a web link for Sahan and Charuka on their phones. It shows both map engines (a switch on the prototype's map screens: Google's map, the free map, and "Map not available"). Corrections go in before anything is wired. | the link; every screen against the designs; the corrections list; a fresh reviewer's check of every screen against the designs and these rules |
 | **8.1 Foundation** | `packages/shared`; office sign-in (e-mail, password, 2-step code, forgot password per decision 2); the session → interface switch; tabs and More by permission; the API client on office-api; notifications for office people (server work, section 10); the theme; the tap-test harness | sign-in on both apps; the tab sets per preset; the tap test running on the empty shell |
 | **8.2 Requester** | Home (02), New request (the 4 steps), My trips (17), a request's page, Alerts (16), Profile (18) | a requester's whole day on a phone |
 | **8.3 Dispatcher** | Home (03), Assign a task (06–09), the Tasks board and history, Task detail (14) with every action, Give it a driver (11), Ask drivers (13), the Drivers board (12) with Week, Live (15) with trails and playback | a dispatcher's whole day without a laptop |
@@ -338,6 +351,14 @@ checkpoint.
   site's own phone layout is retired once parity is reached.
 - **react-native-web and the maps:** the web build needs Google's JS map or the open package behind the same component.
   Proven in 8.0 with the prototype's Live and Review.
+- **Two map engines on every map screen:** Live's trails and playback, the planner's route line and the pin map must work on
+  Google's map and on the free map, and fall back by themselves. Mitigation:
+  - one map component for the driver app and Office mode, with the engine rules in one pure module (`lib/mapEngine.ts`);
+  - `npm run test:maps` grows with every Office-mode map screen, and each round's phone tests run on both engines;
+  - the reviewer checks map changes against both.
+- **Google's web map in the mobile website counts against the map-load cap** (430 a day): a dispatcher using the phone site
+  all day uses loads the native app would not. Mitigation: the native app is the main phone tool (its Google map is free);
+  the phone site's map loads are counted like the desktop's, and the usage card shows them.
 - **Office push beside driver push:** one token table with two kinds of people. Mitigation: the role check in every push
   path, and pgTAP for each.
 - **iOS:** Apple's review of an app that also holds a driver interface with background location. Mitigation:

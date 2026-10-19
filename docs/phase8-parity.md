@@ -4,7 +4,7 @@ Every function of the office site (apps/office, as built at main `003c749`, plus
 permission it needs, with the Office-mode screen that does it and its status: **planned 8.x** → **built** → **tested** (the
 tap test and the Part's tests), or **laptop only (decided)**. Every checkpoint of Phase 8 shows this table; a row moves only
 with its screen's test. The numbers in brackets are the designs in `design/office/png/`. Built from a read-only inventory of
-the site on 19 October 2026 (137 rows).
+the site on 19 October 2026 (138 rows, with the privacy e-mail added after the Part 6 checkpoint).
 
 Permissions: V view, R request, Ap approve, AT assign_tasks, Veh vehicles, Iss issues, U users, ANY any office permission.
 
@@ -140,13 +140,14 @@ Permissions: V view, R request, Ap approve, AT assign_tasks, Veh vehicles, Iss i
 | Settings | Claude connector keys new/revoke | create_office_key, revoke_office_key | U | — | laptop only (decided) |
 | Settings | Switch user off/on | set_office_user_active | U | More → Office users | planned 8.5 |
 | Settings | Fleet settings (below) | get_settings, update_settings | U | More → Quick settings (19): the six quick keys | planned 8.5; the other keys laptop only (decided) |
+| Settings | Privacy contact e-mail (Part 6: the public /privacy page's contact; removed = the office phone) | get_settings, update_settings `privacy_email` | U | — | laptop only (decided: set once before the store submission and rarely changed; the page itself is linked from Sign in and Profile) |
 | Settings | Google usage + caps | get_settings.google, update_settings | U | More → Reports: the counters (read) | planned 8.5; caps laptop only (decided) |
 | Settings | Routing usage 14 days | routing_usage | U | More → Reports: read | planned 8.5 |
 | Notif settings | This browser on/off (web only) | register_web_push, remove_web_push | ANY | Profile → Notifications on this phone (native push; web push on the web build) | planned 8.1 |
 | Notif settings | Event toggles | set_my_notification_settings | ANY | Profile (18) → Notifications | planned 8.2 |
 | Notif settings | Browsers with notifications: Remove | remove_web_push | ANY | Profile (18) → Notifications | planned 8.2 |
 | Notif settings | Sounds on/off, volume, Test, per kind | set_my_notification_settings | ANY | Profile (18) → Notifications | planned 8.2 |
-| Maps | Google map after counted load; else MapLibre/drawn/no map | register_map_load | ANY | Every map: Google on Android/iOS/web after the counted load, else the open package | planned 8.3 |
+| Maps | Google map after counted load; else MapLibre/drawn/no map | register_map_load | ANY | Every map (Live with trails and playback, the planner's map and route line, task detail, the places pin map): the driver app's one map component with both engines and its rules (Google by default, the automatic switch to the free map, the map package setting switches every phone, "Map not available"). Native app: the free Maps SDK, not counted. Web build: the counted load, no map at the cap, the free map with the package open | planned 8.0 (the prototype shows both engines) and 8.3 |
 
 **Laptop only (decided at planning, section 2 of the plan):** the site import and its history and undo, the Zoho message for
 Projects, Claude connector keys, 2-step enrolment, the detailed fleet settings (everything but the six quick ones), the
