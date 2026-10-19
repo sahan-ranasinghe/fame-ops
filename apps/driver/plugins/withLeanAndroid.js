@@ -6,9 +6,9 @@
 //   never uses them (it checks RSA and ECDSA signatures): left out of the packaging.
 // - R8 is told that ML Kit's barcode scanner is missing on purpose: expo-camera, built from source for this build
 //   (scripts/lean-build.mjs), leaves it out (app.json barcodeScannerEnabled false) and checks for it before any scan.
-// The rest of the lean build is not here: the dev client (with its ML Kit barcode scanner) and, in the Google-map build,
-// MapLibre are left out of autolinking by scripts/lean-build.mjs; arm64 only and R8 are the drivers profile's Gradle
-// flags in eas.json.
+// The rest of the lean build is not here: the dev client (with its ML Kit barcode scanner) is left out of autolinking by
+// scripts/lean-build.mjs; R8, resource shrinking and the two ABIs (arm64-v8a, armeabi-v7a) are the drivers profile's
+// Gradle flags in eas.json.
 
 const { withAppBuildGradle, withDangerousMod } = require('expo/config-plugins');
 const { existsSync, readFileSync, writeFileSync } = require('node:fs');

@@ -1,30 +1,28 @@
 // The drivers build (Phase 7, Part 6; docs/phase7-plan.md §27) leaves out of autolinking what a driver's phone never uses:
 //   - the dev client (expo-dev-client, expo-dev-launcher, expo-dev-menu): the development build keeps it; its launcher
 //     also brings ML Kit's barcode scanner (libbarhopper and its models);
-//   - MapLibre, when the build has the Google map (GOOGLE_ANDROID_MAPS=on): the task map is Google's, and the OpenFreeMap
-//     map's module is required only without it (components/TaskMap.tsx). A build with the switch off keeps MapLibre;
 // and it builds expo-camera from its source: Expo links it as a ready-made library whose dependencies always include ML Kit's
 // barcode scanner (libbarhopper, 4.9 MB, and its models); only its own build.gradle reads app.json's
 // barcodeScannerEnabled false and leaves the scanner out (the camera then answers "not available" if ever asked to scan;
 // plugins/withLeanAndroid.js tells R8 the scanner's classes are missing on purpose).
+// MapLibre stays in every build (Sahan, 19 October: both maps on every phone, components/TaskMap.tsx), and so do both ABIs.
 // Expo's autolinking reads these only from package.json (expo.autolinking), so this writes them there, for the drivers
-// profiles only. EAS runs it as the package.json script "eas-build-pre-install"; on the laptop the local
+// and store profiles only. EAS runs it as the package.json script "eas-build-pre-install"; on the laptop the local
 // test build runs it with FAME_LEAN_BUILD=1. Any other build: it changes nothing.
 
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const LEAN_PROFILES = ['drivers', 'drivers-32', 'store'];
+export const LEAN_PROFILES = ['drivers', 'store'];
 const DEV_CLIENT = ['expo-dev-client', 'expo-dev-launcher', 'expo-dev-menu', 'expo-dev-menu-interface'];
-const MAPLIBRE = '@maplibre/maplibre-react-native';
 const FROM_SOURCE = ['expo-camera'];
 
 /** The modules a build leaves out (empty for every build but the drivers ones). Pure. */
 export function leanExclusions(env) {
   const lean = LEAN_PROFILES.includes(env.EAS_BUILD_PROFILE ?? '') || env.FAME_LEAN_BUILD === '1';
   if (!lean) return [];
-  return [...DEV_CLIENT, ...(env.GOOGLE_ANDROID_MAPS?.trim() === 'on' ? [MAPLIBRE] : [])];
+  return [...DEV_CLIENT];
 }
 
 /** package.json's expo.autolinking for a build (null: leave it as committed). Pure. */

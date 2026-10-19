@@ -30,15 +30,15 @@
 // stopped the build on the mismatch.)
 
 //
-// The drivers build (Phase 7, Part 6; docs/phase7-plan.md §27): the EAS profiles drivers and drivers-32 (or
-// FAME_LEAN_BUILD=1 for the local test build) leave out the dev client's plugin and, with the Google map, MapLibre's,
-// and add plugins/withLeanAndroid.js. Their autolinking exclusions are written by scripts/lean-build.mjs.
+// The drivers build (Phase 7, Part 6; docs/phase7-plan.md §27): the EAS profiles drivers and store (or
+// FAME_LEAN_BUILD=1 for the local test build) leave out the dev client's plugin and add plugins/withLeanAndroid.js.
+// MapLibre stays: every build has both maps (components/TaskMap.tsx). Their autolinking exclusions are written by scripts/lean-build.mjs.
 
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const LEAN_PROFILES = ['drivers', 'drivers-32', 'store'];
+const LEAN_PROFILES = ['drivers', 'store'];
 
 /** A plugin entry's name ("expo-dev-client" or ["expo-camera", {…}]). */
 const pluginName = (p: unknown): string => (Array.isArray(p) ? String(p[0]) : String(p));
@@ -59,7 +59,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       throw new Error('A drivers build without scripts/lean-build.mjs\'s exclusions in package.json: eas-build-pre-install did not run');
     }
   }
-  const leftOut = lean ? ['expo-dev-client', ...(mapsOn ? ['@maplibre/maplibre-react-native'] : [])] : [];
+  const leftOut = lean ? ['expo-dev-client'] : [];
   const plugins = lean
     ? [...(config.plugins ?? []).filter((p) => !leftOut.includes(pluginName(p))), './plugins/withLeanAndroid']
     : config.plugins;

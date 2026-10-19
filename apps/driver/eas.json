@@ -36,20 +36,13 @@
       "node": "24.21.0",
       "android": {
         "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a -Pandroid.enableMinifyInReleaseBuilds=true -Pandroid.enableShrinkResourcesInReleaseBuilds=true -Pfame.mlkitFromPlayServices=true -Pexpo.useLegacyPackaging=true"
+        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a -Pandroid.enableMinifyInReleaseBuilds=true -Pandroid.enableShrinkResourcesInReleaseBuilds=true -Pfame.mlkitFromPlayServices=true"
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://hinurfsaxvplbyqgtozj.supabase.co",
         "EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY": "sb_publishable_bjJPWylzmSo5OUOiy_IXpQ_p0IzJBIh"
       },
       "autoIncrement": true
-    },
-    "drivers-32": {
-      "extends": "drivers",
-      "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleRelease -PreactNativeArchitectures=armeabi-v7a -Pandroid.enableMinifyInReleaseBuilds=true -Pandroid.enableShrinkResourcesInReleaseBuilds=true -Pfame.mlkitFromPlayServices=true -Pexpo.useLegacyPackaging=true"
-      }
     },
     "store": {
       "extends": "drivers",

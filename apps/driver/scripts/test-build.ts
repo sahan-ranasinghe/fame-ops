@@ -21,10 +21,11 @@ console.log('\n== Part 6: the drivers build ==');
 const DEV = ['expo-dev-client', 'expo-dev-launcher', 'expo-dev-menu', 'expo-dev-menu-interface'];
 check(leanExclusions({}).length === 0 && leanExclusions({ EAS_BUILD_PROFILE: 'preview', GOOGLE_ANDROID_MAPS: 'on' }).length === 0,
   'the development and preview builds leave nothing out');
-check(JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' })) === JSON.stringify([...DEV, '@maplibre/maplibre-react-native']),
-  'drivers with the Google map: the dev client (and its barcode scanner) and MapLibre out', leanExclusions({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' }));
-check(JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'drivers-32' })) === JSON.stringify(DEV),
-  'drivers without the Google map keeps MapLibre (the OpenFreeMap task map)');
+check(JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' })) === JSON.stringify(DEV)
+  && JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'drivers' })) === JSON.stringify(DEV),
+  'drivers: only the dev client (and its barcode scanner) out; MapLibre stays with or without the Google map (both maps on every phone)',
+  leanExclusions({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' }));
+check(leanExclusions({ EAS_BUILD_PROFILE: 'drivers-32' }).length === 0, 'drivers-32 is retired: one APK for every phone');
 const linking = leanAutolinking({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' });
 check(leanAutolinking({}) === null && JSON.stringify(linking?.android) === JSON.stringify({ buildFromSource: ['expo-camera'] }),
   'drivers builds expo-camera from source (its build.gradle leaves the barcode scanner out); other builds unchanged', linking);
@@ -55,9 +56,9 @@ check(JSON.stringify(soundNames(appJson.expo)) === JSON.stringify(['new_task', '
 const names = (c: ReturnType<typeof appConfig>) => (c.plugins ?? []).map((p) => (Array.isArray(p) ? String(p[0]) : String(p)));
 const lean = configFor({ EAS_BUILD_PROFILE: 'drivers', GOOGLE_ANDROID_MAPS: 'on' });
 const dev = configFor({});
-check(!names(lean).includes('expo-dev-client') && !names(lean).includes('@maplibre/maplibre-react-native') && names(lean).at(-1) === './plugins/withLeanAndroid'
+check(!names(lean).includes('expo-dev-client') && names(lean).includes('@maplibre/maplibre-react-native') && names(lean).at(-1) === './plugins/withLeanAndroid'
   && lean.runtimeVersion === '1.3.0-gmaps' && lean.version === '1.3.0',
-  'the drivers config: no dev client or MapLibre plugin, withLeanAndroid added, runtime 1.3.0-gmaps', { plugins: names(lean), runtime: lean.runtimeVersion });
+  'the drivers config: no dev client, MapLibre kept, withLeanAndroid added, runtime 1.3.0-gmaps', { plugins: names(lean), runtime: lean.runtimeVersion });
 check(names(dev).includes('expo-dev-client') && names(dev).includes('@maplibre/maplibre-react-native') && !names(dev).includes('./plugins/withLeanAndroid'),
   'the development config is as before');
 check(names(dev).includes('./plugins/withKeptSounds') && names(lean).includes('./plugins/withKeptSounds'),
@@ -66,20 +67,19 @@ check(names(dev).includes('./plugins/withKeptSounds') && names(lean).includes('.
 const eas = JSON.parse(read('eas.json')) as { build: Record<string, { environment?: string; extends?: string; channel?: string; android?: { gradleCommand?: string } }> };
 const drivers = eas.build.drivers;
 check(drivers?.environment === 'preview' && drivers.channel === 'preview'
-  && /-PreactNativeArchitectures=arm64-v8a /.test(drivers.android?.gradleCommand ?? '')
+  && /^:app:assembleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a /.test(drivers.android?.gradleCommand ?? '')
+  && !/x86/.test(drivers.android?.gradleCommand ?? '')
   && /enableMinifyInReleaseBuilds=true/.test(drivers.android?.gradleCommand ?? '') && /enableShrinkResourcesInReleaseBuilds=true/.test(drivers.android?.gradleCommand ?? ''),
-  'the drivers profile: arm64-v8a only, R8 and resource shrinking, the preview environment and channel', drivers);
-check(eas.build['drivers-32']?.extends === 'drivers' && /-PreactNativeArchitectures=armeabi-v7a /.test(eas.build['drivers-32']?.android?.gradleCommand ?? ''),
-  'drivers-32: the same for a 32-bit phone, built only when asked');
+  'the drivers profile: one APK for every phone (arm64-v8a and armeabi-v7a, no x86), R8 and resource shrinking, the preview environment and channel', drivers);
+check(!('drivers-32' in eas.build), 'drivers-32 is gone from eas.json');
 const store = eas.build.store as typeof drivers & { distribution?: string; autoIncrement?: boolean; android?: { buildType?: string; gradleCommand?: string } };
 check(store?.extends === 'drivers' && store.android?.buildType === 'app-bundle' && /^:app:bundleRelease -PreactNativeArchitectures=arm64-v8a,armeabi-v7a /.test(store.android?.gradleCommand ?? '')
   && store.autoIncrement === true && (drivers as { autoIncrement?: boolean }).autoIncrement === true
   && (JSON.parse(read('eas.json')) as { cli?: { appVersionSource?: string } }).cli?.appVersionSource === 'remote'
-  && JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'store', GOOGLE_ANDROID_MAPS: 'on' })) === JSON.stringify([...DEV, '@maplibre/maplibre-react-native']),
+  && JSON.stringify(leanExclusions({ EAS_BUILD_PROFILE: 'store', GOOGLE_ANDROID_MAPS: 'on' })) === JSON.stringify(DEV),
   'store: an .aab with both ABIs (Play gives each phone its own), lean; EAS raises the version code at every drivers and store build');
-check(/-Pexpo\.useLegacyPackaging=true$/.test(drivers.android?.gradleCommand ?? '') && /-Pexpo\.useLegacyPackaging=true$/.test(eas.build['drivers-32']?.android?.gradleCommand ?? '')
-  && !/useLegacyPackaging/.test(store.android?.gradleCommand ?? ''),
-  'the APKs keep their native libraries compressed (41.5 MB → about 25 MB to download; §27\'s rule over 40 MB); the .aab leaves it to Play');
+check(Object.values(eas.build).every((b) => !/useLegacyPackaging/.test(b.android?.gradleCommand ?? '')) && !/useLegacyPackaging/.test(read('app.json')),
+  "no profile compresses the native libraries: Android's default, stored uncompressed and 16 KB page-aligned (Sahan, 19 October)");
 check(/arm64-v8a,armeabi-v7a/.test(eas.build.preview?.android?.gradleCommand ?? '') && !eas.build.preview?.environment,
   'the preview profile is as it was (1.2.0)');
 const pkg = JSON.parse(read('package.json')) as { scripts: Record<string, string>; expo?: { autolinking?: unknown } };
@@ -88,9 +88,9 @@ check(pkg.scripts['eas-build-pre-install'] === 'node scripts/lean-build.mjs' && 
 
 const taskMap = read('src/components/TaskMap.tsx');
 const openMap = read('src/components/OpenTaskMap.tsx');
-check(!/@maplibre\/maplibre-react-native/.test(taskMap) && /from '@maplibre\/maplibre-react-native'/.test(openMap)
-  && /GOOGLE_MAP_BUILD\s*\n?\s*\?\s*null\s*\n?[\s\S]*require\('\.\/OpenTaskMap'\)/.test(taskMap),
-  'MapLibre is imported only by OpenTaskMap.tsx, which TaskMap requires only without the Google map');
+check(/from '@maplibre\/maplibre-react-native'/.test(openMap) && /from 'react-native-maps'/.test(read('src/components/GoogleTaskMap.tsx'))
+  && /from '\.\/OpenTaskMap'/.test(taskMap) && /from '\.\/GoogleTaskMap'/.test(taskMap),
+  'both maps in every build: TaskMap imports Google\'s map and the free map (npm run test:maps checks how it picks)');
 const layout = read('src/app/_layout.tsx');
 check(!/GemunuLibre_700Bold|NotoSansSinhala/.test(layout), 'the two fonts no screen uses are not loaded');
 
