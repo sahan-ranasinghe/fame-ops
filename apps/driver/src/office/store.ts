@@ -1,0 +1,43 @@
+// Office mode (Phase 8, O1): the signed-in office person, kept on the phone like the driver's row (lib/kv.ts), read by the
+// route layouts to decide the interface (the session decides: docs/phase8-plan.md section 1). A driver sign-in and an
+// office sign-in never both exist on one phone: office/auth.ts clears the other first.
+
+import { useSyncExternalStore } from 'react';
+
+import { getJson, remove, setJson } from '@/lib/kv';
+import type { Me } from './types';
+
+export const OFFICE_KEYS = {
+  /** GET /me as last answered (the person, their permissions and tools). */
+  me: 'office.me',
+  /** The e-mail typed at the last office sign-in (filled in next time). */
+  email: 'office.email',
+} as const;
+
+type Listener = () => void;
+const listeners = new Set<Listener>();
+let cached: Me | null | undefined;
+
+export function getOfficeMe(): Me | null {
+  if (cached === undefined) cached = getJson<Me>(OFFICE_KEYS.me);
+  return cached;
+}
+
+export function setOfficeMe(me: Me | null): void {
+  cached = me;
+  if (me) setJson(OFFICE_KEYS.me, me);
+  else remove(OFFICE_KEYS.me);
+  listeners.forEach((l) => l());
+}
+
+function subscribe(l: Listener): () => void {
+  listeners.add(l);
+  return () => {
+    listeners.delete(l);
+  };
+}
+
+/** The office person on this phone (null = none), live. */
+export function useOfficeMe(): Me | null {
+  return useSyncExternalStore(subscribe, getOfficeMe, getOfficeMe);
+}

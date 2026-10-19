@@ -18,6 +18,7 @@ import { View } from 'react-native';
 import { LocationGate } from '@/components/LocationGate';
 import { anyFormDirty } from '@/components/navigation';
 import { tapData } from '@/lib/notifications';
+import { bootOffice } from '@/office/auth';
 import { AppProvider, useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -36,6 +37,11 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
   useEffect(() => {
     if (ready) SplashScreen.hideAsync();
   }, [ready]);
+
+  // Office mode (Phase 8): the office person's session checked once at start (lib/session.ts: offline is not signed out).
+  useEffect(() => {
+    void bootOffice();
+  }, []);
 
   useEffect(() => {
     if (!ready || !me || !response) return;

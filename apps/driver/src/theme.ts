@@ -13,6 +13,11 @@ export const colors = {
   red: '#b3261e', // danger, not sharing, expired
   muted: '#5d646c',
   line: '#dcd9d0',
+  /** Office mode (Phase 8, decision 6): free / active. */
+  green: '#2e7d32',
+  greenChip: '#e3f1e4',
+  redChip: '#fbeceb',
+  amberChip: '#fdf1d6',
 } as const;
 
 // Names under which the fonts are loaded in src/app/_layout.tsx.

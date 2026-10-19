@@ -76,7 +76,10 @@
     "test:asks": "tsx scripts/test-asks.ts",
     "test:maps": "tsx scripts/test-maps.ts",
     "eas-build-pre-install": "node scripts/lean-build.mjs",
-    "test:build": "tsx scripts/test-build.ts"
+    "test:build": "tsx scripts/test-build.ts",
+    "test:office": "tsx scripts/test-office.ts",
+    "test:live": "tsx scripts/test-live.ts",
+    "test:inbox": "tsx scripts/test-inbox.ts"
   },
   "private": true,
   "expo": {

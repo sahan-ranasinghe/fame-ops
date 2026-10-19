@@ -10,6 +10,7 @@ import { Txt } from '@/components/ui';
 import { getJson, KEYS } from '@/lib/kv';
 import { needsProfilePhoto, profilePhotoDeferred } from '@/lib/photoRules';
 import { needsPhonePrompt, phonePromptDeferred } from '@/lib/profile';
+import { useOfficeMe } from '@/office/store';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -56,6 +57,9 @@ function TabBar({ state, navigation }: TabBarProps) {
 
 export default function TabsLayout() {
   const { me, meFresh, tasks } = useApp();
+  const officeMe = useOfficeMe();
+  // Office mode (Phase 8): the session decides the interface; an office sign-in never sees the driver's screens.
+  if (!me && officeMe) return <Redirect href="/office" />;
   if (!me) return <Redirect href="/login" />;
   if (!getJson<boolean>(KEYS.permissionsSeen)) return <Redirect href="/permissions" />;
   const taskRunning = tasks.some((task) => task.status === 'in_progress');

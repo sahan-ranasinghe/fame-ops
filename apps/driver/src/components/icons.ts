@@ -37,3 +37,12 @@ export { default as Clock } from 'lucide-react-native/icons/clock';
 export { default as IdCard } from 'lucide-react-native/icons/id-card';
 export { default as LocateFixed } from 'lucide-react-native/icons/locate-fixed';
 export { default as Pencil } from 'lucide-react-native/icons/pencil';
+// Office mode (Phase 8, O1).
+export { default as House } from 'lucide-react-native/icons/house';
+export { default as Ellipsis } from 'lucide-react-native/icons/ellipsis';
+export { default as ClipboardCheck } from 'lucide-react-native/icons/clipboard-check';
+export { default as Users } from 'lucide-react-native/icons/users';
+export { default as Calendar } from 'lucide-react-native/icons/calendar';
+export { default as Search } from 'lucide-react-native/icons/search';
+export { default as Eye } from 'lucide-react-native/icons/eye';
+export { default as EyeOff } from 'lucide-react-native/icons/eye-off';
