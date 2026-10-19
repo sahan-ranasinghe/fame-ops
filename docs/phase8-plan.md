@@ -437,6 +437,33 @@ Built in the brief's order; the trip editor (06–09) is round O2.
   unchanged. The strings: every `office.*` key in both languages, checked by script.
 - A fresh reviewer's findings and the full run: below, "The checkpoint".
 
+### The checkpoint (19 October 2026, 22:05; branch `phase8-o1` at its last commit; nothing left the laptop)
+- **The fresh reviewer** (after everything was built): no blocker. Six items fixed before the checkpoint: Task detail's
+  Live map selected nobody (the name was sent, Live wanted the username); decide_request went without the card's
+  version (a request edited while the page was open would have been approved unseen); two of the server's "edited since
+  you opened it" refusals did not reload the card; `common.back` was missing; Profile's Office phone never left
+  "Loading…" when get_settings failed; a dropped write offered no Try again on three screens. Taken from the minors: the
+  decline and cancel reasons go to the office in English whatever the phone's language; Live from Task detail through
+  the tabs already there; the task actions also by the tools the person may call. Noted, not changed: the office's
+  LanguagePill still runs the driver's channel rename (harmless); Alerts' action words are one "Open ›"; the
+  notification events' labels come from the server in English; Live's chips and list are under the map, not the
+  design's over-map chips and draggable sheet; an approver without assign_tasks sees Needs a driver rows with no
+  action (the server's rule); the design's missing elements per screen are in the reviewer's list (most "by the brief":
+  O2 or later; the omissions: the requester's Home "today · on the way" card, My trips' search, timeline line and
+  driver card, Profile's "Check for update", Task detail's "near <town>" and "12 seats", Needs a driver's legs and
+  "would be back"). **The driver's sign-in page looks different** (design 01: the small "සිං · EN" pill instead of the
+  two-button switch, "Sign in" in the dark header, the Driver | Office switch); its behaviour is unchanged.
+- **The full run** (22:00, 71 s): the driver app's every suite on the local stack (data 95, the eleven offline suites,
+  office 84, live 69, inbox 88: 1,082 checks, 0 failed) and the typecheck (0 errors). Nothing outside `apps/driver`,
+  `docs` and `CLAUDE.md` changed, so the site's, Deno's, pgTAP's and the connector's suites were not run.
+- **Not built:** item 9 (office push on the phone: server work behind Sahan's go, see the checkpoint message), Ask
+  drivers (13), and everything listed under "What moved to O2 or later".
+- **The EAS update that follows** (after Sahan's go, from main after the fast-forward): channel `preview`, environment
+  `preview` (the Google switch on, so the runtime is `1.3.0-gmaps`): it reaches the 1.3.0 phone only (the 1.2.0 phone
+  keeps its runtime's last update and its old channels from push-task). It also carries the phone-side changes waiting
+  since the 1.3.0 build: the offline sign-in rule (lib/session.ts), the maps' credits (mapCredit) and every failed
+  Google map try reported (mapReport).
+
 ### What moved to O2 or later
 - O2 (the trip editor, 06–09): New request, Assign a task, Change the trip / time / stops, Edit a request, Book now, the
   Home's big action buttons, the chips' panels.
