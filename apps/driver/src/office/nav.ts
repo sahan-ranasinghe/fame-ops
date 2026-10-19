@@ -87,6 +87,9 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
 /** A notification's link on the site (InboxItem.url) → the office screen in the app, or null when O1 has no such screen. */
 export function routeForUrl(url: string | undefined, permissions: readonly string[]): string | null {
   if (!url) return null;
+  // The site's query form (/tasks?task=<id>): a push tap on the site opens that task.
+  const q = url.match(/[?&]task=([0-9a-f-]{36})/);
+  if (q) return has(permissions, 'assign_tasks') ? `/office/task/${q[1]}` : null;
   const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0].split('#')[0];
   let m = path.match(/^\/requests\/([0-9a-f-]{36})(?:\/decide)?$/);
   if (m) return has(permissions, 'approve') ? `/office/request/${m[1]}` : has(permissions, 'request') ? '/office/(tabs)/trips' : null;
@@ -98,8 +101,5 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   if (path === '/requests') return has(permissions, 'approve') ? '/office/(tabs)/approve' : null;
   if (path === '/my-trips') return has(permissions, 'request') ? '/office/(tabs)/trips' : null;
   if (path === '/live' || path.startsWith('/live?')) return has(permissions, 'view') ? '/office/(tabs)/live' : null;
-  // The site's query form (/tasks?task=<id>): a push tap on the site.
-  const q = url.match(/[?&]task=([0-9a-f-]{36})/);
-  if (q) return has(permissions, 'assign_tasks') ? `/office/task/${q[1]}` : null;
   return null;
 }
