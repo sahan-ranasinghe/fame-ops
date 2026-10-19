@@ -11,10 +11,11 @@
 // How a failure is seen on Android. Google's SDK has no "key refused" callback: a refused key, a billing or authorisation
 // problem, Google Play services missing or out of date, or Google down all leave a grey map that never finishes loading.
 // react-native-maps passes on Google's OnMapLoadedCallback as onMapLoaded ("the map has finished rendering": every tile
-// drawn), so: no onMapLoaded within phone_map_wait_s (30 s) while the phone has internet = Google failed. The same wait
-// with no internet is not Google's fault: the card shows until the network is back, then the map is tried again. A render
-// error of either map (the error boundary) is a failure at once; MapLibre also says onDidFailLoadingMap (the style or the
-// tiles could not be fetched).
+// drawn), so: no onMapLoaded within phone_map_wait_s (30 s) while the phone has internet = Google failed. The wait runs
+// only while the map can draw (its screen in front, the app on screen) and starts again when it can or the network returns.
+// The same wait with no internet is not Google's fault: the card shows until the network is back, then the map is tried
+// again. A render error of either map (the error boundary) is a failure at once; MapLibre also says onDidFailLoadingMap (the
+// style or the tiles could not be fetched).
 //
 // After a failure the phone stays on the free map until the app opens again: started afresh, or brought to the front
 // 30 minutes or more after the failure (appOpened). The phone tells the server (report_map_state) about a failure and
@@ -56,8 +57,8 @@ export type MountEvent =
   | { type: 'loaded' }
   /** The engine failed: MapLibre's onDidFailLoadingMap, or a render error caught by the boundary. */
   | { type: 'error' }
-  /** The wait is over and the map has not said it loaded. */
-  | { type: 'timeout'; online: boolean }
+  /** The wait is over and the map has not said it loaded; for this attempt of this engine (a later one ignores it). */
+  | { type: 'timeout'; online: boolean; attempt: number; engine: Engine }
   /** Try again (the card's button), or the network came back while the card shows. */
   | { type: 'retry' }
   /** The engine for this phone changed (the setting, or Google failed or came back). */
@@ -85,7 +86,7 @@ export function mapStep(s: MountState, e: MountEvent): Step {
       if (s.engine === 'google') return { state: s, googleFailed: 'error' };
       return { state: { ...s, status: 'unavailable' } };
     case 'timeout':
-      if (s.status !== 'loading') return { state: s };
+      if (s.status !== 'loading' || e.attempt !== s.attempt || e.engine !== s.engine) return { state: s };
       // Offline: neither map can load, and it is not Google's fault.
       if (!e.online) return { state: { ...s, status: 'unavailable' } };
       if (s.engine === 'google') return { state: s, googleFailed: 'timeout' };

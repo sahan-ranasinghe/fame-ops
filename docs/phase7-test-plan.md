@@ -1091,6 +1091,9 @@ run on 1.3.0.
 Samsung SM-A226B). If a phone running 32-bit Android is at the office, install the APK there too and run P1, P5 and P11 on it
 (P6).
 
+**Before any phone runs 1.3.0** the round has deployed the migration and push-task (the go order): a 1.3.0 phone deletes the
+1.2.0 channels once the server has its new ones, so the server's push-task must already send on them.
+
 Android versions: **minSdkVersion 24** (Android 7.0 Nougat and later install it) and **targetSdkVersion 36** (built for
 Android 16's rules). A phone older than Android 7.0 cannot install it; the store build (`store`, an .aab) has the same two
 levels.
@@ -1238,7 +1241,8 @@ You should see:
   brings no notification.
 
 ### P11. The same task on Google's map and on the free map
-1. Open a running task (Start task) on the phone: the map.
+1. Open a running task (Start task) on the phone and stay on it at least a minute: the map. (If Google's map never said
+   it finished loading on a real phone, it would switch to the free map here by itself: note it if it does.)
 2. In the office: Settings → Fleet → Map package → Open. Wait a minute on the task screen.
 3. Map package → Google again. Wait a minute.
 4. In Claude: "set phone_map_wait_s to 1" (`update_settings`). On the phone close the app (swipe it away), open it and the
@@ -1256,6 +1260,8 @@ You should see:
   using the free map" (within 5 minutes). Back at 30 s and the app opened again: Google's map, and the issue resolves by itself.
 - Offline: "Map not available" with the stops and "≈ N km straight line" to each stop still to do, and Try again; Start,
   Complete, the odometer, fuel, Report and Navigate all still work. With the connection back the map returns by itself.
+  (A map can still draw offline from the tiles it kept: if it does, open a task in a place the phone has not shown before,
+  or note it and go on.)
 - The same on both phones, in English and in Sinhala.
 
 ## If something looks wrong

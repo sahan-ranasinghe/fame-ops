@@ -69,7 +69,19 @@ Deno.test("Part 6: the privacy contact e-mail (one address or null) and the phon
   assertEquals(validateSetting("privacy_email", " Privacy@Fame.Global "), "privacy@fame.global");
   assertEquals(validateSetting("privacy_email", null), null);
   assertEquals(validateSetting("privacy_email", ""), null);
-  for (const bad of ["fame", "a@b", "two@fame.lk three@fame.lk", "<x@fame.lk>", 42]) {
+  for (
+    const bad of [
+      "fame",
+      "a@b",
+      "two@fame.lk three@fame.lk",
+      "<x@fame.lk>",
+      "a?cc=x@fame.lk",
+      "a&b@fame.lk",
+      "a#b@fame.lk",
+      "o'neil@fame.lk",
+      42,
+    ]
+  ) {
     assertThrows(() => validateSetting("privacy_email", bad), Error, "privacy_email");
   }
   assertEquals([SETTINGS_DEFAULTS.privacy_email, SETTINGS_DEFAULTS.phone_map_wait_s], [null, 30]);

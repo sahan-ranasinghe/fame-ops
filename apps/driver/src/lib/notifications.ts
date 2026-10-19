@@ -10,11 +10,15 @@
 //                   you are), maximum importance, four short pulses, general.wav; its name
 //                   in the driver's language; registered with the token like new-tasks.
 //                   A tap opens the question (app/ask/[id].tsx) with Today underneath.
-//   task-ring       Part 6 (the 1.3.0 build): a new task rings for 30 s (task_ring.ogg) until the driver opens
-//                   the app or the task (stopRinging clears the notification, and its sound with it).
-//   task-updates    Part 6: a task changed, cancelled or given to someone else (task_update.ogg).
+//   task-ring       Part 6 (the 1.3.0 build): "New tasks", a new task rings for 30 s (task_ring.ogg) until the driver
+//                   opens the app or the task (stopRinging clears the notification, and its sound with it).
+//   task-updates    Part 6: a task changed, cancelled, given to someone else or reopened (task_update.ogg).
 //   office-asks     Part 6: the office's questions with their own tone (office_ask.ogg).
-//                   The three are made only on a 1.3.0 build; there new-tasks and driver-asks are removed.
+//   task-reminders  Part 6: leave in 30 min, leave now, accept or decline, the arrival nudge (new_task.wav).
+//                   The four are made only on a 1.3.0 build; there the app no longer makes new-tasks, driver-asks,
+//                   tasks-new or tasks-changed, and deletes them once the server has the token with the new ones
+//                   (removeReplacedChannels, lib/push.ts). The server's push-task must know the new ones first: the
+//                   round deploys push-task before any phone runs 1.3.0.
 //   tasks-new       a new task: loud ring, strong vibration (push from the server; phones
 //                   on an older update)
 //   tasks-changed   a task changed or cancelled (push; phones on an older update)

@@ -12,7 +12,7 @@ Fame Fleet is the app and the office site that Fame Global Solutions uses to run
 - **Photos and videos you take in the app:** the odometer, fuel receipts, the video of a fuel fill, vehicle problems, your profile photo, your licence (front and back) and vehicle photos and documents.
 - **Your details:** name, employee code, username, mobile and WhatsApp numbers, an emergency contact, licence number and expiry date, and the language you use. Your PIN is stored only in a form that cannot be read back.
 - **Your work:** tasks, the times you started and finished them, odometer readings, fuel, the km driven, reports about the vehicle, when you are not available, and your answers to the office's questions.
-- **About the phone, so the office can help when recording stops:** whether location and notifications are on, the battery level, the app version, the phone's make and model, and a token for push notifications.
+- **About the phone, so the office can help when recording stops:** whether location and notifications are on, the battery level, the app version, the phone's make and model, whether Google's map loads on it, and a token for push notifications.
 
 We do not collect your contacts, messages, calls or files, we show no ads and we never sell data.
 
@@ -26,7 +26,7 @@ We do not collect your contacts, messages, calls or files, we show no ads and we
 
 - Location points: 90 days. The last known position of each driver stays until the next one replaces it.
 - Where a photo was taken, and where you were when you marked a stop Arrived, stay with the photo and the task.
-- The phone's status reports: 30 days.
+- The phone's status reports: 30 days. Whether Google's map loads on the phone: one line per driver, replaced by the next.
 - Fuel videos: 12 months (or 6 months if the company sets it so).
 - Answers to the office's questions: 30 days. Read office notifications: 90 days.
 - Tasks, trips, odometer readings, fuel, vehicle reports, their photos and your details are company records and are kept while the company needs them for its vehicles, costs and accounts.

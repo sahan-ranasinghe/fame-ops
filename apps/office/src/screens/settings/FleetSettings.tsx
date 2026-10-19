@@ -171,7 +171,7 @@ export function FleetSettings() {
         </form>
 
         {/* Part 6 (store readiness): the public privacy page's contact. */}
-        <form className="card card-b form" data-testid="privacy-email-settings" onSubmit={(ev) => {
+        <form className="card card-b form" data-testid="privacy-email-settings" noValidate onSubmit={(ev) => {
           ev.preventDefault();
           const v = privacyEmailValue(privacyEmail ?? data.settings.privacy_email ?? "");
           if ("error" in v) {

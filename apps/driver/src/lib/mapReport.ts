@@ -23,12 +23,16 @@ export function noteMapOutcome(outcome: { googleFailed?: FailReason; googleLoade
 /** Sends the waiting report, if any; kept for the next try when the server cannot be reached. */
 export function flushMapReport(): Promise<void> {
   if (sending) return sending;
+  const first = getJson<MapReport>(KEYS.mapReportPending);
+  const sentAt = first?.at ?? null;
   sending = (async () => {
-    const pending = getJson<MapReport>(KEYS.mapReportPending);
+    const pending = first;
     if (!pending) return;
     try {
-      await api.reportMapState(supabase, { ...pending, app_version: appVersionLabel() });
-      setJson(KEYS.mapReported, pending.google_ok);
+      const answer = await api.reportMapState(supabase, { ...pending, app_version: appVersionLabel() });
+      // 'older': the server has a newer report (another phone of this driver); this one is dropped, and the phone does
+      // not count it as said, so its next outcome is reported.
+      if (answer === 'ok') setJson(KEYS.mapReported, pending.google_ok);
       // A newer report may have been queued meanwhile: only this one leaves.
       if (getJson<MapReport>(KEYS.mapReportPending)?.at === pending.at) remove(KEYS.mapReportPending);
     } catch {
@@ -36,6 +40,9 @@ export function flushMapReport(): Promise<void> {
     }
   })().finally(() => {
     sending = null;
+    // A report queued while this one was on its way goes now, not at the next refresh.
+    const next = getJson<MapReport>(KEYS.mapReportPending);
+    if (next && next.at !== sentAt) void flushMapReport();
   });
   return sending;
 }

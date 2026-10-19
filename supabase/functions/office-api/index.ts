@@ -130,7 +130,9 @@ async function resolvePerson(request: Request): Promise<Resolved> {
 function overLimit(key: string, perMinute = CALLS_PER_MINUTE): boolean {
   const now = Date.now();
   // The public page's callers are many addresses: forget the quiet ones now and then.
-  if (calls.size > 2000) for (const [k, v] of calls) if (v.every((t) => now - t >= 60_000)) calls.delete(k);
+  if (calls.size > 2000) { for (const [k, v] of calls) if (v.every((t) => now - t >= 60_000)) calls.delete(k); }
+  // Still crowded (many addresses in one minute): the public page's counters start again; a person's stay.
+  if (calls.size > 10000) { for (const k of calls.keys()) if (k.startsWith("public:")) calls.delete(k); }
   const recent = (calls.get(key) ?? []).filter((t) => now - t < 60_000);
   recent.push(now);
   calls.set(key, recent);
@@ -145,7 +147,9 @@ Deno.serve(async (request) => {
   // Part 6: the privacy page opens without signing in and shows the contact from the settings (privacy_email, else the
   // office phone). The only answer without a session.
   if (request.method === "GET" && path === "/public/privacy") {
-    const from = (request.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || "unknown";
+    // The address the platform adds: x-real-ip, else the last x-forwarded-for entry (a caller can only add entries before it).
+    const from = request.headers.get("x-real-ip")?.trim() || (request.headers.get("x-forwarded-for") ?? "").split(",").pop()?.trim() ||
+      "unknown";
     if (overLimit(`public:${from}`, PUBLIC_PER_MINUTE)) return json(429, { error: "too_many_calls" }, cors);
     try {
       const settings = await loadSettings(db);

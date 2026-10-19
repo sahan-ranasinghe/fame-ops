@@ -270,8 +270,9 @@ draw. Not changed (Sahan asked to leave the website's fallback as it is); it can
   again. Offline, nothing is blamed on Google: the card below shows until the network is back.
 - **Both fail** (OpenFreeMap down, or no network): "Map not available" with the stops and the straight-line distance;
   every button of the task still works, and Navigate opens the Google Maps app.
-- To test the switch on a phone: `update_settings phone_map_wait_s 1` (Google cannot finish in 1 s), open a task, see the
-  free map and the issue; set it back to 30 and open the app again: Google's map, the issue resolved.
+- To test the switch on a phone: `update_settings phone_map_wait_s 1` (Google cannot finish in 1 s), close the app fully
+  (swipe it away), start it and open a task: the free map, and the issue within 5 minutes. Set it back to 30, close the app
+  fully again and start it (bringing it back within 30 minutes keeps the free map): Google's map, the issue resolved.
 
 ## 9. The Android key and billing: check these
 

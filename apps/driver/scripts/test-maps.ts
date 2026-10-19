@@ -37,7 +37,7 @@ console.log('\n== A forced Google failure moves the phone to the free map ==');
   let heard = 0;
   session.subscribe(() => heard++);
   let s: MountState = startMount(engineFor(true, 'google', session.googleFailed()));
-  const step = mapStep(s, { type: 'timeout', online: true });
+  const step = mapStep(s, { type: 'timeout', online: true, attempt: s.attempt, engine: s.engine });
   check(step.googleFailed === 'timeout' && step.state.engine === 'google', 'no onMapLoaded within the wait while online: Google failed (timeout)', step);
   session.markGoogleFailed(1_000);
   const engine = engineFor(true, 'google', session.googleFailed());
@@ -54,14 +54,29 @@ console.log('\n== A forced Google failure moves the phone to the free map ==');
 
   const err = mapStep(startMount('google'), { type: 'error' });
   check(err.googleFailed === 'error', 'a render error of the Google map (the boundary) is a failure at once', err);
-  const offline = mapStep(startMount('google'), { type: 'timeout', online: false });
+  const offline = mapStep(startMount('google'), { type: 'timeout', online: false, attempt: 0, engine: 'google' });
   check(offline.state.status === 'unavailable' && !offline.googleFailed, 'offline: not Google\'s fault, the card shows and nothing is reported', offline);
   const back = mapStep(offline.state, { type: 'retry' });
   check(back.state.status === 'loading' && back.state.engine === 'google' && back.state.attempt === 1, 'the network back (or Try again): Google is mounted again', back.state);
   const google = mapStep(startMount('google'), { type: 'loaded' });
   check(google.state.status === 'loaded' && google.googleLoaded === true, "Google's map loads (onMapLoaded)", google);
-  check(mapStep(google.state, { type: 'timeout', online: true }).state.status === 'loaded' && !mapStep(google.state, { type: 'timeout', online: true }).googleFailed,
+  check(mapStep(google.state, { type: 'timeout', online: true, attempt: 0, engine: 'google' }).state.status === 'loaded' && !mapStep(google.state, { type: 'timeout', online: true, attempt: 0, engine: 'google' }).googleFailed,
     'a wait that ends after the map loaded changes nothing');
+}
+
+console.log('\n== The reviewer\'s findings: stale timeouts, the visible wait, the mounted engine ==');
+{
+  const remounted = mapStep(startMount('google'), { type: 'retry' }).state;
+  check(mapStep(remounted, { type: 'timeout', online: true, attempt: 0, engine: 'google' }).googleFailed === undefined
+    && mapStep(mapStep(startMount('google'), { type: 'engine', engine: 'open' }).state, { type: 'timeout', online: true, attempt: 0, engine: 'google' }).state.status === 'loading',
+    "a timeout from an earlier attempt or the other engine is ignored");
+  const tm = read('src/components/TaskMap.tsx');
+  check(/if \(mount\.status !== 'loading' \|\| !focused \|\| !active\) return;/.test(tm) && /useIsFocused\(\)/.test(tm) && /useAppActive\(\)/.test(tm)
+    && /\[mount\.status, mount\.attempt, mount\.engine, waitS, focused, active, waitRun\]/.test(tm),
+    "the wait runs only while the map's screen is in front and the app on screen, and starts again after (Navigate, the odometer photo)");
+  check(/else if \(mountRef\.current\.status === 'loading'\) setWaitRun/.test(tm), 'the network back during the wait: the whole wait again');
+  check(/const google = mount\.engine === 'google';/.test(tm) && !/const google = engine === 'google'/.test(tm),
+    "what is drawn follows the engine mounted, so Google's content never reaches the free map for a render (rule 10)");
 }
 
 console.log('\n== The setting switches the phones ==');
@@ -77,14 +92,14 @@ console.log('\n== The setting switches the phones ==');
 console.log('\n== Both maps fail: the card ==');
 {
   let s = startMount('google');
-  const g = mapStep(s, { type: 'timeout', online: true });
+  const g = mapStep(s, { type: 'timeout', online: true, attempt: 0, engine: 'google' });
   s = mapStep(g.state, { type: 'engine', engine: 'open' }).state;
   const o = mapStep(s, { type: 'error' });
   check(g.googleFailed === 'timeout' && o.state.status === 'unavailable' && !o.googleFailed,
     'Google failed, then the free map said onDidFailLoadingMap: "Map not available"', { g, o });
-  const t = mapStep(startMount('open'), { type: 'timeout', online: true });
+  const t = mapStep(startMount('open'), { type: 'timeout', online: true, attempt: 0, engine: 'open' });
   check(t.state.status === 'unavailable', 'the free map not loaded within its wait while online (OpenFreeMap down): the card', t);
-  const off = mapStep(startMount('open'), { type: 'timeout', online: false });
+  const off = mapStep(startMount('open'), { type: 'timeout', online: false, attempt: 0, engine: 'open' });
   check(off.state.status === 'unavailable', 'no network: the card', off);
   const tsx = read('src/components/TaskMap.tsx');
   check(/status === 'unavailable'[\s\S]{0,40}<MapUnavailable/.test(tsx) && /class MapBoundary/.test(tsx),

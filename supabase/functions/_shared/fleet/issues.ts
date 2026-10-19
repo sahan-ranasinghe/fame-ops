@@ -750,11 +750,10 @@ export async function computeWanted(db: Db, now: Date, scope: SyncScope = {}): P
   // map package is open no phone asks Google, so nothing is open then. Resolved by the phone's next good load.
   if (full && settings.map_package === "google") {
     const drivers = new Map(refs.employees.filter((e) => e.active).map((e) => [e.id, e]));
-    const failed = unwrap(
-      await db.from("driver_map_state").select("employee_id, reason, google_failed_at, app_version").eq("google_ok", false),
-      "map reports",
-    );
-    for (const r of failed) {
+    // Read on its own: a functions deploy ahead of the migration (no table yet) must not stop the whole sync.
+    const res = await db.from("driver_map_state").select("employee_id, reason, google_failed_at, app_version").eq("google_ok", false);
+    if (res.error) console.error(`issues: map reports skipped: ${res.error.message}`);
+    for (const r of res.data ?? []) {
       const e = drivers.get(r.employee_id);
       if (!e) continue;
       wanted.push({

@@ -14,8 +14,9 @@
 
 import Constants from 'expo-constants';
 import * as Network from 'expo-network';
+import { useIsFocused } from 'expo-router';
 import { Component, type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AppState, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Txt } from '@/components/ui';
@@ -52,10 +53,8 @@ export function TaskMap({ task, me, googleNoteFor }: Props) {
   const { t, settings, dataAvailable } = useApp();
   const insets = useSafeAreaInsets();
   const engine = useMapEngine();
-  const google = engine === 'google';
-  const stops = useMemo(() => mapStops(task, google), [task, google]);
-  const start = useMemo(() => startPoint(task, google), [task, google]);
-  const lines = useMemo(() => mapLines(task, google, stops, start), [task, google, stops, start]);
+  const focused = useIsFocused();
+  const active = useAppActive();
 
   // One mount of the map: loading → loaded, or the card (lib/mapEngine.ts mapStep).
   const [mount, setMount] = useState<MountState>(() => startMount(engine));
@@ -75,26 +74,45 @@ export function TaskMap({ task, me, googleNoteFor }: Props) {
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
 
+  // What is drawn follows the engine mounted, never the one wanted a render early: Google's content never reaches the
+  // free map, even for one render (rule 10).
+  const google = mount.engine === 'google';
+  const stops = useMemo(() => mapStops(task, google), [task, google]);
+  const start = useMemo(() => startPoint(task, google), [task, google]);
+  const lines = useMemo(() => mapLines(task, google, stops, start), [task, google, stops, start]);
+
   // The setting, or Google's failure, changed the engine: mount the other one.
   useEffect(() => { dispatchRef.current({ type: 'engine', engine }); }, [engine]);
 
-  // The wait: a map that has not said it loaded by then is judged, online or not (asked at that moment).
+  // The wait: a map that has not said it loaded by then is judged, online or not (asked at that moment). It runs only while
+  // the map can draw (its screen in front, the app on screen: a map behind the odometer photo or under Google Maps never
+  // finishes), and starts again when that returns or the network comes back during it. A late answer for a map that was
+  // remounted meanwhile is ignored (the attempt and the engine travel with it).
   const waitS = waitFor(mount.engine, settings.phone_map_wait_s);
+  const [waitRun, setWaitRun] = useState(0);
   useEffect(() => {
-    if (mount.status !== 'loading') return;
+    if (mount.status !== 'loading' || !focused || !active) return;
+    const judged = { attempt: mount.attempt, engine: mount.engine };
+    let live = true;
     const timer = setTimeout(() => {
       void Network.getNetworkStateAsync()
         .then((s) => s.isInternetReachable ?? s.isConnected ?? false)
         .catch(() => false)
-        .then((online) => dispatchRef.current({ type: 'timeout', online }));
+        .then((online) => { if (live) dispatchRef.current({ type: 'timeout', online, ...judged }); });
     }, waitS * 1000);
-    return () => clearTimeout(timer);
-  }, [mount.status, mount.attempt, mount.engine, waitS]);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [mount.status, mount.attempt, mount.engine, waitS, focused, active, waitRun]);
 
-  // The card goes by itself when the network comes back.
+  // The network back: the card goes by itself; a map still loading gets its whole wait again.
   const wasOnline = useRef(dataAvailable);
   useEffect(() => {
-    if (dataAvailable && !wasOnline.current && mountRef.current.status === 'unavailable') dispatchRef.current({ type: 'retry' });
+    if (dataAvailable && !wasOnline.current) {
+      if (mountRef.current.status === 'unavailable') dispatchRef.current({ type: 'retry' });
+      else if (mountRef.current.status === 'loading') setWaitRun((n) => n + 1);
+    }
     wasOnline.current = dataAvailable;
   }, [dataAvailable]);
 
@@ -150,6 +168,16 @@ export function TaskMap({ task, me, googleNoteFor }: Props) {
       ) : null}
     </>
   );
+}
+
+/** The app is on screen (AppState active). */
+function useAppActive(): boolean {
+  const [active, setActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => setActive(state === 'active'));
+    return () => sub.remove();
+  }, []);
+  return active;
 }
 
 /** A map that throws while drawing is a failed map (Google's: the phone moves to the free map), never a broken screen. */

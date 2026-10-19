@@ -414,7 +414,11 @@ Deno.test("autocomplete at its cap: no call reaches Google, and openrouteservice
     assertEquals([got.places.length, seen.length, refused.get("places_autocomplete|2026-10-16")], [0, 0, 1]);
     assertEquals(got.note, "Google place search limit reached for today: the open package until tomorrow");
     // search_places then asks the open package's map search (tools/places.ts), as it does without Google.
-    assertEquals([openSearchAnswers(true, got.note), openSearchAnswers(false, undefined), openSearchAnswers(true, undefined)], [true, true, false]);
+    assertEquals([openSearchAnswers(true, got.note), openSearchAnswers(false, undefined), openSearchAnswers(true, undefined)], [
+      true,
+      true,
+      false,
+    ]);
   });
 });
 
@@ -424,7 +428,10 @@ Deno.test("Routes at its cap: no call reaches Google; the plan's legs come from 
     seed("routes", 215);
     const { fetchFn, seen } = counted({ routes: [] });
     const got = await googleLegs(db, settingsWith(), [COLOMBO, KANDY], "2026-10-16T05:00:00Z", { avoid_expressway: false }, NOW, fetchFn);
-    assertEquals([("note" in got) && got.note, seen.length], ["Google road times limit reached for today: the open package until tomorrow", 0]);
+    assertEquals([("note" in got) && got.note, seen.length], [
+      "Google road times limit reached for today: the open package until tomorrow",
+      0,
+    ]);
     // makePlan (tools/tasks.ts) then plans with legFnFor's chain: openrouteservice when ROUTING_PROVIDER is ors, else the
     // estimate (straight line × road_factor ÷ avg_speed_kmh), which needs no call at all.
     const before = Deno.env.get("ROUTING_PROVIDER");

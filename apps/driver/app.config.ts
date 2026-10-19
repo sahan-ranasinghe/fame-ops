@@ -15,9 +15,11 @@
 //   - GOOGLE_ANDROID_MAPS=on (plain text): the switch. Read the same on the
 //     laptop (eas build, eas update --environment) and on the EAS worker, so the
 //     runtime version and extra.googleMapsAndroid agree everywhere: on gives the
-//     runtime 1.2.0-gmaps and the Google task map; off (unset) the runtime 1.2.0
-//     and the OpenFreeMap map. An update made with the switch on never reaches a
-//     phone built with it off (the Google map would crash there for want of a key).
+//     runtime <version>-gmaps (1.3.0-gmaps) and Google's map as the task map's
+//     first engine; off (unset) the runtime <version> and only the free map
+//     (OpenFreeMap; both engines are in every build since 1.3.0,
+//     components/TaskMap.tsx). An update made with the switch on never reaches a
+//     phone built with it off (Google's map has no key there).
 //   - GOOGLE_ANDROID_MAPS_KEY (secret, never in git, readable only on EAS's build
 //     workers): the key, restricted in the Google Cloud console to the package
 //     com.fameglobal.driver and the signing key's SHA-1, written into the

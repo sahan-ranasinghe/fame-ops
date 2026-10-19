@@ -224,8 +224,9 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
 };
 
 const isTime = (s: unknown) => typeof s === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
-/** One address, name@domain.tld, no spaces (what a mailto: link and the stores' listing take). */
-export const isEmail = (s: unknown) => typeof s === "string" && s.length <= 254 && /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[a-z]{2,}$/i.test(s);
+/** One address, name@domain.tld, only the characters a mailto: link takes as they are (no ?, &, #, / or quotes). */
+export const isEmail = (s: unknown) =>
+  typeof s === "string" && s.length <= 254 && /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(s);
 const isUuid = (s: unknown) => typeof s === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
 
 function number(value: unknown, key: string, min: number, max: number, integer = false): number {

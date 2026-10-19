@@ -46,7 +46,9 @@ state, vibrate, wake lock, audio settings (task sounds), storage read/write only
 
 ## 3. Order of work (each line needs Sahan's go)
 
-1. Round: `db push` (the demo migration), the functions, the web (the privacy page goes live).
+1. Round: `db push` (the demo and maps migrations), the functions (push-task with the 1.3.0 channels **before any phone
+   runs 1.3.0**: the phone deletes its 1.2.0 channels once it has registered the new ones), the web (the privacy page goes
+   live).
 2. The reviewers' driver:
    - in Claude or on the site: `create_driver` name "Store Reviewer", code `DEMO-01`, username `store.review`, a PIN, a phone
      number;

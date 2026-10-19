@@ -117,7 +117,8 @@ export function Privacy({ load = loadPrivacyContact }: { load?: () => Promise<Pr
             </li>
             <li>
               <b>About the phone, so the office can help when recording stops:</b> whether location and notifications are on,
-              the battery level, the app version, the phone's make and model, and a token for push notifications.
+              the battery level, the app version, the phone's make and model, whether Google's map loads on it, and a token
+              for push notifications.
             </li>
           </ul>
           <p>We do not collect your contacts, messages, calls or files, we show no ads and we never sell data.</p>
@@ -145,7 +146,7 @@ export function Privacy({ load = loadPrivacyContact }: { load?: () => Promise<Pr
           <ul>
             <li>Location points: 90 days. The last known position of each driver stays until the next one replaces it.</li>
             <li>Where a photo was taken, and where you were when you marked a stop Arrived, stay with the photo and the task.</li>
-            <li>The phone's status reports: 30 days.</li>
+            <li>The phone's status reports: 30 days. Whether Google's map loads on the phone: one line per driver, replaced by the next.</li>
             <li>Fuel videos: 12 months (or 6 months if the company sets it so).</li>
             <li>Answers to the office's questions: 30 days. Read office notifications: 90 days.</li>
             <li>

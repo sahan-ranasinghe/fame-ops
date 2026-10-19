@@ -23,12 +23,18 @@ export function OpenTaskMap({ stops, lines, start, me, fit, follow, onUserMove, 
   const followRef = useRef(follow);
   followRef.current = follow;
 
-  const stop = useMemo((): Partial<CameraStop> => {
+  const framed = useMemo((): Partial<CameraStop> => {
     const f = fit.frame;
     if (f.kind === 'box') return { bounds: [f.sw.lng, f.sw.lat, f.ne.lng, f.ne.lat], padding: { ...PADDING, bottom: PADDING.bottom + SHEET_OVERLAP } };
     if (f.kind === 'point') return { center: [f.center.lng, f.center.lat], zoom: ONE_PLACE_ZOOM };
     return { center: [SRI_LANKA.lng, SRI_LANKA.lat], zoom: 6.4 };
   }, [fit]);
+  // As on Google's map: a new frame (the office changed the stops, the first position) is skipped while Follow me is on,
+  // never applied later. The Camera keeps the frame it had.
+  const [stop, setStop] = useState(framed);
+  useEffect(() => {
+    if (!followRef.current) setStop(framed);
+  }, [framed]);
 
   // Follow me: to the phone at a street's zoom when turned on, then the middle follows each new position.
   const followedOnce = useRef(false);

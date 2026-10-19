@@ -40,7 +40,8 @@ export function profileInput(text: string, saved: string | null | undefined): { 
 export function privacyEmailValue(text: string): { error: string } | { value: string | null } {
   const v = text.trim().toLowerCase();
   if (v === "") return { value: null };
-  return /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[a-z]{2,}$/i.test(v) && v.length <= 254
+  // The server's isEmail (settings.ts): only the characters a mailto: link takes as they are.
+  return /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/.test(v) && v.length <= 254
     ? { value: v }
     : { error: "An e-mail address such as privacy@example.com." };
 }
