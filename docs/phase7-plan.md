@@ -2379,7 +2379,8 @@ Nothing is deployed or built on EAS. Checked with local Docker builds (`reactnat
   left out on purpose.
 - `plugins/withKeptSounds.js` (every build): the notification sounds kept by name.
 
-**Sizes** (compressed zip entries, MB; the 1.2.0 column is the EAS build ddc92043):
+**Sizes** (compressed zip entries, MB; the 1.2.0 column is the EAS build ddc92043; the final 1.3.0, with both ABIs and
+MapLibre, is 79.1 MB: "After the checkpoint" below):
 
 | Part of the APK | 1.2.0 | first lean build | 1.3.0 |
 |---|---|---|---|
@@ -2495,6 +2496,72 @@ connector suite, pgTAP (1032) and the driver data tests pass. The office suite, 
 unit tests, both builds and all 24 e2e pass. Two e2e had failed while unit tests ran beside the chain: the Part 4 trip's tag
 check reads the first "trip-tags" on the page, the board's card, before the board refreshed. Both passed on their own and in
 the quiet run.
+
+#### After the checkpoint (Sahan's 13 items, 19 October; nothing deployed, on local main)
+
+- **The merge.** Hotfix 4 and then Part 6 were rebased onto main (with the Phase 8 plan) and main fast-forwarded; the doc
+  conflicts (CLAUDE.md, this file) were resolved by hand, and every file one side alone changed is that side's own. From
+  now on every deploy comes from main.
+- **One APK for every phone (§27).** arm64-v8a and armeabi-v7a, the native libraries uncompressed and page-aligned;
+  `drivers-32` retired; MapLibre back; the barcode scanner and BouncyCastle's tables stay out. The local build of main's code (Docker, the
+  drivers profile's own Gradle command from eas.json, debug-signed for measuring):
+  - **the APK: 79.1 MB** (79,130,670 bytes): arm64-v8a libraries 36.0 MB (MapLibre 10.8 of them), armeabi-v7a 25.3, dex
+    9.5, the JS bundle 4.1, fonts 1.3, the rest 2.2. One file for every phone; as the libraries are stored uncompressed,
+    it is also about what the app takes on the phone;
+  - 28 native libraries for arm64-v8a and the same 28 for armeabi-v7a, none for x86 or x86_64 (`unzip -l`);
+  - all 56 stored uncompressed; `zipalign -c -P 16 -v 4` passes, and every arm64-v8a library's LOAD segments are aligned to
+    16 KB or more (`llvm-readelf`), as Play requires for apps targeting Android 15+;
+  - minSdkVersion 24 (Android 7.0), targetSdkVersion 36 (Android 16); MapLibre in, no barcode scanner, no BouncyCastle
+    post-quantum tables; all six notification sounds kept;
+  - **the store .aab: 58.9 MB**, both ABIs (28 libraries each) plus the debug symbols and the mapping that never reach a
+    phone; through Play each phone downloads only its own ABI's libraries.
+- **What the cuts removed is unused.**
+  - The barcode scanner: no screen scans (the only `CameraView` is the fuel video, `app/record-video.tsx`, `mode="video"`);
+    no `onBarcodeScanned`, `barcodeScannerSettings`, `scanFromURLAsync` or `launchScanner` anywhere.
+  - BouncyCastle: expo-updates brings it (`bcutil-jdk15to18`) for code signing of updates (`codesigning/CertificateChain.kt`
+    only). The app sets no `codeSigningCertificate`, so it never runs; signed updates would check RSA or ECDSA, never the
+    post-quantum tables left out. TLS is Android's own (OkHttp on the platform's provider), and the APK is signed at build
+    time, not on the phone.
+  - The three blocked permissions: `SYSTEM_ALERT_WINDOW` (draw over other apps), `USE_BIOMETRIC` and `USE_FINGERPRINT`.
+    The microphone is not among them because it was never asked for: the fuel video records muted (`mute` on the
+    `CameraView`, expo-camera's and expo-audio's `recordAudioAndroid: false`, the image picker's `microphonePermission:
+    false`), and the built APK has no `RECORD_AUDIO`.
+- **Both maps on every phone (§27b).** One map component with two engines, the map package setting read every minute, the
+  automatic switch with its issue, "Map not available"; `npm run test:maps`.
+- **Every Google call capped** (`docs/google-maps-setup.md` §7): five paid kinds, all from the server, all counted before
+  the call and refused at the cap or on a counter error; the phone calls none. Two fallback tests were missing and are added
+  (autocomplete at its cap, Routes at its cap).
+- **Channels.** push-task picks a channel by the list each phone registered with its token, which only a 1.3.0 build fills
+  with the new ids (`channelFor`, push-task `index.ts` `channelId: channelFor(kind, t.channels ?? [])`). 1.3.0 adds
+  `task-reminders` and stops making the four 1.2.0 channels; it deletes them only after the server took its token with the
+  replacements, so push-task never sends to a channel that phone deleted (test-preview checks every kind and every set). The
+  phone's settings then list each kind once: New tasks, Changed and cancelled tasks, Task reminders, Questions from the
+  office, General, On duty. Order: push-task is deployed before any phone runs 1.3.0.
+- **The privacy contact e-mail** is a setting (`privacy_email`), on Settings → Fleet for whoever has users, audited, on the
+  connector; `/privacy` shows it as a mailto: link through office-api's public `GET /public/privacy`, else the office
+  phone. The policy's text is also `docs/privacy-policy.md`. Office mode: laptop only (`docs/phase8-parity.md`).
+- **Docs.** store-release.md (Play App Signing with the existing key, the keystore backup, the two videos, the battery
+  fallback); the test plan (Hotfix 4's tests; Part 6 on both phones with Sahan's list; P11 both maps); Phase 8 (both engines
+  in Office mode).
+- **The fresh reviewer** (no blocker; five to fix, nine minor; all fixed): the free map could get Google's content for one
+  render after an engine change; Google's wait counted while the map could not draw (behind the odometer photo, under
+  Google Maps after Navigate) and would have raised false issues; the contract snapshot lacked the five new settings paths;
+  the e-mail field's browser check hid the form's own message; the channel deletion needs push-task deployed first (now in
+  the go order); and the minor ones: Follow me framing on the free map, a late timeout judging a newer map, the report
+  queue, the public route's caller key, the issue sync before the migration, the stricter address pattern, the policy
+  naming the map report, the docs and comments, the e2e cleanup.
+- **Tests on the merged main** (e1e4581 and before): Deno 185 + push-task 1, the type checks and `deno fmt` pass; the
+  connector suite passes in both channels (after the contract fixes: availability's window around a board task, the
+  privacy e-mail removed at the end); pgTAP 1,049 checks in 25 files pass; the office's 747 unit tests and both builds pass;
+  the driver app's 829 checks (data, track and the 11 offline suites with `test:maps`) and its typecheck pass. **The e2e did
+  not pass in one run:** 24 of 25 at 11:46 (one server time-out), then 22 and 19 of 25 while the laptop swapped after the
+  local APK build and the local functions server cut requests off at its CPU limit ("Fame Fleet didn't answer"). Each test
+  passed in at least one full run; "Who's available stays still (dark)" failed twice and is reported, not retried
+  (Sahan's rules, 19 October).
+- **No more local native builds** (Sahan, 19 October): the APK and .aab above were the last local builds. From now on the
+  native config is checked without compiling (prebuild into a scratch folder: the kept sounds, the BouncyCastle exclude,
+  uncompressed libraries, the R8 lines, the permissions removed; autolinking: no dev client, MapLibre and
+  react-native-maps in, expo-camera from source; `expo-doctor`; `test:build`) and the drivers APK is built on EAS.
 
 ## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
 

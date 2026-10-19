@@ -1105,7 +1105,7 @@ levels.
 3. Open Fame Fleet.
 
 You should see:
-- The download is about {APK_MB} MB (one file for every phone; 1.2.0 was 89 MB).
+- The download is about 79 MB (one file for every phone, 64-bit and 32-bit; 1.2.0 was 89 MB).
 - **Still signed in**, the same duty state and vehicle; Me: "Everything is sent" (or the same "Waiting to be sent" as
   before), App version `1.3.0+…`.
 - Today's task map is Google's map, as on 1.2.0.
