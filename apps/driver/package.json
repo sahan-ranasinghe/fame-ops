@@ -79,7 +79,10 @@
     "test:build": "tsx scripts/test-build.ts",
     "test:office": "tsx scripts/test-office.ts",
     "test:live": "tsx scripts/test-live.ts",
-    "test:inbox": "tsx scripts/test-inbox.ts"
+    "test:inbox": "tsx scripts/test-inbox.ts",
+    "test:asks-office": "tsx scripts/test-asks-office.ts",
+    "test:drivers": "tsx scripts/test-drivers.ts",
+    "test:issues": "tsx scripts/test-issues.ts"
   },
   "private": true,
   "expo": {
