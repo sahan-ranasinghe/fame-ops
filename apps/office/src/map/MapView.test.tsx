@@ -7,7 +7,7 @@ import { FleetProvider } from "../app/FleetContext";
 import { FleetStore } from "../data/store";
 import type { Me, Transport, WatchEvent } from "../transport/types";
 import { GOOGLE_LOAD_TIMEOUT_MS, resetGoogleMapForTests } from "./google/googleMaps";
-import { snapAllowed, type MapChoice } from "./google/useGoogleMap";
+import { type MapChoice, snapAllowed } from "./mapChoice";
 import { MapView } from "./MapView";
 
 vi.mock("./MapLibreMap", () => ({ default: () => <div data-testid="free-map">the free map</div> }));

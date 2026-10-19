@@ -133,12 +133,12 @@ begin
     delete from public.route_matched where provider = 'google_roads' and matched_at < v_cut returning 1
   ) select count(*) into v_matched from gone;
   -- Phase 7 (§20): Google's leg lines kept with a plan go 30 days after they were fetched; the pins, times and km stay.
-  -- Part 6: only Google's (source google); openrouteservice's lines are ours and stay.
+  -- Part 6: only Google's (source google, or none: before Part 6 every stored line was Google's); openrouteservice's stay.
   perform set_config('fleet.quiet', 'on', true);
   with cleared as (
     update public.tasks t
        set plan_json = (t.plan_json - 'line_fetched_at')
-                       || jsonb_build_object('legs', coalesce((select jsonb_agg(case when l ->> 'source' = 'google' then l - 'line' else l end order by n)
+                       || jsonb_build_object('legs', coalesce((select jsonb_agg(case when coalesce(l ->> 'source', 'google') = 'google' then l - 'line' else l end order by n)
                                                                 from jsonb_array_elements(t.plan_json -> 'legs') with ordinality as x(l, n)), '[]'::jsonb))
      where t.plan_json ? 'line_fetched_at' and (t.plan_json ->> 'line_fetched_at')::timestamptz < v_cut
     returning 1
@@ -147,7 +147,7 @@ begin
   with cleared as (
     update public.vehicle_requests r
        set plan_json = (r.plan_json - 'line_fetched_at')
-                       || jsonb_build_object('legs', coalesce((select jsonb_agg(case when l ->> 'source' = 'google' then l - 'line' else l end order by n)
+                       || jsonb_build_object('legs', coalesce((select jsonb_agg(case when coalesce(l ->> 'source', 'google') = 'google' then l - 'line' else l end order by n)
                                                                 from jsonb_array_elements(r.plan_json -> 'legs') with ordinality as x(l, n)), '[]'::jsonb))
      where r.plan_json ? 'line_fetched_at' and (r.plan_json ->> 'line_fetched_at')::timestamptz < v_cut
     returning 1

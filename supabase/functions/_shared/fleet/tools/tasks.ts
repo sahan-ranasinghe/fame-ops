@@ -1293,7 +1293,9 @@ export const planTask = tool({
     driver: zText(80).optional(),
     vehicle: zText(20).optional(),
     end_time: zTime.optional(),
-    with_line: z.boolean().optional().describe("The web's plan map: each leg's road line in the timeline (encoded polyline; Google's or openrouteservice's, by the leg's source)"),
+    with_line: z.boolean().optional().describe(
+      "The web's plan map: each leg's road line in the timeline (encoded polyline; Google's or openrouteservice's, by the leg's source)",
+    ),
   }),
   async run(args, { db, now, actor }) {
     realDate(args.date);
@@ -1713,7 +1715,9 @@ export const taskDetail = tool({
   readOnly: true,
   input: z.object({
     task_id: zId,
-    with_line: z.boolean().optional().describe("The web's plan map: each leg's road line in the timeline (encoded polyline; Google's or openrouteservice's, by the leg's source)"),
+    with_line: z.boolean().optional().describe(
+      "The web's plan map: each leg's road line in the timeline (encoded polyline; Google's or openrouteservice's, by the leg's source)",
+    ),
   }),
   async run({ task_id, with_line }, { db, now, actor }) {
     const task = await getTask(db, task_id);

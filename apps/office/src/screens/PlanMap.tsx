@@ -9,7 +9,8 @@
 // planned (the preview keeps its last answer), so the map never flickers.
 import { useMemo, useState } from "react";
 import { MapView } from "../map/MapView";
-import { googleDrawn, useGoogleMap } from "../map/google/useGoogleMap";
+import { useGoogleMap } from "../map/google/useGoogleMap";
+import { googleDrawn } from "../map/mapChoice";
 import { useIsPhone } from "../ui/phone";
 import { type PlanMapStart, type PlanMapStop, planMapOf } from "./planMapLogic";
 import { PlanTimeline, type PlanTimelineProps } from "./PlanTimeline";

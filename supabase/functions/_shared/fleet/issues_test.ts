@@ -133,10 +133,17 @@ Deno.test("an overview trusts a full sync that finished under 60 s ago, or one s
 Deno.test("Part 6: the office hears of a Google map failure only on a second try in a row, or two phones within an hour", () => {
   const now = new Date("2026-10-19T08:00:00Z");
   const ago = (min: number) => new Date(now.getTime() - min * 60_000).toISOString();
-  const row = (id: string, failures: number, min: number) => ({ employee_id: id, failures, last_failed_at: ago(min), google_failed_at: ago(min) });
+  const row = (id: string, failures: number, min: number) => ({
+    employee_id: id,
+    failures,
+    last_failed_at: ago(min),
+    google_failed_at: ago(min),
+  });
   assertEquals(mapAlarms([row("a", 1, 5)], now), [], "one phone, one weak-signal try: nothing");
   assertEquals(mapAlarms([row("a", 2, 300)], now).map((x) => x.why), ["again"], "the same phone failed again on its next try");
-  assertEquals(mapAlarms([row("a", 1, 10), row("b", 1, 50)], now).map((x) => `${x.row.employee_id}:${x.why}`), ["a:two_phones", "b:two_phones"],
-    "two phones within the hour");
+  assertEquals(mapAlarms([row("a", 1, 10), row("b", 1, 50)], now).map((x) => `${x.row.employee_id}:${x.why}`), [
+    "a:two_phones",
+    "b:two_phones",
+  ], "two phones within the hour");
   assertEquals(mapAlarms([row("a", 1, 10), row("b", 1, 70)], now), [], "two phones, but not within the hour");
 });
