@@ -112,10 +112,11 @@ Do this when creating the first release, before any .aab is uploaded (afterwards
    **Choose signing key** → **Use a different key**... → **Export and upload a key from Java KeyStore**.
 3. Download the two files the page offers: Google's **PEPK tool** (`pepk.jar`) and the **encryption public key**
    (`encryption_public_key.pem`).
-4. Run PEPK (the laptop has no Java, so in the Android build image, from the folder with the three files):
-   `docker run --rm -it -v "$PWD":/w -w /w reactnativecommunity/react-native-android java -jar pepk.jar
-   --keystore=<the .jks> --alias=<the alias> --output=fame-fleet-signing.zip --include-cert --rsa-aes-encryption
-   --encryption-key-path=encryption_public_key.pem` and type the two passwords when asked.
+4. Run PEPK. It needs Java, which the laptop does not have (the Android build image was removed on 19 October). Ask before
+   pulling a Java image (for example `eclipse-temurin:17-jre`, under 100 MB), or run it on any computer with Java 17, from
+   the folder with the three files: `java -jar pepk.jar --keystore=<the .jks> --alias=<the alias>
+   --output=fame-fleet-signing.zip --include-cert --rsa-aes-encryption --encryption-key-path=encryption_public_key.pem`, and
+   type the two passwords when asked.
 5. Upload `fame-fleet-signing.zip` on the same page and save.
 6. Check on the App signing page: the **App signing key certificate** SHA-1 is the SHA-1 from step 1. The **Upload key**
    is the same key (Play takes the key of the first upload; EAS signs every `store` build with it).

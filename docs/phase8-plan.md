@@ -233,7 +233,7 @@ Each Part:
 
 | Part | What | Checkpoint shows |
 |---|---|---|
-| **8.0 Design first** | A clickable prototype of the 20 designs plus the missing screens (section 11) with sample data, reusing the driver app's components, served as a web link for Sahan and Charuka on their phones. It shows both map engines (a switch on the prototype's map screens: Google's map, the free map, and "Map not available"). Corrections go in before anything is wired. | the link; every screen against the designs; the corrections list; a fresh reviewer's check of every screen against the designs and these rules |
+| **8.0 Design first** | A clickable prototype of the 20 designs plus the missing screens (section 11) with sample data, reusing the driver app's components, served as a web link for Sahan and Charuka on their phones (its own Pages project `fame-fleet-proto`, no keys, a "Prototype · sample data" banner, noindex: decision 5). It shows both map engines (a switch on the prototype's map screens: the free map live, Google's map as a sample picture since the prototype holds no key, and "Map not available"). Corrections go in before anything is wired. | the link; every screen against the designs; the corrections list; a fresh reviewer's check of every screen against the designs and these rules |
 | **8.1 Foundation** | `packages/shared`; office sign-in (e-mail, password, 2-step code, forgot password per decision 2); the session → interface switch; tabs and More by permission; the API client on office-api; notifications for office people (server work, section 10); the theme; the tap-test harness | sign-in on both apps; the tab sets per preset; the tap test running on the empty shell |
 | **8.2 Requester** | Home (02), New request (the 4 steps), My trips (17), a request's page, Alerts (16), Profile (18) | a requester's whole day on a phone |
 | **8.3 Dispatcher** | Home (03), Assign a task (06–09), the Tasks board and history, Task detail (14) with every action, Give it a driver (11), Ask drivers (13), the Drivers board (12) with Week, Live (15) with trails and playback | a dispatcher's whole day without a laptop |
@@ -318,19 +318,22 @@ checkpoint.
   - Mono is used on Sinhala words.
   - The sample plates clash between screens.
 
-## 12. Decisions for Sahan (my default first)
+## 12. Decisions (Sahan, 19 October 2026: the eight defaults accepted, 5 changed)
 
-1. **Who manages drivers:** design 20 and the brief say users; the server gives create_driver, reset_pin and
-   set_driver_active to vehicles today. Default: either permission may (vehicles or users), so neither the fleet admin
-   (vehicles) nor an admin (users) loses it.
-2. **Forgot password:** default "Ask the fleet admin for a new link" (as the site), with a self-service e-mail reset later.
-3. **The notifications tab's name:** default "Alerts" on the tab bar (short), "Notifications" as the screen's title.
-4. **More:** default the hub (19), with My profile at its top; the Profile screen (18) from there.
-5. **The prototype's link:** default a Cloudflare Pages preview deployment (`8-0.fame-fleet.pages.dev`), sample data only,
-   no sign-in. It needs a go like any deploy.
-6. **The status green `#2e7d32`** for free / active: default yes, added to the tokens.
-7. **A job title:** default none (the permission chips say what the person does).
-8. **"App stopped" in Notifications:** default no (it stays an issue).
+1. **Who manages drivers:** either permission may (vehicles or users), so neither the fleet admin (vehicles) nor an admin
+   (users) loses it. (Design 20 and the brief said users; the server gives create_driver, reset_pin and set_driver_active
+   to vehicles today.)
+2. **Forgot password:** "Ask the fleet admin for a new link" (as on the site); a self-service e-mail reset later.
+3. **The notifications tab's name:** "Alerts" on the tab bar, "Notifications" as the screen's title.
+4. **More:** the hub (19), with My profile at its top; the Profile screen (18) from there.
+5. **The prototype's link (changed by Sahan):** its **own Cloudflare Pages project, `fame-fleet-proto`**, not a preview of the
+   production project `fame-fleet`, so it shares no settings with the live site. Sample data only, **no keys of any kind**
+   in it (no Supabase URL or key, no Google key: the maps in the prototype are the free map and sample pictures, or Google's
+   map only if a later go says how), a **"Prototype · sample data"** banner on every screen, and **noindex** (a robots meta
+   tag and an `X-Robots-Tag: noindex` header in its `_headers`). It needs Sahan's go to deploy, like any deploy.
+6. **The status green `#2e7d32`** for free / active: yes, added to the tokens.
+7. **A job title:** none (the permission chips say what the person does).
+8. **"App stopped" in Notifications:** no (it stays an issue).
 
 ## 13. Risks
 

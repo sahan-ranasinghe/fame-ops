@@ -1080,3 +1080,6 @@ iOS; Play Store.
 - Before ending a turn, stop every background server started (functions serve, the local Supabase stack, dev servers),
   unless Sahan needs it running, and list any that stay.
 - Every checkpoint says how long it took and what took the longest.
+- No new Docker images, and no Supabase CLI, eas-cli or image updates, without asking Sahan first (a `supabase start` pulled
+  2.4 GB of newer images on 19 October). Ask before any command that may pull (a new `docker run` image, `supabase start`
+  after the CLI wants newer versions, a CLI upgrade).
