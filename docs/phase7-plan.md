@@ -2585,7 +2585,9 @@ Office web only: no migration, no function, no driver app change, the connector'
    seconds, with "Use this driver"; it fills the driver and the vehicle.
 5. The same on Approve, Give it a driver and the Drivers board (there a Yes has "Assign →").
 6. As an approver without assign_tasks: a request page, an issue or a fuel fill. **See:** no "Open task" link (before, it
-   led to No access).## Sinhala
+   led to No access).
+
+## Sinhala
 
 The new driver-app strings planned now (Sinhala drafts written by Claude Code, for the check with
 the boss or a driver). The table is completed with every key as built at each checkpoint.
