@@ -138,7 +138,7 @@ console.log('\n== Strings ==');
   const src = read('src/app/office/(tabs)/live.tsx') + read('src/components/DriversMap.tsx') + read('src/office/liveLogic.ts');
   const asked = [...src.matchAll(/t\('office\.live\.([\w.]+)'/g)].map((m) => m[1]);
   const missing = asked.filter((k) => !en.has(k));
-  check(asked.length > 0 && missing.length === 0, 'every office.live.* key the code asks for is in the parts file', missing);
+  check(asked.length > 0 && missing.length === 0, 'every office.live.* key the code asks for is in en.json (O2: the trails, the route and the playback merged)', missing);
   check(LIVE_FILTERS.every((k) => en.has(`filter.${k}`)) && ['onTask', 'free', 'offDuty'].every((k) => en.has(`pill.${k}`)), 'a chip and a pill per filter and per duty');
   check(/t\('map\.unavailable'\)/.test(read('src/components/DriversMap.tsx')) && /t\('map\.tryAgain'\)/.test(read('src/components/DriversMap.tsx')), 'the card reuses the map\'s own strings');
 }
@@ -149,10 +149,12 @@ console.log('\n== The screen and the two engines ==');
   check(/useTool<LiveDrivers>\('live_drivers', \{\}, \{ every: 30_000 \}\)/.test(screen), 'live_drivers with no arguments, every 30 s while in front');
   check(/useLocalSearchParams<\{ driver\?: string \}>\(\)/.test(screen) && /d\.username === param \|\| d\.driver === param/.test(screen) && /setSelected\(found\.username\)/.test(screen) && /router\.setParams\(\{ driver: '' \}\)/.test(screen),
     '?driver=<username or name> selects that driver once, then the parameter is forgotten');
-  check(/<DriversMap markers=\{markers\} fit=\{fit\} focus=\{focus\} onPressMarker=\{select\} mapPackage=\{me\.map\?\.package\} \/>/.test(screen), 'the map gets the markers, the frame, the selected driver and the office\'s map package');
+  // O2: the map also gets the route layers (the trails, the shown route, the playback marker: scripts/test-live-route.ts).
+  check(/<DriversMap markers=\{markers\} fit=\{fit\} focus=\{focus\} onPressMarker=\{select\} mapPackage=\{me\.map\?\.package\} layers=\{layers\} controls=\{controls\} \/>/.test(screen), 'the map gets the markers, the frame, the selected driver, the office\'s map package, the route layers and the controls');
   check(/links\.call && <Action/.test(screen) && /links\.whatsapp && <Action/.test(screen) && /links\.maps && <Action/.test(screen), 'Call, WhatsApp and Open in Maps only when the server gave the link (no dead button)');
-  check(!/trail|playback/i.test(screen.replace(/^\/\/.*$/gm, '')), 'no trails or playback button (not built in O1)');
-  check(/paddingBottom: chosen \? 240 : 24/.test(screen), 'the list makes room under the card');
+  check(/const controls = routes \? \([\s\S]*?testID="live-trails"/.test(screen) && /testID="live-playback"/.test(screen), 'the trails control and the playback bar are there (O2), the control only for a person who may call driver_route');
+  // O2: the card grew (today's numbers, the playback bar), so the room under it follows its measured height.
+  check(/paddingBottom: chosen \? Math\.max\(240, cardH \+ 16\) : 24/.test(screen), 'the list makes room under the card');
 
   const map = read('src/components/DriversMap.tsx');
   check(/import \{ GoogleDriversMap \} from '\.\/GoogleDriversMap'/.test(map) && /import \{ OpenDriversMap \} from '\.\/OpenDriversMap'/.test(map) && !/require\(/.test(map),
@@ -169,8 +171,9 @@ console.log('\n== The screen and the two engines ==');
 
   const google = read('src/components/GoogleDriversMap.tsx');
   const open = read('src/components/OpenDriversMap.tsx');
+  // O2: both engines also take the route layers (DriversEngineProps & LiveLayerProps; scripts/test-live-route.ts).
   for (const [name, src, loaded] of [['Google', google, /onMapLoaded=\{onLoaded\}/], ['free', open, /onDidFinishLoadingMap=\{onLoaded\}/]] as const) {
-    check(/: DriversEngineProps\)/.test(src) && loaded.test(src) && /<DriverPin marker=\{m\} \/>/.test(src) && /onPressMarker\(m\.username\)/.test(src)
+    check(/: DriversEngineProps & LiveLayerProps\)/.test(src) && loaded.test(src) && /<DriverPin marker=\{m\} \/>/.test(src) && /onPressMarker\(m\.username\)/.test(src)
       && /DRIVER_ZOOM/.test(src) && /if \(!ready \|\| focused\) return;|if \(!focused\) setStop\(framed\);/.test(src) && /<MapCompass/.test(src),
     `the ${name} map: the same pins, its loaded signal, a tap selects, the move to a selected driver, the frame skipped while one is selected, the compass`);
   }

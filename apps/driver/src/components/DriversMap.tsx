@@ -10,6 +10,11 @@
 // the app on screen, and starts again when the network returns. Driver positions are ours (no Google content, rule 10),
 // so both engines draw the same markers. The office's own sign-in does not report a failure to the server (report_map_state
 // is the driver's call): the phone still switches engines by itself (mapSession).
+// O2: the route layers (office/liveRouteLogic.ts), the same on both engines: today's trails (each driver's line in a muted
+// colour, its holes dashed), the shown route (the selected driver's day as runs by speed band, the holes dashed grey, the
+// estimated roads dashed slate, the stops as circles with their times) and the playback marker with its time. The two
+// pins the engines share (the stop circle, the playback marker) live here and reach the engines as props; the credit line
+// gains openrouteservice's whenever an estimated road is drawn.
 
 import MapPinOff from 'lucide-react-native/icons/map-pin-off';
 import * as Network from 'expo-network';
@@ -17,8 +22,9 @@ import { useIsFocused } from 'expo-router';
 import { Component, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Txt } from '@/components/ui';
+import { Mono, Txt } from '@/components/ui';
 import { type Engine, engineFor, type MapPackage, mapSession, mapStep, type MountEvent, type MountState, startMount, waitFor } from '@/lib/mapEngine';
+import { type Cursor, creditWithOrs, ESTIMATED_COLOR, HOLE_COLOR, type LiveLayers, NO_LAYERS, STOP_PIN, type StopMark } from '@/office/liveRouteLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { GoogleDriversMap } from './GoogleDriversMap';
@@ -26,6 +32,19 @@ import { type DriversEngineProps, mapStyles } from './mapPins';
 import { OpenDriversMap } from './OpenDriversMap';
 import { GOOGLE_MAP_BUILD } from './TaskMap';
 import { mapCredit } from './taskMapLogic';
+
+/** What both engines are given for the route layers (O2), on top of the markers: the lines and the pins that draw them. */
+export interface LiveLayerProps {
+  layers: LiveLayers;
+  pins: LivePins;
+}
+
+export interface LivePins {
+  /** A stop over 10 minutes: a small circle; its times above it while it is open (tapped). */
+  Stop: (props: { stop: StopMark; open: boolean }) => ReactNode;
+  /** The playback marker: the dot (hollow while estimated) under its time and speed. */
+  Cursor: (props: { cursor: Cursor }) => ReactNode;
+}
 
 /**
  * The engine for this phone now: the build, the map package (the office's own `GET /me` says it for an office sign-in;
@@ -40,9 +59,13 @@ export function useDriversMapEngine(mapPackage: MapPackage | undefined): Engine 
 type Props = Omit<DriversEngineProps, 'onLoaded' | 'onFailed'> & {
   /** The office's map package (me.map.package); the phone's setting when absent. */
   mapPackage?: MapPackage;
+  /** The route layers (O2): the trails, the shown route, the playback marker; none by default. */
+  layers?: LiveLayers;
+  /** The screen's controls over the map (the trails toggle), shown only while a map is mounted, never over "Map not available". */
+  controls?: ReactNode;
 };
 
-export function DriversMap({ mapPackage, ...parts }: Props) {
+export function DriversMap({ mapPackage, layers = NO_LAYERS, controls, ...parts }: Props) {
   const { t, settings, dataAvailable } = useApp();
   const engine = useDriversMapEngine(mapPackage);
   const focused = useIsFocused();
@@ -110,9 +133,12 @@ export function DriversMap({ mapPackage, ...parts }: Props) {
     );
   }
 
-  const credit = mapCredit(mount.engine === 'google', []);
-  const engineProps: DriversEngineProps = {
+  // An estimated road drawn (openrouteservice's) adds its credit to the map's own.
+  const credit = creditWithOrs(mapCredit(mount.engine === 'google', []), mount.engine === 'google', (layers.route?.estimated.length ?? 0) > 0);
+  const engineProps: DriversEngineProps & LiveLayerProps = {
     ...parts,
+    layers,
+    pins: PINS,
     onLoaded: () => dispatchRef.current({ type: 'loaded' }),
     onFailed: () => dispatchRef.current({ type: 'error' }),
   };
@@ -121,6 +147,7 @@ export function DriversMap({ mapPackage, ...parts }: Props) {
       <MapBoundary key={`${mount.engine}:${mount.attempt}`} onError={() => dispatchRef.current({ type: 'error' })}>
         {mount.engine === 'google' ? <GoogleDriversMap {...engineProps} /> : <OpenDriversMap {...engineProps} />}
       </MapBoundary>
+      {controls}
       {/* The providers' credits, in their own words (never translated); Google's map shows its own. */}
       {credit ? (
         <View style={styles.bottom} pointerEvents="none">
@@ -154,6 +181,48 @@ class MapBoundary extends Component<{ onError: () => void; children: ReactNode }
     return this.state.failed ? <View style={StyleSheet.absoluteFill} /> : this.props.children;
   }
 }
+
+// --- The route pins (O2), the same picture on both engines ------------------------------------------------------------
+
+/** A stop over 10 minutes: a small white circle with a grey ring; tapped, its times and length sit above it. */
+function StopDot({ stop, open }: { stop: StopMark; open: boolean }) {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      {open && (
+        <View style={[pinStyles.label, { height: STOP_PIN.labelHeight, marginBottom: STOP_PIN.gap }]}>
+          <Mono size={12} bold>{stop.label}</Mono>
+        </View>
+      )}
+      <View style={[pinStyles.stop, open && { borderColor: colors.ink }]} />
+    </View>
+  );
+}
+
+/** The playback marker: "09:12:05 · 62 km/h" (or "· estimated") above a blue dot, hollow while estimated. */
+function CursorPin({ cursor }: { cursor: Cursor }) {
+  const { t } = useApp();
+  const words = cursor.estimated ? t('office.live.estimated') : cursor.kmh === null ? null : t('office.live.kmh', { n: cursor.kmh });
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <View style={[pinStyles.label, { height: STOP_PIN.labelHeight, marginBottom: STOP_PIN.gap, flexDirection: 'row', gap: 6 }]}>
+        <Mono size={12} bold>{cursor.time}</Mono>
+        {words ? <Txt variant="strong" size={12} color={cursor.estimated ? colors.muted : colors.ink}>{words}</Txt> : null}
+      </View>
+      <View style={[pinStyles.cursor, cursor.estimated && { backgroundColor: colors.card, borderColor: ESTIMATED_COLOR }]} />
+    </View>
+  );
+}
+
+const PINS: LivePins = { Stop: StopDot, Cursor: CursorPin };
+
+/** Google's view-based marker needs the sizes; MapLibre anchors the view itself. */
+export const CURSOR_PIN = { size: 18, labelHeight: STOP_PIN.labelHeight, gap: STOP_PIN.gap } as const;
+
+const pinStyles = StyleSheet.create({
+  label: { backgroundColor: colors.card, borderRadius: 8, paddingHorizontal: 8, justifyContent: 'center', alignItems: 'center', elevation: 2 },
+  stop: { width: STOP_PIN.size, height: STOP_PIN.size, borderRadius: STOP_PIN.size / 2, backgroundColor: colors.card, borderWidth: 2.5, borderColor: HOLE_COLOR, elevation: 2 },
+  cursor: { width: CURSOR_PIN.size, height: CURSOR_PIN.size, borderRadius: CURSOR_PIN.size / 2, backgroundColor: colors.blue, borderWidth: 3, borderColor: colors.card, elevation: 3 },
+});
 
 const styles = StyleSheet.create({
   card: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.mapLand, paddingHorizontal: 16, paddingTop: 16, gap: 6 },

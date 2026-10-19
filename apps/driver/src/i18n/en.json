@@ -1183,7 +1183,22 @@
       "close": "Close",
       "empty": "No drivers.",
       "noneInFilter": "Nobody under this filter.",
-      "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The drivers are listed below."
+      "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The drivers are listed below.",
+      "trails": "Today's trails",
+      "trailsLoading": "Loading trails…",
+      "trailsNotDrawn": "+{n} not drawn",
+      "routeLoading": "Loading today's route…",
+      "routeFailed": "Today's route could not be loaded.",
+      "routeNone": "No positions recorded today.",
+      "routeToday": "Today: {km} km",
+      "routeDriving": "driving {dur}",
+      "routeStopped": "stopped {dur}",
+      "routeStops": "{n} stops",
+      "routeStopsOne": "1 stop",
+      "play": "Play",
+      "pause": "Pause",
+      "slider": "Playback time",
+      "estimated": "estimated"
     },
     "trip": {
       "step_where": "Where",
