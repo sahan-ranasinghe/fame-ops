@@ -1492,6 +1492,107 @@
       "footerTrip": "This question closes when the trip starts.",
       "nobody": "No drivers to ask.",
       "close": "Close"
+    },
+    "drivers": {
+      "title": "Drivers",
+      "count": "{n} drivers",
+      "countOne": "1 driver",
+      "now": "Now",
+      "week": "Week",
+      "filter": {
+        "all": "All",
+        "free_now": "Free now",
+        "on_task": "On a task",
+        "off_duty": "Off duty",
+        "not_available": "Not available"
+      },
+      "pill": {
+        "onTask": "on a task",
+        "free": "free",
+        "onDuty": "on duty",
+        "offDuty": "off duty",
+        "notAvailable": "not available"
+      },
+      "next": "Next: {time} {title}",
+      "starts": "starts {time}",
+      "usuallyStarts": "usually starts {time}",
+      "regular": "regular {plate}",
+      "empty": "No drivers.",
+      "noneInFilter": "Nobody under this filter.",
+      "weekTitle": "The next 7 days",
+      "weekEmpty": "Nobody is marked not available this week.",
+      "addNotAvailable": "+ Not available",
+      "notAvailableTitle": "Not available",
+      "day": "Day",
+      "lastDay": "Until (full days)",
+      "sameDay": "same day",
+      "part": {
+        "label": "When",
+        "full_day": "Full day",
+        "morning": "Morning",
+        "afternoon": "Afternoon",
+        "hours": "Hours",
+        "morningTill": "morning, back {time}",
+        "afternoonFrom": "from {time}"
+      },
+      "from": "From",
+      "to": "To",
+      "reason": {
+        "label": "Reason",
+        "leave": "Leave",
+        "half_day": "Half day",
+        "personal": "Personal",
+        "other": "Other"
+      },
+      "note": "A note (optional)",
+      "save": "Save",
+      "saved": "Saved: {name} is not available {when}.",
+      "hoursProblem": "Enter from and to as HH:MM, with to after from.",
+      "toDateProblem": "The last day must be the same day or later.",
+      "remove": "Remove",
+      "removeTitle": "Available again?",
+      "removeBody": "{name} · {when}. The entry is removed and the driver is available then.",
+      "removed": "Removed.",
+      "addedBy": "added by {name} · {at}",
+      "profile": {
+        "code": "Code {code}",
+        "currentVehicle": "Vehicle today",
+        "noVehicle": "No vehicle today",
+        "licence": "Licence",
+        "licenceExpiry": "expires {date}",
+        "licenceNotSet": "expiry not set",
+        "licenceNumber": "No. {number}",
+        "thisMonth": "This month",
+        "tasksKm": "{tasks} tasks · {km} km",
+        "missing": "Missing: {list}",
+        "emergency": "Emergency contact",
+        "appVersion": "App {version}",
+        "switchedOff": "switched off",
+        "todayState": "Today",
+        "notAvailable": "Not available",
+        "noEntries": "No days marked in the next 30 days.",
+        "notFound": "Driver not found."
+      },
+      "route": {
+        "title": "Today's route",
+        "loading": "Reading the day's route…",
+        "none": "No positions today yet.",
+        "km": "GPS km",
+        "driving": "Driving",
+        "stopped": "Stopped",
+        "stops": "Stops",
+        "legend": {
+          "standing": "standing",
+          "slow": "under 20",
+          "mid": "20–60",
+          "fast": "over 60 km/h",
+          "gap": "no data",
+          "estimated": "estimated road"
+        },
+        "timeline": "Timeline",
+        "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The timeline is below."
+      },
+      "uploadedLater": "uploaded {time}"
     }
   }
 }

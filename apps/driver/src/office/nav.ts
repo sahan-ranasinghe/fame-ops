@@ -8,7 +8,7 @@
 
 import type { Permission } from './permissions';
 
-export type TabKey = 'home' | 'approve' | 'tasks' | 'live' | 'trips' | 'alerts' | 'more';
+export type TabKey = 'home' | 'approve' | 'tasks' | 'drivers' | 'live' | 'trips' | 'alerts' | 'more';
 
 export interface Tab {
   key: TabKey;
@@ -20,6 +20,8 @@ export interface Tab {
 const HOME: Tab = { key: 'home', label: 'office.tabs.home', need: [] };
 const APPROVE: Tab = { key: 'approve', label: 'office.tabs.approve', need: ['approve'] };
 const TASKS: Tab = { key: 'tasks', label: 'office.tabs.tasks', need: ['assign_tasks'] };
+/** O2: the Drivers board (design 12), on the bar of approvers and dispatchers as designs 02, 03, 12 and 15 show it. */
+const DRIVERS: Tab = { key: 'drivers', label: 'office.tabs.drivers', need: ['approve', 'assign_tasks'] };
 const LIVE: Tab = { key: 'live', label: 'office.tabs.live', need: ['view'] };
 const TRIPS: Tab = { key: 'trips', label: 'office.tabs.trips', need: ['request'] };
 const ALERTS: Tab = { key: 'alerts', label: 'office.tabs.alerts', need: [] };
@@ -31,11 +33,12 @@ export const TAB_COUNT = 5;
 export const has = (permissions: readonly string[], ...any: readonly Permission[]): boolean => any.length === 0 || any.some((p) => permissions.includes(p));
 
 /**
- * The bottom bar: Home, then (by the designs) Approve for approvers, Tasks for dispatchers, My trips for requesters, Live
- * for everyone who sees the fleet, Alerts, then More. Never a tab the person may not use, never one twice.
+ * The bottom bar: Home, then (by the designs) Approve · Drivers · Live for approvers, Tasks · Drivers · Live for
+ * dispatchers (O2: Drivers on the bar, Alerts under More and the bell on every header), My trips · Live · Alerts for
+ * requesters, Live for everyone who sees the fleet, Alerts, then More. Never a tab the person may not use, never one twice.
  */
 export function tabsFor(permissions: readonly string[]): Tab[] {
-  const order: Tab[] = has(permissions, 'approve') ? [APPROVE, LIVE, ALERTS] : has(permissions, 'assign_tasks') ? [TASKS, LIVE, ALERTS] : [TRIPS, LIVE, ALERTS];
+  const order: Tab[] = has(permissions, 'approve') ? [APPROVE, DRIVERS, LIVE, ALERTS] : has(permissions, 'assign_tasks') ? [TASKS, DRIVERS, LIVE, ALERTS] : [TRIPS, LIVE, ALERTS];
   const picked: Tab[] = [HOME];
   for (const tab of [...order, TRIPS, LIVE, ALERTS]) {
     if (picked.length >= TAB_COUNT - 1) break;
@@ -79,14 +82,15 @@ export function homeChips(permissions: readonly string[]): HomeChip[] {
   return chips;
 }
 
-export type MoreItem = 'tasks' | 'approve' | 'trips' | 'alerts' | 'issues';
+export type MoreItem = 'tasks' | 'approve' | 'drivers' | 'trips' | 'alerts' | 'issues';
 
-/** What More lists under Work: the screens built in O1 that are not on the bar. */
+/** What More lists under Work: the screens built so far that are not on the bar. */
 export function moreFor(permissions: readonly string[]): MoreItem[] {
   const onBar = new Set<string>(tabsFor(permissions).map((t) => t.key));
   const all: { key: MoreItem; need: readonly Permission[] }[] = [
     { key: 'approve', need: ['approve'] },
     { key: 'tasks', need: ['assign_tasks'] },
+    { key: 'drivers', need: ['approve', 'assign_tasks'] },
     { key: 'trips', need: ['request'] },
     { key: 'issues', need: ['issues', 'assign_tasks'] },
     { key: 'alerts', need: [] },
@@ -111,6 +115,10 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   if (path === '/requests') return has(permissions, 'approve') ? '/office/(tabs)/approve' : null;
   if (path === '/my-trips') return has(permissions, 'request') ? '/office/(tabs)/trips' : null;
   if (path === '/live' || path.startsWith('/live?')) return has(permissions, 'view') ? '/office/(tabs)/live' : null;
+  // O2: the Drivers board and a driver's page (the site's /drivers/board, /drivers/<username>).
+  if (path === '/drivers/board' || path === '/drivers') return has(permissions, 'approve', 'assign_tasks') ? '/office/(tabs)/drivers' : null;
+  m = path.match(/^\/drivers\/([A-Za-z0-9._-]+)$/);
+  if (m) return has(permissions, 'approve', 'assign_tasks') ? `/office/driver/${m[1]}` : null;
   // O2: the issues centre (issue.opened / issue.assigned link to the issue; the site's list).
   m = path.match(/^\/issues\/([0-9a-f-]{36})/);
   if (m) return has(permissions, 'issues', 'assign_tasks') ? `/office/issues/${m[1]}` : null;

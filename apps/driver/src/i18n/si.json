@@ -1492,6 +1492,107 @@
       "footerTrip": "ගමන ආරම්භ වූ විට මෙම ප්‍රශ්නය වැසේ.",
       "nobody": "අසන්නට රියදුරන් නැත.",
       "close": "වසන්න"
+    },
+    "drivers": {
+      "title": "රියදුරන්",
+      "count": "රියදුරන් {n}",
+      "countOne": "රියදුරන් 1",
+      "now": "දැන්",
+      "week": "සතිය",
+      "filter": {
+        "all": "සියල්ල",
+        "free_now": "දැන් නිදහස්",
+        "on_task": "කාර්යයක",
+        "off_duty": "රාජකාරියෙන් පිටත",
+        "not_available": "නොමැත"
+      },
+      "pill": {
+        "onTask": "කාර්යයක",
+        "free": "නිදහස්",
+        "onDuty": "රාජකාරියේ",
+        "offDuty": "රාජකාරියෙන් පිටත",
+        "notAvailable": "නොමැත"
+      },
+      "next": "ඊළඟ: {time} {title}",
+      "starts": "{time} ට පටන් ගනී",
+      "usuallyStarts": "සාමාන්‍යයෙන් {time} ට පටන් ගනී",
+      "regular": "සාමාන්‍ය වාහනය {plate}",
+      "empty": "රියදුරන් නැත.",
+      "noneInFilter": "මෙම පෙරහනට කිසිවෙක් නැත.",
+      "weekTitle": "ඉදිරි දින 7",
+      "weekEmpty": "මෙම සතියේ කිසිවෙක් නොමැත ලෙස සලකුණු කර නැත.",
+      "addNotAvailable": "+ නොමැත",
+      "notAvailableTitle": "නොමැත",
+      "day": "දිනය",
+      "lastDay": "දක්වා (සම්පූර්ණ දින)",
+      "sameDay": "එදිනම",
+      "part": {
+        "label": "කවදාද",
+        "full_day": "සම්පූර්ණ දිනය",
+        "morning": "උදේ",
+        "afternoon": "දහවල්",
+        "hours": "පැය කිහිපයක්",
+        "morningTill": "උදේ, {time} ට ආපසු",
+        "afternoonFrom": "{time} සිට"
+      },
+      "from": "සිට",
+      "to": "දක්වා",
+      "reason": {
+        "label": "හේතුව",
+        "leave": "නිවාඩු",
+        "half_day": "අර්ධ දිනය",
+        "personal": "පෞද්ගලික",
+        "other": "වෙනත්"
+      },
+      "note": "සටහනක් (අත්‍යවශ්‍ය නොවේ)",
+      "save": "සුරකින්න",
+      "saved": "සුරැකිණි: {name} {when} නොමැත.",
+      "hoursProblem": "සිට සහ දක්වා HH:MM ලෙස ඇතුළත් කරන්න, දක්වා සිට ට පසුව විය යුතුයි.",
+      "toDateProblem": "අවසන් දිනය එදිනම හෝ පසුව විය යුතුයි.",
+      "remove": "ඉවත් කරන්න",
+      "removeTitle": "නැවත සිටිනවාද?",
+      "removeBody": "{name} · {when}. සටහන ඉවත් කෙරේ; එවිට රියදුරු එදින සිටී.",
+      "removed": "ඉවත් කළා.",
+      "addedBy": "{name} එකතු කළා · {at}",
+      "profile": {
+        "code": "කේතය {code}",
+        "currentVehicle": "අද වාහනය",
+        "noVehicle": "අද වාහනයක් නැත",
+        "licence": "බලපත්‍රය",
+        "licenceExpiry": "{date} දින කල් ඉකුත් වේ",
+        "licenceNotSet": "කල් ඉකුත් වන දිනය සටහන් කර නැත",
+        "licenceNumber": "අංකය {number}",
+        "thisMonth": "මෙම මාසය",
+        "tasksKm": "කාර්යයන් {tasks} · කි.මී. {km}",
+        "missing": "නැති දේ: {list}",
+        "emergency": "හදිසි සම්බන්ධතාව",
+        "appVersion": "යෙදුම {version}",
+        "switchedOff": "අක්‍රිය කර ඇත",
+        "todayState": "අද",
+        "notAvailable": "නොමැත",
+        "noEntries": "ඉදිරි දින 30 තුළ දින සලකුණු කර නැත.",
+        "notFound": "රියදුරු හමු නොවීය."
+      },
+      "route": {
+        "title": "අද ගමන් මාර්ගය",
+        "loading": "දවසේ ගමන් මාර්ගය කියවමින්…",
+        "none": "අද තවම ස්ථාන නැත.",
+        "km": "GPS කි.මී.",
+        "driving": "රිය පැදවීම",
+        "stopped": "නැවතී",
+        "stops": "නැවතුම්",
+        "legend": {
+          "standing": "නැවතී",
+          "slow": "20 ට අඩු",
+          "mid": "20–60",
+          "fast": "පැයට කි.මී. 60 ට වැඩි",
+          "gap": "දත්ත නැත",
+          "estimated": "ඇස්තමේන්තු මාර්ගය"
+        },
+        "timeline": "කාල රේඛාව",
+        "mapUnavailableBody": "දැන් සිතියමක් පූරණය කළ නොහැක: අන්තර්ජාලය නැත, නැතහොත් සිතියම් සේවාව ක්‍රියා නොකරයි. කාල රේඛාව පහතින් ඇත."
+      },
+      "uploadedLater": "{time} ට උඩුගත කළා"
     }
   }
 }

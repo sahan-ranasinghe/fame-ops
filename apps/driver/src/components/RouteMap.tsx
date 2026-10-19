@@ -1,0 +1,216 @@
+// A driver's day on the map (Office mode, Phase 8 O2; the driver's page, office/driversLogic.ts): one map, two engines, every
+// build, exactly as the Live tab's drivers map (DriversMap.tsx; the rules in lib/mapEngine.ts):
+//   - Google's map (GoogleRouteMap.tsx: react-native-maps, the Maps SDK for Android, free, no map id) when the build
+//     carries the Android key, the office's map package is google and Google's map has not failed on this phone since the
+//     app opened;
+//   - the free map (OpenRouteMap.tsx: MapLibre with OpenFreeMap's tiles, no key) otherwise, with its credit line;
+//   - neither: "Map not available" with Try again; the timeline under the map keeps working.
+// Both engines draw the same content (the positions are ours, rule 10): the day's line coloured by speed band (standing
+// grey, under 20 amber, 20–60 blue, over 60 dark blue), the holes dashed grey, the estimated road over a gap dashed slate
+// (openrouteservice's: its credit shows with the map), the stops over 10 minutes as circles with the time they began, the
+// frame around the day, and the move to one timeline row when it is tapped. A Google map that has not said it loaded
+// within phone_map_wait_s while online is judged failed (the phone moves to the free map; a render error or MapLibre's
+// onDidFailLoadingMap at once); the wait runs only while this screen is in front and the app on screen.
+
+import MapPinOff from 'lucide-react-native/icons/map-pin-off';
+import * as Network from 'expo-network';
+import { useIsFocused } from 'expo-router';
+import { Component, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import { Mono, Txt } from '@/components/ui';
+import { type Engine, engineFor, type MapPackage, mapSession, mapStep, type MountEvent, type MountState, startMount, waitFor } from '@/lib/mapEngine';
+import { BAND_COLORS, type RouteFit, type RouteLine, type StopMark } from '@/office/driversLogic';
+import { useApp } from '@/state/app';
+import { colors } from '@/theme';
+import { GoogleRouteMap } from './GoogleRouteMap';
+import { mapStyles } from './mapPins';
+import { OpenRouteMap } from './OpenRouteMap';
+import { GOOGLE_MAP_BUILD } from './TaskMap';
+import { type Frame, ORS_CREDIT, OSM_CREDIT } from './taskMapLogic';
+
+/** Room around the day when the map frames it. */
+export const ROUTE_PADDING = { top: 40, right: 40, bottom: 40, left: 40 };
+/** The zoom for one place (a stop, a short row). */
+export const ROUTE_ZOOM = 15;
+
+/** A timeline row tapped: the map moves to its span once per tap (`nonce`: the same row tapped again moves it again). */
+export interface RouteFocus {
+  frame: Frame;
+  nonce: number;
+}
+
+/** What each engine is given: the lines, the stops, the frame around the day, the focus, and how it says it loaded or failed. */
+export interface RouteEngineProps {
+  lines: RouteLine[];
+  stops: StopMark[];
+  fit: RouteFit;
+  focus: RouteFocus | null;
+  /** The map finished loading (Google: onMapLoaded; MapLibre: onDidFinishLoadingMap). */
+  onLoaded: () => void;
+  /** The map said it failed (MapLibre: onDidFailLoadingMap). */
+  onFailed: () => void;
+}
+
+/** The line's width by what it is: the day's line 5, standing and the dashed legs 3. */
+export function lineWidth(l: Pick<RouteLine, 'band'>): number {
+  return l.band === 'standing' || l.band === 'gap' || l.band === 'estimated' ? 3 : 5;
+}
+
+/** The stop pin's sizes: the circle over its time label, so each engine can anchor the circle's centre on the position. */
+export const ROUTE_PIN = { circle: 18, gap: 2, label: 18 } as const;
+
+/** Google's anchor y for the stop pin: the circle's centre (a fraction of the view's height). */
+export function routePinAnchorY(): number {
+  return ROUTE_PIN.circle / 2 / (ROUTE_PIN.circle + ROUTE_PIN.gap + ROUTE_PIN.label);
+}
+
+/** A stop over 10 minutes: a dark circle with the time it began under it (both engines). */
+export function RouteStopPin({ stop }: { stop: StopMark }) {
+  return (
+    <View style={pinStyles.wrap}>
+      <View style={pinStyles.circle} />
+      <View style={pinStyles.label}>
+        <Mono size={11} bold>{stop.time}</Mono>
+      </View>
+    </View>
+  );
+}
+
+/** The credits a map owes under it (never translated): the free map's tiles, and openrouteservice's when an estimated road is drawn. */
+export function routeCredit(googleMap: boolean, lines: readonly Pick<RouteLine, 'band'>[]): string | null {
+  const parts = [googleMap ? null : OSM_CREDIT, lines.some((l) => l.band === 'estimated') ? ORS_CREDIT : null].filter(Boolean);
+  return parts.length ? parts.join(' · ') : null;
+}
+
+/** The engine for this phone now: the build, the map package (the office's own GET /me) and Google's failure since the app opened. */
+export function useRouteMapEngine(mapPackage: MapPackage | undefined): Engine {
+  const { settings } = useApp();
+  const failed = useSyncExternalStore(mapSession.subscribe, mapSession.googleFailed);
+  return engineFor(GOOGLE_MAP_BUILD, mapPackage ?? settings.map_package, failed);
+}
+
+type Props = Omit<RouteEngineProps, 'onLoaded' | 'onFailed'> & {
+  /** The office's map package (me.map.package); the phone's setting when absent. */
+  mapPackage?: MapPackage;
+};
+
+export function RouteMap({ mapPackage, ...parts }: Props) {
+  const { t, settings, dataAvailable } = useApp();
+  const engine = useRouteMapEngine(mapPackage);
+  const focused = useIsFocused();
+  const active = useAppActive();
+
+  // One mount of the map: loading → loaded, or the card (lib/mapEngine.ts mapStep), as DriversMap.tsx.
+  const [mount, setMount] = useState<MountState>(() => startMount(engine));
+  const mountRef = useRef(mount);
+  mountRef.current = mount;
+  const dispatch = (e: MountEvent) => {
+    const step = mapStep(mountRef.current, e);
+    mountRef.current = step.state;
+    setMount(step.state);
+    if (step.googleFailed) mapSession.markGoogleFailed(Date.now());
+  };
+  const dispatchRef = useRef(dispatch);
+  dispatchRef.current = dispatch;
+
+  useEffect(() => { dispatchRef.current({ type: 'engine', engine }); }, [engine]);
+
+  const waitS = waitFor(mount.engine, settings.phone_map_wait_s);
+  const [waitRun, setWaitRun] = useState(0);
+  useEffect(() => {
+    if (mount.status !== 'loading' || !focused || !active) return;
+    const judged = { attempt: mount.attempt, engine: mount.engine };
+    let live = true;
+    const timer = setTimeout(() => {
+      void Network.getNetworkStateAsync()
+        .then((s) => s.isInternetReachable ?? s.isConnected ?? false)
+        .catch(() => false)
+        .then((online) => { if (live) dispatchRef.current({ type: 'timeout', online, ...judged }); });
+    }, waitS * 1000);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [mount.status, mount.attempt, mount.engine, waitS, focused, active, waitRun]);
+
+  const wasOnline = useRef(dataAvailable);
+  useEffect(() => {
+    if (dataAvailable && !wasOnline.current) {
+      if (mountRef.current.status === 'unavailable') dispatchRef.current({ type: 'retry' });
+      else if (mountRef.current.status === 'loading') setWaitRun((n) => n + 1);
+    }
+    wasOnline.current = dataAvailable;
+  }, [dataAvailable]);
+
+  if (mount.status === 'unavailable') {
+    return (
+      <View style={styles.card} testID="route-map-unavailable">
+        <View style={styles.head}>
+          <MapPinOff size={22} color={colors.muted} strokeWidth={2.4} />
+          <Txt variant="strong" size={17} style={{ flex: 1 }}>{t('map.unavailable')}</Txt>
+          <Pressable accessibilityRole="button" onPress={() => dispatch({ type: 'retry' })} hitSlop={8} style={styles.retry}>
+            <Txt variant="strong" size={15} color={colors.blue}>{t('map.tryAgain')}</Txt>
+          </Pressable>
+        </View>
+        <Txt variant="small">{t('office.drivers.route.mapUnavailableBody')}</Txt>
+      </View>
+    );
+  }
+
+  const credit = routeCredit(mount.engine === 'google', parts.lines);
+  const engineProps: RouteEngineProps = {
+    ...parts,
+    onLoaded: () => dispatchRef.current({ type: 'loaded' }),
+    onFailed: () => dispatchRef.current({ type: 'error' }),
+  };
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <MapBoundary key={`${mount.engine}:${mount.attempt}`} onError={() => dispatchRef.current({ type: 'error' })}>
+        {mount.engine === 'google' ? <GoogleRouteMap {...engineProps} /> : <OpenRouteMap {...engineProps} />}
+      </MapBoundary>
+      {credit ? (
+        <View style={styles.bottom} pointerEvents="none">
+          <Text style={mapStyles.credit} accessibilityLanguage="en" testID="route-map-credit">{credit}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/** The app is on screen (AppState active). */
+function useAppActive(): boolean {
+  const [active, setActive] = useState(AppState.currentState === 'active');
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => setActive(state === 'active'));
+    return () => sub.remove();
+  }, []);
+  return active;
+}
+
+/** A map that throws while drawing is a failed map (Google's: the phone moves to the free map), never a broken screen. */
+class MapBoundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    this.props.onError();
+  }
+  render() {
+    return this.state.failed ? <View style={StyleSheet.absoluteFill} /> : this.props.children;
+  }
+}
+
+const styles = StyleSheet.create({
+  card: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: colors.mapLand, paddingHorizontal: 16, paddingTop: 16, gap: 6 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  retry: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  bottom: { position: 'absolute', left: 12, bottom: 8, alignItems: 'flex-start' },
+});
+
+const pinStyles = StyleSheet.create({
+  wrap: { alignItems: 'center', gap: ROUTE_PIN.gap },
+  circle: { width: ROUTE_PIN.circle, height: ROUTE_PIN.circle, borderRadius: ROUTE_PIN.circle / 2, backgroundColor: BAND_COLORS.standing, borderWidth: 3, borderColor: '#ffffff', elevation: 3 },
+  label: { height: ROUTE_PIN.label, justifyContent: 'center', backgroundColor: colors.card, borderRadius: 6, paddingHorizontal: 5, elevation: 2 },
+});

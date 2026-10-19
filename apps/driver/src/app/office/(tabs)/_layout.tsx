@@ -6,7 +6,7 @@ import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Bell, ClipboardCheck, Ellipsis, House, ListChecks, type LucideIcon, MapPin, Route } from '@/components/icons';
+import { Bell, ClipboardCheck, Ellipsis, House, ListChecks, type LucideIcon, MapPin, Route, Users } from '@/components/icons';
 import { Txt } from '@/components/ui';
 import { type TabKey, tabsFor } from '@/office/nav';
 import { useOffice } from '@/office/state';
@@ -18,6 +18,7 @@ const ICONS: Record<TabKey, LucideIcon> = {
   home: House,
   approve: ClipboardCheck,
   tasks: ListChecks,
+  drivers: Users,
   live: MapPin,
   trips: Route,
   alerts: Bell,
@@ -25,7 +26,7 @@ const ICONS: Record<TabKey, LucideIcon> = {
 };
 
 /** The route file of each tab. */
-const ROUTE: Record<TabKey, string> = { home: 'index', approve: 'approve', tasks: 'tasks', live: 'live', trips: 'trips', alerts: 'alerts', more: 'more' };
+const ROUTE: Record<TabKey, string> = { home: 'index', approve: 'approve', tasks: 'tasks', drivers: 'drivers', live: 'live', trips: 'trips', alerts: 'alerts', more: 'more' };
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -73,6 +74,7 @@ export default function OfficeTabsLayout() {
       <Tabs.Screen name="index" />
       <Tabs.Screen name="approve" options={{ href: mine.has('approve') ? undefined : null }} />
       <Tabs.Screen name="tasks" options={{ href: mine.has('tasks') ? undefined : null }} />
+      <Tabs.Screen name="drivers" options={{ href: mine.has('drivers') ? undefined : null }} />
       <Tabs.Screen name="live" options={{ href: mine.has('live') ? undefined : null }} />
       <Tabs.Screen name="trips" options={{ href: mine.has('trips') ? undefined : null }} />
       <Tabs.Screen name="alerts" />

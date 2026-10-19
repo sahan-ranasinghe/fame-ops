@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Bell, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, Route, TriangleAlert, User } from '@/components/icons';
+import { Bell, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, Route, TriangleAlert, User, Users } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { type MoreItem, moreFor } from '@/office/nav';
 import { PERMISSION_TEXT } from '@/office/permissions';
@@ -19,6 +19,7 @@ import { colors } from '@/theme';
 const ITEM: Record<MoreItem, { icon: LucideIcon; label: string; path: string }> = {
   approve: { icon: ClipboardCheck, label: 'office.tabs.approve', path: '/office/(tabs)/approve' },
   tasks: { icon: ListChecks, label: 'office.tabs.tasks', path: '/office/(tabs)/tasks' },
+  drivers: { icon: Users, label: 'office.tabs.drivers', path: '/office/(tabs)/drivers' },
   trips: { icon: Route, label: 'office.tabs.trips', path: '/office/(tabs)/trips' },
   alerts: { icon: Bell, label: 'office.tabs.alerts', path: '/office/(tabs)/alerts' },
   issues: { icon: TriangleAlert, label: 'office.issues.title', path: '/office/issues' },
