@@ -3363,3 +3363,28 @@ fast-forwarded to it), with Sahan's go (defaults 1–8 accepted).
 Next: `vehicle_on_the_day` once Sahan says both phones have the update; Part 5 and Part 6 (1.3.0) built and tested
 locally, no EAS build without his go.
 
+**Round Part 6, 19 October 2026** (branch `phase7-6` at `ec1bf7d`, with Hotfix 4, Part 5 and the three rounds after the
+Part 6 checkpoint; main fast-forwarded to it), with Sahan's go under the new deploy gate (the office suite at `ec1bf7d`:
+typecheck, 774 unit tests, both builds, all 25 e2e on their first try with `retries: 1`, no flaky test, no Wi-Fi change;
+Deno 189 tests and the driver suites at `2d5fa57`, nothing outside `apps/office` changed since; pgTAP and the connector
+suite at `c5555d3`, the migrations unchanged since). Started 19:16, the gate run 29 min, the deploy 19:47–20:05.
+1. `npx supabase db push --linked --yes` (the dry run first named exactly the three): `20261019150000_phase7_6_demo`,
+   `20261019180000_phase7_6_maps`, `20261019200000_phase7_6_maps_fallback`; `migration list` shows them local = remote.
+2. `npx supabase functions deploy driver-api fleet-jobs notify-office office-api office-mcp push-task` (notify-office: no
+   change, v4 of 18 October stays): driver-api v5, fleet-jobs v19, office-api v31, office-mcp v35, push-task v12, all
+   verify_jwt false. Without a key or session: office-api /me 401, /public/privacy 200, driver-api 401, fleet-jobs,
+   notify-office and push-task 401 bad_server_key. `get_settings` through the live connector answers with
+   `phone_map_wait_s` 30 and the `privacy_email` description; Google usage today 2 map loads, nothing refused.
+3. `update_settings privacy_email shnvshvjth@gmail.com` through the live connector (audited); /public/privacy answers it.
+4. Web: `npm run build:web`, the key scan on its own (one JWT, role anon; no sb_ value; no service_role; no secret name),
+   `wrangler pages deploy --branch main` (IPv4 first; 46 files, 73 s); https://fame-fleet.pages.dev serves
+   `index-DnRWKtAD.js` with its own fonts (/fonts/fonts.css 200, the woff2 files 200): the sign-in page renders, the
+   browser contacts only the site and the Supabase project, /privacy shows the e-mail as a mailto: link. Overview and the
+   Google map: Sahan's signed-in check.
+5. main fast-forwarded to `ec1bf7d`.
+6. The Teams artifact: the file and the message for Sahan (`docs/teams-artifact-update.md`, Part 6); 85 tools declared,
+   the declaration unchanged since Part 3b.
+Not in this round (Sahan): the phones. 1.3.0 (EAS build `16e041a0`) is not installed anywhere and no EAS update was
+published; the phone-side changes since Part 3b (the map credits, the offline sign-in rule, every failed map try
+reported) wait for the first update after the phones have 1.3.0. `vehicle_on_the_day` stays off.
+

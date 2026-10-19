@@ -1,5 +1,34 @@
 # Updating the Teams copy of the Fame Fleet artifact
 
+## Part 6 with Hotfix 4 (19 October 2026, main at `ec1bf7d`)
+
+Build from main at `ec1bf7d` with `npm run build:artifact` (`apps/office`):
+
+- `apps/office/dist-artifact/index.html` (one file, 963,167 bytes, no Supabase code, no key) and
+  `apps/office/dist-artifact/capabilities.json`, pasted unchanged: the connector **Fame Fleet** with 85 tools, the same
+  list as Part 3b (nothing new to allow; the declaration can stay as it is if claude.ai keeps it).
+- The artifact keeps Google Fonts' link (claude.ai cannot reach the site's files); the office site now serves its own fonts.
+- Changed for callers: none. New settings through the connector: `phone_map_wait_s` (how long a phone waits for Google's
+  map before the free one, 30 s) and `privacy_email` (set to the office's address today).
+
+The message for the Teams chat:
+
+> Fame Fleet is updated. What is new for the office:
+>
+> - One "New request" button, and Back means back: the back arrow goes one step back to where you came from, and a save
+>   returns you there too.
+> - "Give it a driver" is one page: the task at the top, who can take it below, and Open task → for the rest.
+> - Ask drivers is its own step: on Assign a task, Approve and Give it a driver, "Ask drivers" opens a sheet with the free
+>   drivers already ticked; their answers appear under the rows, each with "Use this driver".
+> - When Fame Fleet does not answer a save, the page now says so ("this may not have been saved") with a Try again button
+>   that repeats the same press, so nothing is saved twice by accident. Pages that only read ask again by themselves.
+> - On the office site, if Google's map cannot load, the free map takes over with a note; a route's estimated lines and the
+>   plan's openrouteservice line now carry their credit.
+> - The site has a public privacy page (/privacy) for the app stores, with the office's contact e-mail, and the site
+>   serves its own fonts (nothing is fetched from Google for them).
+> - For the drivers' new app version (1.3.0, coming to the phones next): an issue "Google map failed on <driver>'s phone;
+>   using the free map" appears only when a phone fails twice in a row, or two phones within an hour.
+
 ## Part 3b (18 October 2026, main at `9312e4e`)
 
 Build from main at `9312e4e` with `npm run build:artifact` (`apps/office`):
