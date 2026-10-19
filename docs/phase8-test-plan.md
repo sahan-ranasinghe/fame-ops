@@ -116,6 +116,16 @@ position.
    as before; nothing office-side anywhere.
 2. Sign in as the office again on the same phone: the driver's data is gone from the phone (one person per phone).
 
+### O1.9 Office push on the phone (only after the item 9 go: the migration, notify-office and push-task deployed)
+1. Signed in as the office on the phone with notifications allowed. On the site, as the Requester, send a new request.
+   Expected: the phone rings on the "New tasks" channel with the request's title and "<who> asks …"; a tap opens Approve
+   a request for it. Alerts' badge counts it.
+2. Have a driver decline a task: the phone rings; the tap opens Give it a driver.
+3. On the site, approve a request the phone's person made: a tone (not the ring); the tap opens My trips.
+4. Profile → Notifications: switch "A vehicle request comes in" off; a new request now brings no push (and no Alerts
+   row). Switch it back on.
+5. Sign out on the phone; send a request on the site: no push (the token was removed); sign in: pushes again.
+
 ### If something looks wrong
 - "Fame Fleet did not answer" on a screen: pull down, or Try again; it was a dropped call, not a sign-out.
 - A button missing: it is a function not built in O1 (listed above as "not shown"), not a bug; say which one you wanted.

@@ -3,11 +3,13 @@
 //   - signed out only on a 401 or 403 ('signed_out', 'no_office_role', 'switched_off'); a /me that is dropped is asked
 //     again once by the client, and if it still fails the person stays signed in ('unreachable': Try again);
 //   - a token that could not be refreshed for want of a connection is offline, not signed out (lib/session.ts);
-//   - an office sign-in starts nothing driver-side (no duty, no location, no push registration here), and a driver's
+//   - an office sign-in starts nothing driver-side (no duty, no location; only the phone's push token, for the office's
+//     own notifications: item 9), and a driver's
 //     sign-in on this phone is cleared first (one person per phone).
 // No phone-only code but the Supabase client and the kv store: scripts/test-office.ts runs loadMe with a fake api.
 
 import { isSupabaseConfigured } from '../config';
+import { registerPush, unregisterPush } from '../lib/push';
 import { getJson, KEYS, remove } from '../lib/kv';
 import { sessionKind } from '../lib/session';
 import { supabase } from '../lib/supabase';
@@ -51,6 +53,8 @@ export async function signInOffice(email: string, password: string): Promise<Off
   if (outcome.kind === 'ok') {
     setOfficeMe(outcome.me);
     setJson(OFFICE_KEYS.email, email.trim().toLowerCase());
+    // Item 9: the office's notifications on this phone (register_device_token; only when notifications are allowed).
+    void registerPush();
     return 'ok';
   }
   if (outcome.kind === 'signed_out') {
@@ -81,6 +85,7 @@ export async function bootOffice(): Promise<void> {
 }
 
 export async function signOutOffice(): Promise<void> {
+  await unregisterPush();
   await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
   setOfficeMe(null);
 }

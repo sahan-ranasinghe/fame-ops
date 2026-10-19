@@ -456,8 +456,19 @@ Built in the brief's order; the trip editor (06–09) is round O2.
 - **The full run** (22:00, 71 s): the driver app's every suite on the local stack (data 95, the eleven offline suites,
   office 84, live 69, inbox 88: 1,082 checks, 0 failed) and the typecheck (0 errors). Nothing outside `apps/driver`,
   `docs` and `CLAUDE.md` changed, so the site's, Deno's, pgTAP's and the connector's suites were not run.
-- **Not built:** item 9 (office push on the phone: server work behind Sahan's go, see the checkpoint message), Ask
-  drivers (13), and everything listed under "What moved to O2 or later".
+- **Item 9, office push on the phone (built after the checkpoint on its own branch `phase8-o1-push`, from `phase8-o1`;
+  server work behind Sahan's go, listed apart):** the migration `20261020010000_phase8_office_push.sql` widens
+  `notifications.channel` to `expo_push` and `queue_notification` adds an `expo_push` outbox row for an office recipient
+  whose phone registered a device token (the event's on/off applies to both channels; a driver's token never; pgTAP
+  `phase8_office_push.test.sql`). `notify-office` delivers it through Expo's push service (`expo.ts`: a request to
+  approve, a task that needs a driver and a critical issue loud on `task-ring`, the rest on `task-updates`; the 1.2.0
+  channels on an older phone; a token Expo reports gone is deleted; failed and dead as Web Push; `expo_test.ts`).
+  `push-task` answers `not_a_driver` for a task whose employee is an office person (the custodian case: never the
+  driver's task pushes). The app: `signInOffice` registers the phone's token (`register_device_token`, when
+  notifications are allowed) and `signOutOffice` removes it; a tap on an office push opens its screen (the link through
+  `routeForUrl`, else Alerts; `TapData.url`). No new UI. Its go: `db push` (one migration), `functions deploy
+  notify-office push-task`, then the branch merged before the EAS update.
+- **Not built:** Ask drivers (13), and everything listed under "What moved to O2 or later".
 - **The EAS update that follows** (after Sahan's go, from main after the fast-forward): channel `preview`, environment
   `preview` (the Google switch on, so the runtime is `1.3.0-gmaps`): it reaches the 1.3.0 phone only (the 1.2.0 phone
   keeps its runtime's last update and its old channels from push-task). It also carries the phone-side changes waiting
