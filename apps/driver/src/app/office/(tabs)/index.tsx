@@ -13,7 +13,7 @@ import { Mono, Txt } from '@/components/ui';
 import { addDays, colomboDate } from '@/lib/time';
 import { shortDate } from '@/lib/durations';
 import { boardLine, boardPill, greeting, isCreatedTask, requestLine, requestTitle, statusTone, tripLive, tripTitle } from '@/office/homeLogic';
-import { has, homeChips, homeSections } from '@/office/nav';
+import { has, homeActions, homeChips, homeSections } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { firstName } from '@/office/text';
 import type { Board, MyTrips, Overview, RequestsList } from '@/office/types';
@@ -21,6 +21,7 @@ import { Avatar, Chip, DarkHeader, Divider, Empty, ErrorNotice, Loading, Pill, R
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { Button } from '@/components/ui';
+import { Plus } from '@/components/icons';
 
 const ROWS = 5;
 
@@ -30,6 +31,7 @@ export default function OfficeHome() {
   const router = useRouter();
   const sections = homeSections(me.permissions);
   const chips = homeChips(me.permissions);
+  const actions = homeActions(me.permissions);
   const today = colomboDate();
 
   const overview = useTool<Overview>('fleet_overview', {}, { every: 60_000 });
@@ -57,6 +59,12 @@ export default function OfficeHome() {
       </DarkHeader>
       <Screen refreshing={refreshing} onRefresh={refresh}>
         {overview.error && !ov && <ErrorNotice error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        {actions.length > 0 && (
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            {actions.includes('assign') && <Button icon={Plus} label={t('office.trip.assignTask')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } })} style={{ flex: 1, minHeight: 60 }} />}
+            {actions.includes('request') && <Button kind={actions.includes('assign') ? 'outline' : 'primary'} label={t(actions.includes('assign') ? 'office.trip.request' : 'office.trip.requestVehicle')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'request' } })} style={{ flex: 1, minHeight: 60 }} />}
+          </View>
+        )}
 
         {sections.includes('requests') && (
           <Section title={t('office.home.requests')} count={ov?.requests.waiting} link={t('office.common.viewAll')} onLink={() => router.push('/office/(tabs)/approve')}>
@@ -98,13 +106,13 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('critical') && (
-          <Section title={t('office.home.critical')} count={ov?.critical?.count ?? 0} tone={ov?.critical?.count ? 'red' : undefined}>
+          <Section title={t('office.home.critical')} count={ov?.critical?.count ?? 0} tone={ov?.critical?.count ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
             {overview.loading && <Loading text={t('office.common.loading')} />}
             {ov && (ov.critical?.items.length ?? 0) === 0 && <Empty text={t('office.home.noCritical')} />}
             {ov?.critical?.items.slice(0, ROWS).map((x, i) => (
               <View key={x.issue_id ?? `${x.what}-${i}`}>
                 {i > 0 && <Divider />}
-                <Row title={x.what} line={[x.subject, x.vehicle, x.due].filter(Boolean).join(' · ')} />
+                <Row title={x.what} line={[x.subject, x.vehicle, x.due].filter(Boolean).join(' · ')} onPress={x.issue_id ? () => router.push({ pathname: '/office/issues/[id]', params: { id: x.issue_id ?? '' } }) : undefined} />
               </View>
             ))}
           </Section>

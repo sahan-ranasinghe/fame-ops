@@ -46,3 +46,5 @@ export { default as Calendar } from 'lucide-react-native/icons/calendar';
 export { default as Search } from 'lucide-react-native/icons/search';
 export { default as Eye } from 'lucide-react-native/icons/eye';
 export { default as EyeOff } from 'lucide-react-native/icons/eye-off';
+export { default as ChevronUp } from 'lucide-react-native/icons/chevron-up';
+export { default as GripVertical } from 'lucide-react-native/icons/grip-vertical';

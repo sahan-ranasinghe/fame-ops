@@ -93,3 +93,9 @@ export function withdrawReason(reason: WithdrawReason, note: string): string {
 export function tripRoute(trip: Trip, permissions: readonly string[]): string | null {
   return !isCreatedTask(trip) && has(permissions, 'approve') ? `/office/request/${trip.id}` : null;
 }
+
+/** O2: an own request may be changed while it waits or is approved (changed = approved and edited since): the trip editor's edit mode. */
+export function canEdit(trip: Trip): boolean {
+  if (isCreatedTask(trip)) return false;
+  return trip.status === 'waiting' || trip.status === 'approved' || trip.status === 'changed';
+}

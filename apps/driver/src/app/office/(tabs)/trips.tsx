@@ -16,7 +16,7 @@ import { addDays, colomboDate } from '@/lib/time';
 import { statusTone, tripLive, tripTitle } from '@/office/homeLogic';
 import { useOffice, useTool } from '@/office/state';
 import {
-  bucketCounts, canWithdraw, changedText, type Trip, type TripFilter, tripBuckets, tripKey, tripLine, tripRoute, TRIPS_DAYS_AHEAD, TRIPS_DAYS_BACK,
+  bucketCounts, canEdit, canWithdraw, changedText, type Trip, type TripFilter, tripBuckets, tripKey, tripLine, tripRoute, TRIPS_DAYS_AHEAD, TRIPS_DAYS_BACK,
   WITHDRAW_REASONS, type WithdrawReason, withdrawReason,
 } from '@/office/tripsLogic';
 import type { FleetError, MyTrips, RequestCard } from '@/office/types';
@@ -85,6 +85,9 @@ export default function TripsTab() {
             ) : null}
           </View>
         )}
+        {canEdit(trip) && me.tools.includes('update_request') && (
+          <Button kind="outline" label={t('office.trip.edit')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'edit', id: trip.id } })} style={{ minHeight: 48, marginTop: 8 }} />
+        )}
         {canWithdraw(trip) && (
           <>
             {mine?.error && <ErrorNotice error={mine.error} onRetry={() => void withdraw(trip.id, mine.reason)} onSignIn={() => void signOut()} />}
@@ -104,6 +107,11 @@ export default function TripsTab() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={t('office.trips.above')} title={t('office.tabs.trips')} />
+      {me.tools.includes('create_request') && (
+        <View style={{ paddingHorizontal: 16, paddingTop: 14 }}>
+          <Button label={t('office.trip.requestVehicle')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'request' } })} style={{ minHeight: 56 }} />
+        </View>
+      )}
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
         <FilterChips<TripFilter>
           options={[

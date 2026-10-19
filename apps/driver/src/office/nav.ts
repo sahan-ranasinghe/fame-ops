@@ -47,6 +47,15 @@ export function tabsFor(permissions: readonly string[]): Tab[] {
 
 export type HomeSection = 'requests' | 'needs_driver' | 'critical' | 'tasks' | 'road' | 'trips';
 
+/** O2: Home's big actions (designs 02–04): Assign a task with assign_tasks, Request a vehicle with request. */
+export type HomeAction = 'assign' | 'request';
+export function homeActions(permissions: readonly string[]): HomeAction[] {
+  const out: HomeAction[] = [];
+  if (has(permissions, 'assign_tasks')) out.push('assign');
+  if (has(permissions, 'request')) out.push('request');
+  return out;
+}
+
 /** Home's sections (designs 02–05), in their order, each shown when the person holds what it needs. */
 export const HOME_SECTIONS: { key: HomeSection; need: readonly Permission[] }[] = [
   { key: 'requests', need: ['approve'] },
@@ -70,15 +79,16 @@ export function homeChips(permissions: readonly string[]): HomeChip[] {
   return chips;
 }
 
-export type MoreItem = 'tasks' | 'approve' | 'trips' | 'alerts';
+export type MoreItem = 'tasks' | 'approve' | 'trips' | 'alerts' | 'issues';
 
 /** What More lists under Work: the screens built in O1 that are not on the bar. */
 export function moreFor(permissions: readonly string[]): MoreItem[] {
-  const onBar = new Set(tabsFor(permissions).map((t) => t.key));
+  const onBar = new Set<string>(tabsFor(permissions).map((t) => t.key));
   const all: { key: MoreItem; need: readonly Permission[] }[] = [
     { key: 'approve', need: ['approve'] },
     { key: 'tasks', need: ['assign_tasks'] },
     { key: 'trips', need: ['request'] },
+    { key: 'issues', need: ['issues', 'assign_tasks'] },
     { key: 'alerts', need: [] },
   ];
   return all.filter((i) => has(permissions, ...i.need) && !onBar.has(i.key)).map((i) => i.key);
@@ -101,5 +111,9 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   if (path === '/requests') return has(permissions, 'approve') ? '/office/(tabs)/approve' : null;
   if (path === '/my-trips') return has(permissions, 'request') ? '/office/(tabs)/trips' : null;
   if (path === '/live' || path.startsWith('/live?')) return has(permissions, 'view') ? '/office/(tabs)/live' : null;
+  // O2: the issues centre (issue.opened / issue.assigned link to the issue; the site's list).
+  m = path.match(/^\/issues\/([0-9a-f-]{36})/);
+  if (m) return has(permissions, 'issues', 'assign_tasks') ? `/office/issues/${m[1]}` : null;
+  if (path === '/issues') return has(permissions, 'issues', 'assign_tasks') ? '/office/issues' : null;
   return null;
 }

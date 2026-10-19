@@ -64,6 +64,7 @@ export default function TasksTab() {
         </View>
       </DarkHeader>
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
+        {me.tools.includes('create_task') && <Button label={t('office.trip.assignTask')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } })} style={{ minHeight: 56 }} />}
         {q.loading && <Loading text={t('office.common.loading')} />}
         {q.error && !b && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {b && (b.needs_driver?.length ?? 0) > 0 && (
