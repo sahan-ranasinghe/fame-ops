@@ -1,0 +1,180 @@
+{
+  "task": {
+    "id": "ef924f8a-8f2d-4610-bdf7-e6b6e3d56d05",
+    "title": "Team drop · f902",
+    "kind": "dispatch",
+    "purpose": "company",
+    "status": "assigned",
+    "status_line": "Sent · not opened yet",
+    "start": "Wed 21 Oct 07:29",
+    "date": "2026-10-21",
+    "time": "07:29",
+    "leave_by": "Wed 21 Oct 07:29",
+    "leave_by_source": "plan",
+    "return_to_base": false,
+    "avoid_expressway": false,
+    "plan_version": 0,
+    "driver": "Driver A f902",
+    "vehicle": "FX F902-1 · Toyota HiAce",
+    "vehicle_mode": "specific",
+    "approved_by": {
+      "name": "Fixture Admin",
+      "at": "12:08"
+    },
+    "driver_phone": {
+      "phone": "+94771234567",
+      "phone_display": "077 123 4567",
+      "call": "tel:+94771234567",
+      "whatsapp": "https://wa.me/94771234567"
+    },
+    "passengers": 3,
+    "created_by": "Fixture Admin",
+    "sent": "2026-10-20 12:08",
+    "seen": "not opened yet",
+    "warnings_saved": [
+      "No base place set — add it in Settings (saved by Fixture Admin)"
+    ]
+  },
+  "plan": {
+    "source": "estimate",
+    "source_label": "estimate — no routing key",
+    "computed_at": "2026-10-20 12:08",
+    "leave_by": "2026-10-21 07:29",
+    "leave_by_source": "plan",
+    "ends_at": "2026-10-21 11:47",
+    "total_drive_min": 248,
+    "total_km": 111.1,
+    "buffer_min": 15,
+    "legs": [
+      {
+        "from": "Fixture office f902",
+        "to": "Fixture site f902",
+        "depart": "07:34",
+        "arrive": "11:42",
+        "km": 111.1,
+        "minutes": 248,
+        "source": "estimate",
+        "factor": 1.3
+      }
+    ],
+    "warnings": [
+      "No base place set — add it in Settings"
+    ]
+  },
+  "timeline": {
+    "items": [
+      {
+        "kind": "leave",
+        "at": "07:29",
+        "source": "plan"
+      },
+      {
+        "kind": "stop",
+        "n": 1,
+        "label": "Stop 1 · Pickup · Fixture office f902",
+        "place": "Fixture office f902",
+        "planned_arrive": "07:29",
+        "planned_leave": "07:34",
+        "dwell_min": 5,
+        "dwell_source": "default"
+      },
+      {
+        "kind": "leg",
+        "from_n": 1,
+        "to_n": 2,
+        "km": 111.1,
+        "minutes": 248,
+        "source": "estimate",
+        "rush_factor": 1.3
+      },
+      {
+        "kind": "stop",
+        "n": 2,
+        "label": "Stop 2 · Drop · Fixture site f902",
+        "place": "Fixture site f902",
+        "planned_arrive": "11:42",
+        "planned_leave": "11:47",
+        "arrive_by": "11:00",
+        "late_min": 42,
+        "dwell_min": 5,
+        "dwell_source": "default"
+      }
+    ],
+    "totals": {
+      "drive_min": 248,
+      "km": 111.1,
+      "ends": "11:47"
+    }
+  },
+  "stops": [
+    {
+      "id": "8a6c4113-fbd1-4a7c-9adb-5591156916e0",
+      "n": 1,
+      "label": "Stop 1 · Pickup · Fixture office f902",
+      "dwell_source": "default",
+      "planned_leave": "07:34",
+      "seq": 1,
+      "type": "pickup",
+      "what": "people",
+      "place": "Fixture office f902",
+      "place_id": "75376e34-4c70-4c89-970e-dd603aea4f26",
+      "dwell_min": 5,
+      "planned_arrive": "07:29",
+      "planned_depart": "07:34",
+      "lat": 6.9022,
+      "lng": 79.8612,
+      "pin": "yes",
+      "planned_stay": {
+        "arrive": "07:29",
+        "leave": "07:34",
+        "minutes": 5
+      },
+      "status": "pending",
+      "navigate": "https://www.google.com/maps/dir/?api=1&destination=6.9022%2C79.8612"
+    },
+    {
+      "id": "d31ea7ee-2589-4850-8986-25b198f56d76",
+      "n": 2,
+      "label": "Stop 2 · Drop · Fixture site f902",
+      "dwell_source": "default",
+      "planned_leave": "11:47",
+      "seq": 2,
+      "type": "drop",
+      "what": "people",
+      "place": "Fixture site f902",
+      "place_id": "93e9d771-d61b-4d30-bd34-9994d7abfc30",
+      "dwell_min": 5,
+      "arrive_by": "11:00",
+      "planned_arrive": "11:42",
+      "planned_depart": "11:47",
+      "lat": 7.4867,
+      "lng": 80.3647,
+      "pin": "yes",
+      "planned_stay": {
+        "arrive": "11:42",
+        "leave": "11:47",
+        "minutes": 5
+      },
+      "status": "pending",
+      "navigate": "https://www.google.com/maps/dir/?api=1&destination=7.4867%2C80.3647"
+    }
+  ],
+  "projects": "Fame internal (no project)",
+  "odometer": [],
+  "fuel": [],
+  "vehicle_reports": [],
+  "assignment_history": [
+    {
+      "at": "2026-10-20 12:08",
+      "action": "assigned",
+      "driver": "Driver A f902",
+      "vehicle": "FX F902-1",
+      "actor": "Fixture Admin"
+    }
+  ],
+  "driver_links": {
+    "call": "tel:+94771234567",
+    "whatsapp": "https://wa.me/94771234567"
+  },
+  "photo_links": "Photo links work for 1 hour."
+}

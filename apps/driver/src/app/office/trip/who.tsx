@@ -24,7 +24,7 @@ import { askTargets } from '@/office/askLogic';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import type { ProjectRow } from '@/office/trip/assignLogic';
-import { requestFieldsOf, updateDraft, useTripDraft } from '@/office/trip/draft';
+import { requestFieldsOf, type TripDraft, updateDraft, useTripDraft } from '@/office/trip/draft';
 import { addProjectRow, custodianDrives, driverOptions, groupRows, projectMatch, removeProjectRow, setProjectRow, splitRows, splitState, vehicleLine } from '@/office/trip/formsLogic';
 import { suggestInput } from '@/office/trip/requestLogic';
 import { useTrip } from '@/office/trip/useTrip';
@@ -39,11 +39,23 @@ const NEED_TYPES = ['car', 'van', 'double_cab', 'lorry', 'other'] as const;
 const PROJECT_LOOKUP_MS = 450;
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
+/**
+ * Hotfix O2-H2, the white screen: this step stays mounted under Review, and the save clears the draft. The step used to
+ * return early on "no draft" before one of its hooks, so the render after the save called one hook fewer and React threw
+ * "Rendered fewer hooks than expected" (a release build: a white screen, the trip already saved). The draft is now read
+ * here, and the step with all its hooks exists only while there is a draft (`npm run lint:hooks` guards the rule).
+ */
 export default function TripWho() {
+  const { t } = useApp();
+  const d = useTripDraft();
+  if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }}><Screen><Loading text={t('office.common.loading')} /></Screen></View>;
+  return <WhoStep d={d} />;
+}
+
+function WhoStep({ d }: { d: TripDraft }) {
   const { t } = useApp();
   const { me, api, signOut } = useOffice();
   const router = useRouter();
-  const d = useTripDraft();
   const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
   const isTask = d?.mode === 'task';
   const books = !isTask && me.tools.includes('book_vehicle');
@@ -67,7 +79,6 @@ export default function TripWho() {
   // find_project 450 ms after the last key in a project row (the site's lookup).
   const lookupTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   useEffect(() => () => Object.values(lookupTimers.current).forEach(clearTimeout), []);
-  if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }}><Screen><Loading text={t('office.common.loading')} /></Screen></View>;
   const f = d.fields;
   const setF = (patch: Partial<typeof f>) => updateDraft((x) => ({ ...x, fields: { ...x.fields, ...patch } }));
   const setReq = (patch: Partial<typeof d.req>) => updateDraft((x) => ({ ...x, req: { ...x.req, ...patch } }));

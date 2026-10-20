@@ -1,0 +1,312 @@
+{
+  "request": {
+    "id": "6fbe1073-a90b-4d4c-aba7-cf147ac74c94",
+    "kind": "request",
+    "requested_by": "Fixture Admin",
+    "when": "Wed 21 Oct 13:00",
+    "back_by": "16:00",
+    "route": "Fixture office f902 → Fixture site f902",
+    "need": "Any vehicle",
+    "status": "approved",
+    "asked": "now",
+    "decided": "2026-10-20 12:08 by Fixture Admin",
+    "task_id": "2d84ef3b-bf07-418c-b60a-07e1a00febd2",
+    "driver_required": true,
+    "one_step": true,
+    "version": 0,
+    "stops_count": 2,
+    "trip": {
+      "source": "task",
+      "leave_by": "13:00",
+      "leave_by_source": "manual",
+      "stops": [
+        {
+          "n": 1,
+          "label": "Stop 1 · Pickup · Fixture office f902",
+          "dwell_source": "default",
+          "planned_leave": "13:05",
+          "seq": 1,
+          "type": "pickup",
+          "what": "people",
+          "place": "Fixture office f902",
+          "place_id": "75376e34-4c70-4c89-970e-dd603aea4f26",
+          "dwell_min": 5,
+          "planned_arrive": "13:00",
+          "planned_depart": "13:05",
+          "lat": 6.9022,
+          "lng": 79.8612,
+          "pin": "yes",
+          "status": "pending"
+        },
+        {
+          "n": 2,
+          "label": "Stop 2 · Drop · Fixture site f902",
+          "dwell_source": "default",
+          "planned_leave": "16:20",
+          "seq": 2,
+          "type": "drop",
+          "what": "people",
+          "place": "Fixture site f902",
+          "place_id": "93e9d771-d61b-4d30-bd34-9994d7abfc30",
+          "dwell_min": 5,
+          "arrive_by": "11:00",
+          "planned_arrive": "16:15",
+          "planned_depart": "16:20",
+          "lat": 7.4867,
+          "lng": 80.3647,
+          "pin": "yes",
+          "status": "pending"
+        }
+      ],
+      "timeline": {
+        "items": [
+          {
+            "kind": "leave",
+            "at": "13:00",
+            "source": "manual"
+          },
+          {
+            "kind": "stop",
+            "n": 1,
+            "label": "Stop 1 · Pickup · Fixture office f902",
+            "place": "Fixture office f902",
+            "planned_arrive": "13:00",
+            "planned_leave": "13:05",
+            "dwell_min": 5,
+            "dwell_source": "default"
+          },
+          {
+            "kind": "leg",
+            "from_n": 1,
+            "to_n": 2,
+            "km": 111.1,
+            "minutes": 191,
+            "source": "estimate"
+          },
+          {
+            "kind": "stop",
+            "n": 2,
+            "label": "Stop 2 · Drop · Fixture site f902",
+            "place": "Fixture site f902",
+            "planned_arrive": "16:15",
+            "planned_leave": "16:20",
+            "arrive_by": "11:00",
+            "late_min": 315,
+            "dwell_min": 5,
+            "dwell_source": "default"
+          }
+        ],
+        "totals": {
+          "drive_min": 191,
+          "km": 111.1,
+          "ends": "16:20"
+        }
+      }
+    },
+    "assigned": {
+      "driver": "Driver B f902",
+      "phone": "+94771234568",
+      "call": "tel:+94771234568",
+      "whatsapp": "https://wa.me/94771234568",
+      "vehicle": "FX F902-2",
+      "make_model": "Toyota Axio",
+      "task_status": "assigned"
+    },
+    "fields": {
+      "date": "2026-10-21",
+      "time": "13:00",
+      "back_by": "16:00",
+      "route_from": "Fixture office f902",
+      "route_to": "Fixture site f902",
+      "tools": false,
+      "driver_required": true,
+      "stops": [
+        {
+          "type": "pickup",
+          "what": "people",
+          "place": "Fixture office f902",
+          "place_id": "75376e34-4c70-4c89-970e-dd603aea4f26",
+          "lat": 6.9022,
+          "lng": 79.8612
+        },
+        {
+          "type": "drop",
+          "what": "people",
+          "place": "Fixture site f902",
+          "place_id": "93e9d771-d61b-4d30-bd34-9994d7abfc30",
+          "lat": 7.4867,
+          "lng": 80.3647,
+          "arrive_by": "11:00"
+        }
+      ],
+      "leave_by": "13:00"
+    },
+    "timeline": {
+      "sent": "2026-10-20 12:08",
+      "seen": "2026-10-20 12:08 by Fixture Admin",
+      "decided": "2026-10-20 12:08",
+      "decided_by": "Fixture Admin"
+    },
+    "events": [
+      {
+        "at": "2026-10-20 12:08",
+        "action": "created",
+        "actor": "Fixture Admin",
+        "note": "booked in one step"
+      },
+      {
+        "at": "2026-10-20 12:08",
+        "action": "approved",
+        "actor": "Fixture Admin",
+        "note": "FX F902-2 · Driver B f902"
+      }
+    ],
+    "approved_by": {
+      "name": "Fixture Admin",
+      "at": "12:08"
+    },
+    "live": {
+      "state": "approved",
+      "text": "Approved",
+      "at": "12:08"
+    },
+    "office_phone": {
+      "phone": "+94112345678",
+      "phone_display": "011 234 5678",
+      "call": "tel:+94112345678",
+      "whatsapp": "https://wa.me/94112345678"
+    }
+  },
+  "booked": "in one step",
+  "task_id": "2d84ef3b-bf07-418c-b60a-07e1a00febd2",
+  "request_id": "6fbe1073-a90b-4d4c-aba7-cf147ac74c94",
+  "title": "Booked · f902",
+  "when": "Wed 21 Oct 13:00",
+  "until": "16:00",
+  "leave_by": "Wed 21 Oct 13:00",
+  "leave_by_source": "manual",
+  "driver": "Driver B f902",
+  "vehicle": "FX F902-2",
+  "vehicle_used": {
+    "reg_no": "FX F902-2",
+    "why": "chosen"
+  },
+  "pickup": "Fixture office f902",
+  "dropoff": "Fixture site f902",
+  "stops": [
+    {
+      "n": 1,
+      "label": "Stop 1 · Pickup · Fixture office f902",
+      "dwell_source": "default",
+      "planned_leave": "13:05",
+      "seq": 1,
+      "type": "pickup",
+      "what": "people",
+      "place": "Fixture office f902",
+      "place_id": "75376e34-4c70-4c89-970e-dd603aea4f26",
+      "dwell_min": 5,
+      "planned_arrive": "13:00",
+      "planned_depart": "13:05",
+      "lat": 6.9022,
+      "lng": 79.8612,
+      "pin": "place"
+    },
+    {
+      "n": 2,
+      "label": "Stop 2 · Drop · Fixture site f902",
+      "dwell_source": "default",
+      "planned_leave": "16:20",
+      "seq": 2,
+      "type": "drop",
+      "what": "people",
+      "place": "Fixture site f902",
+      "place_id": "93e9d771-d61b-4d30-bd34-9994d7abfc30",
+      "dwell_min": 5,
+      "arrive_by": "11:00",
+      "planned_arrive": "16:15",
+      "planned_depart": "16:20",
+      "lat": 7.4867,
+      "lng": 80.3647,
+      "pin": "place"
+    }
+  ],
+  "plan": {
+    "source": "estimate",
+    "source_label": "estimate — no routing key",
+    "computed_at": "2026-10-20 12:08",
+    "leave_by": "2026-10-21 13:00",
+    "leave_by_source": "manual",
+    "ends_at": "2026-10-21 16:20",
+    "total_drive_min": 191,
+    "total_km": 111.1,
+    "buffer_min": 15,
+    "legs": [
+      {
+        "from": "Fixture office f902",
+        "to": "Fixture site f902",
+        "depart": "13:05",
+        "arrive": "16:15",
+        "km": 111.1,
+        "minutes": 191,
+        "source": "estimate"
+      }
+    ],
+    "warnings": [
+      "No base place set — add it in Settings"
+    ]
+  },
+  "timeline": {
+    "items": [
+      {
+        "kind": "leave",
+        "at": "13:00",
+        "source": "manual"
+      },
+      {
+        "kind": "stop",
+        "n": 1,
+        "label": "Stop 1 · Pickup · Fixture office f902",
+        "place": "Fixture office f902",
+        "planned_arrive": "13:00",
+        "planned_leave": "13:05",
+        "dwell_min": 5,
+        "dwell_source": "default"
+      },
+      {
+        "kind": "leg",
+        "from_n": 1,
+        "to_n": 2,
+        "km": 111.1,
+        "minutes": 191,
+        "source": "estimate"
+      },
+      {
+        "kind": "stop",
+        "n": 2,
+        "label": "Stop 2 · Drop · Fixture site f902",
+        "place": "Fixture site f902",
+        "planned_arrive": "16:15",
+        "planned_leave": "16:20",
+        "arrive_by": "11:00",
+        "late_min": 315,
+        "dwell_min": 5,
+        "dwell_source": "default"
+      }
+    ],
+    "totals": {
+      "drive_min": 191,
+      "km": 111.1,
+      "ends": "16:20"
+    }
+  },
+  "projects": "Fame internal (no project)",
+  "sent": "Sent to the driver's Fame Driver app.",
+  "warnings": [
+    "No base place set — add it in Settings"
+  ],
+  "notes": [],
+  "links": {
+    "whatsapp_driver": "https://wa.me/94771234568?text=New%20task%3A%20Booked%20%C2%B7%20f902%0ALeave%20by%20Wed%2021%20Oct%2013%3A00%0APickup%3A%20Fixture%20office%20f902%0ADrop-off%3A%20Fixture%20site%20f902%20by%2011%3A00%0Ahttps%3A%2F%2Fwww.google.com%2Fmaps%2Fdir%2F%3Fapi%3D1%26destination%3D6.9022%252C79.8612",
+    "call_driver": "tel:+94771234568"
+  }
+}
