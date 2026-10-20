@@ -734,6 +734,116 @@ commits).
   1.3.0-gmaps, update group b1755069-fbb4-4577-a843-c8fb95501a6f, Android update 01a15753-01ee-7a48-b3ba-70d799458103,
   commit 1d14d0a.
 
+### Part A addendum (20 October, 09:30): the place box locked after one letter
+- On the phone every place field switched to its picked state after the first letter ("s" shown as the chosen place with
+  "Change place"), so the rest could not be typed. The cause was the Where step, not the box: it showed the box only
+  while the stop had no place text, and wrote every keystroke into the stop's `place`, so one letter made the stop
+  "placed". Part A's fix (the search itself) did not cover it.
+- The rule now: typing never chooses a place. A stop is picked only by a tapped result, My location, or a pasted pin or
+  link (`StopDraft.picked`, set by a pick, cleared by typing: `locationLogic.ts typedPatch`); the box's state comes from
+  one rule (`placeBoxState`): the picked state (the name with Change) only after a pick, else the text field with the
+  keyboard, the results under it and the typed text kept in the draft (leaving and returning restores the text, the
+  header says "Typing: …", never a fake place); Change returns to the field with the previous text selected
+  (`selectTextOnFocus`). The start box follows the same rule (its default is the base place). One shared component
+  (`components/office/PlaceSearch.tsx`) is behind every place field in Office mode: the stops and the start of every
+  flow (Request, Assign, Edit a request, Change stops); Approve's "Change the trip" and Places are not built yet (O3).
+  Tests in `test:search`: "s", "sa", "sal" keep the text and show the search states, a pick → the picked state, Change →
+  the field, leave and return → the text; a stop loaded from the server counts as picked.
+
+### Part B as built: Request a vehicle and Assign a task, everything the site asks, with the planner
+- **Parity first.** `docs/phase8-parity.md` "Hotfix O2-H1, Part B": every field, option, check, warning and planner output
+  of the site's New request, Assign a task, Edit a request, Change the task and Change stops, against the server's
+  inputs, with the app's step and control and a status (in · built B · B-moved under More details · n/a · O3 ·
+  decision). One decision for Sahan: times with the native picker need a native module (a 1.4.0 build); the typed
+  HH:MM field stays until then. One row left for O3: Approve's "Change time" (decide_request's date / leave-by / back-by).
+- **The fields, by the principle.** Where: the start's what gets in · note · minutes under More details when passengers
+  get in there; a stop's typed pin and note under More details; "Same as the start · Tick it". When: "Vehicle free by"
+  on a task. Who (request): the passengers as a stepper, the vehicle type with Other, "A driver is needed" and tools as
+  toggle rows; under More details for whom, the requester's phone (approvers), the project, a note of 1000. Who (task):
+  the title and the passengers on the screen; under More details the contact, the notes, the project split (rows with
+  find_project's match line 450 ms after the last key, the percentages, Split equally, the total must be 100, the
+  reason under the button) and the WhatsApp message option. Shared controls: `components/office/Controls.tsx` (Stepper,
+  MoreDetails, ToggleRow, Chips) and `DriverRows.tsx` (Who's available as rows with the best match's reason and Ask
+  drivers), used by the Who step, Book now and Change the task.
+- **Book now** (a request, with book_vehicle; the site's "Assign now"): `suggest_vehicles` for the day, the leave-by (typed
+  or the plan's), back-by, type and passengers; the free drivers as chips; the vehicle in the four groups (Free ·
+  Assigned to someone, ask first with Call / WhatsApp · Busy with its back time · In the garage, shown not offered),
+  the on-the-day chips with the setting, the default-vehicle line in the site's cases; the custodian drives when no
+  driver is needed and the vehicle is assigned; Who's available with Use. Review then has **Book now** as the primary
+  button and **Save as waiting** beside it (`TripFooter secondary`); `book_vehicle` through the site's `bookInput`.
+- **The planner on Review.** "Leave by HH:MM" with "planned from the arrive-by times" / "as typed" · "estimated times";
+  "Updating plan…" while a new plan comes (the one shown stays, dimmed); the timeline as the site (each stop with its
+  times, arrive-by and lateness; each leg with km, road time and source, rush hour, via expressway; the totals; back at
+  the start); the plan's warnings in the server's words; the conflicts as cards (the text, Open that task for who may
+  open tasks, Call / WhatsApp the requester and the driver, Pick another vehicle / driver → back to Who); the vehicle
+  the plan takes and why (`vehicle_used`). The map is the app's task map on both engines (Part B's reviewer checks it
+  again). The versions: `plan_version` on update_task and update_task_stops, `version` on update_request.
+- **After sending: the outcome card** (`formsLogic.ts taskOutcome / bookOutcome / requestOutcome`) instead of an alert:
+  "Sent to Kamal" · "Waiting for the fleet admin's OK" · "Booked" · "Request sent" · "Changes saved", Leave by, the
+  vehicle used and why (or the server's "changed" sentence), the warnings, the conflicts; Open task (with
+  assign_tasks), WhatsApp the driver (the site's message, through the driver's wa.me link from Who's available; "no
+  phone number saved" when there is none), The board / My trips / Done.
+- **Change the task** (`task/[id]/time.tsx`, the site's TaskEdit): the title, the day, Leave by and Vehicle free by, the
+  passengers; the contact and notes under More details; the driver from Who's available (DriverRows, Ask drivers) and
+  the vehicle (Keep, the driver's own, On the day / Any type with the setting, Choose… from the four groups);
+  `update_task` with the plan version and only what differs (`taskExtrasLogic.ts changeTaskInput`); a running task takes
+  the words, the end and the vehicle; the button disabled until something changed, with "Choose what to change first."
+- **Tests.** `npm run test:trip-forms` (the split, Book now, the plan's words, the conflicts, the outcome, the WhatsApp
+  message, Change the task's input, the screens as text: every field to its input, the versions, the controls, the
+  strings); `test:search` (the box); `test:trip`, `test:task-extras` updated.
+
+## 18. Part C (Hotfix O2-H1, 20 October 2026): the parity audit, and the order for O3 and O4
+
+Every row of `docs/phase8-parity.md` (the 138 of the inventory, plus 3 the inventory missed: the date range control,
+the Ask drivers / questions pages, the site's search boxes) is now one of **in the app**, **partial** (what is
+missing), **missing**, or **cannot on a phone** (why). Counts after Part B (141 rows): 74 in the app, 33 partial, 26
+missing, 8 cannot (6 decided earlier: the site import and its undo, the Zoho message, connector keys, 2-step enrolment,
+the privacy e-mail; 2 by the phone's nature: web push is the browser's, and the fuel videos need a video player; the
+detailed settings beyond the six quick keys are a decided part of a "partial" row).
+
+**Two decisions for Sahan** (the "cannot" rows that are not decided yet):
+1. Times with the native picker: `@react-native-community/datetimepicker` is a native module, so a 1.4.0 build. Until
+   then the typed HH:MM field (the site's own control).
+2. The fuel videos on the phone: `expo-video` is a native module (1.4.0). The receipt and the links can come sooner.
+And one piece of server work that four rows wait for: a phone upload for photos and documents (the upload tools are
+web-only today): the vehicle's photo and documents, the driver's photo, the licence photos.
+
+### The order, by value for a day's office work
+
+**O3 — history and polish** (the daily work first: what an approver, a dispatcher and the fleet admin reach for):
+1. Approve's **Change time** (another day, leave-by, back-by; the start; the minutes at From / To) — decide_request's
+   fields the approver uses daily; and **Tell requester** (the WhatsApp text) with the requester's phone on Approve.
+2. Requests: the **Approved / Declined / Cancelled / All** chips, the search and paging; **Cancel a booking** with a
+   reason; the requester's own request page with its timeline (from My trips).
+3. Tasks: **History** (list_tasks over a range, the filters, paging); Load more on the board's columns; Task detail's
+   **photos** (odometer, fuel with the video's state), **history**, warnings, unlogged km, charged to, the plan map; the
+   task's **route map** with GPS km; the missing swap reading; a driver-started trip's purpose; Save as our place.
+4. Live: **watched mode** (the phone uploads every 10 s while the office looks), **Clock out**, **Move to vehicle**, the
+   card's speed and battery and the link to the driver's page, the **Problems** chip, the map's zoom / fit / compass.
+5. Overview: the tiles' **panels** (road, free, garage, tasks, requests, reminders), **Needs attention** as groups with
+   expand, **Snooze** (tomorrow / a week) on issues and groups, the **Reminders** page (documents and services due).
+6. Issues: the kind and vehicle filters, the order, the date range, Realtime; the **Maintenance** page (the reports with
+   filters, photos, Open task, Call) and "take off the road".
+7. Alerts: the search, the History tab, paging. Drivers: the **Questions** list and a question's page; the board's
+   search and New task from a row; the driver's page's playback and live growth; the Duty log's driver filter.
+8. **Places** under More: the list with the search and the operator chips, the place's page (pin, address, district,
+   depot), Remove with the in-use reasons, Restore; the pin map to adjust a pasted pin before saving.
+9. The search field at the top of the Approve queue, Alerts and the Drivers tab (the principle).
+10. Server work: a **phone upload** (a signed upload the phone can use) → the vehicle's photo and documents (upload,
+    replace, remove, restore), the driver's photo, the licence photos. Reports' vehicle / driver filters.
+
+**O4 — the mobile website** (the web build of the same screens becomes the phone version of the office site), plus:
+11. The sign-in rows the app lacks: the 2-step code page ("set up 2-step first" when required), set the password from
+    the one-time link.
+12. One date row for history: Yesterday and a custom From / To on Mileage, Fuel, the Duty log, Issues and History; the
+    board's date picker.
+13. Settings: the Google usage and routing counters (read); remove a browser's notifications from the phone; the
+    sounds' on / off, volume and Test; the Overview's collapsing per person.
+14. The fuel fill's receipt and links (the videos with the 1.4.0 decision).
+
+After O4, the rows not "in the app" are the eight "cannot" rows above — six decided, the videos for Sahan's decision,
+web push by nature — and the phone upload's four rows if the server work is deferred.
+
 ## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
 
 The office will do from the phone everything they do on the website, because they don't always have a laptop. So every

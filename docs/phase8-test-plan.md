@@ -232,3 +232,56 @@ Every button named below exists only with its tool: a missing one on another acc
    "Google Maps" under them; a pick fills the stop (the free map lists it, never draws it).
 5. The start's box ("Leave from"): the same, plus "My location".
 6. සිංහල: "සොයමින්…", "ස්ථාන හමු නොවීය…", "යෝජනා · ළඟම පළමුව", the Town badge "නගරය".
+
+## Hotfix O2-H1, Part B: the trip forms (20 October 2026, after the update)
+
+About 8 minutes on the phone, signed in as the office (approve + assign_tasks + request).
+
+### B.1 The place box
+1. Request a vehicle → Where → a stop's box: type "s" — the box stays a text field with the keyboard and the
+   suggestions under it; "sa", "sal" — "Searching…" then the results (or "No places found…"); the stop's header says
+   "Typing: sal", never a chosen place. Tap a result: the header shows the place with its type chips and "Change place".
+   Change place: the field again with "sal…" selected, so typing replaces it. Go back to Home and return to the draft:
+   the typed text is still there, no fake place.
+2. The start: Change → the field with My location; type a letter: the same.
+
+### B.2 Request a vehicle, with Book now
+1. Where: "Passengers get in here" on → **More details** under the start: What gets in, Note at the start, Time at
+   the start. A stop: More details → Pin (lat, lng), Note for the driver. A first pickup at the same place as the
+   start: "Same as the start · Tick it".
+2. Who: Passengers as − / +, the vehicle type chips (with Other), the two toggle rows; **More details**: On behalf of,
+   Requester's phone (approvers), Project, Note.
+3. **Book it now, or leave it waiting** (with book_vehicle): "Driver" chips (the free drivers), the vehicle in the groups
+   Free · Assigned to someone, ask first (Call / WhatsApp) · Busy · In the garage (greyed); pick a driver: the line
+   "<plate> · Kamal's vehicle today. Pick another below to change it."; untick "A driver is needed" and pick an assigned
+   vehicle: "<custodian> drives it (no driver needed)". Who's available under it with the best match.
+4. Review: Leave by with "planned from the arrive-by times" (or "as typed"), the timeline, the map; the driver · plate
+   chip; the footer: **Save as waiting** beside **Book now**. Book now → the outcome card "Booked", Leave by, the
+   vehicle, the warnings; Open task → the task; My trips.
+
+### B.3 Assign a task
+1. Who: Who's available with "best match" and its reason under it ticked; the vehicle chips (Kamal's today · On the day
+   · Any van… with the setting · Choose… → the four groups); Task title, Passengers − / +; More details: Contact name
+   and phone, Notes, **Charge to projects**: + Add a project → type "130": the match line "✓ 13021 · …" (or "No project
+   found…"); a second row; Split equally → 50 / 50; make it 60 / 60: the footer says "Project percentages add up to
+   120%. They must total 100%." and Next is disabled; "Also give me a WhatsApp message" on.
+2. Review: change nothing; the plan's "Leave by", the rows, the legs with "via expressway" / "Rush hour ×1.2" when the
+   plan says so; a conflict (assign a vehicle already on a task then): the red card with Open that task, Call <name>,
+   Pick another vehicle (→ Who). "Vehicle: WP CAB-4521 · Kamal's vehicle today" under the chips. Plan now while it
+   updates: "Updating plan…" with the plan dimmed.
+3. Send to Kamal → the outcome card "Sent to Kamal", "The task is in their Fame Fleet app.", Leave by, the vehicle, the
+   warnings; **WhatsApp the driver** opens WhatsApp with the message; Open task; The board.
+4. As a dispatcher without approve (tasks_need_approval on): "Send for approval" → "Waiting for the fleet admin's OK".
+
+### B.4 Change the task and Change stops
+1. A task → **Change the task**: the title, the day chips, Leave by, Vehicle free by, Passengers; More details: contact,
+   notes; Who's available with the best match (Ask drivers); the vehicle chips "Keep WP CAB-4521" · the new driver's own
+   · Choose…; Save disabled with "Choose what to change first." until something changes; change the title → Save
+   changes → "Task changed"; pick another driver → "Send to <name>".
+2. A running task → Change the task: the day and leave-by locked ("The task is under way…"), the end and the words only.
+3. Change stops: the editor's Where (the start's More details too) and When ("Vehicle free by"), Review → Save changes
+   → "Changes saved" → the task with plan v+1.
+
+### B.5 Both languages
+සිංහල on Profile: the steps, the controls (More details / Fewer details, the stepper's Clear), Book now's groups, the
+outcome card.
