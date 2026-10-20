@@ -214,6 +214,25 @@ console.log('\n== Both engines draw the same task ==');
     'TaskMap carries both engines in every build (no conditional require)');
 }
 
+console.log('\n== Stage 1: the Live map\'s cluster on both engines ==');
+{
+  const dm = read('src/components/DriversMap.tsx');
+  check(/<MapButton icon=\{Plus\} label=\{t\('office\.live\.zoomIn'\)\} onPress=\{\(\) => tap\('in'\)\}/.test(dm) && /<MapButton icon=\{Minus\} label=\{t\('office\.live\.zoomOut'\)\} onPress=\{\(\) => tap\('out'\)\}/.test(dm)
+    && /<MapButton icon=\{Maximize\} label=\{t\('office\.live\.fitAll'\)\} onPress=\{\(\) => tap\('fit'\)\}/.test(dm) && /command,\s*onLoaded/.test(dm),
+    'DriversMap: zoom in, zoom out, the screen\'s controls, fit everyone; each tap a command for the mounted engine');
+  check(dm.indexOf("if (mount.status === 'unavailable')") < dm.indexOf('testID="drivers-map-controls"'), 'the cluster only over a mounted map, never over "Map not available"');
+  const g = read('src/components/GoogleDriversMap.tsx');
+  const o = read('src/components/OpenDriversMap.tsx');
+  for (const [name, s2] of [['Google', g], ['free', o]] as const) {
+    check(/command \}: DriversEngineProps & LiveLayerProps\)/.test(s2) && /fitAllFrame\(latest\.current\.markers, latest\.current\.route\?\.frame\)/.test(s2) && /zoomStep\(/.test(s2) && /const commandKey = command\?\.nonce \?\? 0;/.test(s2) && /<MapCompass/.test(s2),
+      `the ${name} map carries out the cluster's commands (a zoom step, fit the markers and the shown route) and keeps its compass`);
+  }
+  check(/getCamera\(\)[\s\S]*?animateCamera\(\{ zoom: zoomStep\(cam\.zoom \?\? 7, kind\) \}/.test(g), 'Google: the zoom step from the camera as it is');
+  check(/zoomNow\.current = e\.nativeEvent\.zoom;/.test(o) && /camera\.current\?\.zoomTo\(next, \{ duration: 300 \}\)/.test(o), 'the free map: the zoom step from the zoom it last reported');
+  const plan = read('src/app/office/task/[id]/plan.tsx');
+  check(/<TaskMap report=\{false\} mapPackage=\{me\.map\?\.package\} task=\{detailTask\(p\)\}/.test(plan), "a task's plan on the task map (both engines; Google's line and pins on Google's map only)");
+}
+
 console.log('\n== Strings ==');
 {
   const en = JSON.parse(read('src/i18n/en.json')) as Record<string, Record<string, string>>;

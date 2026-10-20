@@ -7,11 +7,14 @@
 // its holes dashed grey, the estimated roads dashed slate; the stops as circles that open their times on a tap; the
 // playback marker with its time), the map framed on the shown route once when it arrives. The points are ours (no Google
 // content), so the free map draws exactly the same.
+// Stage 1 (O3 item 4f): the cluster's commands (DriversMap.tsx): a zoom step from the camera as it is, or the frame around
+// every marker and the shown route.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import GoogleMapView, { Marker as GoogleMarker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 
+import { fitAllFrame, zoomStep } from '@/office/liveLogic';
 import { ESTIMATED_COLOR, HOLE_COLOR, stopPinAnchorY } from '@/office/liveRouteLogic';
 import { useApp } from '@/state/app';
 import type { LiveLayerProps } from './DriversMap';
@@ -19,7 +22,7 @@ import { MapCompass } from './MapCompass';
 import { DRIVER_ZOOM, DriverPin, driverPinAnchorY, DRIVERS_PADDING, type DriversEngineProps, nextTurn, ONE_PLACE_ZOOM, SRI_LANKA, type Turn } from './mapPins';
 import type { LatLng } from './taskMapLogic';
 
-export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded, layers, pins }: DriversEngineProps & LiveLayerProps) {
+export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded, layers, pins, command }: DriversEngineProps & LiveLayerProps) {
   const { t } = useApp();
   const map = useRef<GoogleMapView>(null);
   const [ready, setReady] = useState(false);
@@ -68,6 +71,27 @@ export function GoogleDriversMap({ markers, fit, focus, onPressMarker, onLoaded,
   const estimated = useMemo(() => (route?.estimated ?? []).map((e) => ({ key: e.key, coords: e.points.map(at) })), [route]);
   const [openStop, setOpenStop] = useState<string | null>(null);
   useEffect(() => setOpenStop(null), [routeKey]);
+
+  // The cluster: one command per tap (its nonce), on the camera as it is now.
+  const latest = useRef({ markers, route: layers.route });
+  latest.current = { markers, route: layers.route };
+  const commandRef = useRef(command);
+  commandRef.current = command;
+  const commandKey = command?.nonce ?? 0;
+  useEffect(() => {
+    const c = commandRef.current;
+    if (!ready || !c) return;
+    if (c.kind === 'fit') {
+      const f = fitAllFrame(latest.current.markers, latest.current.route?.frame);
+      if (f.kind === 'box') map.current?.fitToCoordinates([at(f.sw), at(f.ne)], { edgePadding: DRIVERS_PADDING, animated: true });
+      else if (f.kind === 'point') map.current?.animateCamera({ center: at(f.center), zoom: ONE_PLACE_ZOOM }, { duration: 600 });
+      return;
+    }
+    const kind = c.kind;
+    map.current?.getCamera()
+      .then((cam) => map.current?.animateCamera({ zoom: zoomStep(cam.zoom ?? 7, kind) }, { duration: 300 }))
+      .catch(() => undefined);
+  }, [ready, commandKey]);
 
   const readTurn = () => {
     map.current?.getCamera()

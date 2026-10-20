@@ -15,15 +15,25 @@
 // estimated roads dashed slate, the stops as circles with their times) and the playback marker with its time. The two
 // pins the engines share (the stop circle, the playback marker) live here and reach the engines as props; the credit line
 // gains openrouteservice's whenever an estimated road is drawn.
+// Stage 1 (O3 item 4f): the one control cluster down the right side (the site's MapControls: zoom in, zoom out, the
+// screen's own controls such as today's trails, fit everyone), under the compass each engine shows while the map is turned.
+// A tap is a command (MapCommand, a new nonce each time) the mounted engine carries out on its own camera: a zoom step,
+// or the frame around every driver's marker and the shown route (office/liveLogic.ts fitAllFrame). Shown only while a map
+// is mounted, never over "Map not available".
 
 import MapPinOff from 'lucide-react-native/icons/map-pin-off';
+import Maximize from 'lucide-react-native/icons/maximize';
+import Minus from 'lucide-react-native/icons/minus';
+import Plus from 'lucide-react-native/icons/plus';
 import * as Network from 'expo-network';
 import { useIsFocused } from 'expo-router';
 import { Component, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import type { LucideIcon } from 'lucide-react-native';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Mono, Txt } from '@/components/ui';
 import { type Engine, engineFor, type MapPackage, mapSession, mapStep, type MountEvent, type MountState, startMount, waitFor } from '@/lib/mapEngine';
+import type { MapCommand } from '@/office/liveLogic';
 import { type Cursor, creditWithOrs, ESTIMATED_COLOR, HOLE_COLOR, type LiveLayers, NO_LAYERS, STOP_PIN, type StopMark } from '@/office/liveRouteLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -37,6 +47,8 @@ import { mapCredit } from './taskMapLogic';
 export interface LiveLayerProps {
   layers: LiveLayers;
   pins: LivePins;
+  /** Stage 1: the cluster's last tap (zoom in, zoom out, fit everyone), carried out once per nonce; null before any. */
+  command: MapCommand | null;
 }
 
 export interface LivePins {
@@ -70,6 +82,9 @@ export function DriversMap({ mapPackage, layers = NO_LAYERS, controls, ...parts 
   const engine = useDriversMapEngine(mapPackage);
   const focused = useIsFocused();
   const active = useAppActive();
+  // The cluster's taps, for the mounted engine (a new nonce each time, so the same button twice works twice).
+  const [command, setCommand] = useState<MapCommand | null>(null);
+  const tap = (kind: MapCommand['kind']) => setCommand((c) => ({ kind, nonce: (c?.nonce ?? 0) + 1 }));
 
   // One mount of the map: loading → loaded, or the card (lib/mapEngine.ts mapStep), as TaskMap.tsx.
   const [mount, setMount] = useState<MountState>(() => startMount(engine));
@@ -139,6 +154,7 @@ export function DriversMap({ mapPackage, layers = NO_LAYERS, controls, ...parts 
     ...parts,
     layers,
     pins: PINS,
+    command,
     onLoaded: () => dispatchRef.current({ type: 'loaded' }),
     onFailed: () => dispatchRef.current({ type: 'error' }),
   };
@@ -147,7 +163,12 @@ export function DriversMap({ mapPackage, layers = NO_LAYERS, controls, ...parts 
       <MapBoundary key={`${mount.engine}:${mount.attempt}`} onError={() => dispatchRef.current({ type: 'error' })}>
         {mount.engine === 'google' ? <GoogleDriversMap {...engineProps} /> : <OpenDriversMap {...engineProps} />}
       </MapBoundary>
-      {controls}
+      <View style={styles.cluster} pointerEvents="box-none" testID="drivers-map-controls">
+        <MapButton icon={Plus} label={t('office.live.zoomIn')} onPress={() => tap('in')} testID="map-zoom-in" />
+        <MapButton icon={Minus} label={t('office.live.zoomOut')} onPress={() => tap('out')} testID="map-zoom-out" />
+        {controls}
+        <MapButton icon={Maximize} label={t('office.live.fitAll')} onPress={() => tap('fit')} testID="map-fit" />
+      </View>
       {/* The providers' credits, in their own words (never translated); Google's map shows its own. */}
       {credit ? (
         <View style={styles.bottom} pointerEvents="none">
@@ -155,6 +176,15 @@ export function DriversMap({ mapPackage, layers = NO_LAYERS, controls, ...parts 
         </View>
       ) : null}
     </View>
+  );
+}
+
+/** One button of the cluster: 48 px, white, the icon in ink (the trails toggle beside them has the same look). */
+function MapButton({ icon: Icon, label, onPress, testID }: { icon: LucideIcon; label: string; onPress: () => void; testID?: string }) {
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} testID={testID} style={({ pressed }) => [styles.mapButton, pressed && { opacity: 0.8 }]}>
+      <Icon size={22} color={colors.ink} strokeWidth={2.4} />
+    </Pressable>
   );
 }
 
@@ -229,4 +259,6 @@ const styles = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   retry: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   bottom: { position: 'absolute', left: 12, bottom: 8, alignItems: 'flex-start' },
+  cluster: { position: 'absolute', top: 68, right: 12, alignItems: 'flex-end', gap: 8 },
+  mapButton: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', elevation: 4 },
 });

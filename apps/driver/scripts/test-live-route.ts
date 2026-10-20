@@ -240,7 +240,9 @@ console.log('\n== The screen and the two engines ==');
   check(calls === 3 && withArgs === 3 && !/snap/.test(screen), 'every driver_route call (the shown route, a trail, the refresh) with routeArgs(username); never snap', { calls, withArgs });
   check(/const routes = me\.tools\.includes\('driver_route'\);/.test(screen) && /const controls = routes \? \([\s\S]*?testID="live-trails"/.test(screen) && /route=\{routes \? \{/.test(screen),
     'the trails control and the route only for a person who may call driver_route');
-  check(/controls=\{controls\}/.test(screen) && /\{controls\}\s*\{\/\* The providers' credits/.test(read('src/components/DriversMap.tsx')) && /controls\?: ReactNode;/.test(read('src/components/DriversMap.tsx')),
+  // Stage 1 (O3 item 4f): the screen's control sits in the map's one cluster (zoom in, zoom out, the trails, fit), which
+  // DriversMap draws after the mounted engine, never over "Map not available".
+  check(/controls=\{controls\}/.test(screen) && /testID="map-zoom-out" \/>\s*\{controls\}\s*<MapButton icon=\{Maximize\}/.test(read('src/components/DriversMap.tsx')) && /controls\?: ReactNode;/.test(read('src/components/DriversMap.tsx')),
     'the control is DriversMap\'s slot: shown only while a map is mounted, never over "Map not available"');
   check(/if \(trails\) setTrailMap\(new Map\(\)\);/.test(screen) && /trailsPlan\(all\)/.test(screen) && /trailsOf\(trailMap, plan\.draw, drawing\?\.username \?\? null\)/.test(screen),
     'trails off: the lines go; the plan caps them; the shown driver\'s trail is left out');

@@ -6,10 +6,14 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  dutyOf, filterCounts, filterDrivers, focusOf, frameAll, hasPosition, liveChoice, liveFilterDefs, LIVE_FILTERS, markerLabel, markersOf, markerTone, pillOf, positionsKey, rowLine,
-  type Words,
+  batteryText, canClockOut, clockOutInput, clockOutLine, dutyOf, filterCounts, filterDrivers, fitAllFrame, focusOf, frameAll, hasPosition, hasProblem, liveChoice, liveFilterDefs, LIVE_FILTERS,
+  markerLabel, markersOf, markerTone, moveMode, pillOf, positionsKey, rowLine, speedText, WATCH_EVERY_MS, WATCH_MAX, watchList, type Words, zoomStep,
 } from '../src/office/liveLogic';
-import type { LiveDriver } from '../src/office/types';
+import { canMove, currentChoice, moveHint, moveInput, moveSentences, NO_VEHICLE, searchRows } from '../src/office/moveLogic';
+import { swapRows } from '../src/office/taskExtrasLogic';
+import type { LiveDriver, VehicleCard } from '../src/office/types';
+
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 let failed = 0;
 function check(ok: unknown, label: string, detail?: unknown) {
@@ -51,8 +55,8 @@ const all = [sunil, kamal, ruwan, nimal, piyal];
 console.log('\n== The chips: who belongs under which, and the counts ==');
 {
   const counts = filterCounts(all);
-  check(JSON.stringify(counts) === JSON.stringify({ all: 5, on_task: 1, on_duty: 2, off_duty: 2 }), 'All · 5, On a task · 1, Free · 2, Off duty · 2', counts);
-  check(JSON.stringify(LIVE_FILTERS) === JSON.stringify(['all', 'on_task', 'on_duty', 'off_duty']), 'the chips in the design\'s order');
+  check(JSON.stringify(counts) === JSON.stringify({ all: 5, on_task: 1, on_duty: 2, off_duty: 2, problems: 1 }), 'All · 5, On a task · 1, Free · 2, Off duty · 2, Problems · 1 (Ruwan: Location off on duty)', counts);
+  check(JSON.stringify(LIVE_FILTERS) === JSON.stringify(['all', 'on_task', 'on_duty', 'off_duty', 'problems']), 'the chips in the design\'s order, Problems last (Stage 1)');
   check(filterDrivers(all, 'all').map((d) => d.username).join() === 'sunil,kamal,ruwan,nimal,piyal', 'All keeps the server\'s order');
   check(filterDrivers(all, 'on_task').map((d) => d.username).join() === 'sunil', 'On a task');
   check(filterDrivers(all, 'on_duty').map((d) => d.username).join() === 'kamal,ruwan', 'Free = on duty with no task (a phone problem does not move them)');
@@ -64,7 +68,7 @@ console.log('\n== The chips: who belongs under which, and the counts ==');
     'no duty field: a task = on a task, not sharing = off duty, else on duty; the server\'s duty wins');
   // The Filter sheet (docs/ui-patterns.md §1), no search: the duty with the counts.
   const defs = liveFilterDefs(counts, (k) => k);
-  check(defs.length === 1 && defs[0].default === 'all' && JSON.stringify(defs[0].options.map((o) => [o.value, o.count])) === JSON.stringify([['all', 5], ['on_task', 1], ['on_duty', 2], ['off_duty', 2]]) && defs[0].options[1].label === 'office.live.filter.on_task', 'the Filter sheet: the four with their counts');
+  check(defs.length === 1 && defs[0].default === 'all' && JSON.stringify(defs[0].options.map((o) => [o.value, o.count])) === JSON.stringify([['all', 5], ['on_task', 1], ['on_duty', 2], ['off_duty', 2], ['problems', 1]]) && defs[0].options[1].label === 'office.live.filter.on_task', 'the Filter sheet: the five with their counts');
   check(liveFilterDefs(undefined, (k) => k)[0].options.every((o) => o.count === undefined) && liveChoice({ duty: 'off_duty' }) === 'off_duty' && liveChoice({ duty: 'x' }) === 'all', 'no counts before the answer; the choice read back');
 }
 
@@ -199,6 +203,67 @@ console.log('\n== The screen and the two engines ==');
   const before = pins.indexOf('// --- Office mode (Phase 8, O1)');
   check(before > 0 && /export function StopPin/.test(pins.slice(0, before)) && /export const mapStyles = StyleSheet\.create/.test(pins.slice(0, before)),
     'the task map\'s own exports stand before the appended part, unchanged');
+}
+
+console.log('\n== Stage 1: Problems, watched mode, Clock out, Move to vehicle, the card\'s lines, the map\'s cluster ==');
+{
+  // Problems (the site's rule): No signal or Location off while on duty; off duty is never a problem.
+  check(hasProblem(ruwan) && !hasProblem(kamal) && !hasProblem(nimal) && hasProblem({ duty: 'on_task', status: 'no_signal' }) && !hasProblem({ duty: 'off_duty', status: 'location_off' }) && hasProblem({ state: 'stale' }),
+    'Problems: No signal or Location off on duty (an older answer: stale = no signal); never off duty');
+  check(filterDrivers(all, 'problems').map((d) => d.username).join() === 'ruwan' && filterCounts(all).problems === 1, 'the Problems choice keeps Ruwan, with its count');
+  check(liveChoice({ duty: 'problems' }) === 'problems' && liveFilterDefs(undefined, (k) => k)[0].options[4].label === 'office.live.filter.problems', 'the Filter sheet\'s fifth choice, read back');
+  // Watched mode (the site's useWatchDrivers).
+  const sharing = (u: string, on: boolean) => ({ username: u, state: (on ? 'sharing' : 'not_sharing') as 'sharing' | 'not_sharing' });
+  const ds = [sharing('sunil', true), sharing('kamal', true), sharing('nimal', false), { username: 'asela', state: 'sharing' as const, signal: { sharing: false, point_at: null, heartbeat_at: null, location_on: null, permission: null, location_off_since: null } }];
+  check(same(watchList(ds, false, 'kamal'), ['kamal']) && same(watchList(ds, false, 'nimal'), []) && same(watchList(ds, false, null), []), 'the selected driver while they share; nobody else');
+  check(same(watchList(ds, true, null), ['kamal', 'sunil']), 'the trails on: every sharing driver (the raw signal wins over the share state), sorted');
+  check(watchList(Array.from({ length: 30 }, (_, i) => sharing(`d${String(i).padStart(2, '0')}`, true)), true, null).length === WATCH_MAX && WATCH_MAX === 20 && WATCH_EVERY_MS === 30_000, 'at most 20 (the tool\'s limit), every 30 s');
+  // Clock out and Move to vehicle.
+  check(canClockOut(kamal) && !canClockOut(sunil) && !canClockOut(nimal), 'Clock out: a driver on duty without a task');
+  check(moveMode(kamal) === 'move' && moveMode(sunil) === 'swap' && moveMode(nimal) === 'none', 'Move on duty, Swap on a task, nothing off duty');
+  check(same(clockOutInput('kamal', '  Sent home  '), { driver: 'kamal', reason: 'Sent home' }) && same(clockOutInput('kamal', ' '), { driver: 'kamal' }), 'clock_out_driver: the username, the reason when typed');
+  check(clockOutLine({ clocked_out: 'Kamal Perera', at: '2026-10-20 17:40' }, 'Kamal', t) === 'office.live.clockedOutAt(Kamal Perera,17:40)' && clockOutLine({ clocked_out: false, note: 'x' }, 'Kamal', t) === 'office.live.alreadyOff(Kamal)', 'the answer in words: off duty since, or already off');
+  // The card's lines.
+  check(speedText(sunil, t) === 'office.live.speed(62)' && speedText(ruwan, t) === null && speedText({ speed_kmh: 0, status: 'live' }, t) === 'office.live.speed(0)', 'the speed only while live (0 is a speed)');
+  check(batteryText({ battery_pct: 41 }, t) === 'office.live.battery(41)' && batteryText({ battery_pct: null }, t) === null, 'the battery when the phone said it');
+  // The map's cluster.
+  check(zoomStep(12, 'in') === 13 && zoomStep(12.4, 'out') === 11 && zoomStep(20, 'in') === 20 && zoomStep(3, 'out') === 3 && zoomStep(Number.NaN, 'in') === 8, 'a zoom step, within 3–20');
+  const f = fitAllFrame([{ lat: 7, lng: 80 }, { lat: 7.1, lng: 80.1 }], { kind: 'box', sw: { lat: 6.5, lng: 79.8 }, ne: { lat: 7.05, lng: 80.05 } });
+  check(f.kind === 'box' && f.sw.lat === 6.5 && f.ne.lng === 80.1, 'fit everyone: the markers and the shown route together', f);
+  check(fitAllFrame([], null).kind === 'none' && fitAllFrame([{ lat: 7, lng: 80 }], null).kind === 'point', 'nothing: no move; one marker: a point');
+  // Move to vehicle's rules (office/moveLogic.ts) over the swap's rows.
+  const vrows = swapRows([
+    { reg_no: 'WP CAB-4521', make_model: 'Toyota HiAce', held_by: 'Kamal' },
+    { reg_no: 'WP KV-7788', make_model: 'Nissan Caravan', held_by: 'Nuwan' },
+    { reg_no: 'WP PH-1111', make_model: 'Suzuki Alto', status: 'On a task' },
+    { reg_no: 'WP GA-2222', make_model: 'Toyota Axio' },
+  ] as VehicleCard[], { name: 'Kamal', vehicle: 'WP CAB-4521' });
+  check(currentChoice(vrows) === 'WP CAB-4521' && !canMove(vrows, null) && !canMove(vrows, 'WP CAB-4521') && canMove(vrows, NO_VEHICLE) && canMove(vrows, 'WP KV-7788') && !canMove(vrows, 'WP PH-1111'),
+    'Move: another vehicle or none; never the same one, never one on a running task');
+  check(same(moveHint(vrows, null, 'Kamal'), { key: 'office.live.movePickOther', vars: { name: 'Kamal', plate: 'WP CAB-4521' } }) && same(moveHint(vrows, 'WP KV-7788', 'Kamal'), { key: 'office.live.moveTakesFrom', vars: { holder: 'Nuwan', plate: 'WP KV-7788' } })
+    && moveHint(vrows, NO_VEHICLE, 'Kamal').key === 'office.live.moveStays' && moveHint(vrows, 'WP GA-2222', 'Kamal').key === 'office.live.moveTakes' && moveHint(vrows, 'WP PH-1111', 'Kamal').key === 'office.live.moveOnTask', 'the line under the list says what Move will do');
+  check(same(searchRows(vrows, 'kv 77').map((r) => r.reg_no), ['WP KV-7788']) && same(searchRows(vrows, 'axio').map((r) => r.reg_no), ['WP GA-2222']) && searchRows(vrows, '').length === 4, 'the search: the plate (spaces and dashes ignored) or the model');
+  check(same(moveInput('kamal', 'WP KV-7788'), { driver: 'kamal', vehicle: 'WP KV-7788' }) && same(moveInput('kamal', NO_VEHICLE), { driver: 'kamal', vehicle: null }), 'move_driver_vehicle: the plate, or null for no vehicle');
+  check(same(moveSentences({ driver: 'Kamal', vehicle: 'WP KV-7788 · Nissan Caravan', taken_from: 'Nuwan' }).map((x) => x.key), ['office.live.movedTo', 'office.live.movedTold']) && moveSentences({ driver: 'Kamal', vehicle: 'none' })[0].key === 'office.live.movedNone', 'the sentences after it');
+
+  const screen = read('src/app/office/(tabs)/live.tsx');
+  check(/watchList\(all, trails, selected\)/.test(screen) && /if \(!focused \|\| !mayWatch \|\| !watchKey\) return;/.test(screen) && /api\.call\('watch_drivers', \{ drivers \}\)/.test(screen) && /setInterval\(call, WATCH_EVERY_MS\)/.test(screen) && /AppState\.currentState === 'active'/.test(screen) && /const mayWatch = me\.tools\.includes\('watch_drivers'\)/.test(screen),
+    'watched mode: watch_drivers now and every 30 s while the tab is in front and the app on screen, only with the tool');
+  check(/me\.tools\.includes\('clock_out_driver'\) && canClockOut\(chosen\)/.test(screen) && /api\.call<ClockOutResult>\('clock_out_driver', clockOutInput\(chosen\.username, reason\)\)/.test(screen) && /testID="clock-out-sheet"/.test(screen) && /<ErrorNotice error=\{refused\}/.test(screen),
+    'Clock out: with the tool, a sheet with the reason, the server\'s sentence when it refuses');
+  check(/me\.tools\.includes\('move_driver_vehicle'\) && moveMode\(chosen\) !== 'none'/.test(screen) && /pathname: '\/office\/move\/\[username\]'/.test(screen) && /pathname: '\/office\/task\/\[id\]\/swap'/.test(screen), 'Move to vehicle (on duty) or Swap vehicle (on a task), with the tool');
+  check(/onDriverPage=\{routes \?/.test(screen) && /params: \{ username: chosen\.username \} \}\)/.test(screen) && /testID="live-driver-page"/.test(screen) && /speedText\(d, t\), batteryText\(d, t\)/.test(screen), 'the card: the speed and battery, the driver\'s page for today beside Earlier days');
+  const move = read('src/app/office/move/[username].tsx');
+  check(/api\.call<MoveResult>\('move_driver_vehicle', moveInput\(d\.username, choice\)\)/.test(move) && /disabled=\{!ok\}/.test(move) && /<StickyActions>/.test(move) && /testID="move-hint"/.test(move) && /<FilterBar search=\{text\}/.test(move),
+    'Move to vehicle: the search on top, the sticky Move disabled until another choice, the line saying what it does');
+  check(/<SkeletonRows/.test(move) && /<ListFailed/.test(move) && /<ListEmpty/.test(move) && !/<Loading/.test(move) && /useTool<VehiclesList>\('list_vehicles', \{ filter: 'all' \}/.test(move), 'Move to vehicle: the list pattern, every vehicle from list_vehicles');
+  const en = JSON.parse(read('src/i18n/en.json')) as { office: { live: Record<string, unknown>; task: Record<string, string> } };
+  const si = JSON.parse(read('src/i18n/si.json')) as typeof en;
+  const code = move + read('src/office/moveLogic.ts') + read('src/office/liveLogic.ts') + screen;
+  const live = [...new Set([...code.matchAll(/'office\.live\.([A-Za-z_]+)'/g)].map((m) => m[1]))];
+  const task = [...new Set([...move.matchAll(/'office\.task\.([A-Za-z_]+)'/g)].map((m) => m[1]))];
+  const missing = [...live.filter((k) => typeof en.office.live[k] !== 'string' || typeof si.office.live[k] !== 'string'), ...task.filter((k) => !en.office.task[k] || !si.office.task[k])];
+  check(live.length > 20 && missing.length === 0, `every key of Move to vehicle, Clock out and the card, in en and si (${live.length + task.length})`, missing);
 }
 
 console.log(failed ? `\n${failed} FAILED` : '\nAll Live checks passed.');

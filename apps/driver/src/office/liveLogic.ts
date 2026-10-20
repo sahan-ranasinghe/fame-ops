@@ -3,6 +3,9 @@
 // markers (only drivers with a position) and the frame around them (it changes when the set of drivers changes, never on a
 // refresh that only moved them). Pure: no React, no native module; the words come through `t`, so both languages read the
 // same fields. The server's own sentences (status_text: "Location off since 09:10") are shown as they are.
+// Stage 1 (O3 item 4): the Problems choice (the site's rule: No signal or Location off while on duty), watched mode's
+// drivers (watch_drivers every 30 s), Clock out and Move to vehicle (who may be clocked out or moved; the answers in
+// words), the card's speed and battery, and the map's fit-all frame and zoom steps.
 
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
 import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
@@ -11,8 +14,8 @@ import type { DutyState, LiveDriver } from './types';
 
 export type Words = (key: string, vars?: Record<string, string | number>) => string;
 
-export type LiveFilter = 'all' | DutyState;
-export const LIVE_FILTERS: readonly LiveFilter[] = ['all', 'on_task', 'on_duty', 'off_duty'];
+export type LiveFilter = 'all' | DutyState | 'problems';
+export const LIVE_FILTERS: readonly LiveFilter[] = ['all', 'on_task', 'on_duty', 'off_duty', 'problems'];
 
 type DutyOf = Partial<Pick<LiveDriver, 'duty' | 'task' | 'status' | 'state'>>;
 
@@ -23,10 +26,22 @@ export function dutyOf(d: DutyOf): DutyState {
   return d.status === 'not_sharing' || d.state === 'not_sharing' ? 'off_duty' : 'on_duty';
 }
 
-/** "All · 4", "On a task · 1", "Free · 2", "Off duty · 1". */
+/**
+ * A phone problem while on duty (the site's Problems chip, data/live.ts hasProblem): No signal or Location off. The
+ * status from the server, else read from the older share state (stale = no signal). Off duty is never a problem.
+ */
+export function hasProblem(d: DutyOf): boolean {
+  const s = d.status ?? (d.state === 'sharing' ? 'live' : d.state === 'stale' ? 'no_signal' : 'not_sharing');
+  return dutyOf(d) !== 'off_duty' && (s === 'no_signal' || s === 'location_off');
+}
+
+/** "All · 4", "On a task · 1", "Free · 2", "Off duty · 1", "Problems · 1" (a driver with a problem is in their duty too). */
 export function filterCounts(drivers: readonly DutyOf[]): Record<LiveFilter, number> {
-  const counts: Record<LiveFilter, number> = { all: drivers.length, on_task: 0, on_duty: 0, off_duty: 0 };
-  for (const d of drivers) counts[dutyOf(d)]++;
+  const counts: Record<LiveFilter, number> = { all: drivers.length, on_task: 0, on_duty: 0, off_duty: 0, problems: 0 };
+  for (const d of drivers) {
+    counts[dutyOf(d)]++;
+    if (hasProblem(d)) counts.problems++;
+  }
   return counts;
 }
 
@@ -46,7 +61,8 @@ export const liveChoice = (values: FilterValues): LiveFilter =>
 
 /** The rows (and the markers) under a chip, in the server's order. */
 export function filterDrivers<D extends DutyOf>(drivers: readonly D[], filter: LiveFilter): D[] {
-  return filter === 'all' ? [...drivers] : drivers.filter((d) => dutyOf(d) === filter);
+  if (filter === 'all') return [...drivers];
+  return filter === 'problems' ? drivers.filter(hasProblem) : drivers.filter((d) => dutyOf(d) === filter);
 }
 
 export type PillKey = 'onTask' | 'free' | 'offDuty';
@@ -168,4 +184,85 @@ export function focusOf(drivers: readonly Pick<LiveDriver, 'username' | 'lat' | 
   if (selected === null) return null;
   const d = drivers.find((x) => x.username === selected);
   return d && hasPosition(d) ? { username: d.username, lat: d.lat, lng: d.lng } : null;
+}
+
+// ---------------------------------------------------------------------------
+// Stage 1 (O3 item 4): watched mode, Clock out, Move to vehicle, the card's lines, the map's controls
+// ---------------------------------------------------------------------------
+
+/** watch_drivers is called again this often while Live is in front (each call keeps a driver watched 90 s). */
+export const WATCH_EVERY_MS = 30_000;
+/** The most drivers one watch_drivers call takes. */
+export const WATCH_MAX = 20;
+
+type ShareOf = Pick<LiveDriver, 'username' | 'state'> & Partial<Pick<LiveDriver, 'signal'>>;
+
+/** Sharing now (the site's sharingNow): the raw signal when the card has it, else the share state. */
+export const sharingNow = (d: Partial<Pick<LiveDriver, 'state' | 'signal'>>): boolean => (d.signal ? d.signal.sharing : d.state !== 'not_sharing');
+
+/**
+ * Who is watched (the site's Live): every sharing driver while today's trails are on, else the selected driver while
+ * they share; at most WATCH_MAX, in a steady order (the key does not change on a refresh that changed nothing).
+ */
+export function watchList(drivers: readonly ShareOf[], trails: boolean, selected: string | null): string[] {
+  const who = trails ? drivers.filter(sharingNow) : drivers.filter((d) => d.username === selected && sharingNow(d));
+  return [...new Set(who.map((d) => d.username))].sort().slice(0, WATCH_MAX);
+}
+
+/** Clock out: a driver on duty without a task (the server refuses a running task too, and says so). */
+export const canClockOut = (d: DutyOf): boolean => dutyOf(d) === 'on_duty';
+
+/** Move to vehicle on duty; on a task the same move is a swap during the task (Task detail's Swap vehicle). */
+export function moveMode(d: DutyOf): 'move' | 'swap' | 'none' {
+  const duty = dutyOf(d);
+  return duty === 'on_task' ? 'swap' : duty === 'on_duty' ? 'move' : 'none';
+}
+
+/** clock_out_driver's answer. */
+export interface ClockOutResult {
+  clocked_out: string | false;
+  at?: string;
+  reason?: string;
+  note?: string;
+}
+
+/** "Kamal Perera is off duty since 17:40." / "Kamal is already off duty." */
+export function clockOutLine(r: ClockOutResult, name: string, t: Words): string {
+  if (r.clocked_out === false) return t('office.live.alreadyOff', { name });
+  const at = r.at ? r.at.slice(-5) : '';
+  return at ? t('office.live.clockedOutAt', { name: r.clocked_out, time: at }) : t('office.live.clockedOut', { name: r.clocked_out });
+}
+
+/** clock_out_driver's input: the driver's username and the reason when one was typed. */
+export function clockOutInput(username: string, reason: string): { driver: string; reason?: string } {
+  const why = reason.trim().slice(0, 200);
+  return { driver: username, ...(why ? { reason: why } : {}) };
+}
+
+/** The card's speed line: only while the position is live (a stale speed would mislead), rounded. */
+export function speedText(d: Pick<LiveDriver, 'speed_kmh' | 'status'>, t: Words): string | null {
+  if (typeof d.speed_kmh !== 'number' || !Number.isFinite(d.speed_kmh) || (d.status ?? 'live') !== 'live') return null;
+  return t('office.live.speed', { n: Math.round(d.speed_kmh) });
+}
+
+/** The card's battery line: the phone's last battery reading. */
+export function batteryText(d: Pick<LiveDriver, 'battery_pct'>, t: Words): string | null {
+  return typeof d.battery_pct === 'number' && Number.isFinite(d.battery_pct) ? t('office.live.battery', { n: Math.round(d.battery_pct) }) : null;
+}
+
+/** A map control's command for the engine: zoom one step in or out, or fit everyone (a new nonce each tap). */
+export interface MapCommand {
+  kind: 'in' | 'out' | 'fit';
+  nonce: number;
+}
+
+/** The zoom after a step, within what both engines draw well. */
+export const zoomStep = (zoom: number, kind: 'in' | 'out'): number => Math.max(3, Math.min(20, Math.round((Number.isFinite(zoom) ? zoom : 7) + (kind === 'in' ? 1 : -1))));
+
+/** Fit all (the site's fitAll): every driver's marker and the shown route together. */
+export function fitAllFrame(markers: readonly LatLng[], route: Frame | null | undefined): Frame {
+  const points: LatLng[] = markers.map((m) => ({ lat: m.lat, lng: m.lng }));
+  if (route?.kind === 'box') points.push(route.sw, route.ne);
+  else if (route?.kind === 'point') points.push(route.center);
+  return frameOf(points);
 }

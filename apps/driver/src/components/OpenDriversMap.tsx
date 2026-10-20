@@ -6,11 +6,14 @@
 // route as runs by speed band with the colour on each feature, its holes dashed grey, the estimated roads dashed slate),
 // the stops and the playback marker as markers (the same pins as Google's map), the map framed on the shown route once
 // when it arrives. line-dasharray is a layer's, never a feature's, so the dashed lines have layers of their own.
+// Stage 1 (O3 item 4f): the cluster's commands (DriversMap.tsx): a zoom step from the zoom the map last reported, or the
+// frame around every marker and the shown route.
 
 import { Camera, type CameraRef, type CameraStop, GeoJSONSource, Layer, Map, Marker } from '@maplibre/maplibre-react-native';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet } from 'react-native';
 
+import { fitAllFrame, zoomStep } from '@/office/liveLogic';
 import { ESTIMATED_COLOR, HOLE_COLOR, type HoleLine, STOP_PIN } from '@/office/liveRouteLogic';
 import { useApp } from '@/state/app';
 import type { LiveLayerProps } from './DriversMap';
@@ -20,7 +23,7 @@ import type { LatLng } from './taskMapLogic';
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
-export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, onFailed, layers, pins }: DriversEngineProps & LiveLayerProps) {
+export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, onFailed, layers, pins, command }: DriversEngineProps & LiveLayerProps) {
   const { t } = useApp();
   const camera = useRef<CameraRef>(null);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
@@ -110,6 +113,32 @@ export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, o
     move({ bearing: 0, pitch: 0 });
   };
 
+  // The cluster: one command per tap (its nonce); the zoom steps from the zoom the map last reported.
+  const zoomNow = useRef(6.4);
+  const latest = useRef({ markers, route: layers.route });
+  latest.current = { markers, route: layers.route };
+  const commandRef = useRef(command);
+  commandRef.current = command;
+  const commandKey = command?.nonce ?? 0;
+  useEffect(() => {
+    const c = commandRef.current;
+    if (!c) return;
+    if (c.kind === 'fit') {
+      const f = fitAllFrame(latest.current.markers, latest.current.route?.frame);
+      if (f.kind === 'box') move({ bounds: [f.sw.lng, f.sw.lat, f.ne.lng, f.ne.lat], padding: DRIVERS_PADDING });
+      else if (f.kind === 'point') move({ center: [f.center.lng, f.center.lat], zoom: ONE_PLACE_ZOOM });
+      return;
+    }
+    const next = zoomStep(zoomNow.current, c.kind);
+    zoomNow.current = next;
+    try {
+      camera.current?.zoomTo(next, { duration: 300 });
+    } catch {
+      // The map is not up yet.
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commandKey]);
+
   const cursor = layers.cursor;
   return (
     <>
@@ -120,7 +149,10 @@ export function OpenDriversMap({ markers, fit, focus, onPressMarker, onLoaded, o
         compass={false}
         onDidFinishLoadingMap={onLoaded}
         onDidFailLoadingMap={onFailed}
-        onRegionDidChange={(e) => setTurn((prev) => nextTurn(prev, e.nativeEvent.bearing, e.nativeEvent.pitch))}
+        onRegionDidChange={(e) => {
+          zoomNow.current = e.nativeEvent.zoom;
+          setTurn((prev) => nextTurn(prev, e.nativeEvent.bearing, e.nativeEvent.pitch));
+        }}
       >
         <Camera ref={camera} {...stop} duration={600} easing="ease" />
         {/* Today's trails under everything: each driver's line in its colour, its holes dashed in the same colour. */}

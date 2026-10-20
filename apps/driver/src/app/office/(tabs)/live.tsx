@@ -13,10 +13,18 @@
 //     "Today: 61 km · driving 2 h 10 min · stopped 45 min · 3 stops".
 //   - Playback on the shown route: Play / Pause, 1× 5× 20× 60×, a time slider, the marker stepping along the line in time
 //     order with its time and speed; the driver's live marker is hidden while it runs; closing the card ends it.
+// Stage 1 (O3 item 4; the site's Live):
+//   - watched mode: while the tab is in front and the app on screen, watch_drivers every 30 s for the selected driver while
+//     they share (every sharing driver while today's trails are on), so their phones upload every 10 s while moving;
+//   - the card: the speed (while live) and the battery, the driver's page for today (with driver_route, beside Earlier
+//     days), Clock out (a driver on duty without a task: a sheet with the optional reason; the server's sentence when it
+//     refuses) and Move to vehicle (move/[username]; on a task it is Task detail's Swap vehicle), each with its tool;
+//   - the Problems choice in the Filter sheet (No signal or Location off while on duty, the site's rule);
+//   - the map's cluster: zoom in, zoom out, the trails, fit everyone (components/DriversMap.tsx), the compass above it.
 
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, type LayoutChangeEvent, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, type LayoutChangeEvent, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DriversMap } from '@/components/DriversMap';
@@ -24,10 +32,14 @@ import { type LucideIcon, MessageCircle, Navigation, Phone, Route as RouteIcon, 
 import { type Playback, PlaybackBar, usePlayback } from '@/components/office/PlaybackBar';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { DriverDot } from '@/components/mapPins';
-import { Plate, Txt } from '@/components/ui';
+import { Sheet } from '@/components/patterns/Sheet';
+import { Button, Plate, Txt } from '@/components/ui';
 import { plusDays } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
-import { filterCounts, filterDrivers, focusOf, frameAll, liveChoice, liveFilterDefs, markersOf, pillOf, rowLine } from '@/office/liveLogic';
+import {
+  batteryText, canClockOut, clockOutInput, clockOutLine, type ClockOutResult, filterCounts, filterDrivers, focusOf, frameAll, liveChoice, liveFilterDefs, markersOf, moveMode,
+  pillOf, rowLine, speedText, WATCH_EVERY_MS, watchList,
+} from '@/office/liveLogic';
 import {
   canPlay, type Cursor, cursorAt, drawingOf, gapWindowsOf, type LiveLayers, mergeRoute,
   playbackPath, type Route, ROUTE_REFRESH_MS, routeArgs, routeOf, routeSummary, trailsLoading, trailsOf, trailsPlan,
@@ -38,9 +50,9 @@ import type { DriverRoute, FleetError, LiveDriver, LiveDrivers } from '@/office/
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
-import { Divider, ListFailed, Pill } from '@/office/ui';
+import { Divider, ErrorNotice, ListFailed, Pill } from '@/office/ui';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, fonts } from '@/theme';
 
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
@@ -147,6 +159,26 @@ export default function LiveTab() {
     setTrails(!trails);
   };
 
+  // Watched mode (the site's useWatchDrivers): the selected driver while they share, every sharing driver while the trails
+  // are on; watch_drivers now and every 30 s while the tab is in front and the app on screen. Leaving stops the calls (the
+  // server lets the watch lapse after 90 s). A failed call is quiet: the phones simply upload at their usual pace.
+  const watchKey = useMemo(() => watchList(all, trails, selected).join(','), [all, trails, selected]);
+  const mayWatch = me.tools.includes('watch_drivers');
+  useEffect(() => {
+    if (!focused || !mayWatch || !watchKey) return;
+    const drivers = watchKey.split(',');
+    const call = () => {
+      if (AppState.currentState === 'active') void api.call('watch_drivers', { drivers }).catch(() => undefined);
+    };
+    call();
+    const timer = setInterval(call, WATCH_EVERY_MS);
+    const sub = AppState.addEventListener('change', (state) => { if (state === 'active') call(); });
+    return () => {
+      clearInterval(timer);
+      sub.remove();
+    };
+  }, [focused, mayWatch, watchKey, api]);
+
   // Every 60 s while the tab is in front: the trails and the shown route are fetched again and merged, never replaced.
   useEffect(() => {
     if (!focused || !routes || (!trails && shownUser === null)) return;
@@ -180,7 +212,7 @@ export default function LiveTab() {
   // Design 15's cluster, under the compass's place: the trails toggle (dark while on) and what it is doing. DriversMap
   // shows it only while a map is mounted (never over "Map not available").
   const controls = routes ? (
-    <View style={styles.mapControls} pointerEvents="box-none">
+    <View style={styles.trailsControl} pointerEvents="box-none">
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('office.live.trails')}
@@ -248,6 +280,18 @@ export default function LiveTab() {
           playback={canPlay(path) ? playback : null}
           cursor={cursor}
           onHistory={routes ? () => router.push({ pathname: '/office/driver/[username]', params: { username: chosen.username, date: plusDays(colomboDate(), -1) } }) : undefined}
+          onDriverPage={routes ? () => router.push({ pathname: '/office/driver/[username]', params: { username: chosen.username } }) : undefined}
+          onMove={me.tools.includes('move_driver_vehicle') && moveMode(chosen) !== 'none'
+            ? () => (moveMode(chosen) === 'swap' && chosen.task_id
+              ? router.push({ pathname: '/office/task/[id]/swap', params: { id: chosen.task_id } })
+              : router.push({ pathname: '/office/move/[username]', params: { username: chosen.username } }))
+            : undefined}
+          moveLabel={moveMode(chosen) === 'swap' ? t('office.task.swapVehicle') : t('office.live.moveVehicle')}
+          onClockOut={me.tools.includes('clock_out_driver') && canClockOut(chosen) ? async (reason) => {
+            const r = await api.call<ClockOutResult>('clock_out_driver', clockOutInput(chosen.username, reason));
+            void q.reload();
+            return clockOutLine(r, chosen.driver.split(' ')[0], t);
+          } : undefined}
         />
       )}
     </View>
@@ -286,7 +330,7 @@ interface RouteState {
  * The selected driver's card over the bottom: the name, the plate, the lines, today's numbers from the route, Call / WhatsApp
  * / Open in Maps as the links allow, and the playback bar when the route has a span to play.
  */
-function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory }: {
+function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, onDriverPage, onMove, moveLabel, onClockOut }: {
   d: LiveDriver;
   onClose: () => void;
   onLayout: (e: LayoutChangeEvent) => void;
@@ -296,13 +340,45 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory }
   cursor: Cursor | null;
   /** Stage 1 (O3 item 1): the driver's page on yesterday, the day strip back 90 days (with driver_route). */
   onHistory?: () => void;
+  /** Stage 1 (O3 item 4d): the driver's page for today (with driver_route). */
+  onDriverPage?: () => void;
+  /** Stage 1 (O3 item 4c): Move to vehicle (on duty) or Swap vehicle (on a task), with move_driver_vehicle. */
+  onMove?: () => void;
+  moveLabel: string;
+  /** Stage 1 (O3 item 4b): clock_out_driver with the reason; answers the sentence to show (throws the server's refusal). */
+  onClockOut?: (reason: string) => Promise<string>;
 }) {
-  const { t } = useApp();
+  const { t, language } = useApp();
   const insets = useSafeAreaInsets();
   const pill = pillOf(d);
   const links = d.links ?? {};
   const extra = [d.status_text, d.task_note, d.not_available, d.app_stops_text].filter((s): s is string => !!s);
   const summary = route?.route ? routeSummary(route.route, t) : null;
+  const facts = [speedText(d, t), batteryText(d, t)].filter((s): s is string => !!s);
+  // Clock out: a sheet with the optional reason; the answer (or the server's refusal) stays on the card.
+  const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  const [refused, setRefused] = useState<FleetError | null>(null);
+  useEffect(() => {
+    setDone(null);
+    setRefused(null);
+  }, [d.username]);
+  async function clockOut() {
+    if (!onClockOut || busy) return;
+    setBusy(true);
+    setRefused(null);
+    try {
+      setDone(await onClockOut(reason));
+      setAsking(false);
+      setReason('');
+    } catch (e) {
+      setRefused(e as FleetError);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 12) }]} testID="live-card" onLayout={onLayout}>
       <View style={styles.handle} />
@@ -320,6 +396,7 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory }
         </Pressable>
       </View>
       <Txt variant="muted" size={15}>{rowLine(d, t)}</Txt>
+      {facts.length > 0 && <Txt variant="strong" size={15} testID="live-facts">{facts.join(' · ')}</Txt>}
       {extra.map((line) => <Txt key={line} variant="small" numberOfLines={2}>{line}</Txt>)}
       {!focusable(d) && <Txt variant="small">{t('office.live.noPosition')}</Txt>}
       {route && (
@@ -344,10 +421,46 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory }
         </View>
       )}
       {playback && <PlaybackBar playback={playback} cursor={cursor} />}
-      {onHistory && (
-        <Pressable accessibilityRole="button" onPress={onHistory} style={styles.retry} testID="live-history">
-          <Txt variant="strong" size={15} color={colors.blue}>{t('office.history.earlierDays')} ›</Txt>
-        </Pressable>
+      {(onMove || onClockOut) && (
+        <View style={styles.actions}>
+          {onMove && <Button kind="outline" label={moveLabel} onPress={onMove} style={{ flex: 1, minHeight: 52 }} testID="live-move" />}
+          {onClockOut && <Button kind="outline" label={t('office.live.clockOut')} onPress={() => { setRefused(null); setAsking(true); }} style={{ flex: 1, minHeight: 52 }} testID="live-clock-out" />}
+        </View>
+      )}
+      {done ? <Txt variant="small" color={colors.green} testID="live-clocked-out">{done}</Txt> : null}
+      {refused && !asking ? <ErrorNotice error={refused} /> : null}
+      {(onDriverPage || onHistory) && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+          {onDriverPage && (
+            <Pressable accessibilityRole="button" onPress={onDriverPage} style={styles.retry} testID="live-driver-page">
+              <Txt variant="strong" size={15} color={colors.blue}>{t('office.live.driverPage')} ›</Txt>
+            </Pressable>
+          )}
+          {onHistory && (
+            <Pressable accessibilityRole="button" onPress={onHistory} style={styles.retry} testID="live-history">
+              <Txt variant="strong" size={15} color={colors.blue}>{t('office.history.earlierDays')} ›</Txt>
+            </Pressable>
+          )}
+        </View>
+      )}
+      {onClockOut && (
+        <Sheet
+          visible={asking}
+          title={t('office.live.clockOutTitle', { name: d.driver.split(' ')[0] })}
+          onClose={() => setAsking(false)}
+          testID="clock-out-sheet"
+          actions={(
+            <>
+              <Button kind="outline" label={t('office.live.keepOnDuty')} onPress={() => setAsking(false)} style={{ flex: 1, minHeight: 52 }} />
+              <Button label={t('office.live.clockOut')} onPress={() => void clockOut()} busy={busy} style={{ flex: 1.2, minHeight: 52, backgroundColor: colors.red }} />
+            </>
+          )}
+        >
+          <Txt variant="muted">{t('office.live.clockOutBody')}</Txt>
+          <TextInput value={reason} onChangeText={setReason} maxLength={200} placeholder={t('office.live.clockOutReason')} placeholderTextColor="#9aa0a6"
+            style={[styles.input, { fontFamily: language === 'si' ? fonts.sinhalaBody : fonts.body }]} accessibilityLabel={t('office.live.clockOutReason')} />
+          {refused ? <ErrorNotice error={refused} onRetry={() => void clockOut()} /> : null}
+        </Sheet>
       )}
     </View>
   );
@@ -368,7 +481,7 @@ function Action({ icon: Icon, label, url }: { icon: LucideIcon; label: string; u
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.ink, paddingHorizontal: 20, paddingBottom: 10 },
   map: { flex: 1.2, backgroundColor: colors.mapLand, minHeight: 220 },
-  mapControls: { position: 'absolute', top: 68, right: 12, alignItems: 'flex-end', gap: 8 },
+  trailsControl: { alignItems: 'flex-end', gap: 8 },
   mapButton: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', elevation: 4 },
   mapButtonOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   mapPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 220 },
@@ -392,6 +505,7 @@ const styles = StyleSheet.create({
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   close: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   routeErr: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  input: { minHeight: 52, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 14, fontSize: 17, color: colors.ink, backgroundColor: colors.card },
   retry: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 8 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 4 },
   action: {
