@@ -12,7 +12,7 @@ function check(ok: unknown, label: string, detail?: unknown): void {
 console.log('\nScrubbing');
 {
   const s = scrub('kamal@fame.lk 0771234567 +94 77 123 4567 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abc sb_secret_abcdefg AIzaSyA1234567890abcdefghijkl 3f2b1c4d-1111-4222-8333-444455556666 123456789012 ?token=abc&x=1');
-  check(!/kamal@|0771234567|eyJhbGci|sb_secret_abc|AIzaSyA|3f2b1c4d|123456789012|token=abc/.test(s), 'e-mails, phones, tokens, keys, ids and long numbers are replaced', s);
+  check(!/kamal@|0771234567|77 123 4567|eyJhbGci|sb_secret_abc|AIzaSyA|3f2b1c4d|123456789012|token=abc/.test(s), 'e-mails, phones, tokens, keys, ids and long numbers are replaced', s);
   check(scrub('Cannot read property id of undefined') === 'Cannot read property id of undefined', 'an ordinary message is kept as it is');
 }
 
