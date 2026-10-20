@@ -85,7 +85,7 @@ console.log('\nThe box as text');
   check(box.includes("searchState({ searchable: !empty && typed.current, busy, answer, problem })") && ['searching', 'error', 'none', 'results'].every((s) => box.includes(`state === '${s}'`)), 'one of four things under the field, from the one rule');
   check(box.includes("setRetry((n) => n + 1)") && box.includes(", retry]);"), 'Try again re-runs the same search');
   check(box.includes("api.call<SearchAnswer>('search_places', suggestArgs(near))") && box.includes('Location.getLastKnownPositionAsync()') && !box.includes('requestForegroundPermissionsAsync().granted;\n      const pos = await Location.getLastKnownPositionAsync'), 'an empty box asks for suggestions, with the last known position only when already allowed (no prompt)');
-  check(box.includes("setSuggest({ answer: null, busy: false, failed: false })") && box.includes('office.trip.suggestionsFailed'), 'failed suggestions say so with Try again');
+  check(box.includes("onRetry={() => setSuggestTry((n) => n + 1)}") && box.includes('office.trip.suggestionsFailed'), 'failed suggestions say so with Try again (it asks again)');
   check(box.includes("canGoogle && !empty && !google") && box.includes("typed.current = true; setGoogle(true);"), 'the Google opt-in chip only under the google package, and it triggers a search');
   check(box.includes("r.layer === 'town' ? t('office.trip.townBadge') : r.badge"), 'the Town badge in the phone\'s language');
   check(!/'(admin|fleet_admin|office|viewer|staff)'/.test(box), 'no role names');

@@ -121,11 +121,18 @@ export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
         signal: controller.signal,
       });
     } catch {
+      clearTimeout(timer);
+      throw { code: 'network', message: 'No connection to Fame Fleet.' } satisfies FleetError;
+    }
+    // The timeout covers the body too: a reply that stalls half-way ends as a dropped call (ui-patterns §5).
+    let text: string;
+    try {
+      text = await res.text();
+    } catch {
       throw { code: 'network', message: 'No connection to Fame Fleet.' } satisfies FleetError;
     } finally {
       clearTimeout(timer);
     }
-    const text = await res.text();
     let json: unknown = null;
     try {
       json = text ? JSON.parse(text) : null;

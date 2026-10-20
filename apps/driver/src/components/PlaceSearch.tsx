@@ -9,7 +9,9 @@
 
 import * as Crypto from 'expo-crypto';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { SkeletonRows } from '@/components/patterns/ListState';
+import { SUGGEST_TIMEOUT_MS, withTimeout } from '@/lib/patterns/listLogic';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { GoogleCredit } from '@/components/GoogleCredit';
 import { Check, MapPin } from '@/components/icons';
@@ -76,7 +78,8 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
       const n = ++asked.current;
       session.current ??= Crypto.randomUUID();
       setStatus('searching');
-      driverApi.searchPlaces(text.trim(), session.current).then(
+      // A timeout like every list (docs/ui-patterns.md §5): no answer in 15 s is the phone's own list, as offline.
+      withTimeout(driverApi.searchPlaces(text.trim(), session.current), SUGGEST_TIMEOUT_MS).then(
         (found) => {
           if (n !== asked.current) return;
           setAnswer(found);
@@ -137,12 +140,7 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
       ) : (
         <>
           {status === 'offline' && <Notice tone="warn" text={t('trip.offlineOnly')} />}
-          {status === 'searching' && (
-            <View style={styles.searching}>
-              <ActivityIndicator color={colors.ink} />
-              <Txt variant="muted">{t('trip.searching')}</Txt>
-            </View>
-          )}
+          {status === 'searching' && <SkeletonRows rows={3} lines={2} testID="trip-search-skeleton" />}
 
           {local.length > 0 && (
             <Group title={t('trip.ours')}>

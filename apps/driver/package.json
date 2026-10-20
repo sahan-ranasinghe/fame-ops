@@ -89,7 +89,8 @@
     "test:manage": "tsx scripts/test-manage.ts",
     "test:people": "tsx scripts/test-people.ts",
     "test:search": "tsx scripts/test-search.ts",
-    "test:trip-forms": "tsx scripts/test-trip-forms.ts"
+    "test:trip-forms": "tsx scripts/test-trip-forms.ts",
+    "test:patterns": "tsx scripts/test-patterns.ts"
   },
   "private": true,
   "expo": {

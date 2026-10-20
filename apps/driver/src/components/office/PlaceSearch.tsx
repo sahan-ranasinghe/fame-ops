@@ -16,7 +16,9 @@ import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ChevronRight, LocateFixed, Search, X } from '@/components/icons';
+import { ListError, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Txt } from '@/components/ui';
+import { POSITION_TIMEOUT_MS, SUGGEST_TIMEOUT_MS, withTimeout } from '@/lib/patterns/listLogic';
 import { useOffice } from '@/office/state';
 import { badgeTone, DEBOUNCE_MS, looksPasted, type Picked, pickedOf, pinText, searchState, shouldSearch, suggestArgs } from '@/office/trip/locationLogic';
 import type { FleetError, GooglePlaceAnswer, SearchAnswer, SearchResult } from '@/office/types';
@@ -72,14 +74,14 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
       setProblem(null);
       const withGoogle = google && canGoogle;
       if (withGoogle && !session.current) session.current = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-      api.call<SearchAnswer>('search_places', { text: text.trim(), ...(withGoogle ? { google: true, session: session.current } : {}) }).then((a) => {
+      withTimeout(api.call<SearchAnswer>('search_places', { text: text.trim(), ...(withGoogle ? { google: true, session: session.current } : {}) }), SUGGEST_TIMEOUT_MS).then((a) => {
         if (n !== seq.current) return;
         setAnswer(a);
         setProblem(null);
-      }, (e: FleetError) => {
+      }, (e: FleetError | Error) => {
         if (n !== seq.current) return;
         setAnswer(null);
-        setProblem(e.message);
+        setProblem(e.message || t('patterns.suggestionsTimeout'));
       }).finally(() => {
         if (n === seq.current) setBusy(false);
       });
@@ -87,34 +89,36 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
     return () => clearTimeout(timer);
   }, [text, google, canSearch, canGoogle, api, retry]);
 
-  // Suggestions for an empty box, loaded once: the phone's position when it is already allowed (no prompt), else the server's base place.
+  // Suggestions for an empty box, loaded once per box: the phone's position when it is already allowed (no prompt; 3 s at
+  // most), else the server's base place. Stage 0 fix: the effect used to depend on its own "busy" flag, so setting it
+  // re-ran the effect and its cleanup threw the answer away, and the box said "Loading" for ever. Now one call, a
+  // sequence number for the latest, a 15 s timeout, and the error with Try again (docs/ui-patterns.md §5).
   const empty = !shouldSearch(text);
+  const suggestSeq = useRef(0);
+  const [suggestTry, setSuggestTry] = useState(0);
   useEffect(() => {
-    if (!canSearch || !empty || suggest.answer || suggest.busy || suggest.failed) return;
-    let alive = true;
+    if (!canSearch) return;
+    const n = ++suggestSeq.current;
     setSuggest({ answer: null, busy: true, failed: false });
     void (async () => {
       let near: { lat: number; lng: number } | null = null;
       try {
-        const perm = await Location.getForegroundPermissionsAsync();
+        const perm = await withTimeout(Location.getForegroundPermissionsAsync(), POSITION_TIMEOUT_MS);
         if (perm.granted) {
-          const pos = await Location.getLastKnownPositionAsync();
+          const pos = await withTimeout(Location.getLastKnownPositionAsync(), POSITION_TIMEOUT_MS);
           if (pos) near = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         }
       } catch {
         near = null;
       }
       try {
-        const a = await api.call<SearchAnswer>('search_places', suggestArgs(near));
-        if (alive) setSuggest({ answer: a, busy: false, failed: false });
+        const a = await withTimeout(api.call<SearchAnswer>('search_places', suggestArgs(near)), SUGGEST_TIMEOUT_MS);
+        if (n === suggestSeq.current) setSuggest({ answer: a, busy: false, failed: false });
       } catch {
-        if (alive) setSuggest({ answer: null, busy: false, failed: true });
+        if (n === suggestSeq.current) setSuggest({ answer: null, busy: false, failed: true });
       }
     })();
-    return () => {
-      alive = false;
-    };
-  }, [canSearch, empty, suggest.answer, suggest.busy, suggest.failed, api]);
+  }, [canSearch, api, suggestTry]);
 
   async function pick(r: SearchResult) {
     typed.current = false;
@@ -197,12 +201,7 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
         ) : null}
       </View>
 
-      {state === 'searching' && (
-        <View style={styles.note} testID="place-search-searching">
-          <ActivityIndicator color={colors.muted} />
-          <Txt variant="muted" size={15}>{t('office.trip.searching')}</Txt>
-        </View>
-      )}
+      {state === 'searching' && <SkeletonRows rows={3} lines={2} testID="place-search-searching" />}
       {state === 'error' && (
         <View style={{ gap: 8 }} testID="place-search-error">
           <Txt variant="strong" size={15} color={colors.red}>{problem}</Txt>
@@ -224,18 +223,8 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
 
       {empty && canSearch && (
         <View style={{ gap: 4 }} testID="place-search-suggestions">
-          {suggest.busy && (
-            <View style={styles.note}>
-              <ActivityIndicator color={colors.muted} />
-              <Txt variant="muted" size={15}>{t('office.common.loading')}</Txt>
-            </View>
-          )}
-          {suggest.failed && (
-            <View style={{ gap: 8 }}>
-              <Txt variant="small" color={colors.red}>{t('office.trip.suggestionsFailed')}</Txt>
-              <Button kind="outline" label={t('office.common.tryAgain')} onPress={() => setSuggest({ answer: null, busy: false, failed: false })} style={{ minHeight: 48 }} />
-            </View>
-          )}
+          {suggest.busy && <SkeletonRows rows={3} lines={2} testID="place-search-skeleton" />}
+          {suggest.failed && <ListError message={t('office.trip.suggestionsFailed')} onRetry={() => setSuggestTry((n) => n + 1)} />}
           {suggest.answer && suggest.answer.results.length > 0 && (
             <>
               <Txt variant="label" color={colors.muted}>{t('office.trip.suggestions').toUpperCase()}</Txt>
