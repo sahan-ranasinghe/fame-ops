@@ -963,6 +963,14 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
 - Tests: `test:web`, `test:web-routes`, `test:web-maps`; the site's `viewChoice.test.ts`; the e2e project `mobile-web`
   (24e6b0e). Left: step 5 (installable, the offline page, web push, the favicon) and the rest of step 6; the browser's
   own back / reload on a form with unsaved input (no `beforeunload` yet).
+- Deployed 20 October 2026 (Sahan's GO A and GO B): main fast-forwarded to `7af40d4`; the website (desktop + `/m/`, the
+  phone redirect held: `PHONE_REDIRECT = false`) by `scripts/deploy-pages.sh --deploy`, the scans clean, deployment
+  a0bace8d; the EAS update to preview, runtime 1.3.0-gmaps, group `08f95e1e-7f81-4fcb-b4e6-f4fa98cd1df6`, Android
+  `01a159b8-9cd3-7771-92c5-30b101271d51` (built from `61dcb10`: the app's code as `7af40d4`). The packages added for the
+  web build (react-native-web, @expo/metro-runtime, maplibre-gl) have no native code, and no native package changed
+  since the 1.3.0 build (`ef69255`, versionCode 2). Found after the deploy: a reload of a deep `/m/office/…` address got the
+  desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
+  its go.
 
 ## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
 

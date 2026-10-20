@@ -1111,6 +1111,11 @@ iOS; Play Store.
   Today and a calendar; a trip date = Today / Tomorrow / Pick a date; a time = one time sheet in 5-minute steps; lists =
   skeletons, pull to refresh, Load more, an empty state, Try again, every call with a timeout. One shared component per
   pattern per codebase, never a new one; the reviewer checks every screen against the file at every checkpoint.
+- **GitHub** (Sahan, 20 October 2026): the repo is on GitHub, private: github.com/sahan-ranasinghe/fame-ops (remote
+  `origin`). Never run `git push` or change the remote without his go; each push is its own go. Before a push, run the
+  key scan on the history being pushed and push only if it prints 0:
+  `git log -p <what will be pushed> | grep -cE 'sb_secret_[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN (RSA |EC )?PRIVATE KEY|"private_key":'`
+  If it prints anything else, STOP and show him the number only.
 - **No local native builds** (Sahan, 19 October 2026): no Docker, Gradle or R8 builds on this laptop. Android builds run only
   on EAS, only after Sahan's go, and only on office or home Wi-Fi.
 - Before asking for an EAS build, check the native config without compiling: `expo prebuild` into a scratch folder (nothing
