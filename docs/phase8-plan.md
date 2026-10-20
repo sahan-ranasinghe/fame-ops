@@ -815,6 +815,9 @@ commits).
   the stops mode sends the start even unchanged; the day chips reach 14 days (the date row is O4).
 - **The full run after the fixes** (10:03, 35 s): typecheck 0 errors; 25 suites, 1,859 checks, 0 failed (data 96, trips 98,
   asks 100 on the local stack; the twenty-two others 1,565).
+- **Deployed (GO Part B, 20 October 2026):** main fast-forwarded to ab35740; `eas update --channel preview --environment
+  preview --message "Office mode O2: the trip forms"`: runtime 1.3.0-gmaps, update group a0c7ff7a-a630-4793-9150-f01eec18a2fd,
+  Android update 01a15799-babf-7bda-afa6-dbdad4be218f, commit ab35740. No server change.
 
 ## 18. Part C (Hotfix O2-H1, 20 October 2026): the parity audit, and the order for O3 and O4
 
