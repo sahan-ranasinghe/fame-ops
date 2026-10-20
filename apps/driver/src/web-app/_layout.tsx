@@ -15,13 +15,25 @@ import { Yaldevi_600SemiBold } from '@expo-google-fonts/yaldevi/600SemiBold';
 import { useFonts } from 'expo-font';
 import { type ErrorBoundaryProps, Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { Alert, View } from 'react-native';
 
 import { RouteCrash } from '@/components/patterns/CrashScreen';
 import { SnackbarHost } from '@/components/patterns/Snackbar';
-import { bootOffice } from '@/office/auth';
+import { sessionKind } from '@/lib/session';
+import { supabase } from '@/lib/supabase';
+import { bootOffice, refreshOfficeMe } from '@/office/auth';
+import { getOfficeMe } from '@/office/store';
 import { AppProvider } from '@/state/app';
+import { translate } from '@/i18n';
+import { getJson, KEYS } from '@/lib/kv';
+import { installWebAlert } from '@/lib/webAlert';
 import { colors } from '@/theme';
+
+// Every confirmation works in a browser (Alert.alert does nothing in react-native-web): lib/webAlert.ts.
+installWebAlert(Alert, () => {
+  const language = getJson<'en' | 'si'>(KEYS.language) ?? 'en';
+  return { ok: translate(language, 'web.ok'), cancel: translate(language, 'web.cancel') };
+});
 
 export function ErrorBoundary(props: ErrorBoundaryProps) {
   return <RouteCrash {...props} home="/" />;
@@ -41,8 +53,13 @@ export default function WebRoot() {
     GemunuLibre_800ExtraBold,
   });
   const [booted, setBooted] = useState(false);
+  // The office session checked once (offline is not signed out); a person already signed in on the desktop site (the same
+  // browser session, one origin) arrives signed in here too.
   useEffect(() => {
-    void bootOffice().finally(() => setBooted(true));
+    void (async () => {
+      await bootOffice();
+      if (!getOfficeMe() && sessionKind(await supabase.auth.getSession()) !== 'none') await refreshOfficeMe();
+    })().finally(() => setBooted(true));
   }, []);
   if ((!loaded && !error) || !booted) return <View style={{ flex: 1, backgroundColor: colors.page }} />;
   return (

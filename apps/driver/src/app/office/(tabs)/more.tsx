@@ -7,7 +7,7 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
 
 import { Bell, ChartColumn, Clock, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
@@ -18,6 +18,7 @@ import { useOffice } from '@/office/state';
 import { Avatar, DarkHeader, Divider, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { switchToDesktop } from '@/lib/viewChoice';
 
 const ITEM: Record<MoreItem, { icon: LucideIcon; label: string; path: string }> = {
   approve: { icon: ClipboardCheck, label: 'office.tabs.approve', path: '/office/(tabs)/approve' },
@@ -105,6 +106,8 @@ export default function MoreTab() {
           );
         })}
         <Txt variant="small" style={{ paddingHorizontal: 4 }}>{t('office.more.laptopOnly')}</Txt>
+        {/* The mobile website (O4): the desktop site instead, remembered in this browser. */}
+        {Platform.OS === 'web' && <Button kind="outline" label={t('web.desktopView')} onPress={switchToDesktop} testID="switch-desktop" />}
         <Button kind="outline" label={t('office.common.signOut')} onPress={confirmSignOut} busy={busy} />
         <Txt variant="small" style={{ textAlign: 'center' }}>{t('login.version', { version: Constants.expoConfig?.version ?? '' })}</Txt>
       </Screen>

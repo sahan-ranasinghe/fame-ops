@@ -44,6 +44,7 @@
     "expo-task-manager": "~57.0.21",
     "expo-updates": "~57.0.25",
     "lucide-react-native": "^1.52.0",
+    "maplibre-gl": "^5.24.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
@@ -117,6 +118,7 @@
     "test:success": "tsx scripts/test-success.ts",
     "web:routes": "node scripts/make-web-routes.mjs",
     "test:web-routes": "node scripts/make-web-routes.mjs --check",
+    "test:web": "tsx scripts/test-web.ts",
     "web:export": "node scripts/make-web-routes.mjs && FLEET_WEB=1 EXPO_NO_WEB_SETUP=1 expo export --platform web --output-dir dist-web"
   },
   "private": true,

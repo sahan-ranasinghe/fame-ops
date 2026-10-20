@@ -843,7 +843,8 @@
       "help": "Office accounts are created by the fleet admin.\nDrivers sign in with their username and PIN.",
       "wrong": "Wrong e-mail or password.",
       "noOfficeRole": "This account has no office role in Fame Fleet. Ask the fleet admin.",
-      "mfaRequired": "This account needs its 2-step code. Sign in on the office site first."
+      "mfaRequired": "This account needs its 2-step code. Sign in on the office site first.",
+      "helpWeb": "Office accounts are created by the fleet admin."
     },
     "common": {
       "tryAgain": "Try again",
@@ -2766,5 +2767,10 @@
     "odometerSaved": "Odometer saved",
     "taskStarted": "Task started",
     "onPhone": "on the phone, sent when online"
+  },
+  "web": {
+    "ok": "OK",
+    "cancel": "Cancel",
+    "desktopView": "Switch to desktop view"
   }
 }

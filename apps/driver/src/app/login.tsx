@@ -54,7 +54,8 @@ export default function LoginScreen() {
   const [problem, setProblem] = useState<string | null>(null);
 
   if (me) return <Redirect href="/" />;
-  if (officeMe) return <Redirect href="/office" />;
+  // The website's first page (src/web-app/index.tsx) opens the page a phone asked for on the desktop site.
+  if (officeMe) return <Redirect href={Platform.OS === 'web' ? '/' : '/office'} />;
 
   const ready = side === 'driver' ? username.trim().length >= 3 && pin.length === 6 : /\S+@\S+\.\S+/.test(email.trim()) && password.length >= 6;
 
@@ -185,7 +186,7 @@ export default function LoginScreen() {
               <Button label={t('login.signIn')} onPress={submit} disabled={!ready} busy={busy} />
             </Card>
           )}
-          <Txt variant="muted" style={{ textAlign: 'center', paddingHorizontal: 12 }}>{t(side === 'driver' ? 'login.help' : 'office.login.help')}</Txt>
+          <Txt variant="muted" style={{ textAlign: 'center', paddingHorizontal: 12 }}>{t(side === 'driver' ? 'login.help' : webOnly ? 'office.login.helpWeb' : 'office.login.help')}</Txt>
           {/* Part 6: the app's name and version, and the privacy policy (design/office 01 Sign in). */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4, paddingTop: 8 }}>
             <Txt variant="muted" size={15}>{t('login.version', { version: Constants.expoConfig?.version ?? '' })}</Txt>

@@ -42,3 +42,4 @@ yarn-error.*
 
 # The mobile website's build (npm run web:export)
 dist-web/
+dist-web-local/

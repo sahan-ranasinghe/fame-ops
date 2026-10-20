@@ -15,9 +15,18 @@ export async function fakeOutside(context: BrowserContext): Promise<void> {
     /\/styles\//.test(route.request().url()) ? route.fulfill({ json: FAKE_STYLE }) : route.fulfill({ status: 404, body: "" }));
 }
 
+/** The desktop site's tests stay on the desktop site at any window size (O4: a phone is otherwise sent to /m/). A test of the
+ *  mobile website clears the choice in its own context (an init script added later runs after this one). */
+export async function desktopView(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    if (!window.localStorage.getItem("fleet.view")) window.localStorage.setItem("fleet.view", "desktop");
+  });
+}
+
 export const test = base.extend({
   context: async ({ context }, use) => {
     await fakeOutside(context);
+    await desktopView(context);
     await use(context);
   },
   browser: [async ({ browser }, use) => {
@@ -26,6 +35,7 @@ export const test = base.extend({
     browser.newContext = async (...args: Parameters<typeof open>) => {
       const context = await open(...args);
       await fakeOutside(context);
+      await desktopView(context);
       return context;
     };
     await use(browser);

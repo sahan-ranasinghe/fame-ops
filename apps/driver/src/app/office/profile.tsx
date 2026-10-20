@@ -8,7 +8,7 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ChevronRight, FileText, Phone } from '@/components/icons';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
@@ -25,6 +25,7 @@ import type { FleetError, NotificationSettings, SettingsResult } from '@/office/
 import { BackHeader, Divider, ErrorNotice, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { switchToDesktop } from '@/lib/viewChoice';
 
 interface ProfileAnswer {
   phone?: string;
@@ -190,6 +191,8 @@ export default function OfficeProfile() {
           </View>
         </Section>
 
+        {/* The mobile website (O4): the desktop site instead, remembered in this browser. */}
+        {Platform.OS === 'web' && <Button kind="outline" label={t('web.desktopView')} onPress={switchToDesktop} testID="switch-desktop" />}
         <Button kind="outline" label={t('office.common.signOut')} onPress={confirmSignOut} busy={signingOut} />
       </Screen>
     </View>
