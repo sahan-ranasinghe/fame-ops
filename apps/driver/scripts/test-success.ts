@@ -18,7 +18,7 @@ console.log('\nWhere a save lands');
   const s = successOf({ ...base, kind: 'sent', mode: 'task', taskId: 't1' } as never, ALL);
   check(s.target.kind === 'task' && s.snack === 'taskAssigned' && s.noticeKey === 'task:t1', 'a task sent to the driver opens the task: "Task sent to <name>"', s);
   const w = successOf({ ...base, kind: 'waiting', mode: 'task', requestId: 'r1' } as never, ALL);
-  check(w.target.kind === 'request' && w.snack === 'taskWaiting', 'a task waiting for approval opens its request: "Waiting for the fleet admin's OK"', w);
+  check(w.target.kind === 'request' && w.snack === 'taskWaiting', 'a task waiting for approval opens its request: "Waiting for the fleet admin\'s OK"', w);
   const b = successOf({ ...base, kind: 'booked', mode: 'request', taskId: 't2', requestId: 'r2' } as never, ALL);
   check(b.target.kind === 'task' && b.snack === 'booked', 'a booking opens its task: "Booking saved"', b);
   const r = successOf({ ...base, kind: 'request_sent', mode: 'request', requestId: 'r3' } as never, ALL);
