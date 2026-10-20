@@ -1919,6 +1919,11 @@ test("Hotfix 3 (L7): with 100 open issues and 50 waiting requests the Overview f
       await expect(p.getByRole("heading", { name: "Overview" })).toBeVisible();
     };
 
+    // The measure is this test's load (100 issues, 50 requests), whatever ran before it and however long that took: an
+    // earlier test's unaccepted E2E tasks turn into "Needs a driver" once the 15-minute accept window passes (a slow run,
+    // 20 October 2026), so they are accepted now, as their drivers would.
+    sql(`update tasks set accepted_at = now() where status = 'assigned' and accepted_at is null and title like 'E2E%'`);
+
     // Desktop, 1366 × 768: every section at most 5 rows with View all; the page about two screen heights at most.
     await page.setViewportSize({ width: 1366, height: 768 });
     await signIn(page);
