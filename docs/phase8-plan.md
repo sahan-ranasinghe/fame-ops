@@ -940,6 +940,30 @@ look, the three stale e2e lines moved to the Filter sheet, the fresh reviewer's 
   screen, saved = snackbar, notification settings, visible selection"`: runtime 1.3.0-gmaps, update group
   66f60b92-396f-4782-b61f-21ab4b29f5b2, Android update 01a158c4-fab1-70bf-aa94-3b62d3d39d27, commit cae9f83.
 
+## 21. Stage 2, O4 the mobile website (20 October 2026, branch `phase8-o4` from main `b423a1c`): steps 1–4 as built
+
+The reviewer decisions first (they ship with the next EAS update): Approve's "N new requests ↑" pill and a quiet look every
+minute (c111242; a row another approver decided leaves the list, 0c5c0c9), the driver page split with "Today's route" and
+its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three map controls (79b4b8b).
+
+- Step 1, the web build (1c994e1): `FLEET_WEB=1 npm run web:export` (apps/driver) builds Office mode for the browser under
+  `/m/` from its own route root `src/web-app` (Expo Router is needed for the web build: Office mode's screens are Expo
+  Router routes and their links are route paths; a second router would mean rewriting every screen). The driver's side
+  is never in it (`state/app.web.tsx`, empty location / background / duty twins, the Office-only sign-in).
+- Step 2, the maps (09fbb76): Google's Maps JavaScript API under the google package, every map counted first through
+  `register_map_load`; MapLibre GL JS + OpenFreeMap otherwise or when Google fails; "Map not available" when both fail;
+  rule 10 by the engine mounted. Not yet seen with a real key (needs the deployed site).
+- Steps 3–4 (5937cb8): the sign-in and session (the app's 401/503 rule; one origin with the desktop site), the redirect
+  of a phone (a mobile browser, or a narrow touch screen) with `?from=`, the switch both ways remembered (`fleet.view`),
+  `webAlert` (Cancel always the safe choice), `apps/office/scripts/deploy-pages.sh` (both builds, `/m/*` routed, no source
+  map, the scan, the upload only with `--deploy`).
+- Review fixes (0c5c0c9): uploads from a browser (`office/mediaFile.web.ts`), phone-only buttons hidden or given a
+  browser fallback, no Expo push in a browser (`lib/push.web.ts`), more desktop links mapped, the Android Maps key never in
+  the web config.
+- Tests: `test:web`, `test:web-routes`, `test:web-maps`; the site's `viewChoice.test.ts`; the e2e project `mobile-web`
+  (24e6b0e). Left: step 5 (installable, the offline page, web push, the favicon) and the rest of step 6; the browser's
+  own back / reload on a form with unsaved input (no `beforeunload` yet).
+
 ## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
 
 The office will do from the phone everything they do on the website, because they don't always have a laptop. So every
