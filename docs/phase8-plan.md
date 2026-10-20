@@ -909,10 +909,19 @@ Left out, on purpose: Issues' Realtime (read again on return and pull); removing
 saved place's pin stay on the website; PDFs are added on a laptop (no file picker in 1.3.0). Live's map cluster has four
 controls (zoom in, zoom out, trails, fit) counting the zoom pair as one: a decision for Sahan against "at most three".
 
-**Paused (20 October 2026, for Hotfix O2-H2):** at the Stage 0 + O3 checkpoint run, everything committed (last `4295313`);
-Deno, pgTAP, the connector suite, the website's unit tests and builds and every app suite pass; the e2e has 3 failures,
-all spec lines still clicking the chips Stage 0 replaced (Live's "Problems · N" and "Off duty · N", Requests' "Changed"):
-to fix on resume, then the checkpoint, then Stage 2 (the draft `docs/mobile-website.md` is not committed yet).
+**Paused (20 October 2026, for Hotfix O2-H2)** at the checkpoint run; **resumed** after the hotfix's deploy: the hotfix merged
+in (Stage 0 uses its Snackbar, Select, crash screen and the patterns' §11–§14), Stage 0's own controls given its selection
+look, the three stale e2e lines moved to the Filter sheet, the fresh reviewer's findings fixed (no blocker).
+- **Deployed (GO, 20 October 2026):** main fast-forwarded to 880280b (no server change: the photo and document uploads use
+  the Part 3 tools already live and Storage's signed upload into driver-photos / vehicle-photos / vehicle-docs); Cloudflare
+  Pages (0 source maps, the secret scan empty); `eas update --channel preview --environment preview --message "Office mode
+  O3 + the standard patterns"`: runtime 1.3.0-gmaps, update group 5de017df-e9d2-495c-98ce-b62adac247f1, Android update
+  01a15941-ca39-74b6-a3bb-5c5e6d039888, commit 880280b.
+- **Sahan's decisions on the reviewer's points (to do at the start of Stage 2, shipped with the next update):** Approve
+  keeps live updates after Load more, new items as a "New requests ↑" pill at the top (Twitter / Gmail), the list never
+  jumps by itself; the driver page splits: the profile with a "Today's route" card opening the route on its own screen
+  (week strip and playback there; Uber's driver profile, Samsara); Live's trails toggle moves into the Filter sheet (at most
+  three map controls). The §19 "left out" items stay noted for later.
 
 ## 20. Hotfix O2-H2 (20 October 2026, branch `phase8-o2-h2` from main `44fc0d2`): no white screen, saved = snackbar
 
