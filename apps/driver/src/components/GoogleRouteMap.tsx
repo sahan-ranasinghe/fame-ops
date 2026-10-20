@@ -12,10 +12,10 @@ import { BAND_COLORS } from '@/office/driversLogic';
 import { useApp } from '@/state/app';
 import { MapCompass } from './MapCompass';
 import { nextTurn, ONE_PLACE_ZOOM, SRI_LANKA, type Turn } from './mapPins';
-import { lineWidth, ROUTE_PADDING, ROUTE_ZOOM, type RouteEngineProps, routePinAnchorY, RouteStopPin } from './RouteMap';
+import { lineWidth, PlaybackPin, ROUTE_PADDING, ROUTE_ZOOM, type RouteEngineProps, routePinAnchorY, RouteStopPin } from './RouteMap';
 import type { Frame, LatLng } from './taskMapLogic';
 
-export function GoogleRouteMap({ lines, stops, fit, focus, onLoaded }: RouteEngineProps) {
+export function GoogleRouteMap({ lines, stops, fit, focus, marker, onLoaded }: RouteEngineProps) {
   const { t } = useApp();
   const map = useRef<GoogleMapView>(null);
   const [ready, setReady] = useState(false);
@@ -87,6 +87,13 @@ export function GoogleRouteMap({ lines, stops, fit, focus, onLoaded }: RouteEngi
             <RouteStopPin stop={s} />
           </GoogleMarker>
         ))}
+        {marker ? (
+          // The playback marker: flat, turned by Google to the path (rotation); a new picture only when it goes hollow or back.
+          <GoogleMarker key={`play:${marker.estimated}:${marker.heading == null}`} coordinate={at(marker)} anchor={{ x: 0.5, y: 0.5 }}
+            flat rotation={marker.heading ?? 0} tracksViewChanges={false} zIndex={9}>
+            <PlaybackPin marker={marker} turn={false} />
+          </GoogleMarker>
+        ) : null}
       </GoogleMapView>
       <MapCompass heading={turn.heading} pitch={turn.pitch} label={t('map.northUp')} onPress={northUp} style={{ top: 12, right: 12 }} />
     </>

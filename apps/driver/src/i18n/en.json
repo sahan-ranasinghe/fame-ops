@@ -2134,6 +2134,26 @@
       "answers": "Answers",
       "openTask": "Open the task →",
       "openRequest": "Open the request →"
+    },
+    "history": {
+      "wholeRoute": "Whole route ›",
+      "drivenRoute": "Driven route",
+      "showDrivenRoute": "Show the driven route",
+      "noTaskPoints": "No GPS points were recorded during this task.",
+      "dayRoute": "Route · {day}",
+      "todayRoute": "Today's route",
+      "dayTasks": "Tasks this day",
+      "dayTasksLine": "{n} tasks · {km} km by odometer",
+      "noDayTasks": "No tasks this day.",
+      "noDayPoints": "No driving was recorded this day.",
+      "earlierDays": "Earlier days",
+      "kmLine": "{km} km",
+      "status_completed": "Done",
+      "status_in_progress": "On the way",
+      "status_assigned": "Not started",
+      "status_cancelled": "Cancelled",
+      "status_declined": "Declined",
+      "status_missed": "Missed"
     }
   },
   "patterns": {

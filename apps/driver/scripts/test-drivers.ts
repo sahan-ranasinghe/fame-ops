@@ -196,17 +196,17 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
 
   const page = read('src/app/office/driver/[username].tsx');
   check(/useTool<DriverProfile>\('driver_profile', \{ driver: username \}\)/.test(page), 'driver_profile by username');
-  check(/useTool<DriverRoute>\('driver_route', \{ driver: username, date: today, line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true \}, \{ enabled: mayRoute, every: 60_000 \}\)/.test(page) && /const mayRoute = me\.tools\.includes\('driver_route'\);/.test(page),
-    'driver_route at tolerance 0, 3,000 points, the estimated roads, every minute, only when the person may');
+  check(/useTool<DriverRoute>\('driver_route', dayRouteArgs\(username, day\), \{ enabled: mayRoute, every: routeEvery\(day, today\) \}\)/.test(page) && /const mayRoute = me\.tools\.includes\('driver_route'\);/.test(page),
+    'driver_route for the chosen day (tolerance 0, 3,000 points, the estimated roads: historyLogic dayRouteArgs), today every minute, only when the person may');
   check(/useTool<DriversBoard>\('drivers_board', \{ search: username \}, \{ enabled: mayBoard, every: 60_000 \}\)/.test(page), 'today\'s state from the board\'s row, only when the person may read the board');
   check(/<BackHeader title=\{d\?\.name \?\? username\}/.test(page), 'a stack screen with the back header (back means back)');
-  check(/<RouteMap lines=\{lines\} stops=\{stops\} fit=\{fit\} focus=\{focus\} mapPackage=\{me\.map\?\.package\} \/>/.test(page), 'the map gets the lines, the stops, the frame, the focus and the office\'s map package');
-  check(/setFocus\(\{ frame: rowFrame\(points, seg\), nonce: \(focus\?\.nonce \?\? 0\) \+ 1, index: i \}\)/.test(page), 'a timeline row tapped moves the map to its span (again on a second tap)');
+  check(/<RouteMap lines=\{lines\} stops=\{stops\} fit=\{fit\} focus=\{focus\} marker=\{marker\} mapPackage=\{mapPackage\} \/>/.test(read('src/components/office/DayRoute.tsx')) && /<DayRoute\b/.test(page), 'the map (components/office/DayRoute.tsx) gets the lines, the stops, the frame, the focus, the playback marker and the office\'s map package');
+  check(/setFocus\(\{ frame: rowFrame\(points, seg\), nonce: \(focus\?\.nonce \?\? 0\) \+ 1, index: i \}\)/.test(read('src/components/office/DayRoute.tsx')), 'a timeline row tapped moves the map to its span (again on a second tap)');
   check(/links\.call && <Action/.test(page) && /links\.whatsapp && <Action/.test(page) && /p\.emergency\.links\?\.call &&/.test(page), 'Call and WhatsApp only when the server gave the link');
   check(/p\?\.emergency &&/.test(page) && /p\?\.licence\?\.number/.test(page) && /p\?\.private_hidden/.test(page), 'the private part only when the answer carries it');
   check(/mayRemove && \(/.test(page) && /api\.call\('remove_unavailability', \{ id: e\.id \}\)/.test(page) && /Alert\.alert\(t\('office\.drivers\.removeTitle'\)/.test(page), 'Remove on the page too, after a confirmation, only when allowed');
-  check(!/playback|usePlayback/i.test(page.replace(/^\/\/.*$/gm, '')), 'no playback (the lead may add it)');
-  check(SPEED_BANDS.every((b) => page.includes(`BAND_COLORS[b]`)) || /SPEED_BANDS\.map\(\(b\) => <LegendItem key=\{b\} color=\{BAND_COLORS\[b\]\}/.test(page), 'the legend from the bands');
+  check(/<PlaybackBar playback=\{playback\} cursor=\{marker\} \/>/.test(read('src/components/office/DayRoute.tsx')), 'one playback bar (Stage 1, O3 item 1: the shared bar, as on Live)');
+  check(SPEED_BANDS.every((b) => read('src/components/office/DayRoute.tsx').includes(`BAND_COLORS[b]`)) || /SPEED_BANDS\.map\(\(b\) => <LegendItem key=\{b\} color=\{BAND_COLORS\[b\]\}/.test(read('src/components/office/DayRoute.tsx')), 'the legend from the bands');
 
   const map = read('src/components/RouteMap.tsx');
   check(/import \{ GoogleRouteMap \} from '\.\/GoogleRouteMap'/.test(map) && /import \{ OpenRouteMap \} from '\.\/OpenRouteMap'/.test(map) && !/require\(/.test(map), 'RouteMap carries both engines in every build (no conditional require)');

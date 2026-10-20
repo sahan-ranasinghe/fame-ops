@@ -46,10 +46,34 @@ export interface RouteEngineProps {
   stops: StopMark[];
   fit: RouteFit;
   focus: RouteFocus | null;
+  /** The playback marker (O3 item 1): where the driver was at the playback clock; hollow inside a gap. None when not playing. */
+  marker?: PlaybackMarker | null;
   /** The map finished loading (Google: onMapLoaded; MapLibre: onDidFinishLoadingMap). */
   onLoaded: () => void;
   /** The map said it failed (MapLibre: onDidFailLoadingMap). */
   onFailed: () => void;
+}
+
+/** The playback marker's position and direction (office/historyLogic.ts positionOn). */
+export interface PlaybackMarker {
+  lat: number;
+  lng: number;
+  heading: number | null;
+  estimated: boolean;
+}
+
+/** The playback marker's size: one circle, centred on the position on both engines. */
+export const PLAYBACK_PIN = 26;
+
+/** The playback marker: a blue circle with an arrow to the path's direction (hollow inside a gap). Google turns it with its
+ * own rotation (`turn` false); MapLibre's view turns itself. */
+export function PlaybackPin({ marker, turn }: { marker: PlaybackMarker; turn: boolean }) {
+  const deg = marker.heading ?? 0;
+  return (
+    <View style={[pinStyles.play, marker.estimated && pinStyles.playHollow, turn && marker.heading != null ? { transform: [{ rotate: `${deg}deg` }] } : null]} testID="playback-marker">
+      {marker.heading != null ? <View style={[pinStyles.arrow, marker.estimated && { borderBottomColor: colors.blue }]} /> : null}
+    </View>
+  );
 }
 
 /** The line's width by what it is: the day's line 5, standing and the dashed legs 3. */
@@ -213,4 +237,7 @@ const pinStyles = StyleSheet.create({
   wrap: { alignItems: 'center', gap: ROUTE_PIN.gap },
   circle: { width: ROUTE_PIN.circle, height: ROUTE_PIN.circle, borderRadius: ROUTE_PIN.circle / 2, backgroundColor: BAND_COLORS.standing, borderWidth: 3, borderColor: '#ffffff', elevation: 3 },
   label: { height: ROUTE_PIN.label, justifyContent: 'center', backgroundColor: colors.card, borderRadius: 6, paddingHorizontal: 5, elevation: 2 },
+  play: { width: PLAYBACK_PIN, height: PLAYBACK_PIN, borderRadius: PLAYBACK_PIN / 2, backgroundColor: colors.blue, borderWidth: 3, borderColor: '#ffffff', alignItems: 'center', justifyContent: 'flex-start', paddingTop: 2, elevation: 4 },
+  playHollow: { backgroundColor: '#ffffff', borderColor: colors.blue },
+  arrow: { width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderBottomWidth: 8, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: '#ffffff' },
 });

@@ -14,21 +14,23 @@
 //   - Playback on the shown route: Play / Pause, 1× 5× 20× 60×, a time slider, the marker stepping along the line in time
 //     order with its time and speed; the driver's live marker is hidden while it runs; closing the card ends it.
 
-import Pause from 'lucide-react-native/icons/pause';
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, type LayoutChangeEvent, Linking, PanResponder, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, AppState, type LayoutChangeEvent, Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DriversMap } from '@/components/DriversMap';
-import { type LucideIcon, MessageCircle, Navigation, Phone, Play, Route as RouteIcon, X } from '@/components/icons';
+import { type LucideIcon, MessageCircle, Navigation, Phone, Route as RouteIcon, X } from '@/components/icons';
+import { type Playback, PlaybackBar, usePlayback } from '@/components/office/PlaybackBar';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { DriverDot } from '@/components/mapPins';
-import { Mono, Plate, Txt } from '@/components/ui';
+import { Plate, Txt } from '@/components/ui';
+import { plusDays } from '@/lib/patterns/calendarLogic';
+import { colomboDate } from '@/lib/time';
 import { filterCounts, filterDrivers, focusOf, frameAll, liveChoice, liveFilterDefs, markersOf, pillOf, rowLine } from '@/office/liveLogic';
 import {
-  advance, canPlay, clockS, type Cursor, cursorAt, drawingOf, gapWindowsOf, type LiveLayers, mergeRoute, type PathPoint, PLAYBACK_TICK_MS, type PlaybackSpeed,
-  playbackPath, type Route, ROUTE_REFRESH_MS, routeArgs, routeOf, routeSummary, sliderFraction, SPEEDS, timeAtFraction, trailsLoading, trailsOf, trailsPlan,
+  canPlay, type Cursor, cursorAt, drawingOf, gapWindowsOf, type LiveLayers, mergeRoute,
+  playbackPath, type Route, ROUTE_REFRESH_MS, routeArgs, routeOf, routeSummary, trailsLoading, trailsOf, trailsPlan,
 } from '@/office/liveRouteLogic';
 import { useOffice, useTool } from '@/office/state';
 import { initials } from '@/office/text';
@@ -245,6 +247,7 @@ export default function LiveTab() {
           route={routes ? { route: shownRoute, busy: routeBusy, error: routeErr, retry: () => setRouteTry((n) => n + 1) } : null}
           playback={canPlay(path) ? playback : null}
           cursor={cursor}
+          onHistory={routes ? () => router.push({ pathname: '/office/driver/[username]', params: { username: chosen.username, date: plusDays(colomboDate(), -1) } }) : undefined}
         />
       )}
     </View>
@@ -283,7 +286,7 @@ interface RouteState {
  * The selected driver's card over the bottom: the name, the plate, the lines, today's numbers from the route, Call / WhatsApp
  * / Open in Maps as the links allow, and the playback bar when the route has a span to play.
  */
-function DriverCard({ d, onClose, onLayout, route, playback, cursor }: {
+function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory }: {
   d: LiveDriver;
   onClose: () => void;
   onLayout: (e: LayoutChangeEvent) => void;
@@ -291,6 +294,8 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor }: {
   route: RouteState | null;
   playback: Playback | null;
   cursor: Cursor | null;
+  /** Stage 1 (O3 item 1): the driver's page on yesterday, the day strip back 90 days (with driver_route). */
+  onHistory?: () => void;
 }) {
   const { t } = useApp();
   const insets = useSafeAreaInsets();
@@ -339,6 +344,11 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor }: {
         </View>
       )}
       {playback && <PlaybackBar playback={playback} cursor={cursor} />}
+      {onHistory && (
+        <Pressable accessibilityRole="button" onPress={onHistory} style={styles.retry} testID="live-history">
+          <Txt variant="strong" size={15} color={colors.blue}>{t('office.history.earlierDays')} ›</Txt>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -354,164 +364,6 @@ function Action({ icon: Icon, label, url }: { icon: LucideIcon; label: string; u
     </Pressable>
   );
 }
-
-// ---- Playback (the site's usePlayback on a timer: the phone has no animation frame worth the battery) ------------------
-
-interface Playback {
-  /** The recorded time the marker is at, Unix ms. */
-  t: number;
-  start: number;
-  end: number;
-  playing: boolean;
-  /** Playing, or moved away from the start: the marker is shown. */
-  active: boolean;
-  speed: PlaybackSpeed;
-  toggle: () => void;
-  /** To any moment (clamped to the route). */
-  seek: (t: number) => void;
-  setSpeed: (s: PlaybackSpeed) => void;
-}
-
-/**
- * The clock runs in recorded time at 1×, 5×, 20× or 60× on a 125 ms tick (each tick moves it on by the real time since
- * the last × the speed, a long tick capped), and stops at the end. A new route (another driver) starts it again at its
- * start, paused; new points on the same route leave the clock alone. Leaving the tab pauses it.
- */
-function usePlayback(path: PathPoint[], focused: boolean): Playback {
-  const start = path[0]?.at ?? 0;
-  const end = path[path.length - 1]?.at ?? 0;
-  const [t, setT] = useState(start);
-  const tRef = useRef(start);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeedState] = useState<PlaybackSpeed>(60);
-  const speedRef = useRef<PlaybackSpeed>(60);
-  const endRef = useRef(end);
-  endRef.current = end;
-
-  useEffect(() => {
-    tRef.current = start;
-    setT(start);
-    setPlaying(false);
-  }, [start]);
-  useEffect(() => {
-    if (!focused) setPlaying(false);
-  }, [focused]);
-
-  useEffect(() => {
-    if (!playing) return;
-    let last = Date.now();
-    const timer = setInterval(() => {
-      const now = Date.now();
-      const next = advance(tRef.current, now - last, speedRef.current, endRef.current);
-      last = now;
-      tRef.current = next;
-      setT(next);
-      if (next >= endRef.current) setPlaying(false);
-    }, PLAYBACK_TICK_MS);
-    return () => clearInterval(timer);
-  }, [playing]);
-
-  const seek = useCallback((v: number) => {
-    const clamped = Math.max(start, Math.min(end, v));
-    tRef.current = clamped;
-    setT(clamped);
-  }, [start, end]);
-  const toggle = useCallback(() => {
-    if (!playing && tRef.current >= end) seek(start);
-    setPlaying((p) => !p);
-  }, [playing, end, start, seek]);
-  const setSpeed = useCallback((s: PlaybackSpeed) => {
-    speedRef.current = s;
-    setSpeedState(s);
-  }, []);
-  const shown = Math.max(start, Math.min(end, t));
-  return { t: shown, start, end, playing, active: playing || shown > start, speed, toggle, seek, setSpeed };
-}
-
-/**
- * The bar under the card's lines: Play / Pause and the speeds on one row (48 px each), then the time slider from the
- * day's first minute with the clock (the recorded time to the second, the speed or "estimated") on its right.
- */
-function PlaybackBar({ playback, cursor }: { playback: Playback; cursor: Cursor | null }) {
-  const { t } = useApp();
-  const words = cursor ? (cursor.estimated ? t('office.live.estimated') : cursor.kmh === null ? '' : t('office.live.kmh', { n: cursor.kmh })) : '';
-  return (
-    <View style={styles.playback} testID="live-playback">
-      <View style={styles.playRow}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={playback.playing ? t('office.live.pause') : t('office.live.play')}
-          onPress={playback.toggle}
-          testID="live-play"
-          style={({ pressed }) => [styles.playBtn, pressed && { opacity: 0.8 }]}
-        >
-          {playback.playing ? <Pause size={22} color="#ffffff" strokeWidth={2.6} /> : <Play size={22} color="#ffffff" strokeWidth={2.6} />}
-        </Pressable>
-        {SPEEDS.map((s) => {
-          const on = s === playback.speed;
-          return (
-            <Pressable key={s} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => playback.setSpeed(s)}
-              style={[styles.speed, on && styles.speedOn]}>
-              <Mono size={14} bold color={on ? '#ffffff' : colors.ink}>{`${s}×`}</Mono>
-            </Pressable>
-          );
-        })}
-      </View>
-      <View style={styles.sliderRow}>
-        <Mono size={12} color={colors.muted}>{clockS(playback.start).slice(0, 5)}</Mono>
-        <Slider fraction={sliderFraction(playback.t, playback.start, playback.end)} onSeek={(k) => playback.seek(timeAtFraction(k, playback.start, playback.end))} label={t('office.live.slider')} />
-        <View style={styles.clock}>
-          <Mono size={15} bold>{cursor ? cursor.time : clockS(playback.t)}</Mono>
-          {words ? <Txt variant="small" size={12} numberOfLines={1}>{words}</Txt> : null}
-        </View>
-      </View>
-    </View>
-  );
-}
-
-/** A time slider (no slider module in the build): a track with a thumb; a touch or a drag anywhere on it jumps there. */
-function Slider({ fraction, onSeek, label }: { fraction: number; onSeek: (k: number) => void; label: string }) {
-  const width = useRef(0);
-  const left = useRef(0);
-  const seekRef = useRef(onSeek);
-  seekRef.current = onSeek;
-  const seekAt = (pageX: number) => {
-    if (width.current > 0) seekRef.current((pageX - left.current) / width.current);
-  };
-  const pan = useRef(PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderTerminationRequest: () => false,
-    onPanResponderGrant: (e) => {
-      // Where the track starts on the screen: the touch's page position less its position inside the track.
-      left.current = e.nativeEvent.pageX - e.nativeEvent.locationX;
-      seekAt(e.nativeEvent.pageX);
-    },
-    onPanResponderMove: (e) => seekAt(e.nativeEvent.pageX),
-  })).current;
-  const pct = Math.round(fraction * 100);
-  return (
-    <View
-      {...pan.panHandlers}
-      onLayout={(e) => { width.current = e.nativeEvent.layout.width; }}
-      accessible
-      accessibilityRole="adjustable"
-      accessibilityLabel={label}
-      accessibilityValue={{ min: 0, max: 100, now: pct }}
-      accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
-      onAccessibilityAction={(e) => seekRef.current(Math.max(0, Math.min(1, fraction + (e.nativeEvent.actionName === 'increment' ? 0.05 : -0.05))))}
-      style={styles.track}
-      testID="live-slider"
-    >
-      <View style={styles.trackBar} pointerEvents="none">
-        <View style={[styles.trackFill, { width: `${pct}%` }]} />
-      </View>
-      <View style={[styles.thumb, { left: `${pct}%` }]} pointerEvents="none" />
-    </View>
-  );
-}
-
-const THUMB = 24;
 
 const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.ink, paddingHorizontal: 20, paddingBottom: 10 },
@@ -555,15 +407,4 @@ const styles = StyleSheet.create({
     borderColor: colors.line,
     backgroundColor: colors.card,
   },
-  playback: { gap: 4, marginTop: 2, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
-  playRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  playBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  speed: { minWidth: 48, height: 48, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  speedOn: { backgroundColor: colors.ink, borderColor: colors.ink },
-  clock: { alignItems: 'flex-end', minWidth: 76 },
-  sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  track: { flex: 1, height: 48, justifyContent: 'center' },
-  trackBar: { height: 6, borderRadius: 3, backgroundColor: colors.line, overflow: 'hidden' },
-  trackFill: { height: 6, backgroundColor: colors.blue },
-  thumb: { position: 'absolute', top: (48 - THUMB) / 2, marginLeft: -THUMB / 2, width: THUMB, height: THUMB, borderRadius: THUMB / 2, backgroundColor: colors.blue, borderWidth: 3, borderColor: colors.card, elevation: 2 },
 });

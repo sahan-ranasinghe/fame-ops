@@ -157,7 +157,7 @@ console.log('\n== The screen and the two engines ==');
   // O2: the map also gets the route layers (the trails, the shown route, the playback marker: scripts/test-live-route.ts).
   check(/<DriversMap markers=\{markers\} fit=\{fit\} focus=\{focus\} onPressMarker=\{select\} mapPackage=\{me\.map\?\.package\} layers=\{layers\} controls=\{controls\} \/>/.test(screen), 'the map gets the markers, the frame, the selected driver, the office\'s map package, the route layers and the controls');
   check(/links\.call && <Action/.test(screen) && /links\.whatsapp && <Action/.test(screen) && /links\.maps && <Action/.test(screen), 'Call, WhatsApp and Open in Maps only when the server gave the link (no dead button)');
-  check(/const controls = routes \? \([\s\S]*?testID="live-trails"/.test(screen) && /testID="live-playback"/.test(screen), 'the trails control and the playback bar are there (O2), the control only for a person who may call driver_route');
+  check(/const controls = routes \? \([\s\S]*?testID="live-trails"/.test(screen) && /<PlaybackBar playback=\{playback\} cursor=\{cursor\} \/>/.test(screen) && /testID="live-playback"/.test(readFileSync(join(__dirname, '..', 'src', 'components', 'office', 'PlaybackBar.tsx'), 'utf8')), 'the trails control and the playback bar are there (O2; the bar is the shared one), the control only for a person who may call driver_route');
   // O2: the card grew (today's numbers, the playback bar), so the room under it follows its measured height.
   check(/paddingBottom: chosen \? Math\.max\(240, cardH \+ 16\) : 24/.test(screen), 'the list makes room under the card');
 

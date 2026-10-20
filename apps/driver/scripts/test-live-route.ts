@@ -233,7 +233,8 @@ console.log('\n== Playback: the path, the position at a time, the clock ==');
 
 console.log('\n== The screen and the two engines ==');
 {
-  const screen = read('src/app/office/(tabs)/live.tsx');
+  // The bar and its clock moved to the shared components/office/PlaybackBar.tsx (Stage 1: one playback bar everywhere).
+  const screen = read('src/app/office/(tabs)/live.tsx') + read('src/components/office/PlaybackBar.tsx');
   const calls = (screen.match(/api\.call<DriverRoute>\('driver_route'/g) ?? []).length;
   const withArgs = (screen.match(/api\.call<DriverRoute>\('driver_route', routeArgs\(\w+\)\)/g) ?? []).length;
   check(calls === 3 && withArgs === 3 && !/snap/.test(screen), 'every driver_route call (the shown route, a trail, the refresh) with routeArgs(username); never snap', { calls, withArgs });
@@ -300,7 +301,7 @@ console.log('\n== Strings: the keys the code asks for ==');
   // The O2 strings (the trails, the route, the playback), merged into en.json and si.json; each one asked for somewhere.
   const O2_KEYS = ['trails', 'trailsLoading', 'trailsNotDrawn', 'routeFailed', 'routeNone', 'routeToday', 'routeDriving', 'routeStopped', 'routeStops', 'routeStopsOne', 'play', 'pause', 'slider', 'estimated'];
   const si = new Map(flat((JSON.parse(read('src/i18n/si.json')) as { office: { live: Tree } }).office.live));
-  const src = read('src/app/office/(tabs)/live.tsx') + read('src/components/DriversMap.tsx') + read('src/office/liveRouteLogic.ts');
+  const src = read('src/app/office/(tabs)/live.tsx') + read('src/components/office/PlaybackBar.tsx') + read('src/components/DriversMap.tsx') + read('src/office/liveRouteLogic.ts');
   const asked = [...new Set([...src.matchAll(/t\('office\.live\.([\w.]+)'/g)].map((m) => m[1]))];
   const missing = asked.filter((k) => !en.has(k) || !si.has(k));
   check(asked.length > 0 && missing.length === 0, 'every office.live.* key the code asks for is in en.json and si.json', missing);

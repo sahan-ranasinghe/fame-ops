@@ -1,0 +1,49 @@
+// Office mode (Stage 1, O3 item 1): a task's driven route, opened from a task that has started (in progress or completed)
+// with "Show the driven route" (driver_route with task_id: the task's own window, from Start task to Save & finish). The
+// map on both engines with the line by speed band, the stops over 10 minutes, the estimated roads over gaps, one playback
+// bar, the numbers (GPS km) and the timeline (components/office/DayRoute.tsx); the odometer's km beside the GPS km. A
+// task still under way is read again every minute. With driver_route (assign_tasks or vehicles).
+
+import { useLocalSearchParams } from 'expo-router';
+import { View } from 'react-native';
+
+import { DayRoute } from '@/components/office/DayRoute';
+import { Txt } from '@/components/ui';
+import { taskRouteArgs } from '@/office/historyLogic';
+import { useOffice, useTool } from '@/office/state';
+import type { DriverRoute, TaskDetail } from '@/office/types';
+import { BackHeader, Screen, Section } from '@/office/ui';
+import { useApp } from '@/state/app';
+import { colors } from '@/theme';
+
+export default function TaskRouteScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { t } = useApp();
+  const { me, signOut } = useOffice();
+  const detail = useTool<TaskDetail>('task_detail', { task_id: id });
+  const task = detail.data?.task;
+  const running = task?.status === 'in_progress';
+  const route = useTool<DriverRoute>('driver_route', taskRouteArgs(id), { every: running ? 60_000 : undefined, enabled: me.tools.includes('driver_route') });
+
+  const refresh = () => void Promise.all([detail.reload(), route.reload()]);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.page }}>
+      <BackHeader title={t('office.history.drivenRoute')} subtitle={task?.title ?? route.data?.task?.title} />
+      <Screen refreshing={route.refreshing} onRefresh={refresh} bottom={24}>
+        <Section title={[task?.driver, route.data?.task?.started && route.data?.task?.completed ? `${route.data.task.started}–${route.data.task.completed}` : route.data?.task?.started].filter(Boolean).join(' · ') || t('office.history.drivenRoute')}>
+          <DayRoute
+            data={route.data}
+            error={route.error}
+            onRetry={refresh}
+            onSignIn={() => void signOut()}
+            mapPackage={me.map?.package}
+            emptyText={t('office.history.noTaskPoints')}
+          >
+            {task?.km != null ? <Txt variant="muted" size={15} style={{ paddingVertical: 6 }}>{t('office.task.taskKm', { km: task.km })}</Txt> : null}
+          </DayRoute>
+        </Section>
+      </Screen>
+    </View>
+  );
+}

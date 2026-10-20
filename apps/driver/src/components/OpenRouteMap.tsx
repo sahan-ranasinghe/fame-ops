@@ -12,7 +12,7 @@ import { BAND_COLORS } from '@/office/driversLogic';
 import { useApp } from '@/state/app';
 import { MapCompass } from './MapCompass';
 import { nextTurn, ONE_PLACE_ZOOM, SRI_LANKA, type Turn } from './mapPins';
-import { lineWidth, ROUTE_PADDING, ROUTE_PIN, ROUTE_ZOOM, type RouteEngineProps, RouteStopPin } from './RouteMap';
+import { lineWidth, PlaybackPin, ROUTE_PADDING, ROUTE_PIN, ROUTE_ZOOM, type RouteEngineProps, RouteStopPin } from './RouteMap';
 import type { Frame } from './taskMapLogic';
 
 const MAP_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
@@ -23,7 +23,7 @@ function stopFor(f: Frame, zoom: number): CameraStop {
   return { center: [SRI_LANKA.lng, SRI_LANKA.lat], zoom: 6.4 };
 }
 
-export function OpenRouteMap({ lines, stops, fit, focus, onLoaded, onFailed }: RouteEngineProps) {
+export function OpenRouteMap({ lines, stops, fit, focus, marker, onLoaded, onFailed }: RouteEngineProps) {
   const { t } = useApp();
   const camera = useRef<CameraRef>(null);
   const [turn, setTurn] = useState<Turn>({ heading: 0, pitch: 0 });
@@ -105,6 +105,12 @@ export function OpenRouteMap({ lines, stops, fit, focus, onLoaded, onFailed }: R
             <RouteStopPin stop={s} />
           </Marker>
         ))}
+        {marker ? (
+          // The playback marker: the circle's centre on the position; the view turns to the path (less the map's own turn).
+          <Marker id="route-playback" lngLat={[marker.lng, marker.lat]} anchor="center">
+            <PlaybackPin marker={{ ...marker, heading: marker.heading == null ? null : marker.heading - turn.heading }} turn />
+          </Marker>
+        ) : null}
       </Map>
       <MapCompass heading={turn.heading} pitch={turn.pitch} label={t('map.northUp')} onPress={northUp} style={{ top: 12, right: 12 }} />
     </>

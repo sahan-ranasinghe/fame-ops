@@ -91,7 +91,8 @@
     "test:search": "tsx scripts/test-search.ts",
     "test:trip-forms": "tsx scripts/test-trip-forms.ts",
     "test:patterns": "tsx scripts/test-patterns.ts",
-    "test:taps": "tsx scripts/test-taps.ts"
+    "test:taps": "tsx scripts/test-taps.ts",
+    "test:history": "tsx scripts/test-history.ts"
   },
   "private": true,
   "expo": {

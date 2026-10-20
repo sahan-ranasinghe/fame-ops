@@ -3,23 +3,27 @@
 // expiry, this month's tasks and km, what is missing; the emergency contact and the licence number only when the server
 // sent them, i.e. the person holds vehicles or users), today's state (the driver's row of drivers_board, when the person
 // may read the board), the days marked not available (Remove through remove_unavailability after a confirmation, when
-// allowed), and today's route (driver_route at tolerance 0, up to 3,000 points, with the estimated roads; every minute):
-// the map on both engines (components/RouteMap.tsx: the line by speed band, the holes dashed, the stops as circles with
-// their times), the legend, the day's numbers (GPS km, driving, stopped, stops) and the timeline; a row tapped moves the
-// map to its span. No playback. Back means back (BackHeader). The rules: office/driversLogic.ts.
+// allowed), and the route of a day (Stage 1, O3 item 1: the day strip, today and the 89 days before it; `?date=` opens a
+// day, e.g. from Live's "Earlier days"): driver_route at tolerance 0, up to 3,000 points, with the estimated roads (today
+// every minute, a past day once), the day's tasks with their km (list_tasks, with assign_tasks; a row opens the task),
+// and components/office/DayRoute.tsx: the map on both engines (the line by speed band, the holes dashed, the stops over
+// 10 minutes with their times), one playback bar, the day's numbers and the timeline. Back means back (BackHeader).
+// The rules: office/driversLogic.ts and office/historyLogic.ts.
 
-import { useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MessageCircle, Phone } from '@/components/icons';
-import { RouteMap } from '@/components/RouteMap';
+import { DayRoute } from '@/components/office/DayRoute';
+import { DayStrip } from '@/components/patterns/Calendar';
 import { Mono, Plate, Txt } from '@/components/ui';
-import { durationText, shortDate } from '@/lib/durations';
+import { shortDate } from '@/lib/durations';
 import { colomboDate } from '@/lib/time';
-import { BAND_COLORS, boardPill, dayNumbers, entryParts, routeFrame, routeLines, routePoints, rowFrame, rowLines, segmentLine, segmentTone, SPEED_BANDS, stopMarks } from '@/office/driversLogic';
+import { boardPill, entryParts, rowLines } from '@/office/driversLogic';
+import { dayRouteArgs, dayTasks, dayTasksArgs, historyDay, historyMin, routeEvery } from '@/office/historyLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { DriverProfile, DriverRoute, DriversBoard, FleetError, UnavailableEntry } from '@/office/types';
+import type { DriverProfile, DriverRoute, DriversBoard, FleetError, TaskHistory, UnavailableEntry } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -30,7 +34,8 @@ const LICENCE_TONE: Record<string, Tone> = { ok: 'green', orange: 'amber', red: 
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
 export default function DriverPage() {
-  const { username } = useLocalSearchParams<{ username: string }>();
+  const { username, date: askedDate } = useLocalSearchParams<{ username: string; date?: string }>();
+  const router = useRouter();
   const { t, tList } = useApp();
   const { me, api, signOut } = useOffice();
   const names = { days: tList('days'), months: tList('months') };
@@ -41,7 +46,13 @@ export default function DriverPage() {
   const mayBoard = me.tools.includes('drivers_board');
   const board = useTool<DriversBoard>('drivers_board', { search: username }, { enabled: mayBoard, every: 60_000 });
   const mayRoute = me.tools.includes('driver_route');
-  const route = useTool<DriverRoute>('driver_route', { driver: username, date: today, line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true }, { enabled: mayRoute, every: 60_000 });
+  const [day, setDay] = useState(() => historyDay(askedDate, today));
+  const route = useTool<DriverRoute>('driver_route', dayRouteArgs(username, day), { enabled: mayRoute, every: routeEvery(day, today) });
+  const mayTasks = me.tools.includes('list_tasks');
+  const tasks = useTool<TaskHistory>('list_tasks', dayTasksArgs(username, day), { enabled: mayTasks });
+  const theDay = tasks.data ? dayTasks(tasks.data.tasks) : null;
+  // An answer for another day is never drawn under the chosen day (the tool keeps the last answer while the next loads).
+  const routeData = route.data && route.data.date === day ? route.data : null;
   const mayRemove = me.tools.includes('remove_unavailability');
   const [problem, setProblem] = useState<FleetError | null>(null);
   // The entry whose Remove failed: Try again removes it again (never only hides the error).
@@ -51,17 +62,8 @@ export default function DriverPage() {
   const d = p?.driver;
   const row = board.data?.drivers.find((x) => x.username === username) ?? board.data?.drivers.find((x) => d && x.name === d.name) ?? null;
 
-  // The route for the map: the points once per answer, the lines, the stops, the frame (its key changes with the points shown).
-  const points = useMemo(() => (route.data ? routePoints(route.data) : []), [route.data]);
-  const lines = useMemo(() => (route.data ? routeLines(route.data) : []), [route.data]);
-  const stops = useMemo(() => (route.data ? stopMarks(route.data) : []), [route.data]);
-  const fitNow = routeFrame(lines, stops);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const fit = useMemo(() => fitNow, [fitNow.key]);
-  const [focus, setFocus] = useState<{ frame: ReturnType<typeof rowFrame>; nonce: number; index: number } | null>(null);
-  const numbers = route.data ? dayNumbers(route.data) : null;
 
-  const refresh = () => void Promise.all([profile.reload(), mayBoard ? board.reload() : Promise.resolve(), mayRoute ? route.reload() : Promise.resolve()]);
+  const refresh = () => void Promise.all([profile.reload(), mayBoard ? board.reload() : Promise.resolve(), mayRoute ? route.reload() : Promise.resolve(), mayTasks ? tasks.reload() : Promise.resolve()]);
 
   function confirmRemove(e: UnavailableEntry) {
     const when = entryParts(e, dayLabel, t).slice(0, 2).join(' · ');
@@ -169,61 +171,41 @@ export default function DriverPage() {
         )}
 
         {mayRoute && (
-          <Section title={t('office.drivers.route.title')}>
-            <View style={styles.map} testID="driver-route-map">
-              <RouteMap lines={lines} stops={stops} fit={fit} focus={focus} mapPackage={me.map?.package} />
-            </View>
-            <View style={styles.legend}>
-              {SPEED_BANDS.map((b) => <LegendItem key={b} color={BAND_COLORS[b]} text={t(`office.drivers.route.legend.${b}`)} />)}
-              <LegendItem color={BAND_COLORS.gap} text={t('office.drivers.route.legend.gap')} dashed />
-              {lines.some((l) => l.band === 'estimated') && <LegendItem color={BAND_COLORS.estimated} text={t('office.drivers.route.legend.estimated')} dashed />}
-            </View>
-            {!route.data && !route.error && <SkeletonRows rows={2} lines={1} />}
-            {route.error && <ListFailed stale={!!route.data} error={route.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-            {numbers && (
-              <View style={styles.numbers}>
-                <Number label={t('office.drivers.route.km')} value={numbers.km === null ? '—' : String(numbers.km)} />
-                <Number label={t('office.drivers.route.driving')} value={durationText(t, numbers.drivingMin)} />
-                <Number label={t('office.drivers.route.stopped')} value={durationText(t, numbers.stoppedMin)} />
-                <Number label={t('office.drivers.route.stops')} value={String(numbers.stops)} />
-              </View>
-            )}
-            {route.data && points.length === 0 && <ListEmpty text={t('office.drivers.route.none')} />}
-            {route.data?.km_note && <Txt variant="small">{route.data.km_note}</Txt>}
-            {(route.data?.timeline ?? []).map((seg, i) => {
-              const on = focus?.index === i;
-              return (
-                <View key={`${seg.kind}:${seg.from_at}`}>
-                  {i > 0 && <Divider />}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    onPress={() => setFocus({ frame: rowFrame(points, seg), nonce: (focus?.nonce ?? 0) + 1, index: i })}
-                    style={({ pressed }) => [styles.segRow, on && { backgroundColor: colors.blueChip }, pressed && { opacity: 0.8 }]}
-                  >
-                    <View style={[styles.segDot, { backgroundColor: toneColor(segmentTone(seg.kind)) }]} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Txt variant="strong" size={15} numberOfLines={2}>{seg.text}</Txt>
-                      <Txt variant="small">{segmentLine(seg, t)}</Txt>
-                    </View>
-                  </Pressable>
+          <Section title={day === today ? t('office.history.todayRoute') : t('office.history.dayRoute', { day: dayLabel(day) })}>
+            <DayStrip value={day} onChange={setDay} max={today} min={historyMin(today)} testID="history-day" />
+            <DayRoute
+              data={routeData}
+              error={route.error}
+              onRetry={refresh}
+              onSignIn={() => void signOut()}
+              mapPackage={me.map?.package}
+              emptyText={t('office.history.noDayPoints')}
+            >
+              {mayTasks && (
+                <View style={{ paddingVertical: 8, gap: 2 }} testID="history-tasks">
+                  <Txt variant="strong" size={15}>{t('office.history.dayTasks')}</Txt>
+                  {!theDay && !tasks.error && <SkeletonRows rows={2} lines={1} />}
+                  {tasks.error && <ListFailed stale={!!theDay} error={tasks.error} onRetry={() => void tasks.reload()} onSignIn={() => void signOut()} />}
+                  {theDay && theDay.tasks.length === 0 && <Txt variant="muted" size={15}>{t('office.history.noDayTasks')}</Txt>}
+                  {theDay && theDay.tasks.length > 0 && <Txt variant="small">{t('office.history.dayTasksLine', { n: theDay.tasks.length, km: theDay.km })}</Txt>}
+                  {theDay?.tasks.map((x) => (
+                    <Pressable key={x.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: x.id } })}
+                      style={({ pressed }) => [styles.taskRow, pressed && { opacity: 0.8 }]} testID="history-task">
+                      <Mono size={14} bold>{x.time}</Mono>
+                      <View style={{ flex: 1 }}>
+                        <Txt variant="strong" size={15} numberOfLines={1}>{x.title}</Txt>
+                        <Txt variant="small" numberOfLines={1}>{[t(`office.history.status_${x.status}`), x.vehicle, x.km != null ? t('office.history.kmLine', { km: x.km }) : ''].filter(Boolean).join(' · ')}</Txt>
+                      </View>
+                    </Pressable>
+                  ))}
                 </View>
-              );
-            })}
-            {focus && (
-              <Pressable accessibilityRole="button" onPress={() => setFocus(null)} style={{ minHeight: 44, justifyContent: 'center' }}>
-                <Txt variant="strong" size={15} color={colors.blue}>{t('office.drivers.route.title')} ›</Txt>
-              </Pressable>
-            )}
+              )}
+            </DayRoute>
           </Section>
         )}
       </Screen>
     </View>
   );
-}
-
-function toneColor(tone: ReturnType<typeof segmentTone>): string {
-  return tone === 'blue' ? colors.blue : tone === 'amber' ? colors.amber : tone === 'red' ? colors.red : '#8d9096';
 }
 
 function Line({ label, children }: { label: string; children: React.ReactNode }) {
@@ -244,32 +226,10 @@ function Action({ icon: Icon, label, onPress }: { icon: typeof Phone; label: str
   );
 }
 
-function LegendItem({ color, text, dashed = false }: { color: string; text: string; dashed?: boolean }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-      <View style={[{ width: 18, height: 4, borderRadius: 2, backgroundColor: color }, dashed && { height: 0, borderTopWidth: 3, borderStyle: 'dashed', borderColor: color, backgroundColor: 'transparent' }]} />
-      <Txt variant="small" size={12}>{text}</Txt>
-    </View>
-  );
-}
-
-function Number({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
-      <Mono size={18} bold>{value}</Mono>
-      <Txt variant="small" size={12} numberOfLines={1}>{label}</Txt>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
   action: { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card },
   iconBtn: { width: 48, height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  map: { height: 300, borderRadius: 14, overflow: 'hidden', backgroundColor: colors.mapLand, marginTop: 6 },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 8 },
-  numbers: { flexDirection: 'row', gap: 6, paddingVertical: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.line },
-  segRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 6, marginHorizontal: -6, borderRadius: 10, minHeight: 56 },
-  segDot: { width: 12, height: 12, borderRadius: 6 },
+  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingVertical: 6 },
 });

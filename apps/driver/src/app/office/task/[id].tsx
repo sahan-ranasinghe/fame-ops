@@ -219,6 +219,10 @@ export default function TaskDetailScreen() {
         {task && (task.km != null || task.gps_km != null) && (
           <Txt variant="muted" size={15}>{[task.km != null ? t('office.task.taskKm', { km: task.km }) : '', task.gps_km != null ? t('office.task.gpsKm', { km: task.gps_km }) : ''].filter(Boolean).join(' · ')}</Txt>
         )}
+        {task && (task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route') && (
+          <Button kind="outline" label={t('office.history.showDrivenRoute')} onPress={() => router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } })}
+            style={{ minHeight: 56 }} />
+        )}
         {task && (actions.reassign || actions.cancel) && (
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {actions.reassign && <Button kind="outline" label={task.needs_driver ? t('office.home.giveDriver') : t('office.task.reassign')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } })} style={{ flex: 1, minHeight: 56 }} />}

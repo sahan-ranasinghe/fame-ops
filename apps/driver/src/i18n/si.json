@@ -2134,6 +2134,26 @@
       "answers": "පිළිතුරු",
       "openTask": "කාර්යය විවෘත කරන්න →",
       "openRequest": "ඉල්ලීම විවෘත කරන්න →"
+    },
+    "history": {
+      "wholeRoute": "සම්පූර්ණ මාර්ගය ›",
+      "drivenRoute": "ධාවනය කළ මාර්ගය",
+      "showDrivenRoute": "ධාවනය කළ මාර්ගය පෙන්වන්න",
+      "noTaskPoints": "මෙම කාර්යය අතරතුර GPS ලක්ෂ්‍ය කිසිවක් සටහන් වී නැත.",
+      "dayRoute": "මාර්ගය · {day}",
+      "todayRoute": "අද මාර්ගය",
+      "dayTasks": "මෙදින කාර්යයන්",
+      "dayTasksLine": "කාර්යයන් {n} · ඔඩෝමීටරයෙන් {km} km",
+      "noDayTasks": "මෙදින කාර්යයන් නැත.",
+      "noDayPoints": "මෙදින ධාවනයක් සටහන් වී නැත.",
+      "earlierDays": "පෙර දින",
+      "kmLine": "{km} km",
+      "status_completed": "අවසන්",
+      "status_in_progress": "ගමනේ",
+      "status_assigned": "ආරම්භ කර නැත",
+      "status_cancelled": "අවලංගුයි",
+      "status_declined": "ප්‍රතික්ෂේප කළා",
+      "status_missed": "මග හැරුණා"
     }
   },
   "patterns": {
