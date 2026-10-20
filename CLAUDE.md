@@ -154,8 +154,14 @@
   a pilot before 8.0)**: the approver's and dispatcher's side in the app, JavaScript only (an EAS update to 1.3.0):
   `src/office/` (the site's client, types and permission table copied; `nav.ts` tabs by permission; `state.tsx`
   `useTool`), `src/app/office/` (Home, the Approve queue, Approve a request, the Tasks board, Task detail, Give it a
-  driver, Live on both engines, Alerts, My trips, Profile, More) and the Driver | Office sign-in. The trip editor is O2.
-  As built: `docs/phase8-plan.md` section 14; the phone test: `docs/phase8-test-plan.md`.
+  driver, Live on both engines, Alerts, My trips, Profile, More) and the Driver | Office sign-in. As built:
+  `docs/phase8-plan.md` section 14; the phone test: `docs/phase8-test-plan.md`. **O2 (19–20 October 2026, branch
+  `phase8-o2`, on top of O1)**: the trip editor (06–09: Request a vehicle, Assign a task, Edit a request; `src/office/trip/`,
+  `src/app/office/trip/`), Ask drivers (13), the Drivers board and tab with a driver's page (12), Issues, Task detail's
+  extras (Change time, Change stops, Swap vehicle, Reopen), Live's trails, route and playback on both engines, and the
+  management under More (Vehicles, Reports, Drivers, Office users, Quick settings; 19–20), each row only with its tool.
+  As built: `docs/phase8-plan.md` section 15; the parity table: `docs/phase8-parity.md`; the 15-minute phone test:
+  `docs/phase8-test-plan.md` "O2".
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).

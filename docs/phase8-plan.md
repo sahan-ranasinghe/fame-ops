@@ -471,6 +471,196 @@ Built in the brief's order; the trip editor (06–09) is round O2.
   screen, vehicles, the management under More (8.5), 2-step sign-in in the app, the office push on the phone (item 9:
   server work behind Sahan's go, listed apart in the checkpoint).
 
+## 15. O2 as built (19–20 October 2026, branch `phase8-o2`, on top of O1): the rest of a dispatcher's day
+
+Sahan's brief (19 October, 22:30): the same rules as O1 (JavaScript only, no new native modules, no Expo Router
+migration, no `packages/shared`, by permission never by role, no dead UI, both map engines on every map, English and
+Sinhala, the driver side untouched); one commit per item, an item ships only when it passes its tests and the final
+reviewer, an unfinished one is left out; two gos kept possible in the morning (GO O1 = main fast-forwarded to
+`phase8-o1`; GO O1+O2 = to `phase8-o2`); stop at 06:30 at the latest. Built in the brief's order, items 1–7, with two
+subagents at a time on disjoint files (the lead owned `nav.ts`, the tabs layout, the strings' merge, `package.json`, the
+commits).
+
+### Item 1: the trip editor (designs 06–09), `src/office/trip/` and `src/app/office/trip/`
+- One flow, three entries: **Request a vehicle** (Home and My trips, with request → `create_request`), **Assign a task**
+  (Home and Tasks, with assign_tasks → `create_task`; "Send for approval" when the server answers `waiting_for_approval`)
+  and **Edit** (My trips, on a request the person may change → `update_request` with the card's `version`, only the
+  fields that changed since the request was loaded: the draft keeps `was`). Four steps with a sticky button and back
+  one step: **Where** (the start as the base place or a picked one, up to 12 stops with their type and what, the
+  location search `components/office/PlaceSearch.tsx` through `search_places` {text, google?, session?} — our places,
+  "used before", the map's results with their credit, Google's results with "Google Maps" under them only when
+  `me.map.places` and the tool `google_place` are there, a pasted "lat, lng" or Google Maps link as a pin, "My
+  location" through expo-location; a Google pick calls `google_place` and the stop carries `google_place_id`), **When**
+  (the day as chips Today / Tomorrow / +2 / Pick a date, per stop arrive-by and dwell chips (the site's dwell rules,
+  `dwell.ts`), Back by on the last stop, Leave from with the departure check's words, Plan now), **Who** (a task: the
+  Who's available rows from `availability` with the best match ticked once the answer lands, the vehicle chips — the
+  driver's today, "On the day" and "Any <type>" when the setting `vehicle_on_the_day` is on, "Choose…" from the free
+  vehicles — the title, pax, contact, the project by name, notes; a request: pax, the type needed, "A driver is needed"
+  when `self_drive_allowed`, tools, for whom, the project, a note) and **Review** (the plan on the app's own task map,
+  `components/TaskMap.tsx`, fed a synthetic task by `planMap.ts` so both engines draw it; the timeline, the totals, the
+  conflicts and warnings, the chips; the button names the driver, "Send for approval" or "Save changes"). The plan is
+  previewed with `plan_task` (`with_line: true`) 1.5 s after the last edit (`useTrip.ts`). The site's pure logic is
+  copied file by file with a header saying so (`tripLogic`, `stopsLogic`, `planLogic`, `assignLogic`, `requestLogic`,
+  `departureLogic`, `vehicleChoiceLogic`, `locationLogic`, `durations`, `time`, `format`, `dwell`); the editor's own
+  rules are in `draftLogic.ts` (the draft, the steps per mode), `words.ts` (the site's English reasons and departure
+  sentences mapped to keys), `whoLogic.ts`, `timeLogic.ts` (`TimeInput`'s HH:MM rule). One draft on the phone
+  (`draft.ts`: "Resume draft from HH:MM · Start again"). `components/office/TripShell.tsx` is the step header and footer.
+- Not built: Book now on the Who step (an approver's request goes to the queue like anyone's); the pin map to adjust a
+  pasted pin; `find_project` (the project is typed by name, the server matches it).
+- Tests: `npm run test:trip` (35): the draft and the steps, the copied logic from a draft, the plan on the map, the words,
+  the time field, `whoArgs`, the entries by permission.
+
+### Item 2: Ask drivers (design 13), `components/office/AskDriversSheet.tsx`, `office/askLogic.ts`
+- The sheet from Approve (10), Give it a driver (11) and the editor's Who step, and from the Drivers board: three
+  questions ("Free for a trip?" with the trip's window under it, "When at the office?", "Where are you?"), the drivers
+  with the free ones ticked (a driver with no app never), "Send to N drivers" → `ask_drivers` {kind, drivers, date,
+  from, to, note, task_id | request_id}. Then the answers from `ask_answers` every 10 s while the sheet is open and
+  someone is still to answer: waiting · seen HH:MM · Yes (with **Use**, which ticks that driver on the page) · No · Call
+  me (with Call) · a time or a place (with Map). Only with the tool `ask_drivers`.
+- Tests: `npm run test:asks-office` (59).
+
+### Item 3: the Drivers board (design 12), the Drivers tab and a driver's page
+- `(tabs)/drivers.tsx` for approvers and dispatchers (`drivers_board`): **Now** with the chips All · Free now · On a task
+  · Off duty · Not available and their counts, a row per driver (the dot, the plate held today, the status line, the
+  next task, Call); **Week** with a cell per day from `unavailability` (a full day red, a part amber), "+ Not available"
+  (`set_unavailability`: the day, Full day / Morning / Afternoon / Hours, the reason, a note) and Remove
+  (`remove_unavailability`); "Ask drivers" at the bottom. A row opens `driver/[username].tsx`: the profile
+  (`driver_profile`: phone, licence, this month, the emergency contact when the server sends it), today's state, the
+  not-available entries, **today's route** on `components/RouteMap.tsx` (`driver_route` at tolerance 0, up to 3,000
+  points, `estimate_gaps`): the line by speed band, holes dashed, the estimated legs dashed slate, the stops with their
+  times, the numbers and the timeline (a row frames its span); both engines (`GoogleRouteMap.tsx`, `OpenRouteMap.tsx`,
+  the same engine rule as the task map). Rules in `office/driversLogic.ts`.
+- The bar now follows designs 02, 03, 12 and 15: Approve · Drivers · Live for approvers, Tasks · Drivers · Live for
+  dispatchers; Alerts moves under More for them (the bell stays on every header). `routeForUrl` opens `/drivers/board`
+  and `/drivers/<username>`.
+- Tests: `npm run test:drivers` (96); `test:office`'s bar expectations updated.
+
+### Item 4: Issues, `app/office/issues/index.tsx` and `[id].tsx`, `office/issuesLogic.ts`
+- The list (`list_issues`): the status chips Active · Open · In progress · Resolved · Dismissed, the severity chips, a
+  search box, 50 a page with Load more; a snoozed row says "Snoozed until…". The page (`issue_history`): the facts, the
+  links by permission (the task, the vehicle, the driver, the request), the timeline; **Take** (`update_issue`
+  {assign_to: me, status: in_progress}), a note, **Resolve**, **Dismiss**, **Open again** — each only with the tool, each
+  patching the row. Home's Critical rows open the issue; View all opens the list; More lists Issues with issues or
+  assign_tasks. `routeForUrl` opens `/issues` and `/issues/<id>`.
+- Tests: `npm run test:issues` (97).
+
+### Item 5: Task detail's extras, `office/taskExtrasLogic.ts`
+- **Change time** (`task/[id]/time.tsx`): the day, the leave-by and the end time through `update_task` with the plan
+  version, only what differs; a running task keeps its day and leave-by (its end only); a stale version is refused by
+  the server and the page loads the task again. **Change stops**: the editor's Where and When in mode `stops` (the
+  task's pending stops as the rows, numbered after the reached ones, no Who step), Review sends `update_task_stops`
+  with the plan version, the start, the switches and a leave time typed by hand (never a running task's leave-by).
+  **Swap vehicle** during a task (`task/[id]/swap.tsx`): every active vehicle from `list_vehicles` ranked as the site's
+  MoveVehicle swap (the task's vehicle shown, not offered; free; held by someone, who is told; the garage; another
+  running task not selectable), the readings at the swap typed or left to the phone, a reason → `move_driver_vehicle`;
+  the answer's readings read back. **Reopen** (a task completed today, as `task_detail.can_reopen` says): a reason sheet
+  → `reopen_task`. Each button only with its tool (`extrasFor`).
+- Tests: `npm run test:task-extras` (46).
+
+### Item 6: Live's trails, the shown route and playback (design 15), `office/liveRouteLogic.ts`
+- Only with `driver_route` (else as O1). **Today's trails**: a toggle in the map's control cluster; one `driver_route`
+  call per sharing driver (the first 10, "+N not drawn"), each trail in its own muted colour with its holes dashed,
+  fetched again every 60 s and merged by time, never replaced. **The shown route**: selecting a driver loads their day,
+  drawn as runs by speed band (standing / under 20 / 20–60 / over 60 km/h), holes dashed, the estimated legs dashed
+  slate (openrouteservice's credit joins the credit line), stops over 10 min as circles with their times; the map
+  frames the day once; the card says "Today: 61 km · driving 2 h 10 min · stopped 45 min · 3 stops". **Playback**: Play
+  / Pause, 1× 5× 20× 60×, a slider, the clock and the speed on the marker; pauses when the tab loses focus. Google's map
+  (Polylines, Markers) and the free map (GeoJSON sources and layers) draw the same content through one `layers` prop on
+  `DriversMap`.
+- Not built: `watch_drivers` (the phone uploads every 10 s while watched on the site), Realtime growth of the lines, the
+  zoom / fit / compass buttons.
+- Tests: `npm run test:live-route` (111); `test:live` (69) updated for the restructured screen.
+
+### Item 7: the management under More (designs 19–20)
+- More's rows by permission (`nav.ts` `moreFor`, `MORE_SECTION`): under Work also **Vehicles** (vehicles) and **Reports**
+  (vehicles or assign_tasks); **People**: Drivers (users or vehicles: decision 1) and Office users (users); **Quick
+  settings** (users); the laptop-only line stays.
+- **Vehicles** (`app/office/vehicles/`, rules in `office/manageLogic.ts`): the list (`list_vehicles`: the chips All · On
+  a task · Available · In garage · Documents expiring · Returned with counts, a search box, 25 a page with Load more; a
+  row = the plate, make · seats, the status pill, the availability line, the document chips); the page (the photo
+  when there is one, the facts, km this month against the allowance, the documents on file through
+  `vehicle_documents` with Open; "adding photos and documents: on a laptop", their upload tools being web-only);
+  the form (Register vehicle → `register_vehicle`; Edit → `update_vehicle` with only the fields filled, the current
+  values under them; the type and the regular driver as chips; the rental company with "+ Add a rental company" →
+  `add_rental_company`; the custodian by name or e-mail, "none" clears; in garage / still rented as Keep · Yes · No).
+- **Reports** (`app/office/reports/index.tsx`, read-only): Mileage · Fuel · Duty log over Today · This week · This month
+  · Last month, each section only with its tool (`mileage_summary`, `list_fuel`, `duty_log`): the tiles, each vehicle's
+  rows (a whole month asked as `month`; a shorter range with the month's allowance beside it), the biggest gaps,
+  unlogged km, the odometer checks; the fills with each video's state and Load more; the duty periods with clock in,
+  clock out and how, the vehicles held, hours and km, Load more. No vehicle or driver filter; photos and videos open on a
+  laptop.
+- **People** and **Quick settings** (`app/office/people/`, rules in `office/peopleLogic.ts`): see "Item 7: People" below
+  (built by a subagent; its report is summarised there).
+- Tests: `npm run test:manage` (the Vehicles list and form, the days and the three tools' inputs, the mileage view, the
+  fuel and duty words, More's rows by permission, the screens as text, the strings), `npm run test:people`.
+
+### Item 7: People (Drivers, Office users, Quick settings)
+- Built by a subagent on disjoint files (`app/office/people/`, `office/peopleLogic.ts`, `components/office/PeopleParts.tsx`:
+  a search box, a card for a secret shown once with Share, the permission picker with the presets as chips and `view`
+  locked while another permission needs it, a toggle), wired by the lead into More.
+- **Drivers** (users or vehicles): the list (`list_drivers`: search, Active / With switched off, 25 a page with Load
+  more; a row = name, code · phone, on duty since · plate, the active pill, the licence chip); "+ Add driver"
+  (`create_driver`: name, code, phone, the username rule, a 6-digit PIN typed or generated; the PIN shown once with
+  "Tell <name> by phone"). **Manage a driver** (design 20): the dark header with the pill, Call / WhatsApp / Today's
+  route (the driver's page) and This week (the Drivers board); Details with Edit (phone, WhatsApp, the emergency
+  contact, the licence number and expiry through `update_driver`, only what changed; the private fields only when the
+  server sent them), Driving licence, Emergency contact (+ Call), "Phone changed by the driver · <when>" from the
+  changes, Account (the username; Reset PIN → a sheet: typed or generated, `reset_pin`, shown once), Regular vehicle
+  (from `list_vehicles`' `regular_driver`), "Switch off <name>…" with a confirmation (`set_driver_active`; the server's
+  notes after).
+- **Office users** (users): the list (`list_office_users`: search, Load more; permissions as lower-case words);
+  "+ Add office user" (`create_office_user`: the presets and chips; the one-time set-password link shown once with
+  Share, for WhatsApp); the user's page: phone and permissions (`update_office_user`, only what changed; a person
+  cannot remove their own users permission), New set-password link (`reset_office_password`, shown once with Share),
+  Switch off / on (`set_office_user_active`).
+- **Quick settings** (users; `get_settings` / `update_settings`, each row saved at once with Saved or the error): new
+  tasks need the fleet admin's OK (`tasks_need_approval`), vehicle on the day (`vehicle_on_the_day`), drivers' personal
+  trips (`driver_personal_trips`, the four choices with one line each), auto clock-out (`duty_cutoff`, empty = off),
+  the accept window (`accept_within_min`, `accept_before_leave_min`), the office phone (`office_phone`, stored +94…);
+  the laptop-only line. Read-only without `update_settings`.
+- A PIN or a link is shown once and never logged (the test greps for it). Tests: `npm run test:people` (150).
+
+### What moved to O3 or later
+- The trip editor's Book now (an approver booking in one step), the pin map for a pasted pin, `find_project`, the
+  WhatsApp link on a task.
+- Live's `watch_drivers`, Realtime growth of the lines, the zoom / fit / compass buttons; Move to vehicle and Clock out
+  from Live; the driver's page's playback and live growth.
+- Issues' Realtime, the vehicle / kind filters, snooze, the Overview's groups; the Maintenance page and "take off the
+  road"; Reminders.
+- Task detail: the words (title, pax, contact, notes) through `update_task`, the task's route map, photos and history,
+  `set_trip_purpose`, `swap_reading`, Save as our place; Tasks → History and Load more; Requests' other chips, search
+  and paging; Cancel a booking and Tell requester; the requester's own request page; My trips' search and paging.
+- Vehicles' photos and documents by camera (needs an upload tool that is not web-only), Places under More; Reports'
+  filters, the fuel videos, the Google and routing counters; the drivers' and licence photos.
+- 2-step sign-in in the app; the office push on the phone (item 9 of O1, behind its own go).
+
+### The checkpoint (20 October 2026, 07:00; branch `phase8-o2` at its last commit; nothing left the laptop)
+- **Timing.** The round started 22:30 on 19 October. Items 4 (Issues) and 1 (the trip editor) were committed at 22:54,
+  item 5 (Task detail's extras) at 23:08, items 2 and 3 (Ask drivers, the Drivers board) at 23:11, item 6 (Live) at
+  23:24; item 7 (the management under More) was built 23:15–23:40 and committed at 06:56 after the laptop lost its
+  network at about 23:40 and got it back at 06:55. Item 7 took the longest (about 70 minutes of work: the Vehicles form,
+  the three reports and the People screens); then item 1. The docs (this section, the parity table, the test plan,
+  CLAUDE.md) were written at 23:30–23:35.
+- **The full run** (06:57, 21 s): the driver app's typecheck (0 errors) and every suite — the three on the local stack
+  (data 96, trips 98, asks 100) and the twenty without it, 1,745 checks, 0 failed. Nothing outside `apps/driver`, `docs`
+  and `CLAUDE.md` changed, so the site's, Deno's, pgTAP's and the connector's suites were not run.
+- **The fresh reviewer did not run.** It was due after item 7, at about 23:45; the network was gone by then and came back
+  after the 06:30 stop. By the brief's rule an item ships only after the final reviewer, so GO O1+O2 should wait for a
+  reviewer pass (about 25 minutes: the designs, dead UI, role names, permissions, the driver side, both engines), or
+  GO O1 goes alone (O1 was reviewed on 19 October).
+- **The driver side.** Changed in `apps/driver` outside `src/office/`, `src/app/office/` and `components/office/`:
+  `components/navigation.ts` (the leave guard also counts an office sign-in: one line), `components/icons.ts` (exports),
+  `components/DriversMap.tsx` with its two engines and `RouteMap.tsx` with its two (office-mode maps), `i18n/en.json`
+  and `si.json` (office keys only), `package.json` (test entries). The driver's own suites pass unchanged.
+- **Not built in O2:** Book now on the Who step, the pin map, `find_project`; `watch_drivers`, Realtime growth and the
+  zoom / fit / compass buttons on Live; the Overview's groups and snooze; vehicle photos and documents by camera (the
+  upload tools are web-only); Places under More; Reports' filters and the fuel videos; the Google and routing counters;
+  the design's count lines on More's People rows. Listed under "What moved to O3 or later".
+- **The EAS update that follows** (after Sahan's go, from main after the fast-forward): channel `preview`, environment
+  `preview` (runtime `1.3.0-gmaps`): it reaches the 1.3.0 phone only. GO O1 fast-forwards main to `phase8-o1`
+  (c88c78f); GO O1+O2 to `phase8-o2`'s last commit. Item 9 (the office push on the phone) stays on `phase8-o1-push`
+  behind its own go (a migration and two functions).
+
 ## 13. Risks
 
 - **Scope.** 138 site functions, about 45 screens. Mitigation:

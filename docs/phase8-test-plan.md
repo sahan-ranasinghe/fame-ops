@@ -121,3 +121,89 @@ position.
 - A button missing: it is a function not built in O1 (listed above as "not shown"), not a bug; say which one you wanted.
 - The sign-in page after a cold start while signed in: the session was revoked or expired for good (a 401); sign in
   again. Note the time: the office site's audit shows what happened.
+
+## O2: the rest of a dispatcher's day (20 October 2026, after the O1+O2 EAS update)
+
+About 15 minutes on the phone, in the order a day runs: a request → its approval → a driver found → the live map → the
+rest. Before you start: the phone has 1.3.0 with the O2 update (Me → App version shows the new update id), your admin
+account (every permission) and a Requester account on the site, test.driver on duty on the OPPO so Live has a position.
+Every button named below exists only with its tool: a missing one on another account is the permission, not a bug.
+
+### O2.1 Request a vehicle (designs 06–09), 3 min
+1. Sign in as the office. Home shows the big buttons **Assign a task** and **Request a vehicle**; the bar is Home ·
+   Approve · Drivers · Live · More (Alerts is under More; the bell stays in the header).
+2. **Request a vehicle** → "New trip · step 1/4". Where: the start says the base place; "+ Add a stop" → type "Kuru" in
+   the search: our places first, then the map's results with their credit (and Google's with "Google Maps" under them
+   when the google package is on). Pick one. Next: When.
+3. When: the day chips (Today · Tomorrow · the day after · Pick a date); the stop's "arrive by" (type 10:30) and dwell
+   chips; "Back by" on the last stop; the "Leave from" card says the leave-by the plan found, or why it cannot. Next: Who.
+4. Who (a request): passengers 3, the type needed (van), "A driver is needed" on, a note. Next: Review.
+5. Review: the plan on the map with the stop pins and the line (the free map or Google's as the setting says), the
+   timeline (leave · each stop with its time · back), the totals, any warning. **Send request** → "Request sent" → My
+   trips shows it as Waiting.
+6. Back from any step keeps the step before it with its fields; kill the app on step 2, open it again, Request a vehicle
+   → "Resume draft from HH:MM · Start again".
+
+### O2.2 Approve it, with Ask drivers (designs 10, 13), 3 min
+1. Home → Requests to approve → the request. Beside **Who's available**: **Ask drivers** → the sheet: "Free for a
+   trip?" with the trip's window under it, the drivers with the free ones ticked (test.driver among them). **Send to N
+   drivers**: the question stays on top, the rows say "waiting…".
+2. On the OPPO (test.driver): the question arrives; answer Yes. On the phone within 10 s the row says "Yes · HH:MM" with
+   **Use** → the sheet closes and test.driver is ticked on the page.
+3. **Approve · send to test.driver** → "Approved · sent to test.driver"; the OPPO gets the task.
+
+### O2.3 Give it a driver and Task detail's extras (designs 11, 14), 3 min
+1. On the OPPO decline the task (Can't do this task → Not available). On the phone Home → Needs a driver → **Give a
+   driver**: Who can take it with the best match; **Ask drivers** is there too. Pick test.driver again → Assign.
+2. Open the task (Tasks or Home). Under the stops: **Change time** → the day chips, Leave by, Back by; set Back by to
+   17:30 → Save changes → "Time changed · The driver is told"; the task shows the new end. **Change stops** → the
+   editor's Where with the task's pending stops (numbered after any reached one) → When → Review → Save changes → the
+   task shows the new plan (plan v+1).
+3. On the OPPO start the task. On the phone the task now shows **Swap vehicle**: the list with the task's vehicle first
+   ("The task's vehicle now", not selectable), the free ones, the ones someone holds, the garage, another running
+   task's vehicle greyed. Pick a free one, leave the readings empty, a reason "Puncture" → **Swap vehicle** → "Vehicle
+   swapped · The task goes on in <plate> · End of <old>: the driver enters it on the phone"; the OPPO asks for the
+   readings.
+4. On the OPPO finish the task. On the phone the task shows **Reopen this task** with its note → Reopen task → a reason
+   (Wrong end reading) → "Task reopened · The driver finishes it again"; the OPPO's task is in progress again. Finish it
+   once more on the OPPO.
+
+### O2.4 Live: trails, the route and playback (design 15), 2 min
+1. Live: the trails toggle (the route icon) in the map's cluster → "Loading trails…" then every sharing driver's day as a
+   muted line (holes dashed). Tap test.driver's marker: their route by speed band (grey standing, amber under 20, blue
+   20–60, dark blue over 60), stops as circles ("09:11–09:25 · 14 min" on a tap), the estimated legs dashed slate over
+   GPS gaps; the card says "Today: N km · driving … · stopped … · N stops".
+2. Playback: Play at 60×: the marker runs the day with the clock and the speed; the chips 1× 5× 20× 60×; drag the slider.
+   Leave the tab and come back: paused where it was. Switch the setting `map_package` on the site and pull down: the
+   same on the other engine.
+
+### O2.5 The Drivers tab and a driver's page (designs 12, 20), 2 min
+1. Drivers (the bar): Now with the chips and counts; test.driver's row with the plate held and the status line. Week: a
+   cell per day; "+ Not available" on a driver → Tomorrow · Morning · Leave → Save: the cell turns amber; Remove it.
+2. A row → the driver's page: the profile (phone, licence chip, this month), today's route on the map with the
+   timeline (a row frames its span), the numbers.
+3. More → Drivers → test.driver → Manage a driver (20): the details with Edit, Driving licence, Emergency contact,
+   Account with **Reset PIN** (do not reset test.driver's PIN unless you mean it), Regular vehicle, "Switch off…". More →
+   Drivers → **+ Add driver** → the form (do not add one; cancel).
+
+### O2.6 Issues, Vehicles, Reports, Office users, Quick settings (designs 19), 2 min
+1. More → Issues: the chips (Active · Open · In progress · Resolved · Dismissed), the rows; one → the facts, the links,
+   the timeline; **Take** → "taken by you"; **Resolve** with a note. Home's Critical rows open the same page.
+2. More → Vehicles: the chips with counts, the search ("CAB"), a row → the page (status, rented from, km this month,
+   odometer, next service, the document chips, the files on file with Open) → **Edit** → change nothing → Save:
+   "Nothing to change yet."; set "Garage booked for" 2026-10-25 → Save → "Vehicle updated".
+3. More → Reports: Mileage this month (the tiles, by vehicle, gaps, unlogged, checks); Fuel (the fills with the video's
+   state); Duty log today (test.driver's period with clock in and the vehicle held); Last month on each.
+4. More → Office users: the rows; your own → permissions as chips (you cannot remove your own users permission);
+   **+ Add office user** → the form (cancel). More → Quick settings: the switches (do not change them), Auto clock-out
+   21:00, the laptop-only line.
+
+### O2.7 Both languages and the driver untouched, 1 min
+1. සිංහල on Profile: every O2 screen in Sinhala with Latin digits, plates and times.
+2. Sign out; sign in as test.driver: the Driver side exactly as before.
+
+### If something looks wrong (O2)
+- A write that fails with "Fame Fleet did not answer": nothing was sent twice; Try again sends it once more.
+- "Edited since you opened it" on Change time or Change stops: someone changed the task on the site; the page loads it
+  again and shows the new plan version.
+- The trails show "+N not drawn": more than 10 drivers are sharing; the first 10 in the server's order are drawn.
