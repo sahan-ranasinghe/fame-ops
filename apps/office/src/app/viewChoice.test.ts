@@ -16,15 +16,20 @@ describe("which build a browser gets (O4)", () => {
     expect(phoneLike(1366, LAPTOP, false)).toBe(false);
   });
   it("a phone goes to /m/ with the page it asked for; the choice wins either way", () => {
-    expect(mobileTarget("/", "", null, 412, ANDROID, true)).toBe("/m/");
-    expect(mobileTarget("/requests/abc", "?x=1", null, 412, ANDROID, true)).toBe(`/m/?from=${encodeURIComponent("/requests/abc?x=1")}`);
+    expect(mobileTarget("/", "", null, 412, ANDROID, true, true)).toBe("/m/");
+    expect(mobileTarget("/requests/abc", "?x=1", null, 412, ANDROID, true, true)).toBe(`/m/?from=${encodeURIComponent("/requests/abc?x=1")}`);
+    expect(mobileTarget("/tasks", "", "desktop", 412, ANDROID, true, true)).toBeNull();
+    expect(mobileTarget("/tasks", "", "mobile", 1366, LAPTOP, false, true)).toBe(`/m/?from=${encodeURIComponent("/tasks")}`);
+    expect(mobileTarget("/tasks", "", null, 1366, LAPTOP, false, true)).toBeNull();
+    expect(mobileTarget("/tasks", "", null, 600, LAPTOP, false, true)).toBeNull();
+  });
+  it("while the redirect is held, a phone stays on the desktop site unless it chose the mobile view", () => {
+    expect(mobileTarget("/", "", null, 412, ANDROID, true)).toBeNull();
+    expect(mobileTarget("/tasks", "", "mobile", 412, ANDROID, true)).toBe(`/m/?from=${encodeURIComponent("/tasks")}`);
     expect(mobileTarget("/tasks", "", "desktop", 412, ANDROID, true)).toBeNull();
-    expect(mobileTarget("/tasks", "", "mobile", 1366, LAPTOP, false)).toBe(`/m/?from=${encodeURIComponent("/tasks")}`);
-    expect(mobileTarget("/tasks", "", null, 1366, LAPTOP, false)).toBeNull();
-    expect(mobileTarget("/tasks", "", null, 600, LAPTOP, false)).toBeNull();
   });
   it("the privacy page and the set-password landing stay on the desktop site", () => {
-    expect(mobileTarget("/privacy", "", null, 412, ANDROID, true)).toBeNull();
-    expect(mobileTarget("/set-password", "", "mobile", 412, ANDROID, true)).toBeNull();
+    expect(mobileTarget("/privacy", "", null, 412, ANDROID, true, true)).toBeNull();
+    expect(mobileTarget("/set-password", "", "mobile", 412, ANDROID, true, true)).toBeNull();
   });
 });

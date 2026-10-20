@@ -26,12 +26,18 @@ export function touchPointer(): boolean {
 /** Pages the desktop site keeps on a phone too: the public privacy page and the set-password link's landing. */
 const DESKTOP_ONLY = /^\/(privacy|set-password)(\/|$)/;
 
-/** Where a phone is sent from a desktop page, or null to stay: /m/, with the page asked for as ?from= (the mobile site
- *  opens its own screen for it after sign-in). */
-export function mobileTarget(path: string, search: string, choice: string | null, width: number, userAgent: string, touch: boolean): string | null {
+/** Phones sent to the mobile website by themselves. OFF (Sahan, 20 October 2026): held until he has tested /m/ on his
+ *  phone; until then only a browser that chose "Switch to mobile view" goes there. Turning it on = this line set to true
+ *  and the site deployed. */
+export const PHONE_REDIRECT = false;
+
+/** Where a browser is sent from a desktop page, or null to stay: /m/, with the page asked for as ?from= (the mobile site
+ *  opens its own screen for it after sign-in). A phone goes only while `redirect` is on; a browser that chose the mobile
+ *  view always does. */
+export function mobileTarget(path: string, search: string, choice: string | null, width: number, userAgent: string, touch: boolean, redirect = PHONE_REDIRECT): string | null {
   if (DESKTOP_ONLY.test(path)) return null;
   if (choice === "desktop") return null;
-  if (choice !== "mobile" && !phoneLike(width, userAgent, touch)) return null;
+  if (choice !== "mobile" && (!redirect || !phoneLike(width, userAgent, touch))) return null;
   const from = path === "/" && !search ? "" : `?from=${encodeURIComponent(path + search)}`;
   return `/m/${from}`;
 }

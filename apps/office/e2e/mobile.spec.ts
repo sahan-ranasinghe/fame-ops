@@ -1,8 +1,8 @@
-// The mobile website (Phase 8, O4; docs/mobile-website.md): an Android phone's browser opening the office site is sent to /m/
-// (Office mode's own screens, built for the browser from the driver app); sign-in with the office e-mail and password →
-// Home → Approve → Give a driver → Live, a desktop link kept across the sign-in (?from=), and the switch both ways,
-// remembered. Runs under the "mobile-web" Playwright project only, against the local mobile build the dev server serves
-// under /m/ (FLEET_MOBILE_DIR; scripts/test-office-local.sh makes it).
+// The mobile website (Phase 8, O4; docs/mobile-website.md): Office mode's own screens under /m/, built for the browser from
+// the driver app. The phone redirect is held (viewChoice.ts PHONE_REDIRECT): a phone stays on the desktop site until it
+// opts in. Sign-in with the office e-mail and password → Home → Approve → Live, the switch both ways (remembered), then a
+// desktop link opened on the phone → its own screen → Give a driver. Runs under the "mobile-web" Playwright project only,
+// against the local mobile build the dev server serves under /m/ (FLEET_MOBILE_DIR; scripts/test-office-local.sh makes it).
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./offline";
 
@@ -76,7 +76,7 @@ test.beforeEach(async ({ context }) => {
   });
 });
 
-test("a phone on the office site: sent to the mobile website, sign-in → Home → Approve → Give a driver → Live, a desktop link kept, the switch both ways", async ({ page }) => {
+test("a phone on the office site: the desktop site while the redirect is held; the mobile website by its address, sign-in → Home → Approve → Live, the switch both ways, then a desktop link → Give a driver", async ({ page }) => {
   const email = `mobile.admin.${stamp}@fame.test`;
   const password = await officeUser("Mobile Admin", email, ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]);
   const d1 = { name: `Mobile Decliner ${stamp}`, code: `MD-${stamp}`, username: `md.${stamp}`, pin: "135792", phone: "0771234506" };
@@ -91,9 +91,14 @@ test("a phone on the office site: sent to the mobile website, sign-in → Home �
   const asker = `Mobile Desk ${stamp}`;
   await tool("create_request", { requested_by: asker, date: day, time: "13:00", route_from: "Head office", route_to: "Kandy", need_type: "van", pax: 2 });
 
-  // The desktop site's address on a phone: the mobile website's sign-in, its Office side only (no Driver | Office switch).
+  // The phone redirect is held (viewChoice.ts PHONE_REDIRECT, off until Sahan's phone test): the site's address on a
+  // phone stays on the desktop site.
   await page.goto("/");
-  await expect(page).toHaveURL(/\/m\/?/);
+  await expect(page.getByLabel("E-mail")).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/");
+
+  // The mobile website by its address: its sign-in, its Office side only (no Driver | Office switch).
+  await page.goto("/m/");
   await expect(page.getByText("Work email")).toBeVisible();
   await expect(page.getByText("Driver", { exact: true })).toHaveCount(0);
   await page.locator('input[type="email"]').fill(email);
@@ -112,17 +117,6 @@ test("a phone on the office site: sent to the mobile website, sign-in → Home �
   await expect(page).toHaveURL(/\/m\/office\/request\//);
   await expect(shown(page.getByText(asker))).toBeVisible();
 
-  // A desktop link (a push or an e-mail) on the phone: the task's own screen; its driver declined, so Give a driver.
-  await page.goto(`/tasks/${task.task_id}`);
-  await expect(page).toHaveURL(new RegExp(`/m/office/task/${task.task_id}`));
-  await expect(shown(page.getByText(`Mobile task ${stamp}`))).toBeVisible();
-  await shown(page.getByRole("button", { name: "Give a driver", exact: true })).click();
-  await expect(page).toHaveURL(new RegExp(`/m/office/task/${task.task_id}/driver`));
-  await page.getByTestId(`give-row-${d2.username}`).click();
-  await shown(page.getByRole("button", { name: new RegExp(`^Give to ${d2.name}`) })).click();
-  await expect(page.getByText(`Task sent to ${d2.name}`)).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`/m/office/task/${task.task_id}$`));
-
   // Live: the map and its one filter row.
   await page.goto("/m/");
   await tab(page, "Live").click();
@@ -138,10 +132,21 @@ test("a phone on the office site: sent to the mobile website, sign-in → Home �
   await page.reload();
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
-  // The desktop site on a phone offers the way back: Switch to mobile view, remembered.
+  // The desktop site on a phone offers the way in: Switch to mobile view, remembered.
   await page.goto("/more");
   await page.getByTestId("switch-mobile").click();
   await expect(page).toHaveURL(/\/m\/?/);
   await expect(tab(page, "Live")).toBeVisible();
   expect(await page.evaluate(() => window.localStorage.getItem("fleet.view"))).toBe("mobile");
+
+  // Having chosen it, a desktop link (a push or an e-mail) opens the task's own screen; its driver declined: Give a driver.
+  await page.goto(`/tasks/${task.task_id}`);
+  await expect(page).toHaveURL(new RegExp(`/m/office/task/${task.task_id}`));
+  await expect(shown(page.getByText(`Mobile task ${stamp}`))).toBeVisible();
+  await shown(page.getByRole("button", { name: "Give a driver", exact: true })).click();
+  await expect(page).toHaveURL(new RegExp(`/m/office/task/${task.task_id}/driver`));
+  await page.getByTestId(`give-row-${d2.username}`).click();
+  await shown(page.getByRole("button", { name: new RegExp(`^Give to ${d2.name}`) })).click();
+  await expect(page.getByText(`Task sent to ${d2.name}`)).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/m/office/task/${task.task_id}$`));
 });
