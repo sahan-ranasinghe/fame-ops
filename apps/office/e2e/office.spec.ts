@@ -68,6 +68,15 @@ async function applyFilter(page: Page, section: string, choice: string | RegExp)
   await expect(panel).toHaveCount(0);
 }
 
+/** The Filter button → the panel: a section's choice is there (with its count), then Esc closes it with nothing applied. */
+async function expectFilterChoice(page: Page, section: string, choice: string | RegExp) {
+  await page.getByTestId("filter-button").first().click();
+  const panel = page.getByTestId("filter-panel");
+  await expect(panel.getByRole("group", { name: section, exact: true }).getByLabel(choice, { exact: typeof choice === "string" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+}
+
 /** The date-range picker's preset ("Yesterday", "Today"): it applies at once. */
 async function pickPreset(page: Page, preset: string) {
   await page.getByTestId("date-range-button").click();
@@ -243,7 +252,8 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(live).toContainText("Location off since", { timeout: 8000 });
   await expect(page.getByTestId("phone-line")).toContainText("Location off");
   await expect(page.getByTestId("phone-line")).toContainText("2 points waiting");
-  await expect(page.getByRole("button", { name: /^Problems · \d+$/ })).toBeVisible();
+  // Stage 0: the counts are in the Filter sheet (Show: Problems · N), no chip row.
+  await expectFilterChoice(page, "Show", /^Problems · \d+$/);
   // A fresh point: live again at once, the marker moves, the speed shows.
   expect(await app.post("location_points", [{ employee_id: me.id, session_id: session, recorded_at: at(2), lat: 6.9, lng: 79.95, accuracy_m: 8, speed_mps: 20, battery_pct: 76 }])).toBe(201);
   await expect(live).toContainText(/Live · (now|\d+ min ago)/, { timeout: 8000 });
@@ -441,7 +451,7 @@ test("a driver's day in the office (Phase 7): on duty on Live, moved to another 
   await expect(live.getByTestId("duty-chip")).toContainText("On duty");
   await expect(live).toContainText(plateA);
   await expect(live).toContainText("OPPO CPH2119");
-  await expect(page.getByRole("button", { name: /^Off duty · \d+$/ })).toBeVisible();
+  await expectFilterChoice(page, "Show", /^Off duty · \d+$/);
 
   // Move to vehicle: a full page, the car picked, Move.
   await live.getByRole("link", { name: "Move to vehicle" }).click();
@@ -1136,7 +1146,7 @@ test("a requester changes an approved booking; the approver sees who is availabl
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await page.goto("/requests");
   await expect(page.locator("tr", { hasText: visitor })).toContainText("Changed");
-  await page.getByRole("button", { name: "Changed", exact: true }).click();
+  await applyFilter(page, "Status", "Changed");
   await page.locator("tr", { hasText: visitor }).getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(new RegExp(`/requests/${req.id}/decide$`));
   await expect(page.getByRole("heading", { name: "Decide the change" })).toBeVisible();
