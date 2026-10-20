@@ -1,11 +1,12 @@
 // The five tabs: Today, Mileage, Fuel, Report, Me. The active one sits on an amber pill.
 
-import { Redirect, Tabs } from 'expo-router';
+import { type ErrorBoundaryProps, Redirect, Tabs } from 'expo-router';
 import { Fuel, Gauge, ListChecks, type LucideIcon, TriangleAlert, User } from '@/components/icons';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { RouteCrash } from '@/components/patterns/CrashScreen';
 import { Txt } from '@/components/ui';
 import { getJson, KEYS } from '@/lib/kv';
 import { needsProfilePhoto, profilePhotoDeferred } from '@/lib/photoRules';
@@ -93,3 +94,8 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', gap: 4, minHeight: 60 },
   pill: { width: 52, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });
+
+/** Hotfix O2-H2: a crash in this stack shows the crash screen (Go back, Reload app, Show details), never a white page. */
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <RouteCrash {...props} home="/" />;
+}

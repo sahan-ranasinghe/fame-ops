@@ -1,12 +1,13 @@
 // Office mode (Phase 8, O1): the bottom tabs per permission set (office/nav.ts tabsFor; designs 02–05, 15–19), the active
 // one on an amber pill as in the driver app. A tab the person may not use is not in the bar at all.
 
-import { Tabs } from 'expo-router';
+import { type ErrorBoundaryProps, Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Bell, ClipboardCheck, Ellipsis, House, ListChecks, type LucideIcon, MapPin, Route, Users } from '@/components/icons';
+import { RouteCrash } from '@/components/patterns/CrashScreen';
 import { Txt } from '@/components/ui';
 import { type TabKey, tabsFor } from '@/office/nav';
 import { useOffice } from '@/office/state';
@@ -88,3 +89,8 @@ const styles = StyleSheet.create({
   tab: { flex: 1, alignItems: 'center', gap: 4, minHeight: 60 },
   pill: { width: 52, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });
+
+/** Hotfix O2-H2: a crash in this stack shows the crash screen (Go back, Reload app, Show details), never a white page. */
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <RouteCrash {...props} home="/office" />;
+}

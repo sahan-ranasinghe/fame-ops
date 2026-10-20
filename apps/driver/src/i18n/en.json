@@ -2119,5 +2119,15 @@
       "viewer": "Viewer",
       "all": "Everything"
     }
+  },
+  "crash": {
+    "title": "Something went wrong",
+    "saved": "Your work was saved if you pressed Save.",
+    "back": "Go back",
+    "reload": "Reload app",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details",
+    "copy": "Copy",
+    "soft": "Something didn't work. Try again."
   }
 }

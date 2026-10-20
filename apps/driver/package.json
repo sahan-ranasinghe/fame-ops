@@ -99,7 +99,8 @@
     "test:search": "tsx scripts/test-search.ts",
     "test:trip-forms": "tsx scripts/test-trip-forms.ts",
     "lint:hooks": "eslint src",
-    "test:components": "jest"
+    "test:components": "jest",
+    "test:crash": "tsx scripts/test-crash.ts"
   },
   "private": true,
   "expo": {

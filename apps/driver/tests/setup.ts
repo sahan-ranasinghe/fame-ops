@@ -12,16 +12,17 @@ jest.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: async () => ({ granted: false }),
 }));
 jest.mock('expo-updates', () => ({ reloadAsync: jest.fn(async () => undefined), updateId: 'test-update', runtimeVersion: '1.3.0-gmaps', channel: 'preview' }));
-// The phone's small key store (SQLite) as a map.
-jest.mock('@/lib/kv', () => {
-  const actual = jest.requireActual('@/lib/kv');
+// The phone's small key store (expo-sqlite's kv-store) as a map.
+jest.mock('expo-sqlite/kv-store', () => {
   const mem = new Map<string, string>();
-  return {
-    ...actual,
-    getJson: (k: string) => (mem.has(k) ? JSON.parse(mem.get(k) as string) : null),
-    setJson: (k: string, v: unknown) => { mem.set(k, JSON.stringify(v)); },
-    remove: (k: string) => { mem.delete(k); },
-    getString: (k: string) => mem.get(k) ?? null,
-    setString: (k: string, v: string) => { mem.set(k, v); },
+  const Storage = {
+    getItemSync: (k: string) => (mem.has(k) ? (mem.get(k) as string) : null),
+    setItemSync: (k: string, v: string) => { mem.set(k, v); },
+    removeItemSync: (k: string) => { mem.delete(k); },
+    getItem: async (k: string) => (mem.has(k) ? (mem.get(k) as string) : null),
+    setItem: async (k: string, v: string) => { mem.set(k, v); },
+    removeItem: async (k: string) => { mem.delete(k); },
+    clearSync: () => mem.clear(),
   };
+  return { __esModule: true, default: Storage, Storage };
 });
