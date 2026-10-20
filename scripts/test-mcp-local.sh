@@ -74,7 +74,7 @@ CHANNEL=mcp python3 scripts/test-mcp-local.py
 echo
 echo "== The tool answers still have the shapes the artifact reads (scripts/tool-shapes.json) =="
 # SHAPES=write records a deliberate, additive change of the answers (new fields) instead of checking.
-python3 -I scripts/snapshot-tool-shapes.py "--${SHAPES:-check}" | tail -3
+python3 -I scripts/snapshot-tool-shapes.py "--${SHAPES:-check}" | grep -v "^  PASS.*as recorded$" | tail -40
 echo
 reset_db
 ready "$API_URL/auth/v1/health" -H "apikey: $ANON_KEY"
