@@ -175,6 +175,11 @@
   three controls, clustering, the industry patterns); short text in the site's words, English and Sinhala; a fresh
   reviewer checks every screen against these rules at each checkpoint and flags anything that looks like the desktop site
   compacted.
+  **Stage 0 + O3 (20 October 2026, branch `phase8-o3`)**: the standard patterns in all three codebases (`docs/ui-patterns.md`),
+  then the rest of the site's daily work in Office mode (history and playback, every tap to its place (`npm run test:taps`),
+  Approve's Change time and Tell requester, Requests, Tasks → History, Live's watched mode / Clock out / Move, the Overview's
+  lists, Issues and Maintenance, Places, fuel videos in the browser, photos and documents by camera through the existing
+  signed uploads). As built: `docs/phase8-plan.md` section 19; parity: `docs/phase8-parity.md`.
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).

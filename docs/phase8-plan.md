@@ -871,6 +871,42 @@ web-only today): the vehicle's photo and documents, the driver's photo, the lice
 After O4, the rows not "in the app" are the eight "cannot" rows above — six decided, the videos for Sahan's decision,
 web push by nature — and the phone upload's four rows if the server work is deferred.
 
+## 19. Stage 0 and O3 as built (20 October 2026, branch `phase8-o3`; nothing published)
+
+**Stage 0, the standard patterns** (`docs/ui-patterns.md`; CLAUDE.md points to it). One shared component per control in each
+codebase. App: `components/patterns/` (FilterBar, Calendar with DateRangeButton / DayStrip / TripDayPicker / DateField and a
+year jump, TimeField, ListState, Sheet) and `lib/patterns/` (their rules). Website: `ui/FilterBar`, `ui/DateRangePicker`,
+`ui/DayPicker`, `ui/TimeField`, `ui/Sheet`, `ui/ListKit` SkeletonRows. Every filter area, date control and time field of the
+driver app, Office mode and the website moved; the URL parameters and the server inputs are as before. The place box's
+never-ending Loading is fixed (a sequence number, not its own busy flag, guards the answer; every search has a timeout).
+The website's transport times out (20 s reads, 30 s writes, 15 s place search; a timed-out write is never repeated by
+itself); the artifact keeps none (Claude may hold a call for approval).
+
+**O3** (the order of §18):
+- Item 1, history: the driver page's day strip (today and 89 days back, `?date=`), the day's tasks with km, one shared
+  playback bar (`components/office/PlaybackBar.tsx`, also Live's), the marker on both engines; Live's Earlier days; a task's
+  Show the driven route (`task/[id]/route`).
+- Item 2, every tap opens its place: `npm run test:taps` follows every link the server writes (notifications, inbox, push)
+  through `routeForUrl` for every permission preset and fails on a route with no screen; every Row has a target. It found
+  `/` and `/drivers/asks/:id`: now Home and the new Questions screens (More → Questions).
+- Item 3, rows 1–9: Approve's Change time and Tell requester (`office/decideLogic.ts`, `components/office/TellRequester.tsx`);
+  Requests' Filter and paging, Cancel booking, the requester's own request page (`office/requestsLogic.ts`); Tasks →
+  History, the board's column paging, Task detail's extras under More details, the plan map, the trip purpose, the swap
+  reading, Save as our place; Live's watched mode, Clock out, Move to vehicle, the card lines, Problems, the map controls;
+  the Overview's chips, Reminders, Needs attention groups with Snooze (`office/overviewLogic.ts`); Issues' kind / vehicle /
+  opened filters and Maintenance (`office/maintenanceLogic.ts`); Alerts' history and paging, New task for a driver, Reports'
+  vehicle and driver filter; Places with Remove / Restore and the pin check on pasted pins (`components/office/PinAdjust.tsx`);
+  the searches on the Approve queue, Alerts and the Drivers board.
+- Item 4: a fuel fill's video opens its 1-hour link in the phone's browser (a list over 50 minutes old is read again first).
+- Item 5: photos and documents by camera (vehicle photo, documents per kind, driver photo, licence front / back): the file
+  goes from the phone to Storage through the signed upload the existing tools hand out (`office/media.ts`); no server change.
+- Item 6: the contract check no longer depends on the hour (`scripts/snapshot-tool-shapes.py`).
+- Item 7: `docs/release-1.4.0.md` (the native date / time pickers, expo-video, the 11 expo-doctor patches), not built.
+
+Left out, on purpose: Issues' Realtime (read again on return and pull); removing or restoring a vehicle document and dragging a
+saved place's pin stay on the website; PDFs are added on a laptop (no file picker in 1.3.0). Live's map cluster has four
+controls (zoom in, zoom out, trails, fit) counting the zoom pair as one: a decision for Sahan against "at most three".
+
 ## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
 
 The office will do from the phone everything they do on the website, because they don't always have a laptop. So every
