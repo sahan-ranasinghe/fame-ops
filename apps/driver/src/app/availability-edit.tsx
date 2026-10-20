@@ -12,7 +12,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeft } from '@/components/icons';
 import { useLeaveGuard } from '@/components/navigation';
-import { useDateLabel } from '@/components/task';
 import { Button, Card, Field, Notice, Txt } from '@/components/ui';
 import { ApiError, setMyUnavailability } from '@/lib/api';
 import {
@@ -21,9 +20,7 @@ import {
   type AvailForm,
   availArgs,
   availDirty,
-  dayChoices,
   formFromRow,
-  lastDayChoices,
   newAvailForm,
   partKey,
   reasonKey,
@@ -32,18 +29,18 @@ import {
 import { getJson, KEYS } from '@/lib/kv';
 import { supabase } from '@/lib/supabase';
 import { colomboDate } from '@/lib/time';
+import { DateField, TripDayPicker } from '@/components/patterns/Calendar';
+import { TimeField } from '@/components/patterns/TimeField';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
 /** Noon of a Colombo day, for the day's label ("Tue 20 Oct"). */
-const noon = (date: string) => `${date}T12:00:00+05:30`;
 
 export default function AvailabilityEditScreen() {
   const { t, me, settings } = useApp();
   const { id } = useLocalSearchParams<{ id?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const dateLabel = useDateLabel();
   const today = colomboDate();
   const row = id ? (getJson<UnavailabilityRow[]>(KEYS.availability) ?? []).find((item) => item.id === id) ?? null : null;
   const [start] = useState<AvailForm>(() => (row ? formFromRow(row) : newAvailForm(today)));
@@ -59,8 +56,6 @@ export default function AvailabilityEditScreen() {
     setForm((old) => ({ ...old, ...patch }));
     setProblem(null);
   };
-  // An entry already running (it began before today) keeps its first day among the choices.
-  const days = form.from < today ? [form.from, ...dayChoices(today)] : dayChoices(today);
 
   async function save() {
     if (busy) return;
@@ -99,11 +94,8 @@ export default function AvailabilityEditScreen() {
 
         <Card style={{ gap: 12 }}>
           <Txt variant="big">{t('avail.day')}</Txt>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-            {days.map((day) => (
-              <Chip key={day} on={form.from === day} label={dateLabel(noon(day))} onPress={() => change({ from: day, to: form.to && form.to > day ? form.to : null })} />
-            ))}
-          </ScrollView>
+          {/* The day: Today, Tomorrow or Pick a date (docs/ui-patterns.md §3); an entry already running keeps its first day. */}
+          <TripDayPicker value={form.from} onChange={(day) => change({ from: day, to: form.to && form.to > day ? form.to : null })} testID="avail-day" />
         </Card>
 
         <Card style={{ gap: 10 }}>
@@ -113,8 +105,8 @@ export default function AvailabilityEditScreen() {
           ))}
           {form.part === 'hours' && (
             <View style={styles.times}>
-              <Field label={t('avail.from')} value={form.start} onChangeText={(text) => change({ start: text })} keyboardType="numbers-and-punctuation" maxLength={5} mono />
-              <Field label={t('avail.to')} value={form.end} onChangeText={(text) => change({ end: text })} keyboardType="numbers-and-punctuation" maxLength={5} mono />
+              <TimeField label={t('avail.from')} value={form.start} onCommit={(start) => change({ start })} testID="avail-from" />
+              <TimeField label={t('avail.to')} value={form.end} onCommit={(end) => change({ end })} testID="avail-to" />
             </View>
           )}
         </Card>
@@ -123,11 +115,7 @@ export default function AvailabilityEditScreen() {
           <Card style={{ gap: 12 }}>
             <Txt variant="big">{t('avail.lastDay')}</Txt>
             {/* No last day picked = that one day; a tap on the picked day takes it back. */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-              {lastDayChoices(form.from).map((day) => (
-                <Chip key={day} on={form.to === day} label={dateLabel(noon(day))} onPress={() => change({ to: form.to === day ? null : day })} />
-              ))}
-            </ScrollView>
+            <DateField label={t('avail.lastDay')} value={form.to ?? ''} onChange={(day) => change({ to: day && day > form.from ? day : null })} min={form.from} testID="avail-last-day" />
           </Card>
         )}
 

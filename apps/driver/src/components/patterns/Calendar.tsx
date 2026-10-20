@@ -95,7 +95,7 @@ export function DateRangeButton({ value, onChange, presets = PRESETS, max, maxDa
       </Pressable>
       <Sheet visible={open} title={t('patterns.dates')} onClose={() => setOpen(false)} testID="date-range-sheet" actions={(
         <>
-          <Button kind="outline" label={t('office.common.cancel')} onPress={() => setOpen(false)} style={{ flex: 1, minHeight: 52 }} />
+          <Button kind="outline" label={t('patterns.cancel')} onPress={() => setOpen(false)} style={{ flex: 1, minHeight: 52 }} />
           <Button label={t('patterns.apply')} disabled={!draft.from || !draft.to} onPress={() => { if (draft.from && draft.to) { onChange({ from: draft.from, to: draft.to }); setOpen(false); } }} style={{ flex: 1.4, minHeight: 52 }} />
         </>
       )}>
@@ -151,7 +151,7 @@ export function DayStrip({ value, onChange, max, min, testID = 'day-strip' }: {
         <Txt variant="strong" size={16} style={{ flex: 1 }}>{rangeWords({ from: value, to: value }, names)}</Txt>
         {value !== today && (
           <Pressable accessibilityRole="button" onPress={() => { onChange(today); setWeek(today); }} style={styles.todayBtn}>
-            <Txt variant="strong" size={14}>{t('office.common.today')}</Txt>
+            <Txt variant="strong" size={14}>{t('patterns.today')}</Txt>
           </Pressable>
         )}
         <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.pickDate')} onPress={() => { setMonth(value); setJump(true); }} style={styles.iconBtn}><CalendarIcon size={20} color={colors.ink} /></Pressable>
@@ -197,8 +197,8 @@ export function TripDayPicker({ value, onChange, testID = 'trip-day' }: { value:
   );
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }} testID={testID}>
-      {chip(value === today, t('office.common.today'), () => onChange(today), 'today')}
-      {chip(value === tomorrow, `${t('office.common.tomorrow')} · ${rangeWords({ from: tomorrow, to: tomorrow }, names)}`, () => onChange(tomorrow), 'tomorrow')}
+      {chip(value === today, t('patterns.today'), () => onChange(today), 'today')}
+      {chip(value === tomorrow, `${t('patterns.tomorrow')} · ${rangeWords({ from: tomorrow, to: tomorrow }, names)}`, () => onChange(tomorrow), 'tomorrow')}
       {other ? chip(true, rangeWords({ from: other, to: other }, names), () => { setMonth(other); setOpen(true); }, 'other') : null}
       <Pressable accessibilityRole="button" onPress={() => { setMonth(value || today); setOpen(true); }} style={styles.chip} testID={`${testID}-pick`}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><CalendarIcon size={18} color={colors.ink} /><Txt variant="strong" size={16}>{t('patterns.pickDate')}</Txt></View>
@@ -211,7 +211,7 @@ export function TripDayPicker({ value, onChange, testID = 'trip-day' }: { value:
 }
 
 /** A plain date (an expiry, a booking): the field with the calendar, any date. */
-export function DateField({ label, value, onChange, testID }: { label: string; value: string; onChange: (day: string) => void; testID?: string }) {
+export function DateField({ label, value, onChange, min, testID }: { label: string; value: string; onChange: (day: string) => void; /** The first day that may be picked. */ min?: string; testID?: string }) {
   const { t } = useApp();
   const names = useNames();
   const [open, setOpen] = useState(false);
@@ -224,7 +224,7 @@ export function DateField({ label, value, onChange, testID }: { label: string; v
         <Txt variant="strong" size={16} style={{ flex: 1 }} color={value ? colors.ink : colors.muted}>{value ? `${rangeWords({ from: value, to: value }, names)} ${value.slice(0, 4)}` : '—'}</Txt>
       </Pressable>
       <Sheet visible={open} title={label} onClose={() => setOpen(false)} actions={value ? <Button kind="outline" label={t('patterns.clear')} onPress={() => { onChange(''); setOpen(false); }} style={{ flex: 1, minHeight: 52 }} /> : undefined}>
-        <MonthCalendar month={month} onMonth={setMonth} onTap={(d) => { onChange(d); setOpen(false); }} picked={value} allowed={() => true} />
+        <MonthCalendar month={month} onMonth={setMonth} onTap={(d) => { onChange(d); setOpen(false); }} picked={value} allowed={(d) => !min || d >= min} />
       </Sheet>
     </View>
   );

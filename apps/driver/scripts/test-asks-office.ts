@@ -138,13 +138,13 @@ console.log('\n== The rows once sent, and the polling ==');
 console.log('\n== The sheet and the screens (read as text) ==');
 {
   const sheet = read('src/components/office/AskDriversSheet.tsx');
-  check(/<Modal visible=\{visible\} transparent animationType="slide" onRequestClose=\{onClose\}>/.test(sheet), 'a bottom sheet (Modal, like ReasonSheet): the back button closes it');
+  check(/<Sheet visible=\{visible\} title=\{t\('office\.ask\.title'\)\} onClose=\{onClose\}/.test(sheet), 'the shared bottom sheet (docs/ui-patterns.md §6): the back button closes it');
   check(/api\.call<AskDriversResult>\('ask_drivers', askInput\(kind, picked, ctx\)\)/.test(sheet), 'Send calls ask_drivers with the logic\'s input');
   check(/api\.call<AskAnswers>\('ask_answers', \{ ask_id: askId \}\)/.test(sheet) && /setInterval\(readAnswers, ANSWERS_EVERY_MS\)/.test(sheet) && /if \(!visible \|\| !askId \|\| !polling\) return;/.test(sheet),
     'the answers through ask_answers(ask_id) every 10 s, only while the sheet is open and someone has still to answer');
   check(/onUse\(target\.username as string\); onClose\(\);/.test(sheet) && /answer\?\.use && onUse && target\.username/.test(sheet), 'Use: only on a Yes, only when the caller can pick; it picks and closes');
   check(/answer\?\.key === 'callMe' && answer\.call &&/.test(sheet) && /answer\?\.key === 'location' && answer\.map &&/.test(sheet), 'Call only with a number, Map only with a link (no dead button)');
-  check(/box: \{ width: 48, height: 48/.test(sheet) && /close: \{ width: 48, height: 48/.test(sheet), '48 px tick box and close button');
+  check(/box: \{ width: 48, height: 48/.test(sheet), '48 px tick box (the close button is the shared sheet\'s, 44 px with an 8 px hit slop)');
   check(/setPicked\(allFree\(drivers\)\)/.test(sheet) && /setPicked\(\[\]\)/.test(sheet), '"All free · None"');
   check(/disabled=\{!canSend\(kind, picked, ctx\)\}/.test(sheet), 'Send disabled until it may be sent');
   check(/t\('office\.ask\.footer'\)/.test(sheet) && /t\('office\.ask\.footerTrip'\)/.test(sheet), 'the bottom line: "They answer with one tap…" (and "closes when the trip starts" for a trip question)');

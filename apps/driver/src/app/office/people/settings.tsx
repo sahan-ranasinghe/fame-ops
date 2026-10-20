@@ -8,7 +8,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { TimeInput } from '@/components/office/TimeInput';
+import { TimeField } from '@/components/patterns/TimeField';
 import { Toggle } from '@/components/office/PeopleParts';
 import { Button, Txt } from '@/components/ui';
 import {
@@ -178,7 +178,7 @@ export default function QuickSettings() {
                     <Txt variant="small">{t('office.people.cutoffHint')}</Txt>
                   </View>
                   {canEdit
-                    ? <View style={{ width: 150 }}><TimeInput value={cutoff} onCommit={(v) => { if (v !== cutoff) void save('duty_cutoff', v); }} /></View>
+                    ? <View style={{ width: 150 }}><TimeField value={cutoff} onCommit={(v) => { if (v !== cutoff) void save('duty_cutoff', v); }} /></View>
                     : <Txt variant="strong" size={22} style={{ fontFamily: fonts.monoSemiBold }}>{cutoff || '—'}</Txt>}
                 </View>
                 <Txt variant="small">{cutoff === '' ? t('office.people.cutoffOff') : t('office.people.cutoffAt', { time: cutoff })}</Txt>

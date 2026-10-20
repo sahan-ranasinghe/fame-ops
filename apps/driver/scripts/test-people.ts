@@ -235,7 +235,7 @@ console.log('\n== The screens as text ==');
   check(files.parts.includes('togglePermission') && files.parts.includes('presetOf') && files.parts.includes('viewLocked') && files.parts.includes('PRESET_KEYS') && files.parts.includes("t('office.people.presetAdmin')"), 'the picker: the presets and Everything, view locked');
   check(files.settings.includes("useTool<SettingsResult>('get_settings', {})") && files.settings.includes("api.call('update_settings', r.input)") && files.settings.includes("me.tools.includes('update_settings')"), 'Quick settings: get_settings, update_settings {key, value}, the controls only with update_settings');
   check(files.settings.includes("t('office.more.laptopOnly')"), 'the laptop-only line');
-  check(files.settings.includes('TimeInput') && files.settings.includes("save('duty_cutoff', v)") && files.settings.includes("save('driver_personal_trips', v)") && files.settings.includes("save('office_phone', phoneShown)"), 'the cutoff through TimeInput, the choice, the phone');
+  check(files.settings.includes('TimeField') && files.settings.includes("save('duty_cutoff', v)") && files.settings.includes("save('driver_personal_trips', v)") && files.settings.includes("save('office_phone', phoneShown)"), 'the cutoff through TimeInput, the choice, the phone');
 
   const ROLE = /'(admin|fleet_admin|office|viewer|staff)'|"(admin|fleet_admin|office|viewer|staff)"|me\.role|\.role\b/;
   for (const [name, text] of Object.entries(files)) {

@@ -8,10 +8,12 @@
 // The sent question stays on the sheet while the screen is open (closing hides it); "Ask another question" starts over.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { Check, Clock, MapPin, Phone, Van, X } from '@/components/icons';
+import { Sheet } from '@/components/patterns/Sheet';
+import { TimeField } from '@/components/patterns/TimeField';
+
+import { Check, Clock, MapPin, Phone, Van } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
 import {
@@ -21,7 +23,7 @@ import { useOffice } from '@/office/state';
 import type { Ask, AskAnswers, AskDriversResult, AskKind, FleetError } from '@/office/types';
 import { Avatar, ErrorNotice, Pill, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
-import { colors, fonts } from '@/theme';
+import { colors } from '@/theme';
 
 interface Props {
   visible: boolean;
@@ -38,14 +40,12 @@ interface Props {
 }
 
 const KIND_ICON = { free_for_trip: Van, office_time: Clock, where_now: MapPin } as const;
-const TIME = /^\d{2}:\d{2}$/;
 
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
 export function AskDriversSheet({ visible, onClose, drivers, preticked: given, context, onUse, kind: firstKind = 'free_for_trip' }: Props) {
   const { t, tList } = useApp();
   const { api } = useOffice();
-  const insets = useSafeAreaInsets();
   const names = { days: tList('days'), months: tList('months') };
   const dayLabel = (date: string) => shortDate(names, `${date}T06:00:00Z`);
 
@@ -116,18 +116,25 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
   }
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.shade}>
-        <Pressable style={{ flex: 1 }} accessibilityRole="button" accessibilityLabel={t('office.ask.close')} onPress={onClose} />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]} testID="ask-sheet">
-          <View style={styles.handle} />
-          <View style={styles.head}>
-            <Txt variant="heading" size={24} style={{ flex: 1 }}>{t('office.ask.title')}</Txt>
-            <Pressable accessibilityRole="button" accessibilityLabel={t('office.ask.close')} onPress={onClose} style={styles.close}>
-              <X size={22} color={colors.ink} strokeWidth={2.4} />
-            </Pressable>
-          </View>
-          <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 10, paddingBottom: 6 }} keyboardShouldPersistTaps="handled">
+    <Sheet visible={visible} title={t('office.ask.title')} onClose={onClose} testID="ask-sheet" actions={(
+      <View style={{ flex: 1, gap: 8 }}>
+          {!sent && kind === 'free_for_trip' && !windowGiven && picked.length > 0 && !canSend(kind, picked, ctx) && (
+            <Txt variant="small" color={colors.amberText}>{t('office.ask.tripTimeNeeded')}</Txt>
+          )}
+          {!sent ? (
+            <Button label={sendLabel(picked.length, t)} onPress={() => void send()} disabled={!canSend(kind, picked, ctx)} busy={busy} style={{ minHeight: 56 }} />
+          ) : (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Button kind="outline" label={t('office.ask.askAnother')} onPress={startOver} style={{ flex: 1, minHeight: 52 }} />
+              <Button kind="dark" label={t('office.ask.close')} onPress={onClose} style={{ flex: 1, minHeight: 52 }} />
+            </View>
+          )}
+          {ask?.expired && <Txt variant="small" color={colors.red} style={{ textAlign: 'center' }}>{t('office.ask.closed')}</Txt>}
+          <Txt variant="small" style={{ textAlign: 'center' }}>
+            {[t('office.ask.footer'), kind === 'free_for_trip' ? t('office.ask.footerTrip') : ''].filter(Boolean).join(' ')}
+          </Txt>
+      </View>
+    )}>
             <Txt variant="label" color={colors.muted}>{t('office.ask.question').toUpperCase()}</Txt>
             {sent && ask ? (
               <View style={[styles.kind, styles.kindOn]}>
@@ -215,26 +222,7 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
               );
             })}
             {problem && <ErrorNotice error={problem} onRetry={() => void send()} />}
-          </ScrollView>
-
-          {!sent && kind === 'free_for_trip' && !windowGiven && picked.length > 0 && !canSend(kind, picked, ctx) && (
-            <Txt variant="small" color={colors.amberText}>{t('office.ask.tripTimeNeeded')}</Txt>
-          )}
-          {!sent ? (
-            <Button label={sendLabel(picked.length, t)} onPress={() => void send()} disabled={!canSend(kind, picked, ctx)} busy={busy} style={{ minHeight: 56 }} />
-          ) : (
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Button kind="outline" label={t('office.ask.askAnother')} onPress={startOver} style={{ flex: 1, minHeight: 52 }} />
-              <Button kind="dark" label={t('office.ask.close')} onPress={onClose} style={{ flex: 1, minHeight: 52 }} />
-            </View>
-          )}
-          {ask?.expired && <Txt variant="small" color={colors.red} style={{ textAlign: 'center' }}>{t('office.ask.closed')}</Txt>}
-          <Txt variant="small" style={{ textAlign: 'center' }}>
-            {[t('office.ask.footer'), kind === 'free_for_trip' ? t('office.ask.footerTrip') : ''].filter(Boolean).join(' ')}
-          </Txt>
-        </View>
-      </View>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -254,29 +242,10 @@ function KindChip({ kind, on, onPress, label, detail, small = false }: { kind: A
 
 /** "From 09:00" / "To 12:00": the trip's time when the caller gave none (times are always mono, Latin digits). */
 function TimeBox({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <Txt variant="strong" size={15}>{label}</Txt>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder="HH:MM"
-        placeholderTextColor="#9aa0a6"
-        keyboardType="numbers-and-punctuation"
-        maxLength={5}
-        accessibilityLabel={label}
-        style={[styles.time, { fontFamily: fonts.mono }, value && !TIME.test(value) && { borderColor: colors.red }]}
-      />
-    </View>
-  );
+  return <TimeField label={label} value={value} onCommit={onChange} />;
 }
 
 const styles = StyleSheet.create({
-  shade: { flex: 1, backgroundColor: 'rgba(10,12,14,0.45)', justifyContent: 'flex-end' },
-  sheet: { maxHeight: '90%', backgroundColor: colors.page, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 10, gap: 10 },
-  handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#c9c6bc', alignSelf: 'center' },
-  head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  close: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   kind: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card },
   kindOn: { borderColor: colors.blue, backgroundColor: '#f4f7fc', borderWidth: 2 },
   sendTo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
@@ -286,5 +255,4 @@ const styles = StyleSheet.create({
   boxOn: {},
   use: { minHeight: 44, minWidth: 64, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, alignItems: 'center', justifyContent: 'center' },
   callBtn: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1.5, borderColor: colors.ink, backgroundColor: colors.card },
-  time: { flex: 1, minHeight: 48, borderWidth: 1.5, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 12, fontSize: 17, color: colors.ink, backgroundColor: colors.card },
 });

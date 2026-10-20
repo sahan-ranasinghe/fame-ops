@@ -14,11 +14,10 @@ import { useLeaveGuard } from '@/components/navigation';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { MoreDetails, Stepper } from '@/components/office/Controls';
 import { DriverRows } from '@/components/office/DriverRows';
-import { TimeInput } from '@/components/office/TimeInput';
+import { TripDayPicker } from '@/components/patterns/Calendar';
+import { TimeField } from '@/components/patterns/TimeField';
 import { DepartureNote } from '@/components/office/TripShell';
 import { Button, Field, Plate, Txt } from '@/components/ui';
-import { shortDate } from '@/lib/durations';
-import { addDays, colomboDate } from '@/lib/time';
 import { askTargets } from '@/office/askLogic';
 import { useOffice, useTool } from '@/office/state';
 import { type ChangeFields, changeFieldsOf, changeTaskInput, timeLocked } from '@/office/taskExtrasLogic';
@@ -37,7 +36,7 @@ const floor5 = (t: string) => { const m = /^(\d{2}):(\d{2})$/.exec(t.trim()); re
 
 export default function ChangeTaskScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { t, tList } = useApp();
+  const { t } = useApp();
   const { api, me, signOut } = useOffice();
   const router = useRouter();
   const q = useTool<TaskDetail>('task_detail', { task_id: id });
@@ -48,12 +47,9 @@ export default function ChangeTaskScreen() {
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<FleetError | null>(null);
   const [why, setWhy] = useState<string | null>(null);
-  const [pickDate, setPickDate] = useState(false);
   const [choosing, setChoosing] = useState(false);
   const [asking, setAsking] = useState(false);
   const [driverName, setDriverName] = useState('');
-  const today = colomboDate();
-  const names = { days: tList('days'), months: tList('months') };
   const locked = task ? timeLocked(task) : false;
   const { allowLeave } = useLeaveGuard(!!task && !!f && JSON.stringify(f) !== JSON.stringify(changeFieldsOf(task)), busy);
   // Who's available for the task's window as the form has it (the site's TaskEdit): not while it runs.
@@ -68,8 +64,6 @@ export default function ChangeTaskScreen() {
     if (task) setF(changeFieldsOf(task));
   }, [task?.id, task?.plan_version]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const days = [today, addDays(today, 1), addDays(today, 2)];
-  const dayLabel = (day: string) => day === today ? t('office.common.today') : day === addDays(today, 1) ? `${t('office.common.tomorrow')} · ${shortDate(names, `${day}T06:00:00Z`)}` : shortDate(names, `${day}T06:00:00Z`);
   const onDay = settings.data?.settings.vehicle_on_the_day === true;
   const picked = f?.driver ? avail.data?.drivers.find((x) => x.username === f.driver) : undefined;
   const currentPlate = task?.vehicle ? plateOf(task.vehicle) : '';
@@ -144,14 +138,11 @@ export default function ChangeTaskScreen() {
               ) : (
                 <>
                   <Txt variant="label" color={colors.muted}>{t('office.task.timeDay').toUpperCase()}</Txt>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                    {(pickDate ? Array.from({ length: 14 }, (_, i) => addDays(today, i)) : [...days, ...(days.includes(f.date) || !f.date ? [] : [f.date])]).map((day) => chip(day, f.date === day, dayLabel(day), () => set({ date: day })))}
-                    {!pickDate && chip('pick', false, t('office.trip.pickDate'), () => setPickDate(true))}
-                  </View>
-                  <TimeInput label={t('office.task.timeLeave')} value={f.time} onCommit={(v) => set({ time: v })} testID="time-leave" />
+                  <TripDayPicker value={f.date} onChange={(date) => set({ date })} testID="task-day" />
+                  <TimeField label={t('office.task.timeLeave')} value={f.time} onCommit={(v) => set({ time: v })} testID="time-leave" />
                   {check && check.kind === 'late' && <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => set({ time: check.leaveBy })} />}
                   {check && check.kind === 'early' && <Txt variant="small">{departureText(t, check)}</Txt>}
-                  <TimeInput label={t('office.trip.freeBy')} value={f.end} onCommit={(v) => set({ end: v })} testID="time-end" />
+                  <TimeField label={t('office.trip.freeBy')} value={f.end} onCommit={(v) => set({ end: v })} testID="time-end" />
                 </>
               )}
               <Stepper label={t('office.trip.passengers')} value={f.passengers} onChange={(passengers) => set({ passengers })} />

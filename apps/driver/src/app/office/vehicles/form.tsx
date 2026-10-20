@@ -1,6 +1,6 @@
 // Office mode (Phase 8, O2, item 7): Register a vehicle, or change one (?reg=<plate>): the same form as the site's
 // VehicleForm; an update sends only the fields filled in (empty fields keep their value, the current one shown under the
-// field). Numbers in mono, dates typed as YYYY-MM-DD, the type and the regular driver as chips, the rental company with
+// field). Numbers in mono, dates on the calendar (docs/ui-patterns.md §3), the type and the regular driver as chips, the rental company with
 // "+ Add a company" (add_rental_company) when allowed, the custodian by name or e-mail ("none" clears). Register saves
 // through register_vehicle, an update through update_vehicle; both go back to the vehicle. Documents and photos are
 // laptop work (their upload tools are web-only).
@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { useLeaveGuard } from '@/components/navigation';
+import { DateField } from '@/components/patterns/Calendar';
 import { Button, Txt } from '@/components/ui';
 import { companyInput, emptyVehicle, VEHICLE_TYPES, vehicleFormDirty, type VehicleFields, vehicleInput } from '@/office/manageLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -86,15 +87,21 @@ export default function VehicleFormScreen() {
     }
   }
 
-  const field = (k: keyof VehicleFields, label: string, opts: { numeric?: boolean; date?: boolean; placeholder?: string; now?: string | number | null } = {}) => (
+  const field = (k: keyof VehicleFields, label: string, opts: { numeric?: boolean; date?: boolean; placeholder?: string; now?: string | number | null } = {}) => opts.date ? (
+    // A date is picked on the calendar (docs/ui-patterns.md §3: a plain date), never typed.
+    <View style={{ gap: 4 }}>
+      <DateField label={label} value={f[k] as string} onChange={(v) => set(k, v as never)} testID={`vehicle-${k}`} />
+      {!isNew && opts.now != null && opts.now !== '' ? <Txt variant="small">{t('office.vehicles.now', { value: String(opts.now) })}</Txt> : null}
+    </View>
+  ) : (
     <View style={{ gap: 4 }}>
       <Txt variant="label" color={colors.muted}>{label.toUpperCase()}</Txt>
       <TextInput
         value={f[k]}
         onChangeText={(v) => set(k, v as never)}
-        placeholder={opts.placeholder ?? (opts.date ? 'YYYY-MM-DD' : '')}
+        placeholder={opts.placeholder ?? ''}
         placeholderTextColor="#9aa0a6"
-        keyboardType={opts.numeric ? 'number-pad' : opts.date ? 'numbers-and-punctuation' : 'default'}
+        keyboardType={opts.numeric ? 'number-pad' : 'default'}
         autoCapitalize={k === 'reg' ? 'characters' : 'sentences'}
         autoCorrect={false}
         maxLength={k === 'reg' ? 20 : 200}

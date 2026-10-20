@@ -52,7 +52,7 @@ export function ListError({ message, onRetry, stale = false }: { message: string
   return (
     <View style={[styles.error, stale && { paddingVertical: 8 }]} testID="list-error">
       <Txt variant="strong" size={15} color={colors.red} style={{ flex: 1 }}>{stale ? t('patterns.couldntRefresh') : message}</Txt>
-      <Button kind="outline" label={t('office.common.tryAgain')} onPress={onRetry} style={{ minHeight: 44, paddingHorizontal: 14 }} />
+      <Button kind="outline" label={t('patterns.tryAgain')} onPress={onRetry} style={{ minHeight: 44, paddingHorizontal: 14 }} />
     </View>
   );
 }

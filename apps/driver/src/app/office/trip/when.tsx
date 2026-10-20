@@ -8,11 +8,12 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { TimeInput } from '@/components/office/TimeInput';
+import { TripDayPicker } from '@/components/patterns/Calendar';
+import { TimeField } from '@/components/patterns/TimeField';
 import { DepartureNote, TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Button, Mono, Txt } from '@/components/ui';
-import { durationText, shortDate } from '@/lib/durations';
-import { addDays, colomboDate } from '@/lib/time';
+import { durationText } from '@/lib/durations';
+import { colomboDate } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
 import { nextStep, updateDraft, useTripDraft } from '@/office/trip/draft';
 import { dwellFallbacks } from '@/office/trip/planLogic';
@@ -25,14 +26,12 @@ import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
 export default function TripWhen() {
-  const { t, tList } = useApp();
+  const { t } = useApp();
   const { me } = useOffice();
   const router = useRouter();
   const d = useTripDraft();
   const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
-  const [pickDate, setPickDate] = useState(false);
   const [other, setOther] = useState<string | null>(null); // the stop whose "Other" minutes box is open
-  const names = { days: tList('days'), months: tList('months') };
   const today = colomboDate();
   const draft = d ?? null;
   const trip = useTrip(draft ?? { mode: 'request', fields: { date: today, leaveBy: '', stops: [], returnToBase: false, avoidExpressway: false, end: '', start: '', startPax: false, title: '', buffer: '', driver: '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false }, req: { behalf: '', project: '', need: '', tools: false, note: '', driverRequired: true, requesterPhone: '' }, rows: [], step: 'when', at: 0 }, settings.data ?? null);
@@ -41,8 +40,6 @@ export default function TripWhen() {
   const setF = (patch: Partial<typeof f>) => updateDraft((x) => ({ ...x, fields: { ...x.fields, ...patch } }));
   const patchStop = (key: string, patch: Partial<StopDraft>) => setF({ stops: f.stops.map((s) => (s.key === key ? { ...s, ...patch } : s)) });
   const fallbacks = dwellFallbacks(f.stops, trip.preview?.stops, trip.dwellSetting);
-  const days = [today, addDays(today, 1), addDays(today, 2)];
-  const dayLabel = (day: string) => day === today ? t('office.common.today') : day === addDays(today, 1) ? `${t('office.common.tomorrow')} · ${shortDate(names, `${day}T06:00:00Z`)}` : shortDate(names, `${day}T06:00:00Z`);
   const stopsOk = stopsInput(f.stops, f.startPax ? 1 : 0);
   const problem = 'error' in stopsOk ? reasonText(t, stopsOk.error) : !f.leaveBy && !f.stops.some((s) => s.arriveBy) ? t('office.trip.reasonLeave') : null;
   const check = trip.check;
@@ -54,18 +51,7 @@ export default function TripWhen() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <TripHeader step="when" mode={draft.mode} above={above} onBack={() => router.back()} />
       <Screen bottom={16}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {(pickDate ? Array.from({ length: 14 }, (_, i) => addDays(today, i)) : [...days, ...(days.includes(f.date) ? [] : [f.date])]).map((day) => (
-            <Pressable key={day} accessibilityRole="button" accessibilityState={{ selected: f.date === day }} onPress={() => setF({ date: day })} style={[styles.chip, f.date === day && styles.chipOn]}>
-              <Txt variant="strong" size={16} color={f.date === day ? '#ffffff' : colors.ink}>{dayLabel(day)}</Txt>
-            </Pressable>
-          ))}
-          {!pickDate && (
-            <Pressable accessibilityRole="button" onPress={() => setPickDate(true)} style={styles.chip}>
-              <Txt variant="strong" size={16}>{t('office.trip.pickDate')}</Txt>
-            </Pressable>
-          )}
-        </View>
+        <TripDayPicker value={f.date} onChange={(date) => setF({ date })} testID="trip-day" />
 
         {f.stops.map((s, i) => {
           const fb = fallbacks.get(s.key);
@@ -82,8 +68,8 @@ export default function TripWhen() {
                 </View>
               </View>
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TimeInput label={t('office.trip.arriveBy')} value={s.arriveBy} onCommit={(arriveBy) => patchStop(s.key, { arriveBy })} tone={trip.lateKey === s.key ? 'red' : undefined} />
-                {i === f.stops.length - 1 && <TimeInput label={t(draft.mode === 'task' || draft.mode === 'stops' ? 'office.trip.freeBy' : 'office.trip.backBy')} value={f.end} onCommit={(end) => setF({ end })} tone={trip.lateBack ? 'red' : undefined} />}
+                <TimeField label={t('office.trip.arriveBy')} value={s.arriveBy} onCommit={(arriveBy) => patchStop(s.key, { arriveBy })} tone={trip.lateKey === s.key ? 'red' : undefined} />
+                {i === f.stops.length - 1 && <TimeField label={t(draft.mode === 'task' || draft.mode === 'stops' ? 'office.trip.freeBy' : 'office.trip.backBy')} value={f.end} onCommit={(end) => setF({ end })} tone={trip.lateBack ? 'red' : undefined} />}
               </View>
               {check && check.kind === 'late' && trip.lateKey === s.key && (
                 <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(check.leaveBy)} moveLabel={check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
@@ -117,7 +103,7 @@ export default function TripWhen() {
           <Txt variant="label" color={colors.muted}>{t('office.trip.leaveFrom', { place: startName }).toUpperCase()}</Txt>
           {draft.running ? <Txt variant="muted">{t('office.trip.leaveRunning')}</Txt> : null}
           {!draft.running && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TimeInput value={f.leaveBy} onCommit={trip.setLeave} tone={lateLabel ? 'red' : undefined} placeholder={t('office.trip.leaveAuto')} />
+            <TimeField value={f.leaveBy} onCommit={trip.setLeave} tone={lateLabel ? 'red' : undefined} placeholder={t('office.trip.leaveAuto')} suggested={trip.preview?.leave_by?.slice(-5)} testID="leave-by" />
             {lateLabel && <Txt variant="strong" size={15} color={colors.red}>{lateLabel}</Txt>}
           </View>}
           {!f.leaveBy && <Txt variant="small">{trip.plan.updating ? t('office.trip.planning') : t('office.trip.leaveHint')}</Txt>}

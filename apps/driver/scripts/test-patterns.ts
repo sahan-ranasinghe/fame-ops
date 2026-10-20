@@ -107,6 +107,21 @@ async function main() {
     check(cal.includes('export function DateRangeButton') && cal.includes('export function DayStrip') && cal.includes('export function TripDayPicker') && cal.includes('export function DateField') && cal.includes('setDraft((r) => tapDay(r, d))') && cal.includes('PanResponder.create'), 'the calendar: the range (two taps), the week strip (swipe), the trip day, a plain date');
     const time = read('components/patterns/TimeField.tsx');
     check(time.includes('quickTimes(now, suggested)') && time.includes('initialScrollIndex') && time.includes('TIME_STEPS'), 'the time sheet: the quick chips, the 5-minute list scrolled to the value');
+    // The screens on the patterns (Stage 0): no typed time or date anywhere in the app.
+    const when = read('app/office/trip/when.tsx');
+    const change = read('app/office/task/[id]/time.tsx');
+    const settings = read('app/office/people/settings.tsx');
+    const ask = read('components/office/AskDriversSheet.tsx');
+    const vform = read('app/office/vehicles/form.tsx');
+    const avail = read('app/availability-edit.tsx');
+    check(when.includes('<TripDayPicker value={f.date}') && !when.includes('pickDate') && when.includes('<TimeField') && when.includes('suggested={trip.preview?.leave_by?.slice(-5)}'), 'the trip editor\'s When: Today / Tomorrow / Pick a date (any date), the time sheet with the plan\'s leave-by suggested');
+    check(change.includes('<TripDayPicker value={f.date}') && change.includes('<TimeField') && !change.includes('pickDate'), 'Change the task: the trip day picker and the time sheet');
+    check(settings.includes('<TimeField') && !settings.includes('TimeInput'), 'Quick settings: the auto clock-out through the time sheet');
+    check(ask.includes('<Sheet visible={visible}') && ask.includes('return <TimeField label={label} value={value} onCommit={onChange} />;') && !ask.includes('<Modal'), 'Ask drivers: the shared sheet and the time sheet');
+    check(vform.includes("<DateField label={label} value={f[k] as string}") && !vform.includes("'YYYY-MM-DD'"), 'the vehicle form: dates on the calendar, never typed');
+    check(avail.includes('<TripDayPicker value={form.from}') && avail.includes('<TimeField label={t(\'avail.from\')}') && avail.includes('min={form.from}'), 'the driver\'s availability: the day picker, the time sheet, the last day on the calendar from the first day');
+    const appFiles = ['app/office/trip/when.tsx', 'app/office/task/[id]/time.tsx', 'app/office/people/settings.tsx', 'components/office/AskDriversSheet.tsx', 'app/office/vehicles/form.tsx', 'app/availability-edit.tsx'].map(read).join('\n');
+    check(!/TimeInput|keyboardType="numbers-and-punctuation" maxLength=\{5\}/.test(appFiles), 'no typed HH:MM field left in these screens');
     const en = JSON.parse(read('i18n/en.json')) as { patterns: Record<string, string> };
     const si = JSON.parse(read('i18n/si.json')) as typeof en;
     const code = ['components/patterns/Sheet.tsx', 'components/patterns/ListState.tsx', 'components/patterns/FilterBar.tsx', 'components/patterns/Calendar.tsx', 'components/patterns/TimeField.tsx'].map(read).join('\n');
