@@ -972,6 +972,20 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 23. Step 5 deployed (21 October 2026, Sahan's three gos after CI run 39480596443 passed)
+
+- main fast-forwarded to `035efea` (step 5, the review fixes, the Notifications limits, Live without zoom buttons, the CI
+  workflow) and pushed (the push scan 0); CI run on main: 39484688927.
+- The website: `scripts/deploy-pages.sh --deploy` from `035efea`, the scan clean (deployment 7fc55645); the phone redirect
+  stays off. Checked live: `/` the desktop site, `/m/` and `/m/office/approve` the mobile page, `/m/manifest.webmanifest`
+  (Fame Fleet, scope `/m/`, 3 icons), `/m/sw.js`, the icons. Found after the deploy: Pages answers `/m/offline.html` with a
+  308 to `/m/offline` (its pretty addresses), and Chrome refuses a redirected answer for a page, so the worker's "No
+  connection" page cannot show on the live site; fixed on branch `o4-offline-fix` (the worker asks `/m/offline`), not
+  deployed: waiting for its go.
+- The EAS update to preview, runtime 1.3.0-gmaps: group `f0754f7e-bf67-473b-835d-b88be6011b5a`, Android
+  `01a15ad6-190c-75df-9573-a0ddde875ee5`, from `035efea` (no native package changed since the 1.3.0 build `ef69255` but
+  the test tool jest-expo; none added or changed by step 5).
+
 ## 22. Queued next (Sahan, 20 October 2026; not built)
 
 - **Live as a full-screen map with a draggable bottom sheet** (Google Maps, Uber, PickMe, and the boss's design 15): the map

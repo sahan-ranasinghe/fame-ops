@@ -53,7 +53,7 @@ What it is, as built:
 - **Install:** its own manifest (`/m/manifest.webmanifest`: name Fame Fleet, scope and start `/m/`, standalone, the site's FF
   icons, one maskable), the favicon and the iPhone icon in the page (`apps/driver/public/index.html`, Expo's page template).
 - **Offline:** the worker `/m/sw.js` (scope `/m/`; the desktop site's `/sw.js` keeps `/`) keeps one file,
-  `/m/offline.html`: a page of the site opened with no connection shows "No connection" in English and Sinhala with Try
+  `/m/offline` (the file `offline.html`; Pages serves it at that address): a page of the site opened with no connection shows "No connection" in English and Sinhala with Try
   again, and reloads by itself when the connection is back. Nothing else is cached (a deploy is never stale) and nothing
   works offline.
 - **Web push:** the office's existing web push (the key from `my_notification_settings`, `register_web_push`,

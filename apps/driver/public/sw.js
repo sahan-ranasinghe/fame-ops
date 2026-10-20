@@ -2,8 +2,10 @@
 // stale): (1) a page of the site opened with no connection gets offline.html ("No connection", Try again); (2) a push
 // from the office's web push shows a notification, as the desktop site's /sw.js does; (3) a tap opens its place on the
 // mobile website: an open window is told (the page maps the desktop link to its screen), else /m/?from=<link>.
-const OFFLINE = "/m/offline.html";
-const CACHE = "fame-fleet-m-offline-v1";
+// /m/offline, not /m/offline.html: Cloudflare Pages answers the .html address with a 308 to this one, and a page load never
+// accepts a redirected answer (Chrome shows its own error instead), 21 October 2026.
+const OFFLINE = "/m/offline";
+const CACHE = "fame-fleet-m-offline-v2";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.add(new Request(OFFLINE, { cache: "reload" }))).then(() => self.skipWaiting()));

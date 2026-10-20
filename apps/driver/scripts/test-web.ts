@@ -44,7 +44,7 @@ console.log('\nStep 5: installable, offline, web push (public/, office/browserPu
   const html = readFileSync(join(pub, 'index.html'), 'utf8');
   check(html.includes('href="/m/manifest.webmanifest"') && html.includes('rel="icon"') && html.includes('apple-touch-icon') && html.includes('<div id="root">'), 'the page links the manifest, the favicon and the iPhone icon');
   const sw = readFileSync(join(pub, 'sw.js'), 'utf8');
-  check(sw.includes('"/m/offline.html"') && /req\.mode !== "navigate"/.test(sw) && !/caches\.open\(CACHE\)\.then\(\(c\) => c\.addAll/.test(sw), 'the worker caches only the offline page, for pages opened with no connection');
+  check(sw.includes('"/m/offline"') && !sw.includes('"/m/offline.html"') && /req\.mode !== "navigate"/.test(sw) && !/caches\.open\(CACHE\)\.then\(\(c\) => c\.addAll/.test(sw), 'the worker caches only the offline page, for pages opened with no connection');
   check(sw.includes('"/m/?from=" + encodeURIComponent(path)') && sw.includes('u.pathname.startsWith("/m/")'), 'a tap: an open mobile window is told, else /m/?from=<the link>');
   const offline = readFileSync(join(pub, 'offline.html'), 'utf8');
   check(offline.includes('No connection') && offline.includes('lang="si"') && offline.includes('location.reload()'), 'the offline page: No connection in both languages, Try again, back by itself when online');
