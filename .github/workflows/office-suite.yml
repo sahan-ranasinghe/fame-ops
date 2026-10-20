@@ -1,0 +1,173 @@
+# The office suite on GitHub's machines (Sahan, 21 October 2026; docs/ci.md). The laptop runs the fast checks while
+# working; a checkpoint passes when this run passes. No repository secrets: every key the local functions need is a
+# throwaway value made inside the run, the Supabase stack is the CLI's local one (its own generated keys), and the Google
+# keys stay empty (the free map and the fallbacks). The repo must stay private.
+name: office-suite
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: office-suite-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fast:
+    name: fast
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    outputs:
+      minutes: ${{ steps.done.outputs.minutes }}
+    steps:
+      - name: Start the clock
+        run: echo "CI_START=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/office/package-lock.json
+            apps/driver/package-lock.json
+      - name: Install
+        run: |
+          npm ci --no-audit --no-fund
+          (cd apps/office && npm ci --no-audit --no-fund)
+          (cd apps/driver && npm ci --no-audit --no-fund)
+      - name: Typechecks
+        run: |
+          (cd apps/office && npm run typecheck)
+          (cd apps/driver && npm run typecheck)
+      - name: Hooks lint
+        run: cd apps/driver && npm run lint:hooks
+      - name: Site unit tests (4 workers)
+        run: cd apps/office && ./node_modules/.bin/vitest run
+      - name: Driver script suites
+        run: |
+          cd apps/driver
+          failed=0
+          for s in $(node -e 'console.log(Object.keys(require("./package.json").scripts).filter((k) => k.startsWith("test:")).join(" "))'); do
+            echo "::group::$s"
+            if ! npm run -s "$s"; then echo "FAILED: $s"; failed=1; fi
+            echo "::endgroup::"
+          done
+          exit $failed
+      - name: Minutes
+        id: done
+        if: always()
+        run: |
+          m=$(( ($(date +%s) - CI_START + 59) / 60 ))
+          echo "minutes=$m" >> "$GITHUB_OUTPUT"
+          echo "fast job: about $m min" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  e2e:
+    name: e2e
+    needs: fast
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Start the clock
+        run: |
+          # Everything the run keeps (logs, durations, load) goes in one folder, uploaded at the end.
+          echo "CI_START=$(date +%s)" >> "$GITHUB_ENV"
+          echo "OUT=$RUNNER_TEMP/ci-out" >> "$GITHUB_ENV"
+          echo "TIMES=$RUNNER_TEMP/ci-out/ci-times.txt" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/ci-out"
+          echo "$(date -u +%T) start" > "$RUNNER_TEMP/ci-out/ci-times.txt"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/office/package-lock.json
+            apps/driver/package-lock.json
+      - name: Install (the Supabase CLI from the lockfile, 2.120.0 as on the laptop)
+        run: |
+          npm ci --no-audit --no-fund
+          (cd apps/office && npm ci --no-audit --no-fund)
+          (cd apps/driver && npm ci --no-audit --no-fund)
+          npx supabase --version
+          echo "$(date -u +%T) installed" >> "$TIMES"
+      - name: Playwright's Chromium with its system packages
+        run: |
+          cd apps/office && npx playwright install --with-deps chromium
+          echo "$(date -u +%T) chromium" >> "$TIMES"
+      - name: Start the local Supabase stack (the laptop's image versions)
+        run: |
+          # The laptop's stack runs these four versions (the linked project's, in supabase/.temp, not in git); the rest are
+          # the CLI's own defaults. Nothing newer is pulled.
+          mkdir -p supabase/.temp
+          echo -n "v2.197.0" > supabase/.temp/gotrue-version
+          echo -n "17.11.0.003" > supabase/.temp/postgres-version
+          echo -n "v14.18" > supabase/.temp/rest-version
+          echo -n "v1.77.5" > supabase/.temp/storage-version
+          # Not used by the tests: the dashboard and its API, image resizing, logs, the pooler.
+          npx supabase start -x studio,postgres-meta,imgproxy,logflare,vector,supavisor
+          npx supabase db reset
+          echo "$(date -u +%T) stack" >> "$TIMES"
+      - name: Serve the functions (throwaway keys made here)
+        run: |
+          printf 'OFFICE_MCP_KEY=%s\nSERVER_KEY=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > "$RUNNER_TEMP/office-mcp.env"
+          chmod 600 "$RUNNER_TEMP/office-mcp.env"
+          nohup npx supabase functions serve --env-file "$RUNNER_TEMP/office-mcp.env" > "$OUT/functions-serve.log" 2>&1 &
+          api=$(npx supabase status -o env | sed -n 's/^API_URL="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p')
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$api/functions/v1/office-api/me" || true)
+            [ "$code" = "401" ] && break
+            sleep 5
+          done
+          [ "$code" = "401" ] || { echo "office-api did not come up (last answer $code)"; tail -50 "$OUT/functions-serve.log"; exit 1; }
+          echo "$(date -u +%T) functions" >> "$TIMES"
+      - name: The office suite (as on the laptop; workers 1, retries 1, zero hard failures)
+        env:
+          CI: "1"
+        run: |
+          set -o pipefail
+          bash scripts/test-office-local.sh "$RUNNER_TEMP/office-mcp.env" 2>&1 | tee "$OUT/office-suite.log"
+          echo "$(date -u +%T) suite" >> "$TIMES"
+      - name: The key and secret scans of the built site (no upload)
+        run: |
+          # The production build's public values: the project's address (in the repo's docs) and a stand-in publishable key;
+          # deploy-pages.sh without --deploy builds both sites, checks for source maps and scans, and uploads nothing.
+          printf 'VITE_SUPABASE_URL=https://hinurfsaxvplbyqgtozj.supabase.co\nVITE_SUPABASE_ANON_KEY=ci-stand-in\n' > apps/office/.env.production.local
+          printf 'EXPO_PUBLIC_SUPABASE_URL=https://hinurfsaxvplbyqgtozj.supabase.co\nEXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=ci-stand-in\n' > apps/driver/.env
+          cd apps/office && bash scripts/deploy-pages.sh
+          echo "$(date -u +%T) scans" >> "$TIMES"
+      - name: Load, durations and minutes
+        if: always()
+        run: |
+          {
+            echo "== durations (UTC)"; cat "$TIMES" 2>/dev/null
+            echo "== load at the end"; uptime; nproc; free -m
+            echo "== the suite's result"; grep -E "✘|flaky|passed|failed|All office" "$OUT/office-suite.log" 2>/dev/null | tail -40
+            echo "== CPU cut-offs in the functions log"; grep -cE "CPU time soft limit|early termination" "$OUT/functions-serve.log" 2>/dev/null || true
+          } > "$OUT/ci-summary.txt"
+          cat "$OUT/ci-summary.txt"
+          e2e=$(( ($(date +%s) - CI_START + 59) / 60 ))
+          fast=${{ needs.fast.outputs.minutes || 0 }}
+          echo "minutes: fast about $fast, e2e about $e2e, total about $(( fast + e2e )) (2,000 free a month)" | tee -a "$OUT/ci-summary.txt" "$GITHUB_STEP_SUMMARY"
+      - name: Stop the stack; the Playwright report and traces into the folder
+        if: always()
+        run: |
+          npx supabase stop --no-backup || true
+          cp -r apps/office/playwright-report "$OUT/" 2>/dev/null || true
+          cp -r apps/office/test-results "$OUT/" 2>/dev/null || true
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: office-suite-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/ci-out/

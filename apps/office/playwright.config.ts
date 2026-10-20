@@ -20,7 +20,8 @@ export default defineConfig({
   // requests; a write is never repeated by the app, so a dropped save fails its first try). Still one worker.
   retries: 1,
   workers: 1,
-  reporter: [["list"]],
+  // On GitHub (CI, docs/ci.md) also the HTML report, uploaded with the run.
+  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],
   use: {
     baseURL: "http://localhost:5174",
     trace: "retain-on-failure",

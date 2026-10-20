@@ -1136,6 +1136,12 @@ iOS; Play Store.
   right before bringing the checkpoint, not after each fix. If that run fails and the log shows load (CPU cut-offs,
   time-outs) with no code cause, do not investigate or re-run more than once: report it in a few lines and Sahan decides.
   Don't spend time measuring the laptop's load unless he asks.
+- **CI decides checkpoints (Sahan, 21 October 2026; `docs/ci.md`).** The full office suite runs on GitHub
+  (`.github/workflows/office-suite.yml`), not on the laptop. At a checkpoint: run `python3 scripts/push-scan.py <branches>`;
+  with 0 (plus only the allowlisted entry) and Sahan's push go, push the branch, start the run (`gh workflow run
+  office-suite.yml --ref <branch>`), wait with `gh run watch <id> --exit-status`, and report pass or fail with the failed
+  tests' names. If the Wi-Fi drops, look again with `gh run view <id>`: the run goes on on GitHub. No local full suite
+  unless Sahan asks. The local fast checks still run while working, and a single failed test may be re-run locally.
 - Every full office suite run starts with `npx supabase db reset` on the local stack (never --linked). Sahan has given a
   standing OK for this local reset.
 - When a test fails, fix it and re-run ONLY the failed tests (Playwright: `--last-failed` or that test; Vitest: that file),
