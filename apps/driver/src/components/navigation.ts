@@ -15,6 +15,7 @@ import { useNavigation } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
 
+import { useOfficeMe } from '@/office/store';
 import { useApp } from '@/state/app';
 
 const dirtyForms = new Set<string>();
@@ -28,7 +29,9 @@ export function anyFormDirty(): boolean {
 export function useLeaveGuard(dirty: boolean, busy: boolean): { allowLeave: () => void } {
   const navigation = useNavigation();
   const { t, me } = useApp();
-  const signedIn = me !== null;
+  // Office mode (Phase 8, O2): an office sign-in counts too (the vehicle, driver and office-user forms use the guard).
+  const officeMe = useOfficeMe();
+  const signedIn = me !== null || officeMe !== null;
   const leaving = useRef(false);
   const [key] = useState(() => `form-${++nextKey}`);
 

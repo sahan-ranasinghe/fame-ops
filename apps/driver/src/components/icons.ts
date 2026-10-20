@@ -48,3 +48,7 @@ export { default as Eye } from 'lucide-react-native/icons/eye';
 export { default as EyeOff } from 'lucide-react-native/icons/eye-off';
 export { default as ChevronUp } from 'lucide-react-native/icons/chevron-up';
 export { default as GripVertical } from 'lucide-react-native/icons/grip-vertical';
+// Office mode (Phase 8, O2): management under More.
+export { default as ChartColumn } from 'lucide-react-native/icons/chart-column';
+export { default as SlidersHorizontal } from 'lucide-react-native/icons/sliders-horizontal';
+export { default as UserCog } from 'lucide-react-native/icons/user-cog';

@@ -82,7 +82,7 @@ export function homeChips(permissions: readonly string[]): HomeChip[] {
   return chips;
 }
 
-export type MoreItem = 'tasks' | 'approve' | 'drivers' | 'trips' | 'alerts' | 'issues';
+export type MoreItem = 'tasks' | 'approve' | 'drivers' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'people_drivers' | 'people_users' | 'settings';
 
 /** What More lists under Work: the screens built so far that are not on the bar. */
 export function moreFor(permissions: readonly string[]): MoreItem[] {
@@ -94,9 +94,24 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     { key: 'trips', need: ['request'] },
     { key: 'issues', need: ['issues', 'assign_tasks'] },
     { key: 'alerts', need: [] },
+    // O2 item 7 (design 19): management by permission. Vehicles and Reports with vehicles (Reports also with
+    // assign_tasks: the duty log); Drivers' management with users or vehicles (decision 1); office users and the quick
+    // settings with users.
+    { key: 'vehicles', need: ['vehicles'] },
+    { key: 'reports', need: ['vehicles', 'assign_tasks'] },
+    { key: 'people_drivers', need: ['users', 'vehicles'] },
+    { key: 'people_users', need: ['users'] },
+    { key: 'settings', need: ['users'] },
   ];
   return all.filter((i) => has(permissions, ...i.need) && !onBar.has(i.key)).map((i) => i.key);
 }
+
+/** More's sections (design 19): Work (the screens), People (drivers, office users), then Quick settings. */
+export type MoreSection = 'work' | 'people' | 'settings';
+export const MORE_SECTION: Record<MoreItem, MoreSection> = {
+  approve: 'work', tasks: 'work', drivers: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work',
+  people_drivers: 'people', people_users: 'people', settings: 'settings',
+};
 
 /** A notification's link on the site (InboxItem.url) → the office screen in the app, or null when O1 has no such screen. */
 export function routeForUrl(url: string | undefined, permissions: readonly string[]): string | null {
