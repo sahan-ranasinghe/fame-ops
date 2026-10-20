@@ -10,7 +10,7 @@ only the fast checks while working and single failed tests; a checkpoint passes 
 - **e2e** (after fast): the Supabase CLI from the lockfile (2.120.0, as on the laptop) starts the local stack with the
   laptop's image versions (no newer images), without the dashboard, image resizing, logs and the pooler; a db reset; the
   functions served with throwaway keys made in the run; Playwright's Chromium; then `scripts/test-office-local.sh`, the same
-  suite as on the laptop (one worker, one retry, zero hard failures); then `apps/office/scripts/deploy-pages.sh` without
+  suite as on the laptop (one worker, one retry, zero hard failures) on the freshly reset database; then `test:data`; then `apps/office/scripts/deploy-pages.sh` without
   `--deploy` (both production builds, no source maps, the key and secret scan; nothing is uploaded).
 - Always kept (7 days, also on failure): the artifact `office-suite-<run id>` with the Playwright report and traces, the
   functions log, the suite's output and `ci-summary.txt` (the durations, the load at the end, the CPU cut-offs, the minutes).

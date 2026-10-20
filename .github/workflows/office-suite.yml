@@ -132,10 +132,6 @@ jobs:
           done
           [ "$code" = "401" ] || { echo "office-api did not come up (last answer $code)"; tail -50 "$OUT/functions-serve.log"; exit 1; }
           echo "$(date -u +%T) functions" >> "$TIMES"
-      - name: The driver app's data layer against the stack (test:data)
-        run: |
-          cd apps/driver && npm run -s test:data
-          echo "$(date -u +%T) test:data" >> "$TIMES"
       - name: The office suite (as on the laptop; workers 1, retries 1, zero hard failures)
         env:
           CI: "1"
@@ -143,6 +139,12 @@ jobs:
           set -o pipefail
           bash scripts/test-office-local.sh "$RUNNER_TEMP/office-mcp.env" 2>&1 | tee "$OUT/office-suite.log"
           echo "$(date -u +%T) suite" >> "$TIMES"
+      - name: The driver app's data layer against the stack (test:data, after the suite)
+        run: |
+          # After the office suite, never before it: its rows (tasks that need a driver, critical issues) would be on the
+          # suite's Overview, which the laptop's full run measures on a freshly reset database (run 39472331649).
+          cd apps/driver && npm run -s test:data
+          echo "$(date -u +%T) test:data" >> "$TIMES"
       - name: The key and secret scans of the built site (no upload)
         run: |
           # The production build's public values: the project's address (in the repo's docs) and a stand-in publishable key;
