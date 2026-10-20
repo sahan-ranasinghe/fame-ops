@@ -7,6 +7,9 @@
 // again. Stage 1 (O3 row 1): Change time (request/[id]/time: another day, leave-by, back-by, the start, the minutes at
 // From / To; Who's available is asked at the new time; only what changed is sent, a line with Undo shows it), and after a
 // decision the page stays with the outcome, its warnings and Tell requester (the WhatsApp text, the requester's phone).
+// O3 row 2: the timeline (request_events) for everyone who may open it; Cancel booking with a reason for an approver on
+// an approved or changed request (cancel_request: the task is cancelled too); the person who asked (no approve) opens
+// their own request from My trips: the trip, the timeline, Edit and Withdraw while it waits, no decision buttons.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -22,6 +25,8 @@ import { telLink } from '@/lib/format';
 import { alreadyDecided, availabilityArgs, canApprove, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, rankedDrivers, tripView } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
 import { askedOf, availabilityAt, decideTimes, hasChange, redecideTimes, shownOf } from '@/office/decideLogic';
+import { CANCEL_TEXT, canCancelBooking, cancelReason, canWithdrawOwn, decides, eventLine } from '@/office/requestsLogic';
+import { canEdit as canEditTrip } from '@/office/tripsLogic';
 import { decideStore, useTimeChange } from '@/office/decideStore';
 import { requestTitle } from '@/office/homeLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -47,7 +52,9 @@ export default function ApproveRequest() {
   const router = useRouter();
   const q = useTool<RequestsList>('list_requests', { status: 'all', id, limit: 1 });
   const card: RequestCard | null = q.data?.requests[0] ?? null;
-  const open = card?.status === 'waiting' || card?.status === 'changed';
+  // The approver decides; the person who asked reads their own request (O3 row 2).
+  const decider = decides(me.permissions);
+  const open = decider && (card?.status === 'waiting' || card?.status === 'changed');
   // Change time (O3 row 1): the approver's new day and times, held for this request until decided or undone.
   const change = useTimeChange(id);
   const asked = card ? askedOf(card) : null;
@@ -63,6 +70,26 @@ export default function ApproveRequest() {
   const [declining, setDeclining] = useState(false);
   // After a decision the page stays: the outcome, its warnings and Tell requester (the card is read again).
   const [outcome, setOutcome] = useState<{ title: string; warnings: string[] } | null>(null);
+  // Cancel booking (an approver) or Withdraw (the person who asked): one reason sheet, cancel_request.
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [lastCancel, setLastCancel] = useState<string | null>(null);
+  async function cancel(reason: string) {
+    if (!card || cancelBusy) return;
+    setCancelBusy(true);
+    setProblem(null);
+    setLastCancel(reason);
+    try {
+      const out = await api.call<{ note?: string; task_cancelled?: string }>('cancel_request', { request_id: card.id, reason });
+      setLastCancel(null);
+      setOutcome({ title: decider ? t('office.requests.cancelledTitle') : t('office.requests.withdrawnTitle'), warnings: [out.task_cancelled, out.note].filter((x): x is string => !!x) });
+      void q.reload();
+    } catch (e) {
+      setProblem(e as FleetError);
+    } finally {
+      setCancelBusy(false);
+    }
+  }
   // Ask drivers (design 13, O2): the sheet beside Who's available, only for someone who may ask.
   const [asking, setAsking] = useState(false);
   const mayAsk = me.tools.includes('ask_drivers');
@@ -148,7 +175,7 @@ export default function ApproveRequest() {
         {q.data && !card && <ListEmpty text={t('office.request.notFound')} />}
         {card && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            <Pill text={card.status === 'waiting' ? t('office.request.waitingYourOk') : card.status === 'changed' ? t('office.request.changedByRequester') : t(`office.status.${card.status}`)} tone={open ? 'amber' : card.status === 'approved' ? 'green' : 'red'} size={15} />
+            <Pill text={card.status === 'waiting' ? t('office.request.waitingYourOk') : card.status === 'changed' ? t('office.request.changedByRequester') : t(`office.requests.status_${card.status}`)} tone={open ? 'amber' : card.status === 'approved' ? 'green' : 'red'} size={15} />
             {others.length > 0 && <Pill text={t('office.request.alsoLooking', { name: others.join(', ') })} tone="muted" size={15} />}
             {card.late && <Pill text={t('office.approve.late')} tone="red" size={15} />}
           </View>
@@ -222,7 +249,7 @@ export default function ApproveRequest() {
             {outcome.warnings.map((w) => <Txt key={w} variant="muted" size={15}>{w}</Txt>)}
           </View>
         )}
-        {card && (outcome || !open) && <TellRequester key={`${card.id}-${card.version ?? 0}-${card.status}`} q={card} onSaved={() => void q.reload()} />}
+        {card && decider && (outcome || !open) && <TellRequester key={`${card.id}-${card.version ?? 0}-${card.status}`} q={card} onSaved={() => void q.reload()} />}
         {card && open && !outcome && (
           <Section
             title={t('office.request.whosAvailable')}
@@ -263,7 +290,33 @@ export default function ApproveRequest() {
             })}
           </Section>
         )}
-        {problem && <ErrorNotice error={problem} onRetry={refresh} />}
+        {card && (card.events?.length ?? 0) > 0 && (
+          <Section title={t('office.requests.timeline')} count={card.events!.length}>
+            {card.events!.map((e, i) => (
+              <View key={`${e.at}-${e.action}-${i}`} style={styles.event} testID="request-event">
+                <Mono size={13} color={colors.muted} style={{ width: 92 }}>{e.at}</Mono>
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Txt variant="strong" size={15}>{eventLine(e, t)}</Txt>
+                  {e.note ? <Txt variant="small">{e.note}</Txt> : null}
+                </View>
+              </View>
+            ))}
+          </Section>
+        )}
+        {card && !outcome && canCancelBooking(card, me.permissions, me.tools) && card.status !== 'waiting' && (
+          <Button kind="danger-text" label={t('office.requests.cancelBooking')} busy={cancelBusy} onPress={() => setCancelling(true)} style={{ minHeight: 52 }} testID="cancel-booking" />
+        )}
+        {card && !outcome && !decider && (
+          <View style={{ gap: 8 }}>
+            {canEditTrip(card) && me.tools.includes('update_request') && (
+              <Button kind="outline" label={t('office.trip.edit')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'edit', id: card.id } })} style={{ minHeight: 52 }} />
+            )}
+            {canWithdrawOwn(card, me.permissions, me.tools) && (
+              <Button kind="danger-text" label={t('office.trips.withdraw')} busy={cancelBusy} onPress={() => setCancelling(true)} style={{ minHeight: 52 }} testID="withdraw-request" />
+            )}
+          </View>
+        )}
+        {problem && <ErrorNotice error={problem} onRetry={lastCancel ? () => void cancel(lastCancel) : refresh} />}
       </Screen>
       {outcome && (
         <StickyActions>
@@ -296,6 +349,24 @@ export default function ApproveRequest() {
           onUse={(username) => setPicked(username)}
         />
       )}
+      <ReasonSheet<keyof typeof CANCEL_TEXT>
+        visible={cancelling}
+        title={decider ? 'office.requests.cancelTitle' : 'office.requests.withdrawTitle'}
+        question="office.requests.cancelQuestion"
+        notePlaceholder="office.requests.cancelNote"
+        confirmLabel={decider ? 'office.requests.cancelConfirm' : 'office.requests.withdrawConfirm'}
+        subtitle={card ? requestTitle(card) : null}
+        reasons={[
+          { value: 'not_needed', label: 'office.requests.reasonNotNeeded' },
+          { value: 'vehicle_problem', label: 'office.requests.reasonVehicle' },
+          { value: 'other', label: 'office.requests.reasonOther' },
+        ]}
+        onConfirm={(reason, note) => {
+          setCancelling(false);
+          void cancel(cancelReason(CANCEL_TEXT[reason], note));
+        }}
+        onClose={() => setCancelling(false)}
+      />
       <ReasonSheet<DeclineReasonKey>
         visible={declining}
         title="office.request.declineTitle"
@@ -321,4 +392,5 @@ const styles = StyleSheet.create({
   driverOn: { borderColor: colors.blue, backgroundColor: '#f2f5fb' },
   changed: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.blueChip, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6 },
   outcome: { backgroundColor: '#e8f4ec', borderRadius: 18, padding: 16, gap: 6 },
+  event: { flexDirection: 'row', gap: 10, paddingVertical: 8, minHeight: 44 },
 });

@@ -1,35 +1,75 @@
-// Office mode (Phase 8, O1): the Approve tab, the queue of requests waiting for a decision (list_requests waiting, which
-// includes changed = approved and edited since). A row opens Approve a request (design 10). Not designed as a list: the
-// same rows as Home's "Requests to approve" card, with "Palitha is reviewing" when another approver has it open.
+// Office mode (Phase 8, O1; Stage 1, O3 rows 2 and 9): the Approve tab. The queue of requests waiting for a decision
+// (list_requests waiting, which includes changed = approved and edited since) by default; the search box and one Filter
+// (Waiting, Approved, Declined, Cancelled, All) reach every request, 25 at a time with Load more (docs/ui-patterns.md
+// §1, §5). A row opens the request's page (Approve a request, design 10, or the decided request with its timeline and
+// Tell requester), with "Palitha is reviewing" when another approver has it open. Rules: office/requestsLogic.ts.
 
 import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
-import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { FilterBar } from '@/components/patterns/FilterBar';
+import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
+import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { requestLine, requestTitle } from '@/office/homeLogic';
+import { appendRequests, requestsArgs, requestsChoice, requestsFilterDefs, statusTone } from '@/office/requestsLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { RequestsList } from '@/office/types';
+import type { FleetError, RequestsList } from '@/office/types';
 import { Avatar, DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
+const SEARCH_DEBOUNCE_MS = 500;
+
 export default function ApproveTab() {
   const { t } = useApp();
-  const { signOut } = useOffice();
+  const { api, signOut } = useOffice();
   const router = useRouter();
-  const q = useTool<RequestsList>('list_requests', { status: 'waiting', limit: 50 }, { every: 60_000 });
-  const rows = q.data?.requests ?? [];
+  const [values, setValues] = useState<FilterValues>({ status: 'waiting' });
+  const status = requestsChoice(values);
+  const [text, setText] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(text.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
+  const q = useTool<RequestsList>('list_requests', requestsArgs(status, search), { every: 60_000 });
+  // An answer for another filter or search is never shown under the one chosen.
+  const shown = q.data && (q.data.status ?? status) === status ? q.data : null;
+  const rows = shown?.requests ?? [];
+  const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
+
+  async function loadMore() {
+    if (!q.data?.next || more.busy) return;
+    setMore({ busy: true, error: null });
+    try {
+      const page = await api.call<RequestsList>('list_requests', requestsArgs(status, search, q.data.next));
+      q.patch((p) => appendRequests(p, page));
+      setMore({ busy: false, error: null });
+    } catch (e) {
+      setMore({ busy: false, error: e as FleetError });
+    }
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={t('office.approve.above')} title={t('office.approve.title')} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
+        <FilterBar
+          search={text}
+          onSearch={(v) => { setText(v); if (!v) setSearch(''); }}
+          placeholder={t('office.requests.search')}
+          defs={requestsFilterDefs(t)}
+          values={values}
+          onApply={setValues}
+        />
         {!q.data && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {!q.data && !q.error && <SkeletonRows rows={4} lines={2} />}
+        {!shown && !q.error && <SkeletonRows rows={4} lines={2} />}
         {q.data && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {q.data && (
-          <Section title={t('office.approve.waiting')} count={q.data.total ?? rows.length}>
-            {rows.length === 0 && <ListEmpty text={t('office.approve.none')} />}
+        {shown && (
+          <Section title={status === 'waiting' ? t('office.approve.waiting') : t(`office.requests.status_${status}`)} count={shown.total ?? rows.length}>
+            {rows.length === 0 && <ListEmpty text={search ? t('office.requests.noneMatch') : status === 'waiting' ? t('office.approve.none') : t('office.requests.noneHere')} />}
             {rows.map((r, i) => {
               const reviewing = r.reviewing?.map((x) => x.name).join(', ');
               return (
@@ -41,14 +81,17 @@ export default function ApproveTab() {
                     line={requestLine(r)}
                     line2={reviewing ? t('office.approve.reviewing', { name: reviewing }) : r.late ? t('office.approve.late') : undefined}
                     right={<View style={{ alignItems: 'flex-end', gap: 4 }}>
-                      <Pill text={t(r.status === 'changed' ? 'office.status.changed' : 'office.status.waiting')} tone={r.status === 'changed' ? 'amber' : 'amber'} />
+                      <Pill text={t(`office.requests.status_${r.status}`)} tone={statusTone(r.status)} />
                       {r.asked ? <Txt variant="small" style={{ maxWidth: 100, textAlign: 'right' }} numberOfLines={1}>{r.asked}</Txt> : null}
                     </View>}
                     onPress={() => router.push({ pathname: '/office/request/[id]', params: { id: r.id } })}
+                    testID="request-row"
                   />
                 </View>
               );
             })}
+            {more.error && <ListFailed error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
+            {q.data?.next && <LoadMore shown={rows.length} total={q.data.total} busy={more.busy} onPress={() => void loadMore()} />}
           </Section>
         )}
       </Screen>

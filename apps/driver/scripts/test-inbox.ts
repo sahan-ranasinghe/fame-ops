@@ -171,7 +171,7 @@ console.log('\n== My trips: the buckets ==');
 
   const approver = ['view', 'request', 'approve'];
   check(tripRoute(request('r1', 'waiting'), approver) === '/office/request/r1', 'an approver opens the request page');
-  check(tripRoute(request('r1', 'waiting'), ['view', 'request']) === null, 'a requester: no page in O1, the row is not tappable');
+  check(tripRoute(request('r1', 'waiting'), ['view', 'request']) === '/office/request/r1', 'a requester opens their own request (O3 row 2: the trip, the timeline, Edit, Withdraw)');
   check(tripRoute(task('t1', 'accepted'), approver) === null, 'a created task: no page in O1');
 }
 

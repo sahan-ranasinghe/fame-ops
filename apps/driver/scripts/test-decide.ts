@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { askedOf, asksFromTo, availabilityAt, decideTimes, DWELL_CHOICES, hasChange, redecideTimes, shownOf, timeProblem } from '../src/office/decideLogic';
-import type { RequestCard } from '../src/office/types';
+import { appendRequests, canCancelBooking, cancelReason, canWithdrawOwn, eventLine, requestsArgs, requestsChoice, requestsFilterDefs, statusTone } from '../src/office/requestsLogic';
+import type { RequestCard, RequestsList } from '../src/office/types';
 
 let failures = 0;
 function check(ok: unknown, label: string, detail?: unknown): void {
@@ -61,6 +62,38 @@ console.log('\nThe screens');
   const asked = [...used.matchAll(/office\.(decide|tell)\.([a-zA-Z_]+)/g)].filter((m) => !m[2].endsWith('_')).map((m) => [m[1], m[2]] as const);
   check(asked.every(([ns, k]) => k in en.office[ns]), 'every key asked for exists', asked.filter(([ns, k]) => !(k in en.office[ns])));
   check(['approved', 'driver_changed', 'on_the_way', 'arrived', 'cancelled'].every((m) => `moment_${m}` in si.office.tell), 'every moment the server names');
+}
+
+console.log('\nRequests (O3 row 2)');
+{
+  const tr = (k: string, v?: Record<string, string | number>) => (v ? `${k}:${JSON.stringify(v)}` : k);
+  const defs = requestsFilterDefs(tr);
+  check(defs.length === 1 && defs[0].default === 'waiting' && defs[0].options.map((o) => o.value).join() === 'waiting,approved,declined,cancelled,all', 'one Filter: the status, Waiting by default');
+  check(requestsChoice({ status: 'approved' }) === 'approved' && requestsChoice({ status: 'nonsense' }) === 'waiting' && requestsChoice({}) === 'waiting', 'a broken value reads Waiting');
+  check(same(requestsArgs('all', '  Kurunegala '), { status: 'all', limit: 25, search: 'Kurunegala' }) && same(requestsArgs('waiting', '', 'c2'), { status: 'waiting', limit: 25, cursor: 'c2' }), 'list_requests: the status, the search when typed, 25 a page');
+  const list = { status: 'all', count: 2, requests: [{ id: 'a' }, { id: 'b' }], next: 'n1', total: 3 } as unknown as RequestsList;
+  const page = { status: 'all', count: 2, requests: [{ id: 'b' }, { id: 'c' }], total: 3 } as unknown as RequestsList;
+  const both = appendRequests(list, page);
+  check(both.requests.map((r) => r.id).join() === 'a,b,c' && both.next === undefined, 'Load more: never a request twice, the end known');
+  check(statusTone('declined') === 'red' && statusTone('changed') === 'amber' && statusTone('approved') === 'green', 'the status tones');
+  check(eventLine({ action: 'approved', actor: 'Palitha' }, tr) === 'office.requests.ev_approved_by:{"name":"Palitha","action":"approved"}' && eventLine({ action: 'weird' }, tr).startsWith('office.requests.ev_other'), 'a timeline row by its action (an unknown one in its own words)');
+  const ap = ['approve'], rq = ['request'], tools = ['cancel_request'];
+  check(canCancelBooking({ status: 'approved' }, ap, tools) && !canCancelBooking({ status: 'declined' }, ap, tools) && !canCancelBooking({ status: 'approved' }, rq, tools) && !canCancelBooking({ status: 'approved' }, ap, []),
+    'Cancel booking: an approver with the tool, on a request not over');
+  check(canWithdrawOwn({ status: 'waiting' }, rq, tools) && !canWithdrawOwn({ status: 'approved' }, rq, tools) && !canWithdrawOwn({ status: 'waiting' }, ap, tools), 'Withdraw: the person who asked, while it waits');
+  check(cancelReason('Vehicle problem', ' gearbox ') === 'Vehicle problem — gearbox' && cancelReason('Other', '').length > 0, 'a reason is always sent');
+  const tab = src('app/office/(tabs)/approve.tsx');
+  check(tab.includes('<FilterBar') && tab.includes("requestsArgs(status, search, q.data.next)") && tab.includes('<LoadMore') && tab.includes('office.requests.status_${r.status}'), 'the Approve tab: search, the status filter, Load more, the request words');
+  const page2 = src('app/office/request/[id].tsx');
+  check(page2.includes("api.call<{ note?: string; task_cancelled?: string }>('cancel_request', { request_id: card.id, reason })") && page2.includes('testID="cancel-booking"') && page2.includes('testID="withdraw-request"'), 'Cancel booking and Withdraw through cancel_request with a reason');
+  check(page2.includes('card.events!.map') && page2.includes('const open = decider &&') && page2.includes('{card && decider && (outcome || !open) && <TellRequester'), 'the timeline for everyone; the decision and Tell requester only for an approver');
+  check(!page2.includes('office.status.${card.status}'), "a request's status in the request's own words (never the task's \"needs a driver\")");
+  const en = JSON.parse(src('i18n/en.json'));
+  const si = JSON.parse(src('i18n/si.json'));
+  const keys = Object.keys(en.office.requests);
+  check(keys.every((k) => typeof si.office.requests[k] === 'string'), 'office.requests in both languages');
+  check(['created', 'seen', 'edited', 'approved', 'declined', 'changed', 'redecided', 'postponed', 'cancelled', 'other'].every((a) => `ev_${a}` in en.office.requests && `ev_${a}_by` in si.office.requests), 'every action has its words');
+  check(['waiting', 'changed', 'approved', 'declined', 'cancelled', 'all'].every((x) => `status_${x}` in si.office.requests), 'every status has its words');
 }
 
 console.log(failures === 0 ? '\nAll decide checks passed.' : `\n${failures} decide check(s) FAILED.`);

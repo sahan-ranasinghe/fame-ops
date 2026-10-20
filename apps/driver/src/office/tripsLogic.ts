@@ -7,7 +7,6 @@ import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
 import { addDays } from '../lib/time';
 
 import { isCreatedTask, tripLive } from './homeLogic';
-import { has } from './nav';
 import type { CreatedTaskCard, RequestCard } from './types';
 
 export type Trip = RequestCard | CreatedTaskCard;
@@ -117,8 +116,9 @@ export function withdrawReason(reason: WithdrawReason, note: string): string {
 }
 
 /** Where a row opens: an approver opens a request's page (O1); a created task has no page yet, nor has a requester. */
-export function tripRoute(trip: Trip, permissions: readonly string[]): string | null {
-  return !isCreatedTask(trip) && has(permissions, 'approve') ? `/office/request/${trip.id}` : null;
+export function tripRoute(trip: Trip, _permissions?: readonly string[]): string | null {
+  // O3 row 2: the person who asked opens their own request too (the page shows them the trip, the timeline, Edit and Withdraw).
+  return !isCreatedTask(trip) ? `/office/request/${trip.id}` : null;
 }
 
 /** O2: an own request may be changed while it waits or is approved (changed = approved and edited since): the trip editor's edit mode. */
