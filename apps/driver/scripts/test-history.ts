@@ -74,8 +74,8 @@ console.log('\nThe screens');
   check(keys.length >= 10 && keys.every((k) => typeof si.office?.history?.[k] === 'string'), 'office.history in both languages', keys.filter((k) => typeof si.office?.history?.[k] !== 'string'));
   for (const [file, needs] of [
     ['components/office/DayRoute.tsx', ['office.history.wholeRoute']],
-    ['app/office/driver/[username]/route.tsx', ['office.history.todayRoute', 'office.history.dayRoute', 'office.history.dayTasks', 'office.history.noDayPoints']],
-    ['app/office/driver/[username].tsx', ['office.history.todayRoute', 'office.history.todayLine', 'office.history.openRoute']],
+    ['app/office/driver/[username]/route.tsx', ['office.history.routeTitle', 'office.history.dayTasks', 'office.history.noDayPoints']],
+    ['app/office/driver/[username].tsx', ['office.history.todayRoute', 'office.history.todayLine', 'office.history.openRoute', 'office.history.todayFailed']],
     ['app/office/task/[id]/route.tsx', ['office.history.drivenRoute', 'office.history.noTaskPoints']],
   ] as const) {
     const s = src(file);

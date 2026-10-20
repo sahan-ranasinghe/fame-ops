@@ -244,8 +244,8 @@ console.log('\n== The screen and the two engines ==');
   // DriversMap draws after the mounted engine, never over "Map not available".
   check(/controls=\{controls\}/.test(screen) && /testID="map-zoom-out" \/>\s*\{controls\}\s*<MapButton icon=\{Maximize\}/.test(read('src/components/DriversMap.tsx')) && /controls\?: ReactNode;/.test(read('src/components/DriversMap.tsx')),
     'the control is DriversMap\'s slot: shown only while a map is mounted, never over "Map not available"');
-  check(/if \(!trails\) setTrailMap\(new Map\(\)\);/.test(screen) && /trailsPlan\(all\)/.test(screen) && /trailsOf\(trailMap, plan\.draw, drawing\?\.username \?\? null\)/.test(screen),
-    'trails off: the lines go; the plan caps them; the shown driver\'s trail is left out');
+  check(/if \(trails\) return;\s*trailGen\.current \+= 1;\s*trailBusy\.current\.clear\(\);\s*setTrailMap\(new Map\(\)\);/.test(screen) && /gen === trailGen\.current && setTrailMap/.test(screen) && /trailsPlan\(all\)/.test(screen) && /trailsOf\(trailMap, plan\.draw, drawing\?\.username \?\? null\)/.test(screen),
+    'trails off: the lines go (a trail landing after that is dropped); the plan caps them; the shown driver\'s trail is left out');
   check(/\}, ROUTE_REFRESH_MS\);/.test(screen) && (screen.match(/mergeRoute\(/g) ?? []).length >= 3 && /if \(!focused \|\| !routes \|\| \(!trails && shownUser === null\)\) return;/.test(screen),
     'every 60 s while in front: the trails and the shown route fetched again and merged, never replaced');
   check(/trailsLoading\(plan\.draw, trailMap\)/.test(screen) && /office\.live\.trailsLoading/.test(screen) && /office\.live\.trailsNotDrawn/.test(screen), '"Loading trails…" and "+N not drawn"');

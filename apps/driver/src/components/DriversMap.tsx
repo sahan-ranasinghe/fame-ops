@@ -16,7 +16,7 @@
 // pins the engines share (the stop circle, the playback marker) live here and reach the engines as props; the credit line
 // gains openrouteservice's whenever an estimated road is drawn.
 // Stage 1 (O3 item 4f): the one control cluster down the right side (the site's MapControls: zoom in, zoom out, the
-// screen's own controls such as today's trails, fit everyone), under the compass each engine shows while the map is turned.
+// screen's own controls, fit everyone), under the compass each engine shows while the map is turned.
 // A tap is a command (MapCommand, a new nonce each time) the mounted engine carries out on its own camera: a zoom step,
 // or the frame around every driver's marker and the shown route (office/liveLogic.ts fitAllFrame). Shown only while a map
 // is mounted, never over "Map not available".
@@ -73,7 +73,7 @@ type Props = Omit<DriversEngineProps, 'onLoaded' | 'onFailed'> & {
   mapPackage?: MapPackage;
   /** The route layers (O2): the trails, the shown route, the playback marker; none by default. */
   layers?: LiveLayers;
-  /** The screen's controls over the map (the trails toggle), shown only while a map is mounted, never over "Map not available". */
+  /** The screen's controls over the map (none on Live since the trails moved into the Filter sheet), shown only while a map is mounted, never over "Map not available". */
   controls?: ReactNode;
 };
 
@@ -179,7 +179,7 @@ export function DriversMap({ mapPackage, layers = NO_LAYERS, controls, ...parts 
   );
 }
 
-/** One button of the cluster: 48 px, white, the icon in ink (the trails toggle beside them has the same look). */
+/** One button of the cluster: 48 px, white, the icon in ink. */
 function MapButton({ icon: Icon, label, onPress, testID }: { icon: LucideIcon; label: string; onPress: () => void; testID?: string }) {
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} testID={testID} style={({ pressed }) => [styles.mapButton, pressed && { opacity: 0.8 }]}>

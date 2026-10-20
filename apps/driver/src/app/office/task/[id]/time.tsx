@@ -39,7 +39,8 @@ import { colors } from '@/theme';
 const floor5 = (t: string) => { const m = /^(\d{2}):(\d{2})$/.exec(t.trim()); return m ? `${m[1]}:${String(Math.floor(Number(m[2]) / 5) * 5).padStart(2, '0')}` : t; };
 
 export default function ChangeTaskScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // back=1: opened from Give a driver (design 11, Move the time): the save goes back there, not to the task.
+  const { id, back } = useLocalSearchParams<{ id: string; back?: string }>();
   const { t } = useApp();
   const { api, me, signOut } = useOffice();
   const router = useRouter();
@@ -97,7 +98,8 @@ export default function ChangeTaskScreen() {
       const warnings = out.warnings ?? [];
       // Hotfix O2-H2, Part 1b: back to the task, a snackbar ("The driver is told."), the warnings wait on the task.
       setSavedNotice(`task:${id}`, warnings);
-      router.dismissTo({ pathname: '/office/task/[id]', params: { id } });
+      if (back === '1' && router.canGoBack()) router.back();
+      else router.dismissTo({ pathname: '/office/task/[id]', params: { id } });
       showSnackbar({ text: [driverName && r.input.driver ? t('office.task.changedSentTitle', { name: driverName }) : t('office.task.changedTitle'), t('office.task.timeSavedBody')].join(' · ') });
     } catch (e) {
       setProblem(e as FleetError);

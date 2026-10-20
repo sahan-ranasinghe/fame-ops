@@ -57,9 +57,9 @@ export function boardPill(c: Pick<BoardCard, 'status' | 'accepted' | 'late_min'>
   return { key: c.status ?? 'assigned', tone: statusTone(c.status) };
 }
 
-/** "Sunil · WP CAB-4521 · 4 pax" (design 03). */
-export function boardLine(c: Pick<BoardCard, 'driver' | 'vehicle' | 'vehicle_text'>, pax?: number | null): string {
-  return [c.driver, c.vehicle || c.vehicle_text, pax ? `${pax} pax` : ''].filter(Boolean).join(' · ');
+/** "Sunil · WP CAB-4521 · 4 pax" (design 03); the passengers come in the person's words (office.trip.paxN). */
+export function boardLine(c: Pick<BoardCard, 'driver' | 'vehicle' | 'vehicle_text'>, pax?: string): string {
+  return [c.driver, c.vehicle || c.vehicle_text, pax ?? ''].filter(Boolean).join(' · ');
 }
 
 export const isCreatedTask = (t: RequestCard | CreatedTaskCard): t is CreatedTaskCard => (t as CreatedTaskCard).source === 'task';

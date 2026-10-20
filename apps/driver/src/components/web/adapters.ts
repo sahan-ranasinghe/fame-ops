@@ -250,9 +250,10 @@ export function createGoogleMap(container: HTMLElement, g: GoogleApi, entry: Goo
     if (gone) return;
     if (camera.kind === 'bounds') {
       const b = new g.LatLngBounds(camera.sw, camera.ne);
-      g.event.addListenerOnce(m, 'idle', () => {
+      // Tracked like every listener: a map handed on to the next page never keeps this one.
+      listeners.push(g.event.addListenerOnce(m, 'idle', () => {
         if ((m.getZoom() ?? 0) > MAX_FIT_ZOOM) m.setZoom(MAX_FIT_ZOOM);
-      });
+      }));
       m.fitBounds(b, pad);
     } else if (animate) {
       m.panTo(camera.center);

@@ -64,7 +64,9 @@ export function useMapMount(mapPackage: MapPackage | undefined): MapMount {
 
   useEffect(() => { dispatchRef.current({ type: 'engine', engine }); }, [engine]);
 
-  const waitS = waitFor(mount.engine, settings.phone_map_wait_s);
+  // In a browser Google's map first waits for its count (register_map_load) and the script (at most 15 s): its wait is never
+  // shorter than 20 s, so a load is not counted and then judged failed while still on its way.
+  const waitS = mount.engine === 'google' ? Math.max(20, waitFor(mount.engine, settings.phone_map_wait_s)) : waitFor(mount.engine, settings.phone_map_wait_s);
   const [waitRun, setWaitRun] = useState(0);
   useEffect(() => {
     if (mount.status !== 'loading' || !focused || !active) return;

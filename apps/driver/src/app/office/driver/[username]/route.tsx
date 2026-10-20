@@ -13,22 +13,19 @@ import { DayRoute } from '@/components/office/DayRoute';
 import { DayStrip } from '@/components/patterns/Calendar';
 import { SkeletonRows } from '@/components/patterns/ListState';
 import { Mono, Txt } from '@/components/ui';
-import { shortDate } from '@/lib/durations';
 import { colomboDate } from '@/lib/time';
 import { dayRouteArgs, dayTasks, dayTasksArgs, historyDay, historyMin, routeEvery } from '@/office/historyLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriverProfile, DriverRoute, TaskHistory } from '@/office/types';
-import { BackHeader, ListFailed, Screen, Section } from '@/office/ui';
+import { BackHeader, ListFailed, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
 export default function DriverDayRoute() {
   const { username, date: askedDate } = useLocalSearchParams<{ username: string; date?: string }>();
   const router = useRouter();
-  const { t, tList } = useApp();
+  const { t } = useApp();
   const { me, signOut } = useOffice();
-  const names = { days: tList('days'), months: tList('months') };
-  const dayLabel = (date: string) => shortDate(names, `${date}T06:00:00Z`);
   const today = colomboDate();
 
   // The driver's name for the header (the profile the page before it read; a link straight here reads it once).
@@ -45,10 +42,10 @@ export default function DriverDayRoute() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <BackHeader title={name} subtitle={day === today ? t('office.history.todayRoute') : t('office.history.dayRoute', { day: dayLabel(day) })} />
+      <BackHeader title={name} subtitle={t('office.history.routeTitle')} />
       <Screen refreshing={route.refreshing} onRefresh={refresh} bottom={24}>
         <DayStrip value={day} onChange={setDay} max={today} min={historyMin(today)} testID="history-day" />
-        <Section title={day === today ? t('office.history.todayRoute') : t('office.history.dayRoute', { day: dayLabel(day) })}>
+        <View>
           <DayRoute
             data={routeData}
             error={route.error}
@@ -77,7 +74,7 @@ export default function DriverDayRoute() {
               </View>
             )}
           </DayRoute>
-        </Section>
+        </View>
       </Screen>
     </View>
   );

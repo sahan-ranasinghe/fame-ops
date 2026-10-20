@@ -19,6 +19,7 @@ import { driverParts, driverPill, rankedDrivers } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
+import { extrasFor } from '@/office/taskExtrasLogic';
 import { availabilityArgsForTask, CANCEL_TEXT, cancelInput, declinedThisTask, firstPickForTask, leaveIn, plateOf, reassignInput } from '@/office/taskLogic';
 import type { Availability, FleetError, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
@@ -141,7 +142,7 @@ export default function GiveDriverScreen() {
                 </View>
               </View>
               {(task.passengers || task.vehicle_text || task.vehicle) && (
-                <Pill text={[task.passengers ? `${task.passengers} pax` : '', task.vehicle ? plateOf(task.vehicle) : task.vehicle_text ?? ''].filter(Boolean).join(' · ')} tone="muted" />
+                <Pill text={[task.passengers ? t('office.trip.paxN', { n: task.passengers }) : '', task.vehicle ? plateOf(task.vehicle) : task.vehicle_text ?? ''].filter(Boolean).join(' · ')} tone="muted" />
               )}
             </View>
             <View style={{ gap: 12 }}>
@@ -236,6 +237,8 @@ export default function GiveDriverScreen() {
               style={{ flex: 1 }}
             />
           </View>
+          {/* Design 11: Move the time (the task's Change time; it comes back here). */}
+          {extrasFor(task, me.tools).time && <Button kind="outline" label={t('office.give.moveTime')} onPress={() => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id, back: '1' } })} disabled={busy !== null} style={{ minHeight: 56 }} testID="give-move-time" />}
           {mayCancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => setCancelling(true)} disabled={busy !== null} style={{ borderColor: colors.red, minHeight: 56 }} />}
         </StickyActions>
       )}

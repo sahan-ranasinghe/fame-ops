@@ -138,6 +138,8 @@ export default function LiveTab() {
   const trails = routes && trailsOn(values);
   const [trailMap, setTrailMap] = useState<Map<string, Route>>(() => new Map());
   const trailBusy = useRef(new Set<string>());
+  // A trail asked before the trails went off (or before they went off and on again) is dropped when it lands.
+  const trailGen = useRef(0);
   const plan = useMemo(() => trailsPlan(all), [all]);
   const planRef = useRef(plan);
   planRef.current = plan;
@@ -145,8 +147,9 @@ export default function LiveTab() {
   const loadTrail = useCallback((u: string) => {
     if (trailBusy.current.has(u)) return;
     trailBusy.current.add(u);
+    const gen = trailGen.current;
     api.call<DriverRoute>('driver_route', routeArgs(u))
-      .then((p) => setTrailMap((m) => {
+      .then((p) => gen === trailGen.current && setTrailMap((m) => {
         const cur = m.get(u);
         const fresh = routeOf(u, p);
         return new Map(m).set(u, cur ? mergeRoute(cur, fresh) : fresh);
@@ -160,7 +163,10 @@ export default function LiveTab() {
     for (const u of plan.draw) if (!trailMap.has(u)) loadTrail(u);
   }, [trails, routes, plan, trailMap, loadTrail]);
   useEffect(() => {
-    if (!trails) setTrailMap(new Map());
+    if (trails) return;
+    trailGen.current += 1;
+    trailBusy.current.clear();
+    setTrailMap(new Map());
   }, [trails]);
 
   // Watched mode (the site's useWatchDrivers): the selected driver while they share, every sharing driver while the trails
@@ -257,7 +263,7 @@ export default function LiveTab() {
         {!q.data && !q.error && <SkeletonRows rows={4} lines={2} />}
         {q.data && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {q.data && all.length === 0 && <ListEmpty text={t('office.live.empty')} />}
-        {q.data && all.length > 0 && rows.length === 0 && <ListEmpty text={t('office.live.noneInFilter')} action={t('patterns.clearAll')} onAction={() => setValues({ duty: 'all' })} />}
+        {q.data && all.length > 0 && rows.length === 0 && <ListEmpty text={t('office.live.noneInFilter')} action={t('patterns.clearAll')} onAction={() => setValues((v) => ({ ...v, duty: 'all' }))} />}
         {rows.map((d, i) => (
           <View key={d.username}>
             {i > 0 && <Divider />}

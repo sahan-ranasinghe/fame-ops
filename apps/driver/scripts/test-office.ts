@@ -128,7 +128,7 @@ async function main() {
   check(requestLine({ requested_by: 'Sahan', when: 'Tue 20 Oct 11:00', proposed: { driver: 'Kamal', vehicle: 'WP CAB-4521' } }) === 'Sahan · Tue 20 Oct 11:00 · Kamal · WP CAB-4521', 'a proposal names its driver and vehicle');
   check(statusTone('in_progress') === 'blue' && statusTone('completed') === 'green' && statusTone('waiting') === 'amber' && statusTone('declined') === 'red' && statusTone('zzz') === 'muted', 'status tones');
   check(same(boardPill({ status: 'in_progress', late_min: 15 }), { key: 'late', tone: 'red', min: 15 }) && same(boardPill({ status: 'assigned', accepted: '07:05' }), { key: 'accepted', tone: 'green' }) && same(boardPill({ status: 'assigned' }), { key: 'assigned', tone: 'amber' }), 'board pills: late, accepted, sent');
-  check(boardLine({ driver: 'Sunil', vehicle: 'WP CAB-4521' }, 4) === 'Sunil · WP CAB-4521 · 4 pax' && boardLine({ driver: 'Ruwan', vehicle_text: 'Vehicle: on the day' }) === 'Ruwan · Vehicle: on the day', 'board lines');
+  check(boardLine({ driver: 'Sunil', vehicle: 'WP CAB-4521' }, '4 pax') === 'Sunil · WP CAB-4521 · 4 pax' && boardLine({ driver: 'Ruwan', vehicle_text: 'Vehicle: on the day' }) === 'Ruwan · Vehicle: on the day', 'board lines');
   check(tripLive({ source: 'task', id: 't', task_id: 't', title: 'x', when: 'w', status: 'assigned', live: { state: 'approved', text: 'Approved' }, created: 'c' }).state === 'approved', 'a created task\'s live state');
 
   console.log('\nApprove a request (office/approveLogic.ts):');

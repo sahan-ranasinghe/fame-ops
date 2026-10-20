@@ -149,6 +149,23 @@ export default function DriverPage() {
           </View>
         )}
 
+        {/* The day's route: under the person, before the New task button (the screen's way to the map). */}
+        {mayRoute && d && (
+          <Pressable accessibilityRole="button" onPress={() => openRoute()} style={({ pressed }) => [styles.card, styles.routeCard, pressed && { opacity: 0.85 }]} testID="driver-today-route">
+            <RouteIcon size={26} color={colors.blue} strokeWidth={2.2} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Txt variant="strong" size={17}>{t('office.history.todayRoute')}</Txt>
+              {!todayRoute.data && !todayRoute.error && <Txt variant="small">{t('office.common.loading')}</Txt>}
+              {!todayRoute.data && todayRoute.error && <Txt variant="small" color={colors.amberText}>{t('office.history.todayFailed')}</Txt>}
+              {todayNumbers && (todayNumbers.km !== null || todayNumbers.drivingMin > 0
+                ? <Txt variant="small">{t('office.history.todayLine', { km: todayNumbers.km ?? 0, driving: durationText(t, todayNumbers.drivingMin), stops: todayNumbers.stops })}</Txt>
+                : <Txt variant="small">{t('office.history.noDayPoints')}</Txt>)}
+              <Txt variant="small" color={colors.blue}>{t('office.history.openRoute')}</Txt>
+            </View>
+            <ChevronRight size={22} color={colors.muted} />
+          </Pressable>
+        )}
+
         {d && d.active && me.tools.includes('create_task') && (
           <Button icon={Plus} label={t('office.drivers.newTaskFor', { name: d.name.split(' ')[0] })} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'task', driver: username, name: d.name } })} style={{ minHeight: 56 }} testID="driver-new-task" />
         )}
@@ -177,20 +194,6 @@ export default function DriverPage() {
           </Section>
         )}
 
-        {mayRoute && d && (
-          <Pressable accessibilityRole="button" onPress={() => openRoute()} style={({ pressed }) => [styles.card, styles.routeCard, pressed && { opacity: 0.85 }]} testID="driver-today-route">
-            <RouteIcon size={26} color={colors.blue} strokeWidth={2.2} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Txt variant="strong" size={17}>{t('office.history.todayRoute')}</Txt>
-              {!todayRoute.data && !todayRoute.error && <Txt variant="small">{t('office.common.loading')}</Txt>}
-              {todayNumbers && (todayNumbers.km !== null || todayNumbers.drivingMin > 0
-                ? <Txt variant="small">{t('office.history.todayLine', { km: todayNumbers.km ?? 0, driving: durationText(t, todayNumbers.drivingMin), stops: todayNumbers.stops })}</Txt>
-                : <Txt variant="small">{t('office.history.noDayPoints')}</Txt>)}
-              <Txt variant="small" color={colors.blue}>{t('office.history.openRoute')}</Txt>
-            </View>
-            <ChevronRight size={22} color={colors.muted} />
-          </Pressable>
-        )}
       </Screen>
     </View>
   );
