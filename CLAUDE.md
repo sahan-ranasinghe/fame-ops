@@ -1113,9 +1113,11 @@ iOS; Play Store.
   pattern per codebase, never a new one; the reviewer checks every screen against the file at every checkpoint.
 - **GitHub** (Sahan, 20 October 2026): the repo is on GitHub, private: github.com/sahan-ranasinghe/fame-ops (remote
   `origin`). Never run `git push` or change the remote without his go; each push is its own go. Before a push, run the
-  key scan on the history being pushed and push only if it prints 0:
-  `git log -p <what will be pushed> | grep -cE 'sb_secret_[A-Za-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|-----BEGIN (RSA |EC )?PRIVATE KEY|"private_key":'`
-  If it prints anything else, STOP and show him the number only.
+  key scan on the history being pushed and push only if it prints 0: `python3 scripts/push-scan.py main <branch>` (what
+  `git log -p <refs> --not --remotes=origin` would send; a Supabase secret key, a Google API key, a PEM private key or a
+  service account's private key field; the values masked; the shapes built at run time so no key-shaped text sits in the
+  source; `scripts/push-scan-allow.txt` lists the one allowed historical match, with why). If it prints anything else,
+  STOP and show him the number only.
 - **No local native builds** (Sahan, 19 October 2026): no Docker, Gradle or R8 builds on this laptop. Android builds run only
   on EAS, only after Sahan's go, and only on office or home Wi-Fi.
 - Before asking for an EAS build, check the native config without compiling: `expo prebuild` into a scratch folder (nothing

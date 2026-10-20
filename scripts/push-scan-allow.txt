@@ -1,0 +1,3 @@
+# Matches scripts/push-scan.py skips: commit:file:line, one per line, each with why (gitleaks-style). Never a real key:
+# a real key is removed from the history before it is pushed, never allowlisted.
+f69e1ce480675d4f5033ca7fec24223d379af971:CLAUDE.md:1117  # the scan's own pattern written into the GitHub rule (no key; the rule now names scripts/push-scan.py)
