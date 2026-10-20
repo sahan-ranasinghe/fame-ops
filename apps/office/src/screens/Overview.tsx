@@ -17,7 +17,7 @@ import type { MyTrips, Overview as OverviewData, RequestsList } from "../data/ty
 import { useQuery } from "../data/useQuery";
 import { longDate, today } from "../lib/format";
 import { can } from "../transport/types";
-import { Empty, ErrBox, Loading, Notice, StaleNote, Tile, type TileLink } from "../ui/basics";
+import { Empty, ErrBox, Notice, StaleNote, Tile, type TileLink } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { useIsPhone } from "../ui/phone";
 import { NEEDS_DRIVER_LIST, sortNeedsDriver } from "./needsDriverLogic";
@@ -210,7 +210,7 @@ export function Overview() {
       {!o && !noConnector && (
         <>
           <ErrBox entry={ov} onRetry={() => void store.load("overview", "fleet_overview", {})} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-          {!ov.err && <Loading>Loading the fleet…</Loading>}
+          {!ov.err && <SkeletonRows rows={3} label="Loading the fleet…" />}
         </>
       )}
 

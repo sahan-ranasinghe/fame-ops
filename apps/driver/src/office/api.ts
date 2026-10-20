@@ -28,8 +28,24 @@ export const IDEMPOTENT_WRITES: Readonly<Record<string, string>> = {
 
 /** A dropped read is asked again this soon, once, before the screen hears of it. */
 export const QUICK_RETRY_MS = 2_000;
-/** A call waits this long for its answer. */
+/** A call waits this long for its answer: a read 20 s, a write 30 s, the heavy tools 90 s (the website's rule, retryRule.ts). */
 export const CALL_TIMEOUT_MS = 20_000;
+export const WRITE_TIMEOUT_MS = 30_000;
+export const HEAVY_TIMEOUT_MS = 90_000;
+export const HEAVY_TOOLS: ReadonlySet<string> = new Set([
+  'driver_route', 'mileage_summary', 'list_tasks', 'plan_task', 'create_task', 'update_task_stops', 'book_vehicle',
+  'decide_request', 'redecide_request', 'create_request', 'update_request', 'import_places', 'undo_place_import',
+]);
+
+/** How long a call may wait (no tool = GET /me, a read). */
+export function timeoutFor(tool?: string, base = CALL_TIMEOUT_MS): number {
+  if (!tool) return base;
+  if (HEAVY_TOOLS.has(tool)) return Math.max(base, HEAVY_TIMEOUT_MS);
+  return isWrite(tool) ? Math.max(base, WRITE_TIMEOUT_MS) : base;
+}
+
+/** The error of a call that took too long: not a dropped call (a read is not asked again by itself; a write may have worked). */
+export const TIMED_OUT = { code: 'timeout', message: 'Fame Fleet took too long to answer.' } as const;
 
 /** Dropped on the way (no connection, or the server gave up: a 5xx), not refused. */
 export const dropped = (e: FleetError | undefined | null): boolean =>
@@ -101,13 +117,12 @@ export interface OfficeApi {
 export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
   const doFetch = deps.fetch ?? fetch;
   const base = deps.baseUrl.replace(/\/$/, '');
-  const timeoutMs = deps.timeoutMs ?? CALL_TIMEOUT_MS;
 
-  async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+  async function request<T>(method: 'GET' | 'POST', path: string, body?: unknown, tool?: string): Promise<T> {
     const token = await deps.token();
     if (!token) throw { code: 'not_signed_in', message: 'Sign in again.', status: 401 } satisfies FleetError;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const timer = setTimeout(() => controller.abort(), deps.timeoutMs ?? timeoutFor(tool));
     let res: Response;
     try {
       res = await doFetch(base + path, {
@@ -122,6 +137,7 @@ export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
       });
     } catch {
       clearTimeout(timer);
+      if (controller.signal.aborted) throw { ...TIMED_OUT } satisfies FleetError;
       throw { code: 'network', message: 'No connection to Fame Fleet.' } satisfies FleetError;
     }
     // The timeout covers the body too: a reply that stalls half-way ends as a dropped call (ui-patterns §5).
@@ -129,6 +145,7 @@ export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
     try {
       text = await res.text();
     } catch {
+      if (controller.signal.aborted) throw { ...TIMED_OUT } satisfies FleetError;
       throw { code: 'network', message: 'No connection to Fame Fleet.' } satisfies FleetError;
     } finally {
       clearTimeout(timer);
@@ -151,7 +168,7 @@ export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
       return { ...m, permissions: m.permissions ? normalisePermissions(m.permissions) : permissionsForRole(m.role) };
     },
     async call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {
-      const run = async () => (await request<{ result: T }>('POST', `/tools/${tool}`, args)).result;
+      const run = async () => (await request<{ result: T }>('POST', `/tools/${tool}`, args, tool)).result;
       try {
         return await onceMore(run, (e) => mayRetry(tool, e), deps.retryWaitMs);
       } catch (e) {

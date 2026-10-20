@@ -27,6 +27,7 @@ import { TimeField } from '@/components/patterns/TimeField';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { shortDate } from '@/lib/durations';
+import { MAX_DAYS } from '@/lib/availability';
 import { addDays, colomboDate } from '@/lib/time';
 import { askTargetsFromBoard } from '@/office/askLogic';
 import { boardArgs, boardChoice, boardFilterDefs, boardPill, entryParts, heldPlate, PARTS, REASONS, rowLines, type UnavailabilityForm, unavailabilityInput, weekDays, weekGrid, type WeekRow } from '@/office/driversLogic';
@@ -369,7 +370,7 @@ function NotAvailableSheet({ visible, driver, date: firstDate, onClose, onSaved 
       <Txt variant="label" color={colors.muted}>{t('office.drivers.day').toUpperCase()}</Txt>
       <TripDayPicker value={date} onChange={(d) => { setDate(d); if (toDate && toDate < d) setToDate(''); }} testID="not-available-day" />
       {part === 'full_day' && (
-        <DateField label={t('office.drivers.lastDay')} value={toDate} onChange={setToDate} testID="not-available-until" />
+        <DateField label={t('office.drivers.lastDay')} value={toDate} onChange={setToDate} min={date} max={addDays(date, MAX_DAYS - 1)} testID="not-available-until" />
       )}
       <Txt variant="label" color={colors.muted}>{t('office.drivers.part.label').toUpperCase()}</Txt>
       <ChipRow options={PARTS.map((p) => ({ key: p, label: t(`office.drivers.part.${p}`) }))} value={part} onChange={setPart} />

@@ -27,6 +27,15 @@
     "Fri",
     "Sat"
   ],
+  "daysShort": [
+    "Su",
+    "Mo",
+    "Tu",
+    "We",
+    "Th",
+    "Fr",
+    "Sa"
+  ],
   "months": [
     "Jan",
     "Feb",
@@ -877,7 +886,9 @@
       "forbidden": "{words}",
       "badInput": "{words}",
       "refused": "{words}",
-      "unknown": "Something went wrong talking to Fame Fleet. {words}"
+      "unknown": "Something went wrong talking to Fame Fleet. {words}",
+      "timeout": "Fame Fleet took too long to answer.",
+      "writeTimeout": "Fame Fleet took too long to answer: it may have been saved. Check before trying again."
     },
     "home": {
       "morning": "Morning, {name}",

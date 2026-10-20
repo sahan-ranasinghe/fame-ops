@@ -15,7 +15,7 @@ import type { DocKind, UploadTicket, VehicleDocument, VehicleDocuments } from ".
 import { useQuery } from "../data/useQuery";
 import { today } from "../lib/format";
 import { asFleetError, errText } from "../transport/errors";
-import { Loading, Notice, Pill } from "../ui/basics";
+import { Notice, Pill } from "../ui/basics";
 import { documentPhoto } from "./imageCanvas";
 import {
   byWhenText, DOC_LABEL, DOC_WORDS, docActions, type DocActions, docFileKind, type DocRow, documentRows, EXPIRY_FIELD, expiryText,
@@ -23,6 +23,7 @@ import {
 } from "./mediaLogic";
 import { FilePick } from "./PhotoUpload";
 import { DateField } from "../ui/DayPicker";
+import { SkeletonRows } from "../ui/ListKit";
 
 /** The links last at least an hour: fetched again well before that while the page stays open. */
 const DOCS_EVERY_MS = 20 * 60_000;
@@ -52,7 +53,7 @@ export function VehicleDocumentsSection({ reg, rented, dates = {} }: {
         {q.data?.missing_text && <span className="doc" data-testid="docs-missing">Missing: {q.data.missing_text}</span>}
       </div>
       {acts.upload && <p className="hint" style={{ margin: 0 }}>A photo or a PDF, up to 10 MB. Set the expiry date before you upload or replace the file: it is the vehicle's date too.</p>}
-      {q.loading && <Loading>Loading the documents…</Loading>}
+      {q.loading && <SkeletonRows rows={3} label="Loading the documents…" />}
       {q.err && !q.data && <Notice tone="bad">{errText(q.err)[0]}</Notice>}
       {q.data && (
         <div className="doc-rows">

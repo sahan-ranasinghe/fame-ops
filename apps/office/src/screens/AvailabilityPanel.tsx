@@ -22,12 +22,13 @@ import type { Availability, AvailableDriver, BestMatch } from "../data/types";
 import { type Query, useQuery } from "../data/useQuery";
 import { useFleet } from "../app/FleetContext";
 import { errText } from "../transport/errors";
-import { Loading, Notice, Pill } from "../ui/basics";
+import { Notice, Pill } from "../ui/basics";
 import { DriverRow } from "../ui/DriverRow";
 import { firstName, toPhoneLinks } from "../ui/driverRowLogic";
 import { askWindow, bestRow, type DefaultVehicle, defaultVehicle, driverTone, licenceTone, rankedRows, steadyAvailability, windowLine } from "./availabilityLogic";
 import { countsLine } from "./asks/askLogic";
 import { AnswerLine, AskSheet, useAskAnswers, usePageAsk } from "./asks/AskSheet";
+import { SkeletonRows } from "../ui/ListKit";
 
 export const AVAILABILITY_REFRESH_MS = 60_000;
 export const AVAILABILITY_SETTLE_MS = 400;
@@ -122,7 +123,7 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
         />
       )}
       {!args && <p className="muted small" style={{ margin: 0 }}>Fill in the day and the time to see who is free then.</p>}
-      {args && q.loading && <Loading>Looking who is free…</Loading>}
+      {args && q.loading && <SkeletonRows rows={3} label="Looking who is free…" />}
       {err && <Notice tone="bad">{errText(err)[0]}</Notice>}
       {best && (
         <div className="opt" data-testid="best-match" style={{ cursor: "default", alignItems: "flex-start" }}>

@@ -37,10 +37,22 @@ export const SUGGEST_TIMEOUT_MS = 15_000;
 /** The suggestions asked while someone types. */
 export const SUGGEST_TOOLS: ReadonlySet<string> = new Set(["search_places"]);
 
+/**
+ * The heavy tools get longer (Stage 0 review): a route with its estimated roads (up to 25 openrouteservice calls), a year
+ * of mileage or tasks, a plan with Google's or openrouteservice's legs, a 500-row import and its undo. Their own timings
+ * on the real project stay well under these; a cut write would show "may not have been saved" for a write that worked.
+ */
+export const HEAVY_TIMEOUT_MS = 90_000;
+export const HEAVY_TOOLS: ReadonlySet<string> = new Set([
+  "driver_route", "mileage_summary", "list_tasks", "plan_task", "create_task", "update_task_stops", "book_vehicle",
+  "decide_request", "redecide_request", "create_request", "update_request", "import_places", "undo_place_import",
+]);
+
 /** How long a call may take (GET /me is a read). */
 export function timeoutFor(tool?: string): number {
   if (!tool) return READ_TIMEOUT_MS;
   if (SUGGEST_TOOLS.has(tool)) return SUGGEST_TIMEOUT_MS;
+  if (HEAVY_TOOLS.has(tool)) return HEAVY_TIMEOUT_MS;
   return isWrite(tool) ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS;
 }
 

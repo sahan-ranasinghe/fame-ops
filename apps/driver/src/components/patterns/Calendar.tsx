@@ -2,7 +2,7 @@
 // (one button, the presets, tap the start then the end, a day twice for one day), the week strip of a day of history
 // (swipe week by week, Today, a calendar icon to jump), and a trip's day (Today / Tomorrow chips, Pick a date).
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, StyleSheet, View } from 'react-native';
 
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from '@/components/icons';
@@ -19,6 +19,8 @@ import { Sheet } from './Sheet';
 
 type Names = { days: string[]; months: string[] };
 const useNames = (): Names => { const { tList } = useApp(); return { days: tList('days'), months: tList('months') }; };
+/** The weekday heads: a short form per language (a Sinhala name cut by letters breaks a letter in two). */
+const useShortDays = (): string[] => { const { tList } = useApp(); return tList('daysShort'); };
 const dayNum = (d: string) => String(Number(d.slice(8, 10)));
 
 /** One month's grid. `range` paints a range; `picked` a single day; `allowed` greys the rest. */
@@ -34,7 +36,8 @@ export function MonthCalendar({ month, onMonth, onTap, range, picked, allowed }:
   const names = useNames();
   const today = colomboDate();
   const weeks = useMemo(() => monthGrid(month), [month]);
-  const heads = [1, 2, 3, 4, 5, 6, 0].map((i) => (names.days[i] ?? '').slice(0, 2));
+  const short = useShortDays();
+  const heads = [1, 2, 3, 4, 5, 6, 0].map((i) => short[i] ?? '');
   return (
     <View style={{ gap: 6 }} testID="month-calendar">
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -135,16 +138,26 @@ export function DayStrip({ value, onChange, max, min, testID = 'day-strip' }: {
   const { t } = useApp();
   const names = useNames();
   const today = colomboDate();
+  const short = useShortDays();
   const [week, setWeek] = useState(value);
+  // A day set from outside (a link, a reset) brings its week (the website's DayStrip does the same).
+  useEffect(() => {
+    setWeek((w) => (weekDays(w).includes(value) ? w : value));
+  }, [value]);
   const [jump, setJump] = useState(false);
   const [month, setMonth] = useState(value);
   const days = weekDays(week);
   const allowed = (d: string) => dayAllowed(d, { max, min });
+  // Never a week where every day is greyed (history: no week after today; a trip: none before today).
+  const canNext = (w: string) => !max || weekDays(plusDays(w, 7))[0] <= max;
+  const canPrev = (w: string) => !min || weekDays(plusDays(w, -7))[6] >= min;
+  const bounds = useRef({ canNext, canPrev });
+  bounds.current = { canNext, canPrev };
   const swipe = useRef(PanResponder.create({
     onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 24 && Math.abs(g.dy) < 20,
     onPanResponderRelease: (_, g) => {
-      if (g.dx < -40) setWeek((w) => plusDays(w, 7));
-      else if (g.dx > 40) setWeek((w) => plusDays(w, -7));
+      if (g.dx < -40) setWeek((w) => (bounds.current.canNext(w) ? plusDays(w, 7) : w));
+      else if (g.dx > 40) setWeek((w) => (bounds.current.canPrev(w) ? plusDays(w, -7) : w));
     },
   })).current;
   return (
@@ -159,19 +172,19 @@ export function DayStrip({ value, onChange, max, min, testID = 'day-strip' }: {
         <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.pickDate')} onPress={() => { setMonth(value); setJump(true); }} style={styles.iconBtn}><CalendarIcon size={20} color={colors.ink} /></Pressable>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center' }} {...swipe.panHandlers}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.prevWeek')} onPress={() => setWeek(plusDays(week, -7))} style={styles.weekNav}><ChevronLeft size={20} color={colors.muted} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.prevWeek')} accessibilityState={{ disabled: !canPrev(week) }} disabled={!canPrev(week)} onPress={() => setWeek(plusDays(week, -7))} style={styles.weekNav}><ChevronLeft size={20} color={canPrev(week) ? colors.muted : '#d6d4ce'} /></Pressable>
         {days.map((d) => {
           const on = d === value;
           const ok = allowed(d);
           return (
             <Pressable key={d} accessibilityRole="button" accessibilityState={{ selected: on, disabled: !ok }} disabled={!ok} onPress={() => onChange(d)} style={[styles.stripDay, on && { backgroundColor: colors.ink }]}>
-              <Txt variant="small" color={on ? '#ffffff' : ok ? colors.muted : '#b9bcc0'}>{(names.days[new Date(`${d}T00:00:00Z`).getUTCDay()] ?? '').slice(0, 3)}</Txt>
+              <Txt variant="small" color={on ? '#ffffff' : ok ? colors.muted : '#b9bcc0'}>{short[new Date(`${d}T00:00:00Z`).getUTCDay()] ?? ''}</Txt>
               <Mono size={16} bold color={on ? '#ffffff' : ok ? colors.ink : '#b9bcc0'}>{dayNum(d)}</Mono>
               {d === today && <View style={[styles.todayMark, on && { backgroundColor: colors.amber }]} />}
             </Pressable>
           );
         })}
-        <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.nextWeek')} onPress={() => setWeek(plusDays(week, 7))} style={styles.weekNav}><ChevronRight size={20} color={colors.muted} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.nextWeek')} accessibilityState={{ disabled: !canNext(week) }} disabled={!canNext(week)} onPress={() => setWeek(plusDays(week, 7))} style={styles.weekNav}><ChevronRight size={20} color={canNext(week) ? colors.muted : '#d6d4ce'} /></Pressable>
       </View>
       <Sheet visible={jump} title={t('patterns.pickDate')} onClose={() => setJump(false)}>
         <MonthCalendar month={month} onMonth={setMonth} onTap={(d) => { onChange(d); setWeek(d); setJump(false); }} picked={value} allowed={allowed} />
@@ -184,7 +197,7 @@ export function DayStrip({ value, onChange, max, min, testID = 'day-strip' }: {
 // A trip's day: Today, Tomorrow, Pick a date
 // ---------------------------------------------------------------------------
 
-export function TripDayPicker({ value, onChange, testID = 'trip-day' }: { value: string; onChange: (day: string) => void; testID?: string }) {
+export function TripDayPicker({ value, onChange, max, testID = 'trip-day' }: { value: string; onChange: (day: string) => void; /** The last day offered (a driver's days off: 60 ahead). */ max?: string; testID?: string }) {
   const { t } = useApp();
   const names = useNames();
   const today = colomboDate();
@@ -206,14 +219,14 @@ export function TripDayPicker({ value, onChange, testID = 'trip-day' }: { value:
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}><CalendarIcon size={18} color={colors.ink} /><Txt variant="strong" size={16}>{t('patterns.pickDate')}</Txt></View>
       </Pressable>
       <Sheet visible={open} title={t('patterns.pickDate')} onClose={() => setOpen(false)}>
-        <MonthCalendar month={month} onMonth={setMonth} onTap={(d) => { onChange(d); setOpen(false); }} picked={value} allowed={(d) => d >= today} />
+        <MonthCalendar month={month} onMonth={setMonth} onTap={(d) => { onChange(d); setOpen(false); }} picked={value} allowed={(d) => d >= today && (!max || d <= max)} />
       </Sheet>
     </View>
   );
 }
 
 /** A plain date (an expiry, a booking): the field with the calendar, any date. */
-export function DateField({ label, value, onChange, min, testID }: { label: string; value: string; onChange: (day: string) => void; /** The first day that may be picked. */ min?: string; testID?: string }) {
+export function DateField({ label, value, onChange, min, max, testID }: { label: string; value: string; onChange: (day: string) => void; /** The first day that may be picked. */ min?: string; /** The last day that may be picked. */ max?: string; testID?: string }) {
   const { t } = useApp();
   const names = useNames();
   const [open, setOpen] = useState(false);
@@ -226,7 +239,7 @@ export function DateField({ label, value, onChange, min, testID }: { label: stri
         <Txt variant="strong" size={16} style={{ flex: 1 }} color={value ? colors.ink : colors.muted}>{value ? `${rangeWords({ from: value, to: value }, names)} ${value.slice(0, 4)}` : '—'}</Txt>
       </Pressable>
       <Sheet visible={open} title={label} onClose={() => setOpen(false)} actions={value ? <Button kind="outline" label={t('patterns.clear')} onPress={() => { onChange(''); setOpen(false); }} style={{ flex: 1, minHeight: 52 }} /> : undefined}>
-        <MonthCalendar month={month} onMonth={setMonth} onTap={(d) => { onChange(d); setOpen(false); }} picked={value} allowed={(d) => !min || d >= min} />
+        <MonthCalendar month={month} onMonth={setMonth} onTap={(d) => { onChange(d); setOpen(false); }} picked={value} allowed={(d) => (!min || d >= min) && (!max || d <= max)} />
       </Sheet>
     </View>
   );

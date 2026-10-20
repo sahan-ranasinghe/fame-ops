@@ -14,12 +14,13 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeft, ChevronRight, MapPin, MessageCircle, Phone } from '@/components/icons';
 import { PhotoPick } from '@/components/office/PhotoPick';
 import { DateField } from '@/components/patterns/Calendar';
+import { Sheet } from '@/components/patterns/Sheet';
 import { Button, Field, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
 import {
@@ -419,34 +420,38 @@ export default function ManageDriver() {
       </Screen>
 
       {/* Reset PIN: the sheet. */}
-      <Modal visible={pinOpen} transparent animationType="slide" onRequestClose={closePin}>
-        <View style={styles.shade}>
-          <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-            {pinDone ? (
-              <>
-                <Txt variant="heading">{t('office.people.pinDone', { name: first })}</Txt>
-                <Mono size={40} bold selectable style={{ textAlign: 'center', paddingVertical: 8 }}>{pinDone}</Mono>
-                <Txt variant="strong" size={15} color={colors.amberText}>{t('office.people.pinTell', { name: first })}</Txt>
-                <Button kind="dark" label={t('office.people.done')} onPress={closePin} />
-              </>
-            ) : (
-              <>
-                <Txt variant="heading">{t('office.people.pinTitle')}</Txt>
-                <Txt variant="muted">{name}</Txt>
-                <Txt variant="small">{t('office.people.pinHint')}</Txt>
-                <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
-                  <Field label={t('office.people.pinLabel')} value={pin} onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 6))} maxLength={6} keyboardType="number-pad" editable={!pinBusy} mono style={{ fontSize: 26, fontFamily: fonts.monoSemiBold }} autoFocus />
-                  <Button kind="outline" label={t('office.people.generate')} onPress={() => setPin(randomPin())} disabled={pinBusy} style={{ minHeight: 56 }} />
-                </View>
-                {pinBad && <Notice tone="danger" text={t('office.people.pinBad')} />}
-                {pinError && <ErrorNotice error={pinError} onRetry={() => void setNewPin()} onSignIn={() => void signOut()} />}
-                <Button kind="dark" label={t('office.people.setPin')} onPress={() => void setNewPin()} busy={pinBusy} disabled={pin.length !== 6} />
-                <Button kind="outline" label={t('office.common.cancel')} onPress={closePin} disabled={pinBusy} />
-              </>
-            )}
+      <Sheet
+        visible={pinOpen}
+        title={pinDone ? t('office.people.pinDone', { name: first }) : t('office.people.pinTitle')}
+        onClose={() => { if (!pinBusy) closePin(); }}
+        testID="pin-sheet"
+        actions={pinDone ? (
+          <Button kind="dark" label={t('office.people.done')} onPress={closePin} style={{ flex: 1 }} />
+        ) : (
+          <>
+            <Button kind="outline" label={t('office.common.cancel')} onPress={closePin} disabled={pinBusy} style={{ flex: 1 }} />
+            <Button kind="dark" label={t('office.people.setPin')} onPress={() => void setNewPin()} busy={pinBusy} disabled={pin.length !== 6} style={{ flex: 1 }} />
+          </>
+        )}
+      >
+        {pinDone ? (
+          <View style={{ gap: 12 }}>
+            <Mono size={40} bold selectable style={{ textAlign: 'center', paddingVertical: 8 }}>{pinDone}</Mono>
+            <Txt variant="strong" size={15} color={colors.amberText}>{t('office.people.pinTell', { name: first })}</Txt>
           </View>
-        </View>
-      </Modal>
+        ) : (
+          <View style={{ gap: 12 }}>
+            <Txt variant="muted">{name}</Txt>
+            <Txt variant="small">{t('office.people.pinHint')}</Txt>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 10 }}>
+              <Field label={t('office.people.pinLabel')} value={pin} onChangeText={(v) => setPin(v.replace(/\D/g, '').slice(0, 6))} maxLength={6} keyboardType="number-pad" editable={!pinBusy} mono style={{ fontSize: 26, fontFamily: fonts.monoSemiBold }} autoFocus />
+              <Button kind="outline" label={t('office.people.generate')} onPress={() => setPin(randomPin())} disabled={pinBusy} style={{ minHeight: 56 }} />
+            </View>
+            {pinBad && <Notice tone="danger" text={t('office.people.pinBad')} />}
+            {pinError && <ErrorNotice error={pinError} onRetry={() => void setNewPin()} onSignIn={() => void signOut()} />}
+          </View>
+        )}
+      </Sheet>
     </View>
   );
 }
@@ -460,6 +465,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 56 },
   textBtn: { minHeight: 48, minWidth: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
   iconBtn: { width: 48, height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  shade: { flex: 1, backgroundColor: 'rgba(10,12,14,0.45)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12 },
 });

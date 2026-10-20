@@ -10,9 +10,9 @@ import { useFleet } from "../../app/FleetContext";
 import { useWatch } from "../../data/hooks";
 import type { Ask, AskAnswers as AskAnswersData, AskDriverRow } from "../../data/types";
 import { joinDots } from "../../lib/format";
-import { Avatar, ErrBox, Loading, Pill, StaleNote, Updated } from "../../ui/basics";
+import { Avatar, ErrBox, Pill, StaleNote, Updated } from "../../ui/basics";
 import { ContactButtons } from "../../ui/ContactButtons";
-import { ListHeader } from "../../ui/ListKit";
+import { ListHeader, SkeletonRows } from "../../ui/ListKit";
 import { PageTop } from "../../ui/Page";
 import { linksFromCall } from "../../ui/phoneLinks";
 import { answerChip, assignLink, countsLine, openLine, placeLine, stateLine } from "./askLogic";
@@ -57,7 +57,7 @@ export function AskAnswers() {
       <section className="view" data-testid="ask-answers">
         <PageTop title="Answers from drivers" sub="Ask drivers" backTo="/drivers/asks" />
         <ErrBox entry={entry} onRetry={() => void store.load(key, "ask_answers", { ask_id: id })} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-        {!entry.err && !noConnector && <Loading>Loading the answers…</Loading>}
+        {!entry.err && !noConnector && <SkeletonRows rows={3} label="Loading the answers…" />}
       </section>
     );
   }

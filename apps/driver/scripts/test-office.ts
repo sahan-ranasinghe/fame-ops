@@ -7,7 +7,8 @@
 //
 //   npm run test:office          (from apps/driver)
 
-import { createOfficeApi, dropped, isWrite, mapHttpError, mayRetry, READ_TOOLS, signedOut } from '../src/office/api';
+import { createOfficeApi, dropped, isWrite, mapHttpError, mayRetry, READ_TOOLS, signedOut, timeoutFor } from '../src/office/api';
+import { errorText } from '../src/office/text';
 import { alreadyDecided, availabilityArgs, canApprove, decideCall, declineReason, driverPill, firstPick, rankedDrivers, tripView } from '../src/office/approveLogic';
 import { boardLine, boardPill, greeting, requestLine, requestTitle, statusTone, tripLive } from '../src/office/homeLogic';
 import { homeChips, homeSections, moreFor, routeForUrl, tabsFor } from '../src/office/nav';
@@ -91,6 +92,10 @@ async function main() {
   check(isWrite('cancel_task') && !isWrite('reviewing') && !isWrite('my_inbox'), 'isWrite: a write, the keyed write, a read');
   check(mayRetry('task_board', { code: 'network', message: '' }) && !mayRetry('task_board', { code: 'forbidden', message: '' }) && !mayRetry('cancel_task', { code: 'network', message: '' }), 'mayRetry: a dropped read only');
   check(dropped({ code: 'server_unavailable', message: '' }) && !dropped({ code: 'tool_error', message: '' }), 'dropped: no connection or a 5xx, never a refusal');
+  check(timeoutFor() === 20_000 && timeoutFor('list_issues') === 20_000 && timeoutFor('cancel_task') === 30_000 && timeoutFor('decide_request') === 90_000 && timeoutFor('driver_route') === 90_000,
+    'each call waits by what it is: a read 20 s, a write 30 s, the heavy tools 90 s (the website\'s rule)');
+  check(!dropped({ code: 'timeout', message: '' }) && errorText({ code: 'timeout', message: '', write: true }).key === 'office.error.writeTimeout' && errorText({ code: 'timeout', message: '' }).key === 'office.error.timeout',
+    'a call that took too long is not "No connection": never asked again by itself, and a write says it may have been saved');
 
   console.log('\nTabs, Home and More by permission (office/nav.ts):');
   const keys = (p: readonly string[]) => tabsFor(p).map((t) => t.key).join(' ');

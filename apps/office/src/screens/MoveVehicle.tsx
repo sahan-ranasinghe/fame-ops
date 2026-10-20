@@ -17,6 +17,7 @@ import { can, type FleetError } from "../transport/types";
 import { ErrBox, Loading, Notice } from "../ui/basics";
 import { BackButton, PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { SkeletonRows } from "../ui/ListKit";
 import {
   canMove,
   canSwap,
@@ -110,7 +111,7 @@ export function MoveVehicle() {
   const vehicleList = !veh.data ? (
     <>
       <ErrBox entry={veh} onRetry={() => void store.load("move.vehicles", "list_vehicles", { filter: "all" })} onFix={onFix} />
-      {!veh.err && <Loading>Loading the vehicles…</Loading>}
+      {!veh.err && <SkeletonRows rows={3} label="Loading the vehicles…" />}
     </>
   ) : null;
 

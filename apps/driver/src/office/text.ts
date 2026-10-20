@@ -13,6 +13,8 @@ export function errorText(e: FleetError | undefined | null): { key: string; word
     case 'server_unavailable':
     case 'rate_limited':
       return e.write ? { key: 'office.error.writeDropped', fix: 'retry' } : { key: 'office.error.dropped', fix: 'retry' };
+    case 'timeout':
+      return e.write ? { key: 'office.error.writeTimeout', fix: 'retry' } : { key: 'office.error.timeout', fix: 'retry' };
     case 'not_signed_in':
     case 'mfa_required':
       return { key: 'office.error.signedOut', fix: 'signin' };

@@ -45,6 +45,7 @@ import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
 import { TripDecide } from "./TripDecide";
 import { knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 import { TripDayPicker } from "../ui/DayPicker";
+import { SkeletonRows } from "../ui/ListKit";
 
 interface Decision {
   /** The vehicle picked; "" = the one the driver brings (or, deciding again, keep the vehicle). */
@@ -297,7 +298,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
                 {driverOptions.map((d) => <option key={d.username} value={d.username}>{d.name}{d.label ? ` · ${d.label}` : ""}</option>)}
               </select>
             </div>
-            {!ready ? <Loading>Finding free vehicles…</Loading> : (
+            {!ready ? <SkeletonRows rows={3} label="Finding free vehicles…" /> : (
               <>
                 <div className="lab" id="rq-vehicles">Vehicle</div>
                 <label className="opt"><input type="radio" name="rq-veh" value="" checked={f.vehicle === ""} onChange={() => set("vehicle", "")} />
@@ -374,7 +375,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
                 : <>This driver holds no vehicle today and has no regular one: pick one below.</>}
             </p>
           )}
-          {!ready ? <Loading>Finding free vehicles…</Loading> : (
+          {!ready ? <SkeletonRows rows={3} label="Finding free vehicles…" /> : (
             <>
               {onDay && !custodianDrives && <VehicleChoiceRadios name="rq-veh" value={vehicle} dayDefault={dayDefault} onPick={(v) => set("vehicle", v)} />}
               {sug?.groups

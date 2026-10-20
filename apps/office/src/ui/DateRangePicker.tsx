@@ -62,7 +62,7 @@ export function useDateRange(defaultRange: RangeKey = "today", opts: { oneDay?: 
   };
 }
 
-export function DateRangePicker({ value, label = "Dates" }: { value: DateRangeValue; label?: string }) {
+export function DateRangePicker({ value, label = "Dates", future = false }: { value: DateRangeValue; label?: string; /** My trips: days ahead too; history pages (the default): no day after today (Stage 0 review). */ future?: boolean }) {
   const { range, from, to, maxDays } = value;
   const phone = useIsPhone();
   const today = colomboDay();
@@ -136,6 +136,7 @@ export function DateRangePicker({ value, label = "Dates" }: { value: DateRangeVa
               picking={picking}
               onTap={(d) => { setMsg(undefined); setPicking(value.oneDay ? { from: d, to: d } : tapDay(picking, d)); }}
               maxDays={maxDays}
+              max={future ? undefined : today}
               today={today}
               disabledWhy={limit}
             />

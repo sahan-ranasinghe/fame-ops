@@ -19,7 +19,7 @@ import { hhmm, joinDots, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can } from "../transport/types";
 import type { FleetError } from "../transport/types";
-import { Empty, Loading, Notice, WarningsNote } from "../ui/basics";
+import { Empty, Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
@@ -32,6 +32,7 @@ import { firstStopOf } from "./stopsLogic";
 import { TripEditor, useTrip } from "./TripEditor";
 import { tripPlanInput } from "./tripLogic";
 import { knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
+import { SkeletonRows } from "../ui/ListKit";
 
 interface Form extends RequestFields {
   /** The vehicle picked; "" = the one the driver brings. */
@@ -200,7 +201,7 @@ export function NewRequest() {
               Assign now{sugQ.updating ? <span className="updated" style={{ textTransform: "none", letterSpacing: 0, fontWeight: 400 }}> · Updating…</span> : null}
             </div>
             {!sugArgs && <p className="muted small" style={{ margin: 0 }}>Fill in the day and the leave-by time (or an arrive-by time on a stop) to see which vehicles are free.</p>}
-            {sugArgs && sugQ.loading && <Loading>Finding free vehicles…</Loading>}
+            {sugArgs && sugQ.loading && <SkeletonRows rows={3} label="Finding free vehicles…" />}
             {sugErr && <Notice tone="bad">{sugErr}</Notice>}
             {sug && (
               <div className="form">

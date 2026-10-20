@@ -167,7 +167,7 @@ export function MyTrips() {
             <div className="card card-b" style={{ display: "grid", gap: 12 }}>
               {/* All · Requests · Tasks I created switches the view; the status is the Filter (docs/ui-patterns.md §1, §8). */}
               <Segmented label="Show" options={TRIP_SHOW_OPTIONS} value={show} onChange={setShow} />
-              <DateRangePicker value={dates} />
+              <DateRangePicker value={dates} future />
               <FilterBar
                 search={<SearchBox value={search} onChange={setSearch} placeholder="Place, title, driver or plate" />}
                 filters={[pairsDef("status", "Status", TRIP_STATUS_OPTIONS, "all")]}

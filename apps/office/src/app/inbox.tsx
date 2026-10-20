@@ -29,7 +29,8 @@ export const INBOX_ARGS = { limit: 50 };
 /** The web refreshes every 60 s besides Realtime; the artifact polls every 30 s. */
 export const INBOX_EVERY = { api: 60000, claude: 30000 } as const;
 /** A dropped connection or a busy server: the watch keeps trying. Anything else on the first load = no inbox here. */
-const PASSING = new Set(["network", "server_unavailable", "rate_limited", "upstream_error"]);
+/** A call that took too long ("timeout", Stage 0) is passing too: a slow first load never switches the bell off. */
+const PASSING = new Set(["network", "server_unavailable", "rate_limited", "upstream_error", "timeout"]);
 
 export interface InboxApi {
   /** The feed runs: the person has my_inbox and the tool answered. */

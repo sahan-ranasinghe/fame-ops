@@ -18,7 +18,7 @@ import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react
 import { ChevronRight, LocateFixed, Search, X } from '@/components/icons';
 import { ListError, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Txt } from '@/components/ui';
-import { POSITION_TIMEOUT_MS, SUGGEST_TIMEOUT_MS, withTimeout } from '@/lib/patterns/listLogic';
+import { POSITION_TIMEOUT_MS, SUGGEST_TIMEOUT_MS, TimeoutError, withTimeout } from '@/lib/patterns/listLogic';
 import { useOffice } from '@/office/state';
 import { PinAdjust } from './PinAdjust';
 import { badgeTone, DEBOUNCE_MS, looksPasted, type Picked, pickedOf, pinText, searchState, shouldSearch, suggestArgs } from '@/office/trip/locationLogic';
@@ -84,7 +84,8 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
       }, (e: FleetError | Error) => {
         if (n !== seq.current) return;
         setAnswer(null);
-        setProblem(e.message || t('patterns.suggestionsTimeout'));
+        // A timeout in the person's language (TimeoutError's own words are English); the server's sentence otherwise.
+        setProblem(e instanceof TimeoutError || (e as FleetError).code === 'timeout' ? t('patterns.suggestionsTimeout') : e.message || t('patterns.suggestionsTimeout'));
       }).finally(() => {
         if (n === seq.current) setBusy(false);
       });
@@ -99,8 +100,13 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
   const empty = !shouldSearch(text);
   const suggestSeq = useRef(0);
   const [suggestTry, setSuggestTry] = useState(0);
+  // Stage 0 review: only a box that is (or becomes) empty asks, once (Try again asks again): a trip of 12 stops that all
+  // hold a place makes no calls at all.
+  const wantSuggest = canSearch && empty;
+  const asked = useRef(-1);
   useEffect(() => {
-    if (!canSearch) return;
+    if (!wantSuggest || asked.current === suggestTry) return;
+    asked.current = suggestTry;
     const n = ++suggestSeq.current;
     setSuggest({ answer: null, busy: true, failed: false });
     void (async () => {
@@ -121,7 +127,7 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
         if (n === suggestSeq.current) setSuggest({ answer: null, busy: false, failed: true });
       }
     })();
-  }, [canSearch, api, suggestTry]);
+  }, [wantSuggest, api, suggestTry]);
 
   async function pick(r: SearchResult) {
     typed.current = false;

@@ -174,7 +174,9 @@ describe("ApiTransport: the time limits", () => {
   it("the time limits per call, and the sentences with Try again", () => {
     expect(timeoutFor()).toBe(READ_TIMEOUT_MS);
     expect(timeoutFor("list_issues")).toBe(20_000);
-    expect(timeoutFor("decide_request")).toBe(30_000);
+    expect(timeoutFor("cancel_task")).toBe(30_000);
+    expect(timeoutFor("decide_request")).toBe(90_000);
+    expect(timeoutFor("driver_route")).toBe(90_000);
     expect(timeoutFor("search_places")).toBe(15_000);
     expect(errText({ code: "timeout", message: "" })).toEqual(["Fame Fleet didn’t answer in time. Try again.", "retry"]);
     expect(errText({ code: "timeout", message: "", write: true })[0]).toContain("may not have been saved");

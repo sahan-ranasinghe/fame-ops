@@ -1,5 +1,5 @@
 // Add or change a time I'm not available (Part 3b, H1), pushed over Me → Availability (with ?id= for a change): the day
-// (big buttons for the next 60 days), for a full day a last day (several days, at most 31), when (Full day · Morning until
+// (Today / Tomorrow / Pick a date, up to 60 days ahead), for a full day a last day (several days, at most 31), when (Full day · Morning until
 // the split · Afternoon from the split · From–to with the two times; the split is the office's half_day_split, 13:00 by
 // default), the reason, a note. Save → set_my_unavailability (online only: "No connection" keeps the form; a refusal
 // comes back in words). Back with something changed asks "Discard changes?"; after Save it returns to the list.
@@ -19,6 +19,8 @@ import {
   AVAIL_REASONS,
   type AvailForm,
   availArgs,
+  DAYS_AHEAD,
+  MAX_DAYS,
   availDirty,
   formFromRow,
   newAvailForm,
@@ -28,7 +30,7 @@ import {
 } from '@/lib/availability';
 import { getJson, KEYS } from '@/lib/kv';
 import { supabase } from '@/lib/supabase';
-import { colomboDate } from '@/lib/time';
+import { addDays, colomboDate } from '@/lib/time';
 import { DateField, TripDayPicker } from '@/components/patterns/Calendar';
 import { TimeField } from '@/components/patterns/TimeField';
 import { useApp } from '@/state/app';
@@ -95,7 +97,7 @@ export default function AvailabilityEditScreen() {
         <Card style={{ gap: 12 }}>
           <Txt variant="big">{t('avail.day')}</Txt>
           {/* The day: Today, Tomorrow or Pick a date (docs/ui-patterns.md §3); an entry already running keeps its first day. */}
-          <TripDayPicker value={form.from} onChange={(day) => change({ from: day, to: form.to && form.to > day ? form.to : null })} testID="avail-day" />
+          <TripDayPicker value={form.from} onChange={(day) => change({ from: day, to: form.to && form.to > day && form.to <= addDays(day, MAX_DAYS - 1) ? form.to : null })} max={addDays(colomboDate(), DAYS_AHEAD)} testID="avail-day" />
         </Card>
 
         <Card style={{ gap: 10 }}>
@@ -115,7 +117,7 @@ export default function AvailabilityEditScreen() {
           <Card style={{ gap: 12 }}>
             <Txt variant="big">{t('avail.lastDay')}</Txt>
             {/* No last day picked = that one day; a tap on the picked day takes it back. */}
-            <DateField label={t('avail.lastDay')} value={form.to ?? ''} onChange={(day) => change({ to: day && day > form.from ? day : null })} min={form.from} testID="avail-last-day" />
+            <DateField label={t('avail.lastDay')} value={form.to ?? ''} onChange={(day) => change({ to: day && day > form.from ? day : null })} min={form.from} max={addDays(form.from, MAX_DAYS - 1)} testID="avail-last-day" />
           </Card>
         )}
 

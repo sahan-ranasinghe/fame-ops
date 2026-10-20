@@ -1,9 +1,10 @@
 // The one bottom sheet (docs/ui-patterns.md §6): a grab handle, a title, the content scrolling inside, the actions fixed
 // at the bottom, at most 85 % of the screen; the dimmed area, the back button or the close button closes it. Every sheet
-// in the app (filters, dates, times, reasons, Ask drivers) is this one.
+// in the app (filters, dates, times, reasons, Ask drivers) is this one. It moves above the keyboard (a typed note, a
+// number), and a swipe down on its handle or title closes it (Stage 0 review).
 
-import type { ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { type ReactNode, useMemo, useRef } from 'react';
+import { KeyboardAvoidingView, Modal, PanResponder, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { X } from '@/components/icons';
@@ -25,11 +26,19 @@ export function Sheet({ visible, title, onClose, children, actions, scroll = tru
   const { t } = useApp();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  // A swipe down on the handle or the title closes it (the same as the close button: the caller decides what closing means).
+  const swipe = useMemo(() => PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => g.dy > 12 && Math.abs(g.dy) > Math.abs(g.dx),
+    onPanResponderRelease: (_, g) => { if (g.dy > 80) closeRef.current(); },
+  }), []);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
-      <View style={styles.shade}>
+      <KeyboardAvoidingView behavior="padding" style={styles.shade}>
         <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.close')} style={{ flex: 1 }} onPress={onClose} />
         <View style={[styles.sheet, { maxHeight: height * 0.85, paddingBottom: Math.max(insets.bottom, 12) }]} testID={testID}>
+          <View {...swipe.panHandlers}>
           <View style={styles.handle} />
           <View style={styles.head}>
             <Txt variant="heading" size={22} style={{ flex: 1 }}>{title}</Txt>
@@ -37,10 +46,11 @@ export function Sheet({ visible, title, onClose, children, actions, scroll = tru
               <X size={22} color={colors.ink} />
             </Pressable>
           </View>
+          </View>
           {scroll ? <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">{children}</ScrollView> : <View style={[styles.body, { flexShrink: 1 }]}>{children}</View>}
           {actions ? <View style={styles.actions}>{actions}</View> : null}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

@@ -3,12 +3,12 @@
 // through the offline queue (lib/late.ts; the server keeps the latest report and tells the office and the requester).
 // After it: "The office knows: 15 min late", or "Will be sent when you are online"; the task then says "You said 15 min
 // late at 08:52" (tasks.late_report_min / late_report_at, the phone's copy at once). The back button or Cancel closes
-// the sheet first; while it sends, nothing closes it.
+// the sheet first; while it sends, nothing closes it. The shared Sheet since the Stage 0 review (docs/ui-patterns.md §6).
 
 import { useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { Sheet } from '@/components/patterns/Sheet';
 import { Clock } from '@/components/icons';
 import { Button, Notice, Txt } from '@/components/ui';
 import { LATE_CHOICES, lateLine, lateMinutes } from '@/lib/late';
@@ -55,7 +55,6 @@ export function LateSheet({ task, onClose, onSent }: {
   onSent: (result: { text: string; tone: 'info' | 'warn' | 'danger' }) => void;
 }) {
   const { t, reportLate } = useApp();
-  const insets = useSafeAreaInsets();
   const [other, setOther] = useState(false);
   const [typed, setTyped] = useState('');
   const [bad, setBad] = useState(false);
@@ -86,54 +85,52 @@ export function LateSheet({ task, onClose, onSent }: {
   }
 
   return (
-    <Modal visible={task !== null} transparent animationType="slide" onRequestClose={close}>
-      <KeyboardAvoidingView behavior="padding" style={styles.shade}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-          <Txt variant="heading">{t('late.title')}</Txt>
-          {task ? <Txt variant="muted" numberOfLines={1}>{task.title}</Txt> : null}
-          <View style={styles.choices}>
-            {LATE_CHOICES.map((n) => (
-              <Pressable
-                key={n}
-                accessibilityRole="button"
-                disabled={busy}
-                onPress={() => void send(n)}
-                style={({ pressed }) => [styles.choice, (pressed || busy) && { opacity: 0.6 }]}
-              >
-                <Txt variant="button" size={20}>{t('late.min', { n })}</Txt>
-              </Pressable>
-            ))}
-          </View>
-          {!other ? (
-            <Button kind="outline" label={t('late.other')} disabled={busy} onPress={() => setOther(true)} />
-          ) : (
-            <View style={{ gap: 10 }}>
-              <Txt variant="strong" size={16}>{t('late.minutes')}</Txt>
-              <TextInput
-                value={typed}
-                onChangeText={(text) => {
-                  setTyped(text.replace(/[^\d]/g, '').slice(0, 3));
-                  setBad(false);
-                }}
-                keyboardType="number-pad"
-                autoFocus
-                maxLength={3}
-                style={[styles.input, { fontFamily: fonts.mono }]}
-              />
-              {bad && <Notice tone="danger" text={t('late.bad')} />}
-              <Button kind="dark" label={t('late.send')} busy={busy} onPress={() => void send(lateMinutes(typed))} />
-            </View>
-          )}
-          <Button label={t('common.cancel')} kind="outline" disabled={busy} onPress={close} />
+    <Sheet
+      visible={task !== null}
+      title={t('late.title')}
+      onClose={close}
+      testID="late-sheet"
+      actions={<Button label={t('common.cancel')} kind="outline" disabled={busy} onPress={close} style={{ flex: 1 }} />}
+    >
+      {task ? <Txt variant="muted" numberOfLines={1}>{task.title}</Txt> : null}
+      <View style={styles.choices}>
+        {LATE_CHOICES.map((n) => (
+          <Pressable
+            key={n}
+            accessibilityRole="button"
+            disabled={busy}
+            onPress={() => void send(n)}
+            style={({ pressed }) => [styles.choice, (pressed || busy) && { opacity: 0.6 }]}
+          >
+            <Txt variant="button" size={20}>{t('late.min', { n })}</Txt>
+          </Pressable>
+        ))}
+      </View>
+      {!other ? (
+        <Button kind="outline" label={t('late.other')} disabled={busy} onPress={() => setOther(true)} />
+      ) : (
+        <View style={{ gap: 10 }}>
+          <Txt variant="strong" size={16}>{t('late.minutes')}</Txt>
+          <TextInput
+            value={typed}
+            onChangeText={(text) => {
+              setTyped(text.replace(/[^\d]/g, '').slice(0, 3));
+              setBad(false);
+            }}
+            keyboardType="number-pad"
+            autoFocus
+            maxLength={3}
+            style={[styles.input, { fontFamily: fonts.mono }]}
+          />
+          {bad && <Notice tone="danger" text={t('late.bad')} />}
+          <Button kind="dark" label={t('late.send')} busy={busy} onPress={() => void send(lateMinutes(typed))} />
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
+      )}
+    </Sheet>
   );
 }
 
 const styles = StyleSheet.create({
-  shade: { flex: 1, backgroundColor: 'rgba(10,12,14,0.45)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12 },
   choices: { flexDirection: 'row', gap: 10 },
   choice: {
     flex: 1, minHeight: 72, borderRadius: 16, backgroundColor: colors.amber, alignItems: 'center', justifyContent: 'center',
