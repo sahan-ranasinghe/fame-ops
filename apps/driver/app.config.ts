@@ -36,6 +36,11 @@
 // FAME_LEAN_BUILD=1 for the local test build) leave out the dev client's plugin and add plugins/withLeanAndroid.js.
 // MapLibre stays: every build has both maps (components/TaskMap.tsx). Their autolinking exclusions are written by scripts/lean-build.mjs.
 
+// The mobile website (Phase 8, O4; docs/mobile-website.md): FLEET_WEB=1 (npm run web:export) builds Office mode for the
+// browser from this same app: the web platform, a single-page output served under /m/ on the office site, and its own
+// routes folder src/web-app (Expo Router's `root`), which holds only Office mode and the office sign-in: the driver's
+// side is never in the web build. Without the switch nothing here changes (the Android app, its updates, its runtime).
+
 import type { ConfigContext, ExpoConfig } from 'expo/config';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -61,6 +66,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       throw new Error('A drivers build without scripts/lean-build.mjs\'s exclusions in package.json: eas-build-pre-install did not run');
     }
   }
+  const web = process.env.FLEET_WEB === '1';
   const leftOut = lean ? ['expo-dev-client'] : [];
   const plugins = lean
     ? [...(config.plugins ?? []).filter((p) => !leftOut.includes(pluginName(p))), './plugins/withLeanAndroid']
@@ -78,6 +84,13 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...(mapsOn && mapsKey ? { config: { ...config.android?.config, googleMaps: { apiKey: mapsKey } } } : {}),
     },
     ...(mapsOn ? { runtimeVersion: `${config.version}-gmaps` } : {}),
-    extra: { ...config.extra, googleMapsAndroid: mapsOn },
+    ...(web
+      ? {
+        platforms: ['web'],
+        web: { ...config.web, bundler: 'metro', output: 'single', name: 'Fame Fleet', shortName: 'Fame Fleet', themeColor: '#15181c', backgroundColor: '#f3f2ee' },
+        experiments: { ...config.experiments, baseUrl: '/m' },
+      }
+      : {}),
+    extra: { ...config.extra, googleMapsAndroid: mapsOn, ...(web ? { router: { ...(config.extra?.router as object | undefined), root: 'src/web-app' } } : {}) },
   };
 };

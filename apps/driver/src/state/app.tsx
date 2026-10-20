@@ -201,7 +201,7 @@ export interface OdometerEntry {
   attempts: number;
 }
 
-interface AppValue {
+export interface AppValue {
   /** false until the saved sign-in has been checked. */
   booted: boolean;
   me: Employee | null;

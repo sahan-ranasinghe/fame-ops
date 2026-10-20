@@ -9,6 +9,7 @@
     "@expo-google-fonts/ibm-plex-sans": "^0.4.1",
     "@expo-google-fonts/noto-sans-sinhala": "^0.4.2",
     "@expo-google-fonts/yaldevi": "^0.4.1",
+    "@expo/metro-runtime": "~57.0.17",
     "@maplibre/maplibre-react-native": "^11.5.0",
     "@react-native-ml-kit/text-recognition": "^2.0.0",
     "@supabase/supabase-js": "^2.117.2",
@@ -53,6 +54,7 @@
     "react-native-screens": "~4.26.0",
     "react-native-svg": "15.15.4",
     "react-native-url-polyfill": "^4.0.0",
+    "react-native-web": "^0.21.2",
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
@@ -112,7 +114,10 @@
     "lint:hooks": "eslint src",
     "test:components": "jest",
     "test:crash": "tsx scripts/test-crash.ts",
-    "test:success": "tsx scripts/test-success.ts"
+    "test:success": "tsx scripts/test-success.ts",
+    "web:routes": "node scripts/make-web-routes.mjs",
+    "test:web-routes": "node scripts/make-web-routes.mjs --check",
+    "web:export": "node scripts/make-web-routes.mjs && FLEET_WEB=1 EXPO_NO_WEB_SETUP=1 expo export --platform web --output-dir dist-web"
   },
   "private": true,
   "expo": {

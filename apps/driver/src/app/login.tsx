@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Check, Eye, EyeOff } from '@/components/icons';
@@ -42,7 +42,9 @@ export default function LoginScreen() {
   const officeMe = useOfficeMe();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [side, setSide] = useState<Side>(() => (getJson<string>(OFFICE_KEYS.email) ? 'office' : 'driver'));
+  // The mobile website (Phase 8, O4) is Office mode only: no Driver side in a browser.
+  const webOnly = Platform.OS === 'web';
+  const [side, setSide] = useState<Side>(() => (webOnly || getJson<string>(OFFICE_KEYS.email) ? 'office' : 'driver'));
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [email, setEmail] = useState(() => getJson<string>(OFFICE_KEYS.email) ?? '');
@@ -99,8 +101,8 @@ export default function LoginScreen() {
             <LanguagePill />
           </View>
           <Txt variant="title" color="#ffffff" style={{ marginTop: 18, fontFamily: fonts.heading }}>{t('login.title')}</Txt>
-          {/* Driver | Office (design 01). */}
-          <View style={styles.switch} accessibilityRole="tablist">
+          {/* Driver | Office (design 01); a browser has only the Office side. */}
+          {!webOnly && <View style={styles.switch} accessibilityRole="tablist">
             {(['driver', 'office'] as const).map((s) => {
               const on = s === side;
               return (
@@ -111,7 +113,7 @@ export default function LoginScreen() {
                 </Pressable>
               );
             })}
-          </View>
+          </View>}
         </View>
 
         <View style={{ padding: 16, gap: 16 }}>
