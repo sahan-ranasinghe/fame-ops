@@ -219,7 +219,7 @@ export function Checkbox({ checked, onChange, label, hint, disabled = false, dis
       accessibilityRole="checkbox"
       accessibilityState={{ checked, disabled }}
       accessibilityLabel={label}
-      accessibilityHint={disabled ? disabledReason : hint}
+      accessibilityHint={disabled ? disabledReason ?? hint : hint}
       disabled={disabled}
       onPress={() => onChange(!checked)}
       testID={testID}
@@ -255,7 +255,7 @@ export function Radio({ checked, onPress, label, hint, disabled = false, disable
       accessibilityRole="radio"
       accessibilityState={{ checked, selected: checked, disabled }}
       accessibilityLabel={label}
-      accessibilityHint={disabled ? disabledReason : hint}
+      accessibilityHint={disabled ? disabledReason ?? hint : hint}
       disabled={disabled}
       onPress={onPress}
       testID={testID}

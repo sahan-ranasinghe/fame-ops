@@ -44,7 +44,7 @@ export default function ReportProblemScreen() {
     router.back();
     const call = needsVehicle && app.offline && OFFICE_PHONE !== '';
     showSnackbar({
-      text: [t('report.sentTitle'), t(app.offline ? 'common.savedOffline' : needsVehicle ? 'report.needVehicleSent' : 'report.sentBody')].join(' · '),
+      text: [t('report.sentTitle'), app.offline ? t('done.onPhone') : t(needsVehicle ? 'report.needVehicleSent' : 'report.sentBody')].join(' · '),
       ms: 6000,
       ...(call ? { action: { label: t('gate.callOffice'), onPress: () => void Linking.openURL(`tel:${OFFICE_PHONE}`) } } : {}),
     });

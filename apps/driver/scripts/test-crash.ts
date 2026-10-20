@@ -1,7 +1,7 @@
 // Hotfix O2-H2, Part 1c: what a crash shows and reports (src/lib/crashLogic.ts): never personal data or a key.
 //
 //   npm run test:crash          (from apps/driver)
-import { crashDetails, detailsText, messageOf, reportBody, scrub, shouldReport, stackLines, STACK_LINES } from '../src/lib/crashLogic';
+import { crashDetails, detailsText, messageOf, reportBody, screenOf, scrub, shouldReport, shouldShowSoft, stackLines, STACK_LINES } from '../src/lib/crashLogic';
 
 let failures = 0;
 function check(ok: unknown, label: string, detail?: unknown): void {
@@ -34,6 +34,16 @@ console.log('\nReporting');
 {
   const d = { message: 'x', screen: '/a' };
   check(shouldReport(null, d, 0) && !shouldReport({ key: '/a|x', at: 0 }, d, 30_000) && shouldReport({ key: '/a|x', at: 0 }, d, 61_000) && shouldReport({ key: '/b|x', at: 0 }, d, 1), 'the same error once a minute (a render loop never floods the server)');
+}
+
+console.log('\nThe soft snackbar and the screen (the reviewer\'s findings)');
+{
+  const t0 = 1_000_000;
+  check(shouldShowSoft(null, { message: 'a' }, t0), 'the first soft error shows');
+  check(!shouldShowSoft({ key: 'a', at: t0 }, { message: 'b' }, t0 + 5_000), 'another one within 10 s does not');
+  check(!shouldShowSoft({ key: 'a', at: t0 }, { message: 'a' }, t0 + 20_000), 'the same one within 30 s does not');
+  check(shouldShowSoft({ key: 'a', at: t0 }, { message: 'b' }, t0 + 11_000) && shouldShowSoft({ key: 'a', at: t0 }, { message: 'a' }, t0 + 31_000), 'a different one after 10 s, the same after 30 s');
+  check(screenOf(['office', 'driver', '[username]']) === '/office/driver/[username]' && screenOf([]) === '/', 'the screen is the route\'s pattern, never the person in it');
 }
 
 console.log(failures === 0 ? '\nAll crash checks passed.' : `\n${failures} crash check(s) FAILED.`);

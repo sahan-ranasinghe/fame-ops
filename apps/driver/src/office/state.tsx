@@ -136,7 +136,12 @@ export function useTool<T>(tool: string, args: Record<string, unknown> = {}, opt
     }, [load, opts.every]),
   );
 
+  // A patch is newer than any load still on its way (Hotfix O2-H2: a switch flipped while the screen's focus load runs must
+  // not be flipped back by that older answer): the load in flight is let go.
   const patch = useCallback((next: T | ((prev: T) => T)) => {
+    seq.current += 1;
+    setLoading(false);
+    setRefreshing(false);
     setData((prev) => (typeof next === 'function' ? (prev === null ? prev : (next as (p: T) => T)(prev)) : next));
   }, []);
 

@@ -148,10 +148,16 @@ export default function TripReview() {
       );
       const notice = [...s.notice, ...(wantsWa && !waLink ? [t('office.trip.whatsappNoPhone')] : [])];
       setSavedNotice(s.noticeKey, notice);
-      if (router.canDismiss()) router.dismissAll();
-      if (s.target.kind === 'task') router.push({ pathname: '/office/task/[id]', params: { id: s.target.id } });
-      else if (s.target.kind === 'request') router.push({ pathname: '/office/request/[id]', params: { id: s.target.id } });
-      else router.navigate(s.target.path as never);
+      // Change stops was opened from the task: back to that same screen (and what was under it). A new trip or an edited
+      // request: the editor's steps go and the item opens on the tab the person was on.
+      if (d!.mode === 'stops' && s.target.kind === 'task') {
+        router.dismissTo({ pathname: '/office/task/[id]', params: { id: s.target.id } });
+      } else {
+        if (router.canDismiss()) router.dismissAll();
+        if (s.target.kind === 'task') router.push({ pathname: '/office/task/[id]', params: { id: s.target.id } });
+        else if (s.target.kind === 'request') router.push({ pathname: '/office/request/[id]', params: { id: s.target.id } });
+        else router.navigate(s.target.path as never);
+      }
       showSnackbar({
         text: t(`office.saved.${s.snack}`, { name: driverName }),
         ...(waLink ? { action: { label: t('office.saved.whatsapp'), onPress: () => open(waLink) } } : {}),

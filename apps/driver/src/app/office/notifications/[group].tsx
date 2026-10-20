@@ -41,6 +41,7 @@ export default function OfficeNotificationGroup() {
                   text={eventText(t, e)}
                   value={e.enabled}
                   onChange={(on) => void n.setEvent(e.event, on)}
+                  disabled={n.paused}
                   testID={`notif-ev-${e.event}`}
                 />
               </View>

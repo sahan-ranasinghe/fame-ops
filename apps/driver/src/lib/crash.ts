@@ -12,7 +12,8 @@ import { useSyncExternalStore } from 'react';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 import * as Application from 'expo-application';
 
-import { type CrashDetails, crashDetails, reportBody, shouldReport } from './crashLogic';
+import { getOfficeMe } from '../office/store';
+import { type CrashDetails, crashDetails, reportBody, shouldReport, shouldShowSoft } from './crashLogic';
 import { supabase } from './supabase';
 import { runningUpdateId } from './updates';
 
@@ -43,7 +44,9 @@ export function details(e: unknown, fatal: boolean): CrashDetails {
     appVersion: safe(appVersionLabel, '?'),
     updateId: safe(runningUpdateId, null),
     runtime: runtime(),
-    side: screen.startsWith('/office') ? 'office' : screen ? 'driver' : 'none',
+    // An office person is reported through office-api wherever they are (the sign-in, the privacy page); a driver through
+    // driver-api.
+    side: safe(() => (getOfficeMe() ? 'office' : null), null) ?? (screen.startsWith('/office') ? 'office' : screen ? 'driver' : 'none'),
   }, fatal);
 }
 
@@ -120,9 +123,16 @@ let installed = false;
  * `onSoft` shows a snackbar for an error that did not break the screen (the root passes one that knows the words).
  * Safe to call more than once.
  */
-export function installGlobalHandlers(onSoft: (d: CrashDetails) => void): void {
+export function installGlobalHandlers(showSoft: (d: CrashDetails) => void): void {
   if (installed) return;
   installed = true;
+  let lastSoft: { key: string; at: number } | null = null;
+  const onSoft = (d: CrashDetails) => {
+    const now = Date.now();
+    if (!shouldShowSoft(lastSoft, d, now)) return;
+    lastSoft = { key: d.message, at: now };
+    showSoft(d);
+  };
   const g = globalThis as unknown as { ErrorUtils?: ErrorUtilsLike; HermesInternal?: { enablePromiseRejectionTracker?: (o: unknown) => void } };
   const eu = g.ErrorUtils;
   if (eu) {

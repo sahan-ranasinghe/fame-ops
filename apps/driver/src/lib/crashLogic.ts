@@ -91,6 +91,19 @@ export function reportBody(d: CrashDetails): Record<string, unknown> {
   return { app_version: d.appVersion, update_id: d.updateId, runtime: d.runtime, screen: d.screen, message: d.message, stack: d.stack.join('\n'), side: d.side, fatal: d.fatal, at: d.at };
 }
 
+/** A soft error's snackbar: at most one every 30 s for the same message, and one every 10 s at all (a background promise
+ *  that keeps failing, or the splash's own promises after Reload app, must not keep a driver's screen red). */
+export function shouldShowSoft(last: { key: string; at: number } | null, d: Pick<CrashDetails, 'message'>, now: number): boolean {
+  if (!last) return true;
+  if (now - last.at < 10_000) return false;
+  return last.key !== d.message || now - last.at > 30_000;
+}
+
+/** The route as its pattern, never the person or the id in it: ["office", "driver", "[username]"] → "/office/driver/[username]". */
+export function screenOf(segments: readonly string[]): string {
+  return `/${segments.filter(Boolean).join('/')}`;
+}
+
 /** The same error twice within a minute is reported once (a loop of renders must not flood the server). */
 export function shouldReport(last: { key: string; at: number } | null, d: Pick<CrashDetails, 'message' | 'screen'>, now: number): boolean {
   const key = `${d.screen}|${d.message}`;

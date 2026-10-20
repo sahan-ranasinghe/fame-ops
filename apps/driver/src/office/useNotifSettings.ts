@@ -78,13 +78,27 @@ export function useNotifSettings() {
     );
   }, [key, me.tools, api, prefsPatch]);
 
+  // One Pause or Resume at a time: a second toggle while the first saves is ignored (the records stay in order).
+  const switching = useRef(false);
   const pause = useCallback(async () => {
-    const { record, changes } = pauseChanges(latest.current, perms, new Date().toISOString());
-    if (await save(changes)) keepRecord(record);
+    if (switching.current) return;
+    switching.current = true;
+    try {
+      const { record, changes } = pauseChanges(latest.current, perms, new Date().toISOString());
+      if (await save(changes)) keepRecord(record);
+    } finally {
+      switching.current = false;
+    }
   }, [perms, save, keepRecord]);
 
   const resume = useCallback(async () => {
-    if (await save(resumeChanges(recordNow(), latest.current, perms))) keepRecord(null);
+    if (switching.current) return;
+    switching.current = true;
+    try {
+      if (await save(resumeChanges(recordNow(), latest.current, perms))) keepRecord(null);
+    } finally {
+      switching.current = false;
+    }
   }, [perms, save, recordNow, keepRecord]);
 
   const state = notifState(events, perms);

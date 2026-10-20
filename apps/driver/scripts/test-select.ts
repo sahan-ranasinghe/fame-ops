@@ -45,7 +45,7 @@ const uses: [string, RegExp, string][] = [
   ['components/office/DriverRows.tsx', /<ChoiceRow[\s\S]*?selected=\{on\}[\s\S]*?mark="end"/, 'Who\'s available (Who step, Change the task): ChoiceRow, the radio after the avatar'],
   ['app/office/task/[id]/driver.tsx', /<ChoiceRow[\s\S]*?disabledReason=\{declined \?/, 'Give it a driver: ChoiceRow; the driver who declined is greyed with the reason'],
   ['app/office/request/[id].tsx', /<ChoiceRow[\s\S]*?selected=\{on\}/, 'Approve a request: Who\'s available as ChoiceRows'],
-  ['app/office/trip/who.tsx', /<ChoiceRow key=\{v\.reg_no\}[\s\S]*?disabledReason=\{reason\}/, 'Who step: the vehicles as ChoiceRows; a busy / in-garage group says why'],
+  ['app/office/trip/who.tsx', /<View key=\{v\.reg_no\}[\s\S]*?<ChoiceRow selected=\{shown === v\.reg_no\}[\s\S]*?disabledReason=\{reason\}[\s\S]*?<\/ChoiceRow>[\s\S]*?accessibilityRole="button"/, 'Who step: the vehicles as ChoiceRows; a busy / in-garage group says why; the custodian\'s Call / WhatsApp under the row, not in it'],
   ['app/office/trip/who.tsx', /<ChoiceChip label=\{t\('office\.trip\.onTheDay'\)\}/, 'Who step: On the day / Any van / the driver\'s vehicle / Choose as ChoiceChips'],
   ['app/office/trip/who.tsx', /<ChoiceChip key=\{o\.username\} label=\{o\.name\}/, 'Who step (Book now): the free drivers as ChoiceChips'],
   ['app/office/trip/when.tsx', /<ChoiceChip key=\{day\}/, 'When step: the days (Today / Tomorrow / …) as ChoiceChips'],

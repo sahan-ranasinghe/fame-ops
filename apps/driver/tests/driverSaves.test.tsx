@@ -70,7 +70,7 @@ describe('Report a problem: after Send', () => {
     fireEvent.press(screen.getByText('open report'));
     fireEvent.press(await screen.findByText('send needs vehicle'));
     await screen.findByText('today');
-    expect(shownSnackbar()?.text).toBe(`${t('report.sentTitle')} · ${t('common.savedOffline')}`);
+    expect(shownSnackbar()?.text).toBe(`${t('report.sentTitle')} · ${t('done.onPhone')}`);
     expect(shownSnackbar()?.action?.label).toBe(t('gate.callOffice'));
     expect(errors.seen.map((a) => String(a[0]))).toEqual([]);
   });

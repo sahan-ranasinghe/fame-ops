@@ -15,6 +15,7 @@ import { Alert, Linking, Modal, Pressable, StyleSheet, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeft, ChevronRight, MapPin, MessageCircle, Phone } from '@/components/icons';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Field, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
@@ -22,6 +23,7 @@ import {
   activePill, editableFields, emergencyText, isPin, latestDriverPhoneChange, licenceOf, licencePhotos, licenceTone, longDate, profileFields, type ProfileFields,
   profilePatch, type ProfileProblem, randomPin, regularVehicleOf, seesPrivate, updateDriverInput, whenText,
 } from '@/office/peopleLogic';
+import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import type { DriverProfile, DriversList, FleetError, Vehicle, VehiclesList } from '@/office/types';
 import { Avatar, Divider, Empty, ErrorNotice, Loading, Pill, Screen, Section } from '@/office/ui';
@@ -157,8 +159,9 @@ export default function ManageDriver() {
       void profile.reload();
       void list.reload();
       // Hotfix O2-H2, Part 1b: stays on the driver (the switch shows the new state), a snackbar with the server's notes.
-      const notes = out.notes ?? [];
-      showSnackbar({ text: [t(want ? 'office.people.switchedOn' : 'office.people.switchedOff', { name: first }), ...notes].join(' · '), ...(notes.length ? { ms: 8000 } : {}) });
+      // The server's notes (a running task, a vehicle still held) wait on this page; the snackbar stays one sentence.
+      setSavedNotice(`driver:${username}`, out.notes ?? []);
+      showSnackbar({ text: t(want ? 'office.people.switchedOn' : 'office.people.switchedOff', { name: first }) });
     } catch (e) {
       setSwitchError(e as FleetError);
     } finally {
@@ -220,6 +223,7 @@ export default function ManageDriver() {
         {(profile.loading || list.loading) && !d && !row && <Loading text={t('office.common.loading')} />}
         {profile.error && !p && <ErrorNotice error={profile.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {notFound && <Empty text={t('office.people.notFound', { username })} />}
+        <SavedNotice noticeKey={`driver:${username}`} />
         {p && p.missing.length > 0 && <Notice text={t('office.people.missing', { list: p.missing.join(', ') })} />}
 
         {mayBoard && (

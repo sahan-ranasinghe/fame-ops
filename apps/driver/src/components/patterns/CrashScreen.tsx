@@ -9,6 +9,7 @@
 // error once and offers Go back within that stack.
 
 import { useRouter, type ErrorBoundaryProps } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,6 +46,10 @@ export function CrashScreen({ crash, onBack, onReload }: { crash: CrashDetails; 
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
   const text = detailsText(crash);
+  // A crash while the app was starting: the splash goes, so the crash screen is seen (never a frozen splash).
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => undefined);
+  }, []);
   return (
     <View style={[styles.page, { paddingTop: insets.top + 32, paddingBottom: insets.bottom + 16 }]} testID="crash-screen">
       <ScrollView contentContainerStyle={{ gap: 14, paddingHorizontal: 20 }}>

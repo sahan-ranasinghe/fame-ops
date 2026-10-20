@@ -87,7 +87,8 @@ export function PermissionPicker({ value, onChange, disabled = false }: { value:
               disabled={disabled || lock}
               onChange={() => onChange(togglePermission(value, p))}
               label={t(`office.permission.${p}`)}
-              hint={lock ? t('office.people.viewLocked') : t(`office.permissionText.${p}`)}
+              hint={lock ? undefined : t(`office.permissionText.${p}`)}
+              disabledReason={lock ? t('office.people.viewLocked') : undefined}
               testID={`perm-${p}`}
             />
           );

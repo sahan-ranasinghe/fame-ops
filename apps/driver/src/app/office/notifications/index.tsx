@@ -5,10 +5,11 @@
 // background; a failed save turns it back with a snackbar (office/useNotifSettings.ts).
 
 import { useRouter } from 'expo-router';
-import { Linking, View } from 'react-native';
+import { View } from 'react-native';
 
 import { LinkRow, RowCard, SwitchRow } from '@/components/office/NotifParts';
 import { Txt } from '@/components/ui';
+import { openNotificationSettings } from '@/lib/settingsLinks';
 import { groupSub, groupSummaryLine, groupTitle } from '@/office/notifLogic';
 import { useOffice } from '@/office/state';
 import { useNotifSettings } from '@/office/useNotifSettings';
@@ -63,7 +64,7 @@ export default function OfficeNotifications() {
           </>
         )}
         <RowCard>
-          <LinkRow title={t('office.notif.phoneSound')} line={t('office.notif.phoneSoundText')} onPress={() => void Linking.openSettings()} testID="notif-phone-sound" />
+          <LinkRow title={t('office.notif.phoneSound')} line={t('office.notif.phoneSoundText')} onPress={() => void openNotificationSettings().catch(() => undefined)} testID="notif-phone-sound" />
         </RowCard>
       </Screen>
     </View>

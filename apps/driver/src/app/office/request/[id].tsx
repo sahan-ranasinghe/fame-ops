@@ -99,13 +99,21 @@ export default function ApproveRequest() {
       // (the task the approval made, for someone who opens tasks), the warnings waiting on that task.
       const taskId = (out as DecideResult).task_id ?? (out as RedecideResult).task?.task_id;
       const view = decision === 'approve' && taskId && me.tools.includes('task_detail') ? taskId : null;
-      if (view) setSavedNotice(`task:${view}`, warnings);
-      if (router.canGoBack()) router.back();
-      else router.replace('/office');
-      // No task to open (a decline, or no task_detail): the warnings ride on the snackbar itself, a little longer.
-      showSnackbar(view
-        ? { text: title, action: { label: t('office.saved.view'), onPress: () => router.push({ pathname: '/office/task/[id]', params: { id: view } }) } }
-        : { text: [title, ...warnings].join(' · '), ...(warnings.length ? { ms: 8000 } : {}) });
+      if (view) {
+        setSavedNotice(`task:${view}`, warnings);
+        if (router.canGoBack()) router.back();
+        else router.replace('/office');
+        showSnackbar({ text: title, action: { label: t('office.saved.view'), onPress: () => router.push({ pathname: '/office/task/[id]', params: { id: view } }) } });
+      } else if (warnings.length) {
+        // No task to open and something to read: the person stays on the request, now decided, with the warnings on it.
+        setSavedNotice(`request:${id}`, warnings);
+        void q.reload();
+        showSnackbar({ text: title });
+      } else {
+        if (router.canGoBack()) router.back();
+        else router.replace('/office');
+        showSnackbar({ text: title });
+      }
     } catch (e) {
       const error = e as FleetError;
       setProblem(error);

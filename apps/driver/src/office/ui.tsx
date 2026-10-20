@@ -3,13 +3,14 @@
 // with a title, a count and "View all", rows with an avatar, status pills, chips, a sticky action bar, and the one way a
 // failed call is shown (a notice with Try again; a dropped write says it may not have been saved).
 
-import { useRouter } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { type ReactNode, useCallback, useRef } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Bell, ChevronLeft } from '@/components/icons';
 import { ChoiceChip } from '@/components/patterns/Select';
+import { setSnackbarLift } from '@/components/patterns/Snackbar';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { Button, Mono, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
@@ -225,7 +226,30 @@ export function Empty({ text }: { text: string }) {
 /** The big buttons at the bottom of a stack screen, above the safe area. */
 export function StickyActions({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
-  return <View style={[styles.sticky, { paddingBottom: Math.max(insets.bottom, 12) }]}>{children}</View>;
+  const height = useRef(0);
+  const focused = useRef(false);
+  // While this screen is in front, the snackbar sits above these buttons (Hotfix O2-H2).
+  useFocusEffect(
+    useCallback(() => {
+      focused.current = true;
+      if (height.current) setSnackbarLift(height.current);
+      return () => {
+        focused.current = false;
+        setSnackbarLift(0);
+      };
+    }, []),
+  );
+  return (
+    <View
+      style={[styles.sticky, { paddingBottom: Math.max(insets.bottom, 12) }]}
+      onLayout={(e) => {
+        height.current = e.nativeEvent.layout.height;
+        if (focused.current) setSnackbarLift(height.current);
+      }}
+    >
+      {children}
+    </View>
+  );
 }
 
 /** A filter chip row ("All · 4", "On a task · 1"): the shared ChoiceChip (the check, the tint, the border). */

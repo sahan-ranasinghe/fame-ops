@@ -29,6 +29,7 @@ import { ChangedTag, leaveTime, StopTimeline, useDateLabel, useDurations, useNow
 import { TaskMap } from '@/components/TaskMap';
 import { taskTitle } from '@/components/taskLines';
 import { Button, Mono, Notice, Plate, Txt } from '@/components/ui';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { approvedBy, askedBy, phoneDisplay, taskCalls } from '@/lib/contacts';
 import { canReportLate, declineKey } from '@/lib/late';
 import { colomboDate, colomboTime } from '@/lib/time';
@@ -204,13 +205,14 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
                 text: t('common.yes'),
                 style: 'destructive',
                 onPress: () => void app.cancelTrip(task).then((out) => {
+                  // Hotfix O2-H2: the outcome in the snackbar, never an OK dialog.
                   if (out.kind === 'cancelled') {
-                    Alert.alert(t('trip.cancelled'));
                     goHome();
+                    showSnackbar({ text: t('trip.cancelled') });
                   } else if (out.kind === 'offline') {
-                    Alert.alert(t('trip.cancelOffline'));
+                    showSnackbar({ text: t('trip.cancelOffline'), tone: 'error' });
                   } else if (out.message) {
-                    Alert.alert(t('trip.cancelFailed', { reason: out.message }));
+                    showSnackbar({ text: t('trip.cancelFailed', { reason: out.message }), tone: 'error' });
                   }
                 }),
               },

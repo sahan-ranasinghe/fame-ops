@@ -57,8 +57,25 @@ const subscribe = (l: () => void) => {
   };
 };
 
+// The sticky bottom buttons of the screen in front (office/ui StickyActions): the snackbar sits above them, never over the
+// primary button (Material's snackbar above a bottom app bar).
+let lift = 0;
+const liftListeners = new Set<() => void>();
+export function setSnackbarLift(px: number): void {
+  if (px === lift) return;
+  lift = px;
+  liftListeners.forEach((l) => l());
+}
+const subscribeLift = (l: () => void) => {
+  liftListeners.add(l);
+  return () => {
+    liftListeners.delete(l);
+  };
+};
+
 export function SnackbarHost() {
   const snack = useSyncExternalStore(subscribe, () => current, () => current);
+  const above = useSyncExternalStore(subscribeLift, () => lift, () => lift);
   const insets = useSafeAreaInsets();
   const fade = useRef(new Animated.Value(0)).current;
 
@@ -75,7 +92,7 @@ export function SnackbarHost() {
 
   if (!snack) return null;
   return (
-    <View pointerEvents="box-none" style={[styles.wrap, { bottom: Math.max(insets.bottom, 12) + 64 }]}>
+    <View pointerEvents="box-none" style={[styles.wrap, { bottom: above > 0 ? above + 8 : Math.max(insets.bottom, 12) + 64 }]}>
       <Animated.View style={[styles.bar, snack.tone === 'error' && styles.error, { opacity: fade }]} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="snackbar">
         <Txt variant="strong" size={15} color="#ffffff" style={{ flex: 1 }} numberOfLines={2}>{snack.text}</Txt>
         {snack.action ? (

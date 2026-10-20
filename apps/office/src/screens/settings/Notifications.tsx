@@ -161,11 +161,11 @@ export function WebAppOnly() {
 }
 
 /** One switch: a short title on one line, an optional grey line under it; the whole line flips it. */
-export function SwitchLine({ title, text, on, onChange, testId }: { title: string; text?: string; on: boolean; onChange: (on: boolean) => void; testId?: string }) {
+export function SwitchLine({ title, text, on, onChange, disabled = false, testId }: { title: string; text?: string; on: boolean; onChange: (on: boolean) => void; disabled?: boolean; testId?: string }) {
   return (
-    <label className="set-switch" data-testid={testId}>
+    <label className={`set-switch${disabled ? " is-disabled" : ""}`} data-testid={testId}>
       <span className="grow"><span className="name">{title}</span>{text && <span className="sub">{text}</span>}</span>
-      <input type="checkbox" role="switch" aria-label={title} checked={on} onChange={(e) => onChange(e.target.checked)} />
+      <input type="checkbox" role="switch" aria-label={title} checked={on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
     </label>
   );
 }

@@ -133,17 +133,21 @@ function WhoStep({ d }: { d: TripDraft }) {
     <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => pick(x.username ?? '', x.name, x.phone?.whatsapp)} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined} noWindow={!args} />
   );
 
+  // The custodian's Call and WhatsApp sit under the row, never inside it (a radio row holds no other button: TalkBack reads
+  // them apart).
   const vehicleRow = (v: SuggestedVehicle, disabled: boolean, reason?: string) => (
-    <ChoiceRow key={v.reg_no} selected={shown === v.reg_no} onPress={() => { setF({ vehicle: v.reg_no }); setChoosing(false); }} disabled={disabled} disabledReason={reason} leading={<Plate regNo={v.reg_no} />} mark="end" accessibilityLabel={v.reg_no} testID={`vehicle-row-${v.reg_no}`}>
-      <Txt variant={v.pick === 'no' ? 'strong' : 'muted'} size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
-      {v.assigned_to ? (
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt>
-          {v.call ? <Pressable accessibilityRole="button" onPress={() => open(v.call!)} hitSlop={8}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.call')}</Txt></Pressable> : null}
-          {v.whatsapp ? <Pressable accessibilityRole="button" onPress={() => open(v.whatsapp!)} hitSlop={8}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.whatsapp')}</Txt></Pressable> : null}
+    <View key={v.reg_no} style={{ gap: 4 }}>
+      <ChoiceRow selected={shown === v.reg_no} onPress={() => { setF({ vehicle: v.reg_no }); setChoosing(false); }} disabled={disabled} disabledReason={reason} leading={<Plate regNo={v.reg_no} />} mark="end" accessibilityLabel={v.reg_no} testID={`vehicle-row-${v.reg_no}`}>
+        <Txt variant={v.pick === 'no' ? 'strong' : 'muted'} size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
+        {v.assigned_to ? <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt> : null}
+      </ChoiceRow>
+      {v.assigned_to && (v.call || v.whatsapp) ? (
+        <View style={{ flexDirection: 'row', gap: 18, paddingHorizontal: 14 }}>
+          {v.call ? <Pressable accessibilityRole="button" accessibilityLabel={`${t('office.common.call')} ${v.assigned_to}`} onPress={() => open(v.call!)} hitSlop={8} style={{ minHeight: 40, justifyContent: 'center' }}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.call')}</Txt></Pressable> : null}
+          {v.whatsapp ? <Pressable accessibilityRole="button" accessibilityLabel={`${t('office.common.whatsapp')} ${v.assigned_to}`} onPress={() => open(v.whatsapp!)} hitSlop={8} style={{ minHeight: 40, justifyContent: 'center' }}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.whatsapp')}</Txt></Pressable> : null}
         </View>
       ) : null}
-    </ChoiceRow>
+    </View>
   );
 
   const vehicleGroups = (rows: ReturnType<typeof groupRows>, empty: string) => (

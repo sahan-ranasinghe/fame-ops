@@ -68,7 +68,7 @@ export function useNotifSettings() {
   }, [load]);
 
   /** Flips the events at once, saves them, puts them back when the save fails. True when saved. */
-  const save = useCallback(async (changes: Record<string, boolean>): Promise<boolean> => {
+  const save = useCallback(async function save(changes: Record<string, boolean>): Promise<boolean> {
     if (Object.keys(changes).length === 0) return true;
     const back = undoChanges(latest.current?.events ?? [], changes);
     setData((d) => d && { ...d, events: applyChanges(d.events, changes) });
@@ -77,7 +77,8 @@ export function useNotifSettings() {
       return true;
     } catch (e) {
       setData((d) => d && { ...d, events: applyChanges(d.events, back) });
-      toast(`${NOTIF_TEXT.notSaved} ${errText(asFleetError(e))[0]}`);
+      // The switch turns back; Try again sends the same change (Instagram), never by itself.
+      toast(`${NOTIF_TEXT.notSaved} ${errText(asFleetError(e))[0]}`, { label: "Try again", onClick: () => void save(changes) });
       return false;
     }
   }, [transport, toast]);
@@ -104,13 +105,27 @@ export function useNotifSettings() {
       kept.current = record;
     }, () => undefined);
   }, [key, maySetPrefs, transport]);
+  // One Pause or Resume at a time: a second click while the first saves is ignored (the records stay in order).
+  const switching = useRef(false);
   const pause = useCallback(async () => {
-    const { record, changes } = pauseChanges(latest.current?.events ?? [], perms, new Date().toISOString());
-    if (await save(changes)) keepRecord(record);
+    if (switching.current) return;
+    switching.current = true;
+    try {
+      const { record, changes } = pauseChanges(latest.current?.events ?? [], perms, new Date().toISOString());
+      if (await save(changes)) keepRecord(record);
+    } finally {
+      switching.current = false;
+    }
   }, [perms, save, keepRecord]);
   const resume = useCallback(async () => {
-    const record = kept.current !== undefined ? kept.current : readPause(key);
-    if (await save(resumeChanges(record, latest.current?.events ?? [], perms))) keepRecord(null);
+    if (switching.current) return;
+    switching.current = true;
+    try {
+      const record = kept.current !== undefined ? kept.current : readPause(key);
+      if (await save(resumeChanges(record, latest.current?.events ?? [], perms))) keepRecord(null);
+    } finally {
+      switching.current = false;
+    }
   }, [key, perms, save, keepRecord]);
 
   const events = data?.events ?? [];

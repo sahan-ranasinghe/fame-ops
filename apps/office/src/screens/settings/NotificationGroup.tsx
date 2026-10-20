@@ -36,6 +36,7 @@ export default function NotificationGroup() {
                   text={def ? def.text : e.text}
                   on={e.enabled}
                   onChange={(on) => void n.setEvent(e.event, on)}
+                  disabled={n.paused}
                   testId={`notif-ev-${e.event}`}
                 />
               );
