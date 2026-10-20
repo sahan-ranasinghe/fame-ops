@@ -6,7 +6,7 @@ only the fast checks while working and single failed tests; a checkpoint passes 
 ## What runs
 
 - **fast** (about 5 min): install, both typechecks, the hooks lint, the site's unit tests (4 workers), every driver
-  script suite (`test:*` in `apps/driver`).
+  script suite (`test:*` in `apps/driver`) but `test:data`, which needs the stack and runs in e2e.
 - **e2e** (after fast): the Supabase CLI from the lockfile (2.120.0, as on the laptop) starts the local stack with the
   laptop's image versions (no newer images), without the dashboard, image resizing, logs and the pooler; a db reset; the
   functions served with throwaway keys made in the run; Playwright's Chromium; then `scripts/test-office-local.sh`, the same
