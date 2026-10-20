@@ -972,6 +972,14 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 22. Queued next (Sahan, 20 October 2026; not built)
+
+- **Live as a full-screen map with a draggable bottom sheet** (Google Maps, Uber, PickMe, and the boss's design 15): the map
+  edge to edge with the duty chips floating on it; the list in a sheet that drags between peek, half and full; list and map
+  in sync; the same in the app and on `/m/`.
+- Decided 20 October with it: no zoom buttons on Live (pinch and the wheel zoom); fit stays; the compass only while the map
+  is turned, a tap turns north. Live has no my-location or layers button today (none was added).
+
 ## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
 
 The office will do from the phone everything they do on the website, because they don't always have a laptop. So every
