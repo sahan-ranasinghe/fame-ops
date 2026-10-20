@@ -217,9 +217,9 @@ console.log('\n== Both engines draw the same task ==');
 console.log('\n== Stage 1: the Live map\'s cluster on both engines ==');
 {
   const dm = read('src/components/DriversMap.tsx');
-  check(/<MapButton icon=\{Plus\} label=\{t\('office\.live\.zoomIn'\)\} onPress=\{\(\) => tap\('in'\)\}/.test(dm) && /<MapButton icon=\{Minus\} label=\{t\('office\.live\.zoomOut'\)\} onPress=\{\(\) => tap\('out'\)\}/.test(dm)
+  check(!/tap\('in'\)|tap\('out'\)/.test(dm)
     && /<MapButton icon=\{Maximize\} label=\{t\('office\.live\.fitAll'\)\} onPress=\{\(\) => tap\('fit'\)\}/.test(dm) && /command,\s*onLoaded/.test(dm),
-    'DriversMap: zoom in, zoom out, the screen\'s controls, fit everyone; each tap a command for the mounted engine');
+    'DriversMap: the screen\'s controls, then fit everyone (no zoom buttons since 20 October: pinch zooms); each tap a command for the mounted engine');
   check(dm.indexOf("if (mount.status === 'unavailable')") < dm.indexOf('testID="drivers-map-controls"'), 'the cluster only over a mounted map, never over "Map not available"');
   const g = read('src/components/GoogleDriversMap.tsx');
   const o = read('src/components/OpenDriversMap.tsx');

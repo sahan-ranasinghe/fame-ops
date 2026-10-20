@@ -1363,8 +1363,6 @@
       "moveOnTaskDriver": "{name} is on a task: the task's vehicle is swapped from the task.",
       "moveNoMatch": "No vehicle matches.",
       "notFound": "This driver is not on the list any more.",
-      "zoomIn": "Zoom in",
-      "zoomOut": "Zoom out",
       "fitAll": "Fit everyone on the map",
       "mapSection": "Map"
     },
@@ -2791,7 +2789,8 @@
       "turnedOn": "Notifications are on in this browser",
       "turnedOff": "Notifications are off in this browser",
       "noPermission": "No permission was given. Tap Turn on again and choose Allow.",
-      "failed": "That did not work. Try again."
+      "failed": "That did not work. Try again.",
+      "unavailable": "Notifications are not available in this browser right now. Reload the page to try again."
     }
   }
 }

@@ -145,7 +145,7 @@ async function main() {
     'every map has its "Map not available"');
   check(/routeCredit\(mount\.engine === 'google', lines\)/.test(src[files[1]]) && /creditWithOrs\(mapCredit\(google, \[\]\), google/.test(src[files[2]]) && /OSM_CREDIT/.test(src[files[3]]),
     "the credits as the phones' maps show them");
-  check((src[files[2]].match(/<MapButton /g) ?? []).length === 3, 'Live: three buttons of its own (zoom in, zoom out, fit) beside the screen\'s controls');
+  check((src[files[2]].match(/<MapButton /g) ?? []).length === 1, 'Live: one button of its own (fit; no zoom buttons, pinch and the wheel zoom) beside the screen\'s controls');
 
   const adapters = read('src/components/web/adapters.ts');
   const google = read('src/components/web/googleWeb.ts');

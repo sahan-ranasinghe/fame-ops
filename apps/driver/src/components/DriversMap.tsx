@@ -15,16 +15,14 @@
 // estimated roads dashed slate, the stops as circles with their times) and the playback marker with its time. The two
 // pins the engines share (the stop circle, the playback marker) live here and reach the engines as props; the credit line
 // gains openrouteservice's whenever an estimated road is drawn.
-// Stage 1 (O3 item 4f): the one control cluster down the right side (the site's MapControls: zoom in, zoom out, the
-// screen's own controls, fit everyone), under the compass each engine shows while the map is turned.
+// Stage 1 (O3 item 4f): the one control cluster down the right side (Sahan, 20 October 2026: no zoom buttons, pinch and the
+// wheel zoom; the screen's own controls, then fit everyone), under the compass each engine shows while the map is turned.
 // A tap is a command (MapCommand, a new nonce each time) the mounted engine carries out on its own camera: a zoom step,
 // or the frame around every driver's marker and the shown route (office/liveLogic.ts fitAllFrame). Shown only while a map
 // is mounted, never over "Map not available".
 
 import MapPinOff from 'lucide-react-native/icons/map-pin-off';
 import Maximize from 'lucide-react-native/icons/maximize';
-import Minus from 'lucide-react-native/icons/minus';
-import Plus from 'lucide-react-native/icons/plus';
 import * as Network from 'expo-network';
 import { useIsFocused } from 'expo-router';
 import { Component, type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from 'react';
@@ -164,8 +162,6 @@ export function DriversMap({ mapPackage, layers = NO_LAYERS, controls, ...parts 
         {mount.engine === 'google' ? <GoogleDriversMap {...engineProps} /> : <OpenDriversMap {...engineProps} />}
       </MapBoundary>
       <View style={styles.cluster} pointerEvents="box-none" testID="drivers-map-controls">
-        <MapButton icon={Plus} label={t('office.live.zoomIn')} onPress={() => tap('in')} testID="map-zoom-in" />
-        <MapButton icon={Minus} label={t('office.live.zoomOut')} onPress={() => tap('out')} testID="map-zoom-out" />
         {controls}
         <MapButton icon={Maximize} label={t('office.live.fitAll')} onPress={() => tap('fit')} testID="map-fit" />
       </View>

@@ -4,12 +4,11 @@
 // same: one marker per driver (the initials in a ring coloured by duty, the selected one labelled), the frame around them
 // all, the move to a selected driver, and the route layers (office/liveRouteLogic.ts): today's trails, the shown route by
 // speed with its holes and estimated roads, its stops that open their times on a tap, the playback marker. The one control
-// cluster down the right side (zoom in, zoom out, the screen's own controls, fit everyone) under the compass the free map
-// shows while it is turned; shown only while a map is mounted, never over "Map not available".
+// cluster down the right side (no zoom buttons since 20 October 2026: pinch and the wheel zoom; the screen's own controls,
+// then fit everyone) under the compass the free map shows while it is turned (a tap turns north); shown only while a map
+// is mounted, never over "Map not available".
 
 import Maximize from 'lucide-react-native/icons/maximize';
-import Minus from 'lucide-react-native/icons/minus';
-import Plus from 'lucide-react-native/icons/plus';
 import type { LucideIcon } from 'lucide-react-native';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -141,8 +140,6 @@ export function DriversMap({ markers, fit, focus, onPressMarker, mapPackage, lay
       </BrowserMap>
       <MapCompass heading={turn.heading} pitch={turn.pitch} label={t('map.northUp')} onPress={() => map?.northUp()} style={{ top: 12, right: 12 }} />
       <View style={styles.cluster} pointerEvents="box-none" testID="drivers-map-controls">
-        <MapButton icon={Plus} label={t('office.live.zoomIn')} onPress={() => tap('in')} testID="map-zoom-in" />
-        <MapButton icon={Minus} label={t('office.live.zoomOut')} onPress={() => tap('out')} testID="map-zoom-out" />
         {controls}
         <MapButton icon={Maximize} label={t('office.live.fitAll')} onPress={() => tap('fit')} testID="map-fit" />
       </View>

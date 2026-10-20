@@ -242,8 +242,12 @@ console.log('\n== The screen and the two engines ==');
     'the trails control and the route only for a person who may call driver_route');
   // Stage 1 (O3 item 4f): the screen's control sits in the map's one cluster (zoom in, zoom out, the trails, fit), which
   // DriversMap draws after the mounted engine, never over "Map not available".
-  check(/controls=\{controls\}/.test(screen) && /testID="map-zoom-out" \/>\s*\{controls\}\s*<MapButton icon=\{Maximize\}/.test(read('src/components/DriversMap.tsx')) && /controls\?: ReactNode;/.test(read('src/components/DriversMap.tsx')),
+  check(/controls=\{controls\}/.test(screen) && /testID="drivers-map-controls">\s*\{controls\}\s*<MapButton icon=\{Maximize\}/.test(read('src/components/DriversMap.tsx')) && /controls\?: ReactNode;/.test(read('src/components/DriversMap.tsx')),
     'the control is DriversMap\'s slot: shown only while a map is mounted, never over "Map not available"');
+  for (const f of ['src/components/DriversMap.tsx', 'src/components/DriversMap.web.tsx']) {
+    const src = read(f);
+    check(!/map-zoom-in|map-zoom-out/.test(src) && /testID="map-fit"/.test(src) && /<MapCompass /.test(src + read('src/components/OpenDriversMap.tsx') + read('src/components/GoogleDriversMap.tsx')), `${f}: no zoom buttons (pinch zooms); fit; the compass only while turned`);
+  }
   check(/if \(trails\) return;\s*trailGen\.current \+= 1;\s*trailBusy\.current\.clear\(\);\s*setTrailMap\(new Map\(\)\);/.test(screen) && /gen === trailGen\.current && setTrailMap/.test(screen) && /trailsPlan\(all\)/.test(screen) && /trailsOf\(trailMap, plan\.draw, drawing\?\.username \?\? null\)/.test(screen),
     'trails off: the lines go (a trail landing after that is dropped); the plan caps them; the shown driver\'s trail is left out');
   check(/\}, ROUTE_REFRESH_MS\);/.test(screen) && (screen.match(/mergeRoute\(/g) ?? []).length >= 3 && /if \(!focused \|\| !routes \|\| \(!trails && shownUser === null\)\) return;/.test(screen),
