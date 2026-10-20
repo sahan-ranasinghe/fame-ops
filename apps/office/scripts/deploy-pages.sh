@@ -8,7 +8,10 @@
 # The desktop build reads .env.production.local; the mobile build apps/driver/.env (the URL and the publishable key only).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-source ~/.nvm/nvm.sh && nvm use >/dev/null
+# The laptop's Node comes from nvm (.nvmrc); on CI setup-node has put that version first already (nvm there has none).
+if [ "$(node --version 2>/dev/null)" != "$(cat ../../.nvmrc)" ] && [ -s "$HOME/.nvm/nvm.sh" ]; then
+  source ~/.nvm/nvm.sh && nvm use >/dev/null
+fi
 
 echo "== 1. The desktop site"
 rm -rf dist
