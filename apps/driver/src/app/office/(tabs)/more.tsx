@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Bell, ChartColumn, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
+import { Bell, ChartColumn, Clock, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { MORE_SECTION, type MoreItem, type MoreSection, moreFor } from '@/office/nav';
 import { useOffice } from '@/office/state';
@@ -19,6 +19,7 @@ import { colors } from '@/theme';
 const ITEM: Record<MoreItem, { icon: LucideIcon; label: string; path: string }> = {
   approve: { icon: ClipboardCheck, label: 'office.tabs.approve', path: '/office/(tabs)/approve' },
   tasks: { icon: ListChecks, label: 'office.tabs.tasks', path: '/office/(tabs)/tasks' },
+  task_history: { icon: Clock, label: 'office.history2.title', path: '/office/task-history' },
   drivers: { icon: Users, label: 'office.tabs.drivers', path: '/office/(tabs)/drivers' },
   trips: { icon: Route, label: 'office.tabs.trips', path: '/office/(tabs)/trips' },
   alerts: { icon: Bell, label: 'office.tabs.alerts', path: '/office/(tabs)/alerts' },
@@ -43,7 +44,8 @@ export default function MoreTab() {
   const { me, signOut } = useOffice();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const items = moreFor(me.permissions);
+  // Task history also needs its tool (list_tasks): never a row that would open a screen the person cannot use.
+  const items = moreFor(me.permissions).filter((key) => key !== 'task_history' || me.tools.includes('list_tasks'));
 
   function confirmSignOut() {
     Alert.alert(t('office.common.signOut'), t('office.more.signOutBody'), [

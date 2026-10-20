@@ -82,7 +82,7 @@ export function homeChips(permissions: readonly string[]): HomeChip[] {
   return chips;
 }
 
-export type MoreItem = 'tasks' | 'approve' | 'drivers' | 'asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'places' | 'maintenance' | 'people_drivers' | 'people_users' | 'settings';
+export type MoreItem = 'tasks' | 'task_history' | 'approve' | 'drivers' | 'asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'places' | 'maintenance' | 'people_drivers' | 'people_users' | 'settings';
 
 /** What More lists under Work: the screens built so far that are not on the bar. */
 export function moreFor(permissions: readonly string[]): MoreItem[] {
@@ -90,6 +90,7 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
   const all: { key: MoreItem; need: readonly Permission[] }[] = [
     { key: 'approve', need: ['approve'] },
     { key: 'tasks', need: ['assign_tasks'] },
+    { key: 'task_history', need: ['assign_tasks'] },
     { key: 'drivers', need: ['approve', 'assign_tasks'] },
     { key: 'trips', need: ['request'] },
     { key: 'issues', need: ['issues', 'assign_tasks'] },
@@ -108,13 +109,14 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     { key: 'people_users', need: ['users'] },
     { key: 'settings', need: ['users'] },
   ];
-  return all.filter((i) => has(permissions, ...i.need) && !onBar.has(i.key)).map((i) => i.key);
+  // Stage 1 (O3 item 3): Tasks → History is the Tasks tab's own button; with Tasks under More, History sits beside it.
+  return all.filter((i) => has(permissions, ...i.need) && !onBar.has(i.key) && (i.key !== 'task_history' || !onBar.has('tasks'))).map((i) => i.key);
 }
 
 /** More's sections (design 19): Work (the screens), People (drivers, office users), then Quick settings. */
 export type MoreSection = 'work' | 'people' | 'settings';
 export const MORE_SECTION: Record<MoreItem, MoreSection> = {
-  approve: 'work', tasks: 'work', drivers: 'work', asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work', maintenance: 'work', places: 'work',
+  approve: 'work', tasks: 'work', task_history: 'work', drivers: 'work', asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work', maintenance: 'work', places: 'work',
   people_drivers: 'people', people_users: 'people', settings: 'settings',
 };
 

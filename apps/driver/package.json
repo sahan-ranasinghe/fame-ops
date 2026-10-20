@@ -94,6 +94,7 @@
     "test:taps": "tsx scripts/test-taps.ts",
     "test:history": "tsx scripts/test-history.ts",
     "test:media": "tsx scripts/test-media.ts",
+    "test:task-history": "tsx scripts/test-task-history.ts",
     "test:decide": "tsx scripts/test-decide.ts",
     "test:overview": "tsx scripts/test-overview.ts",
     "test:maintenance": "tsx scripts/test-maintenance.ts",

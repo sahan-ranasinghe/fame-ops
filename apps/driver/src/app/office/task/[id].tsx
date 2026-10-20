@@ -4,16 +4,24 @@
 // a reason (cancel_task), the requester's line with Call. O2 (item 5): Change time (task/[id]/time, update_task), Change
 // stops (the editor's Where and When in mode stops, update_task_stops), Swap vehicle while it runs (task/[id]/swap,
 // move_driver_vehicle) and Reopen with a reason (reopen_task, a task completed today); each only with its tool.
+// Stage 1 (O3 item 3c–f; components/office/TaskDetailParts.tsx): the warnings (the km nobody logged, the warnings saved
+// past) on the screen; a driver-started trip's purpose (Change: task/[id]/purpose, set_trip_purpose); the vehicle swap's
+// stretches with "Type the reading" for one still owed (swap_reading); each reached stop's arrival point with "Save as our
+// place" for a Google stop (save_arrival_place); and under "More details": charged to, the odometer and fuel with their
+// photos, receipts and video pieces (the 1-hour links: an answer read over 50 minutes ago is read again first), the
+// problems reported, the history, and "Show the plan on the map" (task/[id]/plan).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MapPin, MessageCircle, Phone } from '@/components/icons';
+import { StopArrival, SwapSegments, TaskMoreDetails, TaskWarnings, TripPurposeCard } from '@/components/office/TaskDetailParts';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
 import { useOffice, useTool } from '@/office/state';
+import { DETAIL_LINKS_FRESH_MS, type LinkKey, linkOf } from '@/office/taskDetailLogic';
 import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
 import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, stopLateMin, stopParts, steps, taskStatusKey } from '@/office/taskLogic';
 import type { FleetError, TaskDetail } from '@/office/types';
@@ -52,6 +60,40 @@ export default function TaskDetailScreen() {
   // The action under way (its button shows the spinner; the others wait).
   const [busy, setBusy] = useState<'cancel' | 'reopen' | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
+
+  // The photo, receipt and video links last an hour: an answer read over 50 minutes ago is read again before one opens,
+  // and the link is then taken from the fresh answer.
+  const loadedAt = useRef(0);
+  useEffect(() => {
+    if (q.data) loadedAt.current = Date.now();
+  }, [q.data]);
+  const [pendingLink, setPendingLink] = useState<LinkKey | null>(null);
+  const [linkNote, setLinkNote] = useState<string | null>(null);
+  const openUrl = (url: string) => void Linking.openURL(url).catch(() => setLinkNote(t('office.task.linkOpenFailed')));
+  useEffect(() => {
+    if (!pendingLink || !q.data || Date.now() - loadedAt.current > DETAIL_LINKS_FRESH_MS) return;
+    const url = linkOf(q.data, pendingLink);
+    setPendingLink(null);
+    if (url) {
+      setLinkNote(null);
+      openUrl(url);
+    } else setLinkNote(t('office.task.linkGone'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q.data, pendingLink]);
+  function openLink(key: LinkKey) {
+    if (!q.data) return;
+    if (Date.now() - loadedAt.current > DETAIL_LINKS_FRESH_MS) {
+      setLinkNote(t('office.task.linkRenewing'));
+      setPendingLink(key);
+      void q.reload();
+      return;
+    }
+    const url = linkOf(q.data, key);
+    if (url) {
+      setLinkNote(null);
+      openUrl(url);
+    }
+  }
 
   async function cancel(label: string, note: string) {
     if (!task || busy) return;
@@ -127,6 +169,7 @@ export default function TaskDetailScreen() {
           </View>
         )}
         {task && task.status === 'cancelled' && task.cancelled_reason && <Txt variant="muted">{t('office.task.cancelledWhy', { why: task.cancelled_reason })}</Txt>}
+        {p && task && <TaskWarnings p={p} />}
         {task && (
           <View style={styles.card}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -172,6 +215,7 @@ export default function TaskDetailScreen() {
             {task.vehicle_changed && <Txt variant="small">{task.vehicle_changed}</Txt>}
           </View>
         )}
+        {p && task && <TripPurposeCard p={p} />}
         {p && stops.length > 0 && (
           <Section title={t('office.task.stops')}>
             <View style={{ gap: 12, paddingTop: 4 }}>
@@ -199,6 +243,7 @@ export default function TaskDetailScreen() {
                         {late > 0 ? <Txt variant="strong" size={15} color={colors.amberText}>{` ${words.late(late)}`}</Txt> : null}
                         {s.is_start && task?.passengers ? ` · ${t('office.task.passengers', { n: task.passengers })}` : ''}
                       </Txt>
+                      <StopArrival stop={s} onSaved={q.reload} />
                     </View>
                   </View>
                 );
@@ -219,6 +264,7 @@ export default function TaskDetailScreen() {
         {task && (task.km != null || task.gps_km != null) && (
           <Txt variant="muted" size={15}>{[task.km != null ? t('office.task.taskKm', { km: task.km }) : '', task.gps_km != null ? t('office.task.gpsKm', { km: task.gps_km }) : ''].filter(Boolean).join(' · ')}</Txt>
         )}
+        {p && task && <SwapSegments p={p} onSaved={q.reload} />}
         {task && (task.status === 'in_progress' || task.status === 'completed') && me.tools.includes('driver_route') && (
           <Button kind="outline" label={t('office.history.showDrivenRoute')} onPress={() => router.push({ pathname: '/office/task/[id]/route', params: { id: task.id } })}
             style={{ minHeight: 56 }} />
@@ -254,6 +300,10 @@ export default function TaskDetailScreen() {
               </Pressable>
             )}
           </View>
+        )}
+        {p && task && (
+          <TaskMoreDetails p={p} openLink={openLink} linkNote={linkNote}
+            onPlan={p.plan ? () => router.push({ pathname: '/office/task/[id]/plan', params: { id: task.id } }) : undefined} />
         )}
         {problem && <ErrorNotice error={problem} onRetry={() => void q.reload()} />}
       </Screen>
