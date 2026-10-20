@@ -6,19 +6,22 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { Check, Phone } from '@/components/icons';
+import { Phone } from '@/components/icons';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
+import { showSnackbar } from '@/components/patterns/Snackbar';
+import { ChoiceRow } from '@/components/patterns/Select';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { driverParts, driverPill, rankedDrivers } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
+import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { availabilityArgsForTask, CANCEL_TEXT, cancelInput, declinedThisTask, firstPickForTask, leaveIn, plateOf, reassignInput } from '@/office/taskLogic';
 import type { Availability, FleetError, TaskDetail } from '@/office/types';
-import { Avatar, BackHeader, Divider, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
+import { Avatar, BackHeader, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -65,9 +68,11 @@ export default function GiveDriverScreen() {
     try {
       const out = await api.call<{ warnings?: string[]; was?: string }>('reassign_task', reassignInput(task.id, pickedDriver));
       done.current = true;
-      Alert.alert(t('office.give.givenTitle', { name: pickedDriver.name }), out.warnings?.length ? out.warnings.join('\n') : undefined, [
-        { text: t('office.common.ok'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/office')) },
-      ]);
+      // Hotfix O2-H2, Part 1b: the task opens (the one under this page, else in its place), a snackbar says who has it, and
+      // the warnings wait on the task.
+      setSavedNotice(`task:${task.id}`, out.warnings ?? []);
+      router.dismissTo({ pathname: '/office/task/[id]', params: { id: task.id } });
+      showSnackbar({ text: t('office.saved.driverGiven', { name: pickedDriver.name }) });
     } catch (e) {
       setProblem(e as FleetError);
       void q.reload();
@@ -83,7 +88,9 @@ export default function GiveDriverScreen() {
     try {
       await api.call('cancel_task', cancelInput(task.id, label, note));
       done.current = true;
-      Alert.alert(t('office.task.cancelledTitle'), undefined, [{ text: t('office.common.ok'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/office')) }]);
+      if (router.canGoBack()) router.back();
+      else router.replace('/office');
+      showSnackbar({ text: t('office.saved.cancelled') });
     } catch (e) {
       setProblem(e as FleetError);
       void q.reload();
@@ -191,27 +198,26 @@ export default function GiveDriverScreen() {
               const declined = declinedThisTask(task, d);
               const pillKey = declined ? 'declined' : driverPill(d, bestUsername);
               return (
-                <View key={d.username ?? d.name}>
-                  {i > 0 && <Divider />}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    disabled={!d.username || declined}
-                    onPress={() => setPicked(d.username ?? '')}
-                    style={({ pressed }) => [styles.driverRow, on && styles.driverOn, pressed && { opacity: 0.8 }, declined && { opacity: 0.6 }]}
-                  >
-                    <Avatar name={d.name} size={44} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <Txt variant="strong" size={17}>{d.name}</Txt>
-                        {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
-                      </View>
-                      <Txt variant="muted" size={15}>{declined ? t('office.give.declinedThis', { why: task.needs_driver?.reason_text ?? '' }) : driverParts(d).join(' · ')}</Txt>
-                      {d.vehicle && !declined && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
-                    </View>
-                    {on ? <Check size={26} color={colors.blue} strokeWidth={3} /> : pillKey && pillKey !== 'best' ? <Pill text={t(`office.give.${pillKey}`)} tone={pillKey === 'declined' || pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted'} /> : null}
-                  </Pressable>
-                </View>
+                <ChoiceRow
+                  key={d.username ?? d.name}
+                  selected={on}
+                  onPress={() => setPicked(d.username ?? '')}
+                  disabled={!d.username || declined}
+                  disabledReason={declined ? t('office.give.declinedThis', { why: task.needs_driver?.reason_text ?? '' }) : d.username ? undefined : t('office.ask.noAccount')}
+                  leading={<Avatar name={d.name} size={44} />}
+                  mark="end"
+                  trailing={pillKey && pillKey !== 'best' ? <Pill text={t(`office.give.${pillKey}`)} tone={pillKey === 'declined' || pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted'} /> : null}
+                  accessibilityLabel={d.name}
+                  testID={`give-row-${d.username ?? d.name}`}
+                  style={i > 0 ? { marginTop: 8 } : undefined}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Txt variant="strong" size={17}>{d.name}</Txt>
+                    {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
+                  </View>
+                  {!declined && <Txt variant="muted" size={15}>{driverParts(d).join(' · ')}</Txt>}
+                  {d.vehicle && !declined && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
+                </ChoiceRow>
               );
             })}
           </Section>
@@ -269,6 +275,4 @@ const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 14 },
   mark: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   iconBtn: { width: 52, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 14, borderWidth: 2, borderColor: 'transparent', minHeight: 64 },
-  driverOn: { borderColor: colors.blue, backgroundColor: '#f2f5fb' },
 });

@@ -15,6 +15,7 @@ import { Alert, Linking, Modal, Pressable, StyleSheet, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeft, ChevronRight, MapPin, MessageCircle, Phone } from '@/components/icons';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Field, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
 import {
@@ -155,7 +156,9 @@ export default function ManageDriver() {
       const out = await api.call<{ notes?: string[] }>('set_driver_active', { username, active: want });
       void profile.reload();
       void list.reload();
-      Alert.alert(t(want ? 'office.people.switchedOn' : 'office.people.switchedOff', { name: first }), (out.notes ?? []).join('\n') || undefined, [{ text: t('office.common.ok') }]);
+      // Hotfix O2-H2, Part 1b: stays on the driver (the switch shows the new state), a snackbar with the server's notes.
+      const notes = out.notes ?? [];
+      showSnackbar({ text: [t(want ? 'office.people.switchedOn' : 'office.people.switchedOff', { name: first }), ...notes].join(' · '), ...(notes.length ? { ms: 8000 } : {}) });
     } catch (e) {
       setSwitchError(e as FleetError);
     } finally {

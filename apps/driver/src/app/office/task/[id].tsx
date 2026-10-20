@@ -7,10 +7,12 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MapPin, MessageCircle, Phone } from '@/components/icons';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ReasonSheet } from '@/components/ReasonSheet';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
 import { useOffice, useTool } from '@/office/state';
@@ -57,7 +59,10 @@ export default function TaskDetailScreen() {
     setProblem(null);
     try {
       await api.call('cancel_task', cancelInput(task.id, label, note));
-      Alert.alert(t('office.task.cancelledTitle'), undefined, [{ text: t('office.common.ok'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/office')) }]);
+      // Hotfix O2-H2, Part 1b (Google Calendar's "Event deleted"): back to where the person came from, a snackbar says so.
+      if (router.canGoBack()) router.back();
+      else router.replace('/office');
+      showSnackbar({ text: t('office.saved.cancelled') });
     } catch (e) {
       setProblem(e as FleetError);
       void q.reload();
@@ -72,7 +77,7 @@ export default function TaskDetailScreen() {
     setProblem(null);
     try {
       await api.call('reopen_task', reopenInput(task.id, label, note));
-      Alert.alert(t('office.task.reopenedTitle'), t('office.task.reopenedBody'), [{ text: t('office.common.ok') }]);
+      showSnackbar({ text: t('office.saved.reopened') });
       await q.reload();
     } catch (e) {
       setProblem(e as FleetError);
@@ -109,6 +114,7 @@ export default function TaskDetailScreen() {
         {q.loading && <Loading text={t('office.common.loading')} />}
         {q.error && !p && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {q.data && !task && <Empty text={t('office.task.notFound')} />}
+        <SavedNotice noticeKey={`task:${id}`} />
         {task && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pill text={t(`office.status.${statusKey}`)} tone={statusTone(statusKey)} size={15} />

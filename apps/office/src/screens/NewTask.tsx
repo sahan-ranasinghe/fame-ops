@@ -12,9 +12,10 @@
 // tasks need the fleet admin's OK, proposes the task instead: it waits in the
 // approval queue and nothing goes to the driver yet (§33).
 import { type FormEvent, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
+import { flashWarnings } from "../data/flash";
 import { useLists } from "../data/hooks";
 import type { Conflict, CreateTaskResult, FindProject } from "../data/types";
 import { hhmm, num, splitEqually, today, warnList } from "../lib/format";
@@ -48,6 +49,7 @@ const isDate = (s: string | null): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.t
 export function NewTask() {
   const { me, store, transport } = useFleet();
   const toast = useToast();
+  const navigate = useNavigate();
   const lists = useLists();
   const settings = useFleetSettings();
   const base = basePlace(settings.data);
@@ -139,6 +141,16 @@ export function NewTask() {
       // A proposed task is not with the driver yet: no WhatsApp message either.
       const wa = !out.waiting && f.whatsapp && drv?.phone ? driverWhatsApp(v.input, drv.phone, p.leave_by ? `Leave by ${p.leave_by}` : undefined) : "";
       draft.clear();
+      // Hotfix O2-H2, Part 1b (Gmail's "Sent"): the form closes, the task (or the request it waits as) opens in its place,
+      // a toast says what happened (WhatsApp the driver as its action when asked for), the warnings wait on the task.
+      if (out.link) {
+        const notice = [...warnList(p), ...(p.conflicts ?? []).map((c) => c.text)];
+        if (!out.waiting && p.task_id) flashWarnings(p.task_id, notice);
+        void store.invalidate();
+        navigate(out.link.to, { replace: true, state: out.waiting ? undefined : { warnings: notice } });
+        toast(out.toast, wa ? { label: "WhatsApp the driver", href: wa } : undefined);
+        return;
+      }
       setMsg({
         tone: "ok",
         warnings: warnList(p),
@@ -149,7 +161,6 @@ export function NewTask() {
             {p.vehicle_changed ? <span data-testid="vehicle-used">{p.vehicle_changed}. </span>
               : p.vehicle_used ? <span data-testid="vehicle-used">Vehicle: {p.vehicle_used.reg_no} · {p.vehicle_used.why === "chosen" ? "as picked" : p.vehicle_used.why}. </span>
               : p.vehicle ? <span data-testid="vehicle-used">Vehicle: {p.vehicle}. </span> : null}
-            {out.link && <Link className="btn small" to={out.link.to}>{out.link.label}</Link>}{" "}
             <Link className="btn small" to={`/tasks${v.input.date !== today() ? `?date=${v.input.date}` : ""}`}>The board →</Link>{" "}
             {wa ? <a className="btn small" href={wa} target="_blank" rel="noopener">WhatsApp the driver</a>
               : f.whatsapp && !out.waiting ? <span className="small">No phone number saved for this driver, so no WhatsApp link.</span> : null}

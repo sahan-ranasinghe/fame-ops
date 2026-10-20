@@ -8,10 +8,13 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 
-import { Check, Phone } from '@/components/icons';
+import { Phone } from '@/components/icons';
+import { showSnackbar } from '@/components/patterns/Snackbar';
+import { ChoiceRow } from '@/components/patterns/Select';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
@@ -19,9 +22,10 @@ import { telLink } from '@/lib/format';
 import { alreadyDecided, availabilityArgs, canApprove, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, rankedDrivers, tripView } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
 import { requestTitle } from '@/office/homeLogic';
+import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import type { Availability, AvailableDriver, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList } from '@/office/types';
-import { Avatar, BackHeader, Divider, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
+import { Avatar, BackHeader, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -91,7 +95,17 @@ export default function ApproveRequest() {
       decidedOnce.current = true;
       const warnings = [...(out.warnings ?? []), ...((out as DecideResult).conflicts ?? []).map((c) => c.text)];
       const title = decision === 'approve' ? t('office.request.approvedTitle', { name: driver?.name ?? pick }) : t('office.request.declinedTitle');
-      Alert.alert(title, warnings.length ? warnings.join('\n') : undefined, [{ text: t('office.common.ok'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/office')) }]);
+      // Hotfix O2-H2, Part 1b (Gmail's triage: archive, back to the list, "View"): back to the queue, a snackbar with View
+      // (the task the approval made, for someone who opens tasks), the warnings waiting on that task.
+      const taskId = (out as DecideResult).task_id ?? (out as RedecideResult).task?.task_id;
+      const view = decision === 'approve' && taskId && me.tools.includes('task_detail') ? taskId : null;
+      if (view) setSavedNotice(`task:${view}`, warnings);
+      if (router.canGoBack()) router.back();
+      else router.replace('/office');
+      // No task to open (a decline, or no task_detail): the warnings ride on the snackbar itself, a little longer.
+      showSnackbar(view
+        ? { text: title, action: { label: t('office.saved.view'), onPress: () => router.push({ pathname: '/office/task/[id]', params: { id: view } }) } }
+        : { text: [title, ...warnings].join(' · '), ...(warnings.length ? { ms: 8000 } : {}) });
     } catch (e) {
       const error = e as FleetError;
       setProblem(error);
@@ -125,6 +139,7 @@ export default function ApproveRequest() {
       <Screen refreshing={q.refreshing} onRefresh={refresh} bottom={16}>
         {q.loading && <Loading text={t('office.common.loading')} />}
         {q.error && !card && <ErrorNotice error={q.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        <SavedNotice noticeKey={`request:${id}`} />
         {q.data && !card && <Empty text={t('office.request.notFound')} />}
         {card && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -194,27 +209,26 @@ export default function ApproveRequest() {
               const on = d.username === pick && !!d.username;
               const pillKey = driverPill(d, bestUsername);
               return (
-                <View key={d.username ?? d.name}>
-                  {i > 0 && <Divider />}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    disabled={!d.username}
-                    onPress={() => setPicked(d.username ?? '')}
-                    style={({ pressed }) => [styles.driverRow, on && styles.driverOn, pressed && { opacity: 0.8 }]}
-                  >
-                    <Avatar name={d.name} size={44} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <Txt variant="strong" size={17}>{d.name}</Txt>
-                        {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
-                      </View>
-                      <Txt variant="muted" size={15}>{driverParts(d).join(' · ')}</Txt>
-                      {d.vehicle && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
-                    </View>
-                    {on ? <Check size={26} color={colors.blue} strokeWidth={3} /> : pillKey && pillKey !== 'best' ? <Pill text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : 'muted'} /> : null}
-                  </Pressable>
-                </View>
+                <ChoiceRow
+                  key={d.username ?? d.name}
+                  selected={on}
+                  onPress={() => setPicked(d.username ?? '')}
+                  disabled={!d.username}
+                  disabledReason={d.username ? undefined : t('office.ask.noAccount')}
+                  leading={<Avatar name={d.name} size={44} />}
+                  mark="end"
+                  trailing={pillKey && pillKey !== 'best' ? <Pill text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : 'muted'} /> : null}
+                  accessibilityLabel={d.name}
+                  testID={`approve-row-${d.username ?? d.name}`}
+                  style={i > 0 ? { marginTop: 8 } : undefined}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Txt variant="strong" size={17}>{d.name}</Txt>
+                    {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
+                  </View>
+                  <Txt variant="muted" size={15}>{driverParts(d).join(' · ')}</Txt>
+                  {d.vehicle && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
+                </ChoiceRow>
               );
             })}
           </Section>
@@ -268,6 +282,4 @@ export default function ApproveRequest() {
 const styles = StyleSheet.create({
   tripCard: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 18, gap: 10 },
   mark: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 14, borderWidth: 2, borderColor: 'transparent', minHeight: 64 },
-  driverOn: { borderColor: colors.blue, backgroundColor: '#f2f5fb' },
 });

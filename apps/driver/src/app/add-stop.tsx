@@ -6,11 +6,12 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeft, Plus } from '@/components/icons';
 import { useLeaveGuard } from '@/components/navigation';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { PlaceSearch } from '@/components/PlaceSearch';
 import { taskTitle } from '@/components/taskLines';
 import { Button, Notice, Txt } from '@/components/ui';
@@ -52,9 +53,8 @@ export default function AddStopScreen() {
       return;
     }
     allowLeave();
-    Alert.alert(t('trip.stopAdded'), outcome.offline ? t('common.savedOffline') : undefined, [{ text: t('common.ok'), onPress: () => router.back() }], {
-      cancelable: false,
-    });
+    router.back();
+    showSnackbar({ text: outcome.offline ? `${t('trip.stopAdded')} · ${t('done.onPhone')}` : t('trip.stopAdded') });
   }
 
   return (

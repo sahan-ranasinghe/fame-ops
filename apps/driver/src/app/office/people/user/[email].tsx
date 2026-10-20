@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
 import { PermissionPicker, SecretCard } from '@/components/office/PeopleParts';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Field, Notice, Txt } from '@/components/ui';
 import { activePill, findUserRow, permissionWords, phoneDisplay, updateUserInput, userFields, type UserFields, type UserProblem } from '@/office/peopleLogic';
 import { normalisePermissions } from '@/office/permissions';
@@ -107,7 +108,9 @@ export default function ManageOfficeUser() {
     try {
       await api.call('set_office_user_active', { email, active: want });
       q.patch((p) => ({ ...p, users: p.users.map((x) => ((x.email ?? '').toLowerCase() === email.toLowerCase() ? { ...x, active: want } : x)) }));
-      Alert.alert(t(want ? 'office.people.switchedOn' : 'office.people.switchedOff', { name: u?.name ?? email }), undefined, [{ text: t('office.common.ok'), onPress: () => { if (!want) router.back(); } }]);
+      // Hotfix O2-H2, Part 1b: switched off = back to the list (Google Contacts after a delete); on = stays; a snackbar.
+      if (!want && router.canGoBack()) router.back();
+      showSnackbar({ text: t(want ? 'office.people.switchedOn' : 'office.people.switchedOff', { name: u?.name ?? email }) });
     } catch (e) {
       setSwitchError(e as FleetError);
     } finally {

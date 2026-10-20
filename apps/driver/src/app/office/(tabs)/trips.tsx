@@ -12,6 +12,7 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Phone } from '@/components/icons';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Notice, Txt } from '@/components/ui';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import { addDays, colomboDate } from '@/lib/time';
 import { statusTone, tripLive, tripTitle } from '@/office/homeLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -113,6 +114,7 @@ export default function TripsTab() {
         </View>
       )}
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
+        <SavedNotice noticeKey="/office/(tabs)/trips" />
         <FilterChips<TripFilter>
           options={[
             { key: 'all', label: t('office.common.all'), n: trips.length },

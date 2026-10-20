@@ -6,10 +6,13 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
 import { useLeaveGuard } from '@/components/navigation';
+import { showSnackbar } from '@/components/patterns/Snackbar';
+import { ChoiceRow } from '@/components/patterns/Select';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { canSwap, type SwapFields, type SwapResult, swapInput, swapPlates, swapRows, typedKm } from '@/office/taskExtrasLogic';
 import { plateOf } from '@/office/taskLogic';
@@ -72,7 +75,10 @@ export default function SwapVehicleScreen() {
         t('office.task.swapStartOf', { plate: plates.to, reading: reading(out.readings?.new_start) }),
         out.note ?? '',
       ].filter(Boolean);
-      Alert.alert(t('office.task.swapDoneTitle'), lines.join('\n'), [{ text: t('office.common.ok'), onPress: () => router.back() }]);
+      // Hotfix O2-H2, Part 1b: back to the task, a snackbar, the readings wait on the task.
+      setSavedNotice(`task:${id}`, lines, t('office.task.swapDoneTitle'));
+      router.dismissTo({ pathname: '/office/task/[id]', params: { id } });
+      showSnackbar({ text: t('office.task.swapDoneTitle') });
     } catch (e) {
       setProblem(e as FleetError);
       void q.reload();
@@ -94,20 +100,17 @@ export default function SwapVehicleScreen() {
         {task && running && (
           <>
             <Txt variant="muted">{t('office.task.swapIntro')}</Txt>
-            <View style={{ gap: 8 }}>
+            <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
               {rows.map((r) => {
                 const on = choice === r.reg_no;
                 return (
-                  <Pressable key={r.reg_no} accessibilityRole="radio" accessibilityState={{ selected: on, disabled: r.disabled }} disabled={r.disabled} onPress={() => setChoice(r.reg_no)} style={[styles.option, on && styles.optionOn, r.disabled && { opacity: 0.55 }]}>
-                    <View style={[styles.radio, on && { borderColor: colors.ink, backgroundColor: colors.ink }]} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <Plate regNo={plateOf(r.reg_no)} />
-                        {r.what ? <Txt variant="muted" size={15}>{r.what}</Txt> : null}
-                      </View>
-                      <Txt variant={r.state === 'on_task' ? 'strong' : 'muted'} size={15} color={r.state === 'on_task' ? colors.red : r.state === 'held' || r.state === 'garage' ? colors.amberText : colors.muted}>{stateText(r)}</Txt>
+                  <ChoiceRow key={r.reg_no} selected={on} onPress={() => setChoice(r.reg_no)} disabled={r.disabled} accessibilityLabel={`${r.reg_no}, ${stateText(r)}`} testID={`swap-row-${r.reg_no}`}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <Plate regNo={plateOf(r.reg_no)} />
+                      {r.what ? <Txt variant="muted" size={15}>{r.what}</Txt> : null}
                     </View>
-                  </Pressable>
+                    <Txt variant={r.state === 'on_task' ? 'strong' : 'muted'} size={15} color={r.state === 'on_task' ? colors.red : r.state === 'held' || r.state === 'garage' ? colors.amberText : colors.muted}>{stateText(r)}</Txt>
+                  </ChoiceRow>
                 );
               })}
             </View>
@@ -144,9 +147,6 @@ export default function SwapVehicleScreen() {
 }
 
 const styles = StyleSheet.create({
-  option: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: colors.line, borderRadius: 14, padding: 14, backgroundColor: colors.card },
-  optionOn: { borderColor: colors.ink },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2.5, borderColor: '#8b9198' },
   km: { minHeight: 56, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, fontSize: 22, color: colors.ink, backgroundColor: colors.card },
   input: { minHeight: 52, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 14, fontSize: 17, color: colors.ink, backgroundColor: colors.card },
 });

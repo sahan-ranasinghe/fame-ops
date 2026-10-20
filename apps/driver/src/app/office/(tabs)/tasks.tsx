@@ -8,6 +8,7 @@ import { Pressable, View } from 'react-native';
 
 import { ChevronLeft, ChevronRight } from '@/components/icons';
 import { Button, Mono, Txt } from '@/components/ui';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import { shortDate } from '@/lib/durations';
 import { addDays, colomboDate } from '@/lib/time';
 import { boardLine, boardPill } from '@/office/homeLogic';
@@ -64,6 +65,7 @@ export default function TasksTab() {
         </View>
       </DarkHeader>
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
+        <SavedNotice noticeKey="/office/(tabs)/tasks" />
         {me.tools.includes('create_task') && <Button label={t('office.trip.assignTask')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } })} style={{ minHeight: 56 }} />}
         {q.loading && <Loading text={t('office.common.loading')} />}
         {q.error && !b && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}

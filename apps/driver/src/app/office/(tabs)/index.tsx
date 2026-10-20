@@ -22,6 +22,7 @@ import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { Button } from '@/components/ui';
 import { Plus } from '@/components/icons';
+import { SavedNotice } from '@/components/office/SavedNotice';
 
 const ROWS = 5;
 
@@ -58,6 +59,7 @@ export default function OfficeHome() {
         </View>
       </DarkHeader>
       <Screen refreshing={refreshing} onRefresh={refresh}>
+        <SavedNotice noticeKey="/office" />
         {overview.error && !ov && <ErrorNotice error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {actions.length > 0 && (
           <View style={{ flexDirection: 'row', gap: 10 }}>

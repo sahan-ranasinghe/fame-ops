@@ -121,11 +121,19 @@ export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
         signal: controller.signal,
       });
     } catch {
+      clearTimeout(timer);
+      throw { code: 'network', message: 'No connection to Fame Fleet.' } satisfies FleetError;
+    }
+    // Hotfix O2-H2, Part 1b: the timeout covers the answer's body too (a reply that stalls half way must end in the error
+    // state, never a spinner that turns for ever).
+    let text: string;
+    try {
+      text = await res.text();
+    } catch {
       throw { code: 'network', message: 'No connection to Fame Fleet.' } satisfies FleetError;
     } finally {
       clearTimeout(timer);
     }
-    const text = await res.text();
     let json: unknown = null;
     try {
       json = text ? JSON.parse(text) : null;

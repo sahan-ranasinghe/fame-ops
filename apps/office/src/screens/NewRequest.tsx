@@ -13,11 +13,12 @@ import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { useFormDraft } from "../data/drafts";
+import { flashWarnings } from "../data/flash";
 import type { BookResult, Suggestions } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { hhmm, joinDots, today, warnList } from "../lib/format";
 import { errText } from "../transport/errors";
-import { can } from "../transport/types";
+import { can, canOpenTask } from "../transport/types";
 import type { FleetError } from "../transport/types";
 import { Empty, Loading, Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
@@ -105,11 +106,12 @@ export function NewRequest() {
     }
     setBusy(true);
     try {
-      const r = await transport.call<{ next?: string }>("create_request", v.input);
+      const r = await transport.call<{ next?: string; request?: { id?: string } }>("create_request", v.input);
       draft.clear();
-      toast(staff ? r.next ?? "Sent to the fleet admin · you'll be notified" : "Request saved");
       void store.invalidate();
-      navigate("/requests", { replace: true });
+      // Hotfix O2-H2, Part 1b: the form closes, the new request opens for someone who decides it (else the list), a toast.
+      navigate(!staff && r.request?.id ? `/requests/${r.request.id}` : "/requests", { replace: true });
+      toast(staff ? r.next ?? "Sent to the fleet admin · you'll be notified" : "Request sent");
     } catch (e) {
       setErr(errText(e as FleetError)[0]);
       setBusy(false);
@@ -128,9 +130,20 @@ export function NewRequest() {
     try {
       const r = await transport.call<Booked>("book_vehicle", v.input);
       draft.clear();
-      setBooked(r);
-      toast("Booked");
       void store.invalidate();
+      // Hotfix O2-H2, Part 1b: the booking's task opens in the form's place (its request for someone who cannot open
+      // tasks), the warnings wait on the task, a toast says so.
+      const requestId = r.request_id ?? r.request?.id;
+      const to = r.task_id && canOpenTask(me) ? `/tasks/${r.task_id}` : requestId && can(me, "approve") ? `/requests/${requestId}` : null;
+      if (to) {
+        const notice = [...warnList(r), ...((r as { conflicts?: { text: string }[] }).conflicts ?? []).map((c) => c.text)];
+        if (r.task_id) flashWarnings(r.task_id, notice);
+        navigate(to, { replace: true, state: r.task_id && to.startsWith("/tasks/") ? { warnings: notice } : undefined });
+        toast("Booking saved");
+        return;
+      }
+      setBooked(r);
+      toast("Booking saved");
     } catch (e) {
       setErr(errText(e as FleetError)[0]);
     }

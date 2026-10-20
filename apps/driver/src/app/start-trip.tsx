@@ -11,11 +11,12 @@
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeft, Play } from '@/components/icons';
 import { useLeaveGuard } from '@/components/navigation';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { PlaceSearch } from '@/components/PlaceSearch';
 import { Button, Card, Field, Notice, Plate, Segmented, Txt } from '@/components/ui';
 import { type Choice, MAX_NOTE, type Purpose, purposeChoices, purposeKey } from '@/lib/trips';
@@ -73,8 +74,8 @@ export default function StartTripScreen() {
     // The trip is a task now: the normal Start task flow takes this screen's place (back from it goes to Today, where
     // the trip waits with Start task).
     const go = () => router.replace({ pathname: '/log-mileage', params: { mode: 'start', taskId: outcome.taskId, from: 'trip' } });
-    if (outcome.offline) Alert.alert(t('trip.title'), t('trip.queued'), [{ text: t('common.ok'), onPress: go }], { cancelable: false });
-    else go();
+    go();
+    if (outcome.offline) showSnackbar({ text: t('trip.queued'), ms: 6000 });
   }
 
   return (

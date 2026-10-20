@@ -33,6 +33,7 @@ import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Pressable, Scrol
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { PlateText } from '@/components/PlateText';
 import { VehicleConfirm } from '@/components/VehicleConfirm';
 import { Button, Card, Field, Mono, Notice, Segmented, Txt } from '@/components/ui';
@@ -255,6 +256,7 @@ export default function LogMileageScreen() {
       allowLeave();
       app.logFuel(fuel, parseWhole(typedFuelKm));
       router.back();
+      showSnackbar({ text: app.offline ? `${t('done.fuelSaved')} · ${t('done.onPhone')}` : t('done.fuelSaved') });
       return;
     }
 
@@ -280,6 +282,7 @@ export default function LogMileageScreen() {
       // Opened from the task screen: back to it, now in progress. Opened from Today: the task takes this screen's place.
       if (params.from === 'task') router.back();
       else router.replace({ pathname: '/task/[id]', params: { id: task.id } });
+      showSnackbar({ text: t('done.taskStarted') });
     } else if (mode === 'finish' && task) {
       allowLeave();
       app.completeTask(task, reading, fuel);
@@ -289,10 +292,12 @@ export default function LogMileageScreen() {
       allowLeave();
       app.logOdometer(reading, { kind: mode === 'swap_end' ? 'task_end' : 'task_start', vehicleId: swapVehicleId, taskId: task.id });
       router.back();
+      showSnackbar({ text: t('done.odometerSaved') });
     } else {
       allowLeave();
       app.logOdometer(reading);
       router.back();
+      showSnackbar({ text: app.offline ? `${t('done.odometerSaved')} · ${t('done.onPhone')}` : t('done.odometerSaved') });
     }
   }
 

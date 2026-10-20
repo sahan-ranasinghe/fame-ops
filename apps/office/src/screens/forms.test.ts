@@ -57,7 +57,7 @@ describe("Assign a task", () => {
     expect(decodeURIComponent(url.split("text=")[1])).toBe("New task: Team drop · Matara\nLeave by Mon 12 Oct 06:30\nPickup: Head office\nDrop-off: Matara site\nContact: Ruwan\nOpen Fame Driver for the details.");
   });
   it("says it was sent, or (without approve, §33) that it waits for the fleet admin's OK, with the request to open", () => {
-    expect(assignOutcome({ task_id: "t1" }, "Kamal Perera")).toEqual({ waiting: false, head: "Sent to Kamal Perera.", toast: "Task sent", link: { to: "/tasks/t1", label: "Open task →" } });
+    expect(assignOutcome({ task_id: "t1" }, "Kamal Perera")).toEqual({ waiting: false, head: "Sent to Kamal Perera.", toast: "Task sent to Kamal Perera", link: { to: "/tasks/t1", label: "Open task →" } });
     const waiting = assignOutcome({ waiting_for_approval: true, request_id: "r9", next: "Waiting for the fleet admin's OK · you'll be notified." }, "Kamal Perera");
     expect(waiting).toEqual({
       waiting: true, head: "Waiting for the fleet admin's OK · you'll be notified.", toast: "Waiting for the fleet admin's OK",

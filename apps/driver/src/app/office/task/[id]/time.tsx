@@ -7,19 +7,22 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
-import { Check } from '@/components/icons';
+import { ChevronDown, ChevronUp } from '@/components/icons';
 import { useLeaveGuard } from '@/components/navigation';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { MoreDetails, Stepper } from '@/components/office/Controls';
 import { DriverRows } from '@/components/office/DriverRows';
 import { TimeInput } from '@/components/office/TimeInput';
 import { DepartureNote } from '@/components/office/TripShell';
+import { ChoiceChip, ChoiceRow } from '@/components/patterns/Select';
 import { Button, Field, Plate, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
 import { addDays, colomboDate } from '@/lib/time';
 import { askTargets } from '@/office/askLogic';
+import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { type ChangeFields, changeFieldsOf, changeTaskInput, timeLocked } from '@/office/taskExtrasLogic';
 import { availabilityArgsForTask, plateOf } from '@/office/taskLogic';
@@ -28,7 +31,7 @@ import { groupRows, vehicleLine } from '@/office/trip/formsLogic';
 import { departureText } from '@/office/trip/words';
 import { ANY_TYPES, anyValue, ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
 import type { Availability, FleetError, SettingsResult, SuggestedVehicle, TaskDetail, UpdateTaskResult } from '@/office/types';
-import { BackHeader, Divider, Empty, ErrorNotice, Loading, Screen, StickyActions } from '@/office/ui';
+import { BackHeader, Empty, ErrorNotice, Loading, Screen, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -97,7 +100,10 @@ export default function ChangeTaskScreen() {
       const out = await api.call<UpdateTaskResult & { warnings?: string[] }>('update_task', r.input);
       allowLeave();
       const warnings = out.warnings ?? [];
-      Alert.alert(driverName && r.input.driver ? t('office.task.changedSentTitle', { name: driverName }) : t('office.task.changedTitle'), [t('office.task.timeSavedBody'), ...warnings].join('\n'), [{ text: t('office.common.ok'), onPress: () => router.back() }]);
+      // Hotfix O2-H2, Part 1b: back to the task, a snackbar ("The driver is told."), the warnings wait on the task.
+      setSavedNotice(`task:${id}`, warnings);
+      router.dismissTo({ pathname: '/office/task/[id]', params: { id } });
+      showSnackbar({ text: [driverName && r.input.driver ? t('office.task.changedSentTitle', { name: driverName }) : t('office.task.changedTitle'), t('office.task.timeSavedBody')].join(' · ') });
     } catch (e) {
       setProblem(e as FleetError);
       void q.reload();
@@ -106,21 +112,15 @@ export default function ChangeTaskScreen() {
     }
   }
 
-  const vehicleRow = (v: SuggestedVehicle, disabled: boolean) => (
-    <Pressable key={v.reg_no} accessibilityRole="button" accessibilityState={{ selected: f?.vehicle === v.reg_no, disabled }} disabled={disabled} onPress={() => { set({ vehicle: v.reg_no }); setChoosing(false); }} style={[styles.vehicleRow, disabled && { opacity: 0.5 }]}>
-      <Plate regNo={v.reg_no} />
-      <View style={{ flex: 1 }}>
-        <Txt variant="muted" size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
-        {v.assigned_to ? <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt> : null}
-      </View>
-      {f?.vehicle === v.reg_no && <Check size={22} color={colors.blue} strokeWidth={3} />}
-    </Pressable>
+  const vehicleRow = (v: SuggestedVehicle, disabled: boolean, reason?: string) => (
+    <ChoiceRow key={v.reg_no} selected={f?.vehicle === v.reg_no} onPress={() => { set({ vehicle: v.reg_no }); setChoosing(false); }} disabled={disabled} disabledReason={reason} leading={<Plate regNo={v.reg_no} />} mark="end" accessibilityLabel={v.reg_no} testID={`vehicle-row-${v.reg_no}`}>
+      <Txt variant="muted" size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
+      {v.assigned_to ? <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt> : null}
+    </ChoiceRow>
   );
+  // The shared chip (patterns/Select): the check, the tint and the border when picked.
   const chip = (key: string, on: boolean, label: string, onPress: () => void, plate?: string) => (
-    <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={[styles.chip, on && styles.chipOn]}>
-      {plate ? <Plate regNo={plate} dark={on} /> : null}
-      <Txt variant="strong" size={15} color={on ? '#ffffff' : colors.ink}>{label}</Txt>
-    </Pressable>
+    <ChoiceChip key={key} selected={on} label={label} onPress={onPress} before={plate ? <Plate regNo={plate} /> : undefined} />
   );
 
   return (
@@ -177,7 +177,12 @@ export default function ChangeTaskScreen() {
                 {picked?.vehicle && chip('own', f.vehicle === '', t(picked.vehicle.source === 'on_duty' ? 'office.trip.driversToday' : 'office.trip.driversRegular', { name: picked.name.split(' ')[0] }), () => set({ vehicle: '' }), picked.vehicle.reg_no)}
                 {onDay && !locked && chip('day', f.vehicle === ON_THE_DAY, t('office.trip.onTheDay'), () => set({ vehicle: ON_THE_DAY }))}
                 {onDay && !locked && ANY_TYPES.map(([type]) => chip(`any-${type}`, f.vehicle === anyValue(type), t('office.trip.anyType', { type: t(`vehicleType.${type}`) }), () => set({ vehicle: anyValue(type) })))}
-                {chip('choose', choosing, f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : t('office.trip.choose'), () => setChoosing((v) => !v))}
+                <ChoiceChip
+                  selected={!!f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle)}
+                  label={f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : t('office.trip.choose')}
+                  onPress={() => setChoosing((v) => !v)}
+                  after={choosing ? <ChevronUp size={18} color={colors.muted} /> : <ChevronDown size={18} color={colors.muted} />}
+                />
               </View>
               {choosing && (
                 <View style={{ gap: 6 }}>
@@ -185,7 +190,7 @@ export default function ChangeTaskScreen() {
                   {rows.map((g) => (
                     <View key={g.key} style={{ gap: 2 }}>
                       <Txt variant="label" color={colors.muted} style={{ marginTop: 6 }}>{t(`office.trip.group_${g.key}`).toUpperCase()}</Txt>
-                      {g.rows.map((v, i) => <View key={v.reg_no}>{i > 0 && <Divider />}{vehicleRow(v, g.disabled)}</View>)}
+                      <View accessibilityRole="radiogroup" style={{ gap: 6 }}>{g.rows.map((v) => vehicleRow(v, g.disabled, g.disabled ? t(`office.trip.group_${g.key}`) : undefined))}</View>
                     </View>
                   ))}
                 </View>
@@ -217,9 +222,6 @@ export default function ChangeTaskScreen() {
 
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 14 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
-  vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 8 },
   needs: { backgroundColor: colors.redChip, borderRadius: 12, padding: 12 },
   notes: { minHeight: 80, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, padding: 12, fontSize: 17, color: colors.ink, backgroundColor: colors.card, textAlignVertical: 'top' },
 });

@@ -1063,7 +1063,6 @@
       "cancelPlansChanged": "Plans changed",
       "cancelNoVehicle": "No vehicle",
       "cancelOther": "Other",
-      "cancelledTitle": "Task cancelled",
       "cancelling": "Cancelling…",
       "requesterPush": "Requester {name} gets a push for every change",
       "nextStop": "next: {place}",
@@ -1079,8 +1078,6 @@
       "reopenNote": "A word for the history (optional)",
       "reopenFinishedEarly": "Finished too soon",
       "reopenWrongReading": "Wrong end reading",
-      "reopenedTitle": "Task reopened",
-      "reopenedBody": "The driver finishes it again.",
       "timeDay": "Day",
       "timeLeave": "Leave by",
       "timeNote": "The planned times move with the leave-by. The driver is told what changed.",
@@ -1141,8 +1138,7 @@
       "declined": "declined",
       "declinedThis": "Declined this task · {why}",
       "giveTo": "Give to {name} · {plate}",
-      "pickDriver": "Pick a driver",
-      "givenTitle": "Given to {name}"
+      "pickDriver": "Pick a driver"
     },
     "alerts": {
       "above": "What happened, for you",
@@ -1162,9 +1158,6 @@
       "phonePlaceholder": "07X XXX XXXX · empty removes it",
       "phoneNeeded": "Add your phone number so drivers can call you.",
       "saved": "Saved.",
-      "email": "Work email",
-      "notifications": "Notifications",
-      "noEvents": "No notification settings for this account.",
       "app": "App",
       "language": "Language",
       "officePhone": "Office phone",
@@ -1409,19 +1402,9 @@
       "whatsappName": "WhatsApp {name}",
       "pickAnotherVehicle": "Pick another vehicle",
       "pickAnotherDriver": "Pick another driver",
-      "outcomeSent": "Sent to {name}",
-      "outcomeWaiting": "Waiting for the fleet admin's OK",
-      "outcomeWaitingBody": "This task waits for the fleet admin's OK, then goes to the driver. You'll be notified.",
-      "outcomeInApp": "The task is in their Fame Fleet app.",
-      "outcomeRequestSent": "Request sent",
-      "outcomeBooked": "Booked",
-      "outcomeBookedBody": "{who} has {vehicle} on {when}.",
-      "outcomeSaved": "Changes saved",
       "outcomeLeaveBy": "Leave by {time}",
-      "openTask": "Open task",
       "theBoard": "The board",
       "myTrips": "My trips",
-      "whatsappDriver": "WhatsApp the driver",
       "done": "Done",
       "warningsTitle": "Warnings",
       "wa_newTask": "New task",
@@ -1444,7 +1427,6 @@
       "legSource_estimate": "estimate",
       "endsAtTime": "ends {time}",
       "needVehicle": "Pick a vehicle: this driver holds none today and has no regular one.",
-      "openRequest": "Open the request",
       "reapprovalNotice": "This booking is approved: your change needs re-approval.",
       "saveReapproval": "Save · ask for re-approval",
       "reapprovalOutcome": "The office will decide again.",
@@ -2118,6 +2100,152 @@
       "requester": "Requester",
       "viewer": "Viewer",
       "all": "Everything"
+    },
+    "notif": {
+      "title": "Notifications",
+      "pause": "Pause all notifications",
+      "pauseText": "Nothing reaches you until you turn this off",
+      "pausedNote": "Paused. Turn off Pause all to change these.",
+      "allOn": "All on",
+      "allOff": "Off",
+      "nOfM": "{on} of {total} on",
+      "stateOn": "On",
+      "statePaused": "Paused",
+      "stateSomeOff": "Some off",
+      "stateNone": "None for you",
+      "notSaved": "Not saved. Check the connection.",
+      "tryAgain": "Try again",
+      "tellMe": "Tell me about",
+      "noEvents": "Your permissions bring no notifications.",
+      "phoneSound": "Phone sound and vibration",
+      "phoneSoundText": "In Android's settings, each kind has its own sound",
+      "group": {
+        "requests": {
+          "title": "Requests and approvals"
+        },
+        "tasks": {
+          "title": "Tasks and drivers"
+        },
+        "drivers": {
+          "title": "Driver questions and trips"
+        },
+        "issues": {
+          "title": "Issues"
+        },
+        "vehicles": {
+          "title": "Vehicles and bookings"
+        },
+        "mine": {
+          "title": "My trips",
+          "sub": "Things I asked for"
+        },
+        "other": {
+          "title": "Other"
+        }
+      },
+      "ev": {
+        "request_created": {
+          "title": "New vehicle request",
+          "text": "Waits for your decision"
+        },
+        "request_changed": {
+          "title": "Approved request changed",
+          "text": "Needs your approval again"
+        },
+        "request_not_decided": {
+          "title": "Not decided, leaves in 30 min",
+          "text": "A request or a proposed task"
+        },
+        "request_late": {
+          "title": "Leave-by passed, not decided",
+          "text": "It waits until someone decides"
+        },
+        "task_declined": {
+          "title": "Driver can't do a task",
+          "text": "It needs another driver"
+        },
+        "task_not_accepted": {
+          "title": "Task not accepted in time",
+          "text": "It needs a driver"
+        },
+        "task_vehicle_needed": {
+          "title": "Driver needs another vehicle",
+          "text": "After a breakdown or an accident"
+        },
+        "task_running_late": {
+          "title": "Driver running late",
+          "text": "10, 15, 30 minutes or more"
+        },
+        "task_stop_skipped": {
+          "title": "Driver skips a stop",
+          "text": "With the reason"
+        },
+        "ask_answered": {
+          "title": "Driver answers your question"
+        },
+        "trip_personal": {
+          "title": "Driver starts a personal trip",
+          "text": "Where to, the vehicle and the time"
+        },
+        "issue_opened": {
+          "title": "Critical issue",
+          "text": "A breakdown, an accident, an expired document"
+        },
+        "issue_assigned": {
+          "title": "Issue given to you"
+        },
+        "vehicle_booked": {
+          "title": "Your vehicle is booked",
+          "text": "A vehicle you look after"
+        },
+        "vehicle_booking_cancelled": {
+          "title": "Your vehicle's booking cancelled",
+          "text": "A vehicle you look after"
+        },
+        "booking_changed": {
+          "title": "Booking changed by the office",
+          "text": "The time, vehicle or driver"
+        },
+        "request_decided": {
+          "title": "Request decided",
+          "text": "Approved or declined"
+        },
+        "request_redecided": {
+          "title": "Changed request decided",
+          "text": "Kept, changed or declined"
+        },
+        "request_on_the_way": {
+          "title": "Driver on the way"
+        },
+        "request_running_late": {
+          "title": "Driver running late"
+        },
+        "request_arrived": {
+          "title": "Driver arrived",
+          "text": "At the first pickup"
+        },
+        "request_driver_changed": {
+          "title": "Driver changed"
+        },
+        "request_cancelled": {
+          "title": "Trip cancelled",
+          "text": "By the office"
+        }
+      }
+    },
+    "saved": {
+      "taskAssigned": "Task sent to {name}",
+      "taskWaiting": "Waiting for the fleet admin's OK",
+      "requestSent": "Request sent",
+      "booked": "Booking saved",
+      "changesSaved": "Changes saved",
+      "stopsSaved": "Stops saved",
+      "whatsapp": "WhatsApp",
+      "warningsTitle": "Please check",
+      "view": "View",
+      "cancelled": "Task cancelled",
+      "reopened": "Task reopened · the driver finishes it again",
+      "driverGiven": "Task sent to {name}"
     }
   },
   "crash": {
@@ -2129,5 +2257,11 @@
     "hideDetails": "Hide details",
     "copy": "Copy",
     "soft": "Something didn't work. Try again."
+  },
+  "done": {
+    "fuelSaved": "Fuel saved",
+    "odometerSaved": "Odometer saved",
+    "taskStarted": "Task started",
+    "onPhone": "on the phone, sent when online"
   }
 }

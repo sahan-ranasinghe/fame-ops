@@ -7,9 +7,11 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { useLeaveGuard } from '@/components/navigation';
+import { ChoiceChips } from '@/components/patterns/Select';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Txt } from '@/components/ui';
 import { companyInput, emptyVehicle, VEHICLE_TYPES, vehicleFormDirty, type VehicleFields, vehicleInput } from '@/office/manageLogic';
 import { useOffice, useTool } from '@/office/state';
@@ -60,9 +62,10 @@ export default function VehicleFormScreen() {
       const out = await api.call<{ registered?: { reg_no?: string } }>(v.tool, v.input);
       const saved = out?.registered?.reg_no ?? String(v.input.reg_no);
       allowLeave();
-      Alert.alert(isNew ? t('office.vehicles.registeredTitle', { plate: saved }) : t('office.vehicles.updatedTitle'), isNew ? t('office.vehicles.registeredBody') : undefined, [
-        { text: t('office.common.ok'), onPress: () => (isNew ? router.replace({ pathname: '/office/vehicles/[reg]', params: { reg: saved } }) : router.back()) },
-      ]);
+      // Hotfix O2-H2, Part 1b: the vehicle opens (a new one in the form's place, an edit back to it), a snackbar says so.
+      if (isNew) router.replace({ pathname: '/office/vehicles/[reg]', params: { reg: saved } });
+      else router.back();
+      showSnackbar(isNew ? { text: `${t('office.vehicles.registeredTitle', { plate: saved })} · ${t('office.vehicles.registeredBody')}`, ms: 6000 } : { text: t('office.vehicles.updatedTitle') });
     } catch (e) {
       setProblem(e as FleetError);
     } finally {
@@ -104,17 +107,9 @@ export default function VehicleFormScreen() {
       {!isNew && opts.now != null && opts.now !== '' ? <Txt variant="small">{t('office.vehicles.now', { value: String(opts.now) })}</Txt> : null}
     </View>
   );
+  // The shared chips (patterns/Select): the check, the tint and the border on the picked one.
   const chips = <K extends string>(value: K | '', options: { key: K | ''; label: string }[], onPick: (k: K | '') => void) => (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {options.map((o) => {
-        const on = value === o.key;
-        return (
-          <Pressable key={o.key || '_'} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => onPick(o.key)} style={[styles.chip, on && styles.chipOn]}>
-            <Txt variant="strong" size={15} color={on ? '#ffffff' : colors.ink}>{o.label}</Txt>
-          </Pressable>
-        );
-      })}
-    </View>
+    <ChoiceChips<K | ''> options={options} value={value} onChange={onPick} />
   );
   const keepOrNone = { key: '' as const, label: t(isNew ? 'office.vehicles.none' : 'office.vehicles.keep') };
   const activeDrivers = (drivers.data?.drivers ?? []).filter((d) => d.active !== false);
@@ -199,7 +194,5 @@ export default function VehicleFormScreen() {
 
 const styles = StyleSheet.create({
   input: { minHeight: 52, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 14, fontSize: 17, color: colors.ink, backgroundColor: colors.card },
-  chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 14, padding: 12, gap: 10 },
 });
