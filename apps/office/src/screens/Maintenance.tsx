@@ -12,9 +12,11 @@ import type { Overview, VehicleReport, VehicleReports } from "../data/types";
 import { attIcon, cap, levelTone, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, canOpenTask, type FleetError } from "../transport/types";
-import { Chips, Notice, Pill, Plate } from "../ui/basics";
+import { Notice, Pill, Plate } from "../ui/basics";
 import { Icon } from "../ui/icons";
-import { EmptyLine, ListHeader, SearchBox, usePagedList, useUrlFilter, useUrlSearch } from "../ui/ListKit";
+import { FilterBar } from "../ui/FilterBar";
+import { pairsDef } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, SearchBox, SkeletonRows, usePagedList, useUrlFilter, useUrlSearch } from "../ui/ListKit";
 import { useToast } from "../ui/Toast";
 import { ListFooter, ListStale, ListWaiting, useLocalPages } from "./listLocal";
 import { dueFromVehicles } from "./maintenanceLogic";
@@ -120,19 +122,25 @@ export function Maintenance() {
     <section className="view">
       <div className="ph">
         <div><div className="eyebrow">Problems reported by drivers, service and documents</div><h1>Maintenance</h1></div>
-        {canReports && <Chips options={FILTERS} value={filter} onChange={setFilter} />}
       </div>
       <div className="stack">
         <div className="section-t">Problems reported by drivers</div>
         {!canReports && <Notice tone="info">Problem reports need the Issues permission. Ask an admin for access if you handle them.</Notice>}
+        {canReports && (
+          <FilterBar
+            search={<SearchBox value={search} onChange={setSearch} placeholder="Plate, driver, problem or note" />}
+            filters={[pairsDef("status", "Status", FILTERS, "not_closed")]}
+            values={{ status: filter }}
+            onChange={(v) => setFilter(((v.status as string) || "not_closed") as Filter)}
+          />
+        )}
         {canReports && !noConnector && <ListWaiting q={q} loading="Loading reports…" />}
         {canReports && d && (
           <div className="stack" style={q.stale ? { opacity: 0.6 } : undefined} aria-busy={q.updating || q.stale || undefined} data-testid="reports-list">
             <div className="card">
-              <ListHeader title={label} count={list.total} updating={q.updating || q.stale}
-                right={<SearchBox value={search} onChange={setSearch} placeholder="Plate, driver, problem or note" />} />
+              <ListHeader title={label} count={list.total} updating={q.updating || q.stale} />
               <ListStale q={q} />
-              {!list.items.length && <EmptyLine>{q.stale ? "Loading…" : search ? `No report matches "${search}".` : reportsEmpty(filter)}</EmptyLine>}
+              {!list.items.length && (q.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{search ? `No report matches "${search}".` : reportsEmpty(filter)}</EmptyLine>)}
             </div>
             {list.items.map((r) => <ReportCard key={r.id} r={r} />)}
             {list.total > list.items.length || list.pages > 1 ? <div className="card"><ListFooter list={list} /></div> : null}

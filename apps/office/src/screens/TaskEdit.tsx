@@ -23,7 +23,7 @@ import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { firstName } from "../ui/driverRowLogic";
 import { cameFromTask, PageTop, StickyActions, useAfterSave } from "../ui/Page";
-import { TimeInput } from "../ui/TimeInput";
+import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
 import { linkedDriver } from "./asks/askLogic";
 import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
@@ -33,6 +33,7 @@ import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOn
 import { knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 import { TONE, useBoardQuery, useTask } from "./TaskDetail";
 import { leaveIn, TaskSummary } from "./TaskSummary";
+import { TripDayPicker } from "../ui/DayPicker";
 
 interface EditForm {
   driver: string;
@@ -302,13 +303,13 @@ export function TaskEdit() {
                     hint={f.driver && !def && !onDay ? `Keeps ${currentPlate || "the vehicle"}: this driver holds none today and has no regular one.` : undefined} />
                 </div>
                 <div className="grid2">
-                  <div className="field"><label htmlFor="ra-date">Day</label><input type="date" id="ra-date" value={f.date} onChange={(e) => set("date", e.target.value)} /></div>
+                  <div className="field"><span className="lab">Day</span><TripDayPicker id="ra-date" label="Day" value={f.date} onChange={(d) => set("date", d)} /></div>
                   <div className="field">
                     <label htmlFor="ra-time">Leave by</label>
-                    <TimeInput id="ra-time" value={f.time} onCommit={(time) => set("time", time)} />
+                    <TimeField id="ra-time" value={f.time} onCommit={(time) => set("time", time)} />
                     <DepartureNote check={check} onUse={(time) => set("time", time)} />
                   </div>
-                  <div className="field"><label htmlFor="ra-end">Vehicle free again by</label><TimeInput id="ra-end" value={f.end} onCommit={(end) => set("end", end)} /></div>
+                  <div className="field"><label htmlFor="ra-end">Vehicle free again by</label><TimeField id="ra-end" value={f.end} onCommit={(end) => set("end", end)} /></div>
                 </div>
               </>
             )}

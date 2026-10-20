@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiTransport, mapHttpError } from "./api";
+import { errText } from "./errors";
+import { READ_TIMEOUT_MS, timeoutFor } from "./retryRule";
 
 const reply = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -132,5 +134,60 @@ describe("ApiTransport", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1);
     stop();
     vi.useRealTimers();
+  });
+});
+
+// docs/ui-patterns.md §5: no call waits forever (retryRule.ts timeoutFor).
+describe("ApiTransport: the time limits", () => {
+  /** A fetch that never answers until it is aborted. */
+  const hang = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_res, rej) => {
+    init?.signal?.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+  }));
+
+  it("a read gives up after 20 s with 'took too long', a write after 30 s as maybe not saved, a suggestion after 15 s", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = transport(hang as unknown as typeof fetch);
+      let read: unknown = "pending";
+      void t.call("task_board", { date: "2026-10-20" }).catch((e) => { read = e; });
+      await vi.advanceTimersByTimeAsync(19_999);
+      expect(read).toBe("pending");
+      await vi.advanceTimersByTimeAsync(1);
+      expect(read).toMatchObject({ code: "timeout", message: "Fame Fleet took too long to answer." });
+
+      let write: unknown = "pending";
+      void t.call("cancel_task", { task_id: "t1", reason: "x" }).catch((e) => { write = e; });
+      await vi.advanceTimersByTimeAsync(29_999);
+      expect(write).toBe("pending");
+      await vi.advanceTimersByTimeAsync(1);
+      expect(write).toMatchObject({ code: "timeout", write: true });
+
+      let suggest: unknown = "pending";
+      void t.call("search_places", { text: "Galle" }).catch((e) => { suggest = e; });
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(suggest).toMatchObject({ code: "timeout" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the time limits per call, and the sentences with Try again", () => {
+    expect(timeoutFor()).toBe(READ_TIMEOUT_MS);
+    expect(timeoutFor("list_issues")).toBe(20_000);
+    expect(timeoutFor("decide_request")).toBe(30_000);
+    expect(timeoutFor("search_places")).toBe(15_000);
+    expect(errText({ code: "timeout", message: "" })).toEqual(["Fame Fleet didn’t answer in time. Try again.", "retry"]);
+    expect(errText({ code: "timeout", message: "", write: true })[0]).toContain("may not have been saved");
+  });
+
+  it("an answer in time clears the timer: nothing fires later", async () => {
+    vi.useFakeTimers();
+    try {
+      const fetchFn = vi.fn(async () => reply(200, { result: { ok: true } }));
+      expect(await transport(fetchFn as typeof fetch).call("task_board", {})).toEqual({ ok: true });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

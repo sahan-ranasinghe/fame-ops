@@ -121,7 +121,7 @@ describe("Who's available: the one driver row and Ask drivers (H2, H3)", () => {
     const sheet = screen.getByRole("dialog", { name: "Ask drivers" });
     expect((within(sheet).getByLabelText("Ask Kamal Perera") as HTMLInputElement).checked).toBe(true);
     expect((within(sheet).getByLabelText("Ask Ruwan Jaya") as HTMLInputElement).checked).toBe(false);
-    expect((within(sheet).getByLabelText("Day") as HTMLInputElement).value).toBe("2026-10-21");
+    expect(within(sheet).getByRole("group", { name: "Day" }).getAttribute("data-value")).toBe("2026-10-21");
     vi.setSystemTime(new Date("2026-10-20T08:00:00+05:30"));
     fireEvent.click(within(sheet).getByTestId("sheet-send"));
     await settle();

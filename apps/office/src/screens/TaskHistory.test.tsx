@@ -1,6 +1,7 @@
 // Tasks → History (Phase 7 §8): this week by default, the filters into list_tasks, the rows with their tags, the totals
 // and the "more" sentence; the previous rows stay (marked Updating…) while other filters load; a row opens the task.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { applyFilter } from "../test/controls";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { describe, expect, it } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -101,7 +102,7 @@ describe("Tasks → History", () => {
     const t = await mount();
     await screen.findAllByTestId("history-row");
     t.hold = true;
-    fireEvent.change(screen.getByLabelText("Kind"), { target: { value: "self" } });
+    applyFilter("Kind", "Driver-started");
     await act(async () => { await Promise.resolve(); });
     expect(t.argsOf("list_tasks").at(-1)).toEqual({ from: week.from, to: week.to, kind: "self", limit: 25 });
     expect(screen.getByTestId("where").textContent).toBe("/tasks/history?kind=self");
@@ -126,7 +127,9 @@ describe("Tasks → History", () => {
   it("Hotfix 3: the count in the header, the search into the URL and the tool, Missed among the statuses", async () => {
     const t = await mount(dispatcher, "/tasks/history?status=missed");
     expect(t.argsOf("list_tasks")[0]).toEqual({ from: week.from, to: week.to, status: "missed", limit: 25 });
-    expect((screen.getByLabelText("Status") as HTMLSelectElement).value).toBe("missed");
+    // The filter in use is a chip under the search bar (docs/ui-patterns.md §1); the Filter button counts it.
+    expect(within(screen.getByTestId("filter-chips")).getByText("Status: Missed")).toBeTruthy();
+    expect(screen.getByTestId("filter-button").textContent).toContain("1");
     await screen.findAllByTestId("history-row");
     expect(screen.getByTestId("list-count").textContent).toBe(" · 2");
     const box = screen.getByLabelText("Search");

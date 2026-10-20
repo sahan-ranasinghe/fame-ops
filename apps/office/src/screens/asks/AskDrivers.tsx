@@ -16,10 +16,11 @@ import { Avatar, Chips, Notice, Pill } from "../../ui/basics";
 import { DraftBanner } from "../../ui/DraftBanner";
 import { Icon } from "../../ui/icons";
 import { PageTop, StickyActions } from "../../ui/Page";
-import { TimeInput } from "../../ui/TimeInput";
+import { TimeField } from "../../ui/TimeField";
 import { useToast } from "../../ui/Toast";
 import { readAskLink } from "./askLink";
 import { ASK_KINDS, type AskForm, askFormFrom, askInput, type AskWho, MAX_ASK_NOTE } from "./askLogic";
+import { TripDayPicker } from "../../ui/DayPicker";
 
 /** A driver as ask_drivers names them: the username, else the name. */
 const idOf = (d: Pick<BoardDriver, "username" | "name">) => d.username ?? d.name;
@@ -98,9 +99,9 @@ function AskDriversForm() {
           </div>
           {trip && (
             <div className="ask-trip">
-              <div className="field"><label htmlFor="ask-date">Day</label><input type="date" id="ask-date" value={f.date} min={today()} onChange={(e) => set("date", e.target.value)} /></div>
-              <div className="field"><label htmlFor="ask-from">From</label><TimeInput id="ask-from" value={f.from} onCommit={(v) => set("from", v)} /></div>
-              <div className="field"><label htmlFor="ask-to">To <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label><TimeInput id="ask-to" value={f.to} onCommit={(v) => set("to", v)} /></div>
+              <div className="field"><span className="lab">Day</span><TripDayPicker id="ask-date" label="Day" value={f.date} onChange={(d) => set("date", d)} /></div>
+              <div className="field"><label htmlFor="ask-from">From</label><TimeField id="ask-from" value={f.from} onCommit={(v) => set("from", v)} /></div>
+              <div className="field"><label htmlFor="ask-to">To <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label><TimeField id="ask-to" value={f.to} onCommit={(v) => set("to", v)} /></div>
             </div>
           )}
           <div className="field">

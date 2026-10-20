@@ -3,6 +3,7 @@
 // and Dismiss close the panel and patch the row in place (the other rows keep their DOM nodes; no reload, no flash).
 import { cursorAt, offsetOf } from "@fleet/paging";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { applyFilter, pickPreset } from "../test/controls";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -118,15 +119,17 @@ describe("the issues list (§9)", () => {
     expect(t.argsOf("list_issues")[0]).toEqual({ status: "active", from: month.from, to: month.to, sort: "urgent", snoozed: false, limit: 25 });
     await screen.findByText("Vehicle problem: breakdown");
     expect(rowOf("Vehicle problem: breakdown").textContent).toContain(`Opened ${month.from} 08:00 · System · Vehicle problem`);
-    expect(screen.getByRole("tab", { name: "Active" }).getAttribute("aria-selected")).toBe("true");
+    // Active is the default: no chip, the Filter button counts nothing; the header says it.
+    expect(screen.queryByTestId("filter-chips")).toBeNull();
+    expect(within(screen.getByTestId("issues-list")).getByRole("heading").textContent).toContain("Active");
 
-    fireEvent.click(screen.getByRole("tab", { name: "Dismissed" }));
+    applyFilter("Status", "Dismissed");
     await flush();
     expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "dismissed" });
     expect(screen.getByTestId("where").textContent).toBe("/issues?status=dismissed");
     expect(await screen.findByText(/^Nothing dismissed/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Today" }));
+    pickPreset("Today");
     await flush();
     expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "dismissed", from: colomboDay(), to: colomboDay() });
   }, 20_000);
@@ -198,7 +201,7 @@ describe("the issues list (§9)", () => {
     expect(rowOf("Service due")).toBeTruthy();
 
     // Under Resolved it shows who resolved it and when.
-    fireEvent.click(screen.getByRole("tab", { name: "Resolved" }));
+    applyFilter("Status", "Resolved");
     fireEvent.click(await screen.findByRole("link", { name: /Vehicle problem: breakdown/ }));
     const panel = await screen.findByTestId("issue-page");
     expect((await within(panel).findByTestId("issue-facts")).textContent).toContain(`Resolved${month.from} 11:00 by Sahan`);
@@ -271,7 +274,7 @@ describe("the issues list a page at a time (Hotfix 3, L3)", () => {
     const t = await mount("/issues", rows);
     await screen.findByText("Vehicle problem: breakdown");
     expect(within(screen.getByTestId("issues-list")).queryByText("Documents missing")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Snoozed · 1" }));
+    applyFilter("Status", "Snoozed · 1");
     await flush();
     expect(t.argsOf("list_issues").at(-1)).toMatchObject({ status: "active", snoozed: true });
     expect(screen.getByTestId("where").textContent).toBe("/issues?status=snoozed");

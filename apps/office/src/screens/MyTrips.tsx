@@ -15,12 +15,14 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import type { CreatedTaskCard, MyTrips as MyTripsData, RequestCard } from "../data/types";
 import { errText } from "../transport/errors";
-import { Avatar, Chips, Loading, Notice, Pill, Plate, VehicleThumb } from "../ui/basics";
+import { Avatar, Segmented, Notice, Pill, Plate, VehicleThumb } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
-import { DateRange } from "../ui/DateRange";
+import { DateRangePicker } from "../ui/DateRangePicker";
 import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
-import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, usePagedList } from "../ui/ListKit";
+import { FilterBar } from "../ui/FilterBar";
+import { pairsDef } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, SkeletonRows, usePagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import {
   createdLive,
@@ -37,7 +39,7 @@ import {
   TRIP_SHOW_OPTIONS,
   TRIP_STATUS_OPTIONS,
   totalsLine,
-  type TripShow,
+  type TripStatus,
   vehicleOf,
 } from "./myTripsLogic";
 import { TripCardsContext, TRIPS_KEY, TRIPS_PATH, useMyTripsArgs } from "./myTripsQuery";
@@ -132,17 +134,6 @@ function CreatedTaskRow({ t }: { t: CreatedTaskCard }) {
   );
 }
 
-/** All · Requests · Tasks I created, as tabs above the list (the status filter is the chips). */
-function ShowTabs({ value, onChange }: { value: TripShow; onChange: (s: TripShow) => void }) {
-  return (
-    <div className="chips" role="tablist" aria-label="Show">
-      {TRIP_SHOW_OPTIONS.map(([k, label]) => (
-        <button key={k} type="button" role="tab" className="chip" aria-selected={value === k} onClick={() => onChange(k)}>{label}</button>
-      ))}
-    </div>
-  );
-}
-
 export function MyTrips() {
   const { me, noConnector, managePermissions } = useFleet();
   const { search: query } = useLocation();
@@ -174,14 +165,15 @@ export function MyTrips() {
           {asks && <Link className="btn primary home-action phone-only" to="/requests/new" style={{ marginBottom: 18 }}><Icon name="plus" />New request</Link>}
           <div className="stack">
             <div className="card card-b" style={{ display: "grid", gap: 12 }}>
-              <ShowTabs value={show} onChange={setShow} />
-              <DateRange value={dates} />
-              <div role="group" aria-label="Status">
-                <Chips options={TRIP_STATUS_OPTIONS} value={status} onChange={setStatus} />
-              </div>
-              <div className="filters" style={{ marginBottom: 0 }}>
-                <SearchBox value={search} onChange={setSearch} placeholder="Place, title, driver or plate" />
-              </div>
+              {/* All · Requests · Tasks I created switches the view; the status is the Filter (docs/ui-patterns.md §1, §8). */}
+              <Segmented label="Show" options={TRIP_SHOW_OPTIONS} value={show} onChange={setShow} />
+              <DateRangePicker value={dates} />
+              <FilterBar
+                search={<SearchBox value={search} onChange={setSearch} placeholder="Place, title, driver or plate" />}
+                filters={[pairsDef("status", "Status", TRIP_STATUS_OPTIONS, "all")]}
+                values={{ status }}
+                onChange={(v) => setStatus(((v.status as string) || "all") as TripStatus)}
+              />
             </div>
 
             {!allowed ? (
@@ -196,7 +188,7 @@ export function MyTrips() {
                 >
                   {errText(q.err)[0]}
                 </Notice>
-              ) : <Loading>Loading your trips…</Loading>
+              ) : <div className="card"><SkeletonRows label="Loading your trips…" /></div>
             ) : q.err && q.stale ? (
               // The rows on screen are other days' or another filter's: say what went wrong instead.
               <Notice tone="bad" action={<button type="button" className="btn small" onClick={q.refetch}>Try again</button>}>{errText(q.err)[0]}</Notice>
@@ -217,7 +209,7 @@ export function MyTrips() {
                       </table>
                     </div>
                   ) : (
-                    <EmptyLine>{q.stale ? "Loading…" : emptyText(status, asks, show, search)}</EmptyLine>
+                    q.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{emptyText(status, asks, show, search)}</EmptyLine>
                   )}
                   <LoadMore list={list} />
                   <Pager list={list} />

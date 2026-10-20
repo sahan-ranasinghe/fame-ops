@@ -8,7 +8,7 @@
 //   OFFICE_MCP_URL   http://127.0.0.1:54321/functions/v1/office-mcp
 //   OFFICE_MCP_KEY   the local shared key (never the real one)
 //   API_URL, ANON_KEY  the local stack (scripts/test-office-local.sh sets them)
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./offline";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -34,6 +34,51 @@ async function boardCard(page: Page, text: string) {
     await page.waitForTimeout(n ? 800 : 400);
   }
   return card;
+}
+
+// ---- The standard controls (docs/ui-patterns.md, Stage 0): the steps a person takes with them. ----
+const colomboDay = (offsetDays = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(Date.now() + offsetDays * 864e5));
+
+/** Taps a day on the open calendar (`sheet`), moving month by month until it shows. */
+async function tapCalendarDay(sheet: Locator, day: string) {
+  for (let i = 0; i < 36; i++) {
+    const cell = sheet.locator(`[data-day="${day}"]`);
+    if (await cell.count()) return cell.click();
+    const first = (await sheet.locator("[data-day]").first().getAttribute("data-day")) ?? "";
+    await sheet.getByRole("button", { name: day < first ? "Previous month" : "Next month" }).click();
+  }
+  throw new Error(`no day ${day} on the calendar`);
+}
+
+/** A trip's day (the group named `label`: "Day", "Date"): Today, Tomorrow, else Pick a date and the calendar. */
+async function pickTripDay(page: Page, label: string, day: string, scope: Page | Locator = page) {
+  const group = scope.getByRole("group", { name: label, exact: true });
+  if (day === colomboDay(0)) return group.getByRole("button", { name: "Today", exact: true }).click();
+  if (day === colomboDay(1)) return group.getByRole("button", { name: "Tomorrow", exact: true }).click();
+  await group.getByRole("button", { name: /Pick a date|pick another date/ }).click();
+  await tapCalendarDay(page.getByTestId("day-sheet"), day);
+}
+
+/** The Filter button → the panel → a choice in a section → Apply (a list's filters, docs/ui-patterns.md §1). */
+async function applyFilter(page: Page, section: string, choice: string | RegExp) {
+  await page.getByTestId("filter-button").first().click();
+  const panel = page.getByTestId("filter-panel");
+  await panel.getByRole("group", { name: section, exact: true }).getByLabel(choice, { exact: typeof choice === "string" }).check();
+  await panel.getByTestId("filter-apply").click();
+  await expect(panel).toHaveCount(0);
+}
+
+/** The date-range picker's preset ("Yesterday", "Today"): it applies at once. */
+async function pickPreset(page: Page, preset: string) {
+  await page.getByTestId("date-range-button").click();
+  await page.getByTestId("date-range-sheet").getByRole("button", { name: preset, exact: true }).click();
+}
+
+/** The week strip (a day of history): the day's cell, the week before when it is not on this one. */
+async function pickStripDay(page: Page, day: string) {
+  const strip = page.getByTestId("day-strip");
+  if (!(await strip.locator(`[data-day="${day}"]`).count())) await strip.getByRole("button", { name: "Previous week" }).click();
+  await strip.locator(`[data-day="${day}"]`).click();
 }
 
 /** The driver's side, as the Fame Driver app does it: sign in with the PIN, then REST with that session. */
@@ -221,10 +266,11 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await timeline.getByRole("button").first().click();
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
-  await page.getByRole("button", { name: "Yesterday" }).click();
+  // Stage 0: the driver's day is a week strip (yesterday's cell; the week before when today is a Monday).
+  await pickStripDay(page, colomboDay(-1));
   await expect(dp).toContainText("No location was shared", { timeout: 10000 });
-  // The date bar's Today (the menu has a section called Today too).
-  await page.getByTestId("date-range").getByRole("button", { name: "Today" }).click();
+  // The strip's Today (the menu has a section called Today too).
+  await page.getByTestId("day-strip").getByRole("button", { name: "Today", exact: true }).click();
   await expect(timeline).toContainText("Driving", { timeout: 10000 });
   await page.getByRole("link", { name: "Live locations" }).first().click();
   await expect(page.getByRole("heading", { name: "Live locations" })).toBeVisible();
@@ -417,10 +463,10 @@ test("a driver's day in the office (Phase 7): on duty on Live, moved to another 
   await expect(period).toContainText(plateA);
   await expect(period).toContainText(plateB);
   await expect(period).toContainText("office");
-  await page.getByTestId("date-range").getByRole("button", { name: "Yesterday" }).click();
+  await pickPreset(page, "Yesterday");
   await expect(page).toHaveURL(/range=yesterday/);
   await expect(page.getByTestId("duty-row").filter({ hasText: driver.name })).toHaveCount(0);
-  await page.getByTestId("date-range").getByRole("button", { name: "Today" }).click();
+  await pickPreset(page, "Today");
   await expect(page.getByTestId("duty-row").filter({ hasText: driver.name })).toBeVisible();
 });
 
@@ -819,7 +865,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     // Assign a task: a row click fills the driver and leaves the vehicle to them (their vehicle today).
     await page.goto("/tasks/new");
-    await page.getByLabel("Date", { exact: true }).fill(day);
+    await pickTripDay(page, "Date", day);
     await page.getByLabel("Leave by", { exact: true }).fill("13:00");
     await page.getByLabel("Stop 1", { exact: true }).fill(depot.name);
     await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
@@ -890,7 +936,7 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   await page.getByRole("button", { name: "Take" }).click();
   await expect(page.getByRole("status")).toHaveText("Taken");
   await expect(page.getByTestId("issue-page")).toHaveCount(0);
-  await page.getByRole("tab", { name: "In progress" }).click();
+  await applyFilter(page, "Status", "In progress");
   await ourRow().click();
   await expect(page.getByTestId("issue-facts")).toContainText("E2E Fleet Admin");
   await expect(page.getByTestId("issue-history")).toContainText("assigned it to E2E Fleet Admin");
@@ -903,7 +949,7 @@ test("a vehicle problem becomes an issue: the bell, the issue page, Take, a note
   await expect(page.getByRole("status")).toHaveText("Issue resolved");
   await expect(page.getByTestId("issue-page")).toHaveCount(0);
   await expect(page).toHaveURL(/status=in_progress/);
-  await page.getByRole("tab", { name: "Resolved" }).click();
+  await applyFilter(page, "Status", "Resolved");
   await ourRow().click();
   await expect(page.getByText(/Resolved by E2E Fleet Admin/)).toBeVisible();
   await expect(page.getByTestId("issue-report")).toContainText("closed");
@@ -944,7 +990,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   // New request → Assign now: the Free group lists the pool van; pick it and a free driver; Book now.
   await page.goto("/requests/new");
   await page.getByLabel("On behalf of").fill("Someone from HR");
-  await page.getByLabel("Day").fill(day);
+  await pickTripDay(page, "Day", day);
   await page.getByLabel("Leave by", { exact: true }).fill("09:30");
   await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
@@ -962,7 +1008,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
 
   // The request is approved, booked directly; its timeline says so; Cancel booking with a reason.
   await page.goto("/requests");
-  await page.getByRole("button", { name: "Approved", exact: true }).click();
+  await applyFilter(page, "Status", "Approved");
   await page.locator("tr", { hasText: "Someone from HR" }).first().click();
   // Hotfix 3 (L3): the row keeps the list's filter in its link (the list beside the detail keeps it).
   await expect(page).toHaveURL(/\/requests\/[0-9a-f-]+(\?.*)?$/);
@@ -1028,7 +1074,7 @@ test("a requester changes an approved booking; the approver sees who is availabl
   await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
   await page.goto("/requests/new");
   await page.getByLabel("On behalf of").fill(visitor);
-  await page.getByLabel("Day").fill(day);
+  await pickTripDay(page, "Day", day);
   await page.getByLabel("Leave by", { exact: true }).fill("09:00");
   await page.getByLabel("Back by").fill("12:00");
   await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
@@ -1146,7 +1192,7 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   // The Fuel page from the menu: this month, this vehicle; the two fills with their video chips.
   await page.getByRole("link", { name: "Fuel" }).first().click();
   await expect(page).toHaveURL(/\/fuel/);
-  await page.getByLabel("Vehicle").selectOption(plate);
+  await applyFilter(page, "Vehicle", plate);
   const table = page.getByTestId("fuel-table");
   const withVideo = table.locator("tr", { hasText: plate }).filter({ hasText: "28.5" });
   const without = table.locator("tr", { hasText: plate }).filter({ hasText: "3,700" });
@@ -1181,7 +1227,7 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
 
   // Mileage links to the fuel page and counts the videos per vehicle.
   await page.goto("/mileage");
-  await page.getByLabel("Vehicle").selectOption(plate);
+  await applyFilter(page, "Vehicle", plate);
   await expect(page.locator("tr", { hasText: plate })).toContainText("78.5"); // 28.5 + 10 + 40 litres
   await expect(page.getByRole("link", { name: "Fuel entries and videos" })).toBeVisible();
   const summary = await tool<{ vehicles: { vehicle: string; fuel_entries: number; fuel_videos: number }[] }>("mileage_summary", { vehicle: plate });
@@ -1475,7 +1521,7 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   // 1. The requester plans the trip as Assign a task does: two stops, be in Galle by 16:00; the plan's timeline shows.
   await signIn(page, requester.set_password_link, `P3 requester ${stamp}!`);
   await page.goto("/requests/new");
-  await page.getByLabel("Day").fill(day);
+  await pickTripDay(page, "Day", day);
   await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
   await page.getByLabel("Arrive by").nth(1).fill("16:00");
@@ -1509,7 +1555,7 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   await dispatcherPage.goto("/tasks/new");
   const title = `E2E proposed ${tag}`;
   await dispatcherPage.getByLabel("Task", { exact: true }).fill(title);
-  await dispatcherPage.getByLabel("Date", { exact: true }).fill(day);
+  await pickTripDay(dispatcherPage, "Date", day);
   await dispatcherPage.getByLabel("Leave by", { exact: true }).fill("10:00");
   await dispatcherPage.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await dispatcherPage.getByLabel("Stop 2", { exact: true }).fill("Kandy");
@@ -1679,7 +1725,9 @@ test("a vehicle's documents: upload with its expiry, view, replace, remove with 
   // A PDF with its expiry: the row shows who uploaded it and View; the vehicle's insurance date follows.
   const insurance = docs.getByTestId("doc-insurance");
   const expiry = new Date(Date.now() + 200 * 86400000).toISOString().slice(0, 10);
-  await insurance.getByLabel("Expires").fill(expiry);
+  // A plain date: the field opens the calendar (docs/ui-patterns.md §3).
+  await insurance.getByLabel("Expires").click();
+  await tapCalendarDay(page.getByTestId("date-field-sheet"), expiry);
   await insurance.locator('input[type="file"]').setInputFiles({ name: "insurance.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF\n") });
   await expect(insurance).toContainText("Uploaded by E2E Docs Desk");
   await expect(insurance.getByRole("link", { name: "View" })).toHaveAttribute("href", /\/storage\/v1\/object\/sign\/vehicle-docs\//);
@@ -1723,7 +1771,7 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   // 1. The requester asks for a vehicle; My trips lists it as waiting.
   await signIn(page, requester.set_password_link, `HF2 requester ${stamp}!`);
   await page.goto("/requests/new");
-  await page.getByLabel("Day").fill(day);
+  await pickTripDay(page, "Day", day);
   await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
   await page.getByLabel("Arrive by").nth(1).fill("16:00");
@@ -1790,7 +1838,7 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   });
   await onePage.goto("/tasks/new");
   await onePage.getByLabel("Task", { exact: true }).fill(`E2E time field ${tag}`);
-  await onePage.getByLabel("Date", { exact: true }).fill(day);
+  await pickTripDay(onePage, "Date", day);
   await onePage.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await onePage.getByLabel("Stop 2", { exact: true }).fill("Kandy");
   await onePage.getByLabel("Driver", { exact: true }).selectOption(driver.username);
@@ -1799,8 +1847,9 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   await leave.blur();
   await expect(onePage.getByTestId("plan-line")).toContainText("Leave by 09:30", { timeout: 15000 });
   planned.length = 0;
-  await leave.focus();
-  await onePage.keyboard.type("0200P", { delay: 150 });
+  // Typed on a desktop one character at a time: only the whole "14:00" counts (1, 14, 14:, 14:0 never plan).
+  await leave.selectText();
+  await onePage.keyboard.type("14:00", { delay: 150 });
   await expect(onePage.getByTestId("plan-line")).toContainText("Leave by 14:00", { timeout: 15000 });
   await onePage.waitForTimeout(2500);
   expect(planned.filter((b) => b.includes('"leave_by":"02:00"'))).toHaveLength(0);
@@ -1912,7 +1961,7 @@ test("Part 3b: the Drivers board and its week view, a question answered live, th
   await page.goto(`/drivers/board?q=${driver.username}`);
   const row = page.getByTestId("board-list").locator(".drow", { hasText: driver.name });
   await expect(row.getByTestId("drow-status")).toContainText("Off duty");
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Week" }).click();
+  await page.getByRole("tablist", { name: "View" }).getByRole("tab", { name: "Week" }).click();
   const weekRow = page.getByTestId("week-row").filter({ hasText: driver.name });
   await weekRow.getByRole("button", { name: new RegExp(`^${driver.name} not available `) }).first().click();
   const editor = page.getByTestId("unav-editor");
@@ -1923,15 +1972,14 @@ test("Part 3b: the Drivers board and its week view, a question answered live, th
 
   // H3, Hotfix 4 (c). Ask the driver from the board: no tick boxes on the rows; the sheet with its own list; free for a trip
   // tomorrow 14:00–16:00; the answer arrives live under the driver's row, with Assign →.
-  await page.getByRole("group", { name: "View" }).getByRole("button", { name: "Now" }).click();
+  await page.getByRole("tablist", { name: "View" }).getByRole("tab", { name: "Now" }).click();
   await expect(page.getByTestId("board-list").getByRole("checkbox")).toHaveCount(0);
   await page.getByTestId("board-ask").click();
   const sheet = page.getByRole("dialog", { name: "Ask drivers" });
   await sheet.getByRole("button", { name: "None", exact: true }).click();
   await sheet.getByRole("checkbox", { name: `Ask ${driver.name}` }).check();
   await sheet.getByTestId("sheet-kind-free_for_trip").click();
-  const tomorrow = new Date(Date.now() + 5.5 * 3600_000 + 86400_000).toISOString().slice(0, 10);
-  await sheet.getByLabel("Day").fill(tomorrow);
+  await sheet.getByRole("group", { name: "Day", exact: true }).getByRole("button", { name: "Tomorrow", exact: true }).click();
   await sheet.getByLabel("From").fill("14:00");
   await sheet.getByLabel("From").press("Tab");
   await sheet.getByLabel(/^To/).fill("16:00");

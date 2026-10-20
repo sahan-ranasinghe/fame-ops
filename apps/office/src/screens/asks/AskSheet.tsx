@@ -15,10 +15,11 @@ import { errText } from "../../transport/errors";
 import type { FleetError } from "../../transport/types";
 import { Avatar, Notice, Pill } from "../../ui/basics";
 import { Icon } from "../../ui/icons";
-import { TimeInput } from "../../ui/TimeInput";
+import { TimeField } from "../../ui/TimeField";
 import { useToast } from "../../ui/Toast";
 import { ASK_EVERY, askKey } from "./AskAnswers";
 import { answerChip, ASK_KINDS, type AskForm, askInput, MAX_ASK_NOTE } from "./askLogic";
+import { TripDayPicker } from "../../ui/DayPicker";
 
 /** A driver the sheet can ask: their username (ask_drivers names them so), name, photo, a status line and free or not. */
 export interface AskCandidate {
@@ -157,9 +158,9 @@ export function AskSheet({ candidates, window: trip, askFor, onSent, onClose }: 
         </div>
         {trip_ && (
           <div className="ask-trip">
-            <div className="field"><label htmlFor="sheet-date">Day</label><input type="date" id="sheet-date" value={f.date} min={today()} onChange={(e) => set("date", e.target.value)} /></div>
-            <div className="field"><label htmlFor="sheet-from">From</label><TimeInput id="sheet-from" value={f.from} onCommit={(v) => set("from", v)} /></div>
-            <div className="field"><label htmlFor="sheet-to">To <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label><TimeInput id="sheet-to" value={f.to} onCommit={(v) => set("to", v)} /></div>
+            <div className="field"><span className="lab">Day</span><TripDayPicker id="sheet-date" label="Day" value={f.date} onChange={(d) => set("date", d)} /></div>
+            <div className="field"><label htmlFor="sheet-from">From</label><TimeField id="sheet-from" value={f.from} onCommit={(v) => set("from", v)} /></div>
+            <div className="field"><label htmlFor="sheet-to">To <span className="muted" style={{ fontWeight: 400 }}>(optional)</span></label><TimeField id="sheet-to" value={f.to} onCommit={(v) => set("to", v)} /></div>
           </div>
         )}
         <div className="field">

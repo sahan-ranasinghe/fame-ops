@@ -6,7 +6,7 @@
 import { createContext, useContext } from "react";
 import { useLocation, useSearchParams } from "react-router";
 import type { RequestCard } from "../data/types";
-import { type DateRangeValue, useDateRange } from "../ui/DateRange";
+import { type DateRangeValue, useDateRange } from "../ui/DateRangePicker";
 import { useUrlSearch } from "../ui/ListKit";
 import { readShow, readStatus, type TripShow, type TripStatus, tripsArgs, TRIPS_MAX_DAYS, writeStatus } from "./myTripsLogic";
 

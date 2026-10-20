@@ -21,7 +21,7 @@ import { can, type FleetError } from "../transport/types";
 import { Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
-import { TimeInput } from "../ui/TimeInput";
+import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
 import { askedTimes, decideLabel, emptyTripDecision, isProposal, requestView, shownTimes, type TripDecision, tripDecideInput, tripPick } from "./approvalLogic";
 import { linkedDriver } from "./asks/askLogic";
@@ -35,6 +35,7 @@ import { RequestDetailCard } from "./RequestDetailCard";
 import { LateNotice } from "./requestParts";
 import { TripSection, useTripLine } from "./RequestTrip";
 import { knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
+import { TripDayPicker } from "../ui/DayPicker";
 
 export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: RequestCard) => void }) {
   const { me, store, transport } = useFleet();
@@ -219,9 +220,9 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
         <div className="card card-b form" data-testid="decide-times">
           <div className="section-t" style={{ marginBottom: 2 }}>Day and times</div>
           <div className="grid2">
-            <div className="field"><label htmlFor="rq-date">Day</label><input type="date" id="rq-date" value={shown.date} onChange={(e) => set("date", e.target.value)} /></div>
-            <div className="field"><label htmlFor="rq-leave">Leave by</label><TimeInput id="rq-leave" value={shown.leaveBy} onCommit={(t) => set("leaveBy", t)} /></div>
-            <div className="field"><label htmlFor="rq-back">Back by</label><TimeInput id="rq-back" value={shown.back} onCommit={(t) => set("back", t)} /></div>
+            <div className="field"><span className="lab">Day</span><TripDayPicker id="rq-date" label="Day" value={shown.date} onChange={(d) => set("date", d)} /></div>
+            <div className="field"><label htmlFor="rq-leave">Leave by</label><TimeField id="rq-leave" value={shown.leaveBy} onCommit={(t) => set("leaveBy", t)} /></div>
+            <div className="field"><label htmlFor="rq-back">Back by</label><TimeField id="rq-back" value={shown.back} onCommit={(t) => set("back", t)} /></div>
           </div>
           <DepartureNote check={check} onUse={(t) => set("leaveBy", t)} onMoveBack={(t) => set("back", t)} />
           <p className="hint" style={{ margin: 0 }} data-testid="times-hint">

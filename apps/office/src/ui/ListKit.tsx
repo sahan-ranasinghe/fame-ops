@@ -257,6 +257,27 @@ export function Pager<T, A>({ list }: { list: PagedList<T, A> }) {
   );
 }
 
+/**
+ * While a list has no rows yet: grey bars the shape of its rows (docs/ui-patterns.md §5), never a spinner in the list.
+ * The words are there for a screen reader (and say what is loading).
+ */
+export function SkeletonRows({ rows = 5, label = "Loading…", lines = 2 }: { rows?: number; label?: ReactNode; lines?: 1 | 2 }) {
+  return (
+    <div className="skeleton" aria-busy="true" data-testid="skeleton-rows">
+      <span className="sr-only">{label}</span>
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="sk-row" aria-hidden="true">
+          <i className="sk-dot" />
+          <span className="sk-lines">
+            <i className="sk-bar" style={{ width: `${62 - (i % 3) * 12}%` }} />
+            {lines === 2 && <i className="sk-bar thin" style={{ width: `${40 - (i % 2) * 10}%` }} />}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** The empty state in words: what the filter and the days mean ("No open issues this week"). */
 export function EmptyLine({ children }: { children: ReactNode }) {
   return <div className="card-b muted" data-testid="empty-line">{children}</div>;
@@ -272,6 +293,12 @@ export function watchRouterPath(get: (() => string) | null): void {
   routerPath = get;
 }
 
+/** The router has moved on from `pathname` (a write meant for that page must be dropped). */
+export function leftPage(pathname: string): boolean {
+  const now = routerPath?.();
+  return !!now && now !== pathname;
+}
+
 export function useUrlFilter<V extends string>(name: string, fallback: V, allowed?: readonly V[]): [V, (value: V) => void] {
   const [params, setParams] = useSearchParams();
   const { pathname } = useLocation();
@@ -280,8 +307,7 @@ export function useUrlFilter<V extends string>(name: string, fallback: V, allowe
   const set = (next: V) => {
     // Hotfix 4: a write that comes after the page was left (a search settling as a link is followed) would land on the next
     // page's address ("?q=" goes with wherever the router is now): dropped.
-    const now = routerPath?.();
-    if (now && now !== pathname) return;
+    if (leftPage(pathname)) return;
     setParams((old) => {
       const out = new URLSearchParams(old);
       if (next === fallback || next === "") out.delete(name);

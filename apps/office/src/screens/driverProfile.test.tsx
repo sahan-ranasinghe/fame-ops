@@ -3,6 +3,7 @@
 // "changed by the driver"), the banner for what is missing, Edit saving only what changed through update_driver, the phone
 // never emptied, Replace on a licence photo (web only), and the private part's muted line for people without it.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { pickDate } from "../test/controls";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Fleet, FleetProvider } from "../app/FleetContext";
@@ -166,12 +167,12 @@ describe("the driver's profile (G)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Edit driving licence" }));
     const lic = screen.getByTestId("pf-edit-licence");
     fireEvent.change(within(lic).getByLabelText("Licence number"), { target: { value: "B7654321" } });
-    fireEvent.change(within(lic).getByLabelText("Expires"), { target: { value: "2031-11-10" } });
+    pickDate(within(lic).getByLabelText("Expires"), "2027-11-10");
     fireEvent.click(within(lic).getByRole("button", { name: "Save" }));
     await settle();
     expect(t.argsOf("update_driver")).toEqual([
       { username: "kamal.p", emergency_relation: "sister" },
-      { username: "kamal.p", licence_no: "B7654321", licence_expiry: "2031-11-10" },
+      { username: "kamal.p", licence_no: "B7654321", licence_expiry: "2027-11-10" },
     ]);
   });
 

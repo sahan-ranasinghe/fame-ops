@@ -24,7 +24,7 @@ import { can, type FleetError } from "../transport/types";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions } from "../ui/Page";
-import { TimeInput } from "../ui/TimeInput";
+import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
 import { decidesTrip } from "./approvalLogic";
 import { linkedDriver } from "./asks/askLogic";
@@ -44,6 +44,7 @@ import { VehicleGroups, VehicleOption } from "./requestParts";
 import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
 import { TripDecide } from "./TripDecide";
 import { knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
+import { TripDayPicker } from "../ui/DayPicker";
 
 interface Decision {
   /** The vehicle picked; "" = the one the driver brings (or, deciding again, keep the vehicle). */
@@ -308,9 +309,9 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
               </>
             )}
             <div className="grid2">
-              <div className="field"><label htmlFor="rq-date">Day</label><input type="date" id="rq-date" value={f.date} placeholder={q.fields?.date} onChange={(e) => set("date", e.target.value)} /></div>
-              <div className="field"><label htmlFor="rq-time">Time</label><TimeInput id="rq-time" value={f.time} onCommit={(time) => set("time", time)} /></div>
-              <div className="field"><label htmlFor="rq-back">Back by</label><TimeInput id="rq-back" value={f.back} onCommit={(back) => set("back", back)} /></div>
+              <div className="field"><span className="lab">Day</span><TripDayPicker id="rq-date" label="Day" value={f.date} onChange={(d) => set("date", d)} /></div>
+              <div className="field"><label htmlFor="rq-time">Time</label><TimeField id="rq-time" value={f.time} onCommit={(time) => set("time", time)} /></div>
+              <div className="field"><label htmlFor="rq-back">Back by</label><TimeField id="rq-back" value={f.back} onCommit={(back) => set("back", back)} /></div>
             </div>
             <p className="hint" style={{ margin: 0 }}>Now {q.when}{q.back_by ? ` · back by ${q.back_by}` : ""}. A new time alone postpones the booking.</p>
           </div>

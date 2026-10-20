@@ -34,6 +34,7 @@ import { basePlace, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheD
 import { defaultStops, firstStopOf } from "./stopsLogic";
 import { BackByField, LeaveByField, TripPlanCard, TripRoute, useTrip } from "./TripEditor";
 import { knownDef, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
+import { TripDayPicker } from "../ui/DayPicker";
 
 const SPLIT_COLORS = ["var(--accent)", "var(--live)", "var(--ok)", "var(--bad)", "var(--muted)"];
 export { PLAN_DEBOUNCE_MS } from "./dispatchParts";
@@ -180,7 +181,7 @@ export function NewTask() {
             <input id="af-title" maxLength={120} placeholder="Team drop · Matara sites" value={f.title} onChange={(e) => set("title", e.target.value)} data-focus />
           </div>
           <div className="grid2">
-            <div className="field"><label htmlFor="af-date">Date</label><input type="date" id="af-date" value={f.date} onChange={(e) => set("date", e.target.value)} /></div>
+            <div className="field"><span className="lab">Date</span><TripDayPicker id="af-date" label="Date" value={f.date} onChange={(d) => set("date", d)} /></div>
             <LeaveByField trip={trip} id="af-leave" />
           </div>
         </div>

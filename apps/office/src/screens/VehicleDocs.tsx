@@ -22,6 +22,7 @@ import {
   fileTypeText, MAX_DOC_BYTES, megabytes, saveDocInput,
 } from "./mediaLogic";
 import { FilePick } from "./PhotoUpload";
+import { DateField } from "../ui/DayPicker";
 
 /** The links last at least an hour: fetched again well before that while the page stays open. */
 const DOCS_EVERY_MS = 20 * 60_000;
@@ -161,7 +162,7 @@ function DocRowView({ row, reg, acts, year, date: startDate }: { row: DocRow; re
         ? (
           <div className="doc-date">
             <label htmlFor={`doc-exp-${row.key}`}>Expires</label>
-            <input type="date" id={`doc-exp-${row.key}`} value={date} onChange={(e) => setTyped(e.target.value)} />
+            <DateField id={`doc-exp-${row.key}`} label="Expires" value={date} onChange={setTyped} />
             {dateChanged && acts.saveDate && <button type="button" className="btn small dark" disabled={!!busy} onClick={() => void saveDate()}>{busy === "date" ? "Saving…" : "Save date"}</button>}
           </div>
         )

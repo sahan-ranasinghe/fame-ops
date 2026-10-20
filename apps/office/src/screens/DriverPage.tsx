@@ -24,7 +24,8 @@ import { useGoogleMap } from "../map/google/useGoogleMap";
 import { snapAllowed } from "../map/mapChoice";
 import { ESTIMATED_COLOR, type MapMarker, type RoutePoint, SPEED_COLORS } from "../map/types";
 import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, Tile, VehicleThumb } from "../ui/basics";
-import { DateRange, useDateRange } from "../ui/DateRange";
+import { useDateRange } from "../ui/DateRangePicker";
+import { DayStrip } from "../ui/DayPicker";
 import { Icon } from "../ui/icons";
 import { GapsList, useGaps } from "./GapsList";
 import { clockText, gapWindowsOf, playbackPath } from "./playbackLogic";
@@ -159,8 +160,9 @@ export function DriverPage() {
 
         <div className="ph" style={{ marginBottom: 0 }}>
           <div><div className="eyebrow">{dayLabel}{route?.first ? ` · ${route.first}–${route.last}` : ""}</div><h2 style={{ margin: 0 }}>Route</h2></div>
-          <DateRange value={day} label="Day" />
         </div>
+        {/* A day of history: the week strip (docs/ui-patterns.md §3); nothing is recorded after today. */}
+        <DayStrip value={date} onChange={day.setDay} pastOnly label="Day" />
 
         <div className="tiles">
           <Tile label="Km (GPS)" value={route?.km != null ? num(route.km) : "—"} unit="km" sub={route ? `from ${num(route.count)} points` : ""} />

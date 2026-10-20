@@ -10,8 +10,10 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import type { VehicleCard, VehiclesList } from "../data/types";
 import { joinDots, num, vehicleAvailabilityTone } from "../lib/format";
-import { Chips, Pill, VehicleThumb } from "../ui/basics";
-import { EmptyLine, ListHeader, usePagedList } from "../ui/ListKit";
+import { Pill, VehicleThumb } from "../ui/basics";
+import { FilterBar } from "../ui/FilterBar";
+import { pairsDef } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, SkeletonRows, usePagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import { ListFooter, ListStale, ListWaiting, SearchBox, useSearchBox } from "./listLocal";
 import { filterFromWord, VEHICLE_FILTER_WORDS, VEHICLE_FILTERS as FILTERS, type VehicleFilter as Filter, withParam } from "./overviewLinks";
@@ -100,12 +102,13 @@ export function Vehicles() {
               {canRegister && <Link className="btn primary" to="/vehicles/new">Register vehicle</Link>}
             </div>
           </div>
-          <div style={{ marginBottom: 12 }}>
-            <Chips options={FILTERS} value={filter} onChange={setFilter} counts={c ? { all: c.all, on_task: c.on_task, available: c.available, in_garage: c.in_garage, documents_expiring: c.documents_expiring, inactive: c.inactive } : undefined} />
-          </div>
-          <div className="list-tools">
-            <SearchBox label="Find a vehicle" placeholder="Plate, make, driver or custodian" value={box.text} onChange={box.setText} onBlur={box.flush} />
-          </div>
+          {/* The status filter with the whole fleet's counts beside each choice (none for Returned); ?filter= keeps its words. */}
+          <FilterBar
+            search={<SearchBox label="Find a vehicle" placeholder="Plate, make, driver or custodian" value={box.text} onChange={box.setText} onBlur={box.flush} />}
+            filters={[pairsDef("filter", "Show", FILTERS, "all", c ? { all: c.all, on_task: c.on_task, available: c.available, in_garage: c.in_garage, documents_expiring: c.documents_expiring, inactive: c.inactive } : undefined)]}
+            values={{ filter }}
+            onChange={(v) => setFilter(((v.filter as string) || "all") as Filter)}
+          />
           {!noConnector && <ListWaiting q={q} loading="Loading vehicles…" />}
           {d && (
             <div className="card" style={{ marginBottom: 12, ...(q.stale ? { opacity: 0.6 } : {}) }} aria-busy={q.updating || q.stale || undefined} data-testid="vehicles-list">
@@ -155,7 +158,7 @@ export function Vehicles() {
                     </tbody>
                   </table>
                 </div>
-              ) : <EmptyLine>{q.stale ? "Loading…" : vehiclesEmpty(filter, box.search, canRegister)}</EmptyLine>}
+              ) : q.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{vehiclesEmpty(filter, box.search, canRegister)}</EmptyLine>}
               <ListFooter list={list} />
             </div>
           )}

@@ -3,7 +3,7 @@
 // the second step on every call and audits it with the person's name.
 import { normalisePermissions, permissionsForRole } from "@fleet/permissions";
 import { emitWriteDropped, gestureOrigin } from "./gesture";
-import { BACKGROUND_WRITES, dropped, isWrite, mayRetry, onceMore, QUICK_RETRY_MS } from "./retryRule";
+import { BACKGROUND_WRITES, dropped, isWrite, mayRetry, onceMore, QUICK_RETRY_MS, TIMED_OUT, timeoutFor } from "./retryRule";
 import type { FleetError, Me, Transport, WatchEvent } from "./types";
 
 type TokenSource = () => Promise<string | null>;
@@ -40,20 +40,32 @@ export class ApiTransport implements Transport {
     this.base = base.replace(/\/$/, "");
   }
 
-  private async request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: "GET" | "POST", path: string, body?: unknown, timeoutMs = timeoutFor()): Promise<T> {
     const token = await this.token();
     if (!token) throw { code: "not_signed_in", message: "Sign in again.", status: 401 } satisfies FleetError;
     let res: Response;
+    let text: string;
+    // No call waits forever (retryRule.ts timeoutFor): the request is cut off and the page says it took too long.
+    const ctrl = new AbortController();
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      ctrl.abort();
+    }, timeoutMs);
     try {
       res = await this.fetchFn(this.base + path, {
         method,
         headers: { authorization: `Bearer ${token}`, ...(body !== undefined ? { "content-type": "application/json" } : {}) },
         body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: ctrl.signal,
       });
+      text = await res.text();
     } catch {
+      if (timedOut) throw { ...TIMED_OUT } satisfies FleetError;
       throw { code: "network", message: "No connection to Fame Fleet." } satisfies FleetError;
+    } finally {
+      clearTimeout(timer);
     }
-    const text = await res.text();
     let json: unknown = null;
     try {
       json = text ? JSON.parse(text) : null;
@@ -75,14 +87,14 @@ export class ApiTransport implements Transport {
     // What the person pressed to start it (a write they may want to try again), taken before the call waits.
     const origin = isWrite(tool) && !BACKGROUND_WRITES.has(tool) ? gestureOrigin() : null;
     try {
-      const out = await this.request<{ result: T }>("POST", `/tools/${tool}`, args);
+      const out = await this.request<{ result: T }>("POST", `/tools/${tool}`, args, timeoutFor(tool));
       return out.result;
     } catch (e) {
       const error = e as FleetError;
       if (!isWrite(tool)) throw error;
       // A write is never repeated on its own: the page says it may not have been saved, and Try again (ui/WriteRetry)
       // presses the same button again when the person chooses to.
-      if (dropped(error) && origin) emitWriteDropped(tool, origin);
+      if ((dropped(error) || error.code === TIMED_OUT.code) && origin) emitWriteDropped(tool, origin);
       throw { ...error, write: true } satisfies FleetError;
     }
   }

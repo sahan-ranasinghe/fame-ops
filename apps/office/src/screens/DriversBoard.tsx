@@ -15,10 +15,12 @@ import { useQuery } from "../data/useQuery";
 import { addDays, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, canOpenTask } from "../transport/types";
-import { Avatar, Chips, Loading, Notice, Pill } from "../ui/basics";
+import { Avatar, Segmented, Notice, Pill } from "../ui/basics";
 import { DriverRow } from "../ui/DriverRow";
 import { toPhoneLinks } from "../ui/driverRowLogic";
-import { EmptyLine, ListHeader, useUrlFilter } from "../ui/ListKit";
+import { FilterBar } from "../ui/FilterBar";
+import { pairsDef } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, SkeletonRows, useUrlFilter } from "../ui/ListKit";
 import { useIsPhone } from "../ui/phone";
 import { licenceTone } from "./availabilityLogic";
 import {
@@ -90,13 +92,14 @@ export function DriversBoard() {
           {me.tools.includes("ask_answers") && <Link className="btn" to="/drivers/asks">Questions</Link>}
         </div>
       </div>
-      <div className="board-tools">
-        <div role="group" aria-label="View"><Chips options={[["now", "Now"], ["week", "Week"]]} value={view} onChange={setView} /></div>
-        <SearchBox label="Find a driver" placeholder="Name or username" value={box.text} onChange={box.setText} onBlur={box.flush} />
-      </div>
-      <div className="board-filters" role="group" aria-label="Filter">
-        <Chips options={BOARD_FILTERS} value={filter} onChange={setFilter} counts={q.data ? counts : undefined} />
-      </div>
+      {/* Now | Week switches the view (a segmented control); who is shown is the Filter (docs/ui-patterns.md §1, §8). */}
+      <FilterBar
+        search={<SearchBox label="Find a driver" placeholder="Name or username" value={box.text} onChange={box.setText} onBlur={box.flush} />}
+        filters={[pairsDef("filter", "Show", BOARD_FILTERS, "all", q.data ? counts : undefined)]}
+        values={{ filter }}
+        onChange={(v) => setFilter(((v.filter as string) || "all") as BoardFilter)}
+        extra={<Segmented label="View" options={[["now", "Now"], ["week", "Week"]] as const} value={view} onChange={setView} />}
+      />
       {ask && (
         <p className="ask-status sub" data-testid="board-ask-status">
           <span>{ask.question} · {countsLine(ask)}</span>
@@ -111,7 +114,7 @@ export function DriversBoard() {
           onClose={() => setSheet(false)}
         />
       )}
-      {q.loading && <Loading>Loading the drivers…</Loading>}
+      {q.loading && <div className="card"><SkeletonRows label="Loading the drivers…" /></div>}
       {q.err && !q.data && <Notice tone="bad">{errText(q.err)[0]}</Notice>}
       {q.data && !week && (
         <div className="card" data-testid="board-list" aria-busy={q.updating || undefined}>
@@ -186,7 +189,7 @@ function WeekView({ board, shown, from, today: day, updating, onWeek, filter, se
           {from !== thisWeek && <button type="button" className="btn small" onClick={() => onWeek(thisWeek)}>This week</button>}
           {updating && <span className="updated">Updating…</span>}
         </div>
-        {!grid && <Loading>Loading the week…</Loading>}
+        {!grid && <SkeletonRows label="Loading the week…" />}
         {grid && grid.rows.length === 0 && <EmptyLine>{boardEmpty(filter, search)}</EmptyLine>}
         {grid && grid.rows.length > 0 && (isPhone
           ? <PhoneWeek grid={grid} onEdit={setEditing} />

@@ -14,12 +14,13 @@ import { useLists } from "../data/hooks";
 import type { FuelEntry, FuelList } from "../data/types";
 import { num } from "../lib/format";
 import { Pill, Tile } from "../ui/basics";
-import { DateRange, type DateRangeValue, useDateRange } from "../ui/DateRange";
-import { EmptyLine, ListHeader, usePagedList } from "../ui/ListKit";
+import { DateRangePicker, type DateRangeValue, useDateRange } from "../ui/DateRangePicker";
+import type { FilterValues } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, SkeletonRows, usePagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import { megabytes, videoChip, videoTone, videoWords } from "./fuelLogic";
 import { ListFooter, ListStale, ListWaiting } from "./listLocal";
-import { useVehicleDriver } from "./Mileage";
+import { useVehicleDriver, VehicleDriverFilter } from "./Mileage";
 import { fuelLabel, fuelMonthLine, rangeArgs } from "./mileageLogic";
 
 /** list_fuel takes up to 366 days. */
@@ -33,7 +34,7 @@ export const FUEL_DEFAULT_RANGE = "week";
 export const FuelShown = createContext<{ entries: FuelEntry[]; loaded: boolean; total: number } | null>(null);
 
 /** The dates and filters in the URL, and list_fuel's input for them (the list and the fill page agree on it). */
-export function useFuelArgs(): { dates: DateRangeValue; vehicle: string; driver: string; setVehicle: (v: string) => void; setDriver: (d: string) => void; args: Record<string, unknown> } {
+export function useFuelArgs(): { dates: DateRangeValue; vehicle: string; driver: string; setVehicle: (v: string) => void; setDriver: (d: string) => void; setBoth: (v: FilterValues) => void; args: Record<string, unknown> } {
   const dates = useDateRange(FUEL_DEFAULT_RANGE, { maxDays: MAX_DAYS });
   const vd = useVehicleDriver();
   return { dates, ...vd, args: rangeArgs(dates.from, dates.to, { vehicle: vd.vehicle, driver: vd.driver }) };
@@ -51,7 +52,7 @@ export function Fuel() {
   const navigate = useNavigate();
   const { search } = useLocation();
   const { id } = useParams();
-  const { dates, vehicle, setVehicle, driver, setDriver, args } = useFuelArgs();
+  const { dates, vehicle, driver, setBoth, args } = useFuelArgs();
   const list = usePagedList<FuelEntry, FuelList>(FUEL_QUERY, "list_fuel", dates.error ? null : args, (d) => d.entries, { enabled: !noConnector });
   const q = list.query;
   const d = q.data;
@@ -67,23 +68,8 @@ export function Fuel() {
       <FuelShown.Provider value={{ entries: list.items, loaded: !!d && !q.stale && !q.loading, total: list.total }}>
         <ListWithDetail>
           <div className="card card-b" style={{ display: "grid", gap: 12, marginBottom: 18 }}>
-            <DateRange value={dates} />
-            <div className="filters" style={{ marginBottom: 0 }}>
-              <label className="field"><span>Vehicle</span>
-                <select aria-label="Vehicle" value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
-                  <option value="">All vehicles</option>
-                  {vehicle && !lists.vehicles?.some((x) => x.reg_no === vehicle) && <option value={vehicle}>{vehicle}</option>}
-                  {(lists.vehicles ?? []).map((x) => <option key={x.reg_no} value={x.reg_no}>{x.reg_no}</option>)}
-                </select>
-              </label>
-              <label className="field"><span>Driver</span>
-                <select aria-label="Driver" value={driver} onChange={(e) => setDriver(e.target.value)}>
-                  <option value="">All drivers</option>
-                  {driver && !lists.drivers?.some((x) => x.username === driver) && <option value={driver}>{driver}</option>}
-                  {(lists.drivers ?? []).map((x) => <option key={x.username} value={x.username}>{x.name}</option>)}
-                </select>
-              </label>
-            </div>
+            <DateRangePicker value={dates} />
+            <VehicleDriverFilter vehicle={vehicle} driver={driver} onChange={setBoth} lists={lists} />
           </div>
           {dates.error || noConnector ? null : !d || !t ? (
             <ListWaiting q={q} loading="Adding up the fills…" />
@@ -121,7 +107,7 @@ export function Fuel() {
                       </tbody>
                     </table>
                   </div>
-                ) : <EmptyLine>{q.stale ? "Loading…" : fuelEmpty(fuelLabel(d), vehicle, driverName)}</EmptyLine>}
+                ) : q.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{fuelEmpty(fuelLabel(d), vehicle, driverName)}</EmptyLine>}
                 <ListFooter list={list} />
               </div>
             </div>

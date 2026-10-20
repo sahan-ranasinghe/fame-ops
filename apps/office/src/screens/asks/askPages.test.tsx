@@ -135,7 +135,7 @@ describe("Ask drivers (/drivers/ask)", () => {
     mount(t, `/drivers/ask?kind=free_for_trip&drivers=kamal&date=${tripDay}&from=09:00&to=12:00&task=t1`);
     await settle();
     expect(screen.getByTestId("ask-kind-free_for_trip").getAttribute("aria-checked")).toBe("true");
-    expect((screen.getByLabelText("Day") as HTMLInputElement).value).toBe(tripDay);
+    expect(screen.getByRole("group", { name: "Day" }).getAttribute("data-value")).toBe(tripDay);
     expect((screen.getByLabelText("From") as HTMLInputElement).value).toBe("09:00");
     expect(screen.getByTestId("ask-picked").textContent).toContain("Kamal Silva");
     expect(screen.getByRole("link", { name: "this task" }).getAttribute("href")).toBe("/tasks/t1");

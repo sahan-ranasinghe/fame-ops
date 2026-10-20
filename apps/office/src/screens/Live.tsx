@@ -53,12 +53,15 @@ import { filterFromWord, LIVE_FILTER_WORDS, withParam } from "./overviewLinks";
 import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
-import { Avatar, Chips, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote, VehicleThumb } from "../ui/basics";
+import { Avatar, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote, VehicleThumb } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
 import { livePresence } from "../ui/driverRowLogic";
 import { Icon } from "../ui/icons";
 import { linksFromCall } from "../ui/phoneLinks";
 import { duration } from "@fleet/durations";
+import { FilterBar } from "../ui/FilterBar";
+import { pairsDef } from "../ui/filterLogic";
+import { SkeletonRows } from "../ui/ListKit";
 
 /** The trails and the shown route are fetched again this often (the fallback when Realtime is not delivering). */
 const TRAIL_REFRESH_MS = 60000;
@@ -225,7 +228,9 @@ export function Live() {
         </div>
         {d && (
           <div className="ph-actions">
-            <Chips options={LIVE_FILTERS} value={filter} onChange={setFilter} counts={counts} />
+            {/* Who the list shows: the Filter with the counts beside each choice (docs/ui-patterns.md §1); ?filter= kept. */}
+            <FilterBar filters={[pairsDef("filter", "Show", LIVE_FILTERS, "all", counts)]} values={{ filter }}
+              onChange={(v) => setFilter(((v.filter as string) || "all") as LiveFilter)} />
           </div>
         )}
       </div>
@@ -234,7 +239,7 @@ export function Live() {
           {!d && !noConnector && (
             <>
               <ErrBox entry={live} onRetry={() => void store.load("live", "live_drivers", { filter: "all" })} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-              {!live.err && <Loading>Finding drivers…</Loading>}
+              {!live.err && <SkeletonRows label="Finding drivers…" />}
             </>
           )}
           {d && <StaleNote entry={live} />}

@@ -18,6 +18,7 @@ import { useVehicle, vehicleDates } from "./VehicleDetail";
 import { VehicleDocumentsSection } from "./VehicleDocs";
 import { emptyVehicle, type VehicleFields, vehicleInput } from "./vehicleLogic";
 import { vehiclePath } from "./Vehicles";
+import { DateField } from "../ui/DayPicker";
 
 export function VehicleForm() {
   const { reg } = useParams();
@@ -38,7 +39,10 @@ export function VehicleForm() {
   const field = (id: keyof VehicleFields, label: string, type = "text", extra: Record<string, unknown> = {}) => (
     <div className="field">
       <label htmlFor={`vf-${id}`}>{label}</label>
-      <input id={`vf-${id}`} type={type} value={f[id]} onChange={(e) => set(id, e.target.value as VehicleFields[typeof id])} {...extra} />
+      {/* A plain date (Rented until, an expiry): one field and the calendar (docs/ui-patterns.md §3). */}
+      {type === "date"
+        ? <DateField id={`vf-${id}`} label={label} value={String(f[id] ?? "")} onChange={(d) => set(id, d as VehicleFields[typeof id])} />
+        : <input id={`vf-${id}`} type={type} value={f[id]} onChange={(e) => set(id, e.target.value as VehicleFields[typeof id])} {...extra} />}
     </div>
   );
   const backTo = isNew ? "/vehicles" : vehiclePath(plate);

@@ -15,9 +15,11 @@ import { useFleet } from "../app/FleetContext";
 import type { RequestCard, RequestsList } from "../data/types";
 import { cap, requestTone } from "../lib/format";
 import { can, canOpenTask } from "../transport/types";
-import { Chips, ErrBox, Loading, Pill, StaleNote } from "../ui/basics";
+import { ErrBox, Pill, StaleNote } from "../ui/basics";
+import { FilterBar } from "../ui/FilterBar";
+import { pairsDef } from "../ui/filterLogic";
 import { Icon } from "../ui/icons";
-import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, useUrlFilter, useUrlSearch, useWatchedPagedList } from "../ui/ListKit";
+import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, SkeletonRows, useUrlFilter, useUrlSearch, useWatchedPagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import { LATE_BADGE, proposalLine, requestView } from "./approvalLogic";
 import { ReviewingLine } from "./approvers";
@@ -48,16 +50,21 @@ export function Requests() {
         <div className="ph">
           <div><div className="eyebrow">{staff ? "Vehicles you asked for" : "Vehicle requests from staff"}</div><h1>{staff ? "My requests" : "Requests"}</h1></div>
           <div className="ph-actions">
-            <Chips options={REQUEST_FILTERS} value={filter} onChange={setFilter} />
             {asks && <Link className="btn primary desktop-only" to="/requests/new">New request</Link>}
           </div>
         </div>
         {asks && staff && <Link className="btn primary home-action phone-only" to="/requests/new" style={{ marginBottom: 18 }}><Icon name="plus" />New request</Link>}
         {asks && !staff && <Link className="btn primary phone-only" to="/requests/new" style={{ marginBottom: 18 }}>New request</Link>}
+        <FilterBar
+          search={<SearchBox value={search} onChange={setSearch} placeholder="Name, project or place" />}
+          filters={[pairsDef("status", "Status", REQUEST_FILTERS, DEFAULT_REQUESTS_FILTER)]}
+          values={{ status: filter }}
+          onChange={(v) => setFilter(((v.status as string) || DEFAULT_REQUESTS_FILTER) as RequestsFilter)}
+        />
         {!d && !noConnector && (
           <>
             <ErrBox entry={reqs} onRetry={list.query.refetch} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-            {!reqs.err && <Loading>Loading requests…</Loading>}
+            {!reqs.err && <div className="card"><SkeletonRows label="Loading requests…" /></div>}
           </>
         )}
         {d && (
@@ -68,7 +75,6 @@ export function Requests() {
                 title={filterTitle(filter)}
                 count={list.total}
                 updating={updating}
-                right={<SearchBox value={search} onChange={setSearch} placeholder="Name, project or place" />}
               />
               <div style={list.query.stale ? { opacity: 0.6 } : undefined}>
                 {list.items.length ? (
@@ -115,7 +121,7 @@ export function Requests() {
                     </table>
                   </div>
                 ) : (
-                  <EmptyLine>{list.query.stale ? "Loading…" : requestsEmptyText(filter, search, staff)}</EmptyLine>
+                  list.query.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{requestsEmptyText(filter, search, staff)}</EmptyLine>
                 )}
               </div>
               <LoadMore list={list} />

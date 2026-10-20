@@ -1,5 +1,32 @@
 import { describe, expect, it } from "vitest";
-import { colomboDay, customRange, daysIn, isDay, mondayOf, monthOf, rangeDates, rangeText, readRange, tooLong, writeRange } from "./dateRange";
+import {
+  addMonths,
+  colomboDay,
+  customRange,
+  dayDisabled,
+  dayRole,
+  daysIn,
+  isDay,
+  mondayOf,
+  monthGrid,
+  monthOf,
+  monthTitle,
+  pickedRange,
+  type Picking,
+  pickerText,
+  PRESETS,
+  rangeDates,
+  rangeText,
+  readRange,
+  shiftWeek,
+  stripCell,
+  tapDay,
+  tooLong,
+  tripDayText,
+  weekDays,
+  weekTitle,
+  writeRange,
+} from "./dateRange";
 
 const url = (q: string) => new URLSearchParams(q);
 
@@ -101,5 +128,92 @@ describe("date range: the URL", () => {
     expect(writeRange(url("range=custom&from=2026-10-01&to=2026-10-07"), { range: "custom", from: "2026-10-02", to: "2026-10-09" }, "today", true).toString()).toBe("range=custom&from=2026-10-02");
     // The input is not changed.
     expect(base.toString()).toBe("driver=kamal&range=week");
+  });
+});
+
+describe("the presets and the picker's words", () => {
+  it("Last 7 days ends today; every preset is listed, Custom is not", () => {
+    expect(rangeDates("last7", "2026-10-20")).toEqual({ from: "2026-10-14", to: "2026-10-20" });
+    expect(PRESETS.map(([k]) => k)).toEqual(["today", "yesterday", "last7", "week", "month", "last_month"]);
+    expect(readRange(url("range=last7"), "today", "2026-10-20")).toEqual({ range: "last7", from: "2026-10-14", to: "2026-10-20" });
+  });
+
+  it("the button says the range in short words; the year only when it is not this year's", () => {
+    const today = "2026-10-20";
+    expect(pickerText("month", "2026-10-01", "2026-10-31", today)).toBe("This month · 1–31 Oct");
+    expect(pickerText("week", "2026-10-19", "2026-10-25", today)).toBe("This week · Mon 19 – Sun 25 Oct");
+    expect(pickerText("today", today, today, today)).toBe("Today · Tue 20 Oct");
+    expect(pickerText("custom", "2026-09-28", "2026-10-04", today)).toBe("Mon 28 Sep – Sun 4 Oct");
+    expect(pickerText("custom", "2026-08-28", "2026-10-04", today)).toBe("28 Aug – 4 Oct");
+    expect(pickerText("custom", "2025-12-20", "2026-01-10", today)).toBe("20 Dec 2025 – 10 Jan 2026");
+  });
+});
+
+describe("the calendar", () => {
+  it("tap the start, then the end; an earlier end swaps; the same day twice is one day; a new tap starts again", () => {
+    let p: Picking = { from: null, to: null };
+    p = tapDay(p, "2026-10-10");
+    expect(p).toEqual({ from: "2026-10-10", to: null });
+    expect(pickedRange(p)).toEqual({ from: "2026-10-10", to: "2026-10-10" });
+    p = tapDay(p, "2026-10-14");
+    expect(p).toEqual({ from: "2026-10-10", to: "2026-10-14" });
+    p = tapDay(p, "2026-10-12");
+    expect(p).toEqual({ from: "2026-10-12", to: null });
+    p = tapDay(p, "2026-10-05");
+    expect(p).toEqual({ from: "2026-10-05", to: "2026-10-12" });
+    p = tapDay({ from: null, to: null }, "2026-10-08");
+    expect(tapDay(p, "2026-10-08")).toEqual({ from: "2026-10-08", to: "2026-10-08" });
+    expect(pickedRange({ from: null, to: null })).toBeNull();
+  });
+
+  it("the days between are shaded, the ends marked", () => {
+    const p = { from: "2026-10-10", to: "2026-10-12" };
+    expect(dayRole("2026-10-10", p)).toBe("start");
+    expect(dayRole("2026-10-11", p)).toBe("between");
+    expect(dayRole("2026-10-12", p)).toBe("end");
+    expect(dayRole("2026-10-13", p)).toBeNull();
+    expect(dayRole("2026-10-10", { from: "2026-10-10", to: null })).toBe("single");
+  });
+
+  it("a page's limit greys the days past it while the end is picked (both days counted); min and max too", () => {
+    const picking = { from: "2026-10-10", to: null };
+    expect(dayDisabled("2026-10-16", { maxDays: 7, picking })).toBe(false); // 7 days
+    expect(dayDisabled("2026-10-17", { maxDays: 7, picking })).toBe(true); // 8 days
+    expect(dayDisabled("2026-10-04", { maxDays: 7, picking })).toBe(false);
+    expect(dayDisabled("2026-10-03", { maxDays: 7, picking })).toBe(true);
+    // Once the range is whole, a new start may be anywhere.
+    expect(dayDisabled("2026-12-01", { maxDays: 7, picking: { from: "2026-10-10", to: "2026-10-12" } })).toBe(false);
+    expect(dayDisabled("2026-10-19", { min: "2026-10-20" })).toBe(true);
+    expect(dayDisabled("2026-10-21", { max: "2026-10-20" })).toBe(true);
+  });
+
+  it("a month's grid starts on Monday, blanks around it; months move across the year", () => {
+    const oct = monthGrid("2026-10"); // 1 October 2026 is a Thursday
+    expect(oct[0]).toEqual([null, null, null, "2026-10-01", "2026-10-02", "2026-10-03", "2026-10-04"]);
+    expect(oct.flat().filter(Boolean)).toHaveLength(31);
+    expect(oct.every((w) => w.length === 7)).toBe(true);
+    expect(monthGrid("2026-02").flat().filter(Boolean)).toHaveLength(28);
+    expect(addMonths("2026-12", 1)).toBe("2027-01");
+    expect(addMonths("2027-01", -1)).toBe("2026-12");
+    expect(monthTitle("2026-10")).toBe("October 2026");
+  });
+});
+
+describe("the week strip and the trip day", () => {
+  it("seven days from Monday; ‹ › move by a week; the week's title", () => {
+    expect(weekDays("2026-10-19")).toEqual(["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24", "2026-10-25"]);
+    expect(shiftWeek("2026-10-19", -1)).toBe("2026-10-12");
+    expect(shiftWeek("2026-10-22", 1)).toBe("2026-10-26"); // any day: its week's Monday, moved
+    expect(weekTitle("2026-10-19")).toBe("19–25 Oct 2026");
+    expect(weekTitle("2026-09-28")).toBe("28 Sep – 4 Oct 2026");
+    expect(weekTitle("2026-12-28")).toBe("28 Dec 2026 – 3 Jan 2027");
+    expect(stripCell("2026-10-20")).toEqual({ weekday: "Tue", date: 20 });
+  });
+
+  it("a trip's day on its chip: Today, Tomorrow, else the date", () => {
+    expect(tripDayText("2026-10-20", "2026-10-20")).toBe("Today");
+    expect(tripDayText("2026-10-21", "2026-10-20")).toBe("Tomorrow");
+    expect(tripDayText("2026-10-23", "2026-10-20")).toBe("Fri 23 Oct");
+    expect(tripDayText("2027-01-05", "2026-10-20")).toBe("Tue 5 Jan 2027");
   });
 });

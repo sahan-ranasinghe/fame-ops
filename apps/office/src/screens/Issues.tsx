@@ -19,11 +19,13 @@ import { useLists } from "../data/hooks";
 import type { Issue, IssuesList } from "../data/types";
 import { addDays, attIcon } from "../lib/format";
 import { errText } from "../transport/errors";
-import { ErrBox, Loading, Notice, Pill, Plate, StaleNote } from "../ui/basics";
-import { DateRange, useDateRange } from "../ui/DateRange";
+import { ErrBox, Notice, Pill, Plate, StaleNote } from "../ui/basics";
+import { DateRangePicker, useDateRange } from "../ui/DateRangePicker";
 import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
-import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, useUrlSearch, useWatchedPagedList } from "../ui/ListKit";
+import { FilterBar } from "../ui/FilterBar";
+import { type FilterDef, type FilterValues, listDef, pairsDef } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, SkeletonRows, useUrlSearch, useWatchedPagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import {
   DEFAULT_STATUS,
@@ -50,19 +52,6 @@ import {
 
 /** list_issues takes at most 366 days. */
 const MAX_DAYS = 366;
-
-/** The status filter as tabs (the old page's three tabs, now seven). */
-function StatusTabs({ value, onChange, snoozed }: { value: IssueStatusFilter; onChange: (s: IssueStatusFilter) => void; snoozed?: number }) {
-  return (
-    <div className="chips" role="tablist" aria-label="Status">
-      {STATUS_FILTERS.map(([k, label]) => (
-        <button key={k} type="button" role="tab" className="chip" aria-selected={value === k} onClick={() => onChange(k)}>
-          {label}{k === "snoozed" && snoozed ? ` · ${snoozed}` : ""}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function IssueRow({ i, current, search, replace }: { i: Issue; current: boolean; search: string; replace: boolean }) {
   const snooze = snoozeLine(i);
@@ -94,13 +83,24 @@ export default function Issues() {
   const kind = params.get("kind") || "";
   const vehicle = params.get("vehicle") || "";
   const [text, setText] = useUrlSearch();
-  const set = (key: string, value: string, def = "") => setParams((p) => {
+  /** The filters as the Filter panel applies them (docs/ui-patterns.md §1): every one at once, the URL's names kept. */
+  const applyFilters = (v: FilterValues) => setParams((p) => {
     const next = new URLSearchParams(p);
     next.delete("tab"); // the old links' tab= gives way to status=
-    if (value && value !== def) next.set(key, value);
-    else next.delete(key);
+    const put = (key: string, value: string, def = "") => (value && value !== def ? next.set(key, value) : next.delete(key));
+    const st = (v.status as string) || DEFAULT_STATUS;
+    put("status", st, DEFAULT_STATUS);
+    put("kind", v.kind as string);
+    put("vehicle", v.vehicle as string);
+    put("severity", v.severity as string);
     // A new status takes its own order unless one was chosen for it.
-    if (key === "status" && next.get("sort") === defaultSort((value || DEFAULT_STATUS) as IssueStatusFilter)) next.delete("sort");
+    if (next.get("sort") === defaultSort(st as IssueStatusFilter)) next.delete("sort");
+    return next;
+  }, { replace: true });
+  const setSort = (value: string) => setParams((p) => {
+    const next = new URLSearchParams(p);
+    if (value && value !== defaultSort(status)) next.set("sort", value);
+    else next.delete("sort");
     return next;
   }, { replace: true });
 
@@ -145,6 +145,12 @@ export default function Issues() {
   const outside = d && !stale && !text ? outsideNote(d, status, narrowed) : undefined;
   const today = colomboDay();
   const label = STATUS_FILTERS.find(([k]) => k === status)?.[1] ?? "Issues";
+  const filterDefs: FilterDef[] = [
+    { ...pairsDef("status", "Status", STATUS_FILTERS, DEFAULT_STATUS, { snoozed: d?.snoozed || undefined }) },
+    listDef("kind", "Kind", "All kinds", options.kinds.map(([value, l]) => ({ value, label: l })), kind),
+    listDef("vehicle", "Vehicle", "All vehicles", options.vehicles.map((v) => ({ value: v, label: v })), vehicle),
+    pairsDef("severity", "Severity", SEVERITY_OPTIONS, ""),
+  ];
 
   return (
     <section className="view">
@@ -153,39 +159,20 @@ export default function Issues() {
           <div><div className="eyebrow">Everything that needs attention</div><h1>Issues</h1></div>
         </div>
         <div className="card card-b" style={{ display: "grid", gap: 12, marginBottom: 18 }}>
-          <DateRange value={dates} label="Opened" />
-          <StatusTabs value={status} onChange={(s) => set("status", s, DEFAULT_STATUS)} snoozed={d?.snoozed} />
-          <div className="filters" style={{ marginBottom: 0 }}>
-            <SearchBox value={text} onChange={setText} placeholder="Title, plate, driver or detail" />
-            <label className="field"><span>Kind</span>
-              <select aria-label="Kind" value={kind} onChange={(e) => set("kind", e.target.value)}>
-                <option value="">All kinds</option>
-                {options.kinds.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Vehicle</span>
-              <select aria-label="Vehicle" value={vehicle} onChange={(e) => set("vehicle", e.target.value)}>
-                <option value="">All vehicles</option>
-                {options.vehicles.map((v) => <option key={v} value={v}>{v}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Severity</span>
-              <select aria-label="Severity" value={severity} onChange={(e) => set("severity", e.target.value)}>
-                {SEVERITY_OPTIONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Order</span>
-              <select aria-label="Order" value={sort} onChange={(e) => set("sort", e.target.value, defaultSort(status))}>
-                {SORT_OPTIONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-              </select>
-            </label>
-          </div>
+          <DateRangePicker value={dates} label="Opened" />
+          <FilterBar
+            search={<SearchBox value={text} onChange={setText} placeholder="Title, plate, driver or detail" />}
+            filters={filterDefs}
+            values={{ status, kind, vehicle, severity }}
+            onChange={applyFilters}
+            sort={{ value: sort, options: SORT_OPTIONS.map(([value, l]) => ({ value, label: l })), onChange: setSort, label: "Order" }}
+          />
         </div>
 
         {dates.error ? null : !d && !noConnector ? (
           <>
             <ErrBox entry={entry} onRetry={list.query.refetch} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-            {!entry.err && <Loading>Loading issues…</Loading>}
+            {!entry.err && <div className="card"><SkeletonRows label="Loading issues…" /></div>}
           </>
         ) : d && stale && entry.err ? (
           // The rows on screen are another filter's: say what went wrong instead.
@@ -203,7 +190,7 @@ export default function Issues() {
               <div className="rows" style={stale ? { opacity: 0.6 } : undefined}>
                 {rows.length
                   ? rows.map((i) => <IssueRow key={i.id} i={i} current={i.id === id} search={search} replace={!!id} />)
-                  : <EmptyLine>{stale ? "Loading…" : emptyText(status, from, to, narrowed, text)}</EmptyLine>}
+                  : stale ? <SkeletonRows rows={3} /> : <EmptyLine>{emptyText(status, from, to, narrowed, text)}</EmptyLine>}
               </div>
               <LoadMore list={list} />
               <Pager list={list} />

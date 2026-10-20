@@ -6,8 +6,8 @@ import { useFleet } from "../../app/FleetContext";
 import type { Ask, AskAnswers } from "../../data/types";
 import { joinDots } from "../../lib/format";
 import { errText } from "../../transport/errors";
-import { Loading, Notice, Pill } from "../../ui/basics";
-import { EmptyLine, ListHeader, LoadMore, Pager, usePagedList } from "../../ui/ListKit";
+import { Notice, Pill } from "../../ui/basics";
+import { EmptyLine, ListHeader, LoadMore, Pager, usePagedList, SkeletonRows } from "../../ui/ListKit";
 import { PageTop } from "../../ui/Page";
 import { countsLine, openLine } from "./askLogic";
 
@@ -25,7 +25,7 @@ export function AskList() {
       <div className="card">
         <ListHeader title="Questions" count={q.data ? list.total : undefined} updating={q.updating} />
         {q.err && !q.data && <div className="card-b"><Notice tone="bad">{errText(q.err)[0]} <button type="button" className="btn small" onClick={q.refetch}>Try again</button></Notice></div>}
-        {q.loading && <div className="card-b"><Loading>Loading the questions…</Loading></div>}
+        {q.loading && <SkeletonRows label="Loading the questions…" />}
         {q.data && !list.items.length && <EmptyLine>No questions to drivers in the last 7 days.</EmptyLine>}
         <div className="rows">
           {list.items.map((a) => (

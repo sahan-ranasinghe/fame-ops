@@ -20,7 +20,7 @@ import { num } from "../../lib/format";
 import { errText } from "../../transport/errors";
 import type { FleetError } from "../../transport/types";
 import { Notice, Pill } from "../../ui/basics";
-import { EmptyLine, ListHeader } from "../../ui/ListKit";
+import { EmptyLine, ListHeader, SkeletonRows } from "../../ui/ListKit";
 import { PageTop } from "../../ui/Page";
 import { useToast } from "../../ui/Toast";
 import { ListFooter, useLocalPages } from "../listLocal";
@@ -372,7 +372,7 @@ export function ImportHistory({ imports, busy, onUndo }: { imports: PlaceImport[
     <div className="card" data-testid="import-history">
       <ListHeader title="Imports" count={imports?.length}
         right={imports && imports.length >= HISTORY_LIMIT ? <span className="muted small">The newest {HISTORY_LIMIT}</span> : undefined} />
-      {imports === null ? <EmptyLine>Loading…</EmptyLine> : imports.length === 0 ? <EmptyLine>No import yet: the files imported here are listed with Undo.</EmptyLine> : (
+      {imports === null ? <SkeletonRows rows={3} label="Loading the imports…" /> : imports.length === 0 ? <EmptyLine>No import yet: the files imported here are listed with Undo.</EmptyLine> : (
         <div className="tbl-wrap">
           <table>
             <thead><tr><th>When</th><th>Who</th><th>File · preset</th><th>Added</th><th>Updated</th><th>Skipped</th><th></th></tr></thead>

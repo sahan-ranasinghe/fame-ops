@@ -61,6 +61,10 @@ export function errText(e: FleetError | undefined): [string, Fix] {
       // A write is never repeated on its own (transport/retryRule.ts): the person is told, and Try again repeats it.
       if (e.write) return ["Fame Fleet didn’t answer, so this may not have been saved. Try again.", "retry"];
       return ["Fame Fleet didn’t answer. The page tries again by itself.", "retry"];
+    case "timeout":
+      // No call waits forever (retryRule.ts timeoutFor).
+      if (e.write) return ["Fame Fleet didn’t answer in time, so this may not have been saved. Try again.", "retry"];
+      return ["Fame Fleet didn’t answer in time. Try again.", "retry"];
     case "not_granted":
     case "capability_disabled":
     case "capability_removed":

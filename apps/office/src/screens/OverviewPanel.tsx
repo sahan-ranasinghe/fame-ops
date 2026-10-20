@@ -13,9 +13,9 @@ import type { Board, BoardCard, Overview, RequestsList, RoadDriver, VehiclesList
 import { useQuery } from "../data/useQuery";
 import { joinDots, plateOf, today, vehicleAvailabilityTone } from "../lib/format";
 import { can } from "../transport/types";
-import { Avatar, Empty, ErrBox, IconLink, Loading, Pill, Plate, VehicleThumb } from "../ui/basics";
+import { Avatar, Empty, ErrBox, IconLink, Pill, Plate, VehicleThumb } from "../ui/basics";
 import { Icon } from "../ui/icons";
-import { PAGE_SIZE } from "../ui/ListKit";
+import { PAGE_SIZE, SkeletonRows } from "../ui/ListKit";
 import { LATE_BADGE } from "./approvalLogic";
 import { requestsLine } from "./overview/overviewLogic";
 import { FULL_PATH, OPEN_TEXT, type OverviewOpen, VEHICLE_FILTER_WORDS } from "./overviewLinks";
@@ -53,7 +53,7 @@ export function RoadRows({ rows }: { rows: RoadDriver[] }) {
 function QueryState<T>({ q, what }: { q: { data: T | undefined; err?: Entry["err"]; loading: boolean; refetch: () => void }; what: string }) {
   if (q.data !== undefined) return null;
   if (q.err) return <div className="card-b"><ErrBox entry={{ data: undefined, err: q.err, loading: false }} onRetry={q.refetch} /></div>;
-  return <Loading>Loading {what}…</Loading>;
+  return <SkeletonRows label={`Loading ${what}…`} />;
 }
 
 /** Free now (available) and In garage: the vehicles, each to its page on the board with the same filter. */
@@ -133,7 +133,7 @@ function RequestRows() {
   if (!rq.data) {
     return rq.err
       ? <div className="card-b"><ErrBox entry={{ data: undefined, err: rq.err, loading: false }} onRetry={rq.refetch} /></div>
-      : <Loading>Loading requests…</Loading>;
+      : <SkeletonRows label="Loading requests…" />;
   }
   if (!list.length) return <Empty>No requests are waiting.</Empty>;
   const total = rq.data.total ?? list.length;
@@ -175,7 +175,7 @@ export function OverviewPanel({ open, overview, onClose }: { open: OverviewOpen;
   switch (open) {
     case "road":
       eyebrow = o ? `${o.vehicles.on_the_road ?? 0} of ${o.vehicles.total ?? 0} vehicles · now` : "Now";
-      body = o ? <div className="rows"><RoadRows rows={o.on_the_road} /></div> : <Loading>Loading the fleet…</Loading>;
+      body = o ? <div className="rows"><RoadRows rows={o.on_the_road} /></div> : <SkeletonRows label="Loading the fleet…" />;
       break;
     case "free":
       eyebrow = "Not on a task, not in the garage";
@@ -195,7 +195,7 @@ export function OverviewPanel({ open, overview, onClose }: { open: OverviewOpen;
       break;
     case "reminders":
       eyebrow = `Due in the next ${o?.reminders.window_days ?? 14} days`;
-      body = o ? <ReminderList items={o.needs_attention} issues={can(me, "issues")} /> : <Loading>Loading the reminders…</Loading>;
+      body = o ? <ReminderList items={o.needs_attention} issues={can(me, "issues")} /> : <SkeletonRows label="Loading the reminders…" />;
       break;
   }
   return (

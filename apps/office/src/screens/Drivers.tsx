@@ -10,7 +10,9 @@ import type { Driver, DriversList } from "../data/types";
 import { locTone } from "../lib/format";
 import { can } from "../transport/types";
 import { Avatar, Pill, Plate } from "../ui/basics";
-import { EmptyLine, ListHeader, usePagedList, useUrlFilter } from "../ui/ListKit";
+import { FilterBar } from "../ui/FilterBar";
+import { pairsDef } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, SkeletonRows, usePagedList, useUrlFilter } from "../ui/ListKit";
 import { ListFooter, ListStale, ListWaiting, SearchBox, useSearchBox } from "./listLocal";
 import { docTone } from "./vehicleLogic";
 
@@ -52,10 +54,12 @@ export function Drivers() {
           {canAdd && <Link className="btn primary" to="/drivers/new">Add driver</Link>}
         </div>
       </div>
-      <div className="list-tools">
-        <SearchBox label="Find a driver" placeholder="Name, username, code or plate" value={box.text} onChange={box.setText} onBlur={box.flush} />
-        <span className="check"><input type="checkbox" id="drv-inactive" checked={inactive} onChange={(e) => setInactiveFlag(e.target.checked ? "1" : "0")} /> <label htmlFor="drv-inactive">Show switched-off drivers</label></span>
-      </div>
+      <FilterBar
+        search={<SearchBox label="Find a driver" placeholder="Name, username, code or plate" value={box.text} onChange={box.setText} onBlur={box.flush} />}
+        filters={[pairsDef("inactive", "Show", [["0", "Active drivers"], ["1", "All drivers, the switched-off ones too"]], "0")]}
+        values={{ inactive: inactiveFlag }}
+        onChange={(v) => setInactiveFlag(v.inactive === "1" ? "1" : "0")}
+      />
       {!noConnector && <ListWaiting q={q} loading="Loading drivers…" />}
       {d && (
         <div className="card" style={q.stale ? { opacity: 0.6 } : undefined} aria-busy={q.updating || q.stale || undefined} data-testid="drivers-list">
@@ -83,7 +87,7 @@ export function Drivers() {
                 </tbody>
               </table>
             </div>
-          ) : <EmptyLine>{q.stale ? "Loading…" : driversEmpty(inactive, box.search, canAdd)}</EmptyLine>}
+          ) : q.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{driversEmpty(inactive, box.search, canAdd)}</EmptyLine>}
           <ListFooter list={list} />
         </div>
       )}

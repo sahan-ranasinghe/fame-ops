@@ -41,6 +41,7 @@ import { NeedsDriverLine, RequestLine, TripLine } from "./overview/rows";
 import { Section } from "./overview/Section";
 import { canOpen, FULL_PATH, OPEN_TEXT, openFrom, type OverviewOpen, tileTarget, withParam } from "./overviewLinks";
 import { OverviewPanel, RoadRows } from "./OverviewPanel";
+import { SkeletonRows } from "../ui/ListKit";
 
 /** The waiting queue on the Overview: the first page (the section shows 5, the count is the answer's total). */
 export const REQ_WAITING_ARGS = { status: "waiting", limit: SECTION_ROWS.desktop };
@@ -100,7 +101,7 @@ export function Overview() {
             viewAll={{ to: "/requests", label: viewAll(total) }} summary={requestsLine(d.requests)}>
             {rq.err && !rq.data ? (
               <div className="card-b"><ErrBox entry={rq} onRetry={() => void store.load("reqWaiting", "list_requests", REQ_WAITING_ARGS)} /></div>
-            ) : !rq.data ? <Loading>Loading requests…</Loading>
+            ) : !rq.data ? <SkeletonRows rows={3} label="Loading requests…" />
             : list.length ? <div className="rows">{list.slice(0, rows).map((q) => <RequestLine key={q.id} q={q} decide={me.tools.includes("decide_request")} />)}</div>
             : <Empty>No requests are waiting.</Empty>}
           </Section>
@@ -179,7 +180,7 @@ export function Overview() {
             viewAll={{ to: "/my-trips", label: viewAll(trips.data ? total : undefined) }}>
             {trips.err && !trips.data ? (
               <div className="card-b"><ErrBox entry={{ data: undefined, err: trips.err, loading: false }} onRetry={trips.refetch} /></div>
-            ) : !trips.data ? <Loading>Loading your trips…</Loading>
+            ) : !trips.data ? <SkeletonRows rows={3} label="Loading your trips…" />
             : list.length ? <div className="rows">{list.slice(0, rows).map((t) => { const r = tripRow(t); return <TripLine key={r.key} r={r} />; })}</div>
             : <Empty>No trips in the last 30 days or the next 30.{can(me, "request") && <> <Link to="/requests/new">New request</Link></>}</Empty>}
           </Section>

@@ -9,10 +9,11 @@ import type { SetUnavailabilityResult, UnavailableEntry } from "../data/types";
 import { today } from "../lib/format";
 import { asFleetError, errText } from "../transport/errors";
 import { Chips, Notice } from "../ui/basics";
-import { TimeInput } from "../ui/TimeInput";
+import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
 import { useFleetSettings } from "./dispatchParts";
 import { entryError, entryForm, type EntryForm, partChoices, REASONS, setUnavailabilityArgs, shortDay, splitOf } from "./unavailabilityLogic";
+import { DateField } from "../ui/DayPicker";
 
 export function UnavailabilityEditor({ driver, driverName, entry, day, onDone }: {
   /** The driver's username (or code or name). */
@@ -93,12 +94,12 @@ export function UnavailabilityEditor({ driver, driverName, entry, day, onDone }:
       <div className="grid2">
         <div className="field">
           <label htmlFor={`unav-day-${id}`}>Day</label>
-          <input type="date" id={`unav-day-${id}`} value={f.day} min={today()} disabled={!canSave} onChange={(e) => set("day", e.target.value)} />
+          <DateField id={`unav-day-${id}`} label="Day" value={f.day} min={today()} disabled={!canSave} clearable={false} onChange={(d) => set("day", d)} />
         </div>
         {f.part === "full_day" && (
           <div className="field">
             <label htmlFor={`unav-last-${id}`}>Last day <span className="muted small">(several days)</span></label>
-            <input type="date" id={`unav-last-${id}`} value={f.last_day} min={f.day || today()} disabled={!canSave} onChange={(e) => set("last_day", e.target.value)} />
+            <DateField id={`unav-last-${id}`} label="Last day" value={f.last_day} min={f.day || today()} disabled={!canSave} placeholder="Same day" onChange={(d) => set("last_day", d)} />
           </div>
         )}
       </div>
@@ -110,8 +111,8 @@ export function UnavailabilityEditor({ driver, driverName, entry, day, onDone }:
       </div>
       {f.part === "hours" && (
         <div className="grid2">
-          <div className="field"><label htmlFor={`unav-from-${id}`}>From</label><TimeInput id={`unav-from-${id}`} value={f.from} disabled={!canSave} onCommit={(v) => set("from", v)} /></div>
-          <div className="field"><label htmlFor={`unav-to-${id}`}>To</label><TimeInput id={`unav-to-${id}`} value={f.to} disabled={!canSave} onCommit={(v) => set("to", v)} /></div>
+          <div className="field"><label htmlFor={`unav-from-${id}`}>From</label><TimeField id={`unav-from-${id}`} value={f.from} disabled={!canSave} onCommit={(v) => set("from", v)} /></div>
+          <div className="field"><label htmlFor={`unav-to-${id}`}>To</label><TimeField id={`unav-to-${id}`} value={f.to} disabled={!canSave} onCommit={(v) => set("to", v)} /></div>
         </div>
       )}
       <div className="field">

@@ -3,6 +3,7 @@
 // words, and a row opening the request beside the list from the list's own card, back to the same filters.
 import { cursorAt, offsetOf } from "@fleet/paging";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { applyFilter } from "../test/controls";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -108,12 +109,13 @@ describe("the Requests list (Hotfix 3)", () => {
 
   it("the status and the search go into the URL and the tool; the empty line says what the filter means", async () => {
     const t = await mount([card(1, "waiting"), card(2, "approved"), card(3, "approved")]);
-    fireEvent.click(screen.getByRole("button", { name: "Approved" }));
+    applyFilter("Status", "Approved");
     await flush();
     expect(screen.getByTestId("where").textContent).toBe("/requests?status=approved");
     expect(t.argsOf("list_requests").at(-1)).toEqual({ status: "approved", limit: 25 });
     expect(screen.getAllByTestId("request-row")).toHaveLength(2);
-    const box = within(screen.getByTestId("requests-list")).getByLabelText("Search");
+    // The search bar above the list, beside the Filter button (docs/ui-patterns.md §1).
+    const box = within(screen.getByTestId("filter-bar")).getByLabelText("Search");
     fireEvent.change(box, { target: { value: "Asker 3" } });
     fireEvent.keyDown(box, { key: "Enter" });
     await flush();

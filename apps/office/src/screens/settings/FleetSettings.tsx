@@ -17,6 +17,7 @@ import { useToast } from "../../ui/Toast";
 import { PERSONAL_TRIPS_OPTIONS, personalTripsValue } from "../tripPurposeLogic";
 import { officePhoneValue, privacyEmailValue, samePhone } from "./profileLogic";
 import { duration } from "@fleet/durations";
+import { TimeField } from "../../ui/TimeField";
 
 /** The time at a stop by its type (Phase 7, §17); "default" is any other. */
 const DWELL_KEYS: [string, string][] = [["pickup", "Pickup"], ["drop", "Drop"], ["visit", "Visit"], ["default", "Any other"]];
@@ -235,7 +236,7 @@ export function FleetSettings() {
           <h2>Shift nudge in the driver app</h2>
           <p className="muted small" style={{ margin: 0 }}>{data.about.shift_start}. {data.about.shift_days}.</p>
           <div className="grid2">
-            <div className="field"><label htmlFor="fs-shift-start">Time</label><input id="fs-shift-start" type="time" value={draft.shift_start ?? "08:00"} onChange={(e) => setDraft({ ...draft, shift_start: e.target.value })} /></div>
+            <div className="field"><label htmlFor="fs-shift-start">Time</label><TimeField id="fs-shift-start" value={draft.shift_start ?? "08:00"} onCommit={(v) => setDraft({ ...draft, shift_start: v })} /></div>
             <div className="field"><span className="lab">Days</span>
               <div className="chips">
                 {DAYS.map((d, i) => (
@@ -254,7 +255,7 @@ export function FleetSettings() {
           <div className="grid2" style={{ alignItems: "end" }}>
             <div className="field">
               <label htmlFor="fs-duty-cutoff">End of the working day</label>
-              <input id="fs-duty-cutoff" type="time" value={draft.duty_cutoff ?? "21:00"} onChange={(e) => setDraft({ ...draft, duty_cutoff: e.target.value })} />
+              <TimeField id="fs-duty-cutoff" value={draft.duty_cutoff ?? "21:00"} onCommit={(v) => setDraft({ ...draft, duty_cutoff: v })} />
               <span className="hint">{(draft.duty_cutoff ?? "21:00") === "" ? "Empty: nobody is clocked out by the server." : `Clocked out at ${draft.duty_cutoff ?? "21:00"} (Colombo time).`}</span>
             </div>
             <div><button type="button" className="btn" disabled={busy !== null || draft.duty_cutoff === ""} onClick={() => setDraft({ ...draft, duty_cutoff: "" })}>Leave empty</button></div>
@@ -390,8 +391,8 @@ export function FleetSettings() {
           {draft.rush_hour.bands.map((b, i) => (
             <div className="card card-b stop-row" key={i}>
               <div className="grid2">
-                <div className="field"><label htmlFor={`fs-b-from-${i}`}>From</label><input id={`fs-b-from-${i}`} type="time" value={b.from} onChange={(e) => setDraft({ ...draft, rush_hour: { ...draft.rush_hour, bands: draft.rush_hour.bands.map((x, j) => (j === i ? { ...x, from: e.target.value } : x)) } })} /></div>
-                <div className="field"><label htmlFor={`fs-b-to-${i}`}>To</label><input id={`fs-b-to-${i}`} type="time" value={b.to} onChange={(e) => setDraft({ ...draft, rush_hour: { ...draft.rush_hour, bands: draft.rush_hour.bands.map((x, j) => (j === i ? { ...x, to: e.target.value } : x)) } })} /></div>
+                <div className="field"><label htmlFor={`fs-b-from-${i}`}>From</label><TimeField id={`fs-b-from-${i}`} value={b.from} onCommit={(v) => setDraft({ ...draft, rush_hour: { ...draft.rush_hour, bands: draft.rush_hour.bands.map((x, j) => (j === i ? { ...x, from: v } : x)) } })} /></div>
+                <div className="field"><label htmlFor={`fs-b-to-${i}`}>To</label><TimeField id={`fs-b-to-${i}`} value={b.to} onCommit={(v) => setDraft({ ...draft, rush_hour: { ...draft.rush_hour, bands: draft.rush_hour.bands.map((x, j) => (j === i ? { ...x, to: v } : x)) } })} /></div>
               </div>
               <div className="chips">
                 {DAYS.map((d, day) => (

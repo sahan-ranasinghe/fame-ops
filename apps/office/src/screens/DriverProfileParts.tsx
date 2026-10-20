@@ -21,6 +21,7 @@ import { FilePick } from "./PhotoUpload";
 import { UnavailabilityEditor } from "./UnavailabilityEditor";
 import { entryDays } from "./unavailabilityLogic";
 import { docTone } from "./vehicleLogic";
+import { DateField } from "../ui/DayPicker";
 
 /** The editing state the page keeps as its draft: the section open and its fields. */
 export interface ProfileDraft {
@@ -131,8 +132,12 @@ export function ProfileSections({ username, name, p, row, draft, setDraft, contr
           return (
             <div className="field" key={k}>
               <label htmlFor={`pf-${k}`}>{FIELD_LABEL[k]}{k === "whatsapp" ? <span className="muted small"> (if not the mobile)</span> : null}</label>
-              <input id={`pf-${k}`} type={spec.type ?? "text"} inputMode={spec.inputMode} maxLength={spec.max} value={draft.f[k]}
-                onChange={(e) => setField(k, e.target.value)} />
+              {spec.type === "date"
+                ? <DateField id={`pf-${k}`} label={FIELD_LABEL[k]} value={draft.f[k]} onChange={(d) => setField(k, d)} />
+                : (
+                  <input id={`pf-${k}`} type={spec.type ?? "text"} inputMode={spec.inputMode} maxLength={spec.max} value={draft.f[k]}
+                    onChange={(e) => setField(k, e.target.value)} />
+                )}
             </div>
           );
         })}

@@ -2,6 +2,7 @@
 // last 30 days; Unread; the History switch for the archived ones; the search; all in the URL), an item outside the
 // bell's feed marked read here; the reminders paged on the page with the same look.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { applyFilter } from "../test/controls";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -103,11 +104,11 @@ describe("the notifications page (Hotfix 3)", () => {
 
   it("Unread, History (the archived ones too) and the search go into the URL and my_inbox", async () => {
     const t = await mountInbox();
-    fireEvent.click(screen.getByRole("button", { name: "History" }));
+    applyFilter("Older ones", /Also the history/);
     await flush();
     expect(screen.getByTestId("where").textContent).toBe("/inbox?history=1");
     expect(t.argsOf("my_inbox").at(-1)).toEqual({ archived: true, limit: 25 });
-    fireEvent.click(screen.getByRole("button", { name: "Unread" }));
+    applyFilter("Show", "Unread");
     await flush();
     expect(screen.getByTestId("where").textContent).toBe("/inbox?history=1&show=unread");
     expect(t.argsOf("my_inbox").at(-1)).toEqual({ archived: true, unread: true, limit: 25 });

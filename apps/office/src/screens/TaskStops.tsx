@@ -16,7 +16,7 @@ import type { FleetError } from "../transport/types";
 import { Loading, Notice } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { cameFromTask, PageTop, StickyActions, useAfterSave } from "../ui/Page";
-import { TimeInput } from "../ui/TimeInput";
+import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
 import { checkDeparture, departurePlan } from "./departureLogic";
 import { DepartureNote, useFleetSettings, usePlanPreview } from "./dispatchParts";
@@ -197,7 +197,7 @@ export function TaskStops() {
               </div>
               <div className="field">
                 <label htmlFor="ts-leave">Leave by</label>
-                <TimeInput id="ts-leave" value={form.leaveBy} onCommit={(leaveBy) => set({ leaveBy })} />
+                <TimeField id="ts-leave" value={form.leaveBy} onCommit={(leaveBy) => set({ leaveBy })} />
                 {check && check.kind !== "fill"
                   ? <DepartureNote check={check} onUse={(time) => set({ leaveBy: time })} onMove={(n, time) => moveArriveBy(n, time)} />
                   : <span className="hint">Empty: planned from the stops’ arrive-by times.</span>}

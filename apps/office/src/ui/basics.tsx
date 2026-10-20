@@ -116,6 +116,21 @@ export function Updated({ entry }: { entry: Entry }) {
   return entry.at ? <span className="updated">Updated {clock(entry.at)}</span> : null;
 }
 
+/**
+ * A segmented control (docs/ui-patterns.md §8): two or three options that switch the view inside a screen ("Now | Week",
+ * "All | Requests | Tasks I created"). Not a filter: filters are the Filter button (ui/FilterBar.tsx).
+ */
+export function Segmented<K extends string>({ options, value, onChange, label }: { options: readonly (readonly [K, string])[]; value: K; onChange: (k: K) => void; label: string }) {
+  return (
+    <div className="segmented" role="tablist" aria-label={label}>
+      {options.map(([k, l]) => (
+        <button key={k} type="button" role="tab" aria-selected={value === k} onClick={() => onChange(k)}>{l}</button>
+      ))}
+    </div>
+  );
+}
+
+/** Choices inside a form (a reason, a part of the day): chips that pick one. Never a list's filters (ui/FilterBar.tsx). */
 export function Chips<K extends string>({ options, value, onChange, counts }: { options: [K, string][]; value: K; onChange: (k: K) => void; counts?: Partial<Record<K, number>> }) {
   return (
     <div className="chips">

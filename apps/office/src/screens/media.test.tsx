@@ -3,6 +3,7 @@
 // vehicle_documents), Replace photo on a driver (the web only), the request's driver and vehicle once approved with Tell
 // requester and the requester's phone, and the Overview's waiting block marking a proposed task and a late one.
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { pickDate } from "../test/controls";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { type Fleet, FleetProvider } from "../app/FleetContext";
@@ -96,7 +97,7 @@ describe("the Documents section", () => {
     expect(t.argsOf("vehicle_documents")[0]).toEqual({ vehicle: "WP CAB-4521", removed: true });
     expect(screen.getByTestId("docs-missing").textContent).toBe("Missing: revenue licence, emission test, CR");
     expect(within(screen.getByTestId("doc-revenue_licence")).getByText("No document")).toBeTruthy();
-    expect((within(screen.getByTestId("doc-revenue_licence")).getByLabelText("Expires") as HTMLInputElement).value).toBe("2027-01-01");
+    expect(within(screen.getByTestId("doc-revenue_licence")).getByLabelText("Expires").getAttribute("data-value")).toBe("2027-01-01");
     expect(within(ins).getByText("PDF · 512 KB")).toBeTruthy();
     expect(within(ins).getByText("Uploaded by Palitha 14 Oct 10:05")).toBeTruthy();
     expect(within(ins).getByRole("link", { name: "View" }).getAttribute("href")).toBe("https://files/ins.pdf");
@@ -117,7 +118,7 @@ describe("the Documents section", () => {
     const upload = vi.fn(() => Promise.resolve());
     mount(t, officer, <VehicleDocumentsSection reg="WP CAB-4521" rented={false} />, { files: { upload } });
     const row = await screen.findByTestId("doc-revenue_licence");
-    fireEvent.change(within(row).getByLabelText("Expires"), { target: { value: "2027-02-28" } });
+    pickDate(within(row).getByLabelText("Expires"), "2027-02-28");
     const file = new File(["x".repeat(50)], "licence.jpg", { type: "image/jpeg" });
     fireEvent.change(within(row).getByLabelText("Upload"), { target: { files: [file] } });
     await waitFor(() => expect(t.argsOf("save_vehicle_document")).toHaveLength(1));
@@ -146,7 +147,7 @@ describe("the Documents section", () => {
     mount(t, officer, <VehicleDocumentsSection reg="WP CAB-4521" rented={false} />, { files: { upload: vi.fn() } });
     const ins = await screen.findByTestId("doc-insurance");
     expect(within(ins).queryByRole("button", { name: "Save date" })).toBeNull();
-    fireEvent.change(within(ins).getByLabelText("Expires"), { target: { value: "2027-06-30" } });
+    pickDate(within(ins).getByLabelText("Expires"), "2027-06-30");
     fireEvent.click(within(ins).getByRole("button", { name: "Save date" }));
     await waitFor(() => expect(t.argsOf("update_vehicle")).toEqual([{ reg_no: "WP CAB-4521", insurance_expiry: "2027-06-30" }]));
 
@@ -197,7 +198,7 @@ describe("Register vehicle", () => {
     expect(t.argsOf("register_vehicle")[0]).toEqual({ reg_no: "wp cab 4521" });
     // Rented: the agreement is one of its papers, its date starts from the vehicle's rented-until.
     const lease = await screen.findByTestId("doc-lease");
-    await waitFor(() => expect((within(lease).getByLabelText("Expires") as HTMLInputElement).value).toBe("2027-01-31"));
+    await waitFor(() => expect(within(lease).getByLabelText("Expires").getAttribute("data-value")).toBe("2027-01-31"));
     expect(screen.getByRole("link", { name: "Open the vehicle" }).getAttribute("href")).toBe("/vehicles/WP%20CAB-4521");
   });
 });

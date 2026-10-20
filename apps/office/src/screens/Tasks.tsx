@@ -14,10 +14,11 @@ import { useFleet } from "../app/FleetContext";
 import { useEntry } from "../data/hooks";
 import type { Board, BoardCard } from "../data/types";
 import { useQuery } from "../data/useQuery";
-import { addDays, cap, longDate, statusTone, today } from "../lib/format";
-import { Avatar, Dot, ErrBox, Loading, Plate, StaleNote, Updated, VehicleThumb } from "../ui/basics";
+import { cap, longDate, statusTone, today } from "../lib/format";
+import { Avatar, Dot, ErrBox, Plate, StaleNote, Updated, VehicleThumb } from "../ui/basics";
 import { Icon } from "../ui/icons";
-import { LoadMore, PAGE_SIZE, type PagedList } from "../ui/ListKit";
+import { DayStrip } from "../ui/DayPicker";
+import { LoadMore, PAGE_SIZE, type PagedList, SkeletonRows } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import { decidedText } from "./approversLogic";
 import { LateReportLine } from "./LateReport";
@@ -148,7 +149,7 @@ export function Tasks() {
           {!board.data && !noConnector && (
             <>
               <ErrBox entry={board} onRetry={() => void store.load("board", "task_board", boardArgs(date))} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-              {!board.err && <Loading>Loading tasks…</Loading>}
+              {!board.err && <SkeletonRows rows={4} label="Loading tasks…" />}
             </>
           )}
           {board.data && board.err && <StaleNote entry={board} />}
@@ -182,17 +183,13 @@ export function Tasks() {
             <NeedsDriverList tasks={needs} linked={canChange} />
           </div>
         )}
-        <div className="daynav" style={{ marginBottom: 18 }}>
-          <button type="button" className="btn" onClick={() => setDate(addDays(date, -1))}>‹ Yesterday</button>
-          <button type="button" className="btn dark" onClick={() => setDate(today())}>Today</button>
-          <button type="button" className="btn" onClick={() => setDate(addDays(date, 1))}>Tomorrow ›</button>
-          <input type="date" aria-label="Pick a day" value={date} onChange={(e) => { if (e.target.value) setDate(e.target.value); }} />
-        </div>
+        {/* The board's day: the week strip (docs/ui-patterns.md §3), any day (tomorrow's tasks too). */}
+        <div style={{ marginBottom: 18 }}><DayStrip value={date} onChange={setDate} label="Board day" testId="board-day" /></div>
         <div className="board">
           {!b && !noConnector && (
             <div style={{ gridColumn: "1/-1" }}>
               <ErrBox entry={board} onRetry={() => void store.load("board", "task_board", boardArgs(date))} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-              {!board.err && <Loading>Loading tasks…</Loading>}
+              {!board.err && <SkeletonRows rows={4} label="Loading tasks…" />}
             </div>
           )}
           {b && board.err && <div style={{ gridColumn: "1/-1" }}><StaleNote entry={board} /></div>}

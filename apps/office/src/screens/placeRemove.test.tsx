@@ -3,6 +3,7 @@
 // anyway for reasons that came up since, the notice with Settings → Fleet when the base place was cleared, the
 // removed place read-only with Restore), and Places → Removed places with Restore on each row.
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { applyFilter } from "../test/controls";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -158,7 +159,7 @@ describe("Places → Removed places", () => {
     }, fleetAdmin);
     await mount(t, "/places");
     await screen.findByText("Head office");
-    fireEvent.click(screen.getByRole("button", { name: "Removed places" }));
+    applyFilter("Places", "Removed places");
     expect(await screen.findByText("Removed by Palitha 16 Oct 15:20")).toBeTruthy();
     expect(t.argsOf("list_places").at(-1)).toEqual({ limit: 25, removed: true });
 

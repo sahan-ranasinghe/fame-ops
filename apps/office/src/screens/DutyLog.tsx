@@ -12,10 +12,12 @@ import { useLists } from "../data/hooks";
 import type { DutyLog as DutyLogData, DutyPeriod } from "../data/types";
 import { cap, num } from "../lib/format";
 import { can, canOpenTask } from "../transport/types";
-import { DateRange, useDateRange } from "../ui/DateRange";
+import { DateRangePicker, useDateRange } from "../ui/DateRangePicker";
 import { colomboDay } from "../ui/dateRange";
 import { Pill, Plate } from "../ui/basics";
-import { EmptyLine, ListHeader, usePagedList, useUrlFilter } from "../ui/ListKit";
+import { FilterBar } from "../ui/FilterBar";
+import { listDef } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, SkeletonRows, usePagedList, useUrlFilter } from "../ui/ListKit";
 import { PageTop } from "../ui/Page";
 import { clockOut, dutyArgs, emptyText, vehicleLine } from "./dutyLogic";
 import { ListFooter, ListStale, ListWaiting } from "./listLocal";
@@ -47,16 +49,12 @@ export function DutyLog() {
       <PageTop title="Duty log" sub="Drivers · Start work to Finish work" backTo="/drivers" />
       <div className="stack">
         <div className="card card-b" style={{ display: "grid", gap: 12 }}>
-          <DateRange value={dates} />
-          <div className="filters" style={{ marginBottom: 0 }}>
-            <label className="field"><span>Driver</span>
-              <select aria-label="Driver" value={driver} onChange={(e) => setDriver(e.target.value)}>
-                <option value="">All drivers</option>
-                {driver && !lists.drivers?.some((x) => x.username === driver) && <option value={driver}>{driver}</option>}
-                {(lists.drivers ?? []).map((x) => <option key={x.username} value={x.username}>{x.name}</option>)}
-              </select>
-            </label>
-          </div>
+          <DateRangePicker value={dates} />
+          <FilterBar
+            filters={[listDef("driver", "Driver", "All drivers", (lists.drivers ?? []).map((x) => ({ value: x.username, label: x.name })), driver)]}
+            values={{ driver }}
+            onChange={(v) => setDriver((v.driver as string) ?? "")}
+          />
         </div>
 
         {dates.error || noConnector ? null : !d ? (
@@ -129,7 +127,7 @@ export function DutyLog() {
                   </table>
                 </div>
               ) : (
-                <EmptyLine>{q.stale ? "Loading…" : emptyText(d, today)}</EmptyLine>
+                q.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{emptyText(d, today)}</EmptyLine>
               )}
               <ListFooter list={list} />
             </div>

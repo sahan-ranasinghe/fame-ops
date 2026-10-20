@@ -27,6 +27,26 @@ export const IDEMPOTENT_WRITES: Readonly<Record<string, string>> = {
 /** Writes made by the page itself in the background, never by a press: no Try again for them (they come again on their own schedule). */
 export const BACKGROUND_WRITES: ReadonlySet<string> = new Set(["reviewing", "watch_drivers", "set_my_prefs", "register_map_load"]);
 
+/**
+ * No call waits forever (docs/ui-patterns.md §5): a read gives up after 20 s, a write after 30 s, the place search's
+ * suggestions after 15 s; then the page shows the error with Try again (a write's "may not have been saved").
+ */
+export const READ_TIMEOUT_MS = 20_000;
+export const WRITE_TIMEOUT_MS = 30_000;
+export const SUGGEST_TIMEOUT_MS = 15_000;
+/** The suggestions asked while someone types. */
+export const SUGGEST_TOOLS: ReadonlySet<string> = new Set(["search_places"]);
+
+/** How long a call may take (GET /me is a read). */
+export function timeoutFor(tool?: string): number {
+  if (!tool) return READ_TIMEOUT_MS;
+  if (SUGGEST_TOOLS.has(tool)) return SUGGEST_TIMEOUT_MS;
+  return isWrite(tool) ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS;
+}
+
+/** The error of a call that took too long. */
+export const TIMED_OUT = { code: "timeout", message: "Fame Fleet took too long to answer." } as const;
+
 /** A dropped read is asked again this soon, once, before the page hears of it. */
 export const QUICK_RETRY_MS = 2_000;
 

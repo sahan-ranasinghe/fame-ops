@@ -119,7 +119,7 @@ describe("Assign on a Yes fills the driver in", () => {
   it("New task: the driver, the trip's day and its time as the leave-by", async () => {
     await mount(transport(), `/tasks/new?driver=nuwan&date=${DAY}&time=09%3A30`, newTask);
     expect(driverField().value).toBe("nuwan");
-    expect((screen.getByLabelText("Date") as HTMLInputElement).value).toBe(DAY);
+    expect(screen.getByRole("group", { name: "Date" }).getAttribute("data-value")).toBe(DAY);
     expect((screen.getByLabelText("Leave by") as HTMLInputElement).value).toBe("09:30");
   }, 20_000);
 

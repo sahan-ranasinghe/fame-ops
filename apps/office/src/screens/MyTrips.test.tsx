@@ -5,6 +5,7 @@
 // Hotfix 3: All · Requests · Tasks I created (into my_trips' include and the URL); a task the person created is a row
 // with its title, when, route, live state and the driver with Call, and opens the task; the count in the header.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { applyFilter, removeChip } from "../test/controls";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -137,7 +138,7 @@ describe("My trips", () => {
   it("the status filter goes into the URL and my_trips; the old rows stay dimmed until the new come", async () => {
     const t = await mount();
     t.hold = true;
-    fireEvent.click(screen.getByRole("button", { name: "Declined" }));
+    applyFilter("Status", "Declined");
     expect(screen.getByTestId("where").textContent).toBe("/my-trips?status=declined");
     await act(async () => { await Promise.resolve(); });
     expect(t.argsOf("my_trips").at(-1)).toEqual({ from: month.from, to: month.to, status: "declined", include: "all", limit: 25 });
@@ -147,8 +148,8 @@ describe("My trips", () => {
     await act(async () => { t.held.forEach((r) => r()); await Promise.resolve(); });
     expect(screen.getAllByTestId("trip-row")).toHaveLength(1);
     expect(screen.getByTestId("trips-totals").textContent).not.toContain("Updating…");
-    // All again: nothing in the URL.
-    fireEvent.click(screen.getByRole("button", { name: "All" }));
+    // The chip's ✕: All again, nothing in the URL.
+    removeChip("Status: Declined");
     expect(screen.getByTestId("where").textContent).toBe("/my-trips");
   });
 

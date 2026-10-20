@@ -7,8 +7,8 @@ import { useFleet } from "../app/FleetContext";
 import type { Entry } from "../data/store";
 import type { Query } from "../data/useQuery";
 import { errText } from "../transport/errors";
-import { Loading, Notice } from "../ui/basics";
-import { LoadMore, PAGE_SIZE, Pager, type PagedList, type PagingMode, useUrlFilter } from "../ui/ListKit";
+import { Notice } from "../ui/basics";
+import { LoadMore, PAGE_SIZE, Pager, type PagedList, type PagingMode, SkeletonRows, useUrlFilter } from "../ui/ListKit";
 import { useIsPhone } from "../ui/phone";
 
 /** How long typing must pause before the search goes to the server. */
@@ -130,7 +130,8 @@ export const asEntry = <T,>(q: Query<T>): Entry<T> => ({ data: q.data, err: q.er
 export function ListWaiting<T>({ q, loading }: { q: Query<T>; loading: ReactNode }) {
   const { managePermissions } = useFleet();
   if (q.data !== undefined) return null;
-  if (!q.err) return <Loading>{loading}</Loading>;
+  // A list with no rows yet: skeleton rows, never a spinner (docs/ui-patterns.md §5).
+  if (!q.err) return <div className="card"><SkeletonRows label={loading} /></div>;
   const [text, fix] = errText(q.err);
   return (
     <Notice

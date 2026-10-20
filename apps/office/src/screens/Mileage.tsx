@@ -12,8 +12,11 @@ import type { MileageSummary } from "../data/types";
 import { argsKey, useQuery } from "../data/useQuery";
 import { num } from "../lib/format";
 import { errText } from "../transport/errors";
-import { Loading, Notice, Tile } from "../ui/basics";
-import { DateRange, useDateRange } from "../ui/DateRange";
+import { Notice, Tile } from "../ui/basics";
+import { FilterBar } from "../ui/FilterBar";
+import { type FilterValues, listDef } from "../ui/filterLogic";
+import { SkeletonRows } from "../ui/ListKit";
+import { DateRangePicker, useDateRange } from "../ui/DateRangePicker";
 import { Icon } from "../ui/icons";
 import { ALLOWANCE_KEYS, fuelSearch, mileageView, monthLine, personalLine, rangeArgs } from "./mileageLogic";
 import { MileageTable } from "./MileageTable";
@@ -22,15 +25,37 @@ import { MileageTable } from "./MileageTable";
 const MAX_DAYS = 366;
 
 /** ?vehicle= and ?driver= beside the dates (Mileage and Fuel share the names, so a link carries them). */
-export function useVehicleDriver(): { vehicle: string; driver: string; setVehicle: (v: string) => void; setDriver: (d: string) => void } {
+export function useVehicleDriver(): { vehicle: string; driver: string; setVehicle: (v: string) => void; setDriver: (d: string) => void; setBoth: (v: FilterValues) => void } {
   const [params, setParams] = useSearchParams();
-  const set = (key: string, value: string) => setParams((p) => {
+  const set = (patch: Record<string, string>) => setParams((p) => {
     const next = new URLSearchParams(p);
-    if (value) next.set(key, value);
-    else next.delete(key);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
     return next;
   }, { replace: true });
-  return { vehicle: params.get("vehicle") || "", driver: params.get("driver") || "", setVehicle: (v) => set("vehicle", v), setDriver: (d) => set("driver", d) };
+  return {
+    vehicle: params.get("vehicle") || "",
+    driver: params.get("driver") || "",
+    setVehicle: (v) => set({ vehicle: v }),
+    setDriver: (d) => set({ driver: d }),
+    setBoth: (v) => set({ vehicle: (v.vehicle as string) ?? "", driver: (v.driver as string) ?? "" }),
+  };
+}
+
+/** The Vehicle and Driver filters (Mileage, Fuel): one Filter button, their chips (docs/ui-patterns.md §1). */
+export function VehicleDriverFilter({ vehicle, driver, onChange, lists }: {
+  vehicle: string;
+  driver: string;
+  onChange: (v: FilterValues) => void;
+  lists: { vehicles?: { reg_no: string }[]; drivers?: { username: string; name: string }[] };
+}) {
+  const defs = [
+    listDef("vehicle", "Vehicle", "All vehicles", (lists.vehicles ?? []).map((x) => ({ value: x.reg_no, label: x.reg_no })), vehicle),
+    listDef("driver", "Driver", "All drivers", (lists.drivers ?? []).map((x) => ({ value: x.username, label: x.name })), driver),
+  ];
+  return <FilterBar filters={defs} values={{ vehicle, driver }} onChange={onChange} />;
 }
 
 export function Mileage() {
@@ -38,7 +63,7 @@ export function Mileage() {
   const lists = useLists(!noConnector);
   const { search } = useLocation();
   const dates = useDateRange("month", { maxDays: MAX_DAYS });
-  const { vehicle, setVehicle, driver, setDriver } = useVehicleDriver();
+  const { vehicle, driver, setBoth } = useVehicleDriver();
   const { from, to } = dates;
   const args = rangeArgs(from, to, { vehicle, driver });
   const q = useQuery<MileageSummary>("mileage", "mileage_summary", args, { keep: true, enabled: !noConnector && !dates.error });
@@ -59,23 +84,8 @@ export function Mileage() {
       </div>
       <div className="stack">
         <div className="card card-b" style={{ display: "grid", gap: 12 }}>
-          <DateRange value={dates} />
-          <div className="filters" style={{ marginBottom: 0 }}>
-            <label className="field"><span>Vehicle</span>
-              <select aria-label="Vehicle" value={vehicle} onChange={(e) => setVehicle(e.target.value)}>
-                <option value="">All vehicles</option>
-                {vehicle && !lists.vehicles?.some((x) => x.reg_no === vehicle) && <option value={vehicle}>{vehicle}</option>}
-                {(lists.vehicles ?? []).map((x) => <option key={x.reg_no} value={x.reg_no}>{x.reg_no}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Driver</span>
-              <select aria-label="Driver" value={driver} onChange={(e) => setDriver(e.target.value)}>
-                <option value="">All drivers</option>
-                {driver && !lists.drivers?.some((x) => x.username === driver) && <option value={driver}>{driver}</option>}
-                {(lists.drivers ?? []).map((x) => <option key={x.username} value={x.username}>{x.name}</option>)}
-              </select>
-            </label>
-          </div>
+          <DateRangePicker value={dates} />
+          <VehicleDriverFilter vehicle={vehicle} driver={driver} onChange={setBoth} lists={lists} />
         </div>
 
         {dates.error || noConnector ? null : !d || !v || !t ? (
@@ -88,7 +98,7 @@ export function Mileage() {
             >
               {errText(q.err)[0]}
             </Notice>
-          ) : <Loading>Adding up the days…</Loading>
+          ) : <div className="card"><SkeletonRows label="Adding up the days…" /></div>
         ) : q.err && q.stale ? (
           // The figures on screen are other days': say what went wrong instead.
           <Notice tone="bad" action={<button type="button" className="btn small" onClick={q.refetch}>Try again</button>}>{errText(q.err)[0]}</Notice>

@@ -3,6 +3,7 @@
 // board watched every 30 s; the week view (drivers × 7 days, ‹ ›, "+" and a chip open the editor in the page, Save and
 // Remove in two clicks), one driver at a time on a phone.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { applyFilter, removeChip } from "../test/controls";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -119,21 +120,28 @@ describe("the Drivers board: now", () => {
     // New task with the driver picked.
     expect(screen.getAllByRole("link", { name: "New task" })[0].getAttribute("href")).toBe("/tasks/new?driver=kamal.p");
 
-    const filters = within(screen.getByRole("group", { name: "Filter" }));
-    expect(filters.getAllByRole("button").map((b) => b.textContent)).toEqual(["All · 4", "Free now · 1", "On a task · 1", "Off duty · 1", "Not available · 1"]);
-    fireEvent.click(filters.getByRole("button", { name: "Free now · 1" }));
+    // The Filter panel (docs/ui-patterns.md §1): the counts beside the choices, nothing changes until Apply.
+    const choices = () => {
+      fireEvent.click(screen.getByTestId("filter-button"));
+      const group = within(within(screen.getByTestId("filter-panel")).getByRole("group", { name: "Show" }));
+      return group.getAllByRole("radio").map((r) => r.closest("label")?.textContent);
+    };
+    expect(choices()).toEqual(["All · 4", "Free now · 1", "On a task · 1", "Off duty · 1", "Not available · 1"]);
+    fireEvent.click(screen.getByTestId("filter-button")); // closes it again, nothing applied
+    expect(where()).toBe("/drivers/board");
+    applyFilter("Show", "Free now · 1");
     await settle();
     expect(where()).toBe("/drivers/board?filter=free_now");
     expect(rows().map((r) => r.querySelector(".name")?.textContent)).toEqual(["Kamal Perera"]);
     // Filters are local: no new call.
     expect(t.count("drivers_board")).toBe(1);
 
-    fireEvent.click(filters.getByRole("button", { name: "All · 4" }));
+    removeChip("Show: Free now");
     fireEvent.change(screen.getByLabelText("Find a driver"), { target: { value: "silva" } });
     await settle(400);
     expect(where()).toBe("/drivers/board?q=silva");
     expect(rows().map((r) => r.querySelector(".name")?.textContent)).toEqual(["Nuwan Silva"]);
-    expect(filters.getAllByRole("button").map((b) => b.textContent)).toEqual(["All · 1", "Free now · 0", "On a task · 1", "Off duty · 0", "Not available · 0"]);
+    expect(choices()).toEqual(["All · 1", "Free now · 0", "On a task · 1", "Off duty · 0", "Not available · 0"]);
   });
 
   it("Ask drivers (Hotfix 4 c): no ticks on the rows; a sheet with the free ones ticked; the answers under the rows, Assign on a Yes", async () => {
@@ -223,7 +231,7 @@ describe("the Drivers board: the week", () => {
     await settle();
     const editor = screen.getByTestId("unav-editor");
     expect(within(editor).getByRole("heading").textContent).toBe("Not available · Ruwan Jaya");
-    expect((within(editor).getByLabelText("Day") as HTMLInputElement).value).toBe("2026-10-23");
+    expect(within(editor).getByLabelText("Day").getAttribute("data-value")).toBe("2026-10-23");
     fireEvent.click(within(editor).getByRole("button", { name: "Morning until 12:30" }));
     // A morning has no last day.
     expect(within(editor).queryByLabelText(/Last day/)).toBeNull();
@@ -241,7 +249,7 @@ describe("the Drivers board: the week", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "Ruwan Jaya, Wed 21 Oct: Not available · leave. Change or remove" })[0]);
     await settle();
     const editor = screen.getByTestId("unav-editor");
-    expect((within(editor).getByLabelText(/Last day/) as HTMLInputElement).value).toBe("2026-10-22");
+    expect(within(editor).getByLabelText(/Last day/).getAttribute("data-value")).toBe("2026-10-22");
     expect(editor.textContent).toContain("Added by Ruwan Jaya (the driver)");
     // From–to with no times: said at once, nothing sent.
     fireEvent.click(within(editor).getByRole("button", { name: "From–to" }));

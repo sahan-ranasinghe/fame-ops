@@ -14,8 +14,10 @@ import { can, type FleetError } from "../transport/types";
 import type { Paged } from "../data/types";
 import { today } from "../lib/format";
 import { errText } from "../transport/errors";
-import { Chips, Notice, Pill } from "../ui/basics";
-import { EmptyLine, ListHeader, usePagedList } from "../ui/ListKit";
+import { Notice, Pill } from "../ui/basics";
+import { FilterBar } from "../ui/FilterBar";
+import { pairsDef } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, SkeletonRows, usePagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
 import { badgeTone } from "../ui/locationLogic";
 import { useToast } from "../ui/Toast";
@@ -103,13 +105,15 @@ export function Places() {
         </div>
       </div>
       <ListWithDetail>
-        <div className="card card-b form" style={{ gap: 10 }}>
-          <SearchBox label="Find a place" placeholder="Name, site id or other id (MT0184, COL018)" value={box.text} onChange={box.setText} onBlur={box.flush} />
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-            <Chips options={whoOptions(me.tools)} value={who} onChange={(w) => set({ who: w === "ours" ? "" : w })} />
-            <label className="check"><input type="checkbox" checked={nopin} onChange={(e) => set({ nopin: e.target.checked ? "1" : "" })} /> Without a pin</label>
-          </div>
-        </div>
+        <FilterBar
+          search={<SearchBox label="Find a place" placeholder="Name, site id or other id (MT0184, COL018)" value={box.text} onChange={box.setText} onBlur={box.flush} />}
+          filters={[
+            pairsDef("who", "Places", whoOptions(me.tools), "ours"),
+            pairsDef("nopin", "Pin", [["", "With or without a pin"], ["1", "Without a pin"]], ""),
+          ]}
+          values={{ who, nopin: nopin ? "1" : "" }}
+          onChange={(v) => set({ who: v.who === "ours" ? "" : (v.who as string) ?? "", nopin: v.nopin === "1" ? "1" : "" })}
+        />
         {err && <Notice tone="bad">{err}</Notice>}
         {!noConnector && <ListWaiting q={q} loading="Loading the places…" />}
         {d && (
@@ -150,7 +154,7 @@ export function Places() {
                   </tbody>
                 </table>
               </div>
-            ) : <EmptyLine>{q.stale ? "Loading…" : placesEmpty(who, box.search, nopin)}</EmptyLine>}
+            ) : q.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{placesEmpty(who, box.search, nopin)}</EmptyLine>}
             <ListFooter list={list} />
           </div>
         )}

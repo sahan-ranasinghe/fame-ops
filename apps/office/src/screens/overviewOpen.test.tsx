@@ -1,6 +1,7 @@
 // Phase 7 (§16), on the pages: the Overview's tiles open their lists (the side panel on a desktop, in the URL, with an X
 // and Esc; the full page on a phone), the list screens read and write their filter in the URL, and the Reminders page.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { applyFilter, removeChip } from "../test/controls";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -219,7 +220,7 @@ describe("the Overview's tiles (phone)", () => {
     asPhone();
     const transport = await mount("/?open=garage");
     expect(where()).toBe("/vehicles?filter=garage");
-    expect(screen.getByRole("button", { name: /^In garage/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(screen.getByTestId("filter-chips")).getByText("Show: In garage")).toBeTruthy();
     expect(transport.argsOf("list_vehicles").at(-1)).toEqual({ filter: "in_garage", limit: 25 });
   });
 });
@@ -227,9 +228,9 @@ describe("the Overview's tiles (phone)", () => {
 describe("the list screens' filter in the URL", () => {
   it("Vehicles reads it on load and writes it when a chip changes, keeping the other parameters", async () => {
     const transport = await mount("/vehicles?filter=free&x=1");
-    expect(screen.getByRole("button", { name: /^Available/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(screen.getByTestId("filter-chips")).getByText("Show: Available")).toBeTruthy();
     expect(transport.argsOf("list_vehicles").at(-1)).toEqual({ filter: "available", limit: 25 });
-    fireEvent.click(screen.getByRole("button", { name: /^In garage/ }));
+    applyFilter("Show", /^In garage/);
     await act(async () => { await Promise.resolve(); });
     expect(where()).toBe("/vehicles?filter=garage&x=1");
     expect(transport.argsOf("list_vehicles").at(-1)).toEqual({ filter: "in_garage", limit: 25 });
@@ -237,25 +238,25 @@ describe("the list screens' filter in the URL", () => {
     fireEvent.click(screen.getByText("WP KL-1234"));
     await act(async () => { await Promise.resolve(); });
     expect(where()).toBe("/vehicles/WP%20KL-1234?filter=garage&x=1");
-    expect(screen.getByRole("button", { name: /^In garage/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(screen.getByTestId("filter-chips")).getByText("Show: In garage")).toBeTruthy();
   });
 
-  it("All removes the parameter", async () => {
+  it("All removes the parameter (the chip's ✕)", async () => {
     await mount("/vehicles?filter=garage");
-    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    removeChip("Show: In garage");
     await act(async () => { await Promise.resolve(); });
     expect(where()).toBe("/vehicles");
   });
 
   it("Live: ?filter=road is On a task, the list shows only them, and a chip writes its word", async () => {
     await mount("/live?filter=road");
-    expect(screen.getByRole("button", { name: /^On a task/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(screen.getByTestId("filter-chips")).getByText("Show: On a task")).toBeTruthy();
     expect(screen.getAllByText("Nuwan Perera").length).toBeGreaterThan(0);
     expect(screen.queryByText("Sunil Fernando")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^On duty/ }));
+    applyFilter("Show", /^On duty/);
     await act(async () => { await Promise.resolve(); });
     expect(where()).toBe("/live?filter=on_duty");
-    fireEvent.click(screen.getByRole("button", { name: /^All/ }));
+    removeChip("Show: On duty");
     await act(async () => { await Promise.resolve(); });
     expect(where()).toBe("/live");
   });

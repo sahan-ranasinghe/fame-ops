@@ -154,7 +154,10 @@ test("a requester on a phone: four tabs, New request as the big action, the requ
   await expect(page.getByTestId("draft-banner")).toContainText("Resume draft from");
   await page.getByRole("button", { name: "Resume" }).click();
   await expect(page.getByLabel("Note")).toHaveValue("Phone draft");
-  await page.getByLabel("Leave by", { exact: true }).fill("09:00");
+  // Stage 0: a time on a phone is never typed: the field opens the time sheet, a pick counts and closes it.
+  await page.getByLabel("Leave by", { exact: true }).click();
+  await page.getByTestId("time-sheet").getByRole("option", { name: "09:00", exact: true }).click();
+  await expect(page.getByTestId("time-sheet")).toHaveCount(0);
   await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
   await page.getByRole("button", { name: "Save request" }).click();

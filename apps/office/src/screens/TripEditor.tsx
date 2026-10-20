@@ -14,7 +14,7 @@ import { type ReactNode, useEffect } from "react";
 import type { PlanPreview, SettingsResult } from "../data/types";
 import type { Query } from "../data/useQuery";
 import { errText } from "../transport/errors";
-import { TimeInput } from "../ui/TimeInput";
+import { TimeField } from "../ui/TimeField";
 import { checkDeparture, type DepartureCheck, departurePlan } from "./departureLogic";
 import { DepartureNote, StartFrom, startPoint, usePlanPreview } from "./dispatchParts";
 import { dwellFallbacks, type PlanReason, planReasons, rowStopNumbers } from "./planLogic";
@@ -22,6 +22,7 @@ import { PlanWithMap } from "./PlanMap";
 import { StopsRows } from "./StopsEditor";
 import { dwellText, tickStart } from "./stopsLogic";
 import { type Base, type TripFields, tripOffset } from "./tripLogic";
+import { TripDayPicker } from "../ui/DayPicker";
 
 export interface Trip {
   f: TripFields;
@@ -121,7 +122,7 @@ export function LeaveByField({ trip, id, label = "Leave by" }: { trip: Trip; id:
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <TimeInput id={id} value={f.leaveBy} onCommit={trip.setLeave} />
+      <TimeField id={id} value={f.leaveBy} onCommit={trip.setLeave} suggested={trip.plan.data?.leave_by} />
       {check && check.kind !== "fill"
         ? <DepartureNote check={check} onUse={trip.setLeave} onMove={trip.moveArriveBy} onMoveBack={trip.setEnd} backLabel={trip.backLabel} />
         : <span className="hint">Empty: planned from the stops’ arrive-by times.</span>}
@@ -134,7 +135,7 @@ export function BackByField({ trip, id, label = "Back by" }: { trip: Trip; id: s
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <TimeInput id={id} value={trip.f.end} onCommit={trip.setEnd} />
+      <TimeField id={id} value={trip.f.end} onCommit={trip.setEnd} />
       {trip.lateBack && <DepartureNote check={trip.check} onUse={trip.setLeave} onMoveBack={trip.setEnd} backLabel={trip.backLabel} testId="departure-check-back" />}
     </div>
   );
@@ -185,7 +186,7 @@ export function TripEditor({ trip, prefix }: { trip: Trip; prefix: string }) {
     <>
       <div className="card card-b form" data-testid="trip-when">
         <div className="grid2">
-          <div className="field"><label htmlFor={`${prefix}-date`}>Day</label><input type="date" id={`${prefix}-date`} value={f.date} onChange={(e) => update((x) => ({ ...x, date: e.target.value }))} /></div>
+          <div className="field"><span className="lab">Day</span><TripDayPicker id={`${prefix}-date`} label="Day" value={f.date} onChange={(d) => update((x) => ({ ...x, date: d }))} /></div>
           <LeaveByField trip={trip} id={`${prefix}-leave`} />
         </div>
         <div className="grid2">

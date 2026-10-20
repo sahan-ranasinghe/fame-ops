@@ -10,9 +10,9 @@ import { useEntry } from "../data/hooks";
 import type { Attention, Overview } from "../data/types";
 import { attIcon, levelTone } from "../lib/format";
 import { can } from "../transport/types";
-import { ErrBox, Loading, StaleNote } from "../ui/basics";
+import { ErrBox, StaleNote } from "../ui/basics";
 import { Icon } from "../ui/icons";
-import { EmptyLine, ListHeader, LoadMore, Pager, useLocalPagedList } from "../ui/ListKit";
+import { EmptyLine, ListHeader, LoadMore, Pager, useLocalPagedList, SkeletonRows } from "../ui/ListKit";
 import { PageTop } from "../ui/Page";
 import { type ReminderRow, reminderGroups } from "./overviewLinks";
 
@@ -81,7 +81,7 @@ export function Reminders() {
       {!o && !noConnector && (
         <>
           <ErrBox entry={ov} onRetry={() => void store.load("overview", "fleet_overview", {})} onFix={(f) => { if (f === "perms") void managePermissions?.(); }} />
-          {!ov.err && <Loading>Loading the reminders…</Loading>}
+          {!ov.err && <SkeletonRows label="Loading the reminders…" />}
         </>
       )}
       {o && (

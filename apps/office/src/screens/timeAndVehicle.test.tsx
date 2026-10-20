@@ -12,7 +12,7 @@ import { FleetStore } from "../data/store";
 import type { PlanPreview } from "../data/types";
 import type { Me, Transport, WatchEvent } from "../transport/types";
 import { ToastProvider } from "../ui/Toast";
-import { TIME_SETTLE_MS } from "../ui/TimeInput";
+import { TIME_SETTLE_MS } from "../ui/TimeField";
 import { emptyAssign } from "./assignLogic";
 import { PLAN_DEBOUNCE_MS } from "./dispatchParts";
 import { NewTask } from "./NewTask";

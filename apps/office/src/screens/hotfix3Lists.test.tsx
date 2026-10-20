@@ -4,6 +4,7 @@
 // reaches the server once typing pauses) and says what an empty filter means.
 import { pageOf, pageWindow } from "@fleet/paging";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { applyFilter, removeChip } from "../test/controls";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -157,7 +158,8 @@ describe("Drivers", () => {
     expect(t.argsOf("list_drivers").at(-1)).toEqual({ include_inactive: true, limit: 50 });
     expect(screen.getAllByTestId("driver-row")).toHaveLength(30);
     expect(screen.queryByTestId("load-more")).toBeNull();
-    fireEvent.click(screen.getByLabelText("Show switched-off drivers"));
+    // The filter in use is a chip: its ✕ shows the active drivers again (docs/ui-patterns.md §1).
+    removeChip("Show: All drivers, the switched-off ones too");
     await settle();
     expect(screen.getByTestId("where").textContent).toBe("/drivers");
   });
@@ -183,7 +185,10 @@ describe("Vehicles", () => {
     const notes = screen.getAllByTestId("km-allowance-note");
     expect(notes).toHaveLength(1);
     expect(notes[0].closest("tr")?.textContent).toContain("CAP-2207");
-    expect(screen.getByRole("button", { name: /^All · 2/ })).toBeTruthy();
+    // The counts are beside the Filter panel's choices.
+    fireEvent.click(screen.getByTestId("filter-button"));
+    expect(within(screen.getByTestId("filter-panel")).getByLabelText(/^All · 2/)).toBeTruthy();
+    fireEvent.click(screen.getByTestId("filter-button"));
     fireEvent.click(screen.getByText("CAP-2207"));
     await settle();
     // The vehicle page reads the board's rows: nothing more is asked.
@@ -279,7 +284,7 @@ describe("Maintenance", () => {
     expect(t.argsOf("list_vehicle_reports")[0]).toEqual({ status: "not_closed", limit: 25 });
     expect(within(screen.getByTestId("reports-list")).getByTestId("list-count").textContent).toBe(" · 26");
     expect(screen.getByTestId("pager")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Closed" }));
+    applyFilter("Status", "Closed");
     await settle();
     expect(screen.getByTestId("where").textContent).toBe("/maintenance?status=closed");
     expect(t.argsOf("list_vehicle_reports").at(-1)).toEqual({ status: "closed", limit: 25 });

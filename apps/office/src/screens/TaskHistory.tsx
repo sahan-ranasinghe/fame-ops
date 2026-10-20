@@ -13,10 +13,12 @@ import { useLists } from "../data/hooks";
 import type { HistoryTask, TaskHistory as TaskHistoryData } from "../data/types";
 import { num } from "../lib/format";
 import { errText } from "../transport/errors";
-import { Loading, Notice, Pill, Plate } from "../ui/basics";
-import { DateRange, useDateRange } from "../ui/DateRange";
+import { Notice, Pill, Plate } from "../ui/basics";
+import { DateRangePicker, useDateRange } from "../ui/DateRangePicker";
 import { colomboDay } from "../ui/dateRange";
-import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, usePagedList, useUrlSearch } from "../ui/ListKit";
+import { FilterBar } from "../ui/FilterBar";
+import { type FilterValues, listDef, pairsDef } from "../ui/filterLogic";
+import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, SkeletonRows, usePagedList, useUrlSearch } from "../ui/ListKit";
 import { PageTop } from "../ui/Page";
 import { emptyText, historyArgs, type HistoryFilters, KIND_OPTIONS, readFilters, routeText, STATUS_OPTIONS, statusOf, tagsOf, taskLink, totalsLine } from "./taskHistoryLogic";
 
@@ -31,10 +33,14 @@ export function TaskHistory() {
   const [params, setParams] = useSearchParams();
   const f = readFilters(params);
   const [search, setSearch] = useUrlSearch();
-  const set = (key: keyof HistoryFilters, value: string) => setParams((p) => {
+  /** Apply: the four filters at once, under their old names (?driver=&vehicle=&status=&kind=). */
+  const setAll = (v: FilterValues) => setParams((p) => {
     const next = new URLSearchParams(p);
-    if (value) next.set(key, value);
-    else next.delete(key);
+    for (const key of ["driver", "vehicle", "status", "kind"] as (keyof HistoryFilters)[]) {
+      const value = (v[key] as string) ?? "";
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
     return next;
   }, { replace: true });
   const { from, to } = dates;
@@ -55,34 +61,18 @@ export function TaskHistory() {
       <PageTop title="Task history" sub="Tasks" backTo="/tasks" />
       <div className="stack">
         <div className="card card-b" style={{ display: "grid", gap: 12 }}>
-          <DateRange value={dates} />
-          <div className="filters" style={{ marginBottom: 0 }}>
-            <SearchBox value={search} onChange={setSearch} placeholder="Title, driver or plate" />
-            <label className="field"><span>Driver</span>
-              <select aria-label="Driver" value={f.driver} onChange={(e) => set("driver", e.target.value)}>
-                <option value="">All drivers</option>
-                {f.driver && !lists.drivers?.some((x) => x.username === f.driver) && <option value={f.driver}>{f.driver}</option>}
-                {(lists.drivers ?? []).map((x) => <option key={x.username} value={x.username}>{x.name}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Vehicle</span>
-              <select aria-label="Vehicle" value={f.vehicle} onChange={(e) => set("vehicle", e.target.value)}>
-                <option value="">All vehicles</option>
-                {f.vehicle && !lists.vehicles?.some((v) => v.reg_no === f.vehicle) && <option value={f.vehicle}>{f.vehicle}</option>}
-                {(lists.vehicles ?? []).map((v) => <option key={v.reg_no} value={v.reg_no}>{v.reg_no}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Status</span>
-              <select aria-label="Status" value={f.status} onChange={(e) => set("status", e.target.value)}>
-                {STATUS_OPTIONS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-              </select>
-            </label>
-            <label className="field"><span>Kind</span>
-              <select aria-label="Kind" value={f.kind} onChange={(e) => set("kind", e.target.value)}>
-                {KIND_OPTIONS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
-              </select>
-            </label>
-          </div>
+          <DateRangePicker value={dates} />
+          <FilterBar
+            search={<SearchBox value={search} onChange={setSearch} placeholder="Title, driver or plate" />}
+            filters={[
+              listDef("driver", "Driver", "All drivers", (lists.drivers ?? []).map((x) => ({ value: x.username, label: x.name })), f.driver),
+              listDef("vehicle", "Vehicle", "All vehicles", (lists.vehicles ?? []).map((v) => ({ value: v.reg_no, label: v.reg_no })), f.vehicle),
+              pairsDef("status", "Status", STATUS_OPTIONS, ""),
+              pairsDef("kind", "Kind", KIND_OPTIONS, ""),
+            ]}
+            values={{ ...f }}
+            onChange={setAll}
+          />
         </div>
 
         {!allowed ? (
@@ -97,7 +87,7 @@ export function TaskHistory() {
             >
               {errText(q.err)[0]}
             </Notice>
-          ) : <Loading>Loading the task history…</Loading>
+          ) : <div className="card"><SkeletonRows label="Loading the task history…" /></div>
         ) : q.err && q.stale ? (
           // The rows on screen are other days' or filters': say what went wrong instead.
           <Notice tone="bad" action={<button type="button" className="btn small" onClick={q.refetch}>Try again</button>}>{errText(q.err)[0]}</Notice>
@@ -143,7 +133,7 @@ export function TaskHistory() {
                   </table>
                 </div>
               ) : (
-                <EmptyLine>{q.stale ? "Loading…" : emptyText(d.from, d.to, narrowed, search)}</EmptyLine>
+                q.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{emptyText(d.from, d.to, narrowed, search)}</EmptyLine>
               )}
               <LoadMore list={list} />
               <Pager list={list} />

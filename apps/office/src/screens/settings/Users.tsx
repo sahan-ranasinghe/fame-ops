@@ -9,7 +9,7 @@ import { useFleet } from "../../app/FleetContext";
 import type { OfficeUser, OfficeUsers } from "../../data/types";
 import { Avatar, Pill } from "../../ui/basics";
 import { phoneDisplay } from "../../ui/ContactButtons";
-import { EmptyLine, ListHeader, usePagedList } from "../../ui/ListKit";
+import { EmptyLine, ListHeader, usePagedList, SkeletonRows } from "../../ui/ListKit";
 import { ListFooter, ListStale, ListWaiting, SearchBox, useSearchBox } from "../listLocal";
 import { PermissionChips, userPath } from "./userParts";
 
@@ -64,7 +64,7 @@ export function Users() {
                   </tbody>
                 </table>
               </div>
-            ) : <EmptyLine>{q.stale ? "Loading…" : usersEmpty(box.search)}</EmptyLine>}
+            ) : (q.stale ? <SkeletonRows rows={3} /> : <EmptyLine>{usersEmpty(box.search)}</EmptyLine>)}
             <ListFooter list={list} />
           </div>
           <p className="muted small">Drivers are not here: they sign in to the Fame Driver app with a username and PIN (Drivers page).</p>

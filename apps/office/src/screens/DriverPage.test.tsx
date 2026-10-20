@@ -1,3 +1,4 @@
+import { pickStripDay } from "../test/controls";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -115,7 +116,8 @@ describe("DriverPage", () => {
   }, 20_000); // the file's first test pays for importing the page (over 5 s while every test file runs at once)
   it("Yesterday asks the tool for that day and says when nothing was shared", async () => {
     const transport = await mount();
-    fireEvent.click(screen.getByRole("button", { name: "Yesterday" }));
+    // The week strip (docs/ui-patterns.md §3): yesterday's cell (or the calendar when yesterday is last week).
+    pickStripDay(addDays(day, -1));
     await act(async () => { await Promise.resolve(); });
     expect(transport.calls.some((c) => c.tool === "driver_route" && c.args.date === addDays(day, -1))).toBe(true);
     expect(await screen.findByText("No location was shared on this day.")).toBeTruthy();
@@ -123,14 +125,16 @@ describe("DriverPage", () => {
     // The day is in the URL (Phase 7 §8: the date-range control in one-day mode).
     expect(screen.getByTestId("where").textContent).toBe("?range=yesterday");
   });
-  it("opens on the day in the URL; Custom day picks one day (no From–To)", async () => {
+  it("opens on the day in the URL; the week strip picks one day (no From–To); no day after today", async () => {
     const past = addDays(day, -3);
     const transport = await mount(`/drivers/nuwan.p?range=custom&from=${past}`);
     expect(transport.calls.find((c) => c.tool === "driver_route")?.args.date).toBe(past);
     expect(screen.queryByRole("button", { name: "This week" })).toBeNull();
-    const field = screen.getByLabelText("Day", { selector: "input" }) as HTMLInputElement;
-    expect(field.value).toBe(past);
-    fireEvent.change(field, { target: { value: addDays(day, -5) } });
+    const strip = screen.getByTestId("day-strip");
+    expect(strip.querySelector(`[data-day="${past}"]`)?.getAttribute("aria-pressed")).toBe("true");
+    const tomorrow = strip.querySelector<HTMLButtonElement>(`[data-day="${addDays(day, 1)}"]`);
+    if (tomorrow) expect(tomorrow.disabled).toBe(true);
+    pickStripDay(addDays(day, -5));
     await act(async () => { await Promise.resolve(); });
     expect(transport.calls.some((c) => c.tool === "driver_route" && c.args.date === addDays(day, -5))).toBe(true);
     expect(screen.getByTestId("where").textContent).toBe(`?range=custom&from=${addDays(day, -5)}`);
