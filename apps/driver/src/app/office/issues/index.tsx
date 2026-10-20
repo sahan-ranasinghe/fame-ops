@@ -15,13 +15,16 @@ import { TriangleAlert } from '@/components/icons';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Plate, Txt } from '@/components/ui';
+import { presetRange } from '@/lib/patterns/calendarLogic';
 import { defaultValues, type FilterValues } from '@/lib/patterns/filterLogic';
+import { colomboDate } from '@/lib/time';
 import {
   activeCount, appendPage, defaultSort, ISSUE_SORTS, type IssueSort, issuesArgs, issuesChoice, issuesFilterDefs, kindText, listRows, rowLine, SEARCH_DEBOUNCE_MS,
-  severityCounts, severityTone, snoozeParts, statusTone, whoLine, type WhoWords,
+  severityCounts, severityTone, snoozeParts, statusTone, whoLine, type WhoWords, issuesExtra, issuesExtraDefs, kindsFor,
 } from '@/office/issuesLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { FleetError, Issue, IssuesList } from '@/office/types';
+import { has } from '@/office/nav';
+import type { FleetError, Issue, IssuesList, VehiclesList } from '@/office/types';
 import { Chip, DarkHeader, Divider, ListFailed, Pill, Screen, Section, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -36,9 +39,15 @@ const TILE: Record<Tone, { bg: string; ink: string }> = {
 
 export default function IssuesScreen() {
   const { t } = useApp();
-  const { api, signOut } = useOffice();
+  const { api, me, signOut } = useOffice();
   const router = useRouter();
-  const [values, setValues] = useState<FilterValues>(() => defaultValues(issuesFilterDefs(null, null, t)));
+  // O3 row 6: the kind (the ones this person may read), the vehicle (list_vehicles' plates) and when it was opened.
+  const kinds = kindsFor(me.permissions);
+  const plates = useTool<VehiclesList>('list_vehicles', { filter: 'all', limit: 200 }, { enabled: me.tools.includes('list_vehicles') && has(me.permissions, 'issues') });
+  const plateList = (plates.data?.vehicles ?? []).map((v) => v.reg_no);
+  const [values, setValues] = useState<FilterValues>(() => defaultValues([...issuesFilterDefs(null, null, t), ...issuesExtraDefs(kinds, [], t)]));
+  const today = colomboDate();
+  const extra = issuesExtra(values, (preset) => presetRange(preset, today));
   const { status, severity } = issuesChoice(values);
   // The Sort menu: null = the status's own order (the most urgent for the open ones, the newest for the closed ones).
   const [sortPick, setSortPick] = useState<IssueSort | null>(null);
@@ -53,11 +62,11 @@ export default function IssuesScreen() {
     return () => clearTimeout(timer);
   }, [text]);
 
-  const q = useTool<IssuesList>('list_issues', issuesArgs(status, search, undefined, sortPick ?? undefined));
+  const q = useTool<IssuesList>('list_issues', issuesArgs(status, search, undefined, sortPick ?? undefined, extra));
   const d = q.data;
   const rows = listRows(d?.issues ?? [], status, severity);
   const counts = severityCounts(d?.issues ?? [], status);
-  const defs = issuesFilterDefs(d, d ? counts : null, t);
+  const defs = [...issuesFilterDefs(d, d ? counts : null, t), ...issuesExtraDefs(kinds, plateList, t)];
   const apply = (next: FilterValues) => {
     // Another status starts again in that status's own order.
     if (issuesChoice(next).status !== status) setSortPick(null);
@@ -74,7 +83,7 @@ export default function IssuesScreen() {
     if (!d?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
-      const page = await api.call<IssuesList>('list_issues', issuesArgs(status, search, d.next, sortPick ?? undefined));
+      const page = await api.call<IssuesList>('list_issues', issuesArgs(status, search, d.next, sortPick ?? undefined, extra));
       q.patch((p) => appendPage(p, page));
       setMore({ busy: false, error: null });
     } catch (e) {
@@ -130,6 +139,11 @@ export default function IssuesScreen() {
             <Chip n={d.in_progress} text={t('office.issues.chip_in_progress')} tone={d.in_progress > 0 ? 'amber' : 'muted'} onPress={() => apply({ ...values, status: 'in_progress' })} />
             {(d.snoozed ?? 0) > 0 && <Chip n={d.snoozed ?? 0} text={t('office.issues.chip_snoozed')} tone="muted" />}
           </View>
+        )}
+        {me.tools.includes('list_vehicle_reports') && (
+          <Pressable accessibilityRole="link" onPress={() => router.push('/office/maintenance')} style={{ minHeight: 44, justifyContent: 'center', marginTop: 6 }} testID="issues-maintenance">
+            <Txt variant="strong" size={16} color={colors.amber}>{t('office.maint.link')}</Txt>
+          </Pressable>
         )}
       </DarkHeader>
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>

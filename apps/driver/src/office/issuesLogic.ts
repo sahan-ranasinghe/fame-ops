@@ -41,15 +41,63 @@ export const defaultSort = (status: IssueStatusFilter): 'urgent' | 'newest' => (
  * list_issues' input: the status, the order, a page of 50, and the words searched for only when there are any. The
  * snoozed ones are not left out (no Snoozed chip on the phone: a row says "Snoozed until …" instead).
  */
-export function issuesArgs(status: IssueStatusFilter, search = '', cursor?: string, sort?: IssueSort): Record<string, unknown> {
+export function issuesArgs(status: IssueStatusFilter, search = '', cursor?: string, sort?: IssueSort, extra: IssuesExtra = {}): Record<string, unknown> {
   const words = search.trim();
   return {
     status,
     sort: sort ?? defaultSort(status),
     limit: LIMIT,
     ...(words ? { search: words } : {}),
+    ...(extra.kind ? { kind: extra.kind } : {}),
+    ...(extra.vehicle ? { vehicle: extra.vehicle } : {}),
+    ...(extra.from && extra.to ? { from: extra.from, to: extra.to } : {}),
     ...(cursor ? { cursor } : {}),
   };
+}
+
+// ---- Stage 1 (O3 row 6): the kind, the vehicle and when it was opened, in the same Filter sheet (list_issues' own) ----
+
+/** The issue kinds (the server's KIND_TEXT keys) and the task kinds someone with assign_tasks alone may read. */
+export const ISSUE_KINDS = ['vehicle_report', 'odometer_flag', 'km_gap', 'service_due', 'document', 'documents_missing', 'licence', 'allowance', 'rental', 'garage_booked',
+  'signal', 'late_start', 'running_late', 'not_accepted', 'declined', 'request_waiting', 'vehicle_conflict', 'app_stopped', 'arrival_override', 'completed_early',
+  'vehicle_needed', 'missed_task', 'push_failed', 'routing_failed', 'map_fallback'] as const;
+export const TASK_ISSUE_KINDS = ['signal', 'late_start', 'running_late', 'not_accepted', 'declined', 'vehicle_conflict', 'arrival_override', 'completed_early', 'vehicle_needed', 'missed_task'] as const;
+
+/** The kinds this person can read: all with issues, the task kinds with assign_tasks alone. */
+export function kindsFor(permissions: readonly Permission[] | readonly string[]): readonly string[] {
+  return permissions.includes('issues' as never) ? ISSUE_KINDS : permissions.includes('assign_tasks' as never) ? TASK_ISSUE_KINDS : [];
+}
+
+export type OpenedFilter = 'any' | 'today' | 'last7' | 'this_month' | 'last_month';
+export const OPENED_FILTERS: readonly OpenedFilter[] = ['any', 'today', 'last7', 'this_month', 'last_month'];
+
+export interface IssuesExtra {
+  kind?: string;
+  vehicle?: string;
+  from?: string;
+  to?: string;
+}
+
+export function issuesExtraDefs(kinds: readonly string[], plates: readonly string[], tr: (key: string) => string): FilterDef[] {
+  const defs: FilterDef[] = [];
+  if (kinds.length > 1) {
+    defs.push({ key: 'kind', label: tr('office.issues.filterKind'), kind: 'single', default: 'all', options: [{ value: 'all', label: tr('office.common.all') }, ...kinds.map((k) => ({ value: k, label: tr(`office.issues.kind.${k}`) }))] });
+  }
+  if (plates.length > 0) {
+    defs.push({ key: 'vehicle', label: tr('office.issues.filterVehicle'), kind: 'single', default: 'all', options: [{ value: 'all', label: tr('office.common.all') }, ...plates.map((p) => ({ value: p, label: p }))] });
+  }
+  defs.push({ key: 'opened', label: tr('office.issues.filterOpened'), kind: 'single', default: 'any', options: OPENED_FILTERS.map((o) => ({ value: o, label: o === 'any' ? tr('office.issues.openedAny') : tr(`patterns.preset_${o}`) })) });
+  return defs;
+}
+
+/** The extra filters chosen, as list_issues takes them (a range from the preset). `range` turns a preset into days. */
+export function issuesExtra(values: FilterValues, range: (preset: Exclude<OpenedFilter, 'any'>) => { from: string; to: string }): IssuesExtra {
+  const out: IssuesExtra = {};
+  if (typeof values.kind === 'string' && values.kind !== 'all' && (ISSUE_KINDS as readonly string[]).includes(values.kind)) out.kind = values.kind;
+  if (typeof values.vehicle === 'string' && values.vehicle !== 'all' && values.vehicle) out.vehicle = values.vehicle;
+  const o = values.opened;
+  if (typeof o === 'string' && o !== 'any' && (OPENED_FILTERS as readonly string[]).includes(o)) Object.assign(out, range(o as Exclude<OpenedFilter, 'any'>));
+  return out;
 }
 
 /** The Sort menu: list_issues' own `sort` (the most urgent first, or the newest first). */

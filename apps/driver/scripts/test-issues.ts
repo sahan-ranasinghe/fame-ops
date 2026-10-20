@@ -77,7 +77,7 @@ console.log('\n== The screen as text ==');
 {
   const screen = readFileSync(join(__dirname, '..', 'src', 'app', 'office', 'issues', 'index.tsx'), 'utf8');
   check(/<FilterBar/.test(screen) && /defs=\{defs\}/.test(screen) && /issuesFilterDefs\(d, d \? counts : null, t\)/.test(screen) && /sort=\{\{ value: sort, options: ISSUE_SORTS/.test(screen) && !/FilterChips/.test(screen), 'Issues: the search bar, one Filter button with the counts, Sort by the tool\'s order, no chip rows');
-  check(/useTool<IssuesList>\('list_issues', issuesArgs\(status, search, undefined, sortPick \?\? undefined\)\)/.test(screen), 'list_issues with the status, the search and the order picked (none = as before)');
+  check(/useTool<IssuesList>\('list_issues', issuesArgs\(status, search, undefined, sortPick \?\? undefined, extra\)\)/.test(screen), 'list_issues with the status, the search, the order picked and (O3) the kind, vehicle and dates chosen (none = as before)');
   check(/<SkeletonRows/.test(screen) && /<ListFailed stale/.test(screen) && /<LoadMore/.test(screen) && !/<Loading/.test(screen), 'skeleton rows first, "Couldn\'t refresh" over rows, Load more at the end');
   const page = readFileSync(join(__dirname, '..', 'src', 'app', 'office', 'issues', '[id].tsx'), 'utf8');
   check(/<SkeletonRows/.test(page) && /<ListFailed/.test(page) && /<Sheet/.test(page) && !/<Modal/.test(page) && !/<Loading/.test(page), 'the issue\'s page: skeleton rows, the error with Try again, the note sheet is the one bottom sheet');
