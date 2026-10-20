@@ -24,7 +24,9 @@ if grep -rqE "127\.0\.0\.1:54321|localhost:54321" dist/m; then echo "STOP: the m
 if ! grep -rq "hinurfsaxvplbyqgtozj.supabase.co" dist/m; then echo "STOP: the mobile build does not point at the real project"; exit 1; fi
 
 echo "== 3. The routes: a /m/ page reloads on the mobile website, any other page on the desktop site"
-{ printf '/m/*  /m/index.html  200\n'; cat public/_redirects; } > dist/_redirects
+# Only the mobile site's own pages (its files under /m/_expo and /m/assets are served as they are). The target is /m/, not
+# /m/index.html: Pages answers /m/index.html with a 308 to /m/, and a rewrite to it fell through to the desktop page.
+{ printf '/m/login  /m/  200\n/m/office  /m/  200\n/m/office/*  /m/  200\n'; cat public/_redirects; } > dist/_redirects
 cat dist/_redirects
 
 echo "== 4. No source map and no key or secret in what goes up"
