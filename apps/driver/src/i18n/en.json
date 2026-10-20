@@ -1338,7 +1338,12 @@
       "sentTo": "Sent to {name}.",
       "waitingTitle": "Waiting for the fleet admin's OK · you'll be notified.",
       "paxN": "{n} pax",
-      "kmN": "{km} km"
+      "kmN": "{km} km",
+      "searching": "Searching…",
+      "noPlaces": "No places found. Try another name, or paste a pin or a Maps link.",
+      "suggestions": "Suggestions · nearest first",
+      "suggestionsFailed": "Suggestions did not load.",
+      "townBadge": "Town"
     },
     "issues": {
       "above": "Everything that needs attention",

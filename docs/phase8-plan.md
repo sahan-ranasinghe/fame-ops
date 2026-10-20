@@ -698,6 +698,60 @@ commits).
   --environment preview --message "Office mode O1+O2"`: runtime 1.3.0-gmaps, update group 78225c20-4546-46c5-bedc-1b54339f74e6,
   Android update 01a15719-ef54-7882-9848-7d444ab17550, commit d5acf8a (the bundle from the `fame-ops` checkout at that commit).
 
+## 17. Hotfix O2-H1 (20 October 2026): the location search, then the trip forms' parity, then the parity audit
+
+### Part A as built: the Where step's search showed nothing
+- **The cause (the app, not the server).** The connector answered "Kurunegala", "Head office" and "Colombo 05" with our
+  sites, the office and the map's places. In the app, `components/office/PlaceSearch.tsx` skipped the search whenever
+  `text === value`; the Where step writes every keystroke into the draft (`onText` → `patchStop`), so the box's `value`
+  always equalled the text and no `search_places` call was ever sent for a stop — nothing pending, nothing failed,
+  nothing shown. (The site's box keeps a `typed` flag instead.) office-api's call shape was right: `POST
+  /functions/v1/office-api/tools/search_places` with the session's `Authorization: Bearer` and the `apikey`, body
+  `{"text": …}`, permission view or request, the answer `result.results[]`.
+- **The fix.** The box keeps the site's `typed` flag (set by typing, cleared by a pick, My location or the clear button)
+  and asks after it; a pasted pin at once, else 300 ms after the last key. Under the field there is always one of four
+  things from one rule (`locationLogic.ts searchState`): the results (with the pin, the map note and Google's credit),
+  "Searching…", "No places found" or the error with **Try again** (which re-runs the same search); never an empty list
+  while a search is pending or failed. An empty box shows **Suggestions · nearest first**: `search_places {suggest,
+  near}` (the server's new empty-box answer: the places used in the last 90 days, our own pinned places with the offices
+  first, the five nearest towns with their distance, nearest to the phone's last known position when location is already
+  allowed — no prompt — else the base place, else Colombo; `_shared/fleet/suggest.ts`, pure, with its Deno test).
+  `search_places` keeps its contract: `text` is now optional, `suggest` and `near` are new optional inputs, a typed search
+  answers exactly as before; a `town` layer (badge Town) exists only in suggestions.
+- **Tests.** `npm run test:search` (the rule, the four states, the suggestions' input, the badges, the box and the
+  server read as text, the strings); the connector suite gained five suggestion checks (`scripts/test-mcp-local.py`);
+  `suggest_test.ts` (Deno). The office suites and the typecheck unchanged.
+- **The office-api audit, when something like this needs looking at on the live server:** Supabase dashboard → SQL
+  editor: `select at, tool, args_summary, result_summary, actor_name, channel from office_audit where tool =
+  'search_places' and at > now() - interval '1 hour' order by at desc;` (every office-api and connector call is audited
+  with the person's name; a call that never reached the server is simply absent, which is what this bug looked like).
+  The function's own log: dashboard → Edge Functions → office-api → Logs (filter `search_places`).
+
+## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
+
+The office will do from the phone everything they do on the website, because they don't always have a laptop. So every
+function, field, check, warning and view the site has must be in the app, by permission, with nothing silently left
+out. But it must never become the site squeezed onto a phone. It is laid out the way good phone apps are, and it must
+stay simple and organised as it grows. The rules, which govern every Office-mode round from now on:
+
+- **One job per screen.** Long jobs are steps with one sticky primary button; the button is disabled until the step is
+  valid, with the reason under it.
+- **Required things on the screen; optional things under a "More details" fold** on the same screen, never a separate
+  page. Sensible defaults and pre-fills (from /me, the last choice, the regular vehicle), so the common case takes a few
+  taps.
+- **The same patterns everywhere:** one card style, one list style, one bottom sheet, one date row for history, one
+  playback bar, one filter-chip row, one search field at the top of every long list, one place for the primary button.
+  Nothing is invented twice.
+- **Every screen is at most two taps from a tab.** The tabs carry the daily work; everything else is under More, grouped
+  by permission, with a search at the top of More.
+- **Every tappable thing opens its own place:** cards, chips, rows, counts, badges, notifications and pushes open the
+  screen scrolled to the item; a count opens the filtered list; back returns to where the person was.
+- **The map stays plain:** a map with a draggable sheet, the list and the map in sync, at most three controls on the
+  map, clustering when markers overlap, the industry patterns (PickMe, Uber, Samsara, Google Maps), not new ideas.
+- **Text is short, in the site's words; English and Sinhala.**
+- **A fresh reviewer checks every screen against these rules at each checkpoint**, and flags any screen that looks like
+  the desktop site compacted.
+
 ## 13. Risks
 
 - **Scope.** 138 site functions, about 45 screens. Mitigation:

@@ -217,3 +217,18 @@ Every button named below exists only with its tool: a missing one on another acc
 - "Edited since you opened it" on Change time or Change stops: someone changed the task on the site; the page loads it
   again and shows the new plan version.
 - The trails show "+N not drawn": more than 10 drivers are sharing; the first 10 in the server's order are drawn.
+
+## Hotfix O2-H1, Part A: the location search (20 October 2026, after the update)
+
+2 minutes on the phone, signed in as the office.
+1. Request a vehicle → Where → "+ Add a stop". With the box empty: **Suggestions · nearest first** — the places used
+   before (badge "Used before"), our offices and saved places (with their distance), then five towns (badge "Town");
+   pick one: it fills the stop with its pin.
+2. Type "Ku": "Searching…" for a moment, then the results: Dialog's Kurunegala sites (Site · Dialog), the map's places
+   (Map) with their credit line. Type "zzqq": "No places found. Try another name, or paste a pin or a Maps link."
+3. Turn Wi-Fi and mobile data off, type "Kandy": the red error line with **Try again**; data back on, Try again: the
+   results.
+4. Under the google package: the "Search Google" chip appears from two characters; tap it: Google's results with
+   "Google Maps" under them; a pick fills the stop (the free map lists it, never draws it).
+5. The start's box ("Leave from"): the same, plus "My location".
+6. සිංහල: "සොයමින්…", "ස්ථාන හමු නොවීය…", "යෝජනා · ළඟම පළමුව", the Town badge "නගරය".

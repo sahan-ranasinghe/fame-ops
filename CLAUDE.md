@@ -162,6 +162,19 @@
   management under More (Vehicles, Reports, Drivers, Office users, Quick settings; 19–20), each row only with its tool.
   As built: `docs/phase8-plan.md` section 15; the parity table: `docs/phase8-parity.md`; the 15-minute phone test:
   `docs/phase8-test-plan.md` "O2".
+  **The principle (Sahan, 20 October 2026; `docs/phase8-plan.md` section 16, it governs every Office-mode round):** the
+  office does from the phone everything they do on the website: every function, field, check, warning and view the site
+  has is in the app, by permission, nothing silently left out — but never the site squeezed onto a phone. One job per
+  screen; long jobs are steps with one sticky primary button, disabled until valid with the reason under it; required
+  things on the screen, optional ones under a "More details" fold on the same screen; defaults and pre-fills (/me, the
+  last choice, the regular vehicle); the same patterns everywhere (one card, one list, one sheet, one date row, one
+  playback bar, one filter-chip row, one search field at the top of every long list, one place for the primary button);
+  every screen at most two taps from a tab, the rest under More by permission with a search at the top; every tappable
+  thing (card, chip, row, count, badge, notification, push) opens its own place scrolled to the item, a count opens the
+  filtered list, back returns where the person was; the map stays plain (a draggable sheet, list and map in sync, at most
+  three controls, clustering, the industry patterns); short text in the site's words, English and Sinhala; a fresh
+  reviewer checks every screen against these rules at each checkpoint and flags anything that looks like the desktop site
+  compacted.
 - **C (later)**: Project costs; WhatsApp automation; pushing costs to
   Zoho Books; daily allowance claims in the driver app (our addition, waiting for the
   boss's OK; tables may exist, no UI yet); an audit page (needs a tool).

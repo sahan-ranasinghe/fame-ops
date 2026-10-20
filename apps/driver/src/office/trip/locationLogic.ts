@@ -25,6 +25,7 @@ export function badgeTone(badge: string): Tone {
   if (badge.startsWith("Site")) return "blue";
   if (badge === "Map") return "amber";
   if (badge === "Google") return "blue";
+  if (badge === "Town") return "muted";
   return "muted";
 }
 
@@ -49,3 +50,17 @@ export const pinText = (p: { lat: number; lng: number }) => `${p.lat.toFixed(6)}
 
 /** Inside Sri Lanka, roughly: a pin far outside is probably a mistake (warned, not refused). */
 export const inLanka = (lat: number, lng: number) => lat >= 5 && lat <= 10 && lng >= 79 && lng <= 82;
+
+/** Hotfix O2-H1: search_places' input for an empty box: suggestions, nearest to the phone when its position is known. */
+export function suggestArgs(near: { lat: number; lng: number } | null): Record<string, unknown> {
+  return { suggest: true, ...(near ? { near: { lat: near.lat, lng: near.lng } } : {}) };
+}
+
+/** Hotfix O2-H1: what the box shows under the field; never an empty list while a search is pending or failed. */
+export type SearchState = 'idle' | 'searching' | 'results' | 'none' | 'error';
+export function searchState(args: { searchable: boolean; busy: boolean; answer: { results: unknown[]; pin?: unknown } | null; problem: string | null }): SearchState {
+  if (!args.searchable) return 'idle';
+  if (args.problem) return 'error';
+  if (!args.answer) return args.busy ? 'searching' : 'idle';
+  return args.answer.results.length > 0 || args.answer.pin ? 'results' : 'none';
+}

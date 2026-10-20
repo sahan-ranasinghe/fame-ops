@@ -87,7 +87,8 @@
     "test:task-extras": "tsx scripts/test-task-extras.ts",
     "test:live-route": "tsx scripts/test-live-route.ts",
     "test:manage": "tsx scripts/test-manage.ts",
-    "test:people": "tsx scripts/test-people.ts"
+    "test:people": "tsx scripts/test-people.ts",
+    "test:search": "tsx scripts/test-search.ts"
   },
   "private": true,
   "expo": {

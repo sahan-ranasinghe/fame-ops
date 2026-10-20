@@ -15,6 +15,7 @@ import { GOOGLE_MIN_CHARS, googlePin, googleSuggestions } from "../googlePlaces.
 import { pastedPin } from "../pasted.ts";
 import { BUILT_IN, type Field, FIELDS, type Mapping, type Preset } from "../sites.ts";
 import { loadSettings, saveSetting } from "../settings.ts";
+import { COLOMBO, kmText, nearestFirst, ourPlacesFirst, SUGGEST_LIMITS, TOWN_BOX_DEG } from "../suggest.ts";
 import { colomboDate, colomboDateTime, colomboDayTime, dayRange } from "../time.ts";
 import { tool, zId, zPaging, zText } from "../tool.ts";
 import { offsetOf, pageInfo } from "../paging.ts";
@@ -317,7 +318,8 @@ export const addPlace = tool({
 
 export interface SearchResult {
   /** google: a Google place search result (the google package): a google_place_id, no pin until google_place. */
-  layer: "place" | "recent" | "map" | "google";
+  /** town: a populated place from GeoNames, suggested for an empty box (nearest first); its pin, no place id. */
+  layer: "place" | "recent" | "map" | "google" | "town";
   badge: string;
   name: string;
   /** The second line: the site id and district, the address, the map's longer label. */
@@ -387,34 +389,25 @@ export const searchPlaces = tool({
     "id as a stop's place_id; save a Map result or a pin with save_place first. With google (the google package), the map " +
     "layer is Google's place search instead (badge Google, credit Google Maps): a result has google_place_id and no pin; " +
     "google_place gives its pin, and a stop takes google_place_id with the name as place. Every Google request is counted; " +
-    "at the cap the map layer is openrouteservice's again and map_note says why.",
+    "at the cap the map layer is openrouteservice's again and map_note says why. With suggest and no text (an empty box) it " +
+    "answers suggestions instead: the places used in the last 90 days, our own places (offices first) and the nearest towns, " +
+    "nearest to near (the phone's position) or to the base place.",
   readOnly: true,
   input: z.object({
-    text: zText(500).describe('What was typed or pasted: a name, a site id, "lat, lng" or a Google Maps link'),
+    text: z.string().trim().max(500).optional().describe('What was typed or pasted: a name, a site id, "lat, lng" or a Google Maps link'),
+    suggest: z.boolean().optional().describe("With no text: suggestions for an empty box (recent, our places, the nearest towns)"),
+    near: z.object({ lat: z.number().min(-90).max(90), lng: z.number().min(-180).max(180) }).optional()
+      .describe("Where the person is (the phone's position): the suggestions are nearest to it, else to the base place"),
     limit: z.number().int().min(1).max(20).optional().describe("Our places at most (default 8)"),
     map: z.boolean().optional().describe("Also ask the map search (default true)"),
     google: z.boolean().optional().describe("The map layer from Google's place search when the google package is on (default false)"),
     session: z.string().regex(/^[A-Za-z0-9_-]{8,36}$/, "a session token: 8 to 36 letters, digits, - or _").optional()
       .describe("One token per typing session in one box, the same on the google_place call that ends it"),
   }),
-  async run({ text, limit = 8, map = true, google = false, session }, { db, now }) {
-    const typed = text.trim();
-    const pin = await pastedPin(typed);
-    if (pin) {
-      return {
-        result: { text: typed, results: [], pin: { ...pin, maps: mapsPoint(pin.lat, pin.lng) } },
-        summary: `search: a pin at ${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)} (${pin.from})`,
-      };
-    }
-    if (typed.length < SEARCH_MIN_CHARS) return { result: { text: typed, results: [] }, summary: "search: too short" };
+  async run({ text, limit = 8, map = true, google = false, session, suggest = false, near: nearPoint }, { db, now }) {
+    const typed = (text ?? "").trim();
     const since = new Date(now.getTime() - RECENT_DAYS * 86400000).toISOString();
-    const [ourRes, recentRes, settings] = await Promise.all([
-      db.rpc("search_places_ranked", { p_text: typed, p_limit: limit }),
-      db.rpc("recent_places", { p_text: typed, p_since: since, p_limit: 5 }),
-      loadSettings(db),
-    ]);
-    const ours = unwrap(ourRes, "places").map((p) => ourResult(p as RankedRow));
-    const recent: SearchResult[] = unwrap(recentRes, "recent places").map((r) => ({
+    const recentResult = (r: { name: string; address: string | null; lat: number | null; lng: number | null; last_used: string }): SearchResult => ({
       layer: "recent",
       badge: "Used before",
       name: r.name,
@@ -423,7 +416,44 @@ export const searchPlaces = tool({
       lat: r.lat ?? undefined,
       lng: r.lng ?? undefined,
       last_used: colomboDateTime(r.last_used),
-    }));
+    });
+    if (suggest && typed.length < SEARCH_MIN_CHARS) {
+      // An empty box (Hotfix O2-H1): what can be picked without typing, recent and nearest first.
+      const settings = await loadSettings(db);
+      const point = nearPoint ?? (await basePoint(db, settings))?.point ?? COLOMBO;
+      const [recentRes, oursRes, townsRes] = await Promise.all([
+        db.rpc("recent_places", { p_text: "", p_since: since, p_limit: SUGGEST_LIMITS.recent }),
+        db.from("places").select("id, name, address, kind, operator, site_id, other_ids, district, depot, lat, lng")
+          .eq("active", true).is("removed_at", null).eq("operator", "other").not("lat", "is", null).limit(200),
+        db.from("towns").select("id, name, lat, lng, population")
+          .gte("lat", point.lat - TOWN_BOX_DEG).lte("lat", point.lat + TOWN_BOX_DEG)
+          .gte("lng", point.lng - TOWN_BOX_DEG).lte("lng", point.lng + TOWN_BOX_DEG).limit(400),
+      ]);
+      const recent = unwrap(recentRes, "recent places").map(recentResult);
+      const ours = ourPlacesFirst(unwrap(oursRes, "places") as RankedRow[], point, SUGGEST_LIMITS.ours)
+        .map((r) => ({ ...ourResult(r), detail: [ourResult(r).detail, kmText(point, { lat: r.lat as number, lng: r.lng as number })].filter(Boolean).join(" · ") }));
+      const towns = nearestFirst(unwrap(townsRes, "towns") as { id: number; name: string; lat: number; lng: number }[], point, SUGGEST_LIMITS.towns)
+        .map((t): SearchResult => ({ layer: "town", badge: "Town", name: t.name, detail: kmText(point, t), pinned: true, lat: t.lat, lng: t.lng }));
+      return {
+        result: { text: "", results: [...recent, ...ours, ...towns], suggested: true },
+        summary: `suggestions near ${point.lat.toFixed(3)}, ${point.lng.toFixed(3)}: ${recent.length} used before, ${ours.length} ours, ${towns.length} towns`,
+      };
+    }
+    const pin = typed ? await pastedPin(typed) : null;
+    if (pin) {
+      return {
+        result: { text: typed, results: [], pin: { ...pin, maps: mapsPoint(pin.lat, pin.lng) } },
+        summary: `search: a pin at ${pin.lat.toFixed(5)}, ${pin.lng.toFixed(5)} (${pin.from})`,
+      };
+    }
+    if (typed.length < SEARCH_MIN_CHARS) return { result: { text: typed, results: [] }, summary: "search: too short" };
+    const [ourRes, recentRes, settings] = await Promise.all([
+      db.rpc("search_places_ranked", { p_text: typed, p_limit: limit }),
+      db.rpc("recent_places", { p_text: typed, p_since: since, p_limit: 5 }),
+      loadSettings(db),
+    ]);
+    const ours = unwrap(ourRes, "places").map((p) => ourResult(p as RankedRow));
+    const recent: SearchResult[] = unwrap(recentRes, "recent places").map(recentResult);
     let mapNote: string | undefined;
     let mapCached: boolean | undefined;
     let mapResults: SearchResult[] = [];
