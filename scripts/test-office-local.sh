@@ -64,6 +64,13 @@ echo "3. Builds"
 ./node_modules/.bin/vite build >/dev/null
 ./node_modules/.bin/vite build --mode artifact >/dev/null
 ls -la dist-artifact/index.html | awk '{print "   artifact: " $5 " bytes"}'
+# The mobile website (O4): Office mode for the browser, built from the driver app against the local stack and served by the
+# e2e's dev server under /m/ (FLEET_MOBILE_DIR). --clear: the EXPO_PUBLIC values are built in, a cached bundle keeps old ones.
+echo "   mobile website (local build)"
+(cd ../driver && [ -d node_modules ] || npm install --no-audit --no-fund) >/dev/null
+(cd ../driver && node scripts/make-web-routes.mjs >/dev/null && EXPO_PUBLIC_SUPABASE_URL="$API_URL" EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY" \
+  FLEET_WEB=1 EXPO_NO_WEB_SETUP=1 npx expo export --platform web --output-dir dist-web-local --clear >/dev/null)
+export FLEET_MOBILE_DIR="$(cd ../driver && pwd)/dist-web-local"
 echo "4. End to end (Playwright)"
 export OFFICE_MCP_URL="$API_URL/functions/v1/office-mcp" OFFICE_MCP_KEY API_URL ANON_KEY
 # Realtime must be streaming changes before the live step: a database reset (the connector

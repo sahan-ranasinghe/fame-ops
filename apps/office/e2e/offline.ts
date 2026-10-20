@@ -16,9 +16,11 @@ export async function fakeOutside(context: BrowserContext): Promise<void> {
 }
 
 /** The desktop site's tests stay on the desktop site at any window size (O4: a phone is otherwise sent to /m/). A test of the
- *  mobile website clears the choice in its own context (an init script added later runs after this one). */
+ *  mobile website marks its tab (sessionStorage `e2e.mobile`, mobile.spec.ts) and clears the choice once: from then on the
+ *  tab is left to the site's own rule and the switch. */
 export async function desktopView(context: BrowserContext): Promise<void> {
   await context.addInitScript(() => {
+    if (window.sessionStorage.getItem("e2e.mobile")) return;
     if (!window.localStorage.getItem("fleet.view")) window.localStorage.setItem("fleet.view", "desktop");
   });
 }

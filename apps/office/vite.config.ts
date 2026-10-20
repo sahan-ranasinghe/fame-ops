@@ -2,7 +2,8 @@
 // Two builds from one source (docs/office-web-plan.md, section 4):
 //   vite build                  → dist/           the web app for Cloudflare Pages (code-split)
 //   vite build --mode artifact  → dist-artifact/  one self-contained HTML file, the Fame Fleet artifact
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
@@ -24,6 +25,27 @@ const pwaTags = (): Plugin => ({
         { tag: "link", attrs: { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" }, injectTo: "head" },
       ],
     }),
+  },
+});
+
+// The mobile website under /m/ on the dev server (Phase 8, O4): the e2e serves a local build of Office mode for the browser
+// (FLEET_MOBILE_DIR = apps/driver/dist-web-local) on the same origin as the desktop site, as Cloudflare does (a /m/ page
+// that is not a file gets the mobile index). Nothing in either production build.
+const mobileSite = (): Plugin => ({
+  name: "fleet-mobile-site",
+  apply: "serve",
+  configureServer(server) {
+    const dir = process.env.FLEET_MOBILE_DIR;
+    if (!dir) return;
+    server.middlewares.use((req, res, next) => {
+      const url = (req.url ?? "").split("?")[0];
+      if (url !== "/m" && !url.startsWith("/m/")) return next();
+      const rel = decodeURIComponent(url.replace(/^\/m\/?/, ""));
+      const file = rel && !rel.includes("..") && existsSync(join(dir, rel)) && statSync(join(dir, rel)).isFile() ? join(dir, rel) : join(dir, "index.html");
+      const type = file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : file.endsWith(".html") ? "text/html" : file.endsWith(".json") ? "application/json" : file.endsWith(".png") ? "image/png" : file.endsWith(".ttf") ? "font/ttf" : "application/octet-stream";
+      res.setHeader("Content-Type", type);
+      res.end(readFileSync(file));
+    });
   },
 });
 
@@ -58,7 +80,7 @@ const GOOGLE_FONTS =
 export default defineConfig(({ mode }) => {
   const artifact = mode === "artifact";
   return {
-    plugins: [react(), fontTags(artifact), ...(artifact ? [viteSingleFile({ removeViteModuleLoader: true })] : [pwaTags()])],
+    plugins: [react(), mobileSite(), fontTags(artifact), ...(artifact ? [viteSingleFile({ removeViteModuleLoader: true })] : [pwaTags()])],
     define: {
       __BUILD__: JSON.stringify(artifact ? "artifact" : "web"),
       __VERSION__: JSON.stringify(pkg.version),

@@ -34,8 +34,18 @@ export default defineConfig({
   },
   projects: [
     // A desktop: the full flows.
-    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /phone\.spec\.ts/ },
+    { name: "chromium", use: { browserName: "chromium" }, testIgnore: /(phone|mobile)\.spec\.ts/ },
     // A phone (412 × 915, touch): the tab bar per role, pages and detail screens, drafts, the stops editor, pull to refresh.
     { name: "phone", use: { browserName: "chromium", viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }, testMatch: /phone\.spec\.ts/ },
+    // The mobile website (O4): an Android phone's browser on the same origin; the dev server serves the local mobile build
+    // under /m/ (FLEET_MOBILE_DIR, made by scripts/test-office-local.sh).
+    {
+      name: "mobile-web",
+      use: {
+        browserName: "chromium", viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2,
+        userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
+      },
+      testMatch: /mobile\.spec\.ts/,
+    },
   ],
 });
