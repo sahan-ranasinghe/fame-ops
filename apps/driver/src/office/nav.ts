@@ -82,7 +82,7 @@ export function homeChips(permissions: readonly string[]): HomeChip[] {
   return chips;
 }
 
-export type MoreItem = 'tasks' | 'approve' | 'drivers' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'people_drivers' | 'people_users' | 'settings';
+export type MoreItem = 'tasks' | 'approve' | 'drivers' | 'asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'people_drivers' | 'people_users' | 'settings';
 
 /** What More lists under Work: the screens built so far that are not on the bar. */
 export function moreFor(permissions: readonly string[]): MoreItem[] {
@@ -93,6 +93,8 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     { key: 'drivers', need: ['approve', 'assign_tasks'] },
     { key: 'trips', need: ['request'] },
     { key: 'issues', need: ['issues', 'assign_tasks'] },
+    // Stage 1 (O3 item 7): the questions asked to drivers in the last 7 days.
+    { key: 'asks', need: ['approve', 'assign_tasks'] },
     { key: 'alerts', need: [] },
     // O2 item 7 (design 19): management by permission. Vehicles with view (plan section 2: the list and the page are
     // read; Register / Edit by their tools), Reports with vehicles or assign_tasks (the duty log); Drivers' management
@@ -109,7 +111,7 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
 /** More's sections (design 19): Work (the screens), People (drivers, office users), then Quick settings. */
 export type MoreSection = 'work' | 'people' | 'settings';
 export const MORE_SECTION: Record<MoreItem, MoreSection> = {
-  approve: 'work', tasks: 'work', drivers: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work',
+  approve: 'work', tasks: 'work', drivers: 'work', asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work',
   people_drivers: 'people', people_users: 'people', settings: 'settings',
 };
 
@@ -130,8 +132,14 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   if (path === '/requests') return has(permissions, 'approve') ? '/office/(tabs)/approve' : null;
   if (path === '/my-trips') return has(permissions, 'request') ? '/office/(tabs)/trips' : null;
   if (path === '/live' || path.startsWith('/live?')) return has(permissions, 'view') ? '/office/(tabs)/live' : null;
+  // Stage 1 item 2: the site's home (a "needs a driver" push links to /) opens Home.
+  if (path === '/' || path === '') return '/office';
+  // An answer to a question the office asked (/drivers/asks/<id>): the question's page.
+  m = path.match(/^\/drivers\/asks\/([0-9a-f-]{36})$/);
+  if (m) return has(permissions, 'approve', 'assign_tasks') ? `/office/asks/${m[1]}` : null;
+  if (path === '/drivers/asks') return has(permissions, 'approve', 'assign_tasks') ? '/office/asks' : null;
   // O2: the Drivers board and a driver's page (the site's /drivers/board, /drivers/<username>).
-  if (path === '/drivers/board' || path === '/drivers') return has(permissions, 'approve', 'assign_tasks') ? '/office/(tabs)/drivers' : null;
+  if (path === '/drivers/board' || path === '/drivers' || path === '/drivers/ask') return has(permissions, 'approve', 'assign_tasks') ? '/office/(tabs)/drivers' : null;
   m = path.match(/^\/drivers\/([A-Za-z0-9._-]+)$/);
   if (m) return has(permissions, 'approve', 'assign_tasks') ? `/office/driver/${m[1]}` : null;
   // O2: the issues centre (issue.opened / issue.assigned link to the issue; the site's list).

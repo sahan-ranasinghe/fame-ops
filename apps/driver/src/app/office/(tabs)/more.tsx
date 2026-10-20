@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
 
-import { Bell, ChartColumn, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, Route, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van } from '@/components/icons';
+import { Bell, ChartColumn, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, Route, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { MORE_SECTION, type MoreItem, type MoreSection, moreFor } from '@/office/nav';
 import { useOffice } from '@/office/state';
@@ -23,6 +23,7 @@ const ITEM: Record<MoreItem, { icon: LucideIcon; label: string; path: string }> 
   trips: { icon: Route, label: 'office.tabs.trips', path: '/office/(tabs)/trips' },
   alerts: { icon: Bell, label: 'office.tabs.alerts', path: '/office/(tabs)/alerts' },
   issues: { icon: TriangleAlert, label: 'office.issues.title', path: '/office/issues' },
+  asks: { icon: MessageCircle, label: 'office.asks.title', path: '/office/asks' },
   vehicles: { icon: Van, label: 'office.vehicles.title', path: '/office/vehicles' },
   reports: { icon: ChartColumn, label: 'office.reports.title', path: '/office/reports' },
   people_drivers: { icon: Users, label: 'office.more.drivers', path: '/office/people/drivers' },

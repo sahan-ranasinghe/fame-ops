@@ -5,7 +5,7 @@
 // while the caller can pick a driver), and when the sheet keeps asking for answers. Pure: no React, no native module.
 
 import { driverParts } from './approveLogic';
-import type { Ask, AskDriverRow, AskKind, AvailableDriver, BoardDriver } from './types';
+import type { AskAnswers, Ask, AskDriverRow, AskKind, AvailableDriver, BoardDriver } from './types';
 
 export type Words = (key: string, vars?: Record<string, string | number>) => string;
 
@@ -199,4 +199,20 @@ export function sendLabel(n: number, t: Words): string {
 /** The question's own words when the server gave them, else the kind's. */
 export function questionText(ask: Pick<Ask, 'kind' | 'question'>, t: Words): string {
   return ask.question || t(`office.ask.kind.${ask.kind}`);
+}
+
+/** Stage 1 (O3 item 7): "3 of 5 answered · 2 yes · 1 seen" under a question. */
+export function askCountsLine(c: Pick<Ask, 'counts'>['counts'], t: Words): string {
+  return [t('office.asks.answeredOf', { n: c.answered, total: c.asked }), c.yes ? t('office.asks.yesN', { n: c.yes }) : '', c.seen > c.answered ? t('office.asks.seenN', { n: c.seen - c.answered }) : ''].filter(Boolean).join(' · ');
+}
+
+/** The next page of questions after the ones on screen (never a question twice). */
+export function appendAsks(list: AskAnswers, page: AskAnswers): AskAnswers {
+  const have = list.asks ?? [];
+  const seen = new Set(have.map((a) => a.id));
+  const out: AskAnswers = { ...list, asks: [...have, ...(page.asks ?? []).filter((a) => !seen.has(a.id))] };
+  if (page.next) out.next = page.next;
+  else delete out.next;
+  if (page.total !== undefined) out.total = page.total;
+  return out;
 }

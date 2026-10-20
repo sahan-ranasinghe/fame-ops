@@ -2119,6 +2119,21 @@
       "requester": "Requester",
       "viewer": "Viewer",
       "all": "Everything"
+    },
+    "asks": {
+      "title": "Questions",
+      "subtitle": "Asked to drivers · the last 7 days",
+      "lastDays": "The last 7 days",
+      "empty": "No questions in the last 7 days. Ask drivers from the Drivers tab, Approve or a task.",
+      "askedBy": "{name} · {when}",
+      "closed": "Closed",
+      "yesN": "{n} yes",
+      "seenN": "{n} seen",
+      "answeredOf": "{n} of {total} answered",
+      "one": "Question to drivers",
+      "answers": "Answers",
+      "openTask": "Open the task →",
+      "openRequest": "Open the request →"
     }
   },
   "patterns": {
