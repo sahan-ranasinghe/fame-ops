@@ -4,20 +4,25 @@
 // match picked first, a tap picks another; the vehicle fills itself from the driver), then Approve · send to <driver> and
 // Decline… with a reason. The decision goes through decide_request (a waiting request) or redecide_request with the
 // version it was shown with (a changed booking); "already decided by …" is the server's refusal, shown and the card read
-// again. Not in O1 and not shown: Plan on map, Change the trip, Change time, Ask drivers.
+// again. Stage 1 (O3 row 1): Change time (request/[id]/time: another day, leave-by, back-by, the start, the minutes at
+// From / To; Who's available is asked at the new time; only what changed is sent, a line with Undo shows it), and after a
+// decision the page stays with the outcome, its warnings and Tell requester (the WhatsApp text, the requester's phone).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { Check, Phone } from '@/components/icons';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
+import { TellRequester } from '@/components/office/TellRequester';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { telLink } from '@/lib/format';
 import { alreadyDecided, availabilityArgs, canApprove, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, rankedDrivers, tripView } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
+import { askedOf, availabilityAt, decideTimes, hasChange, redecideTimes, shownOf } from '@/office/decideLogic';
+import { decideStore, useTimeChange } from '@/office/decideStore';
 import { requestTitle } from '@/office/homeLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { Availability, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList } from '@/office/types';
@@ -43,7 +48,12 @@ export default function ApproveRequest() {
   const q = useTool<RequestsList>('list_requests', { status: 'all', id, limit: 1 });
   const card: RequestCard | null = q.data?.requests[0] ?? null;
   const open = card?.status === 'waiting' || card?.status === 'changed';
-  const availArgs = card ? availabilityArgs(card) : null;
+  // Change time (O3 row 1): the approver's new day and times, held for this request until decided or undone.
+  const change = useTimeChange(id);
+  const asked = card ? askedOf(card) : null;
+  const shown = asked ? shownOf(change, asked) : null;
+  const changed = !!asked && hasChange(change, asked);
+  const availArgs = card && shown ? availabilityAt(availabilityArgs(card), shown) : null;
   const avail = useTool<Availability>('availability', availArgs ?? {}, { enabled: !!availArgs && !!open, every: 60_000 });
 
   const [picked, setPicked] = useState<string | null>(null);
@@ -51,6 +61,8 @@ export default function ApproveRequest() {
   const [busy, setBusy] = useState<'approve' | 'decline' | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
   const [declining, setDeclining] = useState(false);
+  // After a decision the page stays: the outcome, its warnings and Tell requester (the card is read again).
+  const [outcome, setOutcome] = useState<{ title: string; warnings: string[] } | null>(null);
   // Ask drivers (design 13, O2): the sheet beside Who's available, only for someone who may ask.
   const [asking, setAsking] = useState(false);
   const mayAsk = me.tools.includes('ask_drivers');
@@ -87,12 +99,19 @@ export default function ApproveRequest() {
     setProblem(null);
     const driver = avail.data?.drivers.find((d) => d.username === pick);
     const call = decideCall(card, decision, { driver: pick || undefined, vehicle: driver?.vehicle?.reg_no, reason });
+    // The new time, only what differs from the request (a changed booking: the day and times as a change).
+    if (decision === 'approve' && asked && changed) {
+      if (call.tool === 'decide_request') call.input = { ...call.input, ...decideTimes(change, asked) };
+      else if (Object.keys(redecideTimes(change, asked)).length) call.input = { ...call.input, decision: 'change', ...redecideTimes(change, asked) };
+    }
     try {
       const out = await api.call<DecideResult | RedecideResult>(call.tool, call.input);
       decidedOnce.current = true;
+      decideStore.set(id, null);
       const warnings = [...(out.warnings ?? []), ...((out as DecideResult).conflicts ?? []).map((c) => c.text)];
       const title = decision === 'approve' ? t('office.request.approvedTitle', { name: driver?.name ?? pick }) : t('office.request.declinedTitle');
-      Alert.alert(title, warnings.length ? warnings.join('\n') : undefined, [{ text: t('office.common.ok'), onPress: () => (router.canGoBack() ? router.back() : router.replace('/office')) }]);
+      setOutcome({ title, warnings });
+      void q.reload();
     } catch (e) {
       const error = e as FleetError;
       setProblem(error);
@@ -180,7 +199,31 @@ export default function ApproveRequest() {
             )}
           </View>
         )}
-        {card && open && (
+        {card && open && !outcome && shown && (
+          <View style={{ gap: 8 }}>
+            {changed && (
+              <View style={styles.changed} testID="decide-changed">
+                <Txt variant="strong" size={15} style={{ flex: 1 }} color={colors.blue}>
+                  {t('office.decide.newTime', { day: shortDate(names, `${shown.date}T06:00:00Z`), leave: shown.leaveBy || '—', back: shown.back || '—' })}
+                </Txt>
+                <Pressable accessibilityRole="button" onPress={() => decideStore.set(id, null)} style={{ minHeight: 44, justifyContent: 'center' }} testID="decide-undo">
+                  <Txt variant="strong" size={15} color={colors.blue}>{t('office.decide.undo')}</Txt>
+                </Pressable>
+              </View>
+            )}
+            {me.tools.includes(card.status === 'changed' ? 'redecide_request' : 'decide_request') && (
+              <Button kind="outline" label={t('office.decide.changeTime')} onPress={() => router.push({ pathname: '/office/request/[id]/time', params: { id } })} style={{ minHeight: 52 }} testID="decide-change-time" />
+            )}
+          </View>
+        )}
+        {outcome && (
+          <View style={styles.outcome} testID="decide-outcome">
+            <Txt variant="heading" size={20}>{outcome.title}</Txt>
+            {outcome.warnings.map((w) => <Txt key={w} variant="muted" size={15}>{w}</Txt>)}
+          </View>
+        )}
+        {card && (outcome || !open) && <TellRequester key={`${card.id}-${card.version ?? 0}-${card.status}`} q={card} onSaved={() => void q.reload()} />}
+        {card && open && !outcome && (
           <Section
             title={t('office.request.whosAvailable')}
             count={avail.data ? avail.data.counts.free : undefined}
@@ -222,7 +265,12 @@ export default function ApproveRequest() {
         )}
         {problem && <ErrorNotice error={problem} onRetry={refresh} />}
       </Screen>
-      {card && open && (
+      {outcome && (
+        <StickyActions>
+          <Button kind="dark" label={t('office.decide.done')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/office'))} />
+        </StickyActions>
+      )}
+      {card && open && !outcome && (
         <StickyActions>
           <Button
             label={pickedDriver ? t('office.request.approveSend', { name: pickedDriver.name }) : t('office.request.approve')}
@@ -271,4 +319,6 @@ const styles = StyleSheet.create({
   mark: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
   driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 14, borderWidth: 2, borderColor: 'transparent', minHeight: 64 },
   driverOn: { borderColor: colors.blue, backgroundColor: '#f2f5fb' },
+  changed: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.blueChip, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6 },
+  outcome: { backgroundColor: '#e8f4ec', borderRadius: 18, padding: 16, gap: 6 },
 });

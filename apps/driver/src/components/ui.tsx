@@ -94,10 +94,11 @@ interface ButtonProps {
   disabled?: boolean;
   busy?: boolean;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 }
 
 /** primary = amber (the main action of a screen), dark = ink, outline = secondary. */
-export function Button({ label, onPress, kind = 'primary', icon: Icon, disabled = false, busy = false, style }: ButtonProps) {
+export function Button({ label, onPress, kind = 'primary', icon: Icon, disabled = false, busy = false, style, testID }: ButtonProps) {
   const text = kind === 'dark' ? '#ffffff' : kind === 'danger-text' ? colors.red : colors.ink;
   return (
     <Pressable
@@ -105,6 +106,7 @@ export function Button({ label, onPress, kind = 'primary', icon: Icon, disabled 
       accessibilityState={{ disabled: disabled || busy }}
       disabled={disabled || busy}
       onPress={onPress}
+      testID={testID}
       style={({ pressed }) => [
         styles.button,
         kind === 'primary' && { backgroundColor: colors.amber },

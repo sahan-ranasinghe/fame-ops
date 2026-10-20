@@ -93,7 +93,8 @@
     "test:patterns": "tsx scripts/test-patterns.ts",
     "test:taps": "tsx scripts/test-taps.ts",
     "test:history": "tsx scripts/test-history.ts",
-    "test:media": "tsx scripts/test-media.ts"
+    "test:media": "tsx scripts/test-media.ts",
+    "test:decide": "tsx scripts/test-decide.ts"
   },
   "private": true,
   "expo": {
