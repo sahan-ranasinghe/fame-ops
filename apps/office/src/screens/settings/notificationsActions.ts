@@ -28,3 +28,7 @@ export const removeDevice = (transport: Transport, id: string) => transport.call
 /** Hotfix 2 (B): the office site's sounds, on or off and the volume (0–100), for this person on every browser. */
 export const setSound = (transport: Transport, sound: Partial<SoundPrefs>) =>
   transport.call<NotificationSettings>("set_my_notification_settings", { sound });
+
+/** Hotfix O2-H2 (Part 2): several events at once (Pause all, Resume, one switch). */
+export const setEvents = (transport: Transport, events: Record<string, boolean>) =>
+  transport.call<NotificationSettings>("set_my_notification_settings", { events });

@@ -36,7 +36,7 @@ import { TaskEdit } from "../screens/TaskEdit";
 import { TaskHistory } from "../screens/TaskHistory";
 import { Tasks } from "../screens/Tasks";
 import { TaskStops } from "../screens/TaskStops";
-import { FleetSettings } from "../screens/settings/FleetSettings";
+import { FleetSettings, FleetSettingsRoute } from "../screens/settings/FleetSettings";
 import AppErrorsPage from "../screens/settings/AppErrors";
 import { MyProfile } from "../screens/settings/MyProfile";
 import { UserForm } from "../screens/settings/UserForm";
@@ -75,6 +75,8 @@ const SettingsHome = lazy(() => import("../screens/settings/SettingsHome"));
 const Issues = lazy(() => import("../screens/Issues"));
 const IssuePage = lazy(() => import("../screens/IssuePage"));
 const Notifications = lazy(() => import("../screens/settings/Notifications"));
+const NotificationGroup = lazy(() => import("../screens/settings/NotificationGroup"));
+const NotificationSounds = lazy(() => import("../screens/settings/NotificationSounds"));
 // The site import reads spreadsheets with SheetJS in the browser: web build, loaded on demand.
 const ImportSites = __BUILD__ === "web" ? lazy(() => import("../screens/settings/ImportSites")) : null;
 function ImportRoute() {
@@ -178,9 +180,14 @@ export const routes: RouteObject[] = [
       { path: "settings/users/new", element: <Guard need={["users"]}><UserForm /></Guard> },
       { path: "settings/users/:email/edit", element: <Guard need={["users"]}><UserManage /></Guard> },
       { path: "settings/fleet", element: <Guard need={["users"]}><FleetSettings /></Guard> },
+      // Hotfix O2-H2 (Part 2): each section of Fleet settings on its own page.
+      { path: "settings/fleet/:section", element: <Guard need={["users"]}><FleetSettingsRoute /></Guard> },
       { path: "settings/app-errors", element: <Guard need={["users"]}><AppErrorsPage /></Guard> },
       { path: "settings/import-sites", element: <Guard need={["vehicles"]}><ImportRoute /></Guard> },
       { path: "settings/notifications", element: <Suspense fallback={<div className="loading">Opening notifications…</div>}><Notifications /></Suspense> },
+      // Hotfix O2-H2 (Part 2): the sounds and each group of events on their own page (a static segment outranks :group).
+      { path: "settings/notifications/sounds", element: <Suspense fallback={<div className="loading">Opening sounds…</div>}><NotificationSounds /></Suspense> },
+      { path: "settings/notifications/:group", element: <Suspense fallback={<div className="loading">Opening notifications…</div>}><NotificationGroup /></Suspense> },
       { path: "accounts", element: <Navigate to="/settings/users" replace /> },
       { path: "more", element: <More /> },
       { path: "*", element: <Navigate to="/" replace /> },

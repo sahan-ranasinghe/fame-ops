@@ -138,5 +138,9 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   m = path.match(/^\/issues\/([0-9a-f-]{36})/);
   if (m) return has(permissions, 'issues', 'assign_tasks') ? `/office/issues/${m[1]}` : null;
   if (path === '/issues') return has(permissions, 'issues', 'assign_tasks') ? '/office/issues' : null;
+  // Hotfix O2-H2 (Part 2): the notification settings and one group of them (everyone).
+  if (path === '/settings/notifications') return '/office/notifications';
+  m = path.match(/^\/settings\/notifications\/([a-z]+)$/);
+  if (m && m[1] !== 'sounds') return `/office/notifications/${m[1]}`;
   return null;
 }

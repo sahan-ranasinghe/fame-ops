@@ -14,7 +14,7 @@ import { ToastProvider } from "../ui/Toast";
 import { RequestDecide } from "./RequestDecide";
 import { RequestDetail } from "./RequestDetail";
 import { Requests } from "./Requests";
-import { FleetSettings } from "./settings/FleetSettings";
+import { FleetSettingsRoute } from "./settings/FleetSettings";
 import { Tasks } from "./Tasks";
 
 vi.mock("../map/MapView", () => ({ MapView: () => <div data-testid="map" /> }));
@@ -379,7 +379,8 @@ describe("Settings → Fleet", () => {
       routing_usage: () => ({ provider: "estimate", daily_budget: { ors: 2000 }, days: [] }),
       list_places: () => ({ places: [] }),
     }, { name: "Sahan", role: "admin", permissions: ["view", "users"], tools: ["get_settings", "update_settings", "routing_usage"] });
-    await mount(transport, "/settings/fleet", <Route path="/settings/fleet" element={<FleetSettings />} />);
+    // Hotfix O2-H2 (Part 2): on its section's own page, Settings → Fleet → Tasks and bookings.
+    await mount(transport, "/settings/fleet/tasks", <Route path="/settings/fleet/:section" element={<FleetSettingsRoute />} />);
     const box = (await screen.findByRole("checkbox", { name: /New tasks need the fleet admin's OK/ })) as HTMLInputElement;
     expect(box.checked).toBe(true);
     fireEvent.click(box);
