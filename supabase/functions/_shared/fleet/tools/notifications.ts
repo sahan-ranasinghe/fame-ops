@@ -285,9 +285,12 @@ export const markInboxRead = tool({
   },
 });
 
-/** The page preferences a person may keep (Hotfix 3, L1 and L5): the collapsed sections. */
-const PREF_KEYS = ["overview_collapsed", "menu_collapsed"] as const;
+/** The page preferences a person may keep (Hotfix 3, L1 and L5): the collapsed sections; Hotfix O2-H2 (Part 2): the
+ * notification pause (Instagram's "Pause all"): when it began and what each event was before it, so Resume on any device
+ * puts them back; null clears it. */
+const PREF_KEYS = ["overview_collapsed", "menu_collapsed", "notifications_paused"] as const;
 const zSections = z.array(z.string().trim().min(1).max(40)).max(30);
+const zPause = z.object({ at: z.string().max(40), saved: z.record(z.string().max(60), z.boolean()) }).nullable();
 
 async function prefsOf(db: Db, employeeId: string): Promise<Record<string, unknown>> {
   const row = unwrapMaybe(await db.from("office_prefs").select("prefs").eq("employee_id", employeeId).maybeSingle(), "preferences");
@@ -298,7 +301,8 @@ export const myPrefs = tool({
   name: "my_prefs",
   title: "My page preferences",
   description: "The person's own page preferences (Hotfix 3): the Overview's collapsed sections (overview_collapsed) and the side " +
-    "menu's (menu_collapsed). Personal: a signed-in person or a personal key.",
+    "menu's (menu_collapsed), and the notification pause (notifications_paused: when it began and what each event was). " +
+    "Personal: a signed-in person or a personal key.",
   readOnly: true,
   input: z.object({}),
   async run(_args, { db, actor }) {
@@ -311,15 +315,15 @@ export const setMyPrefs = tool({
   name: "set_my_prefs",
   title: "Keep my page preferences",
   description: "Keeps the person's page preferences: the fields given replace those fields (overview_collapsed, menu_collapsed: lists " +
-    "of section names); the others stay. Answers the preferences as kept.",
+    "of section names; notifications_paused: {at, saved} or null to clear it); the others stay. Answers the preferences as kept.",
   readOnly: false,
   input: z.object({
-    prefs: z.object({ overview_collapsed: zSections.optional(), menu_collapsed: zSections.optional() }),
+    prefs: z.object({ overview_collapsed: zSections.optional(), menu_collapsed: zSections.optional(), notifications_paused: zPause.optional() }),
   }),
   async run({ prefs }, { db, actor, now }) {
     const id = person(actor);
     const given = Object.fromEntries(PREF_KEYS.flatMap((k) => (prefs[k] !== undefined ? [[k, prefs[k]]] : [])));
-    if (Object.keys(given).length === 0) throw new ToolError("Nothing to keep: give overview_collapsed or menu_collapsed.");
+    if (Object.keys(given).length === 0) throw new ToolError("Nothing to keep: give overview_collapsed, menu_collapsed or notifications_paused.");
     const merged = { ...(await prefsOf(db, id)), ...given };
     unwrap(
       await db.from("office_prefs").upsert({ employee_id: id, prefs: merged as NonNullable<Json>, updated_at: now.toISOString() }, {

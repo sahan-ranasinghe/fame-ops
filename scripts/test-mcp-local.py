@@ -2630,6 +2630,14 @@ if CHANNEL == "api":
     p = tool("set_my_prefs", {"prefs": {"menu_collapsed": ["reports"]}})
     check(tool("my_prefs")["prefs"] == {"overview_collapsed": ["road", "tiles"], "menu_collapsed": ["reports"]},
           "the page preferences are kept per person and merged", json.dumps(p))
+    # Hotfix O2-H2 (Part 2): the notification pause is kept with them, and null clears it.
+    rec = {"at": "2026-10-20T08:00:00.000Z", "saved": {"request.created": True, "task.declined": False}}
+    tool("set_my_prefs", {"prefs": {"notifications_paused": rec}})
+    kept = tool("my_prefs")["prefs"]
+    tool("set_my_prefs", {"prefs": {"notifications_paused": None}})
+    cleared = tool("my_prefs")["prefs"]
+    check(kept.get("notifications_paused") == rec and kept.get("menu_collapsed") == ["reports"] and cleared.get("notifications_paused") is None,
+          "the notification pause is kept with the preferences (what each event was), and null clears it", json.dumps(kept)[:200])
     ADMIN_ID = psql(f"select id from employees where email = '{admin_email}'")
     psql(f"insert into office_inbox (employee_id, event, title, url, created_at, read_at) values ('{ADMIN_ID}', 'request.decided', "
          f"'6l old {hl}', '/requests', now() - interval '40 days', now() - interval '39 days')")
