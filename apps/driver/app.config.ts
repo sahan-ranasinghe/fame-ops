@@ -81,7 +81,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ...(googleServicesFile ? { googleServicesFile } : {}),
       // Expo's own setting (manifest meta-data com.google.android.geo.API_KEY); unlike a plugin's
       // options it is left out of the public config, so it is not in the update manifests.
-      ...(mapsOn && mapsKey ? { config: { ...config.android?.config, googleMaps: { apiKey: mapsKey } } } : {}),
+      // Never in the mobile website's build (its config is in the page): the browser's Google key comes from register_map_load.
+      ...(mapsOn && mapsKey && !web ? { config: { ...config.android?.config, googleMaps: { apiKey: mapsKey } } } : {}),
     },
     ...(mapsOn ? { runtimeVersion: `${config.version}-gmaps` } : {}),
     ...(web

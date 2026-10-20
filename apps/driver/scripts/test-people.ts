@@ -236,7 +236,7 @@ console.log('\n== The screens as text ==');
   for (const tool of ['update_office_user', 'reset_office_password', 'set_office_user_active']) {
     check(files.user.includes(`me.tools.includes('${tool}')`), `Manage an office user: ${tool} only when the person has it`);
   }
-  check(files.user.includes('updateUserInput(before, f, me.email)') && files.user.includes('SecretCard') && files.parts.includes('Share.share({ message: shareText })'), 'the rules with the person\'s own e-mail; the link shown once with Share');
+  check(files.user.includes('updateUserInput(before, f, me.email)') && files.user.includes('SecretCard') && files.parts.includes('Share.share({ message: text })') && files.parts.includes('navigator.clipboard.writeText(text)'), 'the rules with the person\'s own e-mail; the link shown once with Share');
   check(files.userNew.includes("api.call<CreateOfficeUserResult>('create_office_user', v.input)") && files.userNew.includes('PermissionPicker') && files.userNew.includes('SecretCard'), 'Add an office user: create_office_user, the picker, the link shown once');
   check(files.parts.includes('togglePermission') && files.parts.includes('presetOf') && files.parts.includes('viewLocked') && files.parts.includes('PRESET_KEYS') && files.parts.includes("t('office.people.presetAdmin')"), 'the picker: the presets and Everything, view locked');
   check(files.settings.includes("useTool<SettingsResult>('get_settings', {})") && files.settings.includes("api.call('update_settings', r.input)") && files.settings.includes("me.tools.includes('update_settings')"), 'Quick settings: get_settings, update_settings {key, value}, the controls only with update_settings');

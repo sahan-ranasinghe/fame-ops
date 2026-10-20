@@ -5,7 +5,7 @@ import { moreFor } from "../app/nav";
 import { badgeText, useNavBadges } from "../app/navBadges";
 import { ROLE_LABEL } from "../transport/types";
 import { Icon } from "../ui/icons";
-import { phoneLike, saveChoice } from "../app/viewChoice";
+import { phoneLike, saveChoice, touchPointer } from "../app/viewChoice";
 
 /** Everything the person may open that is not on the phone's tab bar (Issues and Requests with their counts), and their account. */
 export function More() {
@@ -46,7 +46,7 @@ export function More() {
             </div>
           )}
           {/* O4: a phone that chose the desktop view can go back to the mobile website (remembered in this browser). */}
-          {transport.kind === "api" && phoneLike(window.innerWidth, navigator.userAgent) && (
+          {transport.kind === "api" && phoneLike(window.innerWidth, navigator.userAgent, touchPointer()) && (
             <div className="acts" style={{ marginTop: 16 }}>
               <button type="button" className="btn" data-testid="switch-mobile" onClick={() => { saveChoice("mobile"); location.assign("/m/"); }}>Switch to mobile view</button>
             </div>

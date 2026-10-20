@@ -5,10 +5,10 @@
 // background; a failed save turns it back with a snackbar (office/useNotifSettings.ts).
 
 import { useRouter } from 'expo-router';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 
 import { LinkRow, RowCard, SwitchRow } from '@/components/office/NotifParts';
-import { Txt } from '@/components/ui';
+import { Notice, Txt } from '@/components/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { openNotificationSettings } from '@/lib/settingsLinks';
 import { groupSub, groupSummaryLine, groupTitle } from '@/office/notifLogic';
@@ -29,6 +29,8 @@ export default function OfficeNotifications() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={t('office.notif.title')} />
       <Screen refreshing={tool.refreshing} onRefresh={() => void tool.reload()}>
+        {/* O4: the mobile website has no web push yet (step 5); the switches are the person's own and reach the app. */}
+        {Platform.OS === 'web' && <Notice tone="info" text={t('web.pushLater')} />}
         {tool.loading && <SkeletonRows rows={3} lines={2} />}
         {tool.error && !tool.data && <ErrorNotice error={tool.error} onRetry={() => void tool.reload()} onSignIn={() => void signOut()} />}
         {tool.data && n.groups.length === 0 && <ListEmpty text={t('office.notif.noEvents')} />}
@@ -64,9 +66,9 @@ export default function OfficeNotifications() {
             </Section>
           </>
         )}
-        <RowCard>
+        {Platform.OS !== 'web' && <RowCard>
           <LinkRow title={t('office.notif.phoneSound')} line={t('office.notif.phoneSoundText')} onPress={() => void openNotificationSettings().catch(() => undefined)} testID="notif-phone-sound" />
-        </RowCard>
+        </RowCard>}
       </Screen>
     </View>
   );

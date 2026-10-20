@@ -3,13 +3,14 @@
 // permission picker (the presets as chips, then one row per permission; view locked while another needs it; never a
 // role name) and the switch of the quick settings. The rules: office/peopleLogic.ts.
 
-import { Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
+import { Platform, Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 
 import { Search, X } from '@/components/icons';
 import { Checkbox, ChoiceChip } from '@/components/patterns/Select';
 import { Button, Txt } from '@/components/ui';
 import { type Preset, PRESET_KEYS, presetOf, togglePermission, viewLocked } from '@/office/peopleLogic';
 import { type Permission, PERMISSIONS, PRESETS } from '@/office/permissions';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -45,13 +46,28 @@ export function SearchBox({ value, onChange, onSubmit, placeholder, clearLabel }
   );
 }
 
+/** Share; a browser without a share sheet (a laptop, some Android browsers) copies the text instead and says so. */
+async function shareOrCopy(text: string, copied: string): Promise<void> {
+  if (Platform.OS === 'web' && typeof navigator !== 'undefined' && typeof (navigator as { share?: unknown }).share !== 'function') {
+    try {
+      await navigator.clipboard.writeText(text);
+      showSnackbar({ text: copied });
+    } catch {
+      // No clipboard either: the link above is selectable.
+    }
+    return;
+  }
+  await Share.share({ message: text }).catch(() => undefined);
+}
+
 /** A link shown once: the words, the link itself (selectable), Share, and the hint. Nothing here is logged. */
 export function SecretCard({ title, value, hint, shareText, shareLabel }: { title: string; value: string; hint: string; shareText: string; shareLabel: string }) {
+  const { t } = useApp();
   return (
     <View style={styles.secret}>
       <Txt variant="strong" size={17}>{title}</Txt>
       <Txt variant="body" size={15} selectable style={{ fontFamily: fonts.mono }}>{value}</Txt>
-      <Button kind="dark" label={shareLabel} onPress={() => void Share.share({ message: shareText }).catch(() => undefined)} style={{ minHeight: 56 }} />
+      <Button kind="dark" label={shareLabel} onPress={() => void shareOrCopy(shareText, t('web.copied'))} style={{ minHeight: 56 }} />
       <Txt variant="small">{hint}</Txt>
     </View>
   );

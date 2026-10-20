@@ -106,6 +106,8 @@ console.log('\nNew requests while the list is open (Sahan, 20 October 2026)');
   check(fresh.map((r) => r.id).join() === 'n1,n2', 'the new ones are counted, not shown');
   check(withArrivals(updated, first).map((r) => r.id).join() === 'a,n1,b,n2,c', 'a tap puts them in the server\'s order, then the rest already loaded');
   check(arrivals(now, now).fresh.length === 0, 'nothing new: no pill');
+  const gone = arrivals([card('a'), card('b'), card('c'), card('d')], [card('a'), card('c')]).updated.map((r) => r.id).join();
+  check(gone === 'a,c,d', 'a row above the first page\'s last one that left the list (decided by another approver) goes; rows past the first page stay', gone);
   const tab = src('app/office/(tabs)/approve.tsx');
   check(!/useTool<RequestsList>\('list_requests'[^)]*every/.test(tab) && tab.includes('testID="new-requests"') && tab.includes('scroll.current?.scrollTo({ y: 0'), 'the list has no timer of its own; the pill scrolls up and shows them');
 }

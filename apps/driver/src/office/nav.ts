@@ -146,11 +146,22 @@ export function routeForUrl(url: string | undefined, permissions: readonly strin
   // O2: the Drivers board and a driver's page (the site's /drivers/board, /drivers/<username>).
   if (path === '/drivers/board' || path === '/drivers' || path === '/drivers/ask') return has(permissions, 'approve', 'assign_tasks') ? '/office/(tabs)/drivers' : null;
   m = path.match(/^\/drivers\/([A-Za-z0-9._-]+)$/);
-  if (m) return has(permissions, 'approve', 'assign_tasks') ? `/office/driver/${m[1]}` : null;
+  if (m && m[1] !== 'new') return has(permissions, 'approve', 'assign_tasks') ? `/office/driver/${m[1]}` : null;
   // O2: the issues centre (issue.opened / issue.assigned link to the issue; the site's list).
   m = path.match(/^\/issues\/([0-9a-f-]{36})/);
   if (m) return has(permissions, 'issues', 'assign_tasks') ? `/office/issues/${m[1]}` : null;
   if (path === '/issues') return has(permissions, 'issues', 'assign_tasks') ? '/office/issues' : null;
+  // O4 (the mobile website: every desktop link a phone opens lands on its own screen): Task history, Vehicles and a
+  // vehicle, Places and a place, Maintenance, Reminders.
+  if (path === '/tasks/history') return has(permissions, 'assign_tasks') ? '/office/task-history' : null;
+  if (path === '/vehicles') return has(permissions, 'view') ? '/office/vehicles' : null;
+  m = path.match(/^\/vehicles\/([^/]+)(?:\/edit)?$/);
+  if (m && m[1] !== 'new') return has(permissions, 'view') ? `/office/vehicles/${m[1]}` : null;
+  if (path === '/places') return has(permissions, 'vehicles') ? '/office/places' : null;
+  m = path.match(/^\/places\/([0-9a-f-]{36})$/);
+  if (m) return has(permissions, 'vehicles') ? `/office/places/${m[1]}` : null;
+  if (path === '/maintenance') return has(permissions, 'issues') ? '/office/maintenance' : null;
+  if (path === '/reminders') return has(permissions, 'issues') ? '/office/reminders' : null;
   // Hotfix O2-H2 (Part 2): the notification settings and one group of them (everyone).
   if (path === '/settings/notifications') return '/office/notifications';
   m = path.match(/^\/settings\/notifications\/([a-z]+)$/);

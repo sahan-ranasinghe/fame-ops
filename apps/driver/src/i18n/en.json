@@ -2771,6 +2771,8 @@
   "web": {
     "ok": "OK",
     "cancel": "Cancel",
-    "desktopView": "Switch to desktop view"
+    "desktopView": "Switch to desktop view",
+    "copied": "Link copied",
+    "pushLater": "This browser does not get notifications yet: they come with the next update of the mobile website. The switches below already apply to the Fame Fleet app."
   }
 }

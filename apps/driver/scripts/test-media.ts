@@ -39,7 +39,9 @@ console.log('\nThe upload');
   check(same(ticketOf({ bucket: 'driver-photos', path: 'p', token: 't', extra: 1 }), { bucket: 'driver-photos', path: 'p', token: 't' }) && ticketOf({ bucket: 'other', path: 'p', token: 't' }) === null && ticketOf(null) === null && ticketOf({ bucket: 'vehicle-photos', path: '', token: 't' }) === null,
     'a ticket only as the server sent it (a known bucket, a path, a token)');
   const media = src('office/media.ts');
-  check(media.includes("httpMethod: 'PUT'") && media.includes('UploadType.BINARY_CONTENT') && media.includes("'x-upsert': 'false'") && !/service_role|SERVER_KEY/.test(media), 'PUT the file\'s bytes, never overwrite, only the publishable key on the phone');
+  const fileNative = src('office/mediaFile.ts');
+  const fileWeb = src('office/mediaFile.web.ts');
+  check(fileNative.includes("httpMethod: 'PUT'") && fileNative.includes('UploadType.BINARY_CONTENT') && fileWeb.includes("method: 'PUT'") && media.includes("'x-upsert': 'false'") && !/service_role|SERVER_KEY/.test(media + fileNative + fileWeb), 'PUT the file\'s bytes (the phone through expo-file-system, a browser through fetch), never overwrite, only the publishable key');
   check(media.includes('requestCameraPermissionsAsync') && media.includes('launchImageLibraryAsync') && media.includes("allowsEditing: true, aspect: [1, 1]"), 'the camera (asked) or the phone\'s photos; a driver\'s photo cropped square');
 }
 

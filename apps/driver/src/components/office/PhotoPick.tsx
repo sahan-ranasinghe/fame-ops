@@ -4,7 +4,7 @@
 // allow it. The caller sends it on.
 
 import { useState } from 'react';
-import { Linking, View } from 'react-native';
+import { Linking, Platform, View } from 'react-native';
 
 import { Button, Notice } from '@/components/ui';
 import { pickPhoto, type Shot } from '@/office/media';
@@ -48,7 +48,7 @@ export function PhotoPick({ use, label, onShot, disabled = false, testID = 'phot
       {denied && (
         <View style={{ gap: 6 }}>
           <Notice tone="danger" text={t('office.media.cameraDenied')} />
-          <Button kind="outline" label={t('office.media.openSettings')} onPress={() => void Linking.openSettings()} style={{ minHeight: 48 }} />
+          {Platform.OS !== 'web' && <Button kind="outline" label={t('office.media.openSettings')} onPress={() => void Linking.openSettings()} style={{ minHeight: 48 }} />}
         </View>
       )}
       {failed && <Notice tone="danger" text={t('office.media.pickFailed')} />}

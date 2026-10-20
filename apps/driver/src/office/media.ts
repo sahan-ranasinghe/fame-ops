@@ -2,14 +2,14 @@
 // the phone's photos (the system photo picker: no permission), made at its size (office/mediaLogic.ts) and sent straight
 // to Storage through the one-time signed upload a tool handed out. Nothing waits in a queue: the office person is online
 // and sees the outcome at once (Try again on a failure). Modules already in the 1.3.0 build (expo-image-picker,
-// expo-image-manipulator, expo-file-system): an EAS update, no build.
+// expo-image-manipulator, expo-file-system): an EAS update, no build. The file steps: mediaFile.ts (a browser: mediaFile.web.ts).
 
-import { File, UploadType } from 'expo-file-system';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 import { centredSquare, fitLongSide, JPEG_QUALITY, LONG_SIDE, PROFILE_PX, type PhotoUse, signedUploadUrl, THUMB_PX, type UploadTicket } from './mediaLogic';
+import { fileBytes, putFile } from './mediaFile';
 import type { FleetError } from './types';
 import { withTimeout } from '@/lib/patterns/listLogic';
 
@@ -43,7 +43,7 @@ export async function pickPhoto(use: PhotoUse, source: 'camera' | 'library'): Pr
 
   const make = async (actions: Parameters<typeof manipulateAsync>[1]): Promise<ShotFile> => {
     const out = await manipulateAsync(asset.uri, actions, { compress: JPEG_QUALITY, format: SaveFormat.JPEG });
-    return { uri: out.uri, width: out.width, height: out.height, bytes: new File(out.uri).size ?? 0 };
+    return { uri: out.uri, width: out.width, height: out.height, bytes: await fileBytes(out.uri) };
   };
   if (use === 'driver_profile') {
     const crop = centredSquare(asset.width, asset.height);
@@ -66,11 +66,8 @@ export async function uploadToTicket(ticket: UploadTicket, uri: string, contentT
   let body = '';
   try {
     // Every call has a time limit (docs/ui-patterns.md §5): 60 s for one photo of at most 1600 px.
-    const result = await withTimeout(new File(uri).upload(signedUploadUrl(SUPABASE_URL, ticket), {
-      httpMethod: 'PUT',
-      uploadType: UploadType.BINARY_CONTENT,
-      mimeType: contentType,
-      headers: { apikey: SUPABASE_PUBLISHABLE_KEY, 'Content-Type': contentType, 'x-upsert': 'false' },
+    const result = await withTimeout(putFile(signedUploadUrl(SUPABASE_URL, ticket), uri, contentType, {
+      apikey: SUPABASE_PUBLISHABLE_KEY, 'Content-Type': contentType, 'x-upsert': 'false',
     }), UPLOAD_TIMEOUT_MS);
     status = result.status;
     body = result.body;

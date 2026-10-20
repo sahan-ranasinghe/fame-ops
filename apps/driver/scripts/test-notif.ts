@@ -202,6 +202,9 @@ console.log("\n== The app's words ==");
   check(groupTitle(t, 'mine') === 'My trips' && groupSub(t, 'mine') === 'Things I asked for' && groupSub(t, 'issues') === undefined, 'group titles and the My trips line');
   check(isGroupKey('requests') && isGroupKey('other') && !isGroupKey('nope') && !isGroupKey(undefined), 'only known groups open a group screen');
   check(routeForUrl('https://fame-fleet.pages.dev/settings/notifications', []) === '/office/notifications' && routeForUrl('/settings/notifications/mine', ['request']) === '/office/notifications/mine', "the site's Notifications links open the app's screens");
+  check(routeForUrl('/tasks/history', ['assign_tasks']) === '/office/task-history' && routeForUrl('/vehicles/WP%20CAB-4521', ['view']) === '/office/vehicles/WP%20CAB-4521'
+    && routeForUrl('/vehicles/new', ['view']) === null && routeForUrl('/places', ['vehicles']) === '/office/places' && routeForUrl('/maintenance', ['issues']) === '/office/maintenance'
+    && routeForUrl('/reminders', ['view']) === null && routeForUrl('/drivers/new', ['approve']) === null, "O4: the site's other pages open their own screens, by permission; a New form is not a driver called new");
   check(routeForUrl('/settings/notifications/sounds', []) === null, "the site's Sounds page has no app screen (the phone's sounds are Android's)");
   check(!('notifications' in en.office.profile) && !('noEvents' in en.office.profile), "the Profile's old notification keys are gone");
 }

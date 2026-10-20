@@ -85,11 +85,16 @@ export function cancelReason(label: string, note: string): string {
 // that are not; the pill shows them on a tap.
 // ---------------------------------------------------------------------------
 
-/** The rows on screen with their newer versions from the first page (same order), and the first page's new ones. */
+/** The rows on screen with their newer versions from the first page (same order), and the first page's new ones. A row
+ *  on screen above the first page's last known row that the first page no longer has has left this list (another approver
+ *  decided it under Waiting, or it was cancelled): it goes, never left looking undecided. */
 export function arrivals(current: readonly RequestCard[], first: readonly RequestCard[]): { updated: RequestCard[]; fresh: RequestCard[] } {
   const byId = new Map(first.map((r) => [r.id, r]));
   const have = new Set(current.map((r) => r.id));
-  return { updated: current.map((r) => byId.get(r.id) ?? r), fresh: first.filter((r) => !have.has(r.id)) };
+  let last = -1;
+  current.forEach((r, i) => { if (byId.has(r.id)) last = i; });
+  const updated = current.filter((r, i) => byId.has(r.id) || i > last).map((r) => byId.get(r.id) ?? r);
+  return { updated, fresh: first.filter((r) => !have.has(r.id)) };
 }
 
 /** The list with the new ones in their place: the first page in the server's order, then the rest already loaded. */

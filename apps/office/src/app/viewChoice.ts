@@ -6,10 +6,21 @@
 export const VIEW_KEY = "fleet.view";
 export type ViewChoice = "desktop" | "mobile";
 
-/** A phone: a narrow screen (the site's one breakpoint, ui/phone.ts) or a mobile browser (an iPad keeps the desktop site). */
-export function phoneLike(width: number, userAgent: string): boolean {
-  if (width <= 768) return true;
-  return /Android.+Mobile|iPhone|iPod|Windows Phone|Mobile Safari/.test(userAgent) && !/iPad/.test(userAgent);
+/** A phone: a mobile browser (an iPad keeps the desktop site), or a narrow screen (the site's one breakpoint, ui/phone.ts)
+ *  with a finger for a pointer. A laptop's window made narrow keeps the desktop site (its pointer is a mouse). */
+export function phoneLike(width: number, userAgent: string, touch: boolean): boolean {
+  if (/iPad/.test(userAgent)) return false;
+  if (/Android.+Mobile|iPhone|iPod|Windows Phone|Mobile Safari/.test(userAgent)) return true;
+  return width <= 768 && touch;
+}
+
+/** This browser's pointer is a finger (a phone or a tablet), not a mouse. */
+export function touchPointer(): boolean {
+  try {
+    return window.matchMedia("(pointer: coarse)").matches;
+  } catch {
+    return false;
+  }
 }
 
 /** Pages the desktop site keeps on a phone too: the public privacy page and the set-password link's landing. */
@@ -17,10 +28,10 @@ const DESKTOP_ONLY = /^\/(privacy|set-password)(\/|$)/;
 
 /** Where a phone is sent from a desktop page, or null to stay: /m/, with the page asked for as ?from= (the mobile site
  *  opens its own screen for it after sign-in). */
-export function mobileTarget(path: string, search: string, choice: string | null, width: number, userAgent: string): string | null {
+export function mobileTarget(path: string, search: string, choice: string | null, width: number, userAgent: string, touch: boolean): string | null {
   if (DESKTOP_ONLY.test(path)) return null;
   if (choice === "desktop") return null;
-  if (choice !== "mobile" && !phoneLike(width, userAgent)) return null;
+  if (choice !== "mobile" && !phoneLike(width, userAgent, touch)) return null;
   const from = path === "/" && !search ? "" : `?from=${encodeURIComponent(path + search)}`;
   return `/m/${from}`;
 }
