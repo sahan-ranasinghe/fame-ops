@@ -1,20 +1,26 @@
 // Office mode (Phase 8, O2, item 7): one vehicle, read-only (the site's VehicleDetail): the photo when there is one,
 // the status and availability, type · seats, rented from · until, the rent, the regular driver, who it is assigned to
 // or held by, km this month against the allowance, the odometer, the next service, the garage, the document chips
-// with what is missing, and the documents on file (vehicle_documents: Open in the browser; adding them is laptop work,
-// the upload tools are web-only). Edit (update_vehicle) opens the form. Found by list_vehicles' search (one page; the
-// active vehicles, then the returned ones).
+// with what is missing, and the documents (vehicle_documents) as one row per kind (Stage 1, O3 item 5): the four every
+// vehicle has, the lease when rented, each Other and "Another document"; a row opens the document's screen (Open in the
+// browser, Take photo / Replace, the expiry date: vehicles/doc). The photo: Take photo / Replace photo with the camera or
+// the phone's photos (photo_upload_url + set_vehicle_photo, straight to Storage). Each button only with its tools.
+// Edit (update_vehicle) opens the form. Found by list_vehicles' search (one page; the active vehicles, then the returned
+// ones).
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Image, Linking, Pressable, View } from 'react-native';
 
-import { Button, Mono, Txt } from '@/components/ui';
+import { PhotoPick } from '@/components/office/PhotoPick';
+import { Button, Mono, Notice, Txt } from '@/components/ui';
 import { docTone, kmLine, vehicleTone } from '@/office/manageLogic';
+import { uploadToTicket, type Shot } from '@/office/media';
+import { canSetVehiclePhoto, canUploadDocs, documentRows, ticketOf } from '@/office/mediaLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleCard, VehicleDocuments, VehiclesList } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
-import { BackHeader, ListFailed, Pill, Screen, Section } from '@/office/ui';
+import { BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -31,6 +37,27 @@ export default function VehicleScreen() {
   const [loading, setLoading] = useState(true);
   const canEdit = me.tools.includes('update_vehicle');
   const docsQ = useTool<VehicleDocuments>('vehicle_documents', { vehicle: reg }, { enabled: !!reg && me.tools.includes('vehicle_documents') });
+  const mayPhoto = canSetVehiclePhoto(me.tools);
+  const mayDocs = canUploadDocs(me.tools);
+  const [photo, setPhoto] = useState<{ busy: boolean; error: FleetError | null; done: boolean; last: Shot | null }>({ busy: false, error: null, done: false, last: null });
+
+  // The vehicle's photo: a place for it and its thumbnail, both files straight to Storage, then the vehicle points to them.
+  async function savePhoto(shot: Shot) {
+    setPhoto({ busy: true, error: null, done: false, last: shot });
+    try {
+      const answer = await api.call<{ upload: unknown; thumb?: unknown }>('photo_upload_url', { kind: 'vehicle', target: reg });
+      const main = ticketOf(answer.upload);
+      const thumb = ticketOf(answer.thumb);
+      if (!main || !thumb || !shot.thumb) throw { code: 'tool_error', message: t('office.media.noTicket') } satisfies FleetError;
+      await uploadToTicket(main, shot.photo.uri, 'image/jpeg');
+      await uploadToTicket(thumb, shot.thumb.uri, 'image/jpeg');
+      const r = await api.call<{ photo_url?: string }>('set_vehicle_photo', { vehicle: reg, path: main.path, thumb_path: thumb.path });
+      setV((prev) => (prev ? { ...prev, photo_url: r.photo_url ?? shot.photo.uri } : prev));
+      setPhoto({ busy: false, error: null, done: true, last: null });
+    } catch (e) {
+      setPhoto({ busy: false, error: e as FleetError, done: false, last: shot });
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -73,6 +100,15 @@ export default function VehicleScreen() {
         {v && (
           <>
             {v.photo_url ? <Image source={{ uri: v.photo_url }} style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: 18, backgroundColor: '#e9e7e0' }} resizeMode="cover" accessibilityLabel={reg} /> : null}
+            {mayPhoto && v.active !== false && (
+              <View style={{ gap: 8 }} testID="vehicle-photo">
+                {!v.photo_url && <Txt variant="muted" size={15}>{t('office.media.noVehiclePhoto')}</Txt>}
+                <PhotoPick use="vehicle" label={v.photo_url ? t('office.media.replacePhoto') : t('office.media.takePhoto')} onShot={(shot) => void savePhoto(shot)} disabled={photo.busy} />
+                {photo.busy && <Txt variant="small">{t('office.media.sending')}</Txt>}
+                {photo.done && <Txt variant="small" color={colors.green}>{t('office.media.photoSaved')}</Txt>}
+                {photo.error && <ErrorNotice error={photo.error} onRetry={photo.last ? () => void savePhoto(photo.last!) : undefined} onSignIn={() => void signOut()} />}
+              </View>
+            )}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
               <Pill text={v.active === false ? t('office.vehicles.returned') : v.status ?? ''} tone={vehicleTone(v)} size={15} />
               {v.availability ? <Txt variant="muted" size={15}>{v.availability}</Txt> : null}
@@ -107,15 +143,26 @@ export default function VehicleScreen() {
               <Section title={t('office.vehicles.onFile')} count={docsQ.data?.documents.length}>
                 {!docsQ.data && !docsQ.error && <SkeletonRows rows={2} lines={2} />}
                 {docsQ.error && <ListFailed stale={!!docsQ.data} error={docsQ.error} onRetry={() => void docsQ.reload()} onSignIn={() => void signOut()} />}
-                {docsQ.data && docsQ.data.documents.length === 0 && <ListEmpty text={t('office.vehicles.noFiles')} />}
-                {docsQ.data?.documents.map((doc) => (
-                  <Pressable key={doc.id} accessibilityRole={doc.url ? 'link' : undefined} onPress={doc.url ? () => open(doc.url!) : undefined} style={{ paddingVertical: 10, gap: 2 }}>
-                    <Txt variant="strong">{doc.kind_name}{doc.name && doc.name !== doc.kind_name ? ` · ${doc.name}` : ''}</Txt>
-                    <Txt variant="small">{[doc.expiry ? t('office.vehicles.expires', { date: doc.expiry }) : '', doc.uploaded].filter(Boolean).join(' · ')}</Txt>
-                    {doc.url ? <Txt variant="strong" size={15} color={colors.blue}>{t('office.vehicles.open')}</Txt> : null}
-                  </Pressable>
+                {docsQ.data && docsQ.data.missing_text ? <Notice text={docsQ.data.missing_text} /> : null}
+                {docsQ.data && documentRows(docsQ.data, { rented: !!v.rented_from }).filter((r) => mayDocs || r.doc).map((r, i) => (
+                  <View key={r.key}>
+                    {i > 0 && <Divider />}
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => (mayDocs ? router.push({ pathname: '/office/vehicles/doc', params: { reg, kind: r.kind, ...(r.doc ? { id: r.doc.id } : {}) } }) : r.doc?.url ? open(r.doc.url) : undefined)}
+                      style={({ pressed }) => [{ paddingVertical: 10, gap: 2, minHeight: 56 }, pressed && { opacity: 0.8 }]}
+                      testID="vehicle-doc-row"
+                    >
+                      <Txt variant="strong">{r.adding ? t('office.media.anotherDoc') : r.doc ? `${r.doc.kind_name}${r.doc.name && r.doc.name !== r.doc.kind_name ? ` · ${r.doc.name}` : ''}` : t(`office.media.kind_${r.kind}`)}</Txt>
+                      {r.doc ? (
+                        <Txt variant="small">{[r.doc.expiry ? t('office.vehicles.expires', { date: r.doc.expiry }) : '', r.doc.uploaded].filter(Boolean).join(' · ')}</Txt>
+                      ) : !r.adding ? (
+                        <Txt variant="small" color={r.missing ? colors.amberText : colors.muted}>{t('office.media.noFile')}</Txt>
+                      ) : null}
+                    </Pressable>
+                  </View>
                 ))}
-                <Txt variant="small">{t('office.vehicles.filesLaptop')}</Txt>
+                {docsQ.data && !mayDocs && docsQ.data.documents.length === 0 && <ListEmpty text={t('office.vehicles.noFiles')} />}
               </Section>
             )}
             {canEdit && <Button kind="dark" label={t('office.vehicles.editVehicle')} onPress={() => router.push({ pathname: '/office/vehicles/form', params: { reg } })} style={{ minHeight: 56 }} />}

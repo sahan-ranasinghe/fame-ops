@@ -5,7 +5,10 @@
 // private fields only when the server sent the private part), the driving licence (the expiry with its chip, the photos
 // count), the emergency contact (Call), "Phone changed by the driver · when" when the profile's changes say so. Account:
 // the username, Reset PIN (reset_pin: a sheet with a 6-digit PIN typed or generated, shown once, never logged), the
-// regular vehicle (list_vehicles' regular_driver; read-only here). "Switch off <name>…" with a confirmation
+// regular vehicle (list_vehicles' regular_driver; read-only here). Photos (Stage 1, O3 item 5): the driver's photo and
+// the licence's front and back (each Open, 1-hour link), Take photo / Choose from photos straight to Storage
+// (photo_upload_url + set_driver_photo / set_driver_licence_photo; the old one is kept). The licence expiry is picked on
+// the calendar (docs/ui-patterns.md §3). "Switch off <name>…" with a confirmation
 // (set_driver_active; the server's notes shown after). Data: driver_profile and the driver's row of list_drivers. Every
 // button exists only when me.tools has its tool. The rules: office/peopleLogic.ts.
 
@@ -15,12 +18,16 @@ import { Alert, Linking, Modal, Pressable, StyleSheet, View } from 'react-native
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeft, ChevronRight, MapPin, MessageCircle, Phone } from '@/components/icons';
+import { PhotoPick } from '@/components/office/PhotoPick';
+import { DateField } from '@/components/patterns/Calendar';
 import { Button, Field, Mono, Notice, Plate, Txt } from '@/components/ui';
 import { firstName } from '@/lib/format';
 import {
   activePill, editableFields, emergencyText, isPin, latestDriverPhoneChange, licenceOf, licencePhotos, licenceTone, longDate, profileFields, type ProfileFields,
   profilePatch, type ProfileProblem, randomPin, regularVehicleOf, seesPrivate, updateDriverInput, whenText,
 } from '@/office/peopleLogic';
+import { uploadToTicket, type Shot } from '@/office/media';
+import { canSetDriverPhoto, canSetLicencePhoto, ticketOf } from '@/office/mediaLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriverProfile, DriversList, FleetError, Vehicle, VehiclesList } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
@@ -63,6 +70,28 @@ export default function ManageDriver() {
   const changedAt = latestDriverPhoneChange(p?.changes);
   const regular = d ? regularVehicleOf(vehicles.data?.vehicles as VehicleRow[] | undefined, d.name) : undefined;
   const links = d?.links ?? (row ? { call: row.call, whatsapp: row.whatsapp } : {});
+
+  // Photos: the driver's own and the licence's sides. One at a time; Try again sends the same picture again.
+  const mayPhoto = canSetDriverPhoto(me.tools);
+  const mayLicence = canSetLicencePhoto(me.tools) && priv;
+  type PhotoJob = { which: 'photo' | 'front' | 'back'; shot: Shot };
+  const [photoJob, setPhotoJob] = useState<{ busy: PhotoJob['which'] | null; done: PhotoJob['which'] | null; error: FleetError | null; last: PhotoJob | null }>({ busy: null, done: null, error: null, last: null });
+  async function sendPhoto(job: PhotoJob) {
+    setPhotoJob({ busy: job.which, done: null, error: null, last: job });
+    try {
+      const kind = job.which === 'photo' ? 'driver_profile' : 'driver_licence';
+      const answer = await api.call<{ upload: unknown }>('photo_upload_url', { kind, target: username });
+      const ticket = ticketOf(answer.upload);
+      if (!ticket) throw { code: 'tool_error', message: t('office.media.noTicket') } satisfies FleetError;
+      await uploadToTicket(ticket, job.shot.photo.uri, 'image/jpeg');
+      if (job.which === 'photo') await api.call('set_driver_photo', { driver: username, path: ticket.path });
+      else await api.call('set_driver_licence_photo', { driver: username, side: job.which, path: ticket.path });
+      setPhotoJob({ busy: null, done: job.which, error: null, last: null });
+      void profile.reload();
+    } catch (e) {
+      setPhotoJob({ busy: null, done: null, error: e as FleetError, last: job });
+    }
+  }
 
   // The details editor (in place under the Phone row): only what changed goes to update_driver.
   const [editing, setEditing] = useState(false);
@@ -182,7 +211,7 @@ export default function ManageDriver() {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <View style={[styles.bigAvatar, row?.on_duty_since ? { borderColor: colors.green } : null]}>
-            <Avatar name={name} size={58} />
+            <Avatar name={name} size={58} photo={d?.photo_url} />
           </View>
           <View style={{ flex: 1, gap: 4 }}>
             <Txt variant="title" size={26} color="#ffffff" numberOfLines={2}>{name}</Txt>
@@ -247,17 +276,18 @@ export default function ManageDriver() {
             </View>
             {editing && (
               <View style={{ gap: 10, paddingBottom: 12 }}>
-                {fields.map((k) => (
+                {fields.map((k) => k === 'licence_expiry' ? (
+                  <DateField key={k} label={t(`office.people.field.${k}`)} value={f[k]} onChange={(v) => setF({ ...f, [k]: v })} testID="licence-expiry" />
+                ) : (
                   <Field
                     key={k}
                     label={t(`office.people.field.${k}`)}
                     value={f[k]}
                     onChangeText={(v) => setF({ ...f, [k]: v })}
                     editable={!saving}
-                    mono={k === 'phone' || k === 'whatsapp' || k === 'emergency_phone' || k === 'licence_no' || k === 'licence_expiry'}
-                    keyboardType={k === 'phone' || k === 'whatsapp' || k === 'emergency_phone' ? 'phone-pad' : k === 'licence_expiry' ? 'numbers-and-punctuation' : 'default'}
-                    placeholder={k === 'licence_expiry' ? 'YYYY-MM-DD' : undefined}
-                    maxLength={k === 'emergency_name' ? 120 : k === 'emergency_relation' ? 60 : k === 'licence_no' ? 40 : k === 'licence_expiry' ? 10 : 30}
+                    mono={k === 'phone' || k === 'whatsapp' || k === 'emergency_phone' || k === 'licence_no'}
+                    keyboardType={k === 'phone' || k === 'whatsapp' || k === 'emergency_phone' ? 'phone-pad' : 'default'}
+                    maxLength={k === 'emergency_name' ? 120 : k === 'emergency_relation' ? 60 : k === 'licence_no' ? 40 : 30}
                     autoCapitalize={k === 'licence_no' ? 'characters' : 'sentences'}
                   />
                 ))}
@@ -299,6 +329,42 @@ export default function ManageDriver() {
             )}
             {changedAt && <Txt variant="strong" size={14} color={colors.amberText} style={{ paddingVertical: 8 }}>{t('office.people.phoneChangedByDriver', { when: whenText(names, changedAt) })}</Txt>}
             {p?.private_hidden && <Txt variant="small" style={{ paddingVertical: 6 }}>{p.private_hidden}</Txt>}
+          </Section>
+        )}
+
+        {d && (mayPhoto || mayLicence) && (
+          <Section title={t('office.media.photos')}>
+            {mayPhoto && (
+              <View style={{ gap: 8, paddingVertical: 6 }} testID="driver-photo">
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <Avatar name={name} size={56} photo={d.photo_url} />
+                  <Txt variant="muted" size={15} style={{ flex: 1 }}>{t('office.media.driverPhotoHint')}</Txt>
+                </View>
+                <PhotoPick use="driver_profile" label={d.photo_url ? t('office.media.replacePhoto') : t('office.media.takePhoto')} onShot={(shot) => void sendPhoto({ which: 'photo', shot })} disabled={photoJob.busy !== null} />
+                {photoJob.busy === 'photo' && <Txt variant="small">{t('office.media.sending')}</Txt>}
+                {photoJob.done === 'photo' && <Txt variant="small" color={colors.green}>{t('office.media.photoKept')}</Txt>}
+              </View>
+            )}
+            {mayLicence && (['front', 'back'] as const).map((side) => {
+              const url = side === 'front' ? p?.licence?.front_url : p?.licence?.back_url;
+              return (
+                <View key={side} style={{ gap: 8, paddingVertical: 6 }} testID={`licence-${side}`}>
+                  <Divider />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48 }}>
+                    <Txt variant="strong" size={16} style={{ flex: 1 }}>{t(`office.media.licence_${side}`)}</Txt>
+                    {url ? (
+                      <Pressable accessibilityRole="link" onPress={() => open(url)} style={styles.textBtn}>
+                        <Txt variant="strong" size={15} color={colors.blue}>{t('office.vehicles.open')}</Txt>
+                      </Pressable>
+                    ) : <Txt variant="small">{t('office.media.noFile')}</Txt>}
+                  </View>
+                  <PhotoPick use="driver_licence" label={url ? t('office.media.replacePhoto') : t('office.media.takePhoto')} onShot={(shot) => void sendPhoto({ which: side, shot })} disabled={photoJob.busy !== null} testID={`licence-${side}-pick`} />
+                  {photoJob.busy === side && <Txt variant="small">{t('office.media.sending')}</Txt>}
+                  {photoJob.done === side && <Txt variant="small" color={colors.green}>{t('office.media.photoKept')}</Txt>}
+                </View>
+              );
+            })}
+            {photoJob.error && <ErrorNotice error={photoJob.error} onRetry={photoJob.last ? () => void sendPhoto(photoJob.last!) : undefined} onSignIn={() => void signOut()} />}
           </Section>
         )}
 

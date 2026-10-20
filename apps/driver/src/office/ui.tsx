@@ -5,7 +5,7 @@
 
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Bell, ChevronLeft } from '@/components/icons';
@@ -153,7 +153,8 @@ export function Section({ title, count, link, onLink, tone, children }: {
 }
 
 /** The two-letter avatar of a person. */
-export function Avatar({ name, size = 40 }: { name: string; size?: number }) {
+export function Avatar({ name, size = 40, photo }: { name: string; size?: number; /** The person's photo (a link); the initials without one. */ photo?: string }) {
+  if (photo) return <Image source={{ uri: photo }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.blueChip }} accessibilityLabel={name} />;
   return (
     <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2 }]}>
       <Txt variant="strong" size={Math.round(size * 0.38)} color={colors.blue}>{initials(name)}</Txt>
