@@ -86,7 +86,9 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: artifact ? "dist-artifact" : "dist",
       target: "es2022",
-      sourcemap: !artifact,
+      // No source maps in either build (20 October 2026): a published map carries the libraries' source, and the site needs
+      // none (the artifact never had them). If the site gets crash reporting, maps go up privately, never with the build.
+      sourcemap: false,
       emptyOutDir: true,
     },
     server: { port: 5173, strictPort: true },

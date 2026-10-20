@@ -2636,6 +2636,8 @@ the quiet run.
 - The drawn map on a phone (the artifact, and the web's fallback when the free map's style cannot load) puts the control
   cluster 28 px from the bottom corner; the free map keeps the 40 px of §25. Seen 19 October in the phone e2e when the
   free map's style was blocked; not changed.
+- Web source maps off since 20 Oct; if we add crash reporting for the site later, upload maps privately (Sentry-style), never
+  publish them.
 
 ## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
 
