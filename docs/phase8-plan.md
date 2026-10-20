@@ -726,6 +726,13 @@ commits).
   'search_places' and at > now() - interval '1 hour' order by at desc;` (every office-api and connector call is audited
   with the person's name; a call that never reached the server is simply absent, which is what this bug looked like).
   The function's own log: dashboard → Edge Functions → office-api → Logs (filter `search_places`).
+- **Deployed (GO Part A, 20 October 2026, 09:05–09:12):** main fast-forwarded to 1d14d0a; `supabase functions deploy
+  office-api office-mcp`; office-api `/me` without a session 401, the connector's "Kurunegala" search unchanged (the
+  empty-box suggestions could not be called from the session whose tool list predates the deploy: the live server
+  refused the new field typed as a string, which shows the new schema is up; verified on the local stack by the suite);
+  `eas update --channel preview --environment preview --message "Office mode O2: location search"`: runtime
+  1.3.0-gmaps, update group b1755069-fbb4-4577-a843-c8fb95501a6f, Android update 01a15753-01ee-7a48-b3ba-70d799458103,
+  commit 1d14d0a.
 
 ## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
 
