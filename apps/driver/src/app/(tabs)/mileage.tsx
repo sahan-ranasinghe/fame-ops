@@ -10,7 +10,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LoadMore } from '@/components/LoadMore';
+import { LoadMore } from '@/components/patterns/ListState';
 import { Stretches } from '@/components/SwapCard';
 import { useDateLabel, useNow } from '@/components/task';
 import { shownTaskKm, taskTitle } from '@/components/taskLines';
@@ -141,7 +141,7 @@ export default function MileageScreen() {
               );
             })}
           </Card>
-          <LoadMore info={pageInfo(shown, todayTasks.length)} onPress={() => setShown(loadMore(shown, todayTasks.length, null).shown)} />
+          {pageInfo(shown, todayTasks.length).more && <LoadMore shown={pageInfo(shown, todayTasks.length).n} total={todayTasks.length} busy={false} onPress={() => setShown(loadMore(shown, todayTasks.length, null).shown)} />}
         </View>
 
         <View style={{ gap: 10 }}>

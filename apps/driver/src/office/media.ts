@@ -11,6 +11,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { SUPABASE_PUBLISHABLE_KEY, SUPABASE_URL } from '../config';
 import { centredSquare, fitLongSide, JPEG_QUALITY, LONG_SIDE, PROFILE_PX, type PhotoUse, signedUploadUrl, THUMB_PX, type UploadTicket } from './mediaLogic';
 import type { FleetError } from './types';
+import { withTimeout } from '@/lib/patterns/listLogic';
 
 export interface ShotFile {
   uri: string;
@@ -57,21 +58,25 @@ export async function pickPhoto(use: PhotoUse, source: 'camera' | 'library'): Pr
 }
 
 /** Sends a file to its signed upload. Throws a FleetError with a sentence (the screens show it with Try again). */
+/** One photo's upload: at most a minute. */
+export const UPLOAD_TIMEOUT_MS = 60_000;
+
 export async function uploadToTicket(ticket: UploadTicket, uri: string, contentType: string): Promise<void> {
   let status: number;
   let body = '';
   try {
-    const result = await new File(uri).upload(signedUploadUrl(SUPABASE_URL, ticket), {
+    // Every call has a time limit (docs/ui-patterns.md §5): 60 s for one photo of at most 1600 px.
+    const result = await withTimeout(new File(uri).upload(signedUploadUrl(SUPABASE_URL, ticket), {
       httpMethod: 'PUT',
       uploadType: UploadType.BINARY_CONTENT,
       mimeType: contentType,
       headers: { apikey: SUPABASE_PUBLISHABLE_KEY, 'Content-Type': contentType, 'x-upsert': 'false' },
-    });
+    }), UPLOAD_TIMEOUT_MS);
     status = result.status;
     body = result.body;
   } catch {
     throw { code: 'upload_failed', message: 'No connection: the photo did not go up. Try again.' } satisfies FleetError;
   }
   if (status >= 200 && status < 300) return;
-  throw { code: 'upload_failed', message: `The photo did not go up (${status}${/expired/i.test(body) ? ', the link expired' : ''}). Try again.` } satisfies FleetError;
+  throw { code: /expired/i.test(body) ? 'upload_expired' : 'upload_failed', message: `The photo did not go up (${status}).` } satisfies FleetError;
 }

@@ -9,11 +9,12 @@ import { View } from 'react-native';
 
 import { LinkRow, RowCard, SwitchRow } from '@/components/office/NotifParts';
 import { Txt } from '@/components/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { openNotificationSettings } from '@/lib/settingsLinks';
 import { groupSub, groupSummaryLine, groupTitle } from '@/office/notifLogic';
 import { useOffice } from '@/office/state';
 import { useNotifSettings } from '@/office/useNotifSettings';
-import { BackHeader, Divider, Empty, ErrorNotice, Loading, Screen, Section } from '@/office/ui';
+import { BackHeader, Divider, ErrorNotice, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -28,9 +29,9 @@ export default function OfficeNotifications() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={t('office.notif.title')} />
       <Screen refreshing={tool.refreshing} onRefresh={() => void tool.reload()}>
-        {tool.loading && <Loading text={t('office.common.loading')} />}
+        {tool.loading && <SkeletonRows rows={3} lines={2} />}
         {tool.error && !tool.data && <ErrorNotice error={tool.error} onRetry={() => void tool.reload()} onSignIn={() => void signOut()} />}
-        {tool.data && n.groups.length === 0 && <Empty text={t('office.notif.noEvents')} />}
+        {tool.data && n.groups.length === 0 && <ListEmpty text={t('office.notif.noEvents')} />}
         {tool.data && n.groups.length > 0 && (
           <>
             <RowCard>

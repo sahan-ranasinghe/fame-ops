@@ -1,7 +1,8 @@
 // Office mode (Phase 8, O1): More, the hub (design 19, decision 4): the person with My profile at the top, then Work (the
 // screens the person may use that are not on the bar), the laptop-only line, Sign out and the version. O2 (item 7):
 // the management rows by permission: Vehicles and Reports under Work, People (Drivers, Office users) and Quick settings
-// as their own sections (the design's switches live on the Quick settings page).
+// as their own sections (the design's switches live on the Quick settings page). O3 review: the search at the top (the
+// shared FilterBar's search alone), the rows whose words match.
 
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -10,6 +11,8 @@ import { Alert, View } from 'react-native';
 
 import { Bell, ChartColumn, Clock, MessageCircle, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, MapPin, Route, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van, Wrench } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
+import { FilterBar } from '@/components/patterns/FilterBar';
+import { ListEmpty } from '@/components/patterns/ListState';
 import { MORE_SECTION, type MoreItem, type MoreSection, moreFor } from '@/office/nav';
 import { useOffice } from '@/office/state';
 import { Avatar, DarkHeader, Divider, Row, Screen, Section } from '@/office/ui';
@@ -46,6 +49,12 @@ export default function MoreTab() {
   const [busy, setBusy] = useState(false);
   // Task history also needs its tool (list_tasks): never a row that would open a screen the person cannot use.
   const items = moreFor(me.permissions).filter((key) => key !== 'task_history' || me.tools.includes('list_tasks'));
+  // The search at the top of More (docs/phase8-plan.md §16): the rows whose words match, as the person types.
+  const [find, setFind] = useState('');
+  const lineOf = (key: MoreItem) => (key === 'people_drivers' ? t('office.more.driversLine') : key === 'people_users' ? t('office.more.officeUsersLine') : key === 'settings' ? t('office.more.quickSettingsLine') : undefined);
+  const needle = find.trim().toLowerCase();
+  const matches = (key: MoreItem) => !needle || [t(ITEM[key].label), lineOf(key) ?? ''].some((w) => w.toLowerCase().includes(needle));
+  const shown = items.filter(matches);
 
   function confirmSignOut() {
     Alert.alert(t('office.common.signOut'), t('office.more.signOutBody'), [
@@ -65,7 +74,9 @@ export default function MoreTab() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={t('office.more.above')} title={t('office.tabs.more')} />
       <Screen>
-        <Section title={t('office.more.me')}>
+        <FilterBar search={find} onSearch={setFind} placeholder={t('office.more.search')} defs={[]} values={{}} onApply={() => undefined} testID="more-search" />
+        {needle && shown.length === 0 && <ListEmpty text={t('office.more.noMatch', { text: find.trim() })} />}
+        {!needle && <Section title={t('office.more.me')}>
           <Row
             left={<Avatar name={me.name} size={48} />}
             title={me.name}
@@ -74,9 +85,9 @@ export default function MoreTab() {
           />
           <Divider />
           <Row left={<User size={24} color={colors.ink} />} title={t('office.more.profile')} right={<ChevronRight size={22} color={colors.muted} />} onPress={() => router.push('/office/profile')} />
-        </Section>
+        </Section>}
         {SECTIONS.map((s) => {
-          const rows = items.filter((key) => MORE_SECTION[key] === s.key);
+          const rows = shown.filter((key) => MORE_SECTION[key] === s.key);
           if (rows.length === 0) return null;
           return (
             <Section key={s.key} title={t(s.label)}>
@@ -86,7 +97,7 @@ export default function MoreTab() {
                 return (
                   <View key={key}>
                     {i > 0 && <Divider />}
-                    <Row left={<Icon size={24} color={colors.ink} />} title={t(it.label)} line={key === 'people_drivers' ? t('office.more.driversLine') : key === 'people_users' ? t('office.more.officeUsersLine') : key === 'settings' ? t('office.more.quickSettingsLine') : undefined} right={<ChevronRight size={22} color={colors.muted} />} onPress={() => router.push(it.path as never)} />
+                    <Row left={<Icon size={24} color={colors.ink} />} title={t(it.label)} line={lineOf(key)} right={<ChevronRight size={22} color={colors.muted} />} onPress={() => router.push(it.path as never)} />
                   </View>
                 );
               })}

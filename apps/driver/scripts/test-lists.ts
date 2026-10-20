@@ -172,10 +172,10 @@ check(/\.neq\('status', 'missed'\)/.test(api), 'the task list read from the serv
 
 console.log('\nThe strings (en and si):');
 const lookup = (dict: unknown, key: string) => key.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), dict);
-for (const key of ['today.allTasks', 'today.allTasksTitle', 'today.moreLater', 'today.upcoming', 'today.inProgress', 'list.loadMore', 'list.showing', 'list.loading']) {
+for (const key of ['today.allTasks', 'today.allTasksTitle', 'today.moreLater', 'today.upcoming', 'today.inProgress', 'patterns.loadMore', 'patterns.shownOf']) {
   check(typeof lookup(en, key) === 'string' && typeof lookup(si, key) === 'string', `${key} in both languages`);
 }
-check((lookup(si, 'list.showing') as string).includes('{n}') && (lookup(si, 'list.showing') as string).includes('{total}') && (lookup(si, 'today.moreLater') as string).includes('{n}'),
+check((lookup(si, 'patterns.shownOf') as string).includes('{n}') && (lookup(si, 'patterns.shownOf') as string).includes('{total}') && (lookup(si, 'today.moreLater') as string).includes('{n}'),
   'the Sinhala strings keep the numbers\' places (Latin digits are filled in)');
 
 console.log(failures === 0 ? '\nAll list tests passed.' : `\n${failures} list test(s) failed.`);

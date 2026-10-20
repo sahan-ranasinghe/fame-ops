@@ -33,7 +33,20 @@ export function useIssueAction(): ActOn {
       const why = errText(failed.reason as FleetError)[0];
       return done.length ? `${actedText(action, done.length)}; ${ids.length - done.length} could not be changed: ${why}` : why;
     }
-    toast(actedText(action, done.length));
+    // A snooze says so with Undo for 6 s (docs/ui-patterns.md §10, the app's snackbar the same): update_issue snooze null
+    // on the same issues. A dismissal asked twice already, so it has none.
+    if (action === "dismiss") toast(actedText(action, done.length));
+    else {
+      toast(actedText(action, done.length), {
+        label: "Undo",
+        onClick: () => {
+          void Promise.allSettled(done.map((id) => transport.call("update_issue", { id, snooze: null }))).then((undone) => {
+            void store.invalidate();
+            if (undone.some((r) => r.status === "rejected")) toast("Not undone. Check the connection.");
+          });
+        },
+      });
+    }
     return null;
   };
 }

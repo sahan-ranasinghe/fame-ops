@@ -20,6 +20,7 @@ import { TimeField } from '@/components/patterns/TimeField';
 import { DepartureNote } from '@/components/office/TripShell';
 import { ChoiceChip, ChoiceRow } from '@/components/patterns/Select';
 import { Button, Field, Plate, Txt } from '@/components/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { askTargets } from '@/office/askLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
@@ -30,7 +31,7 @@ import { groupRows, vehicleLine } from '@/office/trip/formsLogic';
 import { departureText } from '@/office/trip/words';
 import { ANY_TYPES, anyValue, ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
 import type { Availability, FleetError, SettingsResult, SuggestedVehicle, TaskDetail, UpdateTaskResult } from '@/office/types';
-import { BackHeader, Empty, ErrorNotice, Loading, Screen, StickyActions } from '@/office/ui';
+import { BackHeader, ErrorNotice, Screen, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -121,9 +122,9 @@ export default function ChangeTaskScreen() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={t('office.task.changeTask')} subtitle={task?.title} />
       <Screen bottom={16}>
-        {q.loading && !task && <Loading text={t('office.common.loading')} />}
+        {q.loading && !task && <SkeletonRows rows={3} lines={2} />}
         {q.error && !task && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {q.data && !task && <Empty text={t('office.task.notFound')} />}
+        {q.data && !task && <ListEmpty text={t('office.task.notFound')} />}
         {task && f && (
           <>
             {task.needs_driver && (
@@ -177,7 +178,7 @@ export default function ChangeTaskScreen() {
               </View>
               {choosing && (
                 <View style={{ gap: 6 }}>
-                  {rows.length === 0 && <Empty text={t('office.trip.noFreeVehicles')} />}
+                  {rows.length === 0 && <ListEmpty text={t('office.trip.noFreeVehicles')} />}
                   {rows.map((g) => (
                     <View key={g.key} style={{ gap: 2 }}>
                       <Txt variant="label" color={colors.muted} style={{ marginTop: 6 }}>{t(`office.trip.group_${g.key}`).toUpperCase()}</Txt>

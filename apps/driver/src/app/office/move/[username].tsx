@@ -9,7 +9,7 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { type ReactNode, useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { useLeaveGuard } from '@/components/navigation';
 import { FilterBar } from '@/components/patterns/FilterBar';
@@ -21,6 +21,8 @@ import { useOffice, useTool } from '@/office/state';
 import { type SwapRow, swapRows } from '@/office/taskExtrasLogic';
 import type { FleetError, LiveDrivers, VehiclesList } from '@/office/types';
 import { BackHeader, ErrorNotice, ListFailed, Screen, StickyActions } from '@/office/ui';
+import { showSnackbar } from '@/components/patterns/Snackbar';
+import { setSavedNotice } from '@/office/savedNotice';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -62,7 +64,10 @@ export default function MoveVehicleScreen() {
     try {
       const out = await api.call<MoveResult>('move_driver_vehicle', moveInput(d.username, choice));
       allowLeave();
-      Alert.alert(t('office.live.movedTitle'), moveSentences(out).map((x) => t(x.key, x.vars)).join(' '), [{ text: t('office.common.ok'), onPress: () => router.back() }]);
+      // Hotfix O2-H2's pattern (docs/ui-patterns.md §12): back to Live, the snackbar; what moved waits on the driver's card.
+      setSavedNotice(`live:${d.username}`, moveSentences(out).map((x) => t(x.key, x.vars)), t('office.live.movedTitle'));
+      router.back();
+      showSnackbar({ text: t('office.live.movedTitle') });
     } catch (e) {
       setProblem(e as FleetError);
       void live.reload();

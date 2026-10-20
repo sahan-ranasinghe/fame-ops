@@ -24,7 +24,8 @@ export function chipTarget(chip: OverviewChip, me: { permissions: readonly strin
     case 'garage':
       return has(me.permissions, 'view', 'vehicles') && tool('list_vehicles') ? '/office/vehicles?filter=in_garage' : null;
     case 'waiting':
-      return has(me.permissions, 'approve') && tool('list_requests') ? '/office/(tabs)/approve' : null;
+      // The count opens the filtered list (docs/phase8-plan.md §16): the waiting ones, whatever the tab showed last.
+      return has(me.permissions, 'approve') && tool('list_requests') ? '/office/(tabs)/approve?status=waiting' : null;
     case 'reminders':
       return has(me.permissions, 'issues', 'assign_tasks') && tool('fleet_overview') ? '/office/reminders' : null;
   }

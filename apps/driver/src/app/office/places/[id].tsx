@@ -15,6 +15,9 @@ import { type PlaceDetailAnswer, placeFields, type PlaceFields, type RemoveAnswe
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError } from '@/office/types';
 import { BackHeader, ErrorNotice, ListFailed, Screen, Section } from '@/office/ui';
+import { showSnackbar } from '@/components/patterns/Snackbar';
+import { SavedNotice } from '@/components/office/SavedNotice';
+import { setSavedNotice } from '@/office/savedNotice';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -35,7 +38,6 @@ export default function PlaceScreen() {
   const [error, setError] = useState<{ error: FleetError; retry: () => void } | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
 
   async function run(kind: 'save' | 'remove' | 'restore', fn: () => Promise<void>) {
     setBusy(kind);
@@ -57,7 +59,7 @@ export default function PlaceScreen() {
     void run('save', async () => {
       await api.call('update_place', input);
       setEditing(false);
-      setDone(t('office.places.saved'));
+      showSnackbar({ text: t('office.places.saved') });
       await q.reload();
     });
   }
@@ -70,7 +72,8 @@ export default function PlaceScreen() {
         return;
       }
       setConfirming(false);
-      setDone([t('office.places.removedDone'), r.note].filter(Boolean).join(' '));
+      setSavedNotice(`place:${p.id}`, r.note ? [r.note] : []);
+      showSnackbar({ text: t('office.places.removedDone') });
       await q.reload();
     });
   }
@@ -78,7 +81,7 @@ export default function PlaceScreen() {
     if (!p) return;
     void run('restore', async () => {
       await api.call('restore_place', { id: p.id });
-      setDone(t('office.places.restoredDone'));
+      showSnackbar({ text: t('office.places.restoredDone') });
       await q.reload();
     });
   }
@@ -95,7 +98,7 @@ export default function PlaceScreen() {
           <>
             {removed && <Notice tone="warn" text={t('office.places.removedAt', { at: p.removed! })} />}
             {p.active === false && !removed && <Notice tone="warn" text={t('office.places.switchedOff')} />}
-            {done && <Txt variant="small" color={colors.green}>{done}</Txt>}
+            <SavedNotice noticeKey={`place:${p.id}`} />
             <View style={styles.card}>
               {[
                 [t('office.places.address'), p.address],

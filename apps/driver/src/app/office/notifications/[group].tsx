@@ -7,10 +7,11 @@ import { View } from 'react-native';
 
 import { RowCard, SwitchRow } from '@/components/office/NotifParts';
 import { Txt } from '@/components/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { eventText, eventTitle, groupSub, groupTitle, isGroupKey } from '@/office/notifLogic';
 import { useOffice } from '@/office/state';
 import { useNotifSettings } from '@/office/useNotifSettings';
-import { BackHeader, Divider, Empty, ErrorNotice, Loading, Screen } from '@/office/ui';
+import { BackHeader, Divider, ErrorNotice, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -27,9 +28,9 @@ export default function OfficeNotificationGroup() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={known ? groupTitle(t, group) : t('office.notif.title')} subtitle={known ? groupSub(t, group) : undefined} />
       <Screen refreshing={tool.refreshing} onRefresh={() => void tool.reload()}>
-        {tool.loading && <Loading text={t('office.common.loading')} />}
+        {tool.loading && <SkeletonRows rows={3} lines={2} />}
         {tool.error && !tool.data && <ErrorNotice error={tool.error} onRetry={() => void tool.reload()} onSignIn={() => void signOut()} />}
-        {tool.data && !shown && <Empty text={t('office.notif.noEvents')} />}
+        {tool.data && !shown && <ListEmpty text={t('office.notif.noEvents')} />}
         {n.paused && shown && <Txt variant="small" color={colors.amberText}>{t('office.notif.pausedNote')}</Txt>}
         {shown && (
           <RowCard>

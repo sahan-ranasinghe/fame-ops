@@ -21,6 +21,7 @@ import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleCard, VehicleDocuments, VehiclesList } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -53,7 +54,8 @@ export default function VehicleScreen() {
       await uploadToTicket(thumb, shot.thumb.uri, 'image/jpeg');
       const r = await api.call<{ photo_url?: string }>('set_vehicle_photo', { vehicle: reg, path: main.path, thumb_path: thumb.path });
       setV((prev) => (prev ? { ...prev, photo_url: r.photo_url ?? shot.photo.uri } : prev));
-      setPhoto({ busy: false, error: null, done: true, last: null });
+      setPhoto({ busy: false, error: null, done: false, last: null });
+      showSnackbar({ text: t('office.media.photoSaved') });
     } catch (e) {
       setPhoto({ busy: false, error: e as FleetError, done: false, last: shot });
     }
@@ -105,7 +107,6 @@ export default function VehicleScreen() {
                 {!v.photo_url && <Txt variant="muted" size={15}>{t('office.media.noVehiclePhoto')}</Txt>}
                 <PhotoPick use="vehicle" label={v.photo_url ? t('office.media.replacePhoto') : t('office.media.takePhoto')} onShot={(shot) => void savePhoto(shot)} disabled={photo.busy} />
                 {photo.busy && <Txt variant="small">{t('office.media.sending')}</Txt>}
-                {photo.done && <Txt variant="small" color={colors.green}>{t('office.media.photoSaved')}</Txt>}
                 {photo.error && <ErrorNotice error={photo.error} onRetry={photo.last ? () => void savePhoto(photo.last!) : undefined} onSignIn={() => void signOut()} />}
               </View>
             )}

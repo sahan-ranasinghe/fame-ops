@@ -696,9 +696,6 @@
     "other": "vehicle"
   },
   "list": {
-    "loadMore": "Load more",
-    "showing": "Showing {n} of {total}",
-    "loading": "Loading…",
     "empty": "Nothing here yet."
   },
   "profile": {
@@ -888,7 +885,9 @@
       "refused": "{words}",
       "unknown": "Something went wrong talking to Fame Fleet. {words}",
       "timeout": "Fame Fleet took too long to answer.",
-      "writeTimeout": "Fame Fleet took too long to answer: it may have been saved. Check before trying again."
+      "writeTimeout": "Fame Fleet took too long to answer: it may have been saved. Check before trying again.",
+      "uploadFailed": "The photo did not go up. Check the connection and try again.",
+      "uploadExpired": "The upload link ran out. Try again."
     },
     "home": {
       "morning": "Morning, {name}",
@@ -927,7 +926,8 @@
       "snoozeTitle": "Snooze until",
       "snooze_tomorrow": "Tomorrow 07:00",
       "snooze_week": "A week from now",
-      "snoozedLine": "Snoozed: {title}"
+      "snoozedLine": "Snoozed: {title}",
+      "undoFailed": "Not undone. Check the connection."
     },
     "status": {
       "assigned": "sent",
@@ -977,7 +977,9 @@
       "officeUsers": "Office users",
       "officeUsersLine": "permissions, set-password link",
       "quickSettings": "Quick settings",
-      "quickSettingsLine": "approval, vehicle on the day, personal trips, clock-out"
+      "quickSettingsLine": "approval, vehicle on the day, personal trips, clock-out",
+      "search": "Find a screen",
+      "noMatch": "Nothing called “{text}”"
     },
     "trips": {
       "backBy": "back by",
@@ -2696,7 +2698,8 @@
       "view": "View",
       "cancelled": "Task cancelled",
       "reopened": "Task reopened · the driver finishes it again",
-      "driverGiven": "Task sent to {name}"
+      "driverGiven": "Task sent to {name}",
+      "docSaved": "Document saved"
     }
   },
   "patterns": {

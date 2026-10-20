@@ -21,7 +21,7 @@ console.log('\nThe chips open their lists');
 {
   const all = { permissions: ['view', 'approve', 'assign_tasks', 'vehicles', 'issues'], tools: ['list_vehicles', 'list_requests', 'fleet_overview'] };
   check(chipTarget('road', all) === '/office/(tabs)/live' && chipTarget('free', all) === '/office/vehicles?filter=available' && chipTarget('garage', all) === '/office/vehicles?filter=in_garage'
-    && chipTarget('waiting', all) === '/office/(tabs)/approve' && chipTarget('reminders', all) === '/office/reminders', 'each chip to its list');
+    && chipTarget('waiting', all) === '/office/(tabs)/approve?status=waiting' && chipTarget('reminders', all) === '/office/reminders', 'each chip to its list (the waiting count to the waiting ones)');
   check(chipTarget('waiting', { permissions: ['view'], tools: ['list_requests'] }) === null && chipTarget('free', { permissions: ['view'], tools: [] }) === null
     && chipTarget('reminders', { permissions: ['view'], tools: ['fleet_overview'] }) === null, 'a chip stays a number for someone who may not open its list');
   for (const [name, p] of Object.entries(PRESETS)) {
@@ -80,7 +80,7 @@ console.log('\nThe screens');
 console.log('\nStage 1 review');
 {
   const home = src('app/office/(tabs)/index.tsx');
-  check(home.includes("api.call('update_issue', { id, snooze: null })") && home.includes('testID="snooze-undo"'), 'Snooze has Undo (update_issue snooze null on the same issues)');
+  check(home.includes("api.call('update_issue', { id, snooze: null })") && /showSnackbar\(\{ text: t\('office\.home\.snoozedLine'[\s\S]*?label: t\('office\.decide\.undo'\)/.test(home) && !home.includes('snooze-undo-line'), 'Snooze has Undo in the snackbar (update_issue snooze null on the same issues), no inline line');
 }
 
 console.log(failures === 0 ? '\nAll overview checks passed.' : `\n${failures} overview check(s) FAILED.`);

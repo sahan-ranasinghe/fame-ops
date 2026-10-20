@@ -19,6 +19,7 @@ import { canUploadDocs, docKindOf, docSaveBlock, EXPIRES, saveDocInput, ticketOf
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleDocuments } from '@/office/types';
 import { BackHeader, ErrorNotice, ListFailed, Screen, Section, StickyActions } from '@/office/ui';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -53,6 +54,7 @@ export default function VehicleDocScreen() {
       await api.call('save_vehicle_document', saveDocInput({ vehicle: reg, kind, path: ticket.path, contentType: 'image/jpeg', bytes: shot.photo.bytes, expiry: shownExpiry, name: name || doc?.name }));
       if (router.canGoBack()) router.back();
       else router.replace({ pathname: '/office/vehicles/[reg]', params: { reg } });
+      showSnackbar({ text: t('office.saved.docSaved') });
     } catch (e) {
       setError(e as FleetError);
       setBusy(false);

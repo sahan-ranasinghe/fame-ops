@@ -12,7 +12,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LoadMore } from '@/components/LoadMore';
+import { LoadMore } from '@/components/patterns/ListState';
 import { useDateLabel } from '@/components/task';
 import { Button, Card, Mono, Plate, Txt } from '@/components/ui';
 import { fetchMileage, type Mileage } from '@/lib/api';
@@ -166,7 +166,7 @@ export default function FuelScreen() {
             );
           })}
         </Card>
-        <LoadMore info={pageInfo(shown, rows.length)} onPress={() => setShown(loadMore(shown, rows.length, null).shown)} />
+        {pageInfo(shown, rows.length).more && <LoadMore shown={pageInfo(shown, rows.length).n} total={rows.length} busy={false} onPress={() => setShown(loadMore(shown, rows.length, null).shown)} />}
         {queue.videos > 0 && <Txt variant="muted" style={{ textAlign: 'center' }}>{`${queue.videos} · ${megabytes(queue.videoBytes)}`}</Txt>}
       </ScrollView>
     </View>

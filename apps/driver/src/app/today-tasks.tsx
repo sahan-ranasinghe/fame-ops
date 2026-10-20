@@ -10,7 +10,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ChevronLeft } from '@/components/icons';
-import { LoadMore } from '@/components/LoadMore';
+import { LoadMore } from '@/components/patterns/ListState';
 import { useNow } from '@/components/task';
 import { TaskList, TaskRows, useMarkShown } from '@/components/TaskRows';
 import { Card, Txt } from '@/components/ui';
@@ -56,7 +56,7 @@ export default function TodayTasksScreen() {
         )}
         {todays.length > 0 && <TaskRows tasks={todays} />}
         <TaskList title={t('today.upcoming')} tasks={later} showDate />
-        <LoadMore info={pageInfo(shown, all.length)} onPress={() => setShown(loadMore(shown, all.length, null).shown)} />
+        {pageInfo(shown, all.length).more && <LoadMore shown={pageInfo(shown, all.length).n} total={all.length} busy={false} onPress={() => setShown(loadMore(shown, all.length, null).shown)} />}
       </ScrollView>
     </View>
   );

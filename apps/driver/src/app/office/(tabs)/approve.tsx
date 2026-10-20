@@ -4,7 +4,7 @@
 // §1, §5). A row opens the request's page (Approve a request, design 10, or the decided request with its timeline and
 // Tell requester), with "Palitha is reviewing" when another approver has it open. Rules: office/requestsLogic.ts.
 
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
@@ -26,7 +26,13 @@ export default function ApproveTab() {
   const { t } = useApp();
   const { api, signOut } = useOffice();
   const router = useRouter();
-  const [values, setValues] = useState<FilterValues>({ status: 'waiting' });
+  // A link may name the status (Home's "N waiting": ?status=waiting, with a tap stamp `at`): the tab stays mounted, so
+  // every new link puts its status back, whatever the person picked before.
+  const params = useLocalSearchParams<{ status?: string; at?: string }>();
+  const [values, setValues] = useState<FilterValues>(() => ({ status: params.status || 'waiting' }));
+  useEffect(() => {
+    if (params.status) setValues({ status: params.status });
+  }, [params.status, params.at]);
   const status = requestsChoice(values);
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');

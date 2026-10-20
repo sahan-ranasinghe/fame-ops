@@ -310,7 +310,9 @@ describe("Needs attention and Critical issues (L2)", () => {
     await flush();
     expect(t.argsOf("update_issue")).toEqual([{ id: "o1", snooze: "tomorrow" }, { id: "o2", snooze: "tomorrow" }, { id: "o3", snooze: "tomorrow" }]);
     expect(within(sectionEl("attention")).getAllByTestId("attention-row")).toHaveLength(1);
-    expect(screen.getByRole("status").textContent).toBe("Snoozed 3 issues until tomorrow 07:00");
+    // The toast says it, with Undo (docs/ui-patterns.md §10).
+    expect(screen.getByRole("status").textContent).toBe("Snoozed 3 issues until tomorrow 07:00Undo");
+    expect(screen.getByTestId("toast-action").textContent).toBe("Undo");
   });
 
   it("Dismiss asks once more in the same strip; Keep goes back; a week's snooze on a critical row", async () => {

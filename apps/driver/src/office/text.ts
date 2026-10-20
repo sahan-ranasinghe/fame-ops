@@ -15,6 +15,11 @@ export function errorText(e: FleetError | undefined | null): { key: string; word
       return e.write ? { key: 'office.error.writeDropped', fix: 'retry' } : { key: 'office.error.dropped', fix: 'retry' };
     case 'timeout':
       return e.write ? { key: 'office.error.writeTimeout', fix: 'retry' } : { key: 'office.error.timeout', fix: 'retry' };
+    // A photo that did not go up (office/media.ts): said in the person's language, with Try again.
+    case 'upload_failed':
+      return { key: 'office.error.uploadFailed', fix: 'retry' };
+    case 'upload_expired':
+      return { key: 'office.error.uploadExpired', fix: 'retry' };
     case 'not_signed_in':
     case 'mfa_required':
       return { key: 'office.error.signedOut', fix: 'signin' };

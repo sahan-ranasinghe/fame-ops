@@ -52,6 +52,8 @@ import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { Divider, ErrorNotice, ListFailed, Pill } from '@/office/ui';
+import { showSnackbar } from '@/components/patterns/Snackbar';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -357,14 +359,12 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, 
   const extra = [d.status_text, d.task_note, d.not_available, d.app_stops_text].filter((s): s is string => !!s);
   const summary = route?.route ? routeSummary(route.route, t) : null;
   const facts = [speedText(d, t), batteryText(d, t)].filter((s): s is string => !!s);
-  // Clock out: a sheet with the optional reason; the answer (or the server's refusal) stays on the card.
+  // Clock out: a sheet with the optional reason; the answer in the snackbar, the server's refusal on the card.
   const [asking, setAsking] = useState(false);
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
   const [refused, setRefused] = useState<FleetError | null>(null);
   useEffect(() => {
-    setDone(null);
     setRefused(null);
   }, [d.username]);
   async function clockOut() {
@@ -372,7 +372,7 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, 
     setBusy(true);
     setRefused(null);
     try {
-      setDone(await onClockOut(reason));
+      showSnackbar({ text: await onClockOut(reason) });
       setAsking(false);
       setReason('');
     } catch (e) {
@@ -429,7 +429,7 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, 
           {onClockOut && <Button kind="outline" label={t('office.live.clockOut')} onPress={() => { setRefused(null); setAsking(true); }} style={{ flex: 1, minHeight: 52 }} testID="live-clock-out" />}
         </View>
       )}
-      {done ? <Txt variant="small" color={colors.green} testID="live-clocked-out">{done}</Txt> : null}
+      <SavedNotice noticeKey={`live:${d.username}`} />
       {refused && !asking ? <ErrorNotice error={refused} /> : null}
       {(onDriverPage || onHistory) && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>

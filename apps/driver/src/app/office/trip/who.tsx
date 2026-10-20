@@ -19,6 +19,7 @@ import { Chips, MoreDetails, Stepper, ToggleRow } from '@/components/office/Cont
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { ChoiceChip, ChoiceRow } from '@/components/patterns/Select';
 import { Field, Mono, Plate, Txt } from '@/components/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { colomboDate } from '@/lib/time';
 import { rankedDrivers } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
@@ -32,7 +33,7 @@ import { useTrip } from '@/office/trip/useTrip';
 import { ANY_TYPES, anyValue, knownDef, ON_THE_DAY, shownVehicle, vehicleDefault } from '@/office/trip/vehicleChoiceLogic';
 import { whoArgs } from '@/office/trip/whoLogic';
 import type { Availability, FindProject, SettingsResult, SuggestedVehicle, Suggestions } from '@/office/types';
-import { Empty, ErrorNotice, Loading, Screen } from '@/office/ui';
+import { ErrorNotice, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -47,9 +48,8 @@ const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
  * here, and the step with all its hooks exists only while there is a draft (`npm run lint:hooks` guards the rule).
  */
 export default function TripWho() {
-  const { t } = useApp();
   const d = useTripDraft();
-  if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }}><Screen><Loading text={t('office.common.loading')} /></Screen></View>;
+  if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }}><Screen><SkeletonRows rows={3} lines={2} /></Screen></View>;
   return <WhoStep d={d} />;
 }
 
@@ -152,7 +152,7 @@ function WhoStep({ d }: { d: TripDraft }) {
 
   const vehicleGroups = (rows: ReturnType<typeof groupRows>, empty: string) => (
     <View style={{ gap: 6 }}>
-      {rows.length === 0 && <Empty text={empty} />}
+      {rows.length === 0 && <ListEmpty text={empty} />}
       {rows.map((g) => (
         <View key={g.key} style={{ gap: 2 }}>
           <Txt variant="label" color={colors.muted} style={{ marginTop: 6 }}>{t(`office.trip.group_${g.key}`).toUpperCase()}</Txt>
@@ -277,7 +277,7 @@ function WhoStep({ d }: { d: TripDraft }) {
               <View style={styles.card} testID="book-now">
                 <Txt variant="label" color={colors.muted}>{t('office.trip.bookNowAbove').toUpperCase()}</Txt>
                 {!sugArgs && <Txt variant="small">{t('office.trip.fillDayFirst')}</Txt>}
-                {sugArgs && sug.loading && !sug.data && <Loading text={t('office.trip.findingVehicles')} />}
+                {sugArgs && sug.loading && !sug.data && <SkeletonRows rows={3} lines={2} />}
                 {sug.error && !sug.data && <ErrorNotice error={sug.error} onRetry={() => void sug.reload()} onSignIn={() => void signOut()} />}
                 {sug.data && (
                   <>

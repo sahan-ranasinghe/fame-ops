@@ -13,7 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { LoadMore } from '@/components/LoadMore';
+import { LoadMore } from '@/components/patterns/ListState';
 import { ReportForm } from '@/components/ReportForm';
 import { useDateLabel } from '@/components/task';
 import { Button, Card, Notice, Txt } from '@/components/ui';
@@ -81,7 +81,7 @@ export default function ReportScreen() {
               );
             })}
           </Card>
-          <LoadMore info={pages.info} busy={pages.busy} onPress={pages.more} />
+          {pages.info.more && <LoadMore shown={pages.info.n} total={pages.info.total} busy={pages.busy} onPress={pages.more} />}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

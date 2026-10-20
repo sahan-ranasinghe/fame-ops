@@ -14,6 +14,7 @@ import { ChoiceChip } from '@/components/patterns/Select';
 import { PlaceSearch, type Picked } from '@/components/office/PlaceSearch';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Field, Mono, Txt } from '@/components/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
 import { draftWorthKeeping, getDraft, newDraft, setDraft, type TripMode, updateDraft, useTripDraft, withDriver } from '@/office/trip/draft';
@@ -23,7 +24,7 @@ import { moveStop, newStop, pickupAtStart, type StopDraft, stopsInput, type Stop
 import { DWELL_CHIPS, dwellChipText, reasonText } from '@/office/trip/words';
 import type { RequestsList, SettingsResult, TaskDetail } from '@/office/types';
 import { draftsFromStops } from '@/office/trip/stopsLogic';
-import { Empty, ErrorNotice, Loading, Screen } from '@/office/ui';
+import { ErrorNotice, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -105,7 +106,7 @@ export default function TripWhere() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.page }}>
         <TripHeader step="where" mode="stops" above={t('office.trip.stopsAbove')} onBack={() => router.back()} />
-        <Screen>{taskQ.loading ? <Loading text={t('office.common.loading')} /> : taskQ.error ? <ErrorNotice error={taskQ.error} onRetry={() => void taskQ.reload()} onSignIn={() => void signOut()} /> : <Empty text={t('office.task.notFound')} />}</Screen>
+        <Screen>{taskQ.loading ? <SkeletonRows rows={3} lines={2} /> : taskQ.error ? <ErrorNotice error={taskQ.error} onRetry={() => void taskQ.reload()} onSignIn={() => void signOut()} /> : <ListEmpty text={t('office.task.notFound')} />}</Screen>
       </View>
     );
   }
@@ -113,11 +114,11 @@ export default function TripWhere() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.page }}>
         <TripHeader step="where" above={t('office.trip.editAbove')} onBack={() => router.back()} />
-        <Screen>{req.loading ? <Loading text={t('office.common.loading')} /> : req.error ? <ErrorNotice error={req.error} onRetry={() => void req.reload()} onSignIn={() => void signOut()} /> : <Empty text={t('office.request.notFound')} />}</Screen>
+        <Screen>{req.loading ? <SkeletonRows rows={3} lines={2} /> : req.error ? <ErrorNotice error={req.error} onRetry={() => void req.reload()} onSignIn={() => void signOut()} /> : <ListEmpty text={t('office.request.notFound')} />}</Screen>
       </View>
     );
   }
-  if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }}><Screen><Loading text={t('office.common.loading')} /></Screen></View>;
+  if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }}><Screen><SkeletonRows rows={3} lines={2} /></Screen></View>;
 
   const f = d.fields;
   const setStops = (stops: StopDraft[]) => updateDraft((x) => ({ ...x, fields: { ...x.fields, stops } }));

@@ -6,7 +6,7 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 
 import { useLeaveGuard } from '@/components/navigation';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
@@ -16,6 +16,7 @@ import { chargedTo, purposeDoneText, purposeInput } from '@/office/taskDetailLog
 import { projectMatch } from '@/office/trip/formsLogic';
 import type { FindProject, FleetError, TaskDetail, TripPurpose, TripPurposeResult } from '@/office/types';
 import { BackHeader, ErrorNotice, ListFailed, Screen, StickyActions } from '@/office/ui';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -67,7 +68,8 @@ export default function TripPurposeScreen() {
     try {
       const out = await api.call<TripPurposeResult>('set_trip_purpose', r.input);
       allowLeave();
-      Alert.alert(t('office.task.purposeSaved'), purposeDoneText(out, t), [{ text: t('office.common.ok'), onPress: () => router.back() }]);
+      router.back();
+      showSnackbar({ text: [t('office.task.purposeSaved'), purposeDoneText(out, t)].filter(Boolean).join(' · ') });
     } catch (e) {
       setProblem(e as FleetError);
     } finally {

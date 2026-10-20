@@ -48,7 +48,7 @@ export function FilterBar({ search, onSearch, placeholder, defs, values, onApply
           </View>
         ) : <View style={{ flex: 1 }} />}
         {defs.length > 0 && (
-          <Pressable accessibilityRole="button" accessibilityLabel={count ? t('patterns.filtersN', { n: count }) : t('patterns.filters')} onPress={() => { setDraft(values); setOpen(true); }} style={[styles.filterBtn, count > 0 && { borderColor: colors.ink }]} testID="filter-button">
+          <Pressable accessibilityRole="button" accessibilityLabel={count ? t('patterns.filtersN', { n: count }) : t('patterns.filters')} accessibilityState={{ expanded: open }} onPress={() => { setDraft(values); setOpen(true); }} style={[styles.filterBtn, count > 0 && { borderColor: colors.ink }]} testID="filter-button">
             <SlidersHorizontal size={20} color={colors.ink} />
             {!onSearch && <Txt variant="strong" size={15}>{t('patterns.filters')}</Txt>}
             {count > 0 && <View style={styles.badge}><Mono size={12} bold color="#ffffff">{String(count)}</Mono></View>}
@@ -70,7 +70,7 @@ export function FilterBar({ search, onSearch, placeholder, defs, values, onApply
           )}
           <View style={{ flex: 1 }} />
           {sort && (
-            <Pressable accessibilityRole="button" onPress={() => setSorting(true)} style={styles.sortBtn} testID="sort-button">
+            <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.sortBy', { label: sort.options.find((o) => o.value === sort.value)?.label ?? '' })} accessibilityState={{ expanded: sorting }} onPress={() => setSorting(true)} style={styles.sortBtn} testID="sort-button">
               <Txt variant="small">{t('patterns.sortBy', { label: sortLabel ?? '' })}</Txt>
               <ChevronDown size={16} color={colors.muted} />
             </Pressable>
