@@ -689,6 +689,14 @@ commits).
   `preview` (runtime `1.3.0-gmaps`): it reaches the 1.3.0 phone only. GO O1 fast-forwards main to `phase8-o1`
   (c88c78f); GO O1+O2 to `phase8-o2`'s last commit. Item 9 (the office push on the phone) stays on `phase8-o1-push`
   behind its own go (a migration and two functions).
+- **Deployed (GO item 9 and GO O1+O2, 20 October 2026, 07:50–08:05):** (1) main fast-forwarded to `phase8-o1-push`
+  (b80a668); `supabase db push --linked` after a dry run that listed exactly one migration: `20261020010000_phase8_office_push.sql`.
+  (2) `supabase functions deploy notify-office push-task`; both answer (a call without the server key: 401
+  `bad_server_key`). (3) main merged into `phase8-o2` (d5acf8a, no conflicts: auth.ts carries the token registration and
+  the draft clearing); typecheck 0, office 84, inbox 88, nav 32, maps 65, rules 131, setup 27, notify-office's Deno
+  expo_test 4, pgTAP phase8_office_push 11, all passed; main fast-forwarded to d5acf8a. (4) `eas update --channel preview
+  --environment preview --message "Office mode O1+O2"`: runtime 1.3.0-gmaps, update group 78225c20-4546-46c5-bedc-1b54339f74e6,
+  Android update 01a15719-ef54-7882-9848-7d444ab17550, commit d5acf8a (the bundle from the `fame-ops` checkout at that commit).
 
 ## 13. Risks
 
