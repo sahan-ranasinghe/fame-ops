@@ -5,11 +5,12 @@
 // tiles, personal km, each vehicle's rows, the biggest gaps, unlogged km and the odometer checks; beside a shorter
 // range the month that contains the last day with the allowance. Fuel (list_fuel): the totals, a row per fill with its
 // video's state, Load more. Duty log (duty_log): the totals, a row per duty period (clock in, clock out and how, the
-// vehicles held, the tasks, hours, km), Load more. Each section only with its tool; filters by vehicle or driver and
-// the videos themselves are laptop work.
+// vehicles held, the tasks, hours, km), Load more. Each section only with its tool; filters by vehicle or driver are
+// laptop work. A fill's video (Stage 1, O3 item 4) opens its 1-hour link in the phone's browser, one button per piece, the
+// steps' marks under it; a list read over 50 minutes ago is read again first (the links last an hour).
 
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Linking, Pressable, View } from 'react-native';
 
 import { DateRangeButton } from '@/components/patterns/Calendar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
@@ -18,7 +19,7 @@ import { presetRange } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
 import {
   appendDuty, appendFuel, clockOut, dutyArgs, heldLine, hoursText, mileageView, outHowKey, outsideKm, rangeArgs, rangeFits, REPORT_MAX_DAYS, type ReportSection, reportSections, rowCells,
-  videoChip, videoLine,
+  clockOf, linksStale, videoChip, videoLine, videoPieces,
 } from '@/office/manageLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DutyLog, FleetError, FuelList, MileageSummary, Row } from '@/office/types';
@@ -155,6 +156,34 @@ function Fuel({ from, to }: { from: string; to: string }) {
   const { api, signOut } = useOffice();
   const q = useTool<FuelList>('list_fuel', rangeArgs(from, to, { limit: 25 }));
   const d = q.data;
+  // When the first page's links were handed out: every new answer (a load, a reload) resets it; a page added by Load more
+  // is fresher than the first, so it leaves the time alone (the oldest link on screen decides).
+  const loadedAt = useRef(0);
+  const appending = useRef(false);
+  useEffect(() => {
+    if (!d) return;
+    if (appending.current) appending.current = false;
+    else loadedAt.current = Date.now();
+  }, [d]);
+  // A tap on a stale list: read again, then open that piece from the fresh answer (or say it is no longer on the first page).
+  const [pending, setPending] = useState<{ id: string; n: number } | null>(null);
+  const [videoNote, setVideoNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pending || !d || linksStale(loadedAt.current, Date.now())) return;
+    const piece = videoPieces(d.entries.find((e) => e.id === pending.id)?.video ?? { status: 'none' }).find((x) => x.n === pending.n);
+    setPending(null);
+    if (piece) void Linking.openURL(piece.url).catch(() => setVideoNote(t('office.reports.videoOpenFailed')));
+    else setVideoNote(t('office.reports.videoReload'));
+  }, [d, pending, t]);
+  function watch(id: string, n: number, url: string) {
+    setVideoNote(null);
+    if (linksStale(loadedAt.current, Date.now())) {
+      setPending({ id, n });
+      void q.reload();
+      return;
+    }
+    void Linking.openURL(url).catch(() => setVideoNote(t('office.reports.videoOpenFailed')));
+  }
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
   const n = (x: number | null | undefined) => (Number(x) || 0).toLocaleString('en-US');
   async function loadMore() {
@@ -162,6 +191,7 @@ function Fuel({ from, to }: { from: string; to: string }) {
     setMore({ busy: true, error: null });
     try {
       const page = await api.call<FuelList>('list_fuel', rangeArgs(from, to, { limit: 25, cursor: d.next }));
+      appending.current = true;
       q.patch((p) => appendFuel(p, page));
       setMore({ busy: false, error: null });
     } catch (e) {
@@ -195,13 +225,27 @@ function Fuel({ from, to }: { from: string; to: string }) {
                     <Pill text={t(`office.reports.video_${chip.key}`)} tone={chip.tone} size={12} />
                   </View>
                   <Txt variant="muted" size={15}>{[e.driver, e.litres != null ? `${n(e.litres)} ${t('office.reports.litres')}` : '', e.lkr != null ? `LKR ${n(e.lkr)}` : '', e.odometer_km != null ? `${n(e.odometer_km)} km` : '', videoLine(e.video)].filter(Boolean).join(' · ')}</Txt>
+                  {e.video.timeline ? <Txt variant="small">{e.video.timeline}</Txt> : null}
+                  {videoPieces(e.video).length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      {videoPieces(e.video).map((piece, k, all) => (
+                        <Pressable key={piece.n} accessibilityRole="link" onPress={() => watch(e.id, piece.n, piece.url)} testID="fuel-video"
+                          style={({ pressed }) => [{ minHeight: 48, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line }, pressed && { opacity: 0.8 }]}>
+                          <Txt variant="strong" size={15} color={colors.blue}>
+                            {pending?.id === e.id && pending.n === piece.n ? t('office.reports.videoRenewing') : all.length > 1 ? t('office.reports.watchPiece', { n: k + 1, d: piece.duration_s != null ? clockOf(piece.duration_s) : '' }) : t('office.reports.watch')}
+                          </Txt>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
                 </View>
               );
             })}
             {more.error && <ListFailed error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
             {d.next && <LoadMore shown={d.entries.length} total={d.total} busy={more.busy} onPress={() => void loadMore()} />}
           </Section>
-          <Txt variant="small">{t('office.reports.videosLaptop')}</Txt>
+          {videoNote && <Txt variant="small" color={colors.red}>{videoNote}</Txt>}
+          <Txt variant="small">{t('office.reports.videosBrowser')}</Txt>
         </>
       )}
     </Screen>

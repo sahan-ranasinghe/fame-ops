@@ -1869,7 +1869,6 @@
       "videosMissing": "{n} missing",
       "fuelMonthLine": "{month}: {n} fills · {litres} litres · LKR {lkr}",
       "noFills": "No fuel logged on these days.",
-      "videosLaptop": "The videos play on a laptop.",
       "video_uploaded": "Video",
       "video_interrupted": "Video · interrupted",
       "video_recorded": "On the phone",
@@ -1924,7 +1923,13 @@
       "col_to_task": "task after",
       "col_from_near": "was near",
       "col_to_near": "then near",
-      "tooLong": "This report covers at most {n} days at a time. Pick fewer days."
+      "tooLong": "This report covers at most {n} days at a time. Pick fewer days.",
+      "watch": "Watch video ›",
+      "watchPiece": "Piece {n} · {d} ›",
+      "videoRenewing": "Getting a fresh link…",
+      "videoReload": "Pull down to read the list again, then tap the video.",
+      "videoOpenFailed": "The video did not open. Try again.",
+      "videosBrowser": "A video opens in the phone's browser. Its link works for one hour."
     },
     "people": {
       "drivers": "Drivers",

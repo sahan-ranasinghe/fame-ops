@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import {
   appendDuty, appendFuel, appendVehicles, clockOf, clockOut, companyInput, docTone, dutyArgs, emptyVehicle, filterCounts, heldLine, hoursText, isDate, kmLine, megabytes, mileageView, mondayOf,
   monthOf, outsideKm, rangeArgs, rangeDayCount, rangeFits, REPORT_MAX_DAYS, reportSections, rowCells, vehicleChoice, vehicleFilterDefs, vehicleFormDirty, vehicleInput, vehiclesArgs, vehiclesEmpty, vehicleTone,
-  videoChip, videoLine, wholeMonth,
+  linksStale, videoChip, videoLine, videoPieces, VIDEO_LINK_FRESH_MS, wholeMonth,
 } from '../src/office/manageLogic';
 import { MORE_SECTION, moreFor } from '../src/office/nav';
 import { PRESETS } from '../src/office/permissions';
@@ -175,6 +175,21 @@ console.log('\nStrings in both languages');
   check(badPh.length === 0, 'the same placeholders in both languages', badPh);
   const siText = [...keys, ...families].map((k) => get(si.office, k) ?? '').join(' ');
   check(!/[෦-෯]/.test(siText), 'Latin digits only in Sinhala');
+}
+
+console.log('\nFuel videos open in the browser (Stage 1, O3 item 4)');
+{
+  const one = videoPieces({ status: 'uploaded', url: 'https://x.supabase.co/a.mp4', duration_s: 47 });
+  check(one.length === 1 && one[0].url.endsWith('a.mp4') && one[0].duration_s === 47, 'an uninterrupted recording: one piece, its link');
+  const two = videoPieces({ status: 'uploaded', url: 'https://x/1.mp4', segments: [{ url: 'https://x/1.mp4', duration_s: 30 }, { duration_s: 5 }, { url: 'https://x/3.mp4', duration_s: 20 }] });
+  check(two.map((x) => x.n).join() === '1,3' && two[1].duration_s === 20, 'an interrupted one: every piece whose file is there, in order, numbered as recorded', two);
+  check(videoPieces({ status: 'uploading', url: 'https://x/a.mp4' }).length === 0 && videoPieces({ status: 'pruned' }).length === 0 && videoPieces({ status: 'uploaded', url: 'javascript:alert(1)' }).length === 0,
+    'nothing to watch until uploaded, after pruning, or without an https link');
+  check(VIDEO_LINK_FRESH_MS === 50 * 60_000 && !linksStale(0, 50 * 60_000) && linksStale(0, 50 * 60_000 + 1), 'a list read over 50 minutes ago is read again before a link opens (the links last an hour)');
+  const screen = read('app/office/reports/index.tsx');
+  check(screen.includes('Linking.openURL(url)') && screen.includes('testID="fuel-video"') && screen.includes('linksStale(loadedAt.current, Date.now())') && screen.includes('appending.current = true'),
+    "Reports: Watch video opens the link in the phone's browser; a stale list is read again first; Load more keeps the oldest time");
+  check(!screen.includes('videosLaptop') && screen.includes("t('office.reports.videosBrowser')") && screen.includes('e.video.timeline'), "the note says the browser, not the laptop; the steps' marks under the row");
 }
 
 console.log(failures === 0 ? '\nAll management checks passed.' : `\n${failures} management check(s) FAILED.`);

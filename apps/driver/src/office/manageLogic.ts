@@ -311,6 +311,19 @@ export function videoLine(v: Pick<VideoCard, 'status' | 'duration_s' | 'bytes'>)
   return [v.duration_s != null ? clockOf(v.duration_s) : '', v.bytes ? megabytes(v.bytes) : ''].filter(Boolean).join(' · ');
 }
 
+/** Stage 1 (O3 item 4): a fill's video as the pieces to watch, each with its 1-hour link (an uninterrupted recording is one
+ * piece; only the pieces whose file is there). The phone's browser plays them: no player in the 1.3.0 build. */
+export function videoPieces(v: Pick<VideoCard, 'status' | 'url' | 'segments' | 'duration_s'>): { n: number; url: string; duration_s?: number }[] {
+  if (v.status !== 'uploaded') return [];
+  const segs = (v.segments ?? []).map((x, i) => ({ n: i + 1, url: x.url ?? '', duration_s: x.duration_s })).filter((x) => /^https:\/\//.test(x.url));
+  if (segs.length) return segs;
+  return v.url && /^https:\/\//.test(v.url) ? [{ n: 1, url: v.url, duration_s: v.duration_s }] : [];
+}
+
+/** The links last an hour: a list read over 50 minutes ago is read again before a link opens. */
+export const VIDEO_LINK_FRESH_MS = 50 * 60_000;
+export const linksStale = (loadedAt: number, now: number) => now - loadedAt > VIDEO_LINK_FRESH_MS;
+
 /** The next page's fills after the ones on screen. */
 export function appendFuel(list: FuelList, page: FuelList): FuelList {
   const seen = new Set(list.entries.map((e) => e.id));
