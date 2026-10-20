@@ -664,7 +664,8 @@ commits).
   on Change time and Swap vehicle. Not changed (noted): design 08's vehicle line under the chips and design 09's
   "15 min early" / "Road time" pills, the not-available pill's reason on the board, the regular-driver chips' 100
   cap, the openrouteservice credit's OSM line under Google's credit. Nothing was removed from the shipped screens.
-- **The full run after the fixes** (07:40, 19 s): typecheck 0 errors; 23 suites, 1,747 checks, 0 failed.
+- **The full run after the fixes** (07:26–07:29): typecheck 0 errors; 23 suites, 1,746 checks, 0 failed (the three stack
+  suites 294 on the local stack, the twenty others 1,452 in a last clean run after the test expectations were updated).
 - **The driver side.** Changed in `apps/driver` outside `src/office/`, `src/app/office/` and `components/office/`:
   `components/navigation.ts` (the leave guard also counts an office sign-in: one line), `components/icons.ts` (exports),
   `components/DriversMap.tsx` with its two engines and `RouteMap.tsx` with its two (office-mode maps), `i18n/en.json`
