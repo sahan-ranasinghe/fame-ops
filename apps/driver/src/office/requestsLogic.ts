@@ -78,3 +78,22 @@ export const CANCEL_TEXT: Record<'not_needed' | 'vehicle_problem' | 'other', str
 export function cancelReason(label: string, note: string): string {
   return [label, note.trim()].filter(Boolean).join(' — ').slice(0, 300);
 }
+
+// ---------------------------------------------------------------------------
+// New requests while the list is open (Sahan, 20 October 2026; Twitter's and Gmail's "New ↑"): the list never jumps by
+// itself. A quiet look at the first page every minute updates the rows already on screen in place and counts the ones
+// that are not; the pill shows them on a tap.
+// ---------------------------------------------------------------------------
+
+/** The rows on screen with their newer versions from the first page (same order), and the first page's new ones. */
+export function arrivals(current: readonly RequestCard[], first: readonly RequestCard[]): { updated: RequestCard[]; fresh: RequestCard[] } {
+  const byId = new Map(first.map((r) => [r.id, r]));
+  const have = new Set(current.map((r) => r.id));
+  return { updated: current.map((r) => byId.get(r.id) ?? r), fresh: first.filter((r) => !have.has(r.id)) };
+}
+
+/** The list with the new ones in their place: the first page in the server's order, then the rest already loaded. */
+export function withArrivals(current: readonly RequestCard[], first: readonly RequestCard[]): RequestCard[] {
+  const inFirst = new Set(first.map((r) => r.id));
+  return [...first, ...current.filter((r) => !inFirst.has(r.id))];
+}

@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { askedOf, asksFromTo, availabilityAt, decideTimes, DWELL_CHOICES, hasChange, redecideTimes, shownOf, timeProblem } from '../src/office/decideLogic';
-import { appendRequests, canCancelBooking, cancelReason, canWithdrawOwn, eventLine, requestsArgs, requestsChoice, requestsFilterDefs, statusTone } from '../src/office/requestsLogic';
+import { appendRequests, arrivals, canCancelBooking, cancelReason, canWithdrawOwn, eventLine, requestsArgs, requestsChoice, requestsFilterDefs, statusTone, withArrivals } from '../src/office/requestsLogic';
 import type { RequestCard, RequestsList } from '../src/office/types';
 
 let failures = 0;
@@ -94,6 +94,20 @@ console.log('\nRequests (O3 row 2)');
   check(keys.every((k) => typeof si.office.requests[k] === 'string'), 'office.requests in both languages');
   check(['created', 'seen', 'edited', 'approved', 'declined', 'changed', 'redecided', 'postponed', 'cancelled', 'other'].every((a) => `ev_${a}` in en.office.requests && `ev_${a}_by` in si.office.requests), 'every action has its words');
   check(['waiting', 'changed', 'approved', 'declined', 'cancelled', 'all'].every((x) => `status_${x}` in si.office.requests), 'every status has its words');
+}
+
+console.log('\nNew requests while the list is open (Sahan, 20 October 2026)');
+{
+  const card = (id: string, status = 'waiting') => ({ id, status, requested_by: 'A', when: 'Wed 09:00' } as unknown as RequestCard);
+  const now = [card('a'), card('b'), card('c')];
+  const first = [card('a'), card('n1'), card('b', 'approved'), card('n2')];
+  const { updated, fresh } = arrivals(now, first);
+  check(updated.map((r) => r.id).join() === 'a,b,c' && updated[1].status === 'approved', 'the rows on screen keep their place and take their newer state');
+  check(fresh.map((r) => r.id).join() === 'n1,n2', 'the new ones are counted, not shown');
+  check(withArrivals(updated, first).map((r) => r.id).join() === 'a,n1,b,n2,c', 'a tap puts them in the server\'s order, then the rest already loaded');
+  check(arrivals(now, now).fresh.length === 0, 'nothing new: no pill');
+  const tab = src('app/office/(tabs)/approve.tsx');
+  check(!/useTool<RequestsList>\('list_requests'[^)]*every/.test(tab) && tab.includes('testID="new-requests"') && tab.includes('scroll.current?.scrollTo({ y: 0'), 'the list has no timer of its own; the pill scrolls up and shows them');
 }
 
 console.log(failures === 0 ? '\nAll decide checks passed.' : `\n${failures} decide check(s) FAILED.`);

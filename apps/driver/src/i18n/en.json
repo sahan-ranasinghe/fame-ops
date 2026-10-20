@@ -951,7 +951,10 @@
       "waiting": "Waiting",
       "reviewing": "{name} is reviewing",
       "late": "Leave-by passed · not decided",
-      "none": "No requests waiting. New ones appear here."
+      "none": "No requests waiting. New ones appear here.",
+      "newOnes": "{n} new requests ↑",
+      "newOne": "1 new request ↑",
+      "newPill": "New"
     },
     "tasks": {
       "above": "The day's board",

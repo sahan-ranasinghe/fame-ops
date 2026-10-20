@@ -4,7 +4,7 @@
 // failed call is shown (a notice with Try again; a dropped write says it may not have been saved).
 
 import { useFocusEffect, useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useRef } from 'react';
+import { type ReactNode, type Ref, useCallback, useRef } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -108,15 +108,18 @@ export function BackHeader({ title, subtitle, right }: { title: string; subtitle
 }
 
 /** A scrolling screen with pull to refresh. */
-export function Screen({ children, refreshing, onRefresh, bottom = 24, style }: {
+export function Screen({ children, refreshing, onRefresh, bottom = 24, style, scrollRef }: {
   children: ReactNode;
   refreshing?: boolean;
   onRefresh?: () => void;
   bottom?: number;
   style?: StyleProp<ViewStyle>;
+  /** A handle for a screen that scrolls itself on a tap (Approve's "New requests ↑"). */
+  scrollRef?: Ref<ScrollView>;
 }) {
   return (
     <ScrollView
+      ref={scrollRef}
       style={{ flex: 1, backgroundColor: colors.page }}
       contentContainerStyle={[{ padding: 16, gap: 14, paddingBottom: bottom }, style]}
       keyboardShouldPersistTaps="handled"

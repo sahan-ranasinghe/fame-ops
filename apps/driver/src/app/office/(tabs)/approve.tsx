@@ -4,18 +4,18 @@
 // §1, §5). A row opens the request's page (Approve a request, design 10, or the decided request with its timeline and
 // Tell requester), with "Palitha is reviewing" when another approver has it open. Rules: office/requestsLogic.ts.
 
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, type ScrollView, StyleSheet, View } from 'react-native';
 
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { requestLine, requestTitle } from '@/office/homeLogic';
-import { appendRequests, requestsArgs, requestsChoice, requestsFilterDefs, statusTone } from '@/office/requestsLogic';
+import { appendRequests, arrivals, requestsArgs, requestsChoice, requestsFilterDefs, statusTone, withArrivals } from '@/office/requestsLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { FleetError, RequestsList } from '@/office/types';
+import type { FleetError, RequestCard, RequestsList } from '@/office/types';
 import { Avatar, DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -40,11 +40,44 @@ export default function ApproveTab() {
     const timer = setTimeout(() => setSearch(text.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [text]);
-  const q = useTool<RequestsList>('list_requests', requestsArgs(status, search), { every: 60_000 });
+  // No timer on the list itself: it never jumps by itself (Sahan, 20 October 2026). A quiet look at the first page every
+  // minute (below) updates the rows on screen in place and counts the new ones for the "New requests ↑" pill.
+  const q = useTool<RequestsList>('list_requests', requestsArgs(status, search));
   // An answer for another filter or search is never shown under the one chosen.
   const shown = q.data && (q.data.status ?? status) === status ? q.data : null;
   const rows = shown?.requests ?? [];
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
+  const scroll = useRef<ScrollView>(null);
+  const [fresh, setFresh] = useState<{ key: string; first: RequestCard[]; ids: string[] } | null>(null);
+  const [marked, setMarked] = useState<Set<string>>(new Set());
+  const freshHere = fresh && fresh.key === q.key ? fresh : null;
+  const look = useRef<() => void>(() => undefined);
+  look.current = () => {
+    const k = q.key;
+    if (!q.data) return;
+    api.call<RequestsList>('list_requests', requestsArgs(status, search)).then((first) => {
+      if (k !== q.key) return;
+      const news = arrivals(q.data?.requests ?? [], first.requests).fresh;
+      q.patch((p) => ({ ...p, requests: arrivals(p.requests, first.requests).updated, ...(first.total !== undefined ? { total: first.total } : {}) }), k);
+      setFresh(news.length ? { key: k, first: first.requests, ids: news.map((r) => r.id) } : null);
+    }, () => undefined);
+  };
+  useFocusEffect(
+    useCallback(() => {
+      const timer = setInterval(() => {
+        if (AppState.currentState === 'active') look.current();
+      }, 60_000);
+      return () => clearInterval(timer);
+    }, []),
+  );
+  function showNew() {
+    if (!freshHere) return;
+    const shown = freshHere;
+    q.patch((p) => ({ ...p, requests: withArrivals(p.requests, shown.first) }), shown.key);
+    setMarked(new Set(shown.ids));
+    setFresh(null);
+    scroll.current?.scrollTo({ y: 0, animated: true });
+  }
 
   async function loadMore() {
     // The list this page belongs to: a page that lands after the filter or day changed is dropped.
@@ -63,7 +96,12 @@ export default function ApproveTab() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={t('office.approve.above')} title={t('office.approve.title')} />
-      <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
+      <Screen refreshing={q.refreshing} onRefresh={() => { setFresh(null); setMarked(new Set()); void q.reload(); }} scrollRef={scroll}>
+        {freshHere && (
+          <Pressable accessibilityRole="button" onPress={showNew} style={styles.newPill} testID="new-requests">
+            <Txt variant="strong" size={15} color="#ffffff">{freshHere.ids.length === 1 ? t('office.approve.newOne') : t('office.approve.newOnes', { n: freshHere.ids.length })}</Txt>
+          </Pressable>
+        )}
         <FilterBar
           search={text}
           onSearch={(v) => { setText(v); if (!v) setSearch(''); }}
@@ -89,6 +127,7 @@ export default function ApproveTab() {
                     line={requestLine(r)}
                     line2={reviewing ? t('office.approve.reviewing', { name: reviewing }) : r.late ? t('office.approve.late') : undefined}
                     right={<View style={{ alignItems: 'flex-end', gap: 4 }}>
+                      {marked.has(r.id) && <Pill text={t('office.approve.newPill')} tone="blue" />}
                       <Pill text={t(`office.requests.status_${r.status}`)} tone={statusTone(r.status)} />
                       {r.asked ? <Txt variant="small" style={{ maxWidth: 100, textAlign: 'right' }} numberOfLines={1}>{r.asked}</Txt> : null}
                     </View>}
@@ -106,3 +145,8 @@ export default function ApproveTab() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  // The pill at the top (Twitter's, Gmail's): ink, round, centred; the list under it stays where it is.
+  newPill: { alignSelf: 'center', minHeight: 44, paddingHorizontal: 18, borderRadius: 22, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', elevation: 3 },
+});
