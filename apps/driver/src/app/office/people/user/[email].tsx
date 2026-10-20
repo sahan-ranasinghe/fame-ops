@@ -23,6 +23,7 @@ export default function ManageOfficeUser() {
   const { email: raw } = useLocalSearchParams<{ email: string }>();
   const email = decodeURIComponent(raw ?? '');
   const { t } = useApp();
+  const permWord = (p: string) => t(`office.permission.${p}`).toLowerCase();
   const { me, api, signOut } = useOffice();
   const router = useRouter();
   const q = useTool<OfficeUsers>('list_office_users', { search: email, limit: 25 });
@@ -72,7 +73,7 @@ export default function ManageOfficeUser() {
           : x)),
       }));
       setF({ ...f, name: r.updated.name, phone: phone ? phoneDisplay(phone) : '', permissions: normalisePermissions(r.updated.permissions) });
-      setSavedText(t('office.people.userSaved', { name: r.updated.name, list: permissionWords(r.updated.permissions) || '—' }));
+      setSavedText(t('office.people.userSaved', { name: r.updated.name, list: permissionWords(r.updated.permissions, permWord) || '—' }));
     } catch (e) {
       setSaveError(e as FleetError);
     } finally {
@@ -138,7 +139,7 @@ export default function ManageOfficeUser() {
               <Avatar name={u.name} size={44} />
               <View style={{ flex: 1 }}>
                 <Txt variant="strong" size={17}>{u.name}</Txt>
-                <Txt variant="small">{permissionWords(u.permissions) || '—'}</Txt>
+                <Txt variant="small">{permissionWords(u.permissions, permWord) || '—'}</Txt>
               </View>
             </View>
             {u.active && canEdit ? (

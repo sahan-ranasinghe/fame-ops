@@ -11,7 +11,6 @@ import { Alert, View } from 'react-native';
 import { Bell, ChartColumn, ChevronRight, ClipboardCheck, ListChecks, type LucideIcon, Route, SlidersHorizontal, TriangleAlert, User, UserCog, Users, Van } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { MORE_SECTION, type MoreItem, type MoreSection, moreFor } from '@/office/nav';
-import { PERMISSION_TEXT } from '@/office/permissions';
 import { useOffice } from '@/office/state';
 import { Avatar, DarkHeader, Divider, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -66,7 +65,7 @@ export default function MoreTab() {
             left={<Avatar name={me.name} size={48} />}
             title={me.name}
             line={me.email}
-            line2={me.permissions.map((p) => PERMISSION_TEXT[p].label.toLowerCase()).join(' · ')}
+            line2={me.permissions.map((p) => t(`office.permission.${p}`).toLowerCase()).join(' · ')}
           />
           <Divider />
           <Row left={<User size={24} color={colors.ink} />} title={t('office.more.profile')} right={<ChevronRight size={22} color={colors.muted} />} onPress={() => router.push('/office/profile')} />

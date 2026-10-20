@@ -99,7 +99,7 @@ export default function TripWhere() {
   if (mode === 'stops' && !d) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.page }}>
-        <TripHeader step="where" above={t('office.trip.stopsAbove')} onBack={() => router.back()} />
+        <TripHeader step="where" mode="stops" above={t('office.trip.stopsAbove')} onBack={() => router.back()} />
         <Screen>{taskQ.loading ? <Loading text={t('office.common.loading')} /> : taskQ.error ? <ErrorNotice error={taskQ.error} onRetry={() => void taskQ.reload()} onSignIn={() => void signOut()} /> : <Empty text={t('office.task.notFound')} />}</Screen>
       </View>
     );
@@ -133,7 +133,7 @@ export default function TripWhere() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <TripHeader step="where" above={above} onBack={() => (router.canGoBack() ? router.back() : router.replace('/office'))} onSaveDraft={() => router.canGoBack() ? router.back() : router.replace('/office')} />
+      <TripHeader step="where" mode={d.mode} above={above} onBack={() => (router.canGoBack() ? router.back() : router.replace('/office'))} onSaveDraft={() => router.canGoBack() ? router.back() : router.replace('/office')} />
       <Screen bottom={16}>
         {/* Start from */}
         <View style={styles.card}>

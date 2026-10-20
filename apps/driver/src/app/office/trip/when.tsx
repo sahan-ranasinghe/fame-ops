@@ -52,7 +52,7 @@ export default function TripWhen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <TripHeader step="when" above={above} onBack={() => router.back()} />
+      <TripHeader step="when" mode={draft.mode} above={above} onBack={() => router.back()} />
       <Screen bottom={16}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {(pickDate ? Array.from({ length: 14 }, (_, i) => addDays(today, i)) : [...days, ...(days.includes(f.date) ? [] : [f.date])]).map((day) => (

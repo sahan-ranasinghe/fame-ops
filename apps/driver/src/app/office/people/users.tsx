@@ -18,6 +18,7 @@ import { colors } from '@/theme';
 
 export default function OfficeUsersPeople() {
   const { t } = useApp();
+  const permWord = (p: string) => t(`office.permission.${p}`).toLowerCase();
   const { me, api, signOut } = useOffice();
   const router = useRouter();
   const [text, setText] = useState('');
@@ -52,7 +53,7 @@ export default function OfficeUsersPeople() {
         left={<Avatar name={u.name} size={44} />}
         title={u.name}
         line={userLine(u)}
-        line2={permissionWords(u.permissions)}
+        line2={permissionWords(u.permissions, permWord)}
         right={<Pill text={t(`office.people.${pill.key}`)} tone={pill.tone} size={13} />}
         onPress={() => u.email && router.push({ pathname: '/office/people/user/[email]', params: { email: u.email } })}
       />

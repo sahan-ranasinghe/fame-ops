@@ -49,6 +49,8 @@ export default function DriversTab() {
   const [asking, setAsking] = useState(false);
   const [adding, setAdding] = useState<{ driver: { name: string; username: string }; date: string } | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
+  // The entry whose Remove failed: Try again removes it again (never only hides the error).
+  const [lastRemove, setLastRemove] = useState<UnavailableEntry | null>(null);
 
   const mayAsk = me.tools.includes('ask_drivers');
   const mayAdd = me.tools.includes('set_unavailability');
@@ -71,8 +73,10 @@ export default function DriversTab() {
   }
   async function remove(e: UnavailableEntry) {
     setProblem(null);
+    setLastRemove(e);
     try {
       await api.call('remove_unavailability', { id: e.id });
+      setLastRemove(null);
       week.patch((prev) => ({ ...prev, entries: prev.entries.filter((x) => x.id !== e.id), count: Math.max(0, prev.count - 1) }));
       void board.reload();
     } catch (err) {
@@ -114,7 +118,7 @@ export default function DriversTab() {
       <Screen refreshing={board.refreshing || week.refreshing} onRefresh={refresh} bottom={mayAsk ? 100 : 24} style={{ gap: 10 }}>
         {board.loading && <Loading text={t('office.common.loading')} />}
         {board.error && !board.data && <ErrorNotice error={board.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-        {problem && <ErrorNotice error={problem} onRetry={() => setProblem(null)} />}
+        {problem && <ErrorNotice error={problem} onRetry={() => { if (lastRemove) void remove(lastRemove); else setProblem(null); }} />}
         {view === 'now' && board.data && drivers.length === 0 && <Empty text={filter === 'all' ? t('office.drivers.empty') : t('office.drivers.noneInFilter')} />}
         {view === 'now' && drivers.map((d) => <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} />)}
 

@@ -102,7 +102,7 @@ console.log('\nMore: the rows by permission');
   const re = moreFor(PRESETS.requester.permissions);
   const vi = moreFor(PRESETS.viewer.permissions);
   const admin = moreFor(['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues', 'users']);
-  check(fa.includes('vehicles') === PRESETS.fleet_admin.permissions.includes('vehicles') && !re.includes('vehicles') && !vi.includes('vehicles'), 'Vehicles only with the vehicles permission');
+  check(fa.includes('vehicles') && re.includes('vehicles') && vi.includes('vehicles') && !moreFor([]).includes('vehicles'), 'Vehicles with view (the list and the page are read; Register / Edit by their tools)');
   check(di.includes('reports') && !re.includes('reports') && !vi.includes('reports'), 'Reports with assign_tasks (the duty log) or vehicles, never for a requester or a viewer');
   check(admin.includes('people_drivers') && admin.includes('people_users') && admin.includes('settings') && !di.includes('people_users') && !di.includes('settings') && !re.includes('people_drivers'), 'People and Quick settings with users (drivers also with vehicles)');
   check(moreFor(['vehicles']).includes('people_drivers') && !moreFor(['vehicles']).includes('people_users'), 'vehicles alone: the drivers\' management (decision 1), not the office users');

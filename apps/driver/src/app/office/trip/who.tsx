@@ -41,11 +41,13 @@ export default function TripWho() {
   const best0 = avail.data?.best?.username ?? drivers0.find((x) => x.name === avail.data?.best?.name)?.username ?? '';
   // The best match is ticked first, once Who's available answers and nobody was picked.
   useEffect(() => {
-    if (isTask && best0 && avail.data) updateDraft((x) => (x.fields.driver ? x : { ...x, fields: { ...x.fields, driver: best0 } }));
+    if (isTask && best0 && avail.data) updateDraft((x) => (x.fields.driver ? x : { ...x, driverName: avail.data?.best?.name ?? best0, fields: { ...x.fields, driver: best0 } }));
   }, [isTask, best0, avail.data]);
   if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }}><Screen><Loading text={t('office.common.loading')} /></Screen></View>;
   const f = d.fields;
   const setF = (patch: Partial<typeof f>) => updateDraft((x) => ({ ...x, fields: { ...x.fields, ...patch } }));
+  // The driver's name travels with the username: Review and the alert say "Kamal", never "kamal.p".
+  const pick = (username: string, name: string) => updateDraft((x) => ({ ...x, driverName: name, fields: { ...x.fields, driver: username, vehicle: '' } }));
   const setReq = (patch: Partial<typeof d.req>) => updateDraft((x) => ({ ...x, req: { ...x.req, ...patch } }));
   const drivers = drivers0;
   const bestUsername = best0;
@@ -78,7 +80,7 @@ export default function TripWho() {
               const on = !!x.username && x.username === f.driver;
               const pillKey = driverPill(x, bestUsername);
               return (
-                <Pressable key={x.username ?? x.name} accessibilityRole="button" accessibilityState={{ selected: on }} disabled={!x.username} onPress={() => setF({ driver: x.username ?? '', vehicle: '' })} style={({ pressed }) => [styles.driverRow, on && styles.driverOn, pressed && { opacity: 0.8 }]}>
+                <Pressable key={x.username ?? x.name} accessibilityRole="button" accessibilityState={{ selected: on }} disabled={!x.username} onPress={() => pick(x.username ?? '', x.name)} style={({ pressed }) => [styles.driverRow, on && styles.driverOn, pressed && { opacity: 0.8 }]}>
                   <Avatar name={x.name} size={48} />
                   <View style={{ flex: 1, gap: 2 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -203,7 +205,7 @@ export default function TripWho() {
             to: f.end && f.end > f.leaveBy ? f.end : undefined,
             note: f.stops.find((s) => s.place.trim())?.place.trim() || undefined,
           }}
-          onUse={(username) => setF({ driver: username, vehicle: '' })}
+          onUse={(username) => pick(username, drivers.find((x) => x.username === username)?.name ?? username)}
         />
       )}
     </View>

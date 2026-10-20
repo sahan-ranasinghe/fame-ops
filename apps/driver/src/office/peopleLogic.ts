@@ -87,9 +87,9 @@ export function userLine(u: Pick<OfficeUser, 'email' | 'phone' | 'phone_display'
   return [u.email ?? '', u.phone_display ?? (u.phone ? phoneDisplay(u.phone) : '')].filter(Boolean).join(' · ');
 }
 
-/** The permissions as lower-case words ("view · approve · assign tasks"), never a role name. */
-export function permissionWords(list: readonly string[] | undefined): string {
-  return normalisePermissions(list).map((p) => PERMISSION_TEXT[p].label.toLowerCase()).join(' · ');
+/** The permissions as lower-case words ("view · approve · assign tasks"), never a role name; the screens pass the phone's language. */
+export function permissionWords(list: readonly string[] | undefined, word: (p: Permission) => string = (p) => PERMISSION_TEXT[p].label.toLowerCase()): string {
+  return normalisePermissions(list).map(word).join(' · ');
 }
 
 export const findDriverRow = (list: Pick<DriversList, 'drivers'> | null | undefined, username: string): Driver | undefined =>

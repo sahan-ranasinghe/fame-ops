@@ -19,6 +19,7 @@ import { colors } from '@/theme';
 
 export default function OfficeUserNew() {
   const { t } = useApp();
+  const permWord = (p: string) => t(`office.permission.${p}`).toLowerCase();
   const { api, signOut } = useOffice();
   const router = useRouter();
   const [f, setF] = useState<UserFields>(emptyUser);
@@ -52,7 +53,7 @@ export default function OfficeUserNew() {
   if (done) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.page }}>
-        <BackHeader title={t('office.people.userCreated')} subtitle={`${done.created.name} · ${permissionWords(done.created.permissions)}`} />
+        <BackHeader title={t('office.people.userCreated')} subtitle={`${done.created.name} · ${permissionWords(done.created.permissions, permWord)}`} />
         <Screen>
           <SecretCard
             title={t('office.people.linkTitle')}

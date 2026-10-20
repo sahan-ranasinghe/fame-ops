@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
+import { useLeaveGuard } from '@/components/navigation';
 import { TimeInput } from '@/components/office/TimeInput';
 import { Button, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
@@ -32,6 +33,7 @@ export default function ChangeTimeScreen() {
   const today = colomboDate();
   const names = { days: tList('days'), months: tList('months') };
   const [pickDate, setPickDate] = useState(false);
+  const { allowLeave } = useLeaveGuard(!!task && !!f && JSON.stringify(f) !== JSON.stringify(timeFieldsOf(task)), busy);
 
   // The form starts from the task as it is now (once; a reload after a stale version starts it again).
   useEffect(() => {
@@ -54,6 +56,7 @@ export default function ChangeTimeScreen() {
     setBusy(true);
     try {
       await api.call('update_task', r.input);
+      allowLeave();
       Alert.alert(t('office.task.timeSavedTitle'), t('office.task.timeSavedBody'), [{ text: t('office.common.ok'), onPress: () => router.back() }]);
     } catch (e) {
       setProblem(e as FleetError);

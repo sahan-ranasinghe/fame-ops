@@ -37,6 +37,8 @@ export interface TripDraft {
   taskId?: string;
   planVersion?: number;
   reached?: number;
+  /** task: the picked driver's name beside the username in fields.driver (Review and the alert name the person). */
+  driverName?: string;
   /** The trip and the task's own fields (the request mode leaves the task's empty). */
   fields: AssignFields;
   req: RequestExtras;

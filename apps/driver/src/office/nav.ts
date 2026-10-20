@@ -33,12 +33,12 @@ export const TAB_COUNT = 5;
 export const has = (permissions: readonly string[], ...any: readonly Permission[]): boolean => any.length === 0 || any.some((p) => permissions.includes(p));
 
 /**
- * The bottom bar: Home, then (by the designs) Approve · Drivers · Live for approvers, Tasks · Drivers · Live for
+ * The bottom bar: Home, then (by the designs) Approve · Live · Drivers for approvers, Tasks · Live · Drivers for
  * dispatchers (O2: Drivers on the bar, Alerts under More and the bell on every header), My trips · Live · Alerts for
  * requesters, Live for everyone who sees the fleet, Alerts, then More. Never a tab the person may not use, never one twice.
  */
 export function tabsFor(permissions: readonly string[]): Tab[] {
-  const order: Tab[] = has(permissions, 'approve') ? [APPROVE, DRIVERS, LIVE, ALERTS] : has(permissions, 'assign_tasks') ? [TASKS, DRIVERS, LIVE, ALERTS] : [TRIPS, LIVE, ALERTS];
+  const order: Tab[] = has(permissions, 'approve') ? [APPROVE, LIVE, DRIVERS, ALERTS] : has(permissions, 'assign_tasks') ? [TASKS, LIVE, DRIVERS, ALERTS] : [TRIPS, LIVE, ALERTS];
   const picked: Tab[] = [HOME];
   for (const tab of [...order, TRIPS, LIVE, ALERTS]) {
     if (picked.length >= TAB_COUNT - 1) break;
@@ -94,10 +94,10 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     { key: 'trips', need: ['request'] },
     { key: 'issues', need: ['issues', 'assign_tasks'] },
     { key: 'alerts', need: [] },
-    // O2 item 7 (design 19): management by permission. Vehicles and Reports with vehicles (Reports also with
-    // assign_tasks: the duty log); Drivers' management with users or vehicles (decision 1); office users and the quick
-    // settings with users.
-    { key: 'vehicles', need: ['vehicles'] },
+    // O2 item 7 (design 19): management by permission. Vehicles with view (plan section 2: the list and the page are
+    // read; Register / Edit by their tools), Reports with vehicles or assign_tasks (the duty log); Drivers' management
+    // with users or vehicles (decision 1); office users and the quick settings with users.
+    { key: 'vehicles', need: ['view'] },
     { key: 'reports', need: ['vehicles', 'assign_tasks'] },
     { key: 'people_drivers', need: ['users', 'vehicles'] },
     { key: 'people_users', need: ['users'] },

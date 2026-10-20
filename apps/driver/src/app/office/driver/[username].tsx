@@ -43,6 +43,8 @@ export default function DriverPage() {
   const route = useTool<DriverRoute>('driver_route', { driver: username, date: today, line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true }, { enabled: mayRoute, every: 60_000 });
   const mayRemove = me.tools.includes('remove_unavailability');
   const [problem, setProblem] = useState<FleetError | null>(null);
+  // The entry whose Remove failed: Try again removes it again (never only hides the error).
+  const [lastRemove, setLastRemove] = useState<UnavailableEntry | null>(null);
 
   const p = profile.data;
   const d = p?.driver;
@@ -69,8 +71,10 @@ export default function DriverPage() {
   }
   async function remove(e: UnavailableEntry) {
     setProblem(null);
+    setLastRemove(e);
     try {
       await api.call('remove_unavailability', { id: e.id });
+      setLastRemove(null);
       profile.patch((prev) => ({ ...prev, not_available: prev.not_available.filter((x) => x.id !== e.id) }));
       if (mayBoard) void board.reload();
     } catch (err) {
@@ -159,7 +163,7 @@ export default function DriverPage() {
                 </View>
               </View>
             ))}
-            {problem && <ErrorNotice error={problem} onRetry={() => setProblem(null)} />}
+            {problem && <ErrorNotice error={problem} onRetry={() => { if (lastRemove) void remove(lastRemove); else setProblem(null); }} />}
           </Section>
         )}
 

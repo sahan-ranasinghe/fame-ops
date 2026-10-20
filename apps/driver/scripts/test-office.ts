@@ -94,15 +94,15 @@ async function main() {
 
   console.log('\nTabs, Home and More by permission (office/nav.ts):');
   const keys = (p: readonly string[]) => tabsFor(p).map((t) => t.key).join(' ');
-  check(keys(PRESETS.fleet_admin.permissions) === 'home approve drivers live more', 'fleet admin: Home · Approve · Drivers · Live · More (O2: Drivers on the bar as design 02, Alerts under More)', keys(PRESETS.fleet_admin.permissions));
-  check(keys(PRESETS.dispatcher.permissions) === 'home tasks drivers live more', 'dispatcher: Home · Tasks · Drivers · Live · More (design 03)', keys(PRESETS.dispatcher.permissions));
+  check(keys(PRESETS.fleet_admin.permissions) === 'home approve live drivers more', 'fleet admin: Home · Approve · Live · Drivers · More (O2: Drivers on the bar as designs 03, 12, 15, Alerts under More)', keys(PRESETS.fleet_admin.permissions));
+  check(keys(PRESETS.dispatcher.permissions) === 'home tasks live drivers more', 'dispatcher: Home · Tasks · Live · Drivers · More (design 03)', keys(PRESETS.dispatcher.permissions));
   check(keys(PRESETS.requester.permissions) === 'home trips live alerts more', 'requester: Home · My trips · Live · Alerts · More', keys(PRESETS.requester.permissions));
   check(keys(PRESETS.viewer.permissions) === 'home live alerts more', 'viewer: Home · Live · Alerts · More', keys(PRESETS.viewer.permissions));
-  check(keys(['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues', 'users']) === 'home approve drivers live more', 'admin: as an approver (Tasks and Alerts under More)');
+  check(keys(['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues', 'users']) === 'home approve live drivers more', 'admin: as an approver (Tasks and Alerts under More)');
   check(keys(['approve']) === 'home approve drivers alerts more', 'approve without view: no Live, Alerts back on the bar', keys(['approve']));
   check(keys(['vehicles']) === 'home alerts more' && keys(['users']) === 'home alerts more' && keys([]) === 'home alerts more', 'vehicles only, users only, nothing: Home · Alerts · More');
   check(tabsFor(['view', 'approve']).every((t, i, a) => a.findIndex((x) => x.key === t.key) === i), 'never a tab twice');
-  check(same(moreFor(PRESETS.fleet_admin.permissions), ['tasks', 'trips', 'issues', 'alerts', 'vehicles', 'reports', 'people_drivers']) && same(moreFor(PRESETS.dispatcher.permissions), ['trips', 'issues', 'alerts', 'reports']) && same(moreFor(PRESETS.viewer.permissions), []), 'More lists what is not on the bar (O2: Issues, Alerts for approvers and dispatchers, the management rows by permission)', [moreFor(PRESETS.fleet_admin.permissions), moreFor(PRESETS.dispatcher.permissions)]);
+  check(same(moreFor(PRESETS.fleet_admin.permissions), ['tasks', 'trips', 'issues', 'alerts', 'vehicles', 'reports', 'people_drivers']) && same(moreFor(PRESETS.dispatcher.permissions), ['trips', 'issues', 'alerts', 'vehicles', 'reports']) && same(moreFor(PRESETS.viewer.permissions), ['vehicles']), 'More lists what is not on the bar (O2: Issues, Alerts for approvers and dispatchers, the management rows by permission)', [moreFor(PRESETS.fleet_admin.permissions), moreFor(PRESETS.dispatcher.permissions)]);
   check(same(homeSections(PRESETS.fleet_admin.permissions), ['requests', 'needs_driver', 'critical', 'tasks', 'road', 'trips']), 'fleet admin Home: every section', homeSections(PRESETS.fleet_admin.permissions));
   check(same(homeSections(PRESETS.dispatcher.permissions), ['needs_driver', 'tasks', 'road', 'trips']), 'dispatcher Home: needs a driver, tasks, road, trips');
   check(same(homeSections(PRESETS.requester.permissions), ['road', 'trips']) && same(homeSections(PRESETS.viewer.permissions), ['road']), 'requester and viewer Home');

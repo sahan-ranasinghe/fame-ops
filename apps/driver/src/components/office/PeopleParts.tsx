@@ -8,7 +8,7 @@ import { Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 import { Check, Search, Square, X } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { type Preset, PRESET_KEYS, presetOf, togglePermission, viewLocked } from '@/office/peopleLogic';
-import { type Permission, PERMISSION_TEXT, PERMISSIONS, PRESETS } from '@/office/permissions';
+import { type Permission, PERMISSIONS, PRESETS } from '@/office/permissions';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -73,7 +73,7 @@ export function PermissionPicker({ value, onChange, disabled = false }: { value:
     <View style={{ gap: 10 }}>
       <Txt variant="label" color={colors.muted}>{t('office.people.quickPicks').toUpperCase()}</Txt>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {PRESET_KEYS.map((k) => chip(k, PRESETS[k].label, PRESETS[k].permissions))}
+        {PRESET_KEYS.map((k) => chip(k, t(`office.preset.${k}`), PRESETS[k].permissions))}
         {chip('all', t('office.people.presetAdmin'), PERMISSIONS)}
       </View>
       <Txt variant="label" color={colors.muted}>{t('office.people.permissions').toUpperCase()}</Txt>
@@ -92,8 +92,8 @@ export function PermissionPicker({ value, onChange, disabled = false }: { value:
             >
               {on ? <Check size={24} color={colors.blue} strokeWidth={2.6} /> : <Square size={24} color={colors.muted} strokeWidth={2} />}
               <View style={{ flex: 1, gap: 2 }}>
-                <Txt variant="strong" size={16}>{PERMISSION_TEXT[p].label}</Txt>
-                <Txt variant="small">{lock ? t('office.people.viewLocked') : PERMISSION_TEXT[p].text}</Txt>
+                <Txt variant="strong" size={16}>{t(`office.permission.${p}`)}</Txt>
+                <Txt variant="small">{lock ? t('office.people.viewLocked') : t(`office.permissionText.${p}`)}</Txt>
               </View>
             </Pressable>
           );

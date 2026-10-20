@@ -26,7 +26,7 @@ Permissions: V view, R request, Ap approve, AT assign_tasks, Veh vehicles, Iss i
 | Sign-in | Privacy page /privacy (no sign-in) | — | none | Sign in (01) footer and Profile (18) → /privacy | built O1 |
 | Shell | Menu sections collapsible, remembered | my_prefs, set_my_prefs | ANY | Tabs per permission + More (19) | replaced by the tabs (8.1) |
 | Shell | Menu badges requests waiting, open issues | fleet_overview, list_issues (+Realtime) | V / Iss or AT | Tab and More badges | built O1 (the Alerts badge and the bell; the counts on Home) |
-| Shell | Phone tab bar tabsFor | — | per tab | Tabs per permission (section 1) | built O1 (office/nav.ts tabsFor); O2: the Drivers tab for approvers and dispatchers (designs 02, 03, 12, 15), Alerts under More |
+| Shell | Phone tab bar tabsFor | — | per tab | Tabs per permission (section 1) | built O1 (office/nav.ts tabsFor); O2: the Drivers tab after Live for approvers and dispatchers (designs 03, 04, 12, 15), Alerts under More |
 | Shell | More page (name, role, e-mail, phone, version, permissions, My profile, Security, Sign out) | — | — | More (19) + Profile (18) | built O1 (More (19) with My profile → Profile (18)); O2: the management rows by permission (Vehicles, Reports, Drivers, Office users, Quick settings); no Security card |
 | Shell | Home big button homeAction | — | by role | Home big actions (02–04) | built O2 (Assign a task with assign_tasks, Request a vehicle with request: the trip editor) |
 | Shell | "N tasks need a driver · Show" banner on Tasks pages | fleet_overview | Ap or AT | Home: Needs a driver (03, 04); Tasks list banner | built O1 (Home: Needs a driver; the Tasks board's section) |
@@ -114,7 +114,7 @@ Permissions: V view, R request, Ap approve, AT assign_tasks, Veh vehicles, Iss i
 | Drivers | Questions last 7 days | ask_answers | Ap or AT | Drivers (12), Ask drivers sheet (13) | later (the sheet shows its own question's answers while open) |
 | Drivers | Answers (counts, chips, shared point, Call/WhatsApp, Assign on Yes) | ask_answers (+Realtime) | Ap or AT | Drivers (12), Ask drivers sheet (13) | built O2 (the sheet asks ask_answers every 10 s: chips, Call, Map, Use on a Yes; no Realtime) |
 | Drivers | Duty log (range ≤62 d, driver, totals, paging) | duty_log | AT or Veh | More → Reports → Duty log | built O2 (More → Reports → Duty log: the range, totals, periods, Load more; no driver filter) |
-| Vehicles | Board chips, search, paging | list_vehicles | V | More → Vehicles (list and page; not designed: 8.0) | built O2 (More → Vehicles: the chips with counts, the search, 25 a page) |
+| Vehicles | Board chips, search, paging | list_vehicles | V | More → Vehicles (list and page; not designed: 8.0) | built O2 (More → Vehicles with view: the chips with counts, the search, 25 a page) |
 | Vehicles | Vehicle detail | list_vehicles | V | More → Vehicles (list and page; not designed: 8.0) | built O2 (the vehicle's page) |
 | Vehicles | Vehicle photo (web only) | photo_upload_url, set_vehicle_photo | Veh | More → Vehicles: add / edit / photos and documents by camera | laptop only for now (the upload tool is web-only; the photo is shown) |
 | Vehicles | Documents upload/replace/view/expiry/remove/restore/other | vehicle_documents, vehicle_document_upload_url, save_vehicle_document, update_vehicle, remove/restore_vehicle_document | Veh | More → Vehicles: add / edit / photos and documents by camera | O2: the documents on file with Open (vehicle_documents); upload, replace, remove and restore laptop only for now (web-only upload tool) |

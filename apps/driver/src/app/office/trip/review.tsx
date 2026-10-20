@@ -44,7 +44,7 @@ export default function TripReview() {
   const p = trip.preview;
   const mapTask = p ? previewTask(p) : null;
   const needsApproval = d.mode === 'task' && !has(me.permissions, 'approve') && settings.data?.settings.tasks_need_approval !== false;
-  const driverName = f.driver;
+  const driverName = d.driverName || f.driver;
   const label = d.mode === 'edit' || d.mode === 'stops' ? t('office.trip.saveChanges') : d.mode === 'request' ? t('office.trip.sendRequest') : needsApproval ? t('office.trip.sendForApproval') : t('office.trip.sendTo', { name: driverName });
   const above = d.mode === 'task' ? t('office.trip.assignAbove', { n: 4 }) : d.mode === 'edit' ? t('office.trip.editAbove') : d.mode === 'stops' ? t('office.trip.stopsAbove') : t('office.trip.newAbove', { n: 4 });
 
@@ -84,7 +84,7 @@ export default function TripReview() {
       const out = await api.call<CreateTaskResult & UpdateRequestResult & { next?: string }>(planned.tool, planned.input);
       setDraft(null);
       const warnings = [...(out.warnings ?? []), ...(((out as CreateTaskResult).conflicts ?? []).map((c) => c.text))];
-      const title = d!.mode === 'task' ? assignOutcome(out, driverName).head : d!.mode === 'edit' || d!.mode === 'stops' ? t('office.trip.savedTitle') : t('office.trip.requestSentTitle');
+      const title = d!.mode === 'task' ? (assignOutcome(out, driverName).waiting ? t('office.trip.waitingTitle') : t('office.trip.sentTo', { name: driverName })) : d!.mode === 'edit' || d!.mode === 'stops' ? t('office.trip.savedTitle') : t('office.trip.requestSentTitle');
       const body = [out.next, ...warnings].filter(Boolean).join('\n');
       Alert.alert(title, body || undefined, [{
         text: t('office.common.ok'),
@@ -108,9 +108,9 @@ export default function TripReview() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <TripHeader step="review" above={above} onBack={() => router.back()} />
+      <TripHeader step="review" mode={d.mode} above={above} onBack={() => router.back()} />
       <Screen bottom={16} style={{ padding: 0, gap: 0 }}>
-        {mapTask && <View style={{ height: 300 }}><TaskMap task={mapTask} me={null} googleNoteFor="any" /></View>}
+        {mapTask && <View style={{ height: 300 }}><TaskMap report={false} mapPackage={me.map?.package} task={mapTask} me={null} googleNoteFor="any" /></View>}
         <View style={{ padding: 16, gap: 14 }}>
           {trip.plan.updating && !p && <Loading text={t('office.trip.planning')} />}
           {reasons.filter((r) => !r.note).map((r, i) => <Txt key={i} variant="strong" size={15} color={colors.amberText}>{r.text}</Txt>)}
@@ -122,7 +122,7 @@ export default function TripReview() {
               </View>
               {totals && (
                 <View style={{ alignItems: 'flex-end' }}>
-                  <Txt variant="strong" size={17}>{`${Math.round(totals.km)} km · ${durationText(t, totals.drive_min)}`}</Txt>
+                  <Txt variant="strong" size={17}>{`${t('office.trip.kmN', { km: Math.round(totals.km) })} · ${durationText(t, totals.drive_min)}`}</Txt>
                   <Txt variant="small">{t('office.trip.endsAt', { place: p.start?.name ?? '', time: totals.ends })}</Txt>
                 </View>
               )}
@@ -167,15 +167,15 @@ export default function TripReview() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {d.mode === 'task' && f.driver && (
               <View style={styles.chipRow}>
-                <Txt variant="strong" size={15}>{f.driver}</Txt>
+                <Txt variant="strong" size={15}>{driverName}</Txt>
                 {f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? <Plate regNo={f.vehicle} /> : f.vehicle ? <Txt variant="small">{f.vehicle === ON_THE_DAY ? t('office.trip.onTheDay') : f.vehicle}</Txt> : null}
               </View>
             )}
             {(f.cname || f.cphone) && <Pill text={t('office.trip.contactChip', { who: [f.cname, f.cphone].filter(Boolean).join(' · ') })} tone="muted" size={15} />}
             {(f.notes || d.req.note) && <Pill text={t('office.request.notes', { note: f.notes || d.req.note })} tone="muted" size={15} />}
-            {f.pax && <Pill text={`${f.pax} pax`} tone="muted" size={15} />}
+            {f.pax && <Pill text={t('office.trip.paxN', { n: f.pax })} tone="muted" size={15} />}
           </View>
-          {typeof problem === 'string' ? <Txt variant="strong" size={15} color={colors.red}>{problem}</Txt> : problem ? <ErrorNotice error={problem} /> : null}
+          {typeof problem === 'string' ? <Txt variant="strong" size={15} color={colors.red}>{problem}</Txt> : problem ? <ErrorNotice error={problem} onRetry={() => void send()} /> : null}
           {trip.plan.input && !trip.plan.updating && <Button kind="outline" label={t('office.trip.planNow')} onPress={trip.plan.planNow} style={{ minHeight: 48 }} />}
         </View>
       </Screen>

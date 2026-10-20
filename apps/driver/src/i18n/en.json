@@ -1334,7 +1334,11 @@
       "request": "Request",
       "requestVehicle": "Request a vehicle",
       "edit": "Edit",
-      "stopsAbove": "Change the stops"
+      "stopsAbove": "Change the stops",
+      "sentTo": "Sent to {name}.",
+      "waitingTitle": "Waiting for the fleet admin's OK · you'll be notified.",
+      "paxN": "{n} pax",
+      "kmN": "{km} km"
     },
     "issues": {
       "above": "Everything that needs attention",
@@ -1977,6 +1981,31 @@
       "officePhone": "Office phone",
       "officePhoneHint": "Call office in the driver app. Empty and Save clears it.",
       "officePhoneNone": "None saved: Call office is not shown."
+    },
+    "permission": {
+      "view": "View",
+      "request": "Request",
+      "approve": "Approve",
+      "assign_tasks": "Assign tasks",
+      "vehicles": "Vehicles",
+      "issues": "Issues",
+      "users": "Users"
+    },
+    "permissionText": {
+      "view": "Overview counts and who is on the road, live locations, the drivers list, the vehicles board, your own requests",
+      "request": "Ask for a vehicle and follow your own requests",
+      "approve": "The requests queue: approve or decline, book a vehicle directly, cancel a booking",
+      "assign_tasks": "The tasks board: assign, reassign and cancel tasks and their stops; task details, routes and task attention items",
+      "vehicles": "Register and edit vehicles, rental companies, places, driver accounts; mileage and maintenance",
+      "issues": "The issues centre, vehicle problem reports and every attention item",
+      "users": "Settings: office users, connector keys, fleet settings"
+    },
+    "preset": {
+      "fleet_admin": "Fleet admin",
+      "dispatcher": "Dispatcher",
+      "requester": "Requester",
+      "viewer": "Viewer",
+      "all": "Everything"
     }
   }
 }

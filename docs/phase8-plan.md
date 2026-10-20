@@ -463,6 +463,10 @@ Built in the brief's order; the trip editor (06–09) is round O2.
   keeps its runtime's last update and its old channels from push-task). It also carries the phone-side changes waiting
   since the 1.3.0 build: the offline sign-in rule (lib/session.ts), the maps' credits (mapCredit) and every failed
   Google map try reported (mapReport).
+- **Deployed (GO O1, 20 October 2026, 07:06):** main fast-forwarded to `phase8-o1` (c88c78f); `eas update --channel preview
+  --environment preview --message "Office mode O1"`: runtime 1.3.0-gmaps, update group e1944bd6-2af1-4412-a314-cc3302860b7e,
+  Android update 01a156f5-a169-7371-be64-e7b36bc0a0cb, commit c88c78f. The bundle was built from the `fame-ops` checkout
+  at the same commit (the `fame-ops-main` worktree has no node_modules).
 
 ### What moved to O2 or later
 - O2 (the trip editor, 06–09): New request, Assign a task, Change the trip / time / stops, Edit a request, Book now, the
@@ -530,7 +534,7 @@ commits).
   points, `estimate_gaps`): the line by speed band, holes dashed, the estimated legs dashed slate, the stops with their
   times, the numbers and the timeline (a row frames its span); both engines (`GoogleRouteMap.tsx`, `OpenRouteMap.tsx`,
   the same engine rule as the task map). Rules in `office/driversLogic.ts`.
-- The bar now follows designs 02, 03, 12 and 15: Approve · Drivers · Live for approvers, Tasks · Drivers · Live for
+- The bar now follows designs 03, 04, 12 and 15: Approve · Live · Drivers for approvers, Tasks · Live · Drivers for
   dispatchers; Alerts moves under More for them (the bell stays on every header). `routeForUrl` opens `/drivers/board`
   and `/drivers/<username>`.
 - Tests: `npm run test:drivers` (96); `test:office`'s bar expectations updated.
@@ -572,8 +576,8 @@ commits).
 - Tests: `npm run test:live-route` (111); `test:live` (69) updated for the restructured screen.
 
 ### Item 7: the management under More (designs 19–20)
-- More's rows by permission (`nav.ts` `moreFor`, `MORE_SECTION`): under Work also **Vehicles** (vehicles) and **Reports**
-  (vehicles or assign_tasks); **People**: Drivers (users or vehicles: decision 1) and Office users (users); **Quick
+- More's rows by permission (`nav.ts` `moreFor`, `MORE_SECTION`): under Work also **Vehicles** (view: the list and the
+  page are read; Register / Edit by their tools) and **Reports** (vehicles or assign_tasks); **People**: Drivers (users or vehicles: decision 1) and Office users (users); **Quick
   settings** (users); the laptop-only line stays.
 - **Vehicles** (`app/office/vehicles/`, rules in `office/manageLogic.ts`): the list (`list_vehicles`: the chips All · On
   a task · Available · In garage · Documents expiring · Returned with counts, a search box, 25 a page with Load more; a
@@ -644,10 +648,23 @@ commits).
 - **The full run** (06:57, 21 s): the driver app's typecheck (0 errors) and every suite — the three on the local stack
   (data 96, trips 98, asks 100) and the twenty without it, 1,745 checks, 0 failed. Nothing outside `apps/driver`, `docs`
   and `CLAUDE.md` changed, so the site's, Deno's, pgTAP's and the connector's suites were not run.
-- **The fresh reviewer did not run.** It was due after item 7, at about 23:45; the network was gone by then and came back
-  after the 06:30 stop. By the brief's rule an item ships only after the final reviewer, so GO O1+O2 should wait for a
-  reviewer pass (about 25 minutes: the designs, dead UI, role names, permissions, the driver side, both engines), or
-  GO O1 goes alone (O1 was reviewed on 19 October).
+- **The fresh reviewer** ran on 20 October, 07:08–07:20, after GO O1 (the network had been gone from 23:40 to 06:55).
+  One blocker, fixed: the trip editor's Review map reused the driver's `TaskMap`, whose mount reported the map's outcome
+  through `report_map_state` as if the office person were a driver (a `driver_map_state` row and a possible
+  `map_fallback` issue "on <name>'s phone"); `TaskMap` now takes `report` (false from Review) and `mapPackage` (the
+  office's package from /me, which it ignored before: major 2). Majors fixed: the review and its alert named the
+  username ("Send to kamal.p") with English literals from the copied `assignOutcome` — the draft keeps the driver's
+  name and two keys say it; the permission names, descriptions and presets were English in Sinhala (the picker, the
+  users list, More, Profile) — `office.permission.*`, `office.permissionText.*`, `office.preset.*`; Vehicles under More
+  was hidden from `view` (plan section 2 gives view the list and the page) — `need: ['view']`; the trip draft survived
+  a sign-out and the next person's sign-in — cleared in `signOutOffice` and on a different e-mail; the bar had Drivers
+  before Live against designs 03, 04, 12 and 15 — swapped; "Try again" after a failed Remove of a not-available entry
+  only hid the error — it removes again. Minors fixed: "3 pax" and "12 km" literals on Review (keys), Review's send
+  error without Try again, '?' fallbacks on an issue's page, four progress bars in mode stops (three), no leave guard
+  on Change time and Swap vehicle. Not changed (noted): design 08's vehicle line under the chips and design 09's
+  "15 min early" / "Road time" pills, the not-available pill's reason on the board, the regular-driver chips' 100
+  cap, the openrouteservice credit's OSM line under Google's credit. Nothing was removed from the shipped screens.
+- **The full run after the fixes** (07:40, 19 s): typecheck 0 errors; 23 suites, 1,747 checks, 0 failed.
 - **The driver side.** Changed in `apps/driver` outside `src/office/`, `src/app/office/` and `components/office/`:
   `components/navigation.ts` (the leave guard also counts an office sign-in: one line), `components/icons.ts` (exports),
   `components/DriversMap.tsx` with its two engines and `RouteMap.tsx` with its two (office-mode maps), `i18n/en.json`

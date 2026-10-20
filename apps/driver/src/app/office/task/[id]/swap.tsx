@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { useLeaveGuard } from '@/components/navigation';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { useOffice, useTool } from '@/office/state';
 import { canSwap, type SwapFields, type SwapResult, swapInput, swapPlates, swapRows, typedKm } from '@/office/taskExtrasLogic';
@@ -32,6 +33,7 @@ export default function SwapVehicleScreen() {
   const [problem, setProblem] = useState<FleetError | null>(null);
   const [why, setWhy] = useState<string | null>(null);
   const running = task?.status === 'in_progress';
+  const { allowLeave } = useLeaveGuard(!!choice || !!f.oldKm || !!f.newKm || !!f.reason, busy);
   const picked = choice ? rows.find((r) => r.reg_no === choice) : undefined;
   const mono = { fontFamily: fonts.monoSemiBold };
   const bodyFont = { fontFamily: language === 'si' ? fonts.sinhalaBody : fonts.body };
@@ -58,6 +60,7 @@ export default function SwapVehicleScreen() {
     setBusy(true);
     try {
       const out = await api.call<SwapResult>('move_driver_vehicle', r.input);
+      allowLeave();
       const plates = swapPlates(out);
       const reading = (v?: string) => {
         const km = typedKm(v);

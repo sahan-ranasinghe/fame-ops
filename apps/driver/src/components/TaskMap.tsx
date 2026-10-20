@@ -20,7 +20,7 @@ import { AppState, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Txt } from '@/components/ui';
-import { type Engine, engineFor, type MountEvent, mapSession, mapStep, type MountState, startMount, waitFor } from '@/lib/mapEngine';
+import { type Engine, engineFor, type MountEvent, mapSession, mapStep, type MountState, startMount, waitFor, type MapPackage } from '@/lib/mapEngine';
 import { noteMapOutcome } from '@/lib/mapReport';
 import type { TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
@@ -34,11 +34,14 @@ import { currentStop, fitKey, frameOf, mapCredit, mapLines, mapStops, startPoint
 /** The build carries the Android Maps key (app.config.ts): Google's map can be used (Part 5). */
 export const GOOGLE_MAP_BUILD = (Constants.expoConfig?.extra as { googleMapsAndroid?: boolean } | undefined)?.googleMapsAndroid === true;
 
-/** The engine for this phone now: the build, the office's map package (read every minute) and Google's failure since the app opened. */
-export function useMapEngine(): Engine {
+/**
+ * The engine for this phone now: the build, the office's map package (the driver's store, read every minute; Office mode
+ * passes the package from GET /me instead) and Google's failure since the app opened.
+ */
+export function useMapEngine(mapPackage?: MapPackage): Engine {
   const { settings } = useApp();
   const failed = useSyncExternalStore(mapSession.subscribe, mapSession.googleFailed);
-  return engineFor(GOOGLE_MAP_BUILD, settings.map_package, failed);
+  return engineFor(GOOGLE_MAP_BUILD, mapPackage ?? settings.map_package, failed);
 }
 
 interface Props {
@@ -47,12 +50,16 @@ interface Props {
   me: LatLng | null;
   /** Which Google place the free map's line speaks about: the stop being driven to (the task screen) or any (the preview). */
   googleNoteFor: 'current' | 'any';
+  /** Office mode (Phase 8, O2): the map's outcome is the driver's report (report_map_state); an office person's phone never reports. */
+  report?: boolean;
+  /** Office mode: the package from GET /me (the driver's store does not know it). */
+  mapPackage?: MapPackage;
 }
 
-export function TaskMap({ task, me, googleNoteFor }: Props) {
+export function TaskMap({ task, me, googleNoteFor, report = true, mapPackage }: Props) {
   const { t, settings, dataAvailable } = useApp();
   const insets = useSafeAreaInsets();
-  const engine = useMapEngine();
+  const engine = useMapEngine(mapPackage);
   const focused = useIsFocused();
   const active = useAppActive();
 
@@ -66,8 +73,8 @@ export function TaskMap({ task, me, googleNoteFor }: Props) {
     setMount(step.state);
     if (step.googleFailed) {
       // One report per try (an app open): a second map failing in the same try is not another failure.
-      if (mapSession.markGoogleFailed(Date.now())) noteMapOutcome({ googleFailed: step.googleFailed });
-    } else if (step.googleLoaded) {
+      if (mapSession.markGoogleFailed(Date.now()) && report) noteMapOutcome({ googleFailed: step.googleFailed });
+    } else if (step.googleLoaded && report) {
       noteMapOutcome({ googleLoaded: true });
     }
   };

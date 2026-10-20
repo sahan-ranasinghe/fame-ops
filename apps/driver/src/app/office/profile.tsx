@@ -17,7 +17,6 @@ import { Button, Field, Mono, Notice, Txt } from '@/components/ui';
 import { PRIVACY_URL } from '@/config';
 import { phoneDisplay } from '@/lib/contacts';
 import { telLink } from '@/lib/format';
-import { PERMISSION_TEXT } from '@/office/permissions';
 import { useOffice, useTool } from '@/office/state';
 import { initials } from '@/office/text';
 import type { FleetError, NotificationSettings, SettingsResult } from '@/office/types';
@@ -117,7 +116,7 @@ export default function OfficeProfile() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {me.permissions.map((p) => (
                 <View key={p} style={styles.permChip}>
-                  <Txt variant="strong" size={14} color="#ffffff">{(PERMISSION_TEXT[p]?.label ?? p).toLowerCase()}</Txt>
+                  <Txt variant="strong" size={14} color="#ffffff">{t(`office.permission.${p}`).toLowerCase()}</Txt>
                 </View>
               ))}
             </View>

@@ -114,7 +114,7 @@ export default function IssueScreen() {
   const actions = i ? issueActions(i, me.tools) : [];
   const links = h ? linksFor(h, me.permissions) : {};
   const facts = i ? issueFacts(i, { system: t('office.issues.system'), nobody: t('office.issues.nobody'), by: (name) => t('office.issues.by', { name }) }) : [];
-  const statusWord = (s?: string) => (s ? t(`office.issues.status.${s}`) : '?');
+  const statusWord = (s?: string) => (s ? t(`office.issues.status.${s}`) : '—');
   // A request's "declined" is a decision, not a task without a driver (office.status.declined says "needs a driver").
   const requestStatusWord = (s: string) => (s === 'declined' ? t('office.request.declinedTitle') : t(`office.status.${s}`));
   const snooze = i ? snoozeParts(i) : undefined;
@@ -174,8 +174,8 @@ export default function IssueScreen() {
               <View style={styles.resolution}>
                 <Txt variant="strong" size={15} color={colors.green}>
                   {i.status === 'dismissed'
-                    ? t('office.issues.dismissedBy', { name: i.resolved_by ?? '?', at: i.resolved_at ?? i.resolved ?? '' })
-                    : t('office.issues.resolvedBy', { name: i.resolved_by ?? '?', at: i.resolved_at ?? i.resolved ?? '' })}
+                    ? t('office.issues.dismissedBy', { name: i.resolved_by ?? '—', at: i.resolved_at ?? i.resolved ?? '' })
+                    : t('office.issues.resolvedBy', { name: i.resolved_by ?? '—', at: i.resolved_at ?? i.resolved ?? '' })}
                 </Txt>
                 <Txt variant="body" size={15}>{i.resolution_note}</Txt>
               </View>

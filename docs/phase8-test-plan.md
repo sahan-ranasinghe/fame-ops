@@ -131,7 +131,7 @@ Every button named below exists only with its tool: a missing one on another acc
 
 ### O2.1 Request a vehicle (designs 06–09), 3 min
 1. Sign in as the office. Home shows the big buttons **Assign a task** and **Request a vehicle**; the bar is Home ·
-   Approve · Drivers · Live · More (Alerts is under More; the bell stays in the header).
+   Approve · Live · Drivers · More (Alerts is under More; the bell stays in the header).
 2. **Request a vehicle** → "New trip · step 1/4". Where: the start says the base place; "+ Add a stop" → type "Kuru" in
    the search: our places first, then the map's results with their credit (and Google's with "Google Maps" under them
    when the google package is on). Pick one. Next: When.
