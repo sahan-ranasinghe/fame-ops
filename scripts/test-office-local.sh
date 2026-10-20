@@ -33,7 +33,8 @@ if [ -z "$env_file" ] || [ ! -r "$env_file" ]; then
   echo "Usage: scripts/test-office-local.sh <the env file 'functions serve' was started with>" >&2
   exit 2
 fi
-if [ -s "$HOME/.nvm/nvm.sh" ]; then
+# The laptop's Node comes from nvm (.nvmrc); on CI setup-node has put that version first already (nvm there has none).
+if [ "$(node --version 2>/dev/null)" != "$(cat .nvmrc)" ] && [ -s "$HOME/.nvm/nvm.sh" ]; then
   . "$HOME/.nvm/nvm.sh"
   nvm use >/dev/null
 fi
