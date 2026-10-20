@@ -8,6 +8,8 @@ export { default as Bell } from 'lucide-react-native/icons/bell';
 export { default as Camera } from 'lucide-react-native/icons/camera';
 export { default as ChevronDown } from 'lucide-react-native/icons/chevron-down';
 export { default as ChevronLeft } from 'lucide-react-native/icons/chevron-left';
+export { default as ChevronsLeft } from 'lucide-react-native/icons/chevrons-left';
+export { default as ChevronsRight } from 'lucide-react-native/icons/chevrons-right';
 export { default as ChevronRight } from 'lucide-react-native/icons/chevron-right';
 export { default as Fuel } from 'lucide-react-native/icons/fuel';
 export { default as Gauge } from 'lucide-react-native/icons/gauge';

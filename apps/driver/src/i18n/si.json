@@ -705,7 +705,6 @@
     "licence": "රියදුරු බලපත්‍රය",
     "licenceNo": "බලපත්‍ර අංකය",
     "licenceExpiry": "කල් ඉකුත් වන දිනය",
-    "licenceExpiryHint": "YYYY-MM-DD",
     "licenceFront": "ඉදිරිපස",
     "licenceBack": "පිටුපස",
     "addPhoto": "ඡායාරූපයක් එක් කරන්න",
@@ -2200,6 +2199,8 @@
     "today": "අද",
     "tomorrow": "හෙට",
     "cancel": "අවලංගු කරන්න",
-    "tryAgain": "නැවත උත්සාහ කරන්න"
+    "tryAgain": "නැවත උත්සාහ කරන්න",
+    "prevYear": "පෙර වසර",
+    "nextYear": "ඊළඟ වසර"
   }
 }

@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Camera, ChevronLeft } from '@/components/icons';
 import { useLeaveGuard } from '@/components/navigation';
+import { DateField } from '@/components/patterns/Calendar';
 import { Thumb, useLicencePhotos } from '@/components/Photos';
 import { Button, Card, Field, Notice, Txt } from '@/components/ui';
 import { type LocalPhoto, removeFile, takePhoto } from '@/lib/photos';
@@ -159,15 +160,7 @@ export default function ProfileEditScreen() {
         <Card style={{ gap: 14 }}>
           <Txt variant="big">{t('profile.licence')}</Txt>
           <Field label={t('profile.licenceNo')} value={form.licence_no} onChangeText={set('licence_no')} autoCapitalize="characters" maxLength={40} mono />
-          <Field
-            label={t('profile.licenceExpiry')}
-            placeholder={t('profile.licenceExpiryHint')}
-            value={form.licence_expiry}
-            onChangeText={set('licence_expiry')}
-            keyboardType="numbers-and-punctuation"
-            maxLength={10}
-            mono
-          />
+          <DateField label={t('profile.licenceExpiry')} value={form.licence_expiry} onChange={set('licence_expiry')} testID="profile-licence-expiry" />
           {fieldProblem('licence_expiry')}
           <View style={styles.sides}>
             {SIDES.map((side) => {

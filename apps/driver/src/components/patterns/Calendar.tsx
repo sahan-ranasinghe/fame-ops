@@ -5,7 +5,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { PanResponder, Pressable, StyleSheet, View } from 'react-native';
 
-import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from '@/components/icons';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from '@/components/icons';
 import { Button, Mono, Txt } from '@/components/ui';
 import { colomboDate } from '@/lib/time';
 import {
@@ -38,9 +38,11 @@ export function MonthCalendar({ month, onMonth, onTap, range, picked, allowed }:
   return (
     <View style={{ gap: 6 }} testID="month-calendar">
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.prevYear')} onPress={() => onMonth(addMonths(month, -12))} style={styles.nav} testID="calendar-prev-year"><ChevronsLeft size={22} color={colors.ink} /></Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.prevMonth')} onPress={() => onMonth(addMonths(month, -1))} style={styles.nav}><ChevronLeft size={22} color={colors.ink} /></Pressable>
         <Txt variant="strong" size={17} style={{ flex: 1, textAlign: 'center' }}>{`${names.months[Number(month.slice(5, 7)) - 1] ?? ''} ${month.slice(0, 4)}`}</Txt>
         <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.nextMonth')} onPress={() => onMonth(addMonths(month, 1))} style={styles.nav}><ChevronRight size={22} color={colors.ink} /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.nextYear')} onPress={() => onMonth(addMonths(month, 12))} style={styles.nav} testID="calendar-next-year"><ChevronsRight size={22} color={colors.ink} /></Pressable>
       </View>
       <View style={{ flexDirection: 'row' }}>{heads.map((h, i) => <Txt key={i} variant="small" style={{ flex: 1, textAlign: 'center' }}>{h}</Txt>)}</View>
       {weeks.map((w, i) => (

@@ -705,7 +705,6 @@
     "licence": "Driving licence",
     "licenceNo": "Licence number",
     "licenceExpiry": "Expiry date",
-    "licenceExpiryHint": "YYYY-MM-DD",
     "licenceFront": "Front",
     "licenceBack": "Back",
     "addPhoto": "Add photo",
@@ -2200,6 +2199,8 @@
     "today": "Today",
     "tomorrow": "Tomorrow",
     "cancel": "Cancel",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "prevYear": "Previous year",
+    "nextYear": "Next year"
   }
 }

@@ -105,6 +105,9 @@ async function main() {
     check(filter.includes('testID="filter-button"') && filter.includes('testID="filter-chip"') && filter.includes("onApply(draft); setOpen(false);") && filter.includes("setDraft(clearValues(defs))") && filter.includes('testID="sort-button"'), 'the filter bar: the button with its badge, chips, Apply only from the sheet, Clear, Sort apart');
     const cal = read('components/patterns/Calendar.tsx');
     check(cal.includes('export function DateRangeButton') && cal.includes('export function DayStrip') && cal.includes('export function TripDayPicker') && cal.includes('export function DateField') && cal.includes('setDraft((r) => tapDay(r, d))') && cal.includes('PanResponder.create'), 'the calendar: the range (two taps), the week strip (swipe), the trip day, a plain date');
+    check(cal.includes('addMonths(month, -12)') && cal.includes('addMonths(month, 12)') && cal.includes("t('patterns.prevYear')"), 'the month calendar jumps a year too (an expiry years ahead is a few taps)');
+    const profileEdit = read('app/profile-edit.tsx');
+    check(profileEdit.includes("<DateField label={t('profile.licenceExpiry')}") && !profileEdit.includes('licenceExpiryHint'), "the driver's own licence expiry on the calendar (the clear button empties it)");
     const time = read('components/patterns/TimeField.tsx');
     check(time.includes('quickTimes(now, suggested)') && time.includes('initialScrollIndex') && time.includes('TIME_STEPS'), 'the time sheet: the quick chips, the 5-minute list scrolled to the value');
     // The screens on the patterns (Stage 0): no typed time or date anywhere in the app.
