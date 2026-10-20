@@ -7,7 +7,9 @@ name: office-suite
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    # ci-office-suite: TEMPORARY. GitHub runs a workflow by hand only once it is on main; until this file is merged into
+    # main, a push to its own branch is the only way to start it. Removed with the merge.
+    branches: [main, ci-office-suite]
 
 permissions:
   contents: read
