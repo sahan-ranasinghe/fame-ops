@@ -184,8 +184,11 @@ def main():
 
     # Photo links and ids change every run: keep the field, drop the value.
     if mode == "--write":
-        SHAPES_FILE.write_text(json.dumps(shapes, indent=1, sort_keys=True) + "\n")
-        print(f"wrote {SHAPES_FILE.name}: {len(shapes)} calls, {sum(len(v) for v in shapes.values())} fields")
+        # The contract only grows: a field seen in an earlier run stays recorded (Stage 1 item 6).
+        old = json.loads(SHAPES_FILE.read_text()) if SHAPES_FILE.exists() else {}
+        merged = {label: sorted(set(old.get(label, [])) | set(shapes.get(label, []))) for label in set(old) | set(shapes)}
+        SHAPES_FILE.write_text(json.dumps(merged, indent=1, sort_keys=True) + "\n")
+        print(f"wrote {SHAPES_FILE.name}: {len(merged)} calls, {sum(len(v) for v in merged.values())} fields")
         return
     expected = json.loads(SHAPES_FILE.read_text())
     bad = 0
@@ -193,18 +196,45 @@ def main():
         if label in skipped:
             print(f"  SKIP  {label}: no tasks today (the suite's tasks are on tomorrow this late); run before 21:15 Colombo to compare it")
             continue
-        before, after = set(expected.get(label, [])), set(shapes.get(label, []))
-        if before == after:
-            print(f"  PASS  {label}: {len(after)} fields unchanged")
+        before, after = expected.get(label, []), shapes.get(label, [])
+        verdict = compare(before, after)
+        if verdict["ok"]:
+            note = f" ({len(verdict['absent'])} optional field(s) absent this run)" if verdict["absent"] else ""
+            print(f"  PASS  {label}: {len(after)} fields{note}")
             continue
         bad += 1
         print(f"  FAIL  {label}")
-        for f in sorted(before - after):
+        for f in verdict["errors"]:
+            print(f"          error:   {f}")
+        for f in verdict["changed"]:
+            print(f"          type:    {f}")
+        for f in verdict["gone"]:
             print(f"          missing: {f}")
-        for f in sorted(after - before):
-            print(f"          new:     {f}")
     print("All tool shapes match the contract." if bad == 0 else f"{bad} tool call(s) changed shape.")
     sys.exit(0 if bad == 0 else 1)
+
+
+def split_entry(entry):
+    """'drivers[].name: string' -> ('drivers[].name', 'string')."""
+    path, _, kind = entry.rpartition(": ")
+    return (path, kind) if path else (entry, "")
+
+
+def compare(before, after):
+    """
+    What can break the artifact, and nothing that depends on the hour the suite ran (Stage 1 item 6): run.ts prunes every
+    null field, so a leaf below the top level (task.started, drivers[].next_task_start, requests[].fields.start.what) may
+    be absent whenever the suite's data at that hour has no value for it — the artifact already handles that. A failure
+    is a call that now errors, a field whose type changed, or a top-level key (or a list the answer always carries) gone.
+    """
+    errors = [e for e in after if e.startswith("ERROR:")]
+    b = dict(split_entry(e) for e in before if not e.startswith("ERROR:"))
+    a = dict(split_entry(e) for e in after if not e.startswith("ERROR:"))
+    changed = [f"{p}: {b[p]} -> {a[p]}" for p in sorted(set(b) & set(a)) if b[p] != a[p] and "empty" not in (b[p], a[p])]
+    absent = sorted(set(b) - set(a))
+    # A top-level key is the answer's own (no dot, no [] before it); an empty list in this run is not a missing one.
+    gone = [p for p in absent if "." not in p and "[]" not in p and not any(q.startswith(p + "[]") or q.startswith(p + ".") for q in a)]
+    return {"ok": not errors and not changed and not gone, "errors": errors, "changed": changed, "gone": gone, "absent": absent}
 
 
 if __name__ == "__main__":
