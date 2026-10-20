@@ -120,7 +120,7 @@
     "test:web-routes": "node scripts/make-web-routes.mjs --check",
     "test:web-maps": "tsx scripts/test-web-maps.ts",
     "test:web": "tsx scripts/test-web.ts",
-    "web:export": "node scripts/make-web-routes.mjs && FLEET_WEB=1 EXPO_NO_WEB_SETUP=1 expo export --platform web --output-dir dist-web"
+    "web:export": "node scripts/make-web-routes.mjs && FLEET_WEB=1 EXPO_NO_WEB_SETUP=1 expo export --platform web --output-dir dist-web --clear"
   },
   "private": true,
   "expo": {

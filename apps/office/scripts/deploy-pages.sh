@@ -18,6 +18,10 @@ echo "== 2. The mobile website (Office mode for the browser)"
 (cd ../driver && rm -rf dist-web && npm run -s web:export)
 mkdir -p dist/m
 cp -R ../driver/dist-web/. dist/m/
+# The Supabase address is built into the mobile bundle (EXPO_PUBLIC_*; web:export clears Metro's cache so a local e2e
+# build's 127.0.0.1 cannot stay in it): the real project's address, never this laptop's.
+if grep -rqE "127\.0\.0\.1:54321|localhost:54321" dist/m; then echo "STOP: the mobile build points at the local stack"; exit 1; fi
+if ! grep -rq "hinurfsaxvplbyqgtozj.supabase.co" dist/m; then echo "STOP: the mobile build does not point at the real project"; exit 1; fi
 
 echo "== 3. The routes: a /m/ page reloads on the mobile website, any other page on the desktop site"
 { printf '/m/*  /m/index.html  200\n'; cat public/_redirects; } > dist/_redirects
