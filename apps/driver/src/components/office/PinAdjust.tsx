@@ -5,7 +5,7 @@
 // (MapLibre, OpenFreeMap, with its credit). The positions are the person's own, so either map may show them.
 
 import { Camera, Map } from '@maplibre/maplibre-react-native';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import GoogleMapView, { PROVIDER_GOOGLE } from 'react-native-maps';
 
@@ -15,7 +15,7 @@ import { Sheet } from '@/components/patterns/Sheet';
 import { useRouteMapEngine } from '@/components/RouteMap';
 import { OSM_CREDIT } from '@/components/taskMapLogic';
 import { Button, Mono, Txt } from '@/components/ui';
-import type { MapPackage } from '@/lib/mapEngine';
+import { type MapPackage, mapSession, waitFor } from '@/lib/mapEngine';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -37,8 +37,20 @@ export function PinAdjust({ visible, pin, name, mapPackage, onUse, onClose }: {
   onUse: (p: PinPoint) => void;
   onClose: () => void;
 }) {
-  const { t } = useApp();
-  const engine = useRouteMapEngine(mapPackage);
+  const { t, settings } = useApp();
+  const chosen = useRouteMapEngine(mapPackage);
+  // Google's map that has not said it is ready within phone_map_wait_s is judged failed (lib/mapEngine.ts): the free map.
+  const [googleDown, setGoogleDown] = useState(false);
+  const [googleReady, setGoogleReady] = useState(false);
+  const engine = chosen === 'google' && !googleDown ? 'google' : 'open';
+  useEffect(() => {
+    if (!visible || engine !== 'google' || googleReady) return;
+    const timer = setTimeout(() => {
+      mapSession.markGoogleFailed(Date.now());
+      setGoogleDown(true);
+    }, waitFor('google', settings.phone_map_wait_s) * 1000);
+    return () => clearTimeout(timer);
+  }, [visible, engine, googleReady, settings.phone_map_wait_s]);
   const [centre, setCentre] = useState<PinPoint | null>(pin);
   const [failed, setFailed] = useState(false);
   const shown = centre ?? pin;
@@ -57,6 +69,7 @@ export function PinAdjust({ visible, pin, name, mapPackage, onUse, onClose }: {
             style={StyleSheet.absoluteFill}
             initialRegion={{ latitude: pin.lat, longitude: pin.lng, latitudeDelta: 0.004, longitudeDelta: 0.004 }}
             toolbarEnabled={false}
+            onMapReady={() => setGoogleReady(true)}
             onRegionChangeComplete={(r) => setCentre({ lat: r.latitude, lng: r.longitude })}
           />
         ) : (

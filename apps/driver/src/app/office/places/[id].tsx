@@ -6,7 +6,7 @@
 
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MapPin } from '@/components/icons';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
@@ -132,6 +132,7 @@ export default function PlaceScreen() {
                 <Field label={t('office.places.address')} value={f.address} onChangeText={(v) => setF({ ...f, address: v })} maxLength={240} editable={busy === null} />
                 <Field label={t('office.places.district')} value={f.district} onChangeText={(v) => setF({ ...f, district: v })} maxLength={80} editable={busy === null} />
                 <Field label={t('office.places.depot')} value={f.depot} onChangeText={(v) => setF({ ...f, depot: v })} maxLength={80} editable={busy === null} />
+                <Txt variant="small">{t('office.places.emptyKeeps')}</Txt>
                 {problem && <Notice tone="danger" text={problem} />}
                 <View style={{ flexDirection: 'row', gap: 10 }}>
                   <Button kind="outline" label={t('office.common.cancel')} disabled={busy !== null} onPress={() => setEditing(false)} style={{ flex: 1, minHeight: 52 }} />
@@ -152,7 +153,10 @@ export default function PlaceScreen() {
                 {confirming ? (
                   <Button kind="danger-text" label={t('office.places.removeAnyway')} busy={busy === 'remove'} onPress={() => remove(true)} style={{ minHeight: 52 }} testID="place-remove-confirm" />
                 ) : (
-                  <Button kind="danger-text" label={t('office.places.remove')} busy={busy === 'remove'} onPress={() => remove(false)} style={{ minHeight: 52 }} testID="place-remove" />
+                  <Button kind="danger-text" label={t('office.places.remove')} busy={busy === 'remove'} onPress={() => Alert.alert(t('office.places.removeAsk', { name: p.name }), t('office.places.removeNote'), [
+                    { text: t('office.common.cancel'), style: 'cancel' },
+                    { text: t('office.places.remove'), style: 'destructive', onPress: () => remove(false) },
+                  ])} style={{ minHeight: 52 }} testID="place-remove" />
                 )}
               </Section>
             )}

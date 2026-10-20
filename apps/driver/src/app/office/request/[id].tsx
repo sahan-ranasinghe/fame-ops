@@ -57,6 +57,8 @@ export default function ApproveRequest() {
   const open = decider && (card?.status === 'waiting' || card?.status === 'changed');
   // Change time (O3 row 1): the approver's new day and times, held for this request until decided or undone.
   const change = useTimeChange(id);
+  // A change left without a decision is gone when the page closes (never a surprise on the next open).
+  useEffect(() => () => decideStore.set(id, null), [id]);
   const asked = card ? askedOf(card) : null;
   const shown = asked ? shownOf(change, asked) : null;
   const changed = !!asked && hasChange(change, asked);

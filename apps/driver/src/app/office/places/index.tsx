@@ -31,24 +31,20 @@ export default function PlacesScreen() {
     const timer = setTimeout(() => setSearch(text.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [text]);
-  const args = placesArgs(who, pin, search);
-  const key = JSON.stringify(args);
-  const q = useTool<PlacesList>('list_places', args);
-  // The answer for the filter on screen only (a slow answer for the previous filter is never shown under this one).
-  const [shownFor, setShownFor] = useState('');
-  useEffect(() => {
-    if (q.data && !q.loading) setShownFor(key);
-  }, [q.data, q.loading, key]);
-  const shown = q.data && shownFor === key ? q.data : null;
+  // useTool keeps an answer with the args that asked for it: a previous filter's places never show under this one.
+  const q = useTool<PlacesList>('list_places', placesArgs(who, pin, search));
+  const shown = q.data;
   const rows = shown?.places ?? [];
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
 
   async function loadMore() {
+    // The list this page belongs to: a page that lands after the filter or day changed is dropped.
+    const k = q.key;
     if (!q.data?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
       const page = await api.call<PlacesList>('list_places', placesArgs(who, pin, search, q.data.next));
-      q.patch((p) => appendPlaces(p, page));
+      q.patch((p) => appendPlaces(p, page), k, true);
       setMore({ busy: false, error: null });
     } catch (e) {
       setMore({ busy: false, error: e as FleetError });

@@ -12,7 +12,7 @@ import { Image, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-n
 import { Phone } from '@/components/icons';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Field, Plate, Txt } from '@/components/ui';
-import { canTakeOffRoad, categoryKey, REPORT_STATUSES, reportSaveCalls, reportTone } from '@/office/maintenanceLogic';
+import { canTakeOffRoad, categoryKey, handedReport, REPORT_STATUSES, reportPageArgs, reportSaveCalls, reportTone } from '@/office/maintenanceLogic';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleReport, VehicleReports } from '@/office/types';
@@ -27,8 +27,10 @@ export default function ReportScreen() {
   const { t } = useApp();
   const { api, me, signOut } = useOffice();
   const router = useRouter();
-  const q = useTool<VehicleReports>('list_vehicle_reports', { status: 'all', limit: 200 });
-  const r = q.data?.reports.find((x) => x.id === id) ?? null;
+  // The row the list opened (at once), then the fresh one from that vehicle's reports (never lost past the newest 200).
+  const [handed] = useState(() => handedReport(id));
+  const q = useTool<VehicleReports>('list_vehicle_reports', reportPageArgs(handed?.vehicle));
+  const r = q.data?.reports.find((x) => x.id === id) ?? handed;
   const canEdit = me.tools.includes('update_vehicle_report');
   const [status, setStatus] = useState<VehicleReport['status'] | null>(null);
   const [note, setNote] = useState('');
@@ -61,7 +63,7 @@ export default function ReportScreen() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={r ? t(categoryKey(r.category)) : t('office.maint.report')} subtitle={r ? [r.vehicle, r.reported].filter(Boolean).join(' · ') : undefined} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} bottom={canEdit ? 140 : 24}>
-        {!q.data && !q.error && <SkeletonRows rows={3} lines={2} />}
+        {!q.data && !q.error && !r && <SkeletonRows rows={3} lines={2} />}
         {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {q.data && !r && <ListEmpty text={t('office.maint.notFound')} />}
         {r && (
@@ -115,8 +117,8 @@ export default function ReportScreen() {
       </Screen>
       {r && canEdit && (
         <StickyActions>
-          {calls.length === 0 && <Txt variant="small" style={{ textAlign: 'center' }}>{t('office.maint.nothingToSave')}</Txt>}
           <Button label={t('office.common.save')} busy={busy} disabled={calls.length === 0} onPress={() => void save()} />
+          {calls.length === 0 && <Txt variant="small" style={{ textAlign: 'center' }}>{t('office.maint.nothingToSave')}</Txt>}
         </StickyActions>
       )}
     </View>

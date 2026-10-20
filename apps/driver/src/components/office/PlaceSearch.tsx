@@ -264,7 +264,9 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
         mapPackage={me.map?.package}
         onClose={() => setPinCheck(null)}
         onUse={(p) => {
-          const name = pinCheck?.name ?? '';
+          // A pin moved on the map is named by its new point (the pasted text named the old one).
+          const moved = !!pinCheck && (Math.abs(p.lat - pinCheck.lat) > 1e-5 || Math.abs(p.lng - pinCheck.lng) > 1e-5);
+          const name = moved ? pinText(p) : pinCheck?.name ?? '';
           setPinCheck(null);
           void pick({ layer: 'map', badge: 'Pin', name, lat: p.lat, lng: p.lng, pinned: true });
         }}

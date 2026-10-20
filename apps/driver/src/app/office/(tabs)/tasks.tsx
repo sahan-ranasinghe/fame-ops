@@ -8,7 +8,7 @@
 // again every minute, and go when the day changes).
 
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { DayStrip } from '@/components/patterns/Calendar';
@@ -42,11 +42,15 @@ export default function TasksTab() {
     setMore({});
     setPaging({ column: null, error: null, failed: null });
   }, [date]);
+  const dateRef = useRef(date);
+  dateRef.current = date;
   async function loadMore(column: BoardColumn, cursor: string) {
     if (paging.column) return;
     setPaging({ column, error: null, failed: null });
     try {
       const page = await api.call<Board>('task_board', columnArgs(date, column, cursor));
+      // Another day was picked meanwhile: this page was the old day's (Stage 1 review).
+      if (dateRef.current !== date) return;
       setMore((m) => ({ ...m, [column]: addColumnPage(m[column], page, column) }));
       setPaging({ column: null, error: null, failed: null });
     } catch (e) {

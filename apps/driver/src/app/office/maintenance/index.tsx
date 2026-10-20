@@ -11,7 +11,7 @@ import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Plate } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
-import { appendReports, categoryKey, reportsArgs, reportsChoice, reportsFilterDefs, reportTone } from '@/office/maintenanceLogic';
+import { appendReports, categoryKey, handReport, reportsArgs, reportsChoice, reportsFilterDefs, reportTone } from '@/office/maintenanceLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleReports } from '@/office/types';
 import { BackHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
@@ -38,11 +38,13 @@ export default function MaintenanceScreen() {
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
 
   async function loadMore() {
+    // The list this page belongs to: a page that lands after the filter or day changed is dropped.
+    const k = q.key;
     if (!q.data?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
       const page = await api.call<VehicleReports>('list_vehicle_reports', reportsArgs(status, search, q.data.next));
-      q.patch((p) => appendReports(p, page));
+      q.patch((p) => appendReports(p, page), k, true);
       setMore({ busy: false, error: null });
     } catch (e) {
       setMore({ busy: false, error: e as FleetError });
@@ -68,7 +70,7 @@ export default function MaintenanceScreen() {
                   line={[r.driver, r.reported, r.photos.length ? t('office.maint.photosN', { n: r.photos.length }) : ''].filter(Boolean).join(' · ')}
                   line2={r.note ?? undefined}
                   right={<Pill text={t(`office.maint.status_${r.status}`)} tone={reportTone(r.status)} />}
-                  onPress={() => router.push({ pathname: '/office/maintenance/[id]', params: { id: r.id } })}
+                  onPress={() => { handReport(r); router.push({ pathname: '/office/maintenance/[id]', params: { id: r.id } }); }}
                   testID="report-row"
                 />
               </View>

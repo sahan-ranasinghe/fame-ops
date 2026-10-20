@@ -65,6 +65,22 @@ export default function OfficeHome() {
   const [snoozeBusy, setSnoozeBusy] = useState(false);
   const [snoozeError, setSnoozeError] = useState<{ error: FleetError; group: AttentionGroup; when: 'tomorrow' | 'week' } | null>(null);
   const maySnooze = me.tools.includes('update_issue');
+  // The last snooze, with Undo (docs/ui-patterns.md §10): update_issue snooze null on the same issues, then read again.
+  const [snoozed, setSnoozed] = useState<AttentionGroup | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
+  async function undoSnooze(group: AttentionGroup) {
+    setUndoBusy(true);
+    setSnoozeError(null);
+    try {
+      for (const id of [...new Set(group.issue_ids)]) await api.call('update_issue', { id, snooze: null });
+      setSnoozed(null);
+      await overview.reload();
+    } catch (e) {
+      setSnoozeError({ error: e as FleetError, group, when: 'tomorrow' });
+    } finally {
+      setUndoBusy(false);
+    }
+  }
   async function snooze(group: AttentionGroup, when: 'tomorrow' | 'week') {
     setSnoozeBusy(true);
     setSnoozeError(null);
@@ -72,6 +88,7 @@ export default function OfficeHome() {
       for (const call of snoozeCalls(group, when)) await api.call('update_issue', call);
       overview.patch((prev) => withoutGroups(prev, [group.key]));
       setSnoozing(null);
+      setSnoozed(group);
     } catch (e) {
       setSnoozeError({ error: e as FleetError, group, when });
     } finally {
@@ -143,6 +160,15 @@ export default function OfficeHome() {
         {sections.includes('critical') && (
           <Section title={t('office.home.attention')} count={attentionCount(ov)} tone={attentionCount(ov) ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
             {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
+            {snoozed && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.blueChip, borderRadius: 12, paddingHorizontal: 12 }} testID="snooze-undo-line">
+                <Txt variant="small" style={{ flex: 1 }} numberOfLines={2}>{t('office.home.snoozedLine', { title: snoozed.title })}</Txt>
+                <Pressable accessibilityRole="button" disabled={undoBusy} onPress={() => void undoSnooze(snoozed)} style={{ minHeight: 44, justifyContent: 'center' }} testID="snooze-undo">
+                  <Txt variant="strong" size={15} color={colors.blue}>{t('office.decide.undo')}</Txt>
+                </Pressable>
+              </View>
+            )}
+            {snoozeError && !snoozing && <ErrorNotice error={snoozeError.error} onSignIn={() => void signOut()} />}
             {ov && attentionGroups(ov).length === 0 && <ListEmpty text={t('office.home.noAttention')} />}
             {attentionGroups(ov).slice(0, ROWS).map((g, i) => {
               const open = expanded.has(g.key);

@@ -72,5 +72,12 @@ console.log('\nMaintenance');
   check(['filterKind', 'filterVehicle', 'filterOpened', 'openedAny'].every((k) => k in si.office.issues) && ['this_month', 'last_month', 'last7', 'today'].every((k) => `preset_${k}` in en.patterns), "the Issues filter words; the presets' words exist");
 }
 
+console.log('\nStage 1 review');
+{
+  const list = src('app/office/maintenance/index.tsx');
+  const page = src('app/office/maintenance/[id].tsx');
+  check(list.includes('handReport(r);') && page.includes('handedReport(id)') && page.includes('reportPageArgs(handed?.vehicle)'), "the list hands its row to the page; the page reads that vehicle's reports (never lost past the newest 200)");
+}
+
 console.log(failures === 0 ? '\nAll maintenance checks passed.' : `\n${failures} maintenance check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

@@ -25,11 +25,13 @@ export default function AsksScreen() {
   const view = listView({ loading: q.loading, hasData: !!q.data, count: asks.length, error: !!q.error });
 
   async function loadMore() {
+    // The list this page belongs to: a page that lands after the filter or day changed is dropped.
+    const k = q.key;
     if (!q.data?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
       const page = await api.call<AskAnswers>('ask_answers', { limit: 20, cursor: q.data.next });
-      q.patch((p) => appendAsks(p, page));
+      q.patch((p) => appendAsks(p, page), k, true);
       setMore({ busy: false, error: null });
     } catch (e) {
       setMore({ busy: false, error: e as FleetError });

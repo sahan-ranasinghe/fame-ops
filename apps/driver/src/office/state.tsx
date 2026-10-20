@@ -75,52 +75,62 @@ export function OfficeProvider({ me, children }: { me: Me; children: ReactNode }
 }
 
 export interface ToolState<T> {
+  /** The answer for the args asked now (never an answer for other args: a new filter or day shows skeletons first). */
   data: T | null;
   error: FleetError | null;
-  /** The first load (nothing to show yet). */
+  /** The first load for these args (nothing to show yet). */
   loading: boolean;
   /** A later load (pull to refresh, the screen came back): the old data stays on screen. */
   refreshing: boolean;
+  /** The args the data belongs to (JSON): a Load more captures it and hands it back to `patch`. */
+  key: string;
   reload: () => Promise<void>;
-  /** Replace the data in place (after a write the server answered). */
-  patch: (next: T | ((prev: T) => T)) => void;
+  /**
+   * Replace the data in place (after a write the server answered). With `forKey`, only when the data still belongs to
+   * those args (a Load more that lands after the filter changed is dropped); `more` marks the list as extended: the
+   * timer and the screen's return do not read it again (they would put back the first page only); pull to refresh does.
+   */
+  patch: (next: T | ((prev: T) => T), forKey?: string, more?: boolean) => void;
 }
 
 /**
  * A tool's answer for a screen. Loads when the screen opens, again every time it comes to the front (`useFocusEffect`)
  * and on `reload` (pull to refresh); `every` adds a timer while the screen is focused. `args` is compared as JSON.
- * A dropped read was already asked again once by the client (office/api.ts).
+ * A dropped read was already asked again once by the client (office/api.ts). Stage 1 review: the data is kept with the
+ * args it answered, so an old answer never shows under new args, and a list extended by Load more is not collapsed by
+ * the timer.
  */
 export function useTool<T>(tool: string, args: Record<string, unknown> = {}, opts: { every?: number; enabled?: boolean } = {}): ToolState<T> {
   const { api } = useOffice();
   const enabled = opts.enabled ?? true;
   const key = JSON.stringify(args);
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<FleetError | null>(null);
-  const [loading, setLoading] = useState(enabled);
-  const [refreshing, setRefreshing] = useState(false);
+  const keyRef = useRef(key);
+  keyRef.current = key;
+  const [store, setStore] = useState<{ key: string; data: T | null; error: FleetError | null }>({ key, data: null, error: null });
+  const data = store.key === key ? store.data : null;
+  const error = store.key === key ? store.error : null;
+  const [busy, setBusy] = useState<{ key: string; first: boolean; refreshing: boolean }>({ key, first: enabled, refreshing: false });
   const seq = useRef(0);
   const dataRef = useRef<T | null>(null);
   dataRef.current = data;
+  /** The args whose list was extended by Load more ('' = none). */
+  const extended = useRef('');
 
-  const load = useCallback(async (quiet: boolean) => {
+  const load = useCallback(async (quiet: boolean, force = false) => {
     if (!enabled) return;
+    if (!force && extended.current === key) return;
+    if (force) extended.current = '';
     const n = ++seq.current;
-    if (dataRef.current === null) setLoading(true);
-    else if (!quiet) setRefreshing(true);
+    setBusy({ key, first: dataRef.current === null, refreshing: dataRef.current !== null && !quiet });
     try {
       const next = await api.call<T>(tool, JSON.parse(key) as Record<string, unknown>);
       if (n !== seq.current) return;
-      setData(next);
-      setError(null);
+      setStore({ key, data: next, error: null });
     } catch (e) {
       if (n !== seq.current) return;
-      setError(e as FleetError);
+      setStore((prev) => ({ key, data: prev.key === key ? prev.data : null, error: e as FleetError }));
     } finally {
-      if (n === seq.current) {
-        setLoading(false);
-        setRefreshing(false);
-      }
+      if (n === seq.current) setBusy({ key, first: false, refreshing: false });
     }
   }, [api, tool, key, enabled]);
 
@@ -136,9 +146,17 @@ export function useTool<T>(tool: string, args: Record<string, unknown> = {}, opt
     }, [load, opts.every]),
   );
 
-  const patch = useCallback((next: T | ((prev: T) => T)) => {
-    setData((prev) => (typeof next === 'function' ? (prev === null ? prev : (next as (p: T) => T)(prev)) : next));
+  const patch = useCallback((next: T | ((prev: T) => T), forKey?: string, more?: boolean) => {
+    if (forKey !== undefined && forKey !== keyRef.current) return;
+    if (more) extended.current = keyRef.current;
+    setStore((prev) => {
+      if (prev.key !== keyRef.current) return prev;
+      const value = typeof next === 'function' ? (prev.data === null ? prev.data : (next as (p: T) => T)(prev.data)) : next;
+      return { ...prev, data: value };
+    });
   }, []);
 
-  return { data, error, loading, refreshing, reload: () => load(false), patch };
+  const loading = enabled && data === null && error === null && (busy.key !== key || busy.first);
+  const refreshing = busy.key === key && busy.refreshing;
+  return { data, error, loading, refreshing, key, reload: () => load(false, true), patch };
 }

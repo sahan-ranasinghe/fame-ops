@@ -36,11 +36,13 @@ export default function OfficeUsersPeople() {
   const canAdd = me.tools.includes('create_office_user');
 
   async function loadMore() {
+    // The list this page belongs to: a page that lands after the filter or day changed is dropped.
+    const k = q.key;
     if (!d?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
       const page = await api.call<OfficeUsers>('list_office_users', usersArgs(search, d.next));
-      q.patch((p) => appendUsers(p, page));
+      q.patch((p) => appendUsers(p, page), k, true);
       setMore({ busy: false, error: null });
     } catch (e) {
       setMore({ busy: false, error: e as FleetError });

@@ -46,11 +46,13 @@ export default function VehiclesScreen() {
   const empty = vehiclesEmpty(filter, search, mayRegister);
 
   async function loadMore() {
+    // The list this page belongs to: a page that lands after the filter or day changed is dropped.
+    const k = q.key;
     if (!d?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
       const page = await api.call<VehiclesList>('list_vehicles', vehiclesArgs(filter, search, d.next));
-      q.patch((p) => appendVehicles(p, page));
+      q.patch((p) => appendVehicles(p, page), k, true);
       setMore({ busy: false, error: null });
     } catch (e) {
       setMore({ busy: false, error: e as FleetError });

@@ -80,6 +80,13 @@ export default function TaskDetailScreen() {
     } else setLinkNote(t('office.task.linkGone'));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q.data, pendingLink]);
+  // The reading again failed: no link waits for ever (Stage 1 review); the reason in words, Try again by tapping again.
+  useEffect(() => {
+    if (pendingLink && q.error) {
+      setPendingLink(null);
+      setLinkNote(q.error.message);
+    }
+  }, [q.error, pendingLink]);
   function openLink(key: LinkKey) {
     if (!q.data) return;
     if (Date.now() - loadedAt.current > DETAIL_LINKS_FRESH_MS) {

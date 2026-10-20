@@ -7,7 +7,7 @@ import { join } from 'node:path';
 
 import {
   batteryText, canClockOut, clockOutInput, clockOutLine, dutyOf, filterCounts, filterDrivers, fitAllFrame, focusOf, frameAll, hasPosition, hasProblem, liveChoice, liveFilterDefs, LIVE_FILTERS,
-  markerLabel, markersOf, markerTone, moveMode, pillOf, positionsKey, rowLine, speedText, WATCH_EVERY_MS, WATCH_MAX, watchList, type Words, zoomStep,
+  markerLabel, markersOf, markerTone, moveMode, pillOf, positionsKey, rowLine, speedText, WATCH_EVERY_MS, WATCH_MAX, watchBatches, watchList, type Words, zoomStep,
 } from '../src/office/liveLogic';
 import { canMove, currentChoice, moveHint, moveInput, moveSentences, NO_VEHICLE, searchRows } from '../src/office/moveLogic';
 import { swapRows } from '../src/office/taskExtrasLogic';
@@ -217,7 +217,10 @@ console.log('\n== Stage 1: Problems, watched mode, Clock out, Move to vehicle, t
   const ds = [sharing('sunil', true), sharing('kamal', true), sharing('nimal', false), { username: 'asela', state: 'sharing' as const, signal: { sharing: false, point_at: null, heartbeat_at: null, location_on: null, permission: null, location_off_since: null } }];
   check(same(watchList(ds, false, 'kamal'), ['kamal']) && same(watchList(ds, false, 'nimal'), []) && same(watchList(ds, false, null), []), 'the selected driver while they share; nobody else');
   check(same(watchList(ds, true, null), ['kamal', 'sunil']), 'the trails on: every sharing driver (the raw signal wins over the share state), sorted');
-  check(watchList(Array.from({ length: 30 }, (_, i) => sharing(`d${String(i).padStart(2, '0')}`, true)), true, null).length === WATCH_MAX && WATCH_MAX === 20 && WATCH_EVERY_MS === 30_000, 'at most 20 (the tool\'s limit), every 30 s');
+  {
+    const all30 = watchList(Array.from({ length: 30 }, (_, i) => sharing(`d${String(i).padStart(2, '0')}`, true)), true, null);
+    check(all30.length === 30 && watchBatches(all30).map((b) => b.length).join() === '20,10' && WATCH_MAX === 20 && WATCH_EVERY_MS === 30_000, 'every sharing driver, sent 20 to a call (the tool\'s limit), every 30 s');
+  }
   // Clock out and Move to vehicle.
   check(canClockOut(kamal) && !canClockOut(sunil) && !canClockOut(nimal), 'Clock out: a driver on duty without a task');
   check(moveMode(kamal) === 'move' && moveMode(sunil) === 'swap' && moveMode(nimal) === 'none', 'Move on duty, Swap on a task, nothing off duty');
@@ -247,7 +250,7 @@ console.log('\n== Stage 1: Problems, watched mode, Clock out, Move to vehicle, t
   check(same(moveSentences({ driver: 'Kamal', vehicle: 'WP KV-7788 · Nissan Caravan', taken_from: 'Nuwan' }).map((x) => x.key), ['office.live.movedTo', 'office.live.movedTold']) && moveSentences({ driver: 'Kamal', vehicle: 'none' })[0].key === 'office.live.movedNone', 'the sentences after it');
 
   const screen = read('src/app/office/(tabs)/live.tsx');
-  check(/watchList\(all, trails, selected\)/.test(screen) && /if \(!focused \|\| !mayWatch \|\| !watchKey\) return;/.test(screen) && /api\.call\('watch_drivers', \{ drivers \}\)/.test(screen) && /setInterval\(call, WATCH_EVERY_MS\)/.test(screen) && /AppState\.currentState === 'active'/.test(screen) && /const mayWatch = me\.tools\.includes\('watch_drivers'\)/.test(screen),
+  check(/watchList\(all, trails, selected\)/.test(screen) && /if \(!focused \|\| !mayWatch \|\| !watchKey\) return;/.test(screen) && /api\.call\('watch_drivers', \{ drivers: batch \}\)/.test(screen) && /watchBatches\(drivers\)/.test(screen) && /setInterval\(call, WATCH_EVERY_MS\)/.test(screen) && /AppState\.currentState !== 'active'/.test(screen) && /const mayWatch = me\.tools\.includes\('watch_drivers'\)/.test(screen),
     'watched mode: watch_drivers now and every 30 s while the tab is in front and the app on screen, only with the tool');
   check(/me\.tools\.includes\('clock_out_driver'\) && canClockOut\(chosen\)/.test(screen) && /api\.call<ClockOutResult>\('clock_out_driver', clockOutInput\(chosen\.username, reason\)\)/.test(screen) && /testID="clock-out-sheet"/.test(screen) && /<ErrorNotice error=\{refused\}/.test(screen),
     'Clock out: with the tool, a sheet with the reason, the server\'s sentence when it refuses');

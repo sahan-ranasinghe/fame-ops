@@ -200,6 +200,22 @@ async function main() {
   check(same(cancelInput('t1', 'Not needed any more', ' plans changed '), { task_id: 't1', reason: 'Not needed any more — plans changed' }), 'cancel_task\'s reason');
   check(same(allowedActions({ status: 'assigned' }), { reassign: true, cancel: true }) && same(allowedActions({ status: 'in_progress' }), { reassign: false, cancel: true }) && same(allowedActions({ status: 'completed' }), { reassign: false, cancel: false }), 'what a task still allows');
 
+  console.log('\nThe data hook and Load more (Stage 1 review):');
+  {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const root = path.join(__dirname, '..', 'src');
+    const state = fs.readFileSync(path.join(root, 'office', 'state.tsx'), 'utf8');
+    check(state.includes('const data = store.key === key ? store.data : null;') && state.includes('if (forKey !== undefined && forKey !== keyRef.current) return;') && state.includes("if (!force && extended.current === key) return;"),
+      'useTool keeps an answer with its args (never an old answer under a new filter or day); a late page is dropped; an extended list is not collapsed by the timer');
+    const files: string[] = [];
+    const walk = (d: string) => { for (const e of fs.readdirSync(d)) { const f = path.join(d, e); if (fs.statSync(f).isDirectory()) walk(f); else if (e.endsWith('.tsx')) files.push(f); } };
+    walk(path.join(root, 'app', 'office'));
+    const lists = files.filter((f) => /q\.patch\(\(p\) => append\w+\(p, page\)/.test(fs.readFileSync(f, 'utf8')));
+    const bad = lists.filter((f) => { const t = fs.readFileSync(f, 'utf8'); return (t.match(/const k = q\.key;/g) ?? []).length !== (t.match(/async function loadMore\(\)/g) ?? []).length || /append\w+\(p, page\)\);/.test(t); });
+    check(lists.length >= 10 && bad.length === 0, `every Load more hands back the key it asked with (${lists.length} lists)`, bad.map((f) => path.relative(root, f)));
+  }
+
   console.log(failures === 0 ? '\nAll office tests passed.' : `\n${failures} office test(s) failed.`);
   process.exit(failures === 0 ? 0 : 1);
 }

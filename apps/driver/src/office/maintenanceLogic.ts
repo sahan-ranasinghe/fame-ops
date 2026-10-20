@@ -52,3 +52,18 @@ export const canTakeOffRoad = (r: Pick<VehicleReport, 'vehicle' | 'vehicle_in_ga
 
 /** The category's words key (breakdown, accident, tyre, warning_light, other). */
 export const categoryKey = (c: string) => `office.maint.cat_${['breakdown', 'accident', 'tyre', 'warning_light'].includes(c) ? c : 'other'}`;
+
+// ---- Stage 1 review: the row the list showed travels to the report's page (the tool has no id of its own) ----
+
+const handed = new Map<string, VehicleReport>();
+/** The list keeps the row it opens. */
+export function handReport(r: VehicleReport): void {
+  handed.set(r.id, r);
+  if (handed.size > 50) handed.delete(handed.keys().next().value as string);
+}
+export const handedReport = (id: string): VehicleReport | null => handed.get(id) ?? null;
+
+/** The page's fresh read: that vehicle's reports when the plate is known (a few), else the newest 200. */
+export function reportPageArgs(plate: string | undefined): Record<string, unknown> {
+  return plate ? { status: 'all', limit: 50, search: plate } : { status: 'all', limit: 200 };
+}

@@ -926,7 +926,8 @@
       "snooze": "කල් දමන්න…",
       "snoozeTitle": "කල් දමන්න",
       "snooze_tomorrow": "හෙට 07:00",
-      "snooze_week": "සතියකින්"
+      "snooze_week": "සතියකින්",
+      "snoozedLine": "කල් දැම්මා: {title}"
     },
     "status": {
       "assigned": "යවා ඇත",
@@ -2559,7 +2560,9 @@
       "removeAnyway": "කෙසේ හෝ ඉවත් කරන්න",
       "removedDone": "ඉවත් කළා.",
       "restore": "මෙම ස්ථානය නැවත ගෙන එන්න",
-      "restoredDone": "නැවත ගෙන ආවා."
+      "restoredDone": "නැවත ගෙන ආවා.",
+      "emptyKeeps": "හිස්ව තබන ක්ෂේත්‍රයක දැනට ඇති දේ එලෙසම පවතී.",
+      "removeAsk": "{name} ඉවත් කරන්නද?"
     },
     "pin": {
       "title": "ලක්ෂ්‍යය පරීක්ෂා කරන්න",

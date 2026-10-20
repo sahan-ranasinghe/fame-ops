@@ -926,7 +926,8 @@
       "snooze": "Snooze…",
       "snoozeTitle": "Snooze until",
       "snooze_tomorrow": "Tomorrow 07:00",
-      "snooze_week": "A week from now"
+      "snooze_week": "A week from now",
+      "snoozedLine": "Snoozed: {title}"
     },
     "status": {
       "assigned": "sent",
@@ -2559,7 +2560,9 @@
       "removeAnyway": "Remove it anyway",
       "removedDone": "Removed.",
       "restore": "Restore this place",
-      "restoredDone": "Restored."
+      "restoredDone": "Restored.",
+      "emptyKeeps": "A field left empty keeps what it says now.",
+      "removeAsk": "Remove {name}?"
     },
     "pin": {
       "title": "Check the pin",

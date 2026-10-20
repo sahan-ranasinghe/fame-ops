@@ -92,6 +92,7 @@ export function placeFields(p: Pick<PlaceDetail, 'name' | 'address' | 'district'
 export function updatePlaceInput(id: string, was: PlaceFields, now: PlaceFields): Record<string, unknown> | 'name' | null {
   const out: Record<string, unknown> = {};
   if (!now.name.trim()) return 'name';
-  for (const k of ['name', 'address', 'district', 'depot'] as const) if (now[k].trim() !== was[k].trim()) out[k] = now[k].trim();
+  // update_place cannot clear a field (its texts need a letter): an emptied field keeps its value (the screen says so).
+  for (const k of ['name', 'address', 'district', 'depot'] as const) if (now[k].trim() && now[k].trim() !== was[k].trim()) out[k] = now[k].trim();
   return Object.keys(out).length ? { id, ...out } : null;
 }

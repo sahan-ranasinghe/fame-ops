@@ -62,7 +62,7 @@ side.
 
 | Codebase | Component | Rules |
 |---|---|---|
-| App | `components/patterns/DateRangeButton.tsx` (`DateRangeButton`, `RangeCalendar`) | `lib/patterns/calendarLogic.ts` |
+| App | `components/patterns/Calendar.tsx` (`DateRangeButton`, `MonthCalendar` with the year jump) | `lib/patterns/calendarLogic.ts` |
 | Website | `ui/DateRangePicker.tsx` (replaces `ui/DateRange.tsx`, same URL parameters `?range=&from=&to=`) | `ui/dateRange.ts` |
 
 ## 3. A single day
@@ -81,7 +81,7 @@ from today). The chosen date shows on its chip when it is another day ("Thu 23 O
 
 | Codebase | Component | Rules |
 |---|---|---|
-| App | `components/patterns/DayStrip.tsx` (history), `components/patterns/TripDayPicker.tsx` (a trip) | `lib/patterns/calendarLogic.ts` |
+| App | `components/patterns/Calendar.tsx`: `DayStrip` (history), `TripDayPicker` (a trip; `max` for a limit), `DateField` (`min` / `max`) | `lib/patterns/calendarLogic.ts` |
 | Website | `ui/DayPicker.tsx` (`DayStrip`, `TripDayPicker`) | `ui/dateRange.ts` |
 
 ## 4. Time
@@ -132,8 +132,8 @@ something was typed). Used for filters, the date range, the time, the reasons (d
 
 | Codebase | Component |
 |---|---|
-| App | `components/patterns/Sheet.tsx` (`Sheet`); `components/ReasonSheet.tsx` and `AskDriversSheet` use it |
-| Website | `ui/Sheet.tsx` (a bottom sheet under 768 px, a centred dialog or a popover above) |
+| App | `components/patterns/Sheet.tsx` (`Sheet`: moves above the keyboard, a swipe down closes it); `ReasonSheet`, `LateSheet`, `AskDriversSheet`, Reset PIN, the filters, dates and times use it |
+| Website | `ui/Sheet.tsx` (a bottom sheet under 768 px, a centred dialog or a popover above); `screens/asks/AskSheet.tsx` keeps its own dialog (Hotfix 4's design), its day and times on the shared pickers |
 
 ## 7. Cards
 
@@ -154,7 +154,7 @@ everything else under More, grouped, with a search at the top. On a desktop the 
 
 | Codebase | Component |
 |---|---|
-| App | `office/nav.ts` `tabsFor` + `app/office/(tabs)/_layout.tsx`; `components/patterns/Segmented.tsx` |
+| App | `office/nav.ts` `tabsFor` + `app/office/(tabs)/_layout.tsx`; `Segmented` in `components/ui.tsx` |
 | Website | `app/nav.ts` `tabsFor` / the menu; `ui/basics.tsx` `Segmented` |
 
 ## 9. The place search
@@ -179,7 +179,7 @@ never toasts: they stay on the screen with Try again.
 
 | Codebase | Component |
 |---|---|
-| App | `components/patterns/Toast.tsx` (`useToast`, Undo); `components/ReasonSheet.tsx` |
+| App | `components/ReasonSheet.tsx` (on the shared Sheet); Undo as an inline line where the change happened (Home's Snooze); a shared toast is not built yet: a native `Alert` asks before a remove |
 | Website | `ui/Toast.tsx` (`useToast`, Undo); `ui/WriteRetry.tsx` |
 
 ---

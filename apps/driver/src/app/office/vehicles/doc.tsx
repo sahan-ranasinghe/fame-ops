@@ -98,8 +98,8 @@ export default function VehicleDocScreen() {
         </Section>
       </Screen>
       <StickyActions>
-        {block && <Txt variant="small" style={{ textAlign: 'center' }}>{t(`office.media.block_${block}`)}</Txt>}
         <Button kind="primary" label={t('office.common.save')} busy={busy} disabled={!!block} onPress={() => void save()} style={{ minHeight: 56 }} />
+        {block && <Txt variant="small" style={{ textAlign: 'center' }}>{t(`office.media.block_${block}`)}</Txt>}
       </StickyActions>
     </View>
   );

@@ -38,7 +38,7 @@ import { plusDays } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
 import {
   batteryText, canClockOut, clockOutInput, clockOutLine, type ClockOutResult, filterCounts, filterDrivers, focusOf, frameAll, liveChoice, liveFilterDefs, markersOf, moveMode,
-  pillOf, rowLine, speedText, WATCH_EVERY_MS, watchList,
+  pillOf, rowLine, speedText, WATCH_EVERY_MS, watchBatches, watchList,
 } from '@/office/liveLogic';
 import {
   canPlay, type Cursor, cursorAt, drawingOf, gapWindowsOf, type LiveLayers, mergeRoute,
@@ -168,7 +168,8 @@ export default function LiveTab() {
     if (!focused || !mayWatch || !watchKey) return;
     const drivers = watchKey.split(',');
     const call = () => {
-      if (AppState.currentState === 'active') void api.call('watch_drivers', { drivers }).catch(() => undefined);
+      if (AppState.currentState !== 'active') return;
+      for (const batch of watchBatches(drivers)) void api.call('watch_drivers', { drivers: batch }).catch(() => undefined);
     };
     call();
     const timer = setInterval(call, WATCH_EVERY_MS);

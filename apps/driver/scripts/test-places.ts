@@ -33,6 +33,7 @@ console.log('\nThe page');
   const was = placeFields({ name: 'Head office', address: 'Colombo 05', district: undefined, depot: undefined });
   check(updatePlaceInput('p1', was, { ...was }) === null && updatePlaceInput('p1', was, { ...was, name: ' ' }) === 'name', 'nothing changed: nothing sent; a name is needed');
   check(same(updatePlaceInput('p1', was, { ...was, district: ' Colombo ' }), { id: 'p1', district: 'Colombo' }), 'update_place: only what changed');
+  check(updatePlaceInput('p1', was, { ...was, address: '  ' }) === null, 'an emptied field keeps its value (update_place cannot clear one): nothing sent');
   const page = src('app/office/places/[id].tsx');
   check(page.includes("api.call<RemoveAnswer>('remove_place', { id: p.id, ...(confirm ? { confirm: true } : {}) })") && page.includes('if (r.needs_confirm)') && page.includes('testID="place-remove-confirm"') && page.includes('testID="place-in-use"'),
     'Remove: the reasons first, the second press confirms');
@@ -49,6 +50,15 @@ console.log('\nThe pin check');
   check(pin.includes('onRegionChangeComplete') && pin.includes('onRegionDidChange') && pin.includes('onUse(roundPin('), "the map's centre is the point used");
   const box = src('components/office/PlaceSearch.tsx');
   check(box.includes('testID="place-search-pin"') && box.includes('setPinCheck({') && box.includes("void pick({ layer: 'map', badge: 'Pin', name, lat: p.lat, lng: p.lng, pinned: true })"), 'a pasted pin is checked on the map before it is used');
+}
+
+console.log('\nStage 1 review');
+{
+  const pin = src('components/office/PinAdjust.tsx');
+  check(pin.includes('mapSession.markGoogleFailed(Date.now())') && pin.includes("waitFor('google', settings.phone_map_wait_s)") && pin.includes('onMapReady={() => setGoogleReady(true)}'), "Google's map that never gets ready: marked failed, the free map instead");
+  check(src('components/office/PlaceSearch.tsx').includes('const name = moved ? pinText(p) : pinCheck?.name'), 'a moved pin is named by its new point');
+  const page = src('app/office/places/[id].tsx');
+  check(page.includes("Alert.alert(t('office.places.removeAsk'") && page.includes("t('office.places.emptyKeeps')"), 'Remove asks first; the edit says an empty field keeps its value');
 }
 
 console.log('\nWords');

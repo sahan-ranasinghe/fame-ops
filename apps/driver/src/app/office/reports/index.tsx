@@ -196,12 +196,14 @@ function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, s
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
   const n = (x: number | null | undefined) => (Number(x) || 0).toLocaleString('en-US');
   async function loadMore() {
+    // The list this page belongs to: a page that lands after the filter or day changed is dropped.
+    const k = q.key;
     if (!d?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
       const page = await api.call<FuelList>('list_fuel', rangeArgs(from, to, { ...by, limit: 25, cursor: d.next }));
       appending.current = true;
-      q.patch((p) => appendFuel(p, page));
+      q.patch((p) => appendFuel(p, page), k, true);
       setMore({ busy: false, error: null });
     } catch (e) {
       setMore({ busy: false, error: e as FleetError });
@@ -269,11 +271,13 @@ function Duty({ from, to, by }: { from: string; to: string; by: Record<string, s
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
   const n = (x: number | null | undefined) => (Number(x) || 0).toLocaleString('en-US');
   async function loadMore() {
+    // The list this page belongs to: a page that lands after the filter or day changed is dropped.
+    const k = q.key;
     if (!d?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
       const page = await api.call<DutyLog>('duty_log', dutyArgs(from, to, { ...by, limit: 25, cursor: d.next }));
-      q.patch((p) => appendDuty(p, page));
+      q.patch((p) => appendDuty(p, page), k, true);
       setMore({ busy: false, error: null });
     } catch (e) {
       setMore({ busy: false, error: e as FleetError });

@@ -202,11 +202,19 @@ export const sharingNow = (d: Partial<Pick<LiveDriver, 'state' | 'signal'>>): bo
 
 /**
  * Who is watched (the site's Live): every sharing driver while today's trails are on, else the selected driver while
- * they share; at most WATCH_MAX, in a steady order (the key does not change on a refresh that changed nothing).
+ * they share; all of them, in a steady order (the key does not change on a refresh that changed nothing), sent
+ * WATCH_MAX to a call (watchBatches; Stage 1 review: the 21st sharing driver is watched too).
  */
 export function watchList(drivers: readonly ShareOf[], trails: boolean, selected: string | null): string[] {
   const who = trails ? drivers.filter(sharingNow) : drivers.filter((d) => d.username === selected && sharingNow(d));
-  return [...new Set(who.map((d) => d.username))].sort().slice(0, WATCH_MAX);
+  return [...new Set(who.map((d) => d.username))].sort();
+}
+
+/** watch_drivers takes at most WATCH_MAX drivers: the list in calls of that size. */
+export function watchBatches(list: readonly string[]): string[][] {
+  const out: string[][] = [];
+  for (let i = 0; i < list.length; i += WATCH_MAX) out.push(list.slice(i, i + WATCH_MAX));
+  return out;
 }
 
 /** Clock out: a driver on duty without a task (the server refuses a running task too, and says so). */

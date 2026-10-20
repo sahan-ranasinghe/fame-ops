@@ -77,5 +77,11 @@ console.log('\nThe screens');
   check(homeKeys.every((k) => typeof en.office.home[k] === 'string' && typeof si.office.home[k] === 'string'), 'the new Home words in both languages');
 }
 
+console.log('\nStage 1 review');
+{
+  const home = src('app/office/(tabs)/index.tsx');
+  check(home.includes("api.call('update_issue', { id, snooze: null })") && home.includes('testID="snooze-undo"'), 'Snooze has Undo (update_issue snooze null on the same issues)');
+}
+
 console.log(failures === 0 ? '\nAll overview checks passed.' : `\n${failures} overview check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

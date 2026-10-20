@@ -98,8 +98,8 @@ export default function ChangeTimeScreen() {
       </Screen>
       {card && asked && (
         <StickyActions>
-          {block && <Txt variant="small" style={{ textAlign: 'center' }}>{block}</Txt>}
           <Button label={t('office.decide.useTimes')} onPress={use} disabled={!!block} />
+          {block && <Txt variant="small" style={{ textAlign: 'center' }}>{block}</Txt>}
           {decideStore.get(id) && <Button kind="outline" label={t('office.decide.asAsked')} onPress={asAsked} style={{ minHeight: 52 }} />}
         </StickyActions>
       )}
