@@ -24,6 +24,12 @@ export function dayRouteArgs(driver: string, date: string): Record<string, unkno
   return { driver, date, line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true };
 }
 
+/** driver_route's input for the profile's "Today's route" card: today's numbers only (a short line; km, driving and the stops
+ *  come from every stored point whatever the line's size). */
+export function todaySummaryArgs(driver: string, date: string): Record<string, unknown> {
+  return { driver, date, line_tolerance_m: 50, max_line_points: 50 };
+}
+
 /** driver_route's input for a task's own window (Start task to Save & finish), the same line as a day. */
 export function taskRouteArgs(taskId: string): Record<string, unknown> {
   return { task_id: taskId, line_tolerance_m: 0, max_line_points: 3000, estimate_gaps: true };

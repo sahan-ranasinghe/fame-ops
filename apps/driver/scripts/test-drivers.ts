@@ -203,11 +203,12 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
     check(where.includes("withDriver(newDraft(m), m === 'task' ? forDriver : undefined, forName)") && logic.includes('export function withDriver') && read('src/app/office/trip/who.tsx').includes('x.fields.driver ? x :'),
       'Assign a task opens with the driver picked (the Who step keeps them; the best match never replaces them)');
   }
-  check(/useTool<DriverRoute>\('driver_route', dayRouteArgs\(username, day\), \{ enabled: mayRoute, every: routeEvery\(day, today\) \}\)/.test(page) && /const mayRoute = me\.tools\.includes\('driver_route'\);/.test(page),
-    'driver_route for the chosen day (tolerance 0, 3,000 points, the estimated roads: historyLogic dayRouteArgs), today every minute, only when the person may');
+  const dayPage = read('src/app/office/driver/[username]/route.tsx');
+  check(/useTool<DriverRoute>\('driver_route', dayRouteArgs\(username, day\), \{ every: routeEvery\(day, today\) \}\)/.test(dayPage) && /const mayRoute = me\.tools\.includes\('driver_route'\);/.test(page) && /todaySummaryArgs\(username, today\), \{ enabled: mayRoute/.test(page),
+    'driver_route for the chosen day on its own screen (tolerance 0, 3,000 points, the estimated roads), today every minute; the profile\'s card only when the person may');
   check(/useTool<DriversBoard>\('drivers_board', \{ search: username \}, \{ enabled: mayBoard, every: 60_000 \}\)/.test(page), 'today\'s state from the board\'s row, only when the person may read the board');
   check(/<BackHeader title=\{d\?\.name \?\? username\}/.test(page), 'a stack screen with the back header (back means back)');
-  check(/<RouteMap lines=\{lines\} stops=\{stops\} fit=\{fit\} focus=\{focus\} marker=\{marker\} mapPackage=\{mapPackage\} \/>/.test(read('src/components/office/DayRoute.tsx')) && /<DayRoute\b/.test(page), 'the map (components/office/DayRoute.tsx) gets the lines, the stops, the frame, the focus, the playback marker and the office\'s map package');
+  check(/<RouteMap lines=\{lines\} stops=\{stops\} fit=\{fit\} focus=\{focus\} marker=\{marker\} mapPackage=\{mapPackage\} \/>/.test(read('src/components/office/DayRoute.tsx')) && /<DayRoute\b/.test(dayPage), 'the map (components/office/DayRoute.tsx) gets the lines, the stops, the frame, the focus, the playback marker and the office\'s map package');
   check(/setFocus\(\{ frame: rowFrame\(points, seg\), nonce: \(focus\?\.nonce \?\? 0\) \+ 1, index: i \}\)/.test(read('src/components/office/DayRoute.tsx')), 'a timeline row tapped moves the map to its span (again on a second tap)');
   check(/links\.call && <Action/.test(page) && /links\.whatsapp && <Action/.test(page) && /p\.emergency\.links\?\.call &&/.test(page), 'Call and WhatsApp only when the server gave the link');
   check(/p\?\.emergency &&/.test(page) && /p\?\.licence\?\.number/.test(page) && /p\?\.private_hidden/.test(page), 'the private part only when the answer carries it');

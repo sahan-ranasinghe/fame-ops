@@ -283,7 +283,7 @@ export default function LiveTab() {
           route={routes ? { route: shownRoute, busy: routeBusy, error: routeErr, retry: () => setRouteTry((n) => n + 1) } : null}
           playback={canPlay(path) ? playback : null}
           cursor={cursor}
-          onHistory={routes ? () => router.push({ pathname: '/office/driver/[username]', params: { username: chosen.username, date: plusDays(colomboDate(), -1) } }) : undefined}
+          onHistory={routes ? () => router.push({ pathname: '/office/driver/[username]/route', params: { username: chosen.username, date: plusDays(colomboDate(), -1) } }) : undefined}
           onDriverPage={routes ? () => router.push({ pathname: '/office/driver/[username]', params: { username: chosen.username } }) : undefined}
           onMove={me.tools.includes('move_driver_vehicle') && moveMode(chosen) !== 'none'
             ? () => (moveMode(chosen) === 'swap' && chosen.task_id

@@ -2297,7 +2297,9 @@
       "status_assigned": "ආරම්භ කර නැත",
       "status_cancelled": "අවලංගුයි",
       "status_declined": "ප්‍රතික්ෂේප කළා",
-      "status_missed": "මග හැරුණා"
+      "status_missed": "මග හැරුණා",
+      "todayLine": "කි.මී. {km} · ධාවනය {driving} · නැවතුම් {stops}",
+      "openRoute": "සිතියම, නැවත ධාවනය සහ පෙර දින ›"
     },
     "media": {
       "photos": "ඡායාරූප",

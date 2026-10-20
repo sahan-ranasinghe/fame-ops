@@ -2297,7 +2297,9 @@
       "status_assigned": "Not started",
       "status_cancelled": "Cancelled",
       "status_declined": "Declined",
-      "status_missed": "Missed"
+      "status_missed": "Missed",
+      "todayLine": "{km} km · driving {driving} · {stops} stops",
+      "openRoute": "The map, playback and earlier days ›"
     },
     "media": {
       "photos": "Photos",

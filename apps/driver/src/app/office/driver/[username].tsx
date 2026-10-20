@@ -3,27 +3,25 @@
 // expiry, this month's tasks and km, what is missing; the emergency contact and the licence number only when the server
 // sent them, i.e. the person holds vehicles or users), today's state (the driver's row of drivers_board, when the person
 // may read the board), the days marked not available (Remove through remove_unavailability after a confirmation, when
-// allowed), and the route of a day (Stage 1, O3 item 1: the day strip, today and the 89 days before it; `?date=` opens a
-// day, e.g. from Live's "Earlier days"): driver_route at tolerance 0, up to 3,000 points, with the estimated roads (today
-// every minute, a past day once), the day's tasks with their km (list_tasks, with assign_tasks; a row opens the task),
-// and components/office/DayRoute.tsx: the map on both engines (the line by speed band, the holes dashed, the stops over
-// 10 minutes with their times), one playback bar, the day's numbers and the timeline. Back means back (BackHeader).
+// allowed), and a "Today's route" card (today's km, driving time and stops) that opens the day's route on its own screen
+// (driver/[username]/route: the day strip, the map, playback, the timeline, the day's tasks; Sahan's decision 2,
+// 20 October 2026, Uber's driver profile, Samsara). A link with `?date=` opens that day's route. Back means back.
 // The rules: office/driversLogic.ts and office/historyLogic.ts.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { MessageCircle, Phone, Plus } from '@/components/icons';
-import { DayRoute } from '@/components/office/DayRoute';
-import { DayStrip } from '@/components/patterns/Calendar';
+import { ChevronRight, MessageCircle, Phone, Plus, Route as RouteIcon } from '@/components/icons';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
 import { colomboDate } from '@/lib/time';
 import { boardPill, entryParts, rowLines } from '@/office/driversLogic';
-import { dayRouteArgs, dayTasks, dayTasksArgs, historyDay, historyMin, routeEvery } from '@/office/historyLogic';
+import { durationText } from '@/lib/durations';
+import { dayNumbers } from '@/office/driversLogic';
+import { todaySummaryArgs } from '@/office/historyLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { DriverProfile, DriverRoute, DriversBoard, FleetError, TaskHistory, UnavailableEntry } from '@/office/types';
+import type { DriverProfile, DriverRoute, DriversBoard, FleetError, UnavailableEntry } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -46,13 +44,18 @@ export default function DriverPage() {
   const mayBoard = me.tools.includes('drivers_board');
   const board = useTool<DriversBoard>('drivers_board', { search: username }, { enabled: mayBoard, every: 60_000 });
   const mayRoute = me.tools.includes('driver_route');
-  const [day, setDay] = useState(() => historyDay(askedDate, today));
-  const route = useTool<DriverRoute>('driver_route', dayRouteArgs(username, day), { enabled: mayRoute, every: routeEvery(day, today) });
-  const mayTasks = me.tools.includes('list_tasks');
-  const tasks = useTool<TaskHistory>('list_tasks', dayTasksArgs(username, day), { enabled: mayTasks });
-  const theDay = tasks.data ? dayTasks(tasks.data.tasks) : null;
-  // An answer for another day is never drawn under the chosen day (the tool keeps the last answer while the next loads).
-  const routeData = route.data && route.data.date === day ? route.data : null;
+  // Today's numbers for the card (a short line; the route screen reads the whole day).
+  const todayRoute = useTool<DriverRoute>('driver_route', todaySummaryArgs(username, today), { enabled: mayRoute, every: 60_000 });
+  const todayNumbers = todayRoute.data ? dayNumbers(todayRoute.data) : null;
+  const openRoute = (date?: string) => router.push({ pathname: '/office/driver/[username]/route', params: { username, ...(date ? { date } : {}) } });
+  // A link with a day (Live's "Earlier days", a notification) opens that day's route, once, over the profile.
+  const [openedDay, setOpenedDay] = useState(false);
+  useEffect(() => {
+    if (askedDate && mayRoute && !openedDay) {
+      setOpenedDay(true);
+      openRoute(askedDate);
+    }
+  }, [askedDate, mayRoute, openedDay]); // eslint-disable-line react-hooks/exhaustive-deps
   const mayRemove = me.tools.includes('remove_unavailability');
   const [problem, setProblem] = useState<FleetError | null>(null);
   // The entry whose Remove failed: Try again removes it again (never only hides the error).
@@ -63,7 +66,7 @@ export default function DriverPage() {
   const row = board.data?.drivers.find((x) => x.username === username) ?? board.data?.drivers.find((x) => d && x.name === d.name) ?? null;
 
 
-  const refresh = () => void Promise.all([profile.reload(), mayBoard ? board.reload() : Promise.resolve(), mayRoute ? route.reload() : Promise.resolve(), mayTasks ? tasks.reload() : Promise.resolve()]);
+  const refresh = () => void Promise.all([profile.reload(), mayBoard ? board.reload() : Promise.resolve(), mayRoute ? todayRoute.reload() : Promise.resolve()]);
 
   function confirmRemove(e: UnavailableEntry) {
     const when = entryParts(e, dayLabel, t).slice(0, 2).join(' · ');
@@ -174,38 +177,19 @@ export default function DriverPage() {
           </Section>
         )}
 
-        {mayRoute && (
-          <Section title={day === today ? t('office.history.todayRoute') : t('office.history.dayRoute', { day: dayLabel(day) })}>
-            <DayStrip value={day} onChange={setDay} max={today} min={historyMin(today)} testID="history-day" />
-            <DayRoute
-              data={routeData}
-              error={route.error}
-              onRetry={refresh}
-              onSignIn={() => void signOut()}
-              mapPackage={me.map?.package}
-              emptyText={t('office.history.noDayPoints')}
-            >
-              {mayTasks && (
-                <View style={{ paddingVertical: 8, gap: 2 }} testID="history-tasks">
-                  <Txt variant="strong" size={15}>{t('office.history.dayTasks')}</Txt>
-                  {!theDay && !tasks.error && <SkeletonRows rows={2} lines={1} />}
-                  {tasks.error && <ListFailed stale={!!theDay} error={tasks.error} onRetry={() => void tasks.reload()} onSignIn={() => void signOut()} />}
-                  {theDay && theDay.tasks.length === 0 && <Txt variant="muted" size={15}>{t('office.history.noDayTasks')}</Txt>}
-                  {theDay && theDay.tasks.length > 0 && <Txt variant="small">{t('office.history.dayTasksLine', { n: theDay.tasks.length, km: theDay.km })}</Txt>}
-                  {theDay?.tasks.map((x) => (
-                    <Pressable key={x.id} accessibilityRole="button" onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: x.id } })}
-                      style={({ pressed }) => [styles.taskRow, pressed && { opacity: 0.8 }]} testID="history-task">
-                      <Mono size={14} bold>{x.time}</Mono>
-                      <View style={{ flex: 1 }}>
-                        <Txt variant="strong" size={15} numberOfLines={1}>{x.title}</Txt>
-                        <Txt variant="small" numberOfLines={1}>{[t(`office.history.status_${x.status}`), x.vehicle, x.km != null ? t('office.history.kmLine', { km: x.km }) : ''].filter(Boolean).join(' · ')}</Txt>
-                      </View>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
-            </DayRoute>
-          </Section>
+        {mayRoute && d && (
+          <Pressable accessibilityRole="button" onPress={() => openRoute()} style={({ pressed }) => [styles.card, styles.routeCard, pressed && { opacity: 0.85 }]} testID="driver-today-route">
+            <RouteIcon size={26} color={colors.blue} strokeWidth={2.2} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Txt variant="strong" size={17}>{t('office.history.todayRoute')}</Txt>
+              {!todayRoute.data && !todayRoute.error && <Txt variant="small">{t('office.common.loading')}</Txt>}
+              {todayNumbers && (todayNumbers.km !== null || todayNumbers.drivingMin > 0
+                ? <Txt variant="small">{t('office.history.todayLine', { km: todayNumbers.km ?? 0, driving: durationText(t, todayNumbers.drivingMin), stops: todayNumbers.stops })}</Txt>
+                : <Txt variant="small">{t('office.history.noDayPoints')}</Txt>)}
+              <Txt variant="small" color={colors.blue}>{t('office.history.openRoute')}</Txt>
+            </View>
+            <ChevronRight size={22} color={colors.muted} />
+          </Pressable>
         )}
       </Screen>
     </View>
@@ -235,5 +219,5 @@ const styles = StyleSheet.create({
   action: { flex: 1, minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card },
   iconBtn: { width: 48, height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  taskRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 52, paddingVertical: 6 },
+  routeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 72 },
 });

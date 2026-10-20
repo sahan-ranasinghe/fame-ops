@@ -46,11 +46,14 @@ console.log('\nThe screens');
   const live = src('app/office/(tabs)/live.tsx');
   check(live.includes("from '@/components/office/PlaybackBar'") && !/function PlaybackBar|function usePlayback/.test(live), 'one playback bar: Live uses the shared one, no copy of its own');
   check(!/export function (playbackPath|positionOn|advance)/.test(src('office/historyLogic.ts')), 'one set of playback maths (office/liveRouteLogic.ts)');
-  const page = src('app/office/driver/[username].tsx');
+  const page = src('app/office/driver/[username]/route.tsx');
   check(page.includes('<DayStrip value={day} onChange={setDay} max={today} min={historyMin(today)}') && page.includes('dayRouteArgs(username, day)') && page.includes('routeEvery(day, today)'),
-    "the driver page: the day strip (today back 90 days), the day's route, today every minute");
+    "a driver's day on its own screen: the day strip (today back 90 days), the day's route, today every minute");
   check(page.includes("'list_tasks', dayTasksArgs(username, day)") && page.includes("pathname: '/office/task/[id]'") && page.includes('route.data.date === day'),
     "the day's tasks open their task; another day's answer is never drawn under the chosen day");
+  const profile = src('app/office/driver/[username].tsx');
+  check(profile.includes('testID="driver-today-route"') && profile.includes("todaySummaryArgs(username, today)") && profile.includes("pathname: '/office/driver/[username]/route'") && !profile.includes('<DayRoute') && !profile.includes('<DayStrip'),
+    "the profile (Sahan's decision 2): a Today's route card with today's numbers opening the route screen; no map or strip on the profile");
   const rm = src('components/RouteMap.tsx');
   const g = src('components/GoogleRouteMap.tsx');
   const o = src('components/OpenRouteMap.tsx');
@@ -63,15 +66,16 @@ console.log('\nThe screens');
   check(/task\.status === 'in_progress' \|\| task\.status === 'completed'\) && me\.tools\.includes\('driver_route'\)/.test(task) && task.includes("pathname: '/office/task/[id]/route'"),
     'a started or finished task has "Show the driven route" (with driver_route)');
   const live2 = src('app/office/(tabs)/live.tsx');
-  check(live2.includes('onHistory={routes ?') && live2.includes("pathname: '/office/driver/[username]'") && live2.includes('date: plusDays(colomboDate(), -1)') && live2.includes('testID="live-history"'),
-    "Live's card: Earlier days opens the driver page on yesterday (with driver_route)");
+  check(live2.includes('onHistory={routes ?') && live2.includes("pathname: '/office/driver/[username]/route'") && live2.includes('date: plusDays(colomboDate(), -1)') && live2.includes('testID="live-history"'),
+    "Live's card: Earlier days opens the driver's route screen on yesterday (with driver_route)");
   const en = JSON.parse(src('i18n/en.json'));
   const si = JSON.parse(src('i18n/si.json'));
   const keys = Object.keys(en.office?.history ?? {});
   check(keys.length >= 10 && keys.every((k) => typeof si.office?.history?.[k] === 'string'), 'office.history in both languages', keys.filter((k) => typeof si.office?.history?.[k] !== 'string'));
   for (const [file, needs] of [
     ['components/office/DayRoute.tsx', ['office.history.wholeRoute']],
-    ['app/office/driver/[username].tsx', ['office.history.todayRoute', 'office.history.dayRoute', 'office.history.dayTasks', 'office.history.noDayPoints']],
+    ['app/office/driver/[username]/route.tsx', ['office.history.todayRoute', 'office.history.dayRoute', 'office.history.dayTasks', 'office.history.noDayPoints']],
+    ['app/office/driver/[username].tsx', ['office.history.todayRoute', 'office.history.todayLine', 'office.history.openRoute']],
     ['app/office/task/[id]/route.tsx', ['office.history.drivenRoute', 'office.history.noTaskPoints']],
   ] as const) {
     const s = src(file);
