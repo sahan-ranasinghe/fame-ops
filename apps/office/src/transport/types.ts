@@ -94,4 +94,6 @@ export const ALL_TOOLS = [
   // Part 3b: the driver's profile, availability, the Drivers board, asking drivers.
   "driver_profile", "set_driver_licence_photo", "unavailability", "set_unavailability", "remove_unavailability",
   "drivers_board", "ask_drivers", "ask_answers",
+  // Hotfix O2-H2, Part 1c: the app's crash reports (Settings → App errors).
+  "list_app_errors",
 ];

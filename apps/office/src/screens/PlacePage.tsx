@@ -179,7 +179,7 @@ export function PlacePage() {
       {notice && (
         <Notice tone="ok">
           {notice.text}
-          {notice.base && <> {notice.base.link ? <Link to="/settings/fleet">{notice.base.text}</Link> : notice.base.text}</>}
+          {notice.base && <> {notice.base.link ? <Link to="/settings/fleet/office">{notice.base.text}</Link> : notice.base.text}</>}
         </Notice>
       )}
       {restored && !p.removed && <Notice tone="ok">Restored. It is back in the searches, lists and pickers.</Notice>}

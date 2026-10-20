@@ -18,6 +18,7 @@ import { Check, ChevronLeft, LocateFixed, Phone, X } from '@/components/icons';
 import { LocationDisclosure } from '@/components/LocationDisclosure';
 import { useLeaveGuard } from '@/components/navigation';
 import { useDateLabel, useNow } from '@/components/task';
+import { ChoiceChip } from '@/components/patterns/Select';
 import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
 import { type AskAnswer, type AskAnswerInput, answerWords, isOpen, questionKey, timeChoices, tripWhen, typedTime } from '@/lib/asks';
 import { agreeLocationDisclosure, locationDisclosureAgreed } from '@/lib/disclosure';
@@ -203,24 +204,26 @@ export default function AskScreen() {
         {showAnswers && ask.kind === 'office_time' && (
           <View style={{ gap: 12 }}>
             <Txt variant="strong">{t('ask.pickTime')}</Txt>
-            <View style={styles.times}>
+            <View accessibilityRole="radiogroup" style={styles.times}>
               {timeChoices(now).map((choice) => {
                 const on = !typing && picked === choice.at;
                 return (
-                  <Pressable
+                  <ChoiceChip
                     key={choice.at}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: on }}
+                    mono
+                    corner
+                    size={22}
+                    label={choice.label}
+                    selected={on}
                     disabled={busy !== null}
                     onPress={() => {
                       setTyping(false);
                       setBadTime(false);
                       setPicked(choice.at);
                     }}
-                    style={[styles.time, on && styles.timeOn]}
-                  >
-                    <Mono size={22} bold color={on ? '#ffffff' : colors.ink}>{choice.label}</Mono>
-                  </Pressable>
+                    style={styles.time}
+                    testID={`ask-time-${choice.label}`}
+                  />
                 );
               })}
             </View>
@@ -270,10 +273,6 @@ const styles = StyleSheet.create({
   back: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   given: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.blueChip, borderRadius: 16, padding: 16 },
   times: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  time: {
-    width: '22%', flexGrow: 1, minHeight: 60, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  timeOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  time: { width: '22%', flexGrow: 1, minHeight: 60, borderRadius: 14, justifyContent: 'center', paddingHorizontal: 6 },
   input: { minHeight: 60, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 14, fontSize: 24, color: colors.ink, backgroundColor: colors.card },
 });

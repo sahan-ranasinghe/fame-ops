@@ -1,0 +1,49 @@
+{
+  "ask": {
+    "id": "f320a634-fb14-4fdc-abce-11c93f102d66",
+    "kind": "free_for_trip",
+    "question": "Free for a trip Wed 21 Oct 09:00–12:00?",
+    "trip": {
+      "date": "2026-10-21",
+      "from": "09:00",
+      "to": "12:00"
+    },
+    "asked_by": "Fixture Admin",
+    "asked": "12:08",
+    "asked_day": "Tue 20 Oct",
+    "expires": "Wed 21 Oct 09:00",
+    "counts": {
+      "asked": 2,
+      "seen": 0,
+      "answered": 0,
+      "yes": 0
+    },
+    "drivers": [
+      {
+        "name": "Driver A f902",
+        "username": "fixaf902",
+        "links": {
+          "phone": "+94771234567",
+          "phone_display": "077 123 4567",
+          "call": "tel:+94771234567",
+          "whatsapp": "https://wa.me/94771234567"
+        },
+        "sent": "12:08",
+        "state": "sent"
+      },
+      {
+        "name": "Driver B f902",
+        "username": "fixbf902",
+        "links": {
+          "phone": "+94771234568",
+          "phone_display": "077 123 4568",
+          "call": "tel:+94771234568",
+          "whatsapp": "https://wa.me/94771234568"
+        },
+        "sent": "12:08",
+        "state": "sent"
+      }
+    ]
+  },
+  "next": "The drivers get a push; their answers show in ask_answers and in your notifications."
+}

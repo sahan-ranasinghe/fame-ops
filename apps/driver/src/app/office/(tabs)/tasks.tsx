@@ -15,6 +15,7 @@ import { DayStrip } from '@/components/patterns/Calendar';
 import { Clock } from '@/components/icons';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Mono, Txt } from '@/components/ui';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import { colomboDate } from '@/lib/time';
 import { boardLine, boardPill } from '@/office/homeLogic';
 import { has } from '@/office/nav';
@@ -101,6 +102,7 @@ export default function TasksTab() {
         )}
       </DarkHeader>
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
+        <SavedNotice noticeKey="/office/(tabs)/tasks" />
         <DayStrip value={date} onChange={setDate} testID="tasks-day" />
         {me.tools.includes('create_task') && <Button label={t('office.trip.assignTask')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } })} style={{ minHeight: 56 }} />}
         {!b && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}

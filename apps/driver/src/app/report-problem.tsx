@@ -10,10 +10,11 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ChevronLeft } from '@/components/icons';
 import { useCallback, useState } from 'react';
-import { Alert, type AlertButton, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ReportForm } from '@/components/ReportForm';
 import { taskTitle } from '@/components/taskLines';
 import { Txt } from '@/components/ui';
@@ -38,22 +39,15 @@ export default function ReportProblemScreen() {
 
   function sent({ needsVehicle }: { needsVehicle: boolean }) {
     allowLeave();
-    const buttons: AlertButton[] = [{ text: t('common.ok'), onPress: () => router.back() }];
-    // Another vehicle is needed and the report only waits on the phone: the office can be called instead.
-    if (needsVehicle && app.offline && OFFICE_PHONE !== '') {
-      buttons.unshift({
-        text: t('gate.callOffice'),
-        onPress: () => {
-          void Linking.openURL(`tel:${OFFICE_PHONE}`);
-          router.back();
-        },
-      });
-    }
-    Alert.alert(
-      t('report.sentTitle'),
-      t(app.offline ? 'common.savedOffline' : needsVehicle ? 'report.needVehicleSent' : 'report.sentBody'),
-      buttons,
-    );
+    // Hotfix O2-H2, Part 1b: back to where the report was opened, a snackbar says it went (or waits on the phone); a
+    // driver who needs another vehicle and has no connection gets "Call office" on it.
+    router.back();
+    const call = needsVehicle && app.offline && OFFICE_PHONE !== '';
+    showSnackbar({
+      text: [t('report.sentTitle'), app.offline ? t('done.onPhone') : t(needsVehicle ? 'report.needVehicleSent' : 'report.sentBody')].join(' · '),
+      ms: 6000,
+      ...(call ? { action: { label: t('gate.callOffice'), onPress: () => void Linking.openURL(`tel:${OFFICE_PHONE}`) } } : {}),
+    });
   }
 
   return (

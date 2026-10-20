@@ -30,6 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DriversMap } from '@/components/DriversMap';
 import { type LucideIcon, MessageCircle, Navigation, Phone, Route as RouteIcon, X } from '@/components/icons';
 import { type Playback, PlaybackBar, usePlayback } from '@/components/office/PlaybackBar';
+import { pickedStyle } from '@/components/patterns/Select';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { DriverDot } from '@/components/mapPins';
 import { Sheet } from '@/components/patterns/Sheet';
@@ -305,7 +306,7 @@ function DriverRow({ d, selected, onPress }: { d: LiveDriver; selected: boolean;
   const pill = pillOf(d);
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} testID={`live-row-${d.username}`}
-      style={({ pressed }) => [styles.row, selected && { backgroundColor: colors.blueChip }, pressed && { opacity: 0.7 }]}>
+      style={({ pressed }) => [styles.row, selected && pickedStyle, pressed && { opacity: 0.7 }]}>
       <DriverDot initials={initials(d.driver)} tone={pill.tone} dim={pill.key === 'offDuty'} selected={selected} size={40} />
       <View style={{ flex: 1, gap: 2 }}>
         <View style={styles.name}>
@@ -487,7 +488,7 @@ const styles = StyleSheet.create({
   mapButtonOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   mapPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 220 },
   chips: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, backgroundColor: colors.page },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, minHeight: 64, borderRadius: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, minHeight: 64, borderRadius: 12, borderWidth: 2, borderColor: 'transparent' },
   name: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   card: {
     position: 'absolute',

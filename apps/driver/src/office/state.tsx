@@ -146,9 +146,13 @@ export function useTool<T>(tool: string, args: Record<string, unknown> = {}, opt
     }, [load, opts.every]),
   );
 
+  // A patch is newer than any load still on its way (Hotfix O2-H2: a switch flipped while the screen's focus load runs must
+  // not be flipped back by that older answer): the load in flight is let go, and its busy state with it.
   const patch = useCallback((next: T | ((prev: T) => T), forKey?: string, more?: boolean) => {
     if (forKey !== undefined && forKey !== keyRef.current) return;
     if (more) extended.current = keyRef.current;
+    seq.current += 1;
+    setBusy({ key: keyRef.current, first: false, refreshing: false });
     setStore((prev) => {
       if (prev.key !== keyRef.current) return prev;
       const value = typeof next === 'function' ? (prev.data === null ? prev.data : (next as (p: T) => T)(prev.data)) : next;

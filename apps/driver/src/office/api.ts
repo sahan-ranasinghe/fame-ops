@@ -140,7 +140,8 @@ export function createOfficeApi(deps: OfficeApiDeps): OfficeApi {
       if (controller.signal.aborted) throw { ...TIMED_OUT } satisfies FleetError;
       throw { code: 'network', message: 'No connection to Fame Fleet.' } satisfies FleetError;
     }
-    // The timeout covers the body too: a reply that stalls half-way ends as a dropped call (ui-patterns §5).
+    // The timeout covers the body too: a reply that stalls half-way ends as a dropped call (ui-patterns §5; Hotfix O2-H2,
+    // Part 1b: never a spinner that turns for ever).
     let text: string;
     try {
       text = await res.text();

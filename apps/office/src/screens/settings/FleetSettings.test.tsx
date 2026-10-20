@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { StrictMode } from "react";
 import { MemoryRouter } from "react-router";
 import { describe, expect, it } from "vitest";
@@ -6,7 +6,7 @@ import { FleetProvider } from "../../app/FleetContext";
 import { FleetStore } from "../../data/store";
 import type { FleetSettings as Values, SettingsResult } from "../../data/types";
 import type { Me, Transport, WatchEvent } from "../../transport/types";
-import { FleetSettings } from "./FleetSettings";
+import { FLEET_SECTIONS, FleetSettings, type FleetSection } from "./FleetSettings";
 
 const base: Values = {
   dwell_min: { pickup: 5, drop: 5, visit: 60, default: 5 }, buffer_min: 15, base_place_id: null, avg_speed_kmh: 35, road_factor: 1.3,
@@ -58,22 +58,46 @@ class Settings implements Transport {
   }
 }
 
-async function mount(transport: Settings, strict = false) {
+/** Hotfix O2-H2 (Part 2): a section's own page (/settings/fleet/:section), or the list of sections (none). */
+async function mount(transport: Settings, section?: FleetSection, strict = false) {
   const me = await transport.me();
   const page = (
     <FleetProvider value={{ store: new FleetStore(transport), transport, me, noConnector: false }}>
-      <MemoryRouter><FleetSettings /></MemoryRouter>
+      <MemoryRouter><FleetSettings section={section} /></MemoryRouter>
     </FleetProvider>
   );
   render(strict ? <StrictMode>{page}</StrictMode> : page);
-  await waitFor(() => expect(screen.getAllByTestId("checklist-row")).toHaveLength(4));
-  return within(screen.getByTestId("checklist-settings"));
+  await screen.findByTestId(section ? `fleet-section-${section}` : "fleet-settings");
+  if (section === "fuel") await waitFor(() => expect(screen.getAllByTestId("checklist-row")).toHaveLength(4));
+  return within(screen.getByTestId(section ? `fleet-section-${section}` : "fleet-settings"));
 }
 
 describe("FleetSettings", () => {
+  it("Hotfix O2-H2: the page is six rows, each with its one-line summary, opening its own page; no setting is on the list", async () => {
+    const transport = new Settings(false, { office_phone: "+94112345678", tasks_need_approval: true });
+    await mount(transport);
+    expect(FLEET_SECTIONS.map((x) => screen.getByTestId(`fleet-row-${x.key}`).getAttribute("href"))).toEqual(FLEET_SECTIONS.map((x) => `/settings/fleet/${x.key}`));
+    expect(screen.getByTestId("fleet-row-office").textContent).toContain("Base: none · office phone 011 234 5678");
+    expect(screen.getByTestId("fleet-row-dispatch").textContent).toContain("Pickup 5 min · accept within 15 min · buffer 15 min");
+    expect(screen.getByTestId("fleet-row-tasks").textContent).toContain("Approval on · vehicle on the day off · self-drive on");
+    expect(screen.getByTestId("fleet-row-fuel").textContent).toContain("4 steps · 480p · kept 12 months");
+    expect(screen.queryByTestId("checklist-settings")).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
+  it("a section's page has only its own cards", async () => {
+    await mount(new Settings(), "office");
+    expect(screen.getByTestId("office-phone-settings")).toBeTruthy();
+    expect(screen.getByTestId("privacy-email-settings")).toBeTruthy();
+    expect(screen.queryByTestId("dwell-settings")).toBeNull();
+    expect(screen.queryByTestId("fleet-row-office")).toBeNull();
+    expect(screen.getByRole("heading", { name: "The office" })).toBeTruthy();
+  });
+
   it("a second answer that lands after Add step (the dev server mounts twice) keeps the new step", async () => {
     const transport = new Settings(true);
-    const checklist = await mount(transport, true);
+    const checklist = await mount(transport, "fuel", true);
     expect(transport.gets).toBe(2);
     fireEvent.click(checklist.getByRole("button", { name: "Add step" }));
     expect(checklist.getAllByTestId("checklist-row")).toHaveLength(5);
@@ -83,14 +107,14 @@ describe("FleetSettings", () => {
 
   it("saving another setting keeps the unsaved steps; the saved one takes the server's value", async () => {
     const transport = new Settings();
-    const checklist = await mount(transport);
+    await mount(transport, "fuel");
+    const checklist = within(screen.getByTestId("checklist-settings"));
     fireEvent.click(checklist.getByRole("button", { name: "Add step" }));
     fireEvent.change(checklist.getByLabelText("Step 5 · English"), { target: { value: "Fuel cap closed" } });
-    const buffer = screen.getByLabelText<HTMLInputElement>("Buffer before a deadline (min)");
-    fireEvent.change(buffer, { target: { value: "20" } });
-    fireEvent.submit(buffer.closest("form")!);
-    await waitFor(() => expect(transport.saves).toEqual([{ key: "buffer_min", value: 20 }]));
-    await waitFor(() => expect(within(buffer.closest("form")!).getByRole("button", { name: "Save" })).toHaveProperty("disabled", true));
+    // Another setting of the same page, saved at once (Recording quality).
+    fireEvent.change(screen.getByLabelText<HTMLSelectElement>("Recording quality"), { target: { value: "720p" } });
+    await waitFor(() => expect(transport.saves).toEqual([{ key: "fuel_video_quality", value: "720p" }]));
+    await waitFor(() => expect(screen.getByLabelText<HTMLSelectElement>("Recording quality").value).toBe("720p"));
     expect(checklist.getAllByTestId("checklist-row")).toHaveLength(5);
     expect(checklist.getByLabelText<HTMLInputElement>("Step 5 · English").value).toBe("Fuel cap closed");
     expect(checklist.getByRole("button", { name: "Save" })).toHaveProperty("disabled", false);
@@ -98,7 +122,7 @@ describe("FleetSettings", () => {
 
   it("the accept window card has the reminder beside the two fields and says when a task needs a driver", async () => {
     const transport = new Settings();
-    await mount(transport);
+    await mount(transport, "dispatch");
     const card = within(screen.getByTestId("accept-settings"));
     expect(card.getByText(/15 min after sending or 30 min before leaving, whichever comes first/)).toBeTruthy();
     expect(card.getByText(/the task needs a driver/)).toBeTruthy();
@@ -113,7 +137,7 @@ describe("FleetSettings", () => {
 
   it("driver-started trips (Phase 7, §13): the four values in plain words, saved when one is picked", async () => {
     const transport = new Settings(false, { driver_personal_trips: "allowed" });
-    await mount(transport);
+    await mount(transport, "day");
     const card = within(screen.getByTestId("personal-trips-settings"));
     const radios = card.getAllByRole<HTMLInputElement>("radio");
     expect(radios.map((r) => r.closest("label")?.textContent?.trim())).toEqual([
@@ -130,13 +154,13 @@ describe("FleetSettings", () => {
 
   it("driver-started trips: an older server with no value shows its default", async () => {
     const transport = new Settings();
-    await mount(transport);
+    await mount(transport, "day");
     expect(within(screen.getByTestId("personal-trips-settings")).getByLabelText<HTMLInputElement>("Allowed: Company work preselected, Personal offered").checked).toBe(true);
   });
 
   it("the time at a stop by type, with plain labels; an older kind still stored is named", async () => {
     const transport = new Settings(false, { dwell_min: { pickup: 5, drop: 5, visit: 60, default: 5, "pickup.goods": 15 } });
-    await mount(transport);
+    await mount(transport, "dispatch");
     const card = within(screen.getByTestId("dwell-settings"));
     expect(card.getByText("A place's usual time and a stop's own time come first", { exact: false })).toBeTruthy();
     expect(["Pickup (min)", "Drop (min)", "Visit (min)", "Any other (min)"].map((l) => card.getByLabelText<HTMLInputElement>(l).value)).toEqual(["5", "5", "60", "5"]);
@@ -149,7 +173,7 @@ describe("FleetSettings", () => {
 
   it("Hotfix 2: the office's number is saved as +94… (refused in words otherwise), and the vehicle on the day is a switch, off by default", async () => {
     const transport = new Settings(false);
-    await mount(transport);
+    await mount(transport, "office");
     const phone = within(screen.getByTestId("office-phone-settings"));
     expect(phone.getByText("None saved: Call office is not shown.")).toBeTruthy();
     fireEvent.change(phone.getByLabelText("Office phone number"), { target: { value: "011 23" } });
@@ -161,7 +185,9 @@ describe("FleetSettings", () => {
     await waitFor(() => expect(transport.saves).toEqual([{ key: "office_phone", value: "+94112345678" }]));
     await waitFor(() => expect(phone.getByText("Saved: 011 234 5678")).toBeTruthy());
     expect(phone.getByLabelText<HTMLInputElement>("Office phone number").value).toBe("011 234 5678");
+    cleanup();
 
+    await mount(transport, "tasks");
     const day = within(screen.getByTestId("vehicle-on-the-day-settings"));
     const box = day.getByRole("checkbox");
     expect((box as HTMLInputElement).checked).toBe(false);
@@ -171,7 +197,7 @@ describe("FleetSettings", () => {
   });
   it("Part 6: the privacy contact e-mail: the format checked, saved, removed (the page then shows the office phone)", async () => {
     const transport = new Settings(false);
-    await mount(transport);
+    await mount(transport, "office");
     const card = within(screen.getByTestId("privacy-email-settings"));
     expect(card.getByText("Shown on the public privacy page. Use Fame's shared address before the store submission.")).toBeTruthy();
     expect(card.getByText("None saved: the page shows the office phone.")).toBeTruthy();

@@ -5,7 +5,8 @@
 
 import { Pressable, Share, StyleSheet, TextInput, View } from 'react-native';
 
-import { Check, Search, Square, X } from '@/components/icons';
+import { Search, X } from '@/components/icons';
+import { Checkbox, ChoiceChip } from '@/components/patterns/Select';
 import { Button, Txt } from '@/components/ui';
 import { type Preset, PRESET_KEYS, presetOf, togglePermission, viewLocked } from '@/office/peopleLogic';
 import { type Permission, PERMISSIONS, PRESETS } from '@/office/permissions';
@@ -64,15 +65,13 @@ export function PermissionPicker({ value, onChange, disabled = false }: { value:
   const chip = (key: Preset | 'all', label: string, list: readonly Permission[]) => {
     const on = current === key;
     return (
-      <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected: on, disabled }} disabled={disabled} onPress={() => onChange([...list])} style={[styles.preset, on && styles.presetOn]}>
-        <Txt variant="strong" size={15} color={on ? '#ffffff' : colors.ink}>{label}</Txt>
-      </Pressable>
+      <ChoiceChip key={key} label={label} selected={on} disabled={disabled} onPress={() => onChange([...list])} />
     );
   };
   return (
     <View style={{ gap: 10 }}>
       <Txt variant="label" color={colors.muted}>{t('office.people.quickPicks').toUpperCase()}</Txt>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+      <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
         {PRESET_KEYS.map((k) => chip(k, t(`office.preset.${k}`), PRESETS[k].permissions))}
         {chip('all', t('office.people.presetAdmin'), PERMISSIONS)}
       </View>
@@ -82,20 +81,16 @@ export function PermissionPicker({ value, onChange, disabled = false }: { value:
           const lock = p === 'view' && locked;
           const on = value.includes(p) || lock;
           return (
-            <Pressable
+            <Checkbox
               key={p}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: on, disabled: disabled || lock }}
+              checked={on}
               disabled={disabled || lock}
-              onPress={() => onChange(togglePermission(value, p))}
-              style={[styles.permRow, lock && { opacity: 0.6 }]}
-            >
-              {on ? <Check size={24} color={colors.blue} strokeWidth={2.6} /> : <Square size={24} color={colors.muted} strokeWidth={2} />}
-              <View style={{ flex: 1, gap: 2 }}>
-                <Txt variant="strong" size={16}>{t(`office.permission.${p}`)}</Txt>
-                <Txt variant="small">{lock ? t('office.people.viewLocked') : t(`office.permissionText.${p}`)}</Txt>
-              </View>
-            </Pressable>
+              onChange={() => onChange(togglePermission(value, p))}
+              label={t(`office.permission.${p}`)}
+              hint={lock ? undefined : t(`office.permissionText.${p}`)}
+              disabledReason={lock ? t('office.people.viewLocked') : undefined}
+              testID={`perm-${p}`}
+            />
           );
         })}
       </View>
@@ -118,9 +113,6 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 17, color: colors.ink, minHeight: 48, paddingVertical: 8 },
   clear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   secret: { backgroundColor: colors.card, borderColor: colors.amber, borderWidth: 1.5, borderRadius: 18, padding: 16, gap: 12 },
-  preset: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
-  presetOn: { backgroundColor: colors.ink, borderColor: colors.ink },
-  permRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 8 },
   toggle: { width: 52, height: 30, borderRadius: 15, backgroundColor: '#c9c5bb', padding: 3, justifyContent: 'center' },
   knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.card },
 });

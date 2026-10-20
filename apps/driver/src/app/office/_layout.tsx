@@ -1,7 +1,9 @@
 // Office mode (Phase 8, O1): the office screens, in their own route group. Only an office sign-in gets here (the session
 // decides: office/store.ts); without one, Login. Nothing driver-side runs for an office person (no LocationGate, no duty).
 
-import { Redirect, Stack } from 'expo-router';
+import { type ErrorBoundaryProps, Redirect, Stack } from 'expo-router';
+
+import { RouteCrash } from '@/components/patterns/CrashScreen';
 
 import { OfficeProvider } from '@/office/state';
 import { useOfficeMe } from '@/office/store';
@@ -15,4 +17,9 @@ export default function OfficeLayout() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }} />
     </OfficeProvider>
   );
+}
+
+/** Hotfix O2-H2: a crash in this stack shows the crash screen (Go back, Reload app, Show details), never a white page. */
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <RouteCrash {...props} home="/office" />;
 }

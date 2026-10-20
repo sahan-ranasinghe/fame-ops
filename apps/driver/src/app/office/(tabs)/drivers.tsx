@@ -18,6 +18,7 @@ import { Alert, Linking, Pressable, StyleSheet, TextInput, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageCircle, Phone, Plus } from '@/components/icons';
+import { ChoiceChip, ChoiceChips } from '@/components/patterns/Select';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { DateField, TripDayPicker } from '@/components/patterns/Calendar';
 import { FilterBar } from '@/components/patterns/FilterBar';
@@ -109,11 +110,9 @@ export default function DriversTab() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={subtitle} title={t('office.drivers.title')}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 10 }}>
-          <View style={styles.seg}>
+          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
             {(['now', 'week'] as const).map((k) => (
-              <Pressable key={k} accessibilityRole="button" accessibilityState={{ selected: view === k }} onPress={() => setView(k)} style={[styles.segBtn, view === k && { backgroundColor: '#ffffff' }]}>
-                <Txt variant="strong" size={15} color={view === k ? colors.ink : '#b9bec6'}>{t(`office.drivers.${k}`)}</Txt>
-              </Pressable>
+              <ChoiceChip key={k} onDark label={t(`office.drivers.${k}`)} selected={view === k} onPress={() => setView(k)} />
             ))}
           </View>
         </View>
@@ -389,25 +388,12 @@ function NotAvailableSheet({ visible, driver, date: firstDate, onClose, onSaved 
   );
 }
 
-/** A row of small chips, one selected. */
+/** A row of small chips, one selected: the shared ChoiceChips (the check, the tint, the border). */
 function ChipRow<K extends string>({ options, value, onChange }: { options: { key: K; label: string }[]; value: K; onChange: (k: K) => void }) {
-  return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {options.map((o) => {
-        const on = o.key === value;
-        return (
-          <Pressable key={o.key} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => onChange(o.key)} style={[styles.pick, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}>
-            <Txt variant="strong" size={14} color={on ? '#ffffff' : colors.ink}>{o.label}</Txt>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+  return <ChoiceChips options={options} value={value} onChange={onChange} small />;
 }
 
 const styles = StyleSheet.create({
-  seg: { flexDirection: 'row', backgroundColor: colors.darkSurface, borderRadius: 10, padding: 3, gap: 3 },
-  segBtn: { minWidth: 72, minHeight: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 12, minHeight: 72 },
   dot: { position: 'absolute', right: -1, bottom: -1, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#ffffff' },
   dotSmall: { width: 10, height: 10, borderRadius: 5 },
@@ -420,6 +406,5 @@ const styles = StyleSheet.create({
   cellPart: { backgroundColor: colors.amberChip, borderColor: colors.amber },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1.5, borderColor: colors.line },
   askBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 10, backgroundColor: colors.page },
-  pick: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   input: { minHeight: 48, borderWidth: 1.5, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 12, fontSize: 17, color: colors.ink, backgroundColor: colors.card },
 });

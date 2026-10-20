@@ -5,6 +5,7 @@
 // server uses the same.
 import { useState } from "react";
 import { DWELL_PICKS, dwellText, parseDwell } from "./stopsLogic";
+import { ChoiceChip } from "../ui/Select";
 
 export interface DwellFallback {
   min: number;
@@ -39,10 +40,10 @@ export function DwellPicker({ id, value, fallback, onChange, label = "Time at th
       <span className="lab" id={`${id}-l`}>{label}</span>
       <div className="chips" role="group" aria-labelledby={`${id}-l`}>
         {DWELL_PICKS.map((m) => (
-          <button key={m} type="button" className="chip" style={chipStyle} aria-pressed={!showOther && shown === m}
-            onClick={() => { setOtherOpen(false); onChange(String(m)); }}>{dwellText(m)}</button>
+          <ChoiceChip key={m} style={chipStyle} selected={!showOther && shown === m}
+            onClick={() => { setOtherOpen(false); onChange(String(m)); }}>{dwellText(m)}</ChoiceChip>
         ))}
-        <button type="button" className="chip" style={chipStyle} aria-pressed={showOther} onClick={() => setOtherOpen(true)}>Other</button>
+        <ChoiceChip style={chipStyle} selected={showOther} onClick={() => setOtherOpen(true)}>Other</ChoiceChip>
       </div>
       {showOther && (
         <input id={id} aria-label={`${label}: other`} placeholder="Minutes or h:mm, e.g. 45 or 2:30" inputMode="numeric" maxLength={5}

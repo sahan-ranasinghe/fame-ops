@@ -1,10 +1,9 @@
-// Office mode (Phase 8, O1): the Profile (design 18), a stack screen from More → My profile. Who this is with the
-// permission chips (never a role name), Contact (the phone drivers can call, edited in place → update_my_profile, then
-// /me again so the number follows; the work e-mail), Notifications (a switch per event from my_notification_settings,
-// each change sent on its own through set_my_notification_settings, optimistic and put back if refused), App (the
-// language, the office phone from get_settings with Call, the privacy policy, the version) and Sign out. The phone has
-// no office push yet, so the design's Sounds switch and "Test sound" are not shown (no dead UI). The banner "Add your
-// phone number…" shows while /me says phone_required.
+// Office mode (Phase 8, O1): the Profile (design 18), a stack screen from More → My profile. Who this is with the work
+// e-mail and the permission chips (never a role name), Contact (the phone drivers can call, edited in place →
+// update_my_profile, then /me again so the number follows), App (Notifications as ONE row with its summary, opening its
+// own screen: Hotfix O2-H2 Part 2, Instagram's and WhatsApp's settings; the language, the office phone from get_settings
+// with Call, the privacy policy, the version) and Sign out. The banner "Add your phone number…" shows while /me says
+// phone_required.
 
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
@@ -13,15 +12,17 @@ import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { ChevronRight, FileText, Phone } from '@/components/icons';
 import { LanguageSwitch } from '@/components/LanguageSwitch';
+import { LinkRow } from '@/components/office/NotifParts';
 import { Button, Field, Mono, Notice, Txt } from '@/components/ui';
 import { PRIVACY_URL } from '@/config';
 import { phoneDisplay } from '@/lib/contacts';
 import { telLink } from '@/lib/format';
+import { notifState } from '@/office/notificationGroups';
+import { STATE_KEY } from '@/office/notifLogic';
 import { useOffice, useTool } from '@/office/state';
 import { initials } from '@/office/text';
 import type { FleetError, NotificationSettings, SettingsResult } from '@/office/types';
-import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
-import { BackHeader, Divider, ErrorNotice, ListFailed, Screen, Section } from '@/office/ui';
+import { BackHeader, Divider, ErrorNotice, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -45,7 +46,6 @@ export default function OfficeProfile() {
   const [saved, setSaved] = useState<ProfileAnswer | null>(null);
   const shownPhone = saved ? (saved.phone_display ?? (saved.phone ? phoneDisplay(saved.phone) : undefined)) : me.phone_display;
 
-  const [toggleError, setToggleError] = useState<{ event: string; next: boolean; error: FleetError } | null>(null);
   const [signingOut, setSigningOut] = useState(false);
 
   function startEdit() {
@@ -71,18 +71,6 @@ export default function OfficeProfile() {
     }
   }
 
-  async function toggle(event: string, next: boolean) {
-    setToggleError(null);
-    const set = (on: boolean) => notif.patch((p) => ({ ...p, events: p.events.map((x) => (x.event === event ? { ...x, enabled: on } : x)) }));
-    set(next);
-    try {
-      await api.call('set_my_notification_settings', { events: { [event]: next } });
-    } catch (e) {
-      set(!next);
-      setToggleError({ event, next, error: e as FleetError });
-    }
-  }
-
   function confirmSignOut() {
     Alert.alert(t('office.common.signOut'), t('office.more.signOutBody'), [
       { text: t('office.common.cancel'), style: 'cancel' },
@@ -100,6 +88,8 @@ export default function OfficeProfile() {
   const officePhone = settings.data?.settings.office_phone ?? null;
   const officeTel = telLink(officePhone);
   const version = Constants.expoConfig?.version ?? '';
+  // The Notifications row's one line: On, Paused, Some off (office/notificationGroups.ts).
+  const notifLine = notif.data ? t(STATE_KEY[notifState(notif.data.events, me.permissions)]) : notif.error ? undefined : t('office.common.loading');
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -114,6 +104,7 @@ export default function OfficeProfile() {
           </View>
           <View style={{ flex: 1, gap: 8 }}>
             <Txt variant="title" size={26} color="#ffffff" numberOfLines={2}>{me.name}</Txt>
+            {me.email ? <Txt variant="muted" size={15} color="#c9ccd1" numberOfLines={1}>{me.email}</Txt> : null}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {me.permissions.map((p) => (
                 <View key={p} style={styles.permChip}>
@@ -159,41 +150,11 @@ export default function OfficeProfile() {
             </View>
           )}
           {saved && !editing && <Txt variant="small" color={colors.green} style={{ paddingBottom: 6 }}>{t('office.profile.saved')}</Txt>}
-          <Divider />
-          <View style={styles.row}>
-            <View style={{ flex: 1, gap: 2 }}>
-              <Txt variant="muted" size={15}>{t('office.profile.email')}</Txt>
-              <Txt variant="strong" size={17}>{me.email ?? '–'}</Txt>
-            </View>
-          </View>
-        </Section>
-
-        <Section title={t('office.profile.notifications')}>
-          {!notif.data && !notif.error && <SkeletonRows rows={3} lines={2} />}
-          {notif.error && <ListFailed stale={!!notif.data} error={notif.error} onRetry={() => void notif.reload()} onSignIn={() => void signOut()} />}
-          {notif.data && notif.data.events.length === 0 && <ListEmpty text={t('office.profile.noEvents')} />}
-          {notif.data?.events.map((ev, i) => (
-            <View key={ev.event}>
-              {i > 0 && <Divider />}
-              <Pressable accessibilityRole="switch" accessibilityState={{ checked: ev.enabled }} onPress={() => void toggle(ev.event, !ev.enabled)} style={styles.row}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Txt variant="strong" size={17}>{ev.label}</Txt>
-                  {ev.text ? <Txt variant="muted" size={15}>{ev.text}</Txt> : null}
-                </View>
-                <View style={[styles.toggle, ev.enabled && { backgroundColor: colors.blue }]}>
-                  <View style={[styles.knob, ev.enabled && { alignSelf: 'flex-end' }]} />
-                </View>
-              </Pressable>
-              {toggleError?.event === ev.event && (
-                <View style={{ paddingBottom: 10 }}>
-                  <ErrorNotice error={toggleError.error} onRetry={() => void toggle(ev.event, toggleError.next)} onSignIn={() => void signOut()} />
-                </View>
-              )}
-            </View>
-          ))}
         </Section>
 
         <Section title={t('office.profile.app')}>
+          <LinkRow title={t('office.notif.title')} line={notifLine} onPress={() => router.push('/office/notifications')} testID="profile-notifications" />
+          <Divider />
           <View style={{ gap: 10, paddingVertical: 10 }}>
             <Txt variant="strong" size={17}>{t('office.profile.language')}</Txt>
             <LanguageSwitch />
@@ -242,6 +203,4 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 56 },
   textBtn: { minHeight: 48, minWidth: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
   iconBtn: { width: 48, height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
-  toggle: { width: 52, height: 30, borderRadius: 15, backgroundColor: '#c9c5bb', padding: 3, justifyContent: 'center' },
-  knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.card },
 });

@@ -10,12 +10,16 @@ import { Yaldevi_400Regular } from '@expo-google-fonts/yaldevi/400Regular';
 import { Yaldevi_600SemiBold } from '@expo-google-fonts/yaldevi/600SemiBold';
 import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
-import { Stack, useRouter } from 'expo-router';
+import { type ErrorBoundaryProps, Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useRef } from 'react';
 import { View } from 'react-native';
 
 import { LocationGate } from '@/components/LocationGate';
+import { CrashScreen, reloadApp, RouteCrash, words } from '@/components/patterns/CrashScreen';
+import { showSnackbar, SnackbarHost } from '@/components/patterns/Snackbar';
+import { crashStore, installGlobalHandlers, noteScreen, useFatalCrash } from '@/lib/crash';
+import { screenOf } from '@/lib/crashLogic';
 import { anyFormDirty } from '@/components/navigation';
 import { tapData } from '@/lib/notifications';
 import { bootOffice } from '@/office/auth';
@@ -24,8 +28,18 @@ import { useOfficeMe } from '@/office/store';
 import { AppProvider, useApp } from '@/state/app';
 import { colors } from '@/theme';
 
-// Keep the splash screen up until the fonts and the saved sign-in are ready.
-SplashScreen.preventAutoHideAsync();
+// Keep the splash screen up until the fonts and the saved sign-in are ready (its promise may reject after a reload: never
+// an unhandled rejection of its own).
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
+
+// Hotfix O2-H2, Part 1c: an error outside rendering (an event handler, a timer) or a promise nobody caught never freezes
+// the app: a fatal one shows the crash screen over everything, any other one a snackbar.
+installGlobalHandlers(() => showSnackbar({ text: words()('crash.soft'), tone: 'error' }));
+
+/** Hotfix O2-H2: the last line of defence: a crash above every stack shows the crash screen, never a white page. */
+export function ErrorBoundary(props: ErrorBoundaryProps) {
+  return <RouteCrash {...props} home="/" />;
+}
 
 function Screens({ fontsReady }: { fontsReady: boolean }) {
   const { booted, me, rememberPush } = useApp();
@@ -35,10 +49,18 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
   // The notification the app was opened with (or tapped while running): a task notification opens that task, a question
   // from the office (Part 3b) that question.
   const response = Notifications.useLastNotificationResponse();
+  // The route on screen, for a crash's "Show details" (lib/crash.ts): its pattern ("/office/driver/[username]"), never the
+  // person or the id in it.
+  const segments = useSegments();
+  const screenName = screenOf(segments);
+  useEffect(() => {
+    noteScreen(screenName);
+  }, [screenName]);
+  const fatal = useFatalCrash();
   const handled = useRef<string | null>(null);
 
   useEffect(() => {
-    if (ready) SplashScreen.hideAsync();
+    if (ready) SplashScreen.hideAsync().catch(() => undefined);
   }, [ready]);
 
   // Office mode (Phase 8): the office person's session checked once at start (lib/session.ts: offline is not signed out).
@@ -87,11 +109,19 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
     router.push({ pathname: '/task/[id]', params: { id: taskId } });
   }, [ready, me, response, router, rememberPush]);
 
-  if (!ready) return null;
+  // A fatal error before the app is ready still shows the crash screen (over the splash, which it hides), never a frozen
+  // splash.
+  if (!ready) return fatal ? <CrashScreen crash={fatal} onReload={() => void reloadApp()} /> : null;
   return (
     <View style={{ flex: 1 }}>
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }} />
       {me && <LocationGate />}
+      <SnackbarHost />
+      {fatal ? (
+        <View style={{ position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 }}>
+          <CrashScreen crash={fatal} onBack={() => crashStore.set(null)} onReload={() => void reloadApp()} />
+        </View>
+      ) : null}
     </View>
   );
 }

@@ -1,8 +1,12 @@
-// Settings → Notifications (web only): which events reach this person, this
-// browser's push state with one button, and the browsers notifications are on in.
-// The server honours the toggles at queue time; notify-office pushes to every
-// device. The artifact has no service worker: it points to the web app.
+// Settings → Notifications (web only; Hotfix O2-H2 Part 2, GitHub's and Gmail's settings pages, the app's Notifications
+// screen in the site's look): "Pause all notifications" on top, then one row per group with its summary ("4 of 5 on")
+// opening the group's own page (/settings/notifications/:group, NotificationGroup.tsx), then this browser's push state
+// with one button, the sounds as one row (/settings/notifications/sounds) and the browsers notifications are on in.
+// Only the groups this person's permissions can bring (notificationGroups.ts, the same file as the app's). The server
+// honours the toggles at queue time; notify-office pushes to every device. The artifact has no service worker: it
+// points to the web app.
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 import { useFleet } from "../../app/FleetContext";
 import type { NotificationSettings } from "../../data/types";
 import { currentSubscription, endpointHash, pushState } from "../../push";
@@ -10,31 +14,38 @@ import { errText } from "../../transport/errors";
 import type { FleetError } from "../../transport/types";
 import { Empty, Loading, Notice, Pill } from "../../ui/basics";
 import { useToast } from "../../ui/Toast";
-import { removeDevice, setEvent, turnOffHere, turnOnHere } from "./notificationsActions";
+import { removeDevice, turnOffHere, turnOnHere } from "./notificationsActions";
 import { DEVICE_NOTE, type PushState, stateText } from "./notificationsLogic";
-import { callWithRetry } from "../../transport/retryRule";
-import { SoundCard } from "./SoundCard";
+import { soundPrefs } from "../../data/sounds";
+import { groupSummaryText, NOTIF_GROUPS, NOTIF_TEXT, OTHER_GROUP } from "./notificationGroups";
+import { useNotifSettings } from "./useNotifSettings";
 
-const TOOL_ARGS = {};
+/** A group's title and second line on the site. */
+export function groupWords(key: string): { title: string; sub?: string } {
+  const g = NOTIF_GROUPS.find((x) => x.key === key);
+  return g ? { title: g.title, sub: g.sub } : { title: OTHER_GROUP.title };
+}
+
+/** The Sounds row's one line. */
+export const soundLine = (s: NotificationSettings["sound"]) => {
+  const p = soundPrefs(s);
+  return p.on ? `On · ${p.volume} %` : "Off";
+};
+
+export function NotifHead({ title = NOTIF_TEXT.title }: { title?: string }) {
+  return <div className="ph"><div><div className="eyebrow">Settings</div><h1>{title}</h1></div></div>;
+}
 
 export default function Notifications() {
   const { transport } = useFleet();
   const toast = useToast();
-  const [data, setData] = useState<NotificationSettings | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const n = useNotifSettings();
+  const { data, setData, err } = n;
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<PushState>("off");
   const [myHash, setMyHash] = useState("");
 
-  async function load() {
-    try {
-      setData(await callWithRetry<NotificationSettings>(transport, "my_notification_settings", TOOL_ARGS));
-      setErr(null);
-    } catch (e) {
-      setErr(errText(e as FleetError)[0]);
-    }
-  }
   async function refreshBrowser() {
     const s = await pushState();
     setState(s);
@@ -42,9 +53,7 @@ export default function Notifications() {
     setMyHash(sub ? await endpointHash(sub.endpoint) : "");
   }
   useEffect(() => {
-    void load();
     void refreshBrowser();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function run(fn: () => Promise<NotificationSettings | void>, done: string) {
@@ -56,37 +65,60 @@ export default function Notifications() {
       toast(done);
     } catch (e) {
       setMsg(e instanceof Error && !("code" in e) ? e.message : errText(e as FleetError)[0]);
-      await load(); // back to what the server has
+      await n.reload(); // back to what the server has
     }
     await refreshBrowser();
     setBusy(false);
   }
-  // The box flips at once; the server's answer (or an error) settles it.
-  const toggle = (event: string, enabled: boolean) => {
-    setData((d) => d && { ...d, events: d.events.map((e) => (e.event === event ? { ...e, enabled } : e)) });
-    return run(() => setEvent(transport, event, enabled), "Saved");
-  };
   const turnOn = () => run(() => turnOnHere(transport, data!.push.public_key!), "Notifications are on in this browser");
   const turnOff = () => run(() => turnOffHere(transport), "Notifications are off in this browser");
   const remove = (id: string) => run(() => removeDevice(transport, id), "Removed");
 
-  if (__BUILD__ !== "web") {
-    return (
-      <section className="view"><div className="ph"><div><div className="eyebrow">Settings</div><h1>Notifications</h1></div></div>
-        <Notice tone="info">Notifications are set in the web app (fame-fleet.pages.dev): sign in there, Settings → Notifications.</Notice>
-      </section>
-    );
-  }
-  if (err) return <section className="view"><div className="ph"><div><div className="eyebrow">Settings</div><h1>Notifications</h1></div></div><Notice tone="bad">{err}</Notice></section>;
-  if (!data) return <section className="view"><div className="ph"><div><div className="eyebrow">Settings</div><h1>Notifications</h1></div></div><Loading>Loading…</Loading></section>;
+  if (__BUILD__ !== "web") return <section className="view"><NotifHead /><WebAppOnly /></section>;
+  if (err && !data) return <section className="view"><NotifHead /><Notice tone="bad">{err}</Notice></section>;
+  if (!data) return <section className="view"><NotifHead /><Loading>Loading…</Loading></section>;
 
   const registered = !!myHash && data.devices.some((d) => d.endpoint_hash === myHash);
   const line = stateText(state, data.push.configured, registered);
 
   return (
     <section className="view" data-testid="notifications">
-      <div className="ph"><div><div className="eyebrow">Settings</div><h1>Notifications</h1></div></div>
+      <NotifHead />
       <div className="stack" style={{ maxWidth: 640 }}>
+        {n.groups.length === 0 && <Empty>{NOTIF_TEXT.noEvents}</Empty>}
+        {n.groups.length > 0 && (
+          <>
+            <div className="card card-b">
+              <SwitchLine
+                title={NOTIF_TEXT.pause}
+                text={NOTIF_TEXT.pauseText}
+                on={n.paused}
+                onChange={(on) => void (on ? n.pause() : n.resume())}
+                testId="notif-pause"
+              />
+            </div>
+            <div className="card card-b" style={{ display: "grid", gap: 6 }}>
+              <h2>{NOTIF_TEXT.tellMe}</h2>
+              {n.paused && <p className="muted small" style={{ margin: 0 }}>{NOTIF_TEXT.pausedNote}</p>}
+              <div className="set-rows">
+                {n.groups.map((g) => {
+                  const w = groupWords(g.key);
+                  const summary = n.paused ? NOTIF_TEXT.statePaused : groupSummaryText(g.on, g.total);
+                  const line = w.sub ? `${w.sub} · ${summary}` : summary;
+                  return n.paused
+                    ? <div key={g.key} className="set-link off" data-testid={`notif-group-${g.key}`}><span className="grow"><span className="name">{w.title}</span><span className="sub">{line}</span></span></div>
+                    : (
+                      <Link key={g.key} className="set-link" to={`/settings/notifications/${g.key}`} data-testid={`notif-group-${g.key}`}>
+                        <span className="grow"><span className="name">{w.title}</span><span className="sub">{line}</span></span>
+                        <span aria-hidden="true" className="chev">›</span>
+                      </Link>
+                    );
+                })}
+              </div>
+            </div>
+          </>
+        )}
+
         <div className="card card-b" style={{ display: "grid", gap: 14 }}>
           <h2>This browser</h2>
           <Notice tone={line.tone}>{line.text}</Notice>
@@ -98,17 +130,11 @@ export default function Notifications() {
           <p className="muted small" style={{ margin: 0 }}>{DEVICE_NOTE}</p>
         </div>
 
-        <SoundCard data={data} onSaved={setData} />
-
-        <div className="card card-b" style={{ display: "grid", gap: 14 }}>
-          <h2>Tell me when</h2>
-          {data.events.length === 0 && <Empty>Your permissions bring no notifications yet.</Empty>}
-          {data.events.map((e) => (
-            <label key={e.event} className="row" style={{ padding: 0, cursor: "pointer" }}>
-              <input type="checkbox" checked={e.enabled} disabled={busy} onChange={(ev) => void toggle(e.event, ev.target.checked)} />
-              <span className="grow"><span className="name">{e.label}</span><span className="sub" style={{ display: "block" }}>{e.text}</span></span>
-            </label>
-          ))}
+        <div className="card card-b">
+          <Link className="set-link" to="/settings/notifications/sounds" data-testid="notif-sounds">
+            <span className="grow"><span className="name">Sounds while Fame Fleet is open</span><span className="sub">{soundLine(data.sound)}</span></span>
+            <span aria-hidden="true" className="chev">›</span>
+          </Link>
         </div>
 
         <div className="card card-b" style={{ display: "grid", gap: 14 }}>
@@ -126,5 +152,20 @@ export default function Notifications() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** The artifact's word for the pages that need the web app (no service worker, no browser push). */
+export function WebAppOnly() {
+  return <Notice tone="info">Notifications are set in the web app (fame-fleet.pages.dev): sign in there, Settings → Notifications.</Notice>;
+}
+
+/** One switch: a short title on one line, an optional grey line under it; the whole line flips it. */
+export function SwitchLine({ title, text, on, onChange, disabled = false, testId }: { title: string; text?: string; on: boolean; onChange: (on: boolean) => void; disabled?: boolean; testId?: string }) {
+  return (
+    <label className={`set-switch${disabled ? " is-disabled" : ""}`} data-testid={testId}>
+      <span className="grow"><span className="name">{title}</span>{text && <span className="sub">{text}</span>}</span>
+      <input type="checkbox" role="switch" aria-label={title} checked={on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+    </label>
   );
 }

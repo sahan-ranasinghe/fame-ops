@@ -14,7 +14,7 @@ const PAGE_TEXT: Record<string, string> = {
   profile: "Your phone number, so drivers and requesters can call you",
   users: "Office users, their permissions, set-password links, connector keys",
   fleet: "Dispatch defaults: minutes at stops, the buffer, the base place, rush hour, the routing provider's usage",
-  notifications: "Which events reach you, and the browsers notifications are on in",
+  notifications: "What reaches you, pause all, this browser and its sounds",
 };
 
 export default function SettingsHome() {

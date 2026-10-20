@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { Check } from '@/components/icons';
 import type { Language } from '@/lib/types';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
@@ -10,22 +11,23 @@ const NAMES: Record<Language, { label: string; font: string }> = {
   si: { label: 'සිංහල', font: fonts.sinhalaBodySemiBold },
 };
 
-/** Both languages side by side (sign-in and Me screens). */
+/** Both languages side by side (sign-in and Me screens); the picked one with its check, tint and border. */
 export function LanguageSwitch({ onDark = false }: { onDark?: boolean }) {
   const { language, setLanguage } = useApp();
   return (
-    <View style={[styles.row, onDark && { borderColor: '#4a5058' }]}>
+    <View accessibilityRole="radiogroup" style={[styles.row, onDark && { borderColor: '#4a5058' }]}>
       {(['en', 'si'] as const).map((code) => {
         const on = code === language;
         return (
           <Pressable
             key={code}
-            accessibilityRole="button"
-            accessibilityState={{ selected: on }}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: on, selected: on }}
             onPress={() => setLanguage(code)}
-            style={[styles.option, on && { backgroundColor: onDark ? '#ffffff' : colors.ink }]}
+            style={[styles.option, on && styles.optionOn]}
           >
-            <Text style={{ fontFamily: NAMES[code].font, fontSize: 17, color: on ? (onDark ? colors.ink : '#ffffff') : onDark ? '#ffffff' : colors.ink }}>
+            {on && <Check size={20} color={colors.blue} strokeWidth={3} />}
+            <Text style={{ fontFamily: NAMES[code].font, fontSize: 17, color: on ? colors.blue : onDark ? '#ffffff' : colors.ink }}>
               {NAMES[code].label}
             </Text>
           </Pressable>
@@ -48,7 +50,9 @@ export function LanguagePill() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', borderWidth: 1.5, borderColor: colors.line, borderRadius: 14, overflow: 'hidden' },
-  option: { flex: 1, minHeight: 52, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
+  option: { flex: 1, minHeight: 52, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12, borderWidth: 2, borderColor: 'transparent', borderRadius: 12 },
+  // The picked language: the check, the blue chip tint and the 2 px blue border (the selection rules, patterns/Select.tsx).
+  optionOn: { backgroundColor: colors.blueChip, borderColor: colors.blue },
   pill: {
     minHeight: 44,
     paddingHorizontal: 16,

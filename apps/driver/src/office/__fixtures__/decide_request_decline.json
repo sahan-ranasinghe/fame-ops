@@ -1,0 +1,173 @@
+{
+  "request": {
+    "id": "2556f153-55fe-41c0-85b1-8dbe139f89c6",
+    "kind": "request",
+    "requested_by": "Fixture Admin",
+    "when": "Wed 21 Oct 09:00",
+    "route": "Fixture office f902 → Fixture site f902",
+    "need": "Any vehicle",
+    "note": "to decline",
+    "status": "declined",
+    "asked": "now",
+    "decided": "2026-10-20 12:08 by Fixture Admin",
+    "decline_reason": "No vehicle free then",
+    "driver_required": true,
+    "version": 1,
+    "stops_count": 2,
+    "trip": {
+      "leave_by": "09:00",
+      "leave_by_source": "manual",
+      "stops": [
+        {
+          "n": 1,
+          "label": "Stop 1 · Pickup · Fixture office f902",
+          "dwell_source": "default",
+          "planned_leave": "09:05",
+          "seq": 1,
+          "type": "pickup",
+          "what": "people",
+          "place": "Fixture office f902",
+          "place_id": "75376e34-4c70-4c89-970e-dd603aea4f26",
+          "dwell_min": 5,
+          "planned_arrive": "09:00",
+          "planned_depart": "09:05",
+          "lat": 6.9022,
+          "lng": 79.8612,
+          "pin": "place"
+        },
+        {
+          "n": 2,
+          "label": "Stop 2 · Drop · Fixture site f902",
+          "dwell_source": "default",
+          "planned_leave": "13:17",
+          "seq": 2,
+          "type": "drop",
+          "what": "people",
+          "place": "Fixture site f902",
+          "place_id": "93e9d771-d61b-4d30-bd34-9994d7abfc30",
+          "dwell_min": 5,
+          "arrive_by": "11:00",
+          "planned_arrive": "13:12",
+          "planned_depart": "13:17",
+          "lat": 7.4867,
+          "lng": 80.3647,
+          "pin": "place"
+        }
+      ],
+      "timeline": {
+        "items": [
+          {
+            "kind": "leave",
+            "at": "09:00",
+            "source": "manual"
+          },
+          {
+            "kind": "stop",
+            "n": 1,
+            "label": "Stop 1 · Pickup · Fixture office f902",
+            "place": "Fixture office f902",
+            "planned_arrive": "09:00",
+            "planned_leave": "09:05",
+            "dwell_min": 5,
+            "dwell_source": "default"
+          },
+          {
+            "kind": "leg",
+            "from_n": 1,
+            "to_n": 2,
+            "km": 111.1,
+            "minutes": 248,
+            "source": "estimate",
+            "rush_factor": 1.3
+          },
+          {
+            "kind": "stop",
+            "n": 2,
+            "label": "Stop 2 · Drop · Fixture site f902",
+            "place": "Fixture site f902",
+            "planned_arrive": "13:12",
+            "planned_leave": "13:17",
+            "arrive_by": "11:00",
+            "late_min": 133,
+            "dwell_min": 5,
+            "dwell_source": "default"
+          }
+        ],
+        "totals": {
+          "drive_min": 248,
+          "km": 111.1,
+          "ends": "13:17"
+        }
+      }
+    },
+    "fields": {
+      "date": "2026-10-21",
+      "time": "09:00",
+      "route_from": "Fixture office f902",
+      "route_to": "Fixture site f902",
+      "tools": false,
+      "note": "to decline",
+      "driver_required": true,
+      "stops": [
+        {
+          "type": "pickup",
+          "what": "people",
+          "place": "Fixture office f902",
+          "place_id": "75376e34-4c70-4c89-970e-dd603aea4f26",
+          "lat": 6.9022,
+          "lng": 79.8612
+        },
+        {
+          "type": "drop",
+          "what": "people",
+          "place": "Fixture site f902",
+          "place_id": "93e9d771-d61b-4d30-bd34-9994d7abfc30",
+          "lat": 7.4867,
+          "lng": 80.3647,
+          "arrive_by": "11:00"
+        }
+      ],
+      "leave_by": "09:00"
+    },
+    "timeline": {
+      "sent": "2026-10-20 12:08",
+      "seen": "2026-10-20 12:08 by Fixture Admin",
+      "decided": "2026-10-20 12:08",
+      "decided_by": "Fixture Admin"
+    },
+    "events": [
+      {
+        "at": "2026-10-20 12:08",
+        "action": "created",
+        "actor": "Fixture Admin"
+      },
+      {
+        "at": "2026-10-20 12:08",
+        "action": "seen",
+        "actor": "Fixture Admin"
+      },
+      {
+        "at": "2026-10-20 12:08",
+        "action": "declined",
+        "actor": "Fixture Admin",
+        "note": "No vehicle free then"
+      }
+    ],
+    "declined_by": {
+      "name": "Fixture Admin",
+      "at": "12:08",
+      "reason": "No vehicle free then"
+    },
+    "live": {
+      "state": "declined",
+      "text": "Declined · No vehicle free then",
+      "at": "12:08"
+    },
+    "office_phone": {
+      "phone": "+94112345678",
+      "phone_display": "011 234 5678",
+      "call": "tel:+94112345678",
+      "whatsapp": "https://wa.me/94112345678"
+    }
+  }
+}

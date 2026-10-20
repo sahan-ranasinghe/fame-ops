@@ -108,7 +108,7 @@ export function assignOutcome(p: Pick<CreateTaskResult, "waiting_for_approval" |
       link: p.request_id ? { to: `/requests/${p.request_id}`, label: "Open the request" } : undefined,
     };
   }
-  return { waiting: false, head: `Sent to ${driverName}.`, toast: "Task sent", link: p.task_id ? { to: `/tasks/${p.task_id}`, label: "Open task →" } : undefined };
+  return { waiting: false, head: `Sent to ${driverName}.`, toast: `Task sent to ${driverName}`, link: p.task_id ? { to: `/tasks/${p.task_id}`, label: "Open task →" } : undefined };
 }
 
 /** The WhatsApp message for the driver, when the office asked for one. */

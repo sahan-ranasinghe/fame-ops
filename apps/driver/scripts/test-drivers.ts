@@ -189,9 +189,9 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
   check(/<TripDayPicker value=\{date\}/.test(tab) && /<DateField label=\{t\('office\.drivers\.lastDay'\)\} value=\{toDate\}/.test(tab) && /<TimeField label=\{t\('office\.drivers\.from'\)\} value=\{from\} onCommit=\{setFrom\}/.test(tab) && /<TimeField label=\{t\('office\.drivers\.to'\)\} value=\{to\} onCommit=\{setTo\}/.test(tab) && !/placeholder="HH:MM"/.test(tab),
     'the sheet: the day as Today / Tomorrow / Pick a date, until as a date field, from–to in the time sheet (no typed times)');
   check(/router\.push\(\{ pathname: '\/office\/driver\/\[username\]', params: \{ username: d\.username \} \}\)/.test(tab), 'a row opens the driver\'s page');
-  check(/<FilterBar/.test(tab) && /defs=\{view === 'now' \? boardFilterDefs\(board\.data\?\.counts, t\) : \[\]\}/.test(tab) && !/FilterChips|ScrollView horizontal/.test(tab), 'the search bar and one Filter button with the server\'s counts (Now only), no chip row');
+  check(/<FilterBar/.test(tab) && /defs=\{view === 'now' \? boardFilterDefs\(board\.data\?\.counts, t\) : \[\]\}/.test(tab) && !/FilterChips|ScrollView horizontal/.test(tab), 'the search bar and one Filter button with the server\'s counts (Stage 0)');
   check(/<SkeletonRows/.test(tab) && /<ListFailed/.test(tab) && !/<Loading/.test(tab) && /<SkeletonRows/.test(page0()) && !/<Loading/.test(page0()), 'skeleton rows while loading, the error with Try again (the tab and the driver\'s page)');
-  check(/callBtn: \{ width: 48, height: 48/.test(tab) && /segBtn: \{ minWidth: 72, minHeight: 40/.test(tab) && /cell: \{ width: 40, height: 40/.test(tab), 'the Call button 48 px; the week\'s cells 40 px');
+  check(/callBtn: \{ width: 48, height: 48/.test(tab) && /<ChoiceChip key=\{k\} onDark/.test(tab) && /cell: \{ width: 40, height: 40/.test(tab), 'the Call button 48 px; Now / Week as the shared chips on the dark header (Hotfix O2-H2); the week\'s cells 40 px');
   check(!/me\.role|role ===|'admin'|'fleet_admin'/.test(tab), 'no role names');
 
   const page = read('src/app/office/driver/[username].tsx');

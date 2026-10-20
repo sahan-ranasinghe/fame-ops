@@ -1,11 +1,13 @@
 // A bottom sheet that asks "why?": a few big reasons, an optional word for the
 // office, confirm. Used to skip a stop and to decline a task, and in Office mode to
 // decline, cancel, reopen or withdraw. The back button or Cancel closes it. Since the
-// Stage 0 review it is the shared Sheet (docs/ui-patterns.md §6).
+// Stage 0 review it is the shared Sheet (docs/ui-patterns.md §6); the reasons are the shared ChoiceRow (§11: the radio, the
+// tint, the border).
 
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
+import { ChoiceRow } from '@/components/patterns/Select';
 import { Sheet } from '@/components/patterns/Sheet';
 import { Button, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
@@ -63,14 +65,13 @@ export function ReasonSheet<R extends string>({ visible, title, question, notePl
       <View style={{ gap: 12 }}>
         {subtitle ? <Txt variant="muted">{subtitle}</Txt> : null}
         <Txt variant="strong">{t(question)}</Txt>
-        <View style={{ gap: 8 }}>
+        <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
           {reasons.map((r) => {
             const on = reason === r.value;
             return (
-              <Pressable key={r.value} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => setReason(r.value)} style={[styles.option, on && styles.optionOn]}>
-                <View style={[styles.radio, on && { borderColor: colors.ink, backgroundColor: colors.ink }]} />
+              <ChoiceRow key={r.value} selected={on} onPress={() => setReason(r.value)} accessibilityLabel={t(r.label)} testID={`reason-${r.value}`}>
                 <Txt variant="strong" size={18}>{t(r.label)}</Txt>
-              </Pressable>
+              </ChoiceRow>
             );
           })}
         </View>
@@ -88,8 +89,5 @@ export function ReasonSheet<R extends string>({ visible, title, question, notePl
 }
 
 const styles = StyleSheet.create({
-  option: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, padding: 14 },
-  optionOn: { borderColor: colors.ink },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2.5, borderColor: '#8b9198' },
   input: { minHeight: 52, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 14, fontSize: 17, color: colors.ink },
 });

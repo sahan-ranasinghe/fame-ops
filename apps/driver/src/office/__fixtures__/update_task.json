@@ -1,0 +1,22 @@
+{
+  "task_id": "ef924f8a-8f2d-4610-bdf7-e6b6e3d56d05",
+  "title": "Team drop · f902 (changed)",
+  "when": "Wed 21 Oct 07:29",
+  "leave_by": "Wed 21 Oct 07:29",
+  "driver": "Driver A f902",
+  "plan_version": 1,
+  "changes": {
+    "title": {
+      "from": "Team drop · f902",
+      "to": "Team drop · f902 (changed)"
+    }
+  },
+  "warnings": [
+    "FX F902-1 is booked 08:00–17:00 the same day (Trip · Fixture site f902)."
+  ],
+  "sent": "The driver's app shows the change (Task changed).",
+  "links": {
+    "whatsapp_driver": "https://wa.me/94771234567",
+    "call_driver": "tel:+94771234567"
+  }
+}

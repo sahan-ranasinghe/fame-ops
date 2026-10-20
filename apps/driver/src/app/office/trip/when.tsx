@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { TripDayPicker } from '@/components/patterns/Calendar';
+import { ChoiceChip } from '@/components/patterns/Select';
 import { TimeField } from '@/components/patterns/TimeField';
 import { DepartureNote, TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Button, Mono, Txt } from '@/components/ui';
@@ -75,18 +76,14 @@ export default function TripWhen() {
                 <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(check.leaveBy)} moveLabel={check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
               )}
               <Txt variant="label" color={colors.muted}>{t('office.trip.timeAtStop').toUpperCase()}</Txt>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {DWELL_CHIPS.map((min) => {
                   const on = chosenMin === min;
                   return (
-                    <Pressable key={min} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => { patchStop(s.key, { dwell: on ? '' : String(min) }); setOther(null); }} style={[styles.chip, on && styles.chipOn]}>
-                      <Txt variant="strong" size={15} color={on ? '#ffffff' : colors.ink}>{dwellChipText(t, min)}</Txt>
-                    </Pressable>
+                    <ChoiceChip key={min} label={dwellChipText(t, min)} selected={on} onPress={() => { patchStop(s.key, { dwell: on ? '' : String(min) }); setOther(null); }} />
                   );
                 })}
-                <Pressable accessibilityRole="button" accessibilityState={{ selected: other === s.key || (chosenMin !== null && !onChip) }} onPress={() => setOther(other === s.key ? null : s.key)} style={[styles.chip, (other === s.key || (chosenMin !== null && !onChip)) && styles.chipOn]}>
-                  <Txt variant="strong" size={15} color={other === s.key || (chosenMin !== null && !onChip) ? '#ffffff' : colors.ink}>{t('office.trip.other')}</Txt>
-                </Pressable>
+                <ChoiceChip label={t('office.trip.other')} selected={other === s.key || (chosenMin !== null && !onChip)} onPress={() => setOther(other === s.key ? null : s.key)} />
               </View>
               {other === s.key && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -127,7 +124,6 @@ export default function TripWhen() {
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
   mark: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
   minutes: { width: 90, minHeight: 52, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, fontFamily: fonts.monoSemiBold, fontSize: 22, color: colors.ink, backgroundColor: colors.card },
 });

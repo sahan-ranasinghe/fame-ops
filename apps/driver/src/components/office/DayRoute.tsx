@@ -12,6 +12,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { RouteMap } from '@/components/RouteMap';
 import { Mono, Txt } from '@/components/ui';
+import { pickedStyle } from '@/components/patterns/Select';
 import { durationText } from '@/lib/durations';
 import type { MapPackage } from '@/lib/mapEngine';
 import { BAND_COLORS, dayNumbers, routeFrame, routeLines, routePoints, rowFrame, segmentLine, segmentTone, SPEED_BANDS, stopMarks } from '@/office/driversLogic';
@@ -85,7 +86,7 @@ export function DayRoute({ data, error, onRetry, onSignIn, mapPackage, emptyText
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
               onPress={() => setFocus({ frame: rowFrame(points, seg), nonce: (focus?.nonce ?? 0) + 1, index: i })}
-              style={({ pressed }) => [styles.segRow, on && { backgroundColor: colors.blueChip }, pressed && { opacity: 0.8 }]}
+              style={({ pressed }) => [styles.segRow, on && pickedStyle, pressed && { opacity: 0.8 }]}
               testID="route-row"
             >
               <View style={[styles.segDot, { backgroundColor: toneColor(segmentTone(seg.kind)) }]} />
@@ -133,6 +134,7 @@ const styles = StyleSheet.create({
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 8 },
   bar: { marginBottom: 4 },
   numbers: { flexDirection: 'row', gap: 6, paddingVertical: 8, marginTop: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.line },
-  segRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 6, marginHorizontal: -6, borderRadius: 10, minHeight: 56 },
+  // The row shown on the map: the tint and the 2 px border (docs/ui-patterns.md §11; no mark: nothing is being chosen).
+  segRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 6, marginHorizontal: -6, borderRadius: 10, minHeight: 56, borderWidth: 2, borderColor: 'transparent' },
   segDot: { width: 12, height: 12, borderRadius: 6 },
 });

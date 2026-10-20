@@ -9,12 +9,13 @@
 import { Redirect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Camera, ChevronLeft } from '@/components/icons';
 import { useLeaveGuard } from '@/components/navigation';
 import { DateField } from '@/components/patterns/Calendar';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Thumb, useLicencePhotos } from '@/components/Photos';
 import { Button, Card, Field, Notice, Txt } from '@/components/ui';
 import { type LocalPhoto, removeFile, takePhoto } from '@/lib/photos';
@@ -118,7 +119,8 @@ export default function ProfileEditScreen() {
       return;
     }
     allowLeave();
-    Alert.alert(t('profile.saved'), undefined, [{ text: t('common.ok'), onPress: () => router.back() }], { cancelable: false });
+    router.back();
+    showSnackbar({ text: t('profile.saved') });
   }
 
   return (

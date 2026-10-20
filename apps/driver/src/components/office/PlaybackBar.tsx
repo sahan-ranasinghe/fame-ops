@@ -11,6 +11,7 @@ import Pause from 'lucide-react-native/icons/pause';
 
 import { Play } from '@/components/icons';
 import { Mono, Txt } from '@/components/ui';
+import { ChoiceChip } from '@/components/patterns/Select';
 import { advance, clockS, type Cursor, type PathPoint, PLAYBACK_TICK_MS, type PlaybackSpeed, sliderFraction, SPEEDS, timeAtFraction } from '@/office/liveRouteLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -109,12 +110,8 @@ export function PlaybackBar({ playback, cursor }: { playback: Playback; cursor: 
         </Pressable>
         {SPEEDS.map((s) => {
           const on = s === playback.speed;
-          return (
-            <Pressable key={s} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => playback.setSpeed(s)}
-              style={[styles.speed, on && styles.speedOn]}>
-              <Mono size={14} bold color={on ? '#ffffff' : colors.ink}>{`${s}×`}</Mono>
-            </Pressable>
-          );
+          // The shared chip (docs/ui-patterns.md §11): the picked speed has its check, the tint and the border.
+          return <ChoiceChip key={s} small mono label={`${s}×`} selected={on} onPress={() => playback.setSpeed(s)} />;
         })}
       </View>
       <View style={styles.sliderRow}>
@@ -177,8 +174,6 @@ const styles = StyleSheet.create({
   playback: { gap: 4, marginTop: 2, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
   playRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   playBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  speed: { minWidth: 48, height: 48, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  speedOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   clock: { alignItems: 'flex-end', minWidth: 76 },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   track: { flex: 1, height: 48, justifyContent: 'center' },

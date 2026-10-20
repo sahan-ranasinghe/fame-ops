@@ -9,6 +9,17 @@ proved not to change them:
 
     scripts/snapshot-tool-shapes.py --write     # scripts/tool-shapes.json (the contract)
     scripts/snapshot-tool-shapes.py --check     # fails if any tool's shape changed
+    scripts/snapshot-tool-shapes.py --write-states   # records only the three task_detail states into the contract
+
+task_detail is checked in three states (Hotfix O2-H2, 20 October 2026), each against its own fields: a task not started,
+one in progress and one finished. The finished one is the suite's richest completed task (photos, fuel, projects); the
+other two are made here every run, filled in fully (label, notes, contact, a project, stop addresses), on a day the
+missed-task job never reaches, and started the way the driver app starts one (an update of the task's status). Before,
+the first task on today's board was taken, so the answer's shape followed the time of day.
+
+A list's shape is the union of its rows', and the contract was merged across runs ("it only grows"), so a field that only
+some rows carry may be absent in a run whose data has no such row. Those fields are listed in OPTIONAL with the code that
+leaves them out; one absent from this run is reported, not failed. Any other missing field still fails.
 
 Needs API_URL and OFFICE_MCP_KEY (the local serve's), and optionally
 CHANNEL=api with API_TOKEN (an office session) to go through office-api
@@ -28,6 +39,28 @@ if not API.startswith(("http://127.0.0.1", "http://localhost")):
     sys.exit("Local stack only.")
 CHANNEL = os.environ.get("CHANNEL", "mcp")
 SHAPES_FILE = Path(__file__).with_name("tool-shapes.json")
+DB_CONTAINER = os.environ.get("DB_CONTAINER", "supabase_db_fame-ops")
+
+# Fields a tool leaves out when its data has nothing for them (run.ts prunes absent and null fields): a run whose rows carry
+# none of them is not a broken contract. Each with the code that decides it.
+OPTIONAL = {
+    "availability": {
+        "drivers[].next_task_start": "availability.ts:186 next_task_start: next ? hhmm(next.start_at) : undefined "
+                                     "(only a driver with an assigned task after the window's start)",
+    },
+    "list_requests": {
+        "requests[].fields.start.passengers": "tools/requests.ts:342-346 startStopFields: {} unless a stop is_start "
+                                              "(passengers get in at the start)",
+        "requests[].fields.start.what": "tools/requests.ts:347 what: at.what ?? undefined (the start stop's own what)",
+        "requests[].trip.changed.stops": "tools/requests.ts:372-377 changed only when the office moved the time or the stops "
+                                         "and no change of the requester waits",
+    },
+    "live_drivers": {
+        "drivers[].links: {}": "tools/locations.ts:239 links: {maps only with a position, call / whatsapp only with a phone}: "
+                               "an empty object only for a driver with neither",
+    },
+}
+TASK_STATES = ("not started", "in progress", "finished")
 
 
 def http(method, url, headers, body=None):
@@ -69,6 +102,75 @@ def call(tool, args):
 # app, a personal key); the shared key of the connector has no person. Their fields depend on who calls, not on the tool,
 # so they are left out of the comparison (the web's types record them: apps/office/src/data/types.ts PersonAt).
 PERSON_DEPENDENT = {"approved_by", "declined_by", "cancelled_by"}
+
+
+def psql(sql):
+    import subprocess
+    out = subprocess.run(["docker", "exec", "-i", DB_CONTAINER, "psql", "-U", "postgres", "-d", "postgres", "-X", "-q", "-A", "-t", "-c", sql],
+                         capture_output=True, text=True, check=True)
+    return out.stdout.strip()
+
+
+def fields_of(answer):
+    out = set()
+    shape(answer, "", out)
+    return out
+
+
+def state_tasks(today, drivers, vehicles):
+    """One task per state: {state: task_id}. See the module's note."""
+    import datetime as dt
+    d0 = dt.date.fromisoformat(today)
+    ahead = (d0 + dt.timedelta(days=20)).isoformat()
+    project = ((call("find_project", {"text": "a"}).get("projects") or [{}])[0]).get("job_no")
+    # Chosen the same way every run: the drivers by username, a vehicle nobody holds (so no "taken over" line).
+    busy = set(psql("select coalesce(string_agg(employee_id::text, ','), '') from tasks where status = 'in_progress'").split(","))
+    free = sorted((d for d in drivers if d.get("username") and d.get("active", True)), key=lambda d: d["username"])
+    ids = {d["username"]: psql(f"select id from employees where username = '{d['username']}'") for d in free}
+    free = [d for d in free if ids[d["username"]] not in busy] or free
+    vehicle = psql("select reg_no from vehicles v where active and not in_garage and not demo and not exists "
+                   "(select 1 from vehicle_assignments a where a.vehicle_id = v.id and a.to_at is null) order by reg_no limit 1") \
+        or next((v["reg_no"] for v in vehicles if not v.get("in_garage")), vehicles[0]["reg_no"])
+    def make(title, date, driver):
+        made = call("create_task", {
+            "title": title, "date": date, "start_time": "09:00", "driver": driver, "vehicle": vehicle,
+            "stops": [{"type": "pickup", "what": "people", "place": "Head office", "address": "No. 1, Galle Road, Colombo 03", "note": "Gate 2"},
+                      {"type": "drop", "what": "people", "place": "Kurunegala", "address": "Kurunegala town", "arrive_by": "12:00"}],
+            "passengers": 3, "contact_name": "Contract Contact", "contact_phone": "0771234599", "notes": "Contract shape task",
+            "label": "Contract", **({"projects": [{"project": project, "percent": 100}]} if project else {})})
+        return made["task_id"]
+
+    # Finished: the suite's richest completed task (its photos, fuel and projects), else one made and driven here.
+    finished, most = None, -1
+    for row in (call("list_tasks", {"from": (d0 - dt.timedelta(days=60)).isoformat(), "to": (d0 + dt.timedelta(days=30)).isoformat(),
+                                    "status": "completed"}).get("tasks") or [])[:10]:
+        n = len(fields_of(call("task_detail", {"task_id": row["id"]})))
+        if n > most:
+            finished, most = row["id"], n
+    not_started = make("Contract · not started", ahead, free[0]["username"])
+    runner = free[1]["username"] if len(free) > 1 else free[0]["username"]
+    in_progress = make("Contract · in progress", today, runner)
+    # Started as the app starts it (status, start odometer; started_at and accepted_at as the driver's trigger sets them,
+    # 20261019090000_phase7_hotfix3.sql: it only runs for a driver), then the first stop reached and done.
+    psql(f"update tasks set status = 'in_progress', started_at = now() - interval '30 minutes', accepted_at = now() - interval '30 minutes', start_odometer_km = 1000 where id = '{in_progress}'")
+    psql(f"update task_stops set status = 'done', arrived_at = now() - interval '20 minutes', done_at = now() - interval '15 minutes' "
+         f"where task_id = '{in_progress}' and seq = (select min(seq) from task_stops where task_id = '{in_progress}' and status = 'pending')")
+    # And the phone on duty with three positions since the start (a session as Start work opens it, the points as the phone
+    # uploads them): the running task's ETA and its GPS km are there every run, whatever the driver did before.
+    who = ids[runner]
+    session = psql(f"insert into duty_sessions (employee_id, vehicle_id, started_at) select '{who}', vehicle_id, now() - interval '35 minutes' "
+                   f"from tasks where id = '{in_progress}' and not exists (select 1 from duty_sessions where employee_id = '{who}' and ended_at is null) "
+                   f"returning id") or psql(f"select id from duty_sessions where employee_id = '{who}' and ended_at is null limit 1")
+    for minutes, lat, lng in ((25, 6.9000, 79.8600), (15, 7.0500, 79.9800), (5, 7.2000, 80.1000)):
+        psql(f"insert into location_points (employee_id, session_id, recorded_at, lat, lng, accuracy_m, speed_mps, source) values "
+             f"('{who}', '{session}', now() - interval '{minutes} minutes', {lat}, {lng}, 8, 14, 'app') on conflict do nothing")
+    if not finished:
+        finished = make("Contract · finished", today, runner)
+        psql(f"update tasks set status = 'in_progress', started_at = now() - interval '30 minutes', accepted_at = now() - interval '30 minutes', start_odometer_km = 1000 where id = '{finished}'")
+        psql(f"update task_stops set status = 'done', arrived_at = now() - interval '10 minutes', done_at = now() - interval '5 minutes' "
+             f"where task_id = '{finished}' and status = 'pending'")
+        psql(f"update tasks set status = 'completed', completed_at = now(), end_odometer_km = 1042 where id = '{finished}'")
+    return {"not started": not_started, "in progress": in_progress, "finished": finished}
 
 
 def shape(value, prefix, out):
@@ -155,8 +257,6 @@ def main():
         ("routing_usage", {}),
         ("plan_task", {"date": board.get("date"), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Kurunegala"}),
     ]
-    if task_id:
-        calls.append(("task_detail", {"task_id": task_id}))
     site_id = (call("list_places", {"operator": "dialog"}).get("places") or [{}])[0].get("id")
     if site_id:
         calls.append(("place_detail", {"id": site_id}))
@@ -172,23 +272,48 @@ def main():
                  for k, v in args.items()}
         return f"{tool} {json.dumps(shown, sort_keys=True)}"
 
+    def call_args(tool, args):
+        # "state" names the task's state in the label only; the tool is not given it.
+        return {k: v for k, v in args.items() if not (tool == "task_detail" and k == "state")}
+
+    # task_detail in its three states (each its own label and fields), measured after every other call: the running task
+    # made for it would otherwise show on the board, the overview, Live, availability and the vehicles.
+    def task_states():
+        # The stop-arrivals job (pg_cron, every 5 minutes) fills where the driver reached each stop: run it now, so the
+        # finished task's arrivals do not depend on when its last run was.
+        psql("select public.fill_stop_arrivals()")
+        tasks = state_tasks(board.get("date"), drivers.get("drivers") or [], vehicles.get("vehicles") or [])
+        return [("task_detail", {"task_id": tasks[state], "state": state}) for state in TASK_STATES]
+
     shapes = {}
-    for tool, args in calls:
+
+    def measure(tool, args):
         label = label_of(tool, args)
         try:
             out = set()
-            shape(call(tool, args), "", out)
+            shape(call(tool, call_args(tool, args)), "", out)
             shapes[label] = sorted(out)
         except RuntimeError as e:
             shapes[label] = [f"ERROR: {e}"]
 
+    for tool, args in calls:
+        measure(tool, args)
+    for tool, args in task_states():
+        measure(tool, args)
+
     # Photo links and ids change every run: keep the field, drop the value.
     if mode == "--write":
-        # The contract only grows: a field seen in an earlier run stays recorded (Stage 1 item 6).
-        old = json.loads(SHAPES_FILE.read_text()) if SHAPES_FILE.exists() else {}
-        merged = {label: sorted(set(old.get(label, [])) | set(shapes.get(label, []))) for label in set(old) | set(shapes)}
-        SHAPES_FILE.write_text(json.dumps(merged, indent=1, sort_keys=True) + "\n")
-        print(f"wrote {SHAPES_FILE.name}: {len(merged)} calls, {sum(len(v) for v in merged.values())} fields")
+        SHAPES_FILE.write_text(json.dumps(shapes, indent=1, sort_keys=True) + "\n")
+        print(f"wrote {SHAPES_FILE.name}: {len(shapes)} calls, {sum(len(v) for v in shapes.values())} fields")
+        return
+    if mode == "--write-states":
+        contract = json.loads(SHAPES_FILE.read_text())
+        contract.pop('task_detail {"task_id": "<id>"}', None)
+        for label, fields in shapes.items():
+            if label.startswith("task_detail "):
+                contract[label] = fields
+        SHAPES_FILE.write_text(json.dumps(contract, indent=1, sort_keys=True) + "\n")
+        print(f"wrote the three task_detail states into {SHAPES_FILE.name}")
         return
     expected = json.loads(SHAPES_FILE.read_text())
     bad = 0
@@ -196,45 +321,22 @@ def main():
         if label in skipped:
             print(f"  SKIP  {label}: no tasks today (the suite's tasks are on tomorrow this late); run before 21:15 Colombo to compare it")
             continue
-        before, after = expected.get(label, []), shapes.get(label, [])
-        verdict = compare(before, after)
-        if verdict["ok"]:
-            note = f" ({len(verdict['absent'])} optional field(s) absent this run)" if verdict["absent"] else ""
-            print(f"  PASS  {label}: {len(after)} fields{note}")
+        before, after = set(expected.get(label, [])), set(shapes.get(label, []))
+        optional = OPTIONAL.get(label.split(" ", 1)[0], {})
+        absent_ok = {f for f in before - after if f in optional or f.split(": ")[0] in optional}
+        missing, new = (before - after) - absent_ok, after - before
+        note = f" ({len(absent_ok)} optional, absent this run: {', '.join(sorted(absent_ok))})" if absent_ok else ""
+        if not missing and not new:
+            print(f"  PASS  {label}: {len(after)} fields as recorded{note}")
             continue
         bad += 1
-        print(f"  FAIL  {label}")
-        for f in verdict["errors"]:
-            print(f"          error:   {f}")
-        for f in verdict["changed"]:
-            print(f"          type:    {f}")
-        for f in verdict["gone"]:
+        print(f"  FAIL  {label}{note}")
+        for f in sorted(missing):
             print(f"          missing: {f}")
+        for f in sorted(new):
+            print(f"          new:     {f}")
     print("All tool shapes match the contract." if bad == 0 else f"{bad} tool call(s) changed shape.")
     sys.exit(0 if bad == 0 else 1)
-
-
-def split_entry(entry):
-    """'drivers[].name: string' -> ('drivers[].name', 'string')."""
-    path, _, kind = entry.rpartition(": ")
-    return (path, kind) if path else (entry, "")
-
-
-def compare(before, after):
-    """
-    What can break the artifact, and nothing that depends on the hour the suite ran (Stage 1 item 6): run.ts prunes every
-    null field, so a leaf below the top level (task.started, drivers[].next_task_start, requests[].fields.start.what) may
-    be absent whenever the suite's data at that hour has no value for it — the artifact already handles that. A failure
-    is a call that now errors, a field whose type changed, or a top-level key (or a list the answer always carries) gone.
-    """
-    errors = [e for e in after if e.startswith("ERROR:")]
-    b = dict(split_entry(e) for e in before if not e.startswith("ERROR:"))
-    a = dict(split_entry(e) for e in after if not e.startswith("ERROR:"))
-    changed = [f"{p}: {b[p]} -> {a[p]}" for p in sorted(set(b) & set(a)) if b[p] != a[p] and "empty" not in (b[p], a[p])]
-    absent = sorted(set(b) - set(a))
-    # A top-level key is the answer's own (no dot, no [] before it); an empty list in this run is not a missing one.
-    gone = [p for p in absent if "." not in p and "[]" not in p and not any(q.startswith(p + "[]") or q.startswith(p + ".") for q in a)]
-    return {"ok": not errors and not changed and not gone, "errors": errors, "changed": changed, "gone": gone, "absent": absent}
 
 
 if __name__ == "__main__":

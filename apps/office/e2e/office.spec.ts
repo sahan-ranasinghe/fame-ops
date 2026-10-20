@@ -195,8 +195,11 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByTestId("plan-line")).toContainText("Leave by 09:30", { timeout: 15000 });
   await expect(page.getByTestId("plan-line")).toContainText("estimated times");
   await page.getByRole("button", { name: "Assign & send" }).click();
-  await expect(page.getByText(`Sent to ${driver.name}.`)).toBeVisible();
-  await page.getByRole("link", { name: "The board →" }).click();
+  // Hotfix O2-H2 (Gmail's "Sent"): the form closes, the new task opens in its place, the toast says who has it.
+  await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]{36}$/);
+  await expect(page.locator("#toast")).toContainText(`Task sent to ${driver.name}`);
+  await expect(page.getByTestId("detail").getByRole("heading", { name: title })).toBeVisible();
+  await page.goto("/tasks");
   const card = page.locator(".tcard", { hasText: title });
   await expect(card).toBeVisible();
   await expect(card).toContainText("Leave by 09:30");
@@ -369,22 +372,25 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByRole("button", { name: "Turn on 2-step sign-in" }).click();
   await expect(page.getByText("On", { exact: true })).toBeVisible();
 
-  // 6b. Settings → Notifications: this browser's state in words, the events of an admin, one switched off and kept.
+  // 6b. Settings → Notifications (Hotfix O2-H2 Part 2): this browser's state in words, Pause all and the six groups of an
+  // admin, each a row opening its own page; one event switched off there is kept and the group's summary follows.
   await page.goto("/settings");
   await page.getByRole("link", { name: "Notifications" }).click();
   await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
   await expect(page.getByTestId("notifications")).toContainText(/in this browser|not switched on for the office/);
-  const requestBox = page.getByRole("checkbox", { name: "A vehicle request comes in" });
+  for (const g of ["requests", "tasks", "drivers", "issues", "vehicles", "mine"]) await expect(page.getByTestId(`notif-group-${g}`)).toBeVisible();
+  await expect(page.getByRole("switch")).toHaveCount(1); // Pause all; the events are on the groups' pages
+  await page.getByTestId("notif-group-requests").click();
+  await expect(page).toHaveURL(/\/settings\/notifications\/requests$/);
+  await expect(page.getByRole("switch")).toHaveCount(4);
+  const requestBox = page.getByRole("switch", { name: "New vehicle request" });
   await expect(requestBox).toBeChecked();
-  // Phase 7: "A driver skips a stop", "A driver needs another vehicle"; Part 3: not decided, leave-by passed, and the
-  // trip's four moments for the asker; Part 4: a driver starts a personal trip; Hotfix 2: Play sounds.
-  // Part 3b: a driver running late, a driver's answer, your driver running late.
-  await expect(page.getByRole("checkbox")).toHaveCount(24);
-  await requestBox.uncheck();
-  await expect(page.getByRole("status")).toHaveText("Saved");
+  await Promise.all([page.waitForResponse((r) => r.url().includes("set_my_notification_settings")), requestBox.uncheck()]);
   await page.reload();
-  await expect(page.getByRole("checkbox", { name: "A vehicle request comes in" })).not.toBeChecked();
-  await expect(page.getByRole("checkbox", { name: "A critical issue opens" })).toBeChecked();
+  await expect(page.getByRole("switch", { name: "New vehicle request" })).not.toBeChecked();
+  await page.goto("/settings/notifications");
+  await expect(page.getByTestId("notif-group-requests")).toContainText("3 of 4 on");
+  await expect(page.getByTestId("notif-group-issues")).toContainText("All on");
 
   // 7. Sign out; sign in again: password, then the code.
   await page.getByRole("link", { name: "More" }).first().click();
@@ -509,13 +515,17 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   // Their notifications: their decided and redecided request events, a task of theirs that needs a driver (declined, not
   // accepted), the three booking events everyone can get, and (Phase 7, §4, §33) not decided 30 minutes before leaving and
   // the trip's four moments (on the way, arrived, driver changed, cancelled); and Hotfix 2's "Play sounds".
+  // Hotfix O2-H2 (Part 2): in groups, only those their permissions bring; My trips has its seven; the sounds have a page.
   await page.goto("/settings/notifications");
   await expect(page.getByRole("heading", { name: "Notifications", exact: true })).toBeVisible();
-  // Part 3b: "Your driver is running late" too.
-  await expect(page.getByRole("checkbox")).toHaveCount(14);
+  for (const g of ["requests", "tasks", "vehicles", "mine"]) await expect(page.getByTestId(`notif-group-${g}`)).toBeVisible();
+  for (const g of ["drivers", "issues"]) await expect(page.getByTestId(`notif-group-${g}`)).toHaveCount(0);
+  await page.goto("/settings/notifications/mine");
+  await expect(page.getByRole("switch")).toHaveCount(7);
+  await expect(page.getByRole("switch", { name: "Driver on the way" })).toBeChecked();
+  await expect(page.getByRole("switch", { name: "Request decided", exact: true })).toBeChecked();
+  await page.goto("/settings/notifications/sounds");
   await expect(page.getByRole("checkbox", { name: "Play sounds" })).toBeChecked();
-  await expect(page.getByRole("checkbox", { name: "Your driver is on the way" })).toBeChecked();
-  await expect(page.getByRole("checkbox", { name: "Your request is decided" })).toBeChecked();
 
   // A new request (its own page) is in their own name; "On behalf of" is for someone else.
   await page.goto("/requests");
@@ -998,9 +1008,10 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await page.getByTestId("group-free_pool").locator(".opt", { hasText: plate }).getByRole("radio").check();
   await page.getByTestId("assign-now").getByLabel("Driver", { exact: true }).selectOption({ label: driver.name });
   await page.getByRole("button", { name: "Book now" }).click();
-  await expect(page.getByTestId("booked")).toContainText("Someone from HR has");
-  await expect(page.getByTestId("booked")).toContainText(plate);
-  await page.getByRole("link", { name: "Done" }).click();
+  // Hotfix O2-H2: the booking's task opens in the form's place with "Booking saved".
+  await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]{36}$/);
+  await expect(page.locator("#toast")).toContainText("Booking saved");
+  await expect(page.getByTestId("detail")).toContainText(plate);
 
   // The task is on that day's board with its leave-by time.
   await page.goto(`/tasks?date=${day}`);
@@ -1008,7 +1019,18 @@ test("an approver books a vehicle in one step from the Free group; the task is o
 
   // The request is approved, booked directly; its timeline says so; Cancel booking with a reason.
   await page.goto("/requests");
-  await applyFilter(page, "Status", "Approved");
+  // Hotfix O2-H2, Part 3 (on Stage 0's Filter sheet): the picked option looks picked (checked, drawn as the mark: the blue
+  // ring and its dot or check), the others do not; then Apply as applyFilter does.
+  await page.getByTestId("filter-button").first().click();
+  const statusGroup = page.getByTestId("filter-panel").getByRole("group", { name: "Status", exact: true });
+  const approved = statusGroup.getByLabel("Approved", { exact: true });
+  await approved.check();
+  await expect(approved).toBeChecked();
+  await expect(approved).toHaveCSS("border-top-color", "rgb(30, 79, 160)");
+  expect(await approved.evaluate((el) => getComputedStyle(el, "::before").content)).not.toBe("none");
+  await expect(statusGroup.getByLabel("Waiting", { exact: true })).not.toBeChecked();
+  await page.getByTestId("filter-panel").getByTestId("filter-apply").click();
+  await expect(page.getByTestId("filter-panel")).toHaveCount(0);
   await page.locator("tr", { hasText: "Someone from HR" }).first().click();
   // Hotfix 3 (L3): the row keeps the list's filter in its link (the list beside the detail keeps it).
   await expect(page).toHaveURL(/\/requests\/[0-9a-f-]+(\?.*)?$/);
@@ -1022,10 +1044,10 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   const board = await tool<{ counts: { cancelled: number } }>("task_board", { date: day });
   expect(board.counts.cancelled).toBeGreaterThan(0);
 
-  // The self-drive switch (Settings → Fleet): off hides "A driver is needed" on the request form; then back on.
+  // The self-drive switch (Settings → Fleet → Tasks and bookings, Hotfix O2-H2): off hides "A driver is needed" on the request form; then back on.
   // The local database is not reset between runs: start from on, whatever the last run left.
   await tool("update_settings", { key: "self_drive_allowed", value: true });
-  await page.goto("/settings/fleet");
+  await page.goto("/settings/fleet/tasks");
   const selfDrive = page.getByRole("checkbox", { name: /Self-drive bookings allowed/ });
   await expect(selfDrive).toBeChecked();
   await selfDrive.uncheck();
@@ -1035,7 +1057,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await expect(page.getByRole("checkbox", { name: "A driver is needed" })).toHaveCount(0);
   // Back on through the tool (the same save as the untick above; the local runtime sometimes drops a second call).
   await tool("update_settings", { key: "self_drive_allowed", value: true });
-  await page.goto("/settings/fleet");
+  await page.goto("/settings/fleet/tasks");
   await expect(page.getByRole("checkbox", { name: /Self-drive bookings allowed/ })).toBeChecked();
 });
 
@@ -1234,7 +1256,7 @@ test("the Fuel page: a fill with its video uploaded from the phone plays in the 
   expect(summary.vehicles[0]).toMatchObject({ fuel_entries: 3, fuel_videos: 2 });
 
   // Fleet settings: the steps start with the four defaults in order; add one, move it above the last, save; the driver gets it.
-  await page.goto("/settings/fleet");
+  await page.goto("/settings/fleet/fuel");
   const checklist = page.getByTestId("checklist-settings");
   await expect(checklist.getByTestId("checklist-row")).toHaveCount(4);
   await expect(checklist.getByLabel("Short word 1")).toHaveValue("Plate");
@@ -1562,8 +1584,9 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   await dispatcherPage.getByLabel("Driver", { exact: true }).selectOption(driver.username);
   await expect(dispatcherPage.getByTestId("plan-card")).toContainText("Leave by", { timeout: 20000 });
   await dispatcherPage.getByRole("button", { name: "Send for approval" }).click();
-  await expect(dispatcherPage.getByText("Waiting for the fleet admin's OK").first()).toBeVisible();
-  await expect(dispatcherPage.getByRole("link", { name: "Open the request" })).toBeVisible();
+  // Hotfix O2-H2: the request it waits as opens in the form's place; the toast never says "sent".
+  await expect(dispatcherPage).toHaveURL(/\/requests\/[0-9a-f-]{36}$/);
+  await expect(dispatcherPage.locator("#toast")).toContainText("Waiting for the fleet admin's OK");
   await dispatcherPage.goto(`/tasks?date=${day}`);
   await expect(dispatcherPage.getByTestId("waiting-approval").getByTestId("waiting-card").filter({ hasText: title })).toBeVisible();
   const proposals = await tool<{ requests: { id: string; title?: string; kind?: string }[] }>("list_requests", { status: "waiting", kind: "task" });
@@ -1647,7 +1670,7 @@ test("Phase 7, Part 4: a trip a driver started is tagged and switched to persona
   await expect(page.getByTestId("history-totals")).toBeVisible();
 
   // Settings → Fleet: personal trips off, saved; back to allowed for the rest.
-  await page.goto("/settings/fleet");
+  await page.goto("/settings/fleet/day");
   const trips = page.getByTestId("personal-trips-settings");
   await trips.getByRole("radio", { name: /Off: no Personal choice/ }).check();
   await expect.poll(async () => (await tool<{ settings: { driver_personal_trips?: string } }>("get_settings", {})).settings.driver_personal_trips).toBe("off");
@@ -1672,7 +1695,7 @@ test("Part 6: the privacy contact e-mail in Fleet settings; the public /privacy 
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
     const address = `privacy.${stamp}@fame.test`;
-    await page.goto("/settings/fleet");
+    await page.goto("/settings/fleet/office");
     const card = page.getByTestId("privacy-email-settings");
     await expect(card).toContainText("Shown on the public privacy page. Use Fame's shared address before the store submission.");
     await card.getByLabel("Privacy contact e-mail").fill("not an address");
@@ -1977,7 +2000,9 @@ test("Part 3b: the Drivers board and its week view, a question answered live, th
   await page.getByTestId("board-ask").click();
   const sheet = page.getByRole("dialog", { name: "Ask drivers" });
   await sheet.getByRole("button", { name: "None", exact: true }).click();
-  await sheet.getByRole("checkbox", { name: `Ask ${driver.name}` }).check();
+  // Hotfix O2-H2 (Part 3): a person taps the row (WhatsApp's "Forward to"); the row's box is then ticked.
+  await sheet.getByTestId("sheet-row").filter({ hasText: driver.name }).click();
+  await expect(sheet.getByRole("checkbox", { name: `Ask ${driver.name}` })).toBeChecked();
   await sheet.getByTestId("sheet-kind-free_for_trip").click();
   await sheet.getByRole("group", { name: "Day", exact: true }).getByRole("button", { name: "Tomorrow", exact: true }).click();
   await sheet.getByLabel("From").fill("14:00");

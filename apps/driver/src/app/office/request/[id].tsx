@@ -6,7 +6,8 @@
 // version it was shown with (a changed booking); "already decided by …" is the server's refusal, shown and the card read
 // again. Stage 1 (O3 row 1): Change time (request/[id]/time: another day, leave-by, back-by, the start, the minutes at
 // From / To; Who's available is asked at the new time; only what changed is sent, a line with Undo shows it), and after a
-// decision the page stays with the outcome, its warnings and Tell requester (the WhatsApp text, the requester's phone).
+// decision the page stays (Tell requester: the WhatsApp text, the requester's phone), the snackbar says what happened and
+// the warnings wait in the shared notice (Hotfix O2-H2).
 // O3 row 2: the timeline (request_events) for everyone who may open it; Cancel booking with a reason for an approver on
 // an approved or changed request (cancel_request: the task is cancelled too); the person who asked (no approve) opens
 // their own request from My trips: the trip, the timeline, Edit and Withdraw while it waits, no decision buttons.
@@ -15,8 +16,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { Check, Phone } from '@/components/icons';
+import { Phone } from '@/components/icons';
+import { showSnackbar } from '@/components/patterns/Snackbar';
+import { ChoiceRow } from '@/components/patterns/Select';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import { TellRequester } from '@/components/office/TellRequester';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
@@ -29,6 +33,7 @@ import { CANCEL_TEXT, canCancelBooking, cancelReason, canWithdrawOwn, decides, e
 import { canEdit as canEditTrip } from '@/office/tripsLogic';
 import { decideStore, useTimeChange } from '@/office/decideStore';
 import { requestTitle } from '@/office/homeLogic';
+import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import type { Availability, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
@@ -70,7 +75,7 @@ export default function ApproveRequest() {
   const [busy, setBusy] = useState<'approve' | 'decline' | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
   const [declining, setDeclining] = useState(false);
-  // After a decision the page stays: the outcome, its warnings and Tell requester (the card is read again).
+  // After a decision the page stays with Tell requester (the card is read again); the decision buttons go.
   const [outcome, setOutcome] = useState<{ title: string; warnings: string[] } | null>(null);
   // Cancel booking (an approver) or Withdraw (the person who asked): one reason sheet, cancel_request.
   const [cancelling, setCancelling] = useState(false);
@@ -84,7 +89,11 @@ export default function ApproveRequest() {
     try {
       const out = await api.call<{ note?: string; task_cancelled?: string }>('cancel_request', { request_id: card.id, reason });
       setLastCancel(null);
-      setOutcome({ title: decider ? t('office.requests.cancelledTitle') : t('office.requests.withdrawnTitle'), warnings: [out.task_cancelled, out.note].filter((x): x is string => !!x) });
+      const done = decider ? t('office.requests.cancelledTitle') : t('office.requests.withdrawnTitle');
+      const notes = [out.task_cancelled, out.note].filter((x): x is string => !!x);
+      setOutcome({ title: done, warnings: notes });
+      setSavedNotice(`request:${id}`, notes);
+      showSnackbar({ text: done });
       void q.reload();
     } catch (e) {
       setProblem(e as FleetError);
@@ -139,7 +148,16 @@ export default function ApproveRequest() {
       decideStore.set(id, null);
       const warnings = [...(out.warnings ?? []), ...((out as DecideResult).conflicts ?? []).map((c) => c.text)];
       const title = decision === 'approve' ? t('office.request.approvedTitle', { name: driver?.name ?? pick }) : t('office.request.declinedTitle');
+      // Hotfix O2-H2, Part 1b, merged with O3's Tell requester: the page stays on the decided request (telling the
+      // requester is the next job), the snackbar says what happened (with View when the approval made a task this person
+      // may open), and the warnings wait on the request in the shared notice.
+      const taskId = (out as DecideResult).task_id ?? (out as RedecideResult).task?.task_id;
+      const view = decision === 'approve' && taskId && me.tools.includes('task_detail') ? taskId : null;
       setOutcome({ title, warnings });
+      setSavedNotice(`request:${id}`, warnings);
+      showSnackbar(view
+        ? { text: title, action: { label: t('office.saved.view'), onPress: () => router.push({ pathname: '/office/task/[id]', params: { id: view } }) } }
+        : { text: title });
       void q.reload();
     } catch (e) {
       const error = e as FleetError;
@@ -174,6 +192,7 @@ export default function ApproveRequest() {
       <Screen refreshing={q.refreshing} onRefresh={refresh} bottom={16}>
         {!q.data && !q.error && <SkeletonRows rows={3} lines={2} />}
         {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        <SavedNotice noticeKey={`request:${id}`} />
         {q.data && !card && <ListEmpty text={t('office.request.notFound')} />}
         {card && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -245,12 +264,6 @@ export default function ApproveRequest() {
             )}
           </View>
         )}
-        {outcome && (
-          <View style={styles.outcome} testID="decide-outcome">
-            <Txt variant="heading" size={20}>{outcome.title}</Txt>
-            {outcome.warnings.map((w) => <Txt key={w} variant="muted" size={15}>{w}</Txt>)}
-          </View>
-        )}
         {card && decider && (outcome || !open) && <TellRequester key={`${card.id}-${card.version ?? 0}-${card.status}`} q={card} onSaved={() => void q.reload()} />}
         {card && open && !outcome && (
           <Section
@@ -267,27 +280,26 @@ export default function ApproveRequest() {
               const on = d.username === pick && !!d.username;
               const pillKey = driverPill(d, bestUsername);
               return (
-                <View key={d.username ?? d.name}>
-                  {i > 0 && <Divider />}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    disabled={!d.username}
-                    onPress={() => setPicked(d.username ?? '')}
-                    style={({ pressed }) => [styles.driverRow, on && styles.driverOn, pressed && { opacity: 0.8 }]}
-                  >
-                    <Avatar name={d.name} size={44} />
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                        <Txt variant="strong" size={17}>{d.name}</Txt>
-                        {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
-                      </View>
-                      <Txt variant="muted" size={15}>{driverParts(d).join(' · ')}</Txt>
-                      {d.vehicle && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
-                    </View>
-                    {on ? <Check size={26} color={colors.blue} strokeWidth={3} /> : pillKey && pillKey !== 'best' ? <Pill text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : 'muted'} /> : null}
-                  </Pressable>
-                </View>
+                <ChoiceRow
+                  key={d.username ?? d.name}
+                  selected={on}
+                  onPress={() => setPicked(d.username ?? '')}
+                  disabled={!d.username}
+                  disabledReason={d.username ? undefined : t('office.ask.noAccount')}
+                  leading={<Avatar name={d.name} size={44} />}
+                  mark="end"
+                  trailing={pillKey && pillKey !== 'best' ? <Pill text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : 'muted'} /> : null}
+                  accessibilityLabel={d.name}
+                  testID={`approve-row-${d.username ?? d.name}`}
+                  style={i > 0 ? { marginTop: 8 } : undefined}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Txt variant="strong" size={17}>{d.name}</Txt>
+                    {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
+                  </View>
+                  <Txt variant="muted" size={15}>{driverParts(d).join(' · ')}</Txt>
+                  {d.vehicle && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
+                </ChoiceRow>
               );
             })}
           </Section>
@@ -390,9 +402,6 @@ export default function ApproveRequest() {
 const styles = StyleSheet.create({
   tripCard: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 18, gap: 10 },
   mark: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  driverRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 8, marginHorizontal: -8, borderRadius: 14, borderWidth: 2, borderColor: 'transparent', minHeight: 64 },
-  driverOn: { borderColor: colors.blue, backgroundColor: '#f2f5fb' },
   changed: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.blueChip, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 6 },
-  outcome: { backgroundColor: '#e8f4ec', borderRadius: 18, padding: 16, gap: 6 },
   event: { flexDirection: 'row', gap: 10, paddingVertical: 8, minHeight: 44 },
 });

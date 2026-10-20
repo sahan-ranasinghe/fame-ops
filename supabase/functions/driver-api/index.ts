@@ -17,6 +17,7 @@ import { z } from "zod";
 import { sessionFailure } from "../_shared/fleet/sessionCheck.ts";
 import { auditFinish, auditStart } from "../_shared/fleet/audit.ts";
 import { adminClient, ToolError } from "../_shared/fleet/db.ts";
+import { APP_ERROR_INPUT, saveAppError } from "../_shared/fleet/appErrors.ts";
 import type { Actor } from "../_shared/fleet/roles.ts";
 import { searchPlaces } from "../_shared/fleet/tools/places.ts";
 import { addTripStop, cancelSelfTrip, createSelfTrip } from "../_shared/fleet/trips.ts";
@@ -152,6 +153,13 @@ Deno.serve(async (request) => {
   const now = new Date();
   const ctx = { db, now, actor };
   try {
+    // Hotfix O2-H2: the app's crash report from the driver side (one row in app_errors with this driver).
+    if (path === "/errors") {
+      const p = APP_ERROR_INPUT.safeParse(raw);
+      if (!p.success) return bad(p.error);
+      await saveAppError(db, p.data, "driver", row!.id);
+      return json(200, { ok: true });
+    }
     if (path === "/places/search") {
       const p = INPUTS.search.safeParse(raw);
       if (!p.success) return bad(p.error);

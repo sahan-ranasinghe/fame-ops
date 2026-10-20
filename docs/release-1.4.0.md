@@ -48,7 +48,16 @@ in with 1.4.0, not through EAS Update (a JS bundle built against newer native mo
 crash). Do them together: `npx expo install --check`, then the full suite, `expo prebuild` into a scratch folder,
 `npm run test:build`.
 
-## 4. Anything else found so far
+## 4. expo-clipboard (the crash screen's Copy)
+
+- **Need:** "Show details → Copy" on the crash screen (Hotfix O2-H2, Part 1c) puts the details on the clipboard and says
+  "Copied" in the snackbar (WhatsApp's "Message copied").
+- **Module:** `expo-clipboard` (SDK 57).
+- **Until then:** Copy opens Android's share sheet (`Share.share`, `components/patterns/CrashScreen.tsx`); it stays as
+  "Share" beside Copy after the build.
+- **Check after the build:** a crash screen's Copy, then a paste in WhatsApp shows the details (scrubbed).
+
+## 5. Anything else found so far
 
 - **Photos and documents by camera** (Stage 1 item 5) need no new module: `expo-image-picker` and
   `expo-image-manipulator` are already in the 1.3.0 build. The work is the server's upload path (its own go).
@@ -59,7 +68,7 @@ crash). Do them together: `npx expo install --check`, then the full suite, `expo
 ## The build, when Sahan says go
 
 1. Count this month's builds (`eas build:list`) and say how many are left.
-2. `npx expo install @react-native-community/datetimepicker expo-video` and `npx expo install --check` (the 11 patches).
+2. `npx expo install @react-native-community/datetimepicker expo-video expo-clipboard` and `npx expo install --check` (the 11 patches).
 3. The full suite; `expo prebuild` into a scratch folder (nothing committed); `expo-doctor` (21/21); `npm run test:build`.
 4. Raise the version to 1.4.0 (`app.json`); the runtime follows.
 5. `eas build --profile drivers --platform android --no-wait`; check with `eas build:view`.

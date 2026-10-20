@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Eye, EyeOff } from '@/components/icons';
+import { Check, Eye, EyeOff } from '@/components/icons';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { PRIVACY_URL } from '@/config';
 import { Button, Card, Field, Notice, Txt } from '@/components/ui';
@@ -105,6 +105,8 @@ export default function LoginScreen() {
               const on = s === side;
               return (
                 <Pressable key={s} accessibilityRole="tab" accessibilityState={{ selected: on }} onPress={() => pick(s)} style={[styles.side, on && { backgroundColor: colors.amber }]}>
+                  {/* Hotfix O2-H2 (Part 3): the picked side has a check too, never the colour alone. */}
+                  {on && <Check size={20} color={colors.ink} strokeWidth={3} />}
                   <Txt variant="button" size={18} color={on ? colors.ink : '#c9ccd1'}>{t(s === 'driver' ? 'office.login.driver' : 'office.login.office')}</Txt>
                 </Pressable>
               );
@@ -200,6 +202,6 @@ const styles = StyleSheet.create({
   header: { backgroundColor: colors.ink, paddingHorizontal: 20, paddingBottom: 26 },
   logo: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.amber, alignItems: 'center', justifyContent: 'center' },
   switch: { flexDirection: 'row', marginTop: 18, backgroundColor: colors.darkSurface, borderRadius: 16, padding: 4 },
-  side: { flex: 1, minHeight: 52, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  side: { flex: 1, minHeight: 52, borderRadius: 13, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
   eye: { position: 'absolute', right: 6, bottom: 4, width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
 });

@@ -28,6 +28,7 @@ import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { Button } from '@/components/ui';
 import { ChevronDown, ChevronRight, Plus } from '@/components/icons';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import { Sheet } from '@/components/patterns/Sheet';
 import { attentionCount, attentionGroups, chipTarget, snoozeCalls, withoutGroups } from '@/office/overviewLogic';
 import type { AttentionGroup, FleetError } from '@/office/types';
@@ -110,6 +111,7 @@ export default function OfficeHome() {
         </View>
       </DarkHeader>
       <Screen refreshing={refreshing} onRefresh={refresh}>
+        <SavedNotice noticeKey="/office" />
         {overview.error && <ListFailed stale={!!ov} error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {actions.length > 0 && (
           <View style={{ flexDirection: 'row', gap: 10 }}>

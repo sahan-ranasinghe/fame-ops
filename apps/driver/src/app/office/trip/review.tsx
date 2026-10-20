@@ -5,10 +5,10 @@
 // Pick another vehicle / driver), the warnings, the vehicle the plan takes and why, the chips (driver · plate, the
 // contact, the notes, the passengers), then Send request / Save as waiting + Book now (with book_vehicle) / Send to
 // <driver> or Send for approval (create_task) / Save changes (update_request with the version, update_task_stops with
-// the plan version). After the server took it: the outcome card (the site's words: sent or waiting, Leave by, the
-// vehicle used, the warnings, the conflicts; Open task, Open the request, The board / My trips, WhatsApp the driver,
-// Done), shown from its own state (the draft is gone by then). A dropped send is never repeated by itself: the person
-// sees the sentence and presses again, and Try again sends the same call (a booking stays a booking).
+// the plan version). After the server took it (Hotfix O2-H2, Part 1b; Gmail's "Sent"): the form closes, the new or
+// changed item opens (office/trip/successLogic.ts), a snackbar says what happened (WhatsApp the driver as its action when
+// asked for) and the warnings and conflicts wait on the screen landed on (SavedNotice). A dropped send is never repeated by
+// itself: the person sees the sentence and presses again, and Try again sends the same call (a booking stays a booking).
 
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
@@ -23,6 +23,9 @@ import { useOffice, useTool } from '@/office/state';
 import { validateAssign } from '@/office/trip/assignLogic';
 import { requestFieldsOf, setDraft, type TripMode, updateDraft, useTripDraft } from '@/office/trip/draft';
 import { bookOutcome, conflictActions, driverMessage, leaveNote, type Outcome, requestOutcome, taskOutcome, whatsappWithText } from '@/office/trip/formsLogic';
+import { requestIdOf, successOf } from '@/office/trip/successLogic';
+import { setSavedNotice } from '@/office/savedNotice';
+import { showSnackbar } from '@/components/patterns/Snackbar';
 import { previewTask } from '@/office/trip/planMap';
 import { bookInput, updateRequestInput, validateNewRequest } from '@/office/trip/requestLogic';
 import { stopsInput, startInput, hasDeadline } from '@/office/trip/stopsLogic';
@@ -48,16 +51,9 @@ export default function TripReview() {
   const [busy, setBusy] = useState<'' | SendKind>('');
   const lastKind = useRef<SendKind>('send');
   const [problem, setProblem] = useState<FleetError | string | null>(null);
-  const [outcome, setOutcome] = useState<(Outcome & { waLink?: string; waMissing?: boolean; driverName?: string }) | null>(null);
-  const mode: TripMode = outcome?.mode ?? d?.mode ?? 'request';
+  const mode: TripMode = d?.mode ?? 'request';
   const opensTasks = has(me.permissions, 'assign_tasks');
   const aboveFor = (m: TripMode) => m === 'task' ? t('office.trip.assignAbove', { n: 4 }) : m === 'edit' ? t('office.trip.editAbove') : m === 'stops' ? t('office.trip.stopsAbove') : t('office.trip.newAbove', { n: 4 });
-  const home = mode === 'task' && opensTasks ? '/office/(tabs)/tasks' : has(me.permissions, 'request') ? '/office/(tabs)/trips' : '/office';
-
-  function leaveTo(path: string | { pathname: '/office/task/[id]'; params: { id: string } } | { pathname: '/office/request/[id]'; params: { id: string } }) {
-    router.dismissAll();
-    router.replace(path as never);
-  }
 
   const conflictCard = (c: Conflict, i: number, picks: boolean) => {
     const a = conflictActions(c, opensTasks);
@@ -79,47 +75,6 @@ export default function TripReview() {
       </View>
     );
   };
-
-  // The outcome comes first: the draft is gone once the server took it (the reviewer's blocker 1).
-  if (outcome) {
-    const title = outcome.kind === 'sent' ? t('office.trip.outcomeSent', { name: outcome.driverName ?? '' })
-      : outcome.kind === 'waiting' ? t('office.trip.outcomeWaiting')
-      : outcome.kind === 'booked' ? t('office.trip.outcomeBooked')
-      : outcome.kind === 'request_sent' ? t('office.trip.outcomeRequestSent')
-      : t('office.trip.outcomeSaved');
-    const bodyLines = [
-      outcome.kind === 'waiting' ? t('office.trip.outcomeWaitingBody')
-        : outcome.kind === 'sent' ? t('office.trip.outcomeInApp')
-        : outcome.kind === 'booked' && outcome.who && outcome.vehicle && outcome.when ? t('office.trip.outcomeBookedBody', { who: outcome.who, vehicle: outcome.vehicle.split(' · ')[0], when: outcome.when })
-        : outcome.kind === 'saved' && outcome.needsReapproval ? t('office.trip.reapprovalOutcome')
-        : outcome.next ?? '',
-      outcome.leaveBy ? t('office.trip.outcomeLeaveBy', { time: outcome.leaveBy }) : '',
-      outcome.vehicle && outcome.kind !== 'booked' ? t('office.trip.vehicleUsedLine', { text: outcome.vehicle }) : outcome.kind === 'booked' && outcome.vehicle && outcome.vehicle.includes(' · ') ? t('office.trip.vehicleUsedLine', { text: outcome.vehicle }) : '',
-    ].filter(Boolean);
-    return (
-      <View style={{ flex: 1, backgroundColor: colors.page }}>
-        <TripHeader step="review" mode={mode} above={aboveFor(mode)} onBack={() => leaveTo(home)} />
-        <Screen bottom={16}>
-          <View style={styles.outcome} testID="outcome-card">
-            <Txt variant="heading">{title}</Txt>
-            {bodyLines.map((l, i) => <Txt key={i} variant="body" size={16}>{l}</Txt>)}
-            {outcome.warnings.length > 0 && (
-              <View style={{ gap: 4 }}>
-                <Txt variant="label" color={colors.amberText}>{t('office.trip.warningsTitle').toUpperCase()}</Txt>
-                {outcome.warnings.map((w, i) => <Txt key={i} variant="strong" size={15} color={colors.amberText}>{w}</Txt>)}
-              </View>
-            )}
-            {outcome.conflicts.map((c, i) => conflictCard(c, i, false))}
-            {outcome.waMissing ? <Txt variant="small">{t('office.trip.whatsappNoPhone')}</Txt> : null}
-          </View>
-          {outcome.taskId && opensTasks && <Button kind="dark" label={t('office.trip.openTask')} onPress={() => leaveTo({ pathname: '/office/task/[id]', params: { id: outcome.taskId! } })} style={{ minHeight: 56 }} />}
-          {!outcome.taskId && outcome.requestId && has(me.permissions, 'approve') && <Button kind="dark" label={t('office.trip.openRequest')} onPress={() => leaveTo({ pathname: '/office/request/[id]', params: { id: outcome.requestId! } })} style={{ minHeight: 56 }} />}
-          {outcome.waLink ? <Button kind="outline" label={t('office.trip.whatsappDriver')} onPress={() => open(outcome.waLink!)} style={{ minHeight: 56 }} /> : null}
-          <Button label={mode === 'task' && opensTasks ? t('office.trip.theBoard') : has(me.permissions, 'request') ? t('office.trip.myTrips') : t('office.trip.done')} onPress={() => leaveTo(home)} style={{ minHeight: 56 }} />
-        </Screen>
-      </View>
-    );
-  }
 
   if (!d) return <View style={{ flex: 1, backgroundColor: colors.page }}><Screen><Loading text={t('office.common.loading')} /></Screen></View>;
   const f = d.fields;
@@ -184,8 +139,29 @@ export default function TripReview() {
       const waLink = wantsWa && d!.driverWhatsapp ? whatsappWithText(d!.driverWhatsapp, driverMessage(chosen.input, o.leaveBy ? t('office.trip.outcomeLeaveBy', { time: o.leaveBy }) : undefined, {
         pickup: t('office.trip.wa_pickup'), drop: t('office.trip.wa_drop'), visit: t('office.trip.wa_visit'), stop: t('office.trip.wa_stop'), contact: t('office.trip.wa_contact'), open: t('office.trip.wa_open'), newTask: t('office.trip.wa_newTask'),
       })) : '';
-      const made = { ...o, mode: d!.mode, waLink: waLink || undefined, waMissing: wantsWa && !waLink, driverName };
-      setOutcome(made);
+      // Hotfix O2-H2, Part 1b (Gmail "Sent", Google Calendar "Event saved"): the form closes, the new or changed item opens,
+      // a snackbar says what happened, the warnings wait on the screen landed on; then the draft goes (nothing under the
+      // new screen reads it any more).
+      const s = successOf(
+        { ...o, mode: d!.mode, requestId: o.requestId ?? requestIdOf(out), taskId: o.taskId ?? (d!.mode === 'stops' ? d!.taskId : undefined) },
+        { openTasks: opensTasks, openRequests: has(me.permissions, 'approve'), request: has(me.permissions, 'request') },
+      );
+      const notice = [...s.notice, ...(wantsWa && !waLink ? [t('office.trip.whatsappNoPhone')] : [])];
+      setSavedNotice(s.noticeKey, notice);
+      // Change stops was opened from the task: back to that same screen (and what was under it). A new trip or an edited
+      // request: the editor's steps go and the item opens on the tab the person was on.
+      if (d!.mode === 'stops' && s.target.kind === 'task') {
+        router.dismissTo({ pathname: '/office/task/[id]', params: { id: s.target.id } });
+      } else {
+        if (router.canDismiss()) router.dismissAll();
+        if (s.target.kind === 'task') router.push({ pathname: '/office/task/[id]', params: { id: s.target.id } });
+        else if (s.target.kind === 'request') router.push({ pathname: '/office/request/[id]', params: { id: s.target.id } });
+        else router.navigate(s.target.path as never);
+      }
+      showSnackbar({
+        text: t(`office.saved.${s.snack}`, { name: driverName }),
+        ...(waLink ? { action: { label: t('office.saved.whatsapp'), onPress: () => open(waLink) } } : {}),
+      });
       setDraft(null);
     } catch (e) {
       setProblem(e as FleetError);
@@ -299,5 +275,4 @@ const styles = StyleSheet.create({
   chipRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#ebe9e3', borderRadius: 999, paddingHorizontal: 12, minHeight: 40 },
   conflict: { borderWidth: 1.5, borderColor: colors.red, borderRadius: 14, padding: 12, gap: 10, backgroundColor: colors.card },
   smallBtn: { minHeight: 44, paddingHorizontal: 12 },
-  outcome: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 10 },
 });

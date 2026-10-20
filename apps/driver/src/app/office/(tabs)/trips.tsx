@@ -15,6 +15,7 @@ import { ReasonSheet } from '@/components/ReasonSheet';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Notice, Txt } from '@/components/ui';
+import { SavedNotice } from '@/components/office/SavedNotice';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
 import { statusTone, tripLive, tripTitle } from '@/office/homeLogic';
@@ -124,6 +125,7 @@ export default function TripsTab() {
         </View>
       )}
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
+        <SavedNotice noticeKey="/office/(tabs)/trips" />
         <FilterBar
           search={text}
           onSearch={(v) => { setText(v); if (!v) setSearch(''); }}

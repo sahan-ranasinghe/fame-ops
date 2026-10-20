@@ -237,7 +237,7 @@ console.log('\n== Strings (office.alerts / trips / profile in en.json and si.jso
     'trips.above', 'trips.waiting', 'trips.coming', 'trips.done', 'trips.none', 'trips.approvedBy', 'trips.callName', 'trips.withdraw', 'trips.withdrawTitle',
     'trips.withdrawQuestion', 'trips.withdrawNote', 'trips.withdrawConfirm', 'trips.withdrawn', 'trips.reasonNotNeeded', 'trips.reasonPlansChanged', 'trips.reasonOther',
     'profile.contact', 'profile.myPhone', 'profile.noPhone', 'profile.edit', 'profile.phoneLabel', 'profile.phonePlaceholder', 'profile.phoneNeeded', 'profile.saved',
-    'profile.email', 'profile.notifications', 'profile.noEvents', 'profile.app', 'profile.language', 'profile.officePhone', 'profile.officePhoneNone', 'profile.privacyHint'];
+    'profile.app', 'profile.language', 'profile.officePhone', 'profile.officePhoneNone', 'profile.privacyHint'];
   const absent = used.filter((k) => { const [g, kk] = k.split('.'); return !parts.en.office[g]?.[kk]; });
   check(absent.length === 0, 'every key the three screens use is in the part', absent);
   check(WITHDRAW_REASONS.every((r) => { const [, g, k] = r.label.split('.'); return !!parts.en.office[g]?.[k]; }), "the Withdraw reasons' labels are in the part");

@@ -50,7 +50,7 @@ async function mount(transport: FakeTransport, url: string) {
         <MemoryRouter initialEntries={[url]}>
           <Routes>
             <Route path="/places" element={<Places />}><Route path=":id" element={<PlacePage />} /></Route>
-            <Route path="/settings/fleet" element={<div>Fleet settings</div>} />
+            <Route path="/settings/fleet/office" element={<div>Fleet settings</div>} />
           </Routes>
         </MemoryRouter>
       </ToastProvider>
@@ -104,7 +104,7 @@ describe("the place page's Remove", () => {
     expect(t.argsOf("remove_place")).toEqual([{ id: "p1", confirm: true }]);
 
     expect(await screen.findByText(/Removed\. It is listed under Removed places\./)).toBeTruthy();
-    expect(screen.getByRole("link", { name: /The base place is no longer set/ }).getAttribute("href")).toBe("/settings/fleet");
+    expect(screen.getByRole("link", { name: /The base place is no longer set/ }).getAttribute("href")).toBe("/settings/fleet/office");
     expect(screen.getByTestId("place-removed").textContent).toContain("Removed by Sahan 17 Oct");
     expect(screen.queryByTestId("place-remove")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();

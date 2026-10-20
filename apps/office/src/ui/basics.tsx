@@ -4,6 +4,7 @@ import type { Entry } from "../data/store";
 import { clock, initials, plateOf, type Tone } from "../lib/format";
 import { AUTHZ, errText, type Fix } from "../transport/errors";
 import { Icon } from "./icons";
+import { ChoiceChip } from "./Select";
 
 export const Plate = ({ v }: { v?: string | null }) => v ? <span className="plate">{plateOf(v)}</span> : null;
 export const Pill = ({ tone = "", children }: { tone?: Tone; children: ReactNode }) => <span className={`pill ${tone}`}>{children}</span>;
@@ -135,9 +136,9 @@ export function Chips<K extends string>({ options, value, onChange, counts }: { 
   return (
     <div className="chips">
       {options.map(([k, label]) => (
-        <button key={k} type="button" className="chip" aria-pressed={value === k} onClick={() => onChange(k)}>
+        <ChoiceChip key={k} selected={value === k} onClick={() => onChange(k)}>
           {label}{counts && counts[k] != null ? ` · ${counts[k]}` : ""}
-        </button>
+        </ChoiceChip>
       ))}
     </div>
   );

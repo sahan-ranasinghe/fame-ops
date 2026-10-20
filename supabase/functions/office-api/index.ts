@@ -25,6 +25,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { sessionFailure } from "../_shared/fleet/sessionCheck.ts";
+import { APP_ERROR_INPUT, saveAppError } from "../_shared/fleet/appErrors.ts";
 import {
   type Actor,
   adminClient,
@@ -191,6 +192,27 @@ Deno.serve(async (request) => {
         ? true
         : undefined,
     }, cors);
+  }
+
+  // Hotfix O2-H2: the app's crash report (Office mode's crash screen or an error it survived): one row in app_errors with
+  // this person; scrubbed on the phone and again here; never an error back to the app beyond a refusal.
+  if (request.method === "POST" && path === "/errors") {
+    if (actor.employeeId && overLimit(actor.employeeId)) return json(429, { error: "too_many_calls" }, cors);
+    let raw: unknown = null;
+    try {
+      raw = JSON.parse(await request.text());
+    } catch {
+      return json(400, { error: "bad_json" }, cors);
+    }
+    const p = APP_ERROR_INPUT.safeParse(raw);
+    if (!p.success) return json(400, { error: "bad_input" }, cors);
+    try {
+      await saveAppError(db, p.data, "office", actor.employeeId);
+      return json(200, { ok: true }, cors);
+    } catch (e) {
+      console.error(`office-api: app error report: ${e instanceof Error ? e.message : String(e)}`);
+      return json(500, { error: "not_saved" }, cors);
+    }
   }
 
   if (request.method === "GET" && path === "/tools") {

@@ -13,7 +13,8 @@ import type { Ask, AskAnswers as AskAnswersData, AskDriverRow, AskDriversResult 
 import { today } from "../../lib/format";
 import { errText } from "../../transport/errors";
 import type { FleetError } from "../../transport/types";
-import { Avatar, Notice, Pill } from "../../ui/basics";
+import { Notice, Pill } from "../../ui/basics";
+import { ChoiceCard, SelectableRow } from "../../ui/Select";
 import { Icon } from "../../ui/icons";
 import { TimeField } from "../../ui/TimeField";
 import { useToast } from "../../ui/Toast";
@@ -148,11 +149,10 @@ export function AskSheet({ candidates, window: trip, askFor, onSent, onClose }: 
           <span className="lab">Question</span>
           <div className="ask-kinds">
             {ASK_KINDS.map((k, i) => (
-              <button key={k.kind} ref={i === 0 ? first : undefined} type="button" className="ask-kind" role="radio" aria-checked={f.kind === k.kind}
-                onClick={() => set("kind", k.kind)} data-testid={`sheet-kind-${k.kind}`}>
+              <ChoiceCard key={k.kind} ref={i === 0 ? first : undefined} className="ask-kind" selected={f.kind === k.kind} onPick={() => set("kind", k.kind)} testId={`sheet-kind-${k.kind}`}>
                 <b>{k.title}</b>
                 <span className="sub">{k.sub}</span>
-              </button>
+              </ChoiceCard>
             ))}
           </div>
         </div>
@@ -178,14 +178,10 @@ export function AskSheet({ candidates, window: trip, askFor, onSent, onClose }: 
           </div>
           <div className="rows sheet-rows">
             {rows.map((c) => (
-              <label key={c.username} className="row ask-pick-row" data-testid="sheet-row">
-                <input type="checkbox" checked={f.drivers.includes(c.username)} onChange={() => toggle(c.username)} aria-label={`Ask ${c.name}`} />
-                <Avatar name={c.name} src={c.photo_url ?? undefined} small />
-                <span className="grow">
-                  <span className="name">{c.name}{c.free && <Pill tone="ok">Free</Pill>}</span>
-                  {c.line && <span className="sub" style={{ display: "block" }}>{c.line}</span>}
-                </span>
-              </label>
+              <SelectableRow key={c.username} selected={f.drivers.includes(c.username)} onToggle={() => toggle(c.username)} label={`Ask ${c.name}`} testId="sheet-row" className="ask-pick-row">
+                <span className="name">{c.name}{c.free && <Pill tone="ok">Free</Pill>}</span>
+                {c.line && <span className="sub" style={{ display: "block" }}>{c.line}</span>}
+              </SelectableRow>
             ))}
             {!rows.length && <div className="row muted small">No drivers to ask.</div>}
           </div>

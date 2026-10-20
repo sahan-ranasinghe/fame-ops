@@ -4,7 +4,8 @@
 // Phase 7 Part 2: during a task, a breakdown or an accident offers the tick "I need another vehicle"
 // (the fleet admins are told at once); it is cleared when the category changes.
 
-import { Camera, Check, X } from '@/components/icons';
+import { Camera, X } from '@/components/icons';
+import { Checkbox, ChoiceChip } from '@/components/patterns/Select';
 import { useEffect, useState } from 'react';
 import { Image, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -78,43 +79,36 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
 
       <View style={{ gap: 10 }}>
         <Txt variant="big">{t('report.what')}</Txt>
-        <View style={styles.chips}>
+        <View accessibilityRole="radiogroup" style={styles.chips}>
           {CATEGORIES.map((item) => {
             const on = item === category;
             return (
-              <Pressable
+              <ChoiceChip
                 key={item}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
+                label={t(`report.${item}`)}
+                selected={on}
                 onPress={() => {
                   if (item !== category) setNeedVehicle(false);
                   setCategory(item);
                   setProblem(null);
                 }}
-                style={[styles.chip, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}
-              >
-                <Txt variant="strong" color={on ? '#ffffff' : colors.ink}>{t(`report.${item}`)}</Txt>
-              </Pressable>
+                style={styles.chip}
+                testID={`report-${item}`}
+              />
             );
           })}
         </View>
       </View>
 
       {canAskVehicle && (
-        <Pressable
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: needVehicle }}
-          onPress={() => setNeedVehicle((on) => !on)}
-          style={[styles.tick, needVehicle && styles.tickOn]}
-        >
-          <View style={[styles.box, needVehicle && { backgroundColor: colors.red, borderColor: colors.red }]}>
-            {needVehicle && <Check size={22} color="#ffffff" strokeWidth={3.2} />}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Txt variant="big" color={needVehicle ? colors.red : colors.ink}>{t('report.needVehicle')}</Txt>
-            <Txt variant="small">{t('report.needVehicleHint')}</Txt>
-          </View>
-        </Pressable>
+        <Checkbox
+          checked={needVehicle}
+          onChange={setNeedVehicle}
+          label={t('report.needVehicle')}
+          hint={t('report.needVehicleHint')}
+          tone="danger"
+          testID="report-need-vehicle"
+        />
       )}
 
       <View style={{ gap: 8 }}>
@@ -158,10 +152,7 @@ export function ReportForm({ vehicle, taskId, onSent, onDirtyChange }: {
 const styles = StyleSheet.create({
   between: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  chip: { minHeight: 52, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center' },
-  tick: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 14, padding: 14, borderRadius: 14, borderWidth: 2, borderColor: colors.line },
-  tickOn: { borderColor: colors.red, backgroundColor: '#fbeceb' },
-  box: { width: 32, height: 32, borderRadius: 8, borderWidth: 2.5, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.card },
+  chip: { minHeight: 52, paddingHorizontal: 16, borderRadius: 12 },
   note: {
     minHeight: 96,
     borderWidth: 1.5,

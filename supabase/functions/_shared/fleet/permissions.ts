@@ -109,6 +109,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   get_settings: ANY,
   update_settings: USERS,
   routing_usage: USERS,
+  list_app_errors: USERS,
   register_vehicle: VEH,
   update_vehicle: VEH,
   add_rental_company: VEH,

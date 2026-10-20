@@ -900,7 +900,9 @@ itself); the artifact keeps none (Claude may hold a call for approval).
 - Item 4: a fuel fill's video opens its 1-hour link in the phone's browser (a list over 50 minutes old is read again first).
 - Item 5: photos and documents by camera (vehicle photo, documents per kind, driver photo, licence front / back): the file
   goes from the phone to Storage through the signed upload the existing tools hand out (`office/media.ts`); no server change.
-- Item 6: the contract check no longer depends on the hour (`scripts/snapshot-tool-shapes.py`).
+- Item 6: the contract check no longer depends on the hour (`scripts/snapshot-tool-shapes.py`). Replaced at the merge of
+  Hotfix O2-H2 by its per-state check (§20; Sahan, 20 October 2026): task_detail in three states, each against its own
+  fields, and the optional list fields named with their code, instead of letting any nested field be absent.
 - Item 7: `docs/release-1.4.0.md` (the native date / time pickers, expo-video, the 11 expo-doctor patches), not built.
 
 Left out, on purpose: Issues' Realtime (read again on return and pull); removing or restoring a vehicle document and dragging a
@@ -911,6 +913,23 @@ controls (zoom in, zoom out, trails, fit) counting the zoom pair as one: a decis
 Deno, pgTAP, the connector suite, the website's unit tests and builds and every app suite pass; the e2e has 3 failures,
 all spec lines still clicking the chips Stage 0 replaced (Live's "Problems · N" and "Off duty · N", Requests' "Changed"):
 to fix on resume, then the checkpoint, then Stage 2 (the draft `docs/mobile-website.md` is not committed yet).
+
+## 20. Hotfix O2-H2 (20 October 2026, branch `phase8-o2-h2` from main `44fc0d2`): no white screen, saved = snackbar
+
+- **What it did:** the white screen after a save (the trip editor's Who step skipped a hook once the draft was cleared;
+  `tests/tripSave.test.tsx`, `npm run lint:hooks`); every save closes its form and opens the item with a snackbar
+  (`office/trip/successLogic.ts`, `components/patterns/Snackbar.tsx`, `components/office/SavedNotice.tsx`; the site's
+  `ui/Toast.tsx`); a crash screen behind every stack with Show details and the reports in `app_errors` (`list_app_errors`,
+  Settings → App errors); notification settings in groups with Pause all (app and site, `notificationGroups.ts`); a picked
+  thing always looks picked (`components/patterns/Select.tsx`, the site's `ui/Select.tsx`). Patterns: `docs/ui-patterns.md`.
+  The connector's shape contract checks `task_detail` by state (`scripts/snapshot-tool-shapes.py`). The web build makes no
+  source maps (`vite.config.ts`).
+- **Deployed (GO 2, 20 October 2026):** `supabase db push` (20261020100000_hotfix_o2h2_app_errors); `functions deploy
+  office-api office-mcp driver-api`.
+- **Deployed (GO 1, 20 October 2026):** main fast-forwarded to cae9f83; Cloudflare Pages (fame-fleet.pages.dev, 0 source
+  maps, the secret scan empty); `eas update --channel preview --environment preview --message "Hotfix O2-H2: no white
+  screen, saved = snackbar, notification settings, visible selection"`: runtime 1.3.0-gmaps, update group
+  66f60b92-396f-4782-b61f-21ab4b29f5b2, Android update 01a158c4-fab1-70bf-aa94-3b62d3d39d27, commit cae9f83.
 
 ## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
 

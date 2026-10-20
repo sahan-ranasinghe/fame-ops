@@ -6,6 +6,7 @@ import { type ReactNode, useState } from 'react';
 import { Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { ChevronDown, ChevronUp, Minus, Plus } from '@/components/icons';
+import { ChoiceChips } from '@/components/patterns/Select';
 import { Mono, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -80,26 +81,13 @@ export function ToggleRow({ label, hint, value, onChange, disabled = false, test
   );
 }
 
-/** One of several, as chips (an enumeration). */
+/** One of several, as chips (an enumeration): the shared ChoiceChip (patterns/Select: the check, the tint, the border). */
 export function Chips<K extends string>({ options, value, onChange, small = false }: { options: { key: K; label: string; disabled?: boolean }[]; value: K | ''; onChange: (k: K) => void; small?: boolean }) {
-  return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {options.map((o) => {
-        const on = o.key === value;
-        return (
-          <Pressable key={o.key} accessibilityRole="button" accessibilityState={{ selected: on, disabled: o.disabled }} disabled={o.disabled} onPress={() => onChange(o.key)} style={[styles.chip, small && { minHeight: 36, paddingHorizontal: 12 }, on && styles.chipOn, o.disabled && { opacity: 0.45 }]}>
-            <Txt variant="strong" size={small ? 14 : 15} color={on ? '#ffffff' : colors.ink}>{o.label}</Txt>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+  return <ChoiceChips options={options} value={value} onChange={onChange} small={small} />;
 }
 
 const styles = StyleSheet.create({
   stepBtn: { width: 52, height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   stepValue: { minWidth: 64, height: 48, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10 },
   fold: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 48, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
-  chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
 });
