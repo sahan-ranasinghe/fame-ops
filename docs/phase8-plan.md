@@ -907,6 +907,11 @@ Left out, on purpose: Issues' Realtime (read again on return and pull); removing
 saved place's pin stay on the website; PDFs are added on a laptop (no file picker in 1.3.0). Live's map cluster has four
 controls (zoom in, zoom out, trails, fit) counting the zoom pair as one: a decision for Sahan against "at most three".
 
+**Paused (20 October 2026, for Hotfix O2-H2):** at the Stage 0 + O3 checkpoint run, everything committed (last `4295313`);
+Deno, pgTAP, the connector suite, the website's unit tests and builds and every app suite pass; the e2e has 3 failures,
+all spec lines still clicking the chips Stage 0 replaced (Live's "Problems · N" and "Off duty · N", Requests' "Changed"):
+to fix on resume, then the checkpoint, then Stage 2 (the draft `docs/mobile-website.md` is not committed yet).
+
 ## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
 
 The office will do from the phone everything they do on the website, because they don't always have a laptop. So every
