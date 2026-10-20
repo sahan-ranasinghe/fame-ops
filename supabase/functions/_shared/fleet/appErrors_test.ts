@@ -35,6 +35,11 @@ Deno.test("scrubText: tokens, keys, e-mails, phones and long numbers", () => {
   assert(!/eyJhbGci|sb_secret_abc|AIzaSyA|a@b\.lk|77 123 4567|123456789012/.test(s), s);
 });
 
+Deno.test("scrubText: ids and the secrets of a link, like the phone's", () => {
+  const s = scrubText("task 3f2b1c4d-1111-4222-8333-444455556666 at /x?token=abc&key=def&y=1");
+  assert(!/3f2b1c4d|token=abc|key=def/.test(s) && /y=1/.test(s), s);
+});
+
 Deno.test("list_app_errors is for the people who look after the accounts (users)", () => {
   assertEquals(TOOL_PERMISSION["list_app_errors"], ["users"]);
 });

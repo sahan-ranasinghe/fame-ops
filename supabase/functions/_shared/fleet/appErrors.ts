@@ -26,7 +26,9 @@ const SCRUB: [RegExp, string][] = [
   [/\bAIza[0-9A-Za-z_-]{20,}/g, "<key>"],
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, "<email>"],
   [/(\+?94[\s-]?|\b0)7\d[\s-]?\d{3}[\s-]?\d{4}\b/g, "<phone>"],
+  [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<id>"],
   [/\b\d{9,}\b/g, "<number>"],
+  [/([?&](token|key|apikey|access_token)=)[^&\s]+/gi, "$1<redacted>"],
 ];
 /** The server's own pass over the phone's text (the same rules as the app's crashLogic.scrub). */
 export function scrubText(s: string | null | undefined): string {
