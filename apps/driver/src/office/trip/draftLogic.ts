@@ -39,6 +39,11 @@ export interface TripDraft {
   reached?: number;
   /** task: the picked driver's name beside the username in fields.driver (Review and the alert name the person). */
   driverName?: string;
+  /** task: the picked driver's WhatsApp link (from Who's available, for people who may see numbers): "WhatsApp the driver" after sending. */
+  driverWhatsapp?: string;
+  /** request (Book now, with book_vehicle): what Review needs beside fields.driver / fields.vehicle: the picked vehicle's custodian
+   *  and the driver's default vehicle (null = known to bring none; undefined = not known yet). */
+  book?: { hasCustodian: boolean; defaultVehicle?: string | null };
   /** The trip and the task's own fields (the request mode leaves the task's empty). */
   fields: AssignFields;
   req: RequestExtras;

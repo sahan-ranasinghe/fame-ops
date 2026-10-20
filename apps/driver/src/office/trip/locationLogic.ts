@@ -64,3 +64,19 @@ export function searchState(args: { searchable: boolean; busy: boolean; answer: 
   if (!args.answer) return args.busy ? 'searching' : 'idle';
   return args.answer.results.length > 0 || args.answer.pin ? 'results' : 'none';
 }
+
+/**
+ * Hotfix O2-H1: what a place box shows. Typing never chooses a place: the picked state (the name with Change) appears
+ * only after a pick; while the person types, or until something is picked, the box is a text field with the typed
+ * text kept (so leaving and returning restores the text, never a fake place). Change returns to the field.
+ */
+export type PlaceBox = 'field' | 'picked';
+export function placeBoxState(s: { picked?: boolean; place: string }, editing: boolean): PlaceBox {
+  if (editing) return 'field';
+  return s.picked && s.place.trim() ? 'picked' : 'field';
+}
+
+/** Typing into a stop's box: the text is kept, the pick and its ids go. */
+export function typedPatch(text: string): { place: string; picked: false; placeId: undefined; placePinned: undefined; googlePlaceId: undefined; lat: undefined; lng: undefined } {
+  return { place: text, picked: false, placeId: undefined, placePinned: undefined, googlePlaceId: undefined, lat: undefined, lng: undefined };
+}

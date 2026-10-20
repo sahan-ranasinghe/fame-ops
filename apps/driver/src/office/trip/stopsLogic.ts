@@ -26,6 +26,8 @@ export interface StopDraft {
   /** The picked place's pin when the search box knew it (the same-as-start check, the best match). Never sent. */
   lat?: number;
   lng?: number;
+  /** Hotfix O2-H1: set by a pick (a result, My location, a pin); typing clears it. The box shows the picked state only then. */
+  picked?: boolean;
   /** "6.93, 79.84" typed by hand; empty = the saved place's pin or the town centre. */
   pin: string;
   /** The time at the stop as chosen: minutes or h:mm; empty = the usual time or the default. */
@@ -147,6 +149,7 @@ export const hasDeadline = (list: StopDraft[]) => list.some((s) => isTime(s.arri
 /** Drafts from a task's stops (task_detail), for editing. A time the server chose (usual or default) stays unchosen. */
 export function draftsFromStops(stops: { type: string; what?: string; place?: string; place_id?: string; google_place_id?: string; lat?: number; lng?: number; dwell_min?: number; dwell_source?: string; arrive_by?: string; note?: string; pin?: string }[]): StopDraft[] {
   return stops.map((s) => ({
+    picked: !!(s.place_id || s.google_place_id || (s.lat != null && s.lng != null) || (s.place ?? '').trim()),
     ...newStop((["pickup", "drop", "visit"].includes(s.type) ? s.type : "visit") as StopType),
     what: (s.what ?? "") as What,
     place: s.place ?? "",

@@ -83,7 +83,7 @@ export default function TripWhen() {
               </View>
               <View style={{ flexDirection: 'row', gap: 12 }}>
                 <TimeInput label={t('office.trip.arriveBy')} value={s.arriveBy} onCommit={(arriveBy) => patchStop(s.key, { arriveBy })} tone={trip.lateKey === s.key ? 'red' : undefined} />
-                {i === f.stops.length - 1 && <TimeInput label={t('office.trip.backBy')} value={f.end} onCommit={(end) => setF({ end })} tone={trip.lateBack ? 'red' : undefined} />}
+                {i === f.stops.length - 1 && <TimeInput label={t(draft.mode === 'task' || draft.mode === 'stops' ? 'office.trip.freeBy' : 'office.trip.backBy')} value={f.end} onCommit={(end) => setF({ end })} tone={trip.lateBack ? 'red' : undefined} />}
               </View>
               {check && check.kind === 'late' && trip.lateKey === s.key && (
                 <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(check.leaveBy)} moveLabel={check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />

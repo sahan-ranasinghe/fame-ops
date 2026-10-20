@@ -28,7 +28,7 @@ export type { Picked };
 
 type Suggest = { answer: SearchAnswer | null; busy: boolean; failed: boolean };
 
-export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = false, autoFocus = false }: {
+export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = false, autoFocus = false, editing = false }: {
   value: string;
   placeholder: string;
   /** The person typed (the pick, if any, is gone). */
@@ -37,6 +37,8 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
   /** Offer the phone's position ("My location"), for a start. */
   myLocation?: boolean;
   autoFocus?: boolean;
+  /** Opened with Change: the previous text is selected, so typing replaces it (Hotfix O2-H1). */
+  editing?: boolean;
 }) {
   const { t } = useApp();
   const { api, me } = useOffice();
@@ -183,6 +185,7 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
           placeholder={placeholder}
           placeholderTextColor="#9aa0a6"
           autoFocus={autoFocus}
+          selectTextOnFocus={editing}
           autoCorrect={false}
           style={styles.input}
           accessibilityLabel={placeholder}

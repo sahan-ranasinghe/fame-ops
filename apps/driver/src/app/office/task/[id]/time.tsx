@@ -1,52 +1,80 @@
-// Office mode (Phase 8, O2, item 5): Change time: the day, the leave-by and the end time of a task through update_task
-// with the plan version it was shown with (a stale one is refused: the page loads the task again). A running task keeps
-// its day and leave-by: only the end time moves. Not designed (docs/phase8-plan.md section 11): the When step's chips and
-// time boxes, one Save.
+// Office mode (Phase 8, O2, item 5; Hotfix O2-H1 Part B): Change the task (the site's TaskEdit) through update_task with
+// the plan version it was shown with (a stale one is refused: the page loads the task again). On the screen: the title,
+// the day, Leave by and Vehicle free by, the passengers; under More details the contact and the notes; then the driver
+// (Who's available, the best match marked; Ask drivers) and the vehicle (Keep, the new driver's own, On the day / Any
+// type with the setting, Choose… from the four groups). A running task keeps its day, leave-by and driver: the words,
+// the end and the vehicle only. One sticky Save, disabled until something changed, with the reason under it.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { Check } from '@/components/icons';
 import { useLeaveGuard } from '@/components/navigation';
+import { AskDriversSheet } from '@/components/office/AskDriversSheet';
+import { MoreDetails, Stepper } from '@/components/office/Controls';
+import { DriverRows } from '@/components/office/DriverRows';
 import { TimeInput } from '@/components/office/TimeInput';
-import { Button, Txt } from '@/components/ui';
+import { Button, Field, Plate, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
 import { addDays, colomboDate } from '@/lib/time';
+import { askTargets } from '@/office/askLogic';
 import { useOffice, useTool } from '@/office/state';
-import { changeTimeInput, timeFieldsOf, timeLocked, type TimeFields } from '@/office/taskExtrasLogic';
-import type { FleetError, TaskDetail } from '@/office/types';
-import { BackHeader, Empty, ErrorNotice, Loading, Screen, StickyActions } from '@/office/ui';
+import { type ChangeFields, changeFieldsOf, changeTaskInput, timeLocked } from '@/office/taskExtrasLogic';
+import { availabilityArgsForTask, plateOf } from '@/office/taskLogic';
+import { groupRows, vehicleLine } from '@/office/trip/formsLogic';
+import { ANY_TYPES, anyValue, ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
+import type { Availability, FleetError, SettingsResult, SuggestedVehicle, TaskDetail, UpdateTaskResult } from '@/office/types';
+import { BackHeader, Divider, Empty, ErrorNotice, Loading, Screen, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
-export default function ChangeTimeScreen() {
+export default function ChangeTaskScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t, tList } = useApp();
-  const { api, signOut } = useOffice();
+  const { api, me, signOut } = useOffice();
   const router = useRouter();
   const q = useTool<TaskDetail>('task_detail', { task_id: id });
-  const task = q.data?.task;
-  const [f, setF] = useState<TimeFields | null>(null);
+  const p = q.data;
+  const task = p?.task;
+  const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
+  const [f, setF] = useState<ChangeFields | null>(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<FleetError | null>(null);
   const [why, setWhy] = useState<string | null>(null);
+  const [pickDate, setPickDate] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [driverName, setDriverName] = useState('');
   const today = colomboDate();
   const names = { days: tList('days'), months: tList('months') };
-  const [pickDate, setPickDate] = useState(false);
-  const { allowLeave } = useLeaveGuard(!!task && !!f && JSON.stringify(f) !== JSON.stringify(timeFieldsOf(task)), busy);
+  const locked = task ? timeLocked(task) : false;
+  const { allowLeave } = useLeaveGuard(!!task && !!f && JSON.stringify(f) !== JSON.stringify(changeFieldsOf(task)), busy);
+  // Who's available for the task's window as the form has it (the site's TaskEdit): not while it runs.
+  const availArgs = p && !locked
+    ? availabilityArgsForTask({ ...p, task: { ...p.task, date: f?.date || p.task.date, leave_by: f?.time ? undefined : p.task.leave_by, time: f?.time || p.task.time, end_by: f?.end || p.task.end_by } })
+    : null;
+  const avail = useTool<Availability>('availability', availArgs ?? {}, { enabled: !!availArgs && me.tools.includes('availability'), every: 60_000 });
+  const mayAsk = me.tools.includes('ask_drivers');
 
   // The form starts from the task as it is now (once; a reload after a stale version starts it again).
   useEffect(() => {
-    if (task) setF(timeFieldsOf(task));
+    if (task) setF(changeFieldsOf(task));
   }, [task?.id, task?.plan_version]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const locked = task ? timeLocked(task) : false;
   const days = [today, addDays(today, 1), addDays(today, 2)];
   const dayLabel = (day: string) => day === today ? t('office.common.today') : day === addDays(today, 1) ? `${t('office.common.tomorrow')} · ${shortDate(names, `${day}T06:00:00Z`)}` : shortDate(names, `${day}T06:00:00Z`);
+  const onDay = settings.data?.settings.vehicle_on_the_day === true;
+  const picked = f?.driver ? avail.data?.drivers.find((x) => x.username === f.driver) : undefined;
+  const currentPlate = task?.vehicle ? plateOf(task.vehicle) : '';
+  const groups = avail.data?.vehicles.groups;
+  const rows = groupRows(groups ? { groups, vehicles: [] } : null);
+  const set = (patch: Partial<ChangeFields>) => setF((x) => (x ? { ...x, ...patch } : x));
+  const changed = !!(task && f && 'input' in changeTaskInput(task.id, task.plan_version ?? 0, f, task));
 
   async function save() {
     if (!task || !f || busy) return;
-    const r = changeTimeInput(task.id, task.plan_version ?? 0, f, task);
+    const r = changeTaskInput(task.id, task.plan_version ?? 0, f, task);
     if ('error' in r) {
       setWhy(t(r.error === 'nothing' ? 'office.task.timeNothing' : 'office.task.timeEndBeforeStart'));
       return;
@@ -55,9 +83,10 @@ export default function ChangeTimeScreen() {
     setProblem(null);
     setBusy(true);
     try {
-      await api.call('update_task', r.input);
+      const out = await api.call<UpdateTaskResult & { warnings?: string[] }>('update_task', r.input);
       allowLeave();
-      Alert.alert(t('office.task.timeSavedTitle'), t('office.task.timeSavedBody'), [{ text: t('office.common.ok'), onPress: () => router.back() }]);
+      const warnings = out.warnings ?? [];
+      Alert.alert(driverName && r.input.driver ? t('office.task.changedSentTitle', { name: driverName }) : t('office.task.changedTitle'), [t('office.task.timeSavedBody'), ...warnings].join('\n'), [{ text: t('office.common.ok'), onPress: () => router.back() }]);
     } catch (e) {
       setProblem(e as FleetError);
       void q.reload();
@@ -66,37 +95,84 @@ export default function ChangeTimeScreen() {
     }
   }
 
+  const vehicleRow = (v: SuggestedVehicle, disabled: boolean) => (
+    <Pressable key={v.reg_no} accessibilityRole="button" accessibilityState={{ selected: f?.vehicle === v.reg_no, disabled }} disabled={disabled} onPress={() => { set({ vehicle: v.reg_no }); setChoosing(false); }} style={[styles.vehicleRow, disabled && { opacity: 0.5 }]}>
+      <Plate regNo={v.reg_no} />
+      <View style={{ flex: 1 }}>
+        <Txt variant="muted" size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
+        {v.assigned_to ? <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt> : null}
+      </View>
+      {f?.vehicle === v.reg_no && <Check size={22} color={colors.blue} strokeWidth={3} />}
+    </Pressable>
+  );
+  const chip = (key: string, on: boolean, label: string, onPress: () => void, plate?: string) => (
+    <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={[styles.chip, on && styles.chipOn]}>
+      {plate ? <Plate regNo={plate} dark={on} /> : null}
+      <Txt variant="strong" size={15} color={on ? '#ffffff' : colors.ink}>{label}</Txt>
+    </Pressable>
+  );
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <BackHeader title={t('office.task.changeTime')} subtitle={task?.title} />
+      <BackHeader title={t('office.task.changeTask')} subtitle={task?.title} />
       <Screen bottom={16}>
         {q.loading && !task && <Loading text={t('office.common.loading')} />}
         {q.error && !task && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {q.data && !task && <Empty text={t('office.task.notFound')} />}
         {task && f && (
           <>
-            {locked ? (
-              <Txt variant="muted">{t('office.task.timeLocked', { time: task.leave_by ?? task.time ?? task.start })}</Txt>
-            ) : (
-              <>
-                <Txt variant="label" color={colors.muted}>{t('office.task.timeDay').toUpperCase()}</Txt>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {(pickDate ? Array.from({ length: 14 }, (_, i) => addDays(today, i)) : [...days, ...(days.includes(f.date) || !f.date ? [] : [f.date])]).map((day) => (
-                    <Pressable key={day} accessibilityRole="button" accessibilityState={{ selected: f.date === day }} onPress={() => setF({ ...f, date: day })} style={[styles.chip, f.date === day && styles.chipOn]}>
-                      <Txt variant="strong" size={16} color={f.date === day ? '#ffffff' : colors.ink}>{dayLabel(day)}</Txt>
-                    </Pressable>
-                  ))}
-                  {!pickDate && (
-                    <Pressable accessibilityRole="button" onPress={() => setPickDate(true)} style={styles.chip}>
-                      <Txt variant="strong" size={16}>{t('office.trip.pickDate')}</Txt>
-                    </Pressable>
-                  )}
+            <View style={styles.card}>
+              <Field label={t('office.trip.title')} value={f.title} onChangeText={(title) => set({ title })} maxLength={120} />
+              {locked ? (
+                <Txt variant="muted">{t('office.task.timeLocked', { time: task.leave_by ?? task.time ?? task.start })}</Txt>
+              ) : (
+                <>
+                  <Txt variant="label" color={colors.muted}>{t('office.task.timeDay').toUpperCase()}</Txt>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {(pickDate ? Array.from({ length: 14 }, (_, i) => addDays(today, i)) : [...days, ...(days.includes(f.date) || !f.date ? [] : [f.date])]).map((day) => chip(day, f.date === day, dayLabel(day), () => set({ date: day })))}
+                    {!pickDate && chip('pick', false, t('office.trip.pickDate'), () => setPickDate(true))}
+                  </View>
+                  <TimeInput label={t('office.task.timeLeave')} value={f.time} onCommit={(v) => set({ time: v })} testID="time-leave" />
+                </>
+              )}
+              <TimeInput label={t('office.trip.freeBy')} value={f.end} onCommit={(v) => set({ end: v })} testID="time-end" />
+              <Stepper label={t('office.trip.passengers')} value={f.passengers} onChange={(passengers) => set({ passengers })} />
+              <MoreDetails filled={!!(f.contactName || f.contactPhone || f.notes)} testID="change-details">
+                <Field label={t('office.trip.contactName')} value={f.contactName} onChangeText={(contactName) => set({ contactName })} maxLength={120} />
+                <Field label={t('office.trip.contactPhone')} mono value={f.contactPhone} onChangeText={(contactPhone) => set({ contactPhone })} keyboardType="phone-pad" maxLength={30} />
+                <View>
+                  <Txt variant="strong" size={16} style={{ marginBottom: 8 }}>{t('office.trip.notes')}</Txt>
+                  <TextInput value={f.notes} onChangeText={(notes) => set({ notes })} multiline maxLength={1000} style={styles.notes} placeholderTextColor="#9aa0a6" placeholder={t('office.trip.notesPlaceholder')} />
                 </View>
-                <TimeInput label={t('office.task.timeLeave')} value={f.time} onCommit={(v) => setF({ ...f, time: v })} testID="time-leave" />
-              </>
+              </MoreDetails>
+              <Txt variant="small">{t('office.task.timeNote')}</Txt>
+            </View>
+
+            {!locked && (
+              <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => { set({ driver: x.username ?? '', vehicle: '' }); setDriverName(x.name); }} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk ? () => setAsking(true) : undefined} noWindow={!availArgs} />
             )}
-            <TimeInput label={t('office.trip.backBy')} value={f.end} onCommit={(v) => setF({ ...f, end: v })} testID="time-end" />
-            <Txt variant="small">{t('office.task.timeNote')}</Txt>
+
+            <View style={styles.card}>
+              <Txt variant="label" color={colors.muted}>{t('office.trip.vehicle').toUpperCase()}</Txt>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {chip('keep', f.vehicle === '' && !picked?.vehicle, currentPlate ? t('office.task.keepVehicle', { plate: currentPlate }) : task.vehicle_text ? t('office.task.keepVehicle', { plate: task.vehicle_text }) : t('office.vehicles.keep'), () => set({ vehicle: '' }))}
+                {picked?.vehicle && chip('own', f.vehicle === '', t(picked.vehicle.source === 'on_duty' ? 'office.trip.driversToday' : 'office.trip.driversRegular', { name: picked.name.split(' ')[0] }), () => set({ vehicle: '' }), picked.vehicle.reg_no)}
+                {onDay && !locked && chip('day', f.vehicle === ON_THE_DAY, t('office.trip.onTheDay'), () => set({ vehicle: ON_THE_DAY }))}
+                {onDay && !locked && ANY_TYPES.map(([type]) => chip(`any-${type}`, f.vehicle === anyValue(type), t('office.trip.anyType', { type: t(`vehicleType.${type}`) }), () => set({ vehicle: anyValue(type) })))}
+                {chip('choose', choosing, f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : t('office.trip.choose'), () => setChoosing((v) => !v))}
+              </View>
+              {choosing && (
+                <View style={{ gap: 6 }}>
+                  {rows.length === 0 && <Empty text={t('office.trip.noFreeVehicles')} />}
+                  {rows.map((g) => (
+                    <View key={g.key} style={{ gap: 2 }}>
+                      <Txt variant="label" color={colors.muted} style={{ marginTop: 6 }}>{t(`office.trip.group_${g.key}`).toUpperCase()}</Txt>
+                      {g.rows.map((v, i) => <View key={v.reg_no}>{i > 0 && <Divider />}{vehicleRow(v, g.disabled)}</View>)}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
             {why && <Txt variant="strong" color={colors.red}>{why}</Txt>}
             {problem && <ErrorNotice error={problem} onRetry={() => void save()} />}
           </>
@@ -104,14 +180,27 @@ export default function ChangeTimeScreen() {
       </Screen>
       {task && f && (
         <StickyActions>
-          <Button label={t('office.trip.saveChanges')} onPress={() => void save()} busy={busy} style={{ minHeight: 60 }} />
+          {!changed && <Txt variant="small" style={{ textAlign: 'center' }}>{t('office.task.changeNothingYet')}</Txt>}
+          <Button label={driverName && f.driver ? t('office.task.sendToDriver', { name: driverName }) : t('office.trip.saveChanges')} onPress={() => void save()} busy={busy} disabled={!changed} style={{ minHeight: 60 }} />
         </StickyActions>
+      )}
+      {!locked && mayAsk && p && task && (
+        <AskDriversSheet
+          visible={asking}
+          onClose={() => setAsking(false)}
+          drivers={askTargets(avail.data?.drivers ?? [])}
+          context={{ date: f?.date || task.date, from: (f?.time || task.leave_by || task.time || '').match(/\d{2}:\d{2}/)?.[0], to: (f?.end || task.end_by || '').match(/\d{2}:\d{2}/)?.[0], note: p.stops.find((s) => !s.is_start)?.place, task_id: task.id }}
+          onUse={(username) => { const x = avail.data?.drivers.find((y) => y.username === username); set({ driver: username, vehicle: '' }); setDriverName(x?.name ?? username); }}
+        />
       )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
+  card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 14 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
   chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 8 },
+  notes: { minHeight: 80, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, padding: 12, fontSize: 17, color: colors.ink, backgroundColor: colors.card, textAlignVertical: 'top' },
 });

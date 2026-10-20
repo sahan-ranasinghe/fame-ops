@@ -9,15 +9,16 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { ChevronDown, ChevronUp, X } from '@/components/icons';
+import { Chips, MoreDetails } from '@/components/office/Controls';
 import { PlaceSearch, type Picked } from '@/components/office/PlaceSearch';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
-import { Mono, Txt } from '@/components/ui';
+import { Field, Mono, Txt } from '@/components/ui';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
 import { draftWorthKeeping, getDraft, newDraft, setDraft, type TripMode, updateDraft, useTripDraft } from '@/office/trip/draft';
-import { pinText } from '@/office/trip/locationLogic';
+import { pinText, placeBoxState, typedPatch } from '@/office/trip/locationLogic';
 import { editFields } from '@/office/trip/requestLogic';
-import { moveStop, newStop, type StopDraft, stopsInput, type StopType, type What } from '@/office/trip/stopsLogic';
+import { moveStop, newStop, pickupAtStart, type StopDraft, stopsInput, type StopType, tickStart, type What } from '@/office/trip/stopsLogic';
 import { reasonText } from '@/office/trip/words';
 import type { RequestsList, SettingsResult, TaskDetail } from '@/office/types';
 import { draftsFromStops } from '@/office/trip/stopsLogic';
@@ -118,8 +119,8 @@ export default function TripWhere() {
   const setStops = (stops: StopDraft[]) => updateDraft((x) => ({ ...x, fields: { ...x.fields, stops } }));
   const patchStop = (key: string, patch: Partial<StopDraft>) => setStops(f.stops.map((s) => (s.key === key ? { ...s, ...patch } : s)));
   const pickFor = (key: string, p: Picked) => {
-    if (p.googlePlaceId) patchStop(key, { place: p.name, placeId: undefined, placePinned: undefined, googlePlaceId: p.googlePlaceId, pin: '', lat: p.lat, lng: p.lng });
-    else patchStop(key, { place: p.name, placeId: p.placeId, placePinned: p.placeId ? p.pinned : undefined, googlePlaceId: undefined, lat: p.lat, lng: p.lng, pin: !p.placeId && p.lat !== undefined && p.lng !== undefined ? pinText({ lat: p.lat, lng: p.lng }) : '' });
+    if (p.googlePlaceId) patchStop(key, { place: p.name, picked: true, placeId: undefined, placePinned: undefined, googlePlaceId: p.googlePlaceId, pin: '', lat: p.lat, lng: p.lng });
+    else patchStop(key, { place: p.name, picked: true, placeId: p.placeId, placePinned: p.placeId ? p.pinned : undefined, googlePlaceId: undefined, lat: p.lat, lng: p.lng, pin: !p.placeId && p.lat !== undefined && p.lng !== undefined ? pinText({ lat: p.lat, lng: p.lng }) : '' });
     setEditing(null);
   };
   const pickStart = (p: Picked) => {
@@ -127,6 +128,15 @@ export default function TripWhere() {
     setEditing(null);
   };
   const startName = f.start.trim() || base?.name || '';
+  // The start is picked (a result, My location, a pin) or the base place; typed text alone keeps the box a field.
+  const startPicked = !f.start.trim() || !!(f.startPlaceId || f.startGooglePlaceId || (f.startLat !== undefined && f.startLng !== undefined));
+  const setF = (patch: Partial<typeof f>) => updateDraft((x) => ({ ...x, fields: { ...x.fields, ...patch } }));
+  // A first pickup at the start (the same place): "Same as the start · Tick it" moves it into "Passengers get in here".
+  const atStart = pickupAtStart(f.stops, startName ? { name: startName, lat: f.startLat, lng: f.startLng } : null, f.startPax);
+  const tickIt = (i: number) => {
+    const tk = tickStart(f.stops, i);
+    setF({ stops: tk.list, startPax: true, ...tk.carried });
+  };
   const check = stopsInput(f.stops, f.startPax ? 1 : 0);
   const problem = 'error' in check ? reasonText(t, check.error) : null;
   const above = d.mode === 'task' ? t('office.trip.assignAbove', { n: 1 }) : d.mode === 'edit' ? t('office.trip.editAbove') : d.mode === 'stops' ? t('office.trip.stopsAbove') : t('office.trip.newAbove', { n: 1 });
@@ -138,8 +148,8 @@ export default function TripWhere() {
         {/* Start from */}
         <View style={styles.card}>
           <Txt variant="label" color={colors.muted}>{t('office.trip.startFrom').toUpperCase()}</Txt>
-          {editing === 'start' ? (
-            <PlaceSearch value="" placeholder={t('office.trip.searchPlace')} onText={() => undefined} onPick={pickStart} myLocation autoFocus />
+          {editing === 'start' || (f.start.trim() && !startPicked) ? (
+            <PlaceSearch value={f.start} placeholder={t('office.trip.searchPlace')} onText={(text) => updateDraft((x) => ({ ...x, fields: { ...x.fields, start: text, startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined } }))} onPick={pickStart} myLocation autoFocus={editing === 'start'} editing={editing === 'start'} />
           ) : (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={[styles.mark, { backgroundColor: colors.amber }]}><Mono size={14} bold>S</Mono></View>
@@ -152,7 +162,7 @@ export default function TripWhere() {
               </Pressable>
             </View>
           )}
-          {editing === 'start' && f.start.trim() ? (
+          {(editing === 'start' || !startPicked) && f.start.trim() ? (
             <Pressable accessibilityRole="button" onPress={() => { updateDraft((x) => ({ ...x, fields: { ...x.fields, start: '', startPlaceId: undefined, startGooglePlaceId: undefined, startLat: undefined, startLng: undefined } })); setEditing(null); }} style={{ minHeight: 44, justifyContent: 'center' }}>
               <Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.useBase', { name: base?.name ?? '' })}</Txt>
             </Pressable>
@@ -161,19 +171,32 @@ export default function TripWhere() {
             <Txt variant="body">{t('office.trip.passengersHere')}</Txt>
             <Switch value={f.startPax} onValueChange={(v) => updateDraft((x) => ({ ...x, fields: { ...x.fields, startPax: v } }))} trackColor={{ true: colors.blue, false: colors.line }} thumbColor="#ffffff" />
           </View>
+          {f.startPax && (
+            // The start stop's own fields (the site's StartFrom: what gets in, a note, the minutes there), optional.
+            <MoreDetails filled={!!(f.startWhat || (f.startNote ?? '').trim() || (f.startDwell ?? '').trim())} testID="start-details">
+              <View style={{ gap: 6 }}>
+                <Txt variant="strong" size={16}>{t('office.trip.whatGetsIn')}</Txt>
+                <Chips<What> options={WHATS.map((w) => ({ key: w, label: t(`office.trip.what_${w}`) }))} value={f.startWhat ?? ''} onChange={(w) => setF({ startWhat: f.startWhat === w ? '' : w })} small />
+              </View>
+              <Field label={t('office.trip.noteAtStart')} value={f.startNote ?? ''} onChangeText={(startNote) => setF({ startNote })} maxLength={300} />
+              <Field label={t('office.trip.timeAtStart')} mono value={f.startDwell ?? ''} onChangeText={(v) => setF({ startDwell: v.replace(/\D/g, '').slice(0, 3) })} keyboardType="number-pad" placeholder="5" />
+            </MoreDetails>
+          )}
         </View>
 
         {/* Stops */}
         <View style={styles.card}>
           <Txt variant="label" color={colors.muted}>{t('office.trip.stops').toUpperCase()}</Txt>
           {f.stops.map((s, i) => {
-            const open = editing === s.key || !(s.place.trim() || s.placeId || s.googlePlaceId);
+            // Typing never chooses a place: the box stays a field until a pick (Hotfix O2-H1).
+            const box = placeBoxState(s, editing === s.key);
+            const open = box === 'field';
             return (
               <View key={s.key} style={{ gap: 10, paddingTop: i > 0 ? 12 : 0, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: colors.line }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <View style={styles.mark}><Mono size={14} bold color="#ffffff">{String(i + 1 + (f.startPax ? 1 : 0) + (d.reached ?? 0))}</Mono></View>
                   <View style={{ flex: 1 }}>
-                    {s.place.trim() ? <Txt variant="strong" numberOfLines={2}>{s.place}</Txt> : <Txt variant="muted">{t('office.trip.stopNoPlace')}</Txt>}
+                    {box === 'picked' ? <Txt variant="strong" numberOfLines={2}>{s.place}</Txt> : <Txt variant="muted">{s.place.trim() ? t('office.trip.typing', { text: s.place.trim() }) : t('office.trip.stopNoPlace')}</Txt>}
                     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                       {TYPES.map((type) => (
                         <Pressable key={type} accessibilityRole="button" accessibilityState={{ selected: s.type === type }} onPress={() => patchStop(s.key, { type })} style={[styles.chip, s.type === type && styles.chipOn]}>
@@ -191,11 +214,17 @@ export default function TripWhere() {
                 {s.placeId && s.placePinned === false && <Txt variant="small" color={colors.red}>{t('office.trip.noPinWarning', { place: s.place })}</Txt>}
                 {s.googlePlaceId && <Txt variant="small">{t('office.trip.googleStop')}</Txt>}
                 {open ? (
-                  <PlaceSearch value={s.place} placeholder={t('office.trip.searchPlace')} onText={(text) => patchStop(s.key, { place: text, placeId: undefined, placePinned: undefined, googlePlaceId: undefined, lat: undefined, lng: undefined })} onPick={(p) => pickFor(s.key, p)} />
+                  <PlaceSearch value={s.place} placeholder={t('office.trip.searchPlace')} onText={(text) => patchStop(s.key, typedPatch(text))} onPick={(p) => pickFor(s.key, p)} editing={editing === s.key} autoFocus={editing === s.key} />
                 ) : (
                   <Pressable accessibilityRole="button" onPress={() => setEditing(s.key)} hitSlop={8} style={{ minHeight: 40, justifyContent: 'center' }}>
                     <Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.changePlace')}</Txt>
                   </Pressable>
+                )}
+                {i === atStart && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }} testID="same-as-start">
+                    <Txt variant="small" color={colors.amberText} style={{ flex: 1 }}>{t('office.trip.sameAsStart')}</Txt>
+                    <Pressable accessibilityRole="button" onPress={() => tickIt(i)} style={styles.chip}><Txt variant="strong" size={14}>{t('office.trip.tickIt')}</Txt></Pressable>
+                  </View>
                 )}
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                   <Txt variant="small">{t('office.trip.what')}</Txt>
@@ -205,6 +234,11 @@ export default function TripWhere() {
                     </Pressable>
                   ))}
                 </View>
+                {/* The site's "Details": a pin typed by hand (a pasted one in the search box also works) and the note for the driver. */}
+                <MoreDetails filled={!!(s.pin.trim() || s.note.trim())} testID={`stop-details-${i}`}>
+                  <Field label={t('office.trip.pinTyped')} mono value={s.pin} onChangeText={(pin) => patchStop(s.key, { pin, lat: undefined, lng: undefined })} placeholder={t('office.trip.pinPlaceholder')} keyboardType="numbers-and-punctuation" />
+                  <Field label={t('office.trip.stopNote')} value={s.note} onChangeText={(note) => patchStop(s.key, { note })} maxLength={300} />
+                </MoreDetails>
               </View>
             );
           })}

@@ -2,7 +2,6 @@
 // step's name, the four progress bars, the back arrow (one step back: the previous step, or out of the flow on the first),
 // "Save draft" (the draft is kept anyway; the word says so and leaves), and the sticky primary button at the bottom.
 
-import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,21 +42,28 @@ export function TripHeader({ step, above, onBack, onSaveDraft, mode }: { step: S
 }
 
 /** The sticky Next (or Send) button; `problem` under it when the step cannot go on. */
-export function TripFooter({ label, onPress, disabled, busy, problem, children }: {
+export function TripFooter({ label, onPress, disabled, busy, problem, children, secondary }: {
   label: string;
   onPress: () => void;
   disabled?: boolean;
   busy?: boolean;
   problem?: string | null;
   children?: ReactNode;
+  /** A second, outlined button beside the primary one (Review's "Save as waiting" beside "Book now"). */
+  secondary?: { label: string; onPress: () => void; disabled?: boolean };
 }) {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
-  void router;
   return (
     <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) }]}>
       {problem ? <Txt variant="strong" size={15} color={colors.red}>{problem}</Txt> : null}
-      <Button label={label} icon={busy ? undefined : ChevronRight} onPress={onPress} disabled={disabled} busy={busy} />
+      {secondary ? (
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <Button kind="outline" label={secondary.label} onPress={secondary.onPress} disabled={secondary.disabled || busy} style={{ flex: 1 }} />
+          <Button label={label} icon={busy ? undefined : ChevronRight} onPress={onPress} disabled={disabled} busy={busy} style={{ flex: 1.3 }} />
+        </View>
+      ) : (
+        <Button label={label} icon={busy ? undefined : ChevronRight} onPress={onPress} disabled={disabled} busy={busy} />
+      )}
       {children}
     </View>
   );

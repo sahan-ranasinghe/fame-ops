@@ -52,3 +52,4 @@ export { default as GripVertical } from 'lucide-react-native/icons/grip-vertical
 export { default as ChartColumn } from 'lucide-react-native/icons/chart-column';
 export { default as SlidersHorizontal } from 'lucide-react-native/icons/sliders-horizontal';
 export { default as UserCog } from 'lucide-react-native/icons/user-cog';
+export { default as Minus } from 'lucide-react-native/icons/minus';

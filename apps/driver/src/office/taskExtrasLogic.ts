@@ -74,6 +74,61 @@ export function changeTimeInput(id: string, version: number, f: TimeFields, t: P
 }
 
 // ---------------------------------------------------------------------------
+// Change the task (Hotfix O2-H1 Part B: the site's TaskEdit, update_task with the plan version)
+// ---------------------------------------------------------------------------
+
+export interface ChangeFields extends TimeFields {
+  /** The driver's username; '' = keep. */
+  driver: string;
+  /** The plate, "on the day", "any van"…; '' = keep (or the new driver's own vehicle). */
+  vehicle: string;
+  title: string;
+  passengers: string;
+  contactName: string;
+  contactPhone: string;
+  notes: string;
+}
+
+/** The form as the task is now (the driver and vehicle empty: a pick changes them). */
+export const changeFieldsOf = (t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end_by' | 'title' | 'passengers' | 'contact' | 'notes'>): ChangeFields => ({
+  ...timeFieldsOf(t),
+  driver: '',
+  vehicle: '',
+  title: t.title ?? '',
+  passengers: t.passengers == null ? '' : String(t.passengers),
+  contactName: t.contact?.name ?? '',
+  contactPhone: t.contact?.phone ?? '',
+  notes: t.notes ?? '',
+});
+
+/**
+ * update_task's input: only what differs from the task (the site's updateTaskInput); `nothing` when nothing does,
+ * `endBeforeStart` as for the time alone. A running task takes the words, the end and a vehicle only (its day, leave-by
+ * and driver are the server's to refuse).
+ */
+export function changeTaskInput(id: string, version: number, f: ChangeFields, t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end_by' | 'title' | 'passengers' | 'contact' | 'notes' | 'status'>): { error: 'nothing' | 'endBeforeStart' } | { input: Record<string, unknown> } {
+  const s = (x: string) => x.trim();
+  const was = changeFieldsOf(t);
+  const input: Record<string, unknown> = { task_id: id, plan_version: version };
+  const running = t.status === 'in_progress';
+  if (!running && s(f.driver)) input.driver = s(f.driver);
+  if (s(f.vehicle)) input.vehicle = s(f.vehicle);
+  if (!running && s(f.date) && s(f.date) !== was.date) input.date = s(f.date);
+  if (!running && s(f.time) && s(f.time) !== was.time) input.time = s(f.time);
+  if (s(f.end) !== was.end) input.end_time = s(f.end) || null;
+  if (s(f.title) && s(f.title) !== was.title) input.title = s(f.title);
+  const pax = s(f.passengers);
+  if (pax !== was.passengers) input.passengers = pax === '' ? null : Math.max(0, Math.min(80, parseInt(pax, 10) || 0));
+  if (s(f.contactName) !== was.contactName) input.contact_name = s(f.contactName);
+  if (s(f.contactPhone) !== was.contactPhone) input.contact_phone = s(f.contactPhone);
+  if (s(f.notes) !== was.notes) input.notes = s(f.notes);
+  const leave = s(f.time) || was.time;
+  if (s(f.end) && leave && s(f.end) <= leave) return { error: 'endBeforeStart' };
+  if (Object.keys(input).length === 2) return { error: 'nothing' };
+  return { input };
+}
+
+// ---------------------------------------------------------------------------
 // Swap vehicle (the site's moveLogic, the swap part)
 // ---------------------------------------------------------------------------
 

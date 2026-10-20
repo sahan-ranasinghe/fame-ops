@@ -9,7 +9,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { badgeTone, DEBOUNCE_MS, looksPasted, MIN_CHARS, searchState, shouldSearch, suggestArgs } from '../src/office/trip/locationLogic';
+import { badgeTone, DEBOUNCE_MS, looksPasted, MIN_CHARS, placeBoxState, searchState, shouldSearch, suggestArgs, typedPatch } from '../src/office/trip/locationLogic';
+import { draftsFromStops, newStop } from '../src/office/trip/stopsLogic';
 
 let failures = 0;
 function check(ok: unknown, label: string, detail?: unknown): void {
@@ -40,6 +41,28 @@ console.log('\nThe states under the field');
   check(searchState({ searchable: true, busy: false, answer: null, problem: null }) === 'idle', 'searchable but not typed (a value the form loaded): nothing pending, nothing shown');
 }
 
+console.log('\nTyping never chooses a place (the box locked after one letter: Hotfix O2-H1)');
+{
+  // A fresh stop: the box is a field; "s", "sa", "sal" keep the text in the draft and the box stays a field with the search states under it.
+  let stop = newStop('drop');
+  check(placeBoxState(stop, false) === 'field', 'a fresh stop: a text field');
+  const states: string[] = [];
+  for (const text of ['s', 'sa', 'sal']) {
+    stop = { ...stop, ...typedPatch(text) };
+    states.push(`${placeBoxState(stop, false)}/${searchState({ searchable: shouldSearch(text), busy: shouldSearch(text), answer: null, problem: null })}`);
+  }
+  check(same(states, ['field/idle', 'field/searching', 'field/searching']) && stop.place === 'sal' && stop.picked === false, '"s", "sa", "sal": the box keeps the text and shows the search states, never the picked state', states);
+  check(stop.placeId === undefined && stop.googlePlaceId === undefined && stop.lat === undefined, 'typing clears any earlier pick and its ids');
+  // A result tapped → the picked state; Change → the field again with the text; leaving and returning restores the text.
+  const picked = { ...stop, place: 'Salawa site', picked: true as const, placeId: 'p1', placePinned: true, lat: 6.9, lng: 80.0 };
+  check(placeBoxState(picked, false) === 'picked', 'a tapped result: the picked state');
+  check(placeBoxState(picked, true) === 'field', 'Change: the text field again');
+  const typedAgain = { ...picked, ...typedPatch('Salawa s') };
+  check(placeBoxState(typedAgain, false) === 'field' && typedAgain.place === 'Salawa s', 'typing after Change: the field, the new text kept');
+  check(placeBoxState({ ...stop, place: 'sal' }, false) === 'field', 'leaving and returning with "sal" typed: the field with the text, not a fake place');
+  check(draftsFromStops([{ type: 'drop', place: 'Kandy', place_id: 'p2' }])[0].picked === true && draftsFromStops([{ type: 'drop', place: 'Kandy town' }])[0].picked === true && draftsFromStops([{ type: 'drop' }])[0].picked === false, 'a stop loaded from the server (a request, a task) is a picked one; an empty one is not');
+}
+
 console.log('\nThe suggestions and the badges');
 {
   check(same(suggestArgs(null), { suggest: true }) && same(suggestArgs({ lat: 6.9, lng: 79.8 }), { suggest: true, near: { lat: 6.9, lng: 79.8 } }), 'search_places {suggest} with the phone\'s position when known');
@@ -49,6 +72,11 @@ console.log('\nThe suggestions and the badges');
 console.log('\nThe box as text');
 {
   const box = read('src/components/office/PlaceSearch.tsx');
+  const where = read('src/app/office/trip/where.tsx');
+  check(where.includes("const box = placeBoxState(s, editing === s.key);") && where.includes("const open = box === 'field';") && where.includes("onText={(text) => patchStop(s.key, typedPatch(text))}") && where.includes("box === 'picked' ? <Txt"), 'Where: every stop box follows placeBoxState; the header names the place only when picked');
+  check(where.includes("const startPicked = !f.start.trim() || !!(f.startPlaceId || f.startGooglePlaceId || (f.startLat !== undefined && f.startLng !== undefined));") && where.includes("start: text, startPlaceId: undefined"), 'Where: the start box too (typed text kept, the ids cleared, the base place as the default)');
+  check(where.includes("picked: true, placeId: p.placeId") && where.includes("picked: true, placeId: undefined, placePinned: undefined, googlePlaceId: p.googlePlaceId"), 'a pick (a result, Google, My location, a pin) marks the stop picked');
+  check(box.includes('selectTextOnFocus={editing}') && where.includes("editing={editing === s.key} autoFocus={editing === s.key}"), 'Change returns to the field with the previous text selected');
   check(box.includes('const typed = useRef(false);') && box.includes('if (!canSearch || !typed.current) return;') && !box.includes('text === value'), 'the search runs after the person typed, never skipped because the form already holds the text (the O2 bug)');
   check(box.includes('typed.current = true;\n            setText(v);\n            onText(v);'), 'typing sets the flag before the text');
   check((box.match(/typed\.current = false;/g) ?? []).length >= 3, 'a pick, My location and the clear button reset the flag');
