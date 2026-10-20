@@ -12,10 +12,9 @@ desktop site and is remembered on that browser; the desktop site has "Switch to 
 
 ## Where it stands (20 October 2026)
 
-Built (steps 1–4): the web build of Office mode, the browser maps, the sign-in and session, the one domain with the switch
-both ways, the deploy script. Not built yet (step 5): installing it (manifest, icons, the offline "No connection" page) and
-web push; the steps below for installing are the plan for step 5, not yet true. Until then a browser asks for
-`/favicon.ico` on a mobile page and gets nothing.
+Built: the web build of Office mode, the browser maps, the sign-in and session, the one domain with the switch both ways,
+the deploy script (steps 1–4, deployed 20 October); installing it, the offline page, the favicon, web push and the
+unsaved-form guards (step 5, branch `phase8-o4-s5`, not deployed yet). The phone redirect is ready and off.
 
 ## Signing in
 
@@ -30,25 +29,49 @@ against the website's cap through `register_map_load`, which hands out the brows
 does not load, the free map (MapLibre GL JS with OpenFreeMap's tiles). Google's content is never drawn on the free map
 (CLAUDE.md hard rule 10).
 
-## Install it on a phone (step 5, not built yet)
+## Install it on a phone
+
+While the phone redirect is held, open **https://fame-fleet.pages.dev/m/** (or, on the desktop site on a phone, More →
+**Switch to mobile view**). Once the redirect is on, the site's own address is enough.
 
 ### iPhone (iOS 16.4 or later)
 
-1. Open https://fame-fleet.pages.dev in **Safari** (not Chrome: only Safari can add a web app to the Home Screen with
-   notifications).
+1. Open the address above in **Safari** (only Safari adds a web app to the Home Screen with notifications).
 2. Sign in.
 3. Tap **Share** (the square with the arrow), then **Add to Home Screen**, then **Add**.
-4. Open **Fame Fleet** from the Home Screen (notifications only work from the installed app, never from a Safari tab).
-5. Profile → Notifications → **Turn on** and **Allow** when iOS asks.
+4. Open **Fame Fleet** from the Home Screen (notifications work only from the installed app, never from a Safari tab).
+5. More → My profile → **Notifications** → under "This browser" tap **Turn on in this browser**, then **Allow**.
 
 ### Android (Chrome)
 
-1. Open https://fame-fleet.pages.dev in **Chrome**.
+1. Open the address above in **Chrome**.
 2. Sign in.
 3. Tap **Install app** when Chrome offers it, or ⋮ → **Add to Home screen** → **Install**.
-4. Profile → Notifications → **Turn on** and **Allow**.
+4. More → My profile → **Notifications** → **Turn on in this browser**, then **Allow**.
 
-With no connection the installed site opens to "No connection" with Try again; nothing is kept for offline work.
+What it is, as built:
+- **Install:** its own manifest (`/m/manifest.webmanifest`: name Fame Fleet, scope and start `/m/`, standalone, the site's FF
+  icons, one maskable), the favicon and the iPhone icon in the page (`apps/driver/public/index.html`, Expo's page template).
+- **Offline:** the worker `/m/sw.js` (scope `/m/`; the desktop site's `/sw.js` keeps `/`) keeps one file,
+  `/m/offline.html`: a page of the site opened with no connection shows "No connection" in English and Sinhala with Try
+  again, and reloads by itself when the connection is back. Nothing else is cached (a deploy is never stale) and nothing
+  works offline.
+- **Web push:** the office's existing web push (the key from `my_notification_settings`, `register_web_push`,
+  `remove_web_push`), on the mobile site's worker: Notifications has a "This browser" card (its state in words, Turn on or
+  Turn off; `components/office/BrowserPush.web.tsx`, `lib/browserPush.ts`). A tap opens the notification's place: an open
+  mobile window goes there (the desktop link mapped by `routeForUrl`), else `/m/?from=<link>`. The same browser on the
+  desktop site has its own subscription (scope `/`): turned on in both, it gets each notification twice.
+- **Unsaved forms:** a reload or a closed tab asks the browser's "Leave site?"; the browser's own Back (and an installed
+  app's back gesture) inside the site asks "Discard changes?" like our back arrow (`components/navigation.ts`,
+  `installWebFormGuards`: the router never hears that Back until Discard).
+
+## The phone redirect
+
+Off (`PHONE_REDIRECT = false` in `apps/office/src/app/viewChoice.ts`). To turn it on: set it to `true`, run the site's tests
+(`viewChoice.test.ts`; the e2e `mobile-web` expects it off and needs its first step changed back), and deploy the site
+(`scripts/deploy-pages.sh --deploy`, after Sahan's go). From then on a phone (a mobile browser, or a narrow touch screen; an
+iPad and a laptop keep the desktop site) opening any page except `/privacy` and `/set-password` is sent to `/m/`, with the
+page it asked for opened after the sign-in; "Switch to desktop view" still wins.
 
 ## Deploying (needs Sahan's go)
 
@@ -61,7 +84,9 @@ no source map, runs the key and secret scan over everything that would be upload
 
 - `apps/driver`: `npm run test:web` (the browser's confirmations, no temporary web file left), `npm run test:web-routes`
   (every Office mode screen has its web route), `npm run test:web-maps` (the browser maps' rules).
-- `apps/office`: `src/app/viewChoice.test.ts` (who is sent to `/m/`), and the e2e project `mobile-web`
-  (`e2e/mobile.spec.ts`, a 412 × 915 Android browser): the site's address → `/m/` sign-in → Home → Approve → a desktop
-  task link kept across → Give a driver → Live → Switch to desktop view and back. `scripts/test-office-local.sh` builds
-  the local mobile build and the dev server serves it under `/m/` (`FLEET_MOBILE_DIR`).
+- `apps/office`: `src/app/viewChoice.test.ts` (who is sent to `/m/`, with the redirect on and held), and the e2e project
+  `mobile-web` (`e2e/mobile.spec.ts`, a 412 × 915 Android browser): the site's address stays on the desktop site while the
+  redirect is held → `/m/` sign-in → Home → Approve → Live → Switch to desktop view and back → a desktop task link → Give a
+  driver; and step 5: the manifest and icons, the worker on `/m/`, "No connection" offline, the push card, an unsaved form
+  asking on the browser's Back (Cancel keeps it, Discard leaves) and on a reload. `scripts/test-office-local.sh` builds the
+  local mobile build and the dev server serves it under `/m/` (`FLEET_MOBILE_DIR`).

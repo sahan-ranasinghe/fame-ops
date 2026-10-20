@@ -1253,7 +1253,8 @@
       "declined": "declined",
       "declinedThis": "Declined this task · {why}",
       "giveTo": "Give to {name} · {plate}",
-      "pickDriver": "Pick a driver"
+      "pickDriver": "Pick a driver",
+      "moveTime": "Move the time"
     },
     "alerts": {
       "above": "What happened, for you",
@@ -2301,7 +2302,9 @@
       "status_declined": "Declined",
       "status_missed": "Missed",
       "todayLine": "{km} km · driving {driving} · {stops} stops",
-      "openRoute": "The map, playback and earlier days ›"
+      "openRoute": "The map, playback and earlier days",
+      "todayFailed": "Today's numbers did not load. Open it to try again.",
+      "routeTitle": "Route and playback"
     },
     "media": {
       "photos": "Photos",
@@ -2773,6 +2776,22 @@
     "cancel": "Cancel",
     "desktopView": "Switch to desktop view",
     "copied": "Link copied",
-    "pushLater": "This browser does not get notifications yet: they come with the next update of the mobile website. The switches below already apply to the Fame Fleet app."
+    "push": {
+      "title": "This browser",
+      "notConfigured": "Push notifications are not switched on for the office yet.",
+      "unsupported": "This browser cannot show notifications. Use Chrome on Android, or Safari on an iPhone with Fame Fleet on the Home Screen.",
+      "insecure": "Notifications need the https address of Fame Fleet.",
+      "iosInstall": "On an iPhone, first add Fame Fleet to the Home Screen (Share → Add to Home Screen), then open it from there.",
+      "blocked": "Notifications are blocked for this site in the browser. Allow them in the site settings, then try again.",
+      "on": "Notifications are on in this browser.",
+      "onNotYou": "This browser has notifications on, but not for you yet.",
+      "off": "Notifications are off in this browser.",
+      "turnOn": "Turn on in this browser",
+      "turnOff": "Turn off in this browser",
+      "turnedOn": "Notifications are on in this browser",
+      "turnedOff": "Notifications are off in this browser",
+      "noPermission": "No permission was given. Tap Turn on again and choose Allow.",
+      "failed": "That did not work. Try again."
+    }
   }
 }

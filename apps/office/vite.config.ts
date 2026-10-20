@@ -42,7 +42,7 @@ const mobileSite = (): Plugin => ({
       if (url !== "/m" && !url.startsWith("/m/")) return next();
       const rel = decodeURIComponent(url.replace(/^\/m\/?/, ""));
       const file = rel && !rel.includes("..") && existsSync(join(dir, rel)) && statSync(join(dir, rel)).isFile() ? join(dir, rel) : join(dir, "index.html");
-      const type = file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : file.endsWith(".html") ? "text/html" : file.endsWith(".json") ? "application/json" : file.endsWith(".png") ? "image/png" : file.endsWith(".ttf") ? "font/ttf" : "application/octet-stream";
+      const type = file.endsWith(".js") ? "text/javascript" : file.endsWith(".css") ? "text/css" : file.endsWith(".html") ? "text/html" : file.endsWith(".json") ? "application/json" : file.endsWith(".webmanifest") ? "application/manifest+json" : file.endsWith(".png") ? "image/png" : file.endsWith(".ttf") ? "font/ttf" : "application/octet-stream";
       res.setHeader("Content-Type", type);
       res.end(readFileSync(file));
     });

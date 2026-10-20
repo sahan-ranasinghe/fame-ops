@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#15181c" />
+    <title>Fame Fleet · No connection</title>
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <!-- The page the mobile website shows when it opens with no connection (sw.js). Nothing works offline: it says so, in
+         English and Sinhala, with Try again. System fonts: nothing to fetch. -->
+    <style>
+      :root { --ink: #15181c; --page: #f3f2ee; --card: #ffffff; --amber: #f2a900; --muted: #5f6368; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: var(--page); color: var(--ink);
+        font-family: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      header { background: var(--ink); color: #fff; padding: 20px 16px; font-weight: 800; font-size: 20px; }
+      main { padding: 24px 16px; max-width: 480px; margin: 0 auto; }
+      .card { background: var(--card); border-radius: 16px; padding: 24px 20px; }
+      h1 { font-size: 28px; margin: 0 0 8px; font-weight: 800; }
+      p { font-size: 17px; line-height: 1.45; margin: 0 0 12px; color: var(--muted); }
+      p.si { font-family: "Yaldevi", system-ui, sans-serif; }
+      button { width: 100%; min-height: 56px; margin-top: 12px; border: 0; border-radius: 14px; background: var(--amber);
+        color: var(--ink); font-size: 18px; font-weight: 700; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <header>Fame Fleet</header>
+    <main>
+      <div class="card" role="alert">
+        <h1>No connection</h1>
+        <p>Fame Fleet needs the internet. Check Wi-Fi or mobile data, then try again.</p>
+        <p class="si" lang="si">සම්බන්ධතාවයක් නැත. Wi-Fi හෝ ජංගම දත්ත බලා නැවත උත්සාහ කරන්න.</p>
+        <button type="button" id="again">Try again · නැවත උත්සාහ කරන්න</button>
+      </div>
+    </main>
+    <script>
+      document.getElementById("again").addEventListener("click", function () { location.reload(); });
+      window.addEventListener("online", function () { location.reload(); });
+    </script>
+  </body>
+</html>

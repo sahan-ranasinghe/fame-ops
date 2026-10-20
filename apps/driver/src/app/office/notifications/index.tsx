@@ -7,8 +7,9 @@
 import { useRouter } from 'expo-router';
 import { Platform, View } from 'react-native';
 
+import { BrowserPush } from '@/components/office/BrowserPush';
 import { LinkRow, RowCard, SwitchRow } from '@/components/office/NotifParts';
-import { Notice, Txt } from '@/components/ui';
+import { Txt } from '@/components/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { openNotificationSettings } from '@/lib/settingsLinks';
 import { groupSub, groupSummaryLine, groupTitle } from '@/office/notifLogic';
@@ -29,8 +30,8 @@ export default function OfficeNotifications() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={t('office.notif.title')} />
       <Screen refreshing={tool.refreshing} onRefresh={() => void tool.reload()}>
-        {/* O4: the mobile website has no web push yet (step 5); the switches are the person's own and reach the app. */}
-        {Platform.OS === 'web' && <Notice tone="info" text={t('web.pushLater')} />}
+        {/* O4 step 5: in a browser, this browser's web push first (nothing on a phone: BrowserPush.tsx). */}
+        <BrowserPush data={tool.data} onSaved={(next) => tool.patch(() => next)} />
         {tool.loading && <SkeletonRows rows={3} lines={2} />}
         {tool.error && !tool.data && <ErrorNotice error={tool.error} onRetry={() => void tool.reload()} onSignIn={() => void signOut()} />}
         {tool.data && n.groups.length === 0 && <ListEmpty text={t('office.notif.noEvents')} />}

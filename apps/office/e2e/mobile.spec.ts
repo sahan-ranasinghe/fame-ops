@@ -150,3 +150,66 @@ test("a phone on the office site: the desktop site while the redirect is held; t
   await expect(page.getByText(`Task sent to ${d2.name}`)).toBeVisible();
   await expect(page).toHaveURL(new RegExp(`/m/office/task/${task.task_id}$`));
 });
+
+/** An office user signed in on the mobile website. */
+async function signInMobile(page: Page, who: string, permissions: string[]): Promise<void> {
+  const email = `${who}.${stamp}@fame.test`;
+  const password = await officeUser(`Mobile ${who}`, email, permissions);
+  await page.goto("/m/");
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(tab(page, "More")).toBeVisible();
+}
+
+test("step 5: installable with its own manifest, the worker on /m/, the No connection page offline, this browser's push card, an unsaved form asks before leaving", async ({ page, context }) => {
+  await signInMobile(page, "install", ["view", "vehicles"]);
+
+  // Installable: the page links its own manifest (scope /m/, the FF icons) and the worker controls /m/.
+  const manifest = await page.locator('link[rel="manifest"]').getAttribute("href");
+  expect(manifest).toBe("/m/manifest.webmanifest");
+  const m = await (await page.request.get(manifest!)).json() as { name: string; scope: string; start_url: string; icons: { src: string }[] };
+  expect([m.name, m.scope, m.start_url]).toEqual(["Fame Fleet", "/m/", "/m/"]);
+  for (const icon of m.icons) expect((await page.request.get(icon.src)).status()).toBe(200);
+  expect(await page.evaluate(async () => (await navigator.serviceWorker.ready).scope)).toMatch(/\/m\/$/);
+
+  // No connection: the site opened offline is the worker's page with Try again, in both languages.
+  await page.reload();
+  await expect(tab(page, "More")).toBeVisible();
+  await context.setOffline(true);
+  await page.goto("/m/office/vehicles").catch(() => undefined);
+  await expect(page.getByRole("heading", { name: "No connection" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Try again/ })).toBeVisible();
+  // Back online, the page reloads by itself (Try again does the same by hand).
+  await context.setOffline(false);
+  await expect(page.getByRole("heading", { name: "No connection" })).toHaveCount(0);
+  await expect(page.getByText("Vehicles").first()).toBeVisible();
+
+  // Notifications: this browser's own card (its state in words; one button when one makes sense).
+  await page.goto("/m/office/notifications");
+  await expect(page.getByTestId("browser-push")).toBeVisible();
+
+  // An unsaved form: the browser's Back asks "Discard changes?" (Cancel keeps the form), and a reload asks the browser's
+  // own "Leave site?".
+  await page.goto("/m/office/vehicles");
+  await shown(page.getByRole("button", { name: "Register vehicle" })).click();
+  await expect(page).toHaveURL(/\/m\/office\/vehicles\/form/);
+  await shown(page.locator("input")).fill(`WP MW-${stamp.slice(-4).toUpperCase()}`);
+  const asked: string[] = [];
+  page.once("dialog", (d) => { asked.push(`${d.type()}:${d.message()}`); void d.dismiss(); });
+  await page.goBack({ timeout: 10_000 }).catch(() => undefined);
+  await expect.poll(() => asked.length).toBe(1);
+  expect(asked[0]).toMatch(/^confirm:Discard changes\?/);
+  await expect(page).toHaveURL(/\/m\/office\/vehicles\/form/);
+  await expect(shown(page.locator("input"))).toHaveValue(`WP MW-${stamp.slice(-4).toUpperCase()}`);
+  page.once("dialog", (d) => { asked.push(d.type()); void d.dismiss(); });
+  await page.reload({ timeout: 5_000 }).catch(() => undefined);
+  await expect.poll(() => asked.length).toBe(2);
+  expect(asked[1]).toBe("beforeunload");
+  // Discard: Back goes back for real, to the list.
+  page.once("dialog", (d) => { asked.push(d.type()); void d.accept(); });
+  await page.goBack({ timeout: 10_000 }).catch(() => undefined);
+  await expect.poll(() => asked.length).toBe(3);
+  await expect(page).toHaveURL(/\/m\/office\/vehicles$/);
+  await expect(shown(page.getByRole("button", { name: "Register vehicle" }))).toBeVisible();
+});
