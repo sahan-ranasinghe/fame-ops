@@ -49,7 +49,7 @@ export default function Notifications() {
   async function refreshBrowser() {
     const s = await pushState();
     setState(s);
-    const sub = s === "on" ? await currentSubscription() : null;
+    const sub = s === "on" ? await currentSubscription().catch(() => null) : null;
     setMyHash(sub ? await endpointHash(sub.endpoint) : "");
   }
   useEffect(() => {
@@ -75,7 +75,15 @@ export default function Notifications() {
   const remove = (id: string) => run(() => removeDevice(transport, id), "Removed");
 
   if (__BUILD__ !== "web") return <section className="view"><NotifHead /><WebAppOnly /></section>;
-  if (err && !data) return <section className="view"><NotifHead /><Notice tone="bad">{err}</Notice></section>;
+  if (err && !data) {
+    return (
+      <section className="view" data-testid="notifications-failed">
+        <NotifHead />
+        <Notice tone="bad">{err}</Notice>
+        <div className="acts" style={{ marginTop: 12 }}><button type="button" className="btn" onClick={() => void n.reload()}>Try again</button></div>
+      </section>
+    );
+  }
   if (!data) return <section className="view"><NotifHead /><Loading>Loading…</Loading></section>;
 
   const registered = !!myHash && data.devices.some((d) => d.endpoint_hash === myHash);

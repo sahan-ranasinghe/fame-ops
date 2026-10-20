@@ -22,9 +22,12 @@ export function BrowserPush({ data, onSaved }: { data: NotificationSettings | nu
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
+  // Each browser call has a limit (lib/browserPush.ts): a browser that never answers gives "not available right now",
+  // never a card that waits forever; the rest of the screen never waits for it.
   const look = useCallback(async () => {
-    setState(await browserPushState());
-    const sub = await currentSubscription();
+    const next = await browserPushState();
+    setState(next);
+    const sub = next === 'on' ? await currentSubscription().catch(() => null) : null;
     setHash(sub ? await endpointHash(sub.endpoint) : '');
   }, []);
   useEffect(() => { void look(); }, [look]);
@@ -48,7 +51,7 @@ export function BrowserPush({ data, onSaved }: { data: NotificationSettings | nu
       showSnackbar({ text: t(on ? 'web.push.turnedOn' : 'web.push.turnedOff') });
     } catch (e) {
       const why = e instanceof Error ? e.message : '';
-      setProblem(t(why === 'blocked' ? 'web.push.blocked' : why === 'no_permission' ? 'web.push.noPermission' : 'web.push.failed'));
+      setProblem(t(why === 'blocked' ? 'web.push.blocked' : why === 'no_permission' ? 'web.push.noPermission' : why === 'too_slow' ? 'web.push.unavailable' : 'web.push.failed'));
     }
     await look();
     setBusy(false);

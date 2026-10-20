@@ -23,6 +23,28 @@ export function registerMobileWorker(onNavigate: (path: string) => void): () => 
   return () => navigator.serviceWorker.removeEventListener('message', onMessage);
 }
 
+/** The browser's own service-worker calls can wait forever (a worker that never activates): each has a limit, and the
+ *  card says "not available right now" instead of waiting (no loading state runs forever). */
+export const BROWSER_WAIT_MS = 10_000;
+export function within<T>(p: Promise<T>, ms = BROWSER_WAIT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('too_slow')), ms);
+    p.then((v) => { clearTimeout(timer); resolve(v); }, (e: unknown) => { clearTimeout(timer); reject(e); });
+  });
+}
+
+/** The registration's worker active, within the limit (never navigator.serviceWorker.ready: it waits forever when no
+ *  worker for the page becomes active). */
+async function activeWorker(reg: ServiceWorkerRegistration, ms: number): Promise<ServiceWorkerRegistration> {
+  if (reg.active) return reg;
+  const worker = reg.installing ?? reg.waiting;
+  if (!worker) throw new Error('too_slow');
+  await within(new Promise<void>((resolve) => {
+    worker.addEventListener('statechange', () => { if (worker.state === 'activated') resolve(); });
+  }), ms);
+  return reg;
+}
+
 const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 const isInstalled = () =>
   window.matchMedia?.('(display-mode: standalone)').matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
@@ -36,34 +58,39 @@ export function pushSupport(): 'ok' | 'unsupported' | 'insecure' | 'ios_not_inst
   return 'ok';
 }
 
-async function registration(): Promise<ServiceWorkerRegistration | null> {
-  const reg = await navigator.serviceWorker.getRegistration(SCOPE);
+async function registration(ms = BROWSER_WAIT_MS): Promise<ServiceWorkerRegistration | null> {
+  const reg = await within(navigator.serviceWorker.getRegistration(SCOPE), ms);
   return reg && reg.scope.endsWith(SCOPE) ? reg : null;
 }
 
-export async function currentSubscription(): Promise<PushSubscription | null> {
+export async function currentSubscription(ms = BROWSER_WAIT_MS): Promise<PushSubscription | null> {
   if (pushSupport() !== 'ok') return null;
-  const reg = await registration();
-  return reg ? reg.pushManager.getSubscription() : null;
+  const reg = await registration(ms);
+  return reg ? within(reg.pushManager.getSubscription(), ms) : null;
 }
 
-export async function browserPushState(): Promise<BrowserPushState> {
+/** This browser's state; 'unavailable' when the browser does not answer within the limit. */
+export async function browserPushState(ms = BROWSER_WAIT_MS): Promise<BrowserPushState> {
   const support = pushSupport();
   if (support !== 'ok') return support;
   if (Notification.permission === 'denied') return 'blocked';
-  return (await currentSubscription()) ? 'on' : 'off';
+  try {
+    return (await currentSubscription(ms)) ? 'on' : 'off';
+  } catch {
+    return 'unavailable';
+  }
 }
 
 export interface BrowserSubscription { endpoint: string; p256dh: string; auth: string; user_agent: string }
 
-/** Asks for permission and subscribes. Throws 'blocked' or 'no_permission' (the screen says it in words). */
-export async function subscribeBrowser(publicKey: string): Promise<BrowserSubscription> {
+/** Asks for permission and subscribes. Throws 'blocked', 'no_permission' or 'too_slow' (the screen says it in words). */
+export async function subscribeBrowser(publicKey: string, ms = BROWSER_WAIT_MS): Promise<BrowserSubscription> {
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') throw new Error(permission === 'denied' ? 'blocked' : 'no_permission');
-  const reg = (await registration()) ?? (await navigator.serviceWorker.register(WORKER, { scope: SCOPE }));
-  await navigator.serviceWorker.ready;
-  const sub = (await reg.pushManager.getSubscription())
-    ?? (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) as BufferSource }));
+  const found = (await registration(ms)) ?? (await within(navigator.serviceWorker.register(WORKER, { scope: SCOPE }), ms));
+  const reg = await activeWorker(found, ms);
+  const sub = (await within(reg.pushManager.getSubscription(), ms))
+    ?? (await within(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) as BufferSource }), ms));
   const keys = sub.toJSON().keys ?? {};
   if (!keys.p256dh || !keys.auth) throw new Error('no_keys');
   return { endpoint: sub.endpoint, p256dh: keys.p256dh, auth: keys.auth, user_agent: navigator.userAgent.slice(0, 400) };

@@ -27,6 +27,33 @@ export function registerServiceWorker(onNavigate: (path: string) => void): () =>
   return () => navigator.serviceWorker.removeEventListener("message", onMessage);
 }
 
+/** The browser's own service-worker calls can wait forever (a worker that never activates, a broken browser profile):
+ *  each gets a limit, and the page goes on without it. */
+export const BROWSER_WAIT_MS = 10_000;
+export class BrowserTooSlow extends Error {
+  constructor() {
+    super("This browser did not answer. Notifications are not available here right now; try again later.");
+  }
+}
+export function within<T>(p: Promise<T>, ms = BROWSER_WAIT_MS): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new BrowserTooSlow()), ms);
+    p.then((v) => { clearTimeout(timer); resolve(v); }, (e: unknown) => { clearTimeout(timer); reject(e); });
+  });
+}
+
+/** A registration's worker active, within the limit (never navigator.serviceWorker.ready: it waits for the page's own
+ *  scope, and forever when no worker for it becomes active). */
+async function activeWorker(reg: ServiceWorkerRegistration): Promise<ServiceWorkerRegistration> {
+  if (reg.active) return reg;
+  const worker = reg.installing ?? reg.waiting;
+  if (!worker) throw new BrowserTooSlow();
+  await within(new Promise<void>((resolve) => {
+    worker.addEventListener("statechange", () => { if (worker.state === "activated") resolve(); });
+  }));
+  return reg;
+}
+
 const isIos = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
 const isInstalled = () => window.matchMedia?.("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone === true;
 
@@ -42,15 +69,19 @@ export function pushSupport(): "ok" | "unsupported" | "insecure" | "ios_not_inst
 
 export async function currentSubscription(): Promise<PushSubscription | null> {
   if (pushSupport() !== "ok") return null;
-  const reg = await navigator.serviceWorker.getRegistration("/");
-  return reg ? await reg.pushManager.getSubscription() : null;
+  const reg = await within(navigator.serviceWorker.getRegistration("/"));
+  return reg ? await within(reg.pushManager.getSubscription()) : null;
 }
 
 export async function pushState(): Promise<PushState> {
   const support = pushSupport();
   if (support !== "ok") return support;
   if (Notification.permission === "denied") return "blocked";
-  return (await currentSubscription()) ? "on" : "off";
+  try {
+    return (await currentSubscription()) ? "on" : "off";
+  } catch {
+    return "unavailable";
+  }
 }
 
 /** Asks for permission and subscribes (the existing subscription comes back when there is one). */
@@ -61,9 +92,9 @@ export async function subscribePush(publicKey: string): Promise<BrowserSubscript
       ? "Notifications are blocked for this site in the browser. Allow them in the site settings, then try again."
       : "No permission was given.");
   }
-  const reg = (await navigator.serviceWorker.getRegistration("/")) ?? (await navigator.serviceWorker.register("/sw.js"));
-  await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) });
+  const found = (await within(navigator.serviceWorker.getRegistration("/"))) ?? (await within(navigator.serviceWorker.register("/sw.js")));
+  const reg = await activeWorker(found);
+  const sub = await within(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(publicKey) }));
   const keys = sub.toJSON().keys ?? {};
   if (!keys.p256dh || !keys.auth) throw new Error("The browser gave no keys for the subscription.");
   return { endpoint: sub.endpoint, p256dh: keys.p256dh, auth: keys.auth, user_agent: navigator.userAgent.slice(0, 400) };

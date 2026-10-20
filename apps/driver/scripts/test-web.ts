@@ -55,8 +55,25 @@ console.log('\nStep 5: installable, offline, web push (public/, office/browserPu
   void endpointHash('e').then((h) => check(h.length === 16, 'the endpoint label: 16 hex characters, as the server keeps it', h));
 }
 
-// The endpoint label's check is asynchronous (the browser's digest): the report waits for it.
+console.log('\nNo loading state runs forever: a service worker that never answers');
+{
+  const never = () => new Promise<never>(() => {});
+  const g = globalThis as Record<string, unknown>;
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { userAgent: 'test', serviceWorker: { ready: never(), getRegistration: never, register: never, addEventListener() {}, removeEventListener() {} } },
+  });
+  g.window = { Notification: {}, PushManager: function PushManager() {}, isSecureContext: true, matchMedia: () => ({ matches: false }) };
+  g.Notification = { permission: 'default', requestPermission: () => Promise.resolve('granted') };
+  void import('../src/lib/browserPush').then(async ({ browserPushState, subscribeBrowser }) => {
+    check(await browserPushState(30) === 'unavailable', 'the state: "not available right now" within the limit, never a card that waits');
+    const err = await subscribeBrowser('AQID', 30).then(() => null, (e: Error) => e.message);
+    check(err === 'too_slow', 'Turn on: fails within the limit (no navigator.serviceWorker.ready)', err);
+  });
+}
+
+// The endpoint label's check and the browser stubs above are asynchronous: the report waits for them.
 setTimeout(() => {
   console.log(failures ? `\n${failures} web check(s) FAILED.` : '\nAll web checks passed.');
   process.exit(failures ? 1 : 0);
-}, 100);
+}, 500);

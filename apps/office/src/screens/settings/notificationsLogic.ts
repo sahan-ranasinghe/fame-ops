@@ -1,6 +1,6 @@
 // Pure rules of Settings → Notifications: the push state in words, the VAPID key bytes.
 
-export type PushState = "unsupported" | "insecure" | "ios_not_installed" | "blocked" | "on" | "off";
+export type PushState = "unsupported" | "insecure" | "ios_not_installed" | "blocked" | "unavailable" | "on" | "off";
 
 export interface StateText {
   text: string;
@@ -23,6 +23,8 @@ export function stateText(state: PushState, configured: boolean, registered: boo
         tone: "info",
         can: null,
       };
+    case "unavailable":
+      return { text: "Notifications are not available in this browser right now. Reload the page to try again.", tone: "info", can: null };
     case "blocked":
       return { text: "Notifications are blocked for this site in the browser. Allow them in the site settings, then try again.", tone: "bad", can: null };
     case "on":

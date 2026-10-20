@@ -2,7 +2,7 @@
 // Settings → Notifications says the same, apps/office/src/screens/settings/notificationsLogic.ts), the VAPID key bytes and
 // the endpoint's label as the server keeps it. The browser calls are in lib/browserPush.ts.
 
-export type BrowserPushState = 'unsupported' | 'insecure' | 'ios_not_installed' | 'blocked' | 'on' | 'off';
+export type BrowserPushState = 'unsupported' | 'insecure' | 'ios_not_installed' | 'blocked' | 'unavailable' | 'on' | 'off';
 
 export interface BrowserPushLine {
   /** The i18n key under web.push. */
@@ -20,6 +20,7 @@ export function browserPushLine(state: BrowserPushState, configured: boolean, re
     case 'insecure': return { key: 'insecure', tone: 'info', can: null };
     case 'ios_not_installed': return { key: 'iosInstall', tone: 'info', can: null };
     case 'blocked': return { key: 'blocked', tone: 'danger', can: null };
+    case 'unavailable': return { key: 'unavailable', tone: 'info', can: null };
     case 'on': return registered ? { key: 'on', tone: 'ok', can: 'off' } : { key: 'onNotYou', tone: 'info', can: 'on' };
     case 'off': return { key: 'off', tone: 'warn', can: 'on' };
   }

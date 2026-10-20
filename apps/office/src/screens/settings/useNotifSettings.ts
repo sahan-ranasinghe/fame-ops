@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useFleet } from "../../app/FleetContext";
 import type { NotificationSettings } from "../../data/types";
-import { callWithRetry } from "../../transport/retryRule";
+import { callWithRetry, READ_TIMEOUT_MS, TIMED_OUT } from "../../transport/retryRule";
 import { asFleetError, errText } from "../../transport/errors";
 import { useToast } from "../../ui/Toast";
 import {
@@ -25,6 +25,8 @@ import {
 import { setEvents } from "./notificationsActions";
 
 const TOOL_ARGS = {};
+/** The longest the page shows Loading: one read's limit. */
+export const PAGE_WAIT_MS = READ_TIMEOUT_MS;
 
 /** Where this browser keeps the pause record (per person: two people may share a browser). */
 export const pauseStorageKey = (who: { email?: string; name: string }) => `fleet.notifPause.${(who.email ?? who.name).toLowerCase()}`;
@@ -55,12 +57,20 @@ export function useNotifSettings() {
   latest.current = data;
   const perms = me.permissions;
 
+  // No loading state runs forever (Sahan, 20 October 2026): a call and its one retry may take about 42 s, so after 20 s with
+  // no answer the page shows the error with Try again; an answer that still comes is shown.
   const load = useCallback(async () => {
+    setErr(null);
+    const late = setTimeout(() => {
+      if (!latest.current) setErr(errText(TIMED_OUT)[0]);
+    }, PAGE_WAIT_MS);
     try {
       setData(await callWithRetry<NotificationSettings>(transport, "my_notification_settings", TOOL_ARGS));
       setErr(null);
     } catch (e) {
       setErr(errText(asFleetError(e))[0]);
+    } finally {
+      clearTimeout(late);
     }
   }, [transport]);
   useEffect(() => {
