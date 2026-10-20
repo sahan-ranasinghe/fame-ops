@@ -9,6 +9,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, V
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Bell, ChevronLeft } from '@/components/icons';
+import { ChoiceChip } from '@/components/patterns/Select';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { Button, Mono, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
@@ -227,17 +228,14 @@ export function StickyActions({ children }: { children: ReactNode }) {
   return <View style={[styles.sticky, { paddingBottom: Math.max(insets.bottom, 12) }]}>{children}</View>;
 }
 
-/** A filter chip row ("All · 4", "On a task · 1"). */
+/** A filter chip row ("All · 4", "On a task · 1"): the shared ChoiceChip (the check, the tint, the border). */
 export function FilterChips<K extends string>({ options, value, onChange }: { options: { key: K; label: string; n?: number }[]; value: K; onChange: (k: K) => void }) {
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
       {options.map((o) => {
         const on = o.key === value;
         return (
-          <Pressable key={o.key} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => onChange(o.key)} style={[styles.filter, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}>
-            <Txt variant="strong" size={15} color={on ? '#ffffff' : colors.ink}>{o.label}</Txt>
-            {o.n !== undefined && <Mono size={14} bold color={on ? '#ffffff' : colors.muted}>{String(o.n)}</Mono>}
-          </Pressable>
+          <ChoiceChip key={o.key} label={o.label} selected={on} onPress={() => onChange(o.key)} after={o.n !== undefined ? <Mono size={14} bold color={on ? colors.blue : colors.muted}>{String(o.n)}</Mono> : undefined} />
         );
       })}
     </ScrollView>
@@ -260,5 +258,4 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: colors.line },
   errorBox: { backgroundColor: colors.redChip, borderRadius: 12, padding: 14, gap: 10 },
   sticky: { backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 16, paddingTop: 12, gap: 10 },
-  filter: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, paddingHorizontal: 14, minHeight: 48 },
 });

@@ -3,12 +3,14 @@
 // grey, not available amber), the window's "Not available · …" when there is one, "Last seen 17:42 near Kadawatha ·
 // usually starts 07:40", "Next: Team drop · 14:30", then Call and WhatsApp (nothing without a number).
 //
-// The row's main part is a toggle button when the page picks a driver with it (Who's available); the tick box, the
+// The row's main part is a toggle button when the page picks a driver with it (Who's available), with the shared radio
+// mark in front and the tint and the 2 px border when picked (ui/Select.tsx); the tick box, the
 // right-hand slot (Choose, Assign, New task) and Call / WhatsApp sit beside it, never inside the button. Compact on a
 // phone (the CSS: a smaller photo, Call under the text).
 import type { ReactNode } from "react";
 import type { PhoneLinks } from "../data/types";
 import { Avatar, Pill } from "./basics";
+import { SelectMark } from "./Select";
 import { ContactButtons } from "./ContactButtons";
 import { type DriverRowInfo, factsLine, firstName, nextLine, nowTone } from "./driverRowLogic";
 
@@ -66,10 +68,11 @@ export function DriverRow({
   const status = d.now_status;
   const main = (
     <>
+      {/* Hotfix O2-H2 Part 3: a row that picks a driver has the radio in front (empty / with its dot), never colour alone. */}
+      {onPick && <SelectMark kind="radio" on={!!picked} />}
       <Avatar name={d.name} src={d.photo_url} small />
       {rank != null && <span className="num drow-rank" aria-label={`Best match number ${rank}`}>{rank}</span>}
       <span className="grow drow-text">
-        {picked && <span className="avail-tick" aria-hidden="true">✓ </span>}
         <span className="name">{d.name}{nameExtra ? <> {nameExtra}</> : null}</span>
         {(status || d.not_available) && (
           <span className="drow-status" data-testid="drow-status">

@@ -10,14 +10,15 @@
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Camera, Check, ChevronLeft, Play } from '@/components/icons';
+import { Camera, ChevronLeft, Play } from '@/components/icons';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useLeaveGuard } from '@/components/navigation';
 import { Thumb, useNeedsVehiclePhoto, useVehicleThumbs } from '@/components/Photos';
-import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
+import { ChoiceCard } from '@/components/patterns/Select';
+import { Button, Mono, Notice, Txt } from '@/components/ui';
 import type { VehicleChoice } from '@/lib/api';
 import { takeVehiclePhoto } from '@/lib/photos';
 import type { Vehicle } from '@/lib/types';
@@ -180,12 +181,9 @@ export default function VehicleScreen() {
                 note={photoNote?.vehicleId === item.id ? photoNote.key : null}
               />
             ))}
-            <Pressable accessibilityRole="radio" accessibilityState={{ checked: picked === null }} onPress={() => setPicked(null)}>
-              <Card style={[styles.row, picked === null && styles.selected]}>
-                <Txt variant="big" style={{ flex: 1 }}>{t('vehicle.noVehicleToday')}</Txt>
-                {picked === null && <Check size={26} color={colors.ink} strokeWidth={3} />}
-              </Card>
-            </Pressable>
+            <ChoiceCard selected={picked === null} onPress={() => setPicked(null)} mark="end" testID="vehicle-none" style={styles.row}>
+              <Txt variant="big">{t('vehicle.noVehicleToday')}</Txt>
+            </ChoiceCard>
           </>
         )}
       </ScrollView>
@@ -225,10 +223,8 @@ function Choice({ item, selected, onPress, thumb, onAddPhoto, photoBusy, note }:
   if (item.my_regular) tags.push({ text: t('vehicle.yourRegular'), tone: 'plain' });
   if (item.in_garage) tags.push({ text: t('vehicle.inGarage'), tone: 'amber' });
   return (
-    <Pressable accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={onPress}>
-      <Card style={[styles.row, selected && styles.selected]}>
-        <Thumb uri={thumb} size={64} />
-        <View style={{ flex: 1, gap: 6 }}>
+    <ChoiceCard selected={selected} onPress={onPress} leading={<Thumb uri={thumb} size={64} />} mark="end" accessibilityLabel={item.reg_no} testID={`vehicle-${item.id}`} style={styles.row}>
+        <View style={{ gap: 6 }}>
           <View style={styles.plate}>
             <Mono size={20} bold>{item.reg_no}</Mono>
           </View>
@@ -256,9 +252,7 @@ function Choice({ item, selected, onPress, thumb, onAddPhoto, photoBusy, note }:
             </Txt>
           )}
         </View>
-        {selected && <Check size={26} color={colors.ink} strokeWidth={3} />}
-      </Card>
-    </Pressable>
+    </ChoiceCard>
   );
 }
 
@@ -292,7 +286,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
   back: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 84 },
-  selected: { borderColor: colors.ink, borderWidth: 2.5 },
   plate: { alignSelf: 'flex-start', borderWidth: 1.5, borderColor: colors.ink, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 1 },
   tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },

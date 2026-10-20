@@ -14,6 +14,7 @@ import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MessageCircle, Phone } from '@/components/icons';
 import { RouteMap } from '@/components/RouteMap';
+import { pickedStyle } from '@/components/patterns/Select';
 import { Mono, Plate, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { colomboDate } from '@/lib/time';
@@ -198,7 +199,7 @@ export default function DriverPage() {
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
                     onPress={() => setFocus({ frame: rowFrame(points, seg), nonce: (focus?.nonce ?? 0) + 1, index: i })}
-                    style={({ pressed }) => [styles.segRow, on && { backgroundColor: colors.blueChip }, pressed && { opacity: 0.8 }]}
+                    style={({ pressed }) => [styles.segRow, on && pickedStyle, pressed && { opacity: 0.8 }]}
                   >
                     <View style={[styles.segDot, { backgroundColor: toneColor(segmentTone(seg.kind)) }]} />
                     <View style={{ flex: 1, gap: 2 }}>
@@ -269,6 +270,6 @@ const styles = StyleSheet.create({
   map: { height: 300, borderRadius: 14, overflow: 'hidden', backgroundColor: colors.mapLand, marginTop: 6 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingVertical: 8 },
   numbers: { flexDirection: 'row', gap: 6, paddingVertical: 8, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.line },
-  segRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 6, marginHorizontal: -6, borderRadius: 10, minHeight: 56 },
+  segRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 6, marginHorizontal: -6, borderRadius: 10, minHeight: 56, borderWidth: 2, borderColor: 'transparent' },
   segDot: { width: 12, height: 12, borderRadius: 6 },
 });

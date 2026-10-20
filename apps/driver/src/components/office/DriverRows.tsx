@@ -1,10 +1,10 @@
 // Office mode (Hotfix O2-H1, Part B): Who's available as rows, one pattern for the Who step, Book now and Change the
 // task: the avatar, the name with "best match" (and its reason under it), the status words, last seen / usually starts,
-// the tick on the picked one, the busy / off duty / not available pill on the rest; "Ask drivers" beside the title.
+// the radio (the shared ChoiceRow: the tint and the border when picked), the busy / off duty / not available pill; "Ask drivers" beside the title.
 
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
-import { Check } from '@/components/icons';
+import { ChoiceRow } from '@/components/patterns/Select';
 import { Txt } from '@/components/ui';
 import { driverParts, driverPill, rankedDrivers } from '@/office/approveLogic';
 import type { Availability, AvailableDriver } from '@/office/types';
@@ -46,26 +46,29 @@ export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSi
         const on = !!x.username && x.username === picked;
         const pillKey = driverPill(x, best);
         return (
-          <Pressable key={x.username ?? x.name} accessibilityRole="button" accessibilityState={{ selected: on }} disabled={!x.username} onPress={() => onPick(x)} style={({ pressed }) => [styles.row, on && styles.rowOn, pressed && { opacity: 0.8 }]}>
-            <Avatar name={x.name} size={48} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <Txt variant="strong" size={18}>{x.name}</Txt>
-                {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
-              </View>
-              <Txt variant="muted" size={15}>{driverParts(x).join(' · ')}</Txt>
-              {pillKey === 'best' && data?.best?.why ? <Txt variant="small" color={colors.amberText}>{data.best.why}</Txt> : null}
-              {(x.last_seen || x.usual_start) && <Txt variant="small">{[x.last_seen ? t('office.trip.lastSeen', { when: x.last_seen }) : '', x.usual_start ? t('office.trip.usuallyStarts', { time: x.usual_start }) : ''].filter(Boolean).join(' · ')}</Txt>}
+          <ChoiceRow
+            key={x.username ?? x.name}
+            card
+            selected={on}
+            onPress={() => onPick(x)}
+            disabled={!x.username}
+            disabledReason={x.username ? undefined : t('office.ask.noAccount')}
+            leading={<Avatar name={x.name} size={48} />}
+            mark="end"
+            trailing={pillKey && pillKey !== 'best' ? <Pill text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted'} /> : null}
+            accessibilityLabel={x.name}
+            testID={`driver-row-${x.username ?? x.name}`}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Txt variant="strong" size={18}>{x.name}</Txt>
+              {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
             </View>
-            {on ? <Check size={26} color={colors.blue} strokeWidth={3} /> : pillKey && pillKey !== 'best' ? <Pill text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted'} /> : null}
-          </Pressable>
+            <Txt variant="muted" size={15}>{driverParts(x).join(' · ')}</Txt>
+            {pillKey === 'best' && data?.best?.why ? <Txt variant="small" color={colors.amberText}>{data.best.why}</Txt> : null}
+            {(x.last_seen || x.usual_start) && <Txt variant="small">{[x.last_seen ? t('office.trip.lastSeen', { when: x.last_seen }) : '', x.usual_start ? t('office.trip.usuallyStarts', { time: x.usual_start }) : ''].filter(Boolean).join(' · ')}</Txt>}
+          </ChoiceRow>
         );
       })}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 18, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.card, minHeight: 72 },
-  rowOn: { borderColor: colors.blue, backgroundColor: '#f2f5fb' },
-});

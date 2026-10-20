@@ -1,7 +1,7 @@
 // Office mode (Phase 8, O2): Ask drivers (design 13), a bottom sheet opened from "Ask drivers" on Approve a request, Give
 // it a driver and the Drivers board. The question as three chips (Free for a trip? with the trip's day and window under
-// it · When at the office? · Where are you?), "Send to · N picked" with All free · None, a row per driver (a 48 px tick
-// box, the avatar, the name, the status line; free ones ticked first), then Send to N drivers (ask_drivers). Once sent,
+// it · When at the office? · Where are you?), "Send to · N picked" with All free · None, a row per driver (the shared
+// SelectableRow: a circle that fills with a check, the tint and the border; the name, the status line; free ones picked first), then Send to N drivers (ask_drivers). Once sent,
 // the answers live under the rows (ask_answers every 10 s while the sheet is open and someone has still to answer):
 // waiting… / seen HH:MM / Yes · HH:MM / No / Call me with a Call button when the number is known / a time / where they
 // are with a map link; a Yes gets Use when the caller can pick that driver (onUse). The rules: office/askLogic.ts.
@@ -11,7 +11,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Check, Clock, MapPin, Phone, Van, X } from '@/components/icons';
+import { Clock, MapPin, Phone, Van, X } from '@/components/icons';
+import { ChoiceCard, pickedStyle, SelectableRow, SelectMark } from '@/components/patterns/Select';
 import { Button, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
 import {
@@ -130,7 +131,8 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
           <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 10, paddingBottom: 6 }} keyboardShouldPersistTaps="handled">
             <Txt variant="label" color={colors.muted}>{t('office.ask.question').toUpperCase()}</Txt>
             {sent && ask ? (
-              <View style={[styles.kind, styles.kindOn]}>
+              <View style={[styles.sentKind, pickedStyle]} testID="ask-kind-sent">
+                <SelectMark kind="radio" on size={26} />
                 <Txt variant="strong" size={16} style={{ flex: 1 }}>{ask.question || t(`office.ask.kind.${ask.kind}`)}</Txt>
               </View>
             ) : (
@@ -142,7 +144,7 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
                     <TimeBox label={t('office.ask.tripTo')} value={to} onChange={setTo} />
                   </View>
                 )}
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
                   {ASK_KINDS.filter((k) => k !== 'free_for_trip').map((k) => (
                     <KindChip key={k} kind={k} on={kind === k} onPress={() => setKind(k)} label={t(`office.ask.kind.${k}`)} small />
                   ))}
@@ -172,28 +174,32 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
               const on = askable && picked.includes(target.username as string);
               const answer = row ? answerOf(row) : null;
               const dim = sent ? !row : !askable;
+              if (!sent) {
+                // Not sent yet: pick many (the shared SelectableRow: the circle in front, the tint and the border when picked).
+                return (
+                  <SelectableRow
+                    key={target.username ?? `name:${target.name}`}
+                    selected={on}
+                    onToggle={() => setPicked((p) => toggled(p, drivers, target.username as string))}
+                    disabled={!askable}
+                    disabledReason={askable ? undefined : t('office.ask.noAccount')}
+                    accessibilityLabel={target.name}
+                    testID={`ask-row-${target.username ?? target.name}`}
+                  >
+                    <Txt variant="strong" size={16} numberOfLines={1}>{target.name}</Txt>
+                    {target.line ? <Txt variant="small" numberOfLines={2}>{target.line}</Txt> : null}
+                  </SelectableRow>
+                );
+              }
               return (
-                <Pressable
-                  key={target.username ?? `name:${target.name}`}
-                  accessibilityRole={sent ? undefined : 'checkbox'}
-                  accessibilityState={sent ? undefined : { checked: on, disabled: !askable }}
-                  disabled={sent || !askable}
-                  onPress={() => setPicked((p) => toggled(p, drivers, target.username as string))}
-                  style={[styles.row, dim && { opacity: 0.55 }]}
-                  testID={`ask-row-${target.username ?? target.name}`}
-                >
-                  {!sent && (
-                    <View style={[styles.box, on && styles.boxOn]}>
-                      {on && <Check size={18} color="#ffffff" strokeWidth={3.2} />}
-                    </View>
-                  )}
+                <View key={target.username ?? `name:${target.name}`} style={[styles.row, dim && { opacity: 0.55 }]} testID={`ask-row-${target.username ?? target.name}`}>
                   <Avatar name={target.name} size={40} />
                   <View style={{ flex: 1, gap: 1 }}>
                     <Txt variant="strong" size={16} numberOfLines={1}>{target.name}</Txt>
                     <Txt variant="small" numberOfLines={2}>{target.line || (askable ? '' : t('office.ask.noAccount'))}</Txt>
                   </View>
                   {answer && <Pill text={answerLabel(answer, t)} tone={answer.tone as Tone} size={13} />}
-                  {sent && !row && <Txt variant="small">{t('office.ask.notAsked')}</Txt>}
+                  {!row && <Txt variant="small">{t('office.ask.notAsked')}</Txt>}
                   {answer?.use && onUse && target.username && (
                     <Pressable accessibilityRole="button" onPress={() => { onUse(target.username as string); onClose(); }} style={styles.use}>
                       <Txt variant="strong" size={15}>{t('office.ask.use')}</Txt>
@@ -211,7 +217,7 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
                       <Txt variant="strong" size={15}>{t('office.ask.maps')}</Txt>
                     </Pressable>
                   )}
-                </Pressable>
+                </View>
               );
             })}
             {problem && <ErrorNotice error={problem} onRetry={() => void send()} />}
@@ -238,17 +244,21 @@ export function AskDriversSheet({ visible, onClose, drivers, preticked: given, c
   );
 }
 
-/** One of the three question chips: the icon, the words and, under Free for a trip?, the trip's window. */
+/** One of the three question cards (pick one): the shared ChoiceCard with its radio, the icon, the words and, under Free
+ *  for a trip?, the trip's window. */
 function KindChip({ kind, on, onPress, label, detail, small = false }: { kind: AskKind; on: boolean; onPress: () => void; label: string; detail?: string; small?: boolean }) {
   const Icon = KIND_ICON[kind];
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={[styles.kind, on && styles.kindOn, small && { flex: 1 }]}>
-      <Icon size={small ? 18 : 20} color={colors.ink} strokeWidth={2.2} />
-      <View style={{ flex: 1, flexDirection: small ? 'column' : 'row', alignItems: small ? 'flex-start' : 'center', gap: 8, flexWrap: 'wrap' }}>
-        <Txt variant="strong" size={small ? 15 : 16}>{label}</Txt>
+    <ChoiceCard selected={on} onPress={onPress} accessibilityLabel={label} testID={`ask-kind-${kind}`} style={small ? { flex: 1, paddingHorizontal: 10, gap: 8 } : undefined}>
+      <View style={{ flexDirection: small ? 'column' : 'row', alignItems: small ? 'flex-start' : 'center', gap: small ? 2 : 8, flexWrap: 'wrap' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Icon size={small ? 18 : 20} color={on ? colors.blue : colors.ink} strokeWidth={2.2} />
+          {!small && <Txt variant="strong" size={16}>{label}</Txt>}
+        </View>
+        {small && <Txt variant="strong" size={15}>{label}</Txt>}
         {detail ? <Txt variant="small" style={{ flexShrink: 1 }}>{detail}</Txt> : null}
       </View>
-    </Pressable>
+    </ChoiceCard>
   );
 }
 
@@ -277,13 +287,10 @@ const styles = StyleSheet.create({
   handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#c9c6bc', alignSelf: 'center' },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   close: { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
-  kind: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card },
-  kindOn: { borderColor: colors.blue, backgroundColor: '#f4f7fc', borderWidth: 2 },
+  sentKind: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18 },
   sendTo: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   link: { minHeight: 44, justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.card },
-  box: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', marginLeft: -8 },
-  boxOn: {},
   use: { minHeight: 44, minWidth: 64, paddingHorizontal: 14, borderRadius: 10, backgroundColor: colors.amber, alignItems: 'center', justifyContent: 'center' },
   callBtn: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1.5, borderColor: colors.ink, backgroundColor: colors.card },
   time: { flex: 1, minHeight: 48, borderWidth: 1.5, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 12, fontSize: 17, color: colors.ink, backgroundColor: colors.card },

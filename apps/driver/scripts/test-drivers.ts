@@ -182,7 +182,7 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
   check(/<Modal visible=\{visible\} transparent animationType="slide" onRequestClose=\{onClose\}>/.test(tab), 'the Not available sheet is a Modal (the back button closes it)');
   check(/router\.push\(\{ pathname: '\/office\/driver\/\[username\]', params: \{ username: d\.username \} \}\)/.test(tab), 'a row opens the driver\'s page');
   check(/BOARD_FILTERS\.map/.test(tab) && /board\.data\?\.counts\[k\]/.test(tab), 'the chips with the server\'s counts');
-  check(/callBtn: \{ width: 48, height: 48/.test(tab) && /segBtn: \{ minWidth: 72, minHeight: 40/.test(tab) && /cell: \{ width: 40, height: 40/.test(tab), 'the Call button 48 px; the week\'s cells 40 px');
+  check(/callBtn: \{ width: 48, height: 48/.test(tab) && /<ChoiceChip key=\{k\} onDark label=\{t\(`office\.drivers\.\$\{k\}`\)\}/.test(tab) && /cell: \{ width: 40, height: 40/.test(tab), 'the Call button 48 px; Now / Week as the shared chips (44 px); the week\'s cells 40 px');
   check(!/me\.role|role ===|'admin'|'fleet_admin'/.test(tab), 'no role names');
 
   const page = read('src/app/office/driver/[username].tsx');

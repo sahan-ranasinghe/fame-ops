@@ -22,6 +22,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DriversMap } from '@/components/DriversMap';
 import { type LucideIcon, MessageCircle, Navigation, Phone, Play, Route as RouteIcon, X } from '@/components/icons';
+import { ChoiceChip, pickedStyle } from '@/components/patterns/Select';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { DriverDot } from '@/components/mapPins';
 import { Mono, Plate, Txt } from '@/components/ui';
@@ -256,7 +257,7 @@ function DriverRow({ d, selected, onPress }: { d: LiveDriver; selected: boolean;
   const pill = pillOf(d);
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} testID={`live-row-${d.username}`}
-      style={({ pressed }) => [styles.row, selected && { backgroundColor: colors.blueChip }, pressed && { opacity: 0.7 }]}>
+      style={({ pressed }) => [styles.row, selected && pickedStyle, pressed && { opacity: 0.7 }]}>
       <DriverDot initials={initials(d.driver)} tone={pill.tone} dim={pill.key === 'offDuty'} selected={selected} size={40} />
       <View style={{ flex: 1, gap: 2 }}>
         <View style={styles.name}>
@@ -449,10 +450,7 @@ function PlaybackBar({ playback, cursor }: { playback: Playback; cursor: Cursor 
         {SPEEDS.map((s) => {
           const on = s === playback.speed;
           return (
-            <Pressable key={s} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => playback.setSpeed(s)}
-              style={[styles.speed, on && styles.speedOn]}>
-              <Mono size={14} bold color={on ? '#ffffff' : colors.ink}>{`${s}×`}</Mono>
-            </Pressable>
+            <ChoiceChip key={s} small mono label={`${s}×`} selected={on} onPress={() => playback.setSpeed(s)} />
           );
         })}
       </View>
@@ -520,7 +518,7 @@ const styles = StyleSheet.create({
   mapButtonOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   mapPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 220 },
   chips: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, backgroundColor: colors.page },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, minHeight: 64, borderRadius: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, minHeight: 64, borderRadius: 12, borderWidth: 2, borderColor: 'transparent' },
   name: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   card: {
     position: 'absolute',
@@ -557,8 +555,6 @@ const styles = StyleSheet.create({
   playback: { gap: 4, marginTop: 2, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 8 },
   playRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   playBtn: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  speed: { minWidth: 48, height: 48, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 },
-  speedOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   clock: { alignItems: 'flex-end', minWidth: 76 },
   sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   track: { flex: 1, height: 48, justifyContent: 'center' },

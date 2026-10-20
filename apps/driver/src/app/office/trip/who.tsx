@@ -12,11 +12,12 @@ import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { Check, X } from '@/components/icons';
+import { ChevronDown, ChevronUp, X } from '@/components/icons';
 import { DriverRows } from '@/components/office/DriverRows';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { Chips, MoreDetails, Stepper, ToggleRow } from '@/components/office/Controls';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
+import { ChoiceChip, ChoiceRow } from '@/components/patterns/Select';
 import { Field, Mono, Plate, Txt } from '@/components/ui';
 import { colomboDate } from '@/lib/time';
 import { rankedDrivers } from '@/office/approveLogic';
@@ -31,7 +32,7 @@ import { useTrip } from '@/office/trip/useTrip';
 import { ANY_TYPES, anyValue, knownDef, ON_THE_DAY, shownVehicle, vehicleDefault } from '@/office/trip/vehicleChoiceLogic';
 import { whoArgs } from '@/office/trip/whoLogic';
 import type { Availability, FindProject, SettingsResult, SuggestedVehicle, Suggestions } from '@/office/types';
-import { Divider, Empty, ErrorNotice, Loading, Screen } from '@/office/ui';
+import { Empty, ErrorNotice, Loading, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -132,21 +133,17 @@ function WhoStep({ d }: { d: TripDraft }) {
     <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => pick(x.username ?? '', x.name, x.phone?.whatsapp)} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined} noWindow={!args} />
   );
 
-  const vehicleRow = (v: SuggestedVehicle, disabled: boolean) => (
-    <Pressable key={v.reg_no} accessibilityRole="button" accessibilityState={{ selected: shown === v.reg_no, disabled }} disabled={disabled} onPress={() => { setF({ vehicle: v.reg_no }); setChoosing(false); }} style={[styles.vehicleRow, disabled && { opacity: 0.5 }]}>
-      <Plate regNo={v.reg_no} />
-      <View style={{ flex: 1 }}>
-        <Txt variant={v.pick === 'no' ? 'strong' : 'muted'} size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
-        {v.assigned_to ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt>
-            {v.call ? <Pressable accessibilityRole="button" onPress={() => open(v.call!)} hitSlop={8}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.call')}</Txt></Pressable> : null}
-            {v.whatsapp ? <Pressable accessibilityRole="button" onPress={() => open(v.whatsapp!)} hitSlop={8}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.whatsapp')}</Txt></Pressable> : null}
-          </View>
-        ) : null}
-      </View>
-      {shown === v.reg_no && <Check size={22} color={colors.blue} strokeWidth={3} />}
-    </Pressable>
+  const vehicleRow = (v: SuggestedVehicle, disabled: boolean, reason?: string) => (
+    <ChoiceRow key={v.reg_no} selected={shown === v.reg_no} onPress={() => { setF({ vehicle: v.reg_no }); setChoosing(false); }} disabled={disabled} disabledReason={reason} leading={<Plate regNo={v.reg_no} />} mark="end" accessibilityLabel={v.reg_no} testID={`vehicle-row-${v.reg_no}`}>
+      <Txt variant={v.pick === 'no' ? 'strong' : 'muted'} size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
+      {v.assigned_to ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt>
+          {v.call ? <Pressable accessibilityRole="button" onPress={() => open(v.call!)} hitSlop={8}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.call')}</Txt></Pressable> : null}
+          {v.whatsapp ? <Pressable accessibilityRole="button" onPress={() => open(v.whatsapp!)} hitSlop={8}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.whatsapp')}</Txt></Pressable> : null}
+        </View>
+      ) : null}
+    </ChoiceRow>
   );
 
   const vehicleGroups = (rows: ReturnType<typeof groupRows>, empty: string) => (
@@ -155,7 +152,7 @@ function WhoStep({ d }: { d: TripDraft }) {
       {rows.map((g) => (
         <View key={g.key} style={{ gap: 2 }}>
           <Txt variant="label" color={colors.muted} style={{ marginTop: 6 }}>{t(`office.trip.group_${g.key}`).toUpperCase()}</Txt>
-          {g.rows.map((v, i) => <View key={v.reg_no}>{i > 0 && <Divider />}{vehicleRow(v, g.disabled)}</View>)}
+          <View accessibilityRole="radiogroup" style={{ gap: 6 }}>{g.rows.map((v) => vehicleRow(v, g.disabled, g.disabled ? t(`office.trip.group_${g.key}`) : undefined))}</View>
         </View>
       ))}
     </View>
@@ -163,13 +160,9 @@ function WhoStep({ d }: { d: TripDraft }) {
 
   const onDayChips = onDay && (
     <>
-      <Pressable accessibilityRole="button" accessibilityState={{ selected: shown === ON_THE_DAY }} onPress={() => setF({ vehicle: dayDefault ? '' : ON_THE_DAY })} style={[styles.chip, shown === ON_THE_DAY && styles.chipOn]}>
-        <Txt variant="strong" size={15} color={shown === ON_THE_DAY ? '#ffffff' : colors.ink}>{t('office.trip.onTheDay')}</Txt>
-      </Pressable>
+      <ChoiceChip label={t('office.trip.onTheDay')} selected={shown === ON_THE_DAY} onPress={() => setF({ vehicle: dayDefault ? '' : ON_THE_DAY })} />
       {ANY_TYPES.map(([type]) => (
-        <Pressable key={type} accessibilityRole="button" accessibilityState={{ selected: shown === anyValue(type) }} onPress={() => setF({ vehicle: anyValue(type) })} style={[styles.chip, shown === anyValue(type) && styles.chipOn]}>
-          <Txt variant="strong" size={15} color={shown === anyValue(type) ? '#ffffff' : colors.ink}>{t('office.trip.anyType', { type: t(`vehicleType.${type}`) })}</Txt>
-        </Pressable>
+        <ChoiceChip key={type} label={t('office.trip.anyType', { type: t(`vehicleType.${type}`) })} selected={shown === anyValue(type)} onPress={() => setF({ vehicle: anyValue(type) })} />
       ))}
     </>
   );
@@ -198,15 +191,15 @@ function WhoStep({ d }: { d: TripDraft }) {
               <Txt variant="label" color={colors.muted}>{t('office.trip.vehicle').toUpperCase()}</Txt>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {picked?.vehicle && (
-                  <Pressable accessibilityRole="button" accessibilityState={{ selected: f.vehicle === '' }} onPress={() => setF({ vehicle: '' })} style={[styles.chip, f.vehicle === '' && styles.chipOn]}>
-                    <Plate regNo={picked.vehicle.reg_no} dark={f.vehicle === ''} />
-                    <Txt variant="strong" size={15} color={f.vehicle === '' ? '#ffffff' : colors.ink}>{t(picked.vehicle.source === 'on_duty' ? 'office.trip.driversToday' : 'office.trip.driversRegular', { name: picked.name.split(' ')[0] })}</Txt>
-                  </Pressable>
+                  <ChoiceChip selected={f.vehicle === ''} onPress={() => setF({ vehicle: '' })} before={<Plate regNo={picked.vehicle.reg_no} />} label={t(picked.vehicle.source === 'on_duty' ? 'office.trip.driversToday' : 'office.trip.driversRegular', { name: picked.name.split(' ')[0] })} />
                 )}
                 {onDayChips}
-                <Pressable accessibilityRole="button" onPress={() => setChoosing((v) => !v)} style={[styles.chip, choosing && styles.chipOn]}>
-                  <Txt variant="strong" size={15} color={choosing ? '#ffffff' : colors.ink}>{f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : t('office.trip.choose')}</Txt>
-                </Pressable>
+                <ChoiceChip
+                  selected={!!f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle)}
+                  onPress={() => setChoosing((v) => !v)}
+                  label={f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : t('office.trip.choose')}
+                  after={choosing ? <ChevronUp size={18} color={colors.muted} /> : <ChevronDown size={18} color={colors.muted} />}
+                />
               </View>
               {choosing && vehicleGroups(taskGroups, t('office.trip.noFreeVehicles'))}
               {defaultLine ? <Txt variant="small" color={!def && known ? colors.amberText : colors.muted}>{defaultLine}</Txt> : null}
@@ -291,9 +284,7 @@ function WhoStep({ d }: { d: TripDraft }) {
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                         {options.length === 0 && <Txt variant="small">{t('office.trip.pickFreeDriver')}</Txt>}
                         {options.map((o) => (
-                          <Pressable key={o.username} accessibilityRole="button" accessibilityState={{ selected: f.driver === o.username }} onPress={() => (f.driver === o.username ? pick('', '') : pick(o.username, o.name, drivers.find((x) => x.username === o.username)?.phone?.whatsapp))} style={[styles.chip, f.driver === o.username && styles.chipOn]}>
-                            <Txt variant="strong" size={15} color={f.driver === o.username ? '#ffffff' : colors.ink}>{o.name}</Txt>
-                          </Pressable>
+                          <ChoiceChip key={o.username} label={o.name} selected={f.driver === o.username} onPress={() => (f.driver === o.username ? pick('', '') : pick(o.username, o.name, drivers.find((x) => x.username === o.username)?.phone?.whatsapp))} />
                         ))}
                       </View>
                     )}
@@ -332,9 +323,6 @@ function WhoStep({ d }: { d: TripDraft }) {
 
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 14 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
-  vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 8 },
   notes: { minHeight: 80, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, padding: 12, fontSize: 17, color: colors.ink, backgroundColor: colors.card, textAlignVertical: 'top' },
   input: { minHeight: 48, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, fontSize: 16, color: colors.ink, backgroundColor: colors.card },
   iconBtn: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },

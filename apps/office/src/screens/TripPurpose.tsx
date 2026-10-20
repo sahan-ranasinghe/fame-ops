@@ -10,6 +10,7 @@ import type { FleetError } from "../transport/types";
 import { Notice, Pill } from "../ui/basics";
 import { useToast } from "../ui/Toast";
 import { PURPOSE_TEXT, purposeDoneText, purposeInput, tripTags } from "./tripPurposeLogic";
+import { ChoiceChip } from "../ui/Select";
 
 export function TripTags({ t }: { t: { kind?: TaskKind; purpose?: TripPurpose } }) {
   const tags = tripTags(t);
@@ -75,10 +76,10 @@ export function TripPurposeCard({ taskId, purpose, driver, charged, onSaved }: {
             <span className="lab" id={`purpose-${taskId}`}>Company or personal</span>
             <div className="chips" role="group" aria-labelledby={`purpose-${taskId}`}>
               {(["company", "personal"] as const).map((p) => (
-                <button key={p} type="button" className="chip" aria-pressed={choice === p} disabled={busy}
+                <ChoiceChip key={p} selected={choice === p} disabled={busy}
                   onClick={() => { setChoice(p); setMsg(null); if (p === "personal") setProject(""); }}>
                   {PURPOSE_TEXT[p]}
-                </button>
+                </ChoiceChip>
               ))}
             </div>
           </div>

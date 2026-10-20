@@ -5,9 +5,10 @@
 // kept on the phone and sent before the start without one; a refusal is said in words and the choice stays open.
 
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 import { Check } from '@/components/icons';
+import { ChoiceRow } from '@/components/patterns/Select';
 import { Button, Card, Mono, Notice, Txt } from '@/components/ui';
 import type { VehicleChoice } from '@/lib/api';
 import { typeWord } from '@/lib/taskPreview';
@@ -88,35 +89,37 @@ export function VehicleConfirm({ task, onBusy, onConfirmed }: {
       )}
 
       {picking && (
-        <View style={{ gap: 8 }}>
+        <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
           {choices === null ? (
             <ActivityIndicator color={colors.ink} style={{ marginVertical: 12 }} />
           ) : (
             list.map((v) => {
-              const fits = vehicleFits(task, v) === 'ok';
+              const fit = vehicleFits(task, v);
+              const fits = fit === 'ok';
               const selected = picked === v.id;
               const tags = [
                 v.mine_now ? t('vehicle.yours') : v.held_by ? t('vehicle.withDriver', { name: v.held_by }) : null,
                 v.in_garage ? t('vehicle.inGarage') : null,
               ].filter(Boolean).join(' · ');
+              // The shared ChoiceRow (patterns/Select): the radio, the tint and the border; a vehicle that does not fit is
+              // greyed, not tappable, and says why.
               return (
-                <Pressable
+                <ChoiceRow
                   key={v.id}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: selected, disabled: !fits }}
+                  selected={selected}
+                  disabled={!fits}
+                  disabledReason={fits ? undefined : refusalWords(t, fit, v.reg_no, type)}
                   onPress={() => {
                     setProblem(null);
                     setPicked(v.id);
                   }}
-                  style={[styles.row, selected && styles.selected, !fits && { opacity: 0.55 }]}
+                  accessibilityLabel={v.reg_no}
+                  testID={`confirm-vehicle-${v.id}`}
                 >
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <View style={styles.plate}><Mono size={18} bold>{v.reg_no}</Mono></View>
-                    {v.make_model && <Txt variant="muted" numberOfLines={1}>{v.make_model}</Txt>}
-                    {tags !== '' && <Txt variant="small" color={v.in_garage ? colors.amberText : colors.muted}>{tags}</Txt>}
-                  </View>
-                  {selected && <Check size={24} color={colors.ink} strokeWidth={3} />}
-                </Pressable>
+                  <View style={styles.plate}><Mono size={18} bold>{v.reg_no}</Mono></View>
+                  {v.make_model && <Txt variant="muted" numberOfLines={1}>{v.make_model}</Txt>}
+                  {tags !== '' && <Txt variant="small" color={v.in_garage ? colors.amberText : colors.muted}>{tags}</Txt>}
+                </ChoiceRow>
               );
             })
           )}
@@ -131,17 +134,5 @@ export function VehicleConfirm({ task, onBusy, onConfirmed }: {
 }
 
 const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    minHeight: 72,
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: colors.line,
-    backgroundColor: colors.card,
-  },
-  selected: { borderColor: colors.ink, borderWidth: 2.5 },
   plate: { alignSelf: 'flex-start', borderWidth: 1.5, borderColor: colors.ink, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 1 },
 });

@@ -4,6 +4,7 @@ import { normalisePermissions, type Permission, PERMISSION_TEXT, PERMISSIONS, PR
 import { waLink } from "../../lib/format";
 import { useToast } from "../../ui/Toast";
 import { type Preset, presetOf, togglePermission, VIEW_LOCKED_HINT, viewLocked } from "./usersLogic";
+import { ChoiceChip } from "../../ui/Select";
 
 const PRESET_KEYS = Object.keys(PRESETS) as Preset[];
 
@@ -41,9 +42,9 @@ export function PermissionPicker({ value, onChange, idPrefix }: { value: Permiss
       <span className="lab">Permissions</span>
       <div className="presets" role="group" aria-label="Presets">
         {PRESET_KEYS.map((k) => (
-          <button key={k} type="button" className="chip" aria-pressed={current === k} onClick={() => onChange([...PRESETS[k].permissions])}>{PRESETS[k].label}</button>
+          <ChoiceChip key={k} selected={current === k} onClick={() => onChange([...PRESETS[k].permissions])}>{PRESETS[k].label}</ChoiceChip>
         ))}
-        <button type="button" className="chip" aria-pressed={current === "admin"} onClick={() => onChange([...PERMISSIONS])}>Admin (everything)</button>
+        <ChoiceChip selected={current === "admin"} onClick={() => onChange([...PERMISSIONS])}>Admin (everything)</ChoiceChip>
       </div>
       <div className="perm-list">
         {PERMISSIONS.map((p) => {

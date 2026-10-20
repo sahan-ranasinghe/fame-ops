@@ -10,6 +10,7 @@ import { Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { ChevronDown, ChevronUp, X } from '@/components/icons';
 import { Chips, MoreDetails, ToggleRow } from '@/components/office/Controls';
+import { ChoiceChip } from '@/components/patterns/Select';
 import { PlaceSearch, type Picked } from '@/components/office/PlaceSearch';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Field, Mono, Txt } from '@/components/ui';
@@ -201,11 +202,9 @@ export default function TripWhere() {
                   <View style={styles.mark}><Mono size={14} bold color="#ffffff">{String(i + 1 + (f.startPax ? 1 : 0) + (d.reached ?? 0))}</Mono></View>
                   <View style={{ flex: 1 }}>
                     {box === 'picked' ? <Txt variant="strong" numberOfLines={2}>{s.place}</Txt> : <Txt variant="muted">{s.place.trim() ? t('office.trip.typing', { text: s.place.trim() }) : t('office.trip.stopNoPlace')}</Txt>}
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                    <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                       {TYPES.map((type) => (
-                        <Pressable key={type} accessibilityRole="button" accessibilityState={{ selected: s.type === type }} onPress={() => patchStop(s.key, { type })} style={[styles.chip, s.type === type && styles.chipOn]}>
-                          <Txt variant="strong" size={14} color={s.type === type ? '#ffffff' : colors.ink}>{t(`office.trip.type_${type}`)}</Txt>
-                        </Pressable>
+                        <ChoiceChip key={type} small label={t(`office.trip.type_${type}`)} selected={s.type === type} onPress={() => patchStop(s.key, { type })} />
                       ))}
                     </View>
                   </View>
@@ -233,9 +232,7 @@ export default function TripWhere() {
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                   <Txt variant="small">{t('office.trip.what')}</Txt>
                   {WHATS.map((w) => (
-                    <Pressable key={w} accessibilityRole="button" accessibilityState={{ selected: s.what === w }} onPress={() => patchStop(s.key, { what: s.what === w ? '' : w })} style={[styles.chip, s.what === w && styles.chipOn]}>
-                      <Txt variant="strong" size={14} color={s.what === w ? '#ffffff' : colors.ink}>{t(`office.trip.what_${w}`)}</Txt>
-                    </Pressable>
+                    <ChoiceChip key={w} small label={t(`office.trip.what_${w}`)} selected={s.what === w} onPress={() => patchStop(s.key, { what: s.what === w ? '' : w })} />
                   ))}
                 </View>
                 {/* The site's "Details": a pin typed by hand (a pasted one in the search box also works) and the note for the driver. */}
@@ -263,8 +260,7 @@ export default function TripWhere() {
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
   mark: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
-  chip: { minHeight: 36, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chip: { minHeight: 36, paddingHorizontal: 12, borderRadius: 999, borderWidth: 2, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
   iconBtn: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   addStop: { minHeight: 56, borderRadius: 16, borderWidth: 2, borderStyle: 'dashed', borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
 });

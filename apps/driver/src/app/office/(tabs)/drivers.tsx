@@ -15,6 +15,7 @@ import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, Vi
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageCircle, Phone, Plus } from '@/components/icons';
+import { ChoiceChip, ChoiceChips } from '@/components/patterns/Select';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
@@ -91,11 +92,9 @@ export default function DriversTab() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={subtitle} title={t('office.drivers.title')}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, gap: 10 }}>
-          <View style={styles.seg}>
+          <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
             {(['now', 'week'] as const).map((k) => (
-              <Pressable key={k} accessibilityRole="button" accessibilityState={{ selected: view === k }} onPress={() => setView(k)} style={[styles.segBtn, view === k && { backgroundColor: '#ffffff' }]}>
-                <Txt variant="strong" size={15} color={view === k ? colors.ink : '#b9bec6'}>{t(`office.drivers.${k}`)}</Txt>
-              </Pressable>
+              <ChoiceChip key={k} onDark label={t(`office.drivers.${k}`)} selected={view === k} onPress={() => setView(k)} />
             ))}
           </View>
         </View>
@@ -105,10 +104,7 @@ export default function DriversTab() {
               const on = filter === k;
               const n = board.data?.counts[k];
               return (
-                <Pressable key={k} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => setFilter(k)} style={[styles.chip, on && styles.chipOn]}>
-                  <Txt variant="strong" size={14} color={on ? colors.ink : '#d9dce1'}>{t(`office.drivers.filter.${k}`)}</Txt>
-                  {n !== undefined && <Mono size={14} bold color={on ? colors.ink : '#d9dce1'}>{`· ${n}`}</Mono>}
-                </Pressable>
+                <ChoiceChip key={k} onDark small label={t(`office.drivers.filter.${k}`)} selected={on} onPress={() => setFilter(k)} after={n !== undefined ? <Mono size={14} bold color={on ? colors.blue : '#d9dce1'}>{`· ${n}`}</Mono> : undefined} />
               );
             })}
           </ScrollView>
@@ -388,27 +384,12 @@ function NotAvailableSheet({ visible, driver, days, date: firstDate, dayLabel, o
   );
 }
 
-/** A row of small chips, one selected. */
+/** A row of small chips, one selected: the shared ChoiceChips (the check, the tint, the border). */
 function ChipRow<K extends string>({ options, value, onChange }: { options: { key: K; label: string }[]; value: K; onChange: (k: K) => void }) {
-  return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-      {options.map((o) => {
-        const on = o.key === value;
-        return (
-          <Pressable key={o.key} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => onChange(o.key)} style={[styles.pick, on && { backgroundColor: colors.ink, borderColor: colors.ink }]}>
-            <Txt variant="strong" size={14} color={on ? '#ffffff' : colors.ink}>{o.label}</Txt>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
+  return <ChoiceChips options={options} value={value} onChange={onChange} small />;
 }
 
 const styles = StyleSheet.create({
-  seg: { flexDirection: 'row', backgroundColor: colors.darkSurface, borderRadius: 10, padding: 3, gap: 3 },
-  segBtn: { minWidth: 72, minHeight: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: '#3a4048' },
-  chipOn: { backgroundColor: colors.amber, borderColor: colors.amber },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 12, minHeight: 72 },
   dot: { position: 'absolute', right: -1, bottom: -1, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#ffffff' },
   dotSmall: { width: 10, height: 10, borderRadius: 5 },
@@ -424,6 +405,5 @@ const styles = StyleSheet.create({
   shade: { flex: 1, backgroundColor: 'rgba(10,12,14,0.45)', justifyContent: 'flex-end' },
   sheet: { maxHeight: '90%', backgroundColor: colors.page, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 10, gap: 10 },
   handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#c9c6bc', alignSelf: 'center' },
-  pick: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   input: { minHeight: 48, borderWidth: 1.5, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 12, fontSize: 17, color: colors.ink, backgroundColor: colors.card },
 });

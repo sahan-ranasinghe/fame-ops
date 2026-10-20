@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft } from '@/components/icons';
 import { useLeaveGuard } from '@/components/navigation';
 import { useDateLabel } from '@/components/task';
+import { ChoiceChip, ChoiceRow } from '@/components/patterns/Select';
 import { Button, Card, Field, Notice, Txt } from '@/components/ui';
 import { ApiError, setMyUnavailability } from '@/lib/api';
 import {
@@ -151,22 +152,17 @@ export default function AvailabilityEditScreen() {
   );
 }
 
-/** A big choice button (a day, a reason). */
+/** A big choice button (a day, a reason): the shared ChoiceChip (the check, the tint, the border). */
 function Chip({ on, label, onPress, wide = false }: { on: boolean; label: string; onPress: () => void; wide?: boolean }) {
-  return (
-    <Pressable accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={onPress} style={[styles.chip, wide && styles.wide, on && styles.chipOn]}>
-      <Txt variant="strong" size={17} color={on ? '#ffffff' : colors.ink}>{label}</Txt>
-    </Pressable>
-  );
+  return <ChoiceChip selected={on} label={label} onPress={onPress} style={[styles.chip, wide && styles.wide]} />;
 }
 
-/** One of the "when" choices, as the reasons sheet shows its options. */
+/** One of the "when" choices, as the reasons sheet shows its options: the shared ChoiceRow (the radio). */
 function Option({ on, label, onPress }: { on: boolean; label: string; onPress: () => void }) {
   return (
-    <Pressable accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={onPress} style={[styles.option, on && styles.optionOn]}>
-      <View style={[styles.radio, on && { borderColor: colors.ink, backgroundColor: colors.ink }]} />
-      <Txt variant="strong" size={18} style={{ flex: 1 }}>{label}</Txt>
-    </Pressable>
+    <ChoiceRow selected={on} onPress={onPress} accessibilityLabel={label}>
+      <Txt variant="strong" size={18}>{label}</Txt>
+    </ChoiceRow>
   );
 }
 
@@ -175,15 +171,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   back: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center' },
   chips: { gap: 8, paddingRight: 8 },
-  chip: {
-    minHeight: 56, paddingHorizontal: 16, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  wide: { flexGrow: 1, minWidth: '45%' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chip: { minHeight: 52, borderRadius: 12, paddingHorizontal: 16 },
+  wide: { flexGrow: 1, minWidth: '45%', justifyContent: 'center' },
   reasons: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   times: { flexDirection: 'row', gap: 12 },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, padding: 14, minHeight: 56 },
-  optionOn: { borderColor: colors.ink },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2.5, borderColor: '#8b9198' },
 });

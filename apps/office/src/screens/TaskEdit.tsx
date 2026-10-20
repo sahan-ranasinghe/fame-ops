@@ -33,6 +33,7 @@ import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOn
 import { knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 import { TONE, useBoardQuery, useTask } from "./TaskDetail";
 import { leaveIn, TaskSummary } from "./TaskSummary";
+import { ChoiceChip } from "../ui/Select";
 
 interface EditForm {
   driver: string;
@@ -333,14 +334,14 @@ export function TaskEdit() {
             <div className="chips">
               {p.suggestions.drivers.length
                 ? p.suggestions.drivers.map((d) => (
-                  <button type="button" key={d.username ?? d.name} className="chip" aria-pressed={!!d.username && f.driver === d.username} title={d.availability} onClick={() => pickDriver(d.username ?? "")}>{d.name}</button>
+                  <ChoiceChip key={d.username ?? d.name} selected={!!d.username && f.driver === d.username} title={d.availability} onClick={() => pickDriver(d.username ?? "")}>{d.name}</ChoiceChip>
                 ))
                 : <span className="muted small">No driver is free then.</span>}
             </div>
             <div className="chips">
               {p.suggestions.vehicles.length
                 ? p.suggestions.vehicles.map((v) => (
-                  <button type="button" key={v.reg_no} className="chip" aria-pressed={f.vehicle === v.reg_no} title={v.availability} onClick={() => set("vehicle", v.reg_no)}>{v.reg_no}</button>
+                  <ChoiceChip key={v.reg_no} selected={f.vehicle === v.reg_no} title={v.availability} onClick={() => set("vehicle", v.reg_no)}>{v.reg_no}</ChoiceChip>
                 ))
                 : <span className="muted small">No vehicle is free then.</span>}
             </div>

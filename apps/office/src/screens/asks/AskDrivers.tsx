@@ -12,7 +12,8 @@ import { useQuery } from "../../data/useQuery";
 import { today } from "../../lib/format";
 import { errText } from "../../transport/errors";
 import { canOpenTask, type FleetError } from "../../transport/types";
-import { Avatar, Chips, Notice, Pill } from "../../ui/basics";
+import { Chips, Notice, Pill } from "../../ui/basics";
+import { ChoiceCard, SelectableRow } from "../../ui/Select";
 import { DraftBanner } from "../../ui/DraftBanner";
 import { Icon } from "../../ui/icons";
 import { PageTop, StickyActions } from "../../ui/Page";
@@ -88,11 +89,10 @@ function AskDriversForm() {
             <span className="lab">The question</span>
             <div className="ask-kinds">
               {ASK_KINDS.map((k) => (
-                <button key={k.kind} type="button" className="ask-kind" role="radio" aria-checked={f.kind === k.kind} onClick={() => set("kind", k.kind)}
-                  data-testid={`ask-kind-${k.kind}`}>
+                <ChoiceCard key={k.kind} className="ask-kind" selected={f.kind === k.kind} onPick={() => set("kind", k.kind)} testId={`ask-kind-${k.kind}`}>
                   <b>{k.title}</b>
                   <span className="sub">{k.sub}</span>
-                </button>
+                </ChoiceCard>
               ))}
             </div>
           </div>
@@ -183,14 +183,10 @@ function DriverPicker({ board, loading, error, picked, onToggle, onDone }: {
             const id = idOf(d);
             const on = picked.includes(id);
             return (
-              <label key={id} className="row ask-pick-row" data-testid="picker-row">
-                <input type="checkbox" checked={on} onChange={() => onToggle(id)} aria-label={d.name} />
-                <Avatar name={d.name} src={d.photo_url} small />
-                <span className="grow">
-                  <span className="name">{d.name}{d.free_now && <Pill tone="ok">Free now</Pill>}</span>
-                  <span className="sub" style={{ display: "block" }}>{d.status.text}</span>
-                </span>
-              </label>
+              <SelectableRow key={id} selected={on} onToggle={() => onToggle(id)} label={d.name} testId="picker-row" className="ask-pick-row">
+                <span className="name">{d.name}{d.free_now && <Pill tone="ok">Free now</Pill>}</span>
+                <span className="sub" style={{ display: "block" }}>{d.status.text}</span>
+              </SelectableRow>
             );
           })}
           {!rows.length && <div className="row muted small">{text.trim() ? "No driver by that name." : "No active drivers."}</div>}

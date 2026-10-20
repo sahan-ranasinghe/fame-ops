@@ -3,9 +3,10 @@
 // or Cancel closes it.
 
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ChoiceRow } from '@/components/patterns/Select';
 import { Button, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
@@ -54,14 +55,13 @@ export function ReasonSheet<R extends string>({ visible, title, question, notePl
           <Txt variant="heading">{t(title)}</Txt>
           {subtitle ? <Txt variant="muted">{subtitle}</Txt> : null}
           <Txt variant="strong" style={{ marginTop: 6 }}>{t(question)}</Txt>
-          <View style={{ gap: 8 }}>
+          <View accessibilityRole="radiogroup" style={{ gap: 8 }}>
             {reasons.map((r) => {
               const on = reason === r.value;
               return (
-                <Pressable key={r.value} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => setReason(r.value)} style={[styles.option, on && styles.optionOn]}>
-                  <View style={[styles.radio, on && { borderColor: colors.ink, backgroundColor: colors.ink }]} />
+                <ChoiceRow key={r.value} selected={on} onPress={() => setReason(r.value)} accessibilityLabel={t(r.label)} testID={`reason-${r.value}`}>
                   <Txt variant="strong" size={18}>{t(r.label)}</Txt>
-                </Pressable>
+                </ChoiceRow>
               );
             })}
           </View>
@@ -84,8 +84,5 @@ export function ReasonSheet<R extends string>({ visible, title, question, notePl
 const styles = StyleSheet.create({
   shade: { flex: 1, backgroundColor: 'rgba(10,12,14,0.45)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12 },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, padding: 14 },
-  optionOn: { borderColor: colors.ink },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2.5, borderColor: '#8b9198' },
   input: { minHeight: 52, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 14, fontSize: 17, color: colors.ink },
 });

@@ -144,7 +144,7 @@ console.log('\n== The sheet and the screens (read as text) ==');
     'the answers through ask_answers(ask_id) every 10 s, only while the sheet is open and someone has still to answer');
   check(/onUse\(target\.username as string\); onClose\(\);/.test(sheet) && /answer\?\.use && onUse && target\.username/.test(sheet), 'Use: only on a Yes, only when the caller can pick; it picks and closes');
   check(/answer\?\.key === 'callMe' && answer\.call &&/.test(sheet) && /answer\?\.key === 'location' && answer\.map &&/.test(sheet), 'Call only with a number, Map only with a link (no dead button)');
-  check(/box: \{ width: 48, height: 48/.test(sheet) && /close: \{ width: 48, height: 48/.test(sheet), '48 px tick box and close button');
+  check(/<SelectableRow/.test(sheet) && /selected=\{on\}/.test(sheet) && /close: \{ width: 48, height: 48/.test(sheet), 'the shared SelectableRow (the whole row toggles; the check circle, the tint) and a 48 px close button');
   check(/setPicked\(allFree\(drivers\)\)/.test(sheet) && /setPicked\(\[\]\)/.test(sheet), '"All free · None"');
   check(/disabled=\{!canSend\(kind, picked, ctx\)\}/.test(sheet), 'Send disabled until it may be sent');
   check(/t\('office\.ask\.footer'\)/.test(sheet) && /t\('office\.ask\.footerTrip'\)/.test(sheet), 'the bottom line: "They answer with one tap…" (and "closes when the trip starts" for a trip question)');

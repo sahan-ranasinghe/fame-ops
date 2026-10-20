@@ -1,7 +1,7 @@
 // Building blocks shared by all screens, following the Fame Fleet design:
 // big targets, few words, strong contrast (readable in sunlight).
 
-import type { LucideIcon } from '@/components/icons';
+import { Check, type LucideIcon } from '@/components/icons';
 import type { ReactNode } from 'react';
 import {
   ActivityIndicator,
@@ -141,25 +141,27 @@ export function Field({ label, mono = false, style, ...input }: TextInputProps &
   );
 }
 
-/** Two choices side by side, as in "Did you add fuel?  Yes | No". */
+/** Two choices side by side, as in "Did you add fuel?  Yes | No". The picked one: a check, the blue chip tint and a 2 px
+ *  blue border (Material 3's segmented button; the selection rules in components/patterns/Select.tsx). */
 export function Segmented<T extends string>({ options, value, onChange }: {
   options: { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
 }) {
   return (
-    <View style={styles.segmented}>
+    <View accessibilityRole="radiogroup" style={styles.segmented}>
       {options.map((option) => {
         const on = option.value === value;
         return (
           <Pressable
             key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected: on }}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: on, selected: on }}
             onPress={() => onChange(option.value)}
-            style={[styles.segment, on && { backgroundColor: colors.ink }]}
+            style={[styles.segment, on && styles.segmentOn]}
           >
-            <Txt variant="button" size={18} color={on ? '#ffffff' : colors.ink}>{option.label}</Txt>
+            {on && <Check size={20} color={colors.blue} strokeWidth={3} />}
+            <Txt variant="button" size={18} color={on ? colors.blue : colors.ink}>{option.label}</Txt>
           </Pressable>
         );
       })}
@@ -223,6 +225,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.card,
   },
-  segment: { flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
+  segment: { flex: 1, minHeight: 56, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  segmentOn: { backgroundColor: colors.blueChip, borderColor: colors.blue },
   notice: { borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
 });

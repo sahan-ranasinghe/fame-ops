@@ -6,10 +6,11 @@
 // with get_settings alone the values are read. The laptop-only line at the bottom. The rules: office/peopleLogic.ts.
 
 import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 
 import { TimeInput } from '@/components/office/TimeInput';
 import { Toggle } from '@/components/office/PeopleParts';
+import { ChoiceRow } from '@/components/patterns/Select';
 import { Button, Txt } from '@/components/ui';
 import {
   cutoffValue, minutesValue, officePhoneValue, PERSONAL_TRIPS, type PersonalTrips, personalTripsValue, type QuickKey, QUICK_SETTINGS, type QuickRow, settingInput,
@@ -147,24 +148,20 @@ export default function QuickSettings() {
               <View style={{ gap: 8, paddingVertical: 10 }}>
                 <Txt variant="strong" size={17}>{t('office.people.personalTrips')}</Txt>
                 <Txt variant="small">{t('office.people.personalTripsHint')}</Txt>
-                <View style={{ gap: 6 }}>
+                <View accessibilityRole="radiogroup" style={{ gap: 6 }}>
                   {PERSONAL_TRIPS.map((v: PersonalTrips) => {
                     const on = trips === v;
                     return (
-                      <Pressable
+                      <ChoiceRow
                         key={v}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: on, disabled: !canEdit || !!rows.driver_personal_trips?.busy }}
+                        selected={on}
                         disabled={!canEdit || !!rows.driver_personal_trips?.busy}
                         onPress={() => void save('driver_personal_trips', v)}
-                        style={[styles.option, on && styles.optionOn]}
+                        testID={`personal-trips-${v}`}
                       >
-                        <View style={[styles.radio, on && { borderColor: colors.ink, backgroundColor: colors.ink }]} />
-                        <View style={{ flex: 1, gap: 2 }}>
-                          <Txt variant="strong" size={16}>{t(`office.people.trips.${v}`)}</Txt>
-                          <Txt variant="small">{t(`office.people.trips.${v}Hint`)}</Txt>
-                        </View>
-                      </Pressable>
+                        <Txt variant="strong" size={16}>{t(`office.people.trips.${v}`)}</Txt>
+                        <Txt variant="small">{t(`office.people.trips.${v}Hint`)}</Txt>
+                      </ChoiceRow>
                     );
                   })}
                 </View>
@@ -223,8 +220,5 @@ export default function QuickSettings() {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, padding: 12, backgroundColor: colors.card, minHeight: 56 },
-  optionOn: { borderColor: colors.ink },
-  radio: { width: 22, height: 22, borderRadius: 11, borderWidth: 2.5, borderColor: '#8b9198' },
   number: { minHeight: 52, width: 92, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, fontSize: 22, fontFamily: fonts.monoSemiBold, color: colors.ink, backgroundColor: colors.card },
 });
