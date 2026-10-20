@@ -477,7 +477,7 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   await page.goto("/settings/notifications/mine");
   await expect(page.getByRole("switch")).toHaveCount(7);
   await expect(page.getByRole("switch", { name: "Driver on the way" })).toBeChecked();
-  await expect(page.getByRole("switch", { name: "Request decided" })).toBeChecked();
+  await expect(page.getByRole("switch", { name: "Request decided", exact: true })).toBeChecked();
   await page.goto("/settings/notifications/sounds");
   await expect(page.getByRole("checkbox", { name: "Play sounds" })).toBeChecked();
 
@@ -974,6 +974,15 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   // The request is approved, booked directly; its timeline says so; Cancel booking with a reason.
   await page.goto("/requests");
   await page.getByRole("button", { name: "Approved", exact: true }).click();
+  // Hotfix O2-H2, Part 3: the picked chip looks picked (pressed, the blue tint and 2 px border, a check before the words),
+  // the others do not.
+  const picked = page.getByRole("button", { name: "Approved", exact: true });
+  await expect(picked).toHaveAttribute("aria-pressed", "true");
+  await expect(picked).toHaveCSS("border-top-width", "2px");
+  await expect(picked).toHaveCSS("border-top-color", "rgb(30, 79, 160)");
+  await expect(picked).toHaveCSS("background-color", "rgb(230, 237, 248)");
+  expect(await picked.evaluate((el) => getComputedStyle(el, "::before").content)).not.toBe("none");
+  await expect(page.getByRole("button", { name: "Waiting", exact: true })).toHaveAttribute("aria-pressed", "false");
   await page.locator("tr", { hasText: "Someone from HR" }).first().click();
   // Hotfix 3 (L3): the row keeps the list's filter in its link (the list beside the detail keeps it).
   await expect(page).toHaveURL(/\/requests\/[0-9a-f-]+(\?.*)?$/);
@@ -1940,7 +1949,9 @@ test("Part 3b: the Drivers board and its week view, a question answered live, th
   await page.getByTestId("board-ask").click();
   const sheet = page.getByRole("dialog", { name: "Ask drivers" });
   await sheet.getByRole("button", { name: "None", exact: true }).click();
-  await sheet.getByRole("checkbox", { name: `Ask ${driver.name}` }).check();
+  // Hotfix O2-H2 (Part 3): a person taps the row (WhatsApp's "Forward to"); the row's box is then ticked.
+  await sheet.getByTestId("sheet-row").filter({ hasText: driver.name }).click();
+  await expect(sheet.getByRole("checkbox", { name: `Ask ${driver.name}` })).toBeChecked();
   await sheet.getByTestId("sheet-kind-free_for_trip").click();
   const tomorrow = new Date(Date.now() + 5.5 * 3600_000 + 86400_000).toISOString().slice(0, 10);
   await sheet.getByLabel("Day").fill(tomorrow);
