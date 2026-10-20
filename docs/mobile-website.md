@@ -7,7 +7,7 @@ The office site has two builds on the same address (https://fame-fleet.pages.dev
 - **the mobile site** at `/m/`: the web build of Office mode, the same screens the office uses in the Fame Fleet app
   (`apps/driver/src/app/office`), built with Expo for web (react-native-web). The driver's side of the app is never in it.
 
-A phone opening any page of the site is sent to the mobile site; "Switch to desktop view" (Profile and More) brings the
+Held until Sahan has tested `/m/` on his phone (`apps/office/src/app/viewChoice.ts` `PHONE_REDIRECT = false`; on = `true` and a deploy): a phone stays on the desktop site and reaches the mobile site by its address or by "Switch to mobile view". Once on, a phone opening any page of the site is sent to the mobile site; "Switch to desktop view" (Profile and More) brings the
 desktop site and is remembered on that browser; the desktop site has "Switch to mobile view" for a phone that chose it.
 
 ## Where it stands (20 October 2026)
