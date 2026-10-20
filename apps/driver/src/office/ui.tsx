@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Bell, ChevronLeft } from '@/components/icons';
 import { LanguagePill } from '@/components/LanguageSwitch';
+import { ListError } from '@/components/patterns/ListState';
 import { Button, Mono, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -214,6 +215,18 @@ export function ErrorNotice({ error, onRetry, onSignIn }: { error: FleetError; o
       {e.fix === 'signin' && onSignIn && <Button kind="outline" label={t('office.common.signInAgain')} onPress={onSignIn} style={{ minHeight: 48 }} />}
     </View>
   );
+}
+
+/**
+ * The list pattern's error (components/patterns/ListState.tsx ListError) in Office mode's words: the sentence from
+ * errorText with Try again; with rows on screen (`stale`) "Couldn't refresh" over them. A signed-out session keeps
+ * ErrorNotice (Sign in again instead of Try again).
+ */
+export function ListFailed({ error, onRetry, onSignIn, stale = false }: { error: FleetError; onRetry: () => void; onSignIn?: () => void; stale?: boolean }) {
+  const { t } = useApp();
+  const e = errorText(error);
+  if (e.fix === 'signin') return <ErrorNotice error={error} onRetry={onRetry} onSignIn={onSignIn} />;
+  return <ListError message={e.words ? t(e.key, { words: e.words }) : t(e.key)} onRetry={onRetry} stale={stale} />;
 }
 
 /** A line of text when a list is empty. */

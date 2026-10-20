@@ -133,6 +133,14 @@ console.log('\nThe screens as text');
   check(review.includes("tool: 'update_task_stops'") && review.includes("plan_version: d.planVersion ?? 0") && review.includes("stopsInput(f.stops, (d.reached ?? 0) + (f.startPax ? 1 : 0))"), 'Review in mode stops sends update_task_stops with the plan version and the offset');
   check(review.includes("if (!d.running && f.leaveBy.trim()) input.leave_by = f.leaveBy.trim();") && where.includes("leaveBy: p.task.leave_by_source === 'manual' && p.task.status === 'assigned' ? hhmm(p.task.leave_by) : ''"), 'a leave time typed by hand is sent; a running task\'s leave-by is never sent');
   check(when.includes("nextStep('when', draft.mode)"), 'When asks the mode for its next step');
+  // The list pattern (docs/ui-patterns.md §5) on the task's screens, Give it a driver, Approve a request and the driver rows.
+  const give = read('app/office/task/[id]/driver.tsx');
+  const request = read('app/office/request/[id].tsx');
+  const rows = read('components/office/DriverRows.tsx');
+  for (const [name, src] of [['the task page', page], ['Swap vehicle', swap], ['Give it a driver', give], ['Approve a request', request], ['the driver rows', rows]] as const) {
+    check(src.includes('<SkeletonRows') && src.includes('<ListFailed') && src.includes('<ListEmpty') && !src.includes('<Loading') && !src.includes('<Empty '), `${name}: skeleton rows, the error with Try again, the empty state`);
+  }
+  check(page.includes("busy={busy === 'cancel'}") && page.includes("busy={busy === 'reopen'}") && !page.includes("t('office.task.working')"), 'Cancel and Reopen show their spinner on the button pressed (no "Working…" line)');
 }
 
 console.log('\nStrings in both languages');

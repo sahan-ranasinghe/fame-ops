@@ -7,10 +7,11 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { atParts, DAY_ORDER, dayKey, filterInbox, groupByDay, inboxLine, kindTone, markRead, unreadAfter } from '../src/office/inboxLogic';
+import { atParts, DAY_ORDER, dayKey, filterInbox, groupByDay, inboxArgs, inboxChoice, inboxFilterDefs, inboxLine, kindTone, markRead, unreadAfter } from '../src/office/inboxLogic';
 import { routeForUrl } from '../src/office/nav';
 import {
-  bucketCounts, bucketOf, canWithdraw, changedText, TRIP_BUCKETS, tripBuckets, tripKey, tripLine, tripRoute, TRIPS_DAYS_AHEAD, TRIPS_DAYS_BACK, WITHDRAW_REASONS,
+  bucketCounts, bucketOf, canWithdraw, changedText, TRIP_BUCKETS, tripBuckets, tripKey, tripLine, tripRoute, tripsArgs, tripsChoice, tripsFilterDefs, TRIPS_DAYS_AHEAD, TRIPS_DAYS_BACK,
+  WITHDRAW_REASONS,
   withdrawReason,
 } from '../src/office/tripsLogic';
 import type { CreatedTaskCard, InboxItem, RequestCard, TripLive } from '../src/office/types';
@@ -65,6 +66,9 @@ console.log('\n== Notifications: the day groups ==');
   check(same(filterInbox(items, 'all').map((i) => i.id), [1, 2, 3, 4, 5]), 'All shows everything');
   check(same(filterInbox(items, 'unread').map((i) => i.id), [1, 4, 5]), 'Unread shows only what is not read');
   check(same(groupByDay(filterInbox(items, 'unread'), TODAY).map((g) => g.key), ['today', 'earlier']), 'Unread then grouped: Yesterday (all read) disappears');
+  const idefs = inboxFilterDefs(3, (k) => k);
+  check(idefs.length === 1 && idefs[0].default === 'all' && same(idefs[0].options.map((o) => [o.value, o.count]), [['all', undefined], ['unread', 3]]), 'the Filter sheet: All or Unread, the unread count beside it');
+  check(inboxChoice({ show: 'unread' }) === 'unread' && inboxChoice({}) === 'all' && same(inboxArgs(50), { limit: 50 }) && same(inboxArgs(50, ' kamal '), { limit: 50, search: 'kamal' }), 'my_inbox: the page as before, the search only when typed');
   const one = markRead(items, [1]);
   check(one[0].read && !one[3].read && !one[4].read && one[1] === items[1], 'a tap marks that row read and leaves the others as they are (same objects)');
   check(markRead(items, 'all').every((i) => i.read), 'Mark all read marks every row');
@@ -141,6 +145,11 @@ console.log('\n== My trips: the buckets ==');
   check(same(tripBuckets(trips, 'done').map((g) => g.key), ['done']) && tripBuckets(trips, 'done')[0].trips.length === 4, 'Done alone: one section with its four');
   check(tripBuckets([request('r1', 'waiting')], 'done').length === 0, 'a filter with nothing in it: no section');
   check(tripBuckets([], 'all').length === 0, 'no trips: no sections');
+  const tdefs = tripsFilterDefs(trips, (k) => k);
+  const tc = bucketCounts(trips);
+  check(tdefs.length === 1 && same(tdefs[0].options.map((o) => [o.value, o.count]), [['all', trips.length], ['waiting', tc.waiting], ['coming', tc.coming], ['done', tc.done]]) && tdefs[0].options[1].label === 'office.trips.waiting', 'the Filter sheet: All and the buckets with their counts');
+  check(tripsChoice({ show: 'done' }) === 'done' && tripsChoice({ show: 'x' }) === 'all' && tripsFilterDefs(undefined, (k) => k)[0].options.every((o) => o.count === undefined), 'the choice read back; no counts before the answer');
+  check(same(tripsArgs('2026-10-20', 100), { from: '2026-09-20', to: '2026-12-19', include: 'all', limit: 100 }) && same(tripsArgs('2026-10-20', 100, ' galle '), { from: '2026-09-20', to: '2026-12-19', include: 'all', limit: 100, search: 'galle' }), 'my_trips: 30 days back to 60 ahead as before, the search only when typed');
 
   console.log('\n== My trips: the line, Withdraw and where a row opens ==');
   check(tripLine(request('a', 'waiting', { back_by: '17:00', need: '1 pax' }), 'back by') === 'Tue 20 Oct 11:00 · back by 17:00 · 1 pax', 'a request: when · back by · need');
@@ -164,6 +173,24 @@ console.log('\n== My trips: the buckets ==');
   check(tripRoute(request('r1', 'waiting'), approver) === '/office/request/r1', 'an approver opens the request page');
   check(tripRoute(request('r1', 'waiting'), ['view', 'request']) === null, 'a requester: no page in O1, the row is not tappable');
   check(tripRoute(task('t1', 'accepted'), approver) === null, 'a created task: no page in O1');
+}
+
+console.log('\n== The screens as text (Alerts, My trips, Home, Approve, Tasks) ==');
+{
+  const read = (p: string) => readFileSync(join(__dirname, '..', 'src', p), 'utf8');
+  const alerts = read('app/office/(tabs)/alerts.tsx');
+  const trips = read('app/office/(tabs)/trips.tsx');
+  const home = read('app/office/(tabs)/index.tsx');
+  const approve = read('app/office/(tabs)/approve.tsx');
+  const tasks = read('app/office/(tabs)/tasks.tsx');
+  check(/<FilterBar/.test(alerts) && /defs=\{inboxFilterDefs\(unreadN, t\)\}/.test(alerts) && /useTool<Inbox>\('my_inbox', inboxArgs\(LIMIT, search\)/.test(alerts) && !/FilterChips/.test(alerts), 'Alerts: the search bar (my_inbox\'s search) and one Filter button (All / Unread)');
+  check(/<FilterBar/.test(trips) && /defs=\{tripsFilterDefs\(q\.data \? trips : undefined, t\)\}/.test(trips) && /useTool<MyTrips>\('my_trips', tripsArgs\(today, LIMIT, search\)\)/.test(trips) && !/FilterChips/.test(trips), 'My trips: the search bar (my_trips\' search) and one Filter button with the counts');
+  check(/<DayStrip value=\{date\} onChange=\{setDate\}/.test(tasks) && !/max=/.test(tasks.split('<DayStrip')[1].split('/>')[0]) && /useTool<Board>\('task_board', \{ date, limit: 50 \}/.test(tasks) && !/ChevronLeft|prevDay/.test(tasks), 'Tasks: the week strip with Today and the calendar, days ahead allowed; task_board by the day as before');
+  check(/q\.data && q\.data\.date === date \? q\.data : null/.test(tasks), 'Tasks: another day\'s board is never shown under the day chosen (skeleton rows until it comes)');
+  for (const [name, src] of [['Alerts', alerts], ['My trips', trips], ['Home', home], ['Approve', approve], ['Tasks', tasks]] as const) {
+    check(/<SkeletonRows/.test(src) && /<ListFailed/.test(src) && /<ListEmpty/.test(src) && !/<Loading|<Empty /.test(src), `${name}: skeleton rows, the error with Try again, the empty state that says what next`);
+  }
+  check(/action=\{actions\.includes\('assign'\)/.test(home) && /action=\{me\.tools\.includes\('create_request'\)/.test(trips), 'an empty list\'s action only when the person may (Assign a task, Request a vehicle)');
 }
 
 console.log('\n== Strings (office.alerts / trips / profile in en.json and si.json) ==');

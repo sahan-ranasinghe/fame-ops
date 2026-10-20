@@ -20,8 +20,9 @@ import { alreadyDecided, availabilityArgs, canApprove, DECLINE_TEXT, decideCall,
 import { askTargets } from '@/office/askLogic';
 import { requestTitle } from '@/office/homeLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { Availability, AvailableDriver, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList } from '@/office/types';
-import { Avatar, BackHeader, Divider, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
+import type { Availability, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList } from '@/office/types';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -123,9 +124,9 @@ export default function ApproveRequest() {
         subtitle={card ? [card.kind === 'task' ? t('office.request.proposedTask') : t('office.request.request'), card.requested_by, card.asked].filter(Boolean).join(' · ') : undefined}
       />
       <Screen refreshing={q.refreshing} onRefresh={refresh} bottom={16}>
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !card && <ErrorNotice error={q.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-        {q.data && !card && <Empty text={t('office.request.notFound')} />}
+        {!q.data && !q.error && <SkeletonRows rows={3} lines={2} />}
+        {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        {q.data && !card && <ListEmpty text={t('office.request.notFound')} />}
         {card && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pill text={card.status === 'waiting' ? t('office.request.waitingYourOk') : card.status === 'changed' ? t('office.request.changedByRequester') : t(`office.status.${card.status}`)} tone={open ? 'amber' : card.status === 'approved' ? 'green' : 'red'} size={15} />
@@ -186,10 +187,10 @@ export default function ApproveRequest() {
             link={mayAsk && drivers.length > 0 ? t('office.ask.open') : undefined}
             onLink={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined}
           >
-            {!availArgs && <Empty text={t('office.request.noTime')} />}
-            {avail.loading && <Loading text={t('office.common.loading')} />}
-            {avail.error && !avail.data && <ErrorNotice error={avail.error} onRetry={refresh} />}
-            {avail.data && drivers.length === 0 && <Empty text={t('office.request.nobody')} />}
+            {!availArgs && <ListEmpty text={t('office.request.noTime')} />}
+            {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
+            {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+            {avail.data && drivers.length === 0 && <ListEmpty text={t('office.request.nobody')} />}
             {drivers.map((d, i) => {
               const on = d.username === pick && !!d.username;
               const pillKey = driverPill(d, bestUsername);

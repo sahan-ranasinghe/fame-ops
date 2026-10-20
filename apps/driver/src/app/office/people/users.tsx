@@ -7,12 +7,13 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
-import { SearchBox } from '@/components/office/PeopleParts';
-import { Button, Txt } from '@/components/ui';
+import { FilterBar } from '@/components/patterns/FilterBar';
+import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
+import { Button } from '@/components/ui';
 import { activePill, appendUsers, permissionWords, SEARCH_DEBOUNCE_MS, userLine, usersArgs } from '@/office/peopleLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, OfficeUser, OfficeUsers } from '@/office/types';
-import { Avatar, BackHeader, Divider, Empty, ErrorNotice, Loading, Pill, Row, Screen, Section } from '@/office/ui';
+import { Avatar, BackHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -65,19 +66,21 @@ export default function OfficeUsersPeople() {
       <BackHeader title={t('office.people.users')} subtitle={t('office.people.usersAbove')} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
         {canAdd && <Button kind="primary" label={t('office.people.addUser')} onPress={() => router.push('/office/people/user-new')} style={{ minHeight: 56 }} />}
-        <SearchBox value={text} onChange={setText} onSubmit={() => setSearch(text.trim())} placeholder={t('office.people.searchUsers')} clearLabel={t('office.people.clearSearch')} />
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !d && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        <FilterBar search={text} onSearch={(v) => { setText(v); if (!v) setSearch(''); }} placeholder={t('office.people.searchUsers')} defs={[]} values={{}} onApply={() => undefined} />
+        {!d && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {!d && !q.error && <SkeletonRows rows={5} lines={2} />}
+        {d && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {d && (
           <Section title={t('office.people.users')} count={d.total ?? d.users.length}>
             {d.users.length === 0
-              ? <Empty text={search ? t('office.people.emptySearch', { search }) : t('office.people.emptyUsers')} />
+              ? (search
+                ? <ListEmpty text={t('office.people.emptySearch', { search })} />
+                : <ListEmpty text={t('office.people.emptyUsers')} action={canAdd ? t('office.people.addUser') : undefined} onAction={canAdd ? () => router.push('/office/people/user-new') : undefined} />)
               : d.users.map((u, i) => <View key={u.email ?? `${u.name}-${i}`}>{i > 0 && <Divider />}{renderRow(u)}</View>)}
             {d.total !== undefined && d.total > d.users.length && (
               <View style={{ gap: 10, paddingTop: 12 }}>
-                <Txt variant="small" style={{ textAlign: 'center' }}>{t('office.people.showing', { n: d.users.length, total: d.total })}</Txt>
-                {more.error && <ErrorNotice error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
-                {d.next && <Button kind="outline" label={t('office.people.loadMore')} busy={more.busy} onPress={() => void loadMore()} style={{ minHeight: 52 }} />}
+                {more.error && <ListFailed error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
+                {d.next && <LoadMore shown={d.users.length} total={d.total} busy={more.busy} onPress={() => void loadMore()} />}
               </View>
             )}
           </Section>

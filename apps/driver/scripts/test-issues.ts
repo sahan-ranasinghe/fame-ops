@@ -4,8 +4,11 @@
 //
 //   npm run test:issues          (from apps/driver)
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import {
-  activeCount, appendPage, DEFAULT_STATUS, defaultSort, eventParts, fitsStatus, isActive, isSeverityFilter, isStatusFilter, issueActions, issueFacts, issuesArgs, kindText, LIMIT,
+  activeCount, appendPage, DEFAULT_STATUS, defaultSort, ISSUE_SORTS, issuesChoice, issuesFilterDefs, eventParts, fitsStatus, isActive, isSeverityFilter, isStatusFilter, issueActions, issueFacts, issuesArgs, kindText, LIMIT,
   linksFor, listRows, mergeIssue, noteRequired, patchHistory, REPORT_STATUS_KEYS, reportCategoryKey, rowLine, SEVERITY_FILTERS, severityCounts, severityTone, snoozeParts,
   STATUS_FILTERS, statusTone, updateInput, whoLine, type WhoWords,
 } from '../src/office/issuesLogic';
@@ -55,6 +58,29 @@ console.log('\n== The status chips and list_issues (issuesArgs) ==');
   check(isStatusFilter('in_progress') && !isStatusFilter('snoozed') && !isStatusFilter('all') && !isStatusFilter(undefined), 'isStatusFilter knows the five');
   check(isSeverityFilter('all') && isSeverityFilter('info') && !isSeverityFilter('bad'), 'isSeverityFilter knows all + three');
   check(same(SEVERITY_FILTERS, ['all', 'critical', 'warning', 'info']), 'the severity chips: All, Critical, Warning, Info');
+}
+
+console.log('\n== The Filter sheet and Sort (issuesFilterDefs, issuesChoice, the sort) ==');
+{
+  const tr = (k: string) => k;
+  const defs = issuesFilterDefs({ open: 3, in_progress: 2 }, { all: 5, critical: 1, warning: 3, info: 1 }, tr);
+  check(same(defs.map((d) => [d.key, d.kind, d.default]), [['status', 'single', 'active'], ['severity', 'single', 'all']]), 'two sections: the status (Active by default) and the severity (All)');
+  check(same(defs[0].options.map((o) => [o.value, o.count]), [['active', 5], ['open', 3], ['in_progress', 2], ['resolved', undefined], ['dismissed', undefined]]), 'the status with the server\'s counts where the answer has them');
+  check(same(defs[1].options.map((o) => o.count), [5, 1, 3, 1]) && defs[1].options[0].label === 'office.common.all' && defs[1].options[1].label === 'office.issues.severity.critical', 'the severity with the counts of the rows shown');
+  check(issuesFilterDefs(null, null, tr).every((d) => d.options.every((o) => o.count === undefined)), 'no counts before the first answer');
+  check(same(issuesChoice({ status: 'resolved', severity: 'info' }), { status: 'resolved', severity: 'info' }) && same(issuesChoice({ status: 'snoozed', severity: 'x' }), { status: 'active', severity: 'all' }), 'the choice read back (anything unknown is the default)');
+  check(same(ISSUE_SORTS, ['urgent', 'newest']), 'Sort: the tool\'s own two orders');
+  check(same(issuesArgs('active', '', undefined, 'newest'), { status: 'active', sort: 'newest', limit: 50 }) && same(issuesArgs('resolved', '', 'c3', 'urgent'), { status: 'resolved', sort: 'urgent', limit: 50, cursor: 'c3' }), 'a Sort picked goes as sort; none picked = the status\'s own order (as before)');
+}
+
+console.log('\n== The screen as text ==');
+{
+  const screen = readFileSync(join(__dirname, '..', 'src', 'app', 'office', 'issues', 'index.tsx'), 'utf8');
+  check(/<FilterBar/.test(screen) && /defs=\{defs\}/.test(screen) && /issuesFilterDefs\(d, d \? counts : null, t\)/.test(screen) && /sort=\{\{ value: sort, options: ISSUE_SORTS/.test(screen) && !/FilterChips/.test(screen), 'Issues: the search bar, one Filter button with the counts, Sort by the tool\'s order, no chip rows');
+  check(/useTool<IssuesList>\('list_issues', issuesArgs\(status, search, undefined, sortPick \?\? undefined\)\)/.test(screen), 'list_issues with the status, the search and the order picked (none = as before)');
+  check(/<SkeletonRows/.test(screen) && /<ListFailed stale/.test(screen) && /<LoadMore/.test(screen) && !/<Loading/.test(screen), 'skeleton rows first, "Couldn\'t refresh" over rows, Load more at the end');
+  const page = readFileSync(join(__dirname, '..', 'src', 'app', 'office', 'issues', '[id].tsx'), 'utf8');
+  check(/<SkeletonRows/.test(page) && /<ListFailed/.test(page) && /<Sheet/.test(page) && !/<Modal/.test(page) && !/<Loading/.test(page), 'the issue\'s page: skeleton rows, the error with Try again, the note sheet is the one bottom sheet');
 }
 
 console.log('\n== The rows under the chips (fitsStatus, listRows, severityCounts) ==');

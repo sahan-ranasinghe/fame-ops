@@ -20,7 +20,8 @@ import { colomboDate } from '@/lib/time';
 import { BAND_COLORS, boardPill, dayNumbers, entryParts, routeFrame, routeLines, routePoints, rowFrame, rowLines, segmentLine, segmentTone, SPEED_BANDS, stopMarks } from '@/office/driversLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriverProfile, DriverRoute, DriversBoard, FleetError, UnavailableEntry } from '@/office/types';
-import { Avatar, BackHeader, Divider, Empty, ErrorNotice, Loading, Pill, Screen, Section, type Tone } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -90,9 +91,9 @@ export default function DriverPage() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={d?.name ?? username} subtitle={d ? [t('office.drivers.profile.code', { code: d.code }), d.active ? '' : t('office.drivers.profile.switchedOff')].filter(Boolean).join(' · ') : undefined} />
       <Screen refreshing={profile.refreshing} onRefresh={refresh} bottom={24}>
-        {profile.loading && <Loading text={t('office.common.loading')} />}
-        {profile.error && !p && <ErrorNotice error={profile.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-        {profile.data && !d && <Empty text={t('office.drivers.profile.notFound')} />}
+        {!profile.data && !profile.error && <SkeletonRows rows={3} lines={2} />}
+        {profile.error && <ListFailed stale={!!p} error={profile.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        {profile.data && !d && <ListEmpty text={t('office.drivers.profile.notFound')} />}
         {d && (
           <View style={styles.card}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -145,7 +146,7 @@ export default function DriverPage() {
 
         {p && (
           <Section title={t('office.drivers.profile.notAvailable')} count={p.not_available.length}>
-            {p.not_available.length === 0 && <Empty text={t('office.drivers.profile.noEntries')} />}
+            {p.not_available.length === 0 && <ListEmpty text={t('office.drivers.profile.noEntries')} />}
             {p.not_available.map((e, i) => (
               <View key={e.id}>
                 {i > 0 && <Divider />}
@@ -177,8 +178,8 @@ export default function DriverPage() {
               <LegendItem color={BAND_COLORS.gap} text={t('office.drivers.route.legend.gap')} dashed />
               {lines.some((l) => l.band === 'estimated') && <LegendItem color={BAND_COLORS.estimated} text={t('office.drivers.route.legend.estimated')} dashed />}
             </View>
-            {route.loading && <Loading text={t('office.drivers.route.loading')} />}
-            {route.error && !route.data && <ErrorNotice error={route.error} onRetry={refresh} />}
+            {!route.data && !route.error && <SkeletonRows rows={2} lines={1} />}
+            {route.error && <ListFailed stale={!!route.data} error={route.error} onRetry={refresh} onSignIn={() => void signOut()} />}
             {numbers && (
               <View style={styles.numbers}>
                 <Number label={t('office.drivers.route.km')} value={numbers.km === null ? '—' : String(numbers.km)} />
@@ -187,7 +188,7 @@ export default function DriverPage() {
                 <Number label={t('office.drivers.route.stops')} value={String(numbers.stops)} />
               </View>
             )}
-            {route.data && points.length === 0 && <Empty text={t('office.drivers.route.none')} />}
+            {route.data && points.length === 0 && <ListEmpty text={t('office.drivers.route.none')} />}
             {route.data?.km_note && <Txt variant="small">{route.data.km_note}</Txt>}
             {(route.data?.timeline ?? []).map((seg, i) => {
               const on = focus?.index === i;

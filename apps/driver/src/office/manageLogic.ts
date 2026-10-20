@@ -4,6 +4,8 @@
 // a range of days: the site's mileageLogic.ts, fuelLogic.ts and dutyLogic.ts). Pure: no react-native, no i18n; the
 // screens turn the keys into words.
 
+import type { FilterDef, FilterValues } from '@/lib/patterns/filterLogic';
+
 import type { DutyLog, DutyPeriod, FuelList, MileageSummary, MileageTotals, Row, VehicleCard, VehiclesList, VideoCard } from './types';
 
 // ---------------------------------------------------------------------------
@@ -26,6 +28,31 @@ export function vehiclesArgs(filter: VehicleFilter, search: string, cursor?: str
 export function filterCounts(c: VehiclesList['counts'] | undefined): Partial<Record<VehicleFilter, number>> {
   if (!c) return {};
   return { all: c.all, on_task: c.on_task, available: c.available, in_garage: c.in_garage, documents_expiring: c.documents_expiring, inactive: c.inactive };
+}
+
+/** The Filter sheet's one section (docs/ui-patterns.md §1): list_vehicles' own `filter`, with the fleet's counts beside each choice. */
+export function vehicleFilterDefs(c: VehiclesList['counts'] | undefined, tr: (key: string) => string): FilterDef[] {
+  const counts = filterCounts(c);
+  return [{
+    key: 'filter',
+    label: tr('office.vehicles.filterLabel'),
+    kind: 'single',
+    default: 'all',
+    options: VEHICLE_FILTERS.map((k) => ({ value: k, label: tr(`office.vehicles.filter_${k}`), ...(counts[k] !== undefined ? { count: counts[k] } : {}) })),
+  }];
+}
+
+/** The filter chosen in the sheet (anything unknown is All). */
+export function vehicleChoice(values: FilterValues): VehicleFilter {
+  const v = values.filter;
+  return (VEHICLE_FILTERS as readonly unknown[]).includes(v) ? (v as VehicleFilter) : 'all';
+}
+
+/** What an empty list says: the search found nothing, the filter has nothing, or no vehicle yet (Register one when allowed). */
+export function vehiclesEmpty(filter: VehicleFilter, search: string, mayRegister: boolean): 'noneMatch' | 'noneInFilter' | 'noneRegister' | 'none' {
+  if (search.trim()) return 'noneMatch';
+  if (filter !== 'all') return 'noneInFilter';
+  return mayRegister ? 'noneRegister' : 'none';
 }
 
 /** The next page's rows after the ones on screen (never a plate twice). */
@@ -155,9 +182,6 @@ export const vehicleFormDirty = (f: VehicleFields) => JSON.stringify(f) !== JSON
 // Reports: the days
 // ---------------------------------------------------------------------------
 
-export type RangeKey = 'today' | 'week' | 'month' | 'last_month';
-export const RANGE_KEYS: readonly RangeKey[] = ['today', 'week', 'month', 'last_month'];
-
 const dayOf = (s: string) => new Date(`${s}T00:00:00Z`);
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 const plusDays = (s: string, n: number) => iso(new Date(dayOf(s).getTime() + n * 86_400_000));
@@ -177,21 +201,15 @@ export function monthOf(day: string): { from: string; to: string } {
   return { from: `${day.slice(0, 8)}01`, to: last };
 }
 
-/** The dates a range means on a given Colombo day. */
-export function rangeDates(range: RangeKey, today: string): { from: string; to: string } {
-  switch (range) {
-    case 'today':
-      return { from: today, to: today };
-    case 'week':
-      return { from: mondayOf(today), to: today };
-    case 'month':
-      return { from: monthOf(today).from, to: today };
-    case 'last_month': {
-      const prev = plusDays(monthOf(today).from, -1);
-      return monthOf(prev);
-    }
-  }
-}
+/** The Reports' sections (each by its tool) and the days each may cover at a time (the servers' limits: 366, the duty log 62). */
+export type ReportSection = 'mileage' | 'fuel' | 'duty';
+export const REPORT_MAX_DAYS: Record<ReportSection, number> = { mileage: 366, fuel: 366, duty: 62 };
+
+/** How many days a range covers (both ends counted). */
+export const rangeDayCount = (from: string, to: string): number => Math.round((dayOf(to).getTime() - dayOf(from).getTime()) / 86_400_000) + 1;
+
+/** Whether a section may be asked for these days (the duty log's 62 days: a longer range says so instead of asking). */
+export const rangeFits = (section: ReportSection, from: string, to: string): boolean => rangeDayCount(from, to) <= REPORT_MAX_DAYS[section];
 
 /** The days are one whole calendar month: its YYYY-MM (asked as `month`, so the server adds up one span, not two). */
 export function wholeMonth(from: string, to: string): string | undefined {
@@ -341,8 +359,8 @@ export const hoursText = (h: number) => `${(Math.round(h * 10) / 10).toLocaleStr
 // ---------------------------------------------------------------------------
 
 /** Reports is shown when any of its three tools is allowed; each section by its own tool. */
-export function reportSections(tools: readonly string[]): ('mileage' | 'fuel' | 'duty')[] {
-  const out: ('mileage' | 'fuel' | 'duty')[] = [];
+export function reportSections(tools: readonly string[]): ReportSection[] {
+  const out: ReportSection[] = [];
   if (tools.includes('mileage_summary')) out.push('mileage');
   if (tools.includes('list_fuel')) out.push('fuel');
   if (tools.includes('duty_log')) out.push('duty');

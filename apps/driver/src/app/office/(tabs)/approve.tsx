@@ -5,11 +5,12 @@
 import { useRouter } from 'expo-router';
 import { View } from 'react-native';
 
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
 import { requestLine, requestTitle } from '@/office/homeLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { RequestsList } from '@/office/types';
-import { Avatar, DarkHeader, Divider, Empty, ErrorNotice, Loading, Pill, Row, Screen, Section } from '@/office/ui';
+import { Avatar, DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -23,11 +24,12 @@ export default function ApproveTab() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={t('office.approve.above')} title={t('office.approve.title')} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !q.data && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {!q.data && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {!q.data && !q.error && <SkeletonRows rows={4} lines={2} />}
+        {q.data && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {q.data && (
           <Section title={t('office.approve.waiting')} count={q.data.total ?? rows.length}>
-            {rows.length === 0 && <Empty text={t('office.home.noRequests')} />}
+            {rows.length === 0 && <ListEmpty text={t('office.approve.none')} />}
             {rows.map((r, i) => {
               const reviewing = r.reviewing?.map((x) => x.name).join(', ');
               return (

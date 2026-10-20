@@ -1,6 +1,6 @@
 // Office mode (Phase 8, O1): the Live tab (design 15), the office person's live map of the drivers. The map first (both
 // engines, components/DriversMap.tsx), the drivers as markers (initials in a ring: blue on a task, green free, grey off
-// duty), the filter chips, then the rows. Tapping a row or a marker selects the driver: the map moves to them and a card
+// duty), one Filter button (the duty, with the counts; no search: the list is short), then the rows (skeleton rows first). Tapping a row or a marker selects the driver: the map moves to them and a card
 // comes up over the bottom (the name, the plate, the line, Call / WhatsApp / Open in Maps from the links the server gave).
 // `live_drivers` is read when the tab opens, every 30 s while it is in front, and on pull to refresh. Opened from Home
 // with ?driver=<username>, that driver is selected.
@@ -25,7 +25,7 @@ import { type LucideIcon, MessageCircle, Navigation, Phone, Play, Route as Route
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { DriverDot } from '@/components/mapPins';
 import { Mono, Plate, Txt } from '@/components/ui';
-import { filterCounts, filterDrivers, focusOf, frameAll, LIVE_FILTERS, type LiveFilter, markersOf, pillOf, rowLine } from '@/office/liveLogic';
+import { filterCounts, filterDrivers, focusOf, frameAll, liveChoice, liveFilterDefs, markersOf, pillOf, rowLine } from '@/office/liveLogic';
 import {
   advance, canPlay, clockS, type Cursor, cursorAt, drawingOf, gapWindowsOf, type LiveLayers, mergeRoute, type PathPoint, PLAYBACK_TICK_MS, type PlaybackSpeed,
   playbackPath, type Route, ROUTE_REFRESH_MS, routeArgs, routeOf, routeSummary, sliderFraction, SPEEDS, timeAtFraction, trailsLoading, trailsOf, trailsPlan,
@@ -33,7 +33,10 @@ import {
 import { useOffice, useTool } from '@/office/state';
 import { initials } from '@/office/text';
 import type { DriverRoute, FleetError, LiveDriver, LiveDrivers } from '@/office/types';
-import { Divider, Empty, ErrorNotice, FilterChips, Loading, Pill } from '@/office/ui';
+import { FilterBar } from '@/components/patterns/FilterBar';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import type { FilterValues } from '@/lib/patterns/filterLogic';
+import { Divider, ListFailed, Pill } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -47,7 +50,8 @@ export default function LiveTab() {
   const focused = useIsFocused();
   const { driver: param } = useLocalSearchParams<{ driver?: string }>();
   const q = useTool<LiveDrivers>('live_drivers', {}, { every: 30_000 });
-  const [filter, setFilter] = useState<LiveFilter>('all');
+  const [values, setValues] = useState<FilterValues>({ duty: 'all' });
+  const filter = liveChoice(values);
   const [selected, setSelected] = useState<string | null>(null);
   // The same row tapped again moves the map to the driver again.
   const [nonce, setNonce] = useState(0);
@@ -212,11 +216,7 @@ export default function LiveTab() {
       </View>
 
       <View style={styles.chips}>
-        <FilterChips
-          options={LIVE_FILTERS.map((k) => ({ key: k, label: t(`office.live.filter.${k}`), n: counts[k] }))}
-          value={filter}
-          onChange={setFilter}
-        />
+        <FilterBar defs={liveFilterDefs(q.data ? counts : undefined, t)} values={values} onApply={setValues} testID="live-filter" />
       </View>
 
       <ScrollView
@@ -224,10 +224,11 @@ export default function LiveTab() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: chosen ? Math.max(240, cardH + 16) : 24 }}
         refreshControl={<RefreshControl refreshing={q.refreshing} onRefresh={() => void q.reload()} colors={[colors.amber]} />}
       >
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !q.data && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {q.data && all.length === 0 && <Empty text={t('office.live.empty')} />}
-        {q.data && all.length > 0 && rows.length === 0 && <Empty text={t('office.live.noneInFilter')} />}
+        {!q.data && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {!q.data && !q.error && <SkeletonRows rows={4} lines={2} />}
+        {q.data && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {q.data && all.length === 0 && <ListEmpty text={t('office.live.empty')} />}
+        {q.data && all.length > 0 && rows.length === 0 && <ListEmpty text={t('office.live.noneInFilter')} action={t('patterns.clearAll')} onAction={() => setValues({ duty: 'all' })} />}
         {rows.map((d, i) => (
           <View key={d.username}>
             {i > 0 && <Divider />}
@@ -318,7 +319,7 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor }: {
       {!focusable(d) && <Txt variant="small">{t('office.live.noPosition')}</Txt>}
       {route && (
         <View testID="live-route-line">
-          {route.busy && !route.route && <Loading text={t('office.live.routeLoading')} />}
+          {route.busy && !route.route && <SkeletonRows rows={1} lines={1} testID="live-route-skeleton" />}
           {!route.busy && route.error && !route.route && (
             <View style={styles.routeErr}>
               <Txt variant="small" color={colors.red} style={{ flex: 1 }}>{t('office.live.routeFailed')}</Txt>

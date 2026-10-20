@@ -255,7 +255,7 @@ console.log('\n== The screen and the two engines ==');
     'the bar: Play / Pause, the speed chips, the slider built with a PanResponder (no slider module)');
   check(/accessibilityRole="adjustable"/.test(screen) && /onAccessibilityAction/.test(screen), 'the slider is adjustable for TalkBack');
   check(/paddingBottom: chosen \? Math\.max\(240, cardH \+ 16\) : 24/.test(screen) && /onLayout=\{\(e\) => setCardH\(e\.nativeEvent\.layout\.height\)\}/.test(screen), 'the list makes room under the card, whatever its height');
-  check(/office\.live\.routeLoading/.test(screen) && /office\.live\.routeFailed/.test(screen) && /office\.common\.tryAgain/.test(screen) && /office\.live\.routeNone/.test(screen) && /routeSummary\(route\.route, t\)/.test(screen),
+  check(/<SkeletonRows rows=\{1\} lines=\{1\} testID="live-route-skeleton"/.test(screen) && /office\.live\.routeFailed/.test(screen) && /office\.common\.tryAgain/.test(screen) && /office\.live\.routeNone/.test(screen) && /routeSummary\(route\.route, t\)/.test(screen),
     'the card: loading, failed with Try again, no positions, or today\'s numbers');
 
   const map = read('src/components/DriversMap.tsx');
@@ -298,7 +298,7 @@ console.log('\n== Strings: the keys the code asks for ==');
     Object.entries(tree).flatMap(([k, v]) => (typeof v === 'string' ? [[`${prefix}${k}`, v] as [string, string]] : flat(v, `${prefix}${k}.`)));
   const en = new Map(flat((JSON.parse(read('src/i18n/en.json')) as { office: { live: Tree } }).office.live));
   // The O2 strings (the trails, the route, the playback), merged into en.json and si.json; each one asked for somewhere.
-  const O2_KEYS = ['trails', 'trailsLoading', 'trailsNotDrawn', 'routeLoading', 'routeFailed', 'routeNone', 'routeToday', 'routeDriving', 'routeStopped', 'routeStops', 'routeStopsOne', 'play', 'pause', 'slider', 'estimated'];
+  const O2_KEYS = ['trails', 'trailsLoading', 'trailsNotDrawn', 'routeFailed', 'routeNone', 'routeToday', 'routeDriving', 'routeStopped', 'routeStops', 'routeStopsOne', 'play', 'pause', 'slider', 'estimated'];
   const si = new Map(flat((JSON.parse(read('src/i18n/si.json')) as { office: { live: Tree } }).office.live));
   const src = read('src/app/office/(tabs)/live.tsx') + read('src/components/DriversMap.tsx') + read('src/office/liveRouteLogic.ts');
   const asked = [...new Set([...src.matchAll(/t\('office\.live\.([\w.]+)'/g)].map((m) => m[1]))];

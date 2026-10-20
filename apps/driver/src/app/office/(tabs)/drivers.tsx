@@ -1,33 +1,43 @@
-// Office mode (Phase 8, O2): the Drivers board (design 12). The dark header ("Drivers", "Mon 19 Oct · N drivers"), Now |
-// Week, and in Now the chips All · Free now · On a task · Off duty · Not available with the server's counts (drivers_board
-// with the chip as its filter, every 60 s while in front, on pull to refresh); a row per driver (the avatar with a dot
+// Office mode (Phase 8, O2; the standard patterns in O3, docs/ui-patterns.md): the Drivers board (design 12). The dark
+// header ("Drivers", "Mon 19 Oct · N drivers"), Now | Week as a segmented control, the search bar (drivers_board's own
+// `search`) and in Now one Filter button (All · Free now · On a task · Off duty · Not available with the server's counts
+// in the sheet; drivers_board with the choice as its filter, every 60 s while in front, on pull to refresh), skeleton rows
+// first; a row per driver (the avatar with a dot
 // coloured by state, the name and the plate held today, the status line, the next task / last seen / the regular vehicle,
 // Call when the number is known, a red pill when not available); a row opens the driver's page. Week: the next 7 days as a
 // grid per driver from `unavailability` (today to +6): a marked cell lists its entries (Remove with remove_unavailability,
-// after a confirmation), an empty cell or "+ Not available" opens the sheet (the day, full day / morning / afternoon /
-// hours with from–to, the reason, a note → set_unavailability). "Ask drivers" at the bottom opens the sheet of design 13
+// after a confirmation), an empty cell or "+ Not available" opens the sheet (the one bottom sheet: the day as Today /
+// Tomorrow / Pick a date, until as a date field, full day / morning / afternoon / hours with from–to in the time sheet,
+// the reason, a note → set_unavailability). "Ask drivers" at the bottom opens the sheet of design 13
 // with every free driver ticked (Free for a trip? today: the person types the time). Every button only when the person's
 // tools allow it (me.tools); the rules: office/driversLogic.ts.
 
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Alert, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Alert, Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MessageCircle, Phone, Plus } from '@/components/icons';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
+import { DateField, TripDayPicker } from '@/components/patterns/Calendar';
+import { FilterBar } from '@/components/patterns/FilterBar';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Sheet } from '@/components/patterns/Sheet';
+import { TimeField } from '@/components/patterns/TimeField';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
+import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { shortDate } from '@/lib/durations';
 import { addDays, colomboDate } from '@/lib/time';
 import { askTargetsFromBoard } from '@/office/askLogic';
-import { BOARD_FILTERS, boardPill, entryParts, heldPlate, PARTS, REASONS, rowLines, type UnavailabilityForm, unavailabilityInput, weekDays, weekGrid, type WeekRow } from '@/office/driversLogic';
+import { boardArgs, boardChoice, boardFilterDefs, boardPill, entryParts, heldPlate, PARTS, REASONS, rowLines, type UnavailabilityForm, unavailabilityInput, weekDays, weekGrid, type WeekRow } from '@/office/driversLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { BoardDriver, BoardFilter, DriversBoard, FleetError, SetUnavailabilityResult, UnavailabilityList, UnavailableEntry, UnavailablePart, UnavailableReason } from '@/office/types';
-import { Avatar, DarkHeader, Empty, ErrorNotice, Loading, Pill, Screen } from '@/office/ui';
+import type { BoardDriver, DriversBoard, FleetError, SetUnavailabilityResult, UnavailabilityList, UnavailableEntry, UnavailablePart, UnavailableReason } from '@/office/types';
+import { Avatar, DarkHeader, ErrorNotice, ListFailed, Pill, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
 const EVERY_MS = 60_000;
+const SEARCH_DEBOUNCE_MS = 500;
 const DOT: Record<'blue' | 'green' | 'red' | 'muted', string> = { blue: colors.blue, green: colors.green, red: colors.red, muted: '#9aa0a8' };
 
 type ViewKey = 'now' | 'week';
@@ -42,8 +52,15 @@ export default function DriversTab() {
   const days = useMemo(() => weekDays(today), [today]);
 
   const [view, setView] = useState<ViewKey>('now');
-  const [filter, setFilter] = useState<BoardFilter>('all');
-  const board = useTool<DriversBoard>('drivers_board', view === 'now' ? { filter } : {}, { every: EVERY_MS });
+  const [values, setValues] = useState<FilterValues>({ filter: 'all' });
+  const filter = boardChoice(values);
+  const [text, setText] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(text.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
+  const board = useTool<DriversBoard>('drivers_board', boardArgs(view, filter, search), { every: EVERY_MS });
   const week = useTool<UnavailabilityList>('unavailability', { from: today, to: addDays(today, 6) }, { every: EVERY_MS, enabled: view === 'week' });
 
   const [asking, setAsking] = useState(false);
@@ -99,35 +116,30 @@ export default function DriversTab() {
             ))}
           </View>
         </View>
-        {view === 'now' && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 12 }}>
-            {BOARD_FILTERS.map((k) => {
-              const on = filter === k;
-              const n = board.data?.counts[k];
-              return (
-                <Pressable key={k} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => setFilter(k)} style={[styles.chip, on && styles.chipOn]}>
-                  <Txt variant="strong" size={14} color={on ? colors.ink : '#d9dce1'}>{t(`office.drivers.filter.${k}`)}</Txt>
-                  {n !== undefined && <Mono size={14} bold color={on ? colors.ink : '#d9dce1'}>{`· ${n}`}</Mono>}
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
       </DarkHeader>
 
       <Screen refreshing={board.refreshing || week.refreshing} onRefresh={refresh} bottom={mayAsk ? 100 : 24} style={{ gap: 10 }}>
-        {board.loading && <Loading text={t('office.common.loading')} />}
-        {board.error && !board.data && <ErrorNotice error={board.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        <FilterBar
+          search={text}
+          onSearch={(v) => { setText(v); if (!v) setSearch(''); }}
+          placeholder={t('office.drivers.search')}
+          defs={view === 'now' ? boardFilterDefs(board.data?.counts, t) : []}
+          values={values}
+          onApply={setValues}
+        />
+        {!board.data && board.error && <ListFailed error={board.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        {!board.data && !board.error && <SkeletonRows rows={5} lines={2} />}
+        {board.data && board.error && <ListFailed stale error={board.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {problem && <ErrorNotice error={problem} onRetry={() => { if (lastRemove) void remove(lastRemove); else setProblem(null); }} />}
-        {view === 'now' && board.data && drivers.length === 0 && <Empty text={filter === 'all' ? t('office.drivers.empty') : t('office.drivers.noneInFilter')} />}
+        {view === 'now' && board.data && drivers.length === 0 && <ListEmpty text={search ? t('office.drivers.noneMatch', { search }) : filter === 'all' ? t('office.drivers.empty') : t('office.drivers.noneInFilter')} />}
         {view === 'now' && drivers.map((d) => <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} />)}
 
         {view === 'week' && (
           <>
             <WeekHead days={days} names={names} today={today} />
-            {week.loading && <Loading text={t('office.common.loading')} />}
-            {week.error && !week.data && <ErrorNotice error={week.error} onRetry={refresh} />}
-            {board.data && rows.length === 0 && <Empty text={t('office.drivers.empty')} />}
+            {!week.data && !week.error && board.data && <SkeletonRows rows={4} lines={2} />}
+            {week.error && <ListFailed stale={!!week.data} error={week.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+            {board.data && rows.length === 0 && <ListEmpty text={search ? t('office.drivers.noneMatch', { search }) : t('office.drivers.empty')} />}
             {rows.map((row) => (
               <WeekDriver
                 key={row.username ?? `name:${row.name}`}
@@ -158,9 +170,7 @@ export default function DriversTab() {
         <NotAvailableSheet
           visible
           driver={adding.driver}
-          days={days}
           date={adding.date}
-          dayLabel={dayLabel}
           onClose={() => setAdding(null)}
           onSaved={(entry) => {
             setAdding(null);
@@ -298,13 +308,11 @@ function AskBar({ onPress, disabled }: { onPress: () => void; disabled: boolean 
   );
 }
 
-/** "Not available": the day (the week's days as chips), until (full days), the part, from–to for hours, the reason chips, a note → set_unavailability. */
-function NotAvailableSheet({ visible, driver, days, date: firstDate, dayLabel, onClose, onSaved }: {
+/** "Not available" (the one bottom sheet): the day (Today / Tomorrow / Pick a date), until (full days, a date field), the part, from–to for hours (the time sheet), the reason chips, a note → set_unavailability. */
+function NotAvailableSheet({ visible, driver, date: firstDate, onClose, onSaved }: {
   visible: boolean;
   driver: { name: string; username: string };
-  days: string[];
   date: string;
-  dayLabel: (date: string) => string;
   onClose: () => void;
   onSaved: (entry: UnavailableEntry) => void;
 }) {
@@ -343,48 +351,40 @@ function NotAvailableSheet({ visible, driver, days, date: firstDate, dayLabel, o
     }
   }
 
-  const insets = useSafeAreaInsets();
   const fontFamily = language === 'si' ? fonts.sinhalaBody : fonts.body;
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-    <View style={styles.shade}>
-      <Pressable style={{ flex: 1 }} accessibilityRole="button" accessibilityLabel={t('common.close')} onPress={onClose} />
-      <View style={[styles.sheet, { paddingBottom: insets.bottom + 12 }]} testID="not-available-sheet">
-        <View style={styles.handle} />
-        <Txt variant="heading" size={22}>{t('office.drivers.notAvailableTitle')}</Txt>
-        <Txt variant="muted">{driver.name}</Txt>
-        <ScrollView style={{ flexGrow: 0 }} contentContainerStyle={{ gap: 10 }} keyboardShouldPersistTaps="handled">
-          <Txt variant="label" color={colors.muted}>{t('office.drivers.day').toUpperCase()}</Txt>
-          <ChipRow options={days.map((d) => ({ key: d, label: dayLabel(d) }))} value={date} onChange={(d) => { setDate(d); if (toDate && toDate < d) setToDate(''); }} />
-          {part === 'full_day' && (
-            <>
-              <Txt variant="label" color={colors.muted}>{t('office.drivers.lastDay').toUpperCase()}</Txt>
-              <ChipRow options={[{ key: '', label: t('office.drivers.sameDay') }, ...days.filter((d) => d > date).map((d) => ({ key: d, label: dayLabel(d) }))]} value={toDate} onChange={setToDate} />
-            </>
-          )}
-          <Txt variant="label" color={colors.muted}>{t('office.drivers.part.label').toUpperCase()}</Txt>
-          <ChipRow options={PARTS.map((p) => ({ key: p, label: t(`office.drivers.part.${p}`) }))} value={part} onChange={setPart} />
-          {part === 'hours' && (
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              {([['from', from, setFrom], ['to', to, setTo]] as const).map(([k, v, set]) => (
-                <View key={k} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Txt variant="strong" size={15}>{t(`office.drivers.${k}`)}</Txt>
-                  <TextInput value={v} onChangeText={set} placeholder="HH:MM" placeholderTextColor="#9aa0a6" keyboardType="numbers-and-punctuation" maxLength={5} accessibilityLabel={t(`office.drivers.${k}`)} style={[styles.input, { flex: 1, fontFamily: fonts.mono }]} />
-                </View>
-              ))}
-            </View>
-          )}
-          <Txt variant="label" color={colors.muted}>{t('office.drivers.reason.label').toUpperCase()}</Txt>
-          <ChipRow options={REASONS.map((r) => ({ key: r, label: t(`office.drivers.reason.${r}`) }))} value={reason} onChange={setReason} />
-          <TextInput value={note} onChangeText={setNote} placeholder={t('office.drivers.note')} placeholderTextColor="#9aa0a6" maxLength={300} style={[styles.input, { fontFamily }]} />
-          {hint && <Txt variant="strong" size={14} color={colors.red}>{hint}</Txt>}
-          {problem && <ErrorNotice error={problem} onRetry={() => void save()} />}
-        </ScrollView>
-        <Button label={t('office.drivers.save')} onPress={() => void save()} busy={busy} style={{ minHeight: 56 }} />
-        <Button kind="outline" label={t('common.cancel')} onPress={onClose} disabled={busy} style={{ minHeight: 48 }} />
-      </View>
-    </View>
-    </Modal>
+    <Sheet
+      visible={visible}
+      title={t('office.drivers.notAvailableTitle')}
+      onClose={() => { if (!busy) onClose(); }}
+      testID="not-available-sheet"
+      actions={(
+        <>
+          <Button kind="outline" label={t('common.cancel')} onPress={onClose} disabled={busy} style={{ flex: 1, minHeight: 52 }} />
+          <Button label={t('office.drivers.save')} onPress={() => void save()} busy={busy} style={{ flex: 1.4, minHeight: 52 }} />
+        </>
+      )}
+    >
+      <Txt variant="muted">{driver.name}</Txt>
+      <Txt variant="label" color={colors.muted}>{t('office.drivers.day').toUpperCase()}</Txt>
+      <TripDayPicker value={date} onChange={(d) => { setDate(d); if (toDate && toDate < d) setToDate(''); }} testID="not-available-day" />
+      {part === 'full_day' && (
+        <DateField label={t('office.drivers.lastDay')} value={toDate} onChange={setToDate} testID="not-available-until" />
+      )}
+      <Txt variant="label" color={colors.muted}>{t('office.drivers.part.label').toUpperCase()}</Txt>
+      <ChipRow options={PARTS.map((p) => ({ key: p, label: t(`office.drivers.part.${p}`) }))} value={part} onChange={setPart} />
+      {part === 'hours' && (
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TimeField label={t('office.drivers.from')} value={from} onCommit={setFrom} testID="not-available-from" />
+          <TimeField label={t('office.drivers.to')} value={to} onCommit={setTo} testID="not-available-to" />
+        </View>
+      )}
+      <Txt variant="label" color={colors.muted}>{t('office.drivers.reason.label').toUpperCase()}</Txt>
+      <ChipRow options={REASONS.map((r) => ({ key: r, label: t(`office.drivers.reason.${r}`) }))} value={reason} onChange={setReason} />
+      <TextInput value={note} onChangeText={setNote} placeholder={t('office.drivers.note')} placeholderTextColor="#9aa0a6" maxLength={300} style={[styles.input, { fontFamily }]} />
+      {hint && <Txt variant="strong" size={14} color={colors.red}>{hint}</Txt>}
+      {problem && <ErrorNotice error={problem} onRetry={() => void save()} />}
+    </Sheet>
   );
 }
 
@@ -407,8 +407,6 @@ function ChipRow<K extends string>({ options, value, onChange }: { options: { ke
 const styles = StyleSheet.create({
   seg: { flexDirection: 'row', backgroundColor: colors.darkSurface, borderRadius: 10, padding: 3, gap: 3 },
   segBtn: { minWidth: 72, minHeight: 40, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1, borderColor: '#3a4048' },
-  chipOn: { backgroundColor: colors.amber, borderColor: colors.amber },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, borderRadius: 14, padding: 12, minHeight: 72 },
   dot: { position: 'absolute', right: -1, bottom: -1, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#ffffff' },
   dotSmall: { width: 10, height: 10, borderRadius: 5 },
@@ -421,9 +419,6 @@ const styles = StyleSheet.create({
   cellPart: { backgroundColor: colors.amberChip, borderColor: colors.amber },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 10, borderRadius: 10, borderWidth: 1.5, borderColor: colors.line },
   askBar: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 10, backgroundColor: colors.page },
-  shade: { flex: 1, backgroundColor: 'rgba(10,12,14,0.45)', justifyContent: 'flex-end' },
-  sheet: { maxHeight: '90%', backgroundColor: colors.page, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 16, paddingTop: 10, gap: 10 },
-  handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: '#c9c6bc', alignSelf: 'center' },
   pick: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center' },
   input: { minHeight: 48, borderWidth: 1.5, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 12, fontSize: 17, color: colors.ink, backgroundColor: colors.card },
 });

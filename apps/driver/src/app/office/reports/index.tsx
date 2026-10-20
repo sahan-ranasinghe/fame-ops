@@ -1,5 +1,7 @@
-// Office mode (Phase 8, O2, item 7): Reports under More (design 19's row), read-only, as the site's Mileage, Fuel and
-// Duty log pages over a range of days: Today · This week · This month · Last month. Mileage (mileage_summary): the
+// Office mode (Phase 8, O2, item 7; the standard patterns in O3, docs/ui-patterns.md): Reports under More (design 19's
+// row), read-only, as the site's Mileage, Fuel and Duty log pages: Mileage · Fuel · Duty log as a segmented control, the
+// days as one date range button (the presets Today, Yesterday, Last 7 days, This month, Last month, and one calendar;
+// a whole month is asked as `month`, other days as from/to; the duty log at most 62 days). Mileage (mileage_summary): the
 // tiles, personal km, each vehicle's rows, the biggest gaps, unlogged km and the odometer checks; beside a shorter
 // range the month that contains the last day with the allowance. Fuel (list_fuel): the totals, a row per fill with its
 // video's state, Load more. Duty log (duty_log): the totals, a row per duty period (clock in, clock out and how, the
@@ -9,38 +11,43 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { DateRangeButton } from '@/components/patterns/Calendar';
+import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
+import { Mono, Plate, Segmented, Txt } from '@/components/ui';
+import { presetRange } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
 import {
-  appendDuty, appendFuel, clockOut, dutyArgs, heldLine, hoursText, mileageView, outHowKey, outsideKm, RANGE_KEYS, type RangeKey, rangeArgs, rangeDates, reportSections, rowCells, videoChip, videoLine,
+  appendDuty, appendFuel, clockOut, dutyArgs, heldLine, hoursText, mileageView, outHowKey, outsideKm, rangeArgs, rangeFits, REPORT_MAX_DAYS, type ReportSection, reportSections, rowCells,
+  videoChip, videoLine,
 } from '@/office/manageLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DutyLog, FleetError, FuelList, MileageSummary, Row } from '@/office/types';
-import { BackHeader, Divider, Empty, ErrorNotice, FilterChips, Loading, Pill, Screen, Section } from '@/office/ui';
+import { BackHeader, Divider, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
-
-type SectionKey = 'mileage' | 'fuel' | 'duty';
 
 export default function ReportsScreen() {
   const { t } = useApp();
   const { me } = useOffice();
   const sections = reportSections(me.tools);
-  const [section, setSection] = useState<SectionKey>(sections[0] ?? 'mileage');
-  const [range, setRange] = useState<RangeKey>('month');
+  const [section, setSection] = useState<ReportSection>(sections[0] ?? 'mileage');
   const today = colomboDate();
-  const { from, to } = rangeDates(range, today);
-  const days = from === to ? from : `${from} – ${to}`;
+  // The days: This month by default (the 1st to today), as before.
+  const [range, setRange] = useState(() => presetRange('this_month', today));
+  const { from, to } = range;
+  const fits = rangeFits(section, from, to);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <BackHeader title={t('office.reports.title')} subtitle={days} />
-      <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 4, backgroundColor: colors.page }}>
-        {sections.length > 1 && <FilterChips<SectionKey> options={sections.map((k) => ({ key: k, label: t(`office.reports.${k}`) }))} value={section} onChange={setSection} />}
-        <FilterChips<RangeKey> options={RANGE_KEYS.map((k) => ({ key: k, label: t(`office.reports.range_${k}`) }))} value={range} onChange={setRange} />
+      <BackHeader title={t('office.reports.title')} />
+      <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 10, backgroundColor: colors.page }}>
+        {sections.length > 1 && <Segmented<ReportSection> options={sections.map((k) => ({ value: k, label: t(`office.reports.${k}`) }))} value={section} onChange={setSection} />}
+        {sections.length > 0 && <DateRangeButton value={range} onChange={setRange} max={today} maxDays={REPORT_MAX_DAYS[section]} testID="reports-range" />}
       </View>
       {sections.length === 0 ? (
-        <Screen><Empty text={t('office.reports.nothing')} /></Screen>
+        <Screen><ListEmpty text={t('office.reports.nothing')} /></Screen>
+      ) : !fits ? (
+        <Screen><ListEmpty text={t('office.reports.tooLong', { n: REPORT_MAX_DAYS[section] })} /></Screen>
       ) : section === 'mileage' ? (
         <Mileage from={from} to={to} />
       ) : section === 'fuel' ? (
@@ -68,7 +75,7 @@ function Tile({ label, value, unit, sub, tone }: { label: string; value: string;
 /** A generic table as rows of "key: value" lines (the server's column names, worded where the app knows them). */
 function Rows({ rows, hide, empty }: { rows: Row[]; hide?: readonly string[]; empty: string }) {
   const { t } = useApp();
-  if (rows.length === 0) return <Empty text={empty} />;
+  if (rows.length === 0) return <ListEmpty text={empty} />;
   // A column the app has no word for is shown by its name.
   const word = (key: string) => { const k = `office.reports.col_${key}`; const w = t(k); return w === k ? key.replace(/_/g, ' ') : w; };
   return (
@@ -103,8 +110,9 @@ function Mileage({ from, to }: { from: string; to: string }) {
   const n = (x: number) => (Number(x) || 0).toLocaleString('en-US');
   return (
     <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
-      {q.loading && !v && <Loading text={t('office.reports.adding')} />}
-      {q.error && !v && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+      {!v && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+      {!v && !q.error && <SkeletonRows rows={4} lines={2} />}
+      {v && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
       {v && (
         <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -162,8 +170,9 @@ function Fuel({ from, to }: { from: string; to: string }) {
   }
   return (
     <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
-      {q.loading && !d && <Loading text={t('office.common.loading')} />}
-      {q.error && !d && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+      {!d && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+      {!d && !q.error && <SkeletonRows rows={4} lines={2} />}
+      {d && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
       {d && (
         <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -173,7 +182,7 @@ function Fuel({ from, to }: { from: string; to: string }) {
           </View>
           {d.month_totals && <Txt variant="muted" size={15}>{t('office.reports.fuelMonthLine', { month: d.month, n: n(d.month_totals.entries), litres: n(d.month_totals.litres), lkr: n(d.month_totals.lkr) })}</Txt>}
           <Section title={t('office.reports.fuel')} count={d.total ?? d.entries.length}>
-            {d.entries.length === 0 && <Empty text={t('office.reports.noFills')} />}
+            {d.entries.length === 0 && <ListEmpty text={t('office.reports.noFills')} />}
             {d.entries.map((e, i) => {
               const chip = videoChip(e.video);
               return (
@@ -189,8 +198,8 @@ function Fuel({ from, to }: { from: string; to: string }) {
                 </View>
               );
             })}
-            {more.error && <ErrorNotice error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
-            {d.next && <Button kind="outline" label={t('office.reports.loadMore')} busy={more.busy} onPress={() => void loadMore()} style={{ minHeight: 52 }} />}
+            {more.error && <ListFailed error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
+            {d.next && <LoadMore shown={d.entries.length} total={d.total} busy={more.busy} onPress={() => void loadMore()} />}
           </Section>
           <Txt variant="small">{t('office.reports.videosLaptop')}</Txt>
         </>
@@ -219,8 +228,9 @@ function Duty({ from, to }: { from: string; to: string }) {
   }
   return (
     <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
-      {q.loading && !d && <Loading text={t('office.common.loading')} />}
-      {q.error && !d && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+      {!d && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+      {!d && !q.error && <SkeletonRows rows={4} lines={2} />}
+      {d && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
       {d && (
         <>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
@@ -230,7 +240,7 @@ function Duty({ from, to }: { from: string; to: string }) {
           </View>
           {d.gps_note ? <Txt variant="small">{d.gps_note}</Txt> : null}
           <Section title={t('office.reports.duty')} count={d.total ?? d.periods.length}>
-            {d.periods.length === 0 && <Empty text={t(from === to ? 'office.reports.nobodyToday' : 'office.reports.nobodyRange')} />}
+            {d.periods.length === 0 && <ListEmpty text={t(from === to && from === colomboDate() ? 'office.reports.nobodyToday' : 'office.reports.nobodyRange')} />}
             {d.periods.map((p, i) => {
               const out = clockOut(p);
               return (
@@ -253,8 +263,8 @@ function Duty({ from, to }: { from: string; to: string }) {
                 </View>
               );
             })}
-            {more.error && <ErrorNotice error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
-            {d.next && <Button kind="outline" label={t('office.reports.loadMore')} busy={more.busy} onPress={() => void loadMore()} style={{ minHeight: 52 }} />}
+            {more.error && <ListFailed error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
+            {d.next && <LoadMore shown={d.periods.length} total={d.total} busy={more.busy} onPress={() => void loadMore()} />}
           </Section>
         </>
       )}

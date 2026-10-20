@@ -7,6 +7,8 @@
 // keys): isActive, fitsStatus, defaultSort, severityTone / statusTone, mergeIssue, snoozeLine, whoLine, issueFacts,
 // eventText. Copy again when the site's change.
 
+import type { FilterDef, FilterValues } from '@/lib/patterns/filterLogic';
+
 import type { Permission } from './permissions';
 import type { Issue, IssueEvent, IssueHistory, IssuesList } from './types';
 import type { Tone } from './ui';
@@ -39,15 +41,57 @@ export const defaultSort = (status: IssueStatusFilter): 'urgent' | 'newest' => (
  * list_issues' input: the status, the order, a page of 50, and the words searched for only when there are any. The
  * snoozed ones are not left out (no Snoozed chip on the phone: a row says "Snoozed until …" instead).
  */
-export function issuesArgs(status: IssueStatusFilter, search = '', cursor?: string): Record<string, unknown> {
+export function issuesArgs(status: IssueStatusFilter, search = '', cursor?: string, sort?: IssueSort): Record<string, unknown> {
   const words = search.trim();
   return {
     status,
-    sort: defaultSort(status),
+    sort: sort ?? defaultSort(status),
     limit: LIMIT,
     ...(words ? { search: words } : {}),
     ...(cursor ? { cursor } : {}),
   };
+}
+
+/** The Sort menu: list_issues' own `sort` (the most urgent first, or the newest first). */
+export type IssueSort = 'urgent' | 'newest';
+export const ISSUE_SORTS: readonly IssueSort[] = ['urgent', 'newest'];
+export const isIssueSort = (s: unknown): s is IssueSort => (ISSUE_SORTS as readonly unknown[]).includes(s);
+
+/**
+ * The Filter sheet's sections (docs/ui-patterns.md §1): the status (list_issues' `status`, Active by default, with the
+ * server's counts where the answer has them) and the severity (narrowed on the phone, with the counts of the rows of
+ * the status chosen). `tr` turns the i18n keys into words.
+ */
+export function issuesFilterDefs(
+  list: Pick<IssuesList, 'open' | 'in_progress'> | null | undefined,
+  severity: Record<SeverityFilter, number> | null | undefined,
+  tr: (key: string) => string,
+): FilterDef[] {
+  const statusCount = (k: IssueStatusFilter): number | undefined =>
+    !list ? undefined : k === 'active' ? activeCount(list) : k === 'open' ? list.open : k === 'in_progress' ? list.in_progress : undefined;
+  return [
+    {
+      key: 'status',
+      label: tr('office.issues.filterStatus'),
+      kind: 'single',
+      default: DEFAULT_STATUS,
+      options: STATUS_FILTERS.map((k) => ({ value: k, label: tr(`office.issues.filter.${k}`), ...(statusCount(k) !== undefined ? { count: statusCount(k) } : {}) })),
+    },
+    {
+      key: 'severity',
+      label: tr('office.issues.filterSeverity'),
+      kind: 'single',
+      default: 'all',
+      options: SEVERITY_FILTERS.map((k) => ({ value: k, label: k === 'all' ? tr('office.common.all') : tr(`office.issues.severity.${k}`), ...(severity ? { count: severity[k] } : {}) })),
+    },
+  ];
+}
+
+/** The status and the severity chosen in the sheet (anything unknown falls back to the default). */
+export function issuesChoice(values: FilterValues): { status: IssueStatusFilter; severity: SeverityFilter } {
+  const st = values.status;
+  const sv = values.severity;
+  return { status: isStatusFilter(st) ? st : DEFAULT_STATUS, severity: isSeverityFilter(sv) ? sv : 'all' };
 }
 
 /** Whether an issue belongs under a status chip (Active: open or in progress). */

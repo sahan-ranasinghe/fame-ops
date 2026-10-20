@@ -1,31 +1,36 @@
 // Office mode (Phase 8, O1): the My trips tab (design 17): the person's requests, proposals and the tasks they made,
-// from 30 days back to 60 days ahead (my_trips, include all), as All / Waiting / Coming up / Done (office/tripsLogic.ts).
+// from 30 days back to 60 days ahead (my_trips, include all), the search bar (my_trips' own `search`) and one Filter button
+// (All / Waiting / Coming up / Done with the counts, office/tripsLogic.ts), skeleton rows first.
 // A row: the title, the when · back by · need · driver line, the live state pill, "Changed by the office" when the
 // office changed an approved trip, "Approved by Palitha · Sun 16:40" with Call, and Withdraw on the person's own waiting
 // request (the reasons sheet → cancel_request, then the list is read again). Edit is round O2 and is not shown. A row
 // opens the request's page only for an approver (a requester's own request page comes later).
 
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { Phone } from '@/components/icons';
 import { ReasonSheet } from '@/components/ReasonSheet';
+import { FilterBar } from '@/components/patterns/FilterBar';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Notice, Txt } from '@/components/ui';
-import { addDays, colomboDate } from '@/lib/time';
+import type { FilterValues } from '@/lib/patterns/filterLogic';
+import { colomboDate } from '@/lib/time';
 import { statusTone, tripLive, tripTitle } from '@/office/homeLogic';
 import { useOffice, useTool } from '@/office/state';
 import {
-  bucketCounts, canEdit, canWithdraw, changedText, type Trip, type TripFilter, tripBuckets, tripKey, tripLine, tripRoute, TRIPS_DAYS_AHEAD, TRIPS_DAYS_BACK,
+  canEdit, canWithdraw, changedText, type Trip, tripBuckets, tripKey, tripLine, tripRoute, tripsArgs, tripsChoice, tripsFilterDefs,
   WITHDRAW_REASONS, type WithdrawReason, withdrawReason,
 } from '@/office/tripsLogic';
 import type { FleetError, MyTrips, RequestCard } from '@/office/types';
-import { DarkHeader, Empty, ErrorNotice, FilterChips, Loading, Pill, Screen } from '@/office/ui';
+import { DarkHeader, ErrorNotice, ListFailed, Pill, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
 /** 90 days of one person's trips: well under this (no endless list). */
 const LIMIT = 100;
+const SEARCH_DEBOUNCE_MS = 500;
 
 interface Withdrawing {
   id: string;
@@ -39,13 +44,19 @@ export default function TripsTab() {
   const { me, api, signOut } = useOffice();
   const router = useRouter();
   const today = colomboDate();
-  const [filter, setFilter] = useState<TripFilter>('all');
+  const [values, setValues] = useState<FilterValues>({ show: 'all' });
+  const filter = tripsChoice(values);
+  const [text, setText] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(text.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
   const [sheet, setSheet] = useState<RequestCard | null>(null);
   const [withdrawing, setWithdrawing] = useState<Withdrawing | null>(null);
   const [withdrawn, setWithdrawn] = useState(false);
-  const q = useTool<MyTrips>('my_trips', { from: addDays(today, -TRIPS_DAYS_BACK), to: addDays(today, TRIPS_DAYS_AHEAD), include: 'all', limit: LIMIT });
+  const q = useTool<MyTrips>('my_trips', tripsArgs(today, LIMIT, search));
   const trips = q.data?.trips ?? [];
-  const counts = bucketCounts(trips);
   const groups = tripBuckets(trips, filter);
 
   async function withdraw(id: string, reason: string) {
@@ -113,21 +124,22 @@ export default function TripsTab() {
         </View>
       )}
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
-        <FilterChips<TripFilter>
-          options={[
-            { key: 'all', label: t('office.common.all'), n: trips.length },
-            { key: 'waiting', label: t('office.trips.waiting'), n: counts.waiting },
-            { key: 'coming', label: t('office.trips.coming'), n: counts.coming },
-            { key: 'done', label: t('office.trips.done'), n: counts.done },
-          ]}
-          value={filter}
-          onChange={setFilter}
+        <FilterBar
+          search={text}
+          onSearch={(v) => { setText(v); if (!v) setSearch(''); }}
+          placeholder={t('office.trips.search')}
+          defs={tripsFilterDefs(q.data ? trips : undefined, t)}
+          values={values}
+          onApply={setValues}
         />
         {withdrawn && <Notice tone="info" text={t('office.trips.withdrawn')} />}
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !q.data && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {q.data && trips.length === 0 && <Empty text={t('office.trips.none')} />}
-        {q.data && trips.length > 0 && groups.length === 0 && <Empty text={t('office.common.nothingHere')} />}
+        {!q.data && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {!q.data && !q.error && <SkeletonRows rows={4} lines={3} />}
+        {q.data && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {q.data && trips.length === 0 && (search
+          ? <ListEmpty text={t('office.trips.noneMatch', { search })} />
+          : <ListEmpty text={t('office.trips.none')} action={me.tools.includes('create_request') ? t('office.trip.requestVehicle') : undefined} onAction={me.tools.includes('create_request') ? () => router.push({ pathname: '/office/trip/where', params: { mode: 'request' } }) : undefined} />)}
+        {q.data && trips.length > 0 && groups.length === 0 && <ListEmpty text={t('office.trips.noneInFilter')} action={t('patterns.clearAll')} onAction={() => setValues({ show: 'all' })} />}
         {groups.map((g) => (
           <View key={g.key} style={{ gap: 8 }}>
             <Txt variant="label" color={colors.muted} style={{ paddingHorizontal: 2 }}>{t(`office.trips.${g.key}`).toUpperCase()}</Txt>

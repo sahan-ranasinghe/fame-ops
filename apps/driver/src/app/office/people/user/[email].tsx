@@ -15,7 +15,8 @@ import { activePill, findUserRow, permissionWords, phoneDisplay, updateUserInput
 import { normalisePermissions } from '@/office/permissions';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, OfficeUsers, SetPasswordLinkResult, UpdateOfficeUserResult } from '@/office/types';
-import { Avatar, BackHeader, Empty, ErrorNotice, Loading, Pill, Screen, Section } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Avatar, BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -121,9 +122,9 @@ export default function ManageOfficeUser() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={u?.name ?? t('office.people.manageUser')} subtitle={email} right={pill ? <Pill text={t(`office.people.${pill.key}`)} tone={pill.tone} size={13} /> : undefined} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !q.data && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {q.data && !u && <Empty text={t('office.people.userNotFound', { email })} />}
+        {!q.data && !q.error && <SkeletonRows rows={3} lines={2} />}
+        {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {q.data && !u && <ListEmpty text={t('office.people.userNotFound', { email })} />}
         {secret && (
           <SecretCard
             title={t('office.people.linkTitle')}

@@ -2,7 +2,8 @@
 // at-a-glance chips (fleet_overview), then the sections the person's permissions bring (office/nav.ts homeSections):
 // requests to approve (list_requests), needs a driver (fleet_overview), critical issues (fleet_overview), today's tasks
 // (task_board), on the road (fleet_overview), my trips (my_trips). Each card opens its real screen; pull to refresh, and
-// everything is read again when the screen comes back. The trip editor (+ Assign a task, Request) is round O2: no big
+// everything is read again when the screen comes back; a section shows skeleton rows until its answer comes (the list
+// pattern, docs/ui-patterns.md §5), Try again when it failed, and what to do next when it is empty. The trip editor (+ Assign a task, Request) is round O2: no big
 // action button yet, so none is shown.
 
 import { useRouter } from 'expo-router';
@@ -17,7 +18,8 @@ import { has, homeActions, homeChips, homeSections } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { firstName } from '@/office/text';
 import type { Board, MyTrips, Overview, RequestsList } from '@/office/types';
-import { Avatar, Chip, DarkHeader, Divider, Empty, ErrorNotice, Loading, Pill, Row, Screen, Section } from '@/office/ui';
+import { Avatar, Chip, DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { Button } from '@/components/ui';
@@ -58,7 +60,7 @@ export default function OfficeHome() {
         </View>
       </DarkHeader>
       <Screen refreshing={refreshing} onRefresh={refresh}>
-        {overview.error && !ov && <ErrorNotice error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        {overview.error && <ListFailed stale={!!ov} error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {actions.length > 0 && (
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {actions.includes('assign') && <Button icon={Plus} label={t('office.trip.assignTask')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } })} style={{ flex: 1, minHeight: 60 }} />}
@@ -68,9 +70,9 @@ export default function OfficeHome() {
 
         {sections.includes('requests') && (
           <Section title={t('office.home.requests')} count={ov?.requests.waiting} link={t('office.common.viewAll')} onLink={() => router.push('/office/(tabs)/approve')}>
-            {requests.loading && <Loading text={t('office.common.loading')} />}
-            {requests.error && !requests.data && <ErrorNotice error={requests.error} onRetry={refresh} />}
-            {requests.data && requests.data.requests.length === 0 && <Empty text={t('office.home.noRequests')} />}
+            {!requests.data && !requests.error && <SkeletonRows rows={2} lines={2} />}
+            {requests.error && <ListFailed stale={!!requests.data} error={requests.error} onRetry={refresh} />}
+            {requests.data && requests.data.requests.length === 0 && <ListEmpty text={t('office.home.noRequests')} />}
             {requests.data?.requests.map((r, i) => (
               <View key={r.id}>
                 {i > 0 && <Divider />}
@@ -88,8 +90,8 @@ export default function OfficeHome() {
 
         {sections.includes('needs_driver') && (
           <Section title={t('office.home.needsDriver')} count={ov?.needs_driver?.count ?? 0} tone="red" link={has(me.permissions, 'assign_tasks') ? t('office.common.viewAll') : undefined} onLink={() => router.push('/office/(tabs)/tasks')}>
-            {overview.loading && <Loading text={t('office.common.loading')} />}
-            {ov && (ov.needs_driver?.tasks.length ?? 0) === 0 && <Empty text={t('office.home.noNeedsDriver')} />}
+            {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
+            {ov && (ov.needs_driver?.tasks.length ?? 0) === 0 && <ListEmpty text={t('office.home.noNeedsDriver')} />}
             {ov?.needs_driver?.tasks.slice(0, ROWS).map((x, i) => (
               <View key={x.task_id}>
                 {i > 0 && <Divider />}
@@ -107,8 +109,8 @@ export default function OfficeHome() {
 
         {sections.includes('critical') && (
           <Section title={t('office.home.critical')} count={ov?.critical?.count ?? 0} tone={ov?.critical?.count ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
-            {overview.loading && <Loading text={t('office.common.loading')} />}
-            {ov && (ov.critical?.items.length ?? 0) === 0 && <Empty text={t('office.home.noCritical')} />}
+            {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
+            {ov && (ov.critical?.items.length ?? 0) === 0 && <ListEmpty text={t('office.home.noCritical')} />}
             {ov?.critical?.items.slice(0, ROWS).map((x, i) => (
               <View key={x.issue_id ?? `${x.what}-${i}`}>
                 {i > 0 && <Divider />}
@@ -120,9 +122,15 @@ export default function OfficeHome() {
 
         {sections.includes('tasks') && (
           <Section title={t('office.home.tasks')} count={board.data ? board.data.counts.assigned + board.data.counts.in_progress + board.data.counts.completed : undefined} link={t('office.home.board')} onLink={() => router.push('/office/(tabs)/tasks')}>
-            {board.loading && <Loading text={t('office.common.loading')} />}
-            {board.error && !board.data && <ErrorNotice error={board.error} onRetry={refresh} />}
-            {board.data && [...board.data.in_progress, ...board.data.assigned].length === 0 && <Empty text={t('office.home.noTasks')} />}
+            {!board.data && !board.error && <SkeletonRows rows={3} lines={2} />}
+            {board.error && <ListFailed stale={!!board.data} error={board.error} onRetry={refresh} />}
+            {board.data && [...board.data.in_progress, ...board.data.assigned].length === 0 && (
+              <ListEmpty
+                text={t('office.home.noTasks')}
+                action={actions.includes('assign') ? t('office.trip.assignTask') : undefined}
+                onAction={actions.includes('assign') ? () => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } }) : undefined}
+              />
+            )}
             {board.data && [...board.data.in_progress, ...board.data.assigned].slice(0, ROWS).map((c, i) => {
               const pill = boardPill(c);
               return (
@@ -148,8 +156,8 @@ export default function OfficeHome() {
 
         {sections.includes('road') && (
           <Section title={t('office.home.road')} count={ov?.on_the_road.length} link={t('office.home.liveMap')} onLink={() => router.push('/office/(tabs)/live')}>
-            {overview.loading && <Loading text={t('office.common.loading')} />}
-            {ov && ov.on_the_road.length === 0 && <Empty text={t('office.home.noRoad')} />}
+            {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
+            {ov && ov.on_the_road.length === 0 && <ListEmpty text={t('office.home.noRoad')} />}
             {ov?.on_the_road.slice(0, ROWS).map((d, i) => (
               <View key={d.username ?? d.driver}>
                 {i > 0 && <Divider />}
@@ -167,9 +175,15 @@ export default function OfficeHome() {
 
         {sections.includes('trips') && (
           <Section title={t('office.home.trips')} count={trips.data?.count} link={t('office.common.viewAll')} onLink={() => router.push('/office/(tabs)/trips')}>
-            {trips.loading && <Loading text={t('office.common.loading')} />}
-            {trips.error && !trips.data && <ErrorNotice error={trips.error} onRetry={refresh} />}
-            {trips.data && trips.data.trips.length === 0 && <Empty text={t('office.home.noTrips')} />}
+            {!trips.data && !trips.error && <SkeletonRows rows={2} lines={2} />}
+            {trips.error && <ListFailed stale={!!trips.data} error={trips.error} onRetry={refresh} />}
+            {trips.data && trips.data.trips.length === 0 && (
+              <ListEmpty
+                text={t('office.home.noTrips')}
+                action={actions.includes('request') ? t('office.trip.requestVehicle') : undefined}
+                onAction={actions.includes('request') ? () => router.push({ pathname: '/office/trip/where', params: { mode: 'request' } }) : undefined}
+              />
+            )}
             {trips.data?.trips.slice(0, ROWS).map((x, i) => {
               const live = tripLive(x);
               return (

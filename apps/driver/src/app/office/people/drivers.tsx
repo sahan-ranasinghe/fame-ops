@@ -1,6 +1,6 @@
 // Office mode (Phase 8, O2, item 7): People → Drivers (design 19's "Drivers · add, reset PIN, switch off" row): list_drivers
-// with the search box (name, username, code or plate, sent half a second after the last key), Active / With switched off
-// (include_inactive), 25 a page with Load more on the cursor, pull to refresh. A row (the avatar, the name, the code and
+// with the search bar (name, username, code or plate, sent half a second after the last key), one Filter button (Active /
+// With switched off: include_inactive), skeleton rows first, 25 a page with Load more on the cursor, pull to refresh. A row (the avatar, the name, the code and
 // phone, on duty since · the plate, the active pill, the licence chip) opens Manage a driver (design 20). "+ Add driver"
 // only with create_driver. The rules: office/peopleLogic.ts.
 
@@ -8,16 +8,16 @@ import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
-import { SearchBox } from '@/components/office/PeopleParts';
-import { Button, Txt } from '@/components/ui';
-import { activePill, appendDrivers, driverLine, driverLine2, driversArgs, licenceTone, longDate, SEARCH_DEBOUNCE_MS } from '@/office/peopleLogic';
+import { FilterBar } from '@/components/patterns/FilterBar';
+import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
+import { Button } from '@/components/ui';
+import type { FilterValues } from '@/lib/patterns/filterLogic';
+import { activePill, appendDrivers, driverLine, driverLine2, driversArgs, includeInactiveOf, licenceTone, longDate, peopleDriverDefs, SEARCH_DEBOUNCE_MS } from '@/office/peopleLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { Driver, DriversList, FleetError } from '@/office/types';
-import { Avatar, BackHeader, Divider, Empty, ErrorNotice, FilterChips, Loading, Pill, Row, Screen, Section } from '@/office/ui';
+import { Avatar, BackHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
-
-type Filter = 'active' | 'all';
 
 export default function DriversPeople() {
   const { t, tList } = useApp();
@@ -26,7 +26,8 @@ export default function DriversPeople() {
   const names = { days: tList('days'), months: tList('months') };
   const [text, setText] = useState('');
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<Filter>('active');
+  const [values, setValues] = useState<FilterValues>({ show: 'active' });
+  const filter = includeInactiveOf(values) ? 'all' : 'active';
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
 
   useEffect(() => {
@@ -75,24 +76,28 @@ export default function DriversPeople() {
       <BackHeader title={t('office.people.drivers')} subtitle={t('office.people.driversAbove')} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
         {canAdd && <Button kind="primary" label={t('office.people.addDriver')} onPress={() => router.push('/office/people/driver-new')} style={{ minHeight: 56 }} />}
-        <SearchBox value={text} onChange={setText} onSubmit={() => setSearch(text.trim())} placeholder={t('office.people.search')} clearLabel={t('office.people.clearSearch')} />
-        <FilterChips<Filter>
-          options={[{ key: 'active', label: t('office.people.filterActive') }, { key: 'all', label: t('office.people.filterAll') }]}
-          value={filter}
-          onChange={setFilter}
+        <FilterBar
+          search={text}
+          onSearch={(v) => { setText(v); if (!v) setSearch(''); }}
+          placeholder={t('office.people.search')}
+          defs={peopleDriverDefs(t)}
+          values={values}
+          onApply={setValues}
         />
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !d && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {!d && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {!d && !q.error && <SkeletonRows rows={5} lines={2} />}
+        {d && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {d && (
           <Section title={t('office.people.drivers')} count={d.total ?? d.drivers.length}>
             {d.drivers.length === 0
-              ? <Empty text={search ? t('office.people.emptySearch', { search }) : t('office.people.emptyDrivers')} />
+              ? (search
+                ? <ListEmpty text={t('office.people.emptySearch', { search })} />
+                : <ListEmpty text={t('office.people.emptyDrivers')} action={canAdd ? t('office.people.addDriver') : undefined} onAction={canAdd ? () => router.push('/office/people/driver-new') : undefined} />)
               : d.drivers.map((x, i) => <View key={x.username}>{i > 0 && <Divider />}{renderRow(x)}</View>)}
             {d.total !== undefined && d.total > d.drivers.length && (
               <View style={{ gap: 10, paddingTop: 12 }}>
-                <Txt variant="small" style={{ textAlign: 'center' }}>{t('office.people.showing', { n: d.drivers.length, total: d.total })}</Txt>
-                {more.error && <ErrorNotice error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
-                {d.next && <Button kind="outline" label={t('office.people.loadMore')} busy={more.busy} onPress={() => void loadMore()} style={{ minHeight: 52 }} />}
+                {more.error && <ListFailed error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
+                {d.next && <LoadMore shown={d.drivers.length} total={d.total} busy={more.busy} onPress={() => void loadMore()} />}
               </View>
             )}
           </Section>

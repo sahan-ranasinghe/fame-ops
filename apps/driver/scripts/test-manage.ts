@@ -10,7 +10,8 @@ import { join } from 'node:path';
 
 import {
   appendDuty, appendFuel, appendVehicles, clockOf, clockOut, companyInput, docTone, dutyArgs, emptyVehicle, filterCounts, heldLine, hoursText, isDate, kmLine, megabytes, mileageView, mondayOf,
-  monthOf, outsideKm, rangeArgs, rangeDates, reportSections, rowCells, vehicleFormDirty, vehicleInput, vehiclesArgs, vehicleTone, videoChip, videoLine, wholeMonth,
+  monthOf, outsideKm, rangeArgs, rangeDayCount, rangeFits, REPORT_MAX_DAYS, reportSections, rowCells, vehicleChoice, vehicleFilterDefs, vehicleFormDirty, vehicleInput, vehiclesArgs, vehiclesEmpty, vehicleTone,
+  videoChip, videoLine, wholeMonth,
 } from '../src/office/manageLogic';
 import { MORE_SECTION, moreFor } from '../src/office/nav';
 import { PRESETS } from '../src/office/permissions';
@@ -32,6 +33,13 @@ console.log('\nVehicles: the list');
   const list: VehiclesList = { filter: 'all', counts: { all: 3, on_task: 0, available: 3, in_garage: 0, documents_expiring: 0 }, vehicles: [{ reg_no: 'A' }, { reg_no: 'B' }], next: 'c1', total: 3 };
   const grown = appendVehicles(list, { ...list, vehicles: [{ reg_no: 'B' }, { reg_no: 'C' }], next: undefined });
   check(grown.vehicles.map((v) => v.reg_no).join('') === 'ABC' && !('next' in grown), 'the next page appended, never a plate twice, the cursor gone at the end');
+  // The Filter sheet (docs/ui-patterns.md §1): one section, list_vehicles' own filter, the counts beside the choices.
+  const tr = (k: string) => k;
+  const defs = vehicleFilterDefs({ all: 6, on_task: 2, available: 3, in_garage: 1, documents_expiring: 2 }, tr);
+  check(defs.length === 1 && defs[0].key === 'filter' && defs[0].kind === 'single' && defs[0].default === 'all' && same(defs[0].options.map((o) => o.value), ['all', 'on_task', 'available', 'in_garage', 'documents_expiring', 'inactive']), 'the Filter sheet: one section with the six filters, All by default');
+  check(defs[0].options[1].count === 2 && defs[0].options[5].count === undefined && defs[0].options[0].label === 'office.vehicles.filter_all' && vehicleFilterDefs(undefined, tr)[0].options.every((o) => o.count === undefined), 'the counts beside the choices (none for Returned, none before the answer)');
+  check(vehicleChoice({ filter: 'in_garage' }) === 'in_garage' && vehicleChoice({ filter: 'nope' }) === 'all' && vehicleChoice({}) === 'all' && same(vehiclesArgs(vehicleChoice({ filter: 'in_garage' }), ''), { filter: 'in_garage', limit: 25 }), 'the choice → list_vehicles\' filter, exactly as the chip sent it');
+  check(vehiclesEmpty('all', '', true) === 'noneRegister' && vehiclesEmpty('all', '', false) === 'none' && vehiclesEmpty('in_garage', '', true) === 'noneInFilter' && vehiclesEmpty('all', 'cab', true) === 'noneMatch', 'the empty list: Register only with register_vehicle, the filter or the search said');
   check(vehicleTone({ status: 'On a task' }) === 'blue' && vehicleTone({ status: 'In garage' }) === 'amber' && vehicleTone({ status: 'Available' }) === 'green' && vehicleTone({ status: 'Available', active: false }) === 'muted', 'the status tones');
   check(docTone('red') === 'red' && docTone('expired 3 days ago') === 'red' && docTone('orange') === 'amber' && docTone('soon') === 'amber' && docTone(undefined) === 'muted' && docTone('ok') === 'green', 'the document chip tones');
   check(same(kmLine({ km_this_month: 2100, km_allowance: 2000 }), { used: 2100, allow: 2000, over: true }) && same(kmLine({ km_this_month: 10 }), { used: 10, allow: 0, over: false }), 'km this month against the allowance');
@@ -61,8 +69,10 @@ console.log('\nReports: the days');
 {
   check(mondayOf('2026-10-19') === '2026-10-19' && mondayOf('2026-10-25') === '2026-10-19' && mondayOf('2026-10-18') === '2026-10-12', 'the Monday of the week');
   check(same(monthOf('2026-10-19'), { from: '2026-10-01', to: '2026-10-31' }) && same(monthOf('2026-02-10'), { from: '2026-02-01', to: '2026-02-28' }) && same(monthOf('2026-12-05'), { from: '2026-12-01', to: '2026-12-31' }), 'the month\'s first and last day (February, December)');
-  check(same(rangeDates('today', '2026-10-19'), { from: '2026-10-19', to: '2026-10-19' }) && same(rangeDates('week', '2026-10-21'), { from: '2026-10-19', to: '2026-10-21' }) && same(rangeDates('month', '2026-10-19'), { from: '2026-10-01', to: '2026-10-19' }) && same(rangeDates('last_month', '2026-10-19'), { from: '2026-09-01', to: '2026-09-30' }), 'today, this week, this month, last month');
-  check(same(rangeDates('last_month', '2026-01-10'), { from: '2025-12-01', to: '2025-12-31' }), 'last month across the year');
+  // The days come from the date range button (components/patterns/Calendar.tsx, calendarLogic's presets); the limits per section.
+  check(rangeDayCount('2026-10-19', '2026-10-19') === 1 && rangeDayCount('2026-10-01', '2026-10-31') === 31 && rangeDayCount('2025-12-25', '2026-01-05') === 12, 'the days a range covers');
+  check(REPORT_MAX_DAYS.duty === 62 && REPORT_MAX_DAYS.mileage === 366 && REPORT_MAX_DAYS.fuel === 366, 'the servers\' limits: the duty log 62 days, the others 366');
+  check(rangeFits('duty', '2026-08-19', '2026-10-19') && !rangeFits('duty', '2026-08-18', '2026-10-19') && rangeFits('mileage', '2026-01-01', '2026-10-19'), 'the duty log refuses more than 62 days: the screen says so instead of asking');
   check(wholeMonth('2026-09-01', '2026-09-30') === '2026-09' && wholeMonth('2026-10-01', '2026-10-19') === undefined, 'a whole calendar month is asked as month');
   check(same(rangeArgs('2026-09-01', '2026-09-30'), { month: '2026-09' }) && same(rangeArgs('2026-10-01', '2026-10-19', { limit: 25 }), { from: '2026-10-01', to: '2026-10-19', limit: 25 }), 'mileage_summary / list_fuel input');
   check(same(dutyArgs('2026-10-19', '2026-10-19'), { date: '2026-10-19' }) && same(dutyArgs('2026-10-12', '2026-10-19', { cursor: 'x' }), { from: '2026-10-12', to: '2026-10-19', cursor: 'x' }), 'duty_log input: one day as date, a range as from/to');
@@ -120,6 +130,9 @@ console.log('\nThe screens as text');
   check(list.includes("me.tools.includes('register_vehicle') &&") && list.includes("useTool<VehiclesList>('list_vehicles', vehiclesArgs(filter, search)") && list.includes('appendVehicles(p, page)'), 'the list: list_vehicles with the filter and the search, Register only with its tool, Load more');
   check(page.includes("const canEdit = me.tools.includes('update_vehicle');") && page.includes("me.tools.includes('vehicle_documents')") && page.includes("'list_vehicles', { filter, search: reg, limit: 25 }"), 'the page: Edit only with update_vehicle, the files only with vehicle_documents, found by search');
   check(form.includes('vehicleInput(f, plate)') && form.includes('await api.call<{ registered?: { reg_no?: string } }>(v.tool, v.input)') && form.includes("me.tools.includes('add_rental_company') &&") && form.includes("api.call('add_rental_company', input)") && form.includes('useLeaveGuard('), 'the form: register_vehicle / update_vehicle by the rule, the rental company only with its tool, the leave guard');
+  check(reports.includes('<DateRangeButton value={range} onChange={setRange} max={today} maxDays={REPORT_MAX_DAYS[section]}') && reports.includes("presetRange('this_month', today)") && reports.includes('<Segmented<ReportSection>') && !reports.includes('FilterChips') && reports.includes('rangeFits(section, from, to)'), 'Reports: Mileage · Fuel · Duty log as a segmented control, the days as one date range button (This month first, no future, the duty log 62 days)');
+  check(list.includes('<FilterBar') && list.includes('vehicleFilterDefs(d?.counts, t)') && !list.includes('FilterChips') && list.includes('<SkeletonRows') && list.includes('<LoadMore') && list.includes("action={empty === 'noneRegister'"), 'the list: the search bar and one Filter button with the counts, skeleton rows, Load more, the empty list\'s Register by its tool');
+  check(page.includes('<SkeletonRows') && !page.includes('<Loading') && reports.includes('<SkeletonRows') && !reports.includes('<Loading') && reports.includes('<LoadMore'), 'the page and the reports: skeleton rows while loading, Load more at the end');
   check(reports.includes("useTool<MileageSummary>('mileage_summary', rangeArgs(from, to))") && reports.includes("useTool<FuelList>('list_fuel', rangeArgs(from, to, { limit: 25 }))") && reports.includes("useTool<DutyLog>('duty_log', dutyArgs(from, to, { limit: 25 }))") && reports.includes('reportSections(me.tools)'), 'Reports: the three tools, each section by its tool');
   check(!reports.includes('update_') && !reports.includes('register_') && !reports.includes('set_'), 'Reports is read-only');
   check(more.includes('MORE_SECTION[key] === s.key') && more.includes("path: '/office/vehicles'") && more.includes("path: '/office/reports'") && more.includes("path: '/office/people/drivers'") && more.includes("path: '/office/people/users'") && more.includes("path: '/office/people/settings'"), 'More: the rows by section and their routes');
@@ -150,7 +163,6 @@ console.log('\nStrings in both languages');
     ...['car', 'van', 'double_cab', 'lorry', 'other'].map((k) => `vehicles.type_${k}`),
     ...['lic', 'ins', 'emi'].map((k) => `vehicles.doc_${k}`),
     ...Object.keys(emptyVehicle()).map((k) => `vehicles.f_${k}`),
-    ...['today', 'week', 'month', 'last_month'].map((k) => `reports.range_${k}`),
     ...['mileage', 'fuel', 'duty'].map((k) => `reports.${k}`),
     ...['uploaded', 'interrupted', 'recorded', 'uploading', 'failed', 'none', 'pruned'].map((k) => `reports.video_${k}`),
     ...['driver', 'office', 'auto', 'other'].map((k) => `reports.out_${k}`),

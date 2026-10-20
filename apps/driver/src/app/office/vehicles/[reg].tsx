@@ -13,7 +13,8 @@ import { Button, Mono, Txt } from '@/components/ui';
 import { docTone, kmLine, vehicleTone } from '@/office/manageLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleCard, VehicleDocuments, VehiclesList } from '@/office/types';
-import { BackHeader, Empty, ErrorNotice, Loading, Pill, Screen, Section } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { BackHeader, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -65,9 +66,10 @@ export default function VehicleScreen() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={reg} subtitle={v?.make_model} right={canEdit && v ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/office/vehicles/form', params: { reg } })} hitSlop={8} style={{ minHeight: 44, justifyContent: 'center' }}><Txt variant="strong" color="#ffffff">{t('office.vehicles.edit')}</Txt></Pressable> : undefined} />
       <Screen refreshing={loading && !!v} onRefresh={() => { void load(); void docsQ.reload(); }} bottom={16}>
-        {loading && !v && <Loading text={t('office.common.loading')} />}
-        {error && !v && <ErrorNotice error={error} onRetry={() => void load()} onSignIn={() => void signOut()} />}
-        {missing && !loading && <Empty text={t('office.vehicles.notFound', { plate: reg })} />}
+        {loading && !v && !error && <SkeletonRows rows={4} lines={2} />}
+        {error && !v && <ListFailed error={error} onRetry={() => void load()} onSignIn={() => void signOut()} />}
+        {error && v && <ListFailed stale error={error} onRetry={() => void load()} onSignIn={() => void signOut()} />}
+        {missing && !loading && <ListEmpty text={t('office.vehicles.notFound', { plate: reg })} />}
         {v && (
           <>
             {v.photo_url ? <Image source={{ uri: v.photo_url }} style={{ width: '100%', aspectRatio: 4 / 3, borderRadius: 18, backgroundColor: '#e9e7e0' }} resizeMode="cover" accessibilityLabel={reg} /> : null}
@@ -103,9 +105,9 @@ export default function VehicleScreen() {
             </View>
             {me.tools.includes('vehicle_documents') && (
               <Section title={t('office.vehicles.onFile')} count={docsQ.data?.documents.length}>
-                {docsQ.loading && !docsQ.data && <Loading text={t('office.common.loading')} />}
-                {docsQ.error && !docsQ.data && <ErrorNotice error={docsQ.error} onRetry={() => void docsQ.reload()} onSignIn={() => void signOut()} />}
-                {docsQ.data && docsQ.data.documents.length === 0 && <Empty text={t('office.vehicles.noFiles')} />}
+                {!docsQ.data && !docsQ.error && <SkeletonRows rows={2} lines={2} />}
+                {docsQ.error && <ListFailed stale={!!docsQ.data} error={docsQ.error} onRetry={() => void docsQ.reload()} onSignIn={() => void signOut()} />}
+                {docsQ.data && docsQ.data.documents.length === 0 && <ListEmpty text={t('office.vehicles.noFiles')} />}
                 {docsQ.data?.documents.map((doc) => (
                   <Pressable key={doc.id} accessibilityRole={doc.url ? 'link' : undefined} onPress={doc.url ? () => open(doc.url!) : undefined} style={{ paddingVertical: 10, gap: 2 }}>
                     <Txt variant="strong">{doc.kind_name}{doc.name && doc.name !== doc.kind_name ? ` · ${doc.name}` : ''}</Txt>

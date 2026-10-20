@@ -20,7 +20,8 @@ import { telLink } from '@/lib/format';
 import { useOffice, useTool } from '@/office/state';
 import { initials } from '@/office/text';
 import type { FleetError, NotificationSettings, SettingsResult } from '@/office/types';
-import { BackHeader, Divider, ErrorNotice, Loading, Screen, Section } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { BackHeader, Divider, ErrorNotice, ListFailed, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -168,9 +169,9 @@ export default function OfficeProfile() {
         </Section>
 
         <Section title={t('office.profile.notifications')}>
-          {notif.loading && <Loading text={t('office.common.loading')} />}
-          {notif.error && !notif.data && <ErrorNotice error={notif.error} onRetry={() => void notif.reload()} onSignIn={() => void signOut()} />}
-          {notif.data && notif.data.events.length === 0 && <Txt variant="muted" style={{ padding: 8 }}>{t('office.profile.noEvents')}</Txt>}
+          {!notif.data && !notif.error && <SkeletonRows rows={3} lines={2} />}
+          {notif.error && <ListFailed stale={!!notif.data} error={notif.error} onRetry={() => void notif.reload()} onSignIn={() => void signOut()} />}
+          {notif.data && notif.data.events.length === 0 && <ListEmpty text={t('office.profile.noEvents')} />}
           {notif.data?.events.map((ev, i) => (
             <View key={ev.event}>
               {i > 0 && <Divider />}
@@ -205,7 +206,7 @@ export default function OfficeProfile() {
                 ? <Mono size={17}>{phoneDisplay(officePhone)}</Mono>
                 : settings.error && !settings.data
                 ? <ErrorNotice error={settings.error} onRetry={() => void settings.reload()} />
-                : <Txt variant="muted" size={15}>{settings.data ? t('office.profile.officePhoneNone') : t('office.common.loading')}</Txt>}
+                : <Txt variant="muted" size={15}>{settings.data ? t('office.profile.officePhoneNone') : '—'}</Txt>}
             </View>
             {officeTel && (
               <Pressable accessibilityRole="button" accessibilityLabel={t('office.common.callOffice')} onPress={() => void Linking.openURL(officeTel)} style={styles.iconBtn}>

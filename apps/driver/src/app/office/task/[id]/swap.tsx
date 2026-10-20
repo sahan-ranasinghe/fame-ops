@@ -9,12 +9,13 @@ import { useMemo, useState } from 'react';
 import { Alert, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { useLeaveGuard } from '@/components/navigation';
-import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { Button, Plate, Txt } from '@/components/ui';
 import { useOffice, useTool } from '@/office/state';
 import { canSwap, type SwapFields, type SwapResult, swapInput, swapPlates, swapRows, typedKm } from '@/office/taskExtrasLogic';
 import { plateOf } from '@/office/taskLogic';
 import type { FleetError, TaskDetail, VehiclesList } from '@/office/types';
-import { BackHeader, Empty, ErrorNotice, Loading, Screen, StickyActions } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { BackHeader, ErrorNotice, ListFailed, Screen, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -86,11 +87,11 @@ export default function SwapVehicleScreen() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={t('office.task.swapVehicle')} subtitle={task ? [task.title, task.driver].filter(Boolean).join(' · ') : undefined} />
       <Screen bottom={16} refreshing={veh.refreshing} onRefresh={() => void Promise.all([q.reload(), veh.reload()])}>
-        {(q.loading || veh.loading) && rows.length === 0 && <Loading text={t('office.common.loading')} />}
-        {q.error && !task && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {veh.error && !veh.data && <ErrorNotice error={veh.error} onRetry={() => void veh.reload()} onSignIn={() => void signOut()} />}
-        {q.data && !task && <Empty text={t('office.task.notFound')} />}
-        {task && !running && <Empty text={t('office.task.swapNotRunning')} />}
+        {(q.loading || veh.loading) && rows.length === 0 && !q.error && !veh.error && <SkeletonRows rows={3} lines={1} />}
+        {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {veh.error && <ListFailed stale={!!veh.data} error={veh.error} onRetry={() => void veh.reload()} onSignIn={() => void signOut()} />}
+        {q.data && !task && <ListEmpty text={t('office.task.notFound')} />}
+        {task && !running && <ListEmpty text={t('office.task.swapNotRunning')} />}
         {task && running && (
           <>
             <Txt variant="muted">{t('office.task.swapIntro')}</Txt>

@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  activePill, appendDrivers, appendUsers, cutoffValue, driverLine, driverLine2, driversArgs, editableFields, emergencyText, emptyDriver, emptyUser, findDriverRow, findUserRow,
+  activePill, appendDrivers, appendUsers, cutoffValue, includeInactiveOf, peopleDriverDefs, driverLine, driverLine2, driversArgs, editableFields, emergencyText, emptyDriver, emptyUser, findDriverRow, findUserRow,
   isPin, isTime, latestDriverPhoneChange, licenceOf, licencePhotos, licenceTone, LIMIT, longDate, minutesValue, officePhoneValue, permissionWords, PERSONAL_TRIPS,
   personalTripsValue, phoneDisplay, phoneE164, presetOf, profileFields, profilePatch, QUICK_SETTINGS, randomPin, regularVehicleOf, samePhone, seesPrivate, selfLockout,
   settingInput, switchValue, togglePermission, updateDriverInput, updateUserInput, USERNAME_RULE, userFields, userLine, usersArgs, validateNewDriver, validateNewUser,
@@ -37,6 +37,9 @@ console.log('\n== The lists\' inputs and pages ==');
   check(LIMIT === 25, 'a page is 25');
   check(same(driversArgs('', false), { limit: 25 }), 'drivers: the active ones, no search', driversArgs('', false));
   check(same(driversArgs('  kamal ', true), { limit: 25, search: 'kamal', include_inactive: true }), 'drivers: the search trimmed, switched-off included', driversArgs('  kamal ', true));
+  const pdefs = peopleDriverDefs((k) => k);
+  check(pdefs.length === 1 && pdefs[0].default === 'active' && pdefs[0].kind === 'single' && same(pdefs[0].options.map((o) => o.value), ['active', 'all']) && pdefs[0].options[1].label === 'office.people.filterAll', 'the Filter sheet: Active (the default) or With switched off');
+  check(!includeInactiveOf({ show: 'active' }) && includeInactiveOf({ show: 'all' }) && !includeInactiveOf({}) && same(driversArgs('', includeInactiveOf({ show: 'all' })), { limit: 25, include_inactive: true }), 'the choice → include_inactive, exactly as the chip sent it');
   check(same(driversArgs('x', false, 'c2'), { limit: 25, search: 'x', cursor: 'c2' }), 'Load more sends the cursor');
   check(same(usersArgs('   '), { limit: 25 }) && same(usersArgs('sahan', 'c3'), { limit: 25, search: 'sahan', cursor: 'c3' }), 'users: the same way');
   const list: DriversList = { count: 2, total: 3, next: 'c2', drivers: [kamal, nimal] };
@@ -216,6 +219,9 @@ console.log('\n== The screens as text ==');
   check(files.drivers.includes("useTool<DriversList>('list_drivers'") && files.drivers.includes("'create_driver'") && files.drivers.includes('/office/people/driver-new') && files.drivers.includes("'/office/people/driver/[username]'"), 'Drivers: list_drivers, + Add driver only with create_driver, a row opens the driver');
   const driversCode = files.drivers.replace(/\/\/.*$/gm, '');
   check(driversCode.includes('appendDrivers') && driversCode.includes('d.next') && !driversCode.includes('include_inactive') && driversCode.includes("driversArgs(search, filter === 'all'"), 'Drivers: Load more on the cursor; the switched-off chip only through driversArgs');
+  check(files.drivers.includes('<FilterBar') && files.drivers.includes('defs={peopleDriverDefs(t)}') && !files.drivers.includes('FilterChips') && !files.drivers.includes('SearchBox') && files.drivers.includes('<SkeletonRows') && files.drivers.includes('<LoadMore') && !files.drivers.includes('<Loading'), 'Drivers: the search bar and one Filter button (Active / With switched off), skeleton rows, Load more');
+  check(files.users.includes('<FilterBar search={text}') && !files.users.includes('SearchBox') && files.users.includes('<SkeletonRows') && files.users.includes('<LoadMore') && !files.users.includes('<Loading'), 'Office users: the search bar (no filters), skeleton rows, Load more');
+  check([files.driver, files.user].every((f) => f.includes('<SkeletonRows') && f.includes('<ListFailed') && !f.includes('<Loading')), 'Manage a driver / an office user: skeleton rows first, the error with Try again');
   check(files.driver.includes("'driver_profile'") && files.driver.includes("'list_drivers', { search: username, include_inactive: true, limit: 25 }"), 'Manage a driver: driver_profile and the driver\'s row of list_drivers');
   for (const tool of ['update_driver', 'reset_pin', 'set_driver_active', 'driver_route', 'drivers_board', 'list_vehicles']) {
     check(files.driver.includes(`me.tools.includes('${tool}')`), `Manage a driver: ${tool} only when the person has it`);
@@ -272,7 +278,8 @@ console.log('\n== The strings (office.people in en.json and si.json; the sidecar
   check(emptySi.length === 0, 'no empty Sinhala string', emptySi);
 
   // Every office.people.* key the code uses (literal keys, and the template keys with their known tails).
-  const code = ['drivers.tsx', 'driver/[username].tsx', 'driver-new.tsx', 'users.tsx', 'user/[email].tsx', 'user-new.tsx', 'settings.tsx'].map((f) => read(`app/office/people/${f}`)).join('\n') + read('components/office/PeopleParts.tsx');
+  // The Filter sheet's words come from peopleLogic.ts (peopleDriverDefs), so it is read too.
+  const code = ['drivers.tsx', 'driver/[username].tsx', 'driver-new.tsx', 'users.tsx', 'user/[email].tsx', 'user-new.tsx', 'settings.tsx'].map((f) => read(`app/office/people/${f}`)).join('\n') + read('components/office/PeopleParts.tsx') + read('office/peopleLogic.ts');
   const used = new Set<string>();
   for (const m of code.matchAll(/office\.people\.([A-Za-z0-9_.]+)/g)) used.add(m[1]);
   // The keys built at run time: `office.people.${pill.key}`, driverErr.${problem}, userErr.${problem}, err.${problem}, field.${k}, trips.${v} / ${v}Hint.

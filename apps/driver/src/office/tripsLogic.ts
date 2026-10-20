@@ -3,6 +3,9 @@
 // the line under a title, who may withdraw (the person's own request while it waits), the reason cancel_request gets,
 // and where a row opens (an approver opens a request's page; nothing else opens in O1).
 
+import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
+import { addDays } from '../lib/time';
+
 import { isCreatedTask, tripLive } from './homeLogic';
 import { has } from './nav';
 import type { CreatedTaskCard, RequestCard } from './types';
@@ -44,6 +47,30 @@ export function tripBuckets(trips: readonly Trip[], filter: TripFilter): { key: 
   return TRIP_BUCKETS.filter((key) => filter === 'all' || key === filter)
     .map((key) => ({ key, trips: trips.filter((t) => bucketOf(t) === key) }))
     .filter((g) => g.trips.length > 0);
+}
+
+/** The Filter sheet's one section: All or a bucket (on the phone), with the counts of the trips loaded beside each. */
+export function tripsFilterDefs(trips: readonly Trip[] | undefined, tr: (key: string) => string): FilterDef[] {
+  const counts = trips ? bucketCounts(trips) : undefined;
+  return [{
+    key: 'show',
+    label: tr('office.trips.filterShow'),
+    kind: 'single',
+    default: 'all',
+    options: [
+      { value: 'all', label: tr('office.common.all'), ...(trips ? { count: trips.length } : {}) },
+      ...TRIP_BUCKETS.map((k) => ({ value: k, label: tr(`office.trips.${k}`), ...(counts ? { count: counts[k] } : {}) })),
+    ],
+  }];
+}
+
+export const tripsChoice = (values: FilterValues): TripFilter =>
+  ((TRIP_BUCKETS as readonly unknown[]).includes(values.show) ? values.show : 'all') as TripFilter;
+
+/** my_trips' input: the last 30 days to the next 60, everything the person made, and the words searched for (the tool's own `search`) only when there are any. */
+export function tripsArgs(today: string, limit: number, search = ''): Record<string, unknown> {
+  const words = search.trim();
+  return { from: addDays(today, -TRIPS_DAYS_BACK), to: addDays(today, TRIPS_DAYS_AHEAD), include: 'all', limit, ...(words ? { search: words } : {}) };
 }
 
 /** A stable key for a row: a request and a created task may share an id. */

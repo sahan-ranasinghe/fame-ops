@@ -8,7 +8,8 @@ import { Check } from '@/components/icons';
 import { Txt } from '@/components/ui';
 import { driverParts, driverPill, rankedDrivers } from '@/office/approveLogic';
 import type { Availability, AvailableDriver } from '@/office/types';
-import { Avatar, Empty, ErrorNotice, Loading, Pill } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Avatar, ListFailed, Pill } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -39,9 +40,10 @@ export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSi
           </Pressable>
         )}
       </View>
-      {noWindow && <Empty text={t('office.trip.needLeaveFirst')} />}
-      {loading && !data && <Loading text={t('office.common.loading')} />}
-      {error && !data && <ErrorNotice error={error as never} onRetry={onRetry} onSignIn={onSignIn} />}
+      {noWindow && <ListEmpty text={t('office.trip.needLeaveFirst')} />}
+      {loading && !data && !error && <SkeletonRows rows={3} lines={2} />}
+      {error && <ListFailed stale={!!data} error={error as never} onRetry={onRetry} onSignIn={onSignIn} />}
+      {data && !loading && drivers.length === 0 && <ListEmpty text={t('office.request.nobody')} />}
       {drivers.map((x) => {
         const on = !!x.username && x.username === picked;
         const pillKey = driverPill(x, best);

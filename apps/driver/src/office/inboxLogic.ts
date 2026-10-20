@@ -3,6 +3,7 @@
 // the line under an item, the rows patched read after a tap or "Mark all read", and the tone of each kind's icon tile.
 
 import { type DateNames, shortDate } from '@/lib/durations';
+import type { FilterDef, FilterValues } from '@/lib/patterns/filterLogic';
 import { addDays } from '@/lib/time';
 import type { InboxItem } from './types';
 import type { Tone } from './ui';
@@ -30,6 +31,28 @@ export function dayKey(at: string | undefined, today: string): DayKey {
 }
 
 /** All, or only what is not read yet. */
+/** The Filter sheet's one section: All or Unread (filtered on the phone), the unread count beside it. */
+export function inboxFilterDefs(unread: number | undefined, tr: (key: string) => string): FilterDef[] {
+  return [{
+    key: 'show',
+    label: tr('office.alerts.filterShow'),
+    kind: 'single',
+    default: 'all',
+    options: [
+      { value: 'all', label: tr('office.common.all') },
+      { value: 'unread', label: tr('office.alerts.unread'), ...(unread !== undefined ? { count: unread } : {}) },
+    ],
+  }];
+}
+
+export const inboxChoice = (values: FilterValues): InboxFilter => (values.show === 'unread' ? 'unread' : 'all');
+
+/** my_inbox's input: the page, and the words searched for only when there are any (the tool's own `search`). */
+export function inboxArgs(limit: number, search = ''): Record<string, unknown> {
+  const words = search.trim();
+  return { limit, ...(words ? { search: words } : {}) };
+}
+
 export function filterInbox(items: readonly InboxItem[], filter: InboxFilter): InboxItem[] {
   return filter === 'unread' ? items.filter((i) => !i.read) : [...items];
 }

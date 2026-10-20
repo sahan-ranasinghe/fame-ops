@@ -5,21 +5,25 @@
 // whose link has no screen in O1 is only marked read and shows no Open pill: no button that does nothing.
 
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Check, ChevronRight, ClipboardCheck, type LucideIcon, TriangleAlert, Van } from '@/components/icons';
+import { FilterBar } from '@/components/patterns/FilterBar';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
+import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
-import { filterInbox, groupByDay, inboxLine, type InboxFilter, kindTone, markRead, unreadAfter } from '@/office/inboxLogic';
+import { filterInbox, groupByDay, inboxArgs, inboxChoice, inboxFilterDefs, inboxLine, kindTone, markRead, unreadAfter } from '@/office/inboxLogic';
 import { routeForUrl } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, Inbox, InboxItem } from '@/office/types';
-import { DarkHeader, Empty, ErrorNotice, FilterChips, Loading, Screen, type Tone } from '@/office/ui';
+import { DarkHeader, ErrorNotice, ListFailed, Screen, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
 const LIMIT = 50;
+const SEARCH_DEBOUNCE_MS = 500;
 
 const ICONS: Record<InboxItem['kind'], LucideIcon> = { urgent: TriangleAlert, alarm: TriangleAlert, alert: ClipboardCheck, soft: Van, info: Check };
 const TILE: Record<Tone, { bg: string; ink: string }> = {
@@ -34,10 +38,17 @@ export default function AlertsTab() {
   const { t, tList } = useApp();
   const { me, api, signOut, unread, setUnread, reloadUnread } = useOffice();
   const router = useRouter();
-  const [filter, setFilter] = useState<InboxFilter>('all');
+  const [values, setValues] = useState<FilterValues>({ show: 'all' });
+  const filter = inboxChoice(values);
+  const [text, setText] = useState('');
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(text.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [text]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<FleetError | null>(null);
-  const q = useTool<Inbox>('my_inbox', { limit: LIMIT }, { every: 60_000 });
+  const q = useTool<Inbox>('my_inbox', inboxArgs(LIMIT, search), { every: 60_000 });
   const today = colomboDate();
   const names = { days: tList('days'), months: tList('months') };
   const unreadN = q.data?.unread ?? unread;
@@ -82,15 +93,19 @@ export default function AlertsTab() {
         )}
       </DarkHeader>
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
-        <FilterChips<InboxFilter>
-          options={[{ key: 'all', label: t('office.common.all') }, { key: 'unread', label: t('office.alerts.unread'), n: unreadN }]}
-          value={filter}
-          onChange={setFilter}
+        <FilterBar
+          search={text}
+          onSearch={(v) => { setText(v); if (!v) setSearch(''); }}
+          placeholder={t('office.alerts.search')}
+          defs={inboxFilterDefs(unreadN, t)}
+          values={values}
+          onApply={setValues}
         />
         {problem && <ErrorNotice error={problem} onRetry={() => void markAll()} onSignIn={() => void signOut()} />}
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !q.data && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {q.data && groups.length === 0 && <Empty text={t(filter === 'unread' ? 'office.alerts.noneUnread' : 'office.alerts.none')} />}
+        {!q.data && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {!q.data && !q.error && <SkeletonRows rows={5} lines={2} />}
+        {q.data && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {q.data && groups.length === 0 && <ListEmpty text={search ? t('office.alerts.noneMatch', { search }) : t(filter === 'unread' ? 'office.alerts.noneUnread' : 'office.alerts.none')} />}
         {groups.map((g) => (
           <View key={g.key} style={{ gap: 8 }}>
             <Txt variant="label" color={colors.muted} style={{ paddingHorizontal: 2 }}>{t(`office.common.${g.key}`).toUpperCase()}</Txt>

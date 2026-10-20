@@ -7,12 +7,36 @@
 // native module; the words come through `t`.
 
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
+import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
 import { addDays } from '../lib/time';
 import type { BoardDriver, BoardFilter, DriverRoute, RouteSegment, UnavailableEntry, UnavailablePart, UnavailableReason } from './types';
 
 export type Words = (key: string, vars?: Record<string, string | number>) => string;
 
 export const BOARD_FILTERS: readonly BoardFilter[] = ['all', 'free_now', 'on_task', 'off_duty', 'not_available'];
+
+/** The Filter sheet's one section (Now only): drivers_board's own `filter`, with the server's counts beside each choice. */
+export function boardFilterDefs(counts: Partial<Record<BoardFilter, number>> | undefined, tr: (key: string) => string): FilterDef[] {
+  return [{
+    key: 'filter',
+    label: tr('office.drivers.filterLabel'),
+    kind: 'single',
+    default: 'all',
+    options: BOARD_FILTERS.map((k) => ({ value: k, label: tr(`office.drivers.filter.${k}`), ...(counts?.[k] !== undefined ? { count: counts[k] } : {}) })),
+  }];
+}
+
+export const boardChoice = (values: FilterValues): BoardFilter =>
+  ((BOARD_FILTERS as readonly unknown[]).includes(values.filter) ? values.filter : 'all') as BoardFilter;
+
+/**
+ * drivers_board's input: Now with the filter chosen, Week every driver (no filter); the words searched for (the tool's
+ * own `search`: the name, the username, the plate) only when there are any.
+ */
+export function boardArgs(view: 'now' | 'week', filter: BoardFilter, search = ''): Record<string, unknown> {
+  const words = search.trim();
+  return { ...(view === 'now' ? { filter } : {}), ...(words ? { search: words } : {}) };
+}
 
 export type BoardTone = 'blue' | 'green' | 'red' | 'muted';
 export type BoardPillKey = 'onTask' | 'free' | 'onDuty' | 'offDuty' | 'notAvailable';

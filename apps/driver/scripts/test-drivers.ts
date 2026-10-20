@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  BAND_COLORS, BOARD_FILTERS, boardPill, coversDay, dayNumbers, entryParts, estimatedLines, heldPlate, HOLE_MIN, PARTS, REASONS, routeFrame, routeLines, routePoints, rowFrame, rowLines,
+  BAND_COLORS, boardArgs, boardChoice, boardFilterDefs, BOARD_FILTERS, boardPill, coversDay, dayNumbers, entryParts, estimatedLines, heldPlate, HOLE_MIN, PARTS, REASONS, routeFrame, routeLines, routePoints, rowFrame, rowLines,
   segmentLine, segmentTone, SPEED_BANDS, speedBand, speedLines, stopMarks, unavailabilityInput, weekDays, weekGrid, type Words,
 } from '../src/office/driversLogic';
 import type { BoardDriver, DriverRoute, UnavailableEntry } from '../src/office/types';
@@ -36,6 +36,11 @@ const busy = driver({ name: 'Asela', username: 'asela', status: { kind: 'on_duty
 console.log('\n== The chips, the pill and the dot ==');
 {
   check(same(BOARD_FILTERS, ['all', 'free_now', 'on_task', 'off_duty', 'not_available']), 'All · Free now · On a task · Off duty · Not available, the tool\'s own filters');
+  // The Filter sheet (docs/ui-patterns.md §1) and drivers_board's input: the same as the chips sent, the search only when typed.
+  const bdefs = boardFilterDefs({ all: 5, free_now: 2, on_task: 1 }, (k) => k);
+  check(bdefs.length === 1 && bdefs[0].default === 'all' && same(bdefs[0].options.map((o) => o.value), [...BOARD_FILTERS]) && bdefs[0].options[1].count === 2 && bdefs[0].options[3].count === undefined && bdefs[0].options[1].label === 'office.drivers.filter.free_now', 'the Filter sheet: the five filters with the server\'s counts');
+  check(boardChoice({ filter: 'on_task' }) === 'on_task' && boardChoice({ filter: 'x' }) === 'all' && boardChoice({}) === 'all', 'the choice read back (anything unknown is All)');
+  check(same(boardArgs('now', 'all'), { filter: 'all' }) && same(boardArgs('now', 'free_now', ' kam '), { filter: 'free_now', search: 'kam' }) && same(boardArgs('week', 'free_now'), {}) && same(boardArgs('week', 'all', 'kam'), { search: 'kam' }), 'drivers_board: Now with the filter, Week every driver; the search trimmed, only when typed');
   check(same(boardPill(sunil), { key: 'onTask', tone: 'blue' }), 'on a task: blue');
   check(same(boardPill(ruwan), { key: 'free', tone: 'green' }), 'on duty and free now: green');
   check(same(boardPill(busy), { key: 'onDuty', tone: 'muted' }), 'on duty but not free: grey "on duty"');
@@ -169,19 +174,23 @@ console.log('\n== The route: the points, the legs, the stops, the frames ==');
   check(segmentLine(route.timeline![2], t) === '09:10–09:32 · dur.minutes(22) · office.drivers.uploadedLater(09:40)', 'a stop uploaded later: no km, the upload time', segmentLine(route.timeline![2], t));
 }
 
+const page0 = () => read('src/app/office/driver/[username].tsx');
 console.log('\n== The tab, the page, the map and its two engines (read as text) ==');
 {
   const tab = read('src/app/office/(tabs)/drivers.tsx');
-  check(/useTool<DriversBoard>\('drivers_board', view === 'now' \? \{ filter \} : \{\}, \{ every: EVERY_MS \}\)/.test(tab) && /const EVERY_MS = 60_000;/.test(tab), 'drivers_board with the chip as its filter (every driver in Week), every 60 s');
+  check(/useTool<DriversBoard>\('drivers_board', boardArgs\(view, filter, search\), \{ every: EVERY_MS \}\)/.test(tab) && /const EVERY_MS = 60_000;/.test(tab), 'drivers_board with the Filter sheet\'s choice as its filter (every driver in Week) and the search, every 60 s');
   check(/useTool<UnavailabilityList>\('unavailability', \{ from: today, to: addDays\(today, 6\) \}, \{ every: EVERY_MS, enabled: view === 'week' \}\)/.test(tab), 'unavailability from today to +6, only in Week');
   check(/const mayAsk = me\.tools\.includes\('ask_drivers'\);/.test(tab) && /const mayAdd = me\.tools\.includes\('set_unavailability'\);/.test(tab) && /const mayRemove = me\.tools\.includes\('remove_unavailability'\);/.test(tab),
     'Ask drivers, + Not available and Remove by the person\'s tools');
   check(/\{mayAsk && \(\s*<AskBar/.test(tab) && /onAdd=\{mayAdd && row\.username \? /.test(tab) && /onRemove=\{mayRemove \? confirmRemove : undefined\}/.test(tab), 'none of the three is shown to someone who may not (no dead UI)');
   check(/Alert\.alert\(t\('office\.drivers\.removeTitle'\)/.test(tab) && /api\.call\('remove_unavailability', \{ id: e\.id \}\)/.test(tab), 'Remove asks first, then remove_unavailability');
   check(/api\.call<SetUnavailabilityResult>\('set_unavailability', checked\.input\)/.test(tab) && /unavailabilityInput\(form\)/.test(tab), 'the sheet sends the logic\'s input through set_unavailability');
-  check(/<Modal visible=\{visible\} transparent animationType="slide" onRequestClose=\{onClose\}>/.test(tab), 'the Not available sheet is a Modal (the back button closes it)');
+  check(/<Sheet\s+visible=\{visible\}/.test(tab) && !/<Modal/.test(tab), 'the Not available sheet is the one bottom sheet (the back button closes it)');
+  check(/<TripDayPicker value=\{date\}/.test(tab) && /<DateField label=\{t\('office\.drivers\.lastDay'\)\} value=\{toDate\}/.test(tab) && /<TimeField label=\{t\('office\.drivers\.from'\)\} value=\{from\} onCommit=\{setFrom\}/.test(tab) && /<TimeField label=\{t\('office\.drivers\.to'\)\} value=\{to\} onCommit=\{setTo\}/.test(tab) && !/placeholder="HH:MM"/.test(tab),
+    'the sheet: the day as Today / Tomorrow / Pick a date, until as a date field, from–to in the time sheet (no typed times)');
   check(/router\.push\(\{ pathname: '\/office\/driver\/\[username\]', params: \{ username: d\.username \} \}\)/.test(tab), 'a row opens the driver\'s page');
-  check(/BOARD_FILTERS\.map/.test(tab) && /board\.data\?\.counts\[k\]/.test(tab), 'the chips with the server\'s counts');
+  check(/<FilterBar/.test(tab) && /defs=\{view === 'now' \? boardFilterDefs\(board\.data\?\.counts, t\) : \[\]\}/.test(tab) && !/FilterChips|ScrollView horizontal/.test(tab), 'the search bar and one Filter button with the server\'s counts (Now only), no chip row');
+  check(/<SkeletonRows/.test(tab) && /<ListFailed/.test(tab) && !/<Loading/.test(tab) && /<SkeletonRows/.test(page0()) && !/<Loading/.test(page0()), 'skeleton rows while loading, the error with Try again (the tab and the driver\'s page)');
   check(/callBtn: \{ width: 48, height: 48/.test(tab) && /segBtn: \{ minWidth: 72, minHeight: 40/.test(tab) && /cell: \{ width: 40, height: 40/.test(tab), 'the Call button 48 px; the week\'s cells 40 px');
   check(!/me\.role|role ===|'admin'|'fleet_admin'/.test(tab), 'no role names');
 

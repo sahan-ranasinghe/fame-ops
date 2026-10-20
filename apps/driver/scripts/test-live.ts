@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  dutyOf, filterCounts, filterDrivers, focusOf, frameAll, hasPosition, LIVE_FILTERS, markerLabel, markersOf, markerTone, pillOf, positionsKey, rowLine,
+  dutyOf, filterCounts, filterDrivers, focusOf, frameAll, hasPosition, liveChoice, liveFilterDefs, LIVE_FILTERS, markerLabel, markersOf, markerTone, pillOf, positionsKey, rowLine,
   type Words,
 } from '../src/office/liveLogic';
 import type { LiveDriver } from '../src/office/types';
@@ -62,6 +62,10 @@ console.log('\n== The chips: who belongs under which, and the counts ==');
   check(dutyOf({ task: 'x' }) === 'on_task' && dutyOf({ status: 'not_sharing' }) === 'off_duty' && dutyOf({ state: 'not_sharing' }) === 'off_duty'
     && dutyOf({ status: 'live' }) === 'on_duty' && dutyOf({ duty: 'off_duty', task: 'x' }) === 'off_duty',
     'no duty field: a task = on a task, not sharing = off duty, else on duty; the server\'s duty wins');
+  // The Filter sheet (docs/ui-patterns.md §1), no search: the duty with the counts.
+  const defs = liveFilterDefs(counts, (k) => k);
+  check(defs.length === 1 && defs[0].default === 'all' && JSON.stringify(defs[0].options.map((o) => [o.value, o.count])) === JSON.stringify([['all', 5], ['on_task', 1], ['on_duty', 2], ['off_duty', 2]]) && defs[0].options[1].label === 'office.live.filter.on_task', 'the Filter sheet: the four with their counts');
+  check(liveFilterDefs(undefined, (k) => k)[0].options.every((o) => o.count === undefined) && liveChoice({ duty: 'off_duty' }) === 'off_duty' && liveChoice({ duty: 'x' }) === 'all', 'no counts before the answer; the choice read back');
 }
 
 console.log('\n== The line under the name ==');
@@ -147,6 +151,7 @@ console.log('\n== The screen and the two engines ==');
 {
   const screen = read('src/app/office/(tabs)/live.tsx');
   check(/useTool<LiveDrivers>\('live_drivers', \{\}, \{ every: 30_000 \}\)/.test(screen), 'live_drivers with no arguments, every 30 s while in front');
+  check(/<FilterBar defs=\{liveFilterDefs\(q\.data \? counts : undefined, t\)\} values=\{values\} onApply=\{setValues\}/.test(screen) && !/FilterChips/.test(screen) && /<SkeletonRows/.test(screen) && !/<Loading/.test(screen), 'one Filter button without a search (no chip row), skeleton rows while loading');
   check(/useLocalSearchParams<\{ driver\?: string \}>\(\)/.test(screen) && /d\.username === param \|\| d\.driver === param/.test(screen) && /setSelected\(found\.username\)/.test(screen) && /router\.setParams\(\{ driver: '' \}\)/.test(screen),
     '?driver=<username or name> selects that driver once, then the parameter is forgotten');
   // O2: the map also gets the route layers (the trails, the shown route, the playback marker: scripts/test-live-route.ts).

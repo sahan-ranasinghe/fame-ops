@@ -23,7 +23,8 @@ import {
 } from '@/office/peopleLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriverProfile, DriversList, FleetError, Vehicle, VehiclesList } from '@/office/types';
-import { Avatar, Divider, Empty, ErrorNotice, Loading, Pill, Screen, Section } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Avatar, Divider, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -214,9 +215,9 @@ export default function ManageDriver() {
       </View>
 
       <Screen refreshing={profile.refreshing} onRefresh={refresh}>
-        {(profile.loading || list.loading) && !d && !row && <Loading text={t('office.common.loading')} />}
-        {profile.error && !p && <ErrorNotice error={profile.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-        {notFound && <Empty text={t('office.people.notFound', { username })} />}
+        {(profile.loading || list.loading) && !d && !row && !profile.error && <SkeletonRows rows={3} lines={2} />}
+        {profile.error && <ListFailed stale={!!p} error={profile.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        {notFound && <ListEmpty text={t('office.people.notFound', { username })} />}
         {p && p.missing.length > 0 && <Notice text={t('office.people.missing', { list: p.missing.join(', ') })} />}
 
         {mayBoard && (
@@ -328,7 +329,7 @@ export default function ManageDriver() {
                 {mayVehicles
                   ? regular
                     ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Plate regNo={regular.reg_no} />{regular.make_model ? <Txt variant="muted" size={15}>{regular.make_model}</Txt> : null}</View>
-                    : <Txt variant="muted" size={15}>{vehicles.loading ? t('office.common.loading') : t('office.people.noVehicle')}</Txt>
+                    : <Txt variant="muted" size={15}>{vehicles.loading ? '—' : t('office.people.noVehicle')}</Txt>
                   : plate
                   ? <Plate regNo={plate.split(' · ')[0]} />
                   : <Txt variant="muted" size={15}>{t('office.people.noVehicle')}</Txt>}

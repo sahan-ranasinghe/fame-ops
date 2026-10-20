@@ -18,7 +18,8 @@ import { askTargets } from '@/office/askLogic';
 import { useOffice, useTool } from '@/office/state';
 import { availabilityArgsForTask, CANCEL_TEXT, cancelInput, declinedThisTask, firstPickForTask, leaveIn, plateOf, reassignInput } from '@/office/taskLogic';
 import type { Availability, FleetError, TaskDetail } from '@/office/types';
-import { Avatar, BackHeader, Divider, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -105,8 +106,8 @@ export default function GiveDriverScreen() {
         subtitle={task ? [task.needs_driver ? t('office.home.needsDriver') : t('office.task.reassign'), leave ? t(leave.key === 'leavesIn' ? 'office.give.leavesIn' : 'office.give.passed', { dur: durationText(t, leave.minutes) }) : ''].filter(Boolean).join(' · ') : undefined}
       />
       <Screen refreshing={q.refreshing} onRefresh={refresh} bottom={16}>
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !p && <ErrorNotice error={q.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+        {!p && !q.error && <SkeletonRows rows={2} lines={2} />}
+        {q.error && <ListFailed stale={!!p} error={q.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {task && (
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             {task.needs_driver && (
@@ -182,10 +183,10 @@ export default function GiveDriverScreen() {
             link={mayAsk && drivers.length > 0 ? t('office.ask.open') : undefined}
             onLink={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined}
           >
-            {!availArgs && <Empty text={t('office.request.noTime')} />}
-            {avail.loading && <Loading text={t('office.common.loading')} />}
-            {avail.error && !avail.data && <ErrorNotice error={avail.error} onRetry={refresh} />}
-            {avail.data && drivers.length === 0 && <Empty text={t('office.request.nobody')} />}
+            {!availArgs && <ListEmpty text={t('office.request.noTime')} />}
+            {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
+            {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+            {avail.data && drivers.length === 0 && <ListEmpty text={t('office.request.nobody')} />}
             {drivers.map((d, i) => {
               const on = !!d.username && d.username === pick;
               const declined = declinedThisTask(task, d);

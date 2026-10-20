@@ -17,7 +17,8 @@ import { useOffice, useTool } from '@/office/state';
 import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
 import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, stopLateMin, stopParts, steps, taskStatusKey } from '@/office/taskLogic';
 import type { FleetError, TaskDetail } from '@/office/types';
-import { Avatar, BackHeader, Empty, ErrorNotice, Loading, Pill, Screen, Section, StickyActions } from '@/office/ui';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Avatar, BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { statusTone } from '@/office/homeLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -48,12 +49,13 @@ export default function TaskDetailScreen() {
   const task = p?.task;
   const [cancelling, setCancelling] = useState(false);
   const [reopening, setReopening] = useState(false);
-  const [busy, setBusy] = useState(false);
+  // The action under way (its button shows the spinner; the others wait).
+  const [busy, setBusy] = useState<'cancel' | 'reopen' | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
 
   async function cancel(label: string, note: string) {
     if (!task || busy) return;
-    setBusy(true);
+    setBusy('cancel');
     setProblem(null);
     try {
       await api.call('cancel_task', cancelInput(task.id, label, note));
@@ -62,13 +64,13 @@ export default function TaskDetailScreen() {
       setProblem(e as FleetError);
       void q.reload();
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
   async function reopen(label: string, note: string) {
     if (!task || busy) return;
-    setBusy(true);
+    setBusy('reopen');
     setProblem(null);
     try {
       await api.call('reopen_task', reopenInput(task.id, label, note));
@@ -78,7 +80,7 @@ export default function TaskDetailScreen() {
       setProblem(e as FleetError);
       void q.reload();
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
@@ -106,9 +108,9 @@ export default function TaskDetailScreen() {
         subtitle={task ? [t('office.task.task'), task.start, p?.from_request ? t('office.task.askedBy', { name: p.from_request.requested_by }) : task.created_by ? t('office.task.madeBy', { name: task.created_by }) : ''].filter(Boolean).join(' · ') : undefined}
       />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} bottom={16}>
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !p && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {q.data && !task && <Empty text={t('office.task.notFound')} />}
+        {!p && !q.error && <SkeletonRows rows={4} lines={2} />}
+        {q.error && <ListFailed stale={!!p} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {q.data && !task && <ListEmpty text={t('office.task.notFound')} />}
         {task && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pill text={t(`office.status.${statusKey}`)} tone={statusTone(statusKey)} size={15} />
@@ -220,23 +222,23 @@ export default function TaskDetailScreen() {
         {task && (actions.reassign || actions.cancel) && (
           <View style={{ flexDirection: 'row', gap: 10 }}>
             {actions.reassign && <Button kind="outline" label={task.needs_driver ? t('office.home.giveDriver') : t('office.task.reassign')} onPress={() => router.push({ pathname: '/office/task/[id]/driver', params: { id: task.id } })} style={{ flex: 1, minHeight: 56 }} />}
-            {actions.cancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => setCancelling(true)} disabled={busy} style={{ flex: 1, minHeight: 56, borderColor: colors.red }} />}
+            {actions.cancel && <Button kind="outline" label={t('office.task.cancel')} onPress={() => setCancelling(true)} busy={busy === 'cancel'} disabled={busy !== null} style={{ flex: 1, minHeight: 56, borderColor: colors.red }} />}
           </View>
         )}
         {task && (extras.time || extras.stops) && (
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            {extras.time && <Button kind="outline" label={t('office.task.changeTime')} onPress={() => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } })} disabled={busy} style={{ flex: 1, minHeight: 56 }} />}
-            {extras.stops && <Button kind="outline" label={t('office.task.changeStops')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } })} disabled={busy} style={{ flex: 1, minHeight: 56 }} />}
+            {extras.time && <Button kind="outline" label={t('office.task.changeTime')} onPress={() => router.push({ pathname: '/office/task/[id]/time', params: { id: task.id } })} disabled={busy !== null} style={{ flex: 1, minHeight: 56 }} />}
+            {extras.stops && <Button kind="outline" label={t('office.task.changeStops')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'stops', id: task.id } })} disabled={busy !== null} style={{ flex: 1, minHeight: 56 }} />}
           </View>
         )}
         {task && extras.swap && (
-          <Button kind="outline" label={t('office.task.swapVehicle')} onPress={() => router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } })} disabled={busy} style={{ minHeight: 56 }} />
+          <Button kind="outline" label={t('office.task.swapVehicle')} onPress={() => router.push({ pathname: '/office/task/[id]/swap', params: { id: task.id } })} disabled={busy !== null} style={{ minHeight: 56 }} />
         )}
         {task && extras.reopen && (
           <View style={styles.card}>
             <Txt variant="strong">{t('office.task.reopenTitle')}</Txt>
             <Txt variant="muted" size={15}>{t('office.task.reopenIntro')}</Txt>
-            <Button kind="outline" label={t('office.task.reopen')} onPress={() => setReopening(true)} disabled={busy} style={{ minHeight: 56 }} />
+            <Button kind="outline" label={t('office.task.reopen')} onPress={() => setReopening(true)} busy={busy === 'reopen'} disabled={busy !== null} style={{ minHeight: 56 }} />
           </View>
         )}
         {task && (task.contact?.name || p?.from_request) && (
@@ -279,7 +281,6 @@ export default function TaskDetailScreen() {
         }}
         onClose={() => setReopening(false)}
       />
-      {busy && <StickyActions><Loading text={t(reopening || !cancelling ? 'office.task.working' : 'office.task.cancelling')} /></StickyActions>}
     </View>
   );
 }

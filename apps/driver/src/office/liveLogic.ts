@@ -5,6 +5,7 @@
 // same fields. The server's own sentences (status_text: "Location off since 09:10") are shown as they are.
 
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
+import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
 import { initials } from './text';
 import type { DutyState, LiveDriver } from './types';
 
@@ -28,6 +29,20 @@ export function filterCounts(drivers: readonly DutyOf[]): Record<LiveFilter, num
   for (const d of drivers) counts[dutyOf(d)]++;
   return counts;
 }
+
+/** The Filter sheet's one section (no search: the map's list is short): the duty, with the counts beside each choice. */
+export function liveFilterDefs(counts: Record<LiveFilter, number> | undefined, t: Words): FilterDef[] {
+  return [{
+    key: 'duty',
+    label: t('office.live.filterLabel'),
+    kind: 'single',
+    default: 'all',
+    options: LIVE_FILTERS.map((k) => ({ value: k, label: t(`office.live.filter.${k}`), ...(counts ? { count: counts[k] } : {}) })),
+  }];
+}
+
+export const liveChoice = (values: FilterValues): LiveFilter =>
+  ((LIVE_FILTERS as readonly unknown[]).includes(values.duty) ? values.duty : 'all') as LiveFilter;
 
 /** The rows (and the markers) under a chip, in the server's order. */
 export function filterDrivers<D extends DutyOf>(drivers: readonly D[], filter: LiveFilter): D[] {

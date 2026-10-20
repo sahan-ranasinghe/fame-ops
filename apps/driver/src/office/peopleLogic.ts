@@ -5,6 +5,8 @@
 // phone rule (+94…, profileLogic), and the quick settings rows with each value's update_settings input. Problems are short
 // codes the screens turn into words (office.people.err.*), never English here.
 
+import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
+
 import { IMPLIES_VIEW, normalisePermissions, type Permission, PERMISSION_TEXT, PERMISSIONS, PRESETS } from './permissions';
 import type { Driver, DriverProfile, DriversList, FleetSettings, OfficeUser, OfficeUsers } from './types';
 
@@ -19,6 +21,20 @@ export const SEARCH_DEBOUNCE_MS = 500;
 // ---- The lists ----
 
 /** list_drivers' input: the search trimmed, switched-off drivers when asked, a page at a time. */
+/** People → Drivers' Filter sheet: Active (the default) or With switched off (list_drivers' `include_inactive`). */
+export function peopleDriverDefs(tr: Words): FilterDef[] {
+  return [{
+    key: 'show',
+    label: tr('office.people.filterShow'),
+    kind: 'single',
+    default: 'active',
+    options: [{ value: 'active', label: tr('office.people.filterActive') }, { value: 'all', label: tr('office.people.filterAll') }],
+  }];
+}
+
+/** Whether the switched-off drivers are asked for too. */
+export const includeInactiveOf = (values: FilterValues): boolean => values.show === 'all';
+
 export function driversArgs(search: string, includeInactive: boolean, cursor?: string): Record<string, unknown> {
   const args: Record<string, unknown> = { limit: LIMIT };
   const s = search.trim();

@@ -931,12 +931,11 @@
       "title": "Requests to approve",
       "waiting": "Waiting",
       "reviewing": "{name} is reviewing",
-      "late": "Leave-by passed · not decided"
+      "late": "Leave-by passed · not decided",
+      "none": "No requests waiting. New ones appear here."
     },
     "tasks": {
       "above": "The day's board",
-      "prevDay": "The day before",
-      "nextDay": "The day after",
       "onTheWay": "On the way",
       "sent": "Sent to the driver",
       "waitingApproval": "Waiting for approval",
@@ -978,7 +977,11 @@
       "withdrawn": "Request withdrawn.",
       "reasonNotNeeded": "Not needed any more",
       "reasonPlansChanged": "Plans changed",
-      "reasonOther": "Other"
+      "reasonOther": "Other",
+      "search": "Title, place, driver or plate",
+      "filterShow": "Show",
+      "noneMatch": "Nothing for “{search}”.",
+      "noneInFilter": "No trips under this filter."
     },
     "request": {
       "title": "Approve a request",
@@ -1064,14 +1067,12 @@
       "cancelNoVehicle": "No vehicle",
       "cancelOther": "Other",
       "cancelledTitle": "Task cancelled",
-      "cancelling": "Cancelling…",
       "requesterPush": "Requester {name} gets a push for every change",
       "nextStop": "next: {place}",
       "backAbout": "back about {time}",
       "changeTime": "Change the task",
       "changeStops": "Change stops",
       "swapVehicle": "Swap vehicle",
-      "working": "Working…",
       "reopen": "Reopen task",
       "reopenTitle": "Reopen this task",
       "reopenIntro": "For a wrong end reading or a task finished too soon: it goes back to in progress on the driver's phone, the end reading and the finish time are cleared (the history keeps them) and the driver finishes it again. Only on the day it was completed.",
@@ -1151,7 +1152,10 @@
       "unread": "Unread",
       "none": "No notifications in the last 30 days.",
       "noneUnread": "Nothing unread.",
-      "open": "Open"
+      "open": "Open",
+      "search": "Search notifications",
+      "filterShow": "Show",
+      "noneMatch": "Nothing for “{search}”."
     },
     "profile": {
       "contact": "Contact",
@@ -1204,7 +1208,6 @@
       "trails": "Today's trails",
       "trailsLoading": "Loading trails…",
       "trailsNotDrawn": "+{n} not drawn",
-      "routeLoading": "Loading today's route…",
       "routeFailed": "Today's route could not be loaded.",
       "routeNone": "No positions recorded today.",
       "routeToday": "Today: {km} km",
@@ -1215,7 +1218,8 @@
       "play": "Play",
       "pause": "Pause",
       "slider": "Playback time",
-      "estimated": "estimated"
+      "estimated": "estimated",
+      "filterLabel": "Status"
     },
     "trip": {
       "step_where": "Where",
@@ -1478,9 +1482,6 @@
         "dismissed": "dismissed"
       },
       "searchPlaceholder": "Title, plate, driver or detail",
-      "clearSearch": "Clear the search",
-      "showing": "Showing {n} of {total}",
-      "loadMore": "Load more",
       "empty": {
         "active": "Nothing needs attention. The fleet is in order.",
         "open": "Nothing open.",
@@ -1590,7 +1591,11 @@
         "push_failed": "Push failed",
         "routing_failed": "Routing failed",
         "map_fallback": "Google map failed"
-      }
+      },
+      "filterStatus": "Status",
+      "filterSeverity": "Severity",
+      "sort_urgent": "Most urgent first",
+      "sort_newest": "Newest first"
     },
     "ask": {
       "title": "Ask drivers",
@@ -1664,7 +1669,6 @@
       "notAvailableTitle": "Not available",
       "day": "Day",
       "lastDay": "Until (full days)",
-      "sameDay": "same day",
       "part": {
         "label": "When",
         "full_day": "Full day",
@@ -1731,7 +1735,10 @@
         "timeline": "Timeline",
         "mapUnavailableBody": "No map can load now: no internet, or the map service is down. The timeline is below."
       },
-      "uploadedLater": "uploaded {time}"
+      "uploadedLater": "uploaded {time}",
+      "search": "Name, username or plate",
+      "filterLabel": "Status",
+      "noneMatch": "Nobody matches “{search}”."
     },
     "vehicles": {
       "title": "Vehicles",
@@ -1740,8 +1747,6 @@
       "search": "Plate, make, driver or custodian",
       "none": "No vehicles yet.",
       "noneMatch": "Nothing matches \"{text}\".",
-      "loadMore": "Load more",
-      "shown": "{n} of {total} shown",
       "seats": "{n} seats",
       "heldBy": "with {name} now",
       "assignedTo": "assigned to {name}",
@@ -1824,7 +1829,10 @@
       "badNumber": "{field}: a whole number.",
       "registeredTitle": "{plate} is registered",
       "registeredBody": "Its photos and documents can be added on a laptop.",
-      "updatedTitle": "Vehicle updated"
+      "updatedTitle": "Vehicle updated",
+      "filterLabel": "Show",
+      "noneRegister": "No vehicles yet. Register the first one.",
+      "noneInFilter": "No vehicles under this filter."
     },
     "reports": {
       "title": "Reports",
@@ -1832,12 +1840,6 @@
       "fuel": "Fuel",
       "duty": "Duty log",
       "nothing": "No reports for your permissions.",
-      "range_today": "Today",
-      "range_week": "This week",
-      "range_month": "This month",
-      "range_last_month": "Last month",
-      "adding": "Adding up the days…",
-      "loadMore": "Load more",
       "completedTasks": "Completed tasks",
       "taskKm": "Task km",
       "fromOdometer": "From odometer readings",
@@ -1921,7 +1923,8 @@
       "col_from_task": "task before",
       "col_to_task": "task after",
       "col_from_near": "was near",
-      "col_to_near": "then near"
+      "col_to_near": "then near",
+      "tooLong": "This report covers at most {n} days at a time. Pick fewer days."
     },
     "people": {
       "drivers": "Drivers",
@@ -1933,15 +1936,12 @@
       "settingsAbove": "More · settings",
       "search": "Name, username, code or plate",
       "searchUsers": "Name or e-mail",
-      "clearSearch": "Clear search",
       "filterActive": "Active",
       "filterAll": "With switched off",
       "active": "active",
       "off": "switched off",
       "addDriver": "+ Add driver",
       "addUser": "+ Add office user",
-      "showing": "{n} of {total}",
-      "loadMore": "Load more",
       "emptyDrivers": "No drivers yet.",
       "emptyUsers": "No office users yet.",
       "emptySearch": "Nothing for “{search}”.",
@@ -2092,7 +2092,8 @@
       "minutes": "min",
       "officePhone": "Office phone",
       "officePhoneHint": "Call office in the driver app. Empty and Save clears it.",
-      "officePhoneNone": "None saved: Call office is not shown."
+      "officePhoneNone": "None saved: Call office is not shown.",
+      "filterShow": "Show"
     },
     "permission": {
       "view": "View",
@@ -2155,6 +2156,10 @@
     "pickDate": "Pick a date",
     "planned": "Planned {time}",
     "now": "Now {time}",
-    "suggestionsTimeout": "Suggestions took too long."
+    "suggestionsTimeout": "Suggestions took too long.",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "cancel": "Cancel",
+    "tryAgain": "Try again"
   }
 }

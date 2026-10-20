@@ -9,19 +9,20 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, Linking, Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image, Linking, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
 import { ChevronRight, MessageCircle, Phone } from '@/components/icons';
+import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { Sheet } from '@/components/patterns/Sheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { colomboDate, colomboTime } from '@/lib/time';
 import {
-  eventParts, isActive, type IssueAction, issueActions, issueFacts, kindText, linksFor, noteRequired, patchHistory, REPORT_STATUS_KEYS, reportCategoryKey,
+  eventParts, type IssueAction, issueActions, issueFacts, kindText, linksFor, noteRequired, patchHistory, REPORT_STATUS_KEYS, reportCategoryKey,
   severityTone, snoozeParts, statusTone, updateInput,
 } from '@/office/issuesLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, Issue, IssueHistory } from '@/office/types';
-import { Avatar, BackHeader, Divider, Empty, ErrorNotice, Loading, Pill, Row, Screen, Section, StickyActions } from '@/office/ui';
+import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Row, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -42,7 +43,6 @@ function NoteSheet({ visible, action, subtitle, onConfirm, onClose }: {
   onClose: () => void;
 }) {
   const { t, language } = useApp();
-  const insets = useSafeAreaInsets();
   const [note, setNote] = useState('');
   useEffect(() => {
     if (!visible) setNote('');
@@ -50,27 +50,31 @@ function NoteSheet({ visible, action, subtitle, onConfirm, onClose }: {
   if (!action) return null;
   const required = noteRequired(action);
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.shade}>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]}>
-          <Txt variant="heading">{t(`office.issues.sheet.${action}Title`)}</Txt>
-          {subtitle ? <Txt variant="muted" numberOfLines={2}>{subtitle}</Txt> : null}
-          <TextInput
-            placeholder={t(`office.issues.sheet.${action}Placeholder`)}
-            placeholderTextColor="#9aa0a6"
-            value={note}
-            onChangeText={setNote}
-            maxLength={500}
-            multiline
-            autoFocus
-            textAlignVertical="top"
-            style={[styles.input, { fontFamily: language === 'si' ? fonts.sinhalaBody : fonts.body }]}
-          />
-          <Button label={t(`office.issues.sheet.${action}Confirm`)} kind="dark" disabled={required && !note.trim()} onPress={() => onConfirm(action, note)} />
-          <Button label={t('common.cancel')} kind="outline" onPress={onClose} />
-        </View>
-      </View>
-    </Modal>
+    <Sheet
+      visible={visible}
+      title={t(`office.issues.sheet.${action}Title`)}
+      onClose={onClose}
+      testID="issue-note-sheet"
+      actions={(
+        <>
+          <Button label={t('common.cancel')} kind="outline" onPress={onClose} style={{ flex: 1, minHeight: 52 }} />
+          <Button label={t(`office.issues.sheet.${action}Confirm`)} kind="dark" disabled={required && !note.trim()} onPress={() => onConfirm(action, note)} style={{ flex: 1.4, minHeight: 52 }} />
+        </>
+      )}
+    >
+      {subtitle ? <Txt variant="muted" numberOfLines={2}>{subtitle}</Txt> : null}
+      <TextInput
+        placeholder={t(`office.issues.sheet.${action}Placeholder`)}
+        placeholderTextColor="#9aa0a6"
+        value={note}
+        onChangeText={setNote}
+        maxLength={500}
+        multiline
+        autoFocus
+        textAlignVertical="top"
+        style={[styles.input, { fontFamily: language === 'si' ? fonts.sinhalaBody : fonts.body }]}
+      />
+    </Sheet>
   );
 }
 
@@ -143,9 +147,9 @@ export default function IssueScreen() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <BackHeader title={i?.title ?? t('office.issues.issue')} subtitle={i ? kindText(i, t) : undefined} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()} bottom={16}>
-        {q.loading && <Loading text={t('office.common.loading')} />}
-        {q.error && !h && <ErrorNotice error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
-        {q.data && !q.data.issue && <Empty text={t('office.issues.notFound')} />}
+        {!q.data && !q.error && <SkeletonRows rows={4} lines={2} />}
+        {q.error && <ListFailed stale={!!q.data} error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
+        {q.data && !q.data.issue && <ListEmpty text={t('office.issues.notFound')} />}
         {i && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pill text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} size={15} />
@@ -253,7 +257,7 @@ export default function IssueScreen() {
         )}
         {h && (
           <Section title={t('office.issues.history')}>
-            {h.events.length === 0 && <Empty text={t('office.issues.noHistory')} />}
+            {h.events.length === 0 && <ListEmpty text={t('office.issues.noHistory')} />}
             {h.events.map((e, n) => (
               <View key={n}>
                 {n > 0 && <Divider />}
@@ -303,7 +307,5 @@ const styles = StyleSheet.create({
   resolution: { backgroundColor: colors.greenChip, borderRadius: 12, padding: 12, gap: 4 },
   iconBtn: { width: 52, height: 52, borderRadius: 14, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   photo: { width: 150, height: 112, borderRadius: 12, backgroundColor: '#ebe9e3' },
-  shade: { flex: 1, backgroundColor: 'rgba(10,12,14,0.45)', justifyContent: 'flex-end' },
-  sheet: { backgroundColor: colors.card, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12 },
   input: { minHeight: 96, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 17, color: colors.ink },
 });
