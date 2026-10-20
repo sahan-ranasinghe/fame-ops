@@ -1129,6 +1129,12 @@ iOS; Play Store.
   right before bringing the checkpoint, not after each fix. If that run fails and the log shows load (CPU cut-offs,
   time-outs) with no code cause, do not investigate or re-run more than once: report it in a few lines and Sahan decides.
   Don't spend time measuring the laptop's load unless he asks.
+- Every full office suite run starts with `npx supabase db reset` on the local stack (never --linked). Sahan has given a
+  standing OK for this local reset.
+- When a test fails, fix it and re-run ONLY the failed tests (Playwright: `--last-failed` or that test; Vitest: that file),
+  plus the fast checks. If the fix changed only test files, that is enough: no full suite re-run, as long as the last full
+  run passed everything else on the same app/site code. If the fix changed app, site or server code, do one full run
+  (starting with the local db reset) after the failed test passes, before the checkpoint.
 - The deploy gate (Sahan, 19 October 2026). The deterministic suites must pass fully: pgTAP, Deno, the connector suite, the
   office typecheck + unit tests + both builds, the driver suites. The e2e runs with Playwright `retries: 1` (one worker): a
   test that passes on its retry is flaky, not failed, and the gate is zero failed tests. For every flaky test, check the
