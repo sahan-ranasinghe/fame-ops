@@ -51,7 +51,7 @@ export default function TripWho() {
   // The plan's leave-by stands in for an empty typed one (Who's available and the free vehicles need a time).
   const trip = useTrip(d ?? { mode: 'request', fields: { date: '', leaveBy: '', stops: [], returnToBase: false, avoidExpressway: false, end: '', start: '', startPax: false, title: '', buffer: '', driver: '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false }, req: { behalf: '', project: '', need: '', tools: false, note: '', driverRequired: true, requesterPhone: '' }, rows: [], step: 'who', at: 0 }, settings.data ?? null);
   const leave = d?.fields.leaveBy || trip.preview?.leave_by?.slice(-5) || '';
-  const args = d && (isTask || books) ? whoArgs({ ...d.fields, leaveBy: leave }) : null;
+  const args = d && (isTask || books) ? whoArgs({ ...d.fields, leaveBy: leave }, { base: trip.base?.name, need: isTask ? undefined : d.req.need, pax: isTask ? undefined : d.fields.pax }) : null;
   const avail = useTool<Availability>('availability', args ?? {}, { enabled: !!args && me.tools.includes('availability'), every: 60_000 });
   const sugArgs = d && books ? suggestInput(requestFieldsOf(d), leave) : null;
   const sug = useTool<Suggestions>('suggest_vehicles', sugArgs ?? {}, { enabled: !!sugArgs && me.tools.includes('suggest_vehicles'), every: 60_000 });
@@ -83,24 +83,25 @@ export default function TripWho() {
   const taskGroups = groupRows(groups ? { groups, vehicles: [] } : null);
   const above = isTask ? t('office.trip.assignAbove', { n: 3 }) : d.mode === 'edit' ? t('office.trip.editAbove') : t('office.trip.newAbove', { n: 3 });
   const split = splitState(d.rows);
-  const problem = isTask ? (!f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : null) : null;
 
   // Book now (a request, with book_vehicle): the site's rules for the driver's default vehicle and the custodian.
   const known = !!avail.data || !me.tools.includes('availability');
   const def = picked?.vehicle ? { reg_no: picked.vehicle.reg_no, why: t(picked.vehicle.source === 'on_duty' ? 'office.trip.driversToday' : 'office.trip.driversRegular', { name: picked.name.split(' ')[0] }) } : null;
-  const dflt = vehicleDefault({ on: onDay && books, date: f.date, today, driver: f.driver, def: knownDef(def, known) });
+  const dflt = vehicleDefault({ on: onDay, date: f.date, today, driver: f.driver, def: knownDef(def, known) });
   const dayDefault = dflt?.kind === 'on_the_day';
   const shown = shownVehicle(f.vehicle, dflt);
   const allSuggested: SuggestedVehicle[] = sug.data ? (sug.data.groups ? Object.values(sug.data.groups).flat() : sug.data.vehicles) : [];
   const pickedVehicle = allSuggested.find((v) => v.reg_no === shown);
   const custodian = custodianDrives(selfDrive, d.req.driverRequired, pickedVehicle);
+  const problem = isTask ? (!f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : known && !def && !f.vehicle && !dayDefault ? t('office.trip.needVehicle') : null) : null;
   const free = sug.data?.drivers_free ?? sug.data?.drivers.filter((x) => /free/.test(x.availability)).map((x) => ({ name: x.name, username: x.username })) ?? [];
   const options = driverOptions(free, f.driver, d.driverName);
+  // What Review needs beside the pick: the driver's default vehicle (a task too: the site's "Add a vehicle" rule) and the custodian.
   useEffect(() => {
-    if (!books) return;
-    updateDraft((x) => ({ ...x, book: { hasCustodian: !!pickedVehicle?.assigned_to, defaultVehicle: def?.reg_no ?? (known ? null : undefined) } }));
+    if (!isTask && !books) return;
+    updateDraft((x) => ({ ...x, book: { hasCustodian: !!pickedVehicle?.assigned_to, defaultVehicle: def?.reg_no ?? (known ? null : undefined), custodianDrives: custodian } }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [books, pickedVehicle?.assigned_to, def?.reg_no, known]);
+  }, [isTask, books, pickedVehicle?.assigned_to, def?.reg_no, known, custodian]);
 
   function lookup(i: number, text: string) {
     if (lookupTimers.current[i]) clearTimeout(lookupTimers.current[i]);
@@ -163,6 +164,10 @@ export default function TripWho() {
   );
 
   // The line under the driver about the vehicle the call takes (the site's "vehicle-default" hint).
+  // The chosen vehicle's facts (design 08: "Toyota HiAce · 12 seats · Free"), from the groups when they know it.
+  const chosenReg = f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : picked?.vehicle?.reg_no ?? '';
+  const chosenV = chosenReg ? [...taskGroups.flatMap((g) => g.rows), ...allSuggested].find((v) => v.reg_no === chosenReg) : undefined;
+  const chosenFacts = chosenV ? vehicleLine(chosenV, (n) => t('office.trip.seats', { n })) : '';
   const defaultLine = f.driver && !custodian
     ? dayDefault
       ? (f.vehicle && f.vehicle !== ON_THE_DAY ? t('office.trip.defaultDayInstead') : t('office.trip.defaultDay'))
@@ -194,6 +199,7 @@ export default function TripWho() {
               </View>
               {choosing && vehicleGroups(taskGroups, t('office.trip.noFreeVehicles'))}
               {defaultLine ? <Txt variant="small" color={!def && known ? colors.amberText : colors.muted}>{defaultLine}</Txt> : null}
+              {chosenFacts ? <Txt variant="small" testID="vehicle-facts">{chosenFacts}</Txt> : null}
             </View>
 
             <View style={styles.card}>
@@ -239,10 +245,11 @@ export default function TripWho() {
             <View style={styles.card}>
               <Stepper label={t('office.trip.passengers')} value={f.pax} onChange={(pax) => setF({ pax })} testID="pax-stepper" />
               <Txt variant="strong" size={16}>{t('office.trip.needType')}</Txt>
-              <Chips options={[{ key: '', label: t('office.trip.anyVehicle') } as { key: string; label: string }, ...NEED_TYPES.map((type) => ({ key: type as string, label: t(`vehicleType.${type}`) }))]} value={d.req.need} onChange={(need) => setReq({ need })} />
+              <Chips options={[{ key: '', label: t('office.trip.anyVehicle') } as { key: string; label: string }, ...NEED_TYPES.map((type) => ({ key: type as string, label: t(`office.vehicles.type_${type}`) }))]} value={d.req.need} onChange={(need) => setReq({ need })} />
               {selfDrive && <ToggleRow label={t('office.trip.driverNeeded')} hint={t('office.trip.driverNeededHint')} value={d.req.driverRequired} onChange={(driverRequired) => setReq({ driverRequired })} />}
               <ToggleRow label={t('office.trip.tools')} value={d.req.tools} onChange={(tools) => setReq({ tools })} />
               <MoreDetails filled={!!(d.req.behalf || d.req.requesterPhone || d.req.project || d.req.note)} testID="request-details">
+                <Txt variant="small" testID="asked-by">{t('office.trip.askedBy', { name: me.name, phone: me.phone ?? '' }).replace(/ · $/, '')}</Txt>
                 <Field label={t('office.trip.behalf')} value={d.req.behalf} onChangeText={(behalf) => setReq({ behalf })} maxLength={120} placeholder={t('office.trip.behalfPlaceholder')} />
                 {approver && (
                   <View>

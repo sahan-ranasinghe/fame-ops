@@ -190,7 +190,7 @@ used), **decision** (cannot be done the same way on a phone: Sahan decides).
 | On behalf of (text, 120) | create_request / book_vehicle `on_behalf_of` | Who · More details · text | B-moved |
 | Requester's phone (approvers only, 30; "Tell requester" on WhatsApp) | `requester_phone` | Who · More details · phone (with approve) | built B |
 | Project or team (text 200; the server matches a Zoho job, else keeps the label) | `project` | Who · More details · text | B-moved |
-| Day | `date` | When · Today / Tomorrow / +2 / Pick a date | in |
+| Day | `date` | When · Today / Tomorrow / +2 / Pick a date (14 days ahead) | partial: 14 days ahead; any date with the date row (O4) |
 | Leave by (typed, or planned; the departure check: "Use HH:MM", "Move arrive-by to HH:MM", "Move back by to HH:MM") | `time` (planned when absent and a stop has arrive_by) | When · Leave from card · HH:MM field, the check's line with Use / Move arrive-by / Move back by | in (Move back by built B) |
 | Back by | `back_by` | When · Back by on the last stop | in |
 | Start from (the search; the base place by default) | `start.place / place_id / google_place_id / lat / lng` | Where · start card · Change → the search | in |
@@ -201,7 +201,7 @@ used), **decision** (cannot be done the same way on a phone: Sahan decides).
 | "Same as the start · Tick it" (a first pickup at the start) | — (moves the row into `start.passengers`) | Where · the line under the stop with Tick it | built B |
 | "<place> has no pin — the plan skips this leg" | `pinned: false` on the place | Where · red line under the stop | in |
 | Arrive by | `stops[].arrive_by` | When · HH:MM on the stop | in |
-| Time at this stop (15 / 30 / 1 h / 1 h 30 / 2 h / Other; "Usual here: …") | `stops[].dwell_min` | When · chips + Other on the stop | in |
+| Time at this stop (5 / 15 / 30 / 1 h / 1 h 30 / 2 h / Other; "Usual here: …") | `stops[].dwell_min` | When · chips + Other on the stop (the start's time the same chips, Part B) | in |
 | Details: What (people / goods / documents / other) | `stops[].what` | Where · chips under the stop | in |
 | Details: Pin (lat, lng) typed | `stops[].lat / lng` | Where · More details on the stop · text (a pasted pin in the search box also works) | built B |
 | Details: Note for the driver (300) | `stops[].note` | Where · More details on the stop · text | B-moved |
@@ -218,7 +218,7 @@ used), **decision** (cannot be done the same way on a phone: Sahan decides).
 | Assign now: the vehicle in four groups (Free · Assigned to someone, ask first with Call / WhatsApp · Busy, back HH:MM · In the garage), each row's pick / but words; "The driver's vehicle on the day" and "Any van…" with the setting | book_vehicle `vehicle` | Who · Book now card · the groups as rows, the on-the-day chips | built B |
 | Assign now: the default vehicle line ("WP CAB-4521 · Kamal's vehicle today. Pick another below", "Instead of …, Use …", "holds no vehicle today") | — | Who · the line under the driver | built B |
 | Assign now: the custodian drives (no driver needed, a vehicle assigned to someone) | `driver_required: false`, `vehicle` | Who · the line "<custodian> drives it" when no driver is needed and the vehicle has a custodian | built B |
-| Who's available (best match, Use, the rows' status) for people who book | availability | Who · the rows as on Assign (with book_vehicle) | built B |
+| Who's available (best match, Use, the rows' status) for people who book | availability (the day, the leave-by floored, the back-by, the first stop — the start only when passengers get in there — the type and passengers) | Who · the rows as on Assign (with book_vehicle) | built B |
 | Save as waiting · Book now | create_request · book_vehicle | Review · two buttons (with book_vehicle), one without | built B |
 | Booked: "<who> has <vehicle> on <when> · leave by", the vehicle used and why, the warnings, Open task | BookResult `vehicle_used`, `vehicle_changed`, `warnings`, `task_id` | Review · the outcome card | built B |
 | Sent: "Sent to the fleet admin · you'll be notified" | `next` | Review · the outcome card | in |
@@ -227,7 +227,7 @@ used), **decision** (cannot be done the same way on a phone: Sahan decides).
 | Date · Leave by with the check · Vehicle free by | `date`, `start_time`/`leave_by`, `end_time` | When (Back by reads "Vehicle free by" on a task) | in (the label built B) |
 | The route (start, stops, switches) | `start`, `stops`, `return_to_base`, `avoid_expressway` | Where | in |
 | The plan card with the overlaps as cards: the text, Open that task, Call / WhatsApp the requester and the driver, Pick another vehicle / driver | plan_task `conflicts[]` (`task`, `requester`, `driver`) | Review · conflict cards (Open that task with assign_tasks, Call / WhatsApp, Pick another → Who) | built B |
-| Driver (the list; Who's available with the best match and Use; "Use suggestion") | `driver` | Who · the rows from availability, the best ticked with its reason | in (the reason line built B) |
+| Driver (the list; Who's available with the best match and Use; "Use suggestion"; a driver known to hold no vehicle must get one) | `driver` | Who · the rows from availability, the best ticked with its reason; Next disabled with "Pick a vehicle…" when the driver holds none | in (the reason line and the known-none rule built B) |
 | Vehicle: the driver's vehicle today / regular with its `why`; every vehicle; "The driver's vehicle on the day" / "Any van…"; "holds no vehicle today and has no regular one" | `vehicle` (absent = the driver's) | Who · chips (the driver's today · On the day · Any type · Choose…); Choose… lists the four groups | in (the groups built B) |
 | Passengers (0–80) | `passengers` | Who · stepper | built B |
 | Contact name · Contact phone | `contact_name`, `contact_phone` | Who · More details | B-moved |
@@ -237,14 +237,14 @@ used), **decision** (cannot be done the same way on a phone: Sahan decides).
 | Buffer minutes | `buffer_min` (default: the fleet setting) | — (not on the site's form) | n/a |
 | Send to driver: the app (always) · "Also give me a WhatsApp message" → the link after sending | — (the message built from the input; the driver's phone from list_drivers) | Who · More details · toggle; the outcome card's "WhatsApp the driver" | built B |
 | "New tasks need the fleet admin's OK: this one waits for it" | `waiting_for_approval` | Review · the line under the button, "Send for approval" | in |
-| After sending: "Sent to <driver>" / "Waiting for the fleet admin's OK", Leave by, the vehicle used and why (or changed), the warnings, the conflicts, Open task / The board / WhatsApp the driver | CreateTaskResult | Review · the outcome card (replaces the alert) | built B |
+| After sending: "Sent to <driver>" / "Waiting for the fleet admin's OK", Leave by, the vehicle used and why (or changed), the warnings, the conflicts, Open task / Open the request / The board / WhatsApp the driver | CreateTaskResult | Review · the outcome card (replaces the alert) | built B |
 | The assign checks as warnings, never blocks | create_task `warnings[]` | Review · the outcome card | in |
 | "Updating…" while a new plan comes; the plan shown stays | plan_task | Review · "Updating plan…" line while a plan is on screen | built B |
 | The plan's "Leave by HH:MM · planned from the arrive-by times / as typed · estimated times" | `timeline.items[leave].source`, `plan.source` | Review · the line under Leave by | built B |
 | The vehicle used and why on the preview ("WP CAB-4521 · Kamal's vehicle today") | plan_task `vehicle_used` | Review · the line under the driver chip | built B |
 | A draft kept; a refresh never resets a pick | — | the draft on the phone | in |
-| **Edit a request** (My trips) | update_request with `version`; only what changed | the same steps from the request | in (the requester's phone with the row above) |
-| **Change the task** (Task detail): Title, Day, Leave by, Vehicle free again by, Passengers, Contact, Notes, Driver + Vehicle with Who's available; the words only while under way | update_task with `plan_version` | Task detail → Change the task: day / leave-by / end on the screen, the rest under More details, the driver and vehicle as on Who | built B (was: the time only) |
+| **Edit a request** (My trips) | update_request with `version`; only what changed; an approved booking: "needs re-approval" notice, "Save · ask for re-approval", "the office will decide again" | the same steps from the request; Review's notice, label and outcome | in (the re-approval words built B) |
+| **Change the task** (Task detail): Title, Day, Leave by with the departure check, Vehicle free again by, Passengers, Contact, Notes, Driver + Vehicle with Who's available (the new driver's vehicle named), "needs a driver" reason; the words only while under way | update_task with `plan_version` | Task detail → Change the task: day / leave-by (with Use HH:MM) / end on the screen, the rest under More details, the driver and vehicle as on Who; a running task: the words only | built B (was: the time only) |
 | **Change stops** (Task detail): the start with passengers / what / note, the stops, a leave time by hand | update_task_stops with `plan_version` | Where · When · Review in mode stops | in (the start's what / note with the row above) |
 | **Approve** (design 10): another day / leave-by / back-by, the start, the minutes at From and To on approval | decide_request `date`, `leave_by`, `back_by`, `start`, `from/to_dwell_min` | Approve (10): "Change time" | O3 |
 | Times with the native picker | — | the HH:MM field (mono, the colon added as typed; the site's control) | decision: a native picker needs `@react-native-community/datetimepicker` (a new native module = a 1.4.0 build); the typed field stays until then |

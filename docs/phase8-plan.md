@@ -791,6 +791,30 @@ commits).
 - **Tests.** `npm run test:trip-forms` (the split, Book now, the plan's words, the conflicts, the outcome, the WhatsApp
   message, Change the task's input, the screens as text: every field to its input, the versions, the controls, the
   strings); `test:search` (the box); `test:trip`, `test:task-extras` updated.
+- **The fresh reviewer** (20 October, 09:41–09:53; field by field against the site, the server's schemas, the designs
+  and the principle). Four blockers, fixed: the outcome card could never show (Review cleared the draft, then its "no
+  draft" guard rendered a spinner on every step: the outcome now renders first, from its own state, with the flow's mode
+  inside it); Try again after a failed Book now sent create_request instead (the last kind is kept in a ref); Change the
+  task showed a new driver's vehicle as chosen but never named it (the server kept the old one: it is sent when it
+  differs, the site's rule); a running task offered the end time and the vehicle, which the server refuses (hidden; a
+  running task takes the words only). Majors, fixed: plan_task ran once per mounted step (When, Who and Review each
+  kept their own plan: one plan store for the app, keyed by the input, a call in flight never doubled — rule 10 counts
+  every Google call — and Review shows the plan already made); Change the task had no departure check (the shared
+  DepartureNote with "Use HH:MM", and the "needs a driver" reason); a driver known to hold no vehicle was not blocked
+  (the site's "Add a vehicle": Next disabled with "Pick a vehicle…", and create_task validated with the known default);
+  the "on the day" default was off for a task; the timeline rows were English in Sinhala (`words.ts stopTimesT /
+  legTextT`, the usual time through `durationText`); Who's available was asked for the wrong point and without the
+  request's type and passengers (`whoArgs`: the start only when passengers get in there, `need_type` and `pax`); the
+  server's warnings showed twice. Minors, fixed: the Stepper's hook order; "ends HH:MM" without a return; "Open the
+  request" on a waiting outcome (with approve); the Booked card says who has what and when; the request's type chips
+  in the site's words; the 5 min time chip; Return to office / No expressway as toggle rows; the start's time as the
+  same chips; the custodian's chip on Review; Edit a request's re-approval notice, button and outcome; Change the task's
+  end-before-start reason and the availability time floored; the reached stops counted in the rows; no leave-by on a
+  running task's Change stops; the legs' "From <start>" / "Back to the base"; the chosen vehicle's facts (design 08);
+  "Asked by <me> · <phone>" on a request. Noted, not changed: a draft of another mode is replaced without the question;
+  the stops mode sends the start even unchanged; the day chips reach 14 days (the date row is O4).
+- **The full run after the fixes** (10:03, 35 s): typecheck 0 errors; 25 suites, 1,859 checks, 0 failed (data 96, trips 98,
+  asks 100 on the local stack; the twenty-two others 1,565).
 
 ## 18. Part C (Hotfix O2-H1, 20 October 2026): the parity audit, and the order for O3 and O4
 

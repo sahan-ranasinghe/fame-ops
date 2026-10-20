@@ -103,8 +103,8 @@ export const changeFieldsOf = (t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end
 
 /**
  * update_task's input: only what differs from the task (the site's updateTaskInput); `nothing` when nothing does,
- * `endBeforeStart` as for the time alone. A running task takes the words, the end and a vehicle only (its day, leave-by
- * and driver are the server's to refuse).
+ * `endBeforeStart` as for the time alone. A running task takes the words only (the server refuses its day, leave-by,
+ * end, driver and vehicle while it runs; the vehicle swap is its own screen).
  */
 export function changeTaskInput(id: string, version: number, f: ChangeFields, t: Pick<Task, 'date' | 'time' | 'leave_by' | 'end_by' | 'title' | 'passengers' | 'contact' | 'notes' | 'status'>): { error: 'nothing' | 'endBeforeStart' } | { input: Record<string, unknown> } {
   const s = (x: string) => x.trim();
@@ -112,10 +112,10 @@ export function changeTaskInput(id: string, version: number, f: ChangeFields, t:
   const input: Record<string, unknown> = { task_id: id, plan_version: version };
   const running = t.status === 'in_progress';
   if (!running && s(f.driver)) input.driver = s(f.driver);
-  if (s(f.vehicle)) input.vehicle = s(f.vehicle);
+  if (!running && s(f.vehicle)) input.vehicle = s(f.vehicle);
   if (!running && s(f.date) && s(f.date) !== was.date) input.date = s(f.date);
   if (!running && s(f.time) && s(f.time) !== was.time) input.time = s(f.time);
-  if (s(f.end) !== was.end) input.end_time = s(f.end) || null;
+  if (!running && s(f.end) !== was.end) input.end_time = s(f.end) || null;
   if (s(f.title) && s(f.title) !== was.title) input.title = s(f.title);
   const pax = s(f.passengers);
   if (pax !== was.passengers) input.passengers = pax === '' ? null : Math.max(0, Math.min(80, parseInt(pax, 10) || 0));

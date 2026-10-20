@@ -4,6 +4,8 @@
 
 import type { Translate } from '@/lib/durations';
 import type { DepartureCheck } from './departureLogic';
+import type { TimelineItem } from '../types';
+import { durationText } from '@/lib/durations';
 import type { PlanReason } from './planLogic';
 
 /** A reason from planReasons / stopsInput / tripRequestInput in the phone's language, or as it came. */
@@ -57,10 +59,25 @@ const toMin = (v: string): number | null => {
 const durPart = (text: string): string => /(\d+ h(?: \d+ min)?|\d+ min)/.exec(text)?.[1] ?? '';
 
 /** The time-at-stop chips: 15 min · 30 min · 1 h · 1 h 30 · 2 h, then Other. */
-export const DWELL_CHIPS: readonly number[] = [15, 30, 60, 90, 120];
+export const DWELL_CHIPS: readonly number[] = [5, 15, 30, 60, 90, 120];
 
 export function dwellChipText(t: Translate, min: number): string {
   if (min < 60) return t('dur.minutes', { n: min });
   const h = Math.floor(min / 60), rest = min % 60;
   return rest === 0 ? t('dur.hoursOnly', { h }) : t('dur.hours', { h, m: rest });
+}
+
+/** A stop row's line in the phone's language: "arrive 09:00 · 1 h 30 min (usual here) · leave 10:30"; the start: "leave 07:24 · passengers get in here". */
+export function stopTimesT(t: Translate, s: Extract<TimelineItem, { kind: 'stop' }>): string {
+  if (s.is_start) return [t('office.trip.rowLeave', { time: s.planned_leave }), t('office.trip.rowPassengers')].join(' · ');
+  const stay = `${durationText(t, Math.max(0, s.dwell_min))}${s.dwell_source === 'place' ? ` (${t('office.trip.rowUsualHere')})` : ''}`;
+  return [t('office.trip.rowArrive', { time: s.planned_arrive }), stay, t('office.trip.rowLeave', { time: s.planned_leave })].join(' · ');
+}
+
+/** A leg row's line: "From Head office · 42 km · 1 h 5 min · Google traffic", "Back to the base · …". */
+export function legTextT(t: Translate, l: Extract<TimelineItem, { kind: 'leg' }>, startName?: string): string {
+  const km = Math.round(l.km * 10) / 10;
+  const head = l.from_n === 'start' ? t('office.trip.rowFromStart', { place: startName || t('office.trip.rowTheStart') }) : l.to_n === 'base' ? t('office.trip.rowBackToBase') : '';
+  const src = ['google', 'ors', 'estimate'].includes(l.source) ? t(`office.trip.legSource_${l.source}`) : l.source;
+  return [head, t('office.trip.kmN', { km }), durationText(t, l.minutes), src].filter(Boolean).join(' · ');
 }

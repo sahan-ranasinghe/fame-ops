@@ -75,3 +75,21 @@ const styles = StyleSheet.create({
   bar: { flex: 1, height: 6, borderRadius: 3, backgroundColor: colors.darkSurface },
   footer: { backgroundColor: colors.page, borderTopWidth: 1, borderTopColor: colors.line, paddingHorizontal: 16, paddingTop: 12, gap: 8 },
 });
+
+/** The departure check's line (the site's DepartureNote): red or amber, "Use HH:MM", and Move arrive-by / back-by when offered. */
+export function DepartureNote({ text, tone, useLabel, onUse, moveLabel, onMove }: { text: string; tone: 'bad' | 'warn'; useLabel: string; onUse: () => void; moveLabel?: string; onMove?: () => void }) {
+  const ink = tone === 'bad' ? colors.red : colors.amberText;
+  return (
+    <View style={[noteStyles.note, { backgroundColor: tone === 'bad' ? colors.redChip : colors.amberChip }]}>
+      <Txt variant="strong" size={16} color={ink}>{text}</Txt>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <Button label={useLabel} onPress={onUse} style={{ minHeight: 48, paddingHorizontal: 14 }} />
+        {moveLabel && onMove && <Button kind="outline" label={moveLabel} onPress={onMove} style={{ minHeight: 48, paddingHorizontal: 14, borderColor: ink }} />}
+      </View>
+    </View>
+  );
+}
+
+const noteStyles = StyleSheet.create({
+  note: { borderRadius: 14, padding: 14, gap: 10 },
+});

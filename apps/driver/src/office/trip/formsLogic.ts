@@ -104,6 +104,13 @@ export type OutcomeKind = 'sent' | 'waiting' | 'request_sent' | 'booked' | 'save
 
 export interface Outcome {
   kind: OutcomeKind;
+  /** The flow that made it (the draft is gone by then). */
+  mode?: 'request' | 'task' | 'edit' | 'stops';
+  /** booked: who has the vehicle, and when. */
+  who?: string;
+  when?: string;
+  /** saved: an approved booking changed, the office decides again. */
+  needsReapproval?: boolean;
   /** The task or the request the outcome made, when the person may open it. */
   taskId?: string;
   requestId?: string;
@@ -131,9 +138,11 @@ export function taskOutcome(p: CreateTaskResult): Outcome {
 }
 
 /** The outcome of book_vehicle: booked, with the task when it was made. */
-export function bookOutcome(p: { task_id?: string; request_id?: string; leave_by?: string; vehicle?: string; vehicle_used?: { reg_no: string; why: string }; vehicle_changed?: string; warnings?: string[] }): Outcome {
+export function bookOutcome(p: { task_id?: string; request_id?: string; leave_by?: string; when?: string; vehicle?: string; vehicle_used?: { reg_no: string; why: string }; vehicle_changed?: string; warnings?: string[]; request?: { requested_by?: string; on_behalf_of?: string } }): Outcome {
   return {
     kind: 'booked',
+    who: p.request?.on_behalf_of ?? p.request?.requested_by,
+    when: p.when,
     taskId: p.task_id,
     requestId: p.request_id,
     leaveBy: p.leave_by?.slice(-5),
@@ -144,8 +153,8 @@ export function bookOutcome(p: { task_id?: string; request_id?: string; leave_by
 }
 
 /** The outcome of create_request / update_request / update_task_stops: sent, or saved. */
-export function requestOutcome(kind: 'request_sent' | 'saved', p: { next?: string; warnings?: string[]; request_id?: string; task_id?: string }): Outcome {
-  return { kind, requestId: p.request_id, taskId: p.task_id, warnings: p.warnings ?? [], conflicts: [], next: p.next };
+export function requestOutcome(kind: 'request_sent' | 'saved', p: { next?: string; warnings?: string[]; request_id?: string; task_id?: string; needs_reapproval?: boolean }): Outcome {
+  return { kind, requestId: p.request_id, taskId: p.task_id, warnings: p.warnings ?? [], conflicts: [], next: p.next, needsReapproval: p.needs_reapproval };
 }
 
 /** The driver's WhatsApp link with the task's words, from the number in a wa.me link (the availability rows carry it). */

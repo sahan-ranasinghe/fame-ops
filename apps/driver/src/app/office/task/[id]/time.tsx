@@ -15,6 +15,7 @@ import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { MoreDetails, Stepper } from '@/components/office/Controls';
 import { DriverRows } from '@/components/office/DriverRows';
 import { TimeInput } from '@/components/office/TimeInput';
+import { DepartureNote } from '@/components/office/TripShell';
 import { Button, Field, Plate, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
 import { addDays, colomboDate } from '@/lib/time';
@@ -22,12 +23,17 @@ import { askTargets } from '@/office/askLogic';
 import { useOffice, useTool } from '@/office/state';
 import { type ChangeFields, changeFieldsOf, changeTaskInput, timeLocked } from '@/office/taskExtrasLogic';
 import { availabilityArgsForTask, plateOf } from '@/office/taskLogic';
+import { checkDeparture, departurePlan } from '@/office/trip/departureLogic';
 import { groupRows, vehicleLine } from '@/office/trip/formsLogic';
+import { departureText } from '@/office/trip/words';
 import { ANY_TYPES, anyValue, ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
 import type { Availability, FleetError, SettingsResult, SuggestedVehicle, TaskDetail, UpdateTaskResult } from '@/office/types';
 import { BackHeader, Divider, Empty, ErrorNotice, Loading, Screen, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+
+/** HH:MM rounded down to 5 minutes (a plan moving by a minute does not ask Who's available again). */
+const floor5 = (t: string) => { const m = /^(\d{2}):(\d{2})$/.exec(t.trim()); return m ? `${m[1]}:${String(Math.floor(Number(m[2]) / 5) * 5).padStart(2, '0')}` : t; };
 
 export default function ChangeTaskScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -52,7 +58,7 @@ export default function ChangeTaskScreen() {
   const { allowLeave } = useLeaveGuard(!!task && !!f && JSON.stringify(f) !== JSON.stringify(changeFieldsOf(task)), busy);
   // Who's available for the task's window as the form has it (the site's TaskEdit): not while it runs.
   const availArgs = p && !locked
-    ? availabilityArgsForTask({ ...p, task: { ...p.task, date: f?.date || p.task.date, leave_by: f?.time ? undefined : p.task.leave_by, time: f?.time || p.task.time, end_by: f?.end || p.task.end_by } })
+    ? availabilityArgsForTask({ ...p, task: { ...p.task, date: f?.date || p.task.date, leave_by: f?.time ? undefined : p.task.leave_by, time: f?.time ? floor5(f.time) : p.task.time, end_by: f?.end || p.task.end_by } })
     : null;
   const avail = useTool<Availability>('availability', availArgs ?? {}, { enabled: !!availArgs && me.tools.includes('availability'), every: 60_000 });
   const mayAsk = me.tools.includes('ask_drivers');
@@ -70,11 +76,16 @@ export default function ChangeTaskScreen() {
   const groups = avail.data?.vehicles.groups;
   const rows = groupRows(groups ? { groups, vehicles: [] } : null);
   const set = (patch: Partial<ChangeFields>) => setF((x) => (x ? { ...x, ...patch } : x));
-  const changed = !!(task && f && 'input' in changeTaskInput(task.id, task.plan_version ?? 0, f, task));
+  // A new driver brings their vehicle (the site's vehicleToSend): named in the call when it differs from the task's.
+  const vehicleToSend = f?.vehicle || (picked?.vehicle && picked.vehicle.reg_no !== currentPlate ? picked.vehicle.reg_no : '');
+  const result = task && f ? changeTaskInput(task.id, task.plan_version ?? 0, { ...f, vehicle: vehicleToSend }, task) : null;
+  const changed = !!result && 'input' in result;
+  // The leave-by checked at once against the stops' arrive-by times (the site's TaskEdit).
+  const check = !locked && p && f ? checkDeparture(f.time, departurePlan(p.timeline, p.plan?.buffer_min)) : null;
 
   async function save() {
     if (!task || !f || busy) return;
-    const r = changeTaskInput(task.id, task.plan_version ?? 0, f, task);
+    const r = changeTaskInput(task.id, task.plan_version ?? 0, { ...f, vehicle: vehicleToSend }, task);
     if ('error' in r) {
       setWhy(t(r.error === 'nothing' ? 'office.task.timeNothing' : 'office.task.timeEndBeforeStart'));
       return;
@@ -121,6 +132,11 @@ export default function ChangeTaskScreen() {
         {q.data && !task && <Empty text={t('office.task.notFound')} />}
         {task && f && (
           <>
+            {task.needs_driver && (
+              <View style={styles.needs}>
+                <Txt variant="strong" color={colors.red}>{task.needs_driver.reason === 'declined' ? t('office.task.declinedWhy', { name: task.driver ?? '', why: task.needs_driver.reason_text ?? '' }) : t('office.task.notAccepted', { name: task.driver ?? '' })}</Txt>
+              </View>
+            )}
             <View style={styles.card}>
               <Field label={t('office.trip.title')} value={f.title} onChangeText={(title) => set({ title })} maxLength={120} />
               {locked ? (
@@ -133,9 +149,11 @@ export default function ChangeTaskScreen() {
                     {!pickDate && chip('pick', false, t('office.trip.pickDate'), () => setPickDate(true))}
                   </View>
                   <TimeInput label={t('office.task.timeLeave')} value={f.time} onCommit={(v) => set({ time: v })} testID="time-leave" />
+                  {check && check.kind === 'late' && <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => set({ time: check.leaveBy })} />}
+                  {check && check.kind === 'early' && <Txt variant="small">{departureText(t, check)}</Txt>}
+                  <TimeInput label={t('office.trip.freeBy')} value={f.end} onCommit={(v) => set({ end: v })} testID="time-end" />
                 </>
               )}
-              <TimeInput label={t('office.trip.freeBy')} value={f.end} onCommit={(v) => set({ end: v })} testID="time-end" />
               <Stepper label={t('office.trip.passengers')} value={f.passengers} onChange={(passengers) => set({ passengers })} />
               <MoreDetails filled={!!(f.contactName || f.contactPhone || f.notes)} testID="change-details">
                 <Field label={t('office.trip.contactName')} value={f.contactName} onChangeText={(contactName) => set({ contactName })} maxLength={120} />
@@ -152,7 +170,7 @@ export default function ChangeTaskScreen() {
               <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => { set({ driver: x.username ?? '', vehicle: '' }); setDriverName(x.name); }} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk ? () => setAsking(true) : undefined} noWindow={!availArgs} />
             )}
 
-            <View style={styles.card}>
+            {!locked && <View style={styles.card}>
               <Txt variant="label" color={colors.muted}>{t('office.trip.vehicle').toUpperCase()}</Txt>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {chip('keep', f.vehicle === '' && !picked?.vehicle, currentPlate ? t('office.task.keepVehicle', { plate: currentPlate }) : task.vehicle_text ? t('office.task.keepVehicle', { plate: task.vehicle_text }) : t('office.vehicles.keep'), () => set({ vehicle: '' }))}
@@ -172,7 +190,7 @@ export default function ChangeTaskScreen() {
                   ))}
                 </View>
               )}
-            </View>
+            </View>}
             {why && <Txt variant="strong" color={colors.red}>{why}</Txt>}
             {problem && <ErrorNotice error={problem} onRetry={() => void save()} />}
           </>
@@ -180,7 +198,7 @@ export default function ChangeTaskScreen() {
       </Screen>
       {task && f && (
         <StickyActions>
-          {!changed && <Txt variant="small" style={{ textAlign: 'center' }}>{t('office.task.changeNothingYet')}</Txt>}
+          {!changed && <Txt variant="small" color={result && 'error' in result && result.error === 'endBeforeStart' ? colors.red : colors.muted} style={{ textAlign: 'center' }}>{t(result && 'error' in result && result.error === 'endBeforeStart' ? 'office.task.timeEndBeforeStart' : 'office.task.changeNothingYet')}</Txt>}
           <Button label={driverName && f.driver ? t('office.task.sendToDriver', { name: driverName }) : t('office.trip.saveChanges')} onPress={() => void save()} busy={busy} disabled={!changed} style={{ minHeight: 60 }} />
         </StickyActions>
       )}
@@ -202,5 +220,6 @@ const styles = StyleSheet.create({
   chip: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
   chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   vehicleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 8 },
+  needs: { backgroundColor: colors.redChip, borderRadius: 12, padding: 12 },
   notes: { minHeight: 80, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, padding: 12, fontSize: 17, color: colors.ink, backgroundColor: colors.card, textAlignVertical: 'top' },
 });

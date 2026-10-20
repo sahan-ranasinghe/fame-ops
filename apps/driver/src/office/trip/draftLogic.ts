@@ -43,7 +43,10 @@ export interface TripDraft {
   driverWhatsapp?: string;
   /** request (Book now, with book_vehicle): what Review needs beside fields.driver / fields.vehicle: the picked vehicle's custodian
    *  and the driver's default vehicle (null = known to bring none; undefined = not known yet). */
-  book?: { hasCustodian: boolean; defaultVehicle?: string | null };
+  book?: { hasCustodian: boolean; defaultVehicle?: string | null; custodianDrives?: boolean };
+  /** stops: the task is under way (no leave-by to change). edit: the request was approved (a change needs re-approval). */
+  running?: boolean;
+  wasApproved?: boolean;
   /** The trip and the task's own fields (the request mode leaves the task's empty). */
   fields: AssignFields;
   req: RequestExtras;

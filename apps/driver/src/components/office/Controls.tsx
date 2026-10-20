@@ -21,6 +21,7 @@ export function Stepper({ label, value, min = 0, max = 80, onChange, hint, testI
   hint?: string;
   testID?: string;
 }) {
+  const { t } = useApp();
   const n = value.trim() === '' ? null : Math.max(min, Math.min(max, parseInt(value, 10) || 0));
   const step = (d: number) => {
     const next = Math.max(min, Math.min(max, (n ?? 0) + d));
@@ -41,7 +42,7 @@ export function Stepper({ label, value, min = 0, max = 80, onChange, hint, testI
         </Pressable>
         {n !== null && (
           <Pressable accessibilityRole="button" onPress={() => onChange('')} hitSlop={8} style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 6 }}>
-            <Txt variant="strong" size={14} color={colors.muted}>{useApp().t('office.common.clear')}</Txt>
+            <Txt variant="strong" size={14} color={colors.muted}>{t('office.common.clear')}</Txt>
           </Pressable>
         )}
       </View>

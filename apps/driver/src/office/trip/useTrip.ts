@@ -3,7 +3,7 @@
 // check from the latest plan (an empty leave-by filled in, a typed one checked against the arrive-by times and the
 // back-by); the exact reason when there is no plan. The draft (draft.ts) holds the fields; this hook reads them.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 import { useOffice } from '../state';
 import type { FleetError, PlanPreview, SettingsResult } from '../types';
@@ -26,37 +26,68 @@ export interface PlanState {
   planNow: () => void;
 }
 
-/** plan_task for the draft's trip: debounced, kept while updating, with_line for the map. */
+/**
+ * plan_task for the draft's trip. One store for the whole app (Hotfix O2-H1 Part B, the reviewer's major 5): When, Who
+ * and Review stay mounted in the stack and each asks for the same input, so the answer is kept by its input and a call
+ * in flight is never doubled (every Google Routes call is counted); the step that comes to the front shows the plan
+ * already made instead of "Planning…". Debounced 1.5 s after the last change; the plan shown stays while a new one comes.
+ */
+interface PlanEntry {
+  preview: PlanPreview | null;
+  error: FleetError | null;
+  inFlight: boolean;
+}
+const planStore = new Map<string, PlanEntry>();
+const planListeners = new Set<() => void>();
+const PLAN_STORE_MAX = 24;
+const notifyPlan = () => planListeners.forEach((l) => l());
+const subscribePlan = (l: () => void) => {
+  planListeners.add(l);
+  return () => {
+    planListeners.delete(l);
+  };
+};
+function setEntry(key: string, e: PlanEntry) {
+  planStore.delete(key);
+  planStore.set(key, e);
+  while (planStore.size > PLAN_STORE_MAX) planStore.delete(planStore.keys().next().value as string);
+  notifyPlan();
+}
+async function runPlan(api: { call: <T>(tool: string, args?: Record<string, unknown>) => Promise<T> }, key: string): Promise<void> {
+  const cur = planStore.get(key);
+  if (!key || cur?.inFlight) return;
+  setEntry(key, { preview: cur?.preview ?? null, error: null, inFlight: true });
+  try {
+    const p = await api.call<PlanPreview>('plan_task', { ...(JSON.parse(key) as Record<string, unknown>), with_line: true });
+    setEntry(key, { preview: p, error: null, inFlight: false });
+  } catch (e) {
+    setEntry(key, { preview: cur?.preview ?? null, error: e as FleetError, inFlight: false });
+  }
+}
+/** For the tests: forget every plan. */
+export const clearPlans = () => {
+  planStore.clear();
+  notifyPlan();
+};
+
 export function usePlanPreview(input: Record<string, unknown> | null): PlanState {
   const { api, me } = useOffice();
   const enabled = me.tools.includes('plan_task') && input !== null;
-  const key = input ? JSON.stringify(input) : '';
-  const [preview, setPreview] = useState<PlanPreview | null>(null);
-  const [error, setError] = useState<FleetError | null>(null);
-  const [updating, setUpdating] = useState(false);
-  const seq = useRef(0);
-  const run = useCallback(async (k: string) => {
-    if (!k) return;
-    const n = ++seq.current;
-    setUpdating(true);
-    try {
-      const p = await api.call<PlanPreview>('plan_task', { ...(JSON.parse(k) as Record<string, unknown>), with_line: true });
-      if (n !== seq.current) return;
-      setPreview(p);
-      setError(null);
-    } catch (e) {
-      if (n !== seq.current) return;
-      setError(e as FleetError);
-    } finally {
-      if (n === seq.current) setUpdating(false);
-    }
-  }, [api]);
+  const key = enabled && input ? JSON.stringify(input) : '';
+  const entry = useSyncExternalStore(subscribePlan, () => planStore.get(key), () => planStore.get(key));
+  // The last plan this screen showed stays on screen while the next input's plan comes.
+  const last = useRef<PlanPreview | null>(null);
+  if (entry?.preview) last.current = entry.preview;
   useEffect(() => {
-    if (!enabled) return;
-    const timer = setTimeout(() => void run(key), PLAN_DEBOUNCE_MS);
+    if (!key) return;
+    const have = planStore.get(key);
+    if (have?.preview || have?.inFlight || have?.error) return;
+    const timer = setTimeout(() => void runPlan(api, key), PLAN_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [enabled, key, run]);
-  return { preview: enabled ? preview : null, error: enabled ? error : null, updating, input: enabled ? input : null, planNow: () => void run(key) };
+  }, [key, api]);
+  const updating = !!key && (!entry || entry.inFlight);
+  const preview = !key ? null : entry?.preview ?? (entry?.error ? null : last.current);
+  return { preview, error: entry?.error ?? null, updating, input: enabled ? input : null, planNow: () => void runPlan(api, key) };
 }
 
 export interface Trip {
@@ -91,7 +122,7 @@ export function useTrip(d: TripDraft, settings: SettingsResult | null): Trip {
   useEffect(() => {
     if (fillTo) updateDraft((x) => (x.fields.leaveBy ? x : { ...x, fields: { ...x.fields, leaveBy: fillTo } }));
   }, [fillTo]);
-  const offset = tripOffset(f);
+  const offset = tripOffset(f) + (d.reached ?? 0);
   const numbers = rowStopNumbers(f.stops, offset);
   const lateKey = check?.kind === 'late' && !check.back ? [...numbers].find(([, n]) => n === check.n)?.[0] : undefined;
   const previewErr = plan.error ? plan.error.message : null;

@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Switch, View } from 'react-native';
 
 import { ChevronDown, ChevronUp, X } from '@/components/icons';
-import { Chips, MoreDetails } from '@/components/office/Controls';
+import { Chips, MoreDetails, ToggleRow } from '@/components/office/Controls';
 import { PlaceSearch, type Picked } from '@/components/office/PlaceSearch';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Field, Mono, Txt } from '@/components/ui';
@@ -19,7 +19,7 @@ import { draftWorthKeeping, getDraft, newDraft, setDraft, type TripMode, updateD
 import { pinText, placeBoxState, typedPatch } from '@/office/trip/locationLogic';
 import { editFields } from '@/office/trip/requestLogic';
 import { moveStop, newStop, pickupAtStart, type StopDraft, stopsInput, type StopType, tickStart, type What } from '@/office/trip/stopsLogic';
-import { reasonText } from '@/office/trip/words';
+import { DWELL_CHIPS, dwellChipText, reasonText } from '@/office/trip/words';
 import type { RequestsList, SettingsResult, TaskDetail } from '@/office/types';
 import { draftsFromStops } from '@/office/trip/stopsLogic';
 import { Empty, ErrorNotice, Loading, Screen } from '@/office/ui';
@@ -66,7 +66,7 @@ export default function TripWhere() {
     const f = editFields(card);
     const { behalf, project, need, tools, note, driver, requesterPhone, ...trip } = f;
     setDraft({
-      mode: 'edit', requestId: id, version: card.version ?? 0, was: f, step: 'where', at: Date.now(), rows: [],
+      mode: 'edit', requestId: id, version: card.version ?? 0, was: f, wasApproved: card.status === 'approved', step: 'where', at: Date.now(), rows: [],
       fields: { ...trip, title: '', buffer: '', driver: '', vehicle: '', cname: '', cphone: '', notes: '', whatsapp: false },
       req: { behalf, project, need, tools, note, driverRequired: driver, requesterPhone: requesterPhone ?? '' },
     });
@@ -84,7 +84,7 @@ export default function TripWhere() {
     const date = p.task.date ?? (p.task.leave_by && /^\d{4}-\d{2}-\d{2}/.test(p.task.leave_by) ? p.task.leave_by.slice(0, 10) : colomboDate());
     const hhmm = (v?: string) => v?.match(/\d{2}:\d{2}$/)?.[0] ?? '';
     setDraft({
-      mode: 'stops', taskId: id, planVersion: p.task.plan_version ?? 0, reached, step: 'where', at: Date.now(), rows: [],
+      mode: 'stops', taskId: id, planVersion: p.task.plan_version ?? 0, reached, running: p.task.status === 'in_progress', step: 'where', at: Date.now(), rows: [],
       fields: {
         date, leaveBy: p.task.leave_by_source === 'manual' && p.task.status === 'assigned' ? hhmm(p.task.leave_by) : '', end: hhmm(p.task.end_by),
         stops: draftsFromStops(pending.filter((s) => !s.is_start).map((s) => ({ type: s.type, what: s.what, place: s.place, place_id: s.place_id, google_place_id: s.google_place_id, lat: s.lat, lng: s.lng, dwell_min: s.dwell_min, arrive_by: s.arrive_by, note: s.note }))),
@@ -179,7 +179,11 @@ export default function TripWhere() {
                 <Chips<What> options={WHATS.map((w) => ({ key: w, label: t(`office.trip.what_${w}`) }))} value={f.startWhat ?? ''} onChange={(w) => setF({ startWhat: f.startWhat === w ? '' : w })} small />
               </View>
               <Field label={t('office.trip.noteAtStart')} value={f.startNote ?? ''} onChangeText={(startNote) => setF({ startNote })} maxLength={300} />
-              <Field label={t('office.trip.timeAtStart')} mono value={f.startDwell ?? ''} onChangeText={(v) => setF({ startDwell: v.replace(/\D/g, '').slice(0, 3) })} keyboardType="number-pad" placeholder="5" />
+              <View style={{ gap: 6 }}>
+                <Txt variant="strong" size={16}>{t('office.trip.timeAtStart')}</Txt>
+                <Chips options={[...DWELL_CHIPS.map((m) => ({ key: String(m), label: dwellChipText(t, m) })), { key: 'other', label: t('office.trip.other') }]} value={f.startDwell && DWELL_CHIPS.includes(Number(f.startDwell)) ? f.startDwell : f.startDwell ? 'other' : ''} onChange={(k) => setF({ startDwell: k === 'other' ? (f.startDwell && !DWELL_CHIPS.includes(Number(f.startDwell)) ? f.startDwell : '45') : f.startDwell === k ? '' : k })} small />
+                {f.startDwell && !DWELL_CHIPS.includes(Number(f.startDwell)) ? <Field label={t('office.trip.minutes')} mono value={f.startDwell} onChangeText={(v) => setF({ startDwell: v.replace(/\D/g, '').slice(0, 3) })} keyboardType="number-pad" /> : null}
+              </View>
             </MoreDetails>
           )}
         </View>
@@ -246,13 +250,9 @@ export default function TripWhere() {
             <Txt variant="strong">{`+ ${t('office.trip.addStop')}`}</Txt>
           </Pressable>
         </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          <Pressable accessibilityRole="button" accessibilityState={{ selected: f.returnToBase }} onPress={() => updateDraft((x) => ({ ...x, fields: { ...x.fields, returnToBase: !x.fields.returnToBase } }))} style={[styles.chip, f.returnToBase && styles.chipOn]}>
-            <Txt variant="strong" size={14} color={f.returnToBase ? '#ffffff' : colors.ink}>{t('office.trip.returnToBase')}</Txt>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityState={{ selected: f.avoidExpressway }} onPress={() => updateDraft((x) => ({ ...x, fields: { ...x.fields, avoidExpressway: !x.fields.avoidExpressway } }))} style={[styles.chip, f.avoidExpressway && styles.chipOn]}>
-            <Txt variant="strong" size={14} color={f.avoidExpressway ? '#ffffff' : colors.ink}>{t('office.trip.noExpressway')}</Txt>
-          </Pressable>
+        <View style={styles.card}>
+          <ToggleRow label={t('office.trip.returnToBase')} value={f.returnToBase} onChange={(returnToBase) => setF({ returnToBase })} testID="return-toggle" />
+          <ToggleRow label={t('office.trip.noExpressway')} value={f.avoidExpressway} onChange={(avoidExpressway) => setF({ avoidExpressway })} testID="expressway-toggle" />
         </View>
       </Screen>
       <TripFooter label={t('office.trip.nextWhen')} onPress={() => { updateDraft((x) => ({ ...x, step: 'when' })); router.push('/office/trip/when'); }} disabled={!!problem} problem={problem} />

@@ -17,6 +17,8 @@ import {
   taskOutcome, vehicleLine, whatsappWithText,
 } from '../src/office/trip/formsLogic';
 import { validateAssign } from '../src/office/trip/assignLogic';
+import { whoArgs } from '../src/office/trip/whoLogic';
+import { DWELL_CHIPS } from '../src/office/trip/words';
 import { bookInput, validateNewRequest } from '../src/office/trip/requestLogic';
 import type { Conflict, PlanPreview, SuggestedVehicle } from '../src/office/types';
 
@@ -106,9 +108,22 @@ console.log('\nChange the task');
   check('input' in r1 && same(r1.input, { task_id: 't1', plan_version: 4, driver: 'ruwan', vehicle: 'on the day', title: 'Team drop 2', passengers: null, notes: '' }), 'only what differs, with the plan version; passengers cleared = null', r1);
   const running = { ...task, status: 'in_progress' };
   const r2 = changeTaskInput('t1', 4, { ...f0, driver: 'ruwan', date: '2026-10-22', time: '09:00', end: '16:00', contactName: 'Sunil' }, running);
-  check('input' in r2 && same(r2.input, { task_id: 't1', plan_version: 4, end_time: '16:00', contact_name: 'Sunil' }), 'a running task: the words and the end only (no day, leave-by or driver)', r2);
+  check('input' in r2 && same(r2.input, { task_id: 't1', plan_version: 4, contact_name: 'Sunil' }), 'a running task: the words only (no day, leave-by, end, driver or vehicle: the server refuses them)', r2);
   const r3 = changeTaskInput('t1', 4, { ...f0, end: '07:00' }, task);
   check('error' in r3 && r3.error === 'endBeforeStart', 'the end before the leave-by is refused');
+}
+
+console.log('\nThe reviewer\'s findings, fixed');
+{
+  const base = { date: '2026-10-21', leaveBy: '08:07', end: '', stops: [{ ...newStop('drop'), place: 'Kandy', lat: 7.29, lng: 80.63 }], start: 'Head office', startLat: 6.9, startLng: 79.86 };
+  const a1 = whoArgs({ ...base, startPax: false });
+  check(a1 !== null && a1.at === '2026-10-21 08:05' && a1.lat === 7.29 && a1.first_stop === undefined, 'Who\'s available: the first row is the first stop when passengers do not get in at the start (floored to 5 min)', a1);
+  const a2 = whoArgs({ ...base, startPax: true }, { base: 'Base', need: 'van', pax: '3' });
+  check(a2 !== null && a2.lat === 6.9 && a2.need_type === 'van' && a2.pax === 3, 'with passengers at the start the start is the first stop; a request sends its type and passengers', a2);
+  check(whoArgs({ ...base, start: '', startPax: true, startLat: undefined, startLng: undefined }, { base: 'Base' })?.first_stop === 'Base', 'an empty start with passengers (no pin) names the base place');
+  check(DWELL_CHIPS[0] === 5 && DWELL_CHIPS.includes(120), 'the time-at-stop chips include 5 min (the site\'s picks)');
+  const useTripSrc = read('office/trip/useTrip.ts');
+  check(useTripSrc.includes('const planStore = new Map<string, PlanEntry>();') && useTripSrc.includes('if (!key || cur?.inFlight) return;') && useTripSrc.includes("const offset = tripOffset(f) + (d.reached ?? 0);"), 'one plan store for every mounted step (a call in flight is never doubled); the rows count the reached stops');
 }
 
 console.log('\nThe screens as text: every field reaches its input');
@@ -130,13 +145,19 @@ console.log('\nThe screens as text: every field reaches its input');
   check(who.includes("useTool<Suggestions>('suggest_vehicles', sugArgs ?? {}") && who.includes('groupRows(sug.data)') && who.includes("custodianDrives(selfDrive, d.req.driverRequired, pickedVehicle)") && who.includes('book: { hasCustodian:'), 'Who (Book now): suggest_vehicles, the four groups, the custodian rule, the pick kept for Review');
   check(who.includes("api.call<FindProject>('find_project', { text: text.trim() })") && who.includes('setRows(splitRows)') && who.includes('setRows(addProjectRow)') && who.includes("t('office.trip.splitTotal'"), 'Who (task): the project rows with find_project, Split equally, the total');
   check(who.includes("<ToggleRow label={t('office.trip.whatsappToo')} value={f.whatsapp}") && who.includes("driverWhatsapp: whatsapp") && who.includes('<DriverRows'), 'Who (task): the WhatsApp option, the driver\'s link kept, the shared driver rows (with the best match\'s reason)');
-  check(who.includes("problem = isTask ? (!f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : null) : null") && who.includes('disabled={!!problem} problem={problem}'), 'Who: the button disabled until the step is valid, with the reason under it');
+  check(who.includes('vehicleDefault({ on: onDay, date: f.date') && who.includes("t('office.trip.needVehicle')") && who.includes('if (!isTask && !books) return;') && who.includes('testID="vehicle-facts"') && who.includes('testID="asked-by"') && who.includes('office.vehicles.type_${type}'), 'Who: the on-the-day default for a task, the known-none block, the default kept for Review, the vehicle facts, the asker line, the type labels');
+  check(where.includes('testID="return-toggle"') && where.includes('testID="expressway-toggle"') && where.includes("wasApproved: card.status === 'approved'") && where.includes("running: p.task.status === 'in_progress'") && when.includes("draft.running ?") && when.includes('durationText(t, fb.min)'), 'Where: toggle rows for the two switches, the drafts remember an approved booking and a running task; When: no leave-by on a running task, the usual time in the phone\'s language');
+  check(who.includes("problem = isTask ? (!f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : known && !def && !f.vehicle && !dayDefault ? t('office.trip.needVehicle') : null) : null") && who.includes('disabled={!!problem} problem={problem}'), 'Who: the button disabled until the step is valid (the driver, the title, the split, a vehicle when the driver holds none), with the reason under it');
   check(review.includes("bookInput(rf, { vehicle, driver: f.driver, hasCustodian: !!d.book?.hasCustodian, defaultVehicle: d.book?.defaultVehicle }, trip.base)") && review.includes("secondary={books ? { label: t('office.trip.saveWaiting'), onPress: () => void send('send'), disabled: 'error' in planned } : undefined}"), 'Review: Book now as the primary with Save as waiting beside it (book_vehicle), else Send request');
   check(review.includes("testID=\"plan-updating\"") && review.includes('testID="leave-note"') && review.includes('testID="vehicle-used"') && review.includes('testID="conflict-card"') && review.includes('testID="outcome-card"'), 'Review: Updating plan…, the Leave by note, the vehicle used, the conflict cards, the outcome card');
   check(review.includes("t('office.trip.openThatTask')") && review.includes("t('office.trip.callName'") && review.includes("t('office.trip.whatsappName'") && review.includes("'office.trip.pickAnotherDriver' : 'office.trip.pickAnotherVehicle'"), 'the conflict cards: Open that task, Call / WhatsApp, Pick another vehicle / driver');
-  check(review.includes("const o: Outcome = chosen.tool === 'create_task' ? taskOutcome(out)") && review.includes("t('office.trip.whatsappDriver')") && review.includes("t('office.trip.openTask')") && review.includes("setDraft(null);"), 'the outcome: sent / waiting / booked / saved with Open task and WhatsApp the driver; the draft goes');
+  check(review.includes("const o: Outcome = chosen.tool === 'create_task' ? taskOutcome(out)") && review.includes("t('office.trip.whatsappDriver')") && review.includes("t('office.trip.openTask')") && review.includes("t('office.trip.openRequest')") && review.includes("setDraft(null);"), 'the outcome: sent / waiting / booked / saved with Open task, Open the request and WhatsApp the driver; the draft goes');
+  check(review.indexOf('if (outcome) {') < review.indexOf("if (!d) return <View") && review.includes('mode: d!.mode') && review.includes('lastKind.current = kind;') && review.includes('onRetry={() => void send(lastKind.current)}'), 'the outcome shows before the draft guard (the draft is gone by then); Try again sends the same call');
+  check(!review.includes('p?.warnings?.map') && review.includes("stopTimesT(t, x)") && review.includes("legTextT(t, x, p.start?.name)") && review.includes("'office.trip.endsAtTime'") && review.includes('testID="reapproval-notice"'), 'the warnings once (the reasons), the rows in the phone\'s language, "ends HH:MM" without a return, the re-approval notice');
+  check(review.includes("defaultVehicle: d.book?.defaultVehicle, base: trip.base"), 'create_task with the driver\'s known default vehicle (the site\'s "Add a vehicle" rule)');
   check(review.includes("plan_version: d.planVersion ?? 0") && review.includes("updateRequestInput(d.requestId ?? '', d.version ?? 0, rf, d.was ?? rf, trip.base)"), 'the versions: plan_version on the stops, version on a request');
-  check(change.includes("changeTaskInput(task.id, task.plan_version ?? 0, f, task)") && change.includes("api.call<UpdateTaskResult & { warnings?: string[] }>('update_task', r.input)") && change.includes('<DriverRows') && change.includes("t('office.task.keepVehicle'") && change.includes('disabled={!changed}'), 'Change the task: update_task with the plan version, the driver rows, Keep the vehicle, Save disabled until something changed');
+  check(change.includes("changeTaskInput(task.id, task.plan_version ?? 0, { ...f, vehicle: vehicleToSend }, task)") && change.includes("api.call<UpdateTaskResult & { warnings?: string[] }>('update_task', r.input)") && change.includes('<DriverRows') && change.includes("t('office.task.keepVehicle'") && change.includes('disabled={!changed}'), 'Change the task: update_task with the plan version and the new driver\'s vehicle, the driver rows, Keep the vehicle, Save disabled until something changed');
+  check(change.includes("picked.vehicle.reg_no !== currentPlate ? picked.vehicle.reg_no : ''") && change.includes('{!locked && <View style={styles.card}>') && change.includes("checkDeparture(f.time, departurePlan(p.timeline, p.plan?.buffer_min))") && change.includes('<DepartureNote') && change.includes('floor5(f.time)') && change.includes("'office.task.timeEndBeforeStart' : 'office.task.changeNothingYet'"), 'a new driver\'s vehicle is sent; a running task hides the end and the vehicle; the departure check with Use; the availability time floored; the end-before-start reason');
   check(rows.includes("data?.best?.why") && rows.includes("t('office.ask.open')"), 'the shared driver rows: the best match\'s reason, Ask drivers');
   const roleWord = /'(admin|fleet_admin|office|viewer|staff)'/;
   check(![where, when, who, review, change, controls, rows].some((s) => roleWord.test(s)), 'no role names');

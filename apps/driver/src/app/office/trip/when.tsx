@@ -9,14 +9,14 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { TimeInput } from '@/components/office/TimeInput';
-import { TripFooter, TripHeader } from '@/components/office/TripShell';
+import { DepartureNote, TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Button, Mono, Txt } from '@/components/ui';
-import { shortDate } from '@/lib/durations';
+import { durationText, shortDate } from '@/lib/durations';
 import { addDays, colomboDate } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
 import { nextStep, updateDraft, useTripDraft } from '@/office/trip/draft';
 import { dwellFallbacks } from '@/office/trip/planLogic';
-import { dwellText, parseDwell, type StopDraft, stopsInput } from '@/office/trip/stopsLogic';
+import { parseDwell, type StopDraft, stopsInput } from '@/office/trip/stopsLogic';
 import { useTrip } from '@/office/trip/useTrip';
 import { departureText, DWELL_CHIPS, dwellChipText, lateByText, reasonText } from '@/office/trip/words';
 import type { SettingsResult } from '@/office/types';
@@ -108,17 +108,18 @@ export default function TripWhen() {
                   <Txt variant="muted">{t('office.trip.minutes')}</Txt>
                 </View>
               )}
-              {chosenMin === null && fb && <Txt variant="small">{fb.source === 'place' ? t('office.trip.usualHere', { dur: dwellText(fb.min) }) : t('office.trip.defaultHere', { dur: dwellText(fb.min) })}</Txt>}
+              {chosenMin === null && fb && <Txt variant="small">{fb.source === 'place' ? t('office.trip.usualHere', { dur: durationText(t, fb.min) }) : t('office.trip.defaultHere', { dur: durationText(t, fb.min) })}</Txt>}
             </View>
           );
         })}
 
         <View style={styles.card}>
           <Txt variant="label" color={colors.muted}>{t('office.trip.leaveFrom', { place: startName }).toUpperCase()}</Txt>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {draft.running ? <Txt variant="muted">{t('office.trip.leaveRunning')}</Txt> : null}
+          {!draft.running && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <TimeInput value={f.leaveBy} onCommit={trip.setLeave} tone={lateLabel ? 'red' : undefined} placeholder={t('office.trip.leaveAuto')} />
             {lateLabel && <Txt variant="strong" size={15} color={colors.red}>{lateLabel}</Txt>}
-          </View>
+          </View>}
           {!f.leaveBy && <Txt variant="small">{trip.plan.updating ? t('office.trip.planning') : t('office.trip.leaveHint')}</Txt>}
           {check && check.kind === 'late' && !trip.lateKey && (
             <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(check.leaveBy)} moveLabel={check.back && check.moveBackTo ? t('office.trip.moveBackBy', { time: check.moveBackTo }) : check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.back && check.moveBackTo ? () => trip.setEnd(check.moveBackTo!) : check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
@@ -137,24 +138,10 @@ export default function TripWhen() {
   );
 }
 
-function DepartureNote({ text, tone, useLabel, onUse, moveLabel, onMove }: { text: string; tone: 'bad' | 'warn'; useLabel: string; onUse: () => void; moveLabel?: string; onMove?: () => void }) {
-  const ink = tone === 'bad' ? colors.red : colors.amberText;
-  return (
-    <View style={[styles.note, { backgroundColor: tone === 'bad' ? colors.redChip : colors.amberChip }]}>
-      <Txt variant="strong" size={16} color={ink}>{text}</Txt>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        <Button label={useLabel} onPress={onUse} style={{ minHeight: 48, paddingHorizontal: 14 }} />
-        {moveLabel && onMove && <Button kind="outline" label={moveLabel} onPress={onMove} style={{ minHeight: 48, paddingHorizontal: 14, borderColor: ink }} />}
-      </View>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   card: { backgroundColor: colors.card, borderColor: colors.line, borderWidth: 1, borderRadius: 18, padding: 16, gap: 12 },
   mark: { width: 32, height: 32, borderRadius: 16, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
   chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
   chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   minutes: { width: 90, minHeight: 52, borderWidth: 1.5, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, fontFamily: fonts.monoSemiBold, fontSize: 22, color: colors.ink, backgroundColor: colors.card },
-  note: { borderRadius: 14, padding: 14, gap: 10 },
 });

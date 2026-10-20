@@ -101,7 +101,7 @@ console.log('\nThe words (office/trip/words.ts):');
   check(lateByText(t, late, '07:00') === null, 'nothing when the typed time is early enough');
   const fill = checkDeparture('', plan);
   check(fill?.kind === 'fill' && fill.leaveBy === '07:24', 'an empty leave-by is filled from the plan');
-  check(same(DWELL_CHIPS, [15, 30, 60, 90, 120]) && dwellChipText(t, 90) === 'dur.hours {"h":1,"m":30}' && dwellChipText(t, 15) === 'dur.minutes {"n":15}' && dwellChipText(t, 60) === 'dur.hoursOnly {"h":1}', 'the time-at-stop chips');
+  check(same(DWELL_CHIPS, [5, 15, 30, 60, 90, 120]) && dwellChipText(t, 90) === 'dur.hours {"h":1,"m":30}' && dwellChipText(t, 15) === 'dur.minutes {"n":15}' && dwellChipText(t, 60) === 'dur.hoursOnly {"h":1}', 'the time-at-stop chips');
 }
 
 console.log('\nThe time field (office/trip/timeLogic.ts):');
