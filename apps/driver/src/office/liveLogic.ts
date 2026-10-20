@@ -46,15 +46,22 @@ export function filterCounts(drivers: readonly DutyOf[]): Record<LiveFilter, num
 }
 
 /** The Filter sheet's one section (no search: the map's list is short): the duty, with the counts beside each choice. */
-export function liveFilterDefs(counts: Record<LiveFilter, number> | undefined, t: Words): FilterDef[] {
-  return [{
+export function liveFilterDefs(counts: Record<LiveFilter, number> | undefined, t: Words, opts: { trails?: boolean } = {}): FilterDef[] {
+  const defs: FilterDef[] = [{
     key: 'duty',
     label: t('office.live.filterLabel'),
     kind: 'single',
     default: 'all',
     options: LIVE_FILTERS.map((k) => ({ value: k, label: t(`office.live.filter.${k}`), ...(counts ? { count: counts[k] } : {}) })),
   }];
+  // Today's trails live in the sheet, not over the map (Sahan's decision 3, 20 October 2026: at most three map controls);
+  // on, they show as a chip like any other filter.
+  if (opts.trails) defs.push({ key: 'show', label: t('office.live.mapSection'), kind: 'multi', options: [{ value: 'trails', label: t('office.live.trails') }] });
+  return defs;
 }
+
+/** Today's trails are ticked in the sheet. */
+export const trailsOn = (values: FilterValues): boolean => Array.isArray(values.show) && values.show.includes('trails');
 
 export const liveChoice = (values: FilterValues): LiveFilter =>
   ((LIVE_FILTERS as readonly unknown[]).includes(values.duty) ? values.duty : 'all') as LiveFilter;

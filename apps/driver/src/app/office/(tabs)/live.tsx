@@ -5,7 +5,8 @@
 // `live_drivers` is read when the tab opens, every 30 s while it is in front, and on pull to refresh. Opened from Home
 // with ?driver=<username>, that driver is selected.
 // O2 (the plan's §6, the site's Live; office/liveRouteLogic.ts), for a person who may call driver_route:
-//   - Today's trails: the control over the map (design 15's cluster) draws every sharing driver's line today, at most 10
+//   - Today's trails: a tick box in the Filter sheet's Map section (Sahan's decision 3, 20 October 2026) draws every
+//     sharing driver's line today, at most 10
 //     (the rest "+N not drawn"), one driver_route call each, then again every 60 s while on, merged by time into the line
 //     drawn, never replaced; each in a muted colour, its holes dashed. Off: the lines go.
 //   - The shown route: the selected driver's day in full colour by speed band, the stops as circles with their times, the
@@ -20,7 +21,7 @@
 //     days), Clock out (a driver on duty without a task: a sheet with the optional reason; the server's sentence when it
 //     refuses) and Move to vehicle (move/[username]; on a task it is Task detail's Swap vehicle), each with its tool;
 //   - the Problems choice in the Filter sheet (No signal or Location off while on duty, the site's rule);
-//   - the map's cluster: zoom in, zoom out, the trails, fit everyone (components/DriversMap.tsx), the compass above it.
+//   - the map's cluster: zoom in, zoom out, fit everyone (components/DriversMap.tsx), the compass above it: at most three.
 
 import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,7 +29,7 @@ import { ActivityIndicator, AppState, type LayoutChangeEvent, Linking, Pressable
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DriversMap } from '@/components/DriversMap';
-import { type LucideIcon, MessageCircle, Navigation, Phone, Route as RouteIcon, X } from '@/components/icons';
+import { type LucideIcon, MessageCircle, Navigation, Phone, X } from '@/components/icons';
 import { type Playback, PlaybackBar, usePlayback } from '@/components/office/PlaybackBar';
 import { pickedStyle } from '@/components/patterns/Select';
 import { LanguagePill } from '@/components/LanguageSwitch';
@@ -38,7 +39,7 @@ import { Button, Plate, Txt } from '@/components/ui';
 import { plusDays } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
 import {
-  batteryText, canClockOut, clockOutInput, clockOutLine, type ClockOutResult, filterCounts, filterDrivers, focusOf, frameAll, liveChoice, liveFilterDefs, markersOf, moveMode,
+  batteryText, canClockOut, clockOutInput, clockOutLine, type ClockOutResult, filterCounts, filterDrivers, focusOf, frameAll, liveChoice, liveFilterDefs, markersOf, moveMode, trailsOn,
   pillOf, rowLine, speedText, WATCH_EVERY_MS, watchBatches, watchList,
 } from '@/office/liveLogic';
 import {
@@ -133,7 +134,8 @@ export default function LiveTab() {
   const shownUser = shownRoute?.username ?? null;
 
   // ---- Today's trails: every sharing driver's line (at most TRAILS_CAP), loaded once each, merged every 60 s ----------
-  const [trails, setTrails] = useState(false);
+  // On or off from the Filter sheet's Map section (Sahan's decision 3); off forgets the lines loaded.
+  const trails = routes && trailsOn(values);
   const [trailMap, setTrailMap] = useState<Map<string, Route>>(() => new Map());
   const trailBusy = useRef(new Set<string>());
   const plan = useMemo(() => trailsPlan(all), [all]);
@@ -157,10 +159,9 @@ export default function LiveTab() {
     if (!trails || !routes) return;
     for (const u of plan.draw) if (!trailMap.has(u)) loadTrail(u);
   }, [trails, routes, plan, trailMap, loadTrail]);
-  const toggleTrails = () => {
-    if (trails) setTrailMap(new Map());
-    setTrails(!trails);
-  };
+  useEffect(() => {
+    if (!trails) setTrailMap(new Map());
+  }, [trails]);
 
   // Watched mode (the site's useWatchDrivers): the selected driver while they share, every sharing driver while the trails
   // are on; watch_drivers now and every 30 s while the tab is in front and the app on screen. Leaving stops the calls (the
@@ -213,21 +214,11 @@ export default function LiveTab() {
   const [cardH, setCardH] = useState(0);
   const subtitle = all.length === 1 ? t('office.live.countOne') : t('office.live.count', { n: all.length });
 
-  // Design 15's cluster, under the compass's place: the trails toggle (dark while on) and what it is doing. DriversMap
-  // shows it only while a map is mounted (never over "Map not available").
-  const controls = routes ? (
+  // What the trails are doing, under the map's cluster (the toggle itself is in the Filter sheet: at most three map
+  // controls). DriversMap shows it only while a map is mounted (never over "Map not available").
+  const controls = trails && (loadingTrails || plan.notDrawn > 0) ? (
     <View style={styles.trailsControl} pointerEvents="box-none">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={t('office.live.trails')}
-        accessibilityState={{ selected: trails }}
-        onPress={toggleTrails}
-        testID="live-trails"
-        style={({ pressed }) => [styles.mapButton, trails && styles.mapButtonOn, pressed && { opacity: 0.8 }]}
-      >
-        <RouteIcon size={24} color={trails ? '#ffffff' : colors.ink} strokeWidth={2.4} />
-      </Pressable>
-      {trails && (loadingTrails || plan.notDrawn > 0) && (
+      {(
         <View style={styles.mapPill}>
           {loadingTrails && <ActivityIndicator size="small" color={colors.muted} />}
           <Txt variant="small" color={colors.ink} numberOfLines={1}>
@@ -254,7 +245,7 @@ export default function LiveTab() {
       </View>
 
       <View style={styles.chips}>
-        <FilterBar defs={liveFilterDefs(q.data ? counts : undefined, t)} values={values} onApply={setValues} testID="live-filter" />
+        <FilterBar defs={liveFilterDefs(q.data ? counts : undefined, t, { trails: !!routes })} values={values} onApply={setValues} testID="live-filter" />
       </View>
 
       <ScrollView
@@ -484,8 +475,6 @@ const styles = StyleSheet.create({
   top: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: colors.ink, paddingHorizontal: 20, paddingBottom: 10 },
   map: { flex: 1.2, backgroundColor: colors.mapLand, minHeight: 220 },
   trailsControl: { alignItems: 'flex-end', gap: 8 },
-  mapButton: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line, alignItems: 'center', justifyContent: 'center', elevation: 4 },
-  mapButtonOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   mapPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, maxWidth: 220 },
   chips: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, backgroundColor: colors.page },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, minHeight: 64, borderRadius: 12, borderWidth: 2, borderColor: 'transparent' },

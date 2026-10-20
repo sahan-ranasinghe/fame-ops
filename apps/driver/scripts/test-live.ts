@@ -6,8 +6,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  batteryText, canClockOut, clockOutInput, clockOutLine, dutyOf, filterCounts, filterDrivers, fitAllFrame, focusOf, frameAll, hasPosition, hasProblem, liveChoice, liveFilterDefs, LIVE_FILTERS,
-  markerLabel, markersOf, markerTone, moveMode, pillOf, positionsKey, rowLine, speedText, WATCH_EVERY_MS, WATCH_MAX, watchBatches, watchList, type Words, zoomStep,
+  batteryText, canClockOut, clockOutInput, clockOutLine, dutyOf, filterCounts, filterDrivers, fitAllFrame, focusOf, frameAll, hasPosition, hasProblem, liveChoice, liveFilterDefs, LIVE_FILTERS, markerLabel, markersOf, markerTone, moveMode, pillOf, positionsKey, rowLine, speedText, WATCH_EVERY_MS, WATCH_MAX, watchBatches, watchList, type Words, zoomStep, trailsOn,
 } from '../src/office/liveLogic';
 import { canMove, currentChoice, moveHint, moveInput, moveSentences, NO_VEHICLE, searchRows } from '../src/office/moveLogic';
 import { swapRows } from '../src/office/taskExtrasLogic';
@@ -155,13 +154,17 @@ console.log('\n== The screen and the two engines ==');
 {
   const screen = read('src/app/office/(tabs)/live.tsx');
   check(/useTool<LiveDrivers>\('live_drivers', \{\}, \{ every: 30_000 \}\)/.test(screen), 'live_drivers with no arguments, every 30 s while in front');
-  check(/<FilterBar defs=\{liveFilterDefs\(q\.data \? counts : undefined, t\)\} values=\{values\} onApply=\{setValues\}/.test(screen) && !/FilterChips/.test(screen) && /<SkeletonRows/.test(screen) && !/<Loading/.test(screen), 'one Filter button without a search (no chip row), skeleton rows while loading');
+  check(/<FilterBar defs=\{liveFilterDefs\(q\.data \? counts : undefined, t, \{ trails: !!routes \}\)\} values=\{values\} onApply=\{setValues\}/.test(screen) && !/FilterChips/.test(screen) && /<SkeletonRows/.test(screen) && !/<Loading/.test(screen), 'one Filter button without a search (no chip row), skeleton rows while loading');
   check(/useLocalSearchParams<\{ driver\?: string \}>\(\)/.test(screen) && /d\.username === param \|\| d\.driver === param/.test(screen) && /setSelected\(found\.username\)/.test(screen) && /router\.setParams\(\{ driver: '' \}\)/.test(screen),
     '?driver=<username or name> selects that driver once, then the parameter is forgotten');
   // O2: the map also gets the route layers (the trails, the shown route, the playback marker: scripts/test-live-route.ts).
   check(/<DriversMap markers=\{markers\} fit=\{fit\} focus=\{focus\} onPressMarker=\{select\} mapPackage=\{me\.map\?\.package\} layers=\{layers\} controls=\{controls\} \/>/.test(screen), 'the map gets the markers, the frame, the selected driver, the office\'s map package, the route layers and the controls');
   check(/links\.call && <Action/.test(screen) && /links\.whatsapp && <Action/.test(screen) && /links\.maps && <Action/.test(screen), 'Call, WhatsApp and Open in Maps only when the server gave the link (no dead button)');
-  check(/const controls = routes \? \([\s\S]*?testID="live-trails"/.test(screen) && /<PlaybackBar playback=\{playback\} cursor=\{cursor\} \/>/.test(screen) && /testID="live-playback"/.test(readFileSync(join(__dirname, '..', 'src', 'components', 'office', 'PlaybackBar.tsx'), 'utf8')), 'the trails control and the playback bar are there (O2; the bar is the shared one), the control only for a person who may call driver_route');
+  const trailsDefs = liveFilterDefs(undefined, (k) => k, { trails: true });
+  check(trailsDefs.length === 2 && trailsDefs[1].key === 'show' && trailsDefs[1].kind === 'multi' && trailsDefs[1].options[0].value === 'trails' && liveFilterDefs(undefined, (k) => k).length === 1
+    && trailsOn({ show: ['trails'] }) && !trailsOn({}) && !screen.includes('testID="live-trails"') && /const trails = routes && trailsOn\(values\);/.test(screen),
+    'Today\'s trails are a tick box in the Filter sheet\'s Map section (Sahan\'s decision 3: at most three map controls), only for a person who may call driver_route');
+  check(/<PlaybackBar playback=\{playback\} cursor=\{cursor\} \/>/.test(screen) && /testID="live-playback"/.test(readFileSync(join(__dirname, '..', 'src', 'components', 'office', 'PlaybackBar.tsx'), 'utf8')), 'the playback bar is the shared one');
   // O2: the card grew (today's numbers, the playback bar), so the room under it follows its measured height.
   check(/paddingBottom: chosen \? Math\.max\(240, cardH \+ 16\) : 24/.test(screen), 'the list makes room under the card');
 

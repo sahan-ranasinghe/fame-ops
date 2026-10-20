@@ -1363,7 +1363,8 @@
       "notFound": "This driver is not on the list any more.",
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
-      "fitAll": "Fit everyone on the map"
+      "fitAll": "Fit everyone on the map",
+      "mapSection": "Map"
     },
     "trip": {
       "step_where": "Where",

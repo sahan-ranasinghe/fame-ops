@@ -238,13 +238,13 @@ console.log('\n== The screen and the two engines ==');
   const calls = (screen.match(/api\.call<DriverRoute>\('driver_route'/g) ?? []).length;
   const withArgs = (screen.match(/api\.call<DriverRoute>\('driver_route', routeArgs\(\w+\)\)/g) ?? []).length;
   check(calls === 3 && withArgs === 3 && !/snap/.test(screen), 'every driver_route call (the shown route, a trail, the refresh) with routeArgs(username); never snap', { calls, withArgs });
-  check(/const routes = me\.tools\.includes\('driver_route'\);/.test(screen) && /const controls = routes \? \([\s\S]*?testID="live-trails"/.test(screen) && /route=\{routes \? \{/.test(screen),
+  check(/const routes = me\.tools\.includes\('driver_route'\);/.test(screen) && /const trails = routes && trailsOn\(values\);/.test(screen) && /route=\{routes \? \{/.test(screen),
     'the trails control and the route only for a person who may call driver_route');
   // Stage 1 (O3 item 4f): the screen's control sits in the map's one cluster (zoom in, zoom out, the trails, fit), which
   // DriversMap draws after the mounted engine, never over "Map not available".
   check(/controls=\{controls\}/.test(screen) && /testID="map-zoom-out" \/>\s*\{controls\}\s*<MapButton icon=\{Maximize\}/.test(read('src/components/DriversMap.tsx')) && /controls\?: ReactNode;/.test(read('src/components/DriversMap.tsx')),
     'the control is DriversMap\'s slot: shown only while a map is mounted, never over "Map not available"');
-  check(/if \(trails\) setTrailMap\(new Map\(\)\);/.test(screen) && /trailsPlan\(all\)/.test(screen) && /trailsOf\(trailMap, plan\.draw, drawing\?\.username \?\? null\)/.test(screen),
+  check(/if \(!trails\) setTrailMap\(new Map\(\)\);/.test(screen) && /trailsPlan\(all\)/.test(screen) && /trailsOf\(trailMap, plan\.draw, drawing\?\.username \?\? null\)/.test(screen),
     'trails off: the lines go; the plan caps them; the shown driver\'s trail is left out');
   check(/\}, ROUTE_REFRESH_MS\);/.test(screen) && (screen.match(/mergeRoute\(/g) ?? []).length >= 3 && /if \(!focused \|\| !routes \|\| \(!trails && shownUser === null\)\) return;/.test(screen),
     'every 60 s while in front: the trails and the shown route fetched again and merged, never replaced');
@@ -303,7 +303,7 @@ console.log('\n== Strings: the keys the code asks for ==');
   // The O2 strings (the trails, the route, the playback), merged into en.json and si.json; each one asked for somewhere.
   const O2_KEYS = ['trails', 'trailsLoading', 'trailsNotDrawn', 'routeFailed', 'routeNone', 'routeToday', 'routeDriving', 'routeStopped', 'routeStops', 'routeStopsOne', 'play', 'pause', 'slider', 'estimated'];
   const si = new Map(flat((JSON.parse(read('src/i18n/si.json')) as { office: { live: Tree } }).office.live));
-  const src = read('src/app/office/(tabs)/live.tsx') + read('src/components/office/PlaybackBar.tsx') + read('src/components/DriversMap.tsx') + read('src/office/liveRouteLogic.ts');
+  const src = read('src/app/office/(tabs)/live.tsx') + read('src/components/office/PlaybackBar.tsx') + read('src/components/DriversMap.tsx') + read('src/office/liveRouteLogic.ts') + read('src/office/liveLogic.ts');
   const asked = [...new Set([...src.matchAll(/t\('office\.live\.([\w.]+)'/g)].map((m) => m[1]))];
   const missing = asked.filter((k) => !en.has(k) || !si.has(k));
   check(asked.length > 0 && missing.length === 0, 'every office.live.* key the code asks for is in en.json and si.json', missing);
