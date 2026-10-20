@@ -53,13 +53,13 @@ export default function ApproveTab() {
   const freshHere = fresh && fresh.key === q.key ? fresh : null;
   const look = useRef<() => void>(() => undefined);
   look.current = () => {
-    const k = q.key;
+    const asked = q.key;
     if (!q.data) return;
     api.call<RequestsList>('list_requests', requestsArgs(status, search)).then((first) => {
-      if (k !== q.key) return;
+      if (asked !== q.key) return;
       const news = arrivals(q.data?.requests ?? [], first.requests).fresh;
-      q.patch((p) => ({ ...p, requests: arrivals(p.requests, first.requests).updated, ...(first.total !== undefined ? { total: first.total } : {}) }), k);
-      setFresh(news.length ? { key: k, first: first.requests, ids: news.map((r) => r.id) } : null);
+      q.patch((p) => ({ ...p, requests: arrivals(p.requests, first.requests).updated, ...(first.total !== undefined ? { total: first.total } : {}) }), asked);
+      setFresh(news.length ? { key: asked, first: first.requests, ids: news.map((r) => r.id) } : null);
     }, () => undefined);
   };
   useFocusEffect(
