@@ -51,6 +51,26 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"app_errors": {
+                  Row: {
+                    "app_version": string | null,"employee_id": string | null,"fatal": boolean,"happened_at": string | null,"id": number,"message": string,"received_at": string,"runtime": string | null,"screen": string | null,"side": string,"stack": string | null,"update_id": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "app_version"?: string | null,"employee_id"?: string | null,"fatal"?: boolean,"happened_at"?: string | null,"id"?: never,"message": string,"received_at"?: string,"runtime"?: string | null,"screen"?: string | null,"side": string,"stack"?: string | null,"update_id"?: string | null
+                  }
+                  Update: {
+                    "app_version"?: string | null,"employee_id"?: string | null,"fatal"?: boolean,"happened_at"?: string | null,"id"?: never,"message"?: string,"received_at"?: string,"runtime"?: string | null,"screen"?: string | null,"side"?: string,"stack"?: string | null,"update_id"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "app_errors_employee_id_fkey"
+      columns: ["employee_id"]
+isOneToOne: false
+      referencedRelation: "employees"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"claim_lines": {
                   Row: {
                     "allowance_type_id": string,"amount_cents": number,"claim_id": string,"id": string

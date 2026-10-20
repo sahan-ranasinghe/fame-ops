@@ -37,6 +37,7 @@ import { TaskHistory } from "../screens/TaskHistory";
 import { Tasks } from "../screens/Tasks";
 import { TaskStops } from "../screens/TaskStops";
 import { FleetSettings } from "../screens/settings/FleetSettings";
+import AppErrorsPage from "../screens/settings/AppErrors";
 import { MyProfile } from "../screens/settings/MyProfile";
 import { UserForm } from "../screens/settings/UserForm";
 import { UserManage } from "../screens/settings/UserManage";
@@ -177,6 +178,7 @@ export const routes: RouteObject[] = [
       { path: "settings/users/new", element: <Guard need={["users"]}><UserForm /></Guard> },
       { path: "settings/users/:email/edit", element: <Guard need={["users"]}><UserManage /></Guard> },
       { path: "settings/fleet", element: <Guard need={["users"]}><FleetSettings /></Guard> },
+      { path: "settings/app-errors", element: <Guard need={["users"]}><AppErrorsPage /></Guard> },
       { path: "settings/import-sites", element: <Guard need={["vehicles"]}><ImportRoute /></Guard> },
       { path: "settings/notifications", element: <Suspense fallback={<div className="loading">Opening notifications…</div>}><Notifications /></Suspense> },
       { path: "accounts", element: <Navigate to="/settings/users" replace /> },

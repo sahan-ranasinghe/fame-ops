@@ -169,6 +169,8 @@ export const SETTINGS_PAGES: NavItem[] = [
   { key: "users", label: "Users", need: ["users"], path: "/settings/users" },
   { key: "fleet", label: "Fleet", need: ["users"], path: "/settings/fleet" },
   { key: "import-sites", label: "Import sites", need: ["vehicles"], path: "/settings/import-sites" },
+  // Hotfix O2-H2: the app's crash reports (list_app_errors).
+  { key: "app-errors", label: "App errors", need: ["users"], path: "/settings/app-errors" },
   // Web only (the browser's push subscription); the artifact points to the web app.
   { key: "notifications", label: "Notifications", need: [], path: "/settings/notifications" },
 ];

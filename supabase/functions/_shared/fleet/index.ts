@@ -69,6 +69,7 @@ import {
   setMyPrefs,
 } from "./tools/notifications.ts";
 import { getSettings, routingUsage, updateSettings } from "./tools/settings.ts";
+import { listAppErrors } from "./tools/appErrors.ts";
 import {
   cancelTask,
   createTask,
@@ -148,6 +149,7 @@ export const TOOLS: AnyTool[] = [
   getSettings,
   updateSettings,
   routingUsage,
+  listAppErrors,
   listIssues,
   updateIssue,
   issueHistory,
