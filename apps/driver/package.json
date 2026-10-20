@@ -94,7 +94,8 @@
     "test:taps": "tsx scripts/test-taps.ts",
     "test:history": "tsx scripts/test-history.ts",
     "test:media": "tsx scripts/test-media.ts",
-    "test:decide": "tsx scripts/test-decide.ts"
+    "test:decide": "tsx scripts/test-decide.ts",
+    "test:overview": "tsx scripts/test-overview.ts"
   },
   "private": true,
   "expo": {

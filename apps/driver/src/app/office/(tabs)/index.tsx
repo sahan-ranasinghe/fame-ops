@@ -3,12 +3,16 @@
 // requests to approve (list_requests), needs a driver (fleet_overview), critical issues (fleet_overview), today's tasks
 // (task_board), on the road (fleet_overview), my trips (my_trips). Each card opens its real screen; pull to refresh, and
 // everything is read again when the screen comes back; a section shows skeleton rows until its answer comes (the list
-// pattern, docs/ui-patterns.md §5), Try again when it failed, and what to do next when it is empty. The trip editor (+ Assign a task, Request) is round O2: no big
+// pattern, docs/ui-patterns.md §5), Try again when it failed, and what to do next when it is empty. Stage 1 (O3 row 5): every
+// header chip opens its list (on the road → Live, free now / in garage → Vehicles with that filter, waiting → Approve,
+// reminders → Reminders) or stays a number for someone who may not open it; Needs attention shows the server's groups
+// (expand in place, each item to its issue) with Snooze for tomorrow or a week (update_issue snooze on every issue
+// behind the group). The rules: office/overviewLogic.ts. The trip editor (+ Assign a task, Request) is round O2: no big
 // action button yet, so none is shown.
 
 import { useRouter } from 'expo-router';
-import { useCallback } from 'react';
-import { View } from 'react-native';
+import { useCallback, useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { Mono, Txt } from '@/components/ui';
 import { addDays, colomboDate } from '@/lib/time';
@@ -23,13 +27,17 @@ import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { Button } from '@/components/ui';
-import { Plus } from '@/components/icons';
+import { ChevronDown, ChevronRight, Plus } from '@/components/icons';
+import { Sheet } from '@/components/patterns/Sheet';
+import { attentionCount, attentionGroups, chipTarget, snoozeCalls, withoutGroups } from '@/office/overviewLogic';
+import type { AttentionGroup, FleetError } from '@/office/types';
+import { ErrorNotice } from '@/office/ui';
 
 const ROWS = 5;
 
 export default function OfficeHome() {
   const { t, tList } = useApp();
-  const { me, signOut } = useOffice();
+  const { me, api, signOut } = useOffice();
   const router = useRouter();
   const sections = homeSections(me.permissions);
   const chips = homeChips(me.permissions);
@@ -46,6 +54,30 @@ export default function OfficeHome() {
   }, [overview, requests, board, trips]);
 
   const names = { days: tList('days'), months: tList('months') };
+  const go = (chip: Parameters<typeof chipTarget>[0]) => {
+    const to = chipTarget(chip, me);
+    return to ? () => router.push(to as never) : undefined;
+  };
+
+  // Needs attention: a group opens in place; Snooze hides every issue behind it until tomorrow 07:00 or a week from now.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [snoozing, setSnoozing] = useState<AttentionGroup | null>(null);
+  const [snoozeBusy, setSnoozeBusy] = useState(false);
+  const [snoozeError, setSnoozeError] = useState<{ error: FleetError; group: AttentionGroup; when: 'tomorrow' | 'week' } | null>(null);
+  const maySnooze = me.tools.includes('update_issue');
+  async function snooze(group: AttentionGroup, when: 'tomorrow' | 'week') {
+    setSnoozeBusy(true);
+    setSnoozeError(null);
+    try {
+      for (const call of snoozeCalls(group, when)) await api.call('update_issue', call);
+      overview.patch((prev) => withoutGroups(prev, [group.key]));
+      setSnoozing(null);
+    } catch (e) {
+      setSnoozeError({ error: e as FleetError, group, when });
+    } finally {
+      setSnoozeBusy(false);
+    }
+  }
   const ov = overview.data;
   const refreshing = overview.refreshing || requests.refreshing || board.refreshing || trips.refreshing;
 
@@ -53,10 +85,11 @@ export default function OfficeHome() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={shortDate(names, Date.now())} title={t(`office.home.${greeting()}`, { name: firstName(me.name) })}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-          {ov && chips.includes('road') && <Chip n={ov.vehicles.on_the_road} text={t('office.home.onRoad')} tone="blue" onPress={has(me.permissions, 'view') ? () => router.push('/office/(tabs)/live') : undefined} />}
-          {ov && chips.includes('free') && <Chip n={ov.vehicles.parked} text={t('office.home.free')} tone="muted" />}
-          {ov && chips.includes('waiting') && <Chip n={ov.requests.waiting} text={t('office.home.waitingOk')} tone="amber" onPress={() => router.push('/office/(tabs)/approve')} />}
-          {ov && chips.includes('garage') && ov.vehicles.in_garage !== undefined && <Chip n={ov.vehicles.in_garage} text={t('office.home.inGarage')} tone="muted" />}
+          {ov && chips.includes('road') && <Chip n={ov.vehicles.on_the_road} text={t('office.home.onRoad')} tone="blue" onPress={go('road')} />}
+          {ov && chips.includes('free') && <Chip n={ov.vehicles.parked} text={t('office.home.free')} tone="muted" onPress={go('free')} />}
+          {ov && chips.includes('waiting') && <Chip n={ov.requests.waiting} text={t('office.home.waitingOk')} tone="amber" onPress={go('waiting')} />}
+          {ov && chips.includes('garage') && ov.vehicles.in_garage !== undefined && <Chip n={ov.vehicles.in_garage} text={t('office.home.inGarage')} tone="muted" onPress={go('garage')} />}
+          {ov && chipTarget('reminders', me) && ov.reminders.count > 0 && <Chip n={ov.reminders.count} text={t('office.home.reminders')} tone={ov.reminders.red ? 'red' : 'muted'} onPress={go('reminders')} />}
         </View>
       </DarkHeader>
       <Screen refreshing={refreshing} onRefresh={refresh}>
@@ -108,15 +141,34 @@ export default function OfficeHome() {
         )}
 
         {sections.includes('critical') && (
-          <Section title={t('office.home.critical')} count={ov?.critical?.count ?? 0} tone={ov?.critical?.count ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
+          <Section title={t('office.home.attention')} count={attentionCount(ov)} tone={attentionCount(ov) ? 'red' : undefined} link={t('office.common.viewAll')} onLink={() => router.push('/office/issues')}>
             {!ov && !overview.error && <SkeletonRows rows={2} lines={2} />}
-            {ov && (ov.critical?.items.length ?? 0) === 0 && <ListEmpty text={t('office.home.noCritical')} />}
-            {ov?.critical?.items.slice(0, ROWS).map((x, i) => (
-              <View key={x.issue_id ?? `${x.what}-${i}`}>
-                {i > 0 && <Divider />}
-                <Row title={x.what} line={[x.subject, x.vehicle, x.due].filter(Boolean).join(' · ')} onPress={x.issue_id ? () => router.push({ pathname: '/office/issues/[id]', params: { id: x.issue_id ?? '' } }) : undefined} />
-              </View>
-            ))}
+            {ov && attentionGroups(ov).length === 0 && <ListEmpty text={t('office.home.noAttention')} />}
+            {attentionGroups(ov).slice(0, ROWS).map((g, i) => {
+              const open = expanded.has(g.key);
+              const single = g.items.length === 1 && g.items[0].issue_id;
+              return (
+                <View key={g.key} testID="attention-group">
+                  {i > 0 && <Divider />}
+                  <Row
+                    left={g.items.length > 1 ? (open ? <ChevronDown size={20} color={colors.ink} /> : <ChevronRight size={20} color={colors.ink} />) : undefined}
+                    title={g.title}
+                    line={[g.vehicle, g.count > 1 ? t('office.home.attentionN', { n: g.count }) : g.items[0]?.due].filter(Boolean).join(' · ') || undefined}
+                    right={<Pill text={t(`office.home.sev_${g.severity}`)} tone={g.severity === 'critical' ? 'red' : 'amber'} />}
+                    onPress={single ? () => router.push({ pathname: '/office/issues/[id]', params: { id: g.items[0].issue_id ?? '' } }) : () => setExpanded((x) => { const n = new Set(x); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n; })}
+                  />
+                  {open && g.items.map((x, k) => (
+                    <Row key={x.issue_id ?? `${g.key}-${k}`} title={x.what} line={[x.subject, x.vehicle, x.due].filter(Boolean).join(' · ') || undefined}
+                      onPress={x.issue_id ? () => router.push({ pathname: '/office/issues/[id]', params: { id: x.issue_id ?? '' } }) : undefined} />
+                  ))}
+                  {maySnooze && g.issue_ids.length > 0 && (
+                    <Pressable accessibilityRole="button" onPress={() => { setSnoozeError(null); setSnoozing(g); }} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }} testID="attention-snooze">
+                      <Txt variant="strong" size={15} color={colors.blue}>{t('office.home.snooze')}</Txt>
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })}
           </Section>
         )}
 
@@ -201,6 +253,13 @@ export default function OfficeHome() {
           </Section>
         )}
       </Screen>
+      <Sheet visible={snoozing !== null} title={t('office.home.snoozeTitle')} onClose={() => setSnoozing(null)}>
+        {snoozing && <Txt variant="muted" size={15}>{snoozing.title}</Txt>}
+        {snoozing && (['tomorrow', 'week'] as const).map((when) => (
+          <Button key={when} kind="outline" label={t(`office.home.snooze_${when}`)} busy={snoozeBusy} disabled={snoozeBusy} onPress={() => void snooze(snoozing, when)} style={{ minHeight: 56, marginTop: 10 }} testID={`snooze-${when}`} />
+        ))}
+        {snoozeError && <ErrorNotice error={snoozeError.error} onRetry={() => void snooze(snoozeError.group, snoozeError.when)} onSignIn={() => void signOut()} />}
+      </Sheet>
     </View>
   );
 }

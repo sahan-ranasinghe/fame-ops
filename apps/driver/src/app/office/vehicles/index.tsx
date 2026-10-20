@@ -6,7 +6,7 @@
 // the availability line, the document chips). "+ Register vehicle" only with register_vehicle (also as the empty
 // list's action); a row opens the vehicle.
 
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
@@ -15,6 +15,7 @@ import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListSta
 import { Button, Plate } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { appendVehicles, docTone, kmLine, vehicleChoice, vehicleFilterDefs, vehiclesArgs, vehiclesEmpty, vehicleTone } from '@/office/manageLogic';
+import { vehicleFilterParam } from '@/office/overviewLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, VehicleCard, VehiclesList } from '@/office/types';
 import { BackHeader, ListFailed, Pill, Row, Screen } from '@/office/ui';
@@ -27,7 +28,9 @@ export default function VehiclesScreen() {
   const { t } = useApp();
   const { api, me, signOut } = useOffice();
   const router = useRouter();
-  const [values, setValues] = useState<FilterValues>({ filter: 'all' });
+  // A link may name the filter (Home's chips: ?filter=available / in_garage, or the website's words).
+  const params = useLocalSearchParams<{ filter?: string }>();
+  const [values, setValues] = useState<FilterValues>(() => ({ filter: vehicleFilterParam(params.filter) }));
   const filter = vehicleChoice(values);
   const [typed, setTyped] = useState('');
   const [search, setSearch] = useState('');

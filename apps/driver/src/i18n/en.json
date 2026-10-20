@@ -889,7 +889,6 @@
       "inGarage": "in garage",
       "requests": "Requests to approve",
       "needsDriver": "Needs a driver",
-      "critical": "Critical",
       "tasks": "Today's tasks",
       "road": "On the road",
       "trips": "My trips",
@@ -899,7 +898,6 @@
       "allTasks": "All today's tasks ({n})",
       "noRequests": "No requests waiting.",
       "noNeedsDriver": "Every task has its driver.",
-      "noCritical": "Nothing critical.",
       "noTasks": "No tasks today.",
       "noRoad": "Nobody on the road right now.",
       "noTrips": "No trips in the last days.",
@@ -907,7 +905,17 @@
       "proposed": "proposed {driver}",
       "onTask": "on a task",
       "onDuty": "on duty",
-      "offDuty": "off duty"
+      "offDuty": "off duty",
+      "reminders": "reminders",
+      "attention": "Needs attention",
+      "noAttention": "Nothing needs attention.",
+      "attentionN": "{n} items",
+      "sev_critical": "Critical",
+      "sev_warning": "Warning",
+      "snooze": "Snooze…",
+      "snoozeTitle": "Snooze until",
+      "snooze_tomorrow": "Tomorrow 07:00",
+      "snooze_week": "A week from now"
     },
     "status": {
       "assigned": "sent",
@@ -2282,6 +2290,14 @@
       "reasonOther": "Other",
       "cancelledTitle": "Booking cancelled",
       "withdrawnTitle": "Request withdrawn"
+    },
+    "reminders": {
+      "title": "Reminders",
+      "window": "Due in the next {n} days",
+      "due": "Documents and services due",
+      "noneDue": "Nothing is due.",
+      "other": "Also counted",
+      "note": "Overdue first, then the soonest."
     }
   },
   "patterns": {
