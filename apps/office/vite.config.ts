@@ -99,6 +99,9 @@ export default defineConfig(({ mode }) => {
       setupFiles: ["src/test/setup.ts"],
       // The page tests import whole screens: under the full suite's load the first one in a file can pass 5 s.
       testTimeout: 15_000,
+      // At most 4 workers (Sahan, 20 October 2026): the laptop cannot run 12 in parallel next to the functions server and a
+      // browser; with 12 the page tests ran out of their time. (Vitest 4 has no minWorkers.)
+      maxWorkers: 4,
     },
   };
 });

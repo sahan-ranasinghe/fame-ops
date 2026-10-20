@@ -1124,6 +1124,11 @@ iOS; Play Store.
 - JS, server and web changes need no build: the app gets them through EAS Update, after Sahan's go.
 - Tests in two tiers. After each fix, only the fast tests for what changed (typecheck, the related unit tests, the related
   pgTAP file). The full suite (all pgTAP, the connector suite, the e2e, Deno) runs once, right before the checkpoint.
+- Test rule (Sahan, 20 October 2026): while working, run only the fast checks (typecheck, hooks lint, unit and component
+  tests, script suites, and pgTAP / Deno if server code changed). The full office browser suite runs ONCE per checkpoint,
+  right before bringing the checkpoint, not after each fix. If that run fails and the log shows load (CPU cut-offs,
+  time-outs) with no code cause, do not investigate or re-run more than once: report it in a few lines and Sahan decides.
+  Don't spend time measuring the laptop's load unless he asks.
 - The deploy gate (Sahan, 19 October 2026). The deterministic suites must pass fully: pgTAP, Deno, the connector suite, the
   office typecheck + unit tests + both builds, the driver suites. The e2e runs with Playwright `retries: 1` (one worker): a
   test that passes on its retry is flaky, not failed, and the gate is zero failed tests. For every flaky test, check the

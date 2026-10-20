@@ -2638,6 +2638,7 @@ the quiet run.
   free map's style was blocked; not changed.
 - Web source maps off since 20 Oct; if we add crash reporting for the site later, upload maps privately (Sentry-style), never
   publish them.
+- Site unit tests capped at 4 workers (20 Oct); the laptop can't run 12 in parallel next to the functions server.
 
 ## Hotfix 4 (Sahan, 19 October; branch `phase7-hotfix-4` from main `003c749`)
 
