@@ -7,6 +7,7 @@ import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 
 import { Clock, X } from '@/components/icons';
 import { Button, Mono, Txt } from '@/components/ui';
+import { pickedStyle, SelectMark } from '@/components/patterns/Select';
 import { colomboTime } from '@/lib/time';
 import { isHHMM, openIndex, quickTimes, TIME_STEPS } from '@/lib/patterns/timeLogic';
 import { useApp } from '@/state/app';
@@ -64,8 +65,9 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
           initialScrollIndex={Math.max(0, openIndex(draft, suggested, now) - 2)}
           getItemLayout={(_, i) => ({ length: ROW_H, offset: ROW_H * i, index: i })}
           renderItem={({ item }) => (
-            <Pressable accessibilityRole="radio" accessibilityState={{ checked: item === draft }} onPress={() => setDraft(item)} style={[styles.step, item === draft && { backgroundColor: colors.ink }]}>
-              <Mono size={20} bold color={item === draft ? '#ffffff' : colors.ink}>{item}</Mono>
+            <Pressable accessibilityRole="radio" accessibilityState={{ checked: item === draft, selected: item === draft }} onPress={() => setDraft(item)} style={[styles.step, item === draft && pickedStyle]}>
+              <Mono size={20} bold color={item === draft ? colors.blue : colors.ink}>{item}</Mono>
+              {item === draft && <View style={styles.stepMark}><SelectMark kind="radio" on size={24} /></View>}
             </Pressable>
           )}
         />
@@ -78,5 +80,6 @@ const styles = StyleSheet.create({
   box: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, borderWidth: 1.5, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.card, paddingLeft: 14 },
   clear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center' },
-  step: { height: ROW_H, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  step: { height: ROW_H, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  stepMark: { position: 'absolute', right: 14 },
 });

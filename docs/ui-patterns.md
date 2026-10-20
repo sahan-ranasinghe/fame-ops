@@ -219,6 +219,12 @@ A picked thing always looks picked, everywhere, the same way (Hotfix O2-H2, Part
 - Not a selection: the bottom tabs, the sign-in's Driver | Office tabs (role tab, the amber pill of the design), switches
   (the knob's place is the state), the map's toggles (trails, the compass) and a list row shown on the map (Live, a
   driver's timeline: the tint and the 2 px border, no mark, because nothing is being chosen).
+- Stage 0's controls use the same look (merged 20 October 2026): the trip day's Today / Tomorrow and the date range's
+  presets are ChoiceChips; the Filter sheet's options and the sort list are the shared Checkbox / Radio; the day strip's
+  day and the time sheet's time have the tint and the border (the time with its radio); the calendar's picked day is the
+  Material date picker's filled circle, in the selection blue (`#1e4fa0`), with `role radio` / `aria-pressed`. The time
+  field's quick times (Now, the usual times) are actions, not choices: they pick and close.
+- The sign-in's Driver | Office keeps the design's amber pill and carries a check on the picked side.
 
 ### The accessibility rules
 

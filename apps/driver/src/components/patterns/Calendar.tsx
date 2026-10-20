@@ -7,6 +7,7 @@ import { PanResponder, Pressable, StyleSheet, View } from 'react-native';
 
 import { Calendar as CalendarIcon, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from '@/components/icons';
 import { Button, Mono, Txt } from '@/components/ui';
+import { ChoiceChip, pickedStyle } from '@/components/patterns/Select';
 import { colomboDate } from '@/lib/time';
 import {
   addMonths, dayAllowed, dayState, monthGrid, PRESETS, type PresetKey, presetOf, presetRange, type RangeDraft, rangeWords, tapDay, weekDays,
@@ -56,8 +57,8 @@ export function MonthCalendar({ month, onMonth, onTap, range, picked, allowed }:
             const st = range ? dayState(range, d) : picked === d ? 'single' : 'none';
             const filled = st === 'start' || st === 'end' || st === 'single';
             return (
-              <Pressable key={j} accessibilityRole="button" accessibilityState={{ selected: filled, disabled: !ok }} accessibilityLabel={d} disabled={!ok} onPress={() => onTap(d)} style={[styles.cell, st === 'inside' && { backgroundColor: colors.blueChip }, (st === 'start') && styles.startBand, (st === 'end') && styles.endBand]}>
-                <View style={[styles.dayDot, filled && { backgroundColor: colors.ink }, d === today && !filled && { borderWidth: 1.5, borderColor: colors.blue }]}>
+              <Pressable key={j} accessibilityRole="radio" accessibilityState={{ checked: filled, selected: filled, disabled: !ok }} accessibilityLabel={d} disabled={!ok} onPress={() => onTap(d)} style={[styles.cell, st === 'inside' && { backgroundColor: colors.blueChip }, (st === 'start') && styles.startBand, (st === 'end') && styles.endBand]}>
+                <View style={[styles.dayDot, filled && { backgroundColor: colors.blue }, d === today && !filled && { borderWidth: 1.5, borderColor: colors.blue }]}>
                   <Mono size={15} bold={filled} color={filled ? '#ffffff' : ok ? colors.ink : '#b9bcc0'}>{dayNum(d)}</Mono>
                 </View>
               </Pressable>
@@ -109,9 +110,7 @@ export function DateRangeButton({ value, onChange, presets = PRESETS, max, maxDa
             const r = presetRange(k, today);
             const on = draft.from === r.from && draft.to === r.to;
             return (
-              <Pressable key={k} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={() => { onChange(r); setOpen(false); }} style={[styles.chip, on && styles.chipOn]}>
-                <Txt variant="strong" size={14} color={on ? '#ffffff' : colors.ink}>{t(`patterns.preset_${k}`)}</Txt>
-              </Pressable>
+              <ChoiceChip key={k} small label={t(`patterns.preset_${k}`)} selected={on} onPress={() => { onChange(r); setOpen(false); }} />
             );
           })}
         </View>
@@ -177,10 +176,10 @@ export function DayStrip({ value, onChange, max, min, testID = 'day-strip' }: {
           const on = d === value;
           const ok = allowed(d);
           return (
-            <Pressable key={d} accessibilityRole="button" accessibilityState={{ selected: on, disabled: !ok }} disabled={!ok} onPress={() => onChange(d)} style={[styles.stripDay, on && { backgroundColor: colors.ink }]}>
-              <Txt variant="small" color={on ? '#ffffff' : ok ? colors.muted : '#b9bcc0'}>{short[new Date(`${d}T00:00:00Z`).getUTCDay()] ?? ''}</Txt>
-              <Mono size={16} bold color={on ? '#ffffff' : ok ? colors.ink : '#b9bcc0'}>{dayNum(d)}</Mono>
-              {d === today && <View style={[styles.todayMark, on && { backgroundColor: colors.amber }]} />}
+            <Pressable key={d} accessibilityRole="radio" accessibilityState={{ checked: on, selected: on, disabled: !ok }} disabled={!ok} onPress={() => onChange(d)} style={[styles.stripDay, on && pickedStyle]}>
+              <Txt variant="small" color={on ? colors.blue : ok ? colors.muted : '#b9bcc0'}>{short[new Date(`${d}T00:00:00Z`).getUTCDay()] ?? ''}</Txt>
+              <Mono size={16} bold color={on ? colors.blue : ok ? colors.ink : '#b9bcc0'}>{dayNum(d)}</Mono>
+              {d === today && <View style={styles.todayMark} />}
             </Pressable>
           );
         })}
@@ -205,10 +204,9 @@ export function TripDayPicker({ value, onChange, max, testID = 'trip-day' }: { v
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(value || today);
   const other = value && value !== today && value !== tomorrow ? value : '';
+  // The shared chip (docs/ui-patterns.md §11): the picked day has its check, the tint and the border.
   const chip = (on: boolean, label: string, onPress: () => void, key: string) => (
-    <Pressable key={key} accessibilityRole="button" accessibilityState={{ selected: on }} onPress={onPress} style={[styles.chip, on && styles.chipOn]} testID={`${testID}-${key}`}>
-      <Txt variant="strong" size={16} color={on ? '#ffffff' : colors.ink}>{label}</Txt>
-    </Pressable>
+    <ChoiceChip key={key} label={label} selected={on} onPress={onPress} testID={`${testID}-${key}`} />
   );
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }} testID={testID}>
@@ -253,10 +251,9 @@ const styles = StyleSheet.create({
   endBand: { backgroundColor: colors.blueChip, borderTopRightRadius: 22, borderBottomRightRadius: 22 },
   rangeBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 50, borderWidth: 1.5, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.card, paddingHorizontal: 14 },
   chip: { minHeight: 44, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, backgroundColor: colors.card, justifyContent: 'center' },
-  chipOn: { backgroundColor: colors.ink, borderColor: colors.ink },
   todayBtn: { minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center' },
   iconBtn: { width: 44, height: 44, borderRadius: 12, borderWidth: 1.5, borderColor: colors.line, alignItems: 'center', justifyContent: 'center' },
   weekNav: { width: 30, height: 56, alignItems: 'center', justifyContent: 'center' },
-  stripDay: { flex: 1, height: 60, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  stripDay: { flex: 1, height: 60, borderRadius: 14, alignItems: 'center', justifyContent: 'center', gap: 2, borderWidth: 2, borderColor: 'transparent' },
   todayMark: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.blue },
 });

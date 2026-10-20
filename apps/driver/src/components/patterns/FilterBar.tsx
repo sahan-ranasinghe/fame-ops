@@ -5,8 +5,9 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
-import { Check, ChevronDown, Search, SlidersHorizontal, X } from '@/components/icons';
+import { ChevronDown, Search, SlidersHorizontal, X } from '@/components/icons';
 import { Button, Mono, Txt } from '@/components/ui';
+import { Checkbox, Radio } from '@/components/patterns/Select';
 import { activeChips, activeCount, clearValues, type FilterDef, type FilterValues, isChosen, toggle } from '@/lib/patterns/filterLogic';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
@@ -88,13 +89,11 @@ export function FilterBar({ search, onSearch, placeholder, defs, values, onApply
             <Txt variant="label" color={colors.muted}>{d.label.toUpperCase()}</Txt>
             {d.options.map((o) => {
               const on = isChosen(d, draft, o.value);
-              return (
-                <Pressable key={o.value} accessibilityRole={d.kind === 'multi' ? 'checkbox' : 'radio'} accessibilityState={{ checked: on }} onPress={() => setDraft(toggle(d, draft, o.value))} style={styles.option}>
-                  <View style={[d.kind === 'multi' ? styles.box : styles.radio, on && styles.onMark]}>{on && d.kind === 'multi' ? <Check size={16} color="#ffffff" strokeWidth={3} /> : null}</View>
-                  <Txt variant="body" style={{ flex: 1 }}>{o.label}</Txt>
-                  {o.count !== undefined && <Mono size={14} color={colors.muted}>{String(o.count)}</Mono>}
-                </Pressable>
-              );
+              // The shared Checkbox / Radio (docs/ui-patterns.md §11): the mark, never the colour alone.
+              const label = o.count !== undefined ? `${o.label} · ${o.count}` : o.label;
+              return d.kind === 'multi'
+                ? <Checkbox key={o.value} checked={on} onChange={() => setDraft(toggle(d, draft, o.value))} label={label} />
+                : <Radio key={o.value} checked={on} onPress={() => setDraft(toggle(d, draft, o.value))} label={label} />;
             })}
           </View>
         ))}
@@ -103,10 +102,7 @@ export function FilterBar({ search, onSearch, placeholder, defs, values, onApply
       {sort && (
         <Sheet visible={sorting} title={t('patterns.sort')} onClose={() => setSorting(false)} testID="sort-sheet">
           {sort.options.map((o) => (
-            <Pressable key={o.value} accessibilityRole="radio" accessibilityState={{ checked: o.value === sort.value }} onPress={() => { sort.onChange(o.value); setSorting(false); }} style={styles.option}>
-              <View style={[styles.radio, o.value === sort.value && styles.onMark]} />
-              <Txt variant="body">{o.label}</Txt>
-            </Pressable>
+            <Radio key={o.value} checked={o.value === sort.value} onPress={() => { sort.onChange(o.value); setSorting(false); }} label={o.label} />
           ))}
         </Sheet>
       )}
@@ -121,8 +117,4 @@ const styles = StyleSheet.create({
   badge: { position: 'absolute', top: -6, right: -6, minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.ink, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 36, paddingHorizontal: 12, borderRadius: 999, backgroundColor: colors.blueChip },
   sortBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 36, paddingHorizontal: 6 },
-  option: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 48 },
-  box: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#8b9198', alignItems: 'center', justifyContent: 'center' },
-  radio: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#8b9198' },
-  onMark: { backgroundColor: colors.ink, borderColor: colors.ink },
 });
