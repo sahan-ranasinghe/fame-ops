@@ -871,6 +871,23 @@ web-only today): the vehicle's photo and documents, the driver's photo, the lice
 After O4, the rows not "in the app" are the eight "cannot" rows above — six decided, the videos for Sahan's decision,
 web push by nature — and the phone upload's four rows if the server work is deferred.
 
+## 19. Hotfix O2-H2 (20 October 2026, branch `phase8-o2-h2` from main `44fc0d2`): no white screen, saved = snackbar
+
+- **What it did:** the white screen after a save (the trip editor's Who step skipped a hook once the draft was cleared;
+  `tests/tripSave.test.tsx`, `npm run lint:hooks`); every save closes its form and opens the item with a snackbar
+  (`office/trip/successLogic.ts`, `components/patterns/Snackbar.tsx`, `components/office/SavedNotice.tsx`; the site's
+  `ui/Toast.tsx`); a crash screen behind every stack with Show details and the reports in `app_errors` (`list_app_errors`,
+  Settings → App errors); notification settings in groups with Pause all (app and site, `notificationGroups.ts`); a picked
+  thing always looks picked (`components/patterns/Select.tsx`, the site's `ui/Select.tsx`). Patterns: `docs/ui-patterns.md`.
+  The connector's shape contract checks `task_detail` by state (`scripts/snapshot-tool-shapes.py`). The web build makes no
+  source maps (`vite.config.ts`).
+- **Deployed (GO 2, 20 October 2026):** `supabase db push` (20261020100000_hotfix_o2h2_app_errors); `functions deploy
+  office-api office-mcp driver-api`.
+- **Deployed (GO 1, 20 October 2026):** main fast-forwarded to cae9f83; Cloudflare Pages (fame-fleet.pages.dev, 0 source
+  maps, the secret scan empty); `eas update --channel preview --environment preview --message "Hotfix O2-H2: no white
+  screen, saved = snackbar, notification settings, visible selection"`: runtime 1.3.0-gmaps, update group
+  66f60b92-396f-4782-b61f-21ab4b29f5b2, Android update 01a158c4-fab1-70bf-aa94-3b62d3d39d27, commit cae9f83.
+
 ## 16. The principle (Sahan, 20 October 2026): everything the site does, laid out as a phone app
 
 The office will do from the phone everything they do on the website, because they don't always have a laptop. So every
