@@ -16,6 +16,7 @@ export { default as Gauge } from 'lucide-react-native/icons/gauge';
 export { default as ListChecks } from 'lucide-react-native/icons/list-checks';
 export { default as LogOut } from 'lucide-react-native/icons/log-out';
 export { default as MapPin } from 'lucide-react-native/icons/map-pin';
+export { default as Wrench } from 'lucide-react-native/icons/wrench';
 export { default as MessageCircle } from 'lucide-react-native/icons/message-circle';
 export { default as Navigation } from 'lucide-react-native/icons/navigation';
 export { default as Phone } from 'lucide-react-native/icons/phone';

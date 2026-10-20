@@ -82,7 +82,7 @@ export function homeChips(permissions: readonly string[]): HomeChip[] {
   return chips;
 }
 
-export type MoreItem = 'tasks' | 'approve' | 'drivers' | 'asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'people_drivers' | 'people_users' | 'settings';
+export type MoreItem = 'tasks' | 'approve' | 'drivers' | 'asks' | 'trips' | 'alerts' | 'issues' | 'vehicles' | 'reports' | 'places' | 'maintenance' | 'people_drivers' | 'people_users' | 'settings';
 
 /** What More lists under Work: the screens built so far that are not on the bar. */
 export function moreFor(permissions: readonly string[]): MoreItem[] {
@@ -101,6 +101,9 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     // with users or vehicles (decision 1); office users and the quick settings with users.
     { key: 'vehicles', need: ['view'] },
     { key: 'reports', need: ['vehicles', 'assign_tasks'] },
+    // O3 rows 6 and 8: Maintenance by its tool's permission (issues), Places as the website (vehicles).
+    { key: 'maintenance', need: ['issues'] },
+    { key: 'places', need: ['vehicles'] },
     { key: 'people_drivers', need: ['users', 'vehicles'] },
     { key: 'people_users', need: ['users'] },
     { key: 'settings', need: ['users'] },
@@ -111,7 +114,7 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
 /** More's sections (design 19): Work (the screens), People (drivers, office users), then Quick settings. */
 export type MoreSection = 'work' | 'people' | 'settings';
 export const MORE_SECTION: Record<MoreItem, MoreSection> = {
-  approve: 'work', tasks: 'work', drivers: 'work', asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work',
+  approve: 'work', tasks: 'work', drivers: 'work', asks: 'work', trips: 'work', issues: 'work', alerts: 'work', vehicles: 'work', reports: 'work', maintenance: 'work', places: 'work',
   people_drivers: 'people', people_users: 'people', settings: 'settings',
 };
 

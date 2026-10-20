@@ -96,7 +96,8 @@
     "test:media": "tsx scripts/test-media.ts",
     "test:decide": "tsx scripts/test-decide.ts",
     "test:overview": "tsx scripts/test-overview.ts",
-    "test:maintenance": "tsx scripts/test-maintenance.ts"
+    "test:maintenance": "tsx scripts/test-maintenance.ts",
+    "test:places": "tsx scripts/test-places.ts"
   },
   "private": true,
   "expo": {

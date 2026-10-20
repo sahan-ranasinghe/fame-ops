@@ -20,6 +20,7 @@ import { ListError, SkeletonRows } from '@/components/patterns/ListState';
 import { Button, Txt } from '@/components/ui';
 import { POSITION_TIMEOUT_MS, SUGGEST_TIMEOUT_MS, withTimeout } from '@/lib/patterns/listLogic';
 import { useOffice } from '@/office/state';
+import { PinAdjust } from './PinAdjust';
 import { badgeTone, DEBOUNCE_MS, looksPasted, type Picked, pickedOf, pinText, searchState, shouldSearch, suggestArgs } from '@/office/trip/locationLogic';
 import type { FleetError, GooglePlaceAnswer, SearchAnswer, SearchResult } from '@/office/types';
 import { Pill } from '@/office/ui';
@@ -54,6 +55,8 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
   const [locating, setLocating] = useState(false);
   const [retry, setRetry] = useState(0);
   const [suggest, setSuggest] = useState<Suggest>({ answer: null, busy: false, failed: false });
+  // O3 row 8: a pasted pin is checked on the map first (PinAdjust: move the map under the fixed pin, Use this point).
+  const [pinCheck, setPinCheck] = useState<{ name: string; lat: number; lng: number; n: number } | null>(null);
   const session = useRef<string | null>(null);
   const seq = useRef(0);
   /** The person typed since the last pick: only then the box asks (the site's rule). */
@@ -210,7 +213,7 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
       )}
       {state === 'none' && <Txt variant="muted" size={15} testID="place-search-none">{t('office.trip.noPlaces')}</Txt>}
       {state === 'results' && pin && (
-        <Pressable accessibilityRole="button" onPress={() => void pick({ layer: 'map', badge: 'Pin', name: pin.name ?? pinText(pin), lat: pin.lat, lng: pin.lng, pinned: true })} style={styles.row}>
+        <Pressable accessibilityRole="button" onPress={() => setPinCheck({ name: pin.name ?? pinText(pin), lat: pin.lat, lng: pin.lng, n: (pinCheck?.n ?? 0) + 1 })} style={styles.row} testID="place-search-pin">
           <Pill text={t('office.trip.thisPin')} tone="amber" />
           <View style={{ flex: 1 }}><Txt variant="strong">{pin.name ?? pinText(pin)}</Txt></View>
           <ChevronRight size={22} color={colors.muted} />
@@ -247,6 +250,19 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
           </Pressable>
         )}
       </View>
+      <PinAdjust
+        key={pinCheck?.n ?? 0}
+        visible={pinCheck !== null}
+        pin={pinCheck}
+        name={pinCheck?.name ?? ''}
+        mapPackage={me.map?.package}
+        onClose={() => setPinCheck(null)}
+        onUse={(p) => {
+          const name = pinCheck?.name ?? '';
+          setPinCheck(null);
+          void pick({ layer: 'map', badge: 'Pin', name, lat: p.lat, lng: p.lng, pinned: true });
+        }}
+      />
     </View>
   );
 }
