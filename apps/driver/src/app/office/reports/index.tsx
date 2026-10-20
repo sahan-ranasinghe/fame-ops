@@ -6,23 +6,25 @@
 // range the month that contains the last day with the allowance. Fuel (list_fuel): the totals, a row per fill with its
 // video's state, Load more. Duty log (duty_log): the totals, a row per duty period (clock in, clock out and how, the
 // vehicles held, the tasks, hours, km), Load more. Each section only with its tool; filters by vehicle or driver are
-// laptop work. A fill's video (Stage 1, O3 item 4) opens its 1-hour link in the phone's browser, one button per piece, the
+// in one Filter under the days (O3 rows 7 and 10). A fill's video (Stage 1, O3 item 4) opens its 1-hour link in the phone's browser, one button per piece, the
 // steps' marks under it; a list read over 50 minutes ago is read again first (the links last an hour).
 
 import { useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, View } from 'react-native';
 
 import { DateRangeButton } from '@/components/patterns/Calendar';
+import { FilterBar } from '@/components/patterns/FilterBar';
+import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Mono, Plate, Segmented, Txt } from '@/components/ui';
 import { presetRange } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
 import {
   appendDuty, appendFuel, clockOut, dutyArgs, heldLine, hoursText, mileageView, outHowKey, outsideKm, rangeArgs, rangeFits, REPORT_MAX_DAYS, type ReportSection, reportSections, rowCells,
-  clockOf, linksStale, videoChip, videoLine, videoPieces,
+  clockOf, linksStale, reportFilterArgs, reportFilterDefs, videoChip, videoLine, videoPieces,
 } from '@/office/manageLogic';
 import { useOffice, useTool } from '@/office/state';
-import type { DutyLog, FleetError, FuelList, MileageSummary, Row } from '@/office/types';
+import type { DriversList, DutyLog, FleetError, FuelList, MileageSummary, Row, VehiclesList } from '@/office/types';
 import { BackHeader, Divider, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -37,6 +39,12 @@ export default function ReportsScreen() {
   const [range, setRange] = useState(() => presetRange('this_month', today));
   const { from, to } = range;
   const fits = rangeFits(section, from, to);
+  // O3 rows 7 and 10: the vehicle and the driver, in one Filter under the days.
+  const plates = useTool<VehiclesList>('list_vehicles', { filter: 'all', limit: 200 }, { enabled: me.tools.includes('list_vehicles') });
+  const people = useTool<DriversList>('list_drivers', { limit: 200 }, { enabled: me.tools.includes('list_drivers') });
+  const [filters, setFilters] = useState<FilterValues>({ vehicle: 'all', driver: 'all' });
+  const defs = reportFilterDefs(section, (plates.data?.vehicles ?? []).map((v) => v.reg_no), (people.data?.drivers ?? []).filter((d) => d.username).map((d) => ({ username: d.username, name: d.name })), t);
+  const by = reportFilterArgs(filters, section);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -44,17 +52,18 @@ export default function ReportsScreen() {
       <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, gap: 10, backgroundColor: colors.page }}>
         {sections.length > 1 && <Segmented<ReportSection> options={sections.map((k) => ({ value: k, label: t(`office.reports.${k}`) }))} value={section} onChange={setSection} />}
         {sections.length > 0 && <DateRangeButton value={range} onChange={setRange} max={today} maxDays={REPORT_MAX_DAYS[section]} testID="reports-range" />}
+        {sections.length > 0 && defs.length > 0 && <FilterBar defs={defs} values={filters} onApply={setFilters} testID="reports-filter" />}
       </View>
       {sections.length === 0 ? (
         <Screen><ListEmpty text={t('office.reports.nothing')} /></Screen>
       ) : !fits ? (
         <Screen><ListEmpty text={t('office.reports.tooLong', { n: REPORT_MAX_DAYS[section] })} /></Screen>
       ) : section === 'mileage' ? (
-        <Mileage from={from} to={to} />
+        <Mileage from={from} to={to} by={by} />
       ) : section === 'fuel' ? (
-        <Fuel from={from} to={to} />
+        <Fuel from={from} to={to} by={by} />
       ) : (
-        <Duty from={from} to={to} />
+        <Duty from={from} to={to} by={by} />
       )}
     </View>
   );
@@ -103,10 +112,10 @@ function Rows({ rows, hide, empty }: { rows: Row[]; hide?: readonly string[]; em
   );
 }
 
-function Mileage({ from, to }: { from: string; to: string }) {
+function Mileage({ from, to, by }: { from: string; to: string; by: Record<string, string> }) {
   const { t } = useApp();
   const { signOut } = useOffice();
-  const q = useTool<MileageSummary>('mileage_summary', rangeArgs(from, to));
+  const q = useTool<MileageSummary>('mileage_summary', rangeArgs(from, to, by));
   const v = q.data ? mileageView(q.data) : null;
   const n = (x: number) => (Number(x) || 0).toLocaleString('en-US');
   return (
@@ -151,10 +160,10 @@ function Mileage({ from, to }: { from: string; to: string }) {
   );
 }
 
-function Fuel({ from, to }: { from: string; to: string }) {
+function Fuel({ from, to, by }: { from: string; to: string; by: Record<string, string> }) {
   const { t } = useApp();
   const { api, signOut } = useOffice();
-  const q = useTool<FuelList>('list_fuel', rangeArgs(from, to, { limit: 25 }));
+  const q = useTool<FuelList>('list_fuel', rangeArgs(from, to, { ...by, limit: 25 }));
   const d = q.data;
   // When the first page's links were handed out: every new answer (a load, a reload) resets it; a page added by Load more
   // is fresher than the first, so it leaves the time alone (the oldest link on screen decides).
@@ -190,7 +199,7 @@ function Fuel({ from, to }: { from: string; to: string }) {
     if (!d?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
-      const page = await api.call<FuelList>('list_fuel', rangeArgs(from, to, { limit: 25, cursor: d.next }));
+      const page = await api.call<FuelList>('list_fuel', rangeArgs(from, to, { ...by, limit: 25, cursor: d.next }));
       appending.current = true;
       q.patch((p) => appendFuel(p, page));
       setMore({ busy: false, error: null });
@@ -252,10 +261,10 @@ function Fuel({ from, to }: { from: string; to: string }) {
   );
 }
 
-function Duty({ from, to }: { from: string; to: string }) {
+function Duty({ from, to, by }: { from: string; to: string; by: Record<string, string> }) {
   const { t } = useApp();
   const { api, signOut } = useOffice();
-  const q = useTool<DutyLog>('duty_log', dutyArgs(from, to, { limit: 25 }));
+  const q = useTool<DutyLog>('duty_log', dutyArgs(from, to, { ...by, limit: 25 }));
   const d = q.data;
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
   const n = (x: number | null | undefined) => (Number(x) || 0).toLocaleString('en-US');
@@ -263,7 +272,7 @@ function Duty({ from, to }: { from: string; to: string }) {
     if (!d?.next || more.busy) return;
     setMore({ busy: true, error: null });
     try {
-      const page = await api.call<DutyLog>('duty_log', dutyArgs(from, to, { limit: 25, cursor: d.next }));
+      const page = await api.call<DutyLog>('duty_log', dutyArgs(from, to, { ...by, limit: 25, cursor: d.next }));
       q.patch((p) => appendDuty(p, page));
       setMore({ busy: false, error: null });
     } catch (e) {

@@ -1162,7 +1162,10 @@
       "open": "Open",
       "search": "Search notifications",
       "filterShow": "Show",
-      "noneMatch": "Nothing for “{search}”."
+      "noneMatch": "Nothing for “{search}”.",
+      "filterHistory": "How far back",
+      "recent": "The last 30 days",
+      "older": "Older ones too"
     },
     "profile": {
       "contact": "Contact",
@@ -1749,7 +1752,8 @@
       "uploadedLater": "uploaded {time}",
       "search": "Name, username or plate",
       "filterLabel": "Status",
-      "noneMatch": "Nobody matches “{search}”."
+      "noneMatch": "Nobody matches “{search}”.",
+      "newTaskFor": "New task for {name}"
     },
     "vehicles": {
       "title": "Vehicles",
@@ -1939,7 +1943,9 @@
       "videoRenewing": "Getting a fresh link…",
       "videoReload": "Pull down to read the list again, then tap the video.",
       "videoOpenFailed": "The video did not open. Try again.",
-      "videosBrowser": "A video opens in the phone's browser. Its link works for one hour."
+      "videosBrowser": "A video opens in the phone's browser. Its link works for one hour.",
+      "filterVehicle": "Vehicle",
+      "filterDriver": "Driver"
     },
     "people": {
       "drivers": "Drivers",

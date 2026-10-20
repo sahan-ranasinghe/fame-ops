@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import {
   appendDuty, appendFuel, appendVehicles, clockOf, clockOut, companyInput, docTone, dutyArgs, emptyVehicle, filterCounts, heldLine, hoursText, isDate, kmLine, megabytes, mileageView, mondayOf,
   monthOf, outsideKm, rangeArgs, rangeDayCount, rangeFits, REPORT_MAX_DAYS, reportSections, rowCells, vehicleChoice, vehicleFilterDefs, vehicleFormDirty, vehicleInput, vehiclesArgs, vehiclesEmpty, vehicleTone,
-  linksStale, videoChip, videoLine, videoPieces, VIDEO_LINK_FRESH_MS, wholeMonth,
+  linksStale, reportFilterArgs, reportFilterDefs, videoChip, videoLine, videoPieces, VIDEO_LINK_FRESH_MS, wholeMonth,
 } from '../src/office/manageLogic';
 import { MORE_SECTION, moreFor } from '../src/office/nav';
 import { PRESETS } from '../src/office/permissions';
@@ -133,7 +133,7 @@ console.log('\nThe screens as text');
   check(reports.includes('<DateRangeButton value={range} onChange={setRange} max={today} maxDays={REPORT_MAX_DAYS[section]}') && reports.includes("presetRange('this_month', today)") && reports.includes('<Segmented<ReportSection>') && !reports.includes('FilterChips') && reports.includes('rangeFits(section, from, to)'), 'Reports: Mileage · Fuel · Duty log as a segmented control, the days as one date range button (This month first, no future, the duty log 62 days)');
   check(list.includes('<FilterBar') && list.includes('vehicleFilterDefs(d?.counts, t)') && !list.includes('FilterChips') && list.includes('<SkeletonRows') && list.includes('<LoadMore') && list.includes("action={empty === 'noneRegister'"), 'the list: the search bar and one Filter button with the counts, skeleton rows, Load more, the empty list\'s Register by its tool');
   check(page.includes('<SkeletonRows') && !page.includes('<Loading') && reports.includes('<SkeletonRows') && !reports.includes('<Loading') && reports.includes('<LoadMore'), 'the page and the reports: skeleton rows while loading, Load more at the end');
-  check(reports.includes("useTool<MileageSummary>('mileage_summary', rangeArgs(from, to))") && reports.includes("useTool<FuelList>('list_fuel', rangeArgs(from, to, { limit: 25 }))") && reports.includes("useTool<DutyLog>('duty_log', dutyArgs(from, to, { limit: 25 }))") && reports.includes('reportSections(me.tools)'), 'Reports: the three tools, each section by its tool');
+  check(reports.includes("useTool<MileageSummary>('mileage_summary', rangeArgs(from, to, by))") && reports.includes("useTool<FuelList>('list_fuel', rangeArgs(from, to, { ...by, limit: 25 }))") && reports.includes("useTool<DutyLog>('duty_log', dutyArgs(from, to, { ...by, limit: 25 }))") && reports.includes('reportSections(me.tools)'), 'Reports: the three tools, each section by its tool (with the vehicle and driver chosen)');
   check(!reports.includes('update_') && !reports.includes('register_') && !reports.includes('set_'), 'Reports is read-only');
   check(more.includes('MORE_SECTION[key] === s.key') && more.includes("path: '/office/vehicles'") && more.includes("path: '/office/reports'") && more.includes("path: '/office/people/drivers'") && more.includes("path: '/office/people/users'") && more.includes("path: '/office/people/settings'"), 'More: the rows by section and their routes');
   const roleWord = /'(admin|fleet_admin|office|viewer|staff)'/;
@@ -190,6 +190,18 @@ console.log('\nFuel videos open in the browser (Stage 1, O3 item 4)');
   check(screen.includes('Linking.openURL(url)') && screen.includes('testID="fuel-video"') && screen.includes('linksStale(loadedAt.current, Date.now())') && screen.includes('appending.current = true'),
     "Reports: Watch video opens the link in the phone's browser; a stale list is read again first; Load more keeps the oldest time");
   check(!screen.includes('videosLaptop') && screen.includes("t('office.reports.videosBrowser')") && screen.includes('e.video.timeline'), "the note says the browser, not the laptop; the steps' marks under the row");
+}
+
+console.log('\nReports: the vehicle and the driver (O3 rows 7 and 10)');
+{
+  const tr = (k: string) => k;
+  const drivers = [{ username: 'kamal', name: 'Kamal Perera' }];
+  check(reportFilterDefs('mileage', ['WP CAB-1'], drivers, tr).map((d) => d.key).join() === 'vehicle,driver' && reportFilterDefs('duty', ['WP CAB-1'], drivers, tr).map((d) => d.key).join() === 'driver'
+    && reportFilterDefs('fuel', [], [], tr).length === 0, 'Mileage and Fuel: vehicle and driver; Duty log: the driver; nothing to pick, no Filter');
+  check(same(reportFilterArgs({ vehicle: 'WP CAB-1', driver: 'kamal' }, 'fuel'), { vehicle: 'WP CAB-1', driver: 'kamal' }) && same(reportFilterArgs({ vehicle: 'WP CAB-1', driver: 'all' }, 'duty'), {}), "the tools' own vehicle / driver; never a vehicle for the duty log");
+  const screen = read('app/office/reports/index.tsx');
+  check(screen.includes('<FilterBar defs={defs} values={filters} onApply={setFilters}') && screen.includes("rangeArgs(from, to, by)") && screen.includes("rangeArgs(from, to, { ...by, limit: 25, cursor: d.next })") && screen.includes("dutyArgs(from, to, { ...by, limit: 25, cursor: d.next })"),
+    'the Filter under the days, on every page of every section');
 }
 
 console.log(failures === 0 ? '\nAll management checks passed.' : `\n${failures} management check(s) FAILED.`);

@@ -10,11 +10,11 @@ import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Check, ChevronRight, ClipboardCheck, type LucideIcon, TriangleAlert, Van } from '@/components/icons';
 import { FilterBar } from '@/components/patterns/FilterBar';
-import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { colomboDate } from '@/lib/time';
-import { filterInbox, groupByDay, inboxArgs, inboxChoice, inboxFilterDefs, inboxLine, kindTone, markRead, unreadAfter } from '@/office/inboxLogic';
+import { appendInbox, filterInbox, groupByDay, inboxArgs, inboxHistory, inboxChoice, inboxFilterDefs, inboxLine, kindTone, markRead, unreadAfter } from '@/office/inboxLogic';
 import { routeForUrl } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, Inbox, InboxItem } from '@/office/types';
@@ -48,7 +48,21 @@ export default function AlertsTab() {
   }, [text]);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<FleetError | null>(null);
-  const q = useTool<Inbox>('my_inbox', inboxArgs(LIMIT, search), { every: 60_000 });
+  const archived = inboxHistory(values);
+  const q = useTool<Inbox>('my_inbox', inboxArgs(LIMIT, search, archived), { every: 60_000 });
+  // O3 row 7: the next 50 (older pages, and the archived ones when History asks for them).
+  const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
+  async function loadMore() {
+    if (!q.data?.next || more.busy) return;
+    setMore({ busy: true, error: null });
+    try {
+      const page = await api.call<Inbox>('my_inbox', inboxArgs(LIMIT, search, archived, q.data.next));
+      q.patch((p) => appendInbox(p, page));
+      setMore({ busy: false, error: null });
+    } catch (e) {
+      setMore({ busy: false, error: e as FleetError });
+    }
+  }
   const today = colomboDate();
   const names = { days: tList('days'), months: tList('months') };
   const unreadN = q.data?.unread ?? unread;
@@ -142,6 +156,8 @@ export default function AlertsTab() {
             })}
           </View>
         ))}
+        {more.error && <ListFailed error={more.error} onRetry={() => void loadMore()} onSignIn={() => void signOut()} />}
+        {q.data?.next && <LoadMore shown={q.data.items.length} total={q.data.total} busy={more.busy} onPress={() => void loadMore()} />}
       </Screen>
     </View>
   );

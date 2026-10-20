@@ -196,6 +196,13 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
 
   const page = read('src/app/office/driver/[username].tsx');
   check(/useTool<DriverProfile>\('driver_profile', \{ driver: username \}\)/.test(page), 'driver_profile by username');
+  check(page.includes("me.tools.includes('create_task')") && page.includes("params: { mode: 'task', driver: username, name: d.name }") && page.includes('testID="driver-new-task"'), 'New task for this driver (O3 row 7: from a row of the board, two taps), with create_task');
+  {
+    const where = read('src/app/office/trip/where.tsx');
+    const logic = read('src/office/trip/draftLogic.ts');
+    check(where.includes("withDriver(newDraft(m), m === 'task' ? forDriver : undefined, forName)") && logic.includes('export function withDriver') && read('src/app/office/trip/who.tsx').includes('x.fields.driver ? x :'),
+      'Assign a task opens with the driver picked (the Who step keeps them; the best match never replaces them)');
+  }
   check(/useTool<DriverRoute>\('driver_route', dayRouteArgs\(username, day\), \{ enabled: mayRoute, every: routeEvery\(day, today\) \}\)/.test(page) && /const mayRoute = me\.tools\.includes\('driver_route'\);/.test(page),
     'driver_route for the chosen day (tolerance 0, 3,000 points, the estimated roads: historyLogic dayRouteArgs), today every minute, only when the person may');
   check(/useTool<DriversBoard>\('drivers_board', \{ search: username \}, \{ enabled: mayBoard, every: 60_000 \}\)/.test(page), 'today\'s state from the board\'s row, only when the person may read the board');

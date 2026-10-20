@@ -15,7 +15,7 @@ import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Field, Mono, Txt } from '@/components/ui';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
-import { draftWorthKeeping, getDraft, newDraft, setDraft, type TripMode, updateDraft, useTripDraft } from '@/office/trip/draft';
+import { draftWorthKeeping, getDraft, newDraft, setDraft, type TripMode, updateDraft, useTripDraft, withDriver } from '@/office/trip/draft';
 import { pinText, placeBoxState, typedPatch } from '@/office/trip/locationLogic';
 import { editFields } from '@/office/trip/requestLogic';
 import { moveStop, newStop, pickupAtStart, type StopDraft, stopsInput, type StopType, tickStart, type What } from '@/office/trip/stopsLogic';
@@ -30,7 +30,9 @@ const TYPES: StopType[] = ['pickup', 'drop', 'visit'];
 const WHATS: Exclude<What, ''>[] = ['people', 'goods', 'documents', 'other'];
 
 export default function TripWhere() {
-  const { mode, id } = useLocalSearchParams<{ mode?: TripMode; id?: string }>();
+  // O3 row 7: Assign a task for a driver (from their page): ?driver=<username>&name=<name> picks them on a fresh draft.
+  const { mode, id, driver: forDriver, name: forName } = useLocalSearchParams<{ mode?: TripMode; id?: string; driver?: string; name?: string }>();
+  const fresh = (m: TripMode) => withDriver(newDraft(m), m === 'task' ? forDriver : undefined, forName);
   const { t } = useApp();
   const { me, signOut } = useOffice();
   const router = useRouter();
@@ -52,10 +54,11 @@ export default function TripWhere() {
     if (mode === 'edit' || mode === 'stops') return; // loaded below from the request or the task
     if (current && current.mode === mode && draftWorthKeeping(current)) {
       Alert.alert(t('office.trip.resumeTitle'), t('office.trip.resumeBody', { time: colomboTime(current.at) }), [
-        { text: t('office.trip.discard'), style: 'destructive', onPress: () => setDraft(newDraft(mode)) },
+        { text: t('office.trip.discard'), style: 'destructive', onPress: () => setDraft(fresh(mode)) },
         { text: t('office.trip.resume') },
       ]);
-    } else if (!current || current.mode !== mode) setDraft(newDraft(mode));
+    } else if (!current || current.mode !== mode || (mode === 'task' && forDriver && current.fields.driver !== forDriver && !draftWorthKeeping(current))) setDraft(fresh(mode));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, asked, t]);
   useEffect(() => {
     if (mode !== 'edit' || !id) return;

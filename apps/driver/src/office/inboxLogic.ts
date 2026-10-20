@@ -5,7 +5,7 @@
 import { type DateNames, shortDate } from '@/lib/durations';
 import type { FilterDef, FilterValues } from '@/lib/patterns/filterLogic';
 import { addDays } from '@/lib/time';
-import type { InboxItem } from './types';
+import type { Inbox, InboxItem } from './types';
 import type { Tone } from './ui';
 
 export type InboxFilter = 'all' | 'unread';
@@ -42,15 +42,38 @@ export function inboxFilterDefs(unread: number | undefined, tr: (key: string) =>
       { value: 'all', label: tr('office.common.all') },
       { value: 'unread', label: tr('office.alerts.unread'), ...(unread !== undefined ? { count: unread } : {}) },
     ],
+  }, {
+    // O3 row 7: the History tab as a section: the last 30 days (the tray), or the older, archived ones too.
+    key: 'history',
+    label: tr('office.alerts.filterHistory'),
+    kind: 'single',
+    default: 'recent',
+    options: [
+      { value: 'recent', label: tr('office.alerts.recent') },
+      { value: 'older', label: tr('office.alerts.older') },
+    ],
   }];
+}
+
+/** The older, archived ones too (my_inbox archived). */
+export const inboxHistory = (values: FilterValues): boolean => values.history === 'older';
+
+/** The next page after the alerts on screen (never one twice). */
+export function appendInbox(list: Inbox, page: Inbox): Inbox {
+  const seen = new Set(list.items.map((i) => i.id));
+  const out: Inbox = { ...list, unread: page.unread ?? list.unread, items: [...list.items, ...page.items.filter((i) => !seen.has(i.id))] };
+  if (page.next) out.next = page.next;
+  else delete out.next;
+  if (page.total !== undefined) out.total = page.total;
+  return out;
 }
 
 export const inboxChoice = (values: FilterValues): InboxFilter => (values.show === 'unread' ? 'unread' : 'all');
 
 /** my_inbox's input: the page, and the words searched for only when there are any (the tool's own `search`). */
-export function inboxArgs(limit: number, search = ''): Record<string, unknown> {
+export function inboxArgs(limit: number, search = '', archived = false, cursor?: string): Record<string, unknown> {
   const words = search.trim();
-  return { limit, ...(words ? { search: words } : {}) };
+  return { limit, ...(words ? { search: words } : {}), ...(archived ? { archived: true } : {}), ...(cursor ? { cursor } : {}) };
 }
 
 export function filterInbox(items: readonly InboxItem[], filter: InboxFilter): InboxItem[] {

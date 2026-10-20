@@ -223,6 +223,25 @@ export function rangeArgs(from: string, to: string, more: Record<string, unknown
   return { ...(month ? { month } : { from, to }), ...more };
 }
 
+/**
+ * O3 rows 7 and 10: Reports' Filter (under the date range): the vehicle (Mileage, Fuel) and the driver (all three), as
+ * mileage_summary / list_fuel / duty_log take them (a plate; a username). Options from list_vehicles and list_drivers.
+ */
+export function reportFilterDefs(section: ReportSection, plates: readonly string[], drivers: readonly { username: string; name: string }[], tr: (key: string) => string): FilterDef[] {
+  const defs: FilterDef[] = [];
+  if (section !== 'duty' && plates.length) defs.push({ key: 'vehicle', label: tr('office.reports.filterVehicle'), kind: 'single', default: 'all', options: [{ value: 'all', label: tr('office.common.all') }, ...plates.map((p) => ({ value: p, label: p }))] });
+  if (drivers.length) defs.push({ key: 'driver', label: tr('office.reports.filterDriver'), kind: 'single', default: 'all', options: [{ value: 'all', label: tr('office.common.all') }, ...drivers.map((d) => ({ value: d.username, label: d.name }))] });
+  return defs;
+}
+
+/** The chosen vehicle and driver for a section's tool (Duty log: the driver only). */
+export function reportFilterArgs(values: FilterValues, section: ReportSection): { vehicle?: string; driver?: string } {
+  const out: { vehicle?: string; driver?: string } = {};
+  if (section !== 'duty' && typeof values.vehicle === 'string' && values.vehicle && values.vehicle !== 'all') out.vehicle = values.vehicle;
+  if (typeof values.driver === 'string' && values.driver && values.driver !== 'all') out.driver = values.driver;
+  return out;
+}
+
 /** duty_log's input: one day as `date`, a range as `from`/`to`. */
 export function dutyArgs(from: string, to: string, more: Record<string, unknown> = {}): Record<string, unknown> {
   return { ...(from === to ? { date: from } : { from, to }), ...more };

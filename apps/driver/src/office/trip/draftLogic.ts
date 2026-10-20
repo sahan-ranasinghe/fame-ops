@@ -63,6 +63,13 @@ export function newDraft(mode: TripMode, date = colomboDate()): TripDraft {
   return { mode, fields: emptyAssign(date), req: emptyExtras(), rows: [], step: 'where', at: Date.now() };
 }
 
+/** O3 row 7: a fresh task draft for one driver (Assign a task from their page): the driver picked, their name for Review. */
+export function withDriver(d: TripDraft, username?: string, name?: string): TripDraft {
+  const u = username?.trim();
+  if (d.mode !== 'task' || !u) return d;
+  return { ...d, fields: { ...d.fields, driver: u }, ...(name?.trim() ? { driverName: name.trim() } : {}) };
+}
+
 /** The request's fields as the copied requestLogic takes them (create_request, update_request). */
 export function requestFieldsOf(d: Pick<TripDraft, 'fields' | 'req'>): RequestFields {
   const { title: _t, buffer: _b, driver: _d, vehicle: _v, cname: _cn, cphone: _cp, notes: _n, whatsapp: _w, ...trip } = d.fields;

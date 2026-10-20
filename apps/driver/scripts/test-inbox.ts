@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { atParts, DAY_ORDER, dayKey, filterInbox, groupByDay, inboxArgs, inboxChoice, inboxFilterDefs, inboxLine, kindTone, markRead, unreadAfter } from '../src/office/inboxLogic';
+import { appendInbox, atParts, DAY_ORDER, dayKey, filterInbox, groupByDay, inboxArgs, inboxChoice, inboxFilterDefs, inboxLine, kindTone, markRead, unreadAfter } from '../src/office/inboxLogic';
 import { routeForUrl } from '../src/office/nav';
 import {
   bucketCounts, bucketOf, canWithdraw, changedText, TRIP_BUCKETS, tripBuckets, tripKey, tripLine, tripRoute, tripsArgs, tripsChoice, tripsFilterDefs, TRIPS_DAYS_AHEAD, TRIPS_DAYS_BACK,
@@ -66,8 +66,14 @@ console.log('\n== Notifications: the day groups ==');
   check(same(filterInbox(items, 'all').map((i) => i.id), [1, 2, 3, 4, 5]), 'All shows everything');
   check(same(filterInbox(items, 'unread').map((i) => i.id), [1, 4, 5]), 'Unread shows only what is not read');
   check(same(groupByDay(filterInbox(items, 'unread'), TODAY).map((g) => g.key), ['today', 'earlier']), 'Unread then grouped: Yesterday (all read) disappears');
+  check(same(inboxArgs(50, '', true, 'c1'), { limit: 50, archived: true, cursor: 'c1' }) && same(inboxArgs(50, ''), { limit: 50 }), "my_inbox: archived for the older ones, the next page's cursor");
+  {
+    const a = { unread: 1, items: [{ id: 1 }, { id: 2 }], next: 'n' } as never;
+    const both = appendInbox(a, { unread: 1, items: [{ id: 2 }, { id: 3 }] } as never) as { items: { id: number }[]; next?: string };
+    check(both.items.map((i) => i.id).join() === '1,2,3' && both.next === undefined, 'Load more: never an alert twice');
+  }
   const idefs = inboxFilterDefs(3, (k) => k);
-  check(idefs.length === 1 && idefs[0].default === 'all' && same(idefs[0].options.map((o) => [o.value, o.count]), [['all', undefined], ['unread', 3]]), 'the Filter sheet: All or Unread, the unread count beside it');
+  check(idefs.length === 2 && idefs[0].default === 'all' && same(idefs[0].options.map((o) => [o.value, o.count]), [['all', undefined], ['unread', 3]]) && idefs[1].key === 'history' && idefs[1].default === 'recent', 'the Filter sheet: All or Unread with the unread count; how far back (O3: the last 30 days or older ones too)');
   check(inboxChoice({ show: 'unread' }) === 'unread' && inboxChoice({}) === 'all' && same(inboxArgs(50), { limit: 50 }) && same(inboxArgs(50, ' kamal '), { limit: 50, search: 'kamal' }), 'my_inbox: the page as before, the search only when typed');
   const one = markRead(items, [1]);
   check(one[0].read && !one[3].read && !one[4].read && one[1] === items[1], 'a tap marks that row read and leaves the others as they are (same objects)');
@@ -183,7 +189,7 @@ console.log('\n== The screens as text (Alerts, My trips, Home, Approve, Tasks) =
   const home = read('app/office/(tabs)/index.tsx');
   const approve = read('app/office/(tabs)/approve.tsx');
   const tasks = read('app/office/(tabs)/tasks.tsx');
-  check(/<FilterBar/.test(alerts) && /defs=\{inboxFilterDefs\(unreadN, t\)\}/.test(alerts) && /useTool<Inbox>\('my_inbox', inboxArgs\(LIMIT, search\)/.test(alerts) && !/FilterChips/.test(alerts), 'Alerts: the search bar (my_inbox\'s search) and one Filter button (All / Unread)');
+  check(/<FilterBar/.test(alerts) && /defs=\{inboxFilterDefs\(unreadN, t\)\}/.test(alerts) && /useTool<Inbox>\('my_inbox', inboxArgs\(LIMIT, search, archived\)/.test(alerts) && /<LoadMore/.test(alerts) && !/FilterChips/.test(alerts), 'Alerts: the search bar (my_inbox\'s search), one Filter button (All / Unread, how far back), Load more');
   check(/<FilterBar/.test(trips) && /defs=\{tripsFilterDefs\(q\.data \? trips : undefined, t\)\}/.test(trips) && /useTool<MyTrips>\('my_trips', tripsArgs\(today, LIMIT, search\)\)/.test(trips) && !/FilterChips/.test(trips), 'My trips: the search bar (my_trips\' search) and one Filter button with the counts');
   check(/<DayStrip value=\{date\} onChange=\{setDate\}/.test(tasks) && !/max=/.test(tasks.split('<DayStrip')[1].split('/>')[0]) && /useTool<Board>\('task_board', \{ date, limit: 50 \}/.test(tasks) && !/ChevronLeft|prevDay/.test(tasks), 'Tasks: the week strip with Today and the calendar, days ahead allowed; task_board by the day as before');
   check(/q\.data && q\.data\.date === date \? q\.data : null/.test(tasks), 'Tasks: another day\'s board is never shown under the day chosen (skeleton rows until it comes)');

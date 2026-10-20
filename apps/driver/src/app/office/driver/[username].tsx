@@ -14,10 +14,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { MessageCircle, Phone } from '@/components/icons';
+import { MessageCircle, Phone, Plus } from '@/components/icons';
 import { DayRoute } from '@/components/office/DayRoute';
 import { DayStrip } from '@/components/patterns/Calendar';
-import { Mono, Plate, Txt } from '@/components/ui';
+import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { shortDate } from '@/lib/durations';
 import { colomboDate } from '@/lib/time';
 import { boardPill, entryParts, rowLines } from '@/office/driversLogic';
@@ -144,6 +144,10 @@ export default function DriverPage() {
             {p?.private_hidden && <Txt variant="small">{p.private_hidden}</Txt>}
             {d.app_version && <Txt variant="small">{t('office.drivers.profile.appVersion', { version: d.app_version })}</Txt>}
           </View>
+        )}
+
+        {d && d.active && me.tools.includes('create_task') && (
+          <Button icon={Plus} label={t('office.drivers.newTaskFor', { name: d.name.split(' ')[0] })} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'task', driver: username, name: d.name } })} style={{ minHeight: 56 }} testID="driver-new-task" />
         )}
 
         {p && (
