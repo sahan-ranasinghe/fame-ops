@@ -1099,6 +1099,13 @@ iOS; Play Store.
   migration that has already been pushed.
 - After building something, give Sahan exact test steps and what he should see.
 - Keep the driver app simple: big buttons, few words, works in sunlight.
+- **UI patterns (Sahan, 20 October 2026): `docs/ui-patterns.md`.** Every control uses the industry's standard pattern
+  (Gmail, Google Calendar, Airbnb, Uber, PickMe, Samsara; Material 3 / Apple's guidelines): filters = a search bar + one
+  Filter button with a count badge opening a sheet (phone) or popover (desktop) with Clear and Apply, active filters as
+  removable chips, Sort apart; a date range = one button + one calendar with presets; a day of history = a week strip with
+  Today and a calendar; a trip date = Today / Tomorrow / Pick a date; a time = one time sheet in 5-minute steps; lists =
+  skeletons, pull to refresh, Load more, an empty state, Try again, every call with a timeout. One shared component per
+  pattern per codebase, never a new one; the reviewer checks every screen against the file at every checkpoint.
 - **No local native builds** (Sahan, 19 October 2026): no Docker, Gradle or R8 builds on this laptop. Android builds run only
   on EAS, only after Sahan's go, and only on office or home Wi-Fi.
 - Before asking for an EAS build, check the native config without compiling: `expo prebuild` into a scratch folder (nothing
