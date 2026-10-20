@@ -230,7 +230,7 @@ Deno.serve(async (request) => {
     taskId
       ? admin.from("task_stops").select("seq, place_name").eq("task_id", taskId).neq("status", "removed").order("seq")
       : Promise.resolve({ data: [] as { seq: number; place_name: string }[] }),
-    admin.from("employees").select("id, name, language, active").eq("id", employeeId).maybeSingle(),
+    admin.from("employees").select("id, name, language, active, role").eq("id", employeeId).maybeSingle(),
     admin.from("device_tokens").select("id, token, channels").eq("employee_id", employeeId),
     askId
       ? admin.from("driver_asks").select("id, kind, trip_from, trip_to, note, asked_by_name").eq("id", askId).maybeSingle()
@@ -245,6 +245,12 @@ Deno.serve(async (request) => {
   const tokens = tokensRes.data ?? [];
 
   const log = { task_id: taskId, employee_id: employeeId, kind, tokens: tokens.length };
+  // Phase 8 (O1 item 9): an office person who drives a custodian's vehicle holds a token for the office's notifications,
+  // never for the driver's task pushes.
+  if (driver.role !== "driver") {
+    await admin.from("push_log").insert({ ...log, sent: 0, failed: 0, errors: [{ error: "not_a_driver" }] });
+    return json(200, { sent: 0, failed: 0, reason: "not_a_driver" });
+  }
   if (tokens.length === 0 || !driver.active) {
     await admin.from("push_log").insert({ ...log, sent: 0, failed: 0, errors: driver.active ? null : [{ error: "driver_inactive" }] });
     return json(200, { sent: 0, failed: 0, reason: driver.active ? "no_token" : "driver_inactive" });

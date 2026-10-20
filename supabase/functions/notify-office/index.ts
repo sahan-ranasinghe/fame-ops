@@ -10,7 +10,10 @@
 // push service reports gone (404 / 410) is marked removed; failed otherwise, tried again
 // after 1, 5, 15 and 60 minutes, dead after 5 attempts. Without VAPID keys every row is
 // marked dead (no_vapid_keys) and nothing else breaks; the e-mail channel is not built
-// (dead, email_not_implemented).
+// (dead, email_not_implemented). Phase 8 (O1 item 9): an 'expo_push' row goes to the
+// recipient's phone(s) through Expo's push service (expo.ts: loud on the Part 6 channels
+// for something to decide, a task that needs a driver or a critical issue, a tone for the
+// rest); a token Expo reports gone is deleted; failed and dead as the Web Push rows.
 //
 // Secrets: VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY (base64url, as `web-push
 // generate-vapid-keys` or scripts/make-vapid-keys.mjs print them), VAPID_SUBJECT
@@ -19,6 +22,7 @@
 
 import { ApplicationServer, importVapidKeys, PushMessageError, Urgency } from "@negrel/webpush";
 import { adminClient, type Db, type Row, type Update } from "../_shared/fleet/db.ts";
+import { type DeviceToken, EXPO_PUSH_URL, expoMessagesFor, readTickets, type Ticket } from "./expo.ts";
 
 const BACKOFF_MIN = [1, 5, 15, 60];
 const MAX_ATTEMPTS = 5;
@@ -133,6 +137,7 @@ async function deliver(db: Db, server: ApplicationServer | null, row: Notificati
     await finish(db, claimed.id, { status: "dead", error });
     return "dead";
   };
+  if (claimed.channel === "expo_push") return deliverExpo(db, claimed, now);
   if (claimed.channel !== "web_push") return dead("email_not_implemented");
   if (!server) return dead("no_vapid_keys");
 
@@ -185,6 +190,53 @@ async function deliver(db: Db, server: ApplicationServer | null, row: Notificati
     next_try_at: new Date(now.getTime() + minutes * 60_000).toISOString(),
   });
   return "failed";
+}
+
+/** Phase 8 (O1 item 9): one expo_push row to every phone of the recipient. */
+async function deliverExpo(db: Db, claimed: Notification, now: Date): Promise<Outcome> {
+  const nowIso = now.toISOString();
+  const dead = async (error: string): Promise<Outcome> => {
+    await finish(db, claimed.id, { status: "dead", error });
+    return "dead";
+  };
+  const { data: tokens, error } = await db.from("device_tokens").select("id, token, channels").eq(
+    "employee_id",
+    claimed.recipient_employee_id,
+  );
+  if (error) throw new Error(`device_tokens: ${error.message}`);
+  if (!tokens || tokens.length === 0) return dead("no_device");
+  const messages = expoMessagesFor(claimed.event, (claimed.payload ?? {}) as Record<string, unknown>, tokens as DeviceToken[]);
+  let tickets: Ticket[];
+  try {
+    const response = await fetch(EXPO_PUSH_URL, {
+      method: "POST",
+      headers: { accept: "application/json", "content-type": "application/json" },
+      signal: AbortSignal.timeout(PUSH_TIMEOUT_MS),
+      body: JSON.stringify(messages),
+    });
+    const reply = (await response.json()) as { data?: Ticket[]; errors?: unknown[] };
+    if (!response.ok || !reply.data) {
+      throw new Error(`expo push ${response.status}: ${JSON.stringify(reply.errors ?? reply).slice(0, 200)}`);
+    }
+    tickets = reply.data;
+  } catch (e) {
+    // Expo did not answer: the row waits for the retry job like a Web Push that failed.
+    if (claimed.attempts >= MAX_ATTEMPTS) return dead(messageOf(e));
+    const minutes = BACKOFF_MIN[Math.min(claimed.attempts, BACKOFF_MIN.length) - 1];
+    await finish(db, claimed.id, {
+      status: "failed",
+      error: messageOf(e),
+      next_try_at: new Date(now.getTime() + minutes * 60_000).toISOString(),
+    });
+    return "failed";
+  }
+  const r = readTickets(tickets, tokens as DeviceToken[]);
+  if (r.gone.length > 0) await db.from("device_tokens").delete().in("id", r.gone);
+  if (r.sent > 0) {
+    await finish(db, claimed.id, { status: "sent", sent_at: nowIso, error: r.errors.length > 0 ? r.errors.join("; ") : null });
+    return "sent";
+  }
+  return dead(r.errors.join("; ") || "no_ticket");
 }
 
 Deno.serve(async (request) => {

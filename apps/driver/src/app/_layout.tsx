@@ -19,6 +19,8 @@ import { LocationGate } from '@/components/LocationGate';
 import { anyFormDirty } from '@/components/navigation';
 import { tapData } from '@/lib/notifications';
 import { bootOffice } from '@/office/auth';
+import { routeForUrl } from '@/office/nav';
+import { useOfficeMe } from '@/office/store';
 import { AppProvider, useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -27,6 +29,7 @@ SplashScreen.preventAutoHideAsync();
 
 function Screens({ fontsReady }: { fontsReady: boolean }) {
   const { booted, me, rememberPush } = useApp();
+  const officeMe = useOfficeMe();
   const ready = fontsReady && booted;
   const router = useRouter();
   // The notification the app was opened with (or tapped while running): a task notification opens that task, a question
@@ -42,6 +45,20 @@ function Screens({ fontsReady }: { fontsReady: boolean }) {
   useEffect(() => {
     void bootOffice();
   }, []);
+
+  // Phase 8 (O1 item 9): an office notification's tap opens its screen in Office mode (the link's screen, else Alerts).
+  useEffect(() => {
+    if (!ready || !officeMe || me || !response) return;
+    const id = response.notification.request.identifier;
+    if (handled.current === id) return;
+    handled.current = id;
+    const data = tapData(response);
+    if (data.kind !== 'office') return;
+    router.navigate('/office');
+    const target = routeForUrl(data.url, officeMe.permissions);
+    if (target) router.push(target as never);
+    else router.navigate('/office/(tabs)/alerts');
+  }, [ready, me, officeMe, response, router]);
 
   useEffect(() => {
     if (!ready || !me || !response) return;

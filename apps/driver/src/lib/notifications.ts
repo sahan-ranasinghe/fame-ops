@@ -391,6 +391,8 @@ export interface TapData {
   changes?: unknown;
   /** When the notification came (ms). */
   at?: number;
+  /** Phase 8 (O1 item 9): an office notification's link (the site's path), opened in Office mode. */
+  url?: string;
 }
 
 function dataOf(notification: Notifications.Notification | null | undefined): TapData {
@@ -401,6 +403,7 @@ function dataOf(notification: Notifications.Notification | null | undefined): Ta
     askId: typeof data?.askId === 'string' ? data.askId : undefined,
     changes: data?.changes,
     at: typeof notification?.date === 'number' ? notification.date : undefined,
+    url: typeof data?.url === 'string' ? data.url : undefined,
   };
 }
 
