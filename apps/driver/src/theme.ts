@@ -16,7 +16,7 @@ export const colors = {
   muted: '#5d646c',
   line: '#dcd9d0',
   /** Office mode (Phase 8, decision 6): free / active. */
-  green: '#2e7d32',
+  green: '#27702d', // Round 2b: 5.2:1 on its chip (#2e7d32 was 4.4:1, under WCAG AA)
   greenChip: '#e3f1e4',
   redChip: '#fbeceb',
   amberChip: '#fdf1d6',

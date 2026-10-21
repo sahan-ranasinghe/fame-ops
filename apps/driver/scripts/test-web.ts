@@ -35,6 +35,20 @@ console.log('\nNothing temporary left in the web build');
   check(temporary.length === 0, 'no .web file says TEMPORARY (the spike\'s placeholders are replaced)', temporary.map((f) => f.slice(root.length + 1)));
 }
 
+console.log('\nThe app\'s text on its chips and on the page is readable (WCAG AA 4.5:1; Round 2b: CI run 39595662895 found green 4.4:1)');
+{
+  const theme = readFileSync(join(__dirname, '..', 'src', 'theme.ts'), 'utf8');
+  const hex = (k: string) => theme.match(new RegExp(`\\b${k}: '(#[0-9a-f]{6})'`))?.[1] ?? '';
+  const lum = (h: string) => {
+    const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  };
+  const ratio = (a: string, b: string) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+  const pairs: [string, string][] = [['green', 'greenChip'], ['blue', 'blueChip'], ['amberText', 'amberChip'], ['red', 'redChip'], ['muted', 'page'], ['green', 'page'], ['green', 'card']];
+  const low = pairs.map(([a, b]) => [a, b, ratio(hex(a), hex(b))] as const).filter(([, , r]) => !(r >= 4.5));
+  check(low.length === 0, 'every text colour on its chip and on the page is at least 4.5:1', low);
+}
+
 console.log('\nOffice mode never loads the driver\'s offline store (expo-sqlite has no web bundle: CI run 39557478415)');
 {
   const root = join(__dirname, '..', 'src');
