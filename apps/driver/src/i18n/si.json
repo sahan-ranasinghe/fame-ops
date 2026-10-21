@@ -2792,6 +2792,25 @@
       "busy": "කාර්යබහුල",
       "off": "සේවයෙන් පිට",
       "onDuty": "සේවයේ"
+    },
+    "timeline": {
+      "planned": "සැලසුම {time}",
+      "arrived": "පැමිණියා {time}",
+      "left": "පිටත් වුණා {time}",
+      "late": "මිනිත්තු {min} ප්‍රමාදයි",
+      "early": "මිනිත්තු {min} කලින්",
+      "onTime": "නියමිත වේලාවට",
+      "estimate": "{time} ට පමණ ({updated} යාවත්කාලීන කළා)",
+      "arriveBy": "{time} ට පෙර පැමිණීම",
+      "skipped": "මඟ හැරියා",
+      "skippedWhy": "මඟ හැරියා · {why}",
+      "skip_closed": "වසා ඇත",
+      "skip_nobodyThere": "කිසිවෙක් නැත",
+      "skip_notNeeded": "අවශ්‍ය නැත",
+      "skip_notVisited": "නොගියා",
+      "skip_other": "වෙනත්",
+      "now": "දැන්",
+      "live": "සජීවී"
     }
   },
   "patterns": {

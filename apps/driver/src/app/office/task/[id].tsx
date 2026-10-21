@@ -16,16 +16,17 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { MapPin, MessageCircle, Phone } from '@/components/icons';
+import { StopTimeline } from '@/components/office/StopTimeline';
 import { StopArrival, SwapSegments, TaskMoreDetails, TaskWarnings, TripPurposeCard } from '@/components/office/TaskDetailParts';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
-import { durationText } from '@/lib/durations';
+import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
 import { DETAIL_LINKS_FRESH_MS, type LinkKey, linkOf } from '@/office/taskDetailLogic';
 import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/office/taskExtrasLogic';
-import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, stopLateMin, stopParts, steps, taskStatusKey } from '@/office/taskLogic';
+import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStatusKey } from '@/office/taskLogic';
 import type { FleetError, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
@@ -56,6 +57,8 @@ export default function TaskDetailScreen() {
   const { api, me, signOut } = useOffice();
   const router = useRouter();
   const q = useTool<TaskDetail>('task_detail', { task_id: id }, { every: 30_000 });
+  // Round 2: live (the driver's Arrived / Left, any change to the task) without a reload.
+  useLiveTask(id, () => void q.refetch());
   const p = q.data;
   const task = p?.task;
   const [cancelling, setCancelling] = useState(false);
@@ -139,17 +142,6 @@ export default function TaskDetailScreen() {
     }
   }
 
-  const words = {
-    planned: (x: string) => t('office.task.planned', { time: x }),
-    left: (x: string) => t('office.task.left', { time: x }),
-    arriveBy: (x: string) => t('office.request.arriveBy', { time: x }),
-    about: (x: string) => t('office.request.about', { time: x }),
-    arrived: (x: string) => t('office.task.arrivedAt', { time: x }),
-    done: (x: string) => t('office.task.doneAt', { time: x }),
-    late: (min: number) => t('office.task.minLate', { min }),
-    there: (min: number) => t('office.request.there', { dur: durationText(t, min) }),
-    skipped: (why: string) => t('office.task.skipped', { why }),
-  };
   const stops = (p?.stops ?? []).filter((s) => s.status !== 'removed');
   const may = allowedActions(task ?? { status: 'cancelled' });
   const actions = { reassign: may.reassign && me.tools.includes('reassign_task'), cancel: may.cancel && me.tools.includes('cancel_task') };
@@ -242,26 +234,8 @@ export default function TaskDetailScreen() {
                   </View>
                 </View>
               )}
-              {stops.map((s) => {
-                const late = stopLateMin(s);
-                const parts = stopParts(s, words);
-                return (
-                  <View key={s.seq} style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={[styles.mark, s.is_start && { backgroundColor: colors.amber }, s.status === 'skipped' && { backgroundColor: colors.muted }]}>
-                      <Mono size={14} bold color={s.is_start ? colors.ink : '#ffffff'}>{s.is_start ? 'S' : String(s.n ?? s.seq)}</Mono>
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Txt variant="strong">{s.place || s.address || s.label || ''}</Txt>
-                      <Txt variant="muted" size={15}>
-                        {parts.join(' · ')}
-                        {late > 0 ? <Txt variant="strong" size={15} color={colors.amberText}>{` ${words.late(late)}`}</Txt> : null}
-                        {s.is_start && task?.passengers ? ` · ${t('office.task.passengers', { n: task.passengers })}` : ''}
-                      </Txt>
-                      <StopArrival stop={s} onSaved={q.reload} />
-                    </View>
-                  </View>
-                );
-              })}
+              {/* Round 2: the live timeline (planned, arrived, left, late or early, the stops to come re-estimated). */}
+              <StopTimeline stops={stops} extra={(s) => <StopArrival stop={s} onSaved={q.reload} />} />
               {task?.return_to_base && task.start_place && (
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                   <View style={[styles.mark, { backgroundColor: colors.card, borderWidth: 2, borderColor: colors.ink }]}><Mono size={14} bold>B</Mono></View>

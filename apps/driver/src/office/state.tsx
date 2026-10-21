@@ -89,6 +89,8 @@ export interface ToolState<T> {
   /** The args the data belongs to (JSON): a Load more captures it and hands it back to `patch`. */
   key: string;
   reload: () => Promise<void>;
+  /** The same, quietly (no refresh spinner): a live change (Realtime) asking again. */
+  refetch: () => Promise<void>;
   /**
    * Replace the data in place (after a write the server answered). With `forKey`, only when the data still belongs to
    * those args (a Load more that lands after the filter changed is dropped); `more` marks the list as extended: the
@@ -166,5 +168,5 @@ export function useTool<T>(tool: string, args: Record<string, unknown> = {}, opt
 
   const loading = enabled && data === null && error === null && (busy.key !== key || busy.first);
   const refreshing = busy.key === key && busy.refreshing;
-  return { data, error, loading, refreshing, key, reload: () => load(false, true), patch };
+  return { data, error, loading, refreshing, key, reload: () => load(false, true), refetch: () => load(true, true), patch };
 }

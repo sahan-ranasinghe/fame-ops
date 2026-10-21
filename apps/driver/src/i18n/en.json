@@ -2792,6 +2792,25 @@
       "busy": "Busy",
       "off": "Off duty",
       "onDuty": "On duty"
+    },
+    "timeline": {
+      "planned": "Planned {time}",
+      "arrived": "Arrived {time}",
+      "left": "Left {time}",
+      "late": "{min} min late",
+      "early": "{min} min early",
+      "onTime": "On time",
+      "estimate": "About {time} (updated {updated})",
+      "arriveBy": "Arrive by {time}",
+      "skipped": "Skipped",
+      "skippedWhy": "Skipped · {why}",
+      "skip_closed": "Closed",
+      "skip_nobodyThere": "Nobody there",
+      "skip_notNeeded": "Not needed",
+      "skip_notVisited": "Not visited",
+      "skip_other": "Other",
+      "now": "Now",
+      "live": "Live"
     }
   },
   "patterns": {
