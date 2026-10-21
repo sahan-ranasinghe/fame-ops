@@ -5,7 +5,7 @@
 // (find_project's match line, the percentages, Split equally) and the WhatsApp message option. A request: passengers,
 // the vehicle type needed, tools; under More details for whom, the requester's phone (approvers), the project and a note;
 // for someone with book_vehicle the Book now card (the site's "Assign now"): the free drivers, the vehicle in four groups
-// with the default line, the custodian driving, Who's available with Use. Next: Review.
+// with the default line, Who's available with Use. Next: Review.
 // Round 3 (docs/phase8-plan.md §30): "Who drives?" first on both flows (the rental forms' "Who's driving?":
 // components/office/WhoDrivesChoice.tsx), in place of "A driver is needed", only while self_drive_allowed is on. I'll drive
 // myself or Someone else (a name and a phone): no driver to pick, and on Assign a task and Book now the vehicle's plate
@@ -33,12 +33,13 @@ import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import type { ProjectRow } from '@/office/trip/assignLogic';
 import { requestFieldsOf, type TripDraft, updateDraft, useTripDraft } from '@/office/trip/draft';
-import { addProjectRow, custodianDrives, driverOptions, groupRows, projectMatch, removeProjectRow, setProjectRow, splitRows, splitState, vehicleLine } from '@/office/trip/formsLogic';
+import { addProjectRow, driverOptions, groupRows, projectMatch, removeProjectRow, setProjectRow, splitRows, splitState, vehicleLine } from '@/office/trip/formsLogic';
 import { suggestInput } from '@/office/trip/requestLogic';
 import { useTrip } from '@/office/trip/useTrip';
 import { ANY_TYPES, anyValue, knownDef, ON_THE_DAY, shownVehicle, vehicleDefault } from '@/office/trip/vehicleChoiceLogic';
 import { whoArgs } from '@/office/trip/whoLogic';
-import { isPlate, noApp, whoOf, type WhoDrives, whoProblem } from '@/office/trip/whoDrivesLogic';
+import { emptyWho, needsPlate, type WhoDrivesValue } from '@/office/trip/whoDrivesLogic';
+import { isPlate, whoOfDraft, whoReason } from '@/office/trip/whoWords';
 import { reasonText } from '@/office/trip/words';
 import type { Availability, FindProject, SettingsResult, SuggestedVehicle, Suggestions } from '@/office/types';
 import { ErrorNotice, Screen } from '@/office/ui';
@@ -69,7 +70,7 @@ function WhoStep({ d }: { d: TripDraft }) {
   const books = !isTask && me.tools.includes('book_vehicle');
   const approver = has(me.permissions, 'approve');
   // The plan's leave-by stands in for an empty typed one (Who's available and the free vehicles need a time).
-  const trip = useTrip(d ?? { mode: 'request', fields: { date: '', leaveBy: '', stops: [], returnToBase: false, avoidExpressway: false, end: '', start: '', startPax: false, title: '', buffer: '', driver: '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false }, req: { behalf: '', project: '', need: '', tools: false, note: '', driverRequired: true, requesterPhone: '' }, rows: [], step: 'who', at: 0 }, settings.data ?? null);
+  const trip = useTrip(d ?? { mode: 'request', fields: { date: '', leaveBy: '', stops: [], returnToBase: false, avoidExpressway: false, end: '', start: '', startPax: false, title: '', buffer: '', driver: '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false }, req: { behalf: '', project: '', need: '', tools: false, note: '', requesterPhone: '' }, rows: [], step: 'who', at: 0 }, settings.data ?? null);
   const leave = d?.fields.leaveBy || trip.preview?.leave_by?.slice(-5) || '';
   const args = d && (isTask || books) ? whoArgs({ ...d.fields, leaveBy: leave }, { base: trip.base?.name, need: isTask ? undefined : d.req.need, pax: isTask ? undefined : d.fields.pax }) : null;
   const avail = useTool<Availability>('availability', args ?? {}, { enabled: !!args && me.tools.includes('availability'), every: 60_000 });
@@ -81,9 +82,9 @@ function WhoStep({ d }: { d: TripDraft }) {
   const drivers0 = avail.data ? rankedDrivers(avail.data.drivers) : [];
   const best0 = avail.data?.best?.username ?? drivers0.find((x) => x.name === avail.data?.best?.name)?.username ?? '';
   // The best match is ticked first, once Who's available answers and nobody was picked (a task a driver drives).
-  const whoChoice = whoOf(d.req).choice;
+  const whoChoice = whoOfDraft(d.req).by;
   useEffect(() => {
-    if (isTask && whoChoice === 'driver' && best0 && avail.data) updateDraft((x) => (x.fields.driver || whoOf(x.req).choice !== 'driver' ? x : { ...x, driverName: avail.data?.best?.name ?? best0, driverWhatsapp: avail.data?.drivers.find((y) => y.username === best0)?.phone?.whatsapp, fields: { ...x.fields, driver: best0 } }));
+    if (isTask && whoChoice === 'driver' && best0 && avail.data) updateDraft((x) => (x.fields.driver || whoOfDraft(x.req).by !== 'driver' ? x : { ...x, driverName: avail.data?.best?.name ?? best0, driverWhatsapp: avail.data?.drivers.find((y) => y.username === best0)?.phone?.whatsapp, fields: { ...x.fields, driver: best0 } }));
   }, [isTask, whoChoice, best0, avail.data]);
   // find_project 450 ms after the last key in a project row (the site's lookup).
   const lookupTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
@@ -94,15 +95,15 @@ function WhoStep({ d }: { d: TripDraft }) {
   const setRows = (fn: (rows: ProjectRow[]) => ProjectRow[]) => updateDraft((x) => ({ ...x, rows: fn(x.rows) }));
   // The driver's name (and WhatsApp link) travel with the username: Review and the outcome say "Kamal", never "kamal.p".
   const pick = (username: string, name: string, whatsapp?: string) => updateDraft((x) => ({ ...x, driverName: name, driverWhatsapp: whatsapp, fields: { ...x.fields, driver: username, vehicle: '' } }));
-  // Round 3: Who drives? Kept with the old switch (driverRequired = a driver); I'll drive myself or Someone else: no driver
-  // (the pick goes), and a vehicle word ("on the day", "any van") gives way to a plate.
-  const who = whoOf(d.req);
-  const setWho = (next: WhoDrives) => updateDraft((x) => {
-    const was = whoOf(x.req);
-    const toNoApp = noApp(next) && !noApp(was);
+  // Round 3: Who drives? I'll drive myself or Someone else: no driver (the pick goes), and a vehicle word ("on the day",
+  // "any van") gives way to a plate.
+  const who = whoOfDraft(d.req);
+  const setWho = (next: WhoDrivesValue) => updateDraft((x) => {
+    const was = whoOfDraft(x.req);
+    const toNoApp = needsPlate(next.by) && !needsPlate(was.by);
     return {
       ...x,
-      req: { ...x.req, who: next, driverRequired: next.choice === 'driver' },
+      req: { ...x.req, who: next },
       ...(toNoApp ? { driverName: undefined, driverWhatsapp: undefined } : {}),
       fields: toNoApp ? { ...x.fields, driver: '', vehicle: isPlate(x.fields.vehicle) ? x.fields.vehicle : '' } : x.fields,
     };
@@ -112,16 +113,16 @@ function WhoStep({ d }: { d: TripDraft }) {
   const onDay = settings.data?.settings.vehicle_on_the_day === true;
   const selfDrive = settings.data?.settings.self_drive_allowed !== false;
   // Self-drive switched off: every trip needs a driver (the question is not asked; an old choice counts as a driver).
-  const whoNow: WhoDrives = selfDrive ? who : { choice: 'driver', name: '', phone: '' };
-  const byDriver = whoNow.choice === 'driver';
-  const noAppTrip = whoNow.choice === 'self' || whoNow.choice === 'other';
+  const whoNow: WhoDrivesValue = selfDrive ? who : emptyWho();
+  const byDriver = whoNow.by === 'driver';
+  const noAppTrip = !byDriver;
   const today = colomboDate();
   const groups = avail.data?.vehicles.groups;
   const taskGroups = groupRows(groups ? { groups, vehicles: [] } : null);
   const above = isTask ? t('office.trip.assignAbove', { n: 3 }) : d.mode === 'edit' ? t('office.trip.editAbove') : t('office.trip.newAbove', { n: 3 });
   const split = splitState(d.rows);
 
-  // Book now (a request, with book_vehicle): the site's rules for the driver's default vehicle and the custodian.
+  // Book now (a request, with book_vehicle): the site's rules for the driver's default vehicle.
   const known = !!avail.data || !me.tools.includes('availability');
   const def = picked?.vehicle ? { reg_no: picked.vehicle.reg_no, why: t(picked.vehicle.source === 'on_duty' ? 'office.trip.driversToday' : 'office.trip.driversRegular', { name: picked.name.split(' ')[0] }) } : null;
   const dflt = vehicleDefault({ on: onDay, date: f.date, today, driver: f.driver, def: knownDef(def, known) });
@@ -129,21 +130,20 @@ function WhoStep({ d }: { d: TripDraft }) {
   const shown = shownVehicle(f.vehicle, dflt);
   const allSuggested: SuggestedVehicle[] = sug.data ? (sug.data.groups ? Object.values(sug.data.groups).flat() : sug.data.vehicles) : [];
   const pickedVehicle = allSuggested.find((v) => v.reg_no === shown);
-  const custodian = custodianDrives(selfDrive, whoNow.choice !== 'custodian', pickedVehicle);
   // What keeps Next disabled, said under it. Assign a task: a driver (or, with no app, the plate), the title, the split.
   // A request: someone else's name and phone (the plate waits for Book now on Review).
-  const whoReason = whoProblem(whoNow, { needsPlate: isTask, plate: f.vehicle });
+  const whoWhy = whoReason(whoNow, { needsPlate: isTask, plate: f.vehicle });
   const problem = isTask
-    ? (byDriver && !f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : whoReason ? reasonText(t, whoReason) : byDriver && known && !def && !f.vehicle && !dayDefault ? t('office.trip.needVehicle') : null)
-    : whoReason ? reasonText(t, whoReason) : null;
+    ? (byDriver && !f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : whoWhy ? reasonText(t, whoWhy) : byDriver && known && !def && !f.vehicle && !dayDefault ? t('office.trip.needVehicle') : null)
+    : whoWhy ? reasonText(t, whoWhy) : null;
   const free = sug.data?.drivers_free ?? sug.data?.drivers.filter((x) => /free/.test(x.availability)).map((x) => ({ name: x.name, username: x.username })) ?? [];
   const options = driverOptions(free, f.driver, d.driverName);
-  // What Review needs beside the pick: the driver's default vehicle (a task too: the site's "Add a vehicle" rule) and the custodian.
+  // What Review needs beside the pick: the driver's default vehicle (a task too: the site's "Add a vehicle" rule).
   useEffect(() => {
     if (!isTask && !books) return;
-    updateDraft((x) => ({ ...x, book: { hasCustodian: !!pickedVehicle?.assigned_to, defaultVehicle: def?.reg_no ?? (known ? null : undefined), custodianDrives: custodian } }));
+    updateDraft((x) => ({ ...x, book: { defaultVehicle: def?.reg_no ?? (known ? null : undefined) } }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isTask, books, pickedVehicle?.assigned_to, def?.reg_no, known, custodian]);
+  }, [isTask, books, def?.reg_no, known]);
 
   function lookup(i: number, text: string) {
     if (lookupTimers.current[i]) clearTimeout(lookupTimers.current[i]);
@@ -169,7 +169,7 @@ function WhoStep({ d }: { d: TripDraft }) {
   const whoCard = selfDrive && (
     <View style={styles.card}>
       <WhoDrivesChoice value={who} onChange={setWho} />
-      {who.choice === 'self' && myLicence && (
+      {who.by === 'self' && myLicence && (
         <View style={{ gap: 4, paddingTop: 8 }} testID="who-self-licence">
           <Txt variant="small" color={colors.amberText}>{t(myLicence === 'expired' ? 'office.who.myLicenceExpired' : 'office.who.myLicenceNone')}</Txt>
           <Pressable accessibilityRole="link" onPress={() => router.push('/office/profile')} style={{ minHeight: 44, justifyContent: 'center' }}>
@@ -199,7 +199,7 @@ function WhoStep({ d }: { d: TripDraft }) {
   const chosenReg = f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? f.vehicle : picked?.vehicle?.reg_no ?? '';
   const chosenV = chosenReg ? [...taskGroups.flatMap((g) => g.rows), ...allSuggested].find((v) => v.reg_no === chosenReg) : undefined;
   const chosenFacts = chosenV ? vehicleLine(chosenV, (n) => t('office.trip.seats', { n })) : '';
-  const defaultLine = f.driver && !custodian
+  const defaultLine = f.driver
     ? dayDefault
       ? (f.vehicle && f.vehicle !== ON_THE_DAY ? t('office.trip.defaultDayInstead') : t('office.trip.defaultDay'))
       : f.vehicle && def && f.vehicle !== def.reg_no ? t('office.trip.insteadOf', { why: def.why, plate: def.reg_no })
@@ -274,7 +274,7 @@ function WhoStep({ d }: { d: TripDraft }) {
                   <Pressable accessibilityRole="button" onPress={() => setRows(addProjectRow)} style={styles.addRow}><Txt variant="strong" size={15}>{t('office.trip.addProject')}</Txt></Pressable>
                   <Txt variant="small">{t('office.trip.projectsHint')}</Txt>
                 </View>
-                {whoNow.choice !== 'self' && <ToggleRow label={t('office.trip.whatsappToo')} value={f.whatsapp} onChange={(whatsapp) => setF({ whatsapp })} testID="whatsapp-toggle" />}
+                {whoNow.by !== 'self' && <ToggleRow label={t('office.trip.whatsappToo')} value={f.whatsapp} onChange={(whatsapp) => setF({ whatsapp })} testID="whatsapp-toggle" />}
               </MoreDetails>
             </View>
           </>
@@ -314,9 +314,7 @@ function WhoStep({ d }: { d: TripDraft }) {
                 {sug.data && (
                   <>
                     {!noAppTrip && <Txt variant="strong" size={16}>{t('office.trip.freeDrivers')}</Txt>}
-                    {noAppTrip ? null : custodian ? (
-                      <Txt variant="muted" size={15}>{t('office.trip.custodianDrives', { name: pickedVehicle?.assigned_to ?? '' })}</Txt>
-                    ) : (
+                    {noAppTrip ? null : (
                       // Round 3: the free drivers as driver-first cards (the photo, the name, the vehicle they bring), never name-only chips.
                       <View accessibilityRole="radiogroup" style={{ gap: 8 }} testID="free-drivers">
                         {options.length === 0 && <Txt variant="small">{t('office.trip.pickFreeDriver')}</Txt>}
@@ -335,15 +333,15 @@ function WhoStep({ d }: { d: TripDraft }) {
                     )}
                     <Txt variant="strong" size={16}>{t('office.trip.vehicle')}</Txt>
                     {noAppTrip ? <Txt variant="small">{t('office.who.plateNeeded')}</Txt> : defaultLine ? <Txt variant="small" color={!def && known ? colors.amberText : colors.muted}>{defaultLine}</Txt> : null}
-                    {!noAppTrip && dayDefault && f.vehicle && f.vehicle !== ON_THE_DAY && !custodian ? <Pressable accessibilityRole="button" onPress={() => setF({ vehicle: '' })} hitSlop={8}><Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.leaveToDay')}</Txt></Pressable> : null}
-                    {!noAppTrip && !dayDefault && f.vehicle && def && f.vehicle !== def.reg_no && !custodian ? <Pressable accessibilityRole="button" onPress={() => setF({ vehicle: '' })} hitSlop={8}><Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.useVehicle', { plate: def.reg_no })}</Txt></Pressable> : null}
-                    {!noAppTrip && !custodian && onDay ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{onDayChips}</View> : null}
+                    {!noAppTrip && dayDefault && f.vehicle && f.vehicle !== ON_THE_DAY ? <Pressable accessibilityRole="button" onPress={() => setF({ vehicle: '' })} hitSlop={8}><Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.leaveToDay')}</Txt></Pressable> : null}
+                    {!noAppTrip && !dayDefault && f.vehicle && def && f.vehicle !== def.reg_no ? <Pressable accessibilityRole="button" onPress={() => setF({ vehicle: '' })} hitSlop={8}><Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.useVehicle', { plate: def.reg_no })}</Txt></Pressable> : null}
+                    {!noAppTrip && onDay ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{onDayChips}</View> : null}
                     {vehicleGroups(groupRows(sug.data), t('office.trip.noVehicles'))}
                   </>
                 )}
               </View>
             )}
-            {books && !custodian && byDriver && whoAvailable}
+            {books && byDriver && whoAvailable}
           </>
         )}
       </Screen>

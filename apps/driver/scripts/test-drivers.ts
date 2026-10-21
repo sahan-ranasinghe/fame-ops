@@ -201,7 +201,7 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
   {
     const where = read('src/app/office/trip/where.tsx');
     const logic = read('src/office/trip/draftLogic.ts');
-    check(where.includes("withDriver(newDraft(m), m === 'task' ? forDriver : undefined, forName)") && logic.includes('export function withDriver') && read('src/app/office/trip/who.tsx').includes("x.fields.driver || whoOf(x.req).choice !== 'driver' ? x :"),
+    check(where.includes("withDriver(newDraft(m), m === 'task' ? forDriver : undefined, forName)") && logic.includes('export function withDriver') && read('src/app/office/trip/who.tsx').includes("x.fields.driver || whoOfDraft(x.req).by !== 'driver' ? x :"),
       'Assign a task opens with the driver picked (the Who step keeps them; the best match never replaces them)');
   }
   const dayPage = read('src/app/office/driver/[username]/route.tsx');

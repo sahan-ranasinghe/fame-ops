@@ -6,7 +6,7 @@
 // task tool takes (driven_by, driver_name, driver_phone), and what a request asked in words. Pure.
 import type { AskedDriver, DrivenBy } from "../data/types";
 import { firstName } from "./driverRowLogic";
-import { PHONE_BAD, phoneE164 } from "../screens/settings/profileLogic";
+import { PHONE_BAD, phoneE164 } from "../lib/phones";
 
 export type { AskedDriver, DrivenBy };
 

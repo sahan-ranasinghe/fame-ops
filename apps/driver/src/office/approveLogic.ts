@@ -4,7 +4,7 @@
 // label, and what the server's "already decided" refusal means.
 
 import { sentenceText } from './statusWords';
-import { asksNoDriver } from './trip/whoDrivesLogic';
+import { asksNoDriver } from './trip/whoWords';
 import type { AvailableDriver, Availability, FleetError, RequestCard, TimelineItem } from './types';
 
 /** One row of the trip card: the mark (S, 1, 2 …, B), the place and its line. */

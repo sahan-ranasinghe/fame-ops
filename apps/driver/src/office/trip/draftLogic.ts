@@ -11,26 +11,24 @@ import type { RequestCard } from '../types';
 import { type AssignFields, emptyAssign, type ProjectRow } from './assignLogic';
 import { editFields, type RequestFields } from './requestLogic';
 import type { TripFields } from './tripLogic';
-import { whoOf, type WhoDrives } from './whoDrivesLogic';
+import type { WhoDrivesValue } from './whoDrivesLogic';
+import { whoOfDraft } from './whoWords';
 
 export type TripMode = 'request' | 'task' | 'edit' | 'stops';
 export type Step = 'where' | 'when' | 'who' | 'review';
 export const STEPS: Step[] = ['where', 'when', 'who', 'review'];
 
-/** The request's own fields (RequestFields minus the trip and `driver`, which is a boolean there). */
+/** The request's own fields (RequestFields minus the trip). */
 export interface RequestExtras {
   behalf: string;
   project: string;
   need: string;
   tools: boolean;
   note: string;
-  /** Unticked = the vehicle's custodian drives (no driver needed). Kept equal to who.choice === 'driver' (a draft saved
-   *  before Round 3 has only this). */
-  driverRequired: boolean;
   requesterPhone: string;
   /** Round 3: "Who drives?" (a driver, I'll drive myself, someone else with a name and a phone), for a request and a task
-   *  alike (whoDrivesLogic.ts); absent in a draft saved before it (whoOf reads driverRequired then). */
-  who?: WhoDrives;
+   *  alike (the site's whoDrivesLogic.ts); a draft saved before the shared rules has { choice } (whoWords.whoOfDraft). */
+  who?: WhoDrivesValue;
 }
 
 export interface TripDraft {
@@ -47,9 +45,9 @@ export interface TripDraft {
   driverName?: string;
   /** task: the picked driver's WhatsApp link (from Who's available, for people who may see numbers): "WhatsApp the driver" after sending. */
   driverWhatsapp?: string;
-  /** request (Book now, with book_vehicle): what Review needs beside fields.driver / fields.vehicle: the picked vehicle's custodian
-   *  and the driver's default vehicle (null = known to bring none; undefined = not known yet). */
-  book?: { hasCustodian: boolean; defaultVehicle?: string | null; custodianDrives?: boolean };
+  /** request (Book now, with book_vehicle) and task: what Review needs beside fields.driver / fields.vehicle: the driver's
+   *  default vehicle (null = known to bring none; undefined = not known yet). */
+  book?: { defaultVehicle?: string | null };
   /** stops: the task is under way (no leave-by to change). edit: the request was approved (a change needs re-approval). */
   running?: boolean;
   wasApproved?: boolean;
@@ -65,7 +63,7 @@ export interface TripDraft {
   againOf?: string;
 }
 
-export const emptyExtras = (): RequestExtras => ({ behalf: '', project: '', need: '', tools: false, note: '', driverRequired: true, requesterPhone: '' });
+export const emptyExtras = (): RequestExtras => ({ behalf: '', project: '', need: '', tools: false, note: '', requesterPhone: '' });
 
 export function newDraft(mode: TripMode, date = colomboDate()): TripDraft {
   return { mode, fields: emptyAssign(date), req: emptyExtras(), rows: [], step: 'where', at: Date.now() };
@@ -85,20 +83,19 @@ export function withDriver(d: TripDraft, username?: string, name?: string): Trip
  */
 export function requestAgainDraft(q: Pick<RequestCard, 'id' | 'fields' | 'note' | 'requester_phone' | 'trip' | 'project'>, today: string): TripDraft {
   const date = addDays(today, 1);
-  const { behalf, project: _p, need, tools, note, driver, requesterPhone, who, ...trip } = editFields(q);
+  const { behalf, project: _p, need, tools, note, requesterPhone, who, ...trip } = editFields(q);
   return {
     ...newDraft('request', date),
     againOf: q.id,
     fields: { ...emptyAssign(date), ...trip, date },
-    req: { behalf, project: q.project ?? '', need, tools, note, driverRequired: driver, requesterPhone: requesterPhone ?? '', who },
+    req: { behalf, project: q.project ?? '', need, tools, note, requesterPhone: requesterPhone ?? '', who },
   };
 }
 
 /** The request's fields as the copied requestLogic takes them (create_request, update_request). */
 export function requestFieldsOf(d: Pick<TripDraft, 'fields' | 'req'>): RequestFields {
   const { title: _t, buffer: _b, driver: _d, vehicle: _v, cname: _cn, cphone: _cp, notes: _n, whatsapp: _w, ...trip } = d.fields;
-  const who = whoOf(d.req);
-  return { ...(trip as TripFields & { pax: string }), behalf: d.req.behalf, project: d.req.project, need: d.req.need, tools: d.req.tools, note: d.req.note, driver: who.choice === 'driver', who, requesterPhone: d.req.requesterPhone };
+  return { ...(trip as TripFields & { pax: string }), behalf: d.req.behalf, project: d.req.project, need: d.req.need, tools: d.req.tools, note: d.req.note, who: whoOfDraft(d.req), requesterPhone: d.req.requesterPhone };
 }
 
 /** A draft worth asking about when a flow starts again: something typed, less than a day old. */

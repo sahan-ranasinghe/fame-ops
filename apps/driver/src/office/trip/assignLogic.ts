@@ -1,5 +1,5 @@
-// Office mode (Phase 8, O2): copied from the office site (apps/office/src/screens/assignLogic.ts at main 03d3538) for the phone's trip editor,
-// as Sahan asked for this round (the shared package comes later). Edit the site's file and copy again, never this one alone.
+// Office mode: a copy of apps/office/src/screens/assignLogic.ts, written by scripts/shared-logic.mjs --write. Never edit it here: edit
+// the site's file and run the script (the app's test:shared-logic and the site's sharedLogic test fail until you do).
 
 // The Assign-a-task form's rules, kept apart from the screen so they can be
 // tested: what is required, how the project split must add up, and the exact
@@ -8,12 +8,12 @@
 // names no vehicle and the server takes the same one); Start from with
 // "Passengers get in here". The trip part is the trip editor's (§34); a task
 // proposed by someone without approve waits for the fleet admin's OK (§33).
-import type { CreateTaskResult } from '../types';
-import { waLink } from './format';
-import { hasDeadline, stopsInput } from './stopsLogic';
-import { type Base, emptyTrip, type TripFields, tripPlanInput } from './tripLogic';
-// Round 3 (the app's own addition until the site's file is copied again): "Who drives?" (whoDrivesLogic.ts).
-import { whoInput, whoProblem, type WhoDrives } from './whoDrivesLogic';
+import type { CreateTaskResult } from "../types";
+import { waLink } from "./format";
+import { emptyWho, plateReason, type WhoDrivesValue, whoInput } from "./whoDrivesLogic";
+import { hasDeadline, stopsInput } from "./stopsLogic";
+import { type Base, emptyTrip, type TripFields, tripPlanInput } from "./tripLogic";
+import { isChoice } from "./vehicleChoiceLogic";
 
 export interface ProjectRow {
   project: string;
@@ -34,7 +34,12 @@ export interface AssignFields extends TripFields {
   cphone: string;
   notes: string;
   whatsapp: boolean;
+  /** Round 3: who drives (ui/WhoDrives); absent in a draft from before Round 3 = a driver. */
+  who?: WhoDrivesValue;
 }
+
+/** The form's "Who drives?" (a driver when a draft has none). */
+export const assignWho = (f: Pick<AssignFields, "who">): WhoDrivesValue => f.who ?? emptyWho();
 
 export const emptyAssign = (date: string): AssignFields => ({
   ...emptyTrip(date), title: "", buffer: "", driver: "", vehicle: "", pax: "", cname: "", cphone: "", notes: "", whatsapp: false,
@@ -55,6 +60,8 @@ export function planInput(f: AssignFields, base: Base = null): Record<string, un
   if (t(f.driver)) input.driver = t(f.driver);
   if (t(f.vehicle)) input.vehicle = t(f.vehicle);
   if (t(f.end)) input.end_time = t(f.end);
+  // Round 3: no driver of ours when the person or someone else drives (the plan checks the vehicle only).
+  if (assignWho(f).by !== "driver") delete input.driver;
   return input;
 }
 
@@ -67,20 +74,12 @@ export function validateAssign(
   f: AssignFields,
   rows: ProjectRow[],
   createdBy?: string,
-  opts: { defaultVehicle?: string | null; base?: Base; who?: WhoDrives } = {},
+  opts: { defaultVehicle?: string | null; base?: Base } = {},
 ): { error: string } | { input: Record<string, unknown> } {
   const t = (s: string) => s.trim();
-  // Round 3: the person assigning drives it, or someone else: no driver, a plate (no app to choose one on the day).
-  if (opts.who && (opts.who.choice === "self" || opts.who.choice === "other")) {
-    const missing = [[t(f.title), "the task"], [t(f.date), "the date"]].filter(([v]) => !v).map((n) => n[1]);
-    if (missing.length) return { error: `Add ${missing.join(", ")}.` };
-    const problem = whoProblem(opts.who, { needsPlate: true, plate: f.vehicle });
-    if (problem) return { error: problem };
-    const v = validateAssign({ ...f, driver: "noapp" }, rows, createdBy, { base: opts.base });
-    if ("error" in v) return v;
-    const { driver: _driver, ...input } = v.input;
-    return { input: { ...input, ...whoInput(opts.who) } };
-  }
+  const who = assignWho(f);
+  // Round 3: the person or someone else drives: no driver, and a plate (nobody confirms a vehicle on the day).
+  if (who.by !== "driver") return validateNoApp(f, rows, who, createdBy, opts.base ?? null);
   // The vehicle fills itself when the driver brings one, or when that is not known yet (the server then decides).
   const fills = !!t(f.driver) && "defaultVehicle" in opts && opts.defaultVehicle !== null;
   const need: [string, string][] = [[t(f.title), "the task"], [t(f.date), "the date"], [t(f.driver), "a driver"], [t(f.vehicle) || (fills ? "filled" : ""), "a vehicle"]];
@@ -96,20 +95,45 @@ export function validateAssign(
   }
   const input: Record<string, unknown> = { ...planInput(f, opts.base ?? null), title: t(f.title), driver: t(f.driver) };
   if (t(f.vehicle)) input.vehicle = t(f.vehicle);
+  return { input: { ...input, ...taskExtras(f, used, createdBy) } };
+}
+
+/** The task's own fields after the trip: passengers, the contact, the notes, the projects, who assigned it. */
+function taskExtras(f: AssignFields, used: ProjectRow[], createdBy?: string): Record<string, unknown> {
+  const t = (s: string) => s.trim();
+  const input: Record<string, unknown> = {};
   if (t(f.pax) !== "") input.passengers = Math.max(0, Math.min(80, parseInt(t(f.pax), 10) || 0));
   if (t(f.cname)) input.contact_name = t(f.cname);
   if (t(f.cphone)) input.contact_phone = t(f.cphone);
   if (t(f.notes)) input.notes = t(f.notes);
   if (used.length) input.projects = used.map((r) => ({ project: r.project.trim(), percent: Number(r.percent) }));
   if (createdBy) input.created_by = createdBy.slice(0, 80);
-  return { input };
+  return input;
+}
+
+/** create_task when the person (self) or someone else (other) drives: no driver, a plate, who drives. */
+function validateNoApp(f: AssignFields, rows: ProjectRow[], who: WhoDrivesValue, createdBy: string | undefined, base: Base): { error: string } | { input: Record<string, unknown> } {
+  const t = (s: string) => s.trim();
+  const miss = ([[t(f.title), "the task"], [t(f.date), "the date"]] as [string, string][]).filter(([v]) => !v).map((n) => n[1]);
+  if (miss.length) return { error: `Add ${miss.join(", ")}.` };
+  const w = whoInput(who);
+  if ("error" in w) return w;
+  if (!t(f.vehicle) || isChoice(t(f.vehicle))) return { error: plateReason(who) };
+  const s = stopsInput(f.stops, f.startPax ? 1 : 0);
+  if ("error" in s) return s;
+  if (!t(f.leaveBy) && !hasDeadline(f.stops)) return { error: "Add a leave-by time, or an arrive-by time on a stop so it can be planned." };
+  const used = rows.filter((r) => r.project.trim());
+  const total = splitTotal(used);
+  if (used.length && Math.abs(total - 100) > 0.01) return { error: `Project percentages add up to ${total}%. They must total 100%.` };
+  const input: Record<string, unknown> = { ...planInput(f, base), title: t(f.title), vehicle: t(f.vehicle), ...w.input };
+  return { input: { ...input, ...taskExtras(f, used, createdBy) } };
 }
 
 /**
  * What Assign a task says after create_task: sent to the driver, or (§33: no approve permission while new tasks need
  * the fleet admin's OK) waiting in the approval queue as a request, with no task yet and nothing sent.
  */
-export function assignOutcome(p: Pick<CreateTaskResult, "waiting_for_approval" | "request_id" | "next" | "task_id">, driverName: string): {
+export function assignOutcome(p: Pick<CreateTaskResult, "waiting_for_approval" | "request_id" | "next" | "task_id">, driverName: string, drivenBy: WhoDrivesValue["by"] = "driver"): {
   waiting: boolean;
   head: string;
   toast: string;
@@ -124,7 +148,11 @@ export function assignOutcome(p: Pick<CreateTaskResult, "waiting_for_approval" |
       link: p.request_id ? { to: `/requests/${p.request_id}`, label: "Open the request" } : undefined,
     };
   }
-  return { waiting: false, head: `Sent to ${driverName}.`, toast: "Task sent", link: p.task_id ? { to: `/tasks/${p.task_id}`, label: "Open task →" } : undefined };
+  const link = p.task_id ? { to: `/tasks/${p.task_id}`, label: "Open task →" } : undefined;
+  // Round 3: nothing is sent when the person or someone else drives (no app).
+  if (drivenBy === "self") return { waiting: false, head: "Saved. You drive it yourself: nothing is sent.", toast: "Task saved · you drive it", link };
+  if (drivenBy === "other") return { waiting: false, head: `Saved. ${driverName} drives it: no app, nothing is sent.`, toast: `Task saved · ${driverName} drives it`, link };
+  return { waiting: false, head: `Sent to ${driverName}.`, toast: `Task sent to ${driverName}`, link };
 }
 
 /** The WhatsApp message for the driver, when the office asked for one. */

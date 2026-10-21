@@ -189,9 +189,9 @@ console.log('\nA6: expired requests');
   const d = requestAgainDraft(expired, '2026-10-21');
   check(d.mode === 'request' && d.againOf === 'r1' && d.fields.date === '2026-10-22', 'Request again: a new request for tomorrow (editable), made from this one');
   check(same(d.fields.stops.map((s) => [s.type, s.place, s.arriveBy]), [['pickup', 'Head office', ''], ['drop', 'Kurunegala site', '11:00']]) && d.fields.start === 'Fame yard' && d.fields.leaveBy === '08:30' && d.fields.end === '17:00' && d.fields.returnToBase, 'the route, the start and the times copied', d.fields.stops);
-  check(d.fields.pax === '4' && d.req.need === 'van' && d.req.tools && d.req.note === 'Bring the ladder' && d.req.behalf === 'Kamal' && d.req.project === 'TRKAN1' && d.req.who?.choice === 'self' && d.req.driverRequired === false, 'passengers, vehicle type, tools, the note, on behalf of, the project, who drives', d.req);
+  check(d.fields.pax === '4' && d.req.need === 'van' && d.req.tools && d.req.note === 'Bring the ladder' && d.req.behalf === 'Kamal' && d.req.project === 'TRKAN1' && d.req.who?.by === 'self', 'passengers, vehicle type, tools, the note, on behalf of, the project, who drives', d.req);
   const old = requestAgainDraft(card({ fields: { date: '2026-10-19', time: '09:00', route_from: 'Colombo', route_to: 'Galle', pax: 2 } }), '2026-10-21');
-  check(same(old.fields.stops.map((s) => s.place), ['Colombo', 'Galle']) && old.fields.leaveBy === '09:00' && old.fields.date === '2026-10-22' && old.req.who?.choice === 'driver', 'an older request (From and To): the route as two stops, its time; a driver');
+  check(same(old.fields.stops.map((s) => s.place), ['Colombo', 'Galle']) && old.fields.leaveBy === '09:00' && old.fields.date === '2026-10-22' && old.req.who?.by === 'driver', 'an older request (From and To): the route as two stops, its time; a driver');
   check(/again: card\.id/.test(read('app/office/request/[id].tsx')) && /again: trip\.id/.test(read('app/office/(tabs)/trips.tsx')) && /requestAgainDraft\(card, colomboDate\(\)\)/.test(read('app/office/trip/where.tsx')), "Request again on the request's page and its Trips row; a link straight to Where reads the request");
 }
 

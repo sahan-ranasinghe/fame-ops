@@ -60,11 +60,6 @@ export function groupRows(sug: Pick<Suggestions, 'groups' | 'vehicles'> | null |
   return GROUP_ORDER.map((key) => ({ key, rows: sug.groups![key], disabled: key === 'in_garage' })).filter((g) => g.rows.length > 0);
 }
 
-/** The custodian drives: self-drive allowed, no driver needed, and the picked vehicle is assigned to someone. */
-export function custodianDrives(selfDrive: boolean, driverRequired: boolean, picked: Pick<SuggestedVehicle, 'assigned_to'> | undefined): boolean {
-  return selfDrive && !driverRequired && !!picked?.assigned_to;
-}
-
 /** A vehicle's second line: "Toyota HiAce · 12 seats · Free · back 14:30". */
 export function vehicleLine(v: SuggestedVehicle, seatsWord: (n: number) => string): string {
   return [v.make_model, v.seats ? seatsWord(v.seats) : '', v.availability, v.but, v.back].filter(Boolean).join(' · ');

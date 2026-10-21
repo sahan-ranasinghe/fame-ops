@@ -21,41 +21,42 @@ import { DriverChoiceRow, DriverRows, TaskDriverCard } from '@/components/office
 import { WhoDrivesChoice } from '@/components/office/WhoDrivesChoice';
 import { hideSnackbar } from '@/components/patterns/Snackbar';
 import { OfficeProvider } from '@/office/state';
-import { defaultWho, type WhoDrives } from '@/office/trip/whoDrivesLogic';
+import { emptyWho, type WhoDrivesValue } from '@/office/trip/whoDrivesLogic';
 import type { Availability, AvailableDriver, Me as OfficeMe } from '@/office/types';
 
 const t = mockUseApp().t;
 const ME: OfficeMe = FIX('me');
 
-function Controlled({ start, seen }: { start: WhoDrives; seen: WhoDrives[] }) {
+function Controlled({ start, seen }: { start: WhoDrivesValue; seen: WhoDrivesValue[] }) {
   const [v, setV] = useState(start);
   return <WhoDrivesChoice value={v} onChange={(n) => { seen.push(n); setV(n); }} />;
 }
 
 describe('Who drives?', () => {
   it('three choices as radios; Someone else opens a name and a phone; a bad phone says so', () => {
-    const seen: WhoDrives[] = [];
-    render(<Controlled start={defaultWho()} seen={seen} />);
+    const seen: WhoDrivesValue[] = [];
+    render(<Controlled start={emptyWho()} seen={seen} />);
     expect(screen.getByText(t('office.who.title'))).toBeTruthy();
     for (const c of ['driver', 'self', 'other'] as const) expect(screen.getByTestId(`who-drives-${c}`).props.accessibilityRole).toBe('radio');
     expect(screen.getByTestId('who-drives-driver').props.accessibilityState).toMatchObject({ checked: true });
     expect(screen.queryByTestId('who-drives-details')).toBeNull();
     fireEvent.press(screen.getByTestId('who-drives-other'));
-    expect(seen.at(-1)?.choice).toBe('other');
+    expect(seen.at(-1)?.by).toBe('other');
     fireEvent.changeText(screen.getByTestId('who-drives-name'), 'Someone Else');
     fireEvent.changeText(screen.getByTestId('who-drives-phone'), '12345');
-    expect(seen.at(-1)).toMatchObject({ choice: 'other', name: 'Someone Else', phone: '12345' });
+    expect(seen.at(-1)).toMatchObject({ by: 'other', name: 'Someone Else', phone: '12345' });
     expect(screen.getByText(t('office.who.phoneBad'))).toBeTruthy();
     fireEvent.changeText(screen.getByTestId('who-drives-phone'), '077 123 4567');
     expect(screen.getByText(t('office.who.phoneHint'))).toBeTruthy();
     fireEvent.press(screen.getByTestId('who-drives-self'));
-    expect(seen.at(-1)?.choice).toBe('self');
+    expect(seen.at(-1)?.by).toBe('self');
     expect(screen.queryByTestId('who-drives-details')).toBeNull();
   });
 
-  it('an older request the custodian drives shows that as its own row', () => {
-    render(<WhoDrivesChoice value={{ choice: 'custodian', name: '', phone: '' }} onChange={() => undefined} />);
-    expect(screen.getByText(t('office.who.custodian'))).toBeTruthy();
+  it('an older request the custodian drives reads as a driver, as on the site (nothing is sent unless it changes)', () => {
+    render(<WhoDrivesChoice value={emptyWho()} onChange={() => undefined} />);
+    expect(screen.getByTestId('who-drives-driver').props.accessibilityState).toMatchObject({ checked: true });
+    expect(screen.queryByTestId('who-drives-custodian')).toBeNull();
   });
 });
 
