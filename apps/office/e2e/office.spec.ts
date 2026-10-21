@@ -531,7 +531,7 @@ test("a requester (request brings view, Phase 7 §12) sees what a viewer sees pl
   for (const g of ["requests", "tasks", "vehicles", "mine"]) await expect(page.getByTestId(`notif-group-${g}`)).toBeVisible();
   for (const g of ["drivers", "issues"]) await expect(page.getByTestId(`notif-group-${g}`)).toHaveCount(0);
   await page.goto("/settings/notifications/mine");
-  await expect(page.getByRole("switch")).toHaveCount(7);
+  await expect(page.getByRole("switch")).toHaveCount(8);
   await expect(page.getByRole("switch", { name: "Driver on the way" })).toBeChecked();
   await expect(page.getByRole("switch", { name: "Request decided", exact: true })).toBeChecked();
   await page.goto("/settings/notifications/sounds");
@@ -2108,9 +2108,9 @@ test("Round 2: the task page follows the driver live: Arrived at a stop shows wi
   test.setTimeout(180_000);
   const email = `e2e.progress.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Progress", email, permissions: ["view", "assign_tasks"] });
-  const driver = { name: `E2E Progress ${stamp}`, code: `E2P-${stamp}`, username: `e2p.${stamp}`, pin: "246813", phone: "0771234500" };
+  const driver = { name: `E2E Progress ${stamp}`, code: `E2R2-${stamp}`, username: `e2r2.${stamp}`, pin: "246813", phone: "0771234522" };
   await tool("create_driver", driver);
-  const plate = `WP E2P-${stamp.slice(-4).toUpperCase()}`;
+  const plate = `WP R2P-${stamp.slice(-4).toUpperCase()}`;
   await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
   // Leaving now (Colombo), two stops with pins: the plan gives each stop its planned time.
   const now = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
