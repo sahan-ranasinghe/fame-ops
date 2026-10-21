@@ -19,3 +19,6 @@ playwright-report/
 __pycache__/
 apps/office/.wrangler/
 .claude/worktrees/
+
+# The Sinhala review export (scripts/i18n/export-sinhala-review.py): working files, not committed.
+docs/i18n/
