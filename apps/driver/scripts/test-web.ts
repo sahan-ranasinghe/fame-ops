@@ -35,6 +35,15 @@ console.log('\nNothing temporary left in the web build');
   check(temporary.length === 0, 'no .web file says TEMPORARY (the spike\'s placeholders are replaced)', temporary.map((f) => f.slice(root.length + 1)));
 }
 
+console.log('\nOffice mode never loads the driver\'s offline store (expo-sqlite has no web bundle: CI run 39557478415)');
+{
+  const root = join(__dirname, '..', 'src');
+  const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
+  const office = [...walk(join(root, 'office')), ...walk(join(root, 'app', 'office'))].filter((f) => /\.tsx?$/.test(f) && !/__fixtures__/.test(f));
+  const bad = office.filter((f) => /(?:from|import\()\s*'(?:\.\.\/)+sync'|'@\/sync'|'(?:\.\.\/)+lib\/photos'|'@\/lib\/photos'|'@\/lib\/api'|'\.\.\/lib\/api'/.test(readFileSync(f, 'utf8')));
+  check(bad.length === 0, 'no Office-mode file imports the queue (sync), lib/photos or lib/api', bad.map((f) => f.slice(root.length + 1)));
+}
+
 console.log('\nStep 5: installable, offline, web push (public/, office/browserPushLogic.ts)');
 {
   const pub = join(__dirname, '..', 'public');

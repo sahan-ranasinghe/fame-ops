@@ -5,12 +5,13 @@
 // photos row of kind profile and set_my_photo. The photo next to office people on other screens (and the site's own
 // Change photo) needs the server's photo_url for them: that waits for its go.
 
+import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useState } from 'react';
 
-import * as api from '../lib/api';
-import { profilePhotoPath } from '../lib/photoRules';
-import type { LocalProfilePhoto } from '../lib/photos';
+/** Where my profile photo goes in driver-photos (the driver's rule, lib/photoRules.ts profilePhotoPath). */
+const profilePhotoPath = (employeeId: string, id: string) => `${employeeId}/profile/${id}.jpg`;
 import { supabase } from '../lib/supabase';
+import { pickPhoto, uploadToTicket } from './media';
 
 const LINK_SECONDS = 3600;
 
@@ -26,35 +27,48 @@ async function myPhotoLink(): Promise<string | null> {
   const row = await supabase.from('employees').select('photo_id').eq('id', id).maybeSingle();
   const photoId = (row.data as { photo_id?: string | null } | null)?.photo_id;
   if (!photoId) return null;
-  const path = await api.fetchPhotoPath(supabase, photoId);
+  const photoRow = await supabase.from('photos').select('storage_path').eq('id', photoId).maybeSingle();
+  const path = (photoRow.data as { storage_path?: string } | null)?.storage_path;
   if (!path) return null;
   const signed = await supabase.storage.from('driver-photos').createSignedUrl(path, LINK_SECONDS);
   return signed.data?.signedUrl ?? null;
 }
 
-/** The camera or the gallery with the square crop (the driver's picker; loaded when used, like the upload). */
-export async function pickMyPhoto(source: 'camera' | 'gallery'): Promise<LocalProfilePhoto | null | 'denied'> {
-  const { pickProfilePhoto } = await import('../lib/photos');
-  return pickProfilePhoto(source);
+/** A picked and squared photo of me, ready to save. */
+export interface MyPhoto {
+  uri: string;
+}
+
+/** The camera or the gallery with the square crop (Office mode's picker, office/media.ts: it works on /m/ too). */
+export async function pickMyPhoto(source: 'camera' | 'gallery'): Promise<MyPhoto | null | 'denied'> {
+  const shot = await pickPhoto('driver_profile', source === 'gallery' ? 'library' : 'camera');
+  return shot && shot !== 'denied' ? { uri: shot.photo.uri } : shot;
 }
 
 export type SaveOutcome = 'ok' | 'failed' | 'network';
 
-/** Saves a picked photo as mine: the file, its photos row, then set_my_photo (each step safe to repeat). */
-export async function saveMyOfficePhoto(photo: LocalProfilePhoto): Promise<SaveOutcome> {
+/**
+ * Saves a picked photo as mine: a signed upload into my own folder (the own-folder insert policy allows it), its photos
+ * row, then set_my_photo. No queue (and none of the driver app's offline store, which the web build cannot carry).
+ */
+export async function saveMyOfficePhoto(photo: MyPhoto): Promise<SaveOutcome> {
   try {
     const id = await myEmployeeId();
     if (!id) return 'failed';
-    // Loaded when used: the upload lives with the driver's queue (its database opens on import).
-    const { uploadPhotoFile } = await import('../sync');
-    const answer = await api.saveProfilePhoto(
-      supabase,
-      { id: photo.id, employee_id: id, storage_path: profilePhotoPath(id, photo.id), taken_at: photo.takenAt },
-      (path) => uploadPhotoFile(photo.uri, path),
-    );
-    return answer === 'ok' ? 'ok' : 'failed';
-  } catch (error) {
-    return error instanceof api.ApiError && error.permanent ? 'failed' : 'network';
+    const photoId = Crypto.randomUUID();
+    const path = profilePhotoPath(id, photoId);
+    const signed = await supabase.storage.from('driver-photos').createSignedUploadUrl(path);
+    if (signed.error || !signed.data) return 'network';
+    await uploadToTicket({ bucket: 'driver-photos', path, token: signed.data.token }, photo.uri, 'image/jpeg');
+    const row = await supabase.from('photos').insert({
+      id: photoId, employee_id: id, kind: 'profile', storage_path: path, taken_at: new Date().toISOString(),
+    });
+    if (row.error) return 'failed';
+    const set = await supabase.rpc('set_my_photo', { p_photo_id: photoId });
+    return set.error ? 'network' : set.data === 'ok' ? 'ok' : 'failed';
+  } catch {
+    // uploadToTicket throws with its own sentence on a dropped connection.
+    return 'network';
   }
 }
 
