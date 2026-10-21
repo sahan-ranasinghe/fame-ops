@@ -972,6 +972,21 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 25. /m/ fixes deployed (21 October 2026, branch `o4-m-fixes`, CI run 39535454329 passed)
+
+- Causes: Google's map on /m/ never stayed (withinLimit called the browser's setTimeout with the wrong `this`: "Illegal
+  invocation", the tab took the free map silently); the fonts were never online (wrangler's upload leaves out
+  `assets/node_modules/`, so the site's HTML answered every font); the map's warnings (missing sprite images, the web's
+  missing native animation driver); the offline page redirected (1db4467).
+- main fast-forwarded to `a650a20` and pushed; the website deployed (4b31833a; the scan clean; every /m/ font, sw.js, the
+  manifest and /m/offline checked live: 200, their own type, no redirect); the phone redirect stays off.
+- The EAS update to preview, runtime 1.3.0-gmaps: group `ed41a27b-a5bc-435f-a71d-a2d8a5d054e1`, Android
+  `01a15c80-3b29-798e-940e-e8aba1e52d59`, from `a650a20` (no native package changed since the 1.3.0 build but the test tool
+  jest-expo; none since the last update).
+- main's CI run 39537830212 failed on one site unit test: `src/ui/TimeField.test.tsx` "is never typed: a tap opens the
+  sheet; 09:00 counts…" (no 09:00 button at 08:48 Colombo); the same test passed on the branch run 26 minutes earlier. Not
+  investigated (Sahan's rule).
+
 ## 24. Parked follow-ups (Sahan, 21 October 2026; not now)
 
 - Snapped routes in the app and /m/: don't store Google Roads results (policy restricts storage, and results can't be
