@@ -16,7 +16,8 @@
     "close": "වසන්න",
     "badTime": "වේලාව HH:MM ලෙස ඇතුළත් කරන්න, උදා. 14:30.",
     "privacy": "පෞද්ගලිකත්ව ප්‍රතිපත්තිය",
-    "back": "ආපසු"
+    "back": "ආපසු",
+    "tryAgainLater": "මිනිත්තුවකින් නැවත උත්සාහ කරන්න"
   },
   "days": [
     "ඉරිදා",
@@ -2738,7 +2739,25 @@
       "reason_vehicle_problem": "වාහන ගැටලුවක්",
       "reason_not_available": "නොමැත",
       "reason_unwell": "අසනීපයි",
-      "reason_other": "වෙනත්"
+      "reason_other": "වෙනත්",
+      "liveNow": "සජීවී · දැන්",
+      "live_min": "සජීවී · මිනිත්තු {n}කට පෙර",
+      "live_h": "සජීවී · පැය {n}කට පෙර",
+      "live_d": "සජීවී · දින {n}කට පෙර",
+      "locationOff": "ස්ථානය අක්‍රියයි",
+      "locationOffSince": "{time} සිට ස්ථානය අක්‍රියයි",
+      "noSignal": "සංඥා නැත",
+      "noSignalSince": "{time} සිට සංඥා නැත",
+      "permissionGone": "ස්ථාන අවසරය ඉවත් කර ඇත",
+      "permissionGoneSince": "{time} සිට ස්ථාන අවසරය ඉවත් කර ඇත",
+      "offDuty": "රාජකාරියෙන් පිටත",
+      "onDutySince": "{time} සිට රාජකාරියේ",
+      "offDutySince": "{time} සිට රාජකාරියෙන් පිටත",
+      "onTaskUntil": "~{time} දක්වා කාර්යයක",
+      "onTaskUntil_live": "~{time} දක්වා කාර්යයක (සජීවී)",
+      "onTaskUntil_planned": "~{time} දක්වා කාර්යයක (සැලසුම්)",
+      "onTaskNoEnd": "කාර්යයක · අවසන් වේලාව නැත",
+      "refused": "ලක්ෂ්‍ය {n}ක් ප්‍රතික්ෂේප විය"
     },
     "chip": {
       "sent": "යැව්වා",

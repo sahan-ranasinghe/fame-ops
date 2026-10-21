@@ -78,7 +78,7 @@ console.log('\n== The line under the name ==');
   check(rowLine({ ...sunil, eta_final: undefined }, t) === 'Team drop · Kurunegala site · office.live.near(Warakapola)', 'no ETA yet: near the town instead');
   check(rowLine({ ...sunil, task: undefined }, t) === 'office.live.onTask · office.live.about(10:38)', 'a task with no title: the words "On a task"');
   check(rowLine(kamal, t) === 'office.live.onDuty · office.live.near(Kadawatha) · office.live.seen(09:10)', 'on duty: On duty · near Kadawatha · seen 09:10', rowLine(kamal, t));
-  check(rowLine(ruwan, t) === 'office.live.onDuty · office.live.near(Kelaniya) · Location off since 08:40', 'a phone problem: the server\'s own words instead of "seen"', rowLine(ruwan, t));
+  check(rowLine(ruwan, t) === 'office.live.onDuty · office.live.near(Kelaniya) · office.line.locationOffSince(08:40)', 'a phone problem: the server\'s sentence in the person\'s language instead of "seen"', rowLine(ruwan, t));
   check(rowLine({ ...kamal, near: undefined, last_position_at: undefined }, t) === 'office.live.onDuty', 'on duty with nothing known: the word alone');
   check(rowLine(nimal, t) === 'office.live.offDuty · office.live.lastSeen(17:52) · office.live.near(Ja-Ela)', 'off duty: Off duty · last seen 17:52 near Ja-Ela', rowLine(nimal, t));
   check(rowLine(piyal, t) === 'office.live.offDuty', 'off duty, never seen: the word alone (never the server\'s "Off duty" twice)');

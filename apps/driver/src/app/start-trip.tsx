@@ -22,6 +22,7 @@ import { Button, Card, Field, Notice, Plate, Segmented, Txt } from '@/components
 import { type Choice, MAX_NOTE, type Purpose, purposeChoices, purposeKey } from '@/lib/trips';
 import { type StartTripOutcome, useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { failedText } from '@/lib/humanReason';
 
 export default function StartTripScreen() {
   const app = useApp();
@@ -66,7 +67,7 @@ export default function StartTripScreen() {
     if (outcome.kind !== 'started') {
       setBusy(false);
       setProblem(
-        outcome.kind === 'no_vehicle' ? t('trip.needVehicle') : outcome.kind === 'task_running' ? t('trip.finishFirst') : t('trip.failed', { reason: outcome.message }),
+        outcome.kind === 'no_vehicle' ? t('trip.needVehicle') : outcome.kind === 'task_running' ? t('trip.finishFirst') : failedText(t, 'trip.failed', outcome.message),
       );
       return;
     }

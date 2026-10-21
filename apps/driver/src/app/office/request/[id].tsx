@@ -297,7 +297,7 @@ export default function ApproveRequest() {
                     <Txt variant="strong" size={17}>{d.name}</Txt>
                     {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
                   </View>
-                  <Txt variant="muted" size={15}>{driverParts(d).join(' · ')}</Txt>
+                  <Txt variant="muted" size={15}>{driverParts(d, t).join(' · ')}</Txt>
                   {d.vehicle && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
                 </ChoiceRow>
               );
@@ -352,7 +352,7 @@ export default function ApproveRequest() {
         <AskDriversSheet
           visible={asking}
           onClose={() => setAsking(false)}
-          drivers={askTargets(drivers)}
+          drivers={askTargets(drivers, t)}
           context={{
             date: trip?.date ?? card.fields?.date,
             from: trip?.leaveBy,

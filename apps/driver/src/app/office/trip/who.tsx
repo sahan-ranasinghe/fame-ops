@@ -311,7 +311,7 @@ function WhoStep({ d }: { d: TripDraft }) {
         <AskDriversSheet
           visible={asking}
           onClose={() => setAsking(false)}
-          drivers={askTargets(drivers)}
+          drivers={askTargets(drivers, t)}
           context={{
             date: f.date,
             from: leave || undefined,

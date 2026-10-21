@@ -12,7 +12,7 @@ import { listView } from '@/lib/patterns/listLogic';
 import { appendAsks, askCountsLine } from '@/office/askLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { AskAnswers, FleetError } from '@/office/types';
-import { BackHeader, Divider, Pill, Row, Screen, Section } from '@/office/ui';
+import { BackHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 
 export default function AsksScreen() {
@@ -43,7 +43,7 @@ export default function AsksScreen() {
       <BackHeader title={t('office.asks.title')} subtitle={t('office.asks.subtitle')} />
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
         {view === 'skeleton' && <SkeletonRows rows={4} />}
-        {view === 'error' && <ListError message={q.error?.message ?? ''} onRetry={() => void q.reload()} />}
+        {view === 'error' && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} />}
         {view === 'empty' && <ListEmpty text={t('office.asks.empty')} />}
         {(view === 'rows' || view === 'rows_stale') && (
           <>
@@ -63,7 +63,7 @@ export default function AsksScreen() {
                 </View>
               ))}
             </Section>
-            {more.error && <ListError message={more.error.message} onRetry={() => void loadMore()} />}
+            {more.error && <ListFailed stale error={more.error} onRetry={() => void loadMore()} />}
             {q.data?.next && <LoadMore shown={asks.length} total={q.data.total} busy={more.busy} onPress={() => void loadMore()} />}
           </>
         )}

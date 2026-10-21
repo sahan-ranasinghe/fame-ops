@@ -65,7 +65,7 @@ export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSi
               <Txt variant="strong" size={18}>{x.name}</Txt>
               {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
             </View>
-            <Txt variant="muted" size={15}>{driverParts(x).join(' · ')}</Txt>
+            <Txt variant="muted" size={15}>{driverParts(x, t).join(' · ')}</Txt>
             {pillKey === 'best' && data?.best?.why ? <Txt variant="small" color={colors.amberText}>{data.best.why}</Txt> : null}
             {(x.last_seen || x.usual_start) && <Txt variant="small">{[x.last_seen ? t('office.trip.lastSeen', { when: x.last_seen }) : '', x.usual_start ? t('office.trip.usuallyStarts', { time: x.usual_start }) : ''].filter(Boolean).join(' · ')}</Txt>}
           </ChoiceRow>

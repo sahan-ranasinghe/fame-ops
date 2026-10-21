@@ -29,6 +29,7 @@ import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, stopLateMin, stopPar
 import type { FleetError, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
+import { sentenceText } from '@/office/statusWords';
 import { statusTone } from '@/office/homeLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -220,7 +221,7 @@ export default function TaskDetailScreen() {
             {task.status === 'in_progress' && (
               <Pressable accessibilityRole="button" onPress={() => router.navigate({ pathname: '/office/(tabs)/live', params: { driver: task.driver ?? '' } })} style={styles.now}>
                 <MapPin size={22} color={colors.blue} />
-                <Txt variant="body" size={15} style={{ flex: 1 }}>{[task.eta?.next_stop ? t('office.task.nextStop', { place: task.eta.next_stop }) : '', task.eta?.next ? t('office.request.about', { time: task.eta.next }) : '', task.eta?.final ? t('office.task.backAbout', { time: task.eta.final }) : ''].filter(Boolean).join(' · ') || task.status_line || t('office.task.onTheWayNow')}</Txt>
+                <Txt variant="body" size={15} style={{ flex: 1 }}>{[task.eta?.next_stop ? t('office.task.nextStop', { place: task.eta.next_stop }) : '', task.eta?.next ? t('office.request.about', { time: task.eta.next }) : '', task.eta?.final ? t('office.task.backAbout', { time: task.eta.final }) : ''].filter(Boolean).join(' · ') || sentenceText(t, task.status_line) || t('office.task.onTheWayNow')}</Txt>
                 <Txt variant="strong" size={16} color={colors.blue}>{t('office.home.liveMap')}</Txt>
               </Pressable>
             )}

@@ -157,7 +157,7 @@ console.log('\n== The sheet and the screens (read as text) ==');
     ['Give it a driver', give, /link=\{mayAsk && drivers\.length > 0 \? t\('office\.ask\.open'\) : undefined\}/, /task_id: task\.id/],
   ] as const) {
     check(/const mayAsk = me\.tools\.includes\('ask_drivers'\);/.test(src) && link.test(src), `${name}: the "Ask drivers" link beside the drivers only when the person may ask (me.tools)`);
-    check(/<AskDriversSheet/.test(src) && /drivers=\{askTargets\(drivers\)\}/.test(src) && ctx.test(src) && /onUse=\{\(username\) => setPicked\(username\)\}/.test(src),
+    check(/<AskDriversSheet/.test(src) && /drivers=\{askTargets\(drivers, t\)\}/.test(src) && ctx.test(src) && /onUse=\{\(username\) => setPicked\(username\)\}/.test(src),
       `${name}: the sheet gets the same rows, the trip's context and its id; Use picks that driver`);
   }
   check(/from: trip\?\.leaveBy/.test(request) && /date: trip\?\.date \?\? card\.fields\?\.date/.test(request), 'Approve: the window from the request\'s plan (leave-by, the day, back-by when later)');

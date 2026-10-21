@@ -217,7 +217,7 @@ export default function GiveDriverScreen() {
                     <Txt variant="strong" size={17}>{d.name}</Txt>
                     {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
                   </View>
-                  {!declined && <Txt variant="muted" size={15}>{driverParts(d).join(' · ')}</Txt>}
+                  {!declined && <Txt variant="muted" size={15}>{driverParts(d, t).join(' · ')}</Txt>}
                   {d.vehicle && !declined && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
                 </ChoiceRow>
               );
@@ -246,7 +246,7 @@ export default function GiveDriverScreen() {
         <AskDriversSheet
           visible={asking}
           onClose={() => setAsking(false)}
-          drivers={askTargets(drivers)}
+          drivers={askTargets(drivers, t)}
           context={{
             date: task.date,
             from: (task.leave_by ?? task.time ?? task.start).match(/\d{2}:\d{2}/)?.[0],

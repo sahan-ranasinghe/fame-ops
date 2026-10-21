@@ -242,7 +242,7 @@ export default function OfficeHome() {
                 <Row
                   left={<Avatar name={d.driver} />}
                   title={[d.driver, d.vehicle].filter(Boolean).join(' · ')}
-                  line={[d.task ?? d.going_to, d.near ? `${d.near}` : d.status_text].filter(Boolean).join(' · ')}
+                  line={[d.task ?? d.going_to, d.near ? `${d.near}` : sentenceText(t, d.status_text)].filter(Boolean).join(' · ')}
                   chip={{ text: d.task ? t('office.chip.underWay') : t('office.chip.onDuty'), tone: d.task ? 'blue' : 'green' }}
                   onPress={() => router.push({ pathname: '/office/(tabs)/live', params: d.username ? { driver: d.username } : {} })}
                 />

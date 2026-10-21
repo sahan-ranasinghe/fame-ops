@@ -6,14 +6,14 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { ListError, SkeletonRows } from '@/components/patterns/ListState';
+import { SkeletonRows } from '@/components/patterns/ListState';
 import { MapPin, Phone } from '@/components/icons';
 import { Txt } from '@/components/ui';
 import { answerLabel, answerOf, askCountsLine, keepPolling } from '@/office/askLogic';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import type { AskAnswers } from '@/office/types';
-import { Avatar, BackHeader, Divider, Pill, Screen, Section } from '@/office/ui';
+import { Avatar, BackHeader, Divider, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -34,7 +34,7 @@ export default function AskScreen() {
       <BackHeader title={t('office.asks.one')} subtitle={ask ? t('office.asks.askedBy', { name: ask.asked_by, when: ask.asked }) : undefined} />
       <Screen refreshing={first.refreshing} onRefresh={() => void first.reload()}>
         {first.loading && !ask && <SkeletonRows rows={4} />}
-        {first.error && !ask && <ListError message={first.error.message} onRetry={() => void first.reload()} />}
+        {first.error && !ask && <ListFailed error={first.error} onRetry={() => void first.reload()} />}
         {ask && (
           <>
             <View style={styles.card}>

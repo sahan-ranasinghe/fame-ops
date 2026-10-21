@@ -16,7 +16,8 @@
     "close": "Close",
     "badTime": "Enter the time as HH:MM, e.g. 14:30.",
     "privacy": "Privacy policy",
-    "back": "Back"
+    "back": "Back",
+    "tryAgainLater": "please try again in a minute"
   },
   "days": [
     "Sun",
@@ -2738,7 +2739,25 @@
       "reason_vehicle_problem": "Vehicle problem",
       "reason_not_available": "Not available",
       "reason_unwell": "Unwell",
-      "reason_other": "Other"
+      "reason_other": "Other",
+      "liveNow": "Live · now",
+      "live_min": "Live · {n} min ago",
+      "live_h": "Live · {n} h ago",
+      "live_d": "Live · {n} d ago",
+      "locationOff": "Location off",
+      "locationOffSince": "Location off since {time}",
+      "noSignal": "No signal",
+      "noSignalSince": "No signal since {time}",
+      "permissionGone": "Location permission removed",
+      "permissionGoneSince": "Location permission removed since {time}",
+      "offDuty": "Off duty",
+      "onDutySince": "On duty since {time}",
+      "offDutySince": "Off duty since {time}",
+      "onTaskUntil": "On a task until ~{time}",
+      "onTaskUntil_live": "On a task until ~{time} (live)",
+      "onTaskUntil_planned": "On a task until ~{time} (planned)",
+      "onTaskNoEnd": "On a task · end time not set",
+      "refused": "{n} points refused"
     },
     "chip": {
       "sent": "Sent",

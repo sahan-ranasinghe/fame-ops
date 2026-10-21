@@ -18,3 +18,4 @@ playwright-report/
 # Python bytecode (the test scripts)
 __pycache__/
 apps/office/.wrangler/
+.claude/worktrees/

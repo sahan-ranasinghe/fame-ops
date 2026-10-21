@@ -9,6 +9,7 @@
 
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
 import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
+import { sentenceText } from './statusWords';
 import { initials } from './text';
 import type { DutyState, LiveDriver } from './types';
 
@@ -106,7 +107,7 @@ export function rowLine(d: LineOf, t: Words): string {
   } else if (duty === 'on_duty') {
     parts.push(t('office.live.onDuty'));
     if (d.near) parts.push(t('office.live.near', { town: d.near }));
-    if (d.status && d.status !== 'live' && d.status_text) parts.push(d.status_text);
+    if (d.status && d.status !== 'live' && d.status_text) parts.push(sentenceText(t, d.status_text));
     else if (d.last_position_at) parts.push(t('office.live.seen', { time: d.last_position_at }));
   } else {
     parts.push(t('office.live.offDuty'));

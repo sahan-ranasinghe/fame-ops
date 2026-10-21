@@ -26,6 +26,7 @@ import { locationPermissions, oneFix } from '@/lib/location';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
+import { failedText } from '@/lib/humanReason';
 
 type Tone = 'info' | 'warn' | 'danger';
 
@@ -91,7 +92,7 @@ export default function AskScreen() {
         : outcome.kind === 'queued'
         ? { text: t('ask.queued'), tone: 'warn' }
         : outcome.kind === 'failed'
-        ? { text: t('ask.failed', { reason: outcome.message }), tone: 'danger' }
+        ? { text: failedText(t, 'ask.failed', outcome.message), tone: 'danger' }
         : { text: t('ask.expired'), tone: 'warn' },
     );
   }

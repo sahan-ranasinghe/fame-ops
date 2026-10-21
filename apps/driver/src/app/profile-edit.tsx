@@ -30,6 +30,7 @@ import {
 } from '@/lib/profile';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { failedText } from '@/lib/humanReason';
 
 const SIDES: LicenceSide[] = ['front', 'back'];
 
@@ -115,7 +116,7 @@ export default function ProfileEditScreen() {
       return;
     }
     if (outcome.kind === 'refused') {
-      setProblem({ text: t('profile.failed', { reason: outcome.message }) });
+      setProblem({ text: failedText(t, 'profile.failed', outcome.message) });
       return;
     }
     allowLeave();

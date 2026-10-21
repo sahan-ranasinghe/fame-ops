@@ -18,6 +18,7 @@ import { Button, Notice, Txt } from '@/components/ui';
 import { canAddStop, type Choice } from '@/lib/trips';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { failedText } from '@/lib/humanReason';
 
 export default function AddStopScreen() {
   const app = useApp();
@@ -49,7 +50,7 @@ export default function AddStopScreen() {
     const outcome = await app.addTripStop(task, pick);
     if (outcome.kind !== 'added') {
       setBusy(false);
-      setProblem(outcome.kind === 'refused' ? t('trip.stopFailed', { reason: outcome.message }) : null);
+      setProblem(outcome.kind === 'refused' ? failedText(t, 'trip.stopFailed', outcome.message) : null);
       return;
     }
     allowLeave();

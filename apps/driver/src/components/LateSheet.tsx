@@ -15,6 +15,7 @@ import { LATE_CHOICES, lateLine, lateMinutes } from '@/lib/late';
 import type { TaskWithStops } from '@/lib/types';
 import { type SendOutcome, useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
+import { failedText } from '@/lib/humanReason';
 
 /** The words for what became of a report (the sheet's result line). */
 export function lateOutcomeText(t: (key: string, vars?: Record<string, string | number>) => string, outcome: SendOutcome, minutes: number): { text: string; tone: 'info' | 'warn' | 'danger' } {
@@ -24,7 +25,7 @@ export function lateOutcomeText(t: (key: string, vars?: Record<string, string | 
     case 'queued':
       return { text: t('late.queued'), tone: 'warn' };
     case 'failed':
-      return { text: t('late.failed', { reason: outcome.message }), tone: 'danger' };
+      return { text: failedText(t, 'late.failed', outcome.message), tone: 'danger' };
     default:
       return { text: t('late.closed'), tone: 'warn' };
   }

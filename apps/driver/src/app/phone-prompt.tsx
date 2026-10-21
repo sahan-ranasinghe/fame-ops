@@ -16,6 +16,7 @@ import { Button, Card, Field, Notice, Txt } from '@/components/ui';
 import { deferPhonePrompt, phoneE164 } from '@/lib/profile';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+import { failedText } from '@/lib/humanReason';
 
 export default function PhonePromptScreen() {
   const app = useApp();
@@ -55,7 +56,7 @@ export default function PhonePromptScreen() {
       return;
     }
     if (outcome.kind === 'refused') {
-      setProblem(t('profile.failed', { reason: outcome.message }));
+      setProblem(failedText(t, 'profile.failed', outcome.message));
       setStuck(true);
       return;
     }

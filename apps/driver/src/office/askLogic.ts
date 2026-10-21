@@ -35,11 +35,11 @@ export interface AskTarget {
 }
 
 /** The rows from Who's available / Who can take it (availability). */
-export function askTargets(drivers: readonly AvailableDriver[]): AskTarget[] {
+export function askTargets(drivers: readonly AvailableDriver[], t?: (key: string, vars?: Record<string, string | number>) => string): AskTarget[] {
   return drivers.map((d) => ({
     name: d.name,
     username: d.username ?? null,
-    line: driverParts(d).join(' · '),
+    line: driverParts(d, t).join(' · '),
     free: d.free && !d.not_available,
     ...(d.phone?.call ? { call: d.phone.call } : {}),
   }));

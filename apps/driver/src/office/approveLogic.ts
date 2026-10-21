@@ -3,6 +3,7 @@
 // input (decide_request for a waiting request, redecide_request with the version for a changed booking), the button's
 // label, and what the server's "already decided" refusal means.
 
+import { sentenceText } from './statusWords';
 import type { AvailableDriver, Availability, FleetError, RequestCard, TimelineItem } from './types';
 
 /** One row of the trip card: the mark (S, 1, 2 …, B), the place and its line. */
@@ -122,12 +123,13 @@ export function rankedDrivers(drivers: readonly AvailableDriver[]): AvailableDri
 }
 
 /** "On duty · free all day · WP CAB-4521 HiAce · 1.7 km away": the parts the screen joins. */
-export function driverParts(d: AvailableDriver): string[] {
+export function driverParts(d: AvailableDriver, t?: (key: string, vars?: Record<string, string | number>) => string): string[] {
   const parts: string[] = [];
   if (d.not_available) parts.push(d.not_available);
   else if (d.match_why) parts.push(d.match_why);
   else {
-    parts.push(d.status_text);
+    // The presence sentence in the person's language (Round 1: never the server's English on a Sinhala screen).
+    parts.push(t ? sentenceText(t, d.status_text) : d.status_text);
     if (d.current_task) parts.push(d.current_task.title);
   }
   if (d.vehicle_note) parts.push(d.vehicle_note);

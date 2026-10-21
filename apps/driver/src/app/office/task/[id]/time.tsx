@@ -205,7 +205,7 @@ export default function ChangeTaskScreen() {
         <AskDriversSheet
           visible={asking}
           onClose={() => setAsking(false)}
-          drivers={askTargets(avail.data?.drivers ?? [])}
+          drivers={askTargets(avail.data?.drivers ?? [], t)}
           context={{ date: f?.date || task.date, from: (f?.time || task.leave_by || task.time || '').match(/\d{2}:\d{2}/)?.[0], to: (f?.end || task.end_by || '').match(/\d{2}:\d{2}/)?.[0], note: p.stops.find((s) => !s.is_start)?.place, task_id: task.id }}
           onUse={(username) => { const x = avail.data?.drivers.find((y) => y.username === username); set({ driver: username, vehicle: '' }); setDriverName(x?.name ?? username); }}
         />

@@ -5,7 +5,7 @@
 // "Accepted 16:10", "Started 07:06 · sharing location", "Done 11:40 · 42 km logged", "Declined (Vehicle problem) · note",
 // "Cancelled: reason", "Driven by Nimal (custodian · no app)". Office mode shows it in the person's language: each sentence
 // is read back into a key with its values; one it does not know is shown as the server said it (English words, never a
-// key). The short chip at the right of a row (Gmail's label: "Sent", "Seen", "Accepted", "Under way", "Late", "Done",
+// key). A driver's presence sentences (status_text) are read the same way (presenceWords). The short chip at the right of a row (Gmail's label: "Sent", "Seen", "Accepted", "Under way", "Late", "Done",
 // "Needs driver") comes from the card's column and that sentence.
 
 import type { Tone } from './ui';
@@ -45,6 +45,39 @@ export function sentenceWords(line: string | undefined | null): Words | null {
     return { key: m[1] ? 'office.line.declinedAfter' : 'office.line.declined', vars: { reason }, tail: m[3] };
   }
   if ((m = s.match(/^Cancelled:?\s*(.*)$/))) return { key: m[1] ? 'office.line.cancelledWhy' : 'office.line.cancelled', vars: { why: m[1] } };
+  return presenceWords(s);
+}
+
+/**
+ * A driver's presence as the server words it (status.ts statusText, availability.ts): "Live · 2 min ago", "Location off
+ * since 09:10", "Location permission removed since 09:10", "No signal since 09:10", "Off duty", "On duty since 07:12",
+ * "Off duty since 07:40", "On a task until ~10:40 (live)", "On a task · end time not set"; "· 3 points refused" after any.
+ */
+function presenceWords(line: string): Words | null {
+  let m: RegExpMatchArray | null;
+  let s = line;
+  let refused: number | null = null;
+  if ((m = s.match(/^(.*) · (\d+) points? refused$/))) {
+    s = m[1];
+    refused = Number(m[2]);
+  }
+  const w = presenceCore(s);
+  if (!w) return null;
+  return refused === null ? w : { ...w, vars: { ...w.vars, refused } };
+}
+
+function presenceCore(s: string): Words | null {
+  let m: RegExpMatchArray | null;
+  if (s === 'Live · now') return { key: 'office.line.liveNow' };
+  if ((m = s.match(/^Live · (\d+) (min|h|d) ago$/))) return { key: `office.line.live_${m[2]}`, vars: { n: Number(m[1]) } };
+  if ((m = s.match(/^(Location off|Location permission removed|No signal)(?: since (\d{2}:\d{2}))?$/))) {
+    const k = m[1] === 'Location off' ? 'locationOff' : m[1] === 'No signal' ? 'noSignal' : 'permissionGone';
+    return m[2] ? { key: `office.line.${k}Since`, vars: { time: m[2] } } : { key: `office.line.${k}` };
+  }
+  if (s === 'Off duty') return { key: 'office.line.offDuty' };
+  if ((m = s.match(/^(On|Off) duty since (\d{2}:\d{2})$/))) return { key: m[1] === 'On' ? 'office.line.onDutySince' : 'office.line.offDutySince', vars: { time: m[2] } };
+  if ((m = s.match(/^On a task until ~(\d{2}:\d{2})(?: \((live|planned)\))?$/))) return { key: m[2] ? `office.line.onTaskUntil_${m[2]}` : 'office.line.onTaskUntil', vars: { time: m[1] } };
+  if (s === 'On a task · end time not set') return { key: 'office.line.onTaskNoEnd' };
   return null;
 }
 
@@ -56,7 +89,7 @@ export function sentenceText(t: T, line: string | undefined | null): string {
   if (!w) return line ?? '';
   const vars = { ...w.vars };
   if (typeof vars.reason === 'string') vars.reason = t(`office.line.reason_${vars.reason}`);
-  const text = t(w.key, vars);
+  const text = t(w.key, vars) + (typeof vars.refused === 'number' ? ` · ${t('office.line.refused', { n: vars.refused })}` : '');
   return w.tail ? `${text} · ${w.tail}` : text;
 }
 

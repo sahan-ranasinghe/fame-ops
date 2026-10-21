@@ -238,9 +238,9 @@ export default function IssueScreen() {
           <Section title={t('office.issues.report')}>
             <View style={{ gap: 6, paddingTop: 4 }}>
               <Txt variant="strong" size={16}>
-                {[reportCategoryKey(h.report.category) ? t(reportCategoryKey(h.report.category)!) : h.report.category, h.report.driver, t('office.issues.reported', { at: h.report.reported })].filter(Boolean).join(' · ')}
+                {[reportCategoryKey(h.report.category) ? t(reportCategoryKey(h.report.category)!) : null, h.report.driver, t('office.issues.reported', { at: h.report.reported })].filter(Boolean).join(' · ')}
               </Txt>
-              <Pill text={REPORT_STATUS_KEYS[h.report.status] ? t(REPORT_STATUS_KEYS[h.report.status]) : h.report.status} tone={h.report.status === 'open' ? 'red' : h.report.status === 'in_garage' ? 'amber' : 'muted'} />
+              {REPORT_STATUS_KEYS[h.report.status] ? <Pill text={t(REPORT_STATUS_KEYS[h.report.status])} tone={h.report.status === 'open' ? 'red' : h.report.status === 'in_garage' ? 'amber' : 'muted'} /> : null}
               {h.report.note ? <Txt variant="body" size={16}>{h.report.note}</Txt> : null}
               {h.report.office_note ? <Txt variant="muted" size={15}>{t('office.issues.officeNote', { note: h.report.office_note })}</Txt> : null}
               {h.report.photos.length > 0 && (

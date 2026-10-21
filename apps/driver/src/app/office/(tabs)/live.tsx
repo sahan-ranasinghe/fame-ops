@@ -53,6 +53,7 @@ import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { Divider, ErrorNotice, ListFailed, Pill, StatusChip, useWebThemeColor } from '@/office/ui';
+import { sentenceText } from '@/office/statusWords';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { useApp } from '@/state/app';
@@ -354,7 +355,7 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, 
   const insets = useSafeAreaInsets();
   const pill = pillOf(d);
   const links = d.links ?? {};
-  const extra = [d.status_text, d.task_note, d.not_available, d.app_stops_text].filter((s): s is string => !!s);
+  const extra = [sentenceText(t, d.status_text), d.task_note, d.not_available, d.app_stops_text].filter((s): s is string => !!s);
   const summary = route?.route ? routeSummary(route.route, t) : null;
   const facts = [speedText(d, t), batteryText(d, t)].filter((s): s is string => !!s);
   // Clock out: a sheet with the optional reason; the answer in the snackbar, the server's refusal on the card.
