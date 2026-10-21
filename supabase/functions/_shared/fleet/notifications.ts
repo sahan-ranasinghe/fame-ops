@@ -297,6 +297,7 @@ export function recipientsFor(event: NotifyEvent, people: readonly Person[], ctx
     case "request.on_the_way":
     case "request.running_late":
     case "request.arrived":
+    case "request.stop_arrived":
     case "request.driver_changed":
     case "request.cancelled":
       ids = ctx.requester ? [ctx.requester] : [];

@@ -951,6 +951,14 @@ check(code == 200, "driver marks the pickup stop done (the phone saw them near i
 td_auto = tool("task_detail", {"task_id": T1})
 check(td_auto["stops"][0].get("auto_detected") and td_auto["stops"][0]["arrived"] and td_auto["stops"][0]["auto_detected"] != td_auto["stops"][0]["arrived"],
       "task_detail: the arrival nudge's time beside the driver's own tap", json.dumps(td_auto["stops"][0])[:300])
+# Round 2: the stop's progress (planned against what happened) and, for the stops to come, the re-estimate.
+pg = td_auto["stops"][0].get("progress") or {}
+nxt = (td_auto["stops"][1].get("progress") or {}) if len(td_auto["stops"]) > 1 else {}
+check(pg.get("arrived") == td_auto["stops"][0]["arrived"] and pg.get("left") == td_auto["stops"][0].get("done")
+      and (pg.get("planned_arrive") is None or isinstance(pg.get("arrive_delta_min"), int))
+      and (not nxt.get("planned_arrive") or (nxt.get("estimate", {}).get("updated") == pg.get("left") and nxt.get("current") is True)),
+      "task_detail: each stop's progress (arrived, left, the delta) and the next stop re-estimated from the time the driver left",
+      json.dumps([pg, nxt])[:400])
 
 board = tool("task_board", {"date": task_day})
 running = {c["id"]: c for c in board["in_progress"]}
@@ -1524,7 +1532,7 @@ if CHANNEL == "api":
                                                  "task.running_late", "ask.answered", "trip.personal", "task.stop_skipped", "issue.opened", "issue.assigned",
                                                  "vehicle.booked", "vehicle.booking_cancelled", "request.changed", "request.redecided", "booking.changed",
                                                  "request.not_decided", "request.late", "request.on_the_way", "request.running_late", "request.arrived",
-                                                 "request.driver_changed", "request.cancelled"]
+                                                 "request.stop_arrived", "request.driver_changed", "request.cancelled"]
           and all(e["enabled"] for e in ms["events"]) and ms["devices"] == [] and ms["push"]["configured"] is VAPID and (("public_key" in ms["push"]) is VAPID),
           "my_notification_settings: every event on (the admin holds every permission), no devices, push.configured says whether the server has the keys", json.dumps(ms)[:300])
     ms = tool("set_my_notification_settings", {"events": {"issue.opened": False}})
@@ -2804,7 +2812,7 @@ if CHANNEL == "api":
     code, body = api_call(staff_token, "my_notification_settings", {})
     check(code == 200 and [e["event"] for e in body["result"]["events"]] == ["request.decided", "task.declined", "task.not_accepted", "vehicle.booked", "vehicle.booking_cancelled",
                                                                           "request.redecided", "booking.changed", "request.not_decided",
-                                                                          "request.on_the_way", "request.running_late", "request.arrived", "request.driver_changed",
+                                                                          "request.on_the_way", "request.running_late", "request.arrived", "request.stop_arrived", "request.driver_changed",
                                                                           "request.cancelled"],
           "a requester's notification settings hold their request events (with a task of theirs that needs a driver) and the three booking events", f"{code} {str(body)[:200]}")
     code, body = api_call(staff_token, "list_requests", {"status": "all"})

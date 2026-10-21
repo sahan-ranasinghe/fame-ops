@@ -65,6 +65,7 @@ Deno.test("the Settings page shows a person the events their permissions can bri
     "request.on_the_way",
     "request.running_late",
     "request.arrived",
+    "request.stop_arrived",
     "request.driver_changed",
     "request.cancelled",
   ]);
@@ -85,6 +86,7 @@ Deno.test("the Settings page shows a person the events their permissions can bri
     "request.on_the_way",
     "request.running_late",
     "request.arrived",
+    "request.stop_arrived",
     "request.driver_changed",
     "request.cancelled",
   ]);
