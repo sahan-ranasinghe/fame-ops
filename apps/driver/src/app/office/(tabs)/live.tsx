@@ -52,15 +52,16 @@ import type { DriverRoute, FleetError, LiveDriver, LiveDrivers } from '@/office/
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
-import { Divider, ErrorNotice, ListFailed, Pill } from '@/office/ui';
+import { Divider, ErrorNotice, ListFailed, Pill, useWebThemeColor } from '@/office/ui';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { useApp } from '@/state/app';
-import { colors, fonts } from '@/theme';
+import { colors, fonts, shadow } from '@/theme';
 
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
 export default function LiveTab() {
+  useWebThemeColor(colors.ink);
   const { t } = useApp();
   const { me, api, signOut } = useOffice();
   const router = useRouter();
@@ -496,7 +497,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     gap: 8,
-    elevation: 12,
+    ...shadow(12, true),
   },
   handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.line, alignSelf: 'center', marginBottom: 4 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },

@@ -24,10 +24,20 @@ the browser (the publishable key only; no secret ever reaches the browser). The 
 
 ## The maps
 
-Google's map when the office's map package is Google and the website's Google map load is allowed (each load counted
-against the website's cap through `register_map_load`, which hands out the browser key); otherwise, and when Google's map
-does not load, the free map (MapLibre GL JS with OpenFreeMap's tiles). Google's content is never drawn on the free map
+The desktop site's rule (21 October 2026): Google's map when the office's map package is google (`/me`, read again at every
+start) and `register_map_load` allows it (the load counted first; the browser key handed out at run time, never in the
+build); the free map (MapLibre GL JS, OpenFreeMap) otherwise, never mixed on one map; Google counts as failed only when its
+script fails, Google refuses the key (`gm_authFailure`) or the script is not ready in 15 s, and then every map of the tab is
+the free map; "Map not available" when both fail. Each map writes one line in the browser's console:
+`[Fame Fleet map] Google used`, or `… refused: <why>` / `… failed: <why>`. Google's content is never drawn on the free map
 (CLAUDE.md hard rule 10).
+
+## Fonts
+
+The app's own files (IBM Plex Sans 400/500/600/700, IBM Plex Mono 500/600, Archivo ExtraBold, Yaldevi 400/600, Gemunu
+Libre ExtraBold; no Google Fonts request), each weight its own family as in the app. The export puts them under
+`/m/assets/vendor/` (`scripts/web-vendor-assets.mjs`): Cloudflare's upload leaves out any `node_modules` folder, where Expo
+puts them, so before 21 October they were never online and Chrome got the site's HTML instead.
 
 ## Install it on a phone
 

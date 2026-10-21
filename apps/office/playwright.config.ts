@@ -19,6 +19,10 @@ export default defineConfig({
   // is checked against the local functions log for a CPU cut at its time (the local runtime's fixed per-worker budget drops
   // requests; a write is never repeated by the app, so a dropped save fails its first try). Still one worker.
   retries: 1,
+  // Screenshot baselines (the mobile website's, CI only): a missing one is written by the run and kept with its artifact
+  // (then committed); an existing one is compared.
+  updateSnapshots: "missing",
+  snapshotPathTemplate: "{testDir}/screens/{arg}{ext}",
   workers: 1,
   // On GitHub (CI, docs/ci.md) also the HTML report, uploaded with the run.
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : [["list"]],

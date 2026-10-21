@@ -16,6 +16,7 @@ import { Button, Card, Field, Notice, Txt } from '@/components/ui';
 import { getJson } from '@/lib/kv';
 import { type OfficeSignInOutcome, signInOffice, signOutOffice } from '@/office/auth';
 import { OFFICE_KEYS, useOfficeMe } from '@/office/store';
+import { useWebThemeColor } from '@/office/ui';
 import { type SignInOutcome, useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -38,6 +39,7 @@ const OFFICE_PROBLEM: Record<Exclude<OfficeSignInOutcome, 'ok'>, string> = {
 type Side = 'driver' | 'office';
 
 export default function LoginScreen() {
+  useWebThemeColor(colors.ink);
   const { me, t, signIn } = useApp();
   const officeMe = useOfficeMe();
   const router = useRouter();

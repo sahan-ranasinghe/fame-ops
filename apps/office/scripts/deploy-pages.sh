@@ -44,6 +44,22 @@ echo "scan: nothing found"
 if [ "${1:-}" = "--deploy" ]; then
   echo "== 5. Upload"
   NODE_OPTIONS=--dns-result-order=ipv4first npx wrangler pages deploy --branch main
+  echo "== 6. The live /m/ files: 200, their own type, no redirect (21 October 2026: the fonts were left out by the upload"
+  echo "   and the offline page was redirected)"
+  site="https://fame-fleet.pages.dev"
+  sleep 10
+  bad=0
+  check() { # path, the content type it must have
+    local got; got=$(curl -s -o /dev/null --max-redirs 0 -w '%{http_code} %{content_type}' "$site$1")
+    if [[ "$got" == 200\ $2* ]]; then echo "   ok   $1  ($got)"; else echo "   BAD  $1  ($got)"; bad=1; fi
+  }
+  check /m/ text/html
+  check /m/office/approve text/html
+  check /m/offline text/html
+  check /m/sw.js application/javascript
+  check /m/manifest.webmanifest application/manifest+json
+  for f in $(cd dist && find m/assets -name '*.ttf' | sort); do check "/$f" font/; done
+  [ "$bad" = 0 ] || { echo "STOP: a /m/ file is not served as itself (above)"; exit 1; }
 else
   echo "Built and checked; not uploaded (run with --deploy after the go)."
 fi

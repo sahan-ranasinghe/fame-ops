@@ -35,7 +35,7 @@ import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import type { DriverProfile, DriversList, FleetError, Vehicle, VehiclesList } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
-import { Avatar, Divider, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
+import { Avatar, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, useWebThemeColor } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -44,6 +44,7 @@ type VehicleRow = Vehicle & { regular_driver?: string };
 const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
 export default function ManageDriver() {
+  useWebThemeColor(colors.ink);
   const { username } = useLocalSearchParams<{ username: string }>();
   const { t, tList } = useApp();
   const { me, api, signOut } = useOffice();

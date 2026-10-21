@@ -4,11 +4,14 @@
 // global error handler can call it from anywhere; `SnackbarHost` is drawn once at the root, above every screen.
 
 import { useEffect, useRef, useSyncExternalStore } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Txt } from '@/components/ui';
-import { colors } from '@/theme';
+import { colors, shadow } from '@/theme';
+
+/** The native animation driver exists only on a phone (react-native-web warns and falls back on every use). */
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 export interface SnackbarAction {
   label: string;
@@ -82,7 +85,7 @@ export function SnackbarHost() {
   useEffect(() => {
     if (!snack) return;
     fade.setValue(0);
-    Animated.timing(fade, { toValue: 1, duration: 150, useNativeDriver: true }).start();
+    Animated.timing(fade, { toValue: 1, duration: 150, useNativeDriver: NATIVE_DRIVER }).start();
     const id = snack.id;
     const timer = setTimeout(() => {
       if (current?.id === id) hideSnackbar();
@@ -117,7 +120,7 @@ export function SnackbarHost() {
 
 const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 12, right: 12, alignItems: 'stretch' },
-  bar: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: colors.ink, elevation: 6 },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 52, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: colors.ink, ...shadow(6) },
   error: { backgroundColor: colors.red },
   action: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 4 },
 });

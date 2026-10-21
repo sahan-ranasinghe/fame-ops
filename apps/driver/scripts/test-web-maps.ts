@@ -95,6 +95,19 @@ async function main() {
     check(err === "Google's map did not load in time", 'a script that never answers fails at its time limit', err);
     const ok = await withinLimit(Promise.resolve(7), 15_000, 'x');
     check(ok === 7, 'a script in time passes through');
+    // As in a browser: setTimeout called with any `this` but the window throws "Illegal invocation" (21 October 2026).
+    const real = { set: globalThis.setTimeout, clear: globalThis.clearTimeout };
+    const strict = <F extends (...a: never[]) => unknown>(f: F) => function (this: unknown, ...a: Parameters<F>) {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+      return (f as (...x: Parameters<F>) => unknown)(...a);
+    };
+    globalThis.setTimeout = strict(real.set) as unknown as typeof setTimeout;
+    globalThis.clearTimeout = strict(real.clear) as unknown as typeof clearTimeout;
+    let browserErr = '';
+    const inBrowser = await withinLimit(Promise.resolve(8), 15_000, 'x').catch((e: Error) => { browserErr = e.message; return 0; });
+    globalThis.setTimeout = real.set;
+    globalThis.clearTimeout = real.clear;
+    check(inBrowser === 8 && browserErr === '', 'the time limit calls the browser\'s setTimeout as a function (never "Illegal invocation")', browserErr);
   }
 
   console.log('\n== The camera ==');

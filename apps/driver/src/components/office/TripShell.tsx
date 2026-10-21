@@ -10,11 +10,13 @@ import { ChevronLeft, ChevronRight } from '@/components/icons';
 import { Button, Txt } from '@/components/ui';
 import { type Step, stepIndex, STEPS, type TripMode } from '@/office/trip/draft';
 import { useApp } from '@/state/app';
+import { useWebThemeColor } from '@/office/ui';
 import { colors } from '@/theme';
 
 export function TripHeader({ step, above, onBack, onSaveDraft, mode }: { step: Step; above: string; onBack: () => void; onSaveDraft?: () => void; mode?: TripMode }) {
   const { t } = useApp();
   const insets = useSafeAreaInsets();
+  useWebThemeColor(colors.ink);
   // A task's stops (mode stops) have three steps: no Who bar.
   const bars = mode === 'stops' ? STEPS.filter((x) => x !== 'who') : STEPS;
   const i = mode === 'stops' ? bars.indexOf(step) : stepIndex(step);

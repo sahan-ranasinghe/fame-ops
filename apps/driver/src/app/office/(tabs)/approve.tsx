@@ -18,7 +18,7 @@ import { useOffice, useTool } from '@/office/state';
 import type { FleetError, RequestCard, RequestsList } from '@/office/types';
 import { Avatar, DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, shadow } from '@/theme';
 
 const SEARCH_DEBOUNCE_MS = 500;
 
@@ -148,5 +148,5 @@ export default function ApproveTab() {
 
 const styles = StyleSheet.create({
   // The pill at the top (Twitter's, Gmail's): ink, round, centred; the list under it stays where it is.
-  newPill: { alignSelf: 'center', minHeight: 44, paddingHorizontal: 18, borderRadius: 22, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', elevation: 3 },
+  newPill: { alignSelf: 'center', minHeight: 44, paddingHorizontal: 18, borderRadius: 22, backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center', ...shadow(3) },
 });

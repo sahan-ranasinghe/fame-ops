@@ -15,7 +15,7 @@ import { LanguagePill } from '@/components/LanguageSwitch';
 import { ListError } from '@/components/patterns/ListState';
 import { Button, Mono, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, hoverStyle, setWebThemeColor, webHitSlop } from '@/theme';
 import { useOffice } from './state';
 import { errorText, initials } from './text';
 import type { FleetError } from './types';
@@ -45,7 +45,7 @@ export function Pill({ text, tone = 'muted', size = 14 }: { text: string; tone?:
 export function Chip({ n, text, tone = 'muted', onPress }: { n: number | string; text: string; tone?: Tone; onPress?: () => void }) {
   const c = TONES[tone];
   return (
-    <Pressable accessibilityRole={onPress ? 'button' : undefined} onPress={onPress} disabled={!onPress} style={[styles.chip, { backgroundColor: c.bg }]}>
+    <Pressable accessibilityRole={onPress ? 'button' : undefined} onPress={onPress} disabled={!onPress} style={(state) => [styles.chip, { backgroundColor: c.bg }, hoverStyle(state)]}>
       <Mono size={15} bold color={c.ink}>{String(n)}</Mono>
       <Txt variant="strong" size={14} color={c.ink}>{text}</Txt>
     </Pressable>
@@ -57,6 +57,7 @@ export function DarkHeader({ above, title, children, bell = true }: { above: str
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { unread } = useOffice();
+  useWebThemeColor(colors.ink);
   return (
     <View style={[styles.dark, { paddingTop: insets.top + 12 }]}>
       <View style={styles.darkTop}>
@@ -73,7 +74,7 @@ export function DarkHeader({ above, title, children, bell = true }: { above: str
 /** The bell with the unread count (the Alerts badge; DarkHeader reads it from the office state). */
 export function BellButton({ onPress, count = 0 }: { onPress: () => void; count?: number }) {
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={styles.bell}>
+    <Pressable accessibilityRole="button" onPress={onPress} style={(state) => [styles.bell, hoverStyle(state)]}>
       <Bell size={22} color="#ffffff" strokeWidth={2.2} />
       {count > 0 && <Badge n={count} />}
     </Pressable>
@@ -93,9 +94,10 @@ export function BackHeader({ title, subtitle, right }: { title: string; subtitle
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t } = useApp();
+  useWebThemeColor(colors.page);
   return (
     <View style={[styles.backHeader, { paddingTop: insets.top + 8 }]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/office'))} style={styles.backBtn}>
+      <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/office'))} style={(state) => [styles.backBtn, hoverStyle(state)]}>
         <ChevronLeft size={28} color={colors.ink} strokeWidth={2.4} />
       </Pressable>
       <View style={{ flex: 1 }}>
@@ -147,7 +149,7 @@ export function Section({ title, count, link, onLink, tone, children }: {
           {count !== undefined && <Mono size={13} bold color={tone === 'red' ? colors.red : colors.muted}>{`· ${count}`}</Mono>}
         </View>
         {link && onLink && (
-          <Pressable accessibilityRole="button" onPress={onLink} hitSlop={10}>
+          <Pressable accessibilityRole="button" onPress={onLink} hitSlop={10} style={(state) => [webHitSlop(10), hoverStyle(state)]}>
             <Txt variant="strong" size={16} color={colors.blue}>{link}</Txt>
           </Pressable>
         )}
@@ -190,10 +192,16 @@ export function Row({ left, title, line, line2, right, onPress, testID }: {
   );
   if (!onPress) return <View style={styles.row} testID={testID}>{inner}</View>;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} testID={testID} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+    <Pressable accessibilityRole="button" onPress={onPress} testID={testID} style={(state) => [styles.row, hoverStyle(state), state.pressed && { opacity: 0.7 }]}>
       {inner}
     </Pressable>
   );
+}
+
+/** The browser's theme colour while this screen is in front (theme.ts setWebThemeColor; nothing on the phone): the colour
+ *  of the screen's top, as the phone's status bar shows it. */
+export function useWebThemeColor(color: string) {
+  useFocusEffect(useCallback(() => setWebThemeColor(color), [color]));
 }
 
 /** A thin line between rows. */

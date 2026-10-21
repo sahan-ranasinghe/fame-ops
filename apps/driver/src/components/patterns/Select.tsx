@@ -15,7 +15,7 @@ import { Pressable, type StyleProp, StyleSheet, View, type ViewStyle } from 'rea
 
 import { Check } from '@/components/icons';
 import { Mono, Txt } from '@/components/ui';
-import { colors } from '@/theme';
+import { colors, hoverStyle } from '@/theme';
 
 /** The selection colours (theme.ts): blue #1e4fa0 on the blue chip background #e6edf8. */
 export const SELECT = {
@@ -78,7 +78,7 @@ export function SelectableRow({ selected, onToggle, disabled = false, disabledRe
       disabled={disabled}
       onPress={onToggle}
       testID={testID}
-      style={({ pressed }) => [styles.row, selected && styles.on, disabled && styles.disabled, pressed && !disabled && { opacity: 0.85 }, style]}
+      style={(state) => [styles.row, selected && styles.on, hoverStyle(state), disabled && styles.disabled, state.pressed && !disabled && { opacity: 0.85 }, style]}
     >
       <SelectMark kind="check" on={selected} size={30} testID={testID ? `${testID}-mark` : undefined} />
       <View style={{ flex: 1, gap: 2 }}>
@@ -112,7 +112,7 @@ export function ChoiceRow({ selected, onPress, disabled = false, disabledReason,
       disabled={disabled}
       onPress={onPress}
       testID={testID}
-      style={({ pressed }) => [styles.row, card && styles.card, selected && styles.on, disabled && styles.disabled, pressed && !disabled && { opacity: 0.85 }, style]}
+      style={(state) => [styles.row, card && styles.card, selected && styles.on, hoverStyle(state), disabled && styles.disabled, state.pressed && !disabled && { opacity: 0.85 }, style]}
     >
       {mark === 'start' && radio}
       {leading}
@@ -167,7 +167,7 @@ export function ChoiceChip({ label, selected, onPress, disabled = false, multi =
       disabled={disabled}
       onPress={onPress}
       testID={testID}
-      style={({ pressed }) => [styles.chip, small && styles.chipSmall, onDark && styles.chipDark, selected && styles.on, disabled && styles.disabled, pressed && !disabled && { opacity: 0.85 }, style]}
+      style={(state) => [styles.chip, small && styles.chipSmall, onDark && styles.chipDark, selected && styles.on, hoverStyle(state), disabled && styles.disabled, state.pressed && !disabled && { opacity: 0.85 }, style]}
     >
       {selected && corner ? (
         <View style={styles.corner} testID={testID ? `${testID}-check` : undefined}><SelectMark kind="check" on size={20} /></View>
@@ -223,7 +223,7 @@ export function Checkbox({ checked, onChange, label, hint, disabled = false, dis
       disabled={disabled}
       onPress={() => onChange(!checked)}
       testID={testID}
-      style={[styles.form, disabled && styles.disabled]}
+      style={(state) => [styles.form, hoverStyle(state), disabled && styles.disabled]}
     >
       <View
         testID={testID ? `${testID}-${checked ? 'on' : 'off'}` : undefined}
@@ -259,7 +259,7 @@ export function Radio({ checked, onPress, label, hint, disabled = false, disable
       disabled={disabled}
       onPress={onPress}
       testID={testID}
-      style={[styles.form, disabled && styles.disabled]}
+      style={(state) => [styles.form, hoverStyle(state), disabled && styles.disabled]}
     >
       <SelectMark kind="radio" on={checked} size={26} testID={testID ? `${testID}-mark` : undefined} />
       <View style={{ flex: 1 }}>

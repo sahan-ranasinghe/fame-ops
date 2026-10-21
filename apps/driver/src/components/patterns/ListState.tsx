@@ -3,19 +3,22 @@
 // shown, and Load more at the end.
 
 import { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Platform, StyleSheet, View } from 'react-native';
 
 import { Button, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
+
+/** The native animation driver exists only on a phone (react-native-web warns and falls back on every use). */
+const NATIVE_DRIVER = Platform.OS !== 'web';
 
 /** Grey bars the shape of the rows, gently pulsing. */
 export function SkeletonRows({ rows = 4, lines = 2, testID = 'skeleton-rows' }: { rows?: number; lines?: number; testID?: string }) {
   const pulse = useRef(new Animated.Value(0.55)).current;
   useEffect(() => {
     const loop = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0.55, duration: 700, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: NATIVE_DRIVER }),
+      Animated.timing(pulse, { toValue: 0.55, duration: 700, useNativeDriver: NATIVE_DRIVER }),
     ]));
     loop.start();
     return () => loop.stop();

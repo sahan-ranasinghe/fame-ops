@@ -25,7 +25,7 @@ import { badgeTone, DEBOUNCE_MS, looksPasted, type Picked, pickedOf, pinText, se
 import type { FleetError, GooglePlaceAnswer, SearchAnswer, SearchResult } from '@/office/types';
 import { Pill } from '@/office/ui';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, webInnerInput } from '@/theme';
 
 export type { Picked };
 
@@ -200,7 +200,7 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
           autoFocus={autoFocus}
           selectTextOnFocus={editing}
           autoCorrect={false}
-          style={styles.input}
+          style={[styles.input, webInnerInput]}
           accessibilityLabel={placeholder}
         />
         {busy ? <ActivityIndicator color={colors.muted} /> : text !== '' ? (

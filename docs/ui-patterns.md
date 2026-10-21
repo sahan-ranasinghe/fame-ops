@@ -295,6 +295,40 @@ Instagram, WhatsApp and Uber's settings (Hotfix O2-H2, Part 2).
 
 ---
 
+## 15. Web parity (the mobile website /m/)
+
+Office mode's screens run unchanged in a browser through react-native-web (`src/web-app`). The same components must look
+the same there; a fix goes into the shared component or token (`theme.ts`, `components/ui.tsx`, `office/ui.tsx`,
+`components/patterns/*`), never into a `/m/`-only copy of a screen, and the phone stays exactly as it was.
+
+- **Shadows**: Android's `elevation` draws nothing in a browser. Use `shadow(level)` from `theme.ts` (elevation on the
+  phone, the matching box-shadow on the web; `shadow(level, true)` for a card anchored to the bottom). Never a bare
+  `elevation:` in an office screen.
+- **Pressed states**: no `android_ripple`. A Pressable's feedback is a style: `pressed` opacity (both) plus
+  `hoverStyle(state)` (a mouse only; touch never hovers). Button, Row, the selection controls, Chip, the bell, the back
+  arrow and the tab bar have both.
+- **Hit areas**: `hitSlop` does nothing in a browser. A small control without padding adds `webHitSlop(n)` (padding with
+  a matching negative margin), or gets a 44 px box.
+- **Fonts by family**: each weight is its own family (`IBMPlexSans_700Bold`, `Yaldevi_600SemiBold`, …) through `Txt` /
+  `Mono`; never `fontWeight` on a styled text (a browser would fake the weight). Text is not selectable unless asked
+  (`selectable`), as on the phone.
+- **Line heights**: `Txt` sets `lineHeight` in px (×1.3 English, ×1.5 Sinhala); a browser has no Android font padding, so
+  never pad a text by hand to centre it.
+- **Inputs**: a text box inside its own bordered box (search, place search) takes `webInnerInput` (no focus ring inside
+  the box); a stand-alone box keeps the browser's ring.
+- **Safe areas**: a browser's insets are 0 (an iPhone in standalone mode gives real ones); headers use
+  `insets.top + n`, never a fixed status-bar height.
+- **Theme colour**: the browser's bar takes the colour of the screen's top, as the phone's transparent status bar does:
+  `useWebThemeColor(colors.ink)` under a dark header (DarkHeader, TripHeader, Live, the driver's page, sign-in),
+  `colors.page` under BackHeader. `index.html` and the manifest keep `#15181c` for the first paint.
+- **Sheets**: the one Sheet is a React Native `Modal`; on the web it is a fixed layer over the page with the same slide,
+  shade and close rules. Confirmations go through `lib/webAlert.ts` (Alert.alert does nothing in a browser).
+- **What a browser cannot do, and what /m/ shows instead**: no pull to refresh (the lists poll and have Try again); no
+  Android notification channels, sounds or full-screen ring (web push through the service worker, Settings →
+  Notifications says this browser's state); no background location or duty (the site is Office mode only); no app
+  settings page (no "Open settings" button); no share sheet on some browsers (copy, with a snackbar); no Google map on the
+  phone's native SDK (the web map twins `*.web.tsx`). The app uses no haptics, so nothing is missing there.
+
 ## The reviewer's checklist (each checkpoint)
 
 For every screen changed or added: the filters are one Filter button + sheet + chips; a date range is one button + one

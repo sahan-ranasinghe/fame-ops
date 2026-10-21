@@ -4,6 +4,7 @@
 // desktop link opened on the phone → its own screen → Give a driver. Runs under the "mobile-web" Playwright project only,
 // against the local mobile build the dev server serves under /m/ (FLEET_MOBILE_DIR; scripts/test-office-local.sh makes it).
 import type { Locator, Page } from "@playwright/test";
+import { fakeGoogleMapsScript } from "./fakeGoogleMaps";
 import { expect, test } from "./offline";
 
 const MCP = (process.env.OFFICE_MCP_URL || "http://127.0.0.1:54321/functions/v1/office-mcp").replace(/\/$/, "");
@@ -213,3 +214,147 @@ test("step 5: installable with its own manifest, the worker on /m/, the No conne
   await expect(page).toHaveURL(/\/m\/office\/vehicles$/);
   await expect(shown(page.getByRole("button", { name: "Register vehicle" }))).toBeVisible();
 });
+
+/** The mobile website's map package, as /me would answer it (the local functions have no Google key: /me says open). */
+async function mapPackage(page: Page, pkg: "google" | "open"): Promise<{ googleLoads: string[] }> {
+  const googleLoads: string[] = [];
+  await page.route("**/functions/v1/office-api/me", async (route) => {
+    const res = await route.fetch();
+    const me = await res.json() as { map?: { package: string; places: boolean } };
+    await route.fulfill({ response: res, json: { ...me, map: { package: pkg, places: false } } });
+  });
+  // The server counts the load and hands over the browser key: a stand-in here (never a real key in a test).
+  await page.route("**/functions/v1/office-api/tools/register_map_load", (route) =>
+    route.fulfill({ json: { result: { allowed: true, package: "google", map: "google", key: "stand-in-browser-key" } } }));
+  await page.route("https://maps.googleapis.com/**", (route) => {
+    googleLoads.push(route.request().url());
+    const callback = new URL(route.request().url()).searchParams.get("callback") ?? "";
+    return route.fulfill({ status: 200, contentType: "text/javascript", body: fakeGoogleMapsScript(callback) });
+  });
+  return { googleLoads };
+}
+
+test("the map on /m/ follows the office's package: google asks Google's loader with the counted key; open never does", async ({ page }) => {
+  const g = await mapPackage(page, "google");
+  const mapLines: string[] = [];
+  page.on("console", (m) => { if (m.text().startsWith("[Fame Fleet map]")) mapLines.push(m.text()); });
+  await signInMobile(page, "mapg", ["view"]);
+  await tab(page, "Live").click();
+  await expect(page.getByTestId("live-map")).toBeVisible();
+  await expect.poll(() => g.googleLoads.length, { timeout: 20_000 }).toBeGreaterThan(0);
+  expect(g.googleLoads[0]).toContain("key=stand-in-browser-key");
+  // Google's map stays: past the script's 15 s limit and the phones' 30 s wait, still Google's, never the free map.
+  const live = page.getByTestId("live-map");
+  await expect(live.locator("[data-fake-google-map]")).toHaveCount(1);
+  await page.waitForTimeout(32_000);
+  await expect(live.locator("[data-fake-google-map]")).toHaveCount(1);
+  await expect(live.locator(".maplibregl-canvas")).toHaveCount(0);
+  expect(mapLines).toContain("[Fame Fleet map] Google used");
+});
+
+test("the map on /m/ with the open package never asks Google", async ({ page }) => {
+  const g = await mapPackage(page, "open");
+  await signInMobile(page, "mapo", ["view"]);
+  await tab(page, "Live").click();
+  await expect(page.getByTestId("live-map")).toBeVisible();
+  await expect(page.getByTestId("live-map").locator(".maplibregl-canvas")).toHaveCount(1);
+  await page.waitForTimeout(5_000);
+  expect(g.googleLoads).toEqual([]);
+});
+
+test("the app's fonts on /m/: every family loads (self-hosted), headings Archivo / Gemunu Libre, body IBM Plex Sans / Yaldevi, plates and times IBM Plex Mono", async ({ page }) => {
+  const googleFonts: string[] = [];
+  page.on("request", (r) => { if (/fonts\.(googleapis|gstatic)\.com/.test(r.url())) googleFonts.push(r.url()); });
+  const badFonts: string[] = [];
+  page.on("response", (r) => {
+    if (/\.(ttf|otf|woff2?)(\?|$)/.test(r.url()) && (r.status() !== 200 || !/font|octet-stream/.test(r.headers()["content-type"] ?? ""))) badFonts.push(`${r.status()} ${r.headers()["content-type"]} ${r.url()}`);
+  });
+  await signInMobile(page, "fonts", ["view", "approve", "assign_tasks"]);
+  await page.evaluate(() => document.fonts.ready);
+  const families = ["IBMPlexSans_400Regular", "IBMPlexSans_500Medium", "IBMPlexSans_600SemiBold", "IBMPlexSans_700Bold", "IBMPlexMono_500Medium", "IBMPlexMono_600SemiBold", "Archivo_800ExtraBold", "Yaldevi_400Regular", "Yaldevi_600SemiBold", "GemunuLibre_800ExtraBold"];
+  const loaded = await page.evaluate(async (fs) => {
+    const out: Record<string, boolean> = {};
+    for (const f of fs) {
+      await document.fonts.load(`16px "${f}"`, "Aa ශ්‍රී 0123");
+      out[f] = document.fonts.check(`16px "${f}"`, "Aa ශ්‍රී 0123") && [...document.fonts].some((ff) => ff.family.replace(/"/g, "") === f && ff.status === "loaded");
+    }
+    return out;
+  }, families);
+  expect(loaded).toEqual(Object.fromEntries(families.map((f) => [f, true])));
+  expect(badFonts).toEqual([]);
+  expect(googleFonts).toEqual([]);
+  // What the screens use: the Home header's title, a body line, a time in mono.
+  const used = await page.evaluate(() => [...new Set([...document.querySelectorAll("#root *")].map((el) => getComputedStyle(el).fontFamily.split(",")[0].replace(/"/g, "").trim()))]);
+  expect(used).toEqual(expect.arrayContaining(["Archivo_800ExtraBold", "IBMPlexSans_400Regular", "IBMPlexMono_600SemiBold"]));
+});
+
+test("the map stays idle on /m/: a handful of frames at most in 5 s with no input", async ({ page }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __frames: number; requestAnimationFrame: typeof requestAnimationFrame };
+    w.__frames = 0;
+    const raf = window.requestAnimationFrame.bind(window);
+    w.requestAnimationFrame = (cb: FrameRequestCallback) => { w.__frames += 1; return raf(cb); };
+  });
+  await signInMobile(page, "idle", ["view"]);
+  await tab(page, "Live").click();
+  await expect(page.getByTestId("live-map")).toBeVisible();
+  await page.waitForTimeout(6_000); // the map comes to rest
+  const before = await page.evaluate(() => (window as unknown as { __frames: number }).__frames);
+  await page.waitForTimeout(5_000);
+  const after = await page.evaluate(() => (window as unknown as { __frames: number }).__frames);
+  expect(after - before, "animation frames in 5 s with no input").toBeLessThanOrEqual(10);
+});
+
+/** The sign-in button in Sinhala (src/i18n/si.json login.signIn). */
+const SI_SIGN_IN = "ඇතුළු වන්න";
+
+for (const lang of ["en", "si"] as const) {
+  test(`screenshots of /m/ in ${lang === "en" ? "English" : "Sinhala"}: Home, Approve, Live, a task and More (kept with the run); the sign-in and More against their baselines on CI`, async ({ page }, testInfo) => {
+    test.setTimeout(180_000);
+    await page.addInitScript((l) => window.localStorage.setItem("language", JSON.stringify(l)), lang);
+    // The sign-in, before anyone is signed in: the same on every run.
+    await page.goto("/m/");
+    await expect(page.locator('input[type="email"]')).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    if (process.env.CI) await expect(page).toHaveScreenshot(`signin-${lang}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01 });
+    await page.screenshot({ path: testInfo.outputPath(`m-${lang}-signin.png`) });
+
+    const driver = { name: `Shot Driver ${stamp}${lang}`, code: `SD-${stamp}${lang}`, username: `sd.${stamp}${lang}`, pin: "135794", phone: "0771234508" };
+    await tool("create_driver", driver);
+    const plate = `WP SH-${stamp.slice(-3).toUpperCase()}${lang === "en" ? "1" : "2"}`;
+    await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(Date.now() + 2 * 864e5));
+    const task = await tool<{ task_id: string }>("create_task", { title: `Screenshot task ${stamp}`, date: day, start_time: "09:00", end_time: "10:00", driver: driver.username, vehicle: plate, pickup: "Head office", dropoff: "Galle" });
+    const email = `shots.${lang}.${stamp}@fame.test`;
+    const password = await officeUser(`Shots ${lang}`, email, ["view", "approve", "assign_tasks"]);
+    await page.locator('input[type="email"]').fill(email);
+    await page.locator('input[type="password"]').fill(password);
+    await page.getByRole("button", { name: lang === "en" ? "Sign in" : SI_SIGN_IN, exact: true }).click();
+    await expect(page).toHaveURL(/\/m\/office/);
+    await page.waitForTimeout(3_000);
+
+    const shot = async (name: string) => {
+      await page.evaluate(() => document.fonts.ready);
+      await page.screenshot({ path: testInfo.outputPath(`m-${lang}-${name}.png`) });
+    };
+    await shot("home");
+    await page.goto("/m/office/approve");
+    await page.waitForTimeout(2_000);
+    await shot("approve");
+    // Live with the map's picture hidden (the tiles are no part of the check).
+    await page.goto("/m/office/live");
+    await page.addStyleTag({ content: '[data-testid="live-map"] canvas, [data-testid="live-map"] [data-fake-google-map] { visibility: hidden !important; }' });
+    await page.waitForTimeout(2_000);
+    await shot("live");
+    await page.goto(`/m/office/task/${task.task_id}`);
+    await expect(shown(page.getByText(`Screenshot task ${stamp}`))).toBeVisible();
+    await shot("task");
+    await page.goto("/m/office/more");
+    await page.waitForTimeout(2_000);
+    await shot("more");
+    // More is the same for everyone with these permissions but for the person's own row (masked).
+    if (process.env.CI) {
+      await expect(page).toHaveScreenshot(`more-${lang}.png`, { animations: "disabled", maxDiffPixelRatio: 0.01, mask: [page.getByText(`Shots ${lang}`), page.getByText(email)] });
+    }
+  });
+}

@@ -10,7 +10,7 @@ import { Button, Mono, Txt } from '@/components/ui';
 import { Checkbox, Radio } from '@/components/patterns/Select';
 import { activeChips, activeCount, clearValues, type FilterDef, type FilterValues, isChosen, toggle } from '@/lib/patterns/filterLogic';
 import { useApp } from '@/state/app';
-import { colors, fonts } from '@/theme';
+import { colors, fonts, webHitSlop, webInnerInput } from '@/theme';
 
 import { Sheet } from './Sheet';
 
@@ -43,8 +43,8 @@ export function FilterBar({ search, onSearch, placeholder, defs, values, onApply
         {onSearch ? (
           <View style={styles.search}>
             <Search size={20} color={colors.muted} />
-            <TextInput value={search} onChangeText={onSearch} placeholder={placeholder ?? t('patterns.search')} placeholderTextColor="#9aa0a6" autoCorrect={false} returnKeyType="search" accessibilityLabel={placeholder ?? t('patterns.search')} style={[styles.searchInput, { fontFamily: language === 'si' ? fonts.sinhalaBody : fonts.body }]} />
-            {search ? <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.clearSearch')} onPress={() => onSearch('')} hitSlop={8}><X size={18} color={colors.muted} /></Pressable> : null}
+            <TextInput value={search} onChangeText={onSearch} placeholder={placeholder ?? t('patterns.search')} placeholderTextColor="#9aa0a6" autoCorrect={false} returnKeyType="search" accessibilityLabel={placeholder ?? t('patterns.search')} style={[styles.searchInput, { fontFamily: language === 'si' ? fonts.sinhalaBody : fonts.body }, webInnerInput]} />
+            {search ? <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.clearSearch')} onPress={() => onSearch('')} hitSlop={8} style={webHitSlop(8)}><X size={18} color={colors.muted} /></Pressable> : null}
           </View>
         ) : <View style={{ flex: 1 }} />}
         {defs.length > 0 && (

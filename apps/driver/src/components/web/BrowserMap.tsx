@@ -154,6 +154,8 @@ function EngineBox({ mapMount, start, padding, onAdapter, events, children }: Br
     const { start: s, padding: pad } = latest.current;
     if (latest.current.mapMount.mount.engine === 'google') {
       void takeGoogleMap().then((grant) => {
+        // One line per map in the browser's console: which map and why (the phone check reads it; never the key).
+        console.info(`[Fame Fleet map] Google ${grant.state === 'ready' ? 'used' : `${grant.state}: ${grant.note}`}`);
         if (!alive) {
           // The page went while the map was being counted: keep it for the next page, never throw a counted map away.
           if (grant.state === 'ready') giveGoogleMap(grant.map);

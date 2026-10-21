@@ -176,7 +176,15 @@ export function createGooglePool<M>(deps: GooglePoolDeps<M>) {
 }
 
 /** A promise that fails after `ms` (the script blocked or too slow). */
-export function withinLimit<T>(p: Promise<T>, ms: number, note: string, timers: { set: typeof setTimeout; clear: typeof clearTimeout } = { set: setTimeout, clear: clearTimeout }): Promise<T> {
+// The default timers call the browser's own functions as functions: called as timers.set(…), window.setTimeout throws
+// "Illegal invocation" in every browser (Node does not mind, so the unit tests never saw it), and Google's map on /m/ failed
+// at once into the free map, without a word (21 October 2026).
+const BROWSER_TIMERS = {
+  set: ((fn: () => void, ms: number) => setTimeout(fn, ms)) as unknown as typeof setTimeout,
+  clear: ((t: ReturnType<typeof setTimeout>) => clearTimeout(t)) as typeof clearTimeout,
+};
+
+export function withinLimit<T>(p: Promise<T>, ms: number, note: string, timers: { set: typeof setTimeout; clear: typeof clearTimeout } = BROWSER_TIMERS): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = timers.set(() => reject(new Error(note)), ms);
     p.then(

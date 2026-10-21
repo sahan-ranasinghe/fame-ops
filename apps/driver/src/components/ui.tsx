@@ -19,7 +19,7 @@ import {
 
 import type { Language } from '@/lib/types';
 import { useApp } from '@/state/app';
-import { colors, fonts } from '@/theme';
+import { colors, fonts, hoverStyle } from '@/theme';
 
 type Weight = 'regular' | 'medium' | 'strong' | 'bold' | 'heading';
 
@@ -56,7 +56,7 @@ interface TxtProps extends TextProps {
 }
 
 /** Text in the right font for the chosen language. */
-export function Txt({ variant = 'body', color, size, style, ...rest }: TxtProps) {
+export function Txt({ variant = 'body', color, size, style, selectable = false, ...rest }: TxtProps) {
   const { language } = useApp();
   const v = VARIANTS[variant];
   const fontSize = size ?? v.size;
@@ -69,12 +69,13 @@ export function Txt({ variant = 'body', color, size, style, ...rest }: TxtProps)
     // Wide letter spacing is a Latin small-caps look; it pulls Sinhala letters apart.
     letterSpacing: variant === 'label' && language === 'en' ? 1.4 : 0,
   };
-  return <Text {...rest} style={[base, style]} />;
+  // Not selectable unless asked (the phone's default; a browser would select a button's words on a long press).
+  return <Text {...rest} selectable={selectable} style={[base, style]} />;
 }
 
 /** Plates, times, odometer numbers: always mono, always Latin digits. */
-export function Mono({ size = 17, color = colors.ink, bold = false, style, ...rest }: TextProps & { size?: number; color?: string; bold?: boolean }) {
-  return <Text {...rest} style={[{ fontFamily: bold ? fonts.monoSemiBold : fonts.mono, fontSize: size, color }, style]} />;
+export function Mono({ size = 17, color = colors.ink, bold = false, selectable = false, style, ...rest }: TextProps & { size?: number; color?: string; bold?: boolean }) {
+  return <Text {...rest} selectable={selectable} style={[{ fontFamily: bold ? fonts.monoSemiBold : fonts.mono, fontSize: size, color }, style]} />;
 }
 
 /** A number plate in its thin bordered chip. */
@@ -107,14 +108,15 @@ export function Button({ label, onPress, kind = 'primary', icon: Icon, disabled 
       disabled={disabled || busy}
       onPress={onPress}
       testID={testID}
-      style={({ pressed }) => [
+      style={(state) => [
         styles.button,
         kind === 'primary' && { backgroundColor: colors.amber },
         kind === 'dark' && { backgroundColor: colors.ink },
         kind === 'outline' && { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.line },
         kind === 'danger-text' && { minHeight: 52 },
+        hoverStyle(state),
         (disabled || busy) && { opacity: 0.45 },
-        pressed && { opacity: 0.8 },
+        state.pressed && { opacity: 0.8 },
         style,
       ]}
     >
@@ -160,7 +162,7 @@ export function Segmented<T extends string>({ options, value, onChange }: {
             accessibilityRole="radio"
             accessibilityState={{ checked: on, selected: on }}
             onPress={() => onChange(option.value)}
-            style={[styles.segment, on && styles.segmentOn]}
+            style={(state) => [styles.segment, on && styles.segmentOn, hoverStyle(state)]}
           >
             {on && <Check size={20} color={colors.blue} strokeWidth={3} />}
             <Txt variant="button" size={18} color={on ? colors.blue : colors.ink}>{option.label}</Txt>

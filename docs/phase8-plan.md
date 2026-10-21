@@ -972,6 +972,12 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 24. Parked follow-ups (Sahan, 21 October 2026; not now)
+
+- Snapped routes in the app and /m/: don't store Google Roads results (policy restricts storage, and results can't be
+  shown on non-Google maps). If wanted later: our own OSRM map matching on OpenStreetMap data, stored once per trip and
+  shown on both maps.
+
 ## 23. Step 5 deployed (21 October 2026, Sahan's three gos after CI run 39480596443 passed)
 
 - main fast-forwarded to `035efea` (step 5, the review fixes, the Notifications limits, Live without zoom buttons, the CI

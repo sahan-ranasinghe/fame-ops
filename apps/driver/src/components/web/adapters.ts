@@ -162,6 +162,11 @@ export function createFreeMap(container: HTMLElement, start: Camera, padding: Pa
     }
   };
 
+  // The free style names sprite images it does not ship (atm, gate, office, toll_booth…): a blank 1×1 image answers each
+  // once, so MapLibre neither warns nor asks again on every tile that uses it.
+  m.on('styleimagemissing', (e: { id: string }) => {
+    if (!gone && !m.hasImage(e.id)) m.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+  });
   m.on('load', () => {
     if (gone) return;
     loaded = true;
@@ -265,13 +270,12 @@ export function createGoogleMap(container: HTMLElement, g: GoogleApi, entry: Goo
   };
   show(start, padding, false);
 
-  if (entry.loaded) setTimeout(() => { if (!gone) on.loaded(); }, 0);
-  else {
-    listeners.push(g.event.addListenerOnce(m, 'tilesloaded', () => {
-      entry.loaded = true;
-      if (!gone) on.loaded();
-    }));
-  }
+  // The desktop site's rule (21 October 2026): Google's map has loaded once its script is ready and the map is made. A
+  // failure is the script failing, Google refusing the key (gm_authFailure) or the script not ready in 15 s, never "no
+  // tiles yet" (a map made before its box had a size could wait for tiles that only come with the next move, and the tab
+  // then went to the free map without a word).
+  entry.loaded = true;
+  setTimeout(() => { if (!gone) on.loaded(); }, 0);
   listeners.push(m.addListener('dragstart', () => on.userMove?.()));
   listeners.push(m.addListener('idle', () => {
     const c = m.getCenter();

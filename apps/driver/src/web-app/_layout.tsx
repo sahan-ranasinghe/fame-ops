@@ -65,7 +65,12 @@ export default function WebRoot() {
   useEffect(() => {
     void (async () => {
       await bootOffice();
-      if (!getOfficeMe() && sessionKind(await supabase.auth.getSession()) !== 'none') await refreshOfficeMe();
+      // The person as the server says now (the desktop site reads /me at every load): a stored one is shown at once and
+      // refreshed in the background (the map package, the permissions and the tools may have changed since the sign-in).
+      if (sessionKind(await supabase.auth.getSession()) !== 'none') {
+        if (getOfficeMe()) void refreshOfficeMe();
+        else await refreshOfficeMe();
+      }
     })().finally(() => setBooted(true));
   }, []);
   // Step 5: the worker (the offline page, the office's pushes); a tap on a notification while the site is open opens its

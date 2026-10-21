@@ -14,7 +14,7 @@ import { Mono, Txt } from '@/components/ui';
 import { ChoiceChip } from '@/components/patterns/Select';
 import { advance, clockS, type Cursor, type PathPoint, PLAYBACK_TICK_MS, type PlaybackSpeed, sliderFraction, SPEEDS, timeAtFraction } from '@/office/liveRouteLogic';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, shadow } from '@/theme';
 
 // ---- Playback (the site's usePlayback on a timer: the phone has no animation frame worth the battery) ------------------
 
@@ -179,5 +179,5 @@ const styles = StyleSheet.create({
   track: { flex: 1, height: 48, justifyContent: 'center' },
   trackBar: { height: 6, borderRadius: 3, backgroundColor: colors.line, overflow: 'hidden' },
   trackFill: { height: 6, backgroundColor: colors.blue },
-  thumb: { position: 'absolute', top: (48 - THUMB) / 2, marginLeft: -THUMB / 2, width: THUMB, height: THUMB, borderRadius: THUMB / 2, backgroundColor: colors.blue, borderWidth: 3, borderColor: colors.card, elevation: 2 },
+  thumb: { position: 'absolute', top: (48 - THUMB) / 2, marginLeft: -THUMB / 2, width: THUMB, height: THUMB, borderRadius: THUMB / 2, backgroundColor: colors.blue, borderWidth: 3, borderColor: colors.card, ...shadow(2) },
 });

@@ -13,7 +13,7 @@ import { type TabKey, tabsFor } from '@/office/nav';
 import { useOffice } from '@/office/state';
 import { Badge } from '@/office/ui';
 import { useApp } from '@/state/app';
-import { colors } from '@/theme';
+import { colors, hoverStyle } from '@/theme';
 
 const ICONS: Record<TabKey, LucideIcon> = {
   home: House,
@@ -51,7 +51,7 @@ function TabBar({ state, navigation }: TabBarProps) {
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             onPress={() => navigation.navigate(route.name)}
-            style={styles.tab}
+            style={(state) => [styles.tab, hoverStyle(state)]}
           >
             <View style={[styles.pill, active && { backgroundColor: colors.amber }]}>
               <Icon size={24} color={active ? colors.ink : colors.muted} strokeWidth={active ? 2.6 : 2} />
