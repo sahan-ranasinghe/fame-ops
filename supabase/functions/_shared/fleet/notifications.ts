@@ -37,6 +37,7 @@ export type NotifyEvent =
   | "request.late"
   | "request.on_the_way"
   | "request.arrived"
+  | "request.stop_arrived"
   | "request.driver_changed"
   | "request.cancelled"
   | "trip.personal"
@@ -183,6 +184,13 @@ export const EVENTS: readonly EventInfo[] = [
     text: "The driver of a trip you asked for reaches the first pickup",
     needs: ["request", "assign_tasks"],
   },
+  // Round 2: each later stop reached, with how late or early ("Kanishka arrived at Wariyapola 10:52, 22 min late").
+  {
+    event: "request.stop_arrived",
+    label: "Your driver reached a stop",
+    text: "The driver of a trip you asked for reaches each stop after the first pickup, with how late or early",
+    needs: ["request", "assign_tasks"],
+  },
   {
     event: "request.driver_changed",
     label: "Your driver is changed",
@@ -225,6 +233,7 @@ const INBOX_KIND: Record<NotifyEvent, InboxKind> = {
   "request.on_the_way": "soft",
   "request.running_late": "soft",
   "request.arrived": "soft",
+  "request.stop_arrived": "soft",
   "task.stop_skipped": "soft",
   "issue.opened": "alarm",
   "trip.personal": "info",

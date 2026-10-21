@@ -262,6 +262,18 @@ export interface Stop {
   arrived?: string;
   /** The driver's phone was within 150 m (the arrival nudge), "HH:MM"; beside the driver's own tap. */
   auto_detected?: string;
+  /** Round 2: planned against what happened (Arrived, Left: Colombo HH:MM), the deltas (+ late, − early) and, for a stop
+   *  still to come once something was confirmed, the new times (estimate.updated = when they were worked out). */
+  progress?: {
+    planned_arrive?: string;
+    planned_leave?: string;
+    arrived?: string;
+    left?: string;
+    arrive_delta_min?: number;
+    leave_delta_min?: number;
+    estimate?: { arrive: string; leave?: string; updated: string };
+    current?: boolean;
+  };
   /** A Google place (Part 5): its pin is drawn on Google's map only; the id is kept, the details 30 days. */
   google?: boolean;
   google_place_id?: string;

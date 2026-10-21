@@ -96,6 +96,7 @@ export const NOTIF_GROUPS: readonly NotifGroupDef[] = [
       { event: "request.on_the_way", title: "Driver on the way", needs: ["request"] },
       { event: "request.running_late", title: "Driver running late", needs: ["request"] },
       { event: "request.arrived", title: "Driver arrived", text: "At the first pickup", needs: ["request", "assign_tasks"] },
+      { event: "request.stop_arrived", title: "Driver reached a stop", text: "Each later stop, with how late or early", needs: ["request", "assign_tasks"] },
       { event: "request.driver_changed", title: "Driver changed", needs: ["request", "assign_tasks"] },
       { event: "request.cancelled", title: "Trip cancelled", text: "By the office", needs: ["request", "assign_tasks"] },
     ],

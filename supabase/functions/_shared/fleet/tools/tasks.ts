@@ -59,6 +59,7 @@ import { lateReportOf } from "../presence.ts";
 import { duration, whenText } from "../durations.ts";
 import { realDate, tool, zDate, zId, zPaging, zText, zTime } from "../tool.ts";
 import { pageOf, pageWindow } from "../paging.ts";
+import { stopProgress } from "../stopProgress.ts";
 import { endOfDay, type GooglePin, googlePin } from "../googlePlaces.ts";
 import { findPlace, placeById } from "./places.ts";
 import { findOneProject } from "./projects.ts";
@@ -1033,6 +1034,24 @@ function statusLine(task: Task, latest: Latest | undefined, now: Date, employee?
 /** The stops the task has now (edited-out ones are kept in the table but shown nowhere), in order. */
 const live = (stops: TaskStop[]) => stops.filter((s) => s.status !== "removed").sort((a, b) => a.seq - b.seq);
 
+/** A stop's progress as task_detail answers it: Colombo HH:MM, the deltas (+ late, − early), the estimate for a stop to come. */
+function progressCard(p: ReturnType<typeof stopProgress>[number] | undefined) {
+  if (!p) return undefined;
+  const hm = (x: string | null) => (x ? colomboTime(x) : undefined);
+  return {
+    planned_arrive: hm(p.planned_arrive),
+    planned_leave: hm(p.planned_leave),
+    arrived: hm(p.arrived),
+    left: hm(p.left),
+    arrive_delta_min: p.arrive_delta_min ?? undefined,
+    leave_delta_min: p.leave_delta_min ?? undefined,
+    estimate: p.estimate
+      ? { arrive: colomboTime(p.estimate.arrive), leave: hm(p.estimate.leave), updated: colomboTime(p.estimate.updated) }
+      : undefined,
+    current: p.current || undefined,
+  };
+}
+
 function endsOf(stops: TaskStop[]): { from?: string; to?: string } {
   const ordered = live(stops);
   return { from: ordered[0]?.place_name, to: ordered.length > 1 ? ordered[ordered.length - 1].place_name : undefined };
@@ -1811,6 +1830,7 @@ export const taskDetail = tool({
       approver ? driverPhotoLinks(db, [approver], now).then((m) => m.get(approver.id)) : undefined,
     ]);
 
+    const progress = new Map(stopProgress(stops, now).map((p) => [p.id, p]));
     return {
       result: {
         task: {
@@ -1926,6 +1946,9 @@ export const taskDetail = tool({
         stops: stops.map((s, i) => ({
           id: s.id,
           ...stopCard(s, i),
+          // Round 2: planned against what happened (Arrived, Left) and, for the stops still to come once something was
+          // confirmed, the new times from the planner's own leg times (stopProgress.ts, the same rule the app and the site run).
+          progress: progressCard(progress.get(s.id)),
           // Phase 7 (§17): the time at the stop, planned against what happened (Arrived → Done).
           planned_stay: s.planned_arrive_at && s.planned_depart_at
             ? {

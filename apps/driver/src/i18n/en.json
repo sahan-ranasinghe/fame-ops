@@ -2702,6 +2702,10 @@
           "title": "Driver arrived",
           "text": "At the first pickup"
         },
+        "request_stop_arrived": {
+          "title": "Driver reached a stop",
+          "text": "Each later stop, with how late or early"
+        },
         "request_driver_changed": {
           "title": "Driver changed"
         },

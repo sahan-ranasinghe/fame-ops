@@ -27,6 +27,9 @@
       "@fleet/status": [
         "../../supabase/functions/_shared/fleet/status.ts"
       ],
+      "@fleet/stopProgress": [
+        "../../supabase/functions/_shared/fleet/stopProgress.ts"
+      ],
       "@fleet/route": [
         "../../supabase/functions/_shared/fleet/route.ts"
       ],
