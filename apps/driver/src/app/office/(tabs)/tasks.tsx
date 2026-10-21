@@ -21,7 +21,7 @@ import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { addColumnPage, BOARD_LIMIT, type BoardColumn, columnArgs, type ColumnMore, columnView } from '@/office/taskHistoryLogic';
 import type { Board, BoardCard, FleetError } from '@/office/types';
-import { chipText, sentenceText, taskChip } from '@/office/statusWords';
+import { chipText, sentenceText, taskChip, taskRowLine } from '@/office/statusWords';
 import { DarkHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -59,14 +59,15 @@ export default function TasksTab() {
     }
   }
 
-  // The one list row (Gmail's list): the time, the title on one line, "driver · the status in words", a short chip.
+  // The one list row (Gmail's list): the time, the title on one line, "driver · the status in words", a short chip. Round 3:
+  // a trip with no app says who drives ("Nimali · Drives themselves · no app"); Running late in the person's words.
   const rowOf = (c: BoardCard, column: BoardColumn) => (
     <Row
       key={c.id}
       time={c.time}
       title={c.title}
-      line={[c.driver, sentenceText(t, c.status)].filter(Boolean).join(' · ')}
-      line2={c.late_report?.text}
+      line={taskRowLine(t, c)}
+      line2={c.late_report ? sentenceText(t, c.late_report.text) : undefined}
       chip={(() => { const k = taskChip(column, c); return { text: chipText(t, k), tone: k.tone }; })()}
       onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: c.id } })}
     />

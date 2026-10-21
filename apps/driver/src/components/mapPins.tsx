@@ -2,7 +2,7 @@
 // map in GoogleTaskMap.tsx and the free map in OpenTaskMap.tsx, chosen by TaskMap.tsx).
 
 import Flag from 'lucide-react-native/icons/flag';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 
 import { Mono } from '@/components/ui';
 import { colors } from '@/theme';
@@ -159,22 +159,27 @@ export interface DriversEngineProps {
 const RING: Record<LiveTone, string> = { blue: colors.blue, green: colors.green, muted: colors.muted };
 
 /** The initials in a dark ring coloured by duty; the row's avatar and the marker's body. */
-export function DriverDot({ initials, tone, dim = false, selected = false, size = DRIVER_PIN.size }: {
+export function DriverDot({ initials, tone, dim = false, selected = false, size = DRIVER_PIN.size, photo }: {
   initials: string;
   tone: LiveTone;
   dim?: boolean;
   selected?: boolean;
   size?: number;
+  /** Round 3 (Live's list and card, never a map marker): the driver's photo inside the ring, the initials without one. */
+  photo?: string;
 }) {
   return (
     <View
       style={[
         driverStyles.dot,
         { width: size, height: size, borderRadius: size / 2, borderColor: RING[tone], borderWidth: selected ? 4 : 3 },
+        photo ? { overflow: 'hidden' } : null,
         dim && { opacity: 0.7 },
       ]}
     >
-      <Txt variant="strong" size={Math.round(size * 0.34)} color="#ffffff">{initials}</Txt>
+      {photo
+        ? <Image source={{ uri: photo }} style={{ width: '100%', height: '100%' }} accessibilityIgnoresInvertColors />
+        : <Txt variant="strong" size={Math.round(size * 0.34)} color="#ffffff">{initials}</Txt>}
     </View>
   );
 }

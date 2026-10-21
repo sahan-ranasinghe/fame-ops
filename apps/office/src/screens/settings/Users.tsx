@@ -54,7 +54,7 @@ export function Users() {
                   <tbody>
                     {list.items.map((u) => (
                       <tr key={u.email ?? u.name} data-testid="user-row">
-                        <td data-label="Person"><span><div className="name"><Avatar name={u.name} small />{u.name}</div>{!u.active && <Pill tone="bad">Switched off</Pill>}</span></td>
+                        <td data-label="Person"><span><div className="name"><Avatar name={u.name} src={u.photo_url} small />{u.name}</div>{!u.active && <Pill tone="bad">Switched off</Pill>}</span></td>
                         <td data-label="E-mail">{u.email || "—"}</td>
                         <td data-label="Phone" className="num">{u.phone_display ?? (u.phone ? phoneDisplay(u.phone) : "—")}</td>
                         <td data-label="Permissions"><span><PermissionChips permissions={u.permissions} /></span></td>

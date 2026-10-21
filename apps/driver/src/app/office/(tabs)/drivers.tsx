@@ -25,15 +25,17 @@ import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Sheet } from '@/components/patterns/Sheet';
 import { TimeField } from '@/components/patterns/TimeField';
-import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { Button, Mono, Txt } from '@/components/ui';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { shortDate } from '@/lib/durations';
 import { MAX_DAYS } from '@/lib/availability';
 import { addDays, colomboDate } from '@/lib/time';
 import { askTargetsFromBoard } from '@/office/askLogic';
-import { attendanceGroups, attendanceLine, boardArgs, boardChoice, boardFilterDefs, boardPill, entryParts, heldPlate, PARTS, REASONS, rowLines, type UnavailabilityForm, unavailabilityInput, weekDays, weekGrid, type WeekRow } from '@/office/driversLogic';
+import { attendanceGroups, attendanceLine, boardArgs, boardChoice, boardFilterDefs, boardPill, entryParts, PARTS, REASONS, rowLines, type UnavailabilityForm, unavailabilityInput, weekDays, weekGrid, type WeekRow } from '@/office/driversLogic';
+import { vehicleChip } from '@/office/approveLogic';
+import { VehicleChipView } from '@/components/office/DriverRows';
 import { useOffice, useTool } from '@/office/state';
-import type { BoardDriver, DriversBoard, FleetError, SetUnavailabilityResult, UnavailabilityList, UnavailableEntry, UnavailablePart, UnavailableReason } from '@/office/types';
+import type { BoardDriver, DriversBoard, FleetError, SetUnavailabilityResult, SettingsResult, UnavailabilityList, UnavailableEntry, UnavailablePart, UnavailableReason } from '@/office/types';
 import { Avatar, DarkHeader, ErrorNotice, ListFailed, Screen, StatusChip } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
@@ -64,6 +66,9 @@ export default function DriversTab() {
   }, [text]);
   const board = useTool<DriversBoard>('drivers_board', boardArgs(view, filter, search), { every: EVERY_MS });
   const week = useTool<UnavailabilityList>('unavailability', { from: today, to: addDays(today, 6) }, { every: EVERY_MS, enabled: view === 'week' });
+  // Round 3: the vehicle chip says "Vehicle: on the day" when the fleet setting is on and a driver has none known.
+  const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
+  const onDay = settings.data?.settings.vehicle_on_the_day === true;
 
   const [asking, setAsking] = useState(false);
   const [adding, setAdding] = useState<{ driver: { name: string; username: string }; date: string } | null>(null);
@@ -132,14 +137,14 @@ export default function DriversTab() {
         {board.data && board.error && <ListFailed stale error={board.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {problem && <ErrorNotice error={problem} onRetry={() => { if (lastRemove) void remove(lastRemove); else setProblem(null); }} />}
         {view === 'now' && board.data && drivers.length === 0 && <ListEmpty text={search ? t('office.drivers.noneMatch', { search }) : filter === 'all' ? t('office.drivers.empty') : t('office.drivers.noneInFilter')} />}
-        {view === 'now' && drivers.map((d) => <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} />)}
+        {view === 'now' && drivers.map((d) => <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} onDay={onDay} />)}
 
         {/* Round 2b: Today's attendance (Samsara's driver day): four groups from the day's duty sessions; Call on each row. */}
         {view === 'attendance' && board.data && attendanceGroups(drivers).map((g) => (
           <View key={g.state} style={{ gap: 8 }} testID={`attendance-${g.state}`}>
             <Txt variant="label" color={colors.muted}>{`${t(`office.attendance.${g.state}`)} · ${g.drivers.length}`.toUpperCase()}</Txt>
             {g.drivers.length === 0 ? <Txt variant="small">{t('office.attendance.nobody')}</Txt> : g.drivers.map((d) => (
-              <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} line={attendanceLine(d, t)} />
+              <DriverRow key={d.username ?? d.name} d={d} onPress={() => openDriver(d)} line={attendanceLine(d, t)} onDay={onDay} />
             ))}
           </View>
         ))}
@@ -193,14 +198,16 @@ export default function DriversTab() {
   );
 }
 
-/** A driver's row (design 12): the avatar with the state's dot, "Name · [plate]", the two lines, Call or the not-available pill. */
-function DriverRow({ d, onPress, line }: { d: BoardDriver; onPress: () => void; line?: string }) {
+/**
+ * A driver's row (design 12; Round 3: the driver-first card of Uber Fleet and Samsara): the photo with the state's dot, the
+ * name, the vehicle chip under it (held today, or the regular one, or none), the two lines, Call or the not-available pill.
+ */
+function DriverRow({ d, onPress, line, onDay }: { d: BoardDriver; onPress: () => void; line?: string; onDay: boolean }) {
   const { t } = useApp();
   const pill = boardPill(d);
   const lines = rowLines(d, t);
   // The attendance view's own line ("Started 07:12") instead of the board's.
   const [line1, line2] = line ? [line, undefined] : lines;
-  const plate = heldPlate(d);
   const call = d.links?.call;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={!d.username} style={({ pressed }) => [styles.row, pressed && { opacity: 0.8 }]} testID={`driver-row-${d.username ?? d.name}`}>
@@ -211,8 +218,8 @@ function DriverRow({ d, onPress, line }: { d: BoardDriver; onPress: () => void; 
       <View style={{ flex: 1, gap: 2 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Txt variant="strong" size={17} numberOfLines={1} style={{ flexShrink: 1 }}>{d.name}</Txt>
-          {plate ? <Plate regNo={plate} /> : null}
         </View>
+        <VehicleChipView chip={vehicleChip(d, onDay)} testID={`driver-vehicle-${d.username ?? d.name}`} />
         <Txt variant="muted" size={15} numberOfLines={2}>{line1}</Txt>
         {line2 ? <Txt variant="small" numberOfLines={2}>{line2}</Txt> : null}
       </View>

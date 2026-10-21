@@ -17,12 +17,13 @@ import { errText } from "../transport/errors";
 import { can, canOpenTask } from "../transport/types";
 import { Avatar, Segmented, Notice, Pill } from "../ui/basics";
 import { DriverRow } from "../ui/DriverRow";
-import { toPhoneLinks } from "../ui/driverRowLogic";
+import { toPhoneLinks, vehicleChipWords } from "../ui/driverRowLogic";
 import { FilterBar } from "../ui/FilterBar";
 import { pairsDef } from "../ui/filterLogic";
 import { EmptyLine, ListHeader, SkeletonRows, useUrlFilter } from "../ui/ListKit";
 import { useIsPhone } from "../ui/phone";
 import { licenceTone } from "./availabilityLogic";
+import { useFleetSettings, vehicleOnTheDay } from "./dispatchParts";
 import {
   BOARD_FILTER_KEYS,
   BOARD_FILTERS,
@@ -62,6 +63,8 @@ interface Editing {
 
 export function DriversBoard() {
   const { me } = useFleet();
+  // Round 3: the driver-first card's vehicle chip ("Vehicle: on the day" for a driver with none known while the setting is on).
+  const onTheDay = vehicleOnTheDay(useFleetSettings().data);
   const [filter, setFilter] = useUrlFilter<BoardFilter>("filter", "all", BOARD_FILTER_KEYS);
   const [view, setView] = useUrlFilter<BoardView>("view", "now", BOARD_VIEWS);
   const [fromParam, setFromParam] = useUrlFilter<string>("from", "");
@@ -127,7 +130,8 @@ export function DriversBoard() {
               {g.drivers.length ? (
                 <div className="rows board-rows">
                   {g.drivers.map((d) => (
-                    <DriverRow key={driverKey(d)} d={{ ...d, now_status: d.status }} phone={toPhoneLinks(d.links)} testId="attendance-row" contactTestId="attendance-contact">
+                    <DriverRow key={driverKey(d)} d={{ ...d, now_status: d.status }} phone={toPhoneLinks(d.links)} testId="attendance-row" contactTestId="attendance-contact"
+                      vehicle={vehicleChipWords(d.vehicle, { onTheDay })}>
                       <span className="sub drow-line" data-testid="attendance-line">{attendanceLine(d)}</span>
                     </DriverRow>
                   ))}
@@ -158,8 +162,8 @@ export function DriversBoard() {
                     : null}
                   testId="board-row"
                   contactTestId="board-contact"
+                  vehicle={vehicleChipWords(d.vehicle, { onTheDay })}
                 >
-                  <BoardVehicle d={d} />
                   {answer && <AnswerLine row={answer} testId="board-answer" />}
                 </DriverRow>
                 );
@@ -171,12 +175,6 @@ export function DriversBoard() {
       {q.data && week && <WeekView board={q.data} shown={shown} from={from} today={day} updating={q.updating} onWeek={goWeek} filter={filter} search={box.search} />}
     </section>
   );
-}
-
-/** "WP CAB-4521 today" or "WP CAB-4521 regular". */
-function BoardVehicle({ d }: { d: BoardDriver }) {
-  if (!d.vehicle) return null;
-  return <span className="sub drow-line"><span className="plate">{d.vehicle.reg_no}</span> {d.vehicle.source === "on_duty" ? "today" : "regular"}</span>;
 }
 
 function WeekView({ board, shown, from, today: day, updating, onWeek, filter, search }: {

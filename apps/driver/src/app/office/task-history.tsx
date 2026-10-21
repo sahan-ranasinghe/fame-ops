@@ -108,7 +108,11 @@ export default function TaskHistoryScreen() {
                       </View>
                     )}
                     title={x.title}
-                    line={[x.driver, x.vehicle, routeText(x, t)].filter(Boolean).join(' · ')}
+                    line={[
+                      x.driver && x.driven_by ? `${x.driver} (${t(x.driven_by === 'self' ? 'office.who.drivesThemselves' : 'office.who.someoneElse').toLowerCase()})` : x.driver,
+                      x.vehicle,
+                      routeText(x, t),
+                    ].filter(Boolean).join(' · ')}
                     line2={rowSub(x, t) || undefined}
                     chip={{ text: key ? t(key) : t(`office.chip.${taskStatusChip(x.status)}`), tone: historyTone(x.status) }}
                     onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: x.id } })}

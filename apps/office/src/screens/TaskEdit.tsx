@@ -26,12 +26,14 @@ import { cameFromTask, PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
 import { linkedDriver } from "./asks/askLogic";
-import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
+import { availabilityArgs, driverVehicle, floorTo5 } from "./availabilityLogic";
+import { driverOptions } from "../ui/driverPickerLogic";
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { checkDeparture, departurePlan } from "./departureLogic";
 import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
 import { knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
-import { TONE, useBoardQuery, useTask } from "./TaskDetail";
+import { useBoardQuery, useTask } from "./TaskDetail";
+import { taskTone } from "./taskDetailLogic";
 import { leaveIn, TaskSummary } from "./TaskSummary";
 import { TripDayPicker } from "../ui/DayPicker";
 import { ChoiceChip } from "../ui/Select";
@@ -159,6 +161,8 @@ export function TaskEdit() {
   // Hotfix 2 (J): with vehicle_on_the_day on, a new driver on a later day (or one who brings none today) leaves the vehicle
   // to the day, unless the task already does.
   const onDay = vehicleOnTheDay(settings.data);
+  // Round 3: the driver cards for the picker (Who's available's rows first, then the list; the one picked always there).
+  const pickOptions = driverOptions({ avail: avail.data?.drivers, list: drivers, picked: f.driver, pickedName: avail.data?.drivers.find((d) => d.username === f.driver)?.name });
   const dflt = f.driver ? vehicleDefault({ on: onDay, date: f.date || t.date || "", today: today(), driver: f.driver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) }) : null;
   const dayDefault = dflt?.kind === "on_the_day";
   const keepsDay = t.vehicle_mode === "driver_day";
@@ -265,7 +269,7 @@ export function TaskEdit() {
             onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
           <form className="card card-b form" onSubmit={save} data-testid="give-form">
             <div className="grid2">
-              <DriverSelect id="ra-driver" value={f.driver} drivers={withPicked(drivers, f.driver, avail.data?.drivers.find((d) => d.username === f.driver)?.name)} onChange={pickDriver} loading={!lists.drivers && !lists.error}
+              <DriverSelect id="ra-driver" value={f.driver} drivers={pickOptions} onChange={pickDriver} loading={!lists.drivers && !lists.error} onTheDay={onDay}
                 emptyLabel={`Choose a driver${t.driver ? ` (now ${t.driver})` : ""}`} />
               <VehicleSelect id="ra-vehicle" value={f.vehicle} def={def} vehicles={lists.vehicles ?? []} onChange={(reg) => set("vehicle", reg)}
                 emptyLabel={keepLabel} choices={onDay} dayDefault={dayDefault}
@@ -287,7 +291,7 @@ export function TaskEdit() {
 
   return (
     <section className="view" data-testid="task-edit">
-      <PageTop title={t.title || "Task"} sub={<><Pill tone={TONE[t.status] ?? ""}>{cap(t.status)}</Pill> <span className="mono">{t.start}</span></>} backTo={back} />
+      <PageTop title={t.title || "Task"} sub={<><Pill tone={taskTone(t.status)}>{cap(t.status)}</Pill> <span className="mono">{t.start}</span></>} backTo={back} />
       <DraftBanner draft={draft} />
       <div className="page-form">
         {reason && <Notice tone="bad"><b>Needs a driver.</b> {reason}</Notice>}
@@ -297,8 +301,9 @@ export function TaskEdit() {
             {!running && (
               <>
                 <div className="grid2">
-                  <DriverSelect id="ra-driver" value={f.driver} drivers={withPicked(drivers, f.driver, avail.data?.drivers.find((d) => d.username === f.driver)?.name)} onChange={pickDriver} autoFocus={driverMode} loading={!lists.drivers && !lists.error}
-                    emptyLabel={needsDriver ? `Choose a driver${t.driver ? ` (now ${t.driver})` : ""}` : `Keep${t.driver ? ` (${t.driver})` : ""}`} />
+                  <DriverSelect id="ra-driver" value={f.driver} drivers={pickOptions} onChange={pickDriver} autoFocus={driverMode} loading={!lists.drivers && !lists.error} onTheDay={onDay}
+                    emptyLabel={needsDriver ? `Choose a driver${t.driver ? ` (now ${t.driver})` : ""}` : `Keep${t.driver ? ` (${t.driver})` : ""}`}
+                    emptyChoice={needsDriver ? undefined : `Keep${t.driver ? ` (${t.driver})` : ""}`} />
                   <VehicleSelect id="ra-vehicle" value={f.vehicle} def={def} vehicles={lists.vehicles ?? []} onChange={(reg) => set("vehicle", reg)}
                     emptyLabel={keepLabel} choices={onDay} dayDefault={dayDefault}
                     hint={f.driver && !def && !onDay ? `Keeps ${currentPlate || "the vehicle"}: this driver holds none today and has no regular one.` : undefined} />

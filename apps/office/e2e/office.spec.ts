@@ -36,6 +36,21 @@ async function boardCard(page: Page, text: string) {
   return card;
 }
 
+/**
+ * Round 3: the driver picker (the field is a button; the driver cards open in the shared sheet with a search): picks a
+ * driver by username as a person does, in `scope` (the page, or a card of it).
+ */
+async function chooseDriver(page: Page, username: string, scope: Page | Locator = page) {
+  await scope.getByLabel("Driver", { exact: true }).click();
+  const sheet = page.getByTestId("driver-sheet");
+  await sheet.getByLabel("Search drivers").fill(username);
+  await sheet.locator(`[data-username="${username}"]`).getByTestId("driver-option").click();
+  await expect(sheet).toHaveCount(0);
+}
+
+/** Round 3: the driver the picker shows as picked (its username). */
+const pickedDriver = (scope: Page | Locator) => scope.getByLabel("Driver", { exact: true });
+
 // ---- The standard controls (docs/ui-patterns.md, Stage 0): the steps a person takes with them. ----
 const colomboDay = (offsetDays = 0) => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Colombo" }).format(new Date(Date.now() + offsetDays * 864e5));
 
@@ -198,7 +213,7 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   // The stops are rows with their own type; the labels are numbered within the type.
   await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await page.getByLabel("Stop 2", { exact: true }).fill("Nugegoda");
-  await page.getByLabel("Driver", { exact: true }).selectOption(driver.username);
+  await chooseDriver(page, driver.username);
   await page.getByLabel("Vehicle", { exact: true }).selectOption(plate);
   // The plan follows the form in one line (1.5 s after the last change): "Leave by 09:30 · … · estimated times".
   await expect(page.getByTestId("plan-line")).toContainText("Leave by 09:30", { timeout: 15000 });
@@ -658,7 +673,7 @@ test("a driver accepts one task and declines another; the office gives it to a f
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]+\/edit\?driver=1$/);
   await expect(page.getByTestId("task-summary")).toContainText("Leave by");
   await page.getByTestId("avail-row").filter({ hasText: d2.name }).click();
-  await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(d2.username);
+  await expect(pickedDriver(page)).toHaveAttribute("data-value", d2.username);
   await expect(page.getByTestId("give-to")).toContainText(`Give to ${d2.name.split(" ")[0]}`);
   await page.getByTestId("give-to").click();
   await expect(page.getByRole("status")).toHaveText(`Task sent to ${d2.name}`);
@@ -719,7 +734,7 @@ test("a task that needs a driver can't be missed; the decide page fills the vehi
   // the test of two drivers side by side, below, in both colour schemes.)
   const rq = await tool<{ request: { id: string } }>("create_request", { requested_by: "E2E Needs Driver", date: day, time: "13:00", route_from: "Head office", route_to: "Galle", need_type: "van", pax: 3 });
   await page.goto(`/requests/${rq.request.id}/decide`);
-  await page.getByLabel("Driver", { exact: true }).selectOption(d2.username);
+  await chooseDriver(page, d2.username);
   await expect(page.getByTestId("vehicle-default")).toContainText(plate);
   await expect(page.getByTestId("plan-card")).toContainText("Leave by", { timeout: 15000 });
 });
@@ -808,11 +823,14 @@ for (const scheme of ["light", "dark"] as const) {
     const rowB = rowOf(panel, b.name);
     await expect(rowA).toHaveAttribute("aria-pressed", "true");
     await expect(rowB).toHaveAttribute("aria-pressed", "false");
-    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(a.username);
+    await expect(pickedDriver(page)).toHaveAttribute("data-value", a.username);
     await expect(panel.getByTestId("best-match")).toContainText(a.name);
     // Two drivers called Twin: the full name in the vehicle's words.
-    await expect(rowA).toContainText(`${plateA} ${a.name}'s vehicle today`);
-    await expect(rowB).toContainText(`${plateB} ${b.name}'s vehicle today`);
+    // Round 3: the vehicle as a chip under the name, whose it is on the line under it.
+    await expect(rowA.getByTestId("vehicle-chip")).toHaveText(plateA);
+    await expect(rowA).toContainText(`${a.name}'s vehicle today`);
+    await expect(rowB.getByTestId("vehicle-chip")).toHaveText(plateB);
+    await expect(rowB).toContainText(`${b.name}'s vehicle today`);
     await expect(page.getByTestId("vehicle-default")).toContainText(`${plateA} · ${a.name}'s vehicle today`);
     await expect(page.getByTestId("plan-card")).toContainText("Leave by", { timeout: 15000 });
     // The picked row and a hovered row are readable in this colour scheme.
@@ -869,26 +887,26 @@ for (const scheme of ["light", "dark"] as const) {
     expect(seen.shift, `what moved: ${seen.moved.join(" ;; ")}`).toBeLessThan(0.01);
     expect(seen.picked).toEqual([a.name]);
     await expect(panel.getByTestId("best-match")).toContainText(a.name);
-    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(a.username);
+    await expect(pickedDriver(page)).toHaveAttribute("data-value", a.username);
     await expect(page.getByTestId("vehicle-default")).toContainText(plateA);
 
     // A click on Twin B's row picks B with the vehicle B brings, and the pick stays through the next refresh.
     await rowB.click();
     await expect(rowB).toHaveAttribute("aria-pressed", "true");
     await expect(rowA).toHaveAttribute("aria-pressed", "false");
-    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(b.username);
+    await expect(pickedDriver(page)).toHaveAttribute("data-value", b.username);
     await expect(page.getByTestId("vehicle-default")).toContainText(`${plateB} · ${b.name}'s vehicle today`);
     expect(await contrastOf(rowB.locator(".name"))).toBeGreaterThan(4.5);
     await wander(true);
     await page.clock.fastForward(61_000);
     await page.waitForTimeout(3000);
     await expect(rowB).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(b.username);
+    await expect(pickedDriver(page)).toHaveAttribute("data-value", b.username);
     // Enter on Twin A's row picks A again.
     await rowA.focus();
     await page.keyboard.press("Enter");
     await expect(rowA).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(a.username);
+    await expect(pickedDriver(page)).toHaveAttribute("data-value", a.username);
     await expect(page.getByTestId("vehicle-default")).toContainText(`${plateA} · ${a.name}'s vehicle today`);
 
     // Assign a task: a row click fills the driver and leaves the vehicle to them (their vehicle today).
@@ -900,7 +918,7 @@ for (const scheme of ["light", "dark"] as const) {
     const rowBNew = rowOf(page.getByTestId("availability"), b.name);
     await rowBNew.click();
     await expect(rowBNew).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByLabel("Driver", { exact: true })).toHaveValue(b.username);
+    await expect(pickedDriver(page)).toHaveAttribute("data-value", b.username);
     await expect(page.getByLabel("Vehicle", { exact: true }).locator("option:checked")).toContainText(plateB);
     // Finish work on both phones: nobody this test put on duty stays for the next run.
     for (const p of phones) expect(await p.app.patch(`duty_sessions?id=eq.${p.session}&ended_at=is.null`, { ended_at: new Date().toISOString(), end_reason: "driver" })).toBe(200);
@@ -1024,7 +1042,7 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await page.getByLabel("Stop 2", { exact: true }).fill("Galle");
   await expect(page.getByTestId("group-free_pool")).toContainText(plate);
   await page.getByTestId("group-free_pool").locator(".opt", { hasText: plate }).getByRole("radio").check();
-  await page.getByTestId("assign-now").getByLabel("Driver", { exact: true }).selectOption({ label: driver.name });
+  await chooseDriver(page, driver.username, page.getByTestId("assign-now"));
   await page.getByRole("button", { name: "Book now" }).click();
   // Hotfix O2-H2: the booking's task opens in the form's place with "Booking saved".
   await expect(page).toHaveURL(/\/tasks\/[0-9a-f-]{36}$/);
@@ -1062,7 +1080,8 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   const board = await tool<{ counts: { cancelled: number } }>("task_board", { date: day });
   expect(board.counts.cancelled).toBeGreaterThan(0);
 
-  // The self-drive switch (Settings → Fleet → Tasks and bookings, Hotfix O2-H2): off hides "A driver is needed" on the request form; then back on.
+  // The self-drive switch (Settings → Fleet → Tasks and bookings, Hotfix O2-H2): off hides "Who drives?" (Round 3: it
+  // replaced "A driver is needed") on the request form; on shows it; then back on.
   // The local database is not reset between runs: start from on, whatever the last run left.
   await tool("update_settings", { key: "self_drive_allowed", value: true });
   await page.goto("/settings/fleet/tasks");
@@ -1072,11 +1091,14 @@ test("an approver books a vehicle in one step from the Free group; the task is o
   await expect(page.getByRole("status")).toHaveText("Setting saved");
   await page.goto("/requests/new");
   await expect(page.getByLabel("On behalf of")).toBeVisible();
-  await expect(page.getByRole("checkbox", { name: "A driver is needed" })).toHaveCount(0);
+  await expect(page.getByTestId("who-drives")).toHaveCount(0);
   // Back on through the tool (the same save as the untick above; the local runtime sometimes drops a second call).
   await tool("update_settings", { key: "self_drive_allowed", value: true });
   await page.goto("/settings/fleet/tasks");
   await expect(page.getByRole("checkbox", { name: /Self-drive bookings allowed/ })).toBeChecked();
+  // On: the request form asks "Who drives?" with its three choices.
+  await page.goto("/requests/new");
+  await expect(page.getByTestId("who-drives").getByRole("button")).toHaveText(["A driver", "I'll drive myself", "Someone else"]);
 });
 
 test("a requester changes an approved booking; the approver sees who is available and keeps it; a task is changed with its history", async ({ page }) => {
@@ -1581,7 +1603,7 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   await expect(approverPage.getByTestId("request-decide-trip")).toBeVisible();
   await expect(approverPage.getByTestId("request-trip").getByTestId("plan-timeline")).toContainText("Galle");
   await approverPage.getByTestId("availability").getByTestId("avail-row").filter({ hasText: driver.name }).click();
-  await expect(approverPage.getByLabel("Driver", { exact: true })).toHaveValue(driver.username);
+  await expect(pickedDriver(approverPage)).toHaveAttribute("data-value", driver.username);
   await approverPage.getByTestId("decide-send").click();
   await expect(approverPage.getByTestId("request-decided")).toBeVisible();
   const decided = await tool<{ requests: { task_id?: string; status: string }[] }>("list_requests", { status: "all", id: asked.id });
@@ -1599,7 +1621,7 @@ test("a request planned like a task is approved with its stops; a dispatcher's t
   await dispatcherPage.getByLabel("Leave by", { exact: true }).fill("10:00");
   await dispatcherPage.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await dispatcherPage.getByLabel("Stop 2", { exact: true }).fill("Kandy");
-  await dispatcherPage.getByLabel("Driver", { exact: true }).selectOption(driver.username);
+  await chooseDriver(dispatcherPage, driver.username);
   await expect(dispatcherPage.getByTestId("plan-card")).toContainText("Leave by", { timeout: 20000 });
   await dispatcherPage.getByRole("button", { name: "Send for approval" }).click();
   // Hotfix O2-H2: the request it waits as opens in the form's place; the toast never says "sent".
@@ -1850,7 +1872,7 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   // 4. One approves; the other, a moment later, is told who did: never a second decision.
   for (const p of [onePage, twoPage]) {
     await p.getByTestId("availability").getByTestId("avail-row").filter({ hasText: driver.name }).click();
-    await expect(p.getByLabel("Driver", { exact: true })).toHaveValue(driver.username);
+    await expect(pickedDriver(p)).toHaveAttribute("data-value", driver.username);
   }
   await onePage.getByTestId("decide-send").click();
   await expect(onePage.getByTestId("request-decided")).toBeVisible();
@@ -1882,7 +1904,7 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   await pickTripDay(onePage, "Date", day);
   await onePage.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await onePage.getByLabel("Stop 2", { exact: true }).fill("Kandy");
-  await onePage.getByLabel("Driver", { exact: true }).selectOption(driver.username);
+  await chooseDriver(onePage, driver.username);
   const leave = onePage.getByLabel("Leave by", { exact: true });
   await leave.fill("09:30");
   await leave.blur();

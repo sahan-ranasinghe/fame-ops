@@ -2,8 +2,9 @@
 // initials until there is one) with Change photo (camera or gallery, the driver's square crop). Nothing new on the
 // server: the same calls as a driver's photo, which any signed-in person may make for themselves — their own employee
 // id (current_employee_id), their own row's photo_id, their own <employee id>/profile/ folder in driver-photos, a
-// photos row of kind profile and set_my_photo. The photo next to office people on other screens (and the site's own
-// Change photo) needs the server's photo_url for them: that waits for its go.
+// photos row of kind profile and set_my_photo. Round 3: the server answers photo_url for office people (/me, the users
+// list, the requester on a request, an issue's assignee); those screens show it, and My profile shows /me's until this
+// phone's own link is there.
 
 import * as Crypto from 'expo-crypto';
 import { useCallback, useEffect, useState } from 'react';

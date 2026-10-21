@@ -70,11 +70,12 @@ export default function TripWhere() {
     const current = getDraft();
     if (current?.mode === 'edit' && current.requestId === id && current.version === card.version) return;
     const f = editFields(card);
-    const { behalf, project, need, tools, note, driver, requesterPhone, ...trip } = f;
+    const { behalf, project, need, tools, note, driver, requesterPhone, who, ...trip } = f;
     setDraft({
       mode: 'edit', requestId: id, version: card.version ?? 0, was: f, wasApproved: card.status === 'approved', step: 'where', at: Date.now(), rows: [],
       fields: { ...trip, title: '', buffer: '', driver: '', vehicle: '', cname: '', cphone: '', notes: '', whatsapp: false },
-      req: { behalf, project, need, tools, note, driverRequired: driver, requesterPhone: requesterPhone ?? '' },
+      // Round 3: who drives, as the request asks it (the old custodian path too).
+      req: { behalf, project, need, tools, note, driverRequired: driver, requesterPhone: requesterPhone ?? '', who },
     });
   }, [mode, id, req.data]);
 

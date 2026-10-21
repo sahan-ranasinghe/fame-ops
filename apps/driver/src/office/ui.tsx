@@ -252,7 +252,7 @@ export function StatusChip({ text, tone = 'muted' }: { text: string; tone?: Tone
  * second line (who · the status in words); at the right only a short StatusChip, or a button. Used by every list in
  * Office mode, on the phone and on /m/.
  */
-export function Row({ left, time, title, line, line2, chip, right, onPress, testID }: {
+export function Row({ left, time, title, line, line2, chip, right, onPress, testID, quiet = false }: {
   left?: ReactNode;
   /** "09:30": a mono time column on the left. */
   time?: string;
@@ -264,13 +264,15 @@ export function Row({ left, time, title, line, line2, chip, right, onPress, test
   right?: ReactNode;
   onPress?: () => void;
   testID?: string;
+  /** Round 3: a quieter row (the Activity log's routine actions): the title in the regular weight, in grey. */
+  quiet?: boolean;
 }) {
   const inner = (
     <>
-      {time !== undefined ? <View style={styles.timeCol}><Mono size={15} bold>{time}</Mono></View> : null}
+      {time !== undefined ? <View style={styles.timeCol}><Mono size={15} bold={!quiet} color={quiet ? colors.muted : undefined}>{time}</Mono></View> : null}
       {left}
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-        <Txt variant="strong" size={17} numberOfLines={1}>{title}</Txt>
+        <Txt variant={quiet ? 'muted' : 'strong'} size={17} numberOfLines={1}>{title}</Txt>
         {line ? <Txt variant="muted" size={15} numberOfLines={1}>{line}</Txt> : null}
         {line2 ? <Txt variant="small" numberOfLines={1}>{line2}</Txt> : null}
       </View>

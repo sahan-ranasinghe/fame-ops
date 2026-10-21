@@ -138,6 +138,23 @@ export interface BestMatch {
   vehicle?: { reg_no: string; source: "on_duty" | "regular" };
   /** "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today" */
   why: string;
+  /** Round 3: the driver-first card's photo. */
+  photo_url?: string;
+}
+
+/**
+ * Round 3 (docs/phase8-plan.md §30): who drives a task, on the answers: self = the person on the task drives it themselves,
+ * other = someone not in Fame Fleet (then `driver` is their name and the phone theirs; no photo); absent = a driver.
+ */
+export type DrivenBy = "self" | "other";
+/** What a request asked: a driver, self, someone else, or the old path (the vehicle's custodian drives). */
+export type AskedDrivenBy = "driver" | "self" | "other" | "custodian";
+/** A free driver for Book now (suggest_vehicles drivers_free; Round 3: the photo and the vehicle they hold or their regular one). */
+export interface FreeDriver {
+  name: string;
+  username: string;
+  photo_url?: string;
+  vehicle?: { reg_no: string; source: "on_duty" | "regular" };
 }
 
 /** Phase 7 (§13): dispatch = the office's task; self = a trip the driver started in the app. */
@@ -162,6 +179,8 @@ export interface BoardCard {
   leave_by?: string;
   accepted?: string;
   driver?: string;
+  /** Round 3: self / other (no app); absent = a driver. */
+  driven_by?: DrivenBy;
   vehicle?: string;
   status?: string;
   eta_next?: string;
@@ -577,6 +596,8 @@ export interface TaskDetail {
     time?: string;
     end_by?: string;
     driver?: string;
+    /** Round 3: self / other (no app); absent = a driver. For other, driver_phone and driver_links are theirs. */
+    driven_by?: DrivenBy;
     vehicle?: string;
     /** Phase 7 (§5, §6). */
     driver_photo_url?: string;
@@ -675,6 +696,10 @@ export interface RequestEditFields {
   tools?: boolean;
   note?: string;
   driver_required?: boolean;
+  /** Round 3: who drives, as asked (custodian = the old path), and someone else's name and phone. */
+  driven_by?: AskedDrivenBy;
+  driver_name?: string;
+  driver_phone?: string;
   on_behalf_of?: string;
   /** Phase 7 (§17): minutes at the From and To places (empty = the place's usual time, else the default). */
   from_dwell_min?: number;
@@ -756,6 +781,8 @@ export interface RequestCard {
   /** A proposed task's title. */
   title?: string;
   requested_by: string;
+  /** Round 3: the asker's photo (initials until there is one). */
+  requested_by_photo_url?: string;
   project?: string;
   when: string;
   back_by?: string;
@@ -778,6 +805,10 @@ export interface RequestCard {
   events?: RequestEvent[];
   /** false = the vehicle's custodian drives (Part 6). */
   driver_required?: boolean;
+  /** Round 3: who the asker said drives, when not a driver (self, someone else with the name and phone, the custodian). */
+  driven_by?: Exclude<AskedDrivenBy, "driver">;
+  driver_name?: string;
+  driver_phone?: string;
   /** Booked directly by the office: request and task in one go. */
   one_step?: boolean;
   cancelled?: string;
@@ -795,6 +826,8 @@ export interface RequestCard {
   /** Once approved (§4, §35 19): who drives, in what, with their photos. */
   assigned?: {
     driver: string;
+    /** Round 3: self / other (no app); absent = a driver. */
+    driven_by?: DrivenBy;
     phone?: string;
     call?: string | null;
     whatsapp?: string | null;
@@ -1128,7 +1161,7 @@ export interface Suggestions {
   vehicles: SuggestedVehicle[];
   drivers: { name: string; username: string; availability: string }[];
   groups?: { free_pool: SuggestedVehicle[]; free_assigned: SuggestedVehicle[]; busy: SuggestedVehicle[]; in_garage: SuggestedVehicle[] };
-  drivers_free?: { name: string; username: string }[];
+  drivers_free?: FreeDriver[];
   /** The fleet setting: may a custodian drive with no driver assigned. */
   self_drive_allowed?: boolean;
   next?: string;
@@ -1143,6 +1176,8 @@ export interface BookResult {
   when?: string;
   leave_by?: string;
   driver?: string;
+  /** Round 3: self / other (no app). */
+  driven_by?: DrivenBy;
   vehicle?: string;
   warnings?: string[];
   /** Phase 7 (§3). */
@@ -1178,6 +1213,9 @@ export interface CreateTaskResult {
   leave_by?: string;
   leave_by_source?: string;
   driver?: string;
+  /** Round 3: self / other (no app); for other, driver_phone is theirs. */
+  driven_by?: DrivenBy;
+  driver_phone?: string;
   vehicle?: string;
   plan?: PlanSummary;
   warnings?: string[];
@@ -1601,6 +1639,8 @@ export interface OfficeKey {
 export interface OfficeUser {
   name: string;
   email?: string | null;
+  /** Round 3: their photo (initials until there is one). */
+  photo_url?: string;
   /** Hotfix 2 (F): E.164 (+94…); phone_display "07X XXX XXXX". */
   phone?: string | null;
   phone_display?: string;
@@ -1665,7 +1705,7 @@ export interface Issue {
   resolved?: string;
   resolved_by?: string;
   resolution_note?: string;
-  assigned_to?: { name: string; email?: string };
+  assigned_to?: { name: string; email?: string; photo_url?: string };
   /** Phase 7 (§9): "System · Vehicle problem" or the person; who took it and when; when it was resolved or dismissed. */
   opened_by?: string;
   taken_by?: { name: string; at?: string };
@@ -1807,7 +1847,7 @@ export interface Availability {
   /** Phase 7 (§3): the best match for the window (and the first stop, when given). */
   best?: BestMatch;
   counts: { free: number; on_duty: number; all: number };
-  vehicles: { groups: NonNullable<Suggestions["groups"]>; drivers_free: { name: string; username: string }[]; self_drive_allowed?: boolean };
+  vehicles: { groups: NonNullable<Suggestions["groups"]>; drivers_free: FreeDriver[]; self_drive_allowed?: boolean };
 }
 
 /** list_import_presets: the built-in presets and the mappings saved by name (Part 4b). */
@@ -1858,6 +1898,8 @@ export interface HistoryTask {
   purpose: TripPurpose;
   status: string;
   driver?: string;
+  /** Round 3: self = the person on the task drove it themselves, other = someone not in Fame Fleet. */
+  driven_by?: 'self' | 'other';
   driver_username?: string;
   vehicle?: string;
   from?: string;
@@ -2104,6 +2146,8 @@ export type Role = 'admin' | 'fleet_admin' | 'office' | 'staff' | 'viewer';
 export interface Me {
   name: string;
   email?: string;
+  /** Round 3: the person's own photo (a 1-hour link; initials until there is one). */
+  photo_url?: string;
   /** A label; the permissions decide. */
   role: Role;
   /** What this person may do (employees.permissions). */
@@ -2149,6 +2193,8 @@ export interface ActivityEntry {
   outcome: "done" | "refused" | "failed" | "running";
   /** A refusal's sentence. */
   reason?: string;
+  /** Round 3: a routine action (watching drivers, reading a notification…), shown only with include_routine. */
+  routine?: true;
 }
 export interface ActivityLog extends Paged {
   from: string;

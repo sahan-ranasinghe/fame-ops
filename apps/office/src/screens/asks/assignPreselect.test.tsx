@@ -2,6 +2,7 @@
 // change page (?driver=) or the request's decide page (?driver=) with the driver (and the day and time) filled in; a
 // saved draft is still offered and wins when resumed; TaskEdit's own ?driver=1 picks nobody. And the driver's "Running
 // late" as an amber line on the task page and the board's card.
+import { pickedDriver } from "../../test/controls";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -103,7 +104,8 @@ async function mount(t: FakeTransport, url: string, routes: React.ReactNode) {
   await settle();
 }
 
-const driverField = () => screen.getByLabelText("Driver") as HTMLSelectElement;
+/** Round 3: the driver picker (the username it shows as picked). */
+const driverField = () => ({ value: pickedDriver() });
 
 beforeEach(() => {
   vi.useFakeTimers();

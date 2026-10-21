@@ -144,6 +144,19 @@ export function Chips<K extends string>({ options, value, onChange, counts }: { 
   );
 }
 
+/**
+ * One switch (Settings lists, docs/ui-patterns.md §14): a short title on one line, an optional grey line under it; the
+ * whole line flips it. Notifications and (Round 3) the Activity log's "Show routine actions".
+ */
+export function SwitchLine({ title, text, on, onChange, disabled = false, testId }: { title: string; text?: string; on: boolean; onChange: (on: boolean) => void; disabled?: boolean; testId?: string }) {
+  return (
+    <label className={`set-switch${disabled ? " is-disabled" : ""}`} data-testid={testId}>
+      <span className="grow"><span className="name">{title}</span>{text && <span className="sub">{text}</span>}</span>
+      <input type="checkbox" role="switch" aria-label={title} checked={on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+    </label>
+  );
+}
+
 export const WarningsNote = ({ warnings }: { warnings: string[] }) =>
   warnings.length ? (
     <div className="notice" style={{ marginTop: 10 }}>

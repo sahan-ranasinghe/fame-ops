@@ -29,6 +29,8 @@ export interface Me {
   phone_display?: string;
   /** Approve or assign_tasks and no number yet: the banner "Add your phone number so drivers can call you". */
   phone_required?: boolean;
+  /** Round 3: the person's own photo (a link that works for at least an hour); web only (GET /me). */
+  photo_url?: string;
 }
 
 /** True when the person holds any one of the permissions (none asked = everyone). */

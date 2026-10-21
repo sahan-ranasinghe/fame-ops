@@ -70,8 +70,9 @@ export function vehicleLine(v: SuggestedVehicle, seatsWord: (n: number) => strin
   return [v.make_model, v.seats ? seatsWord(v.seats) : '', v.availability, v.but, v.back].filter(Boolean).join(' · ');
 }
 
-/** The free drivers to offer: the picked one stays in the list even when it is no longer free (the site's withPicked). */
-export function driverOptions(free: { name: string; username: string }[], picked: string, pickedName?: string): { name: string; username: string }[] {
+/** The free drivers to offer: the picked one stays in the list even when it is no longer free (the site's withPicked). Round 3:
+ *  each keeps its photo and vehicle (the driver-first card). */
+export function driverOptions<D extends { name: string; username: string }>(free: D[], picked: string, pickedName?: string): (D | { name: string; username: string })[] {
   if (!picked || free.some((d) => d.username === picked)) return free;
   return [...free, { username: picked, name: pickedName ?? picked }];
 }

@@ -22,7 +22,7 @@ import { useToast } from "../ui/Toast";
 import { ContactButtons } from "../ui/ContactButtons";
 import { isProposal, requestView, withdrawInput } from "./approvalLogic";
 import { DecidedBy, ReviewingLine } from "./approvers";
-import { ChangesList, LateNotice, RequestHead, Timeline } from "./requestParts";
+import { AskedWho, ChangesList, LateNotice, RequestHead, Timeline } from "./requestParts";
 import { AssignedBlock, TellRequester } from "./RequestOutcome";
 import { TripSection, useTripLine } from "./RequestTrip";
 import { useRequestsHome, useTripCard } from "./myTripsQuery";
@@ -144,7 +144,9 @@ export function RequestDetail() {
           <div><dt>Route</dt><dd>{joinDots([q.route || "—", q.stops_count && q.stops_count > 2 ? `${q.stops_count} stops` : ""])}</dd></div>
           {task
             ? <div><dt>Passengers</dt><dd>{p?.passengers ?? "—"}</dd></div>
-            : <div><dt>Need</dt><dd>{joinDots([q.need, q.driver_required === false ? "no driver · the custodian drives" : ""]) || "—"}</dd></div>}
+            : <div><dt>Need</dt><dd>{q.need || "—"}</dd></div>}
+          {/* Round 3: who drives, when it is not a driver of ours (the asker, someone else, the custodian). */}
+          {(q.driven_by || q.driver_required === false) && !q.assigned && <div style={{ gridColumn: "1/-1" }}><dt>Who drives</dt><dd style={{ fontWeight: 400 }}><AskedWho q={q} /></dd></div>}
           {(p?.contact_name || p?.contact_phone) && <div><dt>Contact</dt><dd>{joinDots([p.contact_name, p.contact_phone])}</dd></div>}
           {p?.notes && <div style={{ gridColumn: "1/-1" }}><dt>Notes for the driver</dt><dd style={{ fontWeight: 400 }}>{p.notes}</dd></div>}
           {q.note && <div style={{ gridColumn: "1/-1" }}><dt>Note</dt><dd style={{ fontWeight: 400 }}>{q.note}</dd></div>}

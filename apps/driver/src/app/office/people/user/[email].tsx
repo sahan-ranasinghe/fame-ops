@@ -161,7 +161,7 @@ export default function ManageOfficeUser() {
         {u && f && (
           <Section title={t('office.people.details')}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
-              <Avatar name={u.name} size={44} />
+              <Avatar name={u.name} size={44} photo={u.photo_url} />
               <View style={{ flex: 1 }}>
                 <Txt variant="strong" size={17}>{u.name}</Txt>
                 <Txt variant="small">{permissionWords(u.permissions, permWord) || '—'}</Txt>

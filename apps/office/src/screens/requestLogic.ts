@@ -5,8 +5,10 @@
 // (§34): the day, the leave-by time (typed, or planned from the stops'
 // arrive-by times), the back-by time, Start from with "Passengers get in here"
 // and the stops with their times there (the trip editor's fields).
-import type { FieldChanges, RequestEditFields, RequestEvent, RequestTimeline, RequestTrip } from "../data/types";
+import type { AskedDriver, FieldChanges, RequestEditFields, RequestEvent, RequestTimeline, RequestTrip } from "../data/types";
+import { emptyWho, plateReason, whoFromRequest, type WhoDrivesValue, whoInput } from "../ui/whoDrivesLogic";
 import { parseDwell } from "./stopsLogic";
+import { isChoice } from "./vehicleChoiceLogic";
 import { type Base, emptyTrip, type TripFields, tripChanges, tripFromRequest, tripRequestInput, type TripStartStop, tripTitle } from "./tripLogic";
 
 /** The trip (the day, leave-by, back-by as `end`, the start and the stops), then what the request asks for. */
@@ -18,15 +20,21 @@ export interface RequestFields extends TripFields {
   pax: string;
   tools: boolean;
   note: string;
-  /** Unticked = the vehicle's custodian drives (no driver needed). */
-  driver: boolean;
+  /**
+   * Round 3: who drives (ui/WhoDrives: a driver, the asker, someone else with a name and phone). Absent in a draft from
+   * before Round 3: a driver.
+   */
+  who?: WhoDrivesValue;
   /** Phase 7 (§4): the phone of the person it is for when they have no office account (approvers fill it): Tell requester. */
   requesterPhone?: string;
 }
 
 export const emptyRequest = (date: string): RequestFields => ({
-  ...emptyTrip(date), behalf: "", project: "", need: "", pax: "", tools: false, note: "", driver: true,
+  ...emptyTrip(date), behalf: "", project: "", need: "", pax: "", tools: false, note: "", who: emptyWho(),
 });
+
+/** The form's "Who drives?" (a driver when a draft has none); with self-drive off always a driver. */
+export const whoOf = (f: Pick<RequestFields, "who">, selfDrive = true): WhoDrivesValue => (selfDrive && f.who ? f.who : emptyWho());
 
 /** The time at From / To as sent: minutes, null = not chosen, "bad" = not minutes or h:mm up to 12 h. */
 const dwellOf = (s?: string) => parseDwell(s ?? "");
@@ -43,16 +51,17 @@ function askInput(f: RequestFields): Record<string, unknown> {
   if (t(f.pax) !== "") input.pax = paxOf(f.pax);
   if (f.tools) input.tools = true;
   if (t(f.note)) input.note = t(f.note);
-  if (!f.driver) input.driver_required = false;
   if (t(f.requesterPhone ?? "")) input.requester_phone = t(f.requesterPhone ?? "");
   return input;
 }
 
-/** create_request: the trip (§34) and what the request asks for. */
+/** create_request: the trip (§34), what the request asks for and (Round 3) who drives. */
 export function validateNewRequest(f: RequestFields, base: Base = null): { error: string } | { input: Record<string, unknown> } {
   const trip = tripRequestInput(f, base);
   if ("error" in trip) return trip;
-  return { input: { ...trip.input, ...askInput(f) } };
+  const who = whoInput(whoOf(f));
+  if ("error" in who) return who;
+  return { input: { ...trip.input, ...askInput(f), ...who.input } };
 }
 
 /** The day and the leave time (typed, or the plan's) are enough to look for free vehicles (suggest_vehicles without a request). */
@@ -68,33 +77,39 @@ export function suggestInput(f: RequestFields, time: string): Record<string, unk
 
 /**
  * book_vehicle: the request with its trip, plus the pick. The driver first: their vehicle fills itself
- * (`defaultVehicle`; the call then names none and the server takes the same one) unless one is picked. No driver only
- * when the custodian drives (driver unticked, vehicle assigned). The task's title is "Trip · <the last stop>".
+ * (`defaultVehicle`; the call then names none and the server takes the same one) unless one is picked. Round 3: the
+ * asker or someone else drives (no driver) only with a plate picked: nobody confirms a vehicle on the day. The task's
+ * title is "Trip · <the last stop>".
  */
 export function bookInput(
   f: RequestFields,
-  pick: { vehicle: string; driver: string; hasCustodian: boolean; defaultVehicle?: string | null },
+  pick: { vehicle: string; driver: string; defaultVehicle?: string | null },
   base: Base = null,
 ): { error: string } | { input: Record<string, unknown> } {
   const v = validateNewRequest(f, base);
   if ("error" in v) return v;
-  const custodianDrives = !f.driver && pick.hasCustodian && !!pick.vehicle;
-  if (!pick.driver && !custodianDrives) {
-    return { error: pick.hasCustodian ? 'Pick a driver, or untick "A driver is needed" so the custodian drives.' : "Pick a driver." };
+  const who = whoOf(f);
+  const input: Record<string, unknown> = { ...v.input };
+  const title = tripTitle(f);
+  if (who.by !== "driver") {
+    if (!pick.vehicle || isChoice(pick.vehicle)) return { error: plateReason(who) };
+    input.vehicle = pick.vehicle;
+    if (title) input.title = title;
+    return { input };
   }
+  if (!pick.driver) return { error: "Pick a driver." };
   // The driver's vehicle known to be none (undefined = not known yet: the server decides).
   if (!pick.vehicle && pick.defaultVehicle === null) return { error: "Pick a vehicle: this driver holds none today and has no regular one." };
-  const input: Record<string, unknown> = { ...v.input };
   if (pick.vehicle) input.vehicle = pick.vehicle;
-  if (pick.driver && !custodianDrives) input.driver = pick.driver;
-  const title = tripTitle(f);
+  input.driver = pick.driver;
   if (title) input.title = title;
   return { input };
 }
 
 /**
  * decide_request: decline with a reason, or approve with a driver (the vehicle fills itself unless one is
- * picked) or, when the custodian drives, the custodian's vehicle.
+ * picked) or, when the custodian drives, the custodian's vehicle. Round 3: a request whose asker drives it (self) or
+ * someone else (other) is approved with a plate and no driver; a driver named makes it a driver's trip.
  */
 export function decisionInput(
   d: {
@@ -108,6 +123,10 @@ export function decisionInput(
     decidedBy?: string;
     custodianDrives?: boolean;
     defaultVehicle?: string | null;
+    /** Round 3: what the request asked (self, other: approved with a plate when no driver is named). */
+    asked?: AskedDriver;
+    /** "Nimal drives" / someone else's name, for the reason a plate is needed. */
+    askedWho?: string;
   },
 ): { error: string } | { input: Record<string, unknown> } {
   const input: Record<string, unknown> = { request_id: d.id, decision: d.decision };
@@ -120,6 +139,11 @@ export function decisionInput(
   } else {
     if (d.custodianDrives) {
       if (!d.vehicle) return { error: "Pick the vehicle." };
+      input.vehicle = d.vehicle;
+      return { input };
+    }
+    if (!d.driver && (d.asked === "self" || d.asked === "other")) {
+      if (!d.vehicle || isChoice(d.vehicle)) return { error: `${d.askedWho ?? (d.asked === "self" ? "The person who asked drives" : "Someone else drives")} it: pick the vehicle (nobody confirms one on the day).` };
       input.vehicle = d.vehicle;
       return { input };
     }
@@ -207,7 +231,7 @@ export function editFields(q: { fields?: RequestEditFields; note?: string; reque
     pax: f?.pax == null ? "" : String(f.pax),
     tools: !!f?.tools,
     note: f?.note ?? q.note ?? "",
-    driver: f?.driver_required !== false,
+    who: whoFromRequest(f ?? {}),
   };
 }
 
@@ -237,7 +261,13 @@ export function updateRequestInput(id: string, version: number, f: RequestFields
   if (t(f.pax) !== t(was.pax)) input.pax = t(f.pax) === "" ? null : paxOf(f.pax);
   if (f.tools !== was.tools) input.tools = f.tools;
   if (t(f.note) !== t(was.note)) input.note = t(f.note) || null;
-  if (f.driver !== was.driver) input.driver_required = f.driver;
+  // Round 3: who drives, sent when it changed (the choice, or someone else's name or phone).
+  const who = whoOf(f), whoWas = whoOf(was);
+  if (who.by !== whoWas.by || (who.by === "other" && (t(who.name) !== t(whoWas.name) || t(who.phone) !== t(whoWas.phone)))) {
+    const w = whoInput(who, { always: true });
+    if ("error" in w) return w;
+    Object.assign(input, w.input);
+  }
   if (t(f.behalf) !== t(was.behalf)) input.on_behalf_of = t(f.behalf) || null;
   // Undefined = not on the form (someone who does not approve, or a draft from before the field): left as it is.
   if (f.requesterPhone !== undefined && t(f.requesterPhone) !== t(was.requesterPhone ?? "")) input.requester_phone = t(f.requesterPhone) || null;

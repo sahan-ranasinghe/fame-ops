@@ -10,7 +10,7 @@ import { useFormDraft } from "../../data/drafts";
 import type { CreateKeyResult, OfficeUser, OfficeUsers, SetPasswordLinkResult, UpdateOfficeUserResult } from "../../data/types";
 import { errText } from "../../transport/errors";
 import { type FleetError, ROLE_LABEL, type Role } from "../../transport/types";
-import { Loading, Notice, Pill } from "../../ui/basics";
+import { Avatar, Loading, Notice, Pill } from "../../ui/basics";
 import { phoneDisplay } from "../../ui/ContactButtons";
 import { DraftBanner } from "../../ui/DraftBanner";
 import { PageTop, useAfterSave } from "../../ui/Page";
@@ -159,6 +159,8 @@ export function UserManage() {
       <PageTop title={u.name} sub={<>{email} · {ROLE_LABEL[u.role as Role] ?? u.role}{!u.active && <> · <Pill tone="bad">Switched off</Pill></>}</>} backTo="/settings/users" />
       <DraftBanner draft={draft} />
       <div className="page-form">
+        {/* Round 3: their photo (the initials until there is one; each person changes their own on My profile). */}
+        <div className="card card-b person" data-testid="user-photo"><Avatar name={u.name} src={u.photo_url} large /><span className="muted small">{u.photo_url ? "Their photo." : "No photo yet: they add one on My profile."}</span></div>
         {secret && <Secret {...secret} />}
         {u.active && (
           <form className="card card-b form" onSubmit={save}>

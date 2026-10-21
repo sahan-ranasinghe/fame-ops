@@ -19,7 +19,7 @@ import { useLists } from "../data/hooks";
 import type { Issue, IssuesList } from "../data/types";
 import { addDays, attIcon } from "../lib/format";
 import { errText } from "../transport/errors";
-import { ErrBox, Notice, Pill, Plate, StaleNote } from "../ui/basics";
+import { Avatar, ErrBox, Notice, Pill, Plate, StaleNote } from "../ui/basics";
 import { DateRangePicker, useDateRange } from "../ui/DateRangePicker";
 import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
@@ -65,6 +65,8 @@ function IssueRow({ i, current, search, replace }: { i: Issue; current: boolean;
         {snooze && <div className="sub" data-testid="snoozed-until">{snooze}</div>}
       </div>
       {i.vehicle && <Plate v={i.vehicle} />}
+      {/* Round 3: who took it, by their photo (the initials until there is one); the name is in the line above. */}
+      {i.assigned_to && <span title={`Taken by ${i.assigned_to.name}`} data-testid="issue-assignee"><Avatar name={i.assigned_to.name} src={i.assigned_to.photo_url} small /></span>}
       <Pill tone={statusTone(i.status)}>{i.status.replace("_", " ")}</Pill>
     </Link>
   );

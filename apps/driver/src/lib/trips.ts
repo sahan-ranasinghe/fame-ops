@@ -532,6 +532,10 @@ export function localTrip(input: {
     purpose: request.purpose,
     // Part 6: the server sets it from the driver (the stores' demo driver); the phone's copy only shows the trip.
     demo: false,
+    // Round 3: a trip the driver starts is always theirs (never "drives themselves" or "someone else": no app).
+    driven_by: 'driver',
+    driver_name: null,
+    driver_phone: null,
     title: tripTitle(request.purpose, pick.name),
     label: null,
     employee_id: input.employeeId,

@@ -4,6 +4,7 @@
 // columns; /tasks?filter=needs_driver shows only them, with the way back.
 // §33: the day's proposed tasks waiting for an approver as the first column.
 // §13: a card tags a trip the driver started ("Driver-started") and a personal one ("Personal").
+// Round 3: each card's driver is the one-line driver card (ui/DriverRow DriverLine) with the vehicle chip.
 // Hotfix 3 (L3): each column holds 25 cards (task_board's limit), its count is
 // every card of the column (totals), and "Load more" under it asks that column's
 // next cards (task_board(date, column, limit, cursor)), refreshed with the board.
@@ -15,7 +16,9 @@ import { useEntry } from "../data/hooks";
 import type { Board, BoardCard } from "../data/types";
 import { useQuery } from "../data/useQuery";
 import { cap, longDate, statusTone, today } from "../lib/format";
-import { Avatar, Dot, ErrBox, Plate, StaleNote, Updated, VehicleThumb } from "../ui/basics";
+import { Dot, ErrBox, StaleNote, Updated, VehicleThumb } from "../ui/basics";
+import { DriverLine } from "../ui/DriverRow";
+import { vehicleChipWords } from "../ui/driverRowLogic";
 import { Icon } from "../ui/icons";
 import { DayStrip } from "../ui/DayPicker";
 import { LoadMore, PAGE_SIZE, type PagedList, SkeletonRows } from "../ui/ListKit";
@@ -46,7 +49,11 @@ function TaskCard({ t, col, onOpen }: { t: BoardCard; col: string; onOpen: (id: 
       )}
       {/* Part 3b (H4): the driver's own word. */}
       <LateReportLine late={t.late_report} testId="card-late-report" />
-      <span className="who"><Avatar name={t.driver} src={t.driver_photo_url} small /><span className="grow">{t.driver || ""}</span><VehicleThumb src={t.vehicle_thumb_url} />{t.vehicle ? <Plate v={t.vehicle} /> : t.vehicle_text ? <span className="muted small" data-testid="vehicle-text">{t.vehicle_text}</span> : null}</span>
+      {/* Round 3: the driver-first card: the photo, the name, the vehicle chip under it ("Drives themselves" / "Someone else" on a trip with no app). */}
+      <span className="who">
+        <DriverLine name={t.driver} photo={t.driver_photo_url} drivenBy={t.driven_by} vehicle={vehicleChipWords(t.vehicle, { text: t.vehicle_text })}
+          extra={t.vehicle ? <VehicleThumb src={t.vehicle_thumb_url} /> : undefined} />
+      </span>
       <span className={`status ${statusTone(col, t.status)}`}>{t.status || ""}</span>
       {/* Hotfix 2 (K): who sent it to the driver. */}
       {t.approved_by && <span className="muted small" data-testid="card-approved-by">{decidedText("approved", t.approved_by)}</span>}

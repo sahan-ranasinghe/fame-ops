@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Stop } from "../data/types";
-import { dwellNote, needsDriverText, segmentRows, segmentsTotal, stayLine, stayText, stopTitle, whatOf } from "./taskDetailLogic";
+import { dwellNote, needsDriverText, segmentRows, segmentsTotal, stayLine, stayText, stopTitle, taskTone, whatOf } from "./taskDetailLogic";
 
 const stop = (extra: Partial<Stop> = {}): Stop => ({ seq: 2, type: "drop", place: "Kurunegala site", status: "pending", ...extra });
 
@@ -70,5 +70,11 @@ describe("needs a driver", () => {
     expect(needsDriverText({ driver: "Kamal Silva", needs_driver: { since: "Fri 16 Oct 08:40", reason: "not_accepted", reason_text: "Not accepted in time" } }))
       .toBe("Needs a driver since Fri 16 Oct 08:40 · Kamal hasn't accepted in time");
     expect(needsDriverText({ driver: "Kamal Silva" })).toBe("");
+  });
+});
+
+describe("the task's status pill (Round 3: a missed task)", () => {
+  it("missed is red like cancelled and declined; the others as before; an unknown status plain", () => {
+    expect(["assigned", "in_progress", "completed", "cancelled", "declined", "missed", "something"].map(taskTone)).toEqual(["warn", "live", "ok", "bad", "bad", "bad", ""]);
   });
 });

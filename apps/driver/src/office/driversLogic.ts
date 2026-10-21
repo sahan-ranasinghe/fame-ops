@@ -9,6 +9,7 @@
 import { type Frame, frameOf, type LatLng } from '../components/taskMapLogic';
 import type { FilterDef, FilterValues } from '../lib/patterns/filterLogic';
 import { addDays } from '../lib/time';
+import { sentenceText } from './statusWords';
 import type { BoardDriver, BoardFilter, DriverRoute, RouteSegment, UnavailableEntry, UnavailablePart, UnavailableReason } from './types';
 
 export type Words = (key: string, vars?: Record<string, string | number>) => string;
@@ -85,17 +86,17 @@ export function boardPill(d: Pick<BoardDriver, 'status' | 'free_now'>): { key: B
  * The two lines under the name (design 12):
  *   1. the server's status words ("On a task till 10:40 · Team drop", "On duty since 08:02 · free till 13:00",
  *      "Not available · leave · back Wed 21"), an off-duty driver's usual start after it;
- *   2. the next task, last seen (the server's words), an on-duty driver's usual start, the regular vehicle when it is not
- *      the one held today.
+ *   2. the next task, last seen (the server's words), an on-duty driver's usual start.
+ * Round 3: the server's words in the person's language (statusWords: "Not available, back 13:00", "Last seen 17:42 near
+ * Kadawatha"); the vehicle, the regular one too, is the chip under the name (the driver-first card), not a line.
  */
 export function rowLines(d: Pick<BoardDriver, 'status' | 'next_task' | 'last_seen' | 'usual_start' | 'vehicle'>, t: Words): [string, string] {
-  const first = [d.status.text];
+  const first = [sentenceText(t, d.status.text)];
   if (d.status.kind === 'off_duty' && d.usual_start) first.push(t('office.drivers.usuallyStarts', { time: d.usual_start }));
   const second: string[] = [];
   if (d.next_task) second.push(t('office.drivers.next', { time: d.next_task.when, title: d.next_task.title }));
-  if (d.last_seen) second.push(d.last_seen);
+  if (d.last_seen) second.push(sentenceText(t, d.last_seen));
   if (d.status.kind === 'on_duty' && d.usual_start) second.push(t('office.drivers.starts', { time: d.usual_start }));
-  if (d.vehicle?.source === 'regular' && d.status.kind !== 'on_task') second.push(t('office.drivers.regular', { plate: d.vehicle.reg_no }));
   return [first.filter(Boolean).join(' · '), second.filter(Boolean).join(' · ')];
 }
 

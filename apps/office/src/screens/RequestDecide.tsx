@@ -11,6 +11,9 @@
 // Phase 7 (§33, §34): a waiting proposed task, or a request planned with its
 // stops, gets the trip decide page (TripDecide); an old request (From and To
 // only) keeps this one. The page is chosen once, on the first answer.
+// Round 3: what the request asked about who drives, in words ("Drives themselves", "Someone else: Nimal · 077 123 4567",
+// "The custodian drives"); approved with a plate and no driver, or the approver gives a driver instead (the driver
+// cards, ui/DriverPicker, in place of the name-only selects).
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -23,12 +26,17 @@ import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { Empty, Loading, Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
+import { phoneDisplay } from "../ui/ContactButtons";
+import { DriverPicker } from "../ui/DriverPicker";
+import { driverOptions } from "../ui/driverPickerLogic";
+import { firstName } from "../ui/driverRowLogic";
+import { askedOf, askedWords } from "../ui/whoDrivesLogic";
 import { PageTop, StickyActions } from "../ui/Page";
 import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
 import { decidesTrip } from "./approvalLogic";
 import { linkedDriver } from "./asks/askLogic";
-import { availabilityArgs, driverVehicle, withPicked } from "./availabilityLogic";
+import { availabilityArgs, driverVehicle } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
 import { checkDeparture, departurePlan } from "./departureLogic";
@@ -43,7 +51,7 @@ import { decisionInput, dwellChanges, redecideInput } from "./requestLogic";
 import { VehicleGroups, VehicleOption } from "./requestParts";
 import { newStop, parseDwell, type StopDraft } from "./stopsLogic";
 import { TripDecide } from "./TripDecide";
-import { knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
+import { isChoice, knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 import { TripDayPicker } from "../ui/DayPicker";
 import { SkeletonRows } from "../ui/ListKit";
 
@@ -120,13 +128,14 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
     ? sug.vehicles
     : (lists.vehicles ?? []).map((v) => ({ reg_no: v.reg_no, make_model: v.make_model, seats: v.seats, availability: v.availability || v.status || "", pick: "good", assigned_to: v.assigned_to }));
   const allOptions = sug?.groups ? Object.values(sug.groups).flat() : options;
-  const drivers = sug?.drivers.length
-    ? sug.drivers.map((d) => ({ username: d.username, name: d.name, label: d.availability }))
-    : (lists.drivers ?? []).filter((d) => d.active !== false).map((d) => ({ username: d.username, name: d.name, label: "" }));
+  const activeDrivers = (lists.drivers ?? []).filter((d) => d.active !== false);
   const ready = sug !== undefined || sugNote !== null || !suggests;
 
   // Defaults, only while the person has not chosen: the best match (or the first free driver), and the vehicle they bring.
-  const noDriverNeeded = q?.driver_required === false;
+  // Round 3: no driver needed when the asker or someone else drives (self, other) or the custodian does (the older path).
+  const asked = askedOf(q);
+  const noDriverNeeded = asked !== "driver";
+  const askedWho = asked === "self" ? `${firstName(q.requested_by)} drives` : asked === "other" ? `${q.driver_name || "Someone else"} drives` : "The custodian drives";
   // Who's available decides it once it answers (its best match holds while the day and time stay), so the default does
   // not start as the first free driver and then jump.
   const availDefault = avail.data ? avail.data.best?.username ?? avail.data.vehicles.drivers_free[0]?.username : undefined;
@@ -135,13 +144,22 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
   const def = driver ? driverVehicle(vehicleFor(avail.data, driver), lists.drivers?.find((d) => d.username === driver), (lists.drivers ?? []).filter((d) => d.active !== false).map((d) => d.name)) : null;
   // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the day.
   const onDay = vehicleOnTheDay(settings.data);
-  const dflt = again ? null : vehicleDefault({ on: onDay, date: fields?.date ?? "", today: today(), driver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
+  // Round 3: the asker or someone else drives with no driver named: approved with a plate (the reason under the button).
+  const noAppDrives = !again && (asked === "self" || asked === "other") && !driver;
+  const dflt = again || noAppDrives ? null : vehicleDefault({ on: onDay, date: fields?.date ?? "", today: today(), driver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
   const dayDefault = dflt?.kind === "on_the_day";
   const vehicle = again ? f.vehicle : shownVehicle(f.vehicle, dflt);
-  // The select always holds the driver picked (from Who's available too), even when its list lacks them.
-  const driverOptions: { username: string; name: string; label?: string }[] = withPicked(drivers, driver, avail.data?.drivers.find((d) => d.username === driver)?.name);
+  // The driver cards: Who's available's rows, the suggestions' drivers with their words, the list; the one picked always there.
+  const driverCards = driverOptions({
+    avail: avail.data?.drivers,
+    other: sug?.drivers,
+    list: activeDrivers,
+    picked: driver,
+    pickedName: avail.data?.drivers.find((d) => d.username === driver)?.name,
+  });
   const picked = allOptions.find((v) => v.reg_no === vehicle);
-  const custodianDrives = !again && noDriverNeeded && !!picked?.assigned_to && sug?.self_drive_allowed !== false;
+  const custodianDrives = !again && asked === "custodian" && !driver && !!picked?.assigned_to && sug?.self_drive_allowed !== false;
+  const plateWhy = noAppDrives && (!vehicle || isChoice(vehicle)) ? `${askedWho} it: pick the vehicle (nobody confirms one on the day).` : null;
   // A driver picked in the list keeps a vehicle picked by hand; Use suggestion and a row of Who's available take the
   // driver with the vehicle they bring.
   const pickDriver = (username: string) => setF((x) => ({ ...x, driver: username }));
@@ -161,7 +179,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
       leave_by: fields.time,
       stops: [{ type: "pickup", place: rows[0].place, ...dw(fromDwell) }, { type: "drop", place: rows[1].place, ...dw(toDwell) }],
       ...(driver && !custodianDrives ? { driver } : {}),
-      ...(f.vehicle || (custodianDrives && vehicle) ? { vehicle } : {}),
+      ...(f.vehicle || ((custodianDrives || noAppDrives) && vehicle && !isChoice(vehicle)) ? { vehicle } : {}),
       ...(fields.back_by ? { end_time: fields.back_by } : {}),
     }
     : null;
@@ -179,8 +197,8 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
     // The driver's vehicle: known (Who's available), known to be none, or not known yet (the server decides).
     const knownDefault = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
     const v = decisionInput({
-      id, version: q.version, decision, reason: f.reason, vehicle: custodianDrives ? vehicle : vehicleArg(f.vehicle, dflt), driver: custodianDrives ? "" : driver,
-      decidedBy: me.name, custodianDrives, defaultVehicle: knownDefault,
+      id, version: q.version, decision, reason: f.reason, vehicle: custodianDrives || noAppDrives ? vehicle : vehicleArg(f.vehicle, dflt), driver: custodianDrives ? "" : driver,
+      decidedBy: me.name, custodianDrives, defaultVehicle: knownDefault, asked, askedWho,
     });
     if ("error" in v) {
       setMsg({ tone: "bad", text: v.error });
@@ -204,7 +222,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
           warnings: warnList(p),
           text: (
             <>
-              <b>Approved.</b> {custodianDrives ? `${picked?.assigned_to} drives it.` : "The task is in the driver’s app."}{" "}
+              <b>Approved.</b> {custodianDrives ? `${picked?.assigned_to} drives it.` : noAppDrives ? `${askedWho} it.` : "The task is in the driver’s app."}{" "}
               {p.vehicle_changed ? <span data-testid="vehicle-used">{p.vehicle_changed}. </span>
                 : p.vehicle_used ? <span data-testid="vehicle-used">Vehicle: {p.vehicle_used.reg_no} · {p.vehicle_used.why === "chosen" ? "as picked" : p.vehicle_used.why}. </span>
                 : p.vehicle ? <span data-testid="vehicle-used">Vehicle: {p.vehicle}. </span> : null}
@@ -292,13 +310,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             <div className="section-t" style={{ marginBottom: 2 }}>Change the driver, the vehicle or the time{updating}</div>
             <p className="muted small" style={{ margin: 0 }}>Leave everything as it is and press Keep to approve the booking as it now asks.</p>
             {sugNote && <Notice>{sugNote}</Notice>}
-            <div className="field">
-              <label htmlFor="rq-driver">Driver</label>
-              <select id="rq-driver" value={f.driver} onChange={(e) => pickDriver(e.target.value)}>
-                <option value="">Keep the driver</option>
-                {driverOptions.map((d) => <option key={d.username} value={d.username}>{d.name}{d.label ? ` · ${d.label}` : ""}</option>)}
-              </select>
-            </div>
+            <DriverPicker id="rq-driver" value={f.driver} options={driverCards} onChange={pickDriver} emptyLabel="Keep the driver" emptyChoice="Keep the driver" onTheDay={onDay} />
             {!ready ? <SkeletonRows rows={3} label="Finding free vehicles…" /> : (
               <>
                 <div className="lab" id="rq-vehicles">Vehicle</div>
@@ -347,16 +359,16 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
         <div className="card card-b form" data-testid="decide-pick">
           <div className="section-t" style={{ marginBottom: 2 }}>Driver and vehicle{updating}</div>
           {sugNote && <Notice>{sugNote}</Notice>}
+          {noDriverNeeded && (
+            <p className="muted small" style={{ margin: 0 }} data-testid="decide-asked">
+              Asked: <b>{askedWords(q, phoneDisplay)}</b>.{driver ? " A driver is given instead: it becomes a driver’s trip." : " Approve with the vehicle, or give a driver instead."}
+            </p>
+          )}
           <div className="field">
-            <label htmlFor="rq-driver">Driver</label>
-            {custodianDrives
-              ? <p className="muted small" style={{ margin: 0 }} id="rq-driver">{picked?.assigned_to} drives it: no driver needed.</p>
-              : (
-                <select id="rq-driver" value={driver} onChange={(e) => pickDriver(e.target.value)}>
-                  <option value="">{noDriverNeeded ? "No driver: pick the custodian’s vehicle" : "Pick a driver"}</option>
-                  {driverOptions.map((d) => <option key={d.username} value={d.username}>{d.name}{d.label ? ` · ${d.label}` : ""}</option>)}
-                </select>
-              )}
+            <DriverPicker id="rq-driver" value={driver} options={driverCards} onChange={pickDriver} onTheDay={onDay}
+              emptyLabel={noDriverNeeded ? (asked === "custodian" ? "No driver: pick the custodian’s vehicle" : `No driver: ${askedWho}`) : "Pick a driver"}
+              emptyChoice={noDriverNeeded ? `No driver: ${askedWho.replace(/^The /, "the ")}` : undefined} />
+            {custodianDrives && <span className="hint" data-testid="custodian-drives">{picked?.assigned_to} drives it: no driver needed.</span>}
             {!f.driver && defaultDriver && (
               <span className="hint" data-testid="driver-default">
                 {defaultDriver === avail.data?.best?.username ? "The best match" : "The first free driver"}. Pick another to change it.
@@ -364,7 +376,8 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             )}
           </div>
           <div className="lab" id="rq-vehicles">Vehicle</div>
-          {(driver || dayDefault) && !custodianDrives && (
+          {noAppDrives && <p className="hint" style={{ margin: 0 }} data-testid="vehicle-default">Pick the vehicle: {askedWho.replace(/ drives$/, "")} drives it, so nobody confirms one on the day.</p>}
+          {(driver || dayDefault) && !custodianDrives && !noAppDrives && (
             <p className="hint" style={{ margin: 0 }} data-testid="vehicle-default">
               {dayDefault
                 ? (f.vehicle && f.vehicle !== ON_THE_DAY
@@ -378,7 +391,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
           )}
           {!ready ? <SkeletonRows rows={3} label="Finding free vehicles…" /> : (
             <>
-              {onDay && !custodianDrives && <VehicleChoiceRadios name="rq-veh" value={vehicle} dayDefault={dayDefault} onPick={(v) => set("vehicle", v)} />}
+              {onDay && !custodianDrives && !noAppDrives && <VehicleChoiceRadios name="rq-veh" value={vehicle} dayDefault={dayDefault} onPick={(v) => set("vehicle", v)} />}
               {sug?.groups
                 ? <VehicleGroups sug={sug} name="rq-veh" vehicle={vehicle} onPick={(reg) => set("vehicle", reg)} />
                 : options.map((v) => <VehicleOption key={v.reg_no} v={v} name="rq-veh" checked={vehicle === v.reg_no} onPick={() => set("vehicle", v.reg_no)} />)}
@@ -386,7 +399,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
             </>
           )}
         </div>
-        {!custodianDrives && <AvailabilityPanel args={availArgs} askFor={{ request: id }} picked={driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />}
+        {!custodianDrives && !noAppDrives && <AvailabilityPanel args={availArgs} askFor={{ request: id }} picked={driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }} onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />}
         <div className="card card-b form" data-testid="decide-stops">
           <div className="section-t" style={{ marginBottom: 2 }}>Stops</div>
           <p className="muted small" style={{ margin: 0 }}>Start from {base ? base.name : "the base place"} (the base place). Passengers get in at Stop 1.</p>
@@ -422,7 +435,8 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
           {msg && <div><Notice tone={msg.tone}>{msg.text}</Notice>{msg.warnings && <WarningsNote warnings={msg.warnings} />}</div>}
           <StickyActions>
             <button type="button" className="btn" disabled={busy} onClick={() => void decide("decline")}>Decline</button>
-            <button type="button" className="btn dark" disabled={busy || !ready} onClick={() => void decide("approve")}>{custodianDrives ? "Approve" : "Approve & send to driver"}</button>
+            <button type="button" className="btn dark" disabled={busy || !ready || !!plateWhy} onClick={() => void decide("approve")}>{custodianDrives || noAppDrives ? "Approve" : "Approve & send to driver"}</button>
+            {plateWhy && <p className="hint btn-why" data-testid="approve-why">{plateWhy}</p>}
           </StickyActions>
         </div>
       </div>

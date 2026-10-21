@@ -3,6 +3,8 @@
 // (availability at the task's time: the best match picked first, never the driver who declined; a tap picks another),
 // and "Give to <driver> · <plate>" through reassign_task; Cancel task… with a reason through cancel_task. Back means back.
 // Not in O1 and not shown: Move the time, Ask drivers.
+// Round 3: the drivers are the driver-first cards (components/office/DriverRows.tsx: the photo, the state, the vehicle chip
+// under the name, last seen said once), the server's sentences in the person's language.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -11,17 +13,18 @@ import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Phone } from '@/components/icons';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
-import { ChoiceRow } from '@/components/patterns/Select';
+import { DriverChoiceRow } from '@/components/office/DriverRows';
 import { ReasonSheet } from '@/components/ReasonSheet';
-import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { Button, Mono, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
-import { driverParts, driverPill, rankedDrivers } from '@/office/approveLogic';
+import { driverParts, driverPill, presenceLine, rankedDrivers } from '@/office/approveLogic';
+import { sentenceText } from '@/office/statusWords';
 import { askTargets } from '@/office/askLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { extrasFor } from '@/office/taskExtrasLogic';
 import { availabilityArgsForTask, CANCEL_TEXT, cancelInput, declinedThisTask, firstPickForTask, leaveIn, plateOf, reassignInput } from '@/office/taskLogic';
-import type { Availability, FleetError, TaskDetail } from '@/office/types';
+import type { Availability, FleetError, SettingsResult, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -45,6 +48,8 @@ export default function GiveDriverScreen() {
   const task = p?.task;
   const availArgs = p ? availabilityArgsForTask(p) : null;
   const avail = useTool<Availability>('availability', availArgs ?? {}, { enabled: !!availArgs, every: 60_000 });
+  const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
+  const onDay = settings.data?.settings.vehicle_on_the_day === true;
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState<'give' | 'cancel' | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
@@ -172,7 +177,7 @@ export default function GiveDriverScreen() {
             </View>
             {(p?.from_request || task.approved_by) && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <Avatar name={p?.from_request?.requested_by ?? task.approved_by?.name ?? ''} />
+                <Avatar name={p?.from_request?.requested_by ?? task.approved_by?.name ?? ''} photo={p?.from_request ? undefined : task.approved_by?.photo_url} />
                 <Txt variant="body" size={15} style={{ flex: 1 }}>
                   {[p?.from_request ? t('office.task.askedBy', { name: p.from_request.requested_by }) : '', task.approved_by ? t('office.request.approvedBy', { name: task.approved_by.name, at: task.approved_by.at }) : ''].filter(Boolean).join(' · ')}
                 </Txt>
@@ -195,33 +200,30 @@ export default function GiveDriverScreen() {
             {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
             {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
             {avail.data && drivers.length === 0 && <ListEmpty text={t('office.request.nobody')} />}
-            {drivers.map((d, i) => {
-              const on = !!d.username && d.username === pick;
-              const declined = declinedThisTask(task, d);
-              const pillKey = declined ? 'declined' : driverPill(d, bestUsername);
-              return (
-                <ChoiceRow
-                  key={d.username ?? d.name}
-                  selected={on}
-                  onPress={() => setPicked(d.username ?? '')}
-                  disabled={!d.username || declined}
-                  disabledReason={declined ? t('office.give.declinedThis', { why: task.needs_driver?.reason_text ?? '' }) : d.username ? undefined : t('office.ask.noAccount')}
-                  leading={<Avatar name={d.name} size={44} photo={d.photo_url} />}
-                  mark="end"
-                  trailing={pillKey && pillKey !== 'best' ? <Pill text={t(`office.give.${pillKey}`)} tone={pillKey === 'declined' || pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted'} /> : null}
-                  accessibilityLabel={d.name}
-                  testID={`give-row-${d.username ?? d.name}`}
-                  style={i > 0 ? { marginTop: 8 } : undefined}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <Txt variant="strong" size={17}>{d.name}</Txt>
-                    {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
-                  </View>
-                  {!declined && <Txt variant="muted" size={15}>{driverParts(d, t).join(' · ')}</Txt>}
-                  {d.vehicle && !declined && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
-                </ChoiceRow>
-              );
-            })}
+            <View style={{ gap: 8 }}>
+              {drivers.map((d) => {
+                const declined = declinedThisTask(task, d);
+                const pillKey = declined ? 'declined' : driverPill(d, bestUsername);
+                return (
+                  <DriverChoiceRow
+                    key={d.username ?? d.name}
+                    d={d}
+                    card={false}
+                    selected={!!d.username && d.username === pick}
+                    onPress={() => setPicked(d.username ?? '')}
+                    onDay={onDay}
+                    lines={declined ? undefined : driverParts(d, t)}
+                    best={pillKey === 'best'}
+                    bestWhy={avail.data?.best?.why ? sentenceText(t, avail.data.best.why) : undefined}
+                    pill={pillKey && pillKey !== 'best' ? { text: t(`office.give.${pillKey}`), tone: pillKey === 'declined' || pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted' } : null}
+                    disabled={!d.username || declined}
+                    disabledReason={declined ? t('office.give.declinedThis', { why: task.needs_driver?.reason_text ?? '' }) : d.username ? undefined : t('office.ask.noAccount')}
+                    presence={declined ? undefined : presenceLine(d, t)}
+                    testID={`give-row-${d.username ?? d.name}`}
+                  />
+                );
+              })}
+            </View>
           </Section>
         )}
         {problem && <ErrorNotice error={problem} onRetry={refresh} />}

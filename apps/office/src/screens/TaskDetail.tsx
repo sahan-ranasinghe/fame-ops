@@ -16,7 +16,7 @@ import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
 import { estimatedLegend, type Route, mapRouteOf, minutesText, routeOf, snapControl } from "../data/route";
 import type { DriverRoute, TaskDetail as TaskDetailData } from "../data/types";
-import { cap, hhmm, joinDots, num, today } from "../lib/format";
+import { cap, hhmm, joinDots, num, plateOf, today } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { MapView } from "../map/MapView";
@@ -28,8 +28,10 @@ import { LateReportLine } from "./LateReport";
 import { StopArrival } from "./StopArrival";
 import { StopProgress } from "./StopProgress";
 import { TripPurposeCard, TripTags } from "./TripPurpose";
-import { Avatar, Empty, Loading, Notice, Pill, VehicleThumb, WarningsNote } from "../ui/basics";
+import { Empty, Loading, Notice, Pill, VehicleThumb, WarningsNote } from "../ui/basics";
 import { ContactButtons, linksOf } from "../ui/ContactButtons";
+import { DriverLine } from "../ui/DriverRow";
+import { firstName, vehicleChipWords } from "../ui/driverRowLogic";
 import { Icon } from "../ui/icons";
 import { FROM_TASK, PageTop } from "../ui/Page";
 import { DecisionRow } from "./approvers";
@@ -40,10 +42,9 @@ import { videoWords } from "./fuelLogic";
 import { driveText } from "./stopsLogic";
 import { readFlashWarnings } from "../data/flash";
 import { findDriverPath } from "./needsDriverLogic";
-import { dwellNote, needsDriverText, segmentRows, segmentsTotal, whatOf } from "./taskDetailLogic";
+import { dwellNote, needsDriverText, segmentRows, segmentsTotal, taskTone, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
 
-export const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
 /** The arrival flags shown in amber (an override, no GPS fix, Done without Arrived); "no pin" is plain. */
 const ARRIVAL_WARN = new Set(["override", "no_gps", "not_arrived"]);
 
@@ -148,7 +149,7 @@ export function TaskDetail() {
     <div data-testid="task-detail">
       <PageTop
         title={t.title || "Task"}
-        sub={<><Pill tone={TONE[t.status] ?? ""}>{cap(t.status)}</Pill> <TripTags t={t} /> <span className="mono">{t.start}</span></>}
+        sub={<><Pill tone={taskTone(t.status)}>{cap(t.status)}</Pill> <TripTags t={t} /> <span className="mono">{t.start}</span></>}
         backTo={backTo}
         actions={(canChange || canCancel)
           ? (declined || t.needs_driver) && canChange
@@ -166,11 +167,14 @@ export function TaskDetail() {
       <div className="card card-b">
         <dl className="kv">
           <div>
-            <dt>Driver</dt>
+            <dt>{t.driven_by ? "Who drives" : "Driver"}</dt>
             <dd>
-              {t.driver ? <span className="with-photo"><Avatar name={t.driver} src={t.driver_photo_url} small />{t.driver}</span> : "—"}
-              {/* Hotfix 2 (F): Call and WhatsApp the driver, for people who may see drivers' numbers (the server decides). */}
-              {t.driver_phone && <div style={{ marginTop: 6 }}><ContactButtons phone={t.driver_phone} label="Call driver" testId="call-driver" /></div>}
+              {/* Round 3: the driver-first card (the vehicle chip under the name); a trip with no app says who drives instead of a state. */}
+              {t.driver
+                ? <DriverLine name={t.driver} photo={t.driver_photo_url} drivenBy={t.driven_by} vehicle={vehicleChipWords(plateOf(t.vehicle), { text: t.vehicle_text })} />
+                : "—"}
+              {/* Hotfix 2 (F): Call and WhatsApp the driver (someone else: their own number), for people who may see drivers' numbers. */}
+              {t.driver_phone && <div style={{ marginTop: 6 }}><ContactButtons phone={t.driver_phone} label={t.driven_by === "other" && t.driver ? `Call ${firstName(t.driver)}` : "Call driver"} testId="call-driver" /></div>}
             </dd>
           </div>
           <div>

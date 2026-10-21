@@ -18,7 +18,7 @@ import { Mono, Txt } from '@/components/ui';
 import { addDays, colomboDate } from '@/lib/time';
 import { shortDate } from '@/lib/durations';
 import { greeting, isCreatedTask, requestLine, requestTitle, tripLive, tripTitle } from '@/office/homeLogic';
-import { chipText, sentenceText, taskChip, tripChip } from '@/office/statusWords';
+import { chipText, sentenceText, taskChip, taskRowLine, tripChip } from '@/office/statusWords';
 import { has, homeActions, homeChips, homeSections } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { firstName } from '@/office/text';
@@ -124,7 +124,7 @@ export default function OfficeHome() {
               <View key={r.id}>
                 {i > 0 && <Divider />}
                 <Row
-                  left={<Avatar name={r.requested_by} />}
+                  left={<Avatar name={r.requested_by} photo={r.requested_by_photo_url} />}
                   title={requestTitle(r)}
                   line={requestLine(r)}
                   right={r.asked ? <Txt variant="small" style={{ maxWidth: 90, textAlign: 'right' }}>{r.asked}</Txt> : undefined}
@@ -215,7 +215,7 @@ export default function OfficeHome() {
                   <Row
                     time={c.time}
                     title={c.title}
-                    line={[c.driver, sentenceText(t, c.status)].filter(Boolean).join(' · ')}
+                    line={taskRowLine(t, c)}
                     chip={{ text: chipText(t, k), tone: k.tone }}
                     onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: c.id } })}
                   />

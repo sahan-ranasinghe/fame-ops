@@ -9,6 +9,9 @@
 // free vehicles for that day and time in four groups), who's available with
 // the best match, one call that makes the request and its task together with
 // the same trip. Kept as a draft; a refresh never resets a pick (§10).
+// Round 3: "Who drives?" (ui/WhoDrives, the booking forms' "Who's driving?") in place of "A driver is needed": a driver,
+// I'll drive myself, or someone else (a name and a phone); Book now then needs a plate (the reason under the button), and
+// the driver is picked from the driver cards (ui/DriverPicker).
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -22,17 +25,21 @@ import { can, canOpenTask } from "../transport/types";
 import type { FleetError } from "../transport/types";
 import { Empty, Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
+import { DriverPicker } from "../ui/DriverPicker";
+import { driverOptions } from "../ui/driverPickerLogic";
+import { WhoDrives } from "../ui/WhoDrives";
+import { emptyWho, plateReason } from "../ui/whoDrivesLogic";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
 import { availabilityArgs, floorTo5 } from "./availabilityLogic";
 import { AvailabilityPanel, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { basePlace, useFleetSettings, VehicleChoiceRadios, vehicleOnTheDay } from "./dispatchParts";
-import { bookInput, emptyRequest, type RequestFields, suggestInput, validateNewRequest } from "./requestLogic";
+import { bookInput, emptyRequest, type RequestFields, suggestInput, validateNewRequest, whoOf } from "./requestLogic";
 import { VehicleGroups } from "./requestParts";
 import { firstStopOf } from "./stopsLogic";
 import { TripEditor, useTrip } from "./TripEditor";
 import { tripPlanInput } from "./tripLogic";
-import { knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
+import { isChoice, knownDef, ON_THE_DAY, shownVehicle, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 import { SkeletonRows } from "../ui/ListKit";
 
 interface Form extends RequestFields {
@@ -59,11 +66,14 @@ export function NewRequest() {
   const [err, setErr] = useState<string | null>(null);
   const [booked, setBooked] = useState<Booked | null>(null);
   const settings = useFleetSettings();
-  // The fleet switch: with self-drive off every booking needs a driver, and the box is not shown.
+  // The fleet switch: with self-drive off every booking needs a driver, and "Who drives?" is not shown.
   const selfDrive = settings.data?.settings.self_drive_allowed !== false;
   const base = basePlace(settings.data);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
-  const fields: Form = selfDrive ? f : { ...f, driver: true };
+  const who = whoOf(f, selfDrive);
+  const fields: Form = selfDrive ? f : { ...f, who: emptyWho() };
+  // Round 3: the person or someone else drives: no driver of ours, a plate picked by hand.
+  const noApp = who.by !== "driver";
 
   // The trip: plan_task 1.5 s after the last change; an empty leave-by shows the plan's time as a grey suggestion.
   const trip = useTrip(f, setF, { base, settings: settings.data, planInput: tripPlanInput(f, base) });
@@ -82,17 +92,15 @@ export function NewRequest() {
   const def = f.pickedDriver ? vehicleFor(avail.data, f.pickedDriver) : null;
   // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the day.
   const onDay = books && vehicleOnTheDay(settings.data);
-  const dflt = vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.pickedDriver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
+  const dflt = noApp ? null : vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.pickedDriver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
   const dayDefault = dflt?.kind === "on_the_day";
-  const vehicle = shownVehicle(f.vehicle, dflt);
-  const all = sug ? (sug.groups ? Object.values(sug.groups).flat() : sug.vehicles) : [];
-  const picked = all.find((v) => v.reg_no === vehicle);
-  const custodianDrives = selfDrive && !f.driver && !!picked?.assigned_to;
+  const vehicle = noApp ? (isChoice(f.vehicle) ? "" : f.vehicle) : shownVehicle(f.vehicle, dflt);
+  // The free drivers as driver cards (Who's available's rows first: they know the trip's time), the one picked always there.
   const freeDrivers = sug?.drivers_free ?? sug?.drivers.filter((d) => /free/.test(d.availability)).map((d) => ({ name: d.name, username: d.username })) ?? [];
   const pickedName = avail.data?.drivers.find((d) => d.username === f.pickedDriver)?.name;
-  const driverOptions = f.pickedDriver && !freeDrivers.some((d) => d.username === f.pickedDriver)
-    ? [...freeDrivers, { username: f.pickedDriver, name: pickedName ?? f.pickedDriver }]
-    : freeDrivers;
+  const options = driverOptions({ avail: avail.data?.drivers.filter((d) => d.free), free: freeDrivers, picked: f.pickedDriver, pickedName });
+  // Book now waits for a plate when nobody of ours drives (the reason under the button).
+  const bookWhy = noApp && !vehicle ? plateReason(who) : null;
   // A driver picked in the list keeps a vehicle picked by hand; Use suggestion and a row of Who's available take the
   // driver with the vehicle they bring.
   const pickDriver = (username: string) => setF((x) => ({ ...x, pickedDriver: username }));
@@ -121,7 +129,7 @@ export function NewRequest() {
 
   async function book() {
     const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
-    const v = bookInput(fields, { vehicle: custodianDrives ? f.vehicle : vehicleArg(f.vehicle, dflt), driver: custodianDrives ? "" : f.pickedDriver, hasCustodian: !!picked?.assigned_to, defaultVehicle: known }, base);
+    const v = bookInput(fields, { vehicle: noApp ? vehicle : vehicleArg(f.vehicle, dflt), driver: noApp ? "" : f.pickedDriver, defaultVehicle: known }, base);
     if ("error" in v) {
       setErr(v.error);
       return;
@@ -202,9 +210,8 @@ export function NewRequest() {
           </div>
           <div className="field" style={{ gap: 8 }}>
             <span className="check"><input type="checkbox" id="nr-tools" checked={f.tools} onChange={(e) => set("tools", e.target.checked)} /> <label htmlFor="nr-tools">Tools or equipment go too</label></span>
-            {selfDrive && <span className="check"><input type="checkbox" id="nr-driver" checked={f.driver} onChange={(e) => set("driver", e.target.checked)} /> <label htmlFor="nr-driver">A driver is needed</label></span>}
           </div>
-          {selfDrive && <p className="hint" style={{ margin: "-8px 0 0" }}>Untick "A driver is needed" when the person drives a vehicle assigned to them.</p>}
+          <WhoDrives id="nr" value={who} onChange={(w) => set("who", w)} hidden={!selfDrive} picksVehicle={books} />
           <div className="field"><label htmlFor="nr-note">Note</label><textarea id="nr-note" maxLength={1000} value={f.note} onChange={(e) => set("note", e.target.value)} /></div>
         </div>
 
@@ -218,19 +225,12 @@ export function NewRequest() {
             {sugErr && <Notice tone="bad">{sugErr}</Notice>}
             {sug && (
               <div className="form">
-                <div className="field">
-                  <label htmlFor="nr-driver-pick">Driver</label>
-                  {custodianDrives
-                    ? <p className="muted small" style={{ margin: 0 }} id="nr-driver-pick">{picked?.assigned_to} drives it (no driver needed).</p>
-                    : (
-                      <select id="nr-driver-pick" value={f.pickedDriver} onChange={(e) => pickDriver(e.target.value)}>
-                        <option value="">Pick a free driver</option>
-                        {driverOptions.map((d) => <option key={d.username} value={d.username}>{d.name}</option>)}
-                      </select>
-                    )}
-                </div>
+                {!noApp && (
+                  <DriverPicker id="nr-driver-pick" value={f.pickedDriver} options={options} onChange={pickDriver} emptyLabel="Pick a free driver" onTheDay={onDay} />
+                )}
                 <div className="lab" id="nr-vehicles">Vehicle</div>
-                {(f.pickedDriver || dayDefault) && !custodianDrives && (
+                {noApp && <p className="hint" style={{ margin: 0 }} data-testid="vehicle-default">Pick the vehicle: {who.by === "self" ? "you drive it" : `${who.name.trim() || "someone else"} drives it`}, so nobody confirms one on the day.</p>}
+                {(f.pickedDriver || dayDefault) && !noApp && (
                   <p className="hint" style={{ margin: 0 }} data-testid="vehicle-default">
                     {dayDefault
                       ? (f.vehicle && f.vehicle !== ON_THE_DAY
@@ -242,21 +242,22 @@ export function NewRequest() {
                       : <>This driver holds no vehicle today and has no regular one: pick one below.</>}
                   </p>
                 )}
-                {onDay && !custodianDrives && <VehicleChoiceRadios name="nr-veh" value={vehicle} dayDefault={dayDefault} onPick={(v) => set("vehicle", v)} />}
+                {onDay && !noApp && <VehicleChoiceRadios name="nr-veh" value={vehicle} dayDefault={dayDefault} onPick={(v) => set("vehicle", v)} />}
                 <VehicleGroups sug={sug} name="nr-veh" vehicle={vehicle} onPick={(reg) => set("vehicle", reg)} greyGarage />
                 {sug.vehicles.length === 0 && <Empty>No vehicles registered yet.</Empty>}
               </div>
             )}
           </div>
         )}
-        {books && !custodianDrives && (
+        {books && !noApp && (
           <AvailabilityPanel args={availArgs} picked={f.pickedDriver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }}
             onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
         )}
         {err && <Notice tone="bad">{err}</Notice>}
         <StickyActions>
           <button className={`btn ${books ? "" : "primary"}`} type="submit" disabled={busy}>{busy ? "Saving…" : books ? "Save as waiting" : "Save request"}</button>
-          {books && <button type="button" className="btn primary" disabled={busy || !sug} onClick={() => void book()}>Book now</button>}
+          {books && <button type="button" className="btn primary" disabled={busy || !sug || !!bookWhy} onClick={() => void book()}>Book now</button>}
+          {books && bookWhy && <p className="hint btn-why" data-testid="book-why">{bookWhy}</p>}
         </StickyActions>
       </form>
     </section>

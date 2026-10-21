@@ -138,6 +138,21 @@ export interface BestMatch {
   vehicle?: { reg_no: string; source: "on_duty" | "regular" };
   /** "On duty · free 08:00–12:00 · 3.2 km from the pickup · 1 task today" */
   why: string;
+  /** Round 3: the driver-first card's photo. */
+  photo_url?: string;
+}
+
+/**
+ * Round 3 (whoDrives.ts on the server): who drives a trip. driver = a Fame Fleet driver with the app (absent on the
+ * answers); self = the person on the task drives it themselves; other = someone not in Fame Fleet (a name and a phone).
+ */
+export type DrivenBy = "driver" | "self" | "other";
+/** What a request asked: one of the three, or the older custodian path (the vehicle's custodian drives it). */
+export type AskedDriver = DrivenBy | "custodian";
+/** The vehicle a driver brings (Round 3's driver-first card): held today on duty, else their regular one. */
+export interface DriverVehicleRef {
+  reg_no: string;
+  source: "on_duty" | "regular";
 }
 
 /** Phase 7 (§13): dispatch = the office's task; self = a trip the driver started in the app. */
@@ -174,6 +189,8 @@ export interface BoardCard {
   /** Phase 7 (§5, §6): the driver's photo and the vehicle's thumbnail (links that work for at least an hour). */
   driver_photo_url?: string;
   vehicle_thumb_url?: string;
+  /** Round 3: self = the person drives it themselves, other = someone not in Fame Fleet (`driver` is their name, no photo). */
+  driven_by?: Exclude<DrivenBy, "driver">;
 }
 
 /** Phase 7 (item 18): set at completion when the odometer km or the time is far under the plan. */
@@ -577,6 +594,8 @@ export interface TaskDetail {
     time?: string;
     end_by?: string;
     driver?: string;
+    /** Round 3: self = the person drives it themselves, other = someone not in Fame Fleet (driver and driver_phone are theirs). */
+    driven_by?: Exclude<DrivenBy, "driver">;
     vehicle?: string;
     /** Phase 7 (§5, §6). */
     driver_photo_url?: string;
@@ -675,6 +694,10 @@ export interface RequestEditFields {
   tools?: boolean;
   note?: string;
   driver_required?: boolean;
+  /** Round 3: who drives, as asked (custodian = the older path), and someone else's name and phone. */
+  driven_by?: AskedDriver;
+  driver_name?: string;
+  driver_phone?: string;
   on_behalf_of?: string;
   /** Phase 7 (§17): minutes at the From and To places (empty = the place's usual time, else the default). */
   from_dwell_min?: number;
@@ -756,6 +779,8 @@ export interface RequestCard {
   /** A proposed task's title. */
   title?: string;
   requested_by: string;
+  /** Round 3: the asker's photo, when they are an office person with one. */
+  requested_by_photo_url?: string;
   project?: string;
   when: string;
   back_by?: string;
@@ -778,6 +803,10 @@ export interface RequestCard {
   events?: RequestEvent[];
   /** false = the vehicle's custodian drives (Part 6). */
   driver_required?: boolean;
+  /** Round 3: who the asker said drives, when not a driver; someone else's name and phone. */
+  driven_by?: Exclude<AskedDriver, "driver">;
+  driver_name?: string;
+  driver_phone?: string;
   /** Booked directly by the office: request and task in one go. */
   one_step?: boolean;
   cancelled?: string;
@@ -794,7 +823,10 @@ export interface RequestCard {
   requester_phone?: string;
   /** Once approved (§4, §35 19): who drives, in what, with their photos. */
   assigned?: {
+    /** Someone else's name when they drive (driven_by other). */
     driver: string;
+    /** Round 3: self = the person drives it themselves, other = someone not in Fame Fleet (no photo). */
+    driven_by?: Exclude<DrivenBy, "driver">;
     phone?: string;
     call?: string | null;
     whatsapp?: string | null;
@@ -1126,7 +1158,8 @@ export interface Suggestions {
   vehicles: SuggestedVehicle[];
   drivers: { name: string; username: string; availability: string }[];
   groups?: { free_pool: SuggestedVehicle[]; free_assigned: SuggestedVehicle[]; busy: SuggestedVehicle[]; in_garage: SuggestedVehicle[] };
-  drivers_free?: { name: string; username: string }[];
+  /** Round 3: the driver-first card (the photo, the vehicle held today or the regular one). */
+  drivers_free?: { name: string; username: string; photo_url?: string; vehicle?: DriverVehicleRef }[];
   /** The fleet setting: may a custodian drive with no driver assigned. */
   self_drive_allowed?: boolean;
   next?: string;
@@ -1608,6 +1641,8 @@ export interface OfficeUser {
   /** Round 1: shown to drivers as a contact (the app's Me). */
   driver_contact?: boolean;
   since?: string;
+  /** Round 3: their photo (the initials until there is one). */
+  photo_url?: string;
   /** Only for the people who make keys (users); a Coordinator's answer has none (Round 2b). */
   connector_keys?: OfficeKey[];
 }
@@ -1663,7 +1698,7 @@ export interface Issue {
   resolved?: string;
   resolved_by?: string;
   resolution_note?: string;
-  assigned_to?: { name: string; email?: string };
+  assigned_to?: { name: string; email?: string; photo_url?: string };
   /** Phase 7 (§9): "System · Vehicle problem" or the person; who took it and when; when it was resolved or dismissed. */
   opened_by?: string;
   taken_by?: { name: string; at?: string };
@@ -1805,7 +1840,7 @@ export interface Availability {
   /** Phase 7 (§3): the best match for the window (and the first stop, when given). */
   best?: BestMatch;
   counts: { free: number; on_duty: number; all: number };
-  vehicles: { groups: NonNullable<Suggestions["groups"]>; drivers_free: { name: string; username: string }[]; self_drive_allowed?: boolean };
+  vehicles: { groups: NonNullable<Suggestions["groups"]>; drivers_free: NonNullable<Suggestions["drivers_free"]>; self_drive_allowed?: boolean };
 }
 
 /** list_import_presets: the built-in presets and the mappings saved by name (Part 4b). */
@@ -2104,6 +2139,8 @@ export interface ActivityEntry {
   outcome: "done" | "refused" | "failed" | "running";
   /** A refusal's sentence. */
   reason?: string;
+  /** Round 3: a routine action (watching drivers, reading a notification, loading a map): shown quieter. */
+  routine?: true;
 }
 export interface ActivityLog extends Paged {
   from: string;

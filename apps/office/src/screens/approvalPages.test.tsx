@@ -2,6 +2,7 @@
 // (the stops and plan as asked, the proposal filled in, Send as proposed, only what changed sent, a refresh resets nothing),
 // "Leave-by passed", the requester's request with its plan and Withdraw (no driver, vehicle or conflict), the proposal on
 // the Requests list, the board's "Waiting for approval" column, and the setting.
+import { chooseDriver, pickedDriver } from "../test/controls";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -153,7 +154,7 @@ describe("the trip decide page (§33, §34)", () => {
     expect(screen.getByTestId("proposal-line").textContent).toBe("Task for Kamal Perera · WP CAB-4521 · proposed by Nimal Fernando");
     expect(screen.getByTestId("conflicts").textContent).toContain("Kamal is on Team drop 07:00–09:00");
     // The proposed driver, not the best match; the proposed vehicle.
-    expect((screen.getByLabelText("Driver") as HTMLSelectElement).value).toBe("kamal.p");
+    expect(pickedDriver()).toBe("kamal.p");
     expect((screen.getByLabelText("Vehicle") as HTMLSelectElement).selectedOptions[0].textContent).toBe("WP CAB-4521 · the proposed vehicle");
     expect((screen.getByLabelText("Leave by") as HTMLInputElement).value).toBe("08:00");
     expect(screen.queryByTestId("late-notice")).toBeNull();
@@ -177,15 +178,15 @@ describe("the trip decide page (§33, §34)", () => {
     expect(screen.getByTestId("departure-check")).toBeTruthy();
     const nuwan = screen.getAllByTestId("avail-row").find((r) => r.textContent?.includes("Nuwan Silva"))!;
     fireEvent.click(nuwan);
-    const select = screen.getByLabelText("Driver") as HTMLSelectElement;
-    expect(select.value).toBe("nuwan.s");
+    const select = screen.getByLabelText("Driver");
+    expect(select.getAttribute("data-value")).toBe("nuwan.s");
     expect((screen.getByLabelText("Vehicle") as HTMLSelectElement).selectedOptions[0].textContent).toBe("WP KL-1234 · Nuwan's regular vehicle");
 
     await settle(60_000); // the quiet refreshes
     await settle(400);
     expect(transport.count("availability")).toBeGreaterThanOrEqual(2);
     expect(screen.getByLabelText("Driver")).toBe(select);
-    expect(select.value).toBe("nuwan.s");
+    expect(select.getAttribute("data-value")).toBe("nuwan.s");
     expect((screen.getByLabelText("Leave by") as HTMLInputElement).value).toBe("08:30");
 
     fireEvent.click(screen.getByRole("button", { name: "Approve and send" }));
@@ -210,6 +211,42 @@ describe("the trip decide page (§33, §34)", () => {
     expect(screen.getByText("The list")).toBeTruthy();
   });
 
+  it("Round 3: a request someone else drives says so in words; Approve waits for a plate (the reason under it), sends no driver; a driver given instead is sent", async () => {
+    const card: RequestCard = {
+      ...proposal, id: "r6", kind: "request", title: undefined, proposed: undefined, requested_by: "Dilini Jayasinghe",
+      driver_required: false, driven_by: "other", driver_name: "Nimal Silva", driver_phone: "+94771234567",
+    };
+    const transport = decideTransport(card);
+    await mount(transport, "/requests/r6/decide", decideRoutes);
+    await opened();
+    expect(screen.getByTestId("decide-asked").textContent).toContain("Someone else: Nimal Silva · 077 123 4567");
+    // No driver picked by default: the request names who drives.
+    expect(pickedDriver()).toBe("");
+    const approve = screen.getByTestId("decide-send") as HTMLButtonElement;
+    expect(approve.textContent).toBe("Approve");
+    expect(approve.disabled).toBe(true);
+    expect(screen.getByTestId("approve-why").textContent).toBe("Nimal Silva drives it: pick the vehicle (nobody confirms one on the day).");
+    fireEvent.change(screen.getByLabelText("Vehicle"), { target: { value: "WP PH-2087" } });
+    expect(approve.disabled).toBe(false);
+    fireEvent.click(approve);
+    await settle();
+    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r6", decision: "approve", version: 1, decided_by: "Palitha", vehicle: "WP PH-2087" }]);
+  });
+
+  it("Round 3: the asker drives it themselves; the approver may give a driver instead (the driver cards)", async () => {
+    const card: RequestCard = { ...proposal, id: "r7", kind: "request", title: undefined, proposed: undefined, requested_by: "Dilini Jayasinghe", driver_required: false, driven_by: "self" };
+    const transport = decideTransport(card);
+    await mount(transport, "/requests/r7/decide", decideRoutes);
+    await opened();
+    expect(screen.getByTestId("decide-asked").textContent).toContain("Drives themselves");
+    expect(screen.getByTestId("approve-why").textContent).toBe("Dilini drives it: pick the vehicle (nobody confirms one on the day).");
+    chooseDriver("nuwan.s");
+    expect(screen.queryByTestId("approve-why")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Approve and send" }));
+    await settle();
+    expect(transport.argsOf("decide_request")).toEqual([{ request_id: "r7", decision: "approve", version: 1, decided_by: "Palitha", driver: "nuwan.s" }]);
+  });
+
   it("a request planned with its stops takes the best match (no proposal) and names the driver", async () => {
     const card: RequestCard = { ...proposal, id: "r5", kind: "request", title: undefined, proposed: undefined, requested_by: "Dilini Jayasinghe" };
     const transport = decideTransport(card);
@@ -217,7 +254,7 @@ describe("the trip decide page (§33, §34)", () => {
     await opened();
     expect(screen.getByTestId("request-decide-trip")).toBeTruthy();
     expect(screen.queryByTestId("proposal-line")).toBeNull();
-    expect((screen.getByLabelText("Driver") as HTMLSelectElement).value).toBe("nuwan.s");
+    expect(pickedDriver()).toBe("nuwan.s");
     expect(screen.getByTestId("driver-default").textContent).toContain("The best match");
     fireEvent.click(screen.getByRole("button", { name: "Approve and send" }));
     await settle();

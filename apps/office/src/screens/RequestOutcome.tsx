@@ -4,12 +4,16 @@
 // "Tell requester": the message for the trip's moment (approved, driver
 // changed, on the way, arrived, cancelled) opened in WhatsApp, nothing sent by
 // itself, with the requester's phone an approver can change on the page.
+// Round 3: who drives in the driver card (ui/DriverRow DriverLine): a trip with no app says "Drives themselves" or
+// "Someone else" (their name and their own number), never a driver of ours.
 import { useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import type { PhoneLinks, RequestCard } from "../data/types";
 import { asFleetError, errText } from "../transport/errors";
-import { Avatar, Notice, Plate, VehicleThumb } from "../ui/basics";
+import { Notice, Plate, VehicleThumb } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
+import { DriverLine } from "../ui/DriverRow";
+import { firstName } from "../ui/driverRowLogic";
 import { linksFromCall } from "../ui/phoneLinks";
 import { Icon } from "../ui/icons";
 import { useToast } from "../ui/Toast";
@@ -22,14 +26,11 @@ export const assignedPhone = (a: Pick<NonNullable<RequestCard["assigned"]>, "pho
 export function AssignedBlock({ a }: { a: NonNullable<RequestCard["assigned"]> }) {
   return (
     <div className="card card-b assigned" data-testid="assigned">
-      <div className="section-t">Driver and vehicle</div>
+      <div className="section-t">{a.driven_by ? "Who drives and the vehicle" : "Driver and vehicle"}</div>
       <div className="row" style={{ padding: 0 }}>
-        <Avatar name={a.driver} src={a.photo_url} large />
-        <div className="grow">
-          <div className="name" style={{ fontSize: 18 }}>{a.driver}</div>
-        </div>
+        <span className="grow"><DriverLine name={a.driver} photo={a.photo_url} drivenBy={a.driven_by} /></span>
         {/* Hotfix 2 (F): Call driver and WhatsApp driver (tel: and wa.me on a phone; the number, Copy and WhatsApp web on a computer). */}
-        <ContactButtons phone={assignedPhone(a)} label="Call driver" testId="call-driver" />
+        <ContactButtons phone={assignedPhone(a)} label={a.driven_by === "other" ? `Call ${firstName(a.driver)}` : "Call driver"} testId="call-driver" />
       </div>
       <div className="assigned-vehicle">
         <VehicleThumb src={a.vehicle_photo_url ?? a.vehicle_thumb_url} plate={a.vehicle} size="md" />

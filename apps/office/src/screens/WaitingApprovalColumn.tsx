@@ -7,7 +7,9 @@
 import { useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import type { WaitingApprovalCard } from "../data/types";
-import { Avatar, Dot, Plate } from "../ui/basics";
+import { Dot } from "../ui/basics";
+import { DriverLine, VehicleChip } from "../ui/DriverRow";
+import { vehicleChipWords } from "../ui/driverRowLogic";
 import { LATE_BADGE, waitingTarget } from "./approvalLogic";
 
 function WaitingCard({ c, to }: { c: WaitingApprovalCard; to: string | null }) {
@@ -18,7 +20,12 @@ function WaitingCard({ c, to }: { c: WaitingApprovalCard; to: string | null }) {
       <span className="title">{c.title}</span>
       <span className="route">From {c.from || "—"}<br />To {c.to || "—"}{c.stops_count > 2 ? ` · ${c.stops_count} stops` : ""}</span>
       <span className="leave"><span className="num">Leave by {c.leave_by || c.time}</span><span className="muted"> · proposed by {c.proposed_by}</span></span>
-      <span className="who"><Avatar name={c.driver} small /><span className="grow">{c.driver || "No driver proposed"}</span>{c.vehicle ? <Plate v={c.vehicle} /> : c.vehicle_text ? <span className="muted">{c.vehicle_text}</span> : null}</span>
+      {/* Round 3: the proposed driver as the driver-first card (the vehicle chip under the name), as on the board's cards. */}
+      <span className="who">
+        {c.driver
+          ? <DriverLine name={c.driver} vehicle={vehicleChipWords(c.vehicle, { text: c.vehicle_text })} />
+          : <><span className="grow muted">No driver proposed</span>{c.vehicle || c.vehicle_text ? <VehicleChip chip={vehicleChipWords(c.vehicle, { text: c.vehicle_text })} /> : null}</>}
+      </span>
       <span className={`status ${c.late ? "bad" : "muted"}`}>{c.status}</span>
       {c.late && <span><span className="pill bad">{LATE_BADGE}</span></span>}
     </>

@@ -4,8 +4,9 @@
 // "Passengers get in here".
 import type { ReactNode } from "react";
 import { useFleet } from "../app/FleetContext";
-import type { Driver, PlanPreview, SettingsResult, Vehicle } from "../data/types";
+import type { PlanPreview, SettingsResult, Vehicle } from "../data/types";
 import { type Query, useQuery } from "../data/useQuery";
+import { DriverPicker, type DriverOption } from "../ui/DriverPicker";
 import { LocationSearch } from "../ui/LocationSearch";
 import type { Picked } from "../ui/locationLogic";
 import type { DefaultVehicle } from "./availabilityLogic";
@@ -41,25 +42,25 @@ export function basePlace(s: SettingsResult | undefined): { id: string; name: st
   return s?.base_place ? { id: s.base_place.id, name: s.base_place.name } : null;
 }
 
-/** The driver select, first on the form. */
-export function DriverSelect({ id, value, drivers, onChange, emptyLabel, autoFocus, loading }: {
+/**
+ * The driver field, first on the form (Round 3: the driver picker, ui/DriverPicker: the driver-first cards with a search,
+ * a popover on a desktop, a sheet on a phone; it replaced the name-only select).
+ */
+export function DriverSelect({ id, value, drivers, onChange, emptyLabel, emptyChoice, autoFocus, loading, onTheDay }: {
   id: string;
   value: string;
-  drivers: Pick<Driver, "username" | "name">[];
+  /** ui/driverPickerLogic.driverOptions: Who's available's rows, the driver list, the free drivers. */
+  drivers: DriverOption[];
   onChange: (username: string) => void;
   emptyLabel: string;
+  /** A row that goes back to none ("Keep the driver"). */
+  emptyChoice?: string;
   autoFocus?: boolean;
   loading?: boolean;
+  /** The fleet setting vehicle_on_the_day (the chip of a driver with no vehicle known). */
+  onTheDay?: boolean;
 }) {
-  return (
-    <div className="field">
-      <label htmlFor={id}>Driver</label>
-      <select id={id} value={value} onChange={(e) => onChange(e.target.value)} autoFocus={autoFocus}>
-        <option value="">{loading ? "Loading…" : emptyLabel}</option>
-        {drivers.map((d) => <option key={d.username} value={d.username}>{d.name}</option>)}
-      </select>
-    </div>
-  );
+  return <DriverPicker id={id} value={value} options={drivers} onChange={onChange} emptyLabel={emptyLabel} emptyChoice={emptyChoice} autoFocus={autoFocus} loading={loading} onTheDay={onTheDay} />;
 }
 
 /**

@@ -1,6 +1,6 @@
 // Part 3b (H2): the one driver row's words and links.
 import { describe, expect, it } from "vitest";
-import { factsLine, firstName, livePresence, nextLine, nowTone, toPhoneLinks } from "./driverRowLogic";
+import { drivenByWord, factsLine, firstName, livePresence, nextLine, nowTone, toPhoneLinks, vehicleChipWords } from "./driverRowLogic";
 
 describe("the driver row's words (H2)", () => {
   it("the status chip: on a task blue, on duty green, off duty grey, not available amber", () => {
@@ -33,5 +33,21 @@ describe("the driver row's words (H2)", () => {
       usual_start: "07:40",
     })).toEqual({ warn: "Running late 15 min · said 08:52 · Not available, back 13:00", facts: "Next: Team drop · 14:30 · usually starts 07:40" });
     expect(livePresence({})).toEqual({ warn: "", facts: "" });
+  });
+});
+
+describe("the driver-first card's vehicle chip and small word (Round 3)", () => {
+  it("the plate, \"regular\" beside a regular one, the answer's words, else on the day (setting on) or none yet", () => {
+    expect(vehicleChipWords({ reg_no: "WP CAB-4521", source: "on_duty" })).toEqual({ plate: "WP CAB-4521" });
+    expect(vehicleChipWords({ reg_no: "WP KL-1234", source: "regular" })).toEqual({ plate: "WP KL-1234", note: "regular" });
+    expect(vehicleChipWords("WP CAB-4521", { note: "since 08:40" })).toEqual({ plate: "WP CAB-4521", note: "since 08:40" });
+    expect(vehicleChipWords(undefined, { text: "Any van" })).toEqual({ text: "Any van" });
+    expect(vehicleChipWords(null, { onTheDay: true })).toEqual({ text: "Vehicle: on the day" });
+    expect(vehicleChipWords(null)).toEqual({ text: "No vehicle yet" });
+    expect(vehicleChipWords("", { onTheDay: false })).toEqual({ text: "No vehicle yet" });
+  });
+
+  it("a trip with no app says who drives instead of a state", () => {
+    expect([drivenByWord("self"), drivenByWord("other"), drivenByWord("driver"), drivenByWord(undefined)]).toEqual(["Drives themselves", "Someone else", null, null]);
   });
 });

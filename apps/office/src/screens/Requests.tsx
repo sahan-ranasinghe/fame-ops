@@ -15,12 +15,15 @@ import { useFleet } from "../app/FleetContext";
 import type { RequestCard, RequestsList } from "../data/types";
 import { cap, requestTone } from "../lib/format";
 import { can, canOpenTask } from "../transport/types";
-import { ErrBox, Pill, StaleNote } from "../ui/basics";
+import { Avatar, ErrBox, Pill, StaleNote } from "../ui/basics";
+import { phoneDisplay } from "../ui/ContactButtons";
 import { FilterBar } from "../ui/FilterBar";
 import { pairsDef } from "../ui/filterLogic";
 import { Icon } from "../ui/icons";
 import { EmptyLine, ListHeader, LoadMore, Pager, SearchBox, SkeletonRows, useUrlFilter, useUrlSearch, useWatchedPagedList } from "../ui/ListKit";
 import { ListWithDetail } from "../ui/Page";
+import { drivenByWord } from "../ui/driverRowLogic";
+import { askedOf, askedWords } from "../ui/whoDrivesLogic";
 import { LATE_BADGE, proposalLine, requestView } from "./approvalLogic";
 import { ReviewingLine } from "./approvers";
 import { timelineSteps } from "./requestLogic";
@@ -92,13 +95,17 @@ export function Requests() {
                                     <div className="sub" data-testid="proposal-line">{requestView(q, me).proposal ? proposalLine(q) : `proposed by ${q.requested_by}`}</div>
                                   </>
                                 )
-                                : <><b>{q.requested_by}</b>{q.on_behalf_of && <span className="muted"> · for {q.on_behalf_of}</span>}</>}
+                                : <span className="person"><Avatar name={q.requested_by} src={q.requested_by_photo_url} small /><span><b>{q.requested_by}</b>{q.on_behalf_of && <span className="muted"> · for {q.on_behalf_of}</span>}</span></span>}
                               {q.asked && <div className="sub">{q.asked}</div>}
                             </td>
                             <td data-label="Project">{q.project || "—"}</td>
                             <td data-label="When">{q.when}{q.back_by && <div className="sub">back by {q.back_by}</div>}</td>
                             <td data-label="Route" className="muted">{q.route || "—"}{q.stops_count && q.stops_count > 2 ? <div className="sub">{q.stops_count} stops</div> : null}</td>
-                            <td data-label="Need">{q.kind === "task" ? (q.proposed?.passengers != null ? `${q.proposed.passengers} passengers` : "—") : q.need || "—"}{q.driver_required === false && <div className="sub">no driver · custodian drives</div>}</td>
+                            <td data-label="Need">{q.kind === "task" ? (q.proposed?.passengers != null ? `${q.proposed.passengers} passengers` : "—") : q.need || "—"}{(() => {
+                              // Round 3: who drives when it is not a driver of ours: the task's once approved, else what was asked.
+                              const who = q.assigned ? drivenByWord(q.assigned.driven_by) : askedOf(q) !== "driver" ? askedWords(q, phoneDisplay) : null;
+                              return who ? <div className="sub" data-testid="row-asked">{who}</div> : null;
+                            })()}</td>
                             <td data-label="Status">
                               <Pill tone={requestTone(q.status)}>{cap(q.status)}</Pill>
                               {q.late && <> <Pill tone="bad">{LATE_BADGE}</Pill></>}

@@ -168,8 +168,10 @@ export default function IssueScreen() {
             )}
             <View style={{ gap: 6 }}>
               {facts.map((f) => (
-                <View key={f.key} style={{ flexDirection: 'row', gap: 10 }}>
+                <View key={f.key} style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
                   <Txt variant="muted" size={15} style={{ width: 110 }}>{t(`office.issues.fact.${f.key}`)}</Txt>
+                  {/* Round 3: the assignee's photo beside "Taken by". */}
+                  {f.key === 'takenBy' && i.assigned_to ? <Avatar name={i.assigned_to.name} size={28} photo={i.assigned_to.photo_url} /> : null}
                   <Txt variant="strong" size={15} style={{ flex: 1 }}>{f.value}</Txt>
                 </View>
               ))}

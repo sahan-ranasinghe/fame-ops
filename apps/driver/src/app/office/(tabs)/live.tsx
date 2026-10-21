@@ -34,6 +34,8 @@ import { type Playback, PlaybackBar, usePlayback } from '@/components/office/Pla
 import { pickedStyle } from '@/components/patterns/Select';
 import { LanguagePill } from '@/components/LanguageSwitch';
 import { DriverDot } from '@/components/mapPins';
+import { VehicleChipView } from '@/components/office/DriverRows';
+import { vehicleChip } from '@/office/approveLogic';
 import { Sheet } from '@/components/patterns/Sheet';
 import { Button, Plate, Txt } from '@/components/ui';
 import { plusDays } from '@/lib/patterns/calendarLogic';
@@ -48,7 +50,7 @@ import {
 } from '@/office/liveRouteLogic';
 import { useOffice, useTool } from '@/office/state';
 import { initials } from '@/office/text';
-import type { DriverRoute, FleetError, LiveDriver, LiveDrivers } from '@/office/types';
+import type { DriverRoute, FleetError, LiveDriver, LiveDrivers, SettingsResult } from '@/office/types';
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
@@ -70,6 +72,9 @@ export default function LiveTab() {
   const focused = useIsFocused();
   const { driver: param } = useLocalSearchParams<{ driver?: string }>();
   const q = useTool<LiveDrivers>('live_drivers', {}, { every: 30_000 });
+  // Round 3: the vehicle chip says "Vehicle: on the day" when the fleet setting is on and a driver holds none.
+  const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
+  const onDay = settings.data?.settings.vehicle_on_the_day === true;
   const [values, setValues] = useState<FilterValues>({ duty: 'all' });
   const filter = liveChoice(values);
   const [selected, setSelected] = useState<string | null>(null);
@@ -269,7 +274,7 @@ export default function LiveTab() {
         {rows.map((d, i) => (
           <View key={d.username}>
             {i > 0 && <Divider />}
-            <DriverRow d={d} selected={d.username === selected} onPress={() => select(d.username)} />
+            <DriverRow d={d} selected={d.username === selected} onPress={() => select(d.username)} onDay={onDay} />
           </View>
         ))}
       </ScrollView>
@@ -301,19 +306,22 @@ export default function LiveTab() {
   );
 }
 
-/** A driver's row: the ring with the initials, "Sunil · [WP CAB-4521]", the line, the pill (design 15). */
-function DriverRow({ d, selected, onPress }: { d: LiveDriver; selected: boolean; onPress: () => void }) {
+/**
+ * A driver's row (design 15; Round 3: the driver-first card of Uber Fleet and Samsara): the photo in the state's ring
+ * (the initials until there is one), the name, the vehicle chip under it, the line, the pill.
+ */
+function DriverRow({ d, selected, onPress, onDay }: { d: LiveDriver; selected: boolean; onPress: () => void; onDay: boolean }) {
   const { t } = useApp();
   const pill = pillOf(d);
   return (
     <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} testID={`live-row-${d.username}`}
       style={({ pressed }) => [styles.row, selected && pickedStyle, pressed && { opacity: 0.7 }]}>
-      <DriverDot initials={initials(d.driver)} tone={pill.tone} dim={pill.key === 'offDuty'} selected={selected} size={40} />
+      <DriverDot initials={initials(d.driver)} tone={pill.tone} dim={pill.key === 'offDuty'} selected={selected} size={40} photo={d.photo_url} />
       <View style={{ flex: 1, gap: 2 }}>
         <View style={styles.name}>
           <Txt variant="strong" size={17} numberOfLines={1} style={{ flexShrink: 1 }}>{d.driver}</Txt>
-          {d.vehicle ? <Plate regNo={d.vehicle} /> : null}
         </View>
+        <VehicleChipView chip={vehicleChip({ vehicle: d.vehicle ? { reg_no: d.vehicle, source: 'on_duty' } : null }, onDay)} />
         <Txt variant="muted" size={15} numberOfLines={2}>{rowLine(d, t)}</Txt>
       </View>
       <StatusChip text={t(`office.live.pill.${pill.key}`)} tone={pill.tone} />
@@ -355,7 +363,7 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, 
   const insets = useSafeAreaInsets();
   const pill = pillOf(d);
   const links = d.links ?? {};
-  const extra = [sentenceText(t, d.status_text), d.task_note, d.not_available, d.app_stops_text].filter((s): s is string => !!s);
+  const extra = [sentenceText(t, d.status_text), d.task_note, d.not_available ? sentenceText(t, d.not_available) : undefined, d.app_stops_text].filter((s): s is string => !!s);
   const summary = route?.route ? routeSummary(route.route, t) : null;
   const facts = [speedText(d, t), batteryText(d, t)].filter((s): s is string => !!s);
   // Clock out: a sheet with the optional reason; the answer in the snackbar, the server's refusal on the card.
@@ -384,7 +392,7 @@ function DriverCard({ d, onClose, onLayout, route, playback, cursor, onHistory, 
     <View style={[styles.card, { paddingBottom: Math.max(insets.bottom, 12) }]} testID="live-card" onLayout={onLayout}>
       <View style={styles.handle} />
       <View style={styles.cardHead}>
-        <DriverDot initials={initials(d.driver)} tone={pill.tone} dim={pill.key === 'offDuty'} size={44} />
+        <DriverDot initials={initials(d.driver)} tone={pill.tone} dim={pill.key === 'offDuty'} size={44} photo={d.photo_url} />
         <View style={{ flex: 1, gap: 4 }}>
           <View style={styles.name}>
             <Txt variant="big" numberOfLines={1} style={{ flexShrink: 1 }}>{d.driver}</Txt>

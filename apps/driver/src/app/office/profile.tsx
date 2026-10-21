@@ -134,7 +134,8 @@ export default function OfficeProfile() {
         <View style={styles.hero}>
           <Pressable accessibilityRole="button" accessibilityLabel={t('profilePhoto.change')} onPress={askPhoto} disabled={photoBusy} testID="profile-photo">
             <View style={styles.bigAvatar}>
-              {photo.uri ? <Image source={{ uri: photo.uri }} style={styles.bigPhoto} accessibilityIgnoresInvertColors />
+              {/* Round 3: /me's photo_url until this phone's own link (or a just-saved photo) is there. */}
+              {photo.uri ?? me.photo_url ? <Image source={{ uri: (photo.uri ?? me.photo_url) as string }} style={styles.bigPhoto} accessibilityIgnoresInvertColors />
                 : <Txt variant="heading" size={26} color={colors.ink}>{initials(me.name)}</Txt>}
               {photoBusy && <View style={styles.photoBusy}><ActivityIndicator color="#ffffff" /></View>}
             </View>

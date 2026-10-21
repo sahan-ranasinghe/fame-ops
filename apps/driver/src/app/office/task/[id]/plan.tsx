@@ -14,6 +14,7 @@ import { TaskMap } from '@/components/TaskMap';
 import { Mono, Txt } from '@/components/ui';
 import { durationText } from '@/lib/durations';
 import { useOffice, useTool } from '@/office/state';
+import { sentenceText } from '@/office/statusWords';
 import { detailTask, planDrawable } from '@/office/taskDetailLogic';
 import { legTextT, stopTimesT } from '@/office/trip/words';
 import type { TaskDetail } from '@/office/types';
@@ -79,7 +80,7 @@ export default function TaskPlanScreen() {
               </View>
             </Section>
           )}
-          {plan?.warnings?.map((w, i) => <Txt key={i} variant="strong" size={15} color={colors.amberText}>{w}</Txt>)}
+          {plan?.warnings?.map((w, i) => <Txt key={i} variant="strong" size={15} color={colors.amberText}>{sentenceText(t, w)}</Txt>)}
         </View>
       </Screen>
     </View>

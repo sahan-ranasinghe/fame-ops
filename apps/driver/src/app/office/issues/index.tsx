@@ -25,7 +25,7 @@ import {
 import { useOffice, useTool } from '@/office/state';
 import { has } from '@/office/nav';
 import type { FleetError, Issue, IssuesList, VehiclesList } from '@/office/types';
-import { Chip, DarkHeader, Divider, ListFailed, Screen, Section, StatusChip, type Tone } from '@/office/ui';
+import { Avatar, Chip, DarkHeader, Divider, ListFailed, Screen, Section, StatusChip, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -116,6 +116,8 @@ export default function IssuesScreen() {
           <Txt variant="muted" size={15} numberOfLines={2}>{rowLine(i, kindText(i, t))}</Txt>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {i.vehicle ? <Plate regNo={i.vehicle} /> : null}
+            {/* Round 3: the person who took it, their photo beside the words (initials until there is one). */}
+            {i.assigned_to ? <Avatar name={i.assigned_to.name} size={24} photo={i.assigned_to.photo_url} /> : null}
             <Txt variant="small" style={{ flex: 1 }} numberOfLines={2}>{whoLine(i, words)}</Txt>
           </View>
           {snooze && (

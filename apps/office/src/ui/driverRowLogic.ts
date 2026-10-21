@@ -1,7 +1,7 @@
 // Part 3b (H2): one driver row everywhere a driver is listed for dispatch (Who's available, Live, the Drivers board), the
 // pure part: the status chip's tone, the facts line ("Last seen 17:42 near Kadawatha · usually starts 07:40"), the next
 // task, and the Call / WhatsApp links of an answer that carries only some of them. Pure.
-import type { NowStatus, PersonLinks, PhoneLinks } from "../data/types";
+import type { DriverVehicleRef, DrivenBy, NowStatus, PersonLinks, PhoneLinks } from "../data/types";
 import type { Tone } from "../lib/format";
 import { phoneDisplay } from "./ContactButtons";
 
@@ -19,6 +19,43 @@ export interface DriverRowInfo {
   next_task?: { title: string; when: string };
   /** "07:40" */
   usual_start?: string;
+}
+
+/**
+ * Round 3 (Uber Fleet's and Samsara's driver lists: the person first, the vehicle under them): the vehicle chip's words.
+ * The plate ("regular" beside it when it is their regular one, not held today), else the answer's own words for a task
+ * with no plate yet ("Vehicle: on the day", "Any van"), else "Vehicle: on the day" while the fleet setting
+ * vehicle_on_the_day is on, else "No vehicle yet".
+ */
+export interface VehicleChipWords {
+  plate?: string;
+  /** Beside the plate: "regular", "since 08:40". */
+  note?: string;
+  /** No plate: the words alone. */
+  text?: string;
+}
+
+export const NO_VEHICLE_YET = "No vehicle yet";
+export const VEHICLE_ON_THE_DAY = "Vehicle: on the day";
+
+export function vehicleChipWords(
+  v: DriverVehicleRef | string | null | undefined,
+  o: { onTheDay?: boolean; text?: string | null; note?: string } = {},
+): VehicleChipWords {
+  const plate = typeof v === "string" ? v : v?.reg_no;
+  if (plate) {
+    const note = o.note ?? (typeof v === "object" && v?.source === "regular" ? "regular" : undefined);
+    return note ? { plate, note } : { plate };
+  }
+  if (o.text) return { text: o.text };
+  return { text: o.onTheDay ? VEHICLE_ON_THE_DAY : NO_VEHICLE_YET };
+}
+
+/** Round 3: the small word that takes the duty state's place on a trip with no app ("Drives themselves", "Someone else"). */
+export function drivenByWord(by: DrivenBy | string | null | undefined): string | null {
+  if (by === "self") return "Drives themselves";
+  if (by === "other") return "Someone else";
+  return null;
 }
 
 /** The status chip: on a task blue, on duty green, off duty grey, not available amber. */

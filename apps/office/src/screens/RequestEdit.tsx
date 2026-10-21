@@ -7,6 +7,8 @@
 // waiting request stays waiting; an approved booking becomes "changed" and
 // needs re-approval (the approvers are told). Kept as a draft for this request.
 // Phase 7 (§4): an approver may give or change the requester's phone.
+// Round 3: "Who drives?" (ui/WhoDrives) in place of "A driver is needed"; on someone else's request (an approver
+// changing it) the second choice is "<their first name> drives", as the server takes the asker as the one who drives.
 import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -19,9 +21,11 @@ import { Loading, Notice, Pill } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
 import { PageTop, StickyActions, useAfterSave } from "../ui/Page";
 import { useToast } from "../ui/Toast";
+import { WhoDrives } from "../ui/WhoDrives";
+import { selfLabel } from "../ui/whoDrivesLogic";
 import { basePlace, useFleetSettings } from "./dispatchParts";
 import { useRequest } from "./RequestDetail";
-import { editFields, type RequestFields, updateRequestInput } from "./requestLogic";
+import { editFields, type RequestFields, updateRequestInput, whoOf } from "./requestLogic";
 import { TripEditor, useTrip } from "./TripEditor";
 import { tripPlanInput } from "./tripLogic";
 
@@ -128,8 +132,8 @@ function EditForm({ id, q, f, setF, draft }: {
           </div>
           <div className="field" style={{ gap: 8 }}>
             <span className="check"><input type="checkbox" id="re-tools" checked={f.tools} onChange={(e) => set("tools", e.target.checked)} /> <label htmlFor="re-tools">Tools or equipment go too</label></span>
-            {selfDrive && <span className="check"><input type="checkbox" id="re-driver" checked={f.driver} onChange={(e) => set("driver", e.target.checked)} /> <label htmlFor="re-driver">A driver is needed</label></span>}
           </div>
+          <WhoDrives id="re" value={whoOf(f)} onChange={(w) => set("who", w)} hidden={!selfDrive} selfWords={selfLabel(q.requested_by, me.name)} />
           <div className="field"><label htmlFor="re-note">Note</label><textarea id="re-note" maxLength={1000} value={f.note} onChange={(e) => set("note", e.target.value)} /></div>
         </div>
         {msg && <Notice tone="bad">{msg}</Notice>}

@@ -12,6 +12,8 @@ import type { CreateTaskResult } from '../types';
 import { waLink } from './format';
 import { hasDeadline, stopsInput } from './stopsLogic';
 import { type Base, emptyTrip, type TripFields, tripPlanInput } from './tripLogic';
+// Round 3 (the app's own addition until the site's file is copied again): "Who drives?" (whoDrivesLogic.ts).
+import { whoInput, whoProblem, type WhoDrives } from './whoDrivesLogic';
 
 export interface ProjectRow {
   project: string;
@@ -65,9 +67,20 @@ export function validateAssign(
   f: AssignFields,
   rows: ProjectRow[],
   createdBy?: string,
-  opts: { defaultVehicle?: string | null; base?: Base } = {},
+  opts: { defaultVehicle?: string | null; base?: Base; who?: WhoDrives } = {},
 ): { error: string } | { input: Record<string, unknown> } {
   const t = (s: string) => s.trim();
+  // Round 3: the person assigning drives it, or someone else: no driver, a plate (no app to choose one on the day).
+  if (opts.who && (opts.who.choice === "self" || opts.who.choice === "other")) {
+    const missing = [[t(f.title), "the task"], [t(f.date), "the date"]].filter(([v]) => !v).map((n) => n[1]);
+    if (missing.length) return { error: `Add ${missing.join(", ")}.` };
+    const problem = whoProblem(opts.who, { needsPlate: true, plate: f.vehicle });
+    if (problem) return { error: problem };
+    const v = validateAssign({ ...f, driver: "noapp" }, rows, createdBy, { base: opts.base });
+    if ("error" in v) return v;
+    const { driver: _driver, ...input } = v.input;
+    return { input: { ...input, ...whoInput(opts.who) } };
+  }
   // The vehicle fills itself when the driver brings one, or when that is not known yet (the server then decides).
   const fills = !!t(f.driver) && "defaultVehicle" in opts && opts.defaultVehicle !== null;
   const need: [string, string][] = [[t(f.title), "the task"], [t(f.date), "the date"], [t(f.driver), "a driver"], [t(f.vehicle) || (fills ? "filled" : ""), "a vehicle"]];

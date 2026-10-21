@@ -11,6 +11,8 @@
 // the trip editor's (§34). Someone without the approve permission, while new
 // tasks need the fleet admin's OK, proposes the task instead: it waits in the
 // approval queue and nothing goes to the driver yet (§33).
+// Round 3: "Who drives?" (ui/WhoDrives): a driver (picked from the driver cards, ui/DriverPicker), I'll drive myself, or
+// someone else (a name and a phone). The last two need a plate (the reason under the button) and send nothing.
 import { type FormEvent, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -23,18 +25,21 @@ import { errText } from "../transport/errors";
 import type { FleetError } from "../transport/types";
 import { Notice, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
+import { driverOptions } from "../ui/driverPickerLogic";
 import { Icon } from "../ui/icons";
+import { WhoDrives } from "../ui/WhoDrives";
+import { emptyWho, plateReason } from "../ui/whoDrivesLogic";
 import { PageTop, StickyActions } from "../ui/Page";
 import { useToast } from "../ui/Toast";
-import { type AssignFields, assignOutcome, driverWhatsApp, emptyAssign, planInput, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
+import { type AssignFields, assignOutcome, assignWho, driverWhatsApp, emptyAssign, planInput, type ProjectRow, splitTotal, validateAssign } from "./assignLogic";
 import { linkedDriver, linkedTime } from "./asks/askLogic";
-import { availabilityArgs, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
+import { availabilityArgs, driverVehicle, floorTo5 } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
 import { basePlace, DriverSelect, useFleetSettings, VehicleSelect, vehicleOnTheDay } from "./dispatchParts";
 import { defaultStops, firstStopOf } from "./stopsLogic";
 import { BackByField, LeaveByField, TripPlanCard, TripRoute, useTrip } from "./TripEditor";
-import { knownDef, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
+import { isChoice, knownDef, vehicleArg, vehicleDefault } from "./vehicleChoiceLogic";
 import { TripDayPicker } from "../ui/DayPicker";
 
 const SPLIT_COLORS = ["var(--accent)", "var(--live)", "var(--ok)", "var(--bad)", "var(--muted)"];
@@ -71,11 +76,15 @@ export function NewTask() {
   const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Without approve, while new tasks need the fleet admin's OK (on unless switched off), the task is proposed (§33).
   const proposes = settings.data?.settings.tasks_need_approval !== false && !me.permissions.includes("approve");
+  // Round 3: who drives (always a driver while self-drive is off); the person or someone else = no app, a plate.
+  const selfDrive = settings.data?.settings.self_drive_allowed !== false;
+  const who = selfDrive ? assignWho(f) : emptyWho();
+  const noApp = who.by !== "driver";
 
   // The trip: the plan follows the form, 1.5 s after the last change; Plan now skips the wait. The plan shown stays while
   // the next comes. The departure check fills an empty leave-by, else says what a typed one does; "Vehicle free by" is
   // the back-by (§20).
-  const trip = useTrip(f, (fn) => setF(fn), { base, settings: settings.data, planInput: planInput(f, base), backLabel: "free by" });
+  const trip = useTrip(f, (fn) => setF(fn), { base, settings: settings.data, planInput: planInput({ ...f, who }, base), backLabel: "free by" });
   const preview = trip.preview;
 
   const drivers = (lists.drivers ?? []).filter((d) => d.active !== false);
@@ -91,8 +100,10 @@ export function NewTask() {
   const def = f.driver ? driverVehicle(vehicleFor(avail.data, f.driver), pickedDriver, drivers.map((d) => d.name)) : null;
   // Hotfix 2 (J): with vehicle_on_the_day on, a later day (or a driver who brings none today) leaves the vehicle to the day.
   const onDay = vehicleOnTheDay(settings.data);
-  const dflt = vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.driver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
+  const dflt = noApp ? null : vehicleDefault({ on: onDay, date: f.date, today: today(), driver: f.driver, def: knownDef(def, !!avail.data || !me.tools.includes("availability")) });
   const dayDefault = dflt?.kind === "on_the_day";
+  // Assign & send waits for a plate when nobody of ours drives (the reason under the button).
+  const plateWhy = noApp && (!f.vehicle.trim() || isChoice(f.vehicle)) ? plateReason(who) : null;
 
   /** Picking a driver in the list: the vehicle follows them (their vehicle today, else their regular one) unless one was picked. */
   function pickDriver(username: string) {
@@ -129,7 +140,7 @@ export function NewTask() {
     // The driver's vehicle: known (Who's available, else the driver list), known to be none, or not known yet (the server decides).
     const known = def?.reg_no ?? (avail.data || !me.tools.includes("availability") ? null : undefined);
     // "on the day" is named when it is the default (Hotfix 2, J): never held up for a vehicle.
-    const v = validateAssign({ ...f, vehicle: vehicleArg(f.vehicle, dflt) }, rows, me.name, { defaultVehicle: known, base });
+    const v = validateAssign({ ...f, who, vehicle: noApp ? f.vehicle : vehicleArg(f.vehicle, dflt) }, rows, me.name, { defaultVehicle: known, base });
     if ("error" in v) {
       setMsg({ tone: "bad", text: v.error });
       return;
@@ -137,10 +148,10 @@ export function NewTask() {
     setBusy(true);
     try {
       const p = await transport.call<CreateTaskResult>("create_task", v.input);
-      const drv = drivers.find((x) => x.username === v.input.driver);
-      const out = assignOutcome(p, drv ? drv.name : String(v.input.driver));
-      // A proposed task is not with the driver yet: no WhatsApp message either.
-      const wa = !out.waiting && f.whatsapp && drv?.phone ? driverWhatsApp(v.input, drv.phone, p.leave_by ? `Leave by ${p.leave_by}` : undefined) : "";
+      const drv = noApp ? undefined : drivers.find((x) => x.username === v.input.driver);
+      const out = assignOutcome(p, who.by === "other" ? who.name.trim() : drv ? drv.name : String(v.input.driver ?? me.name), who.by);
+      // A proposed task is not with the driver yet: no WhatsApp message either (nor for a trip with no app).
+      const wa = !out.waiting && !noApp && f.whatsapp && drv?.phone ? driverWhatsApp(v.input, drv.phone, p.leave_by ? `Leave by ${p.leave_by}` : undefined) : "";
       draft.clear();
       // Hotfix O2-H2, Part 1b (Gmail's "Sent"): the form closes, the task (or the request it waits as) opens in its place,
       // a toast says what happened (WhatsApp the driver as its action when asked for), the warnings wait on the task.
@@ -206,17 +217,23 @@ export function NewTask() {
         </TripPlanCard>
 
         <div className="card card-b form">
+          <WhoDrives id="af" value={who} onChange={(w) => set("who", w)} hidden={!selfDrive} picksVehicle />
           <div className="grid2">
-            <DriverSelect id="af-driver" value={f.driver} drivers={withPicked(drivers, f.driver, avail.data?.drivers.find((d) => d.username === f.driver)?.name)} onChange={pickDriver} loading={!lists.drivers && !lists.error}
-              emptyLabel={lists.error && !lists.drivers ? "Couldn’t load" : "Choose a driver"} />
-            <VehicleSelect id="af-vehicle" value={f.vehicle} def={def} vehicles={vehicles} onChange={(reg) => set("vehicle", reg)}
-              emptyLabel={!lists.vehicles && lists.error ? "Couldn’t load" : f.driver ? "Pick a vehicle" : "Choose the driver first"}
-              choices={onDay} dayDefault={dayDefault}
-              hint={f.driver && !def && !onDay ? "This driver holds no vehicle today and has no regular one." : undefined} />
+            {!noApp && (
+              <DriverSelect id="af-driver" value={f.driver} onTheDay={onDay} loading={!lists.drivers && !lists.error} onChange={pickDriver}
+                drivers={driverOptions({ avail: avail.data?.drivers, list: drivers, picked: f.driver, pickedName: avail.data?.drivers.find((d) => d.username === f.driver)?.name })}
+                emptyLabel={lists.error && !lists.drivers ? "Couldn’t load" : "Choose a driver"} />
+            )}
+            <VehicleSelect id="af-vehicle" value={noApp && isChoice(f.vehicle) ? "" : f.vehicle} def={noApp ? null : def} vehicles={vehicles} onChange={(reg) => set("vehicle", reg)}
+              emptyLabel={!lists.vehicles && lists.error ? "Couldn’t load" : noApp ? "Pick the vehicle" : f.driver ? "Pick a vehicle" : "Choose the driver first"}
+              choices={onDay && !noApp} dayDefault={dayDefault}
+              hint={noApp ? "Nobody confirms a vehicle on the day: pick its plate." : f.driver && !def && !onDay ? "This driver holds no vehicle today and has no regular one." : undefined} />
           </div>
           {lists.error && (!lists.drivers || !lists.vehicles) && <Notice>Couldn’t load the {!lists.drivers && !lists.vehicles ? "drivers and vehicles" : !lists.drivers ? "drivers" : "vehicles"}: {lists.error} <button type="button" className="btn small" onClick={lists.reload}>Try again</button></Notice>}
-          <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }}
-            onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
+          {!noApp && (
+            <AvailabilityPanel args={availArgs} picked={f.driver} onPick={(d) => { if (d.username) takeSuggestion(d.username); }}
+              onUse={(b) => { if (b.username) takeSuggestion(b.username); }} />
+          )}
           <div className="grid2">
             <BackByField trip={trip} id="af-end" label="Vehicle free by" />
             <div className="field"><label htmlFor="af-pax">Passengers</label><input type="number" id="af-pax" min={0} max={80} inputMode="numeric" value={f.pax} onChange={(e) => set("pax", e.target.value)} /></div>
@@ -255,12 +272,22 @@ export function NewTask() {
             <button type="button" className="btn" onClick={() => setRows((rs) => [...rs, { project: "", percent: rs.length ? "" : 100 }])}>+ Add a project</button>
             <span className="hint">Km, fuel and driver costs from this task are split across these projects by the percentages. Leave empty for Fame internal.</span>
           </div>
-          <div className="field">
-            <span className="lab">Send to driver</span>
-            <span className="check"><input type="checkbox" checked disabled id="af-app" /> <label htmlFor="af-app">Fame Driver app (always)</label></span>
-            <span className="check"><input type="checkbox" id="af-wa" checked={f.whatsapp} onChange={(e) => set("whatsapp", e.target.checked)} /> <label htmlFor="af-wa">Also give me a WhatsApp message with the details</label></span>
-            {proposes && <span className="hint" data-testid="needs-approval">New tasks need the fleet admin’s OK: this one waits for it, then goes to the driver.</span>}
-          </div>
+          {noApp
+            ? (
+              <div className="field">
+                <span className="lab">Send to driver</span>
+                <span className="hint" data-testid="no-app">{who.by === "self" ? "You drive it yourself" : `${who.name.trim() || "Someone else"} drives it`}: no app, so nothing is sent.</span>
+                {proposes && <span className="hint" data-testid="needs-approval">New tasks need the fleet admin’s OK: this one waits for it.</span>}
+              </div>
+            )
+            : (
+              <div className="field">
+                <span className="lab">Send to driver</span>
+                <span className="check"><input type="checkbox" checked disabled id="af-app" /> <label htmlFor="af-app">Fame Driver app (always)</label></span>
+                <span className="check"><input type="checkbox" id="af-wa" checked={f.whatsapp} onChange={(e) => set("whatsapp", e.target.checked)} /> <label htmlFor="af-wa">Also give me a WhatsApp message with the details</label></span>
+                {proposes && <span className="hint" data-testid="needs-approval">New tasks need the fleet admin’s OK: this one waits for it, then goes to the driver.</span>}
+              </div>
+            )}
         </div>
 
         {msg && (
@@ -271,7 +298,8 @@ export function NewTask() {
           </div>
         )}
         <StickyActions>
-          <button className="btn primary" type="submit" disabled={busy}>{busy ? "Sending…" : proposes ? "Send for approval" : "Assign & send"}</button>
+          <button className="btn primary" type="submit" disabled={busy || !!plateWhy}>{busy ? "Sending…" : proposes ? "Send for approval" : noApp ? "Save the task" : "Assign & send"}</button>
+          {plateWhy && <p className="hint btn-why" data-testid="save-why">{plateWhy}</p>}
         </StickyActions>
       </form>
     </section>

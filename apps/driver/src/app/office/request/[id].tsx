@@ -11,6 +11,12 @@
 // O3 row 2: the timeline (request_events) for everyone who may open it; Cancel booking with a reason for an approver on
 // an approved or changed request (cancel_request: the task is cancelled too); the person who asked (no approve) opens
 // their own request from My trips: the trip, the timeline, Edit and Withdraw while it waits, no decision buttons.
+// Round 3 (docs/phase8-plan.md §30): the asker's photo beside "Asked by"; Who drives as asked, in words ("Nimali drives it
+// herself", "Someone else: Kamal Silva · 077 123 4567", "The vehicle's custodian drives"). Such a request starts with no
+// driver picked: the approver picks the vehicle (the server refuses an approval with neither a driver nor a vehicle) and
+// may still give a driver instead (two pick-one rows: as asked · give a driver). The drivers are the driver-first cards
+// (components/office/DriverRows.tsx: the photo, the vehicle chip under the name); the button is disabled with the reason
+// under it until the approval is complete.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -20,13 +26,15 @@ import { Phone } from '@/components/icons';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ChoiceRow } from '@/components/patterns/Select';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
+import { DriverChoiceRow, TaskDriverCard } from '@/components/office/DriverRows';
+import { VehicleGroups } from '@/components/office/VehicleGroups';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { TellRequester } from '@/components/office/TellRequester';
 import { ReasonSheet } from '@/components/ReasonSheet';
-import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { Button, Mono, Txt } from '@/components/ui';
 import { durationText, shortDate } from '@/lib/durations';
 import { telLink } from '@/lib/format';
-import { alreadyDecided, availabilityArgs, canApprove, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, rankedDrivers, tripView } from '@/office/approveLogic';
+import { alreadyDecided, approveProblem, availabilityArgs, DECLINE_TEXT, decideCall, declineReason, driverParts, driverPill, firstPick, presenceLine, rankedDrivers, tripView } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
 import { askedOf, availabilityAt, decideTimes, hasChange, redecideTimes, shownOf } from '@/office/decideLogic';
 import { CANCEL_TEXT, canCancelBooking, cancelReason, canWithdrawOwn, decides, eventLine } from '@/office/requestsLogic';
@@ -35,7 +43,10 @@ import { decideStore, useTimeChange } from '@/office/decideStore';
 import { requestTitle } from '@/office/homeLogic';
 import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
-import type { Availability, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList } from '@/office/types';
+import { sentenceText } from '@/office/statusWords';
+import { groupRows } from '@/office/trip/formsLogic';
+import { askedWords, asksNoDriver } from '@/office/trip/whoDrivesLogic';
+import type { Availability, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList, SettingsResult } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -69,8 +80,18 @@ export default function ApproveRequest() {
   const changed = !!asked && hasChange(change, asked);
   const availArgs = card && shown ? availabilityAt(availabilityArgs(card), shown) : null;
   const avail = useTool<Availability>('availability', availArgs ?? {}, { enabled: !!availArgs && !!open, every: 60_000 });
+  const settings = useTool<SettingsResult>('get_settings', {}, { enabled: !!open && me.tools.includes('get_settings') });
+  const onDay = settings.data?.settings.vehicle_on_the_day === true;
 
   const [picked, setPicked] = useState<string | null>(null);
+  // Round 3: a request that asks for no driver (the asker drives, someone else does, the custodian): approved as asked with
+  // the vehicle the approver picks, or the approver gives a driver instead.
+  const noDriverAsked = !!card && asksNoDriver(card);
+  const [giveDriver, setGiveDriver] = useState(false);
+  // Self-drive switched off since it was asked: it can only go with a driver (the server refuses it as asked).
+  const selfDriveOff = settings.data?.settings.self_drive_allowed === false;
+  const asAsked = noDriverAsked && !giveDriver && !selfDriveOff;
+  const [vehiclePick, setVehiclePick] = useState<string | null>(null);
   const [others, setOthers] = useState<string[]>([]);
   const [busy, setBusy] = useState<'approve' | 'decline' | null>(null);
   const [problem, setProblem] = useState<FleetError | null>(null);
@@ -106,8 +127,11 @@ export default function ApproveRequest() {
   const mayAsk = me.tools.includes('ask_drivers');
   const names = { days: tList('days'), months: tList('months') };
 
-  // The first pick once the card and Who's available are known: the proposal's driver, else the best match.
-  const pick = picked ?? (card ? firstPick(card, avail.data ?? null) : '');
+  // The first pick once the card and Who's available are known: the proposal's driver, else the best match; nobody for a
+  // request that asks for no driver (the best match once the approver gives a driver instead).
+  const pick = asAsked ? '' : picked ?? (card ? firstPick(noDriverAsked ? { proposed: card.proposed } : card, avail.data ?? null) : '');
+  // The vehicle for a request approved as asked with no driver: the one picked, else a proposed task's own.
+  const vehicle = vehiclePick ?? (card?.kind === 'task' ? card.proposed?.vehicle ?? '' : '');
 
   // "Palitha is also looking": said every 20 s while a decision is still to be made (a keyed write: never harmful twice).
   useEffect(() => {
@@ -136,7 +160,9 @@ export default function ApproveRequest() {
     setBusy(decision);
     setProblem(null);
     const driver = avail.data?.drivers.find((d) => d.username === pick);
-    const call = decideCall(card, decision, { driver: pick || undefined, vehicle: driver?.vehicle?.reg_no, reason });
+    const call = decideCall(card, decision, asAsked
+      ? { vehicle: vehiclePick ?? undefined, reason }
+      : { driver: pick || undefined, vehicle: driver?.vehicle?.reg_no, reason });
     // The new time, only what differs from the request (a changed booking: the day and times as a change).
     if (decision === 'approve' && asked && changed) {
       if (call.tool === 'decide_request') call.input = { ...call.input, ...decideTimes(change, asked) };
@@ -147,7 +173,9 @@ export default function ApproveRequest() {
       decidedOnce.current = true;
       decideStore.set(id, null);
       const warnings = [...(out.warnings ?? []), ...((out as DecideResult).conflicts ?? []).map((c) => c.text)];
-      const title = decision === 'approve' ? t('office.request.approvedTitle', { name: driver?.name ?? pick }) : t('office.request.declinedTitle');
+      const title = decision === 'approve'
+        ? (asAsked ? t('office.request.approvedTitle', { name: askedName ?? vehicle }) : t('office.request.approvedTitle', { name: driver?.name ?? pick }))
+        : t('office.request.declinedTitle');
       // Hotfix O2-H2, Part 1b, merged with O3's Tell requester: the page stays on the decided request (telling the
       // requester is the next job), the snackbar says what happened (with View when the approval made a task this person
       // may open), and the warnings wait on the request in the shared notice.
@@ -182,6 +210,15 @@ export default function ApproveRequest() {
   const drivers = avail.data ? rankedDrivers(avail.data.drivers) : [];
   const pickedDriver = drivers.find((d) => d.username === pick);
   const bestUsername = avail.data?.best?.username ?? drivers.find((d) => d.name === avail.data?.best?.name)?.username ?? '';
+  const whoAsked = card ? askedWords(card) : null;
+  // The name in "Approved · <name>" when approved as asked: the asker, someone else, or the vehicle.
+  const askedName = card?.driven_by === 'other' ? card.driver_name : card?.driven_by === 'self' ? card.requested_by : undefined;
+  const approveReason = card ? approveProblem(card, { asAsked, driver: pick, vehicle }) : null;
+  // The vehicles for an approval as asked: the free ones first (availability's groups); the custodian drives only one of
+  // their own (a vehicle assigned to someone).
+  const vehicleRows = groupRows(avail.data ? { groups: avail.data.vehicles.groups, vehicles: [] } : null)
+    .map((g) => ({ ...g, rows: card?.driven_by === 'custodian' || (card && !card.driven_by && card.driver_required === false) ? g.rows.filter((v) => !!v.assigned_to) : g.rows }))
+    .filter((g) => g.rows.length > 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -212,6 +249,10 @@ export default function ApproveRequest() {
         )}
         {card && trip && (
           <View style={styles.tripCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }} testID="request-asker">
+              <Avatar name={card.requested_by} size={40} photo={card.requested_by_photo_url} />
+              <Txt variant="body" size={15} style={{ flex: 1 }}>{[t('office.task.askedBy', { name: card.requested_by }), card.asked].filter(Boolean).join(' · ')}</Txt>
+            </View>
             {trip.date && <Txt variant="label" color={colors.muted}>{shortDate(names, `${trip.date}T06:00:00Z`).toUpperCase()}</Txt>}
             {trip.leaveBy && (
               <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
@@ -265,7 +306,49 @@ export default function ApproveRequest() {
           </View>
         )}
         {card && decider && (outcome || !open) && <TellRequester key={`${card.id}-${card.version ?? 0}-${card.status}`} q={card} onSaved={() => void q.reload()} />}
-        {card && open && !outcome && (
+        {card && (whoAsked || card.assigned) && (
+          <Section title={t('office.who.title')}>
+            {whoAsked && <Txt variant="strong" testID="request-who-asked">{t(whoAsked.key, whoAsked.vars)}</Txt>}
+            {/* Round 3: the outcome, once approved: who drives (the driver, the asker, someone else), the vehicle, Call / WhatsApp. */}
+            {card.assigned && (
+              <View style={{ marginTop: whoAsked ? 10 : 0 }} testID="request-assigned">
+                <TaskDriverCard
+                  name={card.assigned.driver || undefined}
+                  photo={card.assigned.photo_url}
+                  drivenBy={card.assigned.driven_by}
+                  plate={card.assigned.vehicle || undefined}
+                  vehicleText={card.assigned.vehicle_text}
+                  details={card.assigned.make_model}
+                  call={card.assigned.call ?? undefined}
+                  whatsapp={card.assigned.whatsapp ?? undefined}
+                  emptyName={t('office.task.noDriver')}
+                />
+              </View>
+            )}
+            {whoAsked && open && !outcome && selfDriveOff && <Txt variant="small" color={colors.amberText} style={{ marginTop: 6 }} testID="approve-self-drive-off">{t('office.who.selfDriveOff')}</Txt>}
+            {whoAsked && open && !outcome && !selfDriveOff && (
+              <View accessibilityRole="radiogroup" style={{ gap: 8, marginTop: 10 }}>
+                <ChoiceRow selected={!giveDriver} onPress={() => setGiveDriver(false)} accessibilityLabel={t('office.who.approveAsAsked')} testID="approve-as-asked">
+                  <Txt variant="strong" size={16}>{t('office.who.approveAsAsked')}</Txt>
+                  <Txt variant="small">{t('office.who.approveAsAskedHint')}</Txt>
+                </ChoiceRow>
+                <ChoiceRow selected={giveDriver} onPress={() => setGiveDriver(true)} accessibilityLabel={t('office.who.giveDriverInstead')} testID="approve-give-driver">
+                  <Txt variant="strong" size={16}>{t('office.who.giveDriverInstead')}</Txt>
+                </ChoiceRow>
+              </View>
+            )}
+          </Section>
+        )}
+        {card && open && !outcome && asAsked && (
+          <Section title={t('office.trip.vehicle')}>
+            {card.kind === 'task' && card.proposed?.vehicle ? <Txt variant="small">{t('office.who.proposedVehicle', { plate: card.proposed.vehicle })}</Txt> : <Txt variant="small">{t('office.who.plateNeeded')}</Txt>}
+            {!availArgs && <ListEmpty text={t('office.request.noTime')} />}
+            {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
+            {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
+            {avail.data && <VehicleGroups rows={vehicleRows} picked={vehicle} onPick={setVehiclePick} empty={t('office.trip.noFreeVehicles')} testID="approve-vehicles" />}
+          </Section>
+        )}
+        {card && open && !outcome && !asAsked && (
           <Section
             title={t('office.request.whosAvailable')}
             count={avail.data ? avail.data.counts.free : undefined}
@@ -276,32 +359,29 @@ export default function ApproveRequest() {
             {availArgs && !avail.data && !avail.error && <SkeletonRows rows={3} lines={2} />}
             {avail.error && <ListFailed stale={!!avail.data} error={avail.error} onRetry={refresh} onSignIn={() => void signOut()} />}
             {avail.data && drivers.length === 0 && <ListEmpty text={t('office.request.nobody')} />}
-            {drivers.map((d, i) => {
-              const on = d.username === pick && !!d.username;
-              const pillKey = driverPill(d, bestUsername);
-              return (
-                <ChoiceRow
-                  key={d.username ?? d.name}
-                  selected={on}
-                  onPress={() => setPicked(d.username ?? '')}
-                  disabled={!d.username}
-                  disabledReason={d.username ? undefined : t('office.ask.noAccount')}
-                  leading={<Avatar name={d.name} size={44} photo={d.photo_url} />}
-                  mark="end"
-                  trailing={pillKey && pillKey !== 'best' ? <Pill text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : 'muted'} /> : null}
-                  accessibilityLabel={d.name}
-                  testID={`approve-row-${d.username ?? d.name}`}
-                  style={i > 0 ? { marginTop: 8 } : undefined}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    <Txt variant="strong" size={17}>{d.name}</Txt>
-                    {pillKey === 'best' && <Pill text={t('office.request.bestMatch')} tone="amber" size={13} />}
-                  </View>
-                  <Txt variant="muted" size={15}>{driverParts(d, t).join(' · ')}</Txt>
-                  {d.vehicle && <View style={{ marginTop: 4 }}><Plate regNo={d.vehicle.reg_no} /></View>}
-                </ChoiceRow>
-              );
-            })}
+            <View style={{ gap: 8 }}>
+              {drivers.map((d) => {
+                const pillKey = driverPill(d, bestUsername);
+                return (
+                  <DriverChoiceRow
+                    key={d.username ?? d.name}
+                    d={d}
+                    card={false}
+                    selected={d.username === pick && !!d.username}
+                    onPress={() => setPicked(d.username ?? '')}
+                    onDay={onDay}
+                    lines={driverParts(d, t)}
+                    best={pillKey === 'best'}
+                    bestWhy={avail.data?.best?.why ? sentenceText(t, avail.data.best.why) : undefined}
+                    pill={pillKey && pillKey !== 'best' ? { text: t(`office.request.${pillKey}`), tone: pillKey === 'not_available' ? 'red' : 'muted' } : null}
+                    disabled={!d.username}
+                    disabledReason={d.username ? undefined : t('office.ask.noAccount')}
+                    presence={presenceLine(d, t)}
+                    testID={`approve-row-${d.username ?? d.name}`}
+                  />
+                );
+              })}
+            </View>
           </Section>
         )}
         {card && (card.events?.length ?? 0) > 0 && (
@@ -340,11 +420,13 @@ export default function ApproveRequest() {
       {card && open && !outcome && (
         <StickyActions>
           <Button
-            label={pickedDriver ? t('office.request.approveSend', { name: pickedDriver.name }) : t('office.request.approve')}
+            label={asAsked ? (vehicle ? t('office.who.approveVehicle', { plate: vehicle }) : t('office.request.approve')) : pickedDriver ? t('office.request.approveSend', { name: pickedDriver.name }) : t('office.request.approve')}
             onPress={() => void decide('approve')}
-            disabled={!canApprove(card, pick) || busy === 'decline'}
+            disabled={!!approveReason || busy === 'decline'}
             busy={busy === 'approve'}
+            testID="approve-button"
           />
+          {approveReason ? <Txt variant="small" style={{ textAlign: 'center' }} testID="approve-reason">{t(approveReason)}</Txt> : null}
           <Button kind="outline" label={t('office.request.decline')} onPress={() => setDeclining(true)} disabled={busy !== null} style={{ borderColor: colors.red, minHeight: 56 }} />
         </StickyActions>
       )}

@@ -3,7 +3,8 @@
 // arguments and the last one stays on screen ("Updating…") while new ones
 // load; a refetch that answers changed data keeps the same DOM nodes and what
 // the person typed or picked, on Who's available and on the decide page.
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { chooseDriver, pickedDriver } from "../test/controls";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -190,10 +191,14 @@ describe("Who's available: a refresh keeps the nodes and the choices", () => {
     const rows = screen.getAllByTestId("avail-row");
     expect(rows).toHaveLength(2);
     expect(rows[0].textContent).toContain("1Kamal Perera");
-    expect(rows[0].textContent).toContain("WP CAB-4521 Kamal's vehicle today");
+    // Round 3: the vehicle as a chip under the name ("regular" beside a regular one), whose it is on the line under.
+    expect(within(rows[0]).getByTestId("vehicle-chip").textContent).toBe("WP CAB-4521");
+    expect(rows[0].textContent).toContain("Kamal's vehicle today");
     expect(rows[1].textContent).toContain("2Nuwan Silva");
-    expect(rows[1].textContent).toContain("WP KL-1234 Nuwan's regular vehicle");
-    expect(screen.getByTestId("best-match").textContent).toContain("WP CAB-4521 Kamal's vehicle today");
+    expect(within(rows[1]).getByTestId("vehicle-chip").textContent).toBe("WP KL-1234 regular");
+    expect(rows[1].textContent).toContain("Nuwan's regular vehicle");
+    expect(within(screen.getByTestId("best-match")).getByTestId("vehicle-chip").textContent).toBe("WP CAB-4521");
+    expect(screen.getByTestId("best-match").textContent).toContain("Kamal's vehicle today");
     fireEvent.click(screen.getByRole("button", { name: "Use suggestion" }));
     expect(used).toEqual(["kamal.p WP CAB-4521 Kamal's vehicle today"]);
     fireEvent.change(screen.getByLabelText("Note"), { target: { value: "Gate 2" } });
@@ -261,9 +266,10 @@ describe("Who's available: two drivers side by side (hotfix, 17 October 2026)", 
     expect(names()).toEqual(["Kamal Perera", "Nuwan Perera", "Kamal Silva"]);
     expect(screen.getByTestId("best-match").textContent).toContain("Kamal Perera");
     // Two drivers called Kamal: their full names; Nuwan Perera is the only Nuwan.
-    expect(rows[0].textContent).toContain("WP CAB-4521 Kamal Perera's vehicle today");
-    expect(rows[1].textContent).toContain("WP KL-1234 Nuwan's regular vehicle");
-    expect(rows[2].textContent).toContain("WP PH-2087 Kamal Silva's regular vehicle");
+    expect(rows[0].textContent).toContain("Kamal Perera's vehicle today");
+    expect(rows[1].textContent).toContain("Nuwan's regular vehicle");
+    expect(rows[2].textContent).toContain("Kamal Silva's regular vehicle");
+    expect(rows.map((r) => within(r).getByTestId("vehicle-chip").textContent)).toEqual(["WP CAB-4521", "WP KL-1234 regular", "WP PH-2087 regular"]);
 
     fireEvent.click(rows[1]);
     expect(picks).toEqual(["nuwan.p WP KL-1234 Nuwan's regular vehicle"]);
@@ -328,12 +334,12 @@ describe("the decide page: a refresh never resets the driver, the vehicle or wha
     ));
     await settle(400);
     await settle(1500);
-    const select = screen.getByLabelText("Driver") as HTMLSelectElement;
+    const select = screen.getByLabelText("Driver");
     // The best match is the default until the person picks: Kamal, with the vehicle he holds today.
-    expect(select.value).toBe("kamal.p");
+    expect(select.getAttribute("data-value")).toBe("kamal.p");
     expect(screen.getByTestId("vehicle-default").textContent).toContain("WP CAB-4521 · Kamal's vehicle today");
     // The person picks Nuwan, then another vehicle, and types a reason.
-    fireEvent.change(select, { target: { value: "nuwan.s" } });
+    chooseDriver("nuwan.s");
     expect(screen.getByTestId("vehicle-default").textContent).toContain("WP KL-1234 · Nuwan's regular vehicle");
     const cab = screen.getByDisplayValue("WP CAB-4521") as HTMLInputElement;
     fireEvent.click(cab);
@@ -348,7 +354,7 @@ describe("the decide page: a refresh never resets the driver, the vehicle or wha
     expect(transport.count("availability")).toBeGreaterThanOrEqual(2);
     expect(screen.getByDisplayValue("WP PH-2087")).toBeTruthy(); // the new answer is on screen
     expect(screen.getByLabelText("Driver")).toBe(select);
-    expect(select.value).toBe("nuwan.s");
+    expect(select.getAttribute("data-value")).toBe("nuwan.s");
     expect(screen.getByDisplayValue("WP CAB-4521")).toBe(cab);
     expect(cab.checked).toBe(true);
     expect(screen.getByLabelText("Decline with a reason")).toBe(reason);
@@ -382,7 +388,7 @@ describe("the decide page: a refresh never resets the driver, the vehicle or wha
     await settle(1500);
     const sunil = screen.getAllByTestId("avail-row").find((r) => r.textContent?.includes("Sunil Silva"))!;
     fireEvent.click(sunil);
-    expect((screen.getByLabelText("Driver") as HTMLSelectElement).value).toBe("sunil.s");
+    expect(pickedDriver()).toBe("sunil.s");
     expect(sunil.getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByTestId("vehicle-default").textContent).toContain("WP PH-2087 · Sunil's regular vehicle");
   });

@@ -3,23 +3,29 @@
 // (the driver's today, On the day when the setting allows, Any van / car / double cab / lorry, Choose… from the four
 // groups), the task's title and passengers, and under More details the contact, the notes, the project split
 // (find_project's match line, the percentages, Split equally) and the WhatsApp message option. A request: passengers,
-// the vehicle type needed, "A driver is needed" (when self-drive is allowed), tools; under More details for whom, the
-// requester's phone (approvers), the project and a note; for someone with book_vehicle the Book now card (the site's
-// "Assign now"): the free drivers, the vehicle in four groups with the default line, the custodian driving, Who's
-// available with Use. Next: Review.
+// the vehicle type needed, tools; under More details for whom, the requester's phone (approvers), the project and a note;
+// for someone with book_vehicle the Book now card (the site's "Assign now"): the free drivers, the vehicle in four groups
+// with the default line, the custodian driving, Who's available with Use. Next: Review.
+// Round 3 (docs/phase8-plan.md §30): "Who drives?" first on both flows (the rental forms' "Who's driving?":
+// components/office/WhoDrivesChoice.tsx), in place of "A driver is needed", only while self_drive_allowed is on. I'll drive
+// myself or Someone else (a name and a phone): no driver to pick, and on Assign a task and Book now the vehicle's plate
+// (nobody confirms one on the day), Next disabled with the reason until it is there. The drivers are the driver-first
+// cards (photo, name, state, the vehicle chip under the name), Book now's free drivers too.
 
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Linking, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { ChevronDown, ChevronUp, X } from '@/components/icons';
-import { DriverRows } from '@/components/office/DriverRows';
+import { DriverChoiceRow, DriverRows } from '@/components/office/DriverRows';
+import { VehicleGroups } from '@/components/office/VehicleGroups';
+import { WhoDrivesChoice } from '@/components/office/WhoDrivesChoice';
 import { AskDriversSheet } from '@/components/office/AskDriversSheet';
 import { Chips, MoreDetails, Stepper, ToggleRow } from '@/components/office/Controls';
 import { TripFooter, TripHeader } from '@/components/office/TripShell';
-import { ChoiceChip, ChoiceRow } from '@/components/patterns/Select';
+import { ChoiceChip } from '@/components/patterns/Select';
 import { Field, Mono, Plate, Txt } from '@/components/ui';
-import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
+import { SkeletonRows } from '@/components/patterns/ListState';
 import { colomboDate } from '@/lib/time';
 import { rankedDrivers } from '@/office/approveLogic';
 import { askTargets } from '@/office/askLogic';
@@ -32,6 +38,8 @@ import { suggestInput } from '@/office/trip/requestLogic';
 import { useTrip } from '@/office/trip/useTrip';
 import { ANY_TYPES, anyValue, knownDef, ON_THE_DAY, shownVehicle, vehicleDefault } from '@/office/trip/vehicleChoiceLogic';
 import { whoArgs } from '@/office/trip/whoLogic';
+import { isPlate, noApp, whoOf, type WhoDrives, whoProblem } from '@/office/trip/whoDrivesLogic';
+import { reasonText } from '@/office/trip/words';
 import type { Availability, FindProject, SettingsResult, SuggestedVehicle, Suggestions } from '@/office/types';
 import { ErrorNotice, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -39,7 +47,6 @@ import { colors } from '@/theme';
 
 const NEED_TYPES = ['car', 'van', 'double_cab', 'lorry', 'other'] as const;
 const PROJECT_LOOKUP_MS = 450;
-const open = (url: string) => void Linking.openURL(url).catch(() => undefined);
 
 /**
  * Hotfix O2-H2, the white screen: this step stays mounted under Review, and the save clears the draft. The step used to
@@ -73,10 +80,11 @@ function WhoStep({ d }: { d: TripDraft }) {
   const mayAsk = me.tools.includes('ask_drivers');
   const drivers0 = avail.data ? rankedDrivers(avail.data.drivers) : [];
   const best0 = avail.data?.best?.username ?? drivers0.find((x) => x.name === avail.data?.best?.name)?.username ?? '';
-  // The best match is ticked first, once Who's available answers and nobody was picked (a task).
+  // The best match is ticked first, once Who's available answers and nobody was picked (a task a driver drives).
+  const whoChoice = whoOf(d.req).choice;
   useEffect(() => {
-    if (isTask && best0 && avail.data) updateDraft((x) => (x.fields.driver ? x : { ...x, driverName: avail.data?.best?.name ?? best0, driverWhatsapp: avail.data?.drivers.find((y) => y.username === best0)?.phone?.whatsapp, fields: { ...x.fields, driver: best0 } }));
-  }, [isTask, best0, avail.data]);
+    if (isTask && whoChoice === 'driver' && best0 && avail.data) updateDraft((x) => (x.fields.driver || whoOf(x.req).choice !== 'driver' ? x : { ...x, driverName: avail.data?.best?.name ?? best0, driverWhatsapp: avail.data?.drivers.find((y) => y.username === best0)?.phone?.whatsapp, fields: { ...x.fields, driver: best0 } }));
+  }, [isTask, whoChoice, best0, avail.data]);
   // find_project 450 ms after the last key in a project row (the site's lookup).
   const lookupTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   useEffect(() => () => Object.values(lookupTimers.current).forEach(clearTimeout), []);
@@ -86,10 +94,27 @@ function WhoStep({ d }: { d: TripDraft }) {
   const setRows = (fn: (rows: ProjectRow[]) => ProjectRow[]) => updateDraft((x) => ({ ...x, rows: fn(x.rows) }));
   // The driver's name (and WhatsApp link) travel with the username: Review and the outcome say "Kamal", never "kamal.p".
   const pick = (username: string, name: string, whatsapp?: string) => updateDraft((x) => ({ ...x, driverName: name, driverWhatsapp: whatsapp, fields: { ...x.fields, driver: username, vehicle: '' } }));
+  // Round 3: Who drives? Kept with the old switch (driverRequired = a driver); I'll drive myself or Someone else: no driver
+  // (the pick goes), and a vehicle word ("on the day", "any van") gives way to a plate.
+  const who = whoOf(d.req);
+  const setWho = (next: WhoDrives) => updateDraft((x) => {
+    const was = whoOf(x.req);
+    const toNoApp = noApp(next) && !noApp(was);
+    return {
+      ...x,
+      req: { ...x.req, who: next, driverRequired: next.choice === 'driver' },
+      ...(toNoApp ? { driverName: undefined, driverWhatsapp: undefined } : {}),
+      fields: toNoApp ? { ...x.fields, driver: '', vehicle: isPlate(x.fields.vehicle) ? x.fields.vehicle : '' } : x.fields,
+    };
+  });
   const drivers = drivers0;
   const picked = drivers.find((x) => x.username === f.driver);
   const onDay = settings.data?.settings.vehicle_on_the_day === true;
   const selfDrive = settings.data?.settings.self_drive_allowed !== false;
+  // Self-drive switched off: every trip needs a driver (the question is not asked; an old choice counts as a driver).
+  const whoNow: WhoDrives = selfDrive ? who : { choice: 'driver', name: '', phone: '' };
+  const byDriver = whoNow.choice === 'driver';
+  const noAppTrip = whoNow.choice === 'self' || whoNow.choice === 'other';
   const today = colomboDate();
   const groups = avail.data?.vehicles.groups;
   const taskGroups = groupRows(groups ? { groups, vehicles: [] } : null);
@@ -104,8 +129,13 @@ function WhoStep({ d }: { d: TripDraft }) {
   const shown = shownVehicle(f.vehicle, dflt);
   const allSuggested: SuggestedVehicle[] = sug.data ? (sug.data.groups ? Object.values(sug.data.groups).flat() : sug.data.vehicles) : [];
   const pickedVehicle = allSuggested.find((v) => v.reg_no === shown);
-  const custodian = custodianDrives(selfDrive, d.req.driverRequired, pickedVehicle);
-  const problem = isTask ? (!f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : known && !def && !f.vehicle && !dayDefault ? t('office.trip.needVehicle') : null) : null;
+  const custodian = custodianDrives(selfDrive, whoNow.choice !== 'custodian', pickedVehicle);
+  // What keeps Next disabled, said under it. Assign a task: a driver (or, with no app, the plate), the title, the split.
+  // A request: someone else's name and phone (the plate waits for Book now on Review).
+  const whoReason = whoProblem(whoNow, { needsPlate: isTask, plate: f.vehicle });
+  const problem = isTask
+    ? (byDriver && !f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : whoReason ? reasonText(t, whoReason) : byDriver && known && !def && !f.vehicle && !dayDefault ? t('office.trip.needVehicle') : null)
+    : whoReason ? reasonText(t, whoReason) : null;
   const free = sug.data?.drivers_free ?? sug.data?.drivers.filter((x) => /free/.test(x.availability)).map((x) => ({ name: x.name, username: x.username })) ?? [];
   const options = driverOptions(free, f.driver, d.driverName);
   // What Review needs beside the pick: the driver's default vehicle (a task too: the site's "Add a vehicle" rule) and the custodian.
@@ -130,36 +160,18 @@ function WhoStep({ d }: { d: TripDraft }) {
   }
 
   const whoAvailable = (
-    <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => pick(x.username ?? '', x.name, x.phone?.whatsapp)} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined} noWindow={!args} />
+    <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => pick(x.username ?? '', x.name, x.phone?.whatsapp)} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk && drivers.length > 0 ? () => setAsking(true) : undefined} noWindow={!args} onDay={onDay} />
   );
-
-  // The custodian's Call and WhatsApp sit under the row, never inside it (a radio row holds no other button: TalkBack reads
-  // them apart).
-  const vehicleRow = (v: SuggestedVehicle, disabled: boolean, reason?: string) => (
-    <View key={v.reg_no} style={{ gap: 4 }}>
-      <ChoiceRow selected={shown === v.reg_no} onPress={() => { setF({ vehicle: v.reg_no }); setChoosing(false); }} disabled={disabled} disabledReason={reason} leading={<Plate regNo={v.reg_no} />} mark="end" accessibilityLabel={v.reg_no} testID={`vehicle-row-${v.reg_no}`}>
-        <Txt variant={v.pick === 'no' ? 'strong' : 'muted'} size={15} color={v.pick === 'no' ? colors.red : v.pick === 'possible' ? colors.amberText : colors.muted}>{vehicleLine(v, (n) => t('office.trip.seats', { n }))}</Txt>
-        {v.assigned_to ? <Txt variant="small">{[t('office.trip.assignedTo', { name: v.assigned_to }), v.custodian_note, v.note].filter(Boolean).join(' · ')}</Txt> : null}
-      </ChoiceRow>
-      {v.assigned_to && (v.call || v.whatsapp) ? (
-        <View style={{ flexDirection: 'row', gap: 18, paddingHorizontal: 14 }}>
-          {v.call ? <Pressable accessibilityRole="button" accessibilityLabel={`${t('office.common.call')} ${v.assigned_to}`} onPress={() => open(v.call!)} hitSlop={8} style={{ minHeight: 40, justifyContent: 'center' }}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.call')}</Txt></Pressable> : null}
-          {v.whatsapp ? <Pressable accessibilityRole="button" accessibilityLabel={`${t('office.common.whatsapp')} ${v.assigned_to}`} onPress={() => open(v.whatsapp!)} hitSlop={8} style={{ minHeight: 40, justifyContent: 'center' }}><Txt variant="strong" size={14} color={colors.blue}>{t('office.common.whatsapp')}</Txt></Pressable> : null}
-        </View>
-      ) : null}
+  // Who drives? (only while self-drive is allowed): its own card at the top of the step, both flows.
+  const whoCard = selfDrive && (
+    <View style={styles.card}>
+      <WhoDrivesChoice value={who} onChange={setWho} />
     </View>
   );
 
+  // The vehicles in the site's four groups (components/office/VehicleGroups.tsx, shared with Approve): a pick closes the list.
   const vehicleGroups = (rows: ReturnType<typeof groupRows>, empty: string) => (
-    <View style={{ gap: 6 }}>
-      {rows.length === 0 && <ListEmpty text={empty} />}
-      {rows.map((g) => (
-        <View key={g.key} style={{ gap: 2 }}>
-          <Txt variant="label" color={colors.muted} style={{ marginTop: 6 }}>{t(`office.trip.group_${g.key}`).toUpperCase()}</Txt>
-          <View accessibilityRole="radiogroup" style={{ gap: 6 }}>{g.rows.map((v) => vehicleRow(v, g.disabled, g.disabled ? t(`office.trip.group_${g.key}`) : undefined))}</View>
-        </View>
-      ))}
-    </View>
+    <VehicleGroups rows={rows} picked={shown} onPick={(reg) => { setF({ vehicle: reg }); setChoosing(false); }} empty={empty} />
   );
 
   const onDayChips = onDay && (
@@ -190,8 +202,17 @@ function WhoStep({ d }: { d: TripDraft }) {
       <Screen bottom={16}>
         {isTask && (
           <>
-            {whoAvailable}
-            <View style={styles.card}>
+            {whoCard}
+            {byDriver && whoAvailable}
+            {noAppTrip && (
+              <View style={styles.card} testID="no-app-vehicle">
+                <Txt variant="label" color={colors.muted}>{t('office.trip.vehicle').toUpperCase()}</Txt>
+                <Txt variant="small">{t('office.who.plateNeeded')}</Txt>
+                {vehicleGroups(taskGroups, t('office.trip.noFreeVehicles'))}
+                {chosenFacts ? <Txt variant="small" testID="vehicle-facts">{chosenFacts}</Txt> : null}
+              </View>
+            )}
+            {byDriver && <View style={styles.card}>
               <Txt variant="label" color={colors.muted}>{t('office.trip.vehicle').toUpperCase()}</Txt>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {picked?.vehicle && (
@@ -208,7 +229,7 @@ function WhoStep({ d }: { d: TripDraft }) {
               {choosing && vehicleGroups(taskGroups, t('office.trip.noFreeVehicles'))}
               {defaultLine ? <Txt variant="small" color={!def && known ? colors.amberText : colors.muted}>{defaultLine}</Txt> : null}
               {chosenFacts ? <Txt variant="small" testID="vehicle-facts">{chosenFacts}</Txt> : null}
-            </View>
+            </View>}
 
             <View style={styles.card}>
               <Field label={t('office.trip.title')} value={f.title} onChangeText={(title) => setF({ title })} placeholder={t('office.trip.titlePlaceholder')} maxLength={120} />
@@ -242,7 +263,7 @@ function WhoStep({ d }: { d: TripDraft }) {
                   <Pressable accessibilityRole="button" onPress={() => setRows(addProjectRow)} style={styles.addRow}><Txt variant="strong" size={15}>{t('office.trip.addProject')}</Txt></Pressable>
                   <Txt variant="small">{t('office.trip.projectsHint')}</Txt>
                 </View>
-                <ToggleRow label={t('office.trip.whatsappToo')} value={f.whatsapp} onChange={(whatsapp) => setF({ whatsapp })} testID="whatsapp-toggle" />
+                {whoNow.choice !== 'self' && <ToggleRow label={t('office.trip.whatsappToo')} value={f.whatsapp} onChange={(whatsapp) => setF({ whatsapp })} testID="whatsapp-toggle" />}
               </MoreDetails>
             </View>
           </>
@@ -250,11 +271,11 @@ function WhoStep({ d }: { d: TripDraft }) {
 
         {!isTask && (
           <>
+            {whoCard}
             <View style={styles.card}>
               <Stepper label={t('office.trip.passengers')} value={f.pax} onChange={(pax) => setF({ pax })} testID="pax-stepper" />
               <Txt variant="strong" size={16}>{t('office.trip.needType')}</Txt>
               <Chips options={[{ key: '', label: t('office.trip.anyVehicle') } as { key: string; label: string }, ...NEED_TYPES.map((type) => ({ key: type as string, label: t(`office.vehicles.type_${type}`) }))]} value={d.req.need} onChange={(need) => setReq({ need })} />
-              {selfDrive && <ToggleRow label={t('office.trip.driverNeeded')} hint={t('office.trip.driverNeededHint')} value={d.req.driverRequired} onChange={(driverRequired) => setReq({ driverRequired })} />}
               <ToggleRow label={t('office.trip.tools')} value={d.req.tools} onChange={(tools) => setReq({ tools })} />
               <MoreDetails filled={!!(d.req.behalf || d.req.requesterPhone || d.req.project || d.req.note)} testID="request-details">
                 <Txt variant="small" testID="asked-by">{t('office.trip.askedBy', { name: me.name, phone: me.phone ?? '' }).replace(/ · $/, '')}</Txt>
@@ -281,28 +302,37 @@ function WhoStep({ d }: { d: TripDraft }) {
                 {sug.error && !sug.data && <ErrorNotice error={sug.error} onRetry={() => void sug.reload()} onSignIn={() => void signOut()} />}
                 {sug.data && (
                   <>
-                    <Txt variant="strong" size={16}>{t('office.trip.freeDrivers')}</Txt>
-                    {custodian ? (
+                    {!noAppTrip && <Txt variant="strong" size={16}>{t('office.trip.freeDrivers')}</Txt>}
+                    {noAppTrip ? null : custodian ? (
                       <Txt variant="muted" size={15}>{t('office.trip.custodianDrives', { name: pickedVehicle?.assigned_to ?? '' })}</Txt>
                     ) : (
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                      // Round 3: the free drivers as driver-first cards (the photo, the name, the vehicle they bring), never name-only chips.
+                      <View accessibilityRole="radiogroup" style={{ gap: 8 }} testID="free-drivers">
                         {options.length === 0 && <Txt variant="small">{t('office.trip.pickFreeDriver')}</Txt>}
                         {options.map((o) => (
-                          <ChoiceChip key={o.username} label={o.name} selected={f.driver === o.username} onPress={() => (f.driver === o.username ? pick('', '') : pick(o.username, o.name, drivers.find((x) => x.username === o.username)?.phone?.whatsapp))} />
+                          <DriverChoiceRow
+                            key={o.username}
+                            d={o}
+                            card={false}
+                            onDay={onDay}
+                            selected={f.driver === o.username}
+                            onPress={() => (f.driver === o.username ? pick('', '') : pick(o.username, o.name, drivers.find((x) => x.username === o.username)?.phone?.whatsapp))}
+                            testID={`free-driver-${o.username}`}
+                          />
                         ))}
                       </View>
                     )}
                     <Txt variant="strong" size={16}>{t('office.trip.vehicle')}</Txt>
-                    {defaultLine ? <Txt variant="small" color={!def && known ? colors.amberText : colors.muted}>{defaultLine}</Txt> : null}
-                    {dayDefault && f.vehicle && f.vehicle !== ON_THE_DAY && !custodian ? <Pressable accessibilityRole="button" onPress={() => setF({ vehicle: '' })} hitSlop={8}><Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.leaveToDay')}</Txt></Pressable> : null}
-                    {!dayDefault && f.vehicle && def && f.vehicle !== def.reg_no && !custodian ? <Pressable accessibilityRole="button" onPress={() => setF({ vehicle: '' })} hitSlop={8}><Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.useVehicle', { plate: def.reg_no })}</Txt></Pressable> : null}
-                    {!custodian && onDay ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{onDayChips}</View> : null}
+                    {noAppTrip ? <Txt variant="small">{t('office.who.plateNeeded')}</Txt> : defaultLine ? <Txt variant="small" color={!def && known ? colors.amberText : colors.muted}>{defaultLine}</Txt> : null}
+                    {!noAppTrip && dayDefault && f.vehicle && f.vehicle !== ON_THE_DAY && !custodian ? <Pressable accessibilityRole="button" onPress={() => setF({ vehicle: '' })} hitSlop={8}><Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.leaveToDay')}</Txt></Pressable> : null}
+                    {!noAppTrip && !dayDefault && f.vehicle && def && f.vehicle !== def.reg_no && !custodian ? <Pressable accessibilityRole="button" onPress={() => setF({ vehicle: '' })} hitSlop={8}><Txt variant="strong" size={15} color={colors.blue}>{t('office.trip.useVehicle', { plate: def.reg_no })}</Txt></Pressable> : null}
+                    {!noAppTrip && !custodian && onDay ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{onDayChips}</View> : null}
                     {vehicleGroups(groupRows(sug.data), t('office.trip.noVehicles'))}
                   </>
                 )}
               </View>
             )}
-            {books && !custodian && whoAvailable}
+            {books && !custodian && byDriver && whoAvailable}
           </>
         )}
       </Screen>

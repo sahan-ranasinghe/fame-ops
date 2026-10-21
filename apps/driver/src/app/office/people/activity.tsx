@@ -2,16 +2,21 @@
 // log: activity_log, who changed what and when, newest first: the action in words, what it was about, who and through
 // which channel, done / refused (with the reason) / failed. The days (one date range button, the last 7 by default) and a
 // person (the search: a name, an e-mail or a driver's username); 50 at a time with Load more.
+// Round 3 (Google Workspace / GitHub audit log): "Show routine actions" (off by default) asks for the routine actions too
+// (include_routine: watching drivers, reading notifications, loading a map…); their rows are quieter. Refused and failed
+// ones always show (the server's rule).
 
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { DateRangeButton } from '@/components/patterns/Calendar';
 import { FilterBar } from '@/components/patterns/FilterBar';
+import { ToggleRow } from '@/components/office/Controls';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
 import { Txt } from '@/components/ui';
 import { presetRange } from '@/lib/patterns/calendarLogic';
 import { colomboDate } from '@/lib/time';
+import { activityArgs, quietRow } from '@/office/activityLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { ActivityEntry, ActivityLog, FleetError } from '@/office/types';
 import { BackHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
@@ -32,12 +37,13 @@ export default function ActivityLogScreen() {
   const [text, setText] = useState('');
   const [person, setPerson] = useState('');
   const [more, setMore] = useState<{ busy: boolean; error: FleetError | null }>({ busy: false, error: null });
+  const [routine, setRoutine] = useState(false);
   useEffect(() => {
     const timer = setTimeout(() => setPerson(text.trim()), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [text]);
 
-  const args = (cursor?: string) => ({ from: range.from, to: range.to, limit: 50, ...(person ? { person } : {}), ...(cursor ? { cursor } : {}) });
+  const args = (cursor?: string) => activityArgs({ from: range.from, to: range.to, person, routine, cursor });
   const q = useTool<ActivityLog>('activity_log', args());
   const d = q.data;
 
@@ -61,6 +67,8 @@ export default function ActivityLogScreen() {
       line={[e.at.slice(0, 10), e.person, e.channel].filter(Boolean).join(' · ')}
       line2={e.reason}
       chip={{ text: t(`office.activity.${e.outcome}`), tone: TONE[e.outcome] }}
+      quiet={quietRow(e)}
+      testID={e.routine ? 'activity-routine' : undefined}
     />
   );
 
@@ -70,6 +78,7 @@ export default function ActivityLogScreen() {
       <Screen refreshing={q.refreshing} onRefresh={() => void q.reload()}>
         <DateRangeButton value={range} onChange={setRange} max={today} maxDays={MAX_DAYS} testID="activity-range" />
         <FilterBar search={text} onSearch={(v) => { setText(v); if (!v) setPerson(''); }} placeholder={t('office.activity.search')} defs={[]} values={{}} onApply={() => undefined} />
+        <ToggleRow label={t('office.activity.showRoutine')} hint={t('office.activity.showRoutineHint')} value={routine} onChange={setRoutine} testID="activity-routine-switch" />
         {!d && q.error && <ListFailed error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}
         {!d && !q.error && <SkeletonRows rows={6} lines={2} />}
         {d && q.error && <ListFailed stale error={q.error} onRetry={() => void q.reload()} onSignIn={() => void signOut()} />}

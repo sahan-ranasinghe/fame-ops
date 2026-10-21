@@ -12,7 +12,7 @@ import type { NotificationSettings } from "../../data/types";
 import { currentSubscription, endpointHash, pushState } from "../../push";
 import { errText } from "../../transport/errors";
 import type { FleetError } from "../../transport/types";
-import { Empty, Loading, Notice, Pill } from "../../ui/basics";
+import { Empty, Loading, Notice, Pill, SwitchLine } from "../../ui/basics";
 import { useToast } from "../../ui/Toast";
 import { removeDevice, turnOffHere, turnOnHere } from "./notificationsActions";
 import { DEVICE_NOTE, type PushState, stateText } from "./notificationsLogic";
@@ -168,12 +168,5 @@ export function WebAppOnly() {
   return <Notice tone="info">Notifications are set in the web app (fame-fleet.pages.dev): sign in there, Settings → Notifications.</Notice>;
 }
 
-/** One switch: a short title on one line, an optional grey line under it; the whole line flips it. */
-export function SwitchLine({ title, text, on, onChange, disabled = false, testId }: { title: string; text?: string; on: boolean; onChange: (on: boolean) => void; disabled?: boolean; testId?: string }) {
-  return (
-    <label className={`set-switch${disabled ? " is-disabled" : ""}`} data-testid={testId}>
-      <span className="grow"><span className="name">{title}</span>{text && <span className="sub">{text}</span>}</span>
-      <input type="checkbox" role="switch" aria-label={title} checked={on} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-    </label>
-  );
-}
+/** One switch (ui/basics SwitchLine, shared with the Activity log since Round 3). */
+export { SwitchLine };

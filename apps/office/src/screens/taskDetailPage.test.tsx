@@ -106,3 +106,35 @@ describe("the task page (Part 2)", () => {
     expect(screen.getByText("Swapped during the task: WP CAB-4521 → WP KL-1234")).toBeTruthy();
   });
 });
+
+describe("the task page (Round 3: who drives, a missed task)", () => {
+  it("someone else drives: their name in the driver card with \"Someone else\", no photo, Call on their own number", async () => {
+    await mount({
+      ...base,
+      task: {
+        ...base.task, status: "assigned", driven_by: "other", driver: "Nimal Silva", driver_photo_url: undefined, status_line: "Someone else drives · no app",
+        driver_phone: { phone: "+94771234567", phone_display: "077 123 4567", call: "tel:+94771234567", whatsapp: "https://wa.me/94771234567" },
+      },
+    }, dispatcher);
+    const card = screen.getByTestId("driver-line");
+    expect(card.textContent).toContain("Nimal Silva");
+    expect(card.querySelector("[data-testid=driven-by]")?.textContent).toBe("Someone else");
+    expect(card.querySelector("[data-testid=vehicle-chip]")?.textContent).toBe("WP CAB-4521");
+    expect(card.querySelector("img")).toBeNull();
+    expect(screen.getByText("Who drives")).toBeTruthy();
+    expect(screen.getByText("Someone else drives · no app")).toBeTruthy();
+    expect(screen.getByTestId("call-driver").textContent).toContain("077 123 4567");
+  });
+
+  it("drives themselves: the small word in the duty state's place", async () => {
+    await mount({ ...base, task: { ...base.task, status: "assigned", driven_by: "self", driver: "Sahan Ranasinghe", status_line: "Drives themselves · no app" } }, dispatcher);
+    expect(screen.getByTestId("driver-line").querySelector("[data-testid=driven-by]")?.textContent).toBe("Drives themselves");
+  });
+
+  it("a missed task: the pill in red and the server's line", async () => {
+    await mount({ ...base, task: { ...base.task, status: "missed", status_line: "Missed · not started (leave by 08:00)" } }, approver);
+    const pill = screen.getByText("Missed");
+    expect(pill.className).toContain("bad");
+    expect(screen.getByText("Missed · not started (leave by 08:00)")).toBeTruthy();
+  });
+});

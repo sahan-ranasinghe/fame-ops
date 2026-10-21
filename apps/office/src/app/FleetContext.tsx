@@ -35,6 +35,8 @@ export interface Fleet {
   };
   /** Web build only (Phase 7): a photo or document goes up through the signed upload a tool handed out. None = no upload buttons. */
   files?: { upload: (ticket: UploadTicket, file: Blob, contentType: string) => Promise<void> };
+  /** Web build only (Round 3): my own photo saved through my own folder and set_my_photo (data/myPhoto.ts). None = no Change photo. */
+  myPhoto?: { save: (jpeg: Blob) => Promise<"ok" | "failed" | "network"> };
 }
 
 const Ctx = createContext<Fleet | null>(null);

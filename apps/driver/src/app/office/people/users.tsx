@@ -53,7 +53,7 @@ export default function OfficeUsersPeople() {
     const pill = activePill(u.active);
     return (
       <Row
-        left={<Avatar name={u.name} size={44} />}
+        left={<Avatar name={u.name} size={44} photo={u.photo_url} />}
         title={u.name}
         line={userLine(u)}
         line2={permissionWords(u.permissions, permWord)}

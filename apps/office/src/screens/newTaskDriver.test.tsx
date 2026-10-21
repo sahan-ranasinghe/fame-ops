@@ -1,5 +1,6 @@
 // Part 3b (H5): the Drivers board's "New task" opens Assign a task with that driver picked (/tasks/new?driver=<username>).
-import { act, render, screen } from "@testing-library/react";
+import { pickedDriver } from "../test/controls";
+import { act, render } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FleetProvider } from "../app/FleetContext";
@@ -55,6 +56,6 @@ describe("Assign a task from the Drivers board", () => {
     );
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-    expect((screen.getByLabelText("Driver") as HTMLSelectElement).value).toBe("nuwan.s");
+    expect(pickedDriver()).toBe("nuwan.s");
   });
 });

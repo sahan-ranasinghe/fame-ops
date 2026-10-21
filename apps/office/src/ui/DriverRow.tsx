@@ -7,14 +7,58 @@
 // mark in front and the tint and the 2 px border when picked (ui/Select.tsx); the tick box, the
 // right-hand slot (Choose, Assign, New task) and Call / WhatsApp sit beside it, never inside the button. Compact on a
 // phone (the CSS: a smaller photo, Call under the text).
+// Round 3 (the driver-first card of Uber Fleet's and Samsara's driver lists): the vehicle as a chip under the name (the
+// plate, "regular", "Vehicle: on the day" or "No vehicle yet"), and on a trip with no app a small word in the duty
+// state's place ("Drives themselves", "Someone else"). DriverLine is the same card on one line, spans only, for a place
+// that is itself a button or a table cell (a board card, a task's header, a request's driver).
 import type { ReactNode } from "react";
-import type { PhoneLinks } from "../data/types";
+import type { DrivenBy, PhoneLinks } from "../data/types";
 import { Avatar, Pill } from "./basics";
 import { SelectMark } from "./Select";
 import { ContactButtons } from "./ContactButtons";
-import { type DriverRowInfo, factsLine, firstName, nextLine, nowTone } from "./driverRowLogic";
+import { type DriverRowInfo, drivenByWord, factsLine, firstName, nextLine, nowTone, type VehicleChipWords } from "./driverRowLogic";
 
-export type { DriverRowInfo } from "./driverRowLogic";
+export type { DriverRowInfo, VehicleChipWords } from "./driverRowLogic";
+
+/** The vehicle chip: the plate in mono (with "regular" beside it), or the words in grey when there is no plate. */
+export function VehicleChip({ chip, testId = "vehicle-chip" }: { chip: VehicleChipWords; testId?: string }) {
+  return chip.plate
+    ? <span className="vchip" data-testid={testId}><span className="plate">{chip.plate}</span>{chip.note ? <> <span className="vchip-note">{chip.note}</span></> : null}</span>
+    : <span className="vchip none" data-testid={testId}>{chip.text}</span>;
+}
+
+/**
+ * The driver card on one line: the photo (initials until there is one), the name, then the small word of a trip with no
+ * app ("Drives themselves", "Someone else") or the status, and the vehicle chip. Spans only.
+ */
+export function DriverLine({ name, photo, drivenBy, status, vehicle, extra, testId = "driver-line" }: {
+  name?: string | null;
+  photo?: string | null;
+  drivenBy?: Exclude<DrivenBy, "driver">;
+  /** The status in a word when the place has one (On duty, On a task). */
+  status?: ReactNode;
+  vehicle?: VehicleChipWords | null;
+  /** After the chip (a vehicle's thumbnail). */
+  extra?: ReactNode;
+  testId?: string;
+}) {
+  const word = drivenByWord(drivenBy);
+  return (
+    <span className="dline" data-testid={testId}>
+      <Avatar name={name} src={drivenBy === "other" ? undefined : photo} small />
+      <span className="dline-text">
+        <span className="name">{name || "—"}</span>
+        {(word || status || vehicle) && (
+          <span className="dline-facts">
+            {word ? <span className="pill muted" data-testid="driven-by">{word}</span> : status}
+            {extra}
+            {vehicle && <VehicleChip chip={vehicle} />}
+          </span>
+        )}
+      </span>
+    </span>
+  );
+}
 
 export interface DriverRowTick {
   checked: boolean;
@@ -38,6 +82,8 @@ export function DriverRow({
   contactTestId = "driver-row-contact",
   contactLabel,
   className,
+  vehicle,
+  drivenBy,
 }: {
   d: DriverRowInfo;
   /** Call and WhatsApp; nothing is shown without a call link. */
@@ -62,10 +108,15 @@ export function DriverRow({
   /** "Call Kamal" by default. */
   contactLabel?: string;
   className?: string;
+  /** Round 3: the vehicle chip under the name (driverRowLogic.vehicleChipWords); none = no chip. */
+  vehicle?: VehicleChipWords | null;
+  /** Round 3: a trip with no app: the small word in the status chip's place. */
+  drivenBy?: Exclude<DrivenBy, "driver">;
 }) {
   const facts = factsLine(d);
   const next = nextLine(d);
-  const status = d.now_status;
+  const word = drivenByWord(drivenBy);
+  const status = word ? undefined : d.now_status;
   const main = (
     <>
       {/* Hotfix O2-H2 Part 3: a row that picks a driver has the radio in front (empty / with its dot), never colour alone. */}
@@ -74,9 +125,11 @@ export function DriverRow({
       {rank != null && <span className="num drow-rank" aria-label={`Best match number ${rank}`}>{rank}</span>}
       <span className="grow drow-text">
         <span className="name">{d.name}{nameExtra ? <> {nameExtra}</> : null}</span>
-        {(status || d.not_available) && (
+        {(status || word || d.not_available || vehicle) && (
           <span className="drow-status" data-testid="drow-status">
+            {word && <Pill tone="muted">{word}</Pill>}
             {status && <Pill tone={nowTone(status.kind)}>{status.text}</Pill>}
+            {vehicle && <VehicleChip chip={vehicle} />}
             {d.not_available && <span className="status warn" data-testid="drow-not-available">{d.not_available}</span>}
           </span>
         )}
@@ -88,7 +141,7 @@ export function DriverRow({
     </>
   );
   return (
-    <div className={`drow${tick ? " has-tick" : ""}${picked ? " picked" : ""}${className ? ` ${className}` : ""}`}>
+    <div className={`drow${tick ? " has-tick" : ""}${picked ? " picked" : ""}${className ? ` ${className}` : ""}`} data-username={d.username ?? undefined}>
       {tick && (
         <span className="drow-tick">
           <input type="checkbox" checked={tick.checked} aria-label={tick.label} onChange={(e) => tick.onChange(e.target.checked)} />

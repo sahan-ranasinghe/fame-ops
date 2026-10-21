@@ -10,18 +10,22 @@
 // place" for a Google stop (save_arrival_place); and under "More details": charged to, the odometer and fuel with their
 // photos, receipts and video pieces (the 1-hour links: an answer read over 50 minutes ago is read again first), the
 // problems reported, the history, and "Show the plan on the map" (task/[id]/plan).
+// Round 3: the driver card (components/office/DriverRows.tsx TaskDriverCard) shows the driver, the person who drives it
+// themselves ("Drives themselves") or someone not in Fame Fleet ("Someone else": their initials, name, Call / WhatsApp);
+// the server's sentences (Running late, the status line, the warnings saved past) in the person's language.
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
-import { MapPin, MessageCircle, Phone } from '@/components/icons';
+import { MapPin } from '@/components/icons';
+import { TaskDriverCard } from '@/components/office/DriverRows';
 import { StopTimeline } from '@/components/office/StopTimeline';
 import { StopArrival, SwapSegments, TaskMoreDetails, TaskWarnings, TripPurposeCard } from '@/components/office/TaskDetailParts';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { ReasonSheet } from '@/components/ReasonSheet';
 import { SavedNotice } from '@/components/office/SavedNotice';
-import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { Button, Mono, Txt } from '@/components/ui';
 import { useLiveTask } from '@/office/liveTask';
 import { useOffice, useTool } from '@/office/state';
 import { DETAIL_LINKS_FRESH_MS, type LinkKey, linkOf } from '@/office/taskDetailLogic';
@@ -29,7 +33,7 @@ import { extrasFor, REOPEN_TEXT, type ReopenReasonKey, reopenInput } from '@/off
 import { allowedActions, CANCEL_TEXT, cancelInput, plateOf, steps, taskStatusKey } from '@/office/taskLogic';
 import type { FleetError, TaskDetail } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
-import { Avatar, BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
+import { BackHeader, ErrorNotice, ListFailed, Pill, Screen, Section } from '@/office/ui';
 import { sentenceText } from '@/office/statusWords';
 import { statusTone } from '@/office/homeLogic';
 import { useApp } from '@/state/app';
@@ -162,7 +166,7 @@ export default function TaskDetailScreen() {
         {task && (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <Pill text={t(`office.status.${statusKey}`)} tone={statusTone(statusKey)} size={15} />
-            {task.late_report && <Pill text={task.late_report.text} tone="amber" size={15} />}
+            {task.late_report && <Pill text={sentenceText(t, task.late_report.text)} tone="amber" size={15} />}
             {!task.late_report && task.status === 'in_progress' && task.eta?.late_min ? <Pill text={t('office.status.late', { min: task.eta.late_min })} tone="amber" size={15} /> : null}
             {task.label && <Pill text={task.label} tone="muted" size={15} />}
             {task.kind === 'self' && <Pill text={t('office.task.driverStarted')} tone="muted" size={15} />}
@@ -175,6 +179,8 @@ export default function TaskDetailScreen() {
           </View>
         )}
         {task && task.status === 'cancelled' && task.cancelled_reason && <Txt variant="muted">{t('office.task.cancelledWhy', { why: task.cancelled_reason })}</Txt>}
+        {/* Round 3: a missed task says so ("Missed · not started (leave by 08:30)"), never "Cancelled:". */}
+        {task && task.status === 'missed' && task.status_line ? <Txt variant="muted" testID="missed-line">{sentenceText(t, task.status_line)}</Txt> : null}
         {p && task && <TaskWarnings p={p} />}
         {task && (
           <View style={styles.card}>
@@ -194,22 +200,17 @@ export default function TaskDetailScreen() {
         )}
         {task && (task.driver || task.vehicle || task.vehicle_text) && (
           <View style={styles.card}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              {task.driver ? <Avatar name={task.driver} size={52} photo={task.driver_photo_url} /> : null}
-              <View style={{ flex: 1, gap: 4 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <Txt variant="strong" size={18}>{task.driver ?? t('office.task.noDriver')}</Txt>
-                  {task.vehicle ? <Plate regNo={plateOf(task.vehicle)} /> : task.vehicle_text ? <Pill text={task.vehicle_text} tone="muted" /> : null}
-                </View>
-                <Txt variant="muted" size={15}>{[task.vehicle?.split(' · ').slice(1).join(' · '), task.start_odometer_km != null ? t('office.task.startOdo', { km: task.start_odometer_km.toLocaleString('en-US') }) : ''].filter(Boolean).join(' · ')}</Txt>
-              </View>
-              {task.driver_phone?.call && (
-                <Pressable accessibilityRole="button" accessibilityLabel={t('office.common.call')} onPress={() => open(task.driver_phone!.call)} style={styles.iconBtn}><Phone size={22} color={colors.ink} strokeWidth={2.4} /></Pressable>
-              )}
-              {task.driver_phone?.whatsapp && (
-                <Pressable accessibilityRole="button" accessibilityLabel={t('office.common.whatsapp')} onPress={() => open(task.driver_phone!.whatsapp)} style={styles.iconBtn}><MessageCircle size={22} color={colors.ink} strokeWidth={2.4} /></Pressable>
-              )}
-            </View>
+            <TaskDriverCard
+              name={task.driver}
+              photo={task.driver_photo_url}
+              drivenBy={task.driven_by}
+              plate={task.vehicle ? plateOf(task.vehicle) : undefined}
+              vehicleText={task.vehicle_text}
+              details={[task.vehicle?.split(' · ').slice(1).join(' · '), task.start_odometer_km != null ? t('office.task.startOdo', { km: task.start_odometer_km.toLocaleString('en-US') }) : ''].filter(Boolean).join(' · ')}
+              call={task.driver_phone?.call}
+              whatsapp={task.driver_phone?.whatsapp}
+              emptyName={t('office.task.noDriver')}
+            />
             {task.status === 'in_progress' && (
               <Pressable accessibilityRole="button" onPress={() => router.navigate({ pathname: '/office/(tabs)/live', params: { driver: task.driver ?? '' } })} style={styles.now}>
                 <MapPin size={22} color={colors.blue} />

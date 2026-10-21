@@ -86,7 +86,7 @@ export default function TripsTab() {
           <Txt variant="strong" size={17} style={{ flex: 1 }}>{tripTitle(trip)}</Txt>
           {(() => { const k = tripChip(live.state); return <StatusChip text={t(`office.chip.${k.key}`)} tone={k.tone} />; })()}
         </View>
-        <Txt variant="muted" size={15}>{tripLine(trip, t('office.trips.backBy'))}</Txt>
+        <Txt variant="muted" size={15}>{tripLine(trip, t('office.trips.backBy'), { self: t('office.who.drivesThemselves'), other: t('office.who.someoneElse') })}</Txt>
         {changed ? <Txt variant="strong" size={14} color={colors.amberText}>{changed}</Txt> : null}
         {approved && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>

@@ -4,6 +4,7 @@ import { useFleet } from "../app/FleetContext";
 import { moreFor, NAV_SECTIONS } from "../app/nav";
 import { badgeText, useNavBadges } from "../app/navBadges";
 import { ROLE_LABEL } from "../transport/types";
+import { Avatar } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { phoneLike, saveChoice, touchPointer } from "../app/viewChoice";
 
@@ -24,6 +25,8 @@ export function More() {
       <div className="ph"><div><div className="eyebrow">Your account, then everything else</div><h1>More</h1></div></div>
       <div className="stack" style={{ maxWidth: 560 }}>
         <div className="card card-b">
+          {/* Round 3: my photo (the initials until there is one; Change photo is on My profile). */}
+          <div className="person" style={{ marginBottom: 14 }} data-testid="more-person"><Avatar name={me.name} src={me.photo_url} large /><b>{me.name || "—"}</b></div>
           <dl className="kv">
             <div><dt>Name</dt><dd>{me.name || "—"}</dd></div>
             <div><dt>Role</dt><dd>{ROLE_LABEL[me.role] ?? me.role}</dd></div>

@@ -85,3 +85,18 @@ export function pickDate(field: HTMLElement, day: string): void {
   fireEvent.click(field);
   tapCalendarDay(screen.getByTestId("date-field-sheet"), day);
 }
+
+/** Round 3: the driver picker's value (the username shown as picked; "" = none). */
+export function pickedDriver(label = "Driver", scope?: HTMLElement): string {
+  const root = scope ? within(scope) : screen;
+  return root.getByLabelText(label, { exact: true }).getAttribute("data-value") ?? "";
+}
+
+/** Round 3: picks a driver in the driver picker as a person does: opens it, then clicks that driver's card in the sheet. */
+export function chooseDriver(username: string, label = "Driver", scope?: HTMLElement): void {
+  const root = scope ? within(scope) : screen;
+  fireEvent.click(root.getByLabelText(label, { exact: true }));
+  const card = screen.getByTestId("driver-sheet").querySelector<HTMLElement>(`[data-username="${username}"] [data-testid="driver-option"]`);
+  if (!card) throw new Error(`No card for ${username} in the driver picker`);
+  fireEvent.click(card);
+}

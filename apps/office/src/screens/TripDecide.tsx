@@ -8,6 +8,9 @@
 // as proposed (Approve and send once anything changed) or Decline with a reason.
 // A late one says "Leave-by passed · not decided" first. The choices are kept as
 // a draft and no refresh resets them (§10).
+// Round 3: what the request asked about who drives, in words ("Drives themselves", "Someone else: Nimal · 077 123
+// 4567", "The custodian drives"); approved with a plate and no driver, or the approver gives a driver instead (the driver
+// cards, ui/DriverPicker), which makes it a driver's trip.
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
@@ -20,12 +23,16 @@ import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
 import { Notice, Pill, WarningsNote } from "../ui/basics";
 import { DraftBanner } from "../ui/DraftBanner";
+import { driverOptions } from "../ui/driverPickerLogic";
+import { firstName } from "../ui/driverRowLogic";
+import { askedOf, askedWords } from "../ui/whoDrivesLogic";
+import { phoneDisplay } from "../ui/ContactButtons";
 import { PageTop, StickyActions } from "../ui/Page";
 import { TimeField } from "../ui/TimeField";
 import { useToast } from "../ui/Toast";
 import { askedTimes, decideLabel, emptyTripDecision, isProposal, requestView, shownTimes, type TripDecision, tripDecideInput, tripPick } from "./approvalLogic";
 import { linkedDriver } from "./asks/askLogic";
-import { availabilityArgs, type DefaultVehicle, driverVehicle, floorTo5, withPicked } from "./availabilityLogic";
+import { availabilityArgs, type DefaultVehicle, driverVehicle, floorTo5 } from "./availabilityLogic";
 import { AvailabilityPanel, scrollToAvailability, useAvailability, vehicleFor } from "./AvailabilityPanel";
 import { ConflictCards } from "./ConflictCards";
 import { checkDeparture, departurePlan } from "./departureLogic";
@@ -34,7 +41,7 @@ import { DepartureNote, DriverSelect, useFleetSettings, VehicleSelect, vehicleOn
 import { RequestDetailCard } from "./RequestDetailCard";
 import { LateNotice } from "./requestParts";
 import { TripSection, useTripLine } from "./RequestTrip";
-import { knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
+import { isChoice, knownDef, ON_THE_DAY, vehicleDefault } from "./vehicleChoiceLogic";
 import { TripDayPicker } from "../ui/DayPicker";
 
 export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: RequestCard) => void }) {
@@ -75,7 +82,11 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   const reviewers = useReviewing(id, q.status === "waiting");
 
   // The driver: picked, else the proposed one, else (a request) the best match once Who's available answers.
-  const noDriverNeeded = q.driver_required === false;
+  // Round 3: no driver needed when the asker or someone else drives (self, other) or the custodian does (the older path).
+  const asked = askedOf(q);
+  const noDriverNeeded = asked !== "driver";
+  // "Nimal drives" (the asker), "Sunil drives" (someone else), "The custodian drives".
+  const askedWho = asked === "self" ? `${firstName(q.requested_by)} drives` : asked === "other" ? `${q.driver_name || "Someone else"} drives` : "The custodian drives";
   const availDefault = avail.data ? avail.data.best?.username ?? avail.data.vehicles.drivers_free[0]?.username : undefined;
   const defaultDriver = proposed?.username ?? (noDriverNeeded ? "" : availDefault ?? (avail.loading ? "" : sug?.drivers_free?.[0]?.username) ?? "");
   const driver = f.driver || defaultDriver;
@@ -93,10 +104,14 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   const dayDefault = dflt?.kind === "on_the_day";
   const pickArgs = {
     f: dayDefault && !f.vehicle ? { ...f, vehicle: ON_THE_DAY } : f, was, driver,
-    proposed: proposed ? { username: proposed.username, vehicle: proposed.vehicle } : undefined, driverVehicle: knownVehicle, noDriverNeeded,
+    proposed: proposed ? { username: proposed.username, vehicle: proposed.vehicle } : undefined, driverVehicle: knownVehicle, noDriverNeeded, asked, askedWho,
   };
   const pick = tripPick(pickArgs);
   const custodianDrives = noDriverNeeded && !driver && !!f.vehicle;
+  // Self or someone else with no driver named: Approve waits for a plate (the reason under the button).
+  const plateWhy = (asked === "self" || asked === "other") && !driver && (!f.vehicle || isChoice(f.vehicle))
+    ? `${askedWho} it: pick the vehicle (nobody confirms one on the day).`
+    : null;
   const vehicles = sug?.vehicles.length
     ? sug.vehicles.map((v) => ({ reg_no: v.reg_no, make_model: v.make_model, status: v.availability }))
     : (lists.vehicles ?? []).map((v) => ({ reg_no: v.reg_no, make_model: v.make_model, status: v.availability || v.status }));
@@ -134,7 +149,7 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
         text: (
           <>
             <b>{p.as_proposed ? "Sent as proposed." : custodianDrives ? "Approved." : "Approved and sent."}</b>{" "}
-            {custodianDrives ? "The custodian drives it." : "The task is in the driver’s app."}{" "}
+            {custodianDrives ? `${askedWho} it.` : "The task is in the driver’s app."}{" "}
             {p.vehicle_changed ? <span data-testid="vehicle-used">{p.vehicle_changed}. </span>
               : p.vehicle_used ? <span data-testid="vehicle-used">Vehicle: {p.vehicle_used.reg_no} · {p.vehicle_used.why === "chosen" ? "as picked" : p.vehicle_used.why}. </span>
               : p.vehicle ? <span data-testid="vehicle-used">Vehicle: {p.vehicle}. </span> : null}
@@ -206,13 +221,20 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
               Proposed by {q.requested_by}: {proposed.driver}{proposed.vehicle ? ` with ${proposed.vehicle}` : proposed.vehicle_text ? ` · ${proposed.vehicle_text}` : ""}{proposed.vehicle_why && proposed.vehicle_why !== "chosen" ? ` (${proposed.vehicle_why})` : ""}.
             </p>
           )}
-          <DriverSelect id="rq-driver" value={driver} drivers={withPicked(active, driver, driverName(driver))} onChange={(u) => set("driver", u)}
-            emptyLabel={noDriverNeeded ? "No driver: the custodian drives" : "Pick a driver"} loading={!lists.drivers && !lists.error} />
+          {noDriverNeeded && (
+            <p className="muted small" style={{ margin: 0 }} data-testid="decide-asked">
+              Asked: <b>{askedWords(q, phoneDisplay)}</b>.{driver ? " A driver is given instead: it becomes a driver’s trip." : " Approve with the vehicle, or give a driver instead."}
+            </p>
+          )}
+          <DriverSelect id="rq-driver" value={driver} onTheDay={onDay} onChange={(u) => set("driver", u)} loading={!lists.drivers && !lists.error}
+            drivers={driverOptions({ avail: avail.data?.drivers, list: active, free: sug?.drivers_free, picked: driver, pickedName: driverName(driver) })}
+            emptyLabel={noDriverNeeded ? `No driver: ${askedWho.replace(/^The /, "the ")}` : "Pick a driver"}
+            emptyChoice={noDriverNeeded ? `No driver: ${askedWho.replace(/^The /, "the ")}` : undefined} />
           {!f.driver && defaultDriver && !proposed?.username && (
             <span className="hint" data-testid="driver-default">{defaultDriver === avail.data?.best?.username ? "The best match" : "The first free driver"}. Pick another to change it.</span>
           )}
           <VehicleSelect id="rq-vehicle" value={f.vehicle} def={def} vehicles={vehicles} onChange={(reg) => set("vehicle", reg)}
-            emptyLabel={noDriverNeeded && !driver ? "Pick the custodian’s vehicle" : "Pick a vehicle"}
+            emptyLabel={noDriverNeeded && !driver ? (asked === "custodian" ? "Pick the custodian’s vehicle" : "Pick the vehicle") : "Pick a vehicle"}
             choices={onDay && !(noDriverNeeded && !driver)} dayDefault={dayDefault}
             hint={driver && !def && knownVehicle === null && !onDay ? "This driver holds no vehicle today and has no regular one: pick one." : undefined} />
         </div>
@@ -242,9 +264,10 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
           {msg && <div><Notice tone={msg.tone}>{msg.text}</Notice>{msg.warnings && <WarningsNote warnings={msg.warnings} />}</div>}
           <StickyActions>
             <button type="button" className="btn" disabled={busy} onClick={() => void decide("decline")}>Decline</button>
-            <button type="button" className="btn dark" disabled={busy} data-testid="decide-send" onClick={() => void decide("approve")}>
-              {decideLabel({ proposal: !!proposed?.username, asProposed: pick.asProposed, custodianDrives })}
+            <button type="button" className="btn dark" disabled={busy || !!plateWhy} data-testid="decide-send" onClick={() => void decide("approve")}>
+              {decideLabel({ proposal: !!proposed?.username, asProposed: pick.asProposed, custodianDrives: custodianDrives || !!plateWhy })}
             </button>
+            {plateWhy && <p className="hint btn-why" data-testid="approve-why">{plateWhy}</p>}
           </StickyActions>
         </div>
       </div>

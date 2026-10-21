@@ -2,9 +2,14 @@
 // an option (the plate, what it is, how it stands, the custodian's links), the
 // requester's timeline, and (Phase 7, §33) the card's head: who asked, or a
 // proposed task's title with its driver and vehicle, and "Leave-by passed".
+// Round 3: the asker's photo in the head, and who the request asked to drive (AskedWho).
 import type { FieldChanges, RequestCard, SuggestedVehicle, Suggestions } from "../data/types";
 import { joinDots } from "../lib/format";
-import { Pill } from "../ui/basics";
+import { Avatar, Pill } from "../ui/basics";
+import { ContactButtons, linksOf } from "../ui/ContactButtons";
+import { DriverLine } from "../ui/DriverRow";
+import { firstName } from "../ui/driverRowLogic";
+import { askedOf } from "../ui/whoDrivesLogic";
 import { LATE_TEXT, proposalLine } from "./approvalLogic";
 import { diffLines, timelineSteps } from "./requestLogic";
 
@@ -97,7 +102,13 @@ export function RequestHead({ q, proposal }: { q: RequestCard; proposal: boolean
             <div className="sub" data-testid="proposal-line">{proposal ? proposalLine(q) : `Proposed by ${q.requested_by}`}</div>
           </>
         )
-        : <div className="name" style={{ fontSize: 19 }}>{q.requested_by}{q.on_behalf_of ? <span className="muted"> · for {q.on_behalf_of}</span> : null}</div>}
+        : (
+          <div className="name person" style={{ fontSize: 19 }}>
+            {/* Round 3: the asker's photo (the initials until there is one). */}
+            <Avatar name={q.requested_by} src={q.requested_by_photo_url} small />
+            <span>{q.requested_by}{q.on_behalf_of ? <span className="muted"> · for {q.on_behalf_of}</span> : null}</span>
+          </div>
+        )}
       <div className="sub">{joinDots([q.project, q.asked, q.one_step ? "booked directly by the office" : ""])}</div>
     </>
   );
@@ -112,5 +123,25 @@ export function LateNotice({ approver }: { approver: boolean }) {
         {approver ? "It is never sent by itself: send it with a later leave-by, or decline it." : "It is never sent by itself: the fleet admin decides it, or you withdraw it."}
       </p>
     </div>
+  );
+}
+
+/**
+ * Round 3: who the request asked to drive, when it is not a driver of ours: the driver card with the small word
+ * ("Drives themselves": the asker; "Someone else": their name, with Call and WhatsApp on their own number), or "The
+ * custodian drives" (the older path). Nothing for a driver.
+ */
+export function AskedWho({ q }: { q: RequestCard }) {
+  const asked = askedOf(q);
+  if (asked === "driver") return null;
+  if (asked === "custodian") return <span data-testid="asked-who">The custodian drives</span>;
+  const other = asked === "other";
+  const name = other ? q.driver_name || "Someone else" : q.requested_by;
+  const phone = other ? linksOf(q.driver_phone) : null;
+  return (
+    <span style={{ display: "grid", gap: 6 }} data-testid="asked-who">
+      <DriverLine name={name} photo={other ? undefined : q.requested_by_photo_url} drivenBy={asked} testId="asked-who-line" />
+      {phone && <ContactButtons phone={phone} label={`Call ${firstName(name)}`} testId="call-asked" />}
+    </span>
   );
 }

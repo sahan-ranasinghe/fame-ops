@@ -75,14 +75,19 @@ export function tripsArgs(today: string, limit: number, search = ''): Record<str
 /** A stable key for a row: a request and a created task may share an id. */
 export const tripKey = (trip: Trip): string => (isCreatedTask(trip) ? `t-${trip.id}` : `r-${trip.id}`);
 
-/** "Tue 20 Oct 11:00 · back by 17:00 · 1 pax · Sunil · WP CAB-4521" (design 17). */
-export function tripLine(trip: Trip, backByWord: string): string {
+/**
+ * "Tue 20 Oct 11:00 · back by 17:00 · 1 pax · Sunil · WP CAB-4521" (design 17). Round 3: a trip with no app says who
+ * drives after the name ("Nimali · Drives themselves", "Kamal Silva · Someone else"), with `who` the two words.
+ */
+export function tripLine(trip: Trip, backByWord: string, who?: { self: string; other: string }): string {
   const a = trip.assigned;
+  const word = a?.driven_by === 'self' ? who?.self : a?.driven_by === 'other' ? who?.other : undefined;
   return [
     trip.when,
     trip.back_by ? `${backByWord} ${trip.back_by}` : '',
     isCreatedTask(trip) ? '' : (trip.need ?? ''),
     a?.driver ?? '',
+    word ?? '',
     a ? (a.vehicle || a.vehicle_text || '') : '',
   ].filter(Boolean).join(' · ');
 }

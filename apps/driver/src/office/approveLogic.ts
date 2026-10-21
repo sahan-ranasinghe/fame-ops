@@ -4,6 +4,7 @@
 // label, and what the server's "already decided" refusal means.
 
 import { sentenceText } from './statusWords';
+import { asksNoDriver } from './trip/whoDrivesLogic';
 import type { AvailableDriver, Availability, FleetError, RequestCard, TimelineItem } from './types';
 
 /** One row of the trip card: the mark (S, 1, 2 …, B), the place and its line. */
@@ -104,8 +105,13 @@ export function availabilityArgs(q: Pick<RequestCard, 'fields' | 'trip'>): Recor
   return args;
 }
 
-/** The driver picked when the page opens: the proposal's driver (a proposed task), else the best match, else nobody. */
-export function firstPick(q: Pick<RequestCard, 'proposed'>, avail: Pick<Availability, 'best' | 'drivers'> | null): string {
+/**
+ * The driver picked when the page opens: the proposal's driver (a proposed task), else the best match, else nobody.
+ * Round 3: nobody for a request that asks for no driver (the asker drives, someone else does, or the custodian): the
+ * approver picks the vehicle, and may still give a driver instead.
+ */
+export function firstPick(q: Pick<RequestCard, 'proposed' | 'driven_by' | 'driver_required'>, avail: Pick<Availability, 'best' | 'drivers'> | null): string {
+  if (asksNoDriver(q)) return '';
   if (q.proposed?.username) return q.proposed.username;
   if (q.proposed?.driver) {
     const d = avail?.drivers.find((x) => x.name === q.proposed?.driver);
@@ -122,18 +128,48 @@ export function rankedDrivers(drivers: readonly AvailableDriver[]): AvailableDri
   return [...drivers].sort((a, b) => order(a) - order(b) || (a.rank ?? 99) - (b.rank ?? 99) || a.name.localeCompare(b.name));
 }
 
-/** "On duty · free all day · WP CAB-4521 HiAce · 1.7 km away": the parts the screen joins. */
+/**
+ * "On duty · free 08:00–12:00 · 0.4 km from the pickup · 1 task today": the parts the screen joins, every server sentence
+ * in the person's language (Round 1 and Round 3: never the server's English on a Sinhala screen). The vehicle is the chip
+ * under the name (vehicleChip), never the server's English vehicle_note.
+ */
 export function driverParts(d: AvailableDriver, t?: (key: string, vars?: Record<string, string | number>) => string): string[] {
+  const say = (line: string) => (t ? sentenceText(t, line) : line);
   const parts: string[] = [];
-  if (d.not_available) parts.push(d.not_available);
-  else if (d.match_why) parts.push(d.match_why);
+  if (d.not_available) parts.push(say(d.not_available));
+  else if (d.match_why) parts.push(say(d.match_why));
   else {
-    // The presence sentence in the person's language (Round 1: never the server's English on a Sinhala screen).
-    parts.push(t ? sentenceText(t, d.status_text) : d.status_text);
+    parts.push(say(d.status_text));
     if (d.current_task) parts.push(d.current_task.title);
   }
-  if (d.vehicle_note) parts.push(d.vehicle_note);
   return parts.filter(Boolean);
+}
+
+/**
+ * Round 3 (Uber Fleet's and Samsara's driver list: the person first, the vehicle under them): the chip under a driver's
+ * name. The plate they hold today, or their regular one ("regular"); none known: "Vehicle: on the day" while the fleet
+ * setting vehicle_on_the_day is on, else "No vehicle yet".
+ */
+export type VehicleChip = { kind: 'plate'; plate: string; regular: boolean } | { kind: 'on_the_day' } | { kind: 'none' };
+
+export function vehicleChip(d: { vehicle?: { reg_no: string; source: 'on_duty' | 'regular' } | null }, onTheDay: boolean): VehicleChip {
+  if (d.vehicle?.reg_no) return { kind: 'plate', plate: d.vehicle.reg_no, regular: d.vehicle.source === 'regular' };
+  return onTheDay ? { kind: 'on_the_day' } : { kind: 'none' };
+}
+
+/** The chip's words beside the plate ("regular"), or instead of it; '' for a plate held today. */
+export function vehicleChipText(c: VehicleChip, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  if (c.kind === 'plate') return c.regular ? t('office.who.regular') : '';
+  return t(c.kind === 'on_the_day' ? 'office.who.vehicleOnTheDay' : 'office.who.noVehicleYet');
+}
+
+/**
+ * The small line under a driver ("Last seen 17:42 near Kadawatha · usually starts 07:40"). The server's last_seen is
+ * already a whole sentence that starts with "Last seen" (presence.ts lastSeenText): it is said in the person's words as it
+ * is, never put inside another "Last seen {when}" (the "Last seen Last seen" doubling, Round 3).
+ */
+export function presenceLine(d: Pick<AvailableDriver, 'last_seen' | 'usual_start'>, t: (key: string, vars?: Record<string, string | number>) => string): string {
+  return [d.last_seen ? sentenceText(t, d.last_seen) : '', d.usual_start ? t('office.trip.usuallyStarts', { time: d.usual_start }) : ''].filter(Boolean).join(' · ');
 }
 
 /** The pill on a row: best match, busy, off duty, not available, or nothing for a free driver. */
@@ -172,8 +208,23 @@ export function decideCall(q: Pick<RequestCard, 'id' | 'status' | 'version' | 'd
   return { tool: 'decide_request', input };
 }
 
-/** May Approve be pressed: a driver is picked, or the custodian drives (driver_required false). */
-export const canApprove = (q: Pick<RequestCard, 'driver_required'>, driver: string): boolean => driver !== '' || q.driver_required === false;
+/**
+ * What Approve still needs (Round 3), as an i18n key; null = it may be pressed. A request that asks for a driver (or the
+ * approver gives one instead): a driver picked. A request the asker drives, someone else drives or the custodian drives,
+ * approved as asked: the vehicle (a proposed task brings its own). The server refuses the rest (it used to be sent with
+ * neither a driver nor a vehicle).
+ */
+export function approveProblem(q: Pick<RequestCard, 'driven_by' | 'driver_required' | 'kind' | 'proposed'> & { status?: RequestCard['status'] }, pick: { asAsked: boolean; driver: string; vehicle: string }): string | null {
+  if (asksNoDriver(q) && pick.asAsked) {
+    // A changed booking kept as asked keeps its task's vehicle (redecide_request keep).
+    if (pick.vehicle || (q.kind === 'task' && q.proposed?.vehicle) || q.status === 'changed') return null;
+    return 'office.who.pickVehicle';
+  }
+  return pick.driver ? null : 'office.trip.needDriver';
+}
+
+/** May Approve be pressed (the older rule, kept for the callers that only know the driver): a driver, or no driver asked. */
+export const canApprove = (q: Pick<RequestCard, 'driver_required' | 'driven_by'>, driver: string): boolean => driver !== '' || asksNoDriver(q);
 
 /** The server refused because the request is decided already (its words say by whom): the card is read again. */
 export const alreadyDecided = (e: FleetError | null | undefined): boolean =>

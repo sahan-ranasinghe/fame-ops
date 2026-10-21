@@ -1,5 +1,6 @@
 // Hotfix O2-H2, Part 1b: after Assign & send, the form closes, the task opens in its place with the warnings, and the toast
 // says who has it (with WhatsApp the driver as its action when asked for); a refused save keeps the form.
+import { chooseDriver } from "../test/controls";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation, useParams } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -77,7 +78,7 @@ async function fillAndSend() {
   fireEvent.blur(leave);
   fireEvent.change(screen.getByLabelText("Stop 1", { exact: true }), { target: { value: "Head office" } });
   fireEvent.change(screen.getByLabelText("Stop 2", { exact: true }), { target: { value: "Galle" } });
-  fireEvent.change(screen.getByLabelText("Driver", { exact: true }), { target: { value: "kamal.p" } });
+  chooseDriver("kamal.p");
   await tick();
   fireEvent.change(screen.getByLabelText("Vehicle", { exact: true }), { target: { value: "WP CAB-4521" } });
   await tick();

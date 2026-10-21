@@ -5,7 +5,7 @@ import type { Overview } from "../data/types";
 import { longDate, today } from "../lib/format";
 import { AUTHZ, errText } from "../transport/errors";
 import { can, ROLE_LABEL } from "../transport/types";
-import { Notice } from "../ui/basics";
+import { Avatar, Notice } from "../ui/basics";
 import { Icon } from "../ui/icons";
 import { PullToRefresh } from "../ui/PullToRefresh";
 import { useFleet } from "./FleetContext";
@@ -125,7 +125,7 @@ function ProfileMenu({ role }: { role: string }) {
       )}
       <button type="button" className="viewer" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((x) => !x)} data-testid="viewer-profile">
         {me.name
-          ? <><span className="avatar sm">{initials}</span><span>{me.name}<small>{role}</small></span></>
+          ? <>{me.photo_url ? <Avatar name={me.name} src={me.photo_url} small /> : <span className="avatar sm">{initials}</span>}<span>{me.name}<small>{role}</small></span></>
           : <span className="muted small">Fleet office</span>}
       </button>
     </div>

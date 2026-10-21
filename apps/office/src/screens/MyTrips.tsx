@@ -15,8 +15,10 @@ import { Link, useLocation, useNavigate } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import type { CreatedTaskCard, MyTrips as MyTripsData, RequestCard } from "../data/types";
 import { errText } from "../transport/errors";
-import { Avatar, Segmented, Notice, Pill, Plate, VehicleThumb } from "../ui/basics";
+import { Segmented, Notice, Pill, VehicleThumb } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
+import { DriverLine } from "../ui/DriverRow";
+import { firstName, vehicleChipWords } from "../ui/driverRowLogic";
 import { DateRangePicker } from "../ui/DateRangePicker";
 import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
@@ -54,13 +56,11 @@ function DriverCell({ a, waiting }: { a: RequestCard["assigned"]; waiting: boole
   const v = vehicleOf(a);
   return (
     <div style={{ display: "grid", gap: 8 }} data-testid="trip-driver">
-      <div className="name"><Avatar name={a.driver} src={a.photo_url} small />{a.driver}</div>
-      <div className="sub" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <VehicleThumb src={a.vehicle_thumb_url ?? a.vehicle_photo_url} plate={v.plate} />
-        {v.plate ? <Plate v={v.plate} /> : <span>{v.text}</span>}
-        {a.make_model && <span>{a.make_model}</span>}
-      </div>
-      <Inside><ContactButtons phone={driverPhone(a)} label="Call driver" testId="call-driver" /></Inside>
+      {/* Round 3: the driver card with the vehicle chip; a trip with no app says "Drives themselves" or "Someone else". */}
+      <DriverLine name={a.driver} photo={a.photo_url} drivenBy={a.driven_by} vehicle={vehicleChipWords(v.plate, { text: v.text })}
+        extra={v.plate ? <VehicleThumb src={a.vehicle_thumb_url ?? a.vehicle_photo_url} plate={v.plate} /> : undefined} />
+      {a.make_model && <span className="sub">{a.make_model}</span>}
+      <Inside><ContactButtons phone={driverPhone(a)} label={a.driven_by === "other" ? `Call ${firstName(a.driver)}` : "Call driver"} testId="call-driver" /></Inside>
     </div>
   );
 }

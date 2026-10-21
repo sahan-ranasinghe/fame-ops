@@ -15,7 +15,7 @@ import { useQuery } from "../data/useQuery";
 import { attIcon, cap, clock } from "../lib/format";
 import { errText } from "../transport/errors";
 import { can, canOpenTask, type FleetError } from "../transport/types";
-import { Loading, Notice, Pill, Plate } from "../ui/basics";
+import { Avatar, Loading, Notice, Pill, Plate } from "../ui/basics";
 import { colomboDay } from "../ui/dateRange";
 import { Icon } from "../ui/icons";
 import { useIsPhone } from "../ui/phone";
@@ -149,7 +149,11 @@ export default function IssuePage() {
         </div>
         <dl className="kv" data-testid="issue-facts" style={{ marginTop: 12 }}>
           {issueFacts(i).map(([label, value]) => (
-            <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+            <div key={label}>
+              <dt>{label}</dt>
+              {/* Round 3: the person who took it with their photo (the initials until there is one). */}
+              <dd>{label === "Taken by" && i.assigned_to ? <span className="person"><Avatar name={i.assigned_to.name} src={i.assigned_to.photo_url} small />{value}</span> : value}</dd>
+            </div>
           ))}
         </dl>
         {i.resolution_note && <Notice tone="ok">{i.status === "dismissed" ? "Dismissed" : "Resolved"} by {i.resolved_by ?? "?"} {i.resolved ? `at ${i.resolved}` : ""}: {i.resolution_note}</Notice>}

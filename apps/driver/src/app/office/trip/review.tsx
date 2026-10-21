@@ -9,6 +9,8 @@
 // changed item opens (office/trip/successLogic.ts), a snackbar says what happened (WhatsApp the driver as its action when
 // asked for) and the warnings and conflicts wait on the screen landed on (SavedNotice). A dropped send is never repeated by
 // itself: the person sees the sentence and presses again, and Try again sends the same call (a booking stays a booking).
+// Round 3: who drives shows in the chips ("You drive it yourself", "Kamal Silva · someone else · 077…"); with no app
+// the task's button is "Save trip" and Book now needs the plate (the reason under the button until there is one).
 
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
@@ -18,7 +20,9 @@ import { TripFooter, TripHeader } from '@/components/office/TripShell';
 import { TimeField } from '@/components/patterns/TimeField';
 import { TaskMap } from '@/components/TaskMap';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
+import { whatsappLink } from '@/lib/contacts';
 import { durationText } from '@/lib/durations';
+import { phoneLocal } from '@/lib/profile';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { validateAssign } from '@/office/trip/assignLogic';
@@ -32,7 +36,9 @@ import { bookInput, updateRequestInput, validateNewRequest } from '@/office/trip
 import { stopsInput, startInput, hasDeadline } from '@/office/trip/stopsLogic';
 import { useTrip } from '@/office/trip/useTrip';
 import { ON_THE_DAY } from '@/office/trip/vehicleChoiceLogic';
+import { defaultWho, whoOf } from '@/office/trip/whoDrivesLogic';
 import { legTextT, reasonLines, reasonText, stopTimesT } from '@/office/trip/words';
+import { sentenceText } from '@/office/statusWords';
 import type { BookResult, Conflict, CreateTaskResult, FleetError, SettingsResult, UpdateRequestResult } from '@/office/types';
 import { ErrorNotice, Loading, Pill, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -66,7 +72,7 @@ export default function TripReview() {
     ) : null;
     return (
       <View key={`${c.kind}-${c.task?.id ?? i}`} style={styles.conflict} testID="conflict-card">
-        <Txt variant="strong" size={15} color={colors.red}>{c.text}</Txt>
+        <Txt variant="strong" size={15} color={colors.red}>{sentenceText(t, c.text)}</Txt>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {a.openTask ? <Button kind="outline" label={t('office.trip.openThatTask')} onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: a.openTask! } })} style={styles.smallBtn} /> : null}
           {reach(c.requester)}
@@ -83,15 +89,19 @@ export default function TripReview() {
   const mapTask = p ? previewTask(p) : null;
   const needsApproval = d.mode === 'task' && !has(me.permissions, 'approve') && settings.data?.settings.tasks_need_approval !== false;
   const books = d.mode === 'request' && me.tools.includes('book_vehicle');
-  const driverName = d.driverName || f.driver;
+  // Round 3: who drives (self-drive switched off = a driver, whatever an older draft said).
+  const selfDrive = settings.data?.settings.self_drive_allowed !== false;
+  const who = selfDrive ? whoOf(d.req) : defaultWho();
+  const noAppTrip = who.choice === 'self' || who.choice === 'other';
+  const driverName = noAppTrip ? (who.choice === 'other' ? who.name.trim() : me.name) : d.driverName || f.driver;
   const custodian = !!d.book?.custodianDrives;
-  const label = d.mode === 'edit' ? (d.wasApproved ? t('office.trip.saveReapproval') : t('office.trip.saveChanges')) : d.mode === 'stops' ? t('office.trip.saveChanges') : d.mode === 'request' ? (books ? t('office.trip.bookNow') : t('office.trip.sendRequest')) : needsApproval ? t('office.trip.sendForApproval') : t('office.trip.sendTo', { name: driverName });
+  const label = d.mode === 'edit' ? (d.wasApproved ? t('office.trip.saveReapproval') : t('office.trip.saveChanges')) : d.mode === 'stops' ? t('office.trip.saveChanges') : d.mode === 'request' ? (books ? t('office.trip.bookNow') : t('office.trip.sendRequest')) : needsApproval ? t('office.trip.sendForApproval') : noAppTrip ? t('office.who.saveTrip') : t('office.trip.sendTo', { name: driverName });
 
   // The call for this draft, or what is missing (the site's rules).
   const call = (): { tool: string; input: Record<string, unknown> } | { error: string } => {
     if (d.mode === 'task') {
       // The driver's default vehicle from the Who step: known, known to be none (a vehicle must be picked), or not known yet.
-      const v = validateAssign({ ...f, vehicle: f.vehicle === ON_THE_DAY ? ON_THE_DAY : f.vehicle }, d.rows, me.name, { defaultVehicle: d.book?.defaultVehicle, base: trip.base });
+      const v = validateAssign({ ...f, vehicle: f.vehicle === ON_THE_DAY ? ON_THE_DAY : f.vehicle }, d.rows, me.name, { defaultVehicle: d.book?.defaultVehicle, base: trip.base, who });
       return 'error' in v ? v : { tool: 'create_task', input: v.input };
     }
     if (d.mode === 'stops') {
@@ -105,7 +115,7 @@ export default function TripReview() {
       if (!d.running && f.leaveBy.trim()) input.leave_by = f.leaveBy.trim();
       return { tool: 'update_task_stops', input };
     }
-    const rf = requestFieldsOf(d);
+    const rf = { ...requestFieldsOf(d), ...(selfDrive ? {} : { who: defaultWho(), driver: true }) };
     if (d.mode === 'edit') {
       // Only what changed since the request was loaded goes (the site's rule, with the version it was shown with).
       const v = updateRequestInput(d.requestId ?? '', d.version ?? 0, rf, d.was ?? rf, trip.base);
@@ -117,7 +127,7 @@ export default function TripReview() {
   const planned = call();
   // Book now (the site's bookInput): the request with its trip plus the pick from the Who step.
   const bookCall = (): { input: Record<string, unknown> } | { error: string } => {
-    const rf = requestFieldsOf(d);
+    const rf = { ...requestFieldsOf(d), ...(selfDrive ? {} : { who: defaultWho(), driver: true }) };
     const vehicle = f.vehicle === ON_THE_DAY ? ON_THE_DAY : f.vehicle;
     return bookInput(rf, { vehicle, driver: f.driver, hasCustodian: !!d.book?.hasCustodian, defaultVehicle: d.book?.defaultVehicle }, trip.base);
   };
@@ -136,8 +146,10 @@ export default function TripReview() {
         : chosen.tool === 'book_vehicle' ? bookOutcome(out)
         : requestOutcome(chosen.tool === 'create_request' ? 'request_sent' : 'saved', out);
       // The driver's WhatsApp message, when asked for and the task went to them (never for a proposed task).
-      const wantsWa = chosen.tool === 'create_task' && f.whatsapp && o.kind === 'sent';
-      const waLink = wantsWa && d!.driverWhatsapp ? whatsappWithText(d!.driverWhatsapp, driverMessage(chosen.input, o.leaveBy ? t('office.trip.outcomeLeaveBy', { time: o.leaveBy }) : undefined, {
+      const wantsWa = chosen.tool === 'create_task' && f.whatsapp && o.kind === 'sent' && who.choice !== 'self';
+      // Someone else drives: their own number (Round 3).
+      const waBase = who.choice === 'other' ? whatsappLink(who.phone) ?? undefined : d!.driverWhatsapp;
+      const waLink = wantsWa && waBase ? whatsappWithText(waBase, driverMessage(chosen.input, o.leaveBy ? t('office.trip.outcomeLeaveBy', { time: o.leaveBy }) : undefined, {
         pickup: t('office.trip.wa_pickup'), drop: t('office.trip.wa_drop'), visit: t('office.trip.wa_visit'), stop: t('office.trip.wa_stop'), contact: t('office.trip.wa_contact'), open: t('office.trip.wa_open'), newTask: t('office.trip.wa_newTask'),
       })) : '';
       // Hotfix O2-H2, Part 1b (Gmail "Sent", Google Calendar "Event saved"): the form closes, the new or changed item opens,
@@ -160,7 +172,8 @@ export default function TripReview() {
         else router.navigate(s.target.path as never);
       }
       showSnackbar({
-        text: t(`office.saved.${s.snack}`, { name: driverName }),
+        // Round 3: nothing is sent to an app when the person drives it themselves or someone else does.
+        text: t(`office.saved.${noAppTrip && s.snack === 'taskAssigned' ? 'taskNoApp' : s.snack}`, { name: driverName }),
         ...(waLink ? { action: { label: t('office.saved.whatsapp'), onPress: () => open(waLink) } } : {}),
       });
       setDraft(null);
@@ -249,13 +262,19 @@ export default function TripReview() {
           {p?.conflicts?.map((c, i) => conflictCard(c, i, true))}
           {reasons.filter((r) => r.note).map((r, i) => <Txt key={`n${i}`} variant="small">{r.text}</Txt>)}
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {(d.mode === 'task' || books) && f.driver && !custodian && (
+            {(d.mode === 'task' || books) && f.driver && !custodian && !noAppTrip && (
               <View style={styles.chipRow}>
                 <Txt variant="strong" size={15}>{driverName}</Txt>
                 {f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? <Plate regNo={f.vehicle} /> : f.vehicle ? <Txt variant="small">{f.vehicle === ON_THE_DAY ? t('office.trip.onTheDay') : f.vehicle}</Txt> : null}
               </View>
             )}
             {custodian && f.vehicle ? <View style={styles.chipRow}><Plate regNo={f.vehicle} /><Txt variant="small">{t('office.trip.custodianDrivesShort')}</Txt></View> : null}
+            {noAppTrip && (d.mode === 'request' || d.mode === 'task' || d.mode === 'edit') ? (
+              <View style={styles.chipRow} testID="who-chip">
+                <Txt variant="strong" size={15}>{who.choice === 'self' ? t('office.who.reviewSelf') : t('office.who.reviewOther', { name: who.name.trim(), phone: phoneLocal(who.phone) })}</Txt>
+                {(d.mode === 'task' || books) && f.vehicle && f.vehicle !== ON_THE_DAY && !/^any /.test(f.vehicle) ? <Plate regNo={f.vehicle} /> : null}
+              </View>
+            ) : null}
             {(f.cname || f.cphone) && <Pill text={t('office.trip.contactChip', { who: [f.cname, f.cphone].filter(Boolean).join(' · ') })} tone="muted" size={15} />}
             {(f.notes || d.req.note) && <Pill text={t('office.request.notes', { note: f.notes || d.req.note })} tone="muted" size={15} />}
             {f.pax && <Pill text={t('office.trip.paxN', { n: f.pax })} tone="muted" size={15} />}

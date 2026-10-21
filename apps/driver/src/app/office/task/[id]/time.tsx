@@ -161,7 +161,7 @@ export default function ChangeTaskScreen() {
             </View>
 
             {!locked && (
-              <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => { set({ driver: x.username ?? '', vehicle: '' }); setDriverName(x.name); }} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk ? () => setAsking(true) : undefined} noWindow={!availArgs} />
+              <DriverRows data={avail.data} loading={avail.loading} error={avail.error} picked={f.driver} onPick={(x) => { set({ driver: x.username ?? '', vehicle: '' }); setDriverName(x.name); }} onRetry={() => void avail.reload()} onSignIn={() => void signOut()} onAsk={mayAsk ? () => setAsking(true) : undefined} noWindow={!availArgs} onDay={onDay} />
             )}
 
             {!locked && <View style={styles.card}>

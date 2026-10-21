@@ -3,6 +3,7 @@
 // departure warning in between. And the vehicle field (J): with vehicle_on_the_day on, "Driver's vehicle on the day" is
 // the default for a later day and for today when the driver brings no vehicle, else the driver's vehicle as before; with
 // the setting off nothing changes.
+import { chooseDriver } from "../test/controls";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -190,7 +191,7 @@ describe("Assign a task: the vehicle field with vehicle_on_the_day (J)", () => {
     expect(firstOption()).toBe("WP CAB-4521 · Kamal's vehicle today");
     expect(optionTexts()).toContain("Driver's vehicle on the day");
 
-    fireEvent.change(screen.getByLabelText("Driver"), { target: { value: "nuwan" } });
+    chooseDriver("nuwan");
     await settle();
     expect(firstOption()).toBe("Driver's vehicle on the day");
     fireEvent.click(screen.getByRole("button", { name: "Assign & send" }));

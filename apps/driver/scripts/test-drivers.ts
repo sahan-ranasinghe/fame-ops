@@ -51,9 +51,10 @@ console.log('\n== The chips, the pill and the dot ==');
 console.log('\n== The two lines under the name ==');
 {
   check(same(rowLines(sunil, t), ['On a task till 10:40 · Team drop · Kurunegala', 'office.drivers.next(15:00,Airport pickup)']), 'Sunil: the status, then Next: 15:00 Airport pickup', rowLines(sunil, t));
-  check(same(rowLines(ruwan, t), ['On duty since 08:02 · free till 13:00', 'Last seen 09:12 near Kelaniya · office.drivers.starts(08:00)']), 'Ruwan: last seen · starts 08:00', rowLines(ruwan, t));
-  check(same(rowLines(kamal, t), ['On duty · free all day · 0 tasks', 'Last seen 09:10 near Kadawatha']), 'Kamal: last seen alone', rowLines(kamal, t));
-  check(same(rowLines(nimal, t), ['Off duty · office.drivers.usuallyStarts(08:30)', 'Last seen Fri 17:52 near Ja-Ela · office.drivers.regular(WP KV-7788)']), 'Nimal: usually starts after Off duty; the regular plate on the second line', rowLines(nimal, t));
+  // Round 3: the server's words in the person's language (statusWords); the vehicle is the chip under the name.
+  check(same(rowLines(ruwan, t), ['On duty since 08:02 · free till 13:00', 'office.line.lastSeenNear(09:12,Kelaniya) · office.drivers.starts(08:00)']), 'Ruwan: last seen (in words) · starts 08:00', rowLines(ruwan, t));
+  check(same(rowLines(kamal, t), ['On duty · free all day · 0 tasks', 'office.line.lastSeenNear(09:10,Kadawatha)']), 'Kamal: last seen alone', rowLines(kamal, t));
+  check(same(rowLines(nimal, t), ['office.line.offDuty() · office.drivers.usuallyStarts(08:30)', 'Last seen Fri 17:52 near Ja-Ela']), 'Nimal: usually starts after Off duty (in words); the regular plate is the chip under the name, not a line; a sentence not known stays as it came', rowLines(nimal, t));
   check(same(rowLines(priyantha, t), ['Not available · leave · back Wed 21', '']), 'Priyantha: the server\'s words, nothing on the second line', rowLines(priyantha, t));
   check(heldPlate(sunil) === 'WP CAB-4521' && heldPlate(ruwan) === 'WP PA-1200' && heldPlate(nimal) === null && heldPlate(priyantha) === null, 'the plate beside the name: the vehicle held today only');
 }
@@ -200,7 +201,7 @@ console.log('\n== The tab, the page, the map and its two engines (read as text) 
   {
     const where = read('src/app/office/trip/where.tsx');
     const logic = read('src/office/trip/draftLogic.ts');
-    check(where.includes("withDriver(newDraft(m), m === 'task' ? forDriver : undefined, forName)") && logic.includes('export function withDriver') && read('src/app/office/trip/who.tsx').includes('x.fields.driver ? x :'),
+    check(where.includes("withDriver(newDraft(m), m === 'task' ? forDriver : undefined, forName)") && logic.includes('export function withDriver') && read('src/app/office/trip/who.tsx').includes("x.fields.driver || whoOf(x.req).choice !== 'driver' ? x :"),
       'Assign a task opens with the driver picked (the Who step keeps them; the best match never replaces them)');
   }
   const dayPage = read('src/app/office/driver/[username]/route.tsx');

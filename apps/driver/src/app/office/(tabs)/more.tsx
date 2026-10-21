@@ -79,7 +79,7 @@ export default function MoreTab() {
         {/* Round 2b (Instagram / WhatsApp): the profile card first; it opens My profile (once, never a second row). */}
         {!needle && <Section title={t('office.more.me')}>
           <Row
-            left={<Avatar name={me.name} size={48} />}
+            left={<Avatar name={me.name} size={48} photo={me.photo_url} />}
             title={me.name}
             line={me.email}
             line2={me.permissions.map((p) => t(`office.permission.${p}`).toLowerCase()).join(' · ')}

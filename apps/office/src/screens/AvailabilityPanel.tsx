@@ -16,6 +16,9 @@
 // AskSheet) with its own list, the free drivers ticked, the question and Send; the answers come back live as chips under
 // the rows, and a Yes has "Use this driver" (it picks that driver as a click on the row does). The question is kept for the
 // page's task or request while the tab is open (sessionStorage), so a refresh keeps the answers.
+// Round 3 (the driver-first card of Uber Fleet's and Samsara's driver lists): every row and the best match carry the
+// vehicle as a chip under the name (the plate, "regular", "Vehicle: on the day" or "No vehicle yet"); the best match is
+// the same driver card with its photo, its reasons and Use suggestion.
 import { useState } from "react";
 import { Link } from "react-router";
 import type { Availability, AvailableDriver, BestMatch } from "../data/types";
@@ -24,7 +27,8 @@ import { useFleet } from "../app/FleetContext";
 import { errText } from "../transport/errors";
 import { Notice, Pill } from "../ui/basics";
 import { DriverRow } from "../ui/DriverRow";
-import { firstName, toPhoneLinks } from "../ui/driverRowLogic";
+import { firstName, toPhoneLinks, vehicleChipWords } from "../ui/driverRowLogic";
+import { useFleetSettings, vehicleOnTheDay } from "./dispatchParts";
 import { askWindow, bestRow, type DefaultVehicle, defaultVehicle, driverTone, licenceTone, rankedRows, steadyAvailability, windowLine } from "./availabilityLogic";
 import { countsLine } from "./asks/askLogic";
 import { AnswerLine, AskSheet, useAskAnswers, usePageAsk } from "./asks/AskSheet";
@@ -82,6 +86,8 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
   const [sheet, setSheet] = useState(false);
   const [sent, keepSent] = usePageAsk(askFor?.task ? `task.${askFor.task}` : askFor?.request ? `request.${askFor.request}` : null);
   const ask = useAskAnswers(sent);
+  // The chip of a driver with no vehicle known: "Vehicle: on the day" while the fleet setting is on.
+  const onTheDay = vehicleOnTheDay(useFleetSettings().data);
   if (!me.tools.includes("availability")) return null;
   const canAsk = me.tools.includes("ask_drivers");
   const { data, err, updating } = q;
@@ -126,17 +132,23 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
       {args && q.loading && <SkeletonRows rows={3} label="Looking who is free…" />}
       {err && <Notice tone="bad">{errText(err)[0]}</Notice>}
       {best && (
-        <div className="opt" data-testid="best-match" style={{ cursor: "default", alignItems: "flex-start" }}>
-          <span className="grow">
-            <span className="eyebrow small" style={{ display: "block", fontSize: 13 }}>Best match</span>
-            <b>{best.name}</b>{bestVeh ? <span className="muted"> · <span className="plate">{bestVeh.reg_no}</span> {bestVeh.why}</span> : null}
-            <span className="sub" style={{ display: "block", marginTop: 4 }}>{best.why}</span>
-          </span>
-          {onUse && best.username && (
-            <button type="button" className="btn small dark" aria-pressed={picked === best.username} onClick={() => onUse(best, bestVeh)}>
-              {picked === best.username ? "Using it" : "Use suggestion"}
-            </button>
-          )}
+        <div className="opt" data-testid="best-match" style={{ cursor: "default", display: "block", padding: 0 }}>
+          <span className="eyebrow small" style={{ display: "block", fontSize: 13, padding: "10px 10px 0" }}>Best match</span>
+          <DriverRow
+            d={{ name: best.name, username: best.username, photo_url: best.photo_url ?? bestRow(best, data?.drivers)?.photo_url }}
+            vehicle={vehicleChipWords(best.vehicle ?? bestRow(best, data?.drivers)?.vehicle, { onTheDay })}
+            right={onUse && best.username
+              ? (
+                <button type="button" className="btn small dark" aria-pressed={picked === best.username} onClick={() => onUse(best, bestVeh)}>
+                  {picked === best.username ? "Using it" : "Use suggestion"}
+                </button>
+              )
+              : undefined}
+            testId="best-match-row"
+          >
+            <span className="sub drow-line">{best.why}</span>
+            {bestVeh && <span className="sub drow-line">{bestVeh.why}</span>}
+          </DriverRow>
         </div>
       )}
       {data && (
@@ -165,13 +177,14 @@ export function AvailabilityPanel({ args, picked, onPick, onUse, title = "Who's 
                   : undefined}
                 testId="avail-row"
                 contactTestId="avail-contact"
+                vehicle={vehicleChipWords(d.vehicle, { onTheDay })}
               >
                 {windowLine(d) && <span className="sub drow-line">{windowLine(d)}</span>}
                 {answer && <AnswerLine row={answer} testId="avail-answer" />}
-                {/* Hotfix 2 (J): "no vehicle yet · regular: WP CAB-4521" says it in words (information only, never a block). */}
+                {/* Hotfix 2 (J): "no vehicle yet · regular: WP CAB-4521" says it in words (information only, never a block); else whose vehicle it is. */}
                 {d.vehicle_note
                   ? <span className="sub drow-line" data-testid="avail-vehicle-note">{d.vehicle_note}</span>
-                  : veh && <span className="sub drow-line"><span className="plate">{veh.reg_no}</span> {veh.why}</span>}
+                  : veh && <span className="sub drow-line" data-testid="avail-vehicle-why">{veh.why}</span>}
               </DriverRow>
             );
           })}

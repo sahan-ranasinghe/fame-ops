@@ -5,9 +5,10 @@
 // (only what the approver changed: the server keeps the plan and the proposal
 // otherwise) and the words on its button. Pure; the pages are TripDecide,
 // RequestDetail, Requests and Tasks.
-import type { RequestCard, WaitingApprovalCard } from "../data/types";
+import type { AskedDriver, RequestCard, WaitingApprovalCard } from "../data/types";
 import { joinDots } from "../lib/format";
 import type { Me } from "../transport/types";
+import { isChoice } from "./vehicleChoiceLogic";
 
 /** A waiting proposal or request past its leave-by (§35 18): it stays in the queue, never sent by itself. */
 export const LATE_TEXT = "Leave-by passed · not decided";
@@ -113,8 +114,12 @@ export interface TripPick {
   proposed?: { username?: string; vehicle?: string };
   /** The vehicle the shown driver brings: a plate, null = known to be none, undefined = not known yet (the server decides). */
   driverVehicle?: string | null;
-  /** The request says no driver is needed: the custodian of the vehicle picked drives. */
+  /** The request says no driver is needed: the custodian of the vehicle picked drives (or, Round 3, the asker or someone else). */
   noDriverNeeded?: boolean;
+  /** Round 3: what the request asked; self and other are approved with a plate when no driver is named. */
+  asked?: AskedDriver;
+  /** "Nimal drives" / "Sunil drives": the reason a plate is needed. */
+  askedWho?: string;
 }
 
 /** The pick as decide_request takes it: the driver and the vehicle only when they differ from the proposal's, and the times changed. */
@@ -154,6 +159,10 @@ export function tripDecideInput(
     return { input: { ...input, reason: r }, asProposed: false };
   }
   const pick = tripPick(d);
+  // Round 3: the asker or someone else drives (no app): a plate, never "on the day" or "any van".
+  if (!d.driver && (d.asked === "self" || d.asked === "other") && (!d.f.vehicle || isChoice(d.f.vehicle))) {
+    return { error: `${d.askedWho ?? (d.asked === "self" ? "The person who asked drives" : "Someone else drives")} it: pick the vehicle (nobody confirms one on the day).` };
+  }
   if (!d.driver && !(d.noDriverNeeded && d.f.vehicle)) {
     return { error: d.noDriverNeeded ? "Pick a driver, or the vehicle whose custodian drives." : "Pick a driver: the vehicle fills itself." };
   }

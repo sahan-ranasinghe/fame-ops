@@ -103,7 +103,9 @@ describe("Who's available: the one driver row and Ask drivers (H2, H3)", () => {
     await settle();
     const [kamal, ruwan] = screen.getAllByTestId("avail-row");
     expect(kamal.tagName).toBe("BUTTON");
-    expect(within(kamal).getByTestId("drow-status").textContent).toBe("On duty since 07:12");
+    expect(within(kamal).getByTestId("drow-status").querySelector(".pill")?.textContent).toBe("On duty since 07:12");
+    // Round 3: the vehicle chip under the name (none known, the setting off).
+    expect(within(kamal).getByTestId("vehicle-chip").textContent).toBe("No vehicle yet");
     expect(within(kamal).getByTestId("drow-facts").textContent).toBe("Last seen 08:01 near Kadawatha · usually starts 07:40");
     expect(within(kamal).getByTestId("drow-next").textContent).toBe("Next: Team drop · Wed 21 Oct 14:30");
     // "On duty since 07:12" is the chip; the window's line does not say it again.

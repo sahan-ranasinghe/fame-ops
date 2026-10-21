@@ -92,7 +92,7 @@ console.log('\nThe words (office/trip/words.ts):');
   check(reasonText(t, 'Add a leave-by time, or an arrive-by time on a stop, so it can be planned.') === 'office.trip.reasonLeave', 'a leave time');
   check(reasonText(t, 'Kurunegala site has no pin — add one.') === 'office.trip.reasonNoPin {"place":"Kurunegala site"}', 'no pin, with the place');
   check(reasonText(t, 'Stop 2: needs a place.').startsWith('office.trip.reasonStopPlace'), 'a stop without a place');
-  check(reasonText(t, 'The vehicle is in the garage') === 'The vehicle is in the garage', 'the server\'s own warning as it came');
+  check(reasonText(t, 'The vehicle is in the garage') === 'The vehicle is in the garage', 'the server\'s own warning as it came (one this app does not know)');
   const plan = departurePlan({ items: [{ kind: 'leave', at: '07:24', source: 'plan' }, { kind: 'stop', n: 2, label: 'Stop 2', place: 'Kurunegala site', planned_arrive: '10:15', planned_leave: '11:45', arrive_by: '10:30', dwell_min: 90 }], totals: { drive_min: 171, km: 94, ends: '11:45' } }, 15, undefined);
   const late = checkDeparture('08:00', plan);
   check(late?.kind === 'late' && late.tone === 'warn' && late.leaveBy === '07:24', 'leaving 08:00 is late for a 10:30 arrive-by: an amber hint (the planner advises, never blocks)', late);

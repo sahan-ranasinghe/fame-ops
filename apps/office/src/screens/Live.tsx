@@ -53,9 +53,11 @@ import { filterFromWord, LIVE_FILTER_WORDS, withParam } from "./overviewLinks";
 import { ROUTES_NEED } from "../app/nav";
 import { errText } from "../transport/errors";
 import { can, type FleetError } from "../transport/types";
-import { Avatar, Empty, ErrBox, Loading, Notice, Pill, Plate, StaleNote, VehicleThumb } from "../ui/basics";
+import { Avatar, Empty, ErrBox, Loading, Notice, Pill, StaleNote, VehicleThumb } from "../ui/basics";
 import { ContactButtons } from "../ui/ContactButtons";
-import { livePresence } from "../ui/driverRowLogic";
+import { VehicleChip } from "../ui/DriverRow";
+import { livePresence, vehicleChipWords } from "../ui/driverRowLogic";
+import { useFleetSettings, vehicleOnTheDay } from "./dispatchParts";
 import { Icon } from "../ui/icons";
 import { linksFromCall } from "../ui/phoneLinks";
 import { duration } from "@fleet/durations";
@@ -77,6 +79,8 @@ const sharingNow = (x: LiveDriver) => (x.signal ? x.signal.sharing : x.state !==
 
 export function Live() {
   const { me, store, transport, noConnector, managePermissions, realtime } = useFleet();
+  // Round 3: the driver-first card's vehicle chip ("Vehicle: on the day" for a driver with none known while the setting is on).
+  const onTheDay = vehicleOnTheDay(useFleetSettings().data);
   const routes = can(me, ...ROUTES_NEED);
   // The chip is in the URL (?filter=road | on_duty | off_duty | problems; none = All): the Overview's tile links to it,
   // a reload keeps it, and a chip changes it in place (the history keeps one entry; other parameters are kept).
@@ -250,9 +254,11 @@ export function Live() {
                 <span className={`dot ${liveTone(x)}`} />
                 <Avatar name={x.driver} src={x.photo_url} small />
                 <span className="grow">
-                  <span className="name">{x.driver} <Plate v={x.vehicle} />{x.vehicle_since && <span className="muted small"> since {x.vehicle_since}</span>}</span>
+                  <span className="name">{x.driver}</span>
                   <span className="duty-lines">
                     <DutyChip x={x} />
+                    {/* Round 3: the vehicle as a chip under the name (the plate held since HH:MM, else none yet). */}
+                    <VehicleChip chip={vehicleChipWords(x.vehicle ? plateOf(x.vehicle) : null, { onTheDay, note: x.vehicle_since ? `since ${x.vehicle_since}` : undefined })} />
                     {working && <span className="sub">{joinDots([x.task, x.near && "near " + x.near]) || "No task"}</span>}
                   </span>
                   {x.task_note && <span className="status bad" style={{ display: "block" }} data-testid="task-note">{x.task_note}</span>}

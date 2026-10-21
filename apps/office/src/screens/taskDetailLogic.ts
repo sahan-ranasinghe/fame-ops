@@ -2,9 +2,16 @@
 // planned against what happened, the vehicle swap's stretches and their total,
 // and the needs-a-driver line. Pure; the page is TaskDetail.tsx.
 import type { Stop, TaskDetail, TaskSegment } from "../data/types";
-import { cap, joinDots, num, plateOf } from "../lib/format";
+import { cap, joinDots, num, plateOf, type Tone } from "../lib/format";
 import { TYPE_LABEL, WHAT_LABEL } from "./stopsLogic";
+import { STATUS_TONE } from "./taskHistoryLogic";
 import { duration } from "@fleet/durations";
+
+/**
+ * The status pill's tone on the task page, the same as Tasks → History: assigned amber, in progress blue, completed green,
+ * cancelled, declined and (Round 3) missed red ("Missed · not started (leave by 08:00)" is the server's line).
+ */
+export const taskTone = (status: string): Tone => STATUS_TONE[status] ?? "";
 
 /** A time at a stop: "45 min", "1 h", "1 h 30 min", "2 h 5 min". */
 export function stayText(minutes: number | null | undefined): string {

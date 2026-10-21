@@ -182,7 +182,8 @@ describe("the issues list (§9)", () => {
     // Opened again: Taken by names the person.
     fireEvent.click(row);
     const panel = await screen.findByTestId("issue-page");
-    expect((await within(panel).findByTestId("issue-facts")).textContent).toContain("Taken bySahan");
+    // Round 3: with their photo (the initials until there is one).
+    expect((await within(panel).findByTestId("issue-facts")).textContent).toMatch(/Taken by.*Sahan/);
     expect(within(panel).queryByRole("button", { name: "Take" })).toBeNull();
   });
 

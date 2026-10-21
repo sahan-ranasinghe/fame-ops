@@ -1093,3 +1093,33 @@ input[type="checkbox"]:disabled, input[type="radio"]:disabled { opacity: .5; cur
 /* The one driver row's pick (ui/DriverRow): the radio in front of the photo. */
 .drow-main .sel-mark { margin-top: 8px }
 .set-switch.is-disabled { opacity: .55; cursor: not-allowed }
+
+/* Round 3: the driver-first card (ui/DriverRow): the vehicle chip under the name, the one-line card (DriverLine). */
+.vchip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); white-space: nowrap }
+.vchip.none { border: 1px dashed var(--line-strong); border-radius: 999px; padding: 0 9px; line-height: 1.6 }
+.vchip-note { font-size: 12px }
+.dline { display: inline-flex; align-items: flex-start; gap: 10px; min-width: 0 }
+.dline > .avatar { margin-top: 1px }
+.dline-text { display: grid; gap: 4px; min-width: 0 }
+.dline-text .name { font-weight: 600 }
+.dline-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px }
+.dline-facts .pill { padding: 1px 9px; font-size: 12px; line-height: 1.5 }
+.tcard .who .dline { flex: 1 1 auto }
+/* "Who drives?" (ui/WhoDrives): the chips, someone else's name and phone under them. */
+.who-drives { gap: 8px }
+/* The reason under a disabled primary button. */
+.sticky-acts .btn-why { flex: 1 1 100%; margin: 0 }
+/* The driver picker (ui/DriverPicker): the field shows the driver picked as the one-line card. */
+.dpick { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 12px; border: 1.5px solid var(--line-strong); border-radius: 10px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer }
+.dpick:hover { border-color: var(--ink) }
+.dpick:disabled { opacity: .5; cursor: not-allowed }
+.dpick .grow { min-width: 0 }
+.dpick-empty { color: var(--muted) }
+.dpick-list { display: grid; gap: 2px; margin-top: 8px }
+.dpick-search { width: 100% }
+/* Settings → Activity log: a routine action is quieter. */
+.row.routine .name { font-weight: 400; color: var(--muted) }
+.row.routine .mono { color: var(--muted) }
+/* Office people's photos beside their names (Round 3). */
+.person { display: inline-flex; align-items: center; gap: 8px; min-width: 0 }
+.profile-photo { display: flex; align-items: center; gap: 16px; flex-wrap: wrap }

@@ -108,11 +108,12 @@ describe("the Drivers board: now", () => {
     expect(t.argsOf("drivers_board")).toEqual([{}]);
     expect(rows().map((r) => r.querySelector(".name")?.textContent)).toEqual(["Kamal Perera", "Nuwan Silva", "Sunil Fernando licence expired or due", "Ruwan Jaya"]);
     const kamal = rows()[0];
-    expect(within(kamal).getByTestId("drow-status").textContent).toBe("On duty since 07:12");
+    expect(within(kamal).getByTestId("drow-status").querySelector(".pill")?.textContent).toBe("On duty since 07:12");
     expect(kamal.querySelector(".pill")?.className).toContain("ok");
     expect(within(kamal).getByTestId("drow-facts").textContent).toBe("Last seen 17:42 near Kadawatha · usually starts 07:40");
     expect(within(kamal).getByTestId("drow-next").textContent).toBe("Next: Team drop · 14:30");
-    expect(kamal.textContent).toContain("WP CAB-4521 today");
+    // Round 3: the vehicle as a chip under the name (held today: the plate alone; a regular one says so).
+    expect(within(kamal).getByTestId("vehicle-chip").textContent).toBe("WP CAB-4521");
     expect(rows()[3].querySelector(".pill")?.className).toContain("warn");
     // Call and WhatsApp beside Kamal's row (he has a number), none for the others.
     expect(screen.getAllByTestId("board-contact")).toHaveLength(1);

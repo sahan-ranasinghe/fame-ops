@@ -122,7 +122,7 @@ export default function ApproveTab() {
                 <View key={r.id}>
                   {i > 0 && <Divider />}
                   <Row
-                    left={<Avatar name={r.requested_by} />}
+                    left={<Avatar name={r.requested_by} photo={r.requested_by_photo_url} />}
                     title={requestTitle(r)}
                     line={requestLine(r)}
                     line2={reviewing ? t('office.approve.reviewing', { name: reviewing }) : r.late ? t('office.approve.late') : undefined}

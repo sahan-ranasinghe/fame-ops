@@ -10,6 +10,7 @@ import { colomboDate } from '@/lib/time';
 import { type AssignFields, emptyAssign, type ProjectRow } from './assignLogic';
 import { type RequestFields } from './requestLogic';
 import type { TripFields } from './tripLogic';
+import { whoOf, type WhoDrives } from './whoDrivesLogic';
 
 export type TripMode = 'request' | 'task' | 'edit' | 'stops';
 export type Step = 'where' | 'when' | 'who' | 'review';
@@ -22,9 +23,13 @@ export interface RequestExtras {
   need: string;
   tools: boolean;
   note: string;
-  /** Unticked = the vehicle's custodian drives (no driver needed). */
+  /** Unticked = the vehicle's custodian drives (no driver needed). Kept equal to who.choice === 'driver' (a draft saved
+   *  before Round 3 has only this). */
   driverRequired: boolean;
   requesterPhone: string;
+  /** Round 3: "Who drives?" (a driver, I'll drive myself, someone else with a name and a phone), for a request and a task
+   *  alike (whoDrivesLogic.ts); absent in a draft saved before it (whoOf reads driverRequired then). */
+  who?: WhoDrives;
 }
 
 export interface TripDraft {
@@ -73,7 +78,8 @@ export function withDriver(d: TripDraft, username?: string, name?: string): Trip
 /** The request's fields as the copied requestLogic takes them (create_request, update_request). */
 export function requestFieldsOf(d: Pick<TripDraft, 'fields' | 'req'>): RequestFields {
   const { title: _t, buffer: _b, driver: _d, vehicle: _v, cname: _cn, cphone: _cp, notes: _n, whatsapp: _w, ...trip } = d.fields;
-  return { ...(trip as TripFields & { pax: string }), behalf: d.req.behalf, project: d.req.project, need: d.req.need, tools: d.req.tools, note: d.req.note, driver: d.req.driverRequired, requesterPhone: d.req.requesterPhone };
+  const who = whoOf(d.req);
+  return { ...(trip as TripFields & { pax: string }), behalf: d.req.behalf, project: d.req.project, need: d.req.need, tools: d.req.tools, note: d.req.note, driver: who.choice === 'driver', who, requesterPhone: d.req.requesterPhone };
 }
 
 /** A draft worth asking about when a flow starts again: something typed, less than a day old. */

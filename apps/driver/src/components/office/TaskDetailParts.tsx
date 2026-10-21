@@ -22,6 +22,7 @@ import { Sheet } from '@/components/patterns/Sheet';
 import { Button, Mono, Plate, Txt } from '@/components/ui';
 import { clockOf, videoChip, videoLine, videoPieces } from '@/office/manageLogic';
 import { useOffice } from '@/office/state';
+import { sentenceText } from '@/office/statusWords';
 import {
   arrivalParts, arrivalPlaceInput, canSaveArrival, chargedTo, fuelTitle, historyParts, type LinkKey, odometerParts, PLACE_KINDS, type PlaceKind,
   planDrawable, reportWords, segmentRows, segmentsTotal, swapReadingInput, unloggedText,
@@ -55,7 +56,7 @@ export function TaskWarnings({ p }: { p: TaskDetail }) {
       {saved.length > 0 && (
         <View style={{ gap: 2 }} testID="warnings-saved">
           <Txt variant="strong" size={15} color={colors.amberText}>{t('office.task.warningsSaved')}</Txt>
-          {saved.map((w, i) => <Txt key={i} variant="body" size={15}>{`• ${w}`}</Txt>)}
+          {saved.map((w, i) => <Txt key={i} variant="body" size={15}>{`• ${sentenceText(t, w)}`}</Txt>)}
         </View>
       )}
     </View>

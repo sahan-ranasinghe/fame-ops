@@ -11,6 +11,7 @@ import { Unreachable } from "../auth/Unreachable";
 import { subscribeAskAnswers, subscribeDriverLatest, subscribeDriverPoints, subscribeDriversPoints, subscribeInbox, subscribeIssues, subscribeTaskProgress } from "../data/realtime";
 import { FleetStore } from "../data/store";
 import { uploadToTicket } from "../data/upload";
+import { saveMyPhoto } from "../data/myPhoto";
 import { registerServiceWorker } from "../push";
 import { Privacy } from "../screens/Privacy";
 import type { Me } from "../transport/types";
@@ -48,6 +49,7 @@ export function Gate() {
         taskProgress: subscribeTaskProgress,
       },
       files: { upload: uploadToTicket },
+      myPhoto: { save: saveMyPhoto },
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [signedIn, auth.transport]);
