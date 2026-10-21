@@ -12,6 +12,9 @@
 
 import { colomboDate, colomboParts, colomboTime } from './time';
 
+/** How long at a stop, the presets of the Stay sheet (components/patterns/DurationField.tsx; Custom for anything else). */
+export const STAY_PRESETS = [5, 15, 30, 60, 120, 240] as const;
+
 /** The app's t() (useApp): a key and its {placeholders}. */
 export type Translate = (key: string, vars?: Record<string, string | number>) => string;
 

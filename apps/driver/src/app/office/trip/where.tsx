@@ -21,7 +21,8 @@ import { draftWorthKeeping, getDraft, newDraft, setDraft, type TripMode, updateD
 import { pinText, placeBoxState, typedPatch } from '@/office/trip/locationLogic';
 import { editFields } from '@/office/trip/requestLogic';
 import { moveStop, newStop, pickupAtStart, type StopDraft, stopsInput, type StopType, tickStart, type What } from '@/office/trip/stopsLogic';
-import { DWELL_CHIPS, dwellChipText, reasonText } from '@/office/trip/words';
+import { reasonText } from '@/office/trip/words';
+import { DurationField } from '@/components/patterns/DurationField';
 import type { RequestsList, SettingsResult, TaskDetail } from '@/office/types';
 import { draftsFromStops } from '@/office/trip/stopsLogic';
 import { ErrorNotice, Screen } from '@/office/ui';
@@ -184,11 +185,7 @@ export default function TripWhere() {
                 <Chips<What> options={WHATS.map((w) => ({ key: w, label: t(`office.trip.what_${w}`) }))} value={f.startWhat ?? ''} onChange={(w) => setF({ startWhat: f.startWhat === w ? '' : w })} small />
               </View>
               <Field label={t('office.trip.noteAtStart')} value={f.startNote ?? ''} onChangeText={(startNote) => setF({ startNote })} maxLength={300} />
-              <View style={{ gap: 6 }}>
-                <Txt variant="strong" size={16}>{t('office.trip.timeAtStart')}</Txt>
-                <Chips options={[...DWELL_CHIPS.map((m) => ({ key: String(m), label: dwellChipText(t, m) })), { key: 'other', label: t('office.trip.other') }]} value={f.startDwell && DWELL_CHIPS.includes(Number(f.startDwell)) ? f.startDwell : f.startDwell ? 'other' : ''} onChange={(k) => setF({ startDwell: k === 'other' ? (f.startDwell && !DWELL_CHIPS.includes(Number(f.startDwell)) ? f.startDwell : '45') : f.startDwell === k ? '' : k })} small />
-                {f.startDwell && !DWELL_CHIPS.includes(Number(f.startDwell)) ? <Field label={t('office.trip.minutes')} mono value={f.startDwell} onChangeText={(v) => setF({ startDwell: v.replace(/\D/g, '').slice(0, 3) })} keyboardType="number-pad" /> : null}
-              </View>
+              <DurationField label={t('office.trip.timeAtStart')} value={f.startDwell ?? ''} onCommit={(startDwell) => setF({ startDwell })} testID="start-stay" />
             </MoreDetails>
           )}
         </View>

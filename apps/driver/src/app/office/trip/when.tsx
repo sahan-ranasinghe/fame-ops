@@ -5,22 +5,20 @@
 // The plan comes 1.5 s after the last change (plan_task). Next: Who.
 
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { TripDayPicker } from '@/components/patterns/Calendar';
-import { ChoiceChip } from '@/components/patterns/Select';
+import { DurationField } from '@/components/patterns/DurationField';
 import { TimeField } from '@/components/patterns/TimeField';
 import { DepartureNote, TripFooter, TripHeader } from '@/components/office/TripShell';
 import { Button, Mono, Txt } from '@/components/ui';
-import { durationText } from '@/lib/durations';
 import { colomboDate } from '@/lib/time';
 import { useOffice, useTool } from '@/office/state';
 import { nextStep, updateDraft, useTripDraft } from '@/office/trip/draft';
 import { dwellFallbacks } from '@/office/trip/planLogic';
 import { parseDwell, type StopDraft, stopsInput } from '@/office/trip/stopsLogic';
 import { useTrip } from '@/office/trip/useTrip';
-import { departureText, DWELL_CHIPS, dwellChipText, lateByText, reasonText } from '@/office/trip/words';
+import { departureText, lateByText, reasonText } from '@/office/trip/words';
 import type { SettingsResult } from '@/office/types';
 import { Loading, Screen } from '@/office/ui';
 import { useApp } from '@/state/app';
@@ -32,7 +30,6 @@ export default function TripWhen() {
   const router = useRouter();
   const d = useTripDraft();
   const settings = useTool<SettingsResult>('get_settings', {}, { enabled: me.tools.includes('get_settings') });
-  const [other, setOther] = useState<string | null>(null); // the stop whose "Other" minutes box is open
   const today = colomboDate();
   const draft = d ?? null;
   const trip = useTrip(draft ?? { mode: 'request', fields: { date: today, leaveBy: '', stops: [], returnToBase: false, avoidExpressway: false, end: '', start: '', startPax: false, title: '', buffer: '', driver: '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false }, req: { behalf: '', project: '', need: '', tools: false, note: '', driverRequired: true, requesterPhone: '' }, rows: [], step: 'when', at: 0 }, settings.data ?? null);
@@ -58,7 +55,6 @@ export default function TripWhen() {
           const fb = fallbacks.get(s.key);
           const chosen = parseDwell(s.dwell);
           const chosenMin = typeof chosen === 'number' ? chosen : null;
-          const onChip = chosenMin !== null && DWELL_CHIPS.includes(chosenMin);
           return (
             <View key={s.key} style={styles.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -68,30 +64,15 @@ export default function TripWhen() {
                   <Txt variant="small">{t(`office.trip.type_${s.type}`)}</Txt>
                 </View>
               </View>
+              {/* One compact row per stop (Google Calendar): Arrive by and Stay; the last stop's Free by / Back by under it. */}
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TimeField label={t('office.trip.arriveBy')} value={s.arriveBy} onCommit={(arriveBy) => patchStop(s.key, { arriveBy })} tone={trip.lateKey === s.key ? 'red' : undefined} />
-                {i === f.stops.length - 1 && <TimeField label={t(draft.mode === 'task' || draft.mode === 'stops' ? 'office.trip.freeBy' : 'office.trip.backBy')} value={f.end} onCommit={(end) => setF({ end })} tone={trip.lateBack ? 'red' : undefined} />}
+                <TimeField compact label={t('office.trip.arriveBy')} value={s.arriveBy} onCommit={(arriveBy) => patchStop(s.key, { arriveBy })} tone={trip.lateKey === s.key ? 'red' : undefined} testID={`stop-arrive-${i}`} />
+                <DurationField label={t('patterns.stay')} value={chosenMin !== null ? String(chosenMin) : ''} onCommit={(dwell) => patchStop(s.key, { dwell })} suggestedMin={fb?.min} testID={`stop-stay-${i}`} />
               </View>
+              {i === f.stops.length - 1 && <TimeField compact label={t(draft.mode === 'task' || draft.mode === 'stops' ? 'office.trip.freeBy' : 'office.trip.backBy')} value={f.end} onCommit={(end) => setF({ end })} tone={trip.lateBack ? 'red' : undefined} />}
               {check && check.kind === 'late' && trip.lateKey === s.key && (
                 <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(check.leaveBy)} moveLabel={check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
               )}
-              <Txt variant="label" color={colors.muted}>{t('office.trip.timeAtStop').toUpperCase()}</Txt>
-              <View accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {DWELL_CHIPS.map((min) => {
-                  const on = chosenMin === min;
-                  return (
-                    <ChoiceChip key={min} label={dwellChipText(t, min)} selected={on} onPress={() => { patchStop(s.key, { dwell: on ? '' : String(min) }); setOther(null); }} />
-                  );
-                })}
-                <ChoiceChip label={t('office.trip.other')} selected={other === s.key || (chosenMin !== null && !onChip)} onPress={() => setOther(other === s.key ? null : s.key)} />
-              </View>
-              {other === s.key && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <TextInput value={s.dwell} onChangeText={(v) => patchStop(s.key, { dwell: v.replace(/[^\d:]/g, '').slice(0, 5) })} keyboardType="number-pad" placeholder="45" placeholderTextColor="#9aa0a6" style={styles.minutes} accessibilityLabel={t('office.trip.minutes')} />
-                  <Txt variant="muted">{t('office.trip.minutes')}</Txt>
-                </View>
-              )}
-              {chosenMin === null && fb && <Txt variant="small">{fb.source === 'place' ? t('office.trip.usualHere', { dur: durationText(t, fb.min) }) : t('office.trip.defaultHere', { dur: durationText(t, fb.min) })}</Txt>}
             </View>
           );
         })}

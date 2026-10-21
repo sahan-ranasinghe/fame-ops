@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 jest.mock('@/state/app', () => ({ useApp: () => require('./fakeOffice').mockUseApp() }));
 
 /* eslint-disable import/first */
+import { DurationField } from '@/components/patterns/DurationField';
 import { TimeField } from '@/components/patterns/TimeField';
 
 function Harness({ initial = '', suggested, onCommit }: { initial?: string; suggested?: string; onCommit: (v: string) => void }) {
@@ -51,5 +52,40 @@ describe('The time field: presets and the clock', () => {
     fireEvent.changeText(screen.getByTestId('time-type-minute'), '37');
     fireEvent.press(screen.getByText('Done'));
     expect(commits).toEqual(['14:37']);
+  });
+});
+
+const SAFE = { frame: { x: 0, y: 0, width: 412, height: 915 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } };
+
+function StayHarness({ suggestedMin, onCommit }: { suggestedMin?: number; onCommit: (v: string) => void }) {
+  const [v, setV] = useState('');
+  return (
+    <SafeAreaProvider initialMetrics={SAFE}>
+      <DurationField value={v} onCommit={(x) => { setV(x); onCommit(x); }} suggestedMin={suggestedMin} testID="stay" />
+    </SafeAreaProvider>
+  );
+}
+
+describe('The Stay field (Google Calendar\'s duration)', () => {
+  it('shows the suggested stay in grey, then a preset counts at once', () => {
+    const commits: string[] = [];
+    render(<StayHarness suggestedMin={60} onCommit={(v) => commits.push(v)} />);
+    expect(screen.getByText('1 h · suggested')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('stay'));
+    for (const m of [5, 15, 30, 60, 120, 240]) expect(screen.getByTestId(`stay-${m}`)).toBeTruthy();
+    fireEvent.press(screen.getByTestId('stay-30'));
+    expect(commits).toEqual(['30']);
+    expect(screen.getByText('30 min')).toBeTruthy();
+  });
+
+  it('Custom: an hours column and a minutes column, so 5 h is two taps', () => {
+    const commits: string[] = [];
+    render(<StayHarness onCommit={(v) => commits.push(v)} />);
+    fireEvent.press(screen.getByTestId('stay'));
+    fireEvent.press(screen.getByTestId('stay-custom'));
+    fireEvent.press(screen.getByTestId('stay-hours-5'));
+    fireEvent.press(screen.getByTestId('stay-minutes-0'));
+    fireEvent.press(screen.getByText('Done'));
+    expect(commits).toEqual(['300']);
   });
 });

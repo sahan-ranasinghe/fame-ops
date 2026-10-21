@@ -15,7 +15,7 @@ import { colors } from '@/theme';
 import { Sheet } from './Sheet';
 import { TimeDial } from './TimeDial';
 
-export function TimeField({ value, onCommit, label, placeholder, tone, suggested, testID }: {
+export function TimeField({ value, onCommit, label, placeholder, tone, suggested, compact = false, testID }: {
   value: string;
   onCommit: (time: string) => void;
   label?: string;
@@ -25,6 +25,8 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
   tone?: 'red';
   /** A time to offer first ("Planned 07:24"). */
   suggested?: string;
+  /** The small size, two to a row (a stop's Arrive by beside its Stay). */
+  compact?: boolean;
   testID?: string;
 }) {
   const { t } = useApp();
@@ -35,9 +37,9 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
   return (
     <View style={{ flex: 1, gap: 6 }}>
       {label ? <Txt variant="label" color={colors.muted}>{label.toUpperCase()}</Txt> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel={label ?? t('patterns.time')} onPress={() => { setDraft(isHHMM(value) ? value : suggested && isHHMM(suggested) ? suggested : now); setOpen(true); }} style={[styles.box, tone === 'red' && { borderColor: colors.red }]} testID={testID}>
+      <Pressable accessibilityRole="button" accessibilityLabel={label ?? t('patterns.time')} onPress={() => { setDraft(isHHMM(value) ? value : suggested && isHHMM(suggested) ? suggested : now); setOpen(true); }} style={[styles.box, compact && styles.compact, tone === 'red' && { borderColor: colors.red }]} testID={testID}>
         <Clock size={20} color={colors.muted} />
-        {isHHMM(value) ? <Mono size={26} bold>{value}</Mono> : <Txt variant="muted" size={16} style={{ flex: 1 }} numberOfLines={1}>{placeholder ?? '--:--'}</Txt>}
+        {isHHMM(value) ? <Mono size={compact ? 20 : 26} bold>{value}</Mono> : <Txt variant="muted" size={16} style={{ flex: 1 }} numberOfLines={1}>{placeholder ?? '--:--'}</Txt>}
         {isHHMM(value) ? <View style={{ flex: 1 }} /> : null}
         {isHHMM(value) && (
           <Pressable accessibilityRole="button" accessibilityLabel={t('patterns.clear')} onPress={() => onCommit('')} hitSlop={8} style={styles.clear}><X size={20} color={colors.muted} /></Pressable>
@@ -64,6 +66,7 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
 
 const styles = StyleSheet.create({
   box: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, borderWidth: 1.5, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.card, paddingLeft: 14 },
+  compact: { minHeight: 48, borderRadius: 12, paddingLeft: 12, gap: 8 },
   clear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center' },
 });

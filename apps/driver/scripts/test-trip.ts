@@ -14,7 +14,8 @@ import { previewTask } from '../src/office/trip/planMap';
 import { validateNewRequest } from '../src/office/trip/requestLogic';
 import { newStop } from '../src/office/trip/stopsLogic';
 import { tripPlanInput } from '../src/office/trip/tripLogic';
-import { departureText, DWELL_CHIPS, dwellChipText, lateByText, reasonText } from '../src/office/trip/words';
+import { departureText, lateByText, reasonText } from '../src/office/trip/words';
+import { STAY_PRESETS } from '../src/lib/durations';
 import type { PlanPreview, PlanTimeline } from '../src/office/types';
 import { formatTyped, isTime } from '../src/office/trip/timeLogic';
 import { whoArgs } from '../src/office/trip/whoLogic';
@@ -101,7 +102,7 @@ console.log('\nThe words (office/trip/words.ts):');
   check(lateByText(t, late, '07:00') === null, 'nothing when the typed time is early enough');
   const fill = checkDeparture('', plan);
   check(fill?.kind === 'fill' && fill.leaveBy === '07:24', 'an empty leave-by is filled from the plan');
-  check(same(DWELL_CHIPS, [5, 15, 30, 60, 90, 120]) && dwellChipText(t, 90) === 'dur.hours {"h":1,"m":30}' && dwellChipText(t, 15) === 'dur.minutes {"n":15}' && dwellChipText(t, 60) === 'dur.hoursOnly {"h":1}', 'the time-at-stop chips');
+  check(same(STAY_PRESETS, [5, 15, 30, 60, 120, 240]), 'the Stay sheet\'s presets (21 October 2026): 5 min · 15 min · 30 min · 1 h · 2 h · 4 h, then Custom');
 }
 
 console.log('\nThe time field (office/trip/timeLogic.ts):');

@@ -18,7 +18,7 @@ import {
 } from '../src/office/trip/formsLogic';
 import { validateAssign } from '../src/office/trip/assignLogic';
 import { whoArgs } from '../src/office/trip/whoLogic';
-import { DWELL_CHIPS } from '../src/office/trip/words';
+import { STAY_PRESETS } from '../src/lib/durations';
 import { bookInput, validateNewRequest } from '../src/office/trip/requestLogic';
 import type { Conflict, PlanPreview, SuggestedVehicle } from '../src/office/types';
 
@@ -121,7 +121,7 @@ console.log('\nThe reviewer\'s findings, fixed');
   const a2 = whoArgs({ ...base, startPax: true }, { base: 'Base', need: 'van', pax: '3' });
   check(a2 !== null && a2.lat === 6.9 && a2.need_type === 'van' && a2.pax === 3, 'with passengers at the start the start is the first stop; a request sends its type and passengers', a2);
   check(whoArgs({ ...base, start: '', startPax: true, startLat: undefined, startLng: undefined }, { base: 'Base' })?.first_stop === 'Base', 'an empty start with passengers (no pin) names the base place');
-  check(DWELL_CHIPS[0] === 5 && DWELL_CHIPS.includes(120), 'the time-at-stop chips include 5 min (the site\'s picks)');
+  check(STAY_PRESETS[0] === 5 && (STAY_PRESETS as readonly number[]).includes(240), 'the Stay presets include 5 min and 4 h');
   const useTripSrc = read('office/trip/useTrip.ts');
   check(useTripSrc.includes('const planStore = new Map<string, PlanEntry>();') && useTripSrc.includes('if (!key || cur?.inFlight) return;') && useTripSrc.includes("const offset = tripOffset(f) + (d.reached ?? 0);"), 'one plan store for every mounted step (a call in flight is never doubled); the rows count the reached stops');
 }
@@ -146,7 +146,7 @@ console.log('\nThe screens as text: every field reaches its input');
   check(who.includes("api.call<FindProject>('find_project', { text: text.trim() })") && who.includes('setRows(splitRows)') && who.includes('setRows(addProjectRow)') && who.includes("t('office.trip.splitTotal'"), 'Who (task): the project rows with find_project, Split equally, the total');
   check(who.includes("<ToggleRow label={t('office.trip.whatsappToo')} value={f.whatsapp}") && who.includes("driverWhatsapp: whatsapp") && who.includes('<DriverRows'), 'Who (task): the WhatsApp option, the driver\'s link kept, the shared driver rows (with the best match\'s reason)');
   check(who.includes('vehicleDefault({ on: onDay, date: f.date') && who.includes("t('office.trip.needVehicle')") && who.includes('if (!isTask && !books) return;') && who.includes('testID="vehicle-facts"') && who.includes('testID="asked-by"') && who.includes('office.vehicles.type_${type}'), 'Who: the on-the-day default for a task, the known-none block, the default kept for Review, the vehicle facts, the asker line, the type labels');
-  check(where.includes('testID="return-toggle"') && where.includes('testID="expressway-toggle"') && where.includes("wasApproved: card.status === 'approved'") && where.includes("running: p.task.status === 'in_progress'") && when.includes("draft.running ?") && when.includes('durationText(t, fb.min)'), 'Where: toggle rows for the two switches, the drafts remember an approved booking and a running task; When: no leave-by on a running task, the usual time in the phone\'s language');
+  check(where.includes('testID="return-toggle"') && where.includes('testID="expressway-toggle"') && where.includes("wasApproved: card.status === 'approved'") && where.includes("running: p.task.status === 'in_progress'") && when.includes("draft.running ?") && when.includes('suggestedMin={fb?.min}'), 'Where: toggle rows for the two switches, the drafts remember an approved booking and a running task; When: no leave-by on a running task, the usual stay offered as the suggestion (21 October 2026: the Stay field)');
   check(who.includes("problem = isTask ? (!f.driver ? t('office.trip.needDriver') : !f.title.trim() ? t('office.trip.needTitle') : !split.ok ? t('office.trip.reasonSplit', { total: split.total }) : known && !def && !f.vehicle && !dayDefault ? t('office.trip.needVehicle') : null) : null") && who.includes('disabled={!!problem} problem={problem}'), 'Who: the button disabled until the step is valid (the driver, the title, the split, a vehicle when the driver holds none), with the reason under it');
   check(review.includes("bookInput(rf, { vehicle, driver: f.driver, hasCustodian: !!d.book?.hasCustodian, defaultVehicle: d.book?.defaultVehicle }, trip.base)") && review.includes("secondary={books ? { label: t('office.trip.saveWaiting'), onPress: () => void send('send'), disabled: 'error' in planned } : undefined}"), 'Review: Book now as the primary with Save as waiting beside it (book_vehicle), else Send request');
   check(review.includes("testID=\"plan-updating\"") && review.includes('testID="leave-note"') && review.includes('testID="vehicle-used"') && review.includes('testID="conflict-card"') && !review.includes('testID="outcome-card"'), 'Review: Updating plan…, the Leave by note, the vehicle used, the conflict cards (Hotfix O2-H2: no outcome card)');

@@ -58,15 +58,6 @@ const toMin = (v: string): number | null => {
 
 const durPart = (text: string): string => /(\d+ h(?: \d+ min)?|\d+ min)/.exec(text)?.[1] ?? '';
 
-/** The time-at-stop chips: 15 min · 30 min · 1 h · 1 h 30 · 2 h, then Other. */
-export const DWELL_CHIPS: readonly number[] = [5, 15, 30, 60, 90, 120];
-
-export function dwellChipText(t: Translate, min: number): string {
-  if (min < 60) return t('dur.minutes', { n: min });
-  const h = Math.floor(min / 60), rest = min % 60;
-  return rest === 0 ? t('dur.hoursOnly', { h }) : t('dur.hours', { h, m: rest });
-}
-
 /** A stop row's line in the phone's language: "arrive 09:00 · 1 h 30 min (usual here) · leave 10:30"; the start: "leave 07:24 · passengers get in here". */
 export function stopTimesT(t: Translate, s: Extract<TimelineItem, { kind: 'stop' }>): string {
   if (s.is_start) return [t('office.trip.rowLeave', { time: s.planned_leave }), t('office.trip.rowPassengers')].join(' · ');

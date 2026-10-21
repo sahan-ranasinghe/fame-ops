@@ -2807,7 +2807,12 @@
     "hour": "පැය",
     "minute": "මිනිත්තු",
     "typeTime": "වේලාව ටයිප් කරන්න",
-    "useDial": "ඔරලෝසුව භාවිත කරන්න"
+    "useDial": "ඔරලෝසුව භාවිත කරන්න",
+    "stay": "රැඳී සිටීම",
+    "custom": "අභිරුචි",
+    "hoursCol": "පැය",
+    "minutesCol": "මිනිත්තු",
+    "suggestedValue": "{value} · යෝජිත"
   },
   "crash": {
     "title": "යම් දෙයක් වැරදුණා",

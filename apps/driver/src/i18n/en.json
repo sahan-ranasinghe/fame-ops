@@ -2807,7 +2807,12 @@
     "hour": "Hour",
     "minute": "Minute",
     "typeTime": "Type the time",
-    "useDial": "Use the clock"
+    "useDial": "Use the clock",
+    "stay": "Stay",
+    "custom": "Custom",
+    "hoursCol": "Hours",
+    "minutesCol": "Minutes",
+    "suggestedValue": "{value} · suggested"
   },
   "crash": {
     "title": "Something went wrong",
