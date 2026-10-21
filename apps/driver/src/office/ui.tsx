@@ -4,14 +4,14 @@
 // failed call is shown (a notice with Try again; a dropped write says it may not have been saved).
 
 import { useFocusEffect, useRouter } from 'expo-router';
-import { type ReactNode, type Ref, useCallback, useRef } from 'react';
+import { type ReactNode, type Ref, useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Bell, ChevronLeft } from '@/components/icons';
+import { Bell, ChevronLeft, Plus } from '@/components/icons';
 import { ChoiceChip } from '@/components/patterns/Select';
+import { Sheet } from '@/components/patterns/Sheet';
 import { setSnackbarLift } from '@/components/patterns/Snackbar';
-import { LanguagePill } from '@/components/LanguageSwitch';
 import { ListError } from '@/components/patterns/ListState';
 import { Button, Mono, Txt } from '@/components/ui';
 import { useApp } from '@/state/app';
@@ -45,15 +45,18 @@ export function Pill({ text, tone = 'muted', size = 14 }: { text: string; tone?:
  * The header's numbers as one row of compact tiles (Shopify's, Stripe's and Uber Fleet's stat tiles, 21 October 2026): a
  * big number, a small label on one line, each tile opening its list. Replaces the row of chips under a dark header.
  */
-export function StatTiles({ tiles }: { tiles: { key: string; n: number; label: string; tone?: 'blue' | 'muted' | 'amber' | 'red'; onPress?: () => void }[] }) {
-  const ink = { blue: '#9db8ea', muted: '#ffffff', amber: '#f7c85a', red: '#ff8a80' } as const;
+export function StatTiles({ tiles, light = false }: { tiles: { key: string; n: number; label: string; tone?: 'blue' | 'muted' | 'amber' | 'red'; onPress?: () => void }[]; light?: boolean }) {
+  // Round 2b: light = the compact strip in the page (Shopify / Uber Fleet), not a dark block.
+  const ink = light
+    ? ({ blue: colors.blue, muted: colors.ink, amber: colors.amberText, red: colors.red } as const)
+    : ({ blue: '#9db8ea', muted: '#ffffff', amber: '#f7c85a', red: '#ff8a80' } as const);
   return (
-    <View style={styles.tiles} testID="stat-tiles">
+    <View style={[styles.tiles, light && { marginTop: 0 }]} testID="stat-tiles">
       {tiles.map((x) => (
         <Pressable key={x.key} accessibilityRole="button" accessibilityLabel={`${x.n} ${x.label}`} onPress={x.onPress} disabled={!x.onPress}
-          style={(state) => [styles.tile, hoverStyle(state), state.pressed && { opacity: 0.8 }]} testID={`stat-${x.key}`}>
+          style={(state) => [styles.tile, light && styles.tileLight, hoverStyle(state), state.pressed && { opacity: 0.8 }]} testID={`stat-${x.key}`}>
           <Mono size={24} bold color={ink[x.tone ?? 'muted']}>{String(x.n)}</Mono>
-          <Txt variant="small" color="#c9ccd1" numberOfLines={1}>{x.label}</Txt>
+          <Txt variant="small" color={light ? colors.muted : '#c9ccd1'} numberOfLines={1}>{x.label}</Txt>
         </Pressable>
       ))}
     </View>
@@ -81,7 +84,6 @@ export function DarkHeader({ above, title, children, bell = true }: { above: str
     <View style={[styles.dark, { paddingTop: insets.top + 12 }]}>
       <View style={styles.darkTop}>
         <Txt variant="muted" size={15} color="#c9ccd1" style={{ flex: 1 }} numberOfLines={1}>{above}</Txt>
-        <LanguagePill />
         {bell && <BellButton count={unread} onPress={() => router.push('/office/(tabs)/alerts')} />}
       </View>
       <Txt variant="title" color="#ffffff" style={{ marginTop: 8 }} numberOfLines={1}>{title}</Txt>
@@ -91,10 +93,11 @@ export function DarkHeader({ above, title, children, bell = true }: { above: str
 }
 
 /** The bell with the unread count (the Alerts badge; DarkHeader reads it from the office state). */
-export function BellButton({ onPress, count = 0 }: { onPress: () => void; count?: number }) {
+export function BellButton({ onPress, count = 0, light = false }: { onPress: () => void; count?: number; light?: boolean }) {
+  const { t } = useApp();
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={(state) => [styles.bell, hoverStyle(state)]}>
-      <Bell size={22} color="#ffffff" strokeWidth={2.2} />
+    <Pressable accessibilityRole="button" accessibilityLabel={t('office.tabs.alerts')} onPress={onPress} style={(state) => [styles.bell, light && styles.bellLight, hoverStyle(state)]} testID="bell">
+      <Bell size={22} color={light ? colors.ink : '#ffffff'} strokeWidth={2.2} />
       {count > 0 && <Badge n={count} />}
     </Pressable>
   );
@@ -105,6 +108,52 @@ export function Badge({ n }: { n: number }) {
     <View style={styles.badge} testID="badge">
       <Mono size={12} bold color="#ffffff">{n > 99 ? '99+' : String(n)}</Mono>
     </View>
+  );
+}
+
+/**
+ * Round 2b: Home's thin top bar (Gmail / Uber Fleet): the greeting and the date in small text, the bell. It stays thin
+ * while the page scrolls under it; the counts and the lists live in the page.
+ */
+export function TopBar({ greeting, date }: { greeting: string; date: string }) {
+  const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { unread } = useOffice();
+  useWebThemeColor(colors.page);
+  return (
+    <View style={[styles.topBar, { paddingTop: insets.top + 6 }]} testID="top-bar">
+      <View style={{ flex: 1 }}>
+        <Txt variant="strong" size={17} numberOfLines={1}>{greeting}</Txt>
+        <Txt variant="small" numberOfLines={1}>{date}</Txt>
+      </View>
+      <BellButton light count={unread} onPress={() => router.push('/office/(tabs)/alerts')} />
+    </View>
+  );
+}
+
+/**
+ * Round 2b: the one floating "+ New trip" button (Gmail's Compose, Google Calendar's +): bottom right, above the tab bar.
+ * With one choice it opens it; with two, a small sheet asks which.
+ */
+export function NewTripButton({ choices }: { choices: { key: string; label: string; onPress: () => void }[] }) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  if (choices.length === 0) return null;
+  return (
+    <>
+      <Pressable accessibilityRole="button" accessibilityLabel={t('office.home.newTrip')} onPress={() => (choices.length === 1 ? choices[0].onPress() : setOpen(true))}
+        style={(state) => [styles.fab, hoverStyle(state), state.pressed && { opacity: 0.85 }]} testID="new-trip">
+        <Plus size={22} color={colors.ink} strokeWidth={2.6} />
+        <Txt variant="strong" size={16}>{t('office.home.newTrip')}</Txt>
+      </Pressable>
+      <Sheet visible={open} title={t('office.home.newTrip')} onClose={() => setOpen(false)} testID="new-trip-sheet">
+        <View style={{ gap: 10 }}>
+          {choices.map((c, i) => (
+            <Button key={c.key} kind={i === 0 ? 'primary' : 'outline'} label={c.label} onPress={() => { setOpen(false); c.onPress(); }} style={{ minHeight: 56 }} testID={`new-trip-${c.key}`} />
+          ))}
+        </View>
+      </Sheet>
+    </>
   );
 }
 
@@ -334,6 +383,10 @@ const styles = StyleSheet.create({
   pill: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, alignSelf: 'flex-start' },
   tiles: { flexDirection: 'row', gap: 8, marginTop: 12 },
   tile: { flex: 1, backgroundColor: colors.darkSurface, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10, gap: 2 },
+  tileLight: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingBottom: 8, backgroundColor: colors.page, borderBottomWidth: 1, borderBottomColor: colors.line },
+  bellLight: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line },
+  fab: { position: 'absolute', right: 16, bottom: 16, minHeight: 56, paddingHorizontal: 18, borderRadius: 28, backgroundColor: colors.amber, flexDirection: 'row', alignItems: 'center', gap: 8, elevation: 4, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } },
   statusChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, maxWidth: 112, flexShrink: 0 },
   timeCol: { width: 52 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },

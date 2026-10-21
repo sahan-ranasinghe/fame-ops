@@ -956,7 +956,9 @@
       "tileFree": "නිදහස්",
       "tileGarage": "ගරාජයේ",
       "remindersRow": "සිහිකැඳවීම් {n}",
-      "remindersRowOne": "සිහිකැඳවීම් 1"
+      "remindersRowOne": "සිහිකැඳවීම් 1",
+      "newTrip": "නව ගමනක්",
+      "needsYouNow": "ඔබගෙන් දැන් අවශ්‍යයි"
     },
     "status": {
       "assigned": "යවා ඇත",

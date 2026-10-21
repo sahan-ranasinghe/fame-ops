@@ -23,7 +23,7 @@ import { has, homeActions, homeChips, homeSections } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { firstName } from '@/office/text';
 import type { Board, MyTrips, Overview, RequestsList } from '@/office/types';
-import { Avatar, DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section, StatTiles } from '@/office/ui';
+import { Avatar, Divider, ListFailed, NewTripButton, Pill, Row, Screen, Section, StatTiles, TopBar } from '@/office/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
@@ -98,32 +98,21 @@ export default function OfficeHome() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <DarkHeader above={shortDate(names, Date.now())} title={t(`office.home.${greeting()}`, { name: firstName(me.name) })}>
+      {/* Round 2b (Gmail / Uber Fleet / Shopify): a thin top bar; the counts as a strip in the page; "Needs you now" first;
+          one floating "+ New trip". The language switch is on My profile. */}
+      <TopBar greeting={t(`office.home.${greeting()}`, { name: firstName(me.name) })} date={shortDate(names, Date.now())} />
+      <Screen refreshing={refreshing} onRefresh={refresh} bottom={actions.length > 0 ? 96 : 24}>
+        <SavedNotice noticeKey="/office" />
         {ov && (
-          <StatTiles tiles={[
+          <StatTiles light tiles={[
             ...(chips.includes('road') ? [{ key: 'road', n: ov.vehicles.on_the_road, label: t('office.home.tileRoad'), tone: 'blue' as const, onPress: go('road') }] : []),
             ...(chips.includes('free') ? [{ key: 'free', n: ov.vehicles.parked, label: t('office.home.tileFree'), onPress: go('free') }] : []),
             ...(chips.includes('garage') && ov.vehicles.in_garage !== undefined ? [{ key: 'garage', n: ov.vehicles.in_garage, label: t('office.home.tileGarage'), onPress: go('garage') }] : []),
           ]} />
         )}
-      </DarkHeader>
-      <Screen refreshing={refreshing} onRefresh={refresh}>
-        <SavedNotice noticeKey="/office" />
-        {ov && chipTarget('reminders', me) && ov.reminders.count > 0 && (
-          <Row
-            left={<Bell size={22} color={ov.reminders.red ? colors.red : colors.ink} strokeWidth={2.2} />}
-            title={ov.reminders.count === 1 ? t('office.home.remindersRowOne') : t('office.home.remindersRow', { n: ov.reminders.count })}
-            right={<ChevronRight size={20} color={colors.muted} />}
-            onPress={go('reminders')}
-            testID="home-reminders"
-          />
-        )}
         {overview.error && <ListFailed stale={!!ov} error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
-        {actions.length > 0 && (
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            {actions.includes('assign') && <Button icon={Plus} label={t('office.trip.assignTask')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } })} style={{ flex: 1, minHeight: 60 }} />}
-            {actions.includes('request') && <Button kind={actions.includes('assign') ? 'outline' : 'primary'} label={t(actions.includes('assign') ? 'office.trip.request' : 'office.trip.requestVehicle')} onPress={() => router.push({ pathname: '/office/trip/where', params: { mode: 'request' } })} style={{ flex: 1, minHeight: 60 }} />}
-          </View>
+        {(sections.includes('requests') || sections.includes('needs_driver') || sections.includes('critical') || (ov && chipTarget('reminders', me) && ov.reminders.count > 0)) && (
+          <Txt variant="heading" size={20} testID="needs-you-now">{t('office.home.needsYouNow')}</Txt>
         )}
 
         {sections.includes('requests') && (
@@ -198,6 +187,15 @@ export default function OfficeHome() {
           </Section>
         )}
 
+        {ov && chipTarget('reminders', me) && ov.reminders.count > 0 && (
+          <Row
+            left={<Bell size={22} color={ov.reminders.red ? colors.red : colors.ink} strokeWidth={2.2} />}
+            title={ov.reminders.count === 1 ? t('office.home.remindersRowOne') : t('office.home.remindersRow', { n: ov.reminders.count })}
+            right={<ChevronRight size={20} color={colors.muted} />}
+            onPress={go('reminders')}
+            testID="home-reminders"
+          />
+        )}
         {sections.includes('tasks') && (
           <Section title={t('office.home.tasks')} count={board.data ? board.data.counts.assigned + board.data.counts.in_progress + board.data.counts.completed : undefined} link={t('office.home.board')} onLink={() => router.push('/office/(tabs)/tasks')}>
             {!board.data && !board.error && <SkeletonRows rows={3} lines={2} />}
@@ -279,6 +277,10 @@ export default function OfficeHome() {
           </Section>
         )}
       </Screen>
+      <NewTripButton choices={[
+        ...(actions.includes('assign') ? [{ key: 'task', label: t('office.trip.assignTask'), onPress: () => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } }) }] : []),
+        ...(actions.includes('request') ? [{ key: 'request', label: t('office.trip.requestVehicle'), onPress: () => router.push({ pathname: '/office/trip/where', params: { mode: 'request' } }) }] : []),
+      ]} />
       <Sheet visible={snoozing !== null} title={t('office.home.snoozeTitle')} onClose={() => setSnoozing(null)}>
         {snoozing && <Txt variant="muted" size={15}>{snoozing.title}</Txt>}
         {snoozing && (['tomorrow', 'week'] as const).map((when) => (

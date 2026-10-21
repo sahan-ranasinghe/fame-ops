@@ -956,7 +956,9 @@
       "tileFree": "Free",
       "tileGarage": "In garage",
       "remindersRow": "{n} reminders",
-      "remindersRowOne": "1 reminder"
+      "remindersRowOne": "1 reminder",
+      "newTrip": "New trip",
+      "needsYouNow": "Needs you now"
     },
     "status": {
       "assigned": "sent",
