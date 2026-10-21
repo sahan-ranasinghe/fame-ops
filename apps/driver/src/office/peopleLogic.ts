@@ -485,3 +485,14 @@ export function settingInput(row: QuickRow, raw: unknown): { input: { key: Quick
 export function withSetting(settings: FleetSettings, key: QuickKey, value: unknown): FleetSettings {
   return { ...settings, [key]: value } as FleetSettings;
 }
+
+/**
+ * Round 2b (the server's accountGuards.ts, the same rule): may this person change that office account? Not an admin's
+ * without users; not one holding any permission this person could not give (users covers office_users). Their own
+ * account: always (its name and phone; never its permissions, refused by selfLockout and the server).
+ */
+export function canChangeAccount(me: { email?: string; permissions: readonly string[] }, target: { email?: string | null; permissions: readonly string[] }): boolean {
+  if (me.email && target.email && me.email.toLowerCase() === target.email.toLowerCase()) return true;
+  const held = new Set(me.permissions.includes('users') ? [...me.permissions, 'office_users'] : me.permissions);
+  return target.permissions.every((p) => held.has(p));
+}

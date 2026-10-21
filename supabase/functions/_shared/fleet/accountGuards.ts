@@ -5,7 +5,9 @@
 //      users, nor take them from anyone).
 //   2. Nobody changes their own role or permissions, and nobody switches off their own account.
 //   3. Only an admin (the users permission) changes an admin's account in any way: name, phone, permissions, switching
-//      it off, a new set-password link.
+//      it off, a new set-password link. More generally, nobody touches an account that holds a permission they could not
+//      give (a Coordinator never acts on a Fleet admin's account: a set-password link there would hand them approve;
+//      Checkpoint 2b review).
 // The shared connector key holds every permission and is no person: rules 1 and 3 pass for it, rule 2 cannot apply.
 
 import { type Permission, PERMISSION_TEXT } from "./permissions.ts";
@@ -36,11 +38,18 @@ export function accountChangeProblem(actor: GuardActor, change: AccountChange): 
   const admin = isAdmin(actor.permissions);
   if (change.kind !== "create") {
     const self = actor.employeeId !== null && actor.employeeId === change.target.id;
-    if (change.kind === "update" && self && (change.permissions !== undefined || change.role !== undefined)) {
+    const sameList = (a: readonly Permission[], b: readonly Permission[]) => a.length === b.length && a.every((p) => b.includes(p));
+    const permsChange = change.kind === "update" && change.permissions !== undefined &&
+      !sameList(change.permissions, change.target.permissions);
+    if (change.kind === "update" && self && (permsChange || change.role !== undefined)) {
       return "You cannot change your own role or permissions. Ask another admin.";
     }
     if (change.kind === "switch" && self && !change.active) return "You cannot switch off your own account. Ask another admin.";
     if (isAdmin(change.target.permissions) && !admin) return "Only an admin can change an admin's account.";
+    const beyond = change.target.permissions.filter((p) => !grantable(actor.permissions).includes(p));
+    if (beyond.length > 0 && !self) {
+      return `Only someone who holds every permission of this account can change it (not yours: ${names(beyond)}). Ask an admin.`;
+    }
   }
   if (change.kind === "create" || change.kind === "update") {
     // An explicit role is a label for admins to set; anyone else gets the one the permissions make.

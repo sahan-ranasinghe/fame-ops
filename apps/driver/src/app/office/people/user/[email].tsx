@@ -13,7 +13,7 @@ import { ToggleRow } from '@/components/office/Controls';
 import { PermissionPicker, SecretCard } from '@/components/office/PeopleParts';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Field, Notice, Txt } from '@/components/ui';
-import { activePill, findUserRow, permissionWords, phoneDisplay, updateUserInput, userFields, type UserFields, type UserProblem } from '@/office/peopleLogic';
+import { activePill, canChangeAccount, findUserRow, permissionWords, phoneDisplay, updateUserInput, userFields, type UserFields, type UserProblem } from '@/office/peopleLogic';
 import { normalisePermissions } from '@/office/permissions';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, OfficeUsers, SetPasswordLinkResult, UpdateOfficeUserResult } from '@/office/types';
@@ -31,9 +31,12 @@ export default function ManageOfficeUser() {
   const router = useRouter();
   const q = useTool<OfficeUsers>('list_office_users', { search: email, limit: 25 });
   const u = findUserRow(q.data, email);
-  const canEdit = me.tools.includes('update_office_user');
-  const canLink = me.tools.includes('reset_office_password');
-  const canSwitch = me.tools.includes('set_office_user_active');
+  // Round 2b: an account beyond this person's permissions (an admin's, a Fleet admin's for a Coordinator) is shown, not
+  // changed (the server refuses it too); the note under the details says who can.
+  const reach = !u || canChangeAccount(me, { email: u.email, permissions: u.permissions ?? [] });
+  const canEdit = reach && me.tools.includes('update_office_user');
+  const canLink = reach && me.tools.includes('reset_office_password');
+  const canSwitch = reach && me.tools.includes('set_office_user_active');
 
   const [f, setF] = useState<UserFields | null>(null);
   useEffect(() => {
@@ -185,6 +188,7 @@ export default function ManageOfficeUser() {
             )}
           </Section>
         )}
+        {u && !reach && <Notice text={t('office.people.outOfReach')} />}
         {u && u.active && canEdit && (
           <Section title={t('office.people.driverContactTitle')}>
             <ToggleRow label={t('office.people.driverContact')} value={u.driver_contact === true} onChange={(on) => void setContact(on)}

@@ -99,6 +99,8 @@ export default defineConfig(({ mode }) => {
         "@fleet/stopProgress": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/stopProgress.ts", import.meta.url)),
         // The permission table (tool → permission, presets): the menu can never disagree with the server.
         "@fleet/permissions": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/permissions.ts", import.meta.url)),
+        // Round 2b: who may change which office account (the same rule office-api runs).
+        "@fleet/accountGuards": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/accountGuards.ts", import.meta.url)),
         "@fleet/polyline": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/polyline.ts", import.meta.url)),
         // "Kamal's vehicle today", or the full name when two drivers share a first name: as the connector says it.
         "@fleet/names": fileURLToPath(new URL("../../supabase/functions/_shared/fleet/names.ts", import.meta.url)),

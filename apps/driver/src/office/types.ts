@@ -1607,7 +1607,8 @@ export interface OfficeUser {
   /** Round 1: shown to drivers as a contact (the app's Me). */
   driver_contact?: boolean;
   since?: string;
-  connector_keys: OfficeKey[];
+  /** Only for the people who make keys (users); a Coordinator's answer has none (Round 2b). */
+  connector_keys?: OfficeKey[];
 }
 
 export interface OfficeUsers extends Paged {

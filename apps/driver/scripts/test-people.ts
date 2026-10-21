@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import {
   activePill, appendDrivers, appendUsers, cutoffValue, includeInactiveOf, peopleDriverDefs, driverLine, driverLine2, driversArgs, editableFields, emergencyText, emptyDriver, emptyUser, findDriverRow, findUserRow,
   isPin, isTime, latestDriverPhoneChange, licenceOf, licencePhotos, licenceTone, LIMIT, longDate, minutesValue, officePhoneValue, permissionWords, PERSONAL_TRIPS,
-  personalTripsValue, phoneDisplay, phoneE164, presetOf, profileFields, profilePatch, QUICK_SETTINGS, randomPin, regularVehicleOf, samePhone, seesPrivate, selfLockout,
+  personalTripsValue, phoneDisplay, phoneE164, presetOf, canChangeAccount, profileFields, profilePatch, QUICK_SETTINGS, randomPin, regularVehicleOf, samePhone, seesPrivate, selfLockout,
   settingInput, switchValue, togglePermission, updateDriverInput, updateUserInput, USERNAME_RULE, userFields, userLine, usersArgs, validateNewDriver, validateNewUser,
   viewLocked, whenText, withSetting, type Words,
 } from '../src/office/peopleLogic';
@@ -157,6 +157,13 @@ console.log('\n== Office users ==');
   check(presetOf(['view', 'approve']) === null && presetOf([]) === null, 'no preset for other lists');
   check(selfLockout('me@x.lk', 'ME@x.lk', ['view']) && selfLockout('me@x.lk', 'me@x.lk', ['view', 'users']) && !selfLockout('me@x.lk', 'other@x.lk', ['view']) && !selfLockout(undefined, 'me@x.lk', ['view']), 'nobody changes their own permissions (Round 2b), whatever they tick');
   check(presetOf(['view', 'request', 'assign_tasks', 'vehicles', 'issues', 'office_users']) === 'coordinator', 'the Coordinator preset (Round 2b)');
+  {
+    const co = { email: 'c@x.lk', permissions: ['view', 'request', 'assign_tasks', 'vehicles', 'issues', 'office_users'] };
+    check(canChangeAccount(co, { email: 'r@x.lk', permissions: ['view', 'request'] }) && !canChangeAccount(co, { email: 'f@x.lk', permissions: ['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues'] })
+      && canChangeAccount(co, { email: 'C@x.lk', permissions: co.permissions })
+      && canChangeAccount({ email: 'a@x.lk', permissions: ['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues', 'users'] }, { email: 'c@x.lk', permissions: co.permissions }),
+      'a Coordinator changes a requester, never a Fleet admin; an admin of before Round 2b changes a Coordinator (Checkpoint 2b review)');
+  }
   check(presetOf(['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues', 'users', 'office_users']) === 'all', 'everything with office_users is still Everything');
   check(same(validateNewUser(emptyUser()), { error: 'fields' }), 'a new user needs a name and an e-mail');
   check(same(validateNewUser({ name: 'A', email: 'nope', phone: '', permissions: ['view'] }), { error: 'email' }), 'a bad e-mail');

@@ -31,13 +31,13 @@ Deno.test("a Coordinator cannot give approve, nor take it from a fleet admin; ma
   );
   assertEquals(
     accountChangeProblem(coordinator, { kind: "update", target: fleetAdminTarget, permissions: ["view", "request", "assign_tasks"] }),
-    "You can only give or take away permissions you hold yourself (not: Approve).",
+    "Only someone who holds every permission of this account can change it (not yours: Approve). Ask an admin.",
   );
   assertEquals(
     accountChangeProblem(coordinator, { kind: "update", target: requesterTarget, permissions: ["view", "request", "assign_tasks"] }),
     null,
   );
-  assertEquals(accountChangeProblem(coordinator, { kind: "update", target: fleetAdminTarget }), null); // name or phone only
+  // Checkpoint 2b review: not even a name or a phone on a Fleet admin's account (it holds approve).
 });
 
 Deno.test("nobody changes their own role or permissions or switches themselves off; an admin neither", () => {
@@ -79,6 +79,30 @@ Deno.test("a role by name is the admins'; the shared key passes", () => {
 });
 
 Deno.test("an admin of before Round 2b (no office_users of their own) makes a Coordinator: users covers office accounts", () => {
-  const oldAdmin = { employeeId: "a9", permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"] as Permission[] };
+  const oldAdmin = {
+    employeeId: "a9",
+    permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"] as Permission[],
+  };
   assertEquals(accountChangeProblem(oldAdmin, { kind: "create", permissions: PRESETS.coordinator.permissions }), null);
+});
+
+Deno.test("Checkpoint 2b review: a Coordinator never acts on a Fleet admin's account (no password link, no switch, no edit)", () => {
+  const why = "Only someone who holds every permission of this account can change it (not yours: Approve). Ask an admin.";
+  assertEquals(accountChangeProblem(coordinator, { kind: "password_link", target: fleetAdminTarget }), why);
+  assertEquals(accountChangeProblem(coordinator, { kind: "switch", target: fleetAdminTarget, active: true }), why);
+  assertEquals(accountChangeProblem(coordinator, { kind: "update", target: fleetAdminTarget }), why);
+  // A requester (within the Coordinator's own) and another Coordinator are theirs to help.
+  assertEquals(accountChangeProblem(coordinator, { kind: "password_link", target: requesterTarget }), null);
+  assertEquals(
+    accountChangeProblem(coordinator, { kind: "password_link", target: { id: "c2", permissions: coordinator.permissions } }),
+    null,
+  );
+});
+
+Deno.test("Checkpoint 2b review: one's own account with the same permission list sent back is not a change", () => {
+  const self = { id: "c1", permissions: coordinator.permissions };
+  assertEquals(
+    accountChangeProblem(coordinator, { kind: "update", target: self, permissions: [...coordinator.permissions].reverse() }),
+    null,
+  );
 });

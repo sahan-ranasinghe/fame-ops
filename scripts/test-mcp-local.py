@@ -3118,6 +3118,8 @@ if CHANNEL == "api":
         return mcp_as(co_url, name, args)
 
     admin_row = psql("select email from employees where 'users' = any(permissions) and active order by created_at limit 1")
+    fa_email = f"fa.{uuid.uuid4().hex[:6]}@fame.test"
+    tool("create_office_user", {"name": "Test Fleet Admin 2b", "email": fa_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
     for ch in ("api", "mcp"):
         tag = "office-api" if ch == "api" else "office-mcp"
         u = uuid.uuid4().hex[:5]
@@ -3144,6 +3146,11 @@ if CHANNEL == "api":
             check(not ok, f"{tag}: {why}", body[:200])
         ok, body = as_coordinator(ch, "update_office_user", {"email": admin_row, "name": "Renamed"})
         check(not ok and "Only an admin" in body, f"{tag}: cannot edit an admin", body[:200])
+        # Checkpoint 2b review: a Fleet admin's account is out of reach too (a set-password link would hand over approve).
+        for name, args in [("reset_office_password", {"email": fa_email}), ("set_office_user_active", {"email": fa_email, "active": False}),
+                           ("update_office_user", {"email": fa_email, "name": "Renamed"})]:
+            ok, body = as_coordinator(ch, name, args)
+            check(not ok and "holds every permission" in body, f"{tag}: cannot {name.replace('_', ' ')} on a Fleet admin's account", body[:200])
         ok, body = as_coordinator(ch, "create_office_user", {"name": f"Would Approve {u}", "email": f"appr.{u}@fame.test", "permissions": ["approve"]})
         check(not ok and "hold yourself" in body, f"{tag}: cannot give approve to anyone", body[:200])
         ok, body = as_coordinator(ch, "update_office_user", {"email": f"req.{u}@fame.test", "permissions": ["request", "users"]})

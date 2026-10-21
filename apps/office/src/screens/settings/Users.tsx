@@ -24,7 +24,9 @@ export function usersEmpty(search: string): string {
 }
 
 export function Users() {
-  const { noConnector } = useFleet();
+  const { me, noConnector } = useFleet();
+  // Round 2b: the keys column only for the people who make keys (a Coordinator's answer has none).
+  const keys = me.tools.includes("create_office_key");
   const box = useSearchBox();
   const list = usePagedList<OfficeUser, OfficeUsers>(USERS_QUERY, "list_office_users", box.search ? { search: box.search } : {}, (d) => d.users,
     { every: 60000, enabled: !noConnector });
@@ -48,7 +50,7 @@ export function Users() {
             {list.items.length ? (
               <div className="tbl-wrap">
                 <table data-testid="users-table">
-                  <thead><tr><th>Person</th><th>E-mail</th><th>Phone</th><th>Permissions</th><th>Since</th><th>Claude keys</th><th className="r"></th></tr></thead>
+                  <thead><tr><th>Person</th><th>E-mail</th><th>Phone</th><th>Permissions</th><th>Since</th>{keys && <th>Claude keys</th>}<th className="r"></th></tr></thead>
                   <tbody>
                     {list.items.map((u) => (
                       <tr key={u.email ?? u.name} data-testid="user-row">
@@ -57,7 +59,7 @@ export function Users() {
                         <td data-label="Phone" className="num">{u.phone_display ?? (u.phone ? phoneDisplay(u.phone) : "—")}</td>
                         <td data-label="Permissions"><span><PermissionChips permissions={u.permissions} /></span></td>
                         <td data-label="Since">{u.since || "—"}</td>
-                        <td data-label="Claude keys">{u.connector_keys.length || "—"}</td>
+                        {keys && <td data-label="Claude keys">{u.connector_keys?.length || "—"}</td>}
                         <td className="r">{u.email && <Link className="btn small" to={userPath(u.email)}>Manage</Link>}</td>
                       </tr>
                     ))}

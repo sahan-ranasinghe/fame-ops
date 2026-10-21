@@ -2278,7 +2278,8 @@
       "driverContactAdmin": "Drivers see {name} on Me with Call and WhatsApp, as Fleet admin.",
       "driverContactOffice": "Drivers see {name} on Me with Call and WhatsApp, as Office.",
       "plannerSuggestions": "Suggest times on the trip forms",
-      "plannerSuggestionsHint": "The leave time and each stop's stay are suggested in grey; a chosen time that misses an arrive-by gets a hint. Off: just the fields. A trip is never blocked."
+      "plannerSuggestionsHint": "The leave time and each stop's stay are suggested in grey; a chosen time that misses an arrive-by gets a hint. Off: just the fields. A trip is never blocked.",
+      "outOfReach": "Only someone who holds every permission of this account can change it. Ask an admin."
     },
     "permission": {
       "view": "View",

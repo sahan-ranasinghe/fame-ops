@@ -1,6 +1,7 @@
 // Manage an office user (/settings/users/:email/edit): name, phone and
 // permissions (kept as a draft), a new set-password link, personal connector
 // keys, switching the account off or on.
+import { accountChangeProblem } from "@fleet/accountGuards";
 import { normalisePermissions, PERMISSION_TEXT } from "@fleet/permissions";
 import { type FormEvent, useEffect, useState } from "react";
 import { useParams } from "react-router";
@@ -14,7 +15,7 @@ import { phoneDisplay } from "../../ui/ContactButtons";
 import { DraftBanner } from "../../ui/DraftBanner";
 import { PageTop, useAfterSave } from "../../ui/Page";
 import { useToast } from "../../ui/Toast";
-import { PermissionPicker, Secret } from "./userParts";
+import { PermissionChips, PermissionPicker, Secret } from "./userParts";
 import { updateInput, type UserFields } from "./usersLogic";
 
 export function UserManage() {
@@ -119,7 +120,7 @@ export function UserManage() {
     await transport.call("revoke_office_key", { key_id: id });
     toast("Key revoked");
     void store.invalidate();
-    setU({ ...u!, connector_keys: u!.connector_keys.filter((k) => k.id !== id) });
+    setU({ ...u!, connector_keys: (u!.connector_keys ?? []).filter((k) => k.id !== id) });
   });
   const toggle = () => {
     if (u!.active && !armed) {
@@ -133,6 +134,25 @@ export function UserManage() {
       afterSave("/settings/users");
     });
   };
+
+  // Round 2b: the same rule as the server (accountGuards.ts): an account holding a permission this person could not give
+  // (an admin's, a Fleet admin's for a Coordinator) is shown, not changed; the reason says who can.
+  const self = !!me.email && me.email.toLowerCase() === email.toLowerCase();
+  const locked = accountChangeProblem(
+    { employeeId: self ? "me" : "someone", permissions: normalisePermissions(me.permissions) },
+    { kind: "password_link", target: { id: self ? "me" : "them", permissions: normalisePermissions(u.permissions) } },
+  );
+  if (locked && !self) {
+    return (
+      <section className="view" data-testid="user-manage">
+        <PageTop title={u.name} sub={<>{email} · {ROLE_LABEL[u.role as Role] ?? u.role}</>} backTo="/settings/users" />
+        <div className="page-form">
+          <Notice tone="info">{locked}</Notice>
+          <div className="card card-b"><PermissionChips permissions={u.permissions} /></div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="view" data-testid="user-manage">
@@ -175,13 +195,14 @@ export function UserManage() {
             <div><button type="button" className="btn" disabled={busy} onClick={() => void newLink()}>New set-password link</button></div>
           </div>
         )}
-        {u.active && (
+        {/* Round 2b: the keys only for the people who make them (a Coordinator never sees them). */}
+        {u.active && me.tools.includes("create_office_key") && (
           <div className="card card-b" style={{ display: "grid", gap: 12 }}>
             <h2>Claude connector keys</h2>
             <p className="muted small" style={{ margin: 0 }}>For their own Claude account, with their permissions. The Teams workspace uses the shared "Fame Fleet" connector.</p>
-            {u.connector_keys.length ? (
+            {u.connector_keys?.length ? (
               <div className="rows" style={{ border: "1px solid var(--line)", borderRadius: 12 }}>
-                {u.connector_keys.map((k) => (
+                {(u.connector_keys ?? []).map((k) => (
                   <div className="row" key={k.id}>
                     <div className="grow"><div className="name">{k.label || "Key"}</div><div className="sub">made {k.created} · last used {k.last_used}</div></div>
                     <button type="button" className="btn small danger" disabled={busy} onClick={() => void revoke(k.id)}>Revoke</button>
