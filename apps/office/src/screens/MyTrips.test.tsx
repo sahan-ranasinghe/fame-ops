@@ -193,7 +193,7 @@ describe("My trips", () => {
 
   it("without the my_trips tool: says so, asks nothing", async () => {
     const t = await mount({ ...requester, tools: ["list_requests"] });
-    expect(screen.getByText(/needs the my_trips tool/)).toBeTruthy();
+    expect(screen.getByText(/can.t see My trips yet/)).toBeTruthy();
     expect(t.argsOf("my_trips")).toEqual([]);
   });
 });

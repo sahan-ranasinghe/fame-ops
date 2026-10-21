@@ -60,5 +60,20 @@ for (const bad of ['not_on_duty', 'HTTP 500', '{"error":"x"}', 'trip.failed is m
   check(humanReason(bad) === null, `never shown: ${JSON.stringify(bad)}`);
 }
 
+console.log('\nEvery text in en.json and si.json is for people');
+{
+  const leaks: string[] = [];
+  const walk = (o: unknown, path: string, lang: string) => {
+    if (typeof o === 'string') {
+      const words = o.replace(/\{[^}]*\}/g, '').replace(/https?:\/\/\S+|[\w.+-]+@[\w.-]+/g, '');
+      const m = words.match(/\b[a-z]+_[a-z_]+\b|\b[a-z]+\.[a-z][A-Za-z]+\.[A-Za-z_]\w*\b|HTTP \d/);
+      if (m) leaks.push(`${lang} ${path}: ${m[0]}`);
+    } else if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) walk(v, path ? `${path}.${k}` : k, lang);
+  };
+  walk(dicts.en, '', 'en');
+  walk(dicts.si, '', 'si');
+  check(leaks.length === 0, 'no code names, keys or HTTP codes inside any text', leaks);
+}
+
 console.log(failures === 0 ? '\nAll status-words checks passed.' : `\n${failures} status-words check(s) failed.`);
 process.exit(failures === 0 ? 0 : 1);

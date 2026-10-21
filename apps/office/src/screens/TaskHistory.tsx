@@ -76,7 +76,7 @@ export function TaskHistory() {
         </div>
 
         {!allowed ? (
-          <Notice tone="bad">Task history needs the list_tasks tool, which your account does not have yet. Ask an admin.</Notice>
+          <Notice tone="bad">Your account can't see the task history yet. Ask an admin to give you the Assign tasks permission.</Notice>
         ) : dates.error || noConnector ? null : !d ? (
           q.err ? (
             <Notice

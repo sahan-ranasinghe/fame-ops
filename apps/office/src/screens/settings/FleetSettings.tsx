@@ -198,7 +198,7 @@ export function FleetSettings({ section }: { section?: FleetSection } = {}) {
                 {data.base_place && !places.some((p) => p.id === data.base_place?.id) && <option value={data.base_place.id}>{data.base_place.name}</option>}
                 {places.map((p) => p.id ? <option key={p.id} value={p.id}>{p.name}</option> : null)}
               </select>
-              {!places.some((p) => p.id) && <span className="hint">The places list carries no ids yet: pick the base with the connector (update_settings base_place_id) until the next update.</span>}
+              {!places.some((p) => p.id) && <span className="hint">The places can't be picked here yet. Ask Claude in the Fame Fleet chat to set the base place.</span>}
             </div>
             <div><button className="btn dark" type="submit" disabled={busy !== null || !changed("base_place_id")}>Save</button></div>
           </form>

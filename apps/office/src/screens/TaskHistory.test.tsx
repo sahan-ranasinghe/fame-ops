@@ -120,7 +120,7 @@ describe("Tasks → History", () => {
 
   it("someone without list_tasks is told, and nothing is asked", async () => {
     const t = await mount({ ...dispatcher, tools: ["list_drivers"] });
-    expect(screen.getByText(/Task history needs the list_tasks tool/)).toBeTruthy();
+    expect(screen.getByText(/can.t see the task history yet/)).toBeTruthy();
     expect(t.argsOf("list_tasks")).toEqual([]);
   });
 

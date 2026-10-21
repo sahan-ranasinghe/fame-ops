@@ -179,7 +179,7 @@ export function MyTrips() {
             </div>
 
             {!allowed ? (
-              <Notice tone="bad">My trips needs the my_trips tool, which your account does not have yet. Ask an admin.</Notice>
+              <Notice tone="bad">Your account can't see My trips yet. Ask an admin for the Request or Assign tasks permission.</Notice>
             ) : dates.error || noConnector ? null : !d ? (
               q.err ? (
                 <Notice

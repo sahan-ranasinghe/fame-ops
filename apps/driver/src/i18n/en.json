@@ -2520,7 +2520,7 @@
       "empty": "No tasks in these days.",
       "emptyFiltered": "No task matches these filters.",
       "emptySearch": "No task matches \"{search}\".",
-      "noAccess": "Task history needs the list_tasks tool, which your account does not have. Ask an admin."
+      "noAccess": "Your account can't see the task history yet. Ask an admin for the Assign tasks permission."
     },
     "places": {
       "title": "Places",
