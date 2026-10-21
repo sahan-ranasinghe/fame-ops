@@ -18,7 +18,7 @@ import { ChoiceRow } from '@/components/patterns/Select';
 import { Plate, Txt } from '@/components/ui';
 import { driverParts, driverPill, presenceLine, rankedDrivers, type VehicleChip, vehicleChip, vehicleChipText } from '@/office/approveLogic';
 import { sentenceText } from '@/office/statusWords';
-import { drivenByKey } from '@/office/trip/whoDrivesLogic';
+import { drivenByKey } from '@/office/trip/whoWords';
 import type { Availability, AvailableDriver, DrivenBy } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, ListFailed, Pill, StatusChip, type Tone } from '@/office/ui';

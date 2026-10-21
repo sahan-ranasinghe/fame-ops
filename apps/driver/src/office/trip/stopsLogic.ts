@@ -1,5 +1,5 @@
-// Office mode (Phase 8, O2): copied from the office site (apps/office/src/screens/stopsLogic.ts at main 03d3538) for the phone's trip editor,
-// as Sahan asked for this round (the shared package comes later). Edit the site's file and copy again, never this one alone.
+// Office mode: a copy of apps/office/src/screens/stopsLogic.ts, written by scripts/shared-logic.mjs --write. Never edit it here: edit
+// the site's file and run the script (the app's test:shared-logic and the site's sharedLogic test fail until you do).
 
 // The stops of a task as the Assign form and the stops editor hold them, and
 // the exact create_task / plan_task / update_task_stops arguments they become
@@ -9,7 +9,7 @@
 // time, else the default by type (the server decides and says which).
 
 export type StopType = "pickup" | "drop" | "visit";
-import { duration } from './durations';
+import { duration } from "./durations";
 export type What = "" | "people" | "goods" | "documents" | "other";
 
 export interface StopDraft {
@@ -23,11 +23,11 @@ export interface StopDraft {
   placePinned?: boolean;
   /** A Google place picked in the search box (Part 5): sent as google_place_id with the name as place. */
   googlePlaceId?: string;
+  /** Hotfix O2-H1: set by a pick (a result, My location, a pin); typing clears it. The box shows the picked state only then. */
+  picked?: boolean;
   /** The picked place's pin when the search box knew it (the same-as-start check, the best match). Never sent. */
   lat?: number;
   lng?: number;
-  /** Hotfix O2-H1: set by a pick (a result, My location, a pin); typing clears it. The box shows the picked state only then. */
-  picked?: boolean;
   /** "6.93, 79.84" typed by hand; empty = the saved place's pin or the town centre. */
   pin: string;
   /** The time at the stop as chosen: minutes or h:mm; empty = the usual time or the default. */
@@ -80,6 +80,7 @@ const isTime = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
 
 /** The quick picks for the time at a stop, in minutes. */
 export const DWELL_PICKS = [5, 15, 30, 60, 90, 120] as const;
+
 /** The longest time at a stop the form takes: 12 h. */
 export const DWELL_MAX = 720;
 
@@ -149,7 +150,7 @@ export const hasDeadline = (list: StopDraft[]) => list.some((s) => isTime(s.arri
 /** Drafts from a task's stops (task_detail), for editing. A time the server chose (usual or default) stays unchosen. */
 export function draftsFromStops(stops: { type: string; what?: string; place?: string; place_id?: string; google_place_id?: string; lat?: number; lng?: number; dwell_min?: number; dwell_source?: string; arrive_by?: string; note?: string; pin?: string }[]): StopDraft[] {
   return stops.map((s) => ({
-    picked: !!(s.place_id || s.google_place_id || (s.lat != null && s.lng != null) || (s.place ?? '').trim()),
+    picked: !!(s.place_id || s.google_place_id || (s.lat != null && s.lng != null) || (s.place ?? "").trim()),
     ...newStop((["pickup", "drop", "visit"].includes(s.type) ? s.type : "visit") as StopType),
     what: (s.what ?? "") as What,
     place: s.place ?? "",

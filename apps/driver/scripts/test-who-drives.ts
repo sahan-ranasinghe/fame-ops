@@ -15,11 +15,10 @@ import { sentenceText, sentenceWords, taskChip, taskRowLine } from '../src/offic
 import { tripLine } from '../src/office/tripsLogic';
 import { validateAssign } from '../src/office/trip/assignLogic';
 import { newDraft, requestFieldsOf } from '../src/office/trip/draftLogic';
-import { bookInput, editFields, type RequestFields, updateRequestInput, validateNewRequest } from '../src/office/trip/requestLogic';
+import { bookInput, editFields, type RequestFields, updateRequestInput, validateNewRequest, whoOf } from '../src/office/trip/requestLogic';
 import { newStop } from '../src/office/trip/stopsLogic';
-import {
-  askedWords, asksNoDriver, defaultWho, drivenByKey, isPlate, WHO_NEED_NAME, WHO_NEED_PHONE, WHO_NEED_PLATE, whoChanges, whoChoices, whoFromFields, whoInput, whoOf, whoProblem,
-} from '../src/office/trip/whoDrivesLogic';
+import { emptyWho, whoFromRequest, whoInput } from '../src/office/trip/whoDrivesLogic';
+import { askedKey, asksNoDriver, drivenByKey, isPlate, WHO_CHOICES, whoOfDraft, whoReason } from '../src/office/trip/whoWords';
 import { reasonText } from '../src/office/trip/words';
 import type { AvailableDriver, RequestCard } from '../src/office/types';
 
@@ -42,71 +41,73 @@ const check = (ok: unknown, name: string, got?: unknown) => {
   if (!ok) failures++;
 };
 
-console.log('Who drives? (office/trip/whoDrivesLogic.ts)');
+console.log('Who drives? (the site\'s whoDrivesLogic.ts, copied; the app\'s whoWords.ts)');
 {
-  check(same(whoOf(undefined), defaultWho()) && whoOf({ driverRequired: false }).choice === 'custodian' && whoOf({ driverRequired: true }).choice === 'driver', 'a draft from before Round 3: the switch read (off = the custodian drives)');
-  check(whoOf({ who: { choice: 'self', name: '', phone: '' }, driverRequired: false }).choice === 'self', 'the choice wins over the old switch');
-  check(same(whoChoices(true), ['driver', 'self', 'other']) && same(whoChoices(false), ['driver']), 'three choices while self_drive_allowed is on; a driver only when off');
-  check(same(whoInput(defaultWho()), {}), 'a driver: nothing sent (the default)');
-  check(same(whoInput({ choice: 'self', name: 'x', phone: 'y' }), { driven_by: 'self' }), 'I\'ll drive myself: driven_by self, no name or phone');
-  check(same(whoInput({ choice: 'other', name: ' Other Person ', phone: ' 077 123 4567 ' }), { driven_by: 'other', driver_name: 'Other Person', driver_phone: '077 123 4567' }), 'someone else: driven_by other with the name and the phone, trimmed');
-  check(same(whoInput({ choice: 'custodian', name: '', phone: '' }), { driver_required: false }), 'the custodian (an older request): driver_required false');
-  check(whoProblem({ choice: 'other', name: '', phone: '0771234567' }) === WHO_NEED_NAME && whoProblem({ choice: 'other', name: 'A', phone: '123' }) === WHO_NEED_PHONE && whoProblem({ choice: 'other', name: 'A', phone: '077 123 4567' }) === null, 'someone else: a name, and a Sri Lankan phone');
-  check(whoProblem({ choice: 'self', name: '', phone: '' }, { needsPlate: true, plate: '' }) === WHO_NEED_PLATE && whoProblem({ choice: 'self', name: '', phone: '' }, { needsPlate: true, plate: 'on the day' }) === WHO_NEED_PLATE && whoProblem({ choice: 'self', name: '', phone: '' }, { needsPlate: true, plate: 'any van' }) === WHO_NEED_PLATE, 'no app: a plate, never "on the day" or "any van"');
-  check(whoProblem({ choice: 'self', name: '', phone: '' }, { needsPlate: true, plate: 'WP CAB-4521' }) === null && whoProblem({ choice: 'self', name: '', phone: '' }) === null && whoProblem(defaultWho(), { needsPlate: true, plate: '' }) === null, 'a plate given; a request without Book now needs none; a driver needs none');
+  const self = { by: 'self' as const, name: '', phone: '' };
+  const other = { by: 'other' as const, name: ' Other Person ', phone: ' 077 123 4567 ' };
+  check(same(whoOfDraft(undefined), emptyWho()) && whoOfDraft({ who: { choice: 'self' } }).by === 'self' && whoOfDraft({ who: { choice: 'custodian' } }).by === 'driver' && same(whoOfDraft({ who: { by: 'other', name: 'A', phone: '1' } }), { by: 'other', name: 'A', phone: '1' }), 'a draft: the shared shape, an older { choice } (the custodian reads as a driver, as on the site), or none');
+  check(same(WHO_CHOICES, ['driver', 'self', 'other']), 'the three answers in order');
+  check(same(whoInput(emptyWho()), { input: {} }) && same(whoInput(emptyWho(), { always: true }), { input: { driven_by: 'driver' } }), 'a driver: nothing sent (the default); update_request says it');
+  check(same(whoInput({ ...self, name: 'x', phone: 'y' }), { input: { driven_by: 'self' } }), 'I\'ll drive myself: driven_by self, no name or phone');
+  check(same(whoInput(other), { input: { driven_by: 'other', driver_name: 'Other Person', driver_phone: '077 123 4567' } }), 'someone else: driven_by other with the name and the phone, trimmed');
+  const e = (w: Parameters<typeof whoInput>[0]) => { const r = whoInput(w); return 'error' in r ? r.error : ''; };
+  check(e({ ...other, name: ' ' }) === 'Someone else drives: type their name.' && /^Someone else drives: type their phone/.test(e({ ...other, phone: '' })) && /^Their phone: /.test(e({ ...other, phone: '123' })), 'someone else: a name, then a Sri Lankan phone');
+  check(reasonText(en, e({ ...other, name: '' })) === en('office.who.needName') && reasonText(si, e({ ...other, phone: '' })) === si('office.who.needPhone') && reasonText(si, e({ ...other, phone: '12' })) === si('office.who.needPhone'), 'the shared rules\' English said through the app\'s keys');
+  const plate = (v: string) => whoReason(self, { needsPlate: true, plate: v });
+  check(!!plate('') && !!plate('on the day') && !!plate('any van') && plate('WP CAB-4521') === null, 'no app: a plate, never "on the day" or "any van"');
+  check(reasonText(si, plate('') ?? '') === si('office.who.needPlate') && reasonText(en, whoReason({ by: 'other', name: 'B', phone: '0771234567' }, { needsPlate: true, plate: '' }) ?? '') === en('office.who.needPlate'), 'the plate reason in the person\'s language');
+  check(whoReason(self) === null && whoReason(emptyWho(), { needsPlate: true, plate: '' }) === null, 'a request without Book now needs no plate; a driver needs none');
   check(isPlate('WP CAB-4521') && !isPlate('on the day') && !isPlate('any double cab') && !isPlate(' '), 'a plate is a specific vehicle');
-  check(same(whoChanges(defaultWho(), defaultWho()), {}) && same(whoChanges({ choice: 'self', name: '', phone: '' }, defaultWho()), { driven_by: 'self' }) && same(whoChanges(defaultWho(), { choice: 'self', name: '', phone: '' }), { driven_by: 'driver' }), 'update_request: only a change (a driver again is driven_by driver)');
-  check(same(whoChanges({ choice: 'other', name: 'B', phone: '0771234567' }, { choice: 'other', name: 'A', phone: '0771234567' }), { driven_by: 'other', driver_name: 'B', driver_phone: '0771234567' }) && same(whoChanges({ choice: 'other', name: 'A', phone: '0771234567' }, { choice: 'other', name: 'A ', phone: '0771234567' }), {}), 'someone else renamed: sent; the same (spaces aside): not');
-  check(same(whoFromFields({ driven_by: 'other', driver_name: 'A', driver_phone: '+94771234567' }), { choice: 'other', name: 'A', phone: '+94771234567' }) && whoFromFields({ driver_required: false }).choice === 'custodian' && whoFromFields({}).choice === 'driver' && same(whoFromFields({ driven_by: 'self', driver_name: 'x' }), { choice: 'self', name: '', phone: '' }), 'the edit form reads driven_by (an older card: driver_required)');
+  check(same(whoFromRequest({ driven_by: 'other', driver_name: 'A', driver_phone: '+94771234567' }), { by: 'other', name: 'A', phone: '+94771234567' }) && whoFromRequest({ driver_required: false }).by === 'driver' && whoFromRequest({}).by === 'driver' && whoFromRequest({ driven_by: 'custodian' }).by === 'driver', 'the edit form reads driven_by; the custodian (an older request) reads as a driver');
   check(drivenByKey('self') === 'office.who.drivesThemselves' && drivenByKey('other') === 'office.who.someoneElse' && drivenByKey(undefined) === null, 'the small word under the name');
   const q = (o: Partial<RequestCard>) => ({ requested_by: 'Asker', ...o }) as RequestCard;
-  check(same(askedWords(q({ driven_by: 'self' })), { key: 'office.who.askedSelf', vars: { name: 'Asker' } }) && same(askedWords(q({ driven_by: 'other', driver_name: 'B', driver_phone: '+94771234567' })), { key: 'office.who.askedOtherPhone', vars: { name: 'B', phone: '077 123 4567' } }) && askedWords(q({ driver_required: false }))?.key === 'office.who.askedCustodian' && askedWords(q({})) === null, 'Approve says what was asked (the phone as people write it)');
+  check(same(askedKey(q({ driven_by: 'self' })), { key: 'office.who.askedSelf', vars: { name: 'Asker' } }) && same(askedKey(q({ driven_by: 'other', driver_name: 'B', driver_phone: '+94771234567' })), { key: 'office.who.askedOtherPhone', vars: { name: 'B', phone: '077 123 4567' } }) && askedKey(q({ driver_required: false }))?.key === 'office.who.askedCustodian' && askedKey(q({})) === null, 'Approve says what was asked (the phone as people write it)');
   check(asksNoDriver({ driven_by: 'self' }) && asksNoDriver({ driven_by: 'other' }) && asksNoDriver({ driven_by: 'custodian' }) && asksNoDriver({ driver_required: false }) && !asksNoDriver({ driver_required: true }), 'no driver asked: self, someone else, the custodian');
 }
 
-console.log('\nThe forms\' inputs (requestLogic, assignLogic, the draft)');
+console.log('\nThe forms\' inputs (the site\'s requestLogic and assignLogic, copied; the draft)');
 {
   const trip = { date: '2026-10-22', leaveBy: '08:00', stops: [{ ...newStop('drop'), place: 'Kandy' }], returnToBase: false, avoidExpressway: false, end: '', start: '', startPax: false };
-  const rf: RequestFields = { ...trip, behalf: '', project: '', need: '', pax: '', tools: false, note: '', driver: true, requesterPhone: '' };
-  const self = { choice: 'self' as const, name: '', phone: '' };
-  const other = { choice: 'other' as const, name: 'Other Person', phone: '077 123 4567' };
-  const r1 = validateNewRequest({ ...rf, who: self, driver: false });
+  const rf: RequestFields = { ...trip, behalf: '', project: '', need: '', pax: '', tools: false, note: '', requesterPhone: '' };
+  const self = { by: 'self' as const, name: '', phone: '' };
+  const other = { by: 'other' as const, name: 'Other Person', phone: '077 123 4567' };
+  check(whoOf(rf).by === 'driver' && whoOf({ who: self }, false).by === 'driver' && whoOf({ who: self }).by === 'self', 'no answer = a driver; self-drive switched off = a driver');
+  const r1 = validateNewRequest({ ...rf, who: self });
   check('input' in r1 && r1.input.driven_by === 'self' && !('driver_required' in r1.input), 'create_request: I\'ll drive myself (driven_by self, never the old driver_required false)', r1);
-  const r2 = validateNewRequest({ ...rf, who: { ...other, phone: '12' }, driver: false });
-  check('error' in r2 && r2.error === WHO_NEED_PHONE, 'create_request: someone else needs a Sri Lankan phone', r2);
-  const r3 = validateNewRequest({ ...rf, who: other, driver: false });
+  const r2 = validateNewRequest({ ...rf, who: { ...other, phone: '12' } });
+  check('error' in r2 && /^Their phone: /.test(r2.error), 'create_request: someone else needs a Sri Lankan phone', r2);
+  const r3 = validateNewRequest({ ...rf, who: other });
   check('input' in r3 && r3.input.driver_name === 'Other Person' && r3.input.driver_phone === '077 123 4567' && r3.input.driven_by === 'other', 'create_request: someone else with the name and the phone');
-  const r4 = validateNewRequest({ ...rf, driver: false });
-  check('input' in r4 && r4.input.driver_required === false && !('driven_by' in r4.input), 'an older draft (the switch off): the custodian path as before');
-  const b1 = bookInput({ ...rf, who: self, driver: false }, { vehicle: '', driver: '', hasCustodian: false, defaultVehicle: null });
-  check('error' in b1 && b1.error === WHO_NEED_PLATE, 'Book now, I\'ll drive myself: the plate first', b1);
-  const b2 = bookInput({ ...rf, who: self, driver: false }, { vehicle: 'WP CAB-4521', driver: 'kamal', hasCustodian: false, defaultVehicle: null });
+  const b1 = bookInput({ ...rf, who: self }, { vehicle: '', driver: '', defaultVehicle: null });
+  check('error' in b1 && reasonText(en, b1.error) === en('office.who.needPlate'), 'Book now, I\'ll drive myself: the plate first', b1);
+  const b2 = bookInput({ ...rf, who: self }, { vehicle: 'WP CAB-4521', driver: 'kamal', defaultVehicle: null });
   check('input' in b2 && b2.input.vehicle === 'WP CAB-4521' && b2.input.driven_by === 'self' && !('driver' in b2.input) && b2.input.title === 'Trip · Kandy', 'Book now, I\'ll drive myself: the plate, no driver (a leftover pick is never sent)', b2);
-  const b3 = bookInput({ ...rf, who: other, driver: false }, { vehicle: 'on the day', driver: '', hasCustodian: false });
-  check('error' in b3 && b3.error === WHO_NEED_PLATE, 'Book now, someone else: "on the day" is not a plate');
-  const b4 = bookInput({ ...rf, who: defaultWho() }, { vehicle: '', driver: '', hasCustodian: true, defaultVehicle: null });
-  check('error' in b4 && b4.error === 'Pick a driver.', 'Book now with a driver: a driver first (no "untick A driver is needed" any more)');
+  const b3 = bookInput({ ...rf, who: other }, { vehicle: 'on the day', driver: '' });
+  check('error' in b3 && reasonText(en, b3.error) === en('office.who.needPlate'), 'Book now, someone else: "on the day" is not a plate');
+  const b4 = bookInput({ ...rf, who: emptyWho() }, { vehicle: '', driver: '', defaultVehicle: null });
+  check('error' in b4 && b4.error === 'Pick a driver.', 'Book now with a driver: a driver first');
   const was = editFields({ fields: { date: '2026-10-22', time: '08:00', driver_required: false, driven_by: 'custodian' } });
-  check(was.who?.choice === 'custodian' && was.driver === false, 'the edit form: the custodian as asked');
+  check(was.who?.by === 'driver', 'the edit form: an older custodian request reads as a driver (as on the site)');
+  const u0 = updateRequestInput('r1', 3, was, was);
+  check('error' in u0 && u0.error === 'Nothing changed.', 'update_request: who drives is not sent unless it changes (the custodian request stays as asked)');
   const u1 = updateRequestInput('r1', 3, { ...was, who: self }, was);
   check('input' in u1 && u1.input.driven_by === 'self' && u1.input.version === 3, 'update_request: the change of who drives, with the version', u1);
-  const u2 = updateRequestInput('r1', 3, was, was);
-  check('error' in u2, 'update_request: nothing changed is refused before sending');
   const u3 = updateRequestInput('r1', 3, { ...was, who: { ...other, name: '' } }, was);
-  check('error' in u3 && u3.error === WHO_NEED_NAME, 'update_request: someone else without a name is refused before sending');
-  const d = { ...newDraft('request', '2026-10-22'), req: { behalf: '', project: '', need: '', tools: false, note: '', driverRequired: false, requesterPhone: '', who: other } };
-  const fromDraft = requestFieldsOf(d);
-  check(fromDraft.who?.choice === 'other' && fromDraft.driver === false, 'the draft hands its choice to the request\'s fields');
+  check('error' in u3 && reasonText(en, u3.error) === en('office.who.needName'), 'update_request: someone else without a name is refused before sending');
+  const d = { ...newDraft('request', '2026-10-22'), req: { behalf: '', project: '', need: '', tools: false, note: '', requesterPhone: '', who: other } };
+  check(requestFieldsOf(d).who?.by === 'other', 'the draft hands its answer to the request\'s fields');
+  const old = { ...d, req: { ...d.req, who: { choice: 'other', name: 'Old', phone: '0771234567' } as never } };
+  check(same(requestFieldsOf(old).who, { by: 'other', name: 'Old', phone: '0771234567' }), 'a draft saved before the shared rules ({ choice }) is read too');
   const task = { ...newDraft('task', '2026-10-22').fields, ...trip, title: 'Site visit', driver: '', vehicle: '' };
-  const a1 = validateAssign(task, [], 'Me', { who: self });
-  check('error' in a1 && a1.error === WHO_NEED_PLATE, 'Assign a task, I\'ll drive myself: the plate first', a1);
-  const a2 = validateAssign({ ...task, vehicle: 'WP CAB-4521' }, [], 'Me', { who: self });
+  const a1 = validateAssign({ ...task, who: self }, [], 'Me');
+  check('error' in a1 && reasonText(en, a1.error) === en('office.who.needPlate'), 'Assign a task, I\'ll drive myself: the plate first', a1);
+  const a2 = validateAssign({ ...task, vehicle: 'WP CAB-4521', who: self }, [], 'Me');
   check('input' in a2 && a2.input.driven_by === 'self' && a2.input.vehicle === 'WP CAB-4521' && !('driver' in a2.input) && a2.input.title === 'Site visit', 'create_task, I\'ll drive myself: no driver, the plate', a2);
-  const a3 = validateAssign({ ...task, vehicle: 'WP CAB-4521' }, [], 'Me', { who: other });
+  const a3 = validateAssign({ ...task, vehicle: 'WP CAB-4521', who: other }, [], 'Me');
   check('input' in a3 && a3.input.driven_by === 'other' && a3.input.driver_name === 'Other Person' && !('driver' in a3.input), 'create_task, someone else: their name and phone, no driver');
-  const a4 = validateAssign({ ...task, title: '', vehicle: 'WP CAB-4521' }, [], 'Me', { who: self });
+  const a4 = validateAssign({ ...task, title: '', vehicle: 'WP CAB-4521', who: self }, [], 'Me');
   check('error' in a4 && /the task/.test(a4.error), 'create_task, I\'ll drive myself: the title is still needed');
-  const a5 = validateAssign({ ...task, driver: 'kamal', vehicle: 'WP CAB-4521' }, [], 'Me', { who: defaultWho() });
+  const a5 = validateAssign({ ...task, driver: 'kamal', vehicle: 'WP CAB-4521', who: emptyWho() }, [], 'Me');
   check('input' in a5 && a5.input.driver === 'kamal' && !('driven_by' in a5.input), 'create_task with a driver: as before (no driven_by)');
 }
 
@@ -224,7 +225,7 @@ console.log('\nThe server\'s sentences on a Sinhala screen');
   for (const unknown of ['The vehicle is in the garage', 'Something new from the server.', 'Kamal is not available then · a new kind of reason', 'On duty · free 08:00–12:00 · something else', 'WP CAB-4521 is booked tomorrow (x).']) {
     check(sentenceText(si, unknown) === unknown, `unknown: as the server said it: "${unknown}"`);
   }
-  check(reasonText(en, WHO_NEED_PLATE) === en('office.who.needPlate') && reasonText(si, WHO_NEED_NAME) === si('office.who.needName') && reasonText(si, WHO_NEED_PHONE) === si('office.who.needPhone'), 'the Who reasons in the person\'s language');
+  check(reasonText(en, 'You drive it: pick the vehicle (nobody confirms one on the day).') === en('office.who.needPlate') && reasonText(si, 'Someone else drives: type their name.') === si('office.who.needName') && reasonText(si, 'Their phone: Type a Sri Lankan number, e.g. 077 123 4567.') === si('office.who.needPhone'), 'the Who reasons (the site\'s sentences) in the person\'s language');
   check(reasonText(si, 'The leave-by time is already in the past.') === si('office.warn.leavePast') && reasonText(si, 'Pick a driver.') === si('office.trip.needDriver'), 'the plan\'s reasons fall back to the server\'s sentences');
 }
 

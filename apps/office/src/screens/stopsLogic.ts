@@ -20,6 +20,8 @@ export interface StopDraft {
   placePinned?: boolean;
   /** A Google place picked in the search box (Part 5): sent as google_place_id with the name as place. */
   googlePlaceId?: string;
+  /** Hotfix O2-H1: set by a pick (a result, My location, a pin); typing clears it. The box shows the picked state only then. */
+  picked?: boolean;
   /** The picked place's pin when the search box knew it (the same-as-start check, the best match). Never sent. */
   lat?: number;
   lng?: number;
@@ -72,6 +74,9 @@ export function parsePin(text: string): { lat: number; lng: number } | null | "b
 }
 
 const isTime = (s: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(s);
+
+/** The quick picks for the time at a stop, in minutes. */
+export const DWELL_PICKS = [5, 15, 30, 60, 90, 120] as const;
 
 /** The longest time at a stop the form takes: 12 h. */
 export const DWELL_MAX = 720;
@@ -142,6 +147,7 @@ export const hasDeadline = (list: StopDraft[]) => list.some((s) => isTime(s.arri
 /** Drafts from a task's stops (task_detail), for editing. A time the server chose (usual or default) stays unchosen. */
 export function draftsFromStops(stops: { type: string; what?: string; place?: string; place_id?: string; google_place_id?: string; lat?: number; lng?: number; dwell_min?: number; dwell_source?: string; arrive_by?: string; note?: string; pin?: string }[]): StopDraft[] {
   return stops.map((s) => ({
+    picked: !!(s.place_id || s.google_place_id || (s.lat != null && s.lng != null) || (s.place ?? "").trim()),
     ...newStop((["pickup", "drop", "visit"].includes(s.type) ? s.type : "visit") as StopType),
     what: (s.what ?? "") as What,
     place: s.place ?? "",

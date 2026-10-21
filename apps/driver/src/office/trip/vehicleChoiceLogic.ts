@@ -1,5 +1,5 @@
-// Office mode (Phase 8, O2): copied from the office site (apps/office/src/screens/vehicleChoiceLogic.ts at main 03d3538) for the phone's trip editor,
-// as Sahan asked for this round (the shared package comes later). Edit the site's file and copy again, never this one alone.
+// Office mode: a copy of apps/office/src/screens/vehicleChoiceLogic.ts, written by scripts/shared-logic.mjs --write. Never edit it here: edit
+// the site's file and run the script (the app's test:shared-logic and the site's sharedLogic test fail until you do).
 
 // No vehicle up front (Hotfix 2, J). With the fleet setting vehicle_on_the_day
 // on, a task's vehicle may be a plate, "on the day" (the vehicle the driver
@@ -11,7 +11,7 @@
 // vehicle today and no regular one); otherwise, as before, the driver's
 // vehicle today, else their regular one. Saving never waits for a vehicle.
 // With the setting off the forms are as they were. Pure.
-import type { DefaultVehicle } from './format';
+import type { DefaultVehicle } from "./format";
 
 /** The vehicle the driver holds on the day. */
 export const ON_THE_DAY = "on the day";

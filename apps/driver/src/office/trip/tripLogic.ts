@@ -1,5 +1,5 @@
-// Office mode (Phase 8, O2): copied from the office site (apps/office/src/screens/tripLogic.ts at main 03d3538) for the phone's trip editor,
-// as Sahan asked for this round (the shared package comes later). Edit the site's file and copy again, never this one alone.
+// Office mode: a copy of apps/office/src/screens/tripLogic.ts, written by scripts/shared-logic.mjs --write. Never edit it here: edit
+// the site's file and run the script (the app's test:shared-logic and the site's sharedLogic test fail until you do).
 
 // The trip as every dispatch form holds it (Phase 7, §34): the day, the leave
 // time (typed, or planned from the stops' arrive-by times), the back-by time
@@ -7,8 +7,8 @@
 // here", the stops, Return to office and No expressway; and the exact
 // plan_task / create_request / book_vehicle / update_request arguments they
 // become (the connector contract). The trip editor (TripEditor.tsx) shows it.
-import type { RequestEditFields } from '../types';
-import { defaultStops, draftsFromStops, hasDeadline, newStop, type StartFields, startInput, type StopDraft, stopsInput, type What } from './stopsLogic';
+import type { RequestEditFields } from "../types";
+import { defaultStops, draftsFromStops, hasDeadline, newStop, type StartFields, startInput, type StopDraft, stopsInput, type What } from "./stopsLogic";
 
 export interface TripFields extends StartFields {
   date: string;

@@ -32,14 +32,14 @@ const t = (key: string, vars?: Record<string, string | number>) => `${key}${vars
 console.log('The draft (office/trip/draftLogic.ts):');
 {
   const d = newDraft('task', '2026-10-20');
-  check(d.mode === 'task' && d.fields.date === '2026-10-20' && d.fields.stops.length === 2 && d.step === 'where' && d.req.driverRequired, 'a new task draft: the day, a pickup and a drop, the first step');
+  check(d.mode === 'task' && d.fields.date === '2026-10-20' && d.fields.stops.length === 2 && d.step === 'where' && !d.req.who, 'a new task draft: the day, a pickup and a drop, the first step');
   check(!draftWorthKeeping(d), 'an untouched draft is not worth resuming');
   const typed: TripDraft = { ...d, fields: { ...d.fields, stops: [{ ...d.fields.stops[0], place: 'Kandy' }, d.fields.stops[1]] } };
   check(draftWorthKeeping(typed), 'a draft with a place typed is');
   check(!draftWorthKeeping({ ...typed, at: Date.now() - 2 * 86_400_000 }), 'but not after a day');
   check(nextStep('where') === 'when' && nextStep('review') === null && prevStep('who') === 'when' && prevStep('where') === null, 'the steps in order');
-  const r = requestFieldsOf({ ...newDraft('request'), req: { behalf: 'Nimali', project: 'TRKAN1', need: 'van', tools: true, note: 'keys', driverRequired: false, requesterPhone: '' } });
-  check(r.behalf === 'Nimali' && r.need === 'van' && r.driver === false && r.tools && 'stops' in r && !('title' in r), "the request's fields from a draft (driver = the driver-needed switch; the task's fields left out)", Object.keys(r));
+  const r = requestFieldsOf({ ...newDraft('request'), req: { behalf: 'Nimali', project: 'TRKAN1', need: 'van', tools: true, note: 'keys', requesterPhone: '', who: { by: 'self', name: '', phone: '' } } });
+  check(r.behalf === 'Nimali' && r.need === 'van' && r.who?.by === 'self' && r.tools && 'stops' in r && !('title' in r), "the request's fields from a draft (who drives as the draft says it; the task's fields left out)", Object.keys(r));
 }
 
 console.log('\nThe copied site logic from a draft (plan_task, create_request, create_task):');

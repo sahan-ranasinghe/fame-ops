@@ -8,7 +8,7 @@ import type { TimelineItem } from '../types';
 import { durationText } from '@/lib/durations';
 import type { PlanReason } from './planLogic';
 import { sentenceText } from '../statusWords';
-import { WHO_NEED_NAME, WHO_NEED_PHONE, WHO_NEED_PLATE } from './whoDrivesLogic';
+
 
 /** A reason from planReasons / stopsInput / tripRequestInput in the phone's language, or as it came. */
 export function reasonText(t: Translate, text: string): string {
@@ -24,10 +24,10 @@ export function reasonText(t: Translate, text: string): string {
   if (/^Nothing changed\.?$/.test(text)) return t('office.trip.nothingChanged');
   if (/^Pick a driver\.$/.test(text)) return t('office.trip.needDriver');
   if (/^Pick a vehicle: this driver holds none today/.test(text)) return t('office.trip.needVehicle');
-  // Round 3: Who drives? (whoDrivesLogic.ts).
-  if (text === WHO_NEED_PLATE) return t('office.who.needPlate');
-  if (text === WHO_NEED_NAME) return t('office.who.needName');
-  if (text === WHO_NEED_PHONE) return t('office.who.needPhone');
+  // Round 3: Who drives? (the site's whoDrivesLogic.ts and requestLogic.ts say these).
+  if (/ it: pick the vehicle \(nobody confirms one on the day\)\.$/.test(text)) return t('office.who.needPlate');
+  if (text === 'Someone else drives: type their name.') return t('office.who.needName');
+  if (/^Someone else drives: type their phone/.test(text) || /^Their phone: /.test(text)) return t('office.who.needPhone');
   // The server's own sentences (the plan's and the assign warnings) as statusWords reads them; else as they came.
   return sentenceText(t, text);
 }

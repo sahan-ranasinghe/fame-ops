@@ -47,7 +47,7 @@ const uses: [string, RegExp, string][] = [
   ['app/office/task/[id]/driver.tsx', /<DriverChoiceRow[\s\S]*?disabledReason=\{declined \?/, 'Give it a driver: the driver cards; the driver who declined is greyed with the reason'],
   ['app/office/request/[id].tsx', /<DriverChoiceRow[\s\S]*?selected=\{d\.username === pick && !!d\.username\}/, 'Approve a request: Who\'s available as the driver cards'],
   ['app/office/request/[id].tsx', /<ChoiceRow selected=\{!giveDriver\}[\s\S]*?<ChoiceRow selected=\{giveDriver\}/, 'Approve a request with no driver asked: as asked · give a driver instead as ChoiceRows'],
-  ['components/office/WhoDrivesChoice.tsx', /accessibilityRole="radiogroup"[\s\S]*?<ChoiceRow key=\{c\} selected=\{value\.choice === c\}/, 'Who drives? (Who step): the three choices as ChoiceRows in a radio group'],
+  ['components/office/WhoDrivesChoice.tsx', /accessibilityRole="radiogroup"[\s\S]*?<ChoiceRow key=\{c\} selected=\{value\.by === c\}/, 'Who drives? (Who step): the three choices as ChoiceRows in a radio group'],
   ['components/office/VehicleGroups.tsx', /<View key=\{v\.reg_no\}[\s\S]*?<ChoiceRow selected=\{selected\}[\s\S]*?disabledReason=\{reason\}[\s\S]*?<\/ChoiceRow>[\s\S]*?accessibilityRole="button"/, 'The vehicles (Who step, Approve): ChoiceRows; a busy / in-garage group says why; the custodian\'s Call / WhatsApp under the row, not in it'],
   ['app/office/trip/who.tsx', /<VehicleGroups rows=\{rows\} picked=\{shown\}/, 'Who step: the shared vehicle groups'],
   ['app/office/trip/who.tsx', /<ChoiceChip label=\{t\('office\.trip\.onTheDay'\)\}/, 'Who step: On the day / Any van / the driver\'s vehicle / Choose as ChoiceChips'],

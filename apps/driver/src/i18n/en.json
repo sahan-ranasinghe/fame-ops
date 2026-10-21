@@ -1575,7 +1575,6 @@
       "fillDayFirst": "Fill in the day and the leave-by time (or an arrive-by time on a stop) to see which vehicles are free.",
       "freeDrivers": "Driver",
       "pickFreeDriver": "Pick a free driver",
-      "custodianDrives": "{name} drives it (no driver needed).",
       "group_free_pool": "Free",
       "group_free_assigned": "Assigned to someone · ask first",
       "group_busy": "Busy",
@@ -1628,8 +1627,7 @@
       "saveReapproval": "Save · ask for re-approval",
       "reapprovalOutcome": "The office will decide again.",
       "askedBy": "Asked by {name} · {phone}",
-      "leaveRunning": "The task is under way: its leave time stays. The stops and their times can change.",
-      "custodianDrivesShort": "the custodian drives"
+      "leaveRunning": "The task is under way: its leave time stays. The stops and their times can change."
     },
     "issues": {
       "above": "Everything that needs attention",
@@ -2903,8 +2901,6 @@
       "selfHint": "You drive it: no driver, no app.",
       "other": "Someone else",
       "otherHint": "Not in Fame Fleet: their name and phone.",
-      "custodian": "The vehicle's custodian drives",
-      "custodianHint": "As asked: no driver needed.",
       "name": "Their name",
       "namePlaceholder": "Full name",
       "phone": "Their phone",

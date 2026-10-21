@@ -143,12 +143,15 @@ export interface BestMatch {
 }
 
 /**
- * Round 3 (docs/phase8-plan.md §30): who drives a task, on the answers: self = the person on the task drives it themselves,
- * other = someone not in Fame Fleet (then `driver` is their name and the phone theirs; no photo); absent = a driver.
+ * Round 3 (docs/phase8-plan.md §30; the site's data/types.ts): who drives a trip. driver = a Fame Fleet driver with the app
+ * (absent on the answers); self = the person on the task drives it themselves; other = someone not in Fame Fleet (then
+ * `driver` is their name and the phone theirs; no photo).
  */
-export type DrivenBy = "self" | "other";
-/** What a request asked: a driver, self, someone else, or the old path (the vehicle's custodian drives). */
-export type AskedDrivenBy = "driver" | "self" | "other" | "custodian";
+export type DrivenBy = "driver" | "self" | "other";
+/** What a request asked: one of the three, or the older custodian path (the vehicle's custodian drives it). */
+export type AskedDriver = DrivenBy | "custodian";
+/** The same (the name this app used first). */
+export type AskedDrivenBy = AskedDriver;
 /** A free driver for Book now (suggest_vehicles drivers_free; Round 3: the photo and the vehicle they hold or their regular one). */
 export interface FreeDriver {
   name: string;

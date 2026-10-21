@@ -75,12 +75,12 @@ export default function TripWhere() {
     const current = getDraft();
     if (current?.mode === 'edit' && current.requestId === id && current.version === card.version) return;
     const f = editFields(card);
-    const { behalf, project, need, tools, note, driver, requesterPhone, who, ...trip } = f;
+    const { behalf, project, need, tools, note, requesterPhone, who, ...trip } = f;
     setDraft({
       mode: 'edit', requestId: id, version: card.version ?? 0, was: f, wasApproved: card.status === 'approved', step: 'where', at: Date.now(), rows: [],
       fields: { ...trip, title: '', buffer: '', driver: '', vehicle: '', cname: '', cphone: '', notes: '', whatsapp: false },
-      // Round 3: who drives, as the request asks it (the old custodian path too).
-      req: { behalf, project, need, tools, note, driverRequired: driver, requesterPhone: requesterPhone ?? '', who },
+      // Round 3: who drives, as the request asks it (the old custodian path reads as a driver, as on the site).
+      req: { behalf, project, need, tools, note, requesterPhone: requesterPhone ?? '', who },
     });
   }, [mode, id, req.data]);
 
@@ -111,7 +111,7 @@ export default function TripWhere() {
         returnToBase: !!p.task.return_to_base, avoidExpressway: !!p.task.avoid_expressway,
         title: p.task.title, buffer: '', driver: p.task.driver ?? '', vehicle: '', pax: '', cname: '', cphone: '', notes: '', whatsapp: false,
       },
-      req: { behalf: '', project: '', need: '', tools: false, note: '', driverRequired: true, requesterPhone: '' },
+      req: { behalf: '', project: '', need: '', tools: false, note: '', requesterPhone: '' },
     });
   }, [mode, id, taskQ.data]);
 

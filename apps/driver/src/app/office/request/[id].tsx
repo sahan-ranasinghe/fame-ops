@@ -52,7 +52,7 @@ import { setSavedNotice } from '@/office/savedNotice';
 import { useOffice, useTool } from '@/office/state';
 import { sentenceText } from '@/office/statusWords';
 import { groupRows } from '@/office/trip/formsLogic';
-import { askedWords, asksNoDriver } from '@/office/trip/whoDrivesLogic';
+import { askedKey, asksNoDriver } from '@/office/trip/whoWords';
 import type { Availability, DecideResult, FleetError, RedecideResult, RequestCard, RequestsList, SettingsResult } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { Avatar, BackHeader, Divider, ErrorNotice, ListFailed, Pill, Screen, Section, StickyActions } from '@/office/ui';
@@ -218,7 +218,7 @@ export default function ApproveRequest() {
   const drivers = avail.data ? rankedDrivers(avail.data.drivers) : [];
   const pickedDriver = drivers.find((d) => d.username === pick);
   const bestUsername = avail.data?.best?.username ?? drivers.find((d) => d.name === avail.data?.best?.name)?.username ?? '';
-  const whoAsked = card ? askedWords(card) : null;
+  const whoAsked = card ? askedKey(card) : null;
   const selfLicence = card ? selfDriveLine(card) : null;
   // Request again (Round 3, A6; Airbnb's and Uber's "Book again"): the copy in place, then the trip editor at Where.
   const requestAgain = () => {
