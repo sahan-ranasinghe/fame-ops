@@ -313,7 +313,7 @@ test("the map stays idle on /m/: a handful of frames at most in 5 s with no inpu
 const SI_SIGN_IN = "ඇතුළු වන්න";
 
 for (const lang of ["en", "si"] as const) {
-  test(`screenshots of /m/ in ${lang === "en" ? "English" : "Sinhala"}: Home, Approve, Live, a task and More (kept with the run); the sign-in and More against their baselines on CI`, async ({ page }, testInfo) => {
+  test(`screenshots of /m/ in ${lang === "en" ? "English" : "Sinhala"}: Home, Approve, Live, a task, My profile, Where and More (kept with the run); the sign-in and More against their baselines on CI`, async ({ page }, testInfo) => {
     test.setTimeout(180_000);
     await page.addInitScript((l) => window.localStorage.setItem("language", JSON.stringify(l)), lang);
     // The sign-in, before anyone is signed in: the same on every run.
@@ -353,6 +353,13 @@ for (const lang of ["en", "si"] as const) {
     await page.goto(`/m/office/task/${task.task_id}`);
     await expect(shown(page.getByText(`Screenshot task ${stamp}`))).toBeVisible();
     await shot("task");
+    // Round 1: My profile (the photo or the initials, Change photo) and the trip editor's empty Where suggestions.
+    await page.goto("/m/office/profile");
+    await expect(page.getByTestId("profile-change-photo")).toBeVisible();
+    await shot("profile");
+    await page.goto("/m/office/trip/where?mode=task");
+    await page.waitForTimeout(2_000);
+    await shot("where");
     await page.goto("/m/office/more");
     await page.waitForTimeout(2_000);
     await shot("more");

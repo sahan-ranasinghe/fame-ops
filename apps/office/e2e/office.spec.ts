@@ -2054,3 +2054,50 @@ test("Part 3b: the Drivers board and its week view, a question answered live, th
   await expect(page.getByTestId("pf-changes")).toContainText("Emergency contact");
   await expect(page.getByTestId("pf-unavailable")).toContainText("leave");
 });
+
+// Round 1 (21 October 2026): the site's changed screens as pictures kept with the run (no baselines): Overview, Assign a
+// task with the empty Where suggestions, the leave field's clock, a stop's Stay sheet, and Settings → Dispatch with the
+// planner's switch. Nothing is checked against a picture; the steps check that each piece is there.
+test("screenshots of the site (desktop): Overview, Assign a task (Where, the clock, Stay), Settings → Dispatch", async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  const email = `e2e.shots.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Shots", email, permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"] });
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Shots for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+  const shot = async (name: string) => {
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: testInfo.outputPath(`site-${name}.png`), fullPage: true });
+  };
+  await page.waitForTimeout(1_500);
+  await shot("overview");
+
+  await page.goto("/tasks/new");
+  const firstStop = page.getByLabel("Stop 1", { exact: true });
+  await firstStop.click();
+  await page.waitForTimeout(1_500);
+  await shot("where-empty");
+  await page.keyboard.press("Escape");
+  await page.getByLabel("Leave by", { exact: true }).click();
+  await expect(page.getByTestId("time-list").getByTestId("time-dial")).toBeVisible();
+  await expect(page.getByTestId("time-list").getByRole("group", { name: "Quick times" })).toHaveCount(0);
+  await shot("time-clock");
+  await page.keyboard.press("Escape");
+  const stay = page.getByTestId("dwell-picker").first().getByRole("button").first();
+  if (await stay.isVisible()) {
+    await stay.click();
+    await expect(page.getByTestId("stay-sheet")).toBeVisible();
+    await shot("stay-sheet");
+    await page.keyboard.press("Escape");
+  }
+  await expect(page.getByRole("button", { name: "Plan now" })).toHaveCount(0);
+
+  await page.goto("/settings/fleet/dispatch");
+  await expect(page.getByTestId("planner-suggestions-settings")).toBeVisible();
+  await shot("settings-dispatch");
+});
