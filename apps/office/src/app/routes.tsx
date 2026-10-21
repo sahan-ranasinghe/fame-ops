@@ -176,9 +176,9 @@ export const routes: RouteObject[] = [
       { path: "settings", element: <SettingsRoute /> },
       // Hotfix 2 (F): everyone's own page (their phone number).
       { path: "settings/profile", element: <MyProfile /> },
-      { path: "settings/users", element: <Guard need={["users"]}><Users /></Guard> },
-      { path: "settings/users/new", element: <Guard need={["users"]}><UserForm /></Guard> },
-      { path: "settings/users/:email/edit", element: <Guard need={["users"]}><UserManage /></Guard> },
+      { path: "settings/users", element: <Guard need={["users", "office_users"]}><Users /></Guard> },
+      { path: "settings/users/new", element: <Guard need={["users", "office_users"]}><UserForm /></Guard> },
+      { path: "settings/users/:email/edit", element: <Guard need={["users", "office_users"]}><UserManage /></Guard> },
       { path: "settings/fleet", element: <Guard need={["users"]}><FleetSettings /></Guard> },
       // Hotfix O2-H2 (Part 2): each section of Fleet settings on its own page.
       { path: "settings/fleet/:section", element: <Guard need={["users"]}><FleetSettingsRoute /></Guard> },

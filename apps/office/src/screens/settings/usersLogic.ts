@@ -38,18 +38,19 @@ export function togglePermission(list: readonly Permission[], p: Permission): Pe
 /** The preset button that matches the list exactly, "admin" for everything, else null. */
 export function presetOf(list: readonly Permission[]): Preset | "admin" | null {
   const sorted = normalisePermissions(list).join(",");
-  if (sorted === PERMISSIONS.join(",")) return "admin";
+  // Admin: every permission; office_users is optional beside users (users covers office accounts; Round 2b).
+  if (sorted === PERMISSIONS.join(",") || sorted === PERMISSIONS.filter((p) => p !== "office_users").join(",")) return "admin";
   for (const key of Object.keys(PRESETS) as Preset[]) {
     if (PRESETS[key].permissions.join(",") === sorted) return key;
   }
   return null;
 }
 
-export const SELF_LOCKOUT = "You cannot remove your own users permission. Ask another admin to do it.";
+export const SELF_LOCKOUT = "You cannot change your own permissions. Ask another admin.";
 
-/** True when the person is editing their own account and would drop the users permission. */
-export function selfLockout(meEmail: string | undefined, userEmail: string, permissions: readonly Permission[]): boolean {
-  return !!meEmail && meEmail.toLowerCase() === userEmail.toLowerCase() && !permissions.includes("users");
+/** True when the person is editing their own account's permissions (Round 2b: nobody changes their own; the server refuses it too). */
+export function selfLockout(meEmail: string | undefined, userEmail: string, _permissions?: readonly Permission[]): boolean {
+  return !!meEmail && meEmail.toLowerCase() === userEmail.toLowerCase();
 }
 
 export function validateNewUser(f: UserFields): { error: string } | { input: Record<string, unknown> } {

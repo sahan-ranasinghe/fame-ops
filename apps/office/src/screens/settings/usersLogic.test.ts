@@ -17,6 +17,17 @@ describe("Users page rules", () => {
     expect(presetOf(PRESETS.fleet_admin.permissions)).toBe("fleet_admin");
     expect(presetOf(["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"])).toBe("admin");
     expect(presetOf(["view", "users"])).toBeNull();
+    // Round 2b: the Coordinator, and an admin with office_users is still the Admin chip.
+    expect(presetOf(["view", "request", "assign_tasks", "vehicles", "issues", "office_users"])).toBe("coordinator");
+    expect(presetOf(["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users", "office_users"])).toBe("admin");
+  });
+
+  it("the picker offers the Coordinator preset and the Office accounts permission (Round 2b)", () => {
+    let picked: Permission[] = [];
+    render(createElement(PermissionPicker, { value: [], onChange: (p: Permission[]) => { picked = p; }, idPrefix: "t" }));
+    fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
+    expect(picked).toEqual(["view", "request", "assign_tasks", "vehicles", "issues", "office_users"]);
+    expect(screen.getByRole("checkbox", { name: /^Office accounts/ })).toBeTruthy();
   });
 
   it("view is ticked with any other permission and locked while one is ticked; unticking them all frees it", () => {

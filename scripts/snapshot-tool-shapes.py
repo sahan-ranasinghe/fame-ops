@@ -54,6 +54,17 @@ OPTIONAL = {
         "requests[].fields.start.what": "tools/requests.ts:347 what: at.what ?? undefined (the start stop's own what)",
         "requests[].trip.changed.stops": "tools/requests.ts:372-377 changed only when the office moved the time or the stops "
                                          "and no change of the requester waits",
+        "requests[].trip.timeline.items[].rush_factor": "timeline.ts: rush_factor only on a leg in a rush-hour band",
+    },
+    # A plan's rush-hour factor is there only for a leg in a rush-hour band (settings.rush_hour): a run at another time of
+    # day has none (main's CI at 16:40 Colombo recorded it, 21 October 2026).
+    "task_detail": {
+        "plan.legs[].factor": "plan.ts: a leg's factor only when the rush-hour factor applied to it",
+        "timeline.items[].rush_factor": "timeline.ts: rush_factor only on a leg in a rush-hour band",
+    },
+    "plan_task": {
+        "plan.legs[].factor": "plan.ts: a leg's factor only when the rush-hour factor applied to it",
+        "timeline.items[].rush_factor": "timeline.ts: rush_factor only on a leg in a rush-hour band",
     },
     "live_drivers": {
         "drivers[].links: {}": "tools/locations.ts:239 links: {maps only with a position, call / whatsapp only with a phone}: "

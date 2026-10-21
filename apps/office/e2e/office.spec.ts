@@ -361,6 +361,9 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.getByTestId("user-created")).toContainText("Account created");
   await page.getByRole("link", { name: "Done" }).click();
+  // The list may come back still searching for the admin's own e-mail (main's CI run 39584038398): look for the new
+  // account by its own e-mail, as a person would.
+  await page.getByLabel("Find a person").fill(dispEmail);
   const dRow = page.locator("tr", { hasText: dispEmail });
   await expect(dRow).toContainText("Assign tasks");
   await dRow.getByRole("link", { name: "Manage" }).click();

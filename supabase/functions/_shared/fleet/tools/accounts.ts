@@ -13,6 +13,7 @@
 import { z } from "zod";
 import type { Db } from "../db.ts";
 import { fetchAll, ToolError, unwrap, unwrapMaybe } from "../db.ts";
+import { accountChangeProblem } from "../accountGuards.ts";
 import { normalisePermissions, PERMISSIONS, permissionsForRole, roleForPermissions } from "../permissions.ts";
 import { isRole, OFFICE_ROLES, type Role } from "../roles.ts";
 import { colomboDateTime } from "../time.ts";
@@ -22,9 +23,9 @@ import { tool, zPaging, zSearch, zText } from "../tool.ts";
 import { pageOf, pageWindow } from "../paging.ts";
 
 const zEmail = z.string().trim().toLowerCase().email().max(160);
-const zOfficeRole = z.enum(["admin", "fleet_admin", "office", "staff", "viewer"]);
+const zOfficeRole = z.enum(["admin", "fleet_admin", "office", "coordinator", "staff", "viewer"]);
 const zPermissions = z.array(z.enum(PERMISSIONS as [string, ...string[]])).max(PERMISSIONS.length)
-  .describe("Any of: view, request, approve, assign_tasks, vehicles, issues, users");
+  .describe("Any of: view, request, approve, assign_tasks, vehicles, issues, users, office_users");
 const LINK_HOURS = 1;
 
 /** The web app's address for set-password links: the first origin of OFFICE_WEB_URL (office-api allows every listed origin for CORS). */
@@ -43,6 +44,16 @@ async function officeUser(db: Db, email: string) {
   }
   return row;
 }
+
+/** Round 2b: the least-privilege rules (accountGuards.ts), the same for office-api and office-mcp. */
+function guard(actor: { employeeId: string | null; permissions: readonly string[] }, change: Parameters<typeof accountChangeProblem>[1]) {
+  const problem = accountChangeProblem({ employeeId: actor.employeeId, permissions: normalisePermissions(actor.permissions) }, change);
+  if (problem) throw new ToolError(problem);
+}
+const targetOf = (row: { id: string; permissions: unknown }) => ({
+  id: row.id,
+  permissions: normalisePermissions(row.permissions as string[]),
+});
 
 /** A one-time link that lets the person set their password (valid about an hour). */
 async function setPasswordLink(db: Db, email: string): Promise<string> {
@@ -79,7 +90,9 @@ export const listOfficeUsers = tool({
   readOnly: true,
   // Hotfix 3 (L3): the search box (name, e-mail, role) and a page at a time.
   input: z.object({ search: zSearch, ...zPaging }),
-  async run({ search, limit, cursor }, { db }) {
+  async run({ search, limit, cursor }, { db, actor }) {
+    // Connector keys are the admins' (users) only; a Coordinator sees the accounts, not the keys.
+    const seesKeys = actor.permissions.includes("users");
     const [users, keys] = await Promise.all([
       fetchAll(
         (a, b) =>
@@ -112,7 +125,7 @@ export const listOfficeUsers = tool({
           // Round 1: shown to drivers as a contact (Me: name, Call, WhatsApp).
           driver_contact: u.driver_contact === true,
           since: colomboDateTime(u.created_at),
-          connector_keys: keys.filter((k) => k.employee_id === u.id && !k.revoked_at).map((k) => ({
+          connector_keys: !seesKeys ? undefined : keys.filter((k) => k.employee_id === u.id && !k.revoked_at).map((k) => ({
             id: k.id,
             label: k.label,
             created: colomboDateTime(k.created_at),
@@ -141,11 +154,12 @@ export const createOfficeUser = tool({
     phone: zText(30).optional(),
     code: zText(30).optional().describe("Employee number. Default: made from the e-mail"),
   }),
-  async run({ name, email, role, permissions, phone: typedPhone, code }, { db }) {
+  async run({ name, email, role, permissions, phone: typedPhone, code }, { db, actor }) {
     const phone = storedPhone(typedPhone);
     const existing = unwrapMaybe(await db.from("employees").select("id").eq("email", email).maybeSingle(), "office user");
     if (existing) throw new ToolError(`${email} already has an account. Use reset_office_password or set_office_user_active.`);
     const perms = permissions ? normalisePermissions(permissions) : permissionsForRole(role ?? "viewer");
+    guard(actor, { kind: "create", permissions: perms, role: permissions ? role : undefined });
     const label = role ?? roleForPermissions(perms);
 
     const { data: created, error } = await db.auth.admin.createUser({ email, email_confirm: true, user_metadata: { name, role: label } });
@@ -183,7 +197,7 @@ export const updateOfficeUser = tool({
   name: "update_office_user",
   title: "Change an office user",
   description: "Changes an office user's name, phone and/or permissions (view, request, approve, assign_tasks, vehicles, issues, users). " +
-    "The permissions list replaces the old one and takes effect on the person's next call. You cannot remove your own users permission. " +
+    "The permissions list replaces the old one and takes effect on the person's next call. Nobody changes their own role or permissions, nobody gives or takes away a permission they do not hold, and only an admin changes an admin. " +
     "The phone is a Sri Lankan number (stored +94…; null clears it); every change of a number is logged. driver_contact: shown to " +
     "drivers as a contact on the app's Me (name, Call, WhatsApp; 'Fleet admin' when they also approve, else 'Office').",
   readOnly: false,
@@ -202,9 +216,7 @@ export const updateOfficeUser = tool({
       throw new ToolError("Nothing to change: give a name, phone, permissions, role and/or driver_contact.");
     }
     const perms = permissions !== undefined ? normalisePermissions(permissions) : normalisePermissions(user.permissions);
-    if (permissions !== undefined && actor.employeeId === user.id && !perms.includes("users")) {
-      throw new ToolError("You cannot remove your own users permission. Ask another admin to do it.");
-    }
+    guard(actor, { kind: "update", target: targetOf(user), permissions: permissions !== undefined ? perms : undefined, role });
     const label = role ?? (permissions !== undefined ? roleForPermissions(perms) : user.role);
     const updated = unwrap(
       await db.from("employees").update({
@@ -241,8 +253,9 @@ export const resetOfficePassword = tool({
     "Returns a fresh one-time set-password link for an office user (forgot the password, or the old link expired). Send it by WhatsApp.",
   readOnly: false,
   input: z.object({ email: zEmail }),
-  async run({ email }, { db }) {
+  async run({ email }, { db, actor }) {
     const user = await officeUser(db, email);
+    guard(actor, { kind: "password_link", target: targetOf(user) });
     if (!user.active) throw new ToolError(`${user.name} is switched off. Use set_office_user_active first.`);
     const link = await setPasswordLink(db, email);
     return {
@@ -259,8 +272,9 @@ export const setOfficeUserActive = tool({
     "Off: the person cannot sign in or use the web app, their connector keys stop working, and their sessions end. On: back as before.",
   readOnly: false,
   input: z.object({ email: zEmail, active: z.boolean() }),
-  async run({ email, active }, { db, now }) {
+  async run({ email, active }, { db, now, actor }) {
     const user = await officeUser(db, email);
+    guard(actor, { kind: "switch", target: targetOf(user), active });
     unwrap(await db.from("employees").update({ active }).eq("id", user.id).select("id"), "office user");
     if (user.auth_user_id) {
       const { error } = await db.auth.admin.updateUserById(user.auth_user_id, { ban_duration: active ? "none" : "876000h" });

@@ -1,5 +1,5 @@
 // Office mode (Phase 8, O1): the server's permission table, copied from supabase/functions/_shared/fleet/permissions.ts at
-// main ec1bf7d (the site imports that very file). Copy again when it changes, never edit this one alone.
+// phase9-r2b (Round 2b: office_users, the Coordinator; the site imports that very file). Copy again when it changes, never edit this one alone.
 
 // Who may call which tool: the permissions a person holds (employees.permissions)
 // against the permission each tool needs. One table, applied by office-mcp (Claude)
@@ -15,14 +15,24 @@
 //   vehicles      vehicles, rental companies, places, drivers, projects
 //   issues        update issues and vehicle problem reports
 //   users         office users, connector keys and settings
+//   office_users  office accounts that are not admins (Round 2b, the Coordinator), granting only what the granter holds
 //
 // The role (employees.role) is a label only: it is derived from the permissions
 // when an account is made or changed, and the backfill map below is what the
 // migration gave every existing account.
 
-export type Permission = "view" | "request" | "approve" | "assign_tasks" | "vehicles" | "issues" | "users";
+export type Permission = "view" | "request" | "approve" | "assign_tasks" | "vehicles" | "issues" | "users" | "office_users";
 
-export const PERMISSIONS: readonly Permission[] = ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users"];
+export const PERMISSIONS: readonly Permission[] = [
+  "view",
+  "request",
+  "approve",
+  "assign_tasks",
+  "vehicles",
+  "issues",
+  "users",
+  "office_users",
+];
 
 /** What each permission means, in the words the Users page shows. */
 export const PERMISSION_TEXT: Record<Permission, { label: string; text: string }> = {
@@ -39,6 +49,10 @@ export const PERMISSION_TEXT: Record<Permission, { label: string; text: string }
   vehicles: { label: "Vehicles", text: "Register and edit vehicles, rental companies, places, driver accounts; mileage and maintenance" },
   issues: { label: "Issues", text: "The issues centre, vehicle problem reports and every attention item" },
   users: { label: "Users", text: "Settings: office users, connector keys, fleet settings" },
+  office_users: {
+    label: "Office accounts",
+    text: "Add and edit office accounts that are not admins, giving only permissions you hold yourself",
+  },
 };
 
 const V: readonly Permission[] = ["view"];
@@ -47,6 +61,8 @@ const VR: readonly Permission[] = ["view", "request"];
 const AA: readonly Permission[] = ["approve", "assign_tasks"];
 const VEH: readonly Permission[] = ["vehicles"];
 const USERS: readonly Permission[] = ["users"];
+/** Office accounts: admins (users) and, for accounts that are not admins, the Coordinator (office_users). */
+const ACCOUNTS: readonly Permission[] = ["users", "office_users"];
 /** Personal: a person's own notification settings and devices (any office permission). */
 const ANY: readonly Permission[] = PERMISSIONS;
 
@@ -112,6 +128,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   get_settings: ANY,
   update_settings: USERS,
   routing_usage: USERS,
+  list_app_errors: USERS,
   register_vehicle: VEH,
   update_vehicle: VEH,
   add_rental_company: VEH,
@@ -119,7 +136,8 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   reset_pin: VEH,
   set_driver_active: VEH,
   update_driver: ["vehicles", "users"],
-  import_projects: VEH,
+  // Round 2b: project import is the approvers' (Admins and Fleet admins keep it; a Coordinator does not).
+  import_projects: ["approve"],
   mileage_summary: VEH,
   list_fuel: VEH,
   add_place: ["vehicles", "assign_tasks"],
@@ -145,11 +163,12 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   list_issues: ["issues", "assign_tasks"],
   issue_history: ["issues", "assign_tasks"],
   update_issue: ["issues"],
-  list_office_users: USERS,
-  create_office_user: USERS,
-  update_office_user: USERS,
-  reset_office_password: USERS,
-  set_office_user_active: USERS,
+  // Round 2b: office_users runs these for accounts that are not admins (the guards: accountGuards.ts).
+  list_office_users: ACCOUNTS,
+  create_office_user: ACCOUNTS,
+  update_office_user: ACCOUNTS,
+  reset_office_password: ACCOUNTS,
+  set_office_user_active: ACCOUNTS,
   create_office_key: USERS,
   revoke_office_key: USERS,
   my_notification_settings: ANY,
@@ -176,9 +195,15 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   ask_answers: AA,
 };
 
-/** The four buttons on the Users page. An admin is everything, so it is not a preset. */
-export const PRESETS: Record<"fleet_admin" | "dispatcher" | "requester" | "viewer", { label: string; permissions: Permission[] }> = {
+/** The buttons on the Users page. An admin is everything, so it is not a preset. */
+export const PRESETS: Record<
+  "fleet_admin" | "coordinator" | "dispatcher" | "requester" | "viewer",
+  { label: string; permissions: Permission[] }
+> = {
   fleet_admin: { label: "Fleet admin", permissions: ["view", "request", "approve", "assign_tasks", "vehicles", "issues"] },
+  // Round 2b (Sahan, 21 October 2026): the records and the trips, never approve or users; a task they assign waits for
+  // a fleet admin's OK while tasks_need_approval is on.
+  coordinator: { label: "Coordinator", permissions: ["view", "request", "assign_tasks", "vehicles", "issues", "office_users"] },
   dispatcher: { label: "Dispatcher", permissions: ["view", "request", "assign_tasks"] },
   // Phase 7 (§12): any permission implies view, so the Requester preset carries it (view = what a viewer sees).
   requester: { label: "Requester", permissions: ["view", "request"] },
@@ -192,6 +217,8 @@ export function permissionsForRole(role: string): Permission[] {
       return [...PERMISSIONS];
     case "fleet_admin":
       return [...PRESETS.fleet_admin.permissions];
+    case "coordinator":
+      return [...PRESETS.coordinator.permissions];
     case "office":
       return ["view", "request", "assign_tasks"];
     case "staff":
@@ -204,10 +231,15 @@ export function permissionsForRole(role: string): Permission[] {
 }
 
 /** The label for a set of permissions (the role column). */
-export function roleForPermissions(permissions: readonly string[]): "admin" | "fleet_admin" | "office" | "staff" | "viewer" {
+export function roleForPermissions(
+  permissions: readonly string[],
+): "admin" | "fleet_admin" | "office" | "coordinator" | "staff" | "viewer" {
   const has = (p: Permission) => permissions.includes(p);
   if (has("users")) return "admin";
-  if (has("approve") || has("vehicles") || has("issues")) return "fleet_admin";
+  if (has("approve")) return "fleet_admin";
+  // Round 2b: office accounts without approve = the Coordinator (no account held office_users before it).
+  if (has("office_users")) return "coordinator";
+  if (has("vehicles") || has("issues")) return "fleet_admin";
   if (has("assign_tasks")) return "office";
   if (has("request")) return "staff";
   return "viewer";
@@ -228,7 +260,7 @@ export function normalisePermissions(list: readonly unknown[] | null | undefined
 }
 
 /** The permissions that bring view with them: the form locks the view box while any of these is ticked. */
-export const IMPLIES_VIEW: readonly Permission[] = ["request", "approve", "assign_tasks", "vehicles", "issues", "users"];
+export const IMPLIES_VIEW: readonly Permission[] = ["request", "approve", "assign_tasks", "vehicles", "issues", "users", "office_users"];
 
 /** True when the permissions allow the tool. An unknown tool is allowed to nobody. */
 export function allows(permissions: readonly string[], tool: string): boolean {

@@ -341,16 +341,17 @@ export function togglePermission(list: readonly Permission[], p: Permission): Pe
 /** The preset that matches the list exactly, "all" for everything (the Everything chip), else null. */
 export function presetOf(list: readonly Permission[]): Preset | 'all' | null {
   const sorted = normalisePermissions(list).join(',');
-  if (sorted === PERMISSIONS.join(',')) return 'all';
+  // Everything: every permission; office_users is optional beside users (users covers office accounts; Round 2b).
+  if (sorted === PERMISSIONS.join(',') || sorted === PERMISSIONS.filter((p) => p !== 'office_users').join(',')) return 'all';
   for (const key of PRESET_KEYS) {
     if (PRESETS[key].permissions.join(',') === sorted) return key;
   }
   return null;
 }
 
-/** True when the person is editing their own account and would drop the users permission. */
-export function selfLockout(meEmail: string | undefined, userEmail: string, permissions: readonly Permission[]): boolean {
-  return !!meEmail && meEmail.toLowerCase() === userEmail.toLowerCase() && !permissions.includes('users');
+/** True when the person is editing their own account's permissions (Round 2b: nobody changes their own; the server refuses it too). */
+export function selfLockout(meEmail: string | undefined, userEmail: string, _permissions?: readonly Permission[]): boolean {
+  return !!meEmail && meEmail.toLowerCase() === userEmail.toLowerCase();
 }
 
 export type UserProblem = 'fields' | 'email' | 'permissions' | 'permissionsOff' | 'selfLockout';

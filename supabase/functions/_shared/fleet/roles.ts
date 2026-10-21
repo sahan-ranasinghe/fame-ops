@@ -2,14 +2,15 @@
 // on their employees row (permissions.ts) against the permission each tool
 // needs. The role is a label: admin runs everything including accounts;
 // fleet_admin runs the fleet; office sees everything and assigns tasks and
-// requests; staff ask for vehicles; viewer reads; driver is the app.
+// requests; coordinator (Round 2b) keeps the records: drivers, vehicles, documents, office accounts that are not
+// admins, issues, and assigns trips that wait for approval; staff ask for vehicles; viewer reads; driver is the app.
 //
 // The same check is applied by office-mcp (Claude) and office-api (the web
 // app) before a tool runs; menus in the clients only mirror it.
 
 import { allows, type Permission, permissionsForRole, TOOL_PERMISSION } from "./permissions.ts";
 
-export type Role = "admin" | "fleet_admin" | "office" | "staff" | "viewer" | "driver";
+export type Role = "admin" | "fleet_admin" | "office" | "coordinator" | "staff" | "viewer" | "driver";
 export type Channel = "claude" | "web" | "driver";
 
 /** The person a tool runs for. employeeId is null only for the shared connector key (which holds every permission). */
@@ -23,7 +24,7 @@ export interface Actor {
   channel: Channel;
 }
 
-export const OFFICE_ROLES: readonly Role[] = ["admin", "fleet_admin", "office", "staff", "viewer"];
+export const OFFICE_ROLES: readonly Role[] = ["admin", "fleet_admin", "office", "coordinator", "staff", "viewer"];
 
 /**
  * 2-step sign-in (TOTP) is optional for every role: a person turns it on in
@@ -50,5 +51,5 @@ export function canCall(actor: Pick<Actor, "permissions">, tool: string): boolea
 }
 
 export function isRole(value: unknown): value is Role {
-  return typeof value === "string" && ["admin", "fleet_admin", "office", "staff", "viewer", "driver"].includes(value);
+  return typeof value === "string" && ["admin", "fleet_admin", "office", "coordinator", "staff", "viewer", "driver"].includes(value);
 }

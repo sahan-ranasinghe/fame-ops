@@ -107,7 +107,7 @@ export function moreFor(permissions: readonly string[]): MoreItem[] {
     { key: 'maintenance', need: ['issues'] },
     { key: 'places', need: ['vehicles'] },
     { key: 'people_drivers', need: ['users', 'vehicles'] },
-    { key: 'people_users', need: ['users'] },
+    { key: 'people_users', need: ['users', 'office_users'] },
     { key: 'settings', need: ['users'] },
   ];
   // Stage 1 (O3 item 3): Tasks → History is the Tasks tab's own button; with Tasks under More, History sits beside it.

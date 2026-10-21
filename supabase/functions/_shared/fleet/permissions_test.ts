@@ -35,10 +35,15 @@ Deno.test("the backfill map: what each role became, and the labels round-trip", 
   assertEquals(roleForPermissions(PRESETS.requester.permissions), "staff");
   assertEquals(roleForPermissions(PRESETS.dispatcher.permissions), "office");
   assertEquals(roleForPermissions([]), "viewer");
+  assertEquals(roleForPermissions(PRESETS.coordinator.permissions), "coordinator");
+  // An account that already held vehicles or issues without approve keeps its label (nobody held office_users before).
+  assertEquals(roleForPermissions(["view", "vehicles"]), "fleet_admin");
 });
 
 Deno.test("the presets", () => {
-  assertEquals(PRESETS.fleet_admin.permissions, PERMISSIONS.filter((p) => p !== "users"));
+  assertEquals(PRESETS.fleet_admin.permissions, PERMISSIONS.filter((p) => p !== "users" && p !== "office_users"));
+  // Round 2b: the Coordinator: the records and the trips, never approve or users.
+  assertEquals(PRESETS.coordinator.permissions, ["view", "request", "assign_tasks", "vehicles", "issues", "office_users"]);
   assertEquals(PRESETS.dispatcher.permissions, ["view", "request", "assign_tasks"]);
   // Phase 7 (§12): any permission brings view with it.
   assertEquals(PRESETS.requester.permissions, ["view", "request"]);
@@ -171,10 +176,16 @@ Deno.test("toolsFor keeps the connector's order; normalise drops unknown words a
 });
 
 Deno.test("the derived role table matches the old one where it mattered", () => {
-  assertEquals(TOOL_ROLES.create_request, ["admin", "fleet_admin", "office", "staff"]);
-  assertEquals(TOOL_ROLES.fleet_overview, ["admin", "fleet_admin", "office", "staff", "viewer"]);
-  assertEquals(TOOL_ROLES.task_board, ["admin", "fleet_admin", "office"]);
-  assertEquals(TOOL_ROLES.cancel_task, ["admin", "fleet_admin", "office"]);
-  assertEquals(TOOL_ROLES.mileage_summary, ["admin", "fleet_admin"]);
+  assertEquals(TOOL_ROLES.create_request, ["admin", "fleet_admin", "office", "coordinator", "staff"]);
+  assertEquals(TOOL_ROLES.fleet_overview, ["admin", "fleet_admin", "office", "coordinator", "staff", "viewer"]);
+  assertEquals(TOOL_ROLES.task_board, ["admin", "fleet_admin", "office", "coordinator"]);
+  assertEquals(TOOL_ROLES.cancel_task, ["admin", "fleet_admin", "office", "coordinator"]);
+  assertEquals(TOOL_ROLES.mileage_summary, ["admin", "fleet_admin", "coordinator"]);
   assertEquals(TOOL_ROLES.create_office_key, ["admin"]);
+  // Round 2b: the Coordinator manages office accounts (not admins: accountGuards.ts), never approves, never imports projects
+  // or changes the settings.
+  assertEquals(TOOL_ROLES.create_office_user, ["admin", "coordinator"]);
+  assertEquals(TOOL_ROLES.decide_request, ["admin", "fleet_admin"]);
+  assertEquals(TOOL_ROLES.import_projects, ["admin", "fleet_admin"]);
+  assertEquals(TOOL_ROLES.update_settings, ["admin"]);
 });

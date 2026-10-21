@@ -2219,7 +2219,7 @@
         "email": "That e-mail does not look right.",
         "permissions": "Tick at least one permission.",
         "permissionsOff": "Tick at least one permission, or switch the account off instead.",
-        "selfLockout": "You cannot remove your own users permission. Ask another admin to do it."
+        "selfLockout": "You cannot change your own permissions. Ask another admin."
       },
       "signIn": "Sign-in",
       "newLinkHint": "Forgot the password, or the first link expired: make a new one-time set-password link.",
@@ -2280,7 +2280,8 @@
       "assign_tasks": "Assign tasks",
       "vehicles": "Vehicles",
       "issues": "Issues",
-      "users": "Users"
+      "users": "Users",
+      "office_users": "Office accounts"
     },
     "permissionText": {
       "view": "Overview counts and who is on the road, live locations, the drivers list, the vehicles board, your own requests",
@@ -2289,10 +2290,12 @@
       "assign_tasks": "The tasks board: assign, reassign and cancel tasks and their stops; task details, routes and task attention items",
       "vehicles": "Register and edit vehicles, rental companies, places, driver accounts; mileage and maintenance",
       "issues": "The issues centre, vehicle problem reports and every attention item",
-      "users": "Settings: office users, connector keys, fleet settings"
+      "users": "Settings: office users, connector keys, fleet settings",
+      "office_users": "Add and edit office accounts that are not admins, giving only permissions you hold yourself"
     },
     "preset": {
       "fleet_admin": "Fleet admin",
+      "coordinator": "Coordinator",
       "dispatcher": "Dispatcher",
       "requester": "Requester",
       "viewer": "Viewer",

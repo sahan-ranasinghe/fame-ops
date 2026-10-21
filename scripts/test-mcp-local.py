@@ -2926,7 +2926,7 @@ if CHANNEL == "api":
           "a requester reads the settings and plans their trip (Phase 7 §34), with no driver, vehicle or conflicts in the answer", f"{code} {code2} {str(body2)[:200]}")
     tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "assign_tasks"]})
     code, body = api_call(API_TOKEN, "update_office_user", {"email": admin_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
-    check(code == 409 and "own users permission" in body.get("error", ""), "an admin cannot remove their own users permission (409)", f"{code} {body}")
+    check(code == 409 and "own role or permissions" in body.get("error", ""), "an admin cannot change their own permissions (409; Round 2b: nobody can)", f"{code} {body}")
     off = tool("set_office_user_active", {"email": staff_email, "active": False})
     code, body = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(off["active"] is False and code in (401, 403), "switched off: the same session is refused at once (the sign-in is banned)", f"{code} {body}")
@@ -3074,6 +3074,84 @@ check(pc.get("email") == "privacy@fame.test", "added again: the page shows it ag
 tool("update_settings", {"key": "privacy_email", "value": None})
 check(int(psql("select count(*) from office_audit where tool = 'update_settings' and args_summary like '%privacy_email%'")) >= 3,
       "every change of the privacy e-mail is in the audit log")
+
+if CHANNEL == "api":
+    # Round 2b (Sahan, 21 October 2026): the Coordinator, on BOTH channels: office-api (a signed-in session) and office-mcp
+    # (the person's own connector key). What they may do and what the shared guards refuse (accountGuards.ts).
+    print("\n== 8c. Round 2b: the Coordinator on office-api and office-mcp ==")
+    co_email = f"coord.{uuid.uuid4().hex[:6]}@fame.test"
+    made = tool("create_office_user", {"name": "Achini Coordinator", "email": co_email,
+                                       "permissions": ["view", "request", "assign_tasks", "vehicles", "issues", "office_users"]})
+    check(made["created"]["role"] == "coordinator", "an admin makes a Coordinator (the label from the permissions)", str(made["created"])[:200])
+    co_uid = psql(f"select auth_user_id from employees where email = '{co_email}'")
+    co_pw = "C00rd-" + uuid.uuid4().hex[:10]
+    http("PUT", f"{API}/auth/v1/admin/users/{co_uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": co_pw})
+    co_token = office_sign_in(co_email, co_pw, enrol_totp=False)
+    code, me = http("GET", f"{API}/functions/v1/office-api/me", api_headers(co_token))
+    tools_ok = {"create_driver", "register_vehicle", "create_office_user", "create_request", "create_task", "list_issues", "update_issue"}
+    tools_no = {"decide_request", "book_vehicle", "update_settings", "import_projects", "create_office_key", "list_app_errors"}
+    check(code == 200 and me.get("role") == "coordinator" and tools_ok <= set(me.get("tools", [])) and not (tools_no & set(me.get("tools", []))),
+          "a Coordinator signs in: drivers, vehicles, office accounts, requests, tasks, issues; never approve, settings, project import or keys",
+          f"{code} {sorted(set(me.get('tools', [])) & tools_no)} {str(me)[:160]}")
+    # Live data through RLS: the role is an office role (current_office_role), so the positions read.
+    role_db = psql(f"select set_config('request.jwt.claims', json_build_object('sub', '{co_uid}')::text, false) is not null; "
+                   "select coalesce(public.current_office_role(), 'none')").splitlines()[-1]
+    check(role_db == "coordinator", "the coordinator label is an office role for the database (Realtime and the live data)", role_db)
+
+    # The person's own connector key: the same rules on office-mcp.
+    co_key = tool("create_office_key", {"email": co_email, "label": "coordinator test"})
+    co_url = API + "/functions/v1" + co_key["connector_url"].split("/functions/v1", 1)[1]
+    def mcp_as(url, name, args):
+        code, raw = http("POST", url, {"Content-Type": "application/json", "Accept": "application/json, text/event-stream", "MCP-Protocol-Version": "2025-06-18"},
+                         {"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": name, "arguments": args}}, raw=True)
+        text = raw.decode()
+        if text.lstrip().startswith(("event:", "data:")):
+            text = [l[6:] for l in text.replace("\r", "").split("\n") if l.startswith("data: ")][-1]
+        msg = json.loads(text)
+        res = msg.get("result") or {}
+        body = (res.get("content") or [{}])[0].get("text", "") if res else msg.get("error", {}).get("message", "")
+        return (not res.get("isError")) and "result" in msg, body
+    def as_coordinator(channel, name, args):
+        if channel == "api":
+            code, body = api_call(co_token, name, args)
+            return code == 200, (json.dumps(body.get("result")) if code == 200 else body.get("error", "") if isinstance(body, dict) else str(body)) + f" [{code}]"
+        return mcp_as(co_url, name, args)
+
+    admin_row = psql("select email from employees where 'users' = any(permissions) and active order by created_at limit 1")
+    for ch in ("api", "mcp"):
+        tag = "office-api" if ch == "api" else "office-mcp"
+        u = uuid.uuid4().hex[:5]
+        ok, body = as_coordinator(ch, "create_driver", {"name": f"Intern Driver {u}", "code": f"I{u}", "username": f"intern.{u}", "pin": "482916", "phone": f"+94 71 77{int(u, 16) % 100000:05d}"})
+        check(ok, f"{tag}: a Coordinator registers a driver", body[:200])
+        audit = psql(f"select actor_name from office_audit where tool = 'create_driver' and args_summary like '%intern.{u}%' order by id desc limit 1")
+        check(audit == "Achini Coordinator", f"{tag}: the change is in the audit log in the Coordinator's name", audit)
+        plate_u = f"WP IN-{int(u, 16) % 9000 + 1000}"
+        ok, body = as_coordinator(ch, "register_vehicle", {"reg_no": plate_u, "make_model": "Toyota HiAce", "vehicle_type": "van", "seats": 12})
+        check(ok, f"{tag}: and a vehicle", body[:200])
+        ok, body = as_coordinator(ch, "create_office_user", {"name": f"Intern Requester {u}", "email": f"req.{u}@fame.test", "permissions": ["request"]})
+        check(ok and '"role": "staff"' in body.replace('":"', '": "'), f"{tag}: adds an office user with request only", body[:200])
+        ok, body = as_coordinator(ch, "create_request", {"date": (today + dt.timedelta(days=3)).isoformat(), "time": "09:00", "route_from": "Head office", "route_to": "Galle", "pax": 2})
+        check(ok, f"{tag}: requests a vehicle", body[:200])
+        ok, body = as_coordinator(ch, "create_task", {"title": f"Intern task {u}", "date": (today + dt.timedelta(days=3)).isoformat(), "start_time": "10:00",
+                                                       "driver": f"intern.{u}", "vehicle": plate_u, "pickup": "Head office", "dropoff": "Galle"})
+        check(ok and "waiting_for_approval" in body, f"{tag}: assigns a task, which waits for a fleet admin's OK (tasks_need_approval on)", body[:200])
+        for name, args, why in [
+            ("decide_request", {"request_id": str(uuid.uuid4()), "decision": "approve"}, "cannot approve a request"),
+            ("update_settings", {"key": "buffer_min", "value": 20}, "cannot change the settings"),
+            ("import_projects", {"projects": [{"zoho_project_id": f"z{u}", "job_no": "1", "name": "x"}]}, "cannot import projects"),
+        ]:
+            ok, body = as_coordinator(ch, name, args)
+            check(not ok, f"{tag}: {why}", body[:200])
+        ok, body = as_coordinator(ch, "update_office_user", {"email": admin_row, "name": "Renamed"})
+        check(not ok and "Only an admin" in body, f"{tag}: cannot edit an admin", body[:200])
+        ok, body = as_coordinator(ch, "create_office_user", {"name": f"Would Approve {u}", "email": f"appr.{u}@fame.test", "permissions": ["approve"]})
+        check(not ok and "hold yourself" in body, f"{tag}: cannot give approve to anyone", body[:200])
+        ok, body = as_coordinator(ch, "update_office_user", {"email": f"req.{u}@fame.test", "permissions": ["request", "users"]})
+        check(not ok and "hold yourself" in body, f"{tag}: cannot give users to anyone", body[:200])
+        ok, body = as_coordinator(ch, "update_office_user", {"email": co_email, "permissions": ["view", "request"]})
+        check(not ok and "your own" in body, f"{tag}: cannot change their own permissions", body[:200])
+    check(psql(f"select count(*) from employees where email like 'appr.%@fame.test'") == "0", "nothing was made by a refused call")
+    api_call(API_TOKEN, "revoke_office_key", {"key_id": co_key["key_id"]})
 
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:
