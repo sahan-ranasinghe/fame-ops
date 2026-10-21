@@ -1857,7 +1857,7 @@ test("Hotfix 2: two approvers at once, the phone banner, the requester's notific
   await expect(twoPage.getByTestId("phone-banner")).toBeVisible();
   await twoPage.getByRole("link", { name: "Add my number" }).click();
   await twoPage.getByLabel("My phone number").fill("077 123 0002");
-  await twoPage.getByRole("button", { name: "Save" }).click();
+  await twoPage.getByRole("button", { name: "Save", exact: true }).click();
   await expect(twoPage.getByTestId("my-profile")).toContainText("Saved: 077 123 0002");
   await twoPage.goto("/requests");
   await expect(twoPage.getByTestId("phone-banner")).toHaveCount(0);
