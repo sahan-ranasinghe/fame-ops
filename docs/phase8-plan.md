@@ -993,6 +993,20 @@ Checkpoint 2b (Sahan):
   no late / early, never the re-estimate's anchor (`stopProgress.ts`: `confirmed_later`, `time_not_recorded`). No
   "arrived" notice for it. Undo clears it. Shown as "Confirmed later" on the site, /m/, Office mode and the driver app.
 
+Deployed (21 October 2026, Sahan's go after Checkpoint 2b; CI 39614878831 on the branch, the connector suite on both
+channels, pgTAP 1131, Deno 220):
+
+- Server: `db push` applied `20261021300000_round2b_coordinator` and `20261021400000_round2b_confirmed_visits`;
+  `office-api`, `office-mcp`, `driver-api` deployed. Checked live: `list_office_users`, `task_detail` (stop progress);
+  Sahan checked `drivers_board` attendance and `activity_log` from Claude chat.
+- main fast-forwarded to `25971b3` and pushed (the push scan 0); main's CI 39619998196 passed (it carries the Users-search
+  fix that failed 39584038398).
+- The website: deployment 4f15cbd7 (the scan clean; two uploads before it dropped at 58/80 files on a weak network and
+  published nothing); `/`, `/m/`, `/m/offline`, `/privacy` and the /m/ fonts answer 200.
+- The EAS update to preview, runtime 1.3.0-gmaps: group `1f77a602-fbec-4892-b46c-eac9b79f4ba0`, Android
+  `01a15f28-bf53-7877-afc9-f2e7c34a8926`, from `25971b3` (no native package changed since `1547884`; since `ef69255`
+  only the web build's switch and web / test packages).
+
 ## 28. Round 2 deployed (21 October 2026, branch `phase9-r2`, Sahan's go after Checkpoint 2)
 
 Live stop progress: the driver slides Arrived / Left / finish (Undo 6 s), the "Arrived at <stop>?" card on the task
