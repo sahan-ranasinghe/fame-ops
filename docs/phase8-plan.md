@@ -972,6 +972,32 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 31. Queued after Round 3 (Sahan, 22 October 2026, after Checkpoint 3)
+
+The order: **Part B** (Round D, the design pass) → **Round 4** (the vehicle check) → Round 5 (the fuel card) → Round 6
+(passengers) → Round 7 (someone else has that driver or vehicle) → `docs/voice-calls-plan.md`.
+
+**Part B (Round D) starts with** two items from Checkpoint 3's review, before the inventory:
+- The app's and the site's `requestLogic` / `assignLogic` (`apps/driver/src/office/trip/` and `apps/office/src/screens/`)
+  become ONE shared source, or a test fails when they differ (they have drifted; nothing checks them today).
+- M5: "2 h ago" and the other relative times still in English on Sinhala screens.
+Then: the inventory of every screen; the patterns in `docs/design-pass.md` (Dashboard, List row, Desktop table, Detail page,
+RouteStepper, StatusBanner, StatsRow, Forms, Profile / settings, Empty / loading / error states, the rules); a pilot of 6
+screens (trip Review, request / task detail, Office Home, the driver's Task in progress, the site's Overview, the site's Tasks
+list) with before / after screenshots as a CI artifact; STOP for Sahan's approval; the rollout only after his OK.
+
+**Round 4 (the vehicle check) also covers self-drive and someone-else trips** (Zipcar's and Turo's return pattern):
+- The self-driver does the same vehicle check before setting off, from Office mode, /m/ or the site.
+- At the back-by time, or at the end of the trip's day when there is none, they get "Trip finished? Enter the odometer"
+  (fuel and a photo optional). The answer completes the trip, updates the vehicle's odometer and km, and counts toward the
+  monthly allowance.
+- No answer by 09:00 the next day: the trip closes as "Completed · not confirmed" and the office sees it in Needs attention.
+- (Until then a no-app trip is never started or finished: it stays Assigned after its day and is never marked missed, as the
+  custodian's trips were. A someone-else trip is answered by the person it is booked on.)
+
+**Follow-up:** the connector suite runs on a fixed date and clock, so it never fails around midnight (Round 3's run had to wait
+until after 03:00: "today" checks crossed midnight).
+
 ## 30. Round 3 plan: who drives, driver first (21 October 2026, branch `phase9-r3`; the contract for the server and both clients)
 
 From the Phase 9 brief (Round 3) plus Sahan's additions: the Activity log's routine actions, and the three server items
@@ -1057,6 +1083,21 @@ fixed.
   "Expired · nobody decided it in time"); out of the waiting lists and counts; the person who asked is told once (their
   request.decided notice); list_requests and my_trips take status `expired`. Its page has "Request again": a new request
   with everything copied but the day. Requests already past when it is deployed expire quietly.
+
+**Deployed** (22 October 2026, Sahan's four gos after Checkpoint 3; CI 39661858641 on the branch, the connector suite on
+both channels (593 + 656 calls, the shape contract with Round 3's 14 additive fields, the smoke test), pgTAP 33 files /
+1159, Deno 228):
+- Server: `db push` applied only `20261022100000_round3_who_drives` and `20261022110000_round3_expired_requests`;
+  `office-api`, `office-mcp`, `driver-api` deployed. Checked live: `list_requests` status expired answers the 5 requests
+  that were waiting past their day (19, 20 and three of 21 October; expired quietly at 04:36, the event "Nobody decided it
+  before its day was over"), each with `fields.driven_by` driver.
+- main fast-forwarded to `4a896a4` and pushed (the push scan 0); main's CI 39691359846 passed (fast; e2e 40 passed, none
+  flaky).
+- The website: deployment d18dc16e (the scan clean); `/`, `/m/`, `/m/offline`, `/privacy`, the /m/ worker, manifest and
+  fonts answer 200 with their own types.
+- The EAS update to preview, runtime 1.3.0-gmaps: group `dcc4b2dc-8557-47eb-995b-4625ca99b5dd`, Android
+  `01a160d5-9606-7ee9-8f81-8eccf5a93b00`, from `4a896a4` (no native package changed since `ef69255`: only the web-only
+  packages and the test tools; `app.config.ts` only under `FLEET_WEB=1`; since `25971b3` two test scripts).
 
 ## 29. Round 2b as built (21 October 2026, branch `phase9-r2b`)
 
