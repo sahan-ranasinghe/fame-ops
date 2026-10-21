@@ -972,6 +972,19 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 26. The time sheet and the office's channels (21 October 2026, branch `o4-time-sounds`, CI run 39543429881 passed)
+
+- TimeField (site and app): from 08:56 "Now" rounded to 09:00 and the 09:00 chip gave way to it; now "Now" is its own
+  choice and every common time stays. Tests on fixed clocks; the site's unit suite can run at any time (`FLEET_TEST_CLOCK`).
+- Office mode's channels `office-requests` (office_ask.ogg) and `office-issues` (new_task.wav), made only for an office
+  person and registered with the token. notify-office's choice of them (`notify-office/expo.ts`) is on main but NOT deployed:
+  its own go (`npx supabase functions deploy notify-office`). Until then office pushes go on task-ring / task-updates.
+- 1.4.0: two office sounds drafted (`apps/driver/assets/sound-drafts/`, `docs/release-1.4.0.md` section 5).
+- main fast-forwarded to `8071c15` and pushed; main's CI run 39546010586 passed (1 flaky: office.spec.ts:421; the branch
+  run's flaky one was phone.spec.ts:179). The website deployed (6cbce83b, the scan clean, every /m/ file checked live). The
+  EAS update to preview, runtime 1.3.0-gmaps: group `2929e79c-fc3a-472b-a864-04b7b348ce64`, Android
+  `01a15ce5-2bb9-7675-8142-c98a837613cf`, from `8071c15` (no native change since the 1.3.0 build but jest-expo).
+
 ## 25. /m/ fixes deployed (21 October 2026, branch `o4-m-fixes`, CI run 39535454329 passed)
 
 - Causes: Google's map on /m/ never stayed (withinLimit called the browser's setTimeout with the wrong `this`: "Illegal
