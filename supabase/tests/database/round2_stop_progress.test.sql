@@ -71,5 +71,15 @@ update public.task_stops set status = 'arrived', arrived_at = '2026-10-21 11:50+
 select ok((select payload ->> 'body' from public.notifications where event = 'request.stop_arrived' order by created_at desc, id desc limit 1)
             like '11:50, 10 min early%', 'Kurunegala: "11:50, 10 min early"');
 
+-- Checkpoint 2 review: an Undo and a second Arrived send nothing more; a skipped stop has no leave delta.
+update public.task_stops set status = 'pending', arrived_at = null where task_id = (select id from r2_task) and seq = 3;
+update public.task_stops set status = 'arrived', arrived_at = '2026-10-21 11:55+05:30' where task_id = (select id from r2_task) and seq = 3;
+select is((select count(*) from public.notifications where event = 'request.stop_arrived'), 2::bigint,
+  'Undo, then Arrived again at Kurunegala: still one notice for that stop');
+update public.task_stops set status = 'skipped', skip_reason = 'closed', done_at = '2026-10-21 12:40+05:30'
+ where task_id = (select id from r2_task) and seq = 3;
+select is((select leave_delta_min from public.task_stops where task_id = (select id from r2_task) and seq = 3), null::integer,
+  'a skipped stop: no leave delta (its done_at is when it was skipped)');
+
 select * from finish();
 rollback;

@@ -24,7 +24,8 @@ const stops: Stop[] = [
   },
   {
     seq: 4, n: 4, label: "Stop 4 · Drop · Matale", type: "drop", place: "Matale", status: "skipped", skip_reason: "nobody_there",
-    progress: { planned_arrive: "15:00", planned_leave: "15:10" },
+    // A skip time as an older server sent it: never shown as "Left" (Checkpoint 2 review).
+    progress: { planned_arrive: "15:00", planned_leave: "15:10", left: "14:40", leave_delta_min: -30 },
   },
 ];
 
@@ -49,6 +50,8 @@ describe("the stop progress timeline (Round 2)", () => {
 
     // The reason in words, never the code.
     expect(rows[3].querySelector("[data-testid=stop-skipped]")!.textContent).toBe("Skipped · Nobody there");
+    // Checkpoint 2 review: a skipped stop has no times or difference of its own, even if the answer carried a skip time.
+    expect(rows[3].querySelector("[data-testid=stop-times]")).toBeNull();
   });
 
   it("says On time within 2 minutes (green) and Next for a stop still to reach", () => {

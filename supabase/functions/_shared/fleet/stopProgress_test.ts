@@ -70,3 +70,28 @@ Deno.test("the delta in words: late, early, on time within 2 minutes", () => {
   assertEquals(deltaKind(2), { kind: "on_time", min: 0 });
   assertEquals(deltaKind(null), null);
 });
+
+Deno.test("Checkpoint 2 review: a skipped stop is never the anchor and never shows as left", () => {
+  const stops = [
+    stop(1, "09:00", "09:05"),
+    stop(2, "10:30", "10:40", { status: "skipped", done_at: at("09:10") }),
+    stop(3, "11:00", "11:30"),
+  ];
+  const p = stopProgress(stops, new Date(at("09:11")));
+  assertEquals(p[1].left, null);
+  assertEquals(p[1].leave_delta_min, null);
+  assertEquals(p[2].estimate, null); // nothing the driver confirmed yet: the plan stands
+  assertEquals(p[0].current, true);
+});
+
+Deno.test("Checkpoint 2 review: an estimate is never in the past", () => {
+  const stops = [
+    stop(1, "09:00", "09:10", { status: "done", arrived_at: at("09:00"), done_at: at("10:00") }),
+    stop(2, "10:00", "10:20"),
+    stop(3, "11:00", "11:10"),
+  ];
+  // Left at 10:00, the leg planned 50 min → 10:50; at 11:00 it is still to come: about 11:00, then stop 3 from it.
+  const p = stopProgress(stops, new Date(at("11:00")));
+  assertEquals(p[1].estimate, { arrive: utc("11:00"), leave: utc("11:20"), updated: utc("11:00") });
+  assertEquals(p[2].estimate?.arrive, utc("12:00"));
+});

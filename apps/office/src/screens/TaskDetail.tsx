@@ -90,11 +90,13 @@ export function useTask(id: string, opts: { withLine?: boolean; live?: boolean }
     return () => { clearTimeout(timer); stop(); };
   }, [live, subscribe, id]);
   const running = p?.task.status === "assigned" || p?.task.status === "in_progress";
+  // The 60 s refresh stays on the web too, behind the channel (Checkpoint 2 review): a channel that fails or never joins
+  // must not leave the page frozen.
   useEffect(() => {
-    if (!live || subscribe || !running) return;
+    if (!live || !running) return;
     const timer = setInterval(() => void reloadRef.current(), 60_000);
     return () => clearInterval(timer);
-  }, [live, subscribe, running]);
+  }, [live, running]);
   return { p, err, reload };
 }
 

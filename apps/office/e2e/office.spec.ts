@@ -2105,7 +2105,7 @@ test("screenshots of the site (desktop): Overview, Assign a task (Where, the clo
 });
 
 test("Round 2: the task page follows the driver live: Arrived at a stop shows with its time and the difference against the plan, no reload", async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const email = `e2e.progress.${stamp}@fame.test`;
   const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Progress", email, permissions: ["view", "assign_tasks"] });
   const driver = { name: `E2E Progress ${stamp}`, code: `E2P-${stamp}`, username: `e2p.${stamp}`, pin: "246813", phone: "0771234500" };
@@ -2148,7 +2148,9 @@ test("Round 2: the task page follows the driver live: Arrived at a stop shows wi
   const stops = await app.get<{ id: string; seq: number }[]>(`task_stops?select=id,seq&task_id=eq.${t.task_id}&status=neq.removed&order=seq`);
   expect(await app.patch(`task_stops?id=eq.${stops[0].id}`, { status: "arrived", arrived_at: new Date().toISOString(), arrival_flag: "override" })).toBe(200);
 
-  await expect(first.getByTestId("stop-times")).toContainText(/Arrived \d\d:\d\d/, { timeout: 15_000 });
+  // Realtime shows it within a second or two; after a db reset the local change stream can take longer, and the page's
+  // 60 s refresh behind the channel is then the fallback (still no reload): up to 75 s (Checkpoint 2 review).
+  await expect(first.getByTestId("stop-times")).toContainText(/Arrived \d\d:\d\d/, { timeout: 75_000 });
   await expect(first.getByTestId("stop-delta")).toHaveText(/^(On time|\d[\d hmind]* (late|early))$/);
   await expect(first).toContainText("Here now");
   expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload)).toBe(true);

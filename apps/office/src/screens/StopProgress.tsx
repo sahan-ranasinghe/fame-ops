@@ -33,9 +33,10 @@ export function progressTimes(p: Progress): string {
   return joinDots([planned, p.arrived ? `Arrived ${p.arrived}` : "", p.left ? `Left ${p.left}` : ""]);
 }
 
-/** The difference against the plan in words: the arrival's, else the leaving's. Null when there is nothing to compare. */
+/** The arrival's difference against the plan in words (the same rule as the app's; Checkpoint 2 review). Null when the
+ *  driver has not arrived. */
 export function progressDelta(p: Progress): { text: string; late: boolean } | null {
-  const d = deltaKind(p.arrive_delta_min ?? p.leave_delta_min ?? null);
+  const d = deltaKind(p.arrive_delta_min ?? null);
   if (!d) return null;
   if (d.kind === "on_time") return { text: "On time", late: false };
   return { text: `${duration(d.min)} ${d.kind === "late" ? "late" : "early"}`, late: d.kind === "late" };
@@ -66,8 +67,10 @@ export function StopProgress({ stops, extra, action }: {
       {stops.map((s) => {
         const p = s.progress;
         const here = !!p?.current && s.status === "arrived";
-        const times = p ? progressTimes(p) : "";
-        const delta = p ? progressDelta(p) : null;
+        // A skipped stop: no times or difference of its own (the server sends none either; Checkpoint 2 review).
+        const skipped = s.status === "skipped";
+        const times = p && !skipped ? progressTimes(p) : "";
+        const delta = p && !skipped ? progressDelta(p) : null;
         const estimate = p && !s.arrived ? progressEstimate(p) : "";
         const stay = !p ? stayLine(s) : "";
         return (

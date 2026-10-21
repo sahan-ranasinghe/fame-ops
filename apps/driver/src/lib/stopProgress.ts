@@ -8,7 +8,10 @@
 //   stay, or now when that has passed), then each stop after it keeps the planner's own leg time (planned arrive minus
 //   the previous stop's planned leave) and its planned stay. The plan's leg times are the one calculation; nothing new is
 //   asked of a router here.
-// - Nothing confirmed yet: no estimate (the plan is what is known). A skipped stop is passed over (no time of its own).
+// - Nothing confirmed yet: no estimate (the plan is what is known). A skipped stop is passed over: no time of its own
+//   (its done_at is when it was skipped, never "Left"), never the anchor (Checkpoint 2 review).
+// - An estimate is never in the past: the first stop still to come is at the earliest now, and the rest follow from it
+//   (then "updated" is now: the estimate moved because time passed).
 
 export interface ProgressStopIn {
   id: string;
@@ -45,31 +48,35 @@ const passed = (s: ProgressStopIn) => s.status === "done" || s.status === "skipp
 
 export function stopProgress(stops: readonly ProgressStopIn[], now: Date = new Date()): StopProgress[] {
   const list = [...stops].filter((s) => s.status !== "removed").sort((a, b) => a.seq - b.seq);
-  const out: StopProgress[] = list.map((s) => ({
-    id: s.id,
-    planned_arrive: s.planned_arrive_at,
-    planned_leave: s.planned_depart_at,
-    arrived: s.arrived_at,
-    left: s.done_at,
-    arrive_delta_min: minutes(ms(s.arrived_at), ms(s.planned_arrive_at)),
-    leave_delta_min: minutes(ms(s.done_at), ms(s.planned_depart_at)),
-    estimate: null,
-    current: false,
-  }));
+  const out: StopProgress[] = list.map((s) => {
+    const skipped = s.status === "skipped";
+    return {
+      id: s.id,
+      planned_arrive: s.planned_arrive_at,
+      planned_leave: s.planned_depart_at,
+      arrived: skipped ? null : s.arrived_at,
+      left: skipped ? null : s.done_at,
+      arrive_delta_min: skipped ? null : minutes(ms(s.arrived_at), ms(s.planned_arrive_at)),
+      leave_delta_min: skipped ? null : minutes(ms(s.done_at), ms(s.planned_depart_at)),
+      estimate: null,
+      current: false,
+    };
+  });
   const currentIndex = list.findIndex((s) => !passed(s));
   if (currentIndex >= 0) out[currentIndex].current = true;
 
   // The latest stop with a confirmation, and its leave time (left; still there: arrived + its planned stay, or now).
   let anchor = -1;
   for (let i = list.length - 1; i >= 0; i--) {
-    if (list[i].arrived_at || list[i].done_at) {
+    if (list[i].status !== "skipped" && (list[i].arrived_at || list[i].done_at)) {
       anchor = i;
       break;
     }
   }
   if (anchor < 0) return out;
   const a = list[anchor];
-  const updated = a.done_at ?? a.arrived_at!;
+  let updated = a.done_at ?? a.arrived_at!;
+  let first = true;
   let leave: number;
   if (a.done_at) leave = ms(a.done_at)!;
   else {
@@ -86,7 +93,13 @@ export function stopProgress(stops: readonly ProgressStopIn[], now: Date = new D
       continue;
     }
     if (pa === null || prevPlannedLeave === null || passed(s) || s.arrived_at) break;
-    const arrive = leave + Math.max(0, pa - prevPlannedLeave);
+    let arrive = leave + Math.max(0, pa - prevPlannedLeave);
+    if (first && arrive < now.getTime()) {
+      // Never in the past: the driver is not there yet, so at the earliest now.
+      arrive = now.getTime();
+      updated = iso(arrive);
+    }
+    first = false;
     const stay = pd !== null ? Math.max(0, pd - pa) : null;
     out[i].estimate = { arrive: iso(arrive), leave: stay !== null ? iso(arrive + stay) : null, updated };
     if (stay === null) break;
