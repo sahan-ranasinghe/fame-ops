@@ -2926,7 +2926,11 @@ if CHANNEL == "api":
           "a requester reads the settings and plans their trip (Phase 7 §34), with no driver, vehicle or conflicts in the answer", f"{code} {code2} {str(body2)[:200]}")
     tool("update_office_user", {"email": staff_email, "permissions": ["view", "request", "assign_tasks"]})
     code, body = api_call(API_TOKEN, "update_office_user", {"email": admin_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
-    check(code == 409 and "own role or permissions" in body.get("error", ""), "an admin cannot change their own permissions (409; Round 2b: nobody can)", f"{code} {body}")
+    # Round 2b: refused; when this admin is the only active one, the last-admin reason answers first ("Make another admin
+    # first"); the self rule alone is checked in 8d with other admins on.
+    only_admin = psql("select count(*) from employees where active and 'users' = any(permissions)") == "1"
+    why = "This is the last active admin: it cannot lose Users." if only_admin else "own role or permissions"
+    check(code == 409 and why in body.get("error", ""), f"an admin cannot change their own permissions (409; Round 2b: nobody can{'; the last admin' if only_admin else ''})", f"{code} {body}")
     off = tool("set_office_user_active", {"email": staff_email, "active": False})
     code, body = http("GET", f"{API}/functions/v1/office-api/me", api_headers(staff_token))
     check(off["active"] is False and code in (401, 403), "switched off: the same session is refused at once (the sign-in is banned)", f"{code} {body}")
