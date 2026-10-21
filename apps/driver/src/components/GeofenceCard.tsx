@@ -49,7 +49,7 @@ export function GeofenceCard({ task, here, onSkip }: { task: TaskWithStops; here
         <Txt variant="muted">{t('geofence.doneBody', { next: prompt.next.place_name })}</Txt>
         <SlideToConfirm
           label={t('geofence.passedYes')}
-          onConfirm={() => slides.passed(prompt.stop, arrivalCheck(prompt.stop, here.fix))}
+          onConfirm={() => slides.passed(prompt.stop)}
           testID="geofence-passed-yes"
         />
         <Button kind="outline" label={t('geofence.passedSkip')} onPress={() => onSkip(prompt.stop)} testID="geofence-passed-skip" />

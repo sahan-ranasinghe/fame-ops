@@ -71,7 +71,7 @@ const uses: [string, RegExp, string][] = [
   ['app/office/vehicles/form.tsx', /<ChoiceChips</, 'Vehicle form: the type, the rental company, the regular driver as ChoiceChips'],
   ['app/office/people/settings.tsx', /<ChoiceRow[\s\S]*?testID=\{`personal-trips-\$\{v\}`\}/, 'Quick settings: personal trips as ChoiceRows'],
   ['components/office/PeopleParts.tsx', /<ChoiceChip key=\{key\}/, 'Office users / drivers: the permission presets as ChoiceChips'],
-  ['components/office/PeopleParts.tsx', /<Checkbox[\s\S]*?checked=\{on\}[\s\S]*?disabled=\{disabled \|\| lock\}/, 'Office users: every permission as a Checkbox (View locked says why)'],
+  ['components/office/PeopleParts.tsx', /<Checkbox[\s\S]*?checked=\{on\}[\s\S]*?disabled=\{disabled \|\| lock \|\| barred\}/, 'Office users: every permission as a Checkbox (View locked and the ones only an admin gives say why)'],
   ['app/vehicle.tsx', /<ChoiceCard selected=\{selected\}/, 'Driver: Change vehicle / today\'s vehicle as ChoiceCards'],
   ['app/vehicle.tsx', /<ChoiceCard selected=\{picked === null\}/, 'Driver: "No vehicle today" as a ChoiceCard'],
   ['components/VehicleConfirm.tsx', /<ChoiceRow[\s\S]*?disabled=\{!fits\}[\s\S]*?disabledReason=/, 'Driver: the task\'s vehicle on the day; one that does not fit is greyed with the reason'],

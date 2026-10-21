@@ -278,9 +278,10 @@ export interface AppValue {
   markStopArrived: (stop: TaskStop, record?: { flag: ArrivalFlag; distanceM: number | null }) => void;
   markStopDone: (stop: TaskStop) => void;
   /** Round 2: Undo after a slide: Arrived → back to pending; Left → back to arrived (queued after the slide's own write). */
-  undoStopStep: (stop: TaskStop, step: 'arrived' | 'left') => void;
+  undoStopStep: (stop: TaskStop, step: 'arrived' | 'left' | 'passed') => void;
   /** Round 2b: a stop driven past, confirmed at the next stop ("Yes, I was there"): Arrived and Left now, flagged as recorded. */
-  markStopPassed: (stop: TaskStop, record: { flag: ArrivalFlag; distanceM: number | null }) => void;
+  /** Round 2b: "Yes, I was there" for a stop driven past: visited, confirmed now; the server takes its times from the points. */
+  markStopPassed: (stop: TaskStop) => void;
   skipStop: (stop: TaskStop, reason: SkipReason, note: string) => void;
   /** Accept a task (the server keeps the earliest time). */
   acceptTask: (task: TaskWithStops) => void;
@@ -1227,19 +1228,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Round 2: the snackbar's Undo. The same queued write as the slide, after it in the queue (the order is kept), so offline
   // the two land in turn. How Arrived was marked (arrival_flag) stays on the server as recorded.
   // Round 2b: an undone Arrived is remembered on the phone, so the stop marked again shows "corrected" (lib/stopCorrections.ts).
-  const undoStopStep = useCallback((stop: TaskStop, step: 'arrived' | 'left') => {
-    if (step === 'arrived') {
+  // 'passed' undoes "Yes, I was there": the stop is to do again, the confirmation and any times from the points cleared.
+  const undoStopStep = useCallback((stop: TaskStop, step: 'arrived' | 'left' | 'passed') => {
+    if (step === 'passed') patchStop(stop, { status: 'pending', confirmed_later_at: null, arrived_at: null, done_at: null });
+    else if (step === 'arrived') {
       noteArrivalUndone(stop.id);
       patchStop(stop, { status: 'pending', arrived_at: null });
     } else patchStop(stop, { status: 'arrived', done_at: null });
   }, [patchStop]);
 
-  // Round 2b: "Did you stop at …?" → "Yes, I was there": the same two queued writes as the slides (Arrived, then Left),
-  // both with the phone's time now; how it was marked is the far-away Arrived's (the distance from the phone at the next stop).
-  const markStopPassed = useCallback((stop: TaskStop, record: { flag: ArrivalFlag; distanceM: number | null }) => {
-    const now = new Date().toISOString();
-    patchStop(stop, { status: 'arrived', arrived_at: now, arrival_flag: record.flag, arrival_distance_m: record.distanceM });
-    patchStop(stop, { status: 'done', done_at: now });
+  // Round 2b (Sahan, 21 October 2026): "Did you stop at …?" → "Yes, I was there". Never the time of this answer as the visit
+  // time: one queued write, visited with confirmed_later_at; the server takes Arrived and Left from the location points that
+  // passed within 150 m of the stop (first and last), or none ("time not recorded").
+  const markStopPassed = useCallback((stop: TaskStop) => {
+    patchStop(stop, { status: 'done', confirmed_later_at: new Date().toISOString(), arrived_at: null, done_at: null });
   }, [patchStop]);
 
   const skipStop = useCallback((stop: TaskStop, reason: SkipReason, note: string) => {

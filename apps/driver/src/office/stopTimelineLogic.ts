@@ -21,6 +21,8 @@ export interface StopLine {
   arriveBy: string | null;
   current: boolean;
   state: 'left' | 'here' | 'next' | 'skipped';
+  /** Round 2b: "Confirmed later by the driver" (a stop driven past without Arrived); null otherwise. */
+  confirmed: string | null;
 }
 
 /** A skip reason's words (the server sends the code: closed, nobody_there, not_needed, not_visited, other). */
@@ -48,6 +50,7 @@ export function stopLine(s: Stop, t: T): StopLine {
     const why = skipWords(t, s.skip_reason);
     parts.push(why ? t('office.timeline.skippedWhy', { why }) : t('office.timeline.skipped'));
   }
+  else if (p?.time_not_recorded) parts.push(t('office.timeline.timeNotRecorded'));
   else {
     if (arrived) parts.push(t('office.timeline.arrived', { time: arrived }));
     if (left) parts.push(t('office.timeline.left', { time: left }));
@@ -67,5 +70,6 @@ export function stopLine(s: Stop, t: T): StopLine {
     arriveBy: s.arrive_by && !left ? t('office.timeline.arriveBy', { time: s.arrive_by }) : null,
     current: !!p?.current,
     state,
+    confirmed: !skipped && p?.confirmed_later ? t('office.timeline.confirmedLater') : null,
   };
 }

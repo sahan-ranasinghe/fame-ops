@@ -972,6 +972,27 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 29. Round 2b as built (21 October 2026, branch `phase9-r2b`)
+
+Home, dark mode and contrast, no duplicate navigation, the Coordinator (`office_users`; `docs/coordinator-guide.md`),
+Today's attendance (`drivers_board.attendance`), the Activity log (`activity_log`, admins only), and three changes after
+Checkpoint 2b (Sahan):
+
+- **The help-desk rule** (Google Workspace's help-desk admin): someone who is not an admin creates, edits, links and
+  switches off only accounts holding none of Office accounts, Users and Approve, and never gives those
+  (`accountGuards.ts` rule 4, both channels). Another Coordinator, a Fleet admin or an admin opens locked with the reason
+  ("Only an admin can change this account: it holds …"); the permission pickers offer only what may be given
+  (`givablePermissions`; the app's copy in `office/peopleLogic.ts`).
+- **The last active admin** (GitHub's last owner, Google's last super admin): never switched off, never loses Users,
+  never another role label, whoever asks, the shared key included (rule 5: `countActiveAdmins` in `tools/accounts.ts`).
+  Nobody changes their own permissions still holds.
+- **A stop driven past, confirmed later** (migration `20261021400000_round2b_confirmed_visits`): "Yes, I was there" is one
+  queued write (`confirmed_later_at`); the server takes Arrived / Left from the driver's location points within 150 m of
+  the pin (the first and the last, between the stop before it and the confirmation; `confirmed_visit_times`), at once and
+  every 5 minutes for 2 days (`fill_confirmed_visits`, cron `confirmed-visits`). With none: visited, "time not recorded",
+  no late / early, never the re-estimate's anchor (`stopProgress.ts`: `confirmed_later`, `time_not_recorded`). No
+  "arrived" notice for it. Undo clears it. Shown as "Confirmed later" on the site, /m/, Office mode and the driver app.
+
 ## 28. Round 2 deployed (21 October 2026, branch `phase9-r2`, Sahan's go after Checkpoint 2)
 
 Live stop progress: the driver slides Arrived / Left / finish (Undo 6 s), the "Arrived at <stop>?" card on the task

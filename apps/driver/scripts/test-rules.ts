@@ -63,7 +63,7 @@ function check(ok: boolean, label: string, detail?: unknown): void {
 function stop(fields: Partial<TaskStop>): TaskStop {
   return {
     address: null, arrival_accuracy_m: null, arrival_at: null, arrival_distance_m: null, arrival_flag: null, arrival_lat: null,
-    arrival_lng: null, arrive_by: null, arrived_at: null, auto_detected_at: null, done_at: null, dwell_min: null, dwell_source: null,
+    arrival_lng: null, arrive_by: null, arrived_at: null, auto_detected_at: null, confirmed_later_at: null, done_at: null, dwell_min: null, dwell_source: null,
     google_fetched_at: null, google_place_id: null, id: 's', is_start: false, lat: null, lng: null, note: null, place_id: null,
     place_name: 'Kurunegala site', planned_arrive_at: null, planned_depart_at: null, removed_at: null, saved_place_id: null,
     seq: 1, skip_note: null, skip_reason: null, status: 'pending', task_id: 't', type: 'drop', what: null,

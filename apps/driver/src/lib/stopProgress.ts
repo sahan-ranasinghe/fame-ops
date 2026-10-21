@@ -12,6 +12,9 @@
 //   (its done_at is when it was skipped, never "Left"), never the anchor (Checkpoint 2 review).
 // - An estimate is never in the past: the first stop still to come is at the earliest now, and the rest follow from it
 //   (then "updated" is now: the estimate moved because time passed).
+// - A stop confirmed later (Round 2b: driven past without Arrived, "Yes, I was there" at the next stop): its times are
+//   the location points' (the server's), marked confirmed_later; with none it is visited with no times
+//   (time_not_recorded): never late or early, never the anchor, passed over like a skipped stop.
 
 export interface ProgressStopIn {
   id: string;
@@ -21,6 +24,8 @@ export interface ProgressStopIn {
   planned_depart_at: string | null;
   arrived_at: string | null;
   done_at: string | null;
+  /** Round 2b: when the driver confirmed a stop driven past ("Yes, I was there"); absent on older answers. */
+  confirmed_later_at?: string | null;
 }
 
 export interface StopProgress {
@@ -37,6 +42,10 @@ export interface StopProgress {
   estimate: { arrive: string; leave: string | null; updated: string } | null;
   /** The stop the driver is at or heading to next (the first one not left or skipped). */
   current: boolean;
+  /** Round 2b: visited, confirmed later by the driver; its times (if any) are from the location points. */
+  confirmed_later: boolean;
+  /** Round 2b: confirmed later with no location points near it: visited, no times. */
+  time_not_recorded: boolean;
 }
 
 const ms = (iso: string | null): number | null => (iso ? new Date(iso).getTime() : null);
@@ -60,6 +69,8 @@ export function stopProgress(stops: readonly ProgressStopIn[], now: Date = new D
       leave_delta_min: skipped ? null : minutes(ms(s.done_at), ms(s.planned_depart_at)),
       estimate: null,
       current: false,
+      confirmed_later: !!s.confirmed_later_at && !skipped,
+      time_not_recorded: !!s.confirmed_later_at && !skipped && !s.arrived_at && !s.done_at,
     };
   });
   const currentIndex = list.findIndex((s) => !passed(s));
@@ -88,11 +99,11 @@ export function stopProgress(stops: readonly ProgressStopIn[], now: Date = new D
     const s = list[i];
     const pa = ms(s.planned_arrive_at);
     const pd = ms(s.planned_depart_at);
-    if (s.status === "skipped") {
-      // Passed over: the next leg is measured from the stop before it.
+    if (passed(s)) {
+      // Skipped, or visited with no time recorded (Round 2b): passed over, the next leg is measured from the stop before it.
       continue;
     }
-    if (pa === null || prevPlannedLeave === null || passed(s) || s.arrived_at) break;
+    if (pa === null || prevPlannedLeave === null || s.arrived_at) break;
     let arrive = leave + Math.max(0, pa - prevPlannedLeave);
     if (first && arrive < now.getTime()) {
       // Never in the past: the driver is not there yet, so at the earliest now.

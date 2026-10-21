@@ -500,6 +500,7 @@ export function localStop(fields: {
     skip_note: null,
     removed_at: null,
     auto_detected_at: null,
+    confirmed_later_at: null,
     arrival_flag: null,
     arrival_distance_m: null,
     arrival_lat: null,

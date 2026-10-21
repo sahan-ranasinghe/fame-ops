@@ -95,3 +95,30 @@ Deno.test("Checkpoint 2 review: an estimate is never in the past", () => {
   assertEquals(p[1].estimate, { arrive: utc("11:00"), leave: utc("11:20"), updated: utc("11:00") });
   assertEquals(p[2].estimate?.arrive, utc("12:00"));
 });
+
+Deno.test("Round 2b: a stop confirmed later with no points: visited, no times, never late or early, passed over", () => {
+  const stops = [
+    stop(1, "09:00", "10:00", { status: "done", arrived_at: at("09:10"), done_at: at("10:20") }),
+    stop(2, "10:30", "10:40", { status: "done", confirmed_later_at: at("11:05") }),
+    stop(3, "11:00", "11:30"),
+  ];
+  const p = stopProgress(stops, new Date(at("10:21")));
+  assertEquals([p[1].confirmed_later, p[1].time_not_recorded], [true, true]);
+  assertEquals([p[1].arrived, p[1].left, p[1].arrive_delta_min, p[1].leave_delta_min, p[1].estimate], [null, null, null, null, null]);
+  // Not the anchor: the estimate runs from stop 1's Left (10:20) over the planned legs, as for a skipped stop.
+  assertEquals(p[2].estimate, { arrive: utc("11:20"), leave: utc("11:50"), updated: at("10:20") });
+  assertEquals(p[2].current, true);
+});
+
+Deno.test("Round 2b: a stop confirmed later with the points' times: its difference, marked confirmed later, the anchor", () => {
+  const stops = [
+    stop(1, "09:00", "10:00", { status: "done", arrived_at: at("09:10"), done_at: at("10:20") }),
+    stop(2, "10:30", "10:40", { status: "done", arrived_at: at("10:38"), done_at: at("10:41"), confirmed_later_at: at("11:05") }),
+    stop(3, "11:00", "11:30"),
+  ];
+  const p = stopProgress(stops, new Date(at("10:45")));
+  assertEquals([p[1].confirmed_later, p[1].time_not_recorded, p[1].arrive_delta_min], [true, false, 8]);
+  // From 10:41 with the leg planned 10:40 → 11:00: 11:01, stay 30 → 11:31.
+  assertEquals(p[2].estimate, { arrive: utc("11:01"), leave: utc("11:31"), updated: at("10:41") });
+  assertEquals(p[0].confirmed_later, false);
+});

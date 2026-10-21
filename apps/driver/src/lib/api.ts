@@ -297,7 +297,7 @@ export type TaskPatch = Pick<
 >;
 export type StopPatch = Pick<
   Tables['task_stops']['Update'],
-  'status' | 'arrived_at' | 'done_at' | 'skip_reason' | 'skip_note' | 'auto_detected_at' | 'arrival_flag' | 'arrival_distance_m'
+  'status' | 'arrived_at' | 'done_at' | 'skip_reason' | 'skip_note' | 'auto_detected_at' | 'arrival_flag' | 'arrival_distance_m' | 'confirmed_later_at'
 >;
 export type OdometerInsert = Tables['odometer_logs']['Insert'] & { id: string };
 export type FuelInsert = Tables['fuel_logs']['Insert'] & { id: string };

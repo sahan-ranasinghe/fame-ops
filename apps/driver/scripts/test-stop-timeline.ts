@@ -52,6 +52,16 @@ check(skipped.times === 'Planned 13:00 · Skipped · Nobody there' && skipped.st
 check(skipWords(en, 'not_visited') === 'Not visited' && skipWords(en, 'whatever') === '', 'every skip code has words; an unknown one shows nothing');
 const old = stopLine({ seq: 1, n: 1, place: 'Office', status: 'done', planned_arrive: '09:00', arrived: '09:02', done: '09:10' } as Stop, en);
 check(old.times === 'Planned 09:00 · Arrived 09:02 · Left 09:10', 'an older server with no progress: its own times', old);
+// Round 2b (Sahan, 21 October 2026): a stop driven past and confirmed later by the driver.
+const untimed = stopLine({ seq: 2, n: 2, place: 'Wariyapola', status: 'done', progress: { planned_arrive: '10:30', confirmed_later: true, time_not_recorded: true } } as Stop, en);
+check(untimed.times === 'Planned 10:30 · Visited · time not recorded' && untimed.delta === null && untimed.confirmed === 'Confirmed later by the driver' && untimed.state === 'left',
+  'confirmed later with no location points: "Visited · time not recorded", no difference, "Confirmed later by the driver"', untimed);
+const timedLater = stopLine({ seq: 2, n: 2, place: 'Wariyapola', status: 'done', progress: { planned_arrive: '10:30', arrived: '10:38', left: '10:41', arrive_delta_min: 8, confirmed_later: true } } as Stop, en);
+check(timedLater.times === 'Planned 10:30 · Arrived 10:38 · Left 10:41' && timedLater.delta?.text === '8 min late' && timedLater.confirmed !== null,
+  'confirmed later with the points\' times: the times, the difference and the mark', timedLater);
+check(l1.confirmed === null && skipped.confirmed === null, 'other stops: no mark');
+const untimedSi = stopLine({ seq: 2, n: 2, place: 'Wariyapola', status: 'done', progress: { planned_arrive: '10:30', confirmed_later: true, time_not_recorded: true } } as Stop, si);
+check(!/[A-Za-z]{3,}/.test([untimedSi.times, untimedSi.confirmed].join(' ')), 'in Sinhala too', untimedSi);
 const s1 = stopLine(here1, si);
 check(!/[A-Za-z]{3,}/.test([s1.times, s1.delta?.text].join(' ')) && s1.times.includes('10:52'), 'in Sinhala: no English words, Latin digits', s1);
 

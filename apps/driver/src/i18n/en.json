@@ -200,7 +200,9 @@
       "early": "{n} min early",
       "onTime": "on time",
       "about": "about {time}",
-      "corrected": "corrected"
+      "corrected": "corrected",
+      "confirmedLater": "confirmed later",
+      "timeNotRecorded": "Visited · time not recorded"
     }
   },
   "log": {
@@ -2839,7 +2841,9 @@
       "skip_notVisited": "Not visited",
       "skip_other": "Other",
       "now": "Now",
-      "live": "Live"
+      "live": "Live",
+      "confirmedLater": "Confirmed later by the driver",
+      "timeNotRecorded": "Visited · time not recorded"
     },
     "attendance": {
       "on_duty": "On duty",

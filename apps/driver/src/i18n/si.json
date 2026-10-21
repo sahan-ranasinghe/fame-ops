@@ -200,7 +200,9 @@
       "early": "මිනිත්තු {n} කලින්",
       "onTime": "වේලාවට",
       "about": "{time} ට පමණ",
-      "corrected": "නිවැරදි කළා"
+      "corrected": "නිවැරදි කළා",
+      "confirmedLater": "පසුව තහවුරු කළා",
+      "timeNotRecorded": "ගියා · වේලාව සටහන් නොවුණා"
     }
   },
   "log": {
@@ -2839,7 +2841,9 @@
       "skip_notVisited": "නොගියා",
       "skip_other": "වෙනත්",
       "now": "දැන්",
-      "live": "සජීවී"
+      "live": "සජීවී",
+      "confirmedLater": "රියදුරු පසුව තහවුරු කළා",
+      "timeNotRecorded": "ගියා · වේලාව සටහන් නොවුණා"
     },
     "attendance": {
       "on_duty": "රාජකාරියේ",

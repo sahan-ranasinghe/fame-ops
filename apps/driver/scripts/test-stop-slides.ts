@@ -185,6 +185,16 @@ console.log('\nThe progress words');
   check(progressWords(t, p[1], true).line === 'Planned 11:30 · Arrived 11:22 · corrected', 'Round 2b: an Arrived undone and marked again: "Arrived 11:22 · corrected"', progressWords(t, p[1], true));
   check(progressWords(t, p[2], true).line === 'Planned 12:30', 'not Arrived (yet again): no "corrected"');
   check(progressWords(t, p[0], true).line === 'Planned 10:30 · Arrived 10:52 · corrected · Left 11:10', '… and it stays once Left');
+  // Round 2b (Sahan, 21 October 2026): a stop driven past, "Yes, I was there" later.
+  const untimed = stopProgress([stops[0], stop(2, { status: 'done', confirmed_later_at: iso(130) }), stop(3)], new Date(T0 + 131 * 60_000));
+  const wu = progressWords(t, untimed[1]);
+  check(wu.line === 'Planned 11:30 · Visited · time not recorded · confirmed later' && wu.delta === null && wu.about === null,
+    'confirmed later with no location points: "Visited · time not recorded · confirmed later", never late or early', wu);
+  check(nextAbout(untimed)?.id === 's3', 'Today\'s card: the next stop is the one after it (the visited stop is not "next")', nextAbout(untimed));
+  const timed = stopProgress([stops[0], stop(2, { status: 'done', arrived_at: iso(112), done_at: iso(115), confirmed_later_at: iso(130) }), stop(3)], new Date(T0 + 131 * 60_000));
+  const wt = progressWords(t, timed[1]);
+  check(wt.line === 'Planned 11:30 · Arrived 11:22 · Left 11:25 · confirmed later' && wt.delta?.text === '8 min early',
+    'confirmed later with the points\' times: Arrived and Left from them, its difference, "confirmed later"', wt);
 }
 
 console.log('\nThe screens');
@@ -203,12 +213,14 @@ console.log('\nThe screens');
   const app = code('state/app.tsx');
   check(/patchStop\(stop, \{ status: 'pending', arrived_at: null \}\)/.test(app) && /patchStop\(stop, \{ status: 'arrived', done_at: null \}\)/.test(app), 'Undo goes through the same queued stop write');
   check(/noteArrivalUndone\(stop\.id\);\s*patchStop\(stop, \{ status: 'pending', arrived_at: null \}\)/.test(app), 'Round 2b: an undone Arrived is remembered on the phone (the "corrected" note); the server keeps how it was first marked');
-  check(/patchStop\(stop, \{ status: 'arrived', arrived_at: now, arrival_flag: record\.flag, arrival_distance_m: record\.distanceM \}\);\s*patchStop\(stop, \{ status: 'done', done_at: now \}\)/.test(app),
-    'Round 2b: "Yes, I was there" = Arrived then Left, the phone\'s time, through the same queued writes');
+  check(/patchStop\(stop, \{ status: 'done', confirmed_later_at: new Date\(\)\.toISOString\(\), arrived_at: null, done_at: null \}\)/.test(app)
+    && !/markStopPassed[\s\S]{0,200}arrived_at: now/.test(app),
+    'Round 2b: "Yes, I was there" = one queued write, visited and confirmed now; never the phone\'s time as the visit (the server takes the points)');
+  check(/patchStop\(stop, \{ status: 'pending', confirmed_later_at: null, arrived_at: null, done_at: null \}\)/.test(app), '… and its Undo clears it all: the stop is to do again');
   const card = code('components/GeofenceCard.tsx');
-  check(/slides\.passed\(prompt\.stop, arrivalCheck\(prompt\.stop, here\.fix\)\)/.test(card) && /onPress=\{\(\) => onSkip\(prompt\.stop\)\}/.test(card) && /label=\{t\('geofence\.passedYes'\)\}/.test(card),
-    'Round 2b: the passed stop\'s card: the slide "Yes, I was there" (marked as a far-away Arrived: the distance from here) and "Skip it" (the skip sheet)');
-  check(/markStopPassed\(stop, arrivalRecord\(made\)\)/.test(button) && /undoStopStep\(stop, 'left'\);\s*undoStopStep\(stop, 'arrived'\);/.test(button), '… with Undo for both');
+  check(/slides\.passed\(prompt\.stop\)/.test(card) && /onPress=\{\(\) => onSkip\(prompt\.stop\)\}/.test(card) && /label=\{t\('geofence\.passedYes'\)\}/.test(card),
+    'Round 2b: the passed stop\'s card: the slide "Yes, I was there" (confirmed later) and "Skip it" (the skip sheet)');
+  check(/markStopPassed\(stop\)/.test(button) && /undoStopStep\(stop, 'passed'\)/.test(button), '… with Undo');
   const bg = code('lib/arrival.ts');
   const bgTask = code('lib/locationTask.ts');
   check(/await checkArrival\(locations\.map\(toPhoneFix\)\)/.test(bgTask) && (bg.match(/notifyArrival\(/g) ?? []).length === 1 && /backgroundArrival\(tasks, fixes, watch\)/.test(bg)
@@ -225,7 +237,7 @@ console.log('\nThe strings (en and si)');
 {
   const keys = ['task.slideArrive', 'task.slideLeave', 'task.slideFinish', 'task.undo', 'task.undoArrived', 'task.undoLeft',
     'task.progress.planned', 'task.progress.arrived', 'task.progress.left', 'task.progress.late', 'task.progress.early', 'task.progress.onTime',
-    'task.progress.about', 'geofence.arrivedTitle', 'geofence.doneTitle', 'geofence.doneBody', 'geofence.passedTitle', 'geofence.passedYes', 'geofence.passedSkip', 'task.undoPassed', 'task.progress.corrected', 'arrival.title', 'arrival.body', 'today.nextStopAbout', 'patterns.slideHint'];
+    'task.progress.about', 'geofence.arrivedTitle', 'geofence.doneTitle', 'geofence.doneBody', 'geofence.passedTitle', 'geofence.passedYes', 'geofence.passedSkip', 'task.undoPassed', 'task.progress.corrected', 'task.progress.confirmedLater', 'task.progress.timeNotRecorded', 'arrival.title', 'arrival.body', 'today.nextStopAbout', 'patterns.slideHint'];
   const missing = keys.filter((k) => typeof lookup(en, k) !== 'string' || typeof lookup(si, k) !== 'string');
   check(missing.length === 0, `every new key in en and si (${keys.length})`, missing);
   const ph = (x: unknown) => (String(x).match(/\{[a-z]+\}/g) ?? []).sort().join(',');

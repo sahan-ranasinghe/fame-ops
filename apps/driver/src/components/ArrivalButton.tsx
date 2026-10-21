@@ -89,22 +89,17 @@ export function distanceText(t: (key: string, vars?: Vars) => string, meters: nu
 export function useStopSlides(): {
   arrive: (stop: TaskStop, made: ArrivalCheck) => void;
   leave: (stop: TaskStop) => void;
-  passed: (stop: TaskStop, made: ArrivalCheck) => void;
+  passed: (stop: TaskStop) => void;
 } {
   const { t, markStopArrived, markStopDone, markStopPassed, undoStopStep } = useApp();
   return {
-    // Round 2b: a stop driven past, "Yes, I was there" at the next stop: Arrived and Left at once (Undo reverts both).
-    passed: (stop, made) => {
-      markStopPassed(stop, arrivalRecord(made));
+    // Round 2b: a stop driven past, "Yes, I was there" at the next stop: visited, confirmed later (the times from the
+    // location points, on the server); Undo makes it a stop to do again.
+    passed: (stop) => {
+      markStopPassed(stop);
       showSnackbar({
         text: t('task.undoPassed', { stop: stop.place_name }),
-        action: {
-          label: t('task.undo'),
-          onPress: () => {
-            undoStopStep(stop, 'left');
-            undoStopStep(stop, 'arrived');
-          },
-        },
+        action: { label: t('task.undo'), onPress: () => undoStopStep(stop, 'passed') },
         ms: SNACK_ACTION_MS,
       });
     },

@@ -273,6 +273,9 @@ export interface Stop {
     leave_delta_min?: number;
     estimate?: { arrive: string; leave?: string; updated: string };
     current?: boolean;
+    /** Round 2b: confirmed later by the driver (driven past without Arrived); with no location points, no times. */
+    confirmed_later?: boolean;
+    time_not_recorded?: boolean;
   };
   /** A Google place (Part 5): its pin is drawn on Google's map only; the id is kept, the details 30 days. */
   google?: boolean;

@@ -25,11 +25,13 @@ export const skipWords = (reason: string | undefined): string => (reason ? SKIP_
 
 export type Progress = NonNullable<Stop["progress"]>;
 
-/** "Planned 10:30–11:00 · Arrived 10:52 · Left 11:40"; empty when nothing is known. */
+/** "Planned 10:30–11:00 · Arrived 10:52 · Left 11:40"; empty when nothing is known. A stop confirmed later with no
+ *  location points near it: "Visited · time not recorded" (Round 2b). */
 export function progressTimes(p: Progress): string {
   const planned = p.planned_arrive
     ? `Planned ${p.planned_arrive}${p.planned_leave && p.planned_leave !== p.planned_arrive ? `–${p.planned_leave}` : ""}`
     : "";
+  if (p.time_not_recorded) return joinDots([planned, "Visited · time not recorded"]);
   return joinDots([planned, p.arrived ? `Arrived ${p.arrived}` : "", p.left ? `Left ${p.left}` : ""]);
 }
 
@@ -80,6 +82,7 @@ export function StopProgress({ stops, extra, action }: {
               <div className="name">
                 {stopTitle(s)}
                 {p?.current && <Pill tone="live">{here ? "Here now" : "Next"}</Pill>}
+                {p?.confirmed_later && <span data-testid="stop-confirmed-later"><Pill>Confirmed later</Pill></span>}
                 {s.is_start && <Pill tone="live">Start · passengers get in here</Pill>}
                 {s.google && <span translate="no"><Pill tone="live">Google Maps</Pill></span>}
               </div>

@@ -22,11 +22,14 @@ export interface ProgressWords {
  */
 export function progressWords(t: T, p: StopProgress | undefined, corrected = false): ProgressWords {
   if (!p) return { line: '', delta: null, about: null };
+  // Round 2b: a stop driven past and confirmed later: its times from the location points, or "Visited · time not recorded".
   const line = [
     p.planned_arrive ? t('task.progress.planned', { time: colomboTime(p.planned_arrive) }) : null,
+    p.time_not_recorded ? t('task.progress.timeNotRecorded') : null,
     p.arrived ? t('task.progress.arrived', { time: colomboTime(p.arrived) }) : null,
     p.arrived && corrected ? t('task.progress.corrected') : null,
     p.left ? t('task.progress.left', { time: colomboTime(p.left) }) : null,
+    p.confirmed_later ? t('task.progress.confirmedLater') : null,
   ].filter(Boolean).join(' · ');
   const kind = deltaKind(p.arrived ? p.arrive_delta_min : null);
   const delta = kind
@@ -41,6 +44,6 @@ export function progressWords(t: T, p: StopProgress | undefined, corrected = fal
 
 /** The next stop's "about HH:MM" for a card (Today): the first stop still to reach, when it has an estimate. */
 export function nextAbout(progress: readonly StopProgress[]): { id: string; time: string } | null {
-  const p = progress.find((x) => !x.arrived && !x.left);
+  const p = progress.find((x) => !x.arrived && !x.left && !x.time_not_recorded);
   return p?.estimate ? { id: p.id, time: colomboTime(p.estimate.arrive) } : null;
 }

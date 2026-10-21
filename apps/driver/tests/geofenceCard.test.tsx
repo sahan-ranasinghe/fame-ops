@@ -66,7 +66,7 @@ describe('GeofenceCard: a stop driven past', () => {
     expect(screen.getByText('Skip it')).toBeTruthy();
   });
 
-  it('"Yes, I was there" marks it Arrived and Left, flagged with the distance, with Undo for both', () => {
+  it('"Yes, I was there" marks it visited, confirmed later (no time from this phone), with Undo', () => {
     const view = render(<Card here={atNext(T0)} onSkip={jest.fn()} />);
     view.rerender(<Card here={atNext(T0 + 60_000)} onSkip={jest.fn()} />);
     slideAll('geofence-passed-yes');
@@ -74,14 +74,14 @@ describe('GeofenceCard: a stop driven past', () => {
       jest.advanceTimersByTime(500);
     });
     expect(mockApp.markStopPassed).toHaveBeenCalledTimes(1);
-    const [passed, record] = mockApp.markStopPassed.mock.calls[0];
-    expect(passed.id).toBe('s1');
-    expect(record.flag).toBe('override');
-    expect(record.distanceM).toBeGreaterThan(1000);
+    const call = mockApp.markStopPassed.mock.calls[0];
+    expect(call[0].id).toBe('s1');
+    // Round 2b (Sahan): the stop only; the server takes the times from the location points.
+    expect(call).toHaveLength(1);
     const snack = shownSnackbar();
     expect(snack?.text).toBe('Place 1 marked as visited');
     act(() => snack?.action?.onPress());
-    expect(mockApp.undoStopStep.mock.calls.map((c) => c[1])).toEqual(['left', 'arrived']);
+    expect(mockApp.undoStopStep.mock.calls.map((c) => c[1])).toEqual(['passed']);
   });
 
   it('"Skip it" opens the skip reasons for the passed stop', () => {

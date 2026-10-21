@@ -145,3 +145,25 @@ describe("the task page live (Round 2)", () => {
     expect(screen.getByTestId("stop-times").textContent).toContain("Arrived 10:52");
   });
 });
+
+describe("a stop confirmed later (Round 2b: driven past without Arrived)", () => {
+  it("with no location points: Visited · time not recorded, no difference, marked Confirmed later", () => {
+    render(<StopProgress stops={[{
+      seq: 1, n: 1, label: "Stop 1 · Drop · Wariyapola", type: "drop", place: "Wariyapola", status: "done",
+      progress: { planned_arrive: "10:30", planned_leave: "10:40", confirmed_later: true, time_not_recorded: true },
+    }]} />);
+    expect(screen.getByTestId("stop-times").textContent).toBe("Planned 10:30–10:40 · Visited · time not recorded");
+    expect(screen.queryByTestId("stop-delta")).toBeNull();
+    expect(screen.getByTestId("stop-confirmed-later").textContent).toBe("Confirmed later");
+  });
+
+  it("with the points' times: Arrived and Left with the difference, marked Confirmed later", () => {
+    render(<StopProgress stops={[{
+      seq: 1, n: 1, label: "Stop 1 · Drop · Wariyapola", type: "drop", place: "Wariyapola", status: "done", arrived: "10:38", done: "10:41",
+      progress: { planned_arrive: "10:30", planned_leave: "10:40", arrived: "10:38", left: "10:41", arrive_delta_min: 8, leave_delta_min: 1, confirmed_later: true },
+    }]} />);
+    expect(screen.getByTestId("stop-times").textContent).toContain("Arrived 10:38 · Left 10:41");
+    expect(screen.getByTestId("stop-delta").textContent).toBe("8 min late");
+    expect(screen.getByTestId("stop-confirmed-later")).toBeTruthy();
+  });
+});

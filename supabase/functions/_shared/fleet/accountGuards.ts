@@ -63,7 +63,9 @@ export function accountChangeProblem(actor: GuardActor, change: AccountChange, c
   const admin = isAdmin(actor.permissions);
   // Rule 5: the last active admin stays an admin and stays on, whoever asks.
   if (change.kind !== "create" && isAdmin(change.target.permissions) && change.target.active !== false && (ctx.activeAdmins ?? 2) <= 1) {
-    if (change.kind === "switch" && !change.active) return "This is the last active admin: it cannot be switched off. Make another admin first.";
+    if (change.kind === "switch" && !change.active) {
+      return "This is the last active admin: it cannot be switched off. Make another admin first.";
+    }
     if (change.kind === "update" && change.permissions !== undefined && !change.permissions.includes("users")) {
       return "This is the last active admin: it cannot lose Users. Make another admin first.";
     }

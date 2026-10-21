@@ -1049,6 +1049,9 @@ function progressCard(p: ReturnType<typeof stopProgress>[number] | undefined) {
       ? { arrive: colomboTime(p.estimate.arrive), leave: hm(p.estimate.leave), updated: colomboTime(p.estimate.updated) }
       : undefined,
     current: p.current || undefined,
+    // Round 2b: confirmed later by the driver (driven past without Arrived); with no location points near it, no times.
+    confirmed_later: p.confirmed_later || undefined,
+    time_not_recorded: p.time_not_recorded || undefined,
   };
 }
 
@@ -1973,7 +1976,9 @@ export const taskDetail = tool({
           skip_note: s.skip_note ?? undefined,
           // Phase 7: how Arrived was marked, when not within 300 m (override, no_gps, no_pin, not_arrived).
           arrival_flag: s.arrival_flag && s.arrival_flag !== "ok" ? s.arrival_flag : undefined,
-          arrival_text: arrivalFlagText(s.arrival_flag, s.arrival_distance_m),
+          arrival_text: s.confirmed_later_at
+            ? confirmedLaterText(s.confirmed_later_at, !!s.arrived_at)
+            : arrivalFlagText(s.arrival_flag, s.arrival_distance_m),
           arrival_distance_m: s.arrival_distance_m ?? undefined,
           navigate: mapsDirections({ lat: s.lat, lng: s.lng, text: s.address ?? s.place_name }),
           // Where the driver's own phone was when the stop was reached (ours, kept for good).
@@ -2445,6 +2450,13 @@ export function finishFlagText(flag: unknown): { kind: string; text: string } | 
       minText(f.planned_minutes)
     } of driving)`,
   };
+}
+
+/** Round 2b: a stop driven past without Arrived, confirmed by the driver at a later stop (the times, if any, beside it). */
+export function confirmedLaterText(confirmedAt: string, timed: boolean): string {
+  return `The driver confirmed this stop at ${colomboTime(confirmedAt)}; ${
+    timed ? "the times are from the location points" : "no location points near the stop"
+  }`;
 }
 
 /** How Arrived was marked, in words, when it was not within 300 m of the pin. */

@@ -50,6 +50,7 @@ export function StopTimeline({ stops, extra, testID = 'stop-timeline' }: { stops
                 </Txt>
               )}
               {line.estimate ? <Txt variant="strong" size={15} color={colors.blue} testID={`timeline-estimate-${i}`}>{line.estimate}</Txt> : null}
+              {line.confirmed ? <Txt variant="small" testID={`timeline-confirmed-${i}`}>{line.confirmed}</Txt> : null}
               {extra?.(s)}
             </View>
           </View>
