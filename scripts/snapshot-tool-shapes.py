@@ -55,6 +55,15 @@ OPTIONAL = {
         "requests[].trip.changed.stops": "tools/requests.ts:372-377 changed only when the office moved the time or the stops "
                                          "and no change of the requester waits",
         "requests[].trip.timeline.items[].rush_factor": "timeline.ts: rush_factor only on a leg in a rush-hour band",
+        # Round 3: only on a request someone else drives, a self-drive or an expired one (office-api's check runs before
+        # the suite's Round 3 section makes them).
+        "requests[].driver_name": "tools/requests.ts:496 driver_name only when someone else drives",
+        "requests[].driver_phone": "tools/requests.ts:497 driver_phone only when someone else drives",
+        "requests[].fields.driver_name": "tools/requests.ts:547 the asked driver's name only when someone else drives",
+        "requests[].fields.driver_phone": "tools/requests.ts:548 the asked driver's phone only when someone else drives",
+        "requests[].self_drive_licence": "tools/requests.ts:499 only on a request the asker drives themselves",
+        "requests[].expired": "tools/requests.ts:505 only on an expired request",
+        "requests[].timeline.expired": "tools/requests.ts:567 only on an expired request",
     },
     # A plan's rush-hour factor is there only for a leg in a rush-hour band (settings.rush_hour): a run at another time of
     # day has none (main's CI at 16:40 Colombo recorded it, 21 October 2026).
