@@ -54,7 +54,12 @@ async function main() {
     check(openIndex('09:10', undefined, '07:00') === 110 && openIndex('', '07:24', '12:00') === 88 && openIndex('', undefined, '12:01') === 145, 'the list opens at the value, else the suggestion, else now');
     const q = quickTimes('07:02', '07:24');
     check(q[0].kind === 'suggested' && q[0].time === '07:24' && q[1].kind === 'now' && q[1].time === '07:05' && q.filter((x) => x.kind === 'common').length === COMMON_TIMES.length, 'the chips: the suggestion, Now, the common times');
-    check(quickTimes('08:58').filter((x) => x.time === '09:00').length === 1, 'Now equal to a common time is not shown twice');
+    // 21 October 2026: "Now" is its own choice and every common time stays (from 08:56 Now is 09:00; 09:00 used to go).
+    for (const at of ['08:48', '08:59', '23:58', '00:01']) {
+      const qt = quickTimes(at);
+      check(qt.filter((x) => x.kind === 'common').map((x) => x.time).join() === COMMON_TIMES.join() && qt.filter((x) => x.kind === 'now').length === 1, `at ${at}: Now, and every common time (09:00 too)`, qt.map((x) => x.time));
+    }
+    check(quickTimes('10:02', '09:00').filter((x) => x.time === '09:00').length === 1, 'the planned time stands for its own common time');
   }
 
   console.log('\nThe filters');

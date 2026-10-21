@@ -668,7 +668,11 @@
     "updates": "Changed and cancelled tasks",
     "updatesDesc": "A task changed, cancelled or given to someone else",
     "reminders": "Task reminders",
-    "remindersDesc": "Time to leave, a task still to accept, and arrived at a stop"
+    "remindersDesc": "Time to leave, a task still to accept, and arrived at a stop",
+    "officeRequests": "Requests and approvals",
+    "officeRequestsDesc": "A request to approve, a task that needs a driver, a booking or a trip that changed",
+    "officeIssues": "Issues",
+    "officeIssuesDesc": "A critical issue, or an issue given to you"
   },
   "dur": {
     "now": "now",

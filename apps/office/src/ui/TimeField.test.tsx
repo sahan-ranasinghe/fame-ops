@@ -138,7 +138,18 @@ describe("TimeField (phone: the sheet)", () => {
   });
   afterEach(() => { window.matchMedia = realMatch; });
 
+  // A fixed clock (21 October 2026: at 08:56 "Now" became 09:00 and the 09:00 chip was gone; the test ran at the real time).
+  it.each([["08:48", "2026-10-21T03:18:00Z"], ["08:59", "2026-10-21T03:29:00Z"], ["23:58", "2026-10-21T18:28:00Z"], ["00:01", "2026-10-21T18:31:00Z"]])("at %s: Now and 09:00 are both there", (_at, iso) => {
+    vi.setSystemTime(new Date(iso));
+    render(<Harness initial="" onCommit={() => {}} />);
+    fireEvent.click(screen.getByLabelText("Leave by"));
+    const sheet = screen.getByTestId("time-sheet");
+    expect(within(sheet).getByRole("button", { name: "09:00" })).toBeTruthy();
+    expect(within(sheet).getByRole("button", { name: /^Now/ })).toBeTruthy();
+  });
+
   it("is never typed: a tap opens the sheet; 09:00 counts and closes it; Clear empties it", () => {
+    vi.setSystemTime(new Date("2026-10-21T03:26:00Z")); // 08:56 Colombo: "Now" is 09:00
     const commits: string[] = [];
     render(<Harness initial="" onCommit={(v) => commits.push(v)} />);
     const btn = screen.getByLabelText("Leave by");

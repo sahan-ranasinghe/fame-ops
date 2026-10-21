@@ -93,6 +93,46 @@ export const OFFICE_ASKS_SOUND = 'office_ask.ogg';
 export const REMINDERS_CHANNEL = 'task-reminders';
 export const REMINDERS_SOUND = 'new_task.wav';
 export const REMINDERS_VIBRATION = [0, 500, 200, 500, 200, 500];
+// Office mode's own channels (Sahan, 21 October 2026: office pushes ring like the driver's, under the office's names): made
+// only on a phone with an office person signed in, each with the closest of the sounds already in the 1.3.0 build (a channel's
+// sound is fixed when it is made; 1.4.0 brings two sounds of their own under new ids, docs/release-1.4.0.md). notify-office
+// sends a push on one only when the phone registered it, else on the channels before.
+//   office-requests  "Requests and approvals": a request to approve, a task that needs a driver, a booking or a request
+//                    changed, a trip on its way: office_ask.ogg (the rising question tone: something to decide)
+//   office-issues    "Issues": a critical issue, an issue given to you: new_task.wav (the loudest short tone)
+export const OFFICE_REQUESTS_CHANNEL = 'office-requests';
+export const OFFICE_REQUESTS_SOUND = 'office_ask.ogg';
+export const OFFICE_REQUESTS_VIBRATION = [0, 400, 200, 400];
+export const OFFICE_ISSUES_CHANNEL = 'office-issues';
+export const OFFICE_ISSUES_SOUND = 'new_task.wav';
+export const OFFICE_ISSUES_VIBRATION = [0, 600, 250, 600, 250, 600];
+
+export function officeRequestsChannel(t: Translate): ChannelSpec {
+  return {
+    id: OFFICE_REQUESTS_CHANNEL,
+    name: t('channel.officeRequests'),
+    description: t('channel.officeRequestsDesc'),
+    importance: 'max',
+    sound: OFFICE_REQUESTS_SOUND,
+    vibrationPattern: OFFICE_REQUESTS_VIBRATION,
+    lockscreen: 'public',
+    lightColor: '#f2a900',
+  };
+}
+
+export function officeIssuesChannel(t: Translate): ChannelSpec {
+  return {
+    id: OFFICE_ISSUES_CHANNEL,
+    name: t('channel.officeIssues'),
+    description: t('channel.officeIssuesDesc'),
+    importance: 'max',
+    sound: OFFICE_ISSUES_SOUND,
+    vibrationPattern: OFFICE_ISSUES_VIBRATION,
+    lockscreen: 'public',
+    lightColor: '#b3261e',
+  };
+}
+
 /** The 1.2.0 build's own channels for tasks (made by lib/notifications.ts before 1.3.0, named "New tasks" and "Task changes"). */
 export const OLD_TASKS_NEW_CHANNEL = 'tasks-new';
 export const OLD_TASKS_CHANGED_CHANNEL = 'tasks-changed';
@@ -150,6 +190,9 @@ export interface ChannelsReady {
   updates?: boolean;
   officeAsks?: boolean;
   reminders?: boolean;
+  /** Office mode (21 October 2026): only on a phone with an office person signed in. */
+  officeRequests?: boolean;
+  officeIssues?: boolean;
 }
 
 /**
@@ -165,6 +208,8 @@ export function channelsToRegister(ready: boolean | ChannelsReady): string[] {
     ...(r.updates ? [UPDATES_CHANNEL] : []),
     ...(r.officeAsks ? [OFFICE_ASKS_CHANNEL] : []),
     ...(r.reminders ? [REMINDERS_CHANNEL] : []),
+    ...(r.officeRequests ? [OFFICE_REQUESTS_CHANNEL] : []),
+    ...(r.officeIssues ? [OFFICE_ISSUES_CHANNEL] : []),
   ];
 }
 

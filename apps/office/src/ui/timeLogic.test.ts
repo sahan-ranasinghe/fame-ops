@@ -44,9 +44,15 @@ describe("time rules", () => {
     expect(nearestStep("23:58", "10:45")).toBe("23:55");
   });
 
-  it("the chips: the planned time first, Now, then the common times, none twice", () => {
+  it("the chips: the planned time first, Now as its own choice, then every common time (21 October 2026)", () => {
     const c = sheetChips("09:00", "07:24");
-    expect(c.map((x) => x.label)).toEqual(["Planned 07:24", "Now · 09:00", "07:00", "08:00", "12:00", "13:00", "17:00"]);
+    expect(c.map((x) => x.label)).toEqual(["Planned 07:24", "Now · 09:00", "07:00", "08:00", "09:00", "12:00", "13:00", "17:00"]);
     expect(sheetChips("10:45").map((x) => x.time)).toEqual(["10:45", ...COMMON_TIMES]);
+    // At 08:56–09:00 "Now" is 09:00: the 09:00 chip stays (an office person picking 09:00 then finds it).
+    for (const now of [nowRounded(new Date("2026-10-21T03:18:00Z")), nowRounded(new Date("2026-10-21T03:29:00Z")), nowRounded(new Date("2026-10-21T18:28:00Z")), nowRounded(new Date("2026-10-21T18:31:00Z"))]) {
+      const chips = sheetChips(now);
+      expect(chips.filter((x) => x.kind === "common").map((x) => x.time)).toEqual([...COMMON_TIMES]);
+      expect(chips.filter((x) => x.kind === "now")).toHaveLength(1);
+    }
   });
 });

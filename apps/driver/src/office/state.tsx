@@ -8,6 +8,7 @@ import { createContext, type ReactNode, useCallback, useContext, useEffect, useM
 import { AppState } from 'react-native';
 
 import { officeApi } from './client';
+import { registerPush } from '../lib/push';
 import { refreshOfficeMe, signOutOffice } from './auth';
 import { useOfficeMe } from './store';
 import type { FleetError, Inbox, Me } from './types';
@@ -42,6 +43,9 @@ export function OfficeProvider({ me, children }: { me: Me; children: ReactNode }
   const reloadUnread = useCallback(() => {
     officeApi.call<Inbox>('my_inbox', { limit: 1, unread: true }).then((r) => setUnread(r.unread ?? 0), () => undefined);
   }, []);
+  // The token once per start, with the phone's channels (the office's own included, 21 October 2026): a person signed in
+  // before an update that brings a channel gets it registered. Nothing in a browser (lib/push.web.ts).
+  useEffect(() => { void registerPush(); }, []);
   useEffect(() => {
     reloadUnread();
     const timer = setInterval(() => {

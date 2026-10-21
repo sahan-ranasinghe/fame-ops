@@ -76,8 +76,9 @@ export function sheetChips(now: string, suggested?: string): { time: string; lab
     out.push({ time: suggested, label: `Planned ${suggested}`, kind: "suggested" });
     seen.add(suggested);
   }
+  // "Now" is its own choice, and every common time is always there (21 October 2026): from 08:56 "Now" is 09:00, and the
+  // 09:00 chip used to give way to it, so the time an office person looks for was gone for those minutes.
   out.push({ time: now, label: `Now · ${now}`, kind: "now" });
-  seen.add(now);
   for (const t of COMMON_TIMES) if (!seen.has(t)) out.push({ time: t, label: t, kind: "common" });
   return out;
 }

@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as realApi from '../src/lib/api';
 import {
-  channelsToRegister, hasPart6Sounds, isRinging, NEW_TASK_TITLES, NEW_TASKS_CHANNEL, NEW_TASKS_SOUND, NEW_TASKS_VIBRATION, newTasksChannel, remindersChannel, replacedChannels,
+  channelsToRegister, hasPart6Sounds, isRinging, NEW_TASK_TITLES, NEW_TASKS_CHANNEL, NEW_TASKS_SOUND, NEW_TASKS_VIBRATION, newTasksChannel, officeIssuesChannel, officeRequestsChannel, remindersChannel, replacedChannels,
   officeAsksChannel, ringChannel, updatesChannel,
 } from '../src/lib/channels';
 import { channelFor as pushChannelFor, DAY_KINDS as PUSH_DAY_KINDS, TASK_KINDS as PUSH_TASK_KINDS } from '../../../supabase/functions/push-task/channels';
@@ -306,6 +306,17 @@ async function main() {
     'the phone registers each channel it has made (a 1.2.0 app: the two it had)');
   check(channelsToRegister({ newTasks: false, asks: false, ring: true, updates: true, officeAsks: true, reminders: true }).join(',') === 'task-ring,task-updates,office-asks,task-reminders',
     'a 1.3.0 phone registers its four (it no longer makes the 1.2.0 ones)');
+  // Office mode's own channels (21 October 2026): a bundled 1.3.0 sound each, a name in each language, registered, and made
+  // only with an office person signed in.
+  const office = [officeRequestsChannel(en), officeIssuesChannel(en)];
+  check(office.map((c) => `${c.id}:${c.sound}`).join(' ') === 'office-requests:office_ask.ogg office-issues:new_task.wav'
+    && office.every((c) => bundled.includes(c.sound) && c.importance === 'max' && c.vibrationPattern.length > 1)
+    && office.map((c) => c.name).join('|') === 'Requests and approvals|Issues'
+    && officeRequestsChannel(si).name !== office[0].name && officeIssuesChannel(si).name !== office[1].name,
+    'the office channels: Requests and approvals, Issues, each a sound in the build, loud, named in each language', office.map((c) => c.id));
+  check(channelsToRegister({ newTasks: false, asks: false, ring: true, updates: true, officeAsks: true, reminders: true, officeRequests: true, officeIssues: true }).join(',') === 'task-ring,task-updates,office-asks,task-reminders,office-requests,office-issues',
+    'an office phone registers the office channels too');
+  check(/if \(getOfficeMe\(\) && hasPart6Sounds/.test(readFileSync(join(here, '..', 'src/lib/notifications.ts'), 'utf8')), 'the office channels are made only with an office person signed in (never for a driver)');
   const source = (file: string) => readFileSync(join(here, '..', file), 'utf8');
   const reminders = remindersChannel(en);
   check(reminders.id === 'task-reminders' && bundled.includes(reminders.sound) && reminders.name === 'Task reminders' && remindersChannel(si).name !== reminders.name,

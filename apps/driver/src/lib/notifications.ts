@@ -50,6 +50,8 @@ import {
   isRinging,
   newTasksChannel,
   officeAsksChannel,
+  officeIssuesChannel,
+  officeRequestsChannel,
   REMINDERS_CHANNEL,
   remindersChannel,
   replacedChannels,
@@ -58,6 +60,7 @@ import {
   updatesChannel,
 } from './channels';
 import { getJson, KEYS, remove, setJson } from './kv';
+import { getOfficeMe } from '../office/store';
 import type { Language } from './types';
 
 export const CHANNELS = {
@@ -135,6 +138,8 @@ let ringReady = false;
 let updatesReady = false;
 let officeAsksReady = false;
 let remindersReady = false;
+let officeRequestsReady = false;
+let officeIssuesReady = false;
 
 /** The "New tasks" channel in a language (Android lets an existing channel's name and description change, nothing else). */
 async function setNewTasksChannel(language: Language): Promise<boolean> {
@@ -176,6 +181,13 @@ async function removeChannel(id: string): Promise<void> {
 }
 
 /** Part 6: the 1.3.0 build's three channels in a language. */
+/** Office mode's two channels in a language. */
+async function setOfficeChannels(language: Language): Promise<void> {
+  const t = (key: string, vars?: Record<string, string | number>) => translate(language, key, vars);
+  officeRequestsReady = await setChannel(officeRequestsChannel(t));
+  officeIssuesReady = await setChannel(officeIssuesChannel(t));
+}
+
 async function setPart6Channels(language: Language): Promise<void> {
   const t = (key: string, vars?: Record<string, string | number>) => translate(language, key, vars);
   ringReady = await setChannel(ringChannel(t));
@@ -198,6 +210,7 @@ export async function renameChannels(language: Language): Promise<void> {
   if (newTasksReady) await setNewTasksChannel(language);
   if (asksReady) await setAsksChannel(language);
   if (ringReady || updatesReady || officeAsksReady || remindersReady) await setPart6Channels(language);
+  if (officeRequestsReady || officeIssuesReady) await setOfficeChannels(language);
 }
 
 /** Whether the "New tasks" channel exists (the push token is registered with it only then). */
@@ -217,7 +230,13 @@ export async function ensureChannels(): Promise<ChannelsReady> {
     updates: updatesReady,
     officeAsks: officeAsksReady,
     reminders: remindersReady,
+    officeRequests: officeRequestsReady,
+    officeIssues: officeIssuesReady,
   });
+  // Office mode's channels: whenever an office person is signed in (also after a sign-in in a running app), never for a driver.
+  if (getOfficeMe() && hasPart6Sounds(Application.nativeApplicationVersion) && !(officeRequestsReady && officeIssuesReady)) {
+    await setOfficeChannels(getJson<Language>(KEYS.language) === 'si' ? 'si' : 'en');
+  }
   if (channelsReady) return ready();
   const language = getJson<Language>(KEYS.language) === 'si' ? 'si' : 'en';
   if (hasPart6Sounds(Application.nativeApplicationVersion)) await setPart6Channels(language);

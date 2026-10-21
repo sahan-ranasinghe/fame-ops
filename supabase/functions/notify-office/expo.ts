@@ -12,9 +12,19 @@ const UPDATES = "task-updates";
 const OLD_LOUD = "tasks-new";
 const OLD_SOFT = "general";
 
-/** Loud (the 30 s ring) for something to decide or a task that needs a driver, and for a critical issue; the rest a tone. */
-export function officeChannelFor(kind: InboxKind, channels: readonly string[]): string {
+/** Office mode's own channels (21 October 2026; the app makes them only for an office person, lib/channels.ts). */
+export const OFFICE_REQUESTS = "office-requests";
+export const OFFICE_ISSUES = "office-issues";
+
+/**
+ * The channel of an office push on a phone with these channels (never one it did not register): an issue on "Issues", every
+ * other event on "Requests and approvals" once the phone has them; before that, loud (the 30 s ring) for something to decide,
+ * a task that needs a driver or a critical issue, and the rest a tone.
+ */
+export function officeChannelFor(kind: InboxKind, channels: readonly string[], event = ""): string {
   const has = (c: string) => channels.includes(c);
+  if (event.startsWith("issue.") && has(OFFICE_ISSUES)) return OFFICE_ISSUES;
+  if (!event.startsWith("issue.") && has(OFFICE_REQUESTS)) return OFFICE_REQUESTS;
   if (kind === "urgent" || kind === "alarm") return has(RING) ? RING : OLD_LOUD;
   return has(UPDATES) ? UPDATES : OLD_SOFT;
 }
@@ -47,7 +57,7 @@ export function expoMessagesFor(event: string, payload: Record<string, unknown>,
     title,
     body,
     data: { kind: "office", event, ...(url ? { url } : {}), inbox: kind },
-    channelId: officeChannelFor(kind, t.channels ?? []),
+    channelId: officeChannelFor(kind, t.channels ?? [], event),
     priority: "high",
     sound: "default",
     ttl: 3600,

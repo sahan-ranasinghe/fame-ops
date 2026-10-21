@@ -1,5 +1,5 @@
 import { assertEquals } from "@std/assert";
-import { expoMessagesFor, officeChannelFor, readTickets } from "./expo.ts";
+import { expoMessagesFor, OFFICE_ISSUES, OFFICE_REQUESTS, officeChannelFor, readTickets } from "./expo.ts";
 
 const phone13 = { id: "t1", token: "ExponentPushToken[a]", channels: ["task-ring", "task-updates", "task-reminders", "office-asks"] };
 const phone12 = { id: "t2", token: "ExponentPushToken[b]", channels: ["tasks-new", "tasks-changed", "general", "new-tasks"] };
@@ -47,4 +47,19 @@ Deno.test("the tickets: sent counts the ok ones, a gone device is listed to dele
     { id: "c", token: "z" },
   ]);
   assertEquals(r, { sent: 1, errors: ["DeviceNotRegistered", "boom"], gone: ["b"] });
+});
+
+Deno.test("an office phone with its own channels: issues on Issues, every other event on Requests and approvals; never a channel it lacks", () => {
+  const office = ["task-ring", "task-updates", "office-asks", "task-reminders", OFFICE_REQUESTS, OFFICE_ISSUES];
+  assertEquals(officeChannelFor("urgent", office, "request.created"), OFFICE_REQUESTS);
+  assertEquals(officeChannelFor("urgent", office, "task.declined"), OFFICE_REQUESTS);
+  assertEquals(officeChannelFor("soft", office, "request.on_the_way"), OFFICE_REQUESTS);
+  assertEquals(officeChannelFor("alarm", office, "issue.opened"), OFFICE_ISSUES);
+  assertEquals(officeChannelFor("alert", office, "issue.assigned"), OFFICE_ISSUES);
+  // A phone with only one of them: the other events keep the channels before.
+  assertEquals(officeChannelFor("alarm", ["task-ring", OFFICE_REQUESTS], "issue.opened"), "task-ring");
+  assertEquals(officeChannelFor("urgent", ["task-ring", OFFICE_ISSUES], "request.created"), "task-ring");
+  // Per phone: the office phone's own channel; a phone without it as before (a critical issue loud).
+  const msgs = expoMessagesFor("issue.opened", { title: "Critical", body: "x" }, [{ id: "1", token: "t1", channels: office }, { id: "2", token: "t2", channels: ["task-ring"] }]);
+  assertEquals(msgs.map((m) => m.channelId), [OFFICE_ISSUES, "task-ring"]);
 });

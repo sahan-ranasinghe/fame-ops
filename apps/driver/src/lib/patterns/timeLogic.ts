@@ -30,7 +30,9 @@ export function openIndex(value: string, suggested: string | undefined, now: str
 export function quickTimes(now: string, suggested?: string): { key: string; time: string; kind: 'suggested' | 'now' | 'common' }[] {
   const out: { key: string; time: string; kind: 'suggested' | 'now' | 'common' }[] = [];
   if (suggested && isHHMM(suggested)) out.push({ key: 'suggested', time: suggested, kind: 'suggested' });
+  // "Now" is its own choice, and every common time is always there (21 October 2026): from 08:56 "Now" is 09:00, and the
+  // 09:00 chip used to give way to it. Only the planned time stands for its own common time.
   out.push({ key: 'now', time: nowRounded(now), kind: 'now' });
-  for (const c of COMMON_TIMES) if (!out.some((o) => o.time === c)) out.push({ key: c, time: c, kind: 'common' });
+  for (const c of COMMON_TIMES) if (!(suggested && c === suggested)) out.push({ key: c, time: c, kind: 'common' });
   return out;
 }

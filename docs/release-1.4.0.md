@@ -57,7 +57,27 @@ crash). Do them together: `npx expo install --check`, then the full suite, `expo
   "Share" beside Copy after the build.
 - **Check after the build:** a crash screen's Copy, then a paste in WhatsApp shows the details (scrubbed).
 
-## 5. Anything else found so far
+## 5. Office sounds of their own (Sahan, 21 October 2026)
+
+- **Need:** office pushes sound like the office's, not like a driver's task. 1.3.0 (an EAS update, 21 October) already
+  gives them two office channels with the closest 1.3.0 sounds: `office-requests` "Requests and approvals"
+  (`office_ask.ogg`) and `office-issues` "Issues" (`new_task.wav`), made only for an office person (`lib/channels.ts`), and
+  notify-office sends on them once a phone registered them (`notify-office/expo.ts`).
+- **Sounds:** two new files, original synthesised tones (pure sines with a sine envelope, no third-party audio), under 2 s,
+  as loud as the six in 1.3.0 (mean about −10.5 dB): `request_waiting.ogg` (1.6 s, a bright rising C–E–G twice: decide this)
+  and `issue_critical.ogg` (1.8 s, quick alternating high–low pulses twice: an alarm). Made by
+  `apps/driver/scripts/make-sounds-1.4.0.sh` into `apps/driver/assets/sound-drafts/` (not in `app.json`: no build or update
+  carries them yet). To ship: move them to `assets/sounds/`, list them in `app.json`'s expo-notifications sounds, and add
+  them to the keep list (`plugins/withKeptSounds.js`, `test:build`): eight sounds.
+- **Channels:** a channel's sound is fixed when it is first made, so new ids in 1.4.0: `office-requests-2`
+  ("Requests and approvals", `request_waiting.ogg`) and `office-issues-2` ("Issues", `issue_critical.ogg`). At start-up a
+  1.4.0 phone makes them and registers them; once the server has its token with them it deletes `office-requests` and
+  `office-issues` (the same rule as the 1.2.0 channels: `replacedChannels`). notify-office prefers the `-2` ids, then the
+  1.3.0 ones, then the driver channels.
+- **Check after the build:** a request to approve and a critical issue each sound their own tone, in both languages'
+  channel names; the APK has all eight sounds.
+
+## 6. Anything else found so far
 
 - **Photos and documents by camera** (Stage 1 item 5) need no new module: `expo-image-picker` and
   `expo-image-manipulator` are already in the 1.3.0 build. The work is the server's upload path (its own go).
@@ -72,6 +92,6 @@ crash). Do them together: `npx expo install --check`, then the full suite, `expo
 3. The full suite; `expo prebuild` into a scratch folder (nothing committed); `expo-doctor` (21/21); `npm run test:build`.
 4. Raise the version to 1.4.0 (`app.json`); the runtime follows.
 5. `eas build --profile drivers --platform android --no-wait`; check with `eas build:view`.
-6. Download the APK: its size, an arm64-v8a and an armeabi-v7a copy of every native library, 16 KB alignment, all six
+6. Download the APK: its size, an arm64-v8a and an armeabi-v7a copy of every native library, 16 KB alignment, all eight
    sounds.
 7. Install on the test phone; then the update channel targets 1.4.0.
