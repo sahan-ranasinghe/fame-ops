@@ -63,6 +63,7 @@ import { stopProgress } from "../stopProgress.ts";
 import { endOfDay, type GooglePin, googlePin } from "../googlePlaces.ts";
 import { findPlace, placeById } from "./places.ts";
 import { findOneProject } from "./projects.ts";
+import { type Asked, checkAsked, type DrivenBy, noAppLine, noAppNote, shownDriver, whoDrivesInput } from "../whoDrives.ts";
 
 type TaskStop = Row<"task_stops">;
 
@@ -755,6 +756,10 @@ export interface NewTask {
   assignedBy?: string | null;
   /** The vehicle used and why ("Kamal's vehicle today", "chosen"). */
   vehicleWhy?: string;
+  /** Round 3: who drives (driver by default); someone else's name and phone. */
+  drivenBy?: DrivenBy;
+  driverName?: string | null;
+  driverPhone?: string | null;
 }
 
 /** The vehicle_requests row office_book_vehicle inserts before the task (one transaction). */
@@ -773,6 +778,10 @@ export interface BookingRequest {
   tools: boolean;
   note: string | null;
   driver_required: boolean;
+  /** Round 3: what was asked (whoDrives.ts); driver_required equals driven_by = 'driver'. */
+  driven_by?: Asked;
+  driver_name?: string | null;
+  driver_phone?: string | null;
   on_behalf_of: string | null;
   /** Phase 7 (§17): the times at From and To. */
   from_dwell_min: number | null;
@@ -833,6 +842,9 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
         ? t.savedWarnings.map((text) => ({ text, by: t.createdBy ?? "the office", at: new Date().toISOString() }))
         : null) as unknown as Json,
     assigned_by_employee_id: t.assignedBy ?? null,
+    driven_by: t.drivenBy ?? "driver",
+    driver_name: t.drivenBy === "other" ? t.driverName ?? null : null,
+    driver_phone: t.drivenBy === "other" ? t.driverPhone ?? null : null,
   };
   let taskId: string;
   let requestId: string | undefined;
@@ -897,7 +909,9 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
       until: t.endBy ? colomboTime(t.endBy) : undefined,
       leave_by: colomboDayTime(t.leaveBy),
       leave_by_source: t.leaveBySource,
-      driver: t.driver.name,
+      driver: t.drivenBy === "other" ? t.driverName ?? undefined : t.driver.name,
+      driven_by: t.drivenBy && t.drivenBy !== "driver" ? t.drivenBy : undefined,
+      driver_phone: t.drivenBy === "other" ? t.driverPhone ?? undefined : undefined,
       vehicle: t.vehicle?.reg_no,
       vehicle_text: t.vehicle ? undefined : vehicleText(t.vehicleMode ?? "driver_day", t.vehicleType),
       vehicle_used: t.vehicleWhy ? { reg_no: t.vehicle?.reg_no, why: t.vehicleWhy } : undefined,
@@ -908,15 +922,21 @@ export async function saveTask(db: Db, t: NewTask, warnings: string[]) {
       plan: planSummary(t.plan, names),
       timeline: planTimeline(t.plan, t.stops),
       projects: t.split.shown.length > 0 ? t.split.shown : "Fame internal (no project)",
-      sent: "Sent to the driver's Fame Driver app.",
+      sent: noAppLine(t.drivenBy) ?? "Sent to the driver's Fame Driver app.",
       warnings,
       notes,
-      links: { whatsapp_driver: waLink(t.driver.phone, message), call_driver: telLink(t.driver.phone) },
+      links: t.drivenBy === "other"
+        ? { whatsapp_driver: waLink(t.driverPhone ?? null, message), call_driver: telLink(t.driverPhone ?? null) }
+        : { whatsapp_driver: waLink(t.driver.phone, message), call_driver: telLink(t.driver.phone) },
     },
     summary:
-      `task ${taskId}: ${t.title}, leave by ${colomboDateTime(t.leaveBy)} (${t.leaveBySource}), ${t.driver.name}, ${
-        t.vehicle?.reg_no ?? vehicleText(t.vehicleMode ?? "driver_day", t.vehicleType)
-      }, ` +
+      `task ${taskId}: ${t.title}, leave by ${colomboDateTime(t.leaveBy)} (${t.leaveBySource}), ${
+        t.drivenBy === "other"
+          ? `${t.driverName} (someone else)`
+          : t.drivenBy === "self"
+          ? `${t.driver.name} (drives themselves)`
+          : t.driver.name
+      }, ${t.vehicle?.reg_no ?? vehicleText(t.vehicleMode ?? "driver_day", t.vehicleType)}, ` +
       `${t.stops.length} stops` + (warnings.length > 0 ? ` (${warnings.length} warnings)` : ""),
   };
 }
@@ -1010,7 +1030,9 @@ function declinedLine(task: Task): string {
 function statusLine(task: Task, latest: Latest | undefined, now: Date, employee?: Employee): string {
   switch (task.status) {
     case "assigned":
-      if (employee && !isDriver(employee)) return `Driven by ${employee.name} (custodian · no app)`;
+      // Round 3: a trip with no app behind it (the person drives it themselves, or someone not in Fame Fleet).
+      if (noAppLine(task.driven_by)) return noAppLine(task.driven_by)!;
+      if (employee && !isDriver(employee)) return "Drives themselves · no app";
       if (task.accepted_at) return `Accepted ${colomboTime(task.accepted_at)}`;
       return task.seen_at ? `Seen by driver ${colomboTime(task.seen_at)}` : "Sent · not opened yet";
     case "declined":
@@ -1026,6 +1048,9 @@ function statusLine(task: Task, latest: Latest | undefined, now: Date, employee?
     }
     case "completed":
       return `Done ${task.completed_at ? colomboTime(task.completed_at) : "?"} · ${task.km ?? 0} km logged`;
+    // Hotfix 3's missed task (never started by the end of its day): never "Cancelled:" (Round 3).
+    case "missed":
+      return `Missed · not started (leave by ${colomboTime(task.leave_by ?? task.start_at)})`;
     default:
       return `Cancelled: ${task.cancelled_reason ?? ""}`.trim();
   }
@@ -1121,8 +1146,12 @@ async function proposeTask(db: Db, now: Date, actor: Actor, p: {
   split: Split;
   warnings: string[];
   conflicts: Conflict[];
+  /** Round 3: who drives (a driver unless the proposer drives or names someone else). */
+  who: { drivenBy: DrivenBy; driverName: string | null; driverPhone: string | null };
 }) {
   const { args, driver, vehicle, prepared } = p;
+  const noApp = p.who.drivenBy !== "driver";
+  const shownName = p.who.drivenBy === "other" ? p.who.driverName ?? "Someone else" : driver.name;
   const who = await requester(db, actor, undefined);
   const first = prepared.stops[0];
   const last = prepared.stops[prepared.stops.length - 1];
@@ -1139,8 +1168,12 @@ async function proposeTask(db: Db, now: Date, actor: Actor, p: {
       route_from: first.place_name,
       route_to: prepared.stops.length > 1 ? last.place_name : null,
       pax: args.passengers ?? null,
-      driver_required: true,
-      proposed_employee_id: driver.id,
+      driver_required: !noApp,
+      driven_by: p.who.drivenBy,
+      driver_name: p.who.driverName,
+      driver_phone: p.who.driverPhone,
+      // The proposed driver is a driver with the app; a self or someone-else trip is the proposer's (requested_by).
+      proposed_employee_id: noApp ? null : driver.id,
       proposed_vehicle_id: vehicle?.id ?? null,
       proposed_vehicle_mode: p.picked.mode,
       proposed_vehicle_type: p.picked.type,
@@ -1170,10 +1203,10 @@ async function proposeTask(db: Db, now: Date, actor: Actor, p: {
     bufferMin: args.buffer_min ?? null,
   }, now);
   const vehicleWords = vehicle?.reg_no ?? vehicleText(p.picked.mode, p.picked.type);
-  await logRequestEvent(db, row.id, "created", actor.name, { at: row.created_at, note: `Proposed: ${driver.name} · ${vehicleWords}` });
+  await logRequestEvent(db, row.id, "created", actor.name, { at: row.created_at, note: `Proposed: ${shownName} · ${vehicleWords}` });
   const route = `${first.place_name}${prepared.stops.length > 1 ? ` → ${last.place_name}` : ""}`;
   await notifyEvent(db, "request.created", {
-    title: `Task to approve · ${actor.name} proposes ${driver.name}`,
+    title: `Task to approve · ${actor.name} proposes ${shownName}`,
     body: [colomboDayTime(p.startAt), route].join(" · "),
     url: `/requests/${row.id}/decide`,
     tag: `request:${row.id}`,
@@ -1226,7 +1259,8 @@ export const createTask = tool({
       "Leave time, HH:MM. Needed unless a stop has an arrive_by time (then the plan gives the leave-by time)",
     ),
     end_time: zTime.optional().describe("When the vehicle should be free again, HH:MM the same day"),
-    driver: zText(80).describe("Driver's username, code or name"),
+    driver: zText(80).optional().describe("Driver's username, code or name (needed unless driven_by is self or other)"),
+    ...whoDrivesInput,
     vehicle: zText(20).optional().describe(
       'Vehicle plate, or "on the day" (the driver\'s vehicle on the day) or "any van" (car, double cab, lorry) when the setting ' +
         "vehicle_on_the_day is on. Default: the vehicle the driver holds today, else their regular vehicle; with the setting, a " +
@@ -1244,12 +1278,27 @@ export const createTask = tool({
   async run(args, { db, now, actor }) {
     realDate(args.date);
     const [refs, settings] = await Promise.all([loadRefs(db), loadSettings(db)]);
-    const driver = activeDriver(refs, args.driver);
+    // Round 3: who drives. self = you, other = someone not in Fame Fleet (the task on your account); both need a plate.
+    const drives = checkAsked(args.driven_by ?? "driver", args, settings.self_drive_allowed, { employeeId: actor.employeeId });
+    const drivenBy = drives.driven_by as DrivenBy;
+    if (drivenBy !== "driver" && args.driver) {
+      throw new ToolError("Leave out driver when driven_by is self or other (or set driven_by to driver).");
+    }
+    if (drivenBy === "driver" && !args.driver) throw new ToolError("Give a driver, or set driven_by to self or other.");
+    const me = actor.employeeId ? refs.emp.get(actor.employeeId) : undefined;
+    const driver = drivenBy === "driver" ? activeDriver(refs, args.driver!) : me!;
+    const shownName = drivenBy === "other" ? drives.driver_name! : driver.name;
+    if (drivenBy !== "driver" && !args.vehicle) {
+      throw new ToolError(`${shownName} drives it: name the vehicle (no app to choose one on the day).`);
+    }
     const picked = pickVehicle(refs, driver, args.vehicle, args.created_by ?? actor.name, now, {
       day: args.date,
       onTheDay: settings.vehicle_on_the_day,
     });
     const vehicle = picked.vehicle;
+    if (drivenBy !== "driver" && !vehicle) {
+      throw new ToolError(`${shownName} drives it: name the vehicle's plate (no app to choose one on the day).`);
+    }
     const typed = args.leave_by ?? args.start_time;
     const prepared = await prepareTask(db, settings, now, { day: args.date, ...args, leaveAt: typed ? utcIso(args.date, typed) : null });
     const startAt = prepared.leaveBy;
@@ -1257,13 +1306,32 @@ export const createTask = tool({
     if (endBy && endBy <= startAt) throw new ToolError("end_time must be later than the leave-by time on the same day.");
 
     const split = await resolveSplit(db, args.projects);
-    const { warnings, conflicts } = await assignCheck(db, { driver, vehicle, startAt, endBy, plannedEnd: prepared.plan.ends_at });
+    const { warnings, conflicts } = await assignCheck(db, {
+      driver: drivenBy === "other" ? null : driver,
+      vehicle,
+      startAt,
+      endBy,
+      plannedEnd: prepared.plan.ends_at,
+    });
     warnings.push(...prepared.plan.warnings.map((w) => w.text), ...prepared.notes);
     if (new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
+    const who = { drivenBy, driverName: drives.driver_name, driverPhone: drives.driver_phone };
 
     // Phase 7 (§33): someone without the approve permission proposes the task; it waits for the fleet admin's OK.
     if (settings.tasks_need_approval && !actor.permissions.includes("approve")) {
-      return await proposeTask(db, now, actor, { args, driver, vehicle, picked, prepared, startAt, endBy, split, warnings, conflicts });
+      return await proposeTask(db, now, actor, {
+        args,
+        driver,
+        vehicle,
+        picked,
+        prepared,
+        startAt,
+        endBy,
+        split,
+        warnings,
+        conflicts,
+        who,
+      });
     }
 
     const saved = await saveTask(db, {
@@ -1276,7 +1344,7 @@ export const createTask = tool({
       passengers: args.passengers ?? null,
       contactName: args.contact_name ?? null,
       contactPhone: args.contact_phone ?? null,
-      notes: args.notes ?? null,
+      notes: [args.notes ?? null, noAppNote({ employee: driver, ...who })].filter(Boolean).join(" ") || null,
       stops: prepared.stops,
       start: prepared.start,
       returnToBase: args.return_to_base ?? false,
@@ -1288,7 +1356,8 @@ export const createTask = tool({
       split,
       createdBy: args.created_by ?? actor.name,
       bookedBy: actor.employeeId,
-      vehicleChoice: picked.choice,
+      vehicleChoice: drivenBy === "driver" ? picked.choice : null,
+      ...who,
       savedWarnings: warnings,
       assignedBy: actor.employeeId,
       vehicleWhy: picked.why,
@@ -1631,8 +1700,10 @@ export const taskBoard = tool({
         stops_count: mine.length,
         leave_by: t.leave_by ? colomboTime(t.leave_by) : undefined,
         accepted: t.accepted_at ? colomboTime(t.accepted_at) : undefined,
-        driver: refs.emp.get(t.employee_id)?.name,
-        driver_photo_url: driverPhotos.get(t.employee_id),
+        driver: shownDriver(t, refs.emp.get(t.employee_id)),
+        // Round 3: self = the person on the task drives it themselves, other = someone not in Fame Fleet (no photo).
+        driven_by: t.driven_by !== "driver" ? t.driven_by : undefined,
+        driver_photo_url: t.driven_by === "other" ? undefined : driverPhotos.get(t.employee_id),
         vehicle: t.vehicle_id ? refs.veh.get(t.vehicle_id)?.reg_no : undefined,
         vehicle_text: t.vehicle_id ? undefined : vehicleText(t.vehicle_mode, t.vehicle_type_wanted),
         vehicle_thumb_url: t.vehicle_id ? vehiclePhotos.get(t.vehicle_id)?.thumb : undefined,
@@ -1863,8 +1934,9 @@ export const taskDetail = tool({
           return_to_base: task.return_to_base,
           avoid_expressway: task.avoid_expressway,
           plan_version: task.plan_version,
-          driver: driver?.name,
-          driver_photo_url: driverPhoto,
+          driver: shownDriver(task, driver),
+          driven_by: task.driven_by !== "driver" ? task.driven_by : undefined,
+          driver_photo_url: task.driven_by === "other" ? undefined : driverPhoto,
           vehicle: vehicle ? `${vehicle.reg_no}${vehicle.make_model ? ` · ${vehicle.make_model}` : ""}` : undefined,
           vehicle_photo_url: vehiclePhoto?.photo,
           vehicle_thumb_url: vehiclePhoto?.thumb,
@@ -1875,7 +1947,7 @@ export const taskDetail = tool({
           approved_by: approver && task.approved_at
             ? { name: approver.name, at: atText(task.approved_at, now), photo_url: approverPhoto, ...phoneLinks(approver.phone) }
             : undefined,
-          driver_phone: phoneLinks(driver?.phone),
+          driver_phone: phoneLinks(task.driven_by === "other" ? task.driver_phone : driver?.phone),
           passengers: task.passengers,
           contact: task.contact_name || task.contact_phone
             ? { name: task.contact_name, phone: task.contact_phone, ...contactLinks(task.contact_phone) }
@@ -2060,7 +2132,7 @@ export const taskDetail = tool({
             asked: colomboDateTime(requestRow.created_at),
           }
           : undefined,
-        driver_links: contactLinks(driver?.phone),
+        driver_links: contactLinks(task.driven_by === "other" ? task.driver_phone : driver?.phone),
         photo_links: PHOTO_LINK_NOTE,
       },
       summary: `task ${task.id} (${task.status})`,
@@ -2132,6 +2204,8 @@ export interface TaskChanges {
   notes?: string | null;
   /** Replace the pending stops with this route (a request's route after an edit) and re-plan. */
   route?: { from: string; to: string };
+  /** Round 3: who drives now (a driver named alone makes it a driver's task). */
+  who?: { drivenBy: DrivenBy; driverName: string | null; driverPhone: string | null };
 }
 
 export interface FieldChange {
@@ -2193,7 +2267,14 @@ export async function changeTask(
   const vehicle = c.vehicle ?? (c.vehicleMode ? null : oldVehicle ?? null);
   const mode: VehicleMode = c.vehicle ? "specific" : c.vehicleMode ? c.vehicleMode.mode : task.vehicle_mode as VehicleMode;
   const wanted = c.vehicle ? null : c.vehicleMode ? c.vehicleMode.type : task.vehicle_type_wanted;
-  const driverChanged = driver.id !== task.employee_id;
+  // Round 3: who drives (a driver named makes it a driver's task; else as it was).
+  const drivenBy: DrivenBy = c.who?.drivenBy ?? (c.driver ? "driver" : task.driven_by as DrivenBy);
+  const driverName = drivenBy === "other" ? (c.who ? c.who.driverName : task.driver_name) : null;
+  const driverPhone = drivenBy === "other" ? (c.who ? c.who.driverPhone : task.driver_phone) : null;
+  if (drivenBy !== "driver" && !vehicle) {
+    throw new ToolError(`${driverName ?? driver.name} drives it: name the vehicle (no app to choose one on the day).`);
+  }
+  const driverChanged = driver.id !== task.employee_id || drivenBy !== task.driven_by || driverName !== task.driver_name;
   const vehicleChanged = (vehicle?.id ?? null) !== task.vehicle_id || mode !== task.vehicle_mode || wanted !== task.vehicle_type_wanted;
   const startAt = c.startAt ?? task.start_at;
   const delta = new Date(startAt).getTime() - new Date(task.start_at).getTime();
@@ -2207,7 +2288,7 @@ export async function changeTask(
   };
   note("time", colomboDayTime(task.start_at), colomboDayTime(startAt));
   note("end by", task.end_by ? colomboTime(task.end_by) : null, endBy ? colomboTime(endBy) : null);
-  note("driver", oldDriver?.name ?? null, driver.name);
+  note("driver", shownDriver(task, oldDriver) ?? null, drivenBy === "other" ? driverName : driver.name);
   note(
     "vehicle",
     oldVehicle?.reg_no ?? vehicleText(task.vehicle_mode, task.vehicle_type_wanted) ?? null,
@@ -2253,6 +2334,9 @@ export async function changeTask(
   const updated = unwrap(
     await db.from("tasks").update({
       employee_id: driver.id,
+      driven_by: drivenBy,
+      driver_name: driverName,
+      driver_phone: driverPhone,
       vehicle_id: vehicle?.id ?? null,
       vehicle_mode: mode,
       vehicle_type_wanted: wanted,
@@ -2355,7 +2439,9 @@ export async function changeTask(
     }
   }
 
-  const warnings = running ? [] : await assignWarnings(db, { driver, vehicle, startAt, endBy, ignoreTaskId: task.id });
+  const warnings = running
+    ? []
+    : await assignWarnings(db, { driver: drivenBy === "other" ? null : driver, vehicle, startAt, endBy, ignoreTaskId: task.id });
   if (!running && new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
   return { task: saved, changes, warnings, plan_version: version, driverChanged };
 }
@@ -2635,6 +2721,8 @@ export const reassignTask = tool({
     const changed = unwrap(
       await db.from("tasks").update({
         employee_id: newDriver.id,
+        // Round 3: a driver named here makes it a driver's task (no longer self-driven or someone else's).
+        ...(driver && { driven_by: "driver", driver_name: null, driver_phone: null }),
         vehicle_id: newVehicle?.id ?? null,
         vehicle_mode: newMode,
         vehicle_type_wanted: newType,

@@ -26,6 +26,7 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { sessionFailure } from "../_shared/fleet/sessionCheck.ts";
 import { APP_ERROR_INPUT, saveAppError } from "../_shared/fleet/appErrors.ts";
+import { driverPhotoLinks } from "../_shared/fleet/media.ts";
 import {
   type Actor,
   adminClient,
@@ -176,9 +177,17 @@ Deno.serve(async (request) => {
   if (request.method === "GET" && path === "/me") {
     // Which map the web shows (never the key: register_map_load hands it out after counting the load).
     const use = await loadSettings(db).then(googleUse, () => null);
+    // Round 3: the person's own photo (initials until there is one); a failed link is no photo, never a failed /me.
+    const photo = actor.employeeId
+      ? await (async () => {
+        const { data } = await db.from("employees").select("id, photo_id").eq("id", actor.employeeId!).maybeSingle();
+        return data ? (await driverPhotoLinks(db, [data])).get(data.id) : undefined;
+      })().catch(() => undefined)
+      : undefined;
     return json(200, {
       name: actor.name,
       email: person.email,
+      photo_url: photo,
       role: actor.role,
       permissions: actor.permissions,
       mfa: person.mfa,

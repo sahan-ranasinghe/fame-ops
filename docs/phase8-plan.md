@@ -972,6 +972,58 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 30. Round 3 plan: who drives, driver first (21 October 2026, branch `phase9-r3`; the contract for the server and both clients)
+
+From the Phase 9 brief (Round 3) plus Sahan's additions: the Activity log's routine actions, and the three server items
+held for the next server go (office photos, the missed task's wording, English sentences on Sinhala screens).
+
+**1. Who drives?** (the rental and car-sharing booking forms' "Who's driving?", e.g. Turo, Enterprise: one question, three
+choices, the details under the chosen one.)
+- Choices: **A driver** (pick one; the default), **I'll drive myself** (the person asking drives), **Someone else** (a name and
+  a phone; not in Fame Fleet). The last two only while `self_drive_allowed` is on; off = every trip needs a driver.
+- Server (migration `20261022100000_round3_who_drives`): `tasks.driven_by` driver | self | other, `tasks.driver_name`,
+  `tasks.driver_phone`; `vehicle_requests.driven_by` driver | self | other | custodian (custodian = the old path, the
+  vehicle's custodian drives, kept for the Teams artifact's `driver_required: false`), `driver_name`, `driver_phone`;
+  `driver_required` stays and always equals `driven_by = 'driver'`. Existing custodian tasks become `self`.
+- Whose account the task is on: a driver's (driver), the self-driver's (self), the person who asked or booked it (other:
+  never shown as the driver; the shared key cannot book "someone else" or "myself": no person). A self or other trip needs
+  a specific vehicle (no app to confirm one on the day); no accept, push or reminders (as today for the custodian).
+- Tools take `driven_by`, `driver_name`, `driver_phone`: create_request, update_request, book_vehicle, create_task
+  (and its proposal when it waits for approval). decide_request / redecide_request follow the request; naming a driver
+  there makes the task `driver`. reassign_task always makes it `driver`.
+- Answers: `driven_by` (self | other; absent for a driver) on task_board cards, task_detail.task, list_requests cards (the
+  request's and `assigned`), my_trips; for other `driver` = the name and `driver_phone` = the phone, no photo. The status
+  line: "Drives themselves · no app" / "Someone else drives · no app" (the app translates both).
+- Screens: one "Who drives?" choice row (three choices) on every request / assign / book form (site, /m/, Office mode);
+  the task shows the driver, the self-driver or someone else in the same driver card, with a small word instead of the
+  duty state ("Drives themselves", "Someone else").
+
+**2. Driver-first cards** (Uber Fleet's and Samsara's driver list: the person first, the vehicle under them).
+- One card per codebase: the photo (initials until there is one), the name, on duty / off duty (or the task state), and
+  the vehicle as a chip under it: the plate ("WP CAB-4521"; "regular" when it is their regular one, not held today),
+  "Vehicle: on the day" (when `vehicle_on_the_day` is on and none is known), or "No vehicle yet".
+- Used wherever a driver is picked or listed for a trip: Who's available / Who can take it, the best match, Give it a
+  driver, Approve, the Drivers board, Live's list, a task's header and the task board rows; name-only pickers become the
+  card list. Server: `photo_url` and `vehicle` on suggest_vehicles' `drivers_free` and the needs-driver best match;
+  `regular_vehicle` on list_drivers.
+- A future day never needs a vehicle typed: the regular one is suggested, else "on the day" when the setting is on (the
+  setting stays off until Sahan turns it on: see 4).
+
+**3. The Activity log's routine actions** (Google Workspace / GitHub audit log): hidden by default; a "Show routine
+actions" switch shows them; changes, refusals and failures always show. Routine: watch_drivers, reviewing, set_my_prefs,
+register_map_load, mark_inbox_read, register_web_push, remove_web_push, google_place, photo_upload_url,
+vehicle_document_upload_url. `activity_log(include_routine?)`; each entry carries `routine: true` when it is one. The driver
+app's own trip calls (start_trip, add_trip_stop, cancel_trip, its profile) join the log.
+
+**4. vehicle_on_the_day**: what turning it on changes, and when it is safe, goes in the checkpoint report.
+
+**5. The held server items.** (a) Office people's photos: `photo_url` on /me, list_office_users, the requester on
+request cards, the assignee on issues and who assigned a task; the site's My profile gets Change photo. (b) A missed task
+says "Missed · not started" (never "Cancelled:"). (c) The English sentences most seen on Sinhala screens get a code beside
+the words, translated by key on the app (the English stays as the fallback): the assign and plan warnings, the vehicle note
+and the best match's reason, "Not available" / "Running late", the missed line; the app's "Last seen Last seen" doubling
+fixed.
+
 ## 29. Round 2b as built (21 October 2026, branch `phase9-r2b`)
 
 Home, dark mode and contrast, no duplicate navigation, the Coordinator (`office_users`; `docs/coordinator-guide.md`),

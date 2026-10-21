@@ -189,7 +189,7 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
   accept_reminder_min: "The driver's one reminder to accept or decline, this many minutes after the task was sent",
   rush_hour: "Rush hour: the factor on legs that start or end within the radius of the centre during the bands (weekdays)",
   self_drive_allowed:
-    "Self-drive bookings: a vehicle's custodian may drive it with no driver assigned (off = every booking needs a driver)",
+    "Trips with no Fame Fleet driver: the person asking may drive it themselves (\"I'll drive myself\"), name someone else who drives (a name and a phone), or a vehicle's custodian drives it (off = every trip needs a driver)",
   tasks_need_approval:
     "New tasks need the fleet admin's OK: a task made by someone without the approve permission waits in the approval queue (Requests) with the proposed driver and vehicle, and is sent to the driver only when approved (off = sent at once)",
   office_phone:

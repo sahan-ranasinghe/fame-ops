@@ -50,6 +50,7 @@ import {
   type StopRowLike,
 } from "./requestTrip.ts";
 import { loadSettings } from "../settings.ts";
+import { type Asked, askedOf, checkAsked, decideWhoDrives, noAppNote, shownDriver, whoDrivesInput } from "../whoDrives.ts";
 import {
   alreadyDecidedText,
   atText,
@@ -185,6 +186,8 @@ function liveOf(r: VehicleRequest, trip: TripOutcome | undefined, now: Date) {
 
 /** What the person who asked sees once it is approved (Phase 7, §4, §35 19): the driver, the vehicle, their photos. */
 interface TripOutcome {
+  /** Round 3: driver | self | other. */
+  drivenBy: string;
   status: string;
   driver: string;
   phone: string | null;
@@ -239,11 +242,14 @@ async function tripOutcomes(db: Db, rows: VehicleRequest[], now: Date): Promise<
   for (const t of tasks) {
     const e = people.find((x) => x.id === t.employee_id);
     const v = vehicles.find((x) => x.id === t.vehicle_id);
+    // Round 3: someone not in Fame Fleet drives: their name and phone (the account behind the task is never shown).
+    const other = t.driven_by === "other";
     out.set(t.id, {
       status: t.status,
-      driver: e?.name ?? "",
-      phone: e?.phone ?? null,
-      driverPhoto: driverPhotos.get(t.employee_id),
+      drivenBy: t.driven_by,
+      driver: other ? t.driver_name ?? "" : e?.name ?? "",
+      phone: other ? t.driver_phone : e?.phone ?? null,
+      driverPhoto: other ? undefined : driverPhotos.get(t.employee_id),
       plate: v?.reg_no ?? "",
       model: v?.make_model ?? null,
       vehiclePhoto: t.vehicle_id ? vehiclePhotos.get(t.vehicle_id)?.photo : undefined,
@@ -269,6 +275,7 @@ function outcomeOf(r: VehicleRequest, trip: TripOutcome | undefined) {
       when: colomboDayTime(trip ? trip.task.leave_by ?? trip.task.start_at : r.needed_at),
       driver: trip?.driver,
       driverPhone: trip?.phone,
+      drivenBy: trip?.drivenBy,
       plate: trip?.plate,
       model: trip?.model,
       place: trip?.firstPickup,
@@ -280,6 +287,7 @@ function outcomeOf(r: VehicleRequest, trip: TripOutcome | undefined) {
     assigned: shown
       ? {
         driver: trip.driver,
+        driven_by: trip.drivenBy !== "driver" ? trip.drivenBy : undefined,
         phone: trip.phone ?? undefined,
         ...contactLinks(trip.phone),
         photo_url: trip.driverPhoto,
@@ -464,6 +472,7 @@ function requestCard(
     kind: r.kind,
     title: r.title ?? undefined,
     requested_by: r.requested_by_name,
+    requested_by_photo_url: r.requested_by_employee_id ? refs?.deciders?.get(r.requested_by_employee_id)?.photo : undefined,
     on_behalf_of: r.on_behalf_of ?? undefined,
     project: r.project_label,
     when: colomboDayTime(leaveAt),
@@ -477,6 +486,10 @@ function requestCard(
     decline_reason: r.decline_reason,
     task_id: r.task_id,
     driver_required: r.driver_required,
+    // Round 3: who the asker said drives, when not a driver (self, other with the name and phone, custodian).
+    driven_by: r.driven_by !== "driver" ? r.driven_by : undefined,
+    driver_name: r.driver_name ?? undefined,
+    driver_phone: r.driver_phone ?? undefined,
     one_step: r.one_step ? true : undefined,
     cancelled: by(r.cancelled_at, r.cancelled_by),
     cancel_reason: r.cancel_reason,
@@ -520,6 +533,9 @@ function requestCard(
       tools: r.tools,
       note: r.note ?? undefined,
       driver_required: r.driver_required,
+      driven_by: r.driven_by,
+      driver_name: r.driver_name ?? undefined,
+      driver_phone: r.driver_phone ?? undefined,
       on_behalf_of: r.on_behalf_of ?? undefined,
       from_dwell_min: r.from_dwell_min ?? undefined,
       to_dwell_min: r.to_dwell_min ?? undefined,
@@ -567,7 +583,10 @@ async function requestCards(db: Db, rows: VehicleRequest[], now: Date, withLine 
   const ids = rows.map((r) => r.id);
   const people = [...new Set(rows.flatMap((r) => r.proposed_employee_id ? [r.proposed_employee_id] : []))];
   const plates = [...new Set(rows.flatMap((r) => r.proposed_vehicle_id ? [r.proposed_vehicle_id] : []))];
-  const deciderIds = [...new Set(rows.flatMap((r) => r.decided_by_employee_id ? [r.decided_by_employee_id] : []))];
+  // Who decided, and (Round 3) who asked: their photos beside their names.
+  const deciderIds = [
+    ...new Set(rows.flatMap((r) => [r.decided_by_employee_id, r.requested_by_employee_id].filter((x): x is string => !!x))),
+  ];
   const open = rows.filter((r) => r.status === "waiting" || r.status === "changed").map((r) => r.id);
   const [events, stops, emps, vehs, trips, deciderRes, viewerRes, settings] = await Promise.all([
     db.from("request_events").select("*").in("request_id", ids).order("at").order("id").limit(5000),
@@ -623,19 +642,28 @@ async function markSeen(db: Db, request: VehicleRequest, actor: Actor, now: Date
   return rows[0] ?? request;
 }
 
-const SELF_DRIVE_OFF = "Self-drive bookings are switched off (Settings → Fleet, self_drive_allowed): give a driver.";
-
-/** The driver of a booking: the one named, or the vehicle's custodian when no driver is needed (and self-drive is allowed). */
-function pickDriver(refs: Refs, typed: string | undefined, driverRequired: boolean, vehicle: Vehicle | null, selfDrive: boolean): Employee {
-  if (typed) return activeDriver(refs, typed);
-  if (!driverRequired) {
-    if (!selfDrive) throw new ToolError(SELF_DRIVE_OFF);
-    if (!vehicle) throw new ToolError("The custodian drives their own vehicle: name the vehicle.");
-    const custodian = vehicle.custodian_employee_id ? refs.emp.get(vehicle.custodian_employee_id) : undefined;
-    if (custodian?.active) return custodian;
-    throw new ToolError(`${vehicle.reg_no} has no custodian to drive it: give a driver.`);
-  }
-  throw new ToolError("Give a driver, or set driver_required to false so the vehicle's custodian drives it.");
+/**
+ * Who drives a request's task (Round 3, whoDrives.ts): a driver named here wins; else the request's own choice (self =
+ * the asker, other = the name asked, custodian = the vehicle's custodian).
+ */
+function pickWhoDrives(
+  refs: Refs,
+  typed: string | undefined,
+  request: Pick<VehicleRequest, "driven_by" | "requested_by_employee_id" | "driver_name" | "driver_phone">,
+  vehicle: Vehicle | null,
+  selfDrive: boolean,
+  actor: Actor,
+) {
+  return decideWhoDrives({
+    driverTyped: typed ? activeDriver(refs, typed) : null,
+    asked: request.driven_by as Asked,
+    askerId: request.requested_by_employee_id,
+    approverId: actor.employeeId,
+    driverName: request.driver_name,
+    driverPhone: request.driver_phone,
+    vehicle,
+    selfDriveAllowed: selfDrive,
+  }, refs.emp);
 }
 
 /** Warnings about the vehicle against what was asked for (never blocks). */
@@ -667,7 +695,10 @@ const requestFields = {
   pax: z.number().int().min(0).max(80).optional().describe("Number of passengers"),
   tools: z.boolean().optional().describe("true if tools or equipment travel too"),
   note: zText(1000).optional(),
-  driver_required: z.boolean().optional().describe("false when no driver is needed: the vehicle's custodian drives. Default true"),
+  driver_required: z.boolean().optional().describe(
+    "false when no driver is needed: the vehicle's custodian drives (the older form of driven_by). Default true",
+  ),
+  ...whoDrivesInput,
   requester_phone: zText(30).optional().describe(
     "The phone of the person who asked, when they have no office account: Tell requester (WhatsApp) goes to it (Phase 7, §4)",
   ),
@@ -733,11 +764,12 @@ export const createRequest = tool({
     const firstStop = trip?.stops[0];
     const lastStop = trip?.stops[trip.stops.length - 1];
 
-    if (args.driver_required === false && !settingsNow.self_drive_allowed) throw new ToolError(SELF_DRIVE_OFF);
     // A project that is known from Zoho is linked; anything else is kept as a label.
     const matched = args.project ? (await matchProjects(db, args.project)).projects : [];
     const project = matched.length === 1 ? matched[0] : null;
     const who = await requester(db, actor, args.requested_by);
+    // Round 3: who drives, as asked (self = the asker).
+    const drives = checkAsked(askedOf(args), args, settingsNow.self_drive_allowed, { employeeId: who.employeeId });
     const staff = !hasAny(actor.permissions, ["approve", "assign_tasks"]);
 
     const created = unwrap(
@@ -756,7 +788,7 @@ export const createRequest = tool({
         pax: args.pax ?? null,
         tools: args.tools ?? false,
         note: args.note ?? null,
-        driver_required: args.driver_required ?? true,
+        ...drives,
         on_behalf_of: args.on_behalf_of ?? null,
         from_dwell_min: args.from_dwell_min ?? null,
         to_dwell_min: args.to_dwell_min ?? null,
@@ -904,6 +936,7 @@ async function createdTaskCards(db: Db, tasks: Task[], now: Date) {
       assigned: trip
         ? {
           driver: trip.driver,
+          driven_by: trip.drivenBy !== "driver" ? trip.drivenBy : undefined,
           phone: trip.phone ?? undefined,
           ...contactLinks(trip.phone),
           photo_url: trip.driverPhoto,
@@ -1183,7 +1216,23 @@ export async function availabilityFor(db: Db, refs: Refs, w: Window) {
     vehicles: ranked.map((r) => r.card),
     drivers: drivers.map(({ free: _free, ...card }) => card),
     groups,
-    drivers_free: drivers.filter((d) => d.free).map((d) => ({ name: d.name, username: d.username })),
+    // Round 3: the driver-first card: the photo, and the vehicle they hold (on duty) or their regular one.
+    drivers_free: await (async () => {
+      const free = refs.employees.filter((e) =>
+        e.role === "driver" && e.active && drivers.some((d) => d.free && d.username === e.username)
+      );
+      const photos = await driverPhotoLinks(db, free);
+      return free.map((e) => {
+        const held = e.current_vehicle_id ? refs.veh.get(e.current_vehicle_id) : undefined;
+        const regular = held ? undefined : refs.vehicles.find((v) => v.active && v.regular_driver_id === e.id);
+        return {
+          name: e.name,
+          username: e.username,
+          photo_url: photos.get(e.id),
+          vehicle: held ? { reg_no: held.reg_no, source: "on_duty" } : regular ? { reg_no: regular.reg_no, source: "regular" } : undefined,
+        };
+      });
+    })(),
     self_drive_allowed: settings.self_drive_allowed,
     good: ranked.some((r) => r.card.pick === "good"),
     day,
@@ -1366,8 +1415,15 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
     onTheDay: settings.vehicle_on_the_day,
   });
   const vehicle = chosen.vehicle;
-  const driver = pickDriver(refs, args.driver, request.driver_required, vehicle, settings.self_drive_allowed);
-  const warnings = await assignWarnings(db, { driver, vehicle, startAt: request.needed_at, endBy: request.back_by });
+  const whoDrives = pickWhoDrives(refs, args.driver, request, vehicle, settings.self_drive_allowed, actor);
+  const driver = whoDrives.employee;
+  const drivesName = whoDrives.driverName ?? driver.name;
+  const warnings = await assignWarnings(db, {
+    driver: whoDrives.drivenBy === "other" ? null : driver,
+    vehicle,
+    startAt: request.needed_at,
+    endBy: request.back_by,
+  });
   warnings.push(...fitWarnings(vehicle, request));
 
   const split: Split = request.project_id
@@ -1405,7 +1461,7 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
     passengers: request.pax,
     contactName: request.requested_by_name,
     contactPhone: requesterRow?.phone ?? null,
-    notes: [request.note, request.tools ? "Tools / equipment travel too." : null, isDriver(driver) ? null : "Driven by the custodian."]
+    notes: [request.note, request.tools ? "Tools / equipment travel too." : null, noAppNote(whoDrives)]
       .filter(Boolean).join(" ") || null,
     stops: prepared.stops,
     start: prepared.start,
@@ -1419,7 +1475,10 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
     createdBy: decidedBy,
     request: { id: request.id, decidedBy },
     bookedBy: actor.employeeId,
-    vehicleChoice: isDriver(driver) ? chosen.choice : null,
+    vehicleChoice: whoDrives.drivenBy === "driver" ? chosen.choice : null,
+    drivenBy: whoDrives.drivenBy,
+    driverName: whoDrives.driverName,
+    driverPhone: whoDrives.driverPhone,
     savedWarnings: warnings,
     assignedBy: actor.employeeId,
     vehicleWhy: chosen.why,
@@ -1434,9 +1493,9 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
       .eq("id", request.id).select("id"),
     "vehicle request",
   );
-  await logRequestEvent(db, request.id, "approved", decidedBy, { note: `${vehicleWordsOf(chosen)} · ${driver.name}` });
+  await logRequestEvent(db, request.id, "approved", decidedBy, { note: `${vehicleWordsOf(chosen)} · ${drivesName}` });
   await notifyEvent(db, "request.decided", {
-    title: `Request approved by ${decidedBy} · ${vehicleWordsOf(chosen)} · ${driver.name}`,
+    title: `Request approved by ${decidedBy} · ${vehicleWordsOf(chosen)} · ${drivesName}`,
     who: decidedBy,
     body: [colomboDayTime(request.needed_at), [request.route_from, request.route_to].filter(Boolean).join(" → ")].filter(Boolean).join(
       " · ",
@@ -1495,7 +1554,8 @@ async function approveTrip(
     onTheDay: settings.vehicle_on_the_day,
   });
   const vehicle = chosen.vehicle;
-  const driver = pickDriver(refs, driverTyped, request.driver_required, vehicle, settings.self_drive_allowed);
+  const whoDrives = pickWhoDrives(refs, driverTyped, request, vehicle, settings.self_drive_allowed, actor);
+  const driver = whoDrives.employee;
 
   // The day and the times: as asked, unless the approver moves them.
   if (args.date) realDate(args.date);
@@ -1528,7 +1588,13 @@ async function approveTrip(
   const endBy = args.back_by ? utcIso(day, args.back_by) : shift(request.back_by);
   if (endBy && endBy <= leaveBy) throw new ToolError("back_by must be later than the leave time on the same day.");
 
-  const { warnings, conflicts } = await assignCheck(db, { driver, vehicle, startAt: leaveBy, endBy, plannedEnd: plan.ends_at });
+  const { warnings, conflicts } = await assignCheck(db, {
+    driver: whoDrives.drivenBy === "other" ? null : driver,
+    vehicle,
+    startAt: leaveBy,
+    endBy,
+    plannedEnd: plan.ends_at,
+  });
   warnings.push(...fitWarnings(vehicle, request), ...plan.warnings.map((w) => w.text));
   if (new Date(leaveBy) < now) warnings.push("The leave-by time is already in the past.");
 
@@ -1557,10 +1623,8 @@ async function approveTrip(
     passengers: request.pax,
     contactName: task ? request.contact_name : request.requested_by_name,
     contactPhone: task ? request.contact_phone : requesterRow?.phone ?? null,
-    notes: task
-      ? request.task_notes
-      : [request.note, request.tools ? "Tools / equipment travel too." : null, isDriver(driver) ? null : "Driven by the custodian."]
-        .filter(Boolean).join(" ") || null,
+    notes: task ? request.task_notes : [request.note, request.tools ? "Tools / equipment travel too." : null, noAppNote(whoDrives)]
+      .filter(Boolean).join(" ") || null,
     stops,
     start,
     returnToBase: request.return_to_base,
@@ -1573,7 +1637,10 @@ async function approveTrip(
     createdBy: task ? request.requested_by_name : decidedBy,
     request: { id: request.id, decidedBy },
     bookedBy: actor.employeeId,
-    vehicleChoice: isDriver(driver) ? chosen.choice : null,
+    vehicleChoice: whoDrives.drivenBy === "driver" ? chosen.choice : null,
+    drivenBy: whoDrives.drivenBy,
+    driverName: whoDrives.driverName,
+    driverPhone: whoDrives.driverPhone,
     savedWarnings: warnings,
     assignedBy: task ? request.requested_by_employee_id : actor.employeeId,
     vehicleWhy: chosen.why,
@@ -1594,13 +1661,13 @@ async function approveTrip(
     args.date || args.leave_by ? `leave ${colomboDayTime(leaveBy)}` : null,
   ].filter(Boolean).join(", ");
   await logRequestEvent(db, request.id, "approved", decidedBy, {
-    note: `${shownNow} · ${driver.name}${changedNote ? ` (${changedNote})` : task ? " (as proposed)" : ""}`,
+    note: `${shownNow} · ${whoDrives.driverName ?? driver.name}${changedNote ? ` (${changedNote})` : task ? " (as proposed)" : ""}`,
   });
   await notifyEvent(db, "request.decided", {
     ...(await pushPhotos(db, driver, vehicle)),
     title: task
-      ? `Task approved by ${decidedBy} · sent to ${driver.name}`
-      : `Request approved by ${decidedBy} · ${shownNow} · ${driver.name}`,
+      ? `Task approved by ${decidedBy} · sent to ${whoDrives.driverName ?? driver.name}`
+      : `Request approved by ${decidedBy} · ${shownNow} · ${whoDrives.driverName ?? driver.name}`,
     who: decidedBy,
     body: [
       task ? title : null,
@@ -1700,8 +1767,22 @@ export const bookVehicle = tool({
       onTheDay: settings.vehicle_on_the_day,
     });
     const vehicle = chosen.vehicle;
-    const driverRequired = args.driver_required ?? true;
-    const driver = pickDriver(refs, args.driver, driverRequired, vehicle, settings.self_drive_allowed);
+    // Round 3: who drives (self = the person it is booked for, other = the name and phone given).
+    const asked = checkAsked(askedOf(args), args, settings.self_drive_allowed, { employeeId: who.employeeId ?? actor.employeeId });
+    const whoDrives = pickWhoDrives(
+      refs,
+      args.driver,
+      {
+        driven_by: asked.driven_by,
+        requested_by_employee_id: who.employeeId,
+        driver_name: asked.driver_name,
+        driver_phone: asked.driver_phone,
+      },
+      vehicle,
+      settings.self_drive_allowed,
+      actor,
+    );
+    const driver = whoDrives.employee;
     const prepared = await prepareTask(db, settings, now, {
       day: args.date,
       stops: args.stops ?? [
@@ -1717,7 +1798,12 @@ export const bookVehicle = tool({
     const neededAt = prepared.leaveBy;
     const backBy = args.back_by ? utcIso(args.date, args.back_by) : null;
     if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than the leave time on the same day.");
-    const warnings = await assignWarnings(db, { driver, vehicle, startAt: neededAt, endBy: backBy });
+    const warnings = await assignWarnings(db, {
+      driver: whoDrives.drivenBy === "other" ? null : driver,
+      vehicle,
+      startAt: neededAt,
+      endBy: backBy,
+    });
     warnings.push(...fitWarnings(vehicle, args));
     warnings.push(...prepared.plan.warnings.map((w) => w.text));
     if (new Date(neededAt) < now) warnings.push("The time is already in the past.");
@@ -1742,7 +1828,8 @@ export const bookVehicle = tool({
       pax: args.pax ?? null,
       tools: args.tools ?? false,
       note: args.note ?? null,
-      driver_required: driverRequired,
+      // The request records what was asked; a driver named here makes it a driver's trip.
+      ...(args.driver ? { driven_by: "driver", driver_required: true, driver_name: null, driver_phone: null } : asked),
       on_behalf_of: args.on_behalf_of ?? null,
       from_dwell_min: args.from_dwell_min ?? null,
       to_dwell_min: args.to_dwell_min ?? null,
@@ -1757,7 +1844,7 @@ export const bookVehicle = tool({
       passengers: args.pax ?? null,
       contactName: who.name,
       contactPhone: who.employeeId ? refs.emp.get(who.employeeId)?.phone ?? null : null,
-      notes: [args.note, args.tools ? "Tools / equipment travel too." : null, isDriver(driver) ? null : "Driven by the custodian."]
+      notes: [args.note, args.tools ? "Tools / equipment travel too." : null, noAppNote(whoDrives)]
         .filter(Boolean).join(" ") || null,
       stops: prepared.stops,
       start: prepared.start,
@@ -1769,7 +1856,10 @@ export const bookVehicle = tool({
       plan: prepared.plan,
       split,
       createdBy: actor.name,
-      vehicleChoice: chosen.choice,
+      vehicleChoice: whoDrives.drivenBy === "driver" ? chosen.choice : null,
+      drivenBy: whoDrives.drivenBy,
+      driverName: whoDrives.driverName,
+      driverPhone: whoDrives.driverPhone,
       vehicleMode: chosen.mode,
       vehicleType: chosen.type,
       approvedBy: actor.employeeId,
@@ -1801,7 +1891,9 @@ export const bookVehicle = tool({
     }, now);
     const row = await getRequest(db, saved.result.request_id!);
     await logRequestEvent(db, row.id, "created", actor.name, { at: row.created_at, note: "booked in one step" });
-    await logRequestEvent(db, row.id, "approved", actor.name, { note: `${vehicleWordsOf(chosen)} · ${driver.name}` });
+    await logRequestEvent(db, row.id, "approved", actor.name, {
+      note: `${vehicleWordsOf(chosen)} · ${whoDrives.driverName ?? driver.name}`,
+    });
     return {
       result: { request: await requestCardOf(db, row, now), booked: "in one step", ...saved.result },
       summary: `booked ${vehicleWordsOf(chosen)} for ${who.name} (requested and approved by ${actor.name}) -> ${saved.summary}`,
@@ -2109,6 +2201,7 @@ export const updateRequest = tool({
     tools: z.boolean().optional(),
     note: z.string().trim().max(1000).nullable().optional().describe("The note; empty or null clears it"),
     driver_required: z.boolean().optional(),
+    ...whoDrivesInput,
     on_behalf_of: z.string().trim().max(120).nullable().optional(),
     requester_phone: z.string().trim().max(30).nullable().optional().describe(
       "The phone of the person who asked (no office account); null clears it",
@@ -2150,8 +2243,18 @@ export const updateRequest = tool({
       ? utcIso(day, colomboTime(base.back_by))
       : null;
     if (backBy && backBy <= neededAt) throw new ToolError("back_by must be later than time on the same day.");
-    const driverRequired = args.driver_required ?? request.driver_required;
-    if (!driverRequired && !(await loadSettings(db)).self_drive_allowed) throw new ToolError(SELF_DRIVE_OFF);
+    // Round 3: who drives, as now asked (self = the asker).
+    const askedNow = askedOf(args, request.driven_by as Asked);
+    const drives = checkAsked(
+      askedNow,
+      {
+        driver_name: args.driver_name ?? (askedNow === "other" ? request.driver_name : null),
+        driver_phone: args.driver_phone ?? (askedNow === "other" ? request.driver_phone : null),
+      },
+      (await loadSettings(db)).self_drive_allowed,
+      { employeeId: request.requested_by_employee_id },
+    );
+    const driverRequired = drives.driver_required;
 
     const before = snapshot(base);
     const tripFrom = trip ? trip.stops[0].place_name : undefined;
@@ -2166,6 +2269,8 @@ export const updateRequest = tool({
       tools: args.tools ?? request.tools,
       note: args.note === undefined ? request.note : (args.note || null),
       driver_required: driverRequired,
+      driven_by: drives.driven_by,
+      driver_name: drives.driver_name,
     };
     const changes = requestDiff(before, after);
     const onBehalfOf = args.on_behalf_of === undefined ? request.on_behalf_of : (args.on_behalf_of || null);
@@ -2193,6 +2298,7 @@ export const updateRequest = tool({
     const rows = unwrap(
       await db.from("vehicle_requests").update({
         ...after,
+        driver_phone: drives.driver_phone,
         on_behalf_of: onBehalfOf,
         requester_phone: requesterPhone,
         from_dwell_min: fromDwell,
@@ -2387,12 +2493,22 @@ export const redecideRequest = tool({
         ? vehicleText(word.mode, word.mode === "any_type" ? word.type : null)
         : vehicleText(task.vehicle_mode, task.vehicle_type_wanted)) ??
       "the vehicle on the day";
-    const driver = change && args.driver
-      ? activeDriver(refs, args.driver)
-      : !request.driver_required && (vehicle?.id ?? null) !== task.vehicle_id
-      ? pickDriver(refs, undefined, false, vehicle, settings.self_drive_allowed)
-      : refs.emp.get(task.employee_id);
+    // Round 3: who drives. A driver named by the approver wins; a request that now asks to drive themselves or names
+    // someone else is applied (the custodian path when the vehicle changed); a request that asks for a driver again needs one.
+    const askedNow = request.driven_by as Asked;
+    const whoChanged = askedNow === "custodian" ? (vehicle?.id ?? null) !== task.vehicle_id : askedNow !== "driver" &&
+      (askedNow !== task.driven_by || request.driver_name !== task.driver_name || request.driver_phone !== task.driver_phone);
+    if (!(change && args.driver) && askedNow === "driver" && task.driven_by !== "driver") {
+      throw new ToolError("The request now asks for a driver: decide with change and give one (driver).");
+    }
+    const whoDrives = change && args.driver
+      ? pickWhoDrives(refs, args.driver, request, vehicle, settings.self_drive_allowed, actor)
+      : whoChanged
+      ? pickWhoDrives(refs, undefined, request, vehicle, settings.self_drive_allowed, actor)
+      : null;
+    const driver = whoDrives?.employee ?? refs.emp.get(task.employee_id);
     if (!driver) throw new ToolError("The task's driver no longer exists.");
+    const drivesName = whoDrives ? whoDrives.driverName ?? driver.name : shownDriver(task, driver) ?? driver.name;
 
     // Phase 7 (§34): a trip the requester edited changes the task's stops through update_task_stops (below); a From or To
     // they changed (an older request, or the connector) through the route.
@@ -2404,6 +2520,7 @@ export const redecideRequest = tool({
       startAt,
       endBy,
       driver,
+      who: whoDrives ? { drivenBy: whoDrives.drivenBy, driverName: whoDrives.driverName, driverPhone: whoDrives.driverPhone } : undefined,
       vehicle: named ?? undefined,
       vehicleMode: word ? { mode: word.mode, type: word.mode === "any_type" ? word.type : null } : undefined,
       passengers: asked[FIELD_LABEL.pax] ? request.pax : undefined,
@@ -2478,7 +2595,7 @@ export const redecideRequest = tool({
         args.decision === "keep" ? "Your changed request was kept" : onlyTime ? "Your booking was postponed" : "Your booking was changed"
       } by ${actor.name}`,
       who: actor.name,
-      body: [text || "as asked", `${shownVehicle} · ${driver.name} · ${colomboDayTime(neededAt)}`].join(" · "),
+      body: [text || "as asked", `${shownVehicle} · ${drivesName} · ${colomboDayTime(neededAt)}`].join(" · "),
       url: `/requests/${request.id}`,
       tag: `request:${request.id}`,
     }, told);

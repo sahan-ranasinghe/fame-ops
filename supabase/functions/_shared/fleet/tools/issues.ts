@@ -15,6 +15,7 @@ import type { Actor } from "../roles.ts";
 import { addDays, colomboDate, colomboDateTime, colomboDayTime, utcIso } from "../time.ts";
 import { daySpan, tool, zDate, zId, zPaging, zSearch, zText } from "../tool.ts";
 import { pageInfo, pageWindow } from "../paging.ts";
+import { driverPhotoLinks } from "../media.ts";
 
 const STATUS = z.enum(["open", "in_progress", "resolved", "dismissed"]);
 const KINDS = Object.keys(KIND_TEXT) as [string, ...string[]];
@@ -37,7 +38,7 @@ export function snoozeEnd(word: "tomorrow" | "week", now: Date): string {
   return word === "tomorrow" ? utcIso(addDays(colomboDate(now), 1), "07:00") : new Date(now.getTime() + 7 * 86400_000).toISOString();
 }
 
-function issueCard(i: IssueRow, refs: Refs, who?: WhoDid, now = new Date()) {
+function issueCard(i: IssueRow, refs: Refs, who?: WhoDid, now = new Date(), photos?: Map<string, string>) {
   const driver = i.employee_id ? refs.emp.get(i.employee_id) : undefined;
   const assignee = i.assigned_to ? refs.emp.get(i.assigned_to) : undefined;
   const snoozed = i.snoozed_until && Date.parse(i.snoozed_until) > now.getTime();
@@ -63,7 +64,7 @@ function issueCard(i: IssueRow, refs: Refs, who?: WhoDid, now = new Date()) {
     taken_by: who && assignee ? { name: assignee.name, at: who.takenAt } : undefined,
     resolved_at: i.resolved_at ? colomboDateTime(i.resolved_at) : undefined,
     resolution_note: i.resolution_note ?? undefined,
-    assigned_to: assignee ? { name: assignee.name, email: assignee.email ?? undefined } : undefined,
+    assigned_to: assignee ? { name: assignee.name, email: assignee.email ?? undefined, photo_url: photos?.get(assignee.id) } : undefined,
     vehicle: i.vehicle_id ? refs.veh.get(i.vehicle_id)?.reg_no : undefined,
     driver: driver?.name,
     driver_username: driver?.username ?? undefined,
@@ -190,7 +191,13 @@ export const listIssues = tool({
         from: span?.from,
         to: span?.to,
         sort,
-        issues: rows.map((i) => issueCard(i, refs, whoOf(i.id), now)),
+        // Round 3: the assignee's photo beside their name.
+        issues: await (async () => {
+          const assignees = [...new Set(rows.flatMap((i) => i.assigned_to ? [i.assigned_to] : []))]
+            .flatMap((id) => refs.emp.get(id) ?? []);
+          const photos = assignees.length ? await driverPhotoLinks(db, assignees, now) : new Map<string, string>();
+          return rows.map((i) => issueCard(i, refs, whoOf(i.id), now, photos));
+        })(),
       },
       summary: `${rows.length} issues (${status}); ${counts.length} active`,
     };

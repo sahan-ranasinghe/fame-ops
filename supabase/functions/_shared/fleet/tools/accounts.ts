@@ -21,6 +21,7 @@ import { phoneDisplay, plain } from "../format.ts";
 import { logPhoneChange, storedPhone } from "../phones.ts";
 import { tool, zPaging, zSearch, zText } from "../tool.ts";
 import { pageOf, pageWindow } from "../paging.ts";
+import { driverPhotoLinks } from "../media.ts";
 
 const zEmail = z.string().trim().toLowerCase().email().max(160);
 const zOfficeRole = z.enum(["admin", "fleet_admin", "office", "coordinator", "staff", "viewer"]);
@@ -110,13 +111,13 @@ export const listOfficeUsers = tool({
   readOnly: true,
   // Hotfix 3 (L3): the search box (name, e-mail, role) and a page at a time.
   input: z.object({ search: zSearch, ...zPaging }),
-  async run({ search, limit, cursor }, { db, actor }) {
+  async run({ search, limit, cursor }, { db, actor, now }) {
     // Connector keys are the admins' (users) only; a Coordinator sees the accounts, not the keys.
     const seesKeys = actor.permissions.includes("users");
     const [users, keys] = await Promise.all([
       fetchAll(
         (a, b) =>
-          db.from("employees").select("id, code, name, email, phone, role, permissions, active, created_at, driver_contact")
+          db.from("employees").select("id, code, name, email, phone, role, permissions, active, created_at, driver_contact, photo_id")
             .in("role", [...OFFICE_ROLES]).order("name").range(a, b),
         "office users",
       ),
@@ -129,6 +130,8 @@ export const listOfficeUsers = tool({
     const key = search ? plain(search) : "";
     const found = key ? users.filter((u) => [u.name, u.email ?? "", u.role].some((x) => plain(x).includes(key))) : users;
     const page = pageOf(found, pageWindow(limit, cursor));
+    // Round 3: each person's photo (initials until there is one), for the shown page only.
+    const photos = await driverPhotoLinks(db, page.rows, now);
     return {
       result: {
         count: page.rows.length,
@@ -137,6 +140,7 @@ export const listOfficeUsers = tool({
         users: page.rows.map((u) => ({
           name: u.name,
           email: u.email,
+          photo_url: photos.get(u.id),
           phone: u.phone,
           phone_display: phoneDisplay(u.phone),
           role: u.role,

@@ -16,9 +16,15 @@ export interface RequestFields {
   tools: boolean;
   note: string | null;
   driver_required: boolean;
+  /** Round 3: who drives (driver | self | other | custodian) and someone else's name; read with driver_required ("driver"). */
+  driven_by?: string;
+  driver_name?: string | null;
 }
 
-export const REQUEST_FIELDS: (keyof RequestFields)[] = [
+/** The fields compared one by one (who drives is read with driver_required). */
+export type FieldKey = Exclude<keyof RequestFields, "driven_by" | "driver_name">;
+
+export const REQUEST_FIELDS: FieldKey[] = [
   "needed_at",
   "back_by",
   "route_from",
@@ -31,7 +37,11 @@ export const REQUEST_FIELDS: (keyof RequestFields)[] = [
 ];
 
 export function snapshot(r: RequestFields): RequestFields {
-  return Object.fromEntries(REQUEST_FIELDS.map((k) => [k, r[k]])) as unknown as RequestFields;
+  const out = Object.fromEntries(REQUEST_FIELDS.map((k) => [k, r[k]])) as unknown as RequestFields;
+  // Round 3: who drives travels with "driver" (driver_required alone cannot say self or someone else).
+  if (r.driven_by !== undefined) out.driven_by = r.driven_by;
+  if (r.driver_name !== undefined) out.driver_name = r.driver_name;
+  return out;
 }
 
 export interface Change {
@@ -43,7 +53,7 @@ export type Changes = Record<string, Change>;
 const TYPE_NAME: Record<string, string> = { car: "Car", van: "Van", double_cab: "Double cab", lorry: "Lorry", other: "Other" };
 
 /** The words for one field's value. */
-function word(key: keyof RequestFields, r: RequestFields): string | null {
+function word(key: FieldKey, r: RequestFields): string | null {
   switch (key) {
     case "needed_at":
       return colomboDayTime(r.needed_at);
@@ -56,14 +66,23 @@ function word(key: keyof RequestFields, r: RequestFields): string | null {
     case "tools":
       return r.tools ? "yes" : "no";
     case "driver_required":
-      return r.driver_required ? "a driver" : "the custodian drives";
+      switch (r.driven_by ?? (r.driver_required ? "driver" : "custodian")) {
+        case "driver":
+          return "a driver";
+        case "self":
+          return "drives themselves";
+        case "other":
+          return `someone else${r.driver_name ? ` (${r.driver_name})` : ""}`;
+        default:
+          return "the custodian drives";
+      }
     default:
       return r[key] ?? null;
   }
 }
 
 /** The names the office reads. */
-export const FIELD_LABEL: Record<keyof RequestFields, string> = {
+export const FIELD_LABEL: Record<FieldKey, string> = {
   needed_at: "time",
   back_by: "back by",
   route_from: "from",

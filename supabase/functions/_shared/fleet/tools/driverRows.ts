@@ -217,6 +217,15 @@ export async function driverRows(
       const photo = photos.get(employee_id);
       return { ...r, ...presence?.get(employee_id), ...(photo ? { photo_url: photo } : {}) };
     })),
-    best: top ? { name: top.name, username: top.username, vehicle: bestRow?.vehicle, why: top.why } : undefined,
+    best: top
+      ? {
+        name: top.name,
+        username: top.username,
+        vehicle: bestRow?.vehicle,
+        why: top.why,
+        // Round 3: the driver-first card needs the photo too.
+        photo_url: bestRow ? photos.get(bestRow.employee_id) : undefined,
+      }
+      : undefined,
   };
 }

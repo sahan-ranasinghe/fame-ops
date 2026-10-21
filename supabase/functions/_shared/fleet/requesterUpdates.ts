@@ -36,6 +36,8 @@ export interface TellInput {
   /** "08:12" */
   left?: string;
   reason?: string | null;
+  /** Round 3: self = the person who asked drives it themselves. */
+  drivenBy?: string;
 }
 
 export function tellMessage(i: TellInput): string {
@@ -43,6 +45,7 @@ export function tellMessage(i: TellInput): string {
   const driver = i.driver ? `${i.driver}${i.driverPhone ? `, ${i.driverPhone}` : ""}` : "the driver";
   switch (i.moment) {
     case "approved":
+      if (i.drivenBy === "self") return `Your vehicle for ${i.when} is booked: ${vehicle}. You drive it yourself.`;
       return `Your vehicle for ${i.when} is booked: ${vehicle}, driver ${driver}.`;
     case "driver_changed":
       return `Your driver for ${i.when} is now ${driver}, with ${vehicle}.`;

@@ -510,7 +510,8 @@ function overlaps(aStart: string, aEnd: string | null, b: Pick<Task, "start_at" 
 }
 
 export interface AssignCheck {
-  driver: Employee;
+  /** Null when someone who is not in Fame Fleet drives (Round 3): no driver checks, the vehicle's only. */
+  driver: Employee | null;
   /** Null while the task's vehicle is chosen on the day or of a type (Hotfix 2, J): the vehicle's checks run when it is set. */
   vehicle: Vehicle | null;
   startAt: string;
@@ -563,14 +564,16 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
     openTasksOn(db, date),
     vehicle ? monthKm(db, [vehicle.id], date.slice(0, 7)) : new Map<string, number>(),
     // Part 3b (H1): the driver's entries on the task's day.
-    db.from("driver_unavailability").select("id, employee_id, starts_at, ends_at, part, reason, note").eq("employee_id", driver.id)
-      .is("removed_at", null).lt("starts_at", day.to).gt("ends_at", day.from),
+    driver
+      ? db.from("driver_unavailability").select("id, employee_id, starts_at, ends_at, part, reason, note").eq("employee_id", driver.id)
+        .is("removed_at", null).lt("starts_at", day.to).gt("ends_at", day.from)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   // The people behind an overlapping task: who asked for it (its request) and who drives it.
   const clashing = sameDay.filter((o) =>
     o.id !== check.ignoreTaskId && overlaps(startAt, endBy, o) &&
-    ((!!vehicle && o.vehicle_id === vehicle.id) || o.employee_id === driver.id)
+    ((!!vehicle && o.vehicle_id === vehicle.id) || (!!driver && o.employee_id === driver.id))
   );
   const requestIds = [...new Set(clashing.flatMap((o) => o.request_id ? [o.request_id] : []))];
   const requests = new Map(
@@ -623,7 +626,7 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
       warnings.push(`${vehicle.reg_no} is booked ${taskWindow(other)} ${clash} (${other.title}).`);
       if (atSameTime) conflicts.push(card("vehicle", `${vehicle.reg_no} is on task`));
     }
-    if (other.employee_id === driver.id) {
+    if (driver && other.employee_id === driver.id) {
       warnings.push(`${driver.name} has another task ${taskWindow(other)} ${clash} (${other.title}).`);
       if (atSameTime) conflicts.push(card("driver", `${driver.name.split(" ")[0]} is on task`));
     }
@@ -648,6 +651,7 @@ export async function assignCheck(db: Db, check: AssignCheck): Promise<{ warning
       if (expiry && expiry < date) warnings.push(`${vehicle.reg_no}: ${doc.name.toLowerCase()} expired on ${expiry}.`);
     }
   }
+  if (!driver) return { warnings, conflicts };
   if (driver.licence_expiry && driver.licence_expiry < date) {
     warnings.push(`${driver.name}'s driving licence expired on ${driver.licence_expiry}.`);
   }
