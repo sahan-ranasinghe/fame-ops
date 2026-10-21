@@ -972,6 +972,23 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 28. Round 2 deployed (21 October 2026, branch `phase9-r2`, Sahan's go after Checkpoint 2)
+
+Live stop progress: the driver slides Arrived / Left / finish (Undo 6 s), the "Arrived at <stop>?" card on the task
+screen, each stop's Planned · Arrived · Left with minutes late or early everywhere (site, Office mode, /m/, the driver
+app, `task_detail.stops[].progress`), the stops to come re-estimated from the planner's own leg times
+(`_shared/fleet/stopProgress.ts`), Realtime on the task pages, `request.stop_arrived` once per stop after the first pickup.
+
+- Server: `db push` applied only `20261021200000_round2_stop_progress`; `office-api`, `office-mcp`, `driver-api` deployed.
+  Checked live: `task_detail` answers `stops[].progress` (planned times, the current stop).
+- main fast-forwarded to `1547884` and pushed (the push scan 0); CI run on main: 39584038398.
+- The website: deployment 68cb37cc, the scan clean; `/`, `/m/`, `/m/offline` and the fonts answer 200.
+- The EAS update to preview, runtime 1.3.0-gmaps: group `090a0836-34ad-45bd-b452-9c98329b81b9`, Android
+  `01a15e00-f21c-75d8-a993-3efa0ee4a87f`, from `1547884` (no native package changed since `ef69255`).
+- Decisions (Sahan): the arrival flag stays after Undo (shown "corrected", never erased); a stop driven past without
+  Arrived is asked about at the next stop; the "Arrived at <stop>?" prompt also in the background (a local notification
+  from the background location task, JS only); the artifact's 60 s refresh stays. These four are Round 2b work.
+
 ## 27. Round 1 deployed (21 October 2026, branch `phase9-r1`, Sahan's four gos after CI run 39562826733 passed)
 
 The boss's review, Round 1 (Checkpoint 1): the Home tiles, Gmail rows, the When step (Arrive by + Stay), the planner as
