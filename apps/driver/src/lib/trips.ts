@@ -209,6 +209,8 @@ export interface KnownPlace {
   lat: number | null;
   lng: number | null;
   site_id?: string | null;
+  /** office | store | site | other (Round 1 item 6: offices first in the empty box); absent on an older copy. */
+  kind?: string | null;
 }
 
 export function pickFromKnown(place: KnownPlace): Choice {

@@ -12,6 +12,9 @@
 // session, the pick asks google_place (one Place Details call with the same
 // token) and the stop keeps the Google place id; the list credits "Google
 // Maps". A Google place is never saved as one of ours (Google's terms).
+// An empty box (Round 1 item 6, docs/ui-patterns.md "Where suggestions"): on focus it asks search_places {suggest} once
+// and shows at most 5 rows, our places (offices first) then the 3 used most recently, each with a building or a clock
+// icon and no badge, no towns; "More places" under them shows the rest in place (ui/placeSuggestLogic.ts).
 import { useEffect, useId, useRef, useState } from "react";
 import { useFleet } from "../app/FleetContext";
 import type { GooglePlaceAnswer, PastedPin, PlaceDetail, SearchAnswer, SearchResult } from "../data/types";
@@ -19,6 +22,8 @@ import { PinMap } from "../map/PinMap";
 import type { FleetError } from "../transport/types";
 import { errText } from "../transport/errors";
 import { Pill } from "./basics";
+import { Icon } from "./icons";
+import { splitSuggestions, type WhereIcon, whereRows } from "./placeSuggestLogic";
 import { badgeTone, DEBOUNCE_MS, inLanka, looksPasted, type Picked, pickedOf, shouldSearch } from "./locationLogic";
 
 interface Confirming {
@@ -60,6 +65,22 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
   const [saving, setSaving] = useState(false);
   const seq = useRef(0);
   const typed = useRef(false);
+  /** The empty box's suggestions: asked once per box, on the first focus with nothing typed. */
+  const [suggested, setSuggested] = useState<SearchAnswer | null>(null);
+  const [suggestBusy, setSuggestBusy] = useState(false);
+  const suggestAsked = useRef(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const empty = value.trim() === "";
+
+  useEffect(() => {
+    if (!canSearch || !open || !empty || suggestAsked.current) return;
+    suggestAsked.current = true;
+    setSuggestBusy(true);
+    transport.call<SearchAnswer>("search_places", { suggest: true })
+      .then((a) => setSuggested(a))
+      .catch(() => { suggestAsked.current = false; })
+      .finally(() => setSuggestBusy(false));
+  }, [canSearch, open, empty, transport]);
 
   useEffect(() => {
     if (!canSearch || !typed.current) return;
@@ -86,10 +107,19 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
     return () => clearTimeout(timer);
   }, [value, canSearch, transport, useGoogle]);
 
-  const pin = answer?.pin;
-  const rows: (SearchResult | { layer: "pin"; pin: PastedPin })[] = [...(pin ? [{ layer: "pin" as const, pin }] : []), ...(answer?.results ?? [])];
-  const credits = [...new Set((answer?.results ?? []).filter((r) => r.layer === "map" && r.attribution).map((r) => r.attribution!))];
-  const fromGoogle = (answer?.results ?? []).some((r) => r.layer === "google");
+  const where = empty && suggested ? (() => {
+    const { ours, recent } = splitSuggestions(suggested.results);
+    return whereRows(ours, recent, (r) => r.name);
+  })() : null;
+  const whereShown = where ? (moreOpen ? [...where.top, ...where.more] : where.top) : [];
+  const icons = new Map<SearchResult, WhereIcon>(whereShown.map((r) => [r.item, r.icon]));
+  const typedAnswer = empty ? null : answer;
+  const pin = typedAnswer?.pin;
+  const rows: (SearchResult | { layer: "pin"; pin: PastedPin })[] = empty
+    ? whereShown.map((r) => r.item)
+    : [...(pin ? [{ layer: "pin" as const, pin }] : []), ...(typedAnswer?.results ?? [])];
+  const credits = [...new Set((typedAnswer?.results ?? []).filter((r) => r.layer === "map" && r.attribution).map((r) => r.attribution!))];
+  const fromGoogle = (typedAnswer?.results ?? []).some((r) => r.layer === "google");
 
   function choose(i: number) {
     const row = rows[i];
@@ -170,7 +200,7 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
     }
   }
 
-  const showList = open && canSearch && (rows.length > 0 || busy || !!err || !!answer?.map_note);
+  const showList = open && canSearch && (empty ? rows.length > 0 || suggestBusy : rows.length > 0 || busy || !!err || !!answer?.map_note);
   return (
     <div className="ls" data-testid="location-search">
       <input
@@ -186,7 +216,7 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
         placeholder={placeholder}
         value={value}
         onChange={(e) => { typed.current = true; setOpen(true); onText(e.target.value); }}
-        onFocus={() => { if (answer) setOpen(true); }}
+        onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={onKey}
       />
@@ -202,17 +232,22 @@ export function LocationSearch({ id, value, onText, onPick, placeholder, label, 
                 </>
               ) : (
                 <>
+                  {icons.has(row) && <span className="ls-ic" data-testid={`where-icon-${icons.get(row)}`} title={icons.get(row) === "building" ? "Our place" : "Used recently"}><Icon name={icons.get(row)!} /></span>}
                   <div className="ls-main"><b>{row.name}</b>{row.detail && <span className="sub">{row.detail}</span>}</div>
                   {!row.pinned && <Pill tone="bad">no pin</Pill>}
-                  <Pill tone={badgeTone(row.badge)}>{row.badge}</Pill>
+                  {!icons.has(row) && <Pill tone={badgeTone(row.badge)}>{row.badge}</Pill>}
                 </>
               )}
             </li>
           ))}
-          {busy && rows.length === 0 && <li className="ls-note">Searching…</li>}
-          {!busy && rows.length === 0 && !err && !answer?.map_note && <li className="ls-note">Nothing found. Keep typing, or paste a Google Maps link or "lat, lng".</li>}
-          {answer?.map_note && <li className="ls-note" data-testid="map-note">{answer.map_note}</li>}
-          {err && <li className="ls-note bad">{err}</li>}
+          {empty && suggestBusy && rows.length === 0 && <li className="ls-note">Loading…</li>}
+          {empty && !moreOpen && where && where.more.length > 0 && (
+            <li className="ls-more"><button type="button" className="linkish" data-testid="where-more" onClick={() => setMoreOpen(true)}>More places</button></li>
+          )}
+          {!empty && busy && rows.length === 0 && <li className="ls-note">Searching…</li>}
+          {!empty && !busy && rows.length === 0 && !err && !answer?.map_note && <li className="ls-note">Nothing found. Keep typing, or paste a Google Maps link or "lat, lng".</li>}
+          {!empty && answer?.map_note && <li className="ls-note" data-testid="map-note">{answer.map_note}</li>}
+          {!empty && err && <li className="ls-note bad">{err}</li>}
           {credits.length > 0 && <li className="ls-credit">Map results: {credits.join(" · ")}</li>}
           {fromGoogle && <li className="ls-credit" data-testid="google-credit"><span translate="no" style={{ fontFamily: "Roboto, Arial, sans-serif" }}>Google Maps</span></li>}
         </ul>

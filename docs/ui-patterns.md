@@ -187,6 +187,22 @@ Typing never chooses a place; a pick fills it and shows the chosen place with **
 | App (driver side) | `components/PlaceSearch.tsx` (Start a trip, Add a stop) |
 | Website | `ui/LocationSearch.tsx` (rules `ui/locationLogic.ts`) |
 
+### Where suggestions (Phase 9 Round 1, item 6)
+
+**The pattern.** Google Maps' and Uber's empty destination box: at most **5 rows**, our places first (the office first,
+then the saved places), then the **3 used most recently**. Each row has a leading **icon**, never a text badge: a
+building for one of our places (and the office), a clock for a recent one. **No towns** until the person types. Under the
+rows, **More places** (Google Maps' "More from recent history") opens the rest of the list in place (the rest of our
+places, then the rest of the recent ones, at most 50; no towns); it is not shown when there is nothing more. While
+typing, the results are as above, and every badge word the server sends is shown in the person's language (the app maps
+it to a `where.badge.*` key, an unknown word to its layer's; never the server's English word raw; the website is English).
+
+| Codebase | Component | Rules |
+|---|---|---|
+| App (Office mode and /m/) | `components/patterns/WhereSuggestions.tsx` inside `components/office/PlaceSearch.tsx` (search_places `{suggest}`) | `lib/placeSuggestLogic.ts` |
+| App (driver side) | the same `WhereSuggestions` inside `components/PlaceSearch.tsx`: our places the phone knows, offices first (driver-api has no "used before"), building icons only; works offline | `lib/placeSuggestLogic.ts` |
+| Website | `ui/LocationSearch.tsx`: on the first focus with nothing typed it asks search_places `{suggest}` once | `ui/placeSuggestLogic.ts` |
+
 ## 10. Confirmations, Undo and toasts
 
 **The pattern.** A destructive or outward action (cancel a task, decline, remove, switch off) asks once in a sheet with

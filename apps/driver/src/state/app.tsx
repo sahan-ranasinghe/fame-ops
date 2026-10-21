@@ -539,7 +539,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const cached = getJson<{ at: number; rows: KnownPlace[] }>(KEYS.tripPlaces);
     if (cached && Date.now() - cached.at < maxAgeMs) return;
     try {
-      const rows = (await api.fetchOurPlaces(supabase)).map((p): KnownPlace => ({ id: p.id, name: p.name, address: p.address, lat: p.lat, lng: p.lng, site_id: p.site_id }));
+      const rows = (await api.fetchOurPlaces(supabase)).map((p): KnownPlace => ({ id: p.id, name: p.name, address: p.address, lat: p.lat, lng: p.lng, site_id: p.site_id, kind: p.kind }));
       setJson(KEYS.tripPlaces, { at: Date.now(), rows });
       setOurPlaces(rows);
     } catch {

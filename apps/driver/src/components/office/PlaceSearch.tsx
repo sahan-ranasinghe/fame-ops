@@ -8,8 +8,9 @@
 // Hotfix O2-H1 (Part A): the search runs after the person typed (a `typed` flag, as the site's box; never for a value a
 // pick or the form set, and never skipped because the form already holds the text, which is what hid every result).
 // Under the field there is always one of: the results, "Searching…", "No places found", or the error with Try again.
-// An empty box shows suggestions from search_places {suggest} (the places used before, our places, the nearest towns),
-// nearest to the phone when its position is already allowed (no prompt), else to the base place.
+// An empty box shows suggestions from search_places {suggest}, nearest to the phone when its position is already allowed
+// (no prompt), else to the base place. Round 1 item 6: at most 5 rows, our places (offices first) then 3 recent, with a
+// building or clock icon and no badge, no towns, "More places" for the rest (components/patterns/WhereSuggestions.tsx).
 
 import * as Location from 'expo-location';
 import { useEffect, useRef, useState } from 'react';
@@ -17,7 +18,9 @@ import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react
 
 import { ChevronRight, LocateFixed, Search, X } from '@/components/icons';
 import { ListError, SkeletonRows } from '@/components/patterns/ListState';
+import { WhereSuggestions } from '@/components/patterns/WhereSuggestions';
 import { Button, Txt } from '@/components/ui';
+import { badgeKey, splitSuggestions, whereRows } from '@/lib/placeSuggestLogic';
 import { POSITION_TIMEOUT_MS, SUGGEST_TIMEOUT_MS, TimeoutError, withTimeout } from '@/lib/patterns/listLogic';
 import { useOffice } from '@/office/state';
 import { PinAdjust } from './PinAdjust';
@@ -28,6 +31,12 @@ import { useApp } from '@/state/app';
 import { colors, webInnerInput } from '@/theme';
 
 export type { Picked };
+
+/** The empty box's rows from search_places {suggest}: our places, the recent ones (towns left out). */
+function whereFromAnswer(results: SearchResult[]) {
+  const { ours, recent } = splitSuggestions(results);
+  return whereRows(ours, recent, (r) => r.name);
+}
 
 type Suggest = { answer: SearchAnswer | null; busy: boolean; failed: boolean };
 
@@ -172,17 +181,26 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
   const state = searchState({ searchable: !empty && typed.current, busy, answer, problem });
   const results = answer?.results ?? [];
   const pin = answer?.pin;
-  const badgeText = (r: SearchResult) => (r.layer === 'town' ? t('office.trip.townBadge') : r.badge);
-  const row = (r: SearchResult, i: number) => (
-    <Pressable key={`${r.layer}-${r.id ?? r.google_place_id ?? r.ref ?? r.name}-${i}`} accessibilityRole="button" onPress={() => void pick(r)} style={styles.row}>
-      <Pill text={badgeText(r)} tone={badgeTone(r.badge)} />
-      <View style={{ flex: 1 }}>
-        <Txt variant="strong" numberOfLines={1}>{r.name}</Txt>
-        {r.detail ? <Txt variant="small" numberOfLines={1}>{r.detail}</Txt> : null}
-      </View>
-      <ChevronRight size={22} color={colors.muted} />
-    </Pressable>
-  );
+  // Round 1 item 6: the server's badge words in the person's language (never its English word raw).
+  const badgeText = (r: SearchResult) => {
+    const key = badgeKey(r.badge, r.layer);
+    return key ? t(key) : null;
+  };
+  const row = (r: SearchResult, i: number) => {
+    const badge = badgeText(r);
+    return (
+      <Pressable key={`${r.layer}-${r.id ?? r.google_place_id ?? r.ref ?? r.name}-${i}`} accessibilityRole="button" onPress={() => void pick(r)} style={styles.row}>
+        {badge ? <Pill text={badge} tone={badgeTone(r.badge)} /> : null}
+        <View style={{ flex: 1 }}>
+          <Txt variant="strong" numberOfLines={1}>{r.name}</Txt>
+          {r.detail ? <Txt variant="small" numberOfLines={1}>{r.detail}</Txt> : null}
+        </View>
+        <ChevronRight size={22} color={colors.muted} />
+      </Pressable>
+    );
+  };
+  // An empty box (Round 1 item 6, docs/ui-patterns.md "Where suggestions"): our places, then 3 recent, 5 rows; no towns.
+  const where = suggest.answer ? whereFromAnswer(suggest.answer.results) : null;
 
   return (
     <View style={{ gap: 8 }}>
@@ -234,11 +252,14 @@ export function PlaceSearch({ value, placeholder, onText, onPick, myLocation = f
         <View style={{ gap: 4 }} testID="place-search-suggestions">
           {suggest.busy && <SkeletonRows rows={3} lines={2} testID="place-search-skeleton" />}
           {suggest.failed && <ListError message={t('office.trip.suggestionsFailed')} onRetry={() => setSuggestTry((n) => n + 1)} />}
-          {suggest.answer && suggest.answer.results.length > 0 && (
-            <>
-              <Txt variant="label" color={colors.muted}>{t('office.trip.suggestions').toUpperCase()}</Txt>
-              {suggest.answer.results.map(row)}
-            </>
+          {where && (
+            <WhereSuggestions
+              lists={where}
+              keyOf={(r, i) => `${r.layer}-${r.id ?? r.name}-${i}`}
+              title={(r) => r.name}
+              detail={(r) => r.detail}
+              onPick={(r) => void pick(r)}
+            />
           )}
         </View>
       )}

@@ -461,6 +461,9 @@ button.avail-row:focus-visible { outline: 3px solid var(--ink); outline-offset: 
 .ls-note { padding: 8px 10px; color: var(--muted); font-size: 14px }
 .ls-note.bad, .bad-text { color: var(--bad) }
 .ls-credit { padding: 6px 10px; color: var(--muted); font-size: 12px }
+.ls-ic { width: 20px; height: 20px; flex: none; color: var(--muted) }
+.ls-ic svg { width: 100%; height: 100% }
+.ls-more { padding: 8px 10px }
 .ls-confirm { margin-top: 8px; display: grid; gap: 10px }
 .pinmap { height: 220px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line) }
 .pinmap.drawn .mapbox { height: 220px }

@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 import { badgeTone, DEBOUNCE_MS, looksPasted, MIN_CHARS, placeBoxState, searchState, shouldSearch, suggestArgs, typedPatch } from '../src/office/trip/locationLogic';
 import { draftsFromStops, newStop } from '../src/office/trip/stopsLogic';
+import { BADGE_I18N_KEYS, badgeKey, officesFirst, splitSuggestions, WHERE_MAX_RECENT, WHERE_MAX_ROWS, whereRows } from '../src/lib/placeSuggestLogic';
 
 let failures = 0;
 function check(ok: unknown, label: string, detail?: unknown): void {
@@ -87,8 +88,39 @@ console.log('\nThe box as text');
   check(box.includes("api.call<SearchAnswer>('search_places', suggestArgs(near))") && box.includes('Location.getLastKnownPositionAsync()') && !box.includes('requestForegroundPermissionsAsync().granted;\n      const pos = await Location.getLastKnownPositionAsync'), 'an empty box asks for suggestions, with the last known position only when already allowed (no prompt)');
   check(box.includes("onRetry={() => setSuggestTry((n) => n + 1)}") && box.includes('office.trip.suggestionsFailed'), 'failed suggestions say so with Try again (it asks again)');
   check(box.includes("canGoogle && !empty && !google") && box.includes("typed.current = true; setGoogle(true);"), 'the Google opt-in chip only under the google package, and it triggers a search');
-  check(box.includes("r.layer === 'town' ? t('office.trip.townBadge') : r.badge"), 'the Town badge in the phone\'s language');
+  check(box.includes('const key = badgeKey(r.badge, r.layer);') && !box.includes('text={r.badge}') && !box.includes(': r.badge'), 'every server badge in the phone\'s language (never the English word raw)');
+  check(box.includes('<WhereSuggestions') && box.includes('whereRows(ours, recent, (r) => r.name)') && !box.includes('suggest.answer.results.map(row)'), 'an empty box: the Where suggestions (ours, then 3 recent, no towns, More places)');
+  const driverBox = read('src/components/PlaceSearch.tsx');
+  check(driverBox.includes('<WhereSuggestions') && driverBox.includes('whereRows(officesFirst(known), [], (p) => p.name)') && driverBox.includes('badge={badgeText(r.badge, r.layer)}') && !driverBox.includes('accessibilityLanguage="en"'), 'the driver\'s box: our places (offices first) in an empty box, the badges translated');
   check(!/'(admin|fleet_admin|office|viewer|staff)'/.test(box), 'no role names');
+}
+
+console.log('\nWhere suggestions (Round 1 item 6)');
+{
+  const P = (name: string, kind = 'other') => ({ layer: 'place', name, kind });
+  const R = (name: string) => ({ layer: 'recent', name });
+  const T = (name: string) => ({ layer: 'town', name });
+  const answer = [R('Kandy depot'), R('Galle site'), R('Head office'), R('Jaffna store'), R('Matara'), P('Head office', 'office'), P('Store A'), P('Store B'), P('Store C'), T('Kurunegala'), T('Kegalle')];
+  const { ours, recent } = splitSuggestions(answer);
+  const w = whereRows(ours, recent, (r) => r.name);
+  check(w.top.length === WHERE_MAX_ROWS && WHERE_MAX_ROWS === 5, 'at most 5 rows', w.top.map((r) => r.item.name));
+  check(same(w.top.map((r) => r.item.name), ['Head office', 'Store A', 'Kandy depot', 'Galle site', 'Jaffna store']), 'ours first, then the 3 most recent (a recent place that is one of ours shows once)', w.top.map((r) => r.item.name));
+  check(w.top.filter((r) => r.icon === 'clock').length === WHERE_MAX_RECENT && w.top.every((r) => r.icon === (r.item.layer === 'place' ? 'building' : 'clock')), 'a building for ours, a clock for a recent one');
+  check(![...w.top, ...w.more].some((r) => r.item.layer === 'town'), 'no towns, not even under More places');
+  check(same(w.more.map((r) => r.item.name), ['Store B', 'Store C', 'Matara']), 'More places: the rest of ours, then the rest of the recent');
+  const few = whereRows([P('Head office', 'office')], [R('Kandy')], (r) => r.name);
+  check(few.top.length === 2 && few.more.length === 0, 'fewer: fewer rows, no More places');
+  const none = whereRows([], [], (r: { name: string }) => r.name);
+  check(none.top.length === 0 && none.more.length === 0, 'nothing: nothing');
+  check(same(officesFirst([{ kind: 'store', n: 1 }, { kind: 'office', n: 2 }, { kind: null, n: 3 }]).map((p) => p.n), [2, 1, 3]), 'the driver\'s own list: offices first, the rest in order');
+  check(badgeKey('Office') === 'where.badge.office' && badgeKey('Site · Dialog') === 'where.badge.siteDialog' && badgeKey('Used before') === 'where.badge.usedBefore' && badgeKey('Town', 'town') === 'where.badge.town', 'the server\'s badge words map to keys');
+  check(badgeKey('Something new', 'map') === 'where.badge.map' && badgeKey('Something new', 'typed') === null && badgeKey(null, 'known') === 'where.badge.saved', 'an unknown word falls back to its layer (never shown raw)');
+  const enAll = JSON.parse(read('src/i18n/en.json')) as Record<string, unknown>;
+  const siAll = JSON.parse(read('src/i18n/si.json')) as Record<string, unknown>;
+  const look = (tree: Record<string, unknown>, k: string) => k.split('.').reduce<unknown>((n, part) => (n as Record<string, unknown> | undefined)?.[part], tree);
+  const keys = [...BADGE_I18N_KEYS, 'where.morePlaces', 'where.ours', 'where.recent'];
+  const gone = keys.filter((k) => typeof look(enAll, k) !== 'string' || typeof look(siAll, k) !== 'string');
+  check(gone.length === 0, 'every Where key in en and si', gone);
 }
 
 console.log('\nThe server\'s suggestions');

@@ -6,10 +6,15 @@
 // typing session; a Google pick carries that token to the trip that ends the session.
 // With no connection (or when the search gets no answer) it says so and offers only what works offline: our places
 // the phone knows (lib/trips.ts offlineMatches) and the typed words.
+// Round 1 item 6 (docs/ui-patterns.md "Where suggestions"): an empty box offers our places the phone knows (offices
+// first), at most 5 rows with a building icon, and "More places" for the rest (components/patterns/WhereSuggestions.tsx);
+// drivers get no "used before" from driver-api. The server's badge words are shown in the driver's language.
 
 import * as Crypto from 'expo-crypto';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { SkeletonRows } from '@/components/patterns/ListState';
+import { WhereSuggestions } from '@/components/patterns/WhereSuggestions';
+import { badgeKey, officesFirst, whereRows } from '@/lib/placeSuggestLogic';
 import { SUGGEST_TIMEOUT_MS, withTimeout } from '@/lib/patterns/listLogic';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
@@ -106,6 +111,13 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
   const results = status === 'done' ? answer?.results ?? [] : [];
   const pin = status === 'done' ? answer?.pin : undefined;
   const nothing = status === 'done' && results.length === 0 && !pin;
+  const empty = text.trim() === '';
+  const where = empty ? whereRows(officesFirst(known), [], (p) => p.name) : null;
+  const badgeText = (badge: string | null | undefined, layer: string) => {
+    const key = badgeKey(badge, layer);
+    return key ? t(key) : null;
+  };
+  const pickBadge = pick?.badge ? badgeText(pick.badge, pick.layer) : null;
 
   return (
     <View style={{ gap: 12 }}>
@@ -132,7 +144,7 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
             <GoogleCredit show={pick.googlePlaceId !== null} />
             {pick.detail && <Txt variant="small" numberOfLines={2}>{pick.detail}</Txt>}
           </View>
-          {pick.badge && <Badge text={pick.badge} />}
+          {pickBadge && <Badge text={pickBadge} />}
           <Pressable accessibilityRole="button" onPress={() => onPick(null)} hitSlop={8} style={styles.change}>
             <Txt variant="strong" size={15} color={colors.blue}>{t('today.change')}</Txt>
           </Pressable>
@@ -141,6 +153,18 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
         <>
           {status === 'offline' && <Notice tone="warn" text={t('trip.offlineOnly')} />}
           {status === 'searching' && <SkeletonRows rows={3} lines={2} testID="trip-search-skeleton" />}
+
+          {where && where.top.length > 0 && (
+            <Card style={{ paddingVertical: 4, paddingHorizontal: 12 }}>
+              <WhereSuggestions
+                lists={where}
+                keyOf={(place) => place.id}
+                title={(place) => place.name}
+                detail={(place) => [place.site_id, place.address].filter(Boolean).join(' · ')}
+                onPick={(place) => choose(pickFromKnown(place))}
+              />
+            </Card>
+          )}
 
           {local.length > 0 && (
             <Group title={t('trip.ours')}>
@@ -167,7 +191,7 @@ export function PlaceSearch({ online, known, pick, onPick, text, onTextChange }:
                     first={i === 0}
                     title={r.name}
                     detail={r.detail}
-                    badge={r.badge}
+                    badge={badgeText(r.badge, r.layer)}
                     google={r.layer === 'google'}
                     onPress={() => choose(pickFromResult(r, session.current))}
                   />
@@ -228,11 +252,11 @@ function Row({ title, detail, badge, google = false, mono = false, icon = false,
   );
 }
 
-/** The server's badge (Office, Site · Dialog, Saved, Map, Google): data from the office's search, as the office's box shows it. */
+/** The server's badge (Office, Site · Dialog, Saved, Map, Google) in the driver's language (lib/placeSuggestLogic badgeKey). */
 function Badge({ text }: { text: string }) {
   return (
     <View style={styles.badge}>
-      <Txt variant="small" size={12} color={colors.ink} accessibilityLanguage="en">{text}</Txt>
+      <Txt variant="small" size={12} color={colors.ink}>{text}</Txt>
     </View>
   );
 }

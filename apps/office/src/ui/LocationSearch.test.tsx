@@ -84,3 +84,72 @@ describe("LocationSearch with Google's places (Part 5)", () => {
     vi.useRealTimers();
   });
 });
+
+/** search_places {suggest}: 5 recent, 3 of ours (the office first), 2 towns, as the server answers an empty box. */
+class Suggesting extends Places {
+  call<T>(tool: string, args: Record<string, unknown> = {}): Promise<T> {
+    if (tool === "search_places" && args.suggest) {
+      this.calls.push({ tool, args });
+      const r = (name: string) => ({ layer: "recent", badge: "Used before", name, pinned: true, lat: 7, lng: 80 });
+      const p = (name: string, badge = "Saved") => ({ layer: "place", badge, name, id: `p-${name}`, pinned: true, lat: 7, lng: 80 });
+      const town = (name: string) => ({ layer: "town", badge: "Town", name, pinned: true, lat: 7, lng: 80 });
+      return Promise.resolve({
+        text: "", suggested: true,
+        results: [r("Kandy depot"), r("Galle site"), r("Head office"), r("Jaffna store"), r("Matara"), p("Head office", "Office"), p("Store A"), p("Store B"), town("Kurunegala"), town("Kegalle")],
+      } as T);
+    }
+    return super.call<T>(tool, args);
+  }
+}
+
+describe("LocationSearch: the empty box's Where suggestions (Round 1 item 6)", () => {
+  it("on focus: 5 rows at most, ours then 3 recent, icons not badges, no towns; More places opens the rest", async () => {
+    const transport = new Suggesting();
+    const me = await transport.me();
+    const picked: Picked[] = [];
+    render(
+      <FleetProvider value={{ store: new FleetStore(transport), transport, me, noConnector: false }}>
+        <MemoryRouter><LocationSearch id="s" label="Stop" value="" onText={() => {}} onPick={(p) => picked.push(p)} /></MemoryRouter>
+      </FleetProvider>,
+    );
+    fireEvent.focus(screen.getByRole("combobox"));
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(5));
+    expect(transport.calls.filter((c) => c.tool === "search_places")).toEqual([{ tool: "search_places", args: { suggest: true } }]);
+    expect(screen.getAllByRole("option").map((o) => o.querySelector("b")!.textContent)).toEqual(["Head office", "Store A", "Kandy depot", "Galle site", "Jaffna store"]);
+    expect(screen.getAllByTestId("where-icon-building")).toHaveLength(2);
+    expect(screen.getAllByTestId("where-icon-clock")).toHaveLength(3);
+    expect(screen.queryByText("Used before")).toBeNull();
+    expect(screen.queryByText("Office")).toBeNull();
+    expect(screen.queryByText("Kurunegala")).toBeNull();
+    fireEvent.click(screen.getByTestId("where-more"));
+    expect(screen.getAllByRole("option")).toHaveLength(7);
+    expect(screen.queryByText("Kurunegala")).toBeNull();
+    expect(screen.queryByTestId("where-more")).toBeNull();
+    fireEvent.click(screen.getByText("Store A"));
+    expect(picked[0]).toMatchObject({ name: "Store A", placeId: "p-Store A" });
+  });
+
+  it("typing: the search's own rows with their badges (the suggestions gone)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const transport = new Suggesting();
+    const me = await transport.me();
+    function Box() {
+      const [v, setV] = useState("");
+      return <LocationSearch id="s" label="Stop" value={v} onText={setV} onPick={() => {}} />;
+    }
+    render(
+      <FleetProvider value={{ store: new FleetStore(transport), transport, me, noConnector: false }}>
+        <MemoryRouter><Box /></MemoryRouter>
+      </FleetProvider>,
+    );
+    fireEvent.focus(screen.getByRole("combobox"));
+    await waitFor(() => expect(screen.getAllByRole("option")).toHaveLength(5));
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "Kandy" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+    await waitFor(() => expect(screen.getByText("Kandy office")).toBeTruthy());
+    expect(screen.queryByText("Head office")).toBeNull();
+    expect(screen.getByText("Office")).toBeTruthy();
+    expect(screen.queryByTestId("where-icon-building")).toBeNull();
+    vi.useRealTimers();
+  });
+});

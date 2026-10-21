@@ -616,7 +616,7 @@ async function main() {
   // A place of its own (a fresh database has none of ours: the office suite's leave-behind was the only one before).
   must(await admin.from('places').insert({ name: `Test depot ${run}`, kind: 'office', lat: 6.93, lng: 79.85 }).select('id').single(), 'our place');
   const ours = await api.fetchOurPlaces(clientD);
-  check(ours.length > 0 && ours.every((p) => !('kind' in p)) && !ours.some((p) => p.site_id), "the offline list: our own places (no sites), read as the driver", ours.slice(0, 2));
+  check(ours.length > 0 && ours.every((p) => typeof p.kind === 'string' && p.kind !== 'site') && !ours.some((p) => p.site_id), "the offline list: our own places (no sites) with their kind (offices first in the empty box), read as the driver", ours.slice(0, 2));
   const tripCar = must(await admin.from('vehicles').insert({ reg_no: `TEST ${run.toUpperCase()}-T`, make_model: 'Toyota Axio', vehicle_type: 'car', seats: 4, current_odometer_km: 3000 }).select('*').single(), 'trip car');
   const queueD = memoryStore();
   const tokenD = async () => (await clientD.auth.getSession()).data.session?.access_token ?? null;

@@ -2875,5 +2875,23 @@
       "failed": "That did not work. Try again.",
       "unavailable": "Notifications are not available in this browser right now. Reload the page to try again."
     }
+  },
+  "where": {
+    "morePlaces": "More places",
+    "ours": "Our place",
+    "recent": "Used recently",
+    "badge": {
+      "office": "Office",
+      "siteDialog": "Site · Dialog",
+      "siteMobitel": "Site · Mobitel",
+      "site": "Site",
+      "saved": "Saved",
+      "usedBefore": "Used before",
+      "map": "Map",
+      "google": "Google",
+      "town": "Town",
+      "pin": "Pin",
+      "link": "Link"
+    }
   }
 }

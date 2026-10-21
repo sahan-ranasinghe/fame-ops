@@ -204,11 +204,11 @@ export async function fetchTasks(client: Client, since: Date): Promise<TaskWithS
 }
 
 /** Our own places (offices, stores, saved places; not the operators' sites), for Start a trip with no connection (Phase 7 §13). */
-export type OurPlace = Pick<Tables['places']['Row'], 'id' | 'name' | 'address' | 'lat' | 'lng' | 'site_id'>;
+export type OurPlace = Pick<Tables['places']['Row'], 'id' | 'name' | 'address' | 'lat' | 'lng' | 'site_id' | 'kind'>;
 
 export async function fetchOurPlaces(client: Client, limit = 500): Promise<OurPlace[]> {
   return check(
-    await client.from('places').select('id, name, address, lat, lng, site_id').eq('active', true).is('removed_at', null)
+    await client.from('places').select('id, name, address, lat, lng, site_id, kind').eq('active', true).is('removed_at', null)
       .neq('kind', 'site').order('name').limit(limit),
     'places',
   );

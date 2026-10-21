@@ -1005,7 +1005,8 @@ export interface Place {
 /** search_places: one row of the location search box (Part 4). */
 export interface SearchResult {
   /** google: Google's place search (the google package): a google_place_id, no pin until google_place. */
-  layer: "place" | "recent" | "map" | "google";
+  /** town: a populated place in search_places {suggest} (left out of the empty box: towns only once the person types). */
+  layer: "place" | "recent" | "map" | "google" | "town";
   badge: string;
   name: string;
   detail?: string;
