@@ -56,3 +56,5 @@ export { default as ChartColumn } from 'lucide-react-native/icons/chart-column';
 export { default as SlidersHorizontal } from 'lucide-react-native/icons/sliders-horizontal';
 export { default as UserCog } from 'lucide-react-native/icons/user-cog';
 export { default as Minus } from 'lucide-react-native/icons/minus';
+export { default as Keyboard } from 'lucide-react-native/icons/keyboard';
+export { default as Building } from 'lucide-react-native/icons/building';

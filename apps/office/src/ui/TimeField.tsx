@@ -2,16 +2,18 @@
 // hours. It shows HH:MM (mono) or a dash.
 // - On a desktop it can be typed (the site's typed rule: the value counts on blur, on Enter, or 1 s after the last change
 //   when it is a whole HH:MM; "9", "930", "9.30" mean 09:00 and 09:30 when the field is left), and a click (or ↓) drops
-//   the time list under it: the suggested time ("Planned 07:24"), Now (rounded up to 5 min), the common times, then every
-//   5 minutes scrolled to the value. Until a value counts the form (its plan, its warnings) keeps the one before.
-// - On a phone it is never typed: a tap opens the time sheet with the same chips and list, Clear and Done.
+//   the chooser under it: the suggested time ("Planned 07:24"), Now, the common times, then the clock (21 October 2026:
+//   Material 3's time picker, any minute; TimeDial.tsx), which fills the field as typing does. Until a value counts the
+//   form (its plan, its warnings) keeps the one before.
+// - On a phone it is never typed: a tap opens the time sheet with the same chips and the clock, Clear and Done.
 // A value set from outside (Use 07:24, a draft resumed, the plan's own time) shows at once, unless the person is typing
 // another one. Replaces ui/TimeInput.tsx; the rules are in timeLogic.ts.
-import { type InputHTMLAttributes, type KeyboardEvent, type MouseEvent, type RefObject, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { type InputHTMLAttributes, type KeyboardEvent, type MouseEvent, useEffect, useId, useRef, useState } from "react";
 import { Icon } from "./icons";
 import { useIsPhone } from "./phone";
 import { Sheet } from "./Sheet";
-import { isWholeTime, nearestStep, nowRounded, parseTyped, sheetChips, TIME_SETTLE_MS, timeSteps } from "./timeLogic";
+import { TimeDial } from "./TimeDial";
+import { isWholeTime, nowExact, parseTyped, sheetChips, TIME_SETTLE_MS } from "./timeLogic";
 
 export { isWholeTime, TIME_SETTLE_MS } from "./timeLogic";
 
@@ -26,21 +28,20 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onC
   suggestedLabel?: string;
 };
 
-const STEPS = timeSteps();
-
-/** The chips and the 5-minute list, shared by the desktop drop-down and the phone sheet. */
-function TimeChoices({ value, suggested, suggestedLabel, onPick, listRef, mouseKeepsFocus }: {
+/** The chips and the clock, shared by the desktop drop-down and the phone sheet. A chip takes its time at once; the clock
+ *  sets the time being chosen (`dial`, what the field or the sheet holds until it counts). */
+function TimeChoices({ value, dial, onDial, suggested, suggestedLabel, onPick, mouseKeepsFocus }: {
   value: string;
+  dial: string;
+  onDial: (t: string) => void;
   suggested?: string;
   suggestedLabel?: string;
   onPick: (t: string) => void;
-  listRef: RefObject<HTMLDivElement | null>;
   mouseKeepsFocus?: boolean;
 }) {
-  const now = nowRounded();
+  const now = nowExact();
   const chips = sheetChips(now, suggested).map((c) => (c.kind === "suggested" && suggestedLabel ? { ...c, label: `${suggestedLabel} ${c.time}` } : c));
-  const target = nearestStep(value, now);
-  // The desktop list keeps the focus in the field (a press would blur it and count what is typed first).
+  // The desktop chooser keeps the focus in the field (a press would blur it and count what is typed first).
   const keep = mouseKeepsFocus ? { onMouseDown: (e: MouseEvent) => e.preventDefault() } : {};
   return (
     <div className="tf-choices">
@@ -52,24 +53,9 @@ function TimeChoices({ value, suggested, suggestedLabel, onPick, listRef, mouseK
           </button>
         ))}
       </div>
-      <div className="tf-list" ref={listRef} role="listbox" aria-label="Every 5 minutes">
-        {STEPS.map((t) => (
-          <button key={t} type="button" role="option" className="tf-opt mono" aria-selected={t === value} data-time={t} data-near={t === target || undefined}
-            onClick={() => onPick(t)} {...keep}>{t}</button>
-        ))}
-      </div>
+      <div {...keep}><TimeDial value={isWholeTime(dial) ? dial : isWholeTime(value) ? value : suggested && isWholeTime(suggested) ? suggested : now} onChange={onDial} /></div>
     </div>
   );
-}
-
-/** Scrolls the list to the value's step (or now) when it opens. */
-function useScrollToNear(open: boolean, listRef: RefObject<HTMLDivElement | null>) {
-  useLayoutEffect(() => {
-    if (!open) return;
-    const list = listRef.current;
-    const near = list?.querySelector<HTMLElement>("[data-near]");
-    if (list && near) list.scrollTop = Math.max(0, near.offsetTop - list.clientHeight / 2 + near.offsetHeight / 2);
-  }, [open, listRef]);
 }
 
 export function TimeField(props: Props) {
@@ -79,9 +65,8 @@ export function TimeField(props: Props) {
 
 function PhoneTime({ value, onCommit, suggested, suggestedLabel, id, disabled, className, ...rest }: Props) {
   const [open, setOpen] = useState(false);
+  const [dial, setDial] = useState("");
   const btn = useRef<HTMLButtonElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  useScrollToNear(open, listRef);
   const pick = (t: string) => {
     if (t !== value) onCommit(t);
     setOpen(false);
@@ -90,7 +75,7 @@ function PhoneTime({ value, onCommit, suggested, suggestedLabel, id, disabled, c
   return (
     <>
       <button ref={btn} id={id} type="button" className={`timefield-btn ${className ?? ""}`} disabled={disabled} aria-haspopup="dialog" aria-label={label}
-        data-value={value || undefined} onClick={() => setOpen(true)}>
+        data-value={value || undefined} onClick={() => { setDial(""); setOpen(true); }}>
         <span className={value ? "mono" : "muted"}>{value || "–"}</span>
         <Icon name="clock" />
       </button>
@@ -98,10 +83,10 @@ function PhoneTime({ value, onCommit, suggested, suggestedLabel, id, disabled, c
         footer={(
           <>
             <button type="button" className="btn" onClick={() => pick("")} disabled={!value}>Clear</button>
-            <button type="button" className="btn primary" onClick={() => setOpen(false)}>Done</button>
+            <button type="button" className="btn primary" onClick={() => (isWholeTime(dial) ? pick(dial) : setOpen(false))}>Done</button>
           </>
         )}>
-        <TimeChoices value={value} suggested={suggested} suggestedLabel={suggestedLabel} onPick={pick} listRef={listRef} />
+        <TimeChoices value={value} dial={dial} onDial={setDial} suggested={suggested} suggestedLabel={suggestedLabel} onPick={pick} />
       </Sheet>
     </>
   );
@@ -111,14 +96,12 @@ function DesktopTime({ value, onCommit, onBlur, onKeyDown, onFocus, suggested, s
   const [text, setText] = useState(value);
   const [open, setOpen] = useState(false);
   const listId = useId();
-  const listRef = useRef<HTMLDivElement>(null);
   // What the form holds as far as this field knows (its value, or the last value handed to it).
   const held = useRef(value);
   const typed = useRef(value);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const commitRef = useRef(onCommit);
   commitRef.current = onCommit;
-  useScrollToNear(open, listRef);
 
   const stop = () => {
     if (timer.current) clearTimeout(timer.current);
@@ -201,7 +184,8 @@ function DesktopTime({ value, onCommit, onBlur, onKeyDown, onFocus, suggested, s
       />
       {open && (
         <div className="tf-drop" id={listId} data-testid="time-list">
-          <TimeChoices value={text} suggested={suggested} suggestedLabel={suggestedLabel} listRef={listRef} mouseKeepsFocus
+          <TimeChoices value={text} dial={text} suggested={suggested} suggestedLabel={suggestedLabel} mouseKeepsFocus
+            onDial={(t) => { typed.current = t; setText(t); stop(); timer.current = setTimeout(() => commit(typed.current), TIME_SETTLE_MS); }}
             onPick={(t) => { setOpen(false); commit(t); }} />
         </div>
       )}

@@ -11,7 +11,8 @@ import { join } from 'node:path';
 import { addMonths, dayAllowed, daysBetween, dayState, monthGrid, monthOf, mondayOf, PRESETS, presetOf, presetRange, rangeWords, tapDay, weekDays } from '../src/lib/patterns/calendarLogic';
 import { activeChips, activeCount, clearValues, defaultValues, type FilterDef, isChosen, multi, single, toggle } from '../src/lib/patterns/filterLogic';
 import { listView, TimeoutError, withTimeout } from '../src/lib/patterns/listLogic';
-import { COMMON_TIMES, nowRounded, openIndex, quickTimes, TIME_STEPS } from '../src/lib/patterns/timeLogic';
+import { COMMON_TIMES, nowRounded, quickTimes } from '../src/lib/patterns/timeLogic';
+import { dialLabels, hhmm, hourAt, minuteAt, partsOf, placeOf, pointOf, typedPart } from '../src/lib/patterns/dialLogic';
 
 let failures = 0;
 function check(ok: unknown, label: string, detail?: unknown): void {
@@ -49,11 +50,18 @@ async function main() {
 
   console.log('\nThe time sheet');
   {
-    check(TIME_STEPS.length === 288 && TIME_STEPS[0] === '00:00' && TIME_STEPS[1] === '00:05' && TIME_STEPS[287] === '23:55', '5-minute steps, the whole day');
+    // The clock (21 October 2026): a 24-hour dial, every minute.
+    const C = 132, OUT = 108, IN = 72;
+    const at = (angle: number, r: number) => pointOf(angle, r, C, C);
+    check(hourAt(at(0, OUT).x, at(0, OUT).y, C, C, OUT, IN) === 0 && hourAt(at(90, OUT).x, at(90, OUT).y, C, C, OUT, IN) === 3 && hourAt(at(270, OUT).x, at(270, OUT).y, C, C, OUT, IN) === 9, 'the outer ring: 00 at the top, 3 at the right, 9 at the left');
+    check(hourAt(at(0, IN).x, at(0, IN).y, C, C, OUT, IN) === 12 && hourAt(at(150, IN).x, at(150, IN).y, C, C, OUT, IN) === 17 && hourAt(at(330, IN).x, at(330, IN).y, C, C, OUT, IN) === 23, 'the inner ring: 12 at the top, 17, 23');
+    check(minuteAt(at(6, OUT).x, at(6, OUT).y, C, C) === 1 && minuteAt(at(42, OUT).x, at(42, OUT).y, C, C) === 7 && minuteAt(at(354, OUT).x, at(354, OUT).y, C, C) === 59, 'every minute can be picked (1, 7, 59)');
+    check(placeOf('hour', 17, OUT, IN).radius === IN && placeOf('hour', 5, OUT, IN).radius === OUT && placeOf('minute', 30, OUT, IN).angle === 180, 'each value is drawn on its ring');
+    check(dialLabels('hour').length === 24 && dialLabels('minute').map((l) => l.text).join() === '00,05,10,15,20,25,30,35,40,45,50,55', 'the labels: 24 hours, the minutes every 5');
+    check(hhmm(24, 61) === '00:01' && partsOf('09:05').h === 9 && partsOf('9:5').h === 0 && typedPart('7', 23) === 7 && typedPart('25', 23) === null, 'typed parts are checked; a time wraps the day');
     check(nowRounded('07:02') === '07:05' && nowRounded('07:05') === '07:05' && nowRounded('07:56') === '08:00' && nowRounded('23:58') === '23:55', 'Now rounded up to the next 5 minutes, never past midnight');
-    check(openIndex('09:10', undefined, '07:00') === 110 && openIndex('', '07:24', '12:00') === 88 && openIndex('', undefined, '12:01') === 145, 'the list opens at the value, else the suggestion, else now');
     const q = quickTimes('07:02', '07:24');
-    check(q[0].kind === 'suggested' && q[0].time === '07:24' && q[1].kind === 'now' && q[1].time === '07:05' && q.filter((x) => x.kind === 'common').length === COMMON_TIMES.length, 'the chips: the suggestion, Now, the common times');
+    check(q[0].kind === 'suggested' && q[0].time === '07:24' && q[1].kind === 'now' && q[1].time === '07:02' && q.filter((x) => x.kind === 'common').length === COMMON_TIMES.length, 'the chips: the suggestion, Now, the common times');
     // 21 October 2026: "Now" is its own choice and every common time stays (from 08:56 Now is 09:00; 09:00 used to go).
     for (const at of ['08:48', '08:59', '23:58', '00:01']) {
       const qt = quickTimes(at);
@@ -115,7 +123,7 @@ async function main() {
     const profileEdit = read('app/profile-edit.tsx');
     check(profileEdit.includes("<DateField label={t('profile.licenceExpiry')}") && !profileEdit.includes('licenceExpiryHint'), "the driver's own licence expiry on the calendar (the clear button empties it)");
     const time = read('components/patterns/TimeField.tsx');
-    check(time.includes('quickTimes(now, suggested)') && time.includes('initialScrollIndex') && time.includes('TIME_STEPS'), 'the time sheet: the quick chips, the 5-minute list scrolled to the value');
+    check(time.includes('quickTimes(now, suggested)') && time.includes('<TimeDial') && !time.includes('TIME_STEPS'), 'the time sheet: the quick chips, then the clock (no 5-minute list)');
     // The screens on the patterns (Stage 0): no typed time or date anywhere in the app.
     const when = read('app/office/trip/when.tsx');
     const change = read('app/office/task/[id]/time.tsx');

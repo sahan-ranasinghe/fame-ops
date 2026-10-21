@@ -2803,7 +2803,11 @@
     "cancel": "Cancel",
     "tryAgain": "Try again",
     "prevYear": "Previous year",
-    "nextYear": "Next year"
+    "nextYear": "Next year",
+    "hour": "Hour",
+    "minute": "Minute",
+    "typeTime": "Type the time",
+    "useDial": "Use the clock"
   },
   "crash": {
     "title": "Something went wrong",

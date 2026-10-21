@@ -1,21 +1,19 @@
 // The time pattern (docs/ui-patterns.md §4): the field shows HH:MM (mono) or a dash; a tap opens the one time sheet: the
-// suggested time ("Planned 07:24"), Now (rounded up to 5 minutes) and the office's common times as chips, then every
-// time in 5-minute steps scrolled to the value; Clear and Done. Typing a time is never needed on a phone.
+// suggested time ("Planned 07:24"), Now and the office's common times as chips (a tap takes one), then the clock
+// (21 October 2026: Material 3's time picker, any minute, a keyboard toggle; TimeDial.tsx); Clear and Done.
 
 import { useState } from 'react';
-import { FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Clock, X } from '@/components/icons';
 import { Button, Mono, Txt } from '@/components/ui';
-import { pickedStyle, SelectMark } from '@/components/patterns/Select';
 import { colomboTime } from '@/lib/time';
-import { isHHMM, openIndex, quickTimes, TIME_STEPS } from '@/lib/patterns/timeLogic';
+import { isHHMM, quickTimes } from '@/lib/patterns/timeLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
 import { Sheet } from './Sheet';
-
-const ROW_H = 52;
+import { TimeDial } from './TimeDial';
 
 export function TimeField({ value, onCommit, label, placeholder, tone, suggested, testID }: {
   value: string;
@@ -37,7 +35,7 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
   return (
     <View style={{ flex: 1, gap: 6 }}>
       {label ? <Txt variant="label" color={colors.muted}>{label.toUpperCase()}</Txt> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel={label ?? t('patterns.time')} onPress={() => { setDraft(value); setOpen(true); }} style={[styles.box, tone === 'red' && { borderColor: colors.red }]} testID={testID}>
+      <Pressable accessibilityRole="button" accessibilityLabel={label ?? t('patterns.time')} onPress={() => { setDraft(isHHMM(value) ? value : suggested && isHHMM(suggested) ? suggested : now); setOpen(true); }} style={[styles.box, tone === 'red' && { borderColor: colors.red }]} testID={testID}>
         <Clock size={20} color={colors.muted} />
         {isHHMM(value) ? <Mono size={26} bold>{value}</Mono> : <Txt variant="muted" size={16} style={{ flex: 1 }} numberOfLines={1}>{placeholder ?? '--:--'}</Txt>}
         {isHHMM(value) ? <View style={{ flex: 1 }} /> : null}
@@ -58,19 +56,7 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
             </Pressable>
           ))}
         </View>
-        <FlatList
-          data={TIME_STEPS as string[]}
-          keyExtractor={(x) => x}
-          style={{ maxHeight: ROW_H * 6 }}
-          initialScrollIndex={Math.max(0, openIndex(draft, suggested, now) - 2)}
-          getItemLayout={(_, i) => ({ length: ROW_H, offset: ROW_H * i, index: i })}
-          renderItem={({ item }) => (
-            <Pressable accessibilityRole="radio" accessibilityState={{ checked: item === draft, selected: item === draft }} onPress={() => setDraft(item)} style={[styles.step, item === draft && pickedStyle]}>
-              <Mono size={20} bold color={item === draft ? colors.blue : colors.ink}>{item}</Mono>
-              {item === draft && <View style={styles.stepMark}><SelectMark kind="radio" on size={24} /></View>}
-            </Pressable>
-          )}
-        />
+        <TimeDial value={draft} onChange={setDraft} testID="time-clock" />
       </Sheet>
     </View>
   );
@@ -80,6 +66,4 @@ const styles = StyleSheet.create({
   box: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, borderWidth: 1.5, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.card, paddingLeft: 14 },
   clear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center' },
-  step: { height: ROW_H, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
-  stepMark: { position: 'absolute', right: 14 },
 });

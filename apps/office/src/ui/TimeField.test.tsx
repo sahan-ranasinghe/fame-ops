@@ -104,7 +104,7 @@ describe("TimeField (desktop: the list)", () => {
     expect(commits).toEqual(["09:30", "07:00"]);
   });
 
-  it("a click drops the list: the planned time first, Now, the common times, then every 5 minutes; a pick counts at once", () => {
+  it("a click drops the chooser: the planned time first, Now, the common times, then the clock; a chip counts at once, the clock fills the field", () => {
     const commits: string[] = [];
     render(<Harness initial="" onCommit={(v) => commits.push(v)} />);
     fireEvent.click(field());
@@ -113,10 +113,19 @@ describe("TimeField (desktop: the list)", () => {
     expect(within(chips).getAllByRole("button")[0].textContent).toBe("Planned 07:24");
     expect(within(chips).getByRole("button", { name: /^Now/ })).toBeTruthy();
     expect(within(chips).getByRole("button", { name: "13:00" })).toBeTruthy();
-    expect(within(list).getAllByRole("option")).toHaveLength(288);
-    fireEvent.click(within(list).getByRole("option", { name: "08:35" }));
-    expect(commits).toEqual(["08:35"]);
-    expect(field().value).toBe("08:35");
+    expect(within(list).queryAllByRole("option")).toHaveLength(0); // no 5-minute list (21 October 2026)
+    // The clock starts at the planned time; → moves the hour by one, any minute; the field shows it and it counts.
+    const dial = within(list).getByTestId("time-dial");
+    fireEvent.keyDown(dial, { key: "ArrowRight" });
+    expect(field().value).toBe("08:24");
+    fireEvent.click(within(list).getByTestId("time-part-minute"));
+    fireEvent.keyDown(within(screen.getByTestId("time-list")).getByTestId("time-dial"), { key: "ArrowRight" });
+    expect(field().value).toBe("08:25");
+    act(() => { vi.advanceTimersByTime(TIME_SETTLE_MS + 10); });
+    expect(commits).toEqual(["08:25"]);
+    fireEvent.click(field());
+    fireEvent.click(within(within(screen.getByTestId("time-list")).getByRole("group", { name: "Quick times" })).getByRole("button", { name: "13:00" }));
+    expect(commits).toEqual(["08:25", "13:00"]);
     expect(screen.queryByTestId("time-list")).toBeNull();
   });
 

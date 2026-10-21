@@ -10,7 +10,8 @@ export const TIME_SETTLE_MS = 1000;
 export const STEP_MIN = 5;
 
 /** The office day's common times, the sheet's chips. */
-export const COMMON_TIMES = ["07:00", "08:00", "09:00", "12:00", "13:00", "17:00"] as const;
+/** The presets over the clock (Sahan, 21 October 2026): Now, then these. */
+export const COMMON_TIMES = ["08:00", "09:00", "12:00", "13:00", "17:00"] as const;
 
 /** "07:05", "23:59": a whole time (no seconds). */
 export const isWholeTime = (v: string) => /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
@@ -46,6 +47,12 @@ export function parseTyped(text: string): string | "" | null {
 const clockFmt = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, hour: "2-digit", minute: "2-digit", hour12: false });
 
 /** Now in Colombo, rounded up to the next 5 minutes (10:41 → 10:45; 10:45 stays; 23:58 → 23:55, never tomorrow). */
+/** Now to the minute (the clock picks any minute, 21 October 2026). */
+export function nowExact(at: Date = new Date()): string {
+  const [h, m] = clockFmt.format(at).split(":").map(Number);
+  return fromMinutes((h % 24) * 60 + m);
+}
+
 export function nowRounded(at: Date = new Date()): string {
   const [h, m] = clockFmt.format(at).split(":").map(Number);
   const mins = (h % 24) * 60 + m;
