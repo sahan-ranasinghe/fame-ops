@@ -12,7 +12,7 @@
 //   vehicles      vehicles, rental companies, places, drivers, projects
 //   issues        update issues and vehicle problem reports
 //   users         office users, connector keys and settings
-//   office_users  office accounts that are not admins (Round 2b, the Coordinator), granting only what the granter holds
+//   office_users  office accounts that hold none of office_users, users, approve (Round 2b, the Coordinator), granting only what the granter holds
 //
 // The role (employees.role) is a label only: it is derived from the permissions
 // when an account is made or changed, and the backfill map below is what the
@@ -48,7 +48,7 @@ export const PERMISSION_TEXT: Record<Permission, { label: string; text: string }
   users: { label: "Users", text: "Settings: office users, connector keys, fleet settings" },
   office_users: {
     label: "Office accounts",
-    text: "Add and edit office accounts that are not admins, giving only permissions you hold yourself",
+    text: "Add and edit office accounts that neither approve nor manage accounts, giving only permissions you hold yourself",
   },
 };
 
@@ -58,7 +58,7 @@ const VR: readonly Permission[] = ["view", "request"];
 const AA: readonly Permission[] = ["approve", "assign_tasks"];
 const VEH: readonly Permission[] = ["vehicles"];
 const USERS: readonly Permission[] = ["users"];
-/** Office accounts: admins (users) and, for accounts that are not admins, the Coordinator (office_users). */
+/** Office accounts: admins (users) and, for accounts holding none of office_users, users, approve, the Coordinator (office_users). */
 const ACCOUNTS: readonly Permission[] = ["users", "office_users"];
 /** Personal: a person's own notification settings and devices (any office permission). */
 const ANY: readonly Permission[] = PERMISSIONS;
@@ -162,7 +162,7 @@ export const TOOL_PERMISSION: Record<string, readonly Permission[]> = {
   list_issues: ["issues", "assign_tasks"],
   issue_history: ["issues", "assign_tasks"],
   update_issue: ["issues"],
-  // Round 2b: office_users runs these for accounts that are not admins (the guards: accountGuards.ts).
+  // Round 2b: office_users runs these for accounts holding none of office_users, users, approve (the guards: accountGuards.ts).
   list_office_users: ACCOUNTS,
   create_office_user: ACCOUNTS,
   update_office_user: ACCOUNTS,

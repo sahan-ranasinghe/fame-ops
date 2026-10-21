@@ -2,8 +2,8 @@
 
 You are a **Coordinator**. You keep the records right and help run the day: drivers, vehicles, their documents and
 photos, office accounts, issues, attendance, requests and tasks. You cannot approve requests, change the fleet
-settings, import projects or change an admin's account. If something needs one of those, ask a Fleet admin or an
-Admin.
+settings, import projects, or change the account of an Admin, a Fleet admin or another Coordinator. If something needs
+one of those, ask a Fleet admin or an Admin.
 
 You can work from a computer (the website, **https://fame-fleet.pages.dev**) or from a phone (the same address opens the
 phone version under **/m/**, or the Fame Fleet app with **Office** chosen at sign-in). The screens below use the
@@ -53,11 +53,12 @@ Driver photos and licence photos are added on the driver's page in the same way.
    - **Requester**: asks for vehicles and follows their own trips. Most office staff need only this.
    - **Viewer**: sees the fleet, changes nothing.
    - **Dispatcher**: assigns and changes tasks.
-   - **Coordinator**: what you have.
 4. **Create account**, then send the one-time link it shows by WhatsApp.
 
-You can only give permissions you have yourself. You cannot give **Approve** or **Users** (Admin) to anyone, and you
-cannot change your own permissions. To change an Admin's account, ask an Admin.
+You can only give permissions you have yourself, and never **Approve**, **Users** or **Office accounts**: those boxes are
+greyed with "Only an admin can give this." You look after the accounts of Requesters, Viewers and Dispatchers (a new
+link, a new name or phone, switching them off). The account of an Admin, a Fleet admin or another Coordinator opens
+locked with the reason: ask an Admin. You cannot change your own permissions.
 
 ## 6. Request a vehicle, assign a task
 

@@ -45,14 +45,34 @@ async function officeUser(db: Db, email: string) {
   return row;
 }
 
-/** Round 2b: the least-privilege rules (accountGuards.ts), the same for office-api and office-mcp. */
-function guard(actor: { employeeId: string | null; permissions: readonly string[] }, change: Parameters<typeof accountChangeProblem>[1]) {
-  const problem = accountChangeProblem({ employeeId: actor.employeeId, permissions: normalisePermissions(actor.permissions) }, change);
+/**
+ * Round 2b: the least-privilege rules (accountGuards.ts), the same for office-api and office-mcp. For a change to an
+ * admin's account the active admins are counted first (rule 5: the last one stays an admin and stays on).
+ */
+async function guard(
+  db: Db,
+  actor: { employeeId: string | null; permissions: readonly string[] },
+  change: Parameters<typeof accountChangeProblem>[1],
+) {
+  const activeAdmins = change.kind !== "create" && change.target.permissions.includes("users") ? await countActiveAdmins(db) : undefined;
+  const problem = accountChangeProblem(
+    { employeeId: actor.employeeId, permissions: normalisePermissions(actor.permissions) },
+    change,
+    { activeAdmins },
+  );
   if (problem) throw new ToolError(problem);
 }
-const targetOf = (row: { id: string; permissions: unknown }) => ({
+async function countActiveAdmins(db: Db): Promise<number> {
+  const { count, error } = await db.from("employees").select("id", { count: "exact", head: true })
+    .eq("active", true).contains("permissions", ["users"]).in("role", OFFICE_ROLES as unknown as string[]);
+  if (error) throw new Error(`active admins: ${error.message}`);
+  return count ?? 0;
+}
+const targetOf = (row: { id: string; permissions: unknown; role: string; active: boolean }) => ({
   id: row.id,
   permissions: normalisePermissions(row.permissions as string[]),
+  role: row.role,
+  active: row.active,
 });
 
 /** A one-time link that lets the person set their password (valid about an hour). */
@@ -159,7 +179,7 @@ export const createOfficeUser = tool({
     const existing = unwrapMaybe(await db.from("employees").select("id").eq("email", email).maybeSingle(), "office user");
     if (existing) throw new ToolError(`${email} already has an account. Use reset_office_password or set_office_user_active.`);
     const perms = permissions ? normalisePermissions(permissions) : permissionsForRole(role ?? "viewer");
-    guard(actor, { kind: "create", permissions: perms, role: permissions ? role : undefined });
+    await guard(db, actor, { kind: "create", permissions: perms, role: permissions ? role : undefined });
     const label = role ?? roleForPermissions(perms);
 
     const { data: created, error } = await db.auth.admin.createUser({ email, email_confirm: true, user_metadata: { name, role: label } });
@@ -216,7 +236,7 @@ export const updateOfficeUser = tool({
       throw new ToolError("Nothing to change: give a name, phone, permissions, role and/or driver_contact.");
     }
     const perms = permissions !== undefined ? normalisePermissions(permissions) : normalisePermissions(user.permissions);
-    guard(actor, { kind: "update", target: targetOf(user), permissions: permissions !== undefined ? perms : undefined, role });
+    await guard(db, actor, { kind: "update", target: targetOf(user), permissions: permissions !== undefined ? perms : undefined, role });
     const label = role ?? (permissions !== undefined ? roleForPermissions(perms) : user.role);
     const updated = unwrap(
       await db.from("employees").update({
@@ -255,7 +275,7 @@ export const resetOfficePassword = tool({
   input: z.object({ email: zEmail }),
   async run({ email }, { db, actor }) {
     const user = await officeUser(db, email);
-    guard(actor, { kind: "password_link", target: targetOf(user) });
+    await guard(db, actor, { kind: "password_link", target: targetOf(user) });
     if (!user.active) throw new ToolError(`${user.name} is switched off. Use set_office_user_active first.`);
     const link = await setPasswordLink(db, email);
     return {
@@ -274,7 +294,7 @@ export const setOfficeUserActive = tool({
   input: z.object({ email: zEmail, active: z.boolean() }),
   async run({ email, active }, { db, now, actor }) {
     const user = await officeUser(db, email);
-    guard(actor, { kind: "switch", target: targetOf(user), active });
+    await guard(db, actor, { kind: "switch", target: targetOf(user), active });
     unwrap(await db.from("employees").update({ active }).eq("id", user.id).select("id"), "office user");
     if (user.auth_user_id) {
       const { error } = await db.auth.admin.updateUserById(user.auth_user_id, { ban_duration: active ? "none" : "876000h" });

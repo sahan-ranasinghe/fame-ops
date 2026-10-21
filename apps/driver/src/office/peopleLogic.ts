@@ -486,13 +486,25 @@ export function withSetting(settings: FleetSettings, key: QuickKey, value: unkno
   return { ...settings, [key]: value } as FleetSettings;
 }
 
+/** Round 2b (the server's accountGuards.ts ADMIN_MANAGED): an account holding any of these is the admins' to change. */
+export const ADMIN_MANAGED = ['office_users', 'users', 'approve'] as const;
+const managed = (p: string) => (ADMIN_MANAGED as readonly string[]).includes(p);
+
 /**
  * Round 2b (the server's accountGuards.ts, the same rule): may this person change that office account? Not an admin's
- * without users; not one holding any permission this person could not give (users covers office_users). Their own
- * account: always (its name and phone; never its permissions, refused by selfLockout and the server).
+ * without users; for someone who is not an admin (Google Workspace's help-desk rule) not one holding Office accounts,
+ * Users or Approve, nor one holding any permission they could not give (users covers office_users). Their own account:
+ * always (its name and phone; never its permissions, refused by selfLockout and the server).
  */
 export function canChangeAccount(me: { email?: string; permissions: readonly string[] }, target: { email?: string | null; permissions: readonly string[] }): boolean {
   if (me.email && target.email && me.email.toLowerCase() === target.email.toLowerCase()) return true;
-  const held = new Set(me.permissions.includes('users') ? [...me.permissions, 'office_users'] : me.permissions);
+  const admin = me.permissions.includes('users');
+  if (!admin && target.permissions.some(managed)) return false;
+  const held = new Set(admin ? [...me.permissions, 'office_users'] : me.permissions);
   return target.permissions.every((p) => held.has(p));
+}
+
+/** What this person may tick on an account form (the server's givablePermissions): an admin what they hold and Office accounts; anyone else what they hold except Office accounts, Users and Approve. */
+export function givablePermissions(perms: readonly string[]): string[] {
+  return perms.includes('users') ? [...new Set([...perms, 'office_users'])] : perms.filter((p) => !managed(p));
 }

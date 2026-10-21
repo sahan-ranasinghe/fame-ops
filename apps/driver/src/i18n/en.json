@@ -2279,7 +2279,9 @@
       "driverContactOffice": "Drivers see {name} on Me with Call and WhatsApp, as Office.",
       "plannerSuggestions": "Suggest times on the trip forms",
       "plannerSuggestionsHint": "The leave time and each stop's stay are suggested in grey; a chosen time that misses an arrive-by gets a hint. Off: just the fields. A trip is never blocked.",
-      "outOfReach": "Only someone who holds every permission of this account can change it. Ask an admin."
+      "outOfReach": "Only an admin can change this account. Ask an admin.",
+      "adminGives": "Only an admin can give this.",
+      "holdToGive": "You can only give permissions you hold yourself."
     },
     "permission": {
       "view": "View",
@@ -2299,7 +2301,7 @@
       "vehicles": "Register and edit vehicles, rental companies, places, driver accounts; mileage and maintenance",
       "issues": "The issues centre, vehicle problem reports and every attention item",
       "users": "Settings: office users, connector keys, fleet settings",
-      "office_users": "Add and edit office accounts that are not admins, giving only permissions you hold yourself"
+      "office_users": "Add and edit office accounts that neither approve nor manage accounts, giving only permissions you hold yourself"
     },
     "preset": {
       "fleet_admin": "Fleet admin",

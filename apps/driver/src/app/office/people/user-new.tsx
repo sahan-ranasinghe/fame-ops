@@ -20,7 +20,7 @@ import { colors } from '@/theme';
 export default function OfficeUserNew() {
   const { t } = useApp();
   const permWord = (p: string) => t(`office.permission.${p}`).toLowerCase();
-  const { api, signOut } = useOffice();
+  const { api, me, signOut } = useOffice();
   const router = useRouter();
   const [f, setF] = useState<UserFields>(emptyUser);
   const [busy, setBusy] = useState(false);
@@ -78,7 +78,7 @@ export default function OfficeUserNew() {
         <Field label={t('office.people.nameLabel')} value={f.name} onChangeText={(v) => setF({ ...f, name: v })} maxLength={120} autoFocus editable={!busy} />
         <Field label={t('office.people.emailLabel')} value={f.email} onChangeText={(v) => setF({ ...f, email: v })} maxLength={160} keyboardType="email-address" autoCapitalize="none" autoCorrect={false} editable={!busy} />
         <Field label={t('office.people.phoneLabel')} value={f.phone} onChangeText={(v) => setF({ ...f, phone: v })} maxLength={30} keyboardType="phone-pad" placeholder="077 123 4567" editable={!busy} mono />
-        <PermissionPicker value={f.permissions} onChange={(permissions) => setF({ ...f, permissions })} disabled={busy} />
+        <PermissionPicker value={f.permissions} onChange={(permissions) => setF({ ...f, permissions })} disabled={busy} holder={me.permissions} />
         {problem && <Notice tone="danger" text={t(`office.people.userErr.${problem}`)} />}
         {error && <ErrorNotice error={error} onRetry={() => void submit()} onSignIn={() => void signOut()} />}
       </Screen>

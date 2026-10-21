@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import {
   activePill, appendDrivers, appendUsers, cutoffValue, includeInactiveOf, peopleDriverDefs, driverLine, driverLine2, driversArgs, editableFields, emergencyText, emptyDriver, emptyUser, findDriverRow, findUserRow,
   isPin, isTime, latestDriverPhoneChange, licenceOf, licencePhotos, licenceTone, LIMIT, longDate, minutesValue, officePhoneValue, permissionWords, PERSONAL_TRIPS,
-  personalTripsValue, phoneDisplay, phoneE164, presetOf, canChangeAccount, profileFields, profilePatch, QUICK_SETTINGS, randomPin, regularVehicleOf, samePhone, seesPrivate, selfLockout,
+  personalTripsValue, phoneDisplay, phoneE164, presetOf, canChangeAccount, givablePermissions, profileFields, profilePatch, QUICK_SETTINGS, randomPin, regularVehicleOf, samePhone, seesPrivate, selfLockout,
   settingInput, switchValue, togglePermission, updateDriverInput, updateUserInput, USERNAME_RULE, userFields, userLine, usersArgs, validateNewDriver, validateNewUser,
   viewLocked, whenText, withSetting, type Words,
 } from '../src/office/peopleLogic';
@@ -163,6 +163,11 @@ console.log('\n== Office users ==');
       && canChangeAccount(co, { email: 'C@x.lk', permissions: co.permissions })
       && canChangeAccount({ email: 'a@x.lk', permissions: ['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues', 'users'] }, { email: 'c@x.lk', permissions: co.permissions }),
       'a Coordinator changes a requester, never a Fleet admin; an admin of before Round 2b changes a Coordinator (Checkpoint 2b review)');
+    check(!canChangeAccount(co, { email: 'c2@x.lk', permissions: co.permissions }) && !canChangeAccount(co, { email: 'o@x.lk', permissions: ['view', 'office_users'] }),
+      'the help-desk rule: Coordinator A never changes Coordinator B (it holds Office accounts)');
+    check(same(givablePermissions(co.permissions), ['view', 'request', 'assign_tasks', 'vehicles', 'issues'])
+      && same(givablePermissions(['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues', 'users']), ['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues', 'users', 'office_users']),
+      'a Coordinator is offered only what they hold, never Office accounts, Users or Approve; an admin everything', givablePermissions(co.permissions));
   }
   check(presetOf(['view', 'request', 'approve', 'assign_tasks', 'vehicles', 'issues', 'users', 'office_users']) === 'all', 'everything with office_users is still Everything');
   check(same(validateNewUser(emptyUser()), { error: 'fields' }), 'a new user needs a name and an e-mail');

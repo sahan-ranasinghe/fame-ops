@@ -1,4 +1,4 @@
-import { IMPLIES_VIEW, type Permission, PRESETS } from "@fleet/permissions";
+import { IMPLIES_VIEW, type Permission, PERMISSIONS, PRESETS } from "@fleet/permissions";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { describe, expect, it } from "vitest";
@@ -24,7 +24,7 @@ describe("Users page rules", () => {
 
   it("the picker offers the Coordinator preset and the Office accounts permission (Round 2b)", () => {
     let picked: Permission[] = [];
-    render(createElement(PermissionPicker, { value: [], onChange: (p: Permission[]) => { picked = p; }, idPrefix: "t" }));
+    render(createElement(PermissionPicker, { value: [], onChange: (p: Permission[]) => { picked = p; }, idPrefix: "t", holder: PERMISSIONS }));
     fireEvent.click(screen.getByRole("button", { name: "Coordinator" }));
     expect(picked).toEqual(["view", "request", "assign_tasks", "vehicles", "issues", "office_users"]);
     expect(screen.getByRole("checkbox", { name: /^Office accounts/ })).toBeTruthy();
@@ -75,7 +75,7 @@ describe("the permission picker", () => {
   it("greys and locks view while another permission is ticked, with the hint; ticking one ticks view", () => {
     let value: Permission[] = ["view", "request"];
     const onChange = (p: Permission[]) => { value = p; };
-    const { rerender } = render(createElement(PermissionPicker, { value, onChange, idPrefix: "t" }));
+    const { rerender } = render(createElement(PermissionPicker, { value, onChange, idPrefix: "t", holder: PERMISSIONS }));
     const view = screen.getByLabelText<HTMLInputElement>(/^View/);
     expect(view.checked).toBe(true);
     expect(view.disabled).toBe(true);
@@ -83,7 +83,7 @@ describe("the permission picker", () => {
     // The Requester preset is view + request.
     expect(screen.getByRole("button", { name: "Requester" }).getAttribute("aria-pressed")).toBe("true");
 
-    rerender(createElement(PermissionPicker, { value: ["view"], onChange, idPrefix: "t" }));
+    rerender(createElement(PermissionPicker, { value: ["view"], onChange, idPrefix: "t", holder: PERMISSIONS }));
     expect(screen.getByLabelText<HTMLInputElement>(/^View/).disabled).toBe(false);
     expect(screen.queryByTestId("view-locked")).toBeNull();
     fireEvent.click(screen.getByLabelText(/^Issues/));

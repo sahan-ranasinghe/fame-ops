@@ -14,7 +14,7 @@ select lives_ok($$
   'a coordinator with office_users is allowed by both checks');
 select throws_ok($$ update public.employees set permissions = '{view,boss}' where id = '10000000-0000-0000-0000-0000000c0b01' $$,
   '23514', NULL, 'an unknown permission is still refused');
-select throws_ok($$ update public.employees set role = 'intern' where id = '10000000-0000-0000-0000-0000000c0b01' $$,
+select throws_ok($$ update public.employees set role = 'not_a_real_role' where id = '10000000-0000-0000-0000-0000000c0b01' $$,
   '23514', NULL, 'an unknown role is still refused');
 
 set local role authenticated;

@@ -8,7 +8,7 @@ import { Platform, Pressable, Share, StyleSheet, TextInput, View } from 'react-n
 import { Search, X } from '@/components/icons';
 import { Checkbox, ChoiceChip } from '@/components/patterns/Select';
 import { Button, Txt } from '@/components/ui';
-import { type Preset, PRESET_KEYS, presetOf, togglePermission, viewLocked } from '@/office/peopleLogic';
+import { ADMIN_MANAGED, givablePermissions, type Preset, PRESET_KEYS, presetOf, togglePermission, viewLocked } from '@/office/peopleLogic';
 import { type Permission, PERMISSIONS, PRESETS } from '@/office/permissions';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { useApp } from '@/state/app';
@@ -74,11 +74,15 @@ export function SecretCard({ title, value, hint, shareText, shareLabel }: { titl
 }
 
 /** The presets as chips, then every permission as a row with its tick; the person's permissions, never a role name. */
-export function PermissionPicker({ value, onChange, disabled = false }: { value: Permission[]; onChange: (next: Permission[]) => void; disabled?: boolean }) {
+export function PermissionPicker({ value, onChange, disabled = false, holder }: { value: Permission[]; onChange: (next: Permission[]) => void; disabled?: boolean; holder: readonly string[] }) {
   const { t } = useApp();
   const current = presetOf(value);
   const locked = viewLocked(value);
+  // Round 2b (Google Workspace's help-desk admin; the server's rule): only what this person may give is offered.
+  const givable = givablePermissions(holder);
+  const fits = (list: readonly Permission[]) => list.every((p) => givable.includes(p));
   const chip = (key: Preset | 'all', label: string, list: readonly Permission[]) => {
+    if (!fits(list)) return null;
     const on = current === key;
     return (
       <ChoiceChip key={key} label={label} selected={on} disabled={disabled} onPress={() => onChange([...list])} />
@@ -95,16 +99,17 @@ export function PermissionPicker({ value, onChange, disabled = false }: { value:
       <View style={{ gap: 6 }}>
         {PERMISSIONS.map((p) => {
           const lock = p === 'view' && locked;
+          const barred = !lock && !givable.includes(p);
           const on = value.includes(p) || lock;
           return (
             <Checkbox
               key={p}
               checked={on}
-              disabled={disabled || lock}
+              disabled={disabled || lock || barred}
               onChange={() => onChange(togglePermission(value, p))}
               label={t(`office.permission.${p}`)}
-              hint={lock ? undefined : t(`office.permissionText.${p}`)}
-              disabledReason={lock ? t('office.people.viewLocked') : undefined}
+              hint={lock || barred ? undefined : t(`office.permissionText.${p}`)}
+              disabledReason={lock ? t('office.people.viewLocked') : barred ? t(ADMIN_MANAGED.includes(p as never) ? 'office.people.adminGives' : 'office.people.holdToGive') : undefined}
               testID={`perm-${p}`}
             />
           );

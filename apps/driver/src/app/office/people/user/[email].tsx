@@ -174,7 +174,7 @@ export default function ManageOfficeUser() {
                   <Field label={t('office.people.phoneLabel')} value={f.phone} onChangeText={(v) => setF({ ...f, phone: v })} maxLength={30} keyboardType="phone-pad" placeholder="077 123 4567" editable={!saving} mono />
                   <Txt variant="small">{t('office.people.phoneHint')}</Txt>
                 </View>
-                <PermissionPicker value={f.permissions} onChange={(permissions) => setF({ ...f, permissions })} disabled={saving} />
+                <PermissionPicker value={f.permissions} onChange={(permissions) => setF({ ...f, permissions })} disabled={saving} holder={me.permissions} />
                 {problem && <Notice tone="danger" text={problem === 'nothing' ? t('office.people.nothingChanged') : t(`office.people.userErr.${problem}`)} />}
                 {saveError && <ErrorNotice error={saveError} onRetry={() => void save()} onSignIn={() => void signOut()} />}
                 {savedText && <Txt variant="small" color={colors.green}>{savedText}</Txt>}

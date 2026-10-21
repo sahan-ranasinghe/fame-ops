@@ -1,6 +1,7 @@
 // Round 2b (Checkpoint 2b review): a Coordinator opens Settings → Users and a person's page without a crash (their
-// answer has no connector keys), sees no keys column or card, may change a requester, and sees a Fleet admin's account
-// locked with the reason (the server refuses it too: accountGuards.ts).
+// answer has no connector keys), sees no keys column or card, may change a requester (offered only what they may give),
+// and sees a Fleet admin's and another Coordinator's account locked with the reason (the server refuses it too:
+// accountGuards.ts, the help-desk rule).
 import { PRESETS } from "@fleet/permissions";
 import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router";
@@ -21,6 +22,7 @@ const coordinator: Me = {
 const users: OfficeUser[] = [
   { name: "Ruwan Requester", email: "ruwan@fame.test", role: "staff", permissions: ["view", "request"], active: true, since: "2026-10-21 10:00" },
   { name: "Palitha Fleet", email: "palitha@fame.test", role: "fleet_admin", permissions: [...PRESETS.fleet_admin.permissions], active: true, since: "2026-10-21 10:00" },
+  { name: "Githmi Coordinator", email: "githmi@fame.test", role: "coordinator", permissions: [...PRESETS.coordinator.permissions], active: true, since: "2026-10-21 10:00" },
 ] as OfficeUser[];
 
 class FakeTransport implements Transport {
@@ -75,8 +77,30 @@ describe("a Coordinator on Settings → Users", () => {
 
   it("a Fleet admin's page is shown locked, with the reason", async () => {
     await mount(`/settings/users/${encodeURIComponent("palitha@fame.test")}/edit`);
-    expect(await screen.findByText(/Only someone who holds every permission of this account can change it/)).toBeTruthy();
+    expect(await screen.findByText("Only an admin can change this account: it holds Approve.")).toBeTruthy();
     expect(screen.queryByText("New set-password link")).toBeNull();
     expect(screen.queryByText("Switch off")).toBeNull();
+  });
+
+  it("another Coordinator's page is shown locked too (the help-desk rule)", async () => {
+    await mount(`/settings/users/${encodeURIComponent("githmi@fame.test")}/edit`);
+    expect(await screen.findByText("Only an admin can change this account: it holds Office accounts.")).toBeTruthy();
+    expect(screen.queryByText("New set-password link")).toBeNull();
+    expect(screen.queryByText("Switch off")).toBeNull();
+  });
+
+  it("on a requester's page, Approve, Users and Office accounts are greyed and the Coordinator, Fleet admin and Admin quick picks are not offered", async () => {
+    await mount(`/settings/users/${encodeURIComponent("ruwan@fame.test")}/edit`);
+    expect(await screen.findByText("Name, phone and permissions")).toBeTruthy();
+    for (const p of ["approve", "users", "office_users"]) {
+      expect((document.getElementById(`eu-${p}`) as HTMLInputElement).disabled).toBe(true);
+      expect(screen.getByTestId(`perm-barred-${p}`).textContent).toBe("Only an admin can give this.");
+    }
+    expect((document.getElementById("eu-issues") as HTMLInputElement).disabled).toBe(false);
+    const presets = screen.getByRole("group", { name: "Presets" }).textContent ?? "";
+    expect(presets).toContain(PRESETS.requester.label);
+    expect(presets).not.toContain(PRESETS.coordinator.label);
+    expect(presets).not.toContain(PRESETS.fleet_admin.label);
+    expect(presets).not.toContain("Admin (everything)");
   });
 });

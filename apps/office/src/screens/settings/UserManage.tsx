@@ -167,7 +167,7 @@ export function UserManage() {
               <div className="field"><label htmlFor="eu-name">Full name</label><input id="eu-name" maxLength={120} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
               <div className="field"><label htmlFor="eu-phone">Mobile</label><input id="eu-phone" maxLength={30} inputMode="tel" placeholder="077 123 4567" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /><span className="hint">Drivers and requesters see it with Call and WhatsApp. Empty and Save clears it.</span></div>
             </div>
-            <PermissionPicker value={f.permissions} onChange={(permissions) => setF({ ...f, permissions })} idPrefix="eu" />
+            <PermissionPicker value={f.permissions} onChange={(permissions) => setF({ ...f, permissions })} idPrefix="eu" holder={me.permissions} />
             {edMsg && <Notice tone={edMsg.tone}>{edMsg.text}</Notice>}
             <div><button className="btn dark" type="submit" disabled={busy}>Save</button></div>
           </form>

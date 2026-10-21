@@ -3120,6 +3120,10 @@ if CHANNEL == "api":
     admin_row = psql("select email from employees where 'users' = any(permissions) and active order by created_at limit 1")
     fa_email = f"fa.{uuid.uuid4().hex[:6]}@fame.test"
     tool("create_office_user", {"name": "Test Fleet Admin 2b", "email": fa_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]})
+    # The help-desk rule (Sahan, 21 October 2026): another Coordinator is the admins' to change.
+    cob_email = f"coordb.{uuid.uuid4().hex[:6]}@fame.test"
+    tool("create_office_user", {"name": "Githmi Coordinator", "email": cob_email,
+                                "permissions": ["view", "request", "assign_tasks", "vehicles", "issues", "office_users"]})
     for ch in ("api", "mcp"):
         tag = "office-api" if ch == "api" else "office-mcp"
         u = uuid.uuid4().hex[:5]
@@ -3150,11 +3154,28 @@ if CHANNEL == "api":
         for name, args in [("reset_office_password", {"email": fa_email}), ("set_office_user_active", {"email": fa_email, "active": False}),
                            ("update_office_user", {"email": fa_email, "name": "Renamed"})]:
             ok, body = as_coordinator(ch, name, args)
-            check(not ok and "holds every permission" in body, f"{tag}: cannot {name.replace('_', ' ')} on a Fleet admin's account", body[:200])
+            check(not ok and "Only an admin can change this account: it holds Approve." in body, f"{tag}: cannot {name.replace('_', ' ')} on a Fleet admin's account", body[:200])
+        # Coordinator A and Coordinator B: no reset, no edit, no switch off; a Requester: all three.
+        for what, name, args in [("make a set-password link for", "reset_office_password", {"email": cob_email}),
+                                 ("rename", "update_office_user", {"email": cob_email, "name": "Renamed"}),
+                                 ("change the permissions of", "update_office_user", {"email": cob_email, "permissions": ["view", "request"]}),
+                                 ("switch off", "set_office_user_active", {"email": cob_email, "active": False})]:
+            ok, body = as_coordinator(ch, name, args)
+            check(not ok and "Only an admin can change this account: it holds Office accounts." in body,
+                  f"{tag}: Coordinator A cannot {what} Coordinator B", body[:200])
+        ok, body = as_coordinator(ch, "create_office_user", {"name": f"Would Coordinate {u}", "email": f"appr.c{u}@fame.test",
+                                                             "permissions": ["view", "request", "assign_tasks", "vehicles", "issues", "office_users"]})
+        check(not ok and "Only an admin can give Office accounts." in body, f"{tag}: cannot make another Coordinator", body[:200])
+        for what, name, args in [("make a set-password link for", "reset_office_password", {"email": f"req.{u}@fame.test"}),
+                                 ("rename", "update_office_user", {"email": f"req.{u}@fame.test", "name": f"Intern Requester {u} B"}),
+                                 ("switch off", "set_office_user_active", {"email": f"req.{u}@fame.test", "active": False}),
+                                 ("switch back on", "set_office_user_active", {"email": f"req.{u}@fame.test", "active": True})]:
+            ok, body = as_coordinator(ch, name, args)
+            check(ok, f"{tag}: a Coordinator may {what} a Requester", body[:200])
         ok, body = as_coordinator(ch, "create_office_user", {"name": f"Would Approve {u}", "email": f"appr.{u}@fame.test", "permissions": ["approve"]})
-        check(not ok and "hold yourself" in body, f"{tag}: cannot give approve to anyone", body[:200])
+        check(not ok and "Only an admin can give Approve." in body, f"{tag}: cannot give approve to anyone", body[:200])
         ok, body = as_coordinator(ch, "update_office_user", {"email": f"req.{u}@fame.test", "permissions": ["request", "users"]})
-        check(not ok and "hold yourself" in body, f"{tag}: cannot give users to anyone", body[:200])
+        check(not ok and "Only an admin can give Users." in body, f"{tag}: cannot give users to anyone", body[:200])
         ok, body = as_coordinator(ch, "update_office_user", {"email": co_email, "permissions": ["view", "request"]})
         check(not ok and "your own" in body, f"{tag}: cannot change their own permissions", body[:200])
     check(psql(f"select count(*) from employees where email like 'appr.%@fame.test'") == "0", "nothing was made by a refused call")
@@ -3176,6 +3197,41 @@ if CHANNEL == "api":
           json.dumps(log["entries"][:3])[:400])
     check(not any(e["action"] in ("Drivers board", "Office users") for e in log["entries"]), "reads are not in the Activity log", str(sorted(actions))[:300])
     api_call(API_TOKEN, "revoke_office_key", {"key_id": co_key["key_id"]})
+
+    # The last active admin (GitHub's last owner, Google's last super admin; Sahan, 21 October 2026): never switched off,
+    # never loses Users, never another role, whoever asks: the person themselves on office-api, the shared key on office-mcp.
+    print("\n== 8d. Round 2b: the last active admin ==")
+    la_email = f"lastadmin.{uuid.uuid4().hex[:6]}@fame.test"
+    tool("create_office_user", {"name": "Last Admin Test", "email": la_email,
+                                "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues", "users", "office_users"]})
+    la_id = psql(f"select id from employees where email = '{la_email}'")
+    la_uid = psql(f"select auth_user_id from employees where email = '{la_email}'")
+    la_pw = "L4st-" + uuid.uuid4().hex[:10]
+    http("PUT", f"{API}/auth/v1/admin/users/{la_uid}", {"apikey": SERVICE, "Authorization": f"Bearer {SERVICE}", "Content-Type": "application/json"}, {"password": la_pw})
+    la_token = office_sign_in(la_email, la_pw, enrol_totp=False)
+    code, body = api_call(la_token, "update_office_user", {"email": la_email, "permissions": ["view", "request"]})
+    check(code != 200 and "your own" in json.dumps(body), "an admin still cannot change their own permissions (with other admins on)", str(body)[:200])
+    others = [r for r in psql(f"select id from employees where active and 'users' = any(permissions) and id <> '{la_id}'").splitlines() if r]
+    ids = ", ".join(f"'{i}'" for i in others)
+    try:
+        if others:
+            psql(f"update employees set active = false where id in ({ids})")
+        for who, call in [("office-api (themselves)", lambda n, a: (lambda c, b: (c == 200, json.dumps(b)))(*api_call(la_token, n, a))),
+                          ("office-mcp (the shared key)", lambda n, a: mcp_as(MCP_URL, n, a))]:
+            for name, args, why in [
+                ("set_office_user_active", {"email": la_email, "active": False}, "it cannot be switched off"),
+                ("update_office_user", {"email": la_email, "permissions": ["view", "request", "approve", "assign_tasks", "vehicles", "issues"]}, "it cannot lose Users"),
+                ("update_office_user", {"email": la_email, "role": "fleet_admin"}, "its role stays Admin"),
+            ]:
+                ok, body = call(name, args)
+                check(not ok and f"This is the last active admin: {why}." in body, f"{who}: the last active admin: {why}", body[:200])
+        check(psql(f"select active::text || ',' || role || ',' || ('users' = any(permissions))::text from employees where id = '{la_id}'") == "true,admin,true",
+              "the last admin is unchanged after the refused calls")
+    finally:
+        if others:
+            psql(f"update employees set active = true where id in ({ids})")
+    ok, body = mcp_as(MCP_URL, "set_office_user_active", {"email": la_email, "active": False})
+    check(ok, "with another admin on, the shared key may switch that admin off", body[:200])
 
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
 for f in failures:
