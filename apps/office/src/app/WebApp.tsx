@@ -8,7 +8,7 @@ import { SecondStep } from "../auth/SecondStep";
 import { SetPassword } from "../auth/SetPassword";
 import { SignIn } from "../auth/SignIn";
 import { Unreachable } from "../auth/Unreachable";
-import { subscribeAskAnswers, subscribeDriverLatest, subscribeDriverPoints, subscribeDriversPoints, subscribeInbox, subscribeIssues } from "../data/realtime";
+import { subscribeAskAnswers, subscribeDriverLatest, subscribeDriverPoints, subscribeDriversPoints, subscribeInbox, subscribeIssues, subscribeTaskProgress } from "../data/realtime";
 import { FleetStore } from "../data/store";
 import { uploadToTicket } from "../data/upload";
 import { registerServiceWorker } from "../push";
@@ -45,6 +45,7 @@ export function Gate() {
         issues: subscribeIssues,
         inbox: subscribeInbox,
         askAnswers: subscribeAskAnswers,
+        taskProgress: subscribeTaskProgress,
       },
       files: { upload: uploadToTicket },
     };

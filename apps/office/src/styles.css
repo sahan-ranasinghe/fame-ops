@@ -433,6 +433,18 @@ input[type="checkbox"], input[type="radio"] { width: 20px; height: 20px; min-hei
 .rq-timeline li .dot { margin-top: 5px; flex: none }
 .rq-timeline li:not(.done) { color: var(--muted) }
 
+/* A task's stops as a delivery timeline (Round 2): one rail, a dot per stop, the current stop ringed. */
+.sp-timeline { list-style: none; margin: 0; padding: 0 }
+.sp-stop { position: relative; display: flex; gap: 12px; align-items: flex-start; padding: 14px 18px; border-top: 1px solid var(--line) }
+.sp-stop:first-child { border-top: 0 }
+.sp-stop::before { content: ""; position: absolute; left: 22px; top: 0; bottom: 0; width: 2px; background: var(--line) }
+.sp-stop:first-child::before { top: 20px } .sp-stop:last-child::before { bottom: calc(100% - 20px) }
+.sp-stop:only-child::before { display: none }
+.sp-stop .dot { position: relative; margin-top: 6px; box-shadow: 0 0 0 3px var(--surface) }
+.sp-stop.current .dot { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--live) }
+.sp-stop.current { background: var(--surface-2) }
+.sp-delta.late { color: var(--warn) } .sp-delta.ok { color: var(--ok) }
+
 /* Phase 6 Part 2: what changed, who's available */
 .changes { margin: 6px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 2px }
 /* Who's available: hover and picked from the theme's own tokens (readable in light and dark); picked also has a bar and a tick, not colour alone. */

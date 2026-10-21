@@ -362,6 +362,22 @@ the same there; a fix goes into the shared component or token (`theme.ts`, `comp
   settings page (no "Open settings" button); no share sheet on some browsers (copy, with a snackbar); no Google map on the
   phone's native SDK (the web map twins `*.web.tsx`). The app uses no haptics, so nothing is missing there.
 
+## 16. Stop progress timeline (Phase 9 Round 2, 21 October 2026)
+
+A task's stops with times are a vertical delivery timeline, the route progress of Uber's and DoorDash's order tracking
+and Samsara's route view: one rail top to bottom, a dot per stop (left = green, here now = blue, skipped = red, still to
+come = plain), the stop the driver is at or heading to ringed and marked "Here now" / "Next".
+
+- Each stop: "Planned 10:30–11:00 · Arrived 10:52 · Left 11:40", then the difference in words: "22 min late" in amber
+  (`--warn`), "8 min early" or "On time" in green (`--ok`). On time = within 2 minutes; the arrival's difference, else the
+  leaving's (`deltaKind` from the shared rule `_shared/fleet/stopProgress.ts`, the same on every surface).
+- A stop still to come once something was confirmed: "about 12:10 (updated 10:52)" (`progress.estimate`).
+- A skipped stop: "Skipped · Nobody there" (the reason in words, never its code).
+- Live: the page follows the driver without a reload (the site: Realtime on the task and its stops, one refetch about a
+  second after a burst of changes, the data replaced in place; the artifact: every 60 s while the task is still to finish).
+- The component, one per codebase: the site's `screens/StopProgress.tsx` (the task page); the app's
+  `components/office/StopTimeline.tsx`.
+
 ## The reviewer's checklist (each checkpoint)
 
 For every screen changed or added: the filters are one Filter button + sheet + chips; a date range is one button + one

@@ -10,7 +10,7 @@
 // against the default, the warnings saved past, and "Needs a driver" at the top.
 // Part 4 (§13): a trip the driver started is tagged "Driver-started" (and "Personal"), with Company work ↔ Personal and
 // "Attach a project" (set_trip_purpose) on the page.
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useFleet } from "../app/FleetContext";
 import { ROUTES_NEED } from "../app/nav";
@@ -26,6 +26,7 @@ import type { RoutePoint } from "../map/types";
 import { GapsList, useGaps } from "./GapsList";
 import { LateReportLine } from "./LateReport";
 import { StopArrival } from "./StopArrival";
+import { StopProgress } from "./StopProgress";
 import { TripPurposeCard, TripTags } from "./TripPurpose";
 import { Avatar, Empty, Loading, Notice, Pill, VehicleThumb, WarningsNote } from "../ui/basics";
 import { ContactButtons, linksOf } from "../ui/ContactButtons";
@@ -39,33 +40,61 @@ import { videoWords } from "./fuelLogic";
 import { driveText } from "./stopsLogic";
 import { readFlashWarnings } from "../data/flash";
 import { findDriverPath } from "./needsDriverLogic";
-import { dwellNote, needsDriverText, segmentRows, segmentsTotal, stayLine, stopTitle, whatOf } from "./taskDetailLogic";
+import { dwellNote, needsDriverText, segmentRows, segmentsTotal, whatOf } from "./taskDetailLogic";
 import { duration } from "@fleet/durations";
 
 export const TONE: Record<string, "warn" | "live" | "ok" | "bad"> = { assigned: "warn", in_progress: "live", completed: "ok", cancelled: "bad", declined: "bad" };
 /** The arrival flags shown in amber (an override, no GPS fix, Done without Arrived); "no pin" is plain. */
 const ARRIVAL_WARN = new Set(["override", "no_gps", "not_arrived"]);
-const SKIP_TEXT: Record<string, string> = { closed: "closed", nobody_there: "nobody there", not_needed: "not needed", not_visited: "not visited (task finished)", other: "other" };
 
 /**
  * Loads one task; loads again when the page is returned to (after an edit). `withLine`: the task page's plan map also
  * asks for each leg's Google road line (web only: Google's map is never in the artifact).
  */
-export function useTask(id: string, opts: { withLine?: boolean } = {}): { p: TaskDetailData | null; err: string | null; reload: () => Promise<void> } {
-  const { transport } = useFleet();
+export function useTask(id: string, opts: { withLine?: boolean; live?: boolean } = {}): { p: TaskDetailData | null; err: string | null; reload: () => Promise<void> } {
+  const { transport, realtime } = useFleet();
   const { key } = useLocation();
   const [p, setP] = useState<TaskDetailData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const withLine = !!opts.withLine && __BUILD__ === "web";
+  // Only the newest answer is kept (a slow one that lands after a newer one is dropped).
+  const seq = useRef(0);
   const reload = async () => {
+    const mine = ++seq.current;
     try {
-      setP(await transport.call<TaskDetailData>("task_detail", withLine ? { task_id: id, with_line: true } : { task_id: id }));
+      const next = await transport.call<TaskDetailData>("task_detail", withLine ? { task_id: id, with_line: true } : { task_id: id });
+      if (mine !== seq.current) return;
+      setP(next);
       setErr(null);
     } catch (e) {
-      setErr(errText(e as FleetError)[0]);
+      // A live refresh that fails keeps the page as it is; only the first load shows the error.
+      if (mine === seq.current) setErr((was) => (p ? was : errText(e as FleetError)[0]));
     }
   };
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
   useEffect(() => { void reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [id, key]);
+
+  // Round 2: live without a reload. The web: a Realtime channel on the task and its stops; a change asks task_detail
+  // again about a second later (a burst of changes is one call), and the answer replaces the data in place (the page
+  // stays, the scroll too). The artifact has no Realtime: it asks again every 60 s while the task is still to finish.
+  const live = !!opts.live;
+  const subscribe = realtime?.taskProgress;
+  useEffect(() => {
+    if (!live || !subscribe || !id) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = subscribe(id, () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => void reloadRef.current(), 1000);
+    });
+    return () => { clearTimeout(timer); stop(); };
+  }, [live, subscribe, id]);
+  const running = p?.task.status === "assigned" || p?.task.status === "in_progress";
+  useEffect(() => {
+    if (!live || subscribe || !running) return;
+    const timer = setInterval(() => void reloadRef.current(), 60_000);
+    return () => clearInterval(timer);
+  }, [live, subscribe, running]);
   return { p, err, reload };
 }
 
@@ -84,7 +113,7 @@ export function useBoardBack(): string {
 export function TaskDetail() {
   const { id = "" } = useParams();
   const { me } = useFleet();
-  const { p, err, reload } = useTask(id, { withLine: true });
+  const { p, err, reload } = useTask(id, { withLine: true, live: true });
   // Hotfix 2 (F): the office's number, for Call office beside "Approved by …" when the approver has none.
   const settings = useFleetSettings();
   const officePhone = linksOf(settings.data?.settings.office_phone);
@@ -222,41 +251,34 @@ export function TaskDetail() {
 
       <div className="section-t">Stops{t.start_place ? ` · from ${t.start_place}` : ""}{t.return_to_base ? " · back to the office" : ""}{t.avoid_expressway ? " · no expressway" : ""}</div>
       <div className="card">
-        <div className="rows">
-          {p.stops.length ? p.stops.map((s) => (
-            <div className="row" key={s.seq} data-testid="task-stop">
-              <span className={`dot ${s.status === "done" ? "ok" : s.status === "skipped" ? "bad" : s.status === "arrived" ? "live" : "warn"}`} />
-              <div className="grow">
-                <div className="name">
-                  {stopTitle(s)}
-                  {s.is_start && <Pill tone="live">Start · passengers get in here</Pill>}
-                  {s.google && <span translate="no"><Pill tone="live">Google Maps</Pill></span>}
-                </div>
-                {stayLine(s) && <div className="sub" data-testid="stop-stay">{stayLine(s)}</div>}
+        {p.stops.length ? (
+          <StopProgress
+            stops={p.stops}
+            extra={(s) => (
+              <>
                 <div className="sub">
                   {joinDots([
                     whatOf(s),
                     s.arrive_by ? `by ${s.arrive_by}` : null,
                     // The time there: in the planned line already when the answer has it.
-                    !s.planned_stay && s.dwell_min != null ? `${duration(s.dwell_min)} there` : null,
+                    !s.progress && !s.planned_stay && s.dwell_min != null ? `${duration(s.dwell_min)} there` : null,
                     dwellNote(s),
-                    s.status === "pending" ? null : cap(s.status),
-                    // Arrived and Done are in the actual line when the answer has it.
-                    !s.actual_stay && s.arrived ? `arrived ${s.arrived}` : null,
+                    // Arrived and Left are on the timeline's own line; Skipped has its line with the reason in words.
+                    s.progress || s.status === "pending" || s.status === "skipped" ? null : cap(s.status),
+                    !s.progress && !s.actual_stay && s.arrived ? `arrived ${s.arrived}` : null,
                     s.auto_detected ? `near the stop ${s.auto_detected} (phone)` : null,
-                    !s.actual_stay && s.done ? `done ${s.done}` : null,
-                    s.skip_reason ? `skipped: ${SKIP_TEXT[s.skip_reason] ?? s.skip_reason}${s.skip_note ? ` (${s.skip_note})` : ""}` : null,
+                    !s.progress && !s.actual_stay && s.done ? `done ${s.done}` : null,
                     s.pin === "none" ? "no map pin" : null,
                   ])}
                 </div>
                 {s.arrival_text && <div className={ARRIVAL_WARN.has(s.arrival_flag ?? "") ? "status warn" : "sub"} data-testid="arrival-flag">{s.arrival_text}</div>}
                 {s.note && <div className="sub">Note: {s.note}</div>}
                 <StopArrival stop={s} onSaved={() => void reload()} />
-              </div>
-              {s.navigate && <a className="btn small" href={s.navigate} {...ext}>Map</a>}
-            </div>
-          )) : <Empty>No stops.</Empty>}
-        </div>
+              </>
+            )}
+            action={(s) => (s.navigate ? <a className="btn small" href={s.navigate} {...ext}>Map</a> : null)}
+          />
+        ) : <div className="rows"><Empty>No stops.</Empty></div>}
         {(canStops || p.removed_stops?.length) && (
           <div className="card-b" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
             {canStops && <Link className="btn" to={`/tasks/${id}/stops${q}`} state={FROM_TASK}>Edit stops</Link>}

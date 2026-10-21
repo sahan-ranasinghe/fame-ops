@@ -30,6 +30,8 @@ export interface Fleet {
     inbox?: (cb: () => void) => () => void;
     /** Part 3b (H3): a driver's row on one question changed (seen, answered): the answers page reloads. */
     askAnswers?: (askId: string, cb: () => void) => () => void;
+    /** Round 2: one task or its stops changed (the task page asks task_detail again, about a second later). */
+    taskProgress?: (taskId: string, cb: () => void) => () => void;
   };
   /** Web build only (Phase 7): a photo or document goes up through the signed upload a tool handed out. None = no upload buttons. */
   files?: { upload: (ticket: UploadTicket, file: Blob, contentType: string) => Promise<void> };

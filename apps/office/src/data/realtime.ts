@@ -118,3 +118,22 @@ export function subscribeAskAnswers(askId: string, cb: () => void): () => void {
     });
   return () => { void client.removeChannel(channel); };
 }
+
+/**
+ * Web only (Round 2): one task's progress while its page is open: any change on the task's row (started, finished,
+ * changed) or on its stops (Arrived, Left, skipped, edited) calls back, and the page asks task_detail again. Office roles
+ * read tasks and task_stops through RLS; both tables are in the supabase_realtime publication.
+ */
+export function subscribeTaskProgress(taskId: string, cb: () => void): () => void {
+  // The id goes into the channel's filters: only a uuid.
+  if (!supabase || !/^[0-9a-f-]{36}$/i.test(taskId)) return () => {};
+  const client = supabase;
+  const channel = client
+    .channel(`task_progress:${taskId}:${++serial}:${Date.now()}`)
+    .on("postgres_changes", { event: "*", schema: "public", table: "task_stops", filter: `task_id=eq.${taskId}` }, () => cb())
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "tasks", filter: `id=eq.${taskId}` }, () => cb())
+    .subscribe((status, err) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn(`Realtime task progress: ${status}`, err?.message ?? "");
+    });
+  return () => { void client.removeChannel(channel); };
+}

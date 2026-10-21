@@ -2103,3 +2103,53 @@ test("screenshots of the site (desktop): Overview, Assign a task (Where, the clo
   await expect(page.getByTestId("planner-suggestions-settings")).toBeVisible();
   await shot("settings-dispatch");
 });
+
+test("Round 2: the task page follows the driver live: Arrived at a stop shows with its time and the difference against the plan, no reload", async ({ page }) => {
+  test.setTimeout(120_000);
+  const email = `e2e.progress.${stamp}@fame.test`;
+  const user = await tool<{ set_password_link: string }>("create_office_user", { name: "E2E Progress", email, permissions: ["view", "assign_tasks"] });
+  const driver = { name: `E2E Progress ${stamp}`, code: `E2P-${stamp}`, username: `e2p.${stamp}`, pin: "246813", phone: "0771234500" };
+  await tool("create_driver", driver);
+  const plate = `WP E2P-${stamp.slice(-4).toUpperCase()}`;
+  await tool("register_vehicle", { reg_no: plate, make_model: "Toyota HiAce", vehicle_type: "van", seats: 12, current_odometer_km: 1000 });
+  // Leaving now (Colombo), two stops with pins: the plan gives each stop its planned time.
+  const now = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Colombo", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+  const t = await tool<{ task_id: string }>("create_task", {
+    title: `E2E progress ${stamp}`, date: colomboDay(0), start_time: now, driver: driver.username, vehicle: plate,
+    stops: [
+      { type: "pickup", what: "people", place: "Head office", lat: 6.9022, lng: 79.8612 },
+      { type: "drop", what: "people", place: "Nugegoda", lat: 6.8649, lng: 79.8997 },
+    ],
+  });
+  // The driver starts the task as the app does (a driver changes a stop only while the task runs).
+  const app = await driverRest(driver.username, driver.pin);
+  expect(await app.post("rpc/accept_task", { p_task_id: t.task_id, p_at: new Date().toISOString() })).toBe(200);
+  expect(await app.patch(`tasks?id=eq.${t.task_id}`, { status: "in_progress", started_at: new Date().toISOString(), start_odometer_km: 1000 })).toBe(200);
+
+  const verify = await fetch(user.set_password_link, { redirect: "manual" });
+  const landing = verify.headers.get("location") ?? "";
+  await page.goto("/" + landing.slice(landing.indexOf("#")));
+  const password = `Progress for ${stamp}!`;
+  await page.getByLabel("New password").fill(password);
+  await page.getByLabel("Again").fill(password);
+  await page.getByRole("button", { name: "Save password" }).click();
+  await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
+
+  await page.goto(`/tasks/${t.task_id}`);
+  const detail = page.getByTestId("task-detail");
+  const first = detail.getByTestId("task-stop").first();
+  await expect(first).toContainText(/Planned \d\d:\d\d/);
+  await expect(first).not.toContainText("Arrived");
+  // A marker on the page: still there afterwards = the page was not loaded again.
+  await page.evaluate(() => { (window as unknown as { __noReload?: boolean }).__noReload = true; });
+  await page.waitForTimeout(3_000); // the Realtime channel joins
+
+  // The driver taps Arrived at the first stop (the app's own write).
+  const stops = await app.get<{ id: string; seq: number }[]>(`task_stops?select=id,seq&task_id=eq.${t.task_id}&status=neq.removed&order=seq`);
+  expect(await app.patch(`task_stops?id=eq.${stops[0].id}`, { status: "arrived", arrived_at: new Date().toISOString(), arrival_flag: "override" })).toBe(200);
+
+  await expect(first.getByTestId("stop-times")).toContainText(/Arrived \d\d:\d\d/, { timeout: 15_000 });
+  await expect(first.getByTestId("stop-delta")).toHaveText(/^(On time|\d[\d hmind]* (late|early))$/);
+  await expect(first).toContainText("Here now");
+  expect(await page.evaluate(() => (window as unknown as { __noReload?: boolean }).__noReload)).toBe(true);
+});
