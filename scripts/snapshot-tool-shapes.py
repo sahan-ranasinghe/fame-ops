@@ -254,6 +254,7 @@ def main():
         ("list_issues", {}),
         ("list_issues", {"status": "all"}),
         ("get_settings", {}),
+        ("list_office_users", {}),
         ("routing_usage", {}),
         ("plan_task", {"date": board.get("date"), "leave_by": "09:00", "pickup": "Head office", "dropoff": "Kurunegala"}),
     ]

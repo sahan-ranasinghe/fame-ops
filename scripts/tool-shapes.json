@@ -565,6 +565,19 @@
   "status: string",
   "total: number"
  ],
+ "list_office_users {}": [
+  "count: number",
+  "users[].active: bool",
+  "users[].connector_keys[]: empty",
+  "users[].driver_contact: bool",
+  "users[].email: string",
+  "users[].name: string",
+  "users[].permissions[]: string",
+  "users[].phone: string",
+  "users[].phone_display: string",
+  "users[].role: string",
+  "users[].since: string"
+ ],
  "list_place_imports {}": [
   "imports[].added: number",
   "imports[].at: string",
