@@ -76,18 +76,20 @@ export default function MoreTab() {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={t('office.more.above')} title={t('office.tabs.more')} />
       <Screen>
-        <FilterBar search={find} onSearch={setFind} placeholder={t('office.more.search')} defs={[]} values={{}} onApply={() => undefined} testID="more-search" />
-        {needle && shown.length === 0 && <ListEmpty text={t('office.more.noMatch', { text: find.trim() })} />}
+        {/* Round 2b (Instagram / WhatsApp): the profile card first; it opens My profile (once, never a second row). */}
         {!needle && <Section title={t('office.more.me')}>
           <Row
             left={<Avatar name={me.name} size={48} />}
             title={me.name}
             line={me.email}
             line2={me.permissions.map((p) => t(`office.permission.${p}`).toLowerCase()).join(' · ')}
+            right={<ChevronRight size={22} color={colors.muted} />}
+            onPress={() => router.push('/office/profile')}
+            testID="more-profile"
           />
-          <Divider />
-          <Row left={<User size={24} color={colors.ink} />} title={t('office.more.profile')} right={<ChevronRight size={22} color={colors.muted} />} onPress={() => router.push('/office/profile')} />
         </Section>}
+        <FilterBar search={find} onSearch={setFind} placeholder={t('office.more.search')} defs={[]} values={{}} onApply={() => undefined} testID="more-search" />
+        {needle && shown.length === 0 && <ListEmpty text={t('office.more.noMatch', { text: find.trim() })} />}
         {SECTIONS.map((s) => {
           const rows = shown.filter((key) => MORE_SECTION[key] === s.key);
           if (rows.length === 0) return null;

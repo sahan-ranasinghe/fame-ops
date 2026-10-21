@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useEntry } from "../data/hooks";
 import type { Overview } from "../data/types";
@@ -97,6 +97,41 @@ function Banner() {
   );
 }
 
+/**
+ * Round 2b: the profile menu at the foot of the rail (Gmail, Google Drive, GitHub): the name and role; a click opens My
+ * profile, Settings and Sign out. Esc or a click outside closes it; the arrow keys move between the items.
+ */
+function ProfileMenu({ role }: { role: string }) {
+  const { me, signOut } = useFleet();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", esc); };
+  }, [open]);
+  const initials = me.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+  return (
+    <div className="viewer-wrap" ref={box}>
+      {open && (
+        <div className="profile-menu" role="menu" aria-label="Your account" data-testid="profile-menu">
+          <Link role="menuitem" to={PROFILE_PATH} onClick={() => setOpen(false)}>My profile</Link>
+          <Link role="menuitem" to="/settings" onClick={() => setOpen(false)}>Settings</Link>
+          {signOut && <button type="button" role="menuitem" onClick={() => { setOpen(false); void signOut(); }}>Sign out</button>}
+        </div>
+      )}
+      <button type="button" className="viewer" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((x) => !x)} data-testid="viewer-profile">
+        {me.name
+          ? <><span className="avatar sm">{initials}</span><span>{me.name}<small>{role}</small></span></>
+          : <span className="muted small">Fleet office</span>}
+      </button>
+    </div>
+  );
+}
+
 /** A screen is current on its own path and on every page under it (/requests/new, /tasks/:id …). */
 const isCurrent = (pathname: string, path: string) => (path === "/" ? pathname === "/" : pathname === path || pathname.startsWith(path + "/"));
 
@@ -141,7 +176,6 @@ function RailMenu({ badges }: { badges: Record<string, number> }) {
           </div>
         );
       })}
-      <NavLink to="/more" className="nav-more"><Icon name="more" /><span>More</span></NavLink>
     </nav>
   );
 }
@@ -185,12 +219,8 @@ function ShellBody() {
         {/* Hotfix 3 (L4): one notification icon, the tray; the issues count is on the Issues menu item. */}
         <div className="bells"><InboxBell /></div>
         <RailMenu badges={badges} />
-        {/* The person's name opens My profile (their phone number, Hotfix 2 F). */}
-        <Link className="viewer" to={PROFILE_PATH} title="My profile" data-testid="viewer-profile">
-          {me.name
-            ? <><span className="avatar sm">{me.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}</span><span>{me.name}<small>{role}</small></span></>
-            : <span className="muted small">Fleet office</span>}
-        </Link>
+        {/* Round 2b (Gmail / Drive / GitHub): the person's name opens the profile menu: My profile, Settings, Sign out. */}
+        <ProfileMenu role={role} />
       </aside>
 
       <main className="main">

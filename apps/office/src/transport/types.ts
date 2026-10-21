@@ -7,7 +7,7 @@ import type { Permission } from "@fleet/permissions";
 
 export type { Permission };
 
-export type Role = "admin" | "fleet_admin" | "office" | "staff" | "viewer";
+export type Role = "admin" | "fleet_admin" | "office" | "coordinator" | "staff" | "viewer";
 
 export interface Me {
   name: string;
@@ -63,6 +63,7 @@ export const ROLE_LABEL: Record<Role, string> = {
   admin: "Admin",
   fleet_admin: "Fleet admin",
   office: "Office",
+  coordinator: "Coordinator",
   staff: "Staff",
   viewer: "Viewer",
 };
@@ -96,4 +97,6 @@ export const ALL_TOOLS = [
   "drivers_board", "ask_drivers", "ask_answers",
   // Hotfix O2-H2, Part 1c: the app's crash reports (Settings → App errors).
   "list_app_errors",
+  // Round 2b: who changed what and when (Settings → Activity log).
+  "activity_log",
 ];

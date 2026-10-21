@@ -78,7 +78,8 @@ export const NAV_SECTIONS: { key: NavSectionKey; label: string; keys: string[] }
 
 /** The menu's sections with only what the person may open, in NAV's order; a section with nothing in it is left out. */
 export function menuFor(me: Pick<Me, "permissions">): NavSection[] {
-  const mine = allowed(NAV, me);
+  // Round 2b (Gmail / Drive / GitHub): Settings is in the profile menu under the person's name, never twice in the rail.
+  const mine = allowed(NAV, me).filter((n) => n.key !== "settings");
   return NAV_SECTIONS
     .map((s) => ({ key: s.key, label: s.label, items: mine.filter((n) => s.keys.includes(n.key)) }))
     .filter((s) => s.items.length > 0);

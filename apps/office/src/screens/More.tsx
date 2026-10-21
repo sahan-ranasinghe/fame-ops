@@ -1,28 +1,28 @@
 import { PERMISSION_TEXT } from "@fleet/permissions";
 import { Link } from "react-router";
 import { useFleet } from "../app/FleetContext";
-import { moreFor } from "../app/nav";
+import { moreFor, NAV_SECTIONS } from "../app/nav";
 import { badgeText, useNavBadges } from "../app/navBadges";
 import { ROLE_LABEL } from "../transport/types";
 import { Icon } from "../ui/icons";
 import { phoneLike, saveChoice, touchPointer } from "../app/viewChoice";
 
-/** Everything the person may open that is not on the phone's tab bar (Issues and Requests with their counts), and their account. */
+/**
+ * Round 2b (Instagram / WhatsApp settings): the profile card at the top (My profile, Settings, Sign out: each once, here
+ * only), then everything the person may open that is not on the phone's tab bar, grouped as the desktop menu is (Today,
+ * Fleet, Reports, Admin), with Issues and Requests carrying their counts.
+ */
 export function More() {
   const { me, signOut, transport } = useFleet();
-  const more = moreFor(me);
+  const more = moreFor(me).filter((n) => n.key !== "settings");
+  const groups = NAV_SECTIONS
+    .map((g) => ({ ...g, items: more.filter((n) => g.keys.includes(n.key) || (g.key === "today" && n.key === "task_history")) }))
+    .filter((g) => g.items.length > 0);
   const badges = useNavBadges();
   return (
     <section className="view">
-      <div className="ph"><div><div className="eyebrow">Your account and everything else</div><h1>More</h1></div></div>
+      <div className="ph"><div><div className="eyebrow">Your account, then everything else</div><h1>More</h1></div></div>
       <div className="stack" style={{ maxWidth: 560 }}>
-        {more.length > 0 && (
-          <div className="more-list" data-testid="more-list">
-            {more.map((n) => (
-              <Link key={n.key} to={n.path}><Icon name={n.key} />{n.label}{badges[n.key] ? <span className="badge" data-testid={`more-badge-${n.key}`}>{badgeText(badges[n.key])}</span> : null}</Link>
-            ))}
-          </div>
-        )}
         <div className="card card-b">
           <dl className="kv">
             <div><dt>Name</dt><dd>{me.name || "—"}</dd></div>
@@ -38,13 +38,9 @@ export function More() {
           </dl>
           <div className="acts" style={{ marginTop: 16 }}>
             <Link className="btn" to="/settings/profile">My profile</Link>
+            <Link className="btn" to="/settings">Settings</Link>
+            {signOut && <button type="button" className="btn" onClick={signOut}>Sign out</button>}
           </div>
-          {signOut && (
-            <div className="acts" style={{ marginTop: 16 }}>
-              <Link className="btn" to="/settings">Sign-in and security</Link>
-              <button type="button" className="btn" onClick={signOut}>Sign out</button>
-            </div>
-          )}
           {/* O4: a phone that chose the desktop view can go back to the mobile website (remembered in this browser). */}
           {transport.kind === "api" && phoneLike(window.innerWidth, navigator.userAgent, touchPointer()) && (
             <div className="acts" style={{ marginTop: 16 }}>
@@ -52,6 +48,16 @@ export function More() {
             </div>
           )}
         </div>
+        {groups.map((g) => (
+          <div key={g.key} className="stack" style={{ gap: 6 }}>
+            <div className="eyebrow">{g.label}</div>
+            <div className="more-list" data-testid={`more-list-${g.key}`}>
+              {g.items.map((n) => (
+                <Link key={n.key} to={n.path}><Icon name={n.key} />{n.label}{badges[n.key] ? <span className="badge" data-testid={`more-badge-${n.key}`}>{badgeText(badges[n.key])}</span> : null}</Link>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );

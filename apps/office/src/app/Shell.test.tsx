@@ -145,10 +145,20 @@ describe("the menu in sections (L5)", () => {
     expect(within(screen.getByTestId("nav-today")).getAllByRole("link").length).toBe(7);
   });
 
+  it("Round 2b: no More in the rail; the name opens the profile menu (My profile, Settings; Esc closes it)", async () => {
+    await mount(dispatcher);
+    expect(within(rail()).queryByRole("link", { name: "More" })).toBeNull();
+    fireEvent.click(screen.getByTestId("viewer-profile"));
+    const menu = screen.getByRole("menu", { name: "Your account" });
+    expect(within(menu).getAllByRole("menuitem").map((a) => a.textContent)).toEqual(expect.arrayContaining(["My profile", "Settings"]));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu", { name: "Your account" })).toBeNull();
+  });
+
   it("a dispatcher sees only what the permissions allow", async () => {
     await mount(dispatcher);
     expect(within(rail()).getAllByRole("link").map((a) => a.textContent)).toEqual([
-      "Overview", "Live locations", "Tasks", "Requests", "My trips", "Issues5", "Drivers board", "Vehicles", "Drivers", "Duty log", "Projects", "Settings", "More",
+      "Overview", "Live locations", "Tasks", "Requests", "My trips", "Issues5", "Drivers board", "Vehicles", "Drivers", "Duty log", "Projects",
     ]);
   });
 });

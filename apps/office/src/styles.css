@@ -65,7 +65,13 @@ h1, h2, h3 { text-wrap: balance; margin: 0 }
 .viewer .avatar { background: var(--rail-hover); color: var(--rail-ink) }
 .viewer small { display: block; color: var(--rail-muted) }
 a.viewer { color: inherit; text-decoration: none }
-a.viewer:hover { color: var(--rail-hi) }
+a.viewer:hover, button.viewer:hover { color: var(--rail-hi) }
+button.viewer { width: 100%; background: none; border: 0; border-top: 1px solid var(--rail-hover); color: var(--rail-ink); text-align: left; cursor: pointer; font: inherit; font-size: 14px }
+.viewer-wrap { margin-top: auto; position: relative }
+.viewer-wrap .viewer { margin-top: 0 }
+.profile-menu { position: absolute; bottom: calc(100% + 6px); left: 0; right: 0; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; display: grid; z-index: 20 }
+.profile-menu a, .profile-menu button { display: block; padding: 10px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; background: none; border: 0; text-align: left; font: inherit; cursor: pointer }
+.profile-menu a:hover, .profile-menu button:hover, .profile-menu a:focus-visible, .profile-menu button:focus-visible { background: var(--surface-2) }
 .main { min-width: 0; padding-inline: clamp(16px, 3vw, 40px); padding-block: 28px 56px }
 .mhead { display: none; align-items: center; gap: 12px; margin-bottom: 18px }
 .mhead b { font: 800 22px/1 var(--font-display) }

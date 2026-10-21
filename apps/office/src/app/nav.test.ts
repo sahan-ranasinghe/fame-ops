@@ -33,22 +33,22 @@ describe("the desktop menu in sections (Hotfix 3, L5)", () => {
       ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board"]],
       ["fleet", ["vehicles", "drivers", "places", "maintenance"]],
       ["reports", ["mileage", "fuel", "duty"]],
-      ["admin", ["projects", "settings"]],
+      ["admin", ["projects"]],
     ]);
   });
   it("each person sees only what their permissions allow; an empty section is left out", () => {
     expect(menuFor(me(PRESETS.viewer.permissions)).map((s) => [s.key, keys(s.items)])).toEqual([
       ["today", ["overview", "live", "requests"]],
       ["fleet", ["vehicles", "drivers"]],
-      ["admin", ["projects", "settings"]],
+      ["admin", ["projects"]],
     ]);
     expect(menuFor(me(PRESETS.dispatcher.permissions)).map((s) => [s.key, keys(s.items)])).toEqual([
       ["today", ["overview", "live", "tasks", "requests", "my_trips", "issues", "drivers_board"]],
       ["fleet", ["vehicles", "drivers"]],
       ["reports", ["duty"]],
-      ["admin", ["projects", "settings"]],
+      ["admin", ["projects"]],
     ]);
-    expect(menuFor(me(["request"])).map((s) => [s.key, keys(s.items)])).toEqual([["today", ["requests", "my_trips"]], ["admin", ["projects", "settings"]]]);
+    expect(menuFor(me(["request"])).map((s) => [s.key, keys(s.items)])).toEqual([["today", ["requests", "my_trips"]], ["admin", ["projects"]]]);
   });
   it("Part 3b (H5): the Drivers board in Today for approve or assign_tasks, never a phone tab", () => {
     const board = NAV.find((n) => n.key === "drivers_board");

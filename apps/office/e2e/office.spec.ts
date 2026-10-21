@@ -342,7 +342,9 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByText("No project matches", { exact: false })).toBeVisible();
 
   // Settings → Users: the admin's row shows every permission; a dispatcher is made from the preset, then given Approve.
-  await page.getByRole("link", { name: "Settings" }).first().click();
+  // Round 2b: Settings is in the profile menu under the person's name (no duplicate in the rail).
+  await page.getByTestId("viewer-profile").click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await page.getByRole("link", { name: /^Users/ }).click();
   await expect(page.getByRole("heading", { name: "Users" })).toBeVisible();
@@ -375,7 +377,9 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.locator("tr", { hasText: dispEmail })).toContainText("Approve");
 
   // 6. Settings: turn on 2-step sign-in.
-  await page.getByRole("link", { name: "Settings" }).first().click();
+  // Round 2b: Settings is in the profile menu under the person's name (no duplicate in the rail).
+  await page.getByTestId("viewer-profile").click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await expect(page.getByText("Off", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Turn on 2-step sign-in" }).click();
@@ -406,8 +410,9 @@ test("an office user sets a password, runs the fleet pages, watches a driver liv
   await expect(page.getByTestId("notif-group-issues")).toContainText("All on");
 
   // 7. Sign out; sign in again: password, then the code.
-  await page.getByRole("link", { name: "More" }).first().click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  // Round 2b: Sign out is in the profile menu under the person's name.
+  await page.getByTestId("viewer-profile").click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Password").fill(password);
