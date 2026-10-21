@@ -34,7 +34,7 @@ import { askTargetsFromBoard } from '@/office/askLogic';
 import { boardArgs, boardChoice, boardFilterDefs, boardPill, entryParts, heldPlate, PARTS, REASONS, rowLines, type UnavailabilityForm, unavailabilityInput, weekDays, weekGrid, type WeekRow } from '@/office/driversLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { BoardDriver, DriversBoard, FleetError, SetUnavailabilityResult, UnavailabilityList, UnavailableEntry, UnavailablePart, UnavailableReason } from '@/office/types';
-import { Avatar, DarkHeader, ErrorNotice, ListFailed, Pill, Screen } from '@/office/ui';
+import { Avatar, DarkHeader, ErrorNotice, ListFailed, Screen, StatusChip } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, fonts } from '@/theme';
 
@@ -193,7 +193,7 @@ function DriverRow({ d, onPress }: { d: BoardDriver; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} disabled={!d.username} style={({ pressed }) => [styles.row, pressed && { opacity: 0.8 }]} testID={`driver-row-${d.username ?? d.name}`}>
       <View>
-        <Avatar name={d.name} size={44} />
+        <Avatar name={d.name} size={44} photo={d.photo_url} />
         <View style={[styles.dot, { backgroundColor: DOT[pill.tone] }]} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
@@ -205,7 +205,7 @@ function DriverRow({ d, onPress }: { d: BoardDriver; onPress: () => void }) {
         {line2 ? <Txt variant="small" numberOfLines={2}>{line2}</Txt> : null}
       </View>
       {d.status.kind === 'not_available' ? (
-        <Pill text={t('office.drivers.pill.notAvailable')} tone="red" size={13} />
+        <StatusChip text={t('office.drivers.pill.notAvailable')} tone="red" />
       ) : call ? (
         <Pressable accessibilityRole="button" accessibilityLabel={`${t('office.common.call')} ${d.name}`} onPress={() => void Linking.openURL(call).catch(() => undefined)} style={styles.callBtn}>
           <Phone size={20} color={colors.ink} strokeWidth={2.4} />

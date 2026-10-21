@@ -41,6 +41,25 @@ export function Pill({ text, tone = 'muted', size = 14 }: { text: string; tone?:
   );
 }
 
+/**
+ * The header's numbers as one row of compact tiles (Shopify's, Stripe's and Uber Fleet's stat tiles, 21 October 2026): a
+ * big number, a small label on one line, each tile opening its list. Replaces the row of chips under a dark header.
+ */
+export function StatTiles({ tiles }: { tiles: { key: string; n: number; label: string; tone?: 'blue' | 'muted' | 'amber' | 'red'; onPress?: () => void }[] }) {
+  const ink = { blue: '#9db8ea', muted: '#ffffff', amber: '#f7c85a', red: '#ff8a80' } as const;
+  return (
+    <View style={styles.tiles} testID="stat-tiles">
+      {tiles.map((x) => (
+        <Pressable key={x.key} accessibilityRole="button" accessibilityLabel={`${x.n} ${x.label}`} onPress={x.onPress} disabled={!x.onPress}
+          style={(state) => [styles.tile, hoverStyle(state), state.pressed && { opacity: 0.8 }]} testID={`stat-${x.key}`}>
+          <Mono size={24} bold color={ink[x.tone ?? 'muted']}>{String(x.n)}</Mono>
+          <Txt variant="small" color="#c9ccd1" numberOfLines={1}>{x.label}</Txt>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 /** A header chip ("3 on the road"): a number in mono and words. */
 export function Chip({ n, text, tone = 'muted', onPress }: { n: number | string; text: string; tone?: Tone; onPress?: () => void }) {
   const c = TONES[tone];
@@ -65,7 +84,7 @@ export function DarkHeader({ above, title, children, bell = true }: { above: str
         <LanguagePill />
         {bell && <BellButton count={unread} onPress={() => router.push('/office/(tabs)/alerts')} />}
       </View>
-      <Txt variant="title" color="#ffffff" style={{ marginTop: 14 }} numberOfLines={1}>{title}</Txt>
+      <Txt variant="title" color="#ffffff" style={{ marginTop: 8 }} numberOfLines={1}>{title}</Txt>
       {children}
     </View>
   );
@@ -169,24 +188,44 @@ export function Avatar({ name, size = 40, photo }: { name: string; size?: number
   );
 }
 
-/** A tappable row: an avatar or a mono time on the left, a title and a line, and a pill or a button on the right. */
-export function Row({ left, title, line, line2, right, onPress, testID }: {
+/** A list row's short status at the right (Gmail's label): one short word, never a sentence; it never squeezes the title. */
+export function StatusChip({ text, tone = 'muted' }: { text: string; tone?: Tone }) {
+  const c = TONES[tone];
+  return (
+    <View style={[styles.statusChip, { backgroundColor: c.bg }]}>
+      <Txt variant="strong" size={13} color={c.ink} numberOfLines={1}>{text}</Txt>
+    </View>
+  );
+}
+
+/**
+ * The one list row (Gmail's list, 21 October 2026): a time column or an avatar on the left; the title on ONE line; a grey
+ * second line (who · the status in words); at the right only a short StatusChip, or a button. Used by every list in
+ * Office mode, on the phone and on /m/.
+ */
+export function Row({ left, time, title, line, line2, chip, right, onPress, testID }: {
   left?: ReactNode;
+  /** "09:30": a mono time column on the left. */
+  time?: string;
   title: string;
   line?: string;
   line2?: string;
+  /** The short status ("Sent", "Seen", "Late 12 min"). */
+  chip?: { text: string; tone?: Tone } | null;
   right?: ReactNode;
   onPress?: () => void;
   testID?: string;
 }) {
   const inner = (
     <>
+      {time !== undefined ? <View style={styles.timeCol}><Mono size={15} bold>{time}</Mono></View> : null}
       {left}
-      <View style={{ flex: 1, gap: 2 }}>
-        <Txt variant="strong" size={17} numberOfLines={2}>{title}</Txt>
-        {line ? <Txt variant="muted" size={15} numberOfLines={2}>{line}</Txt> : null}
-        {line2 ? <Txt variant="small" numberOfLines={2}>{line2}</Txt> : null}
+      <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
+        <Txt variant="strong" size={17} numberOfLines={1}>{title}</Txt>
+        {line ? <Txt variant="muted" size={15} numberOfLines={1}>{line}</Txt> : null}
+        {line2 ? <Txt variant="small" numberOfLines={1}>{line2}</Txt> : null}
       </View>
+      {chip ? <StatusChip text={chip.text} tone={chip.tone} /> : null}
       {right}
     </>
   );
@@ -293,8 +332,12 @@ export function FilterChips<K extends string>({ options, value, onChange }: { op
 
 const styles = StyleSheet.create({
   pill: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, alignSelf: 'flex-start' },
+  tiles: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  tile: { flex: 1, backgroundColor: colors.darkSurface, borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10, gap: 2 },
+  statusChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3, maxWidth: 112, flexShrink: 0 },
+  timeCol: { width: 52 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
-  dark: { backgroundColor: colors.ink, paddingHorizontal: 20, paddingBottom: 22 },
+  dark: { backgroundColor: colors.ink, paddingHorizontal: 20, paddingBottom: 16 },
   darkTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   bell: { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.darkSurface, alignItems: 'center', justifyContent: 'center' },
   badge: { position: 'absolute', top: -4, right: -4, minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },

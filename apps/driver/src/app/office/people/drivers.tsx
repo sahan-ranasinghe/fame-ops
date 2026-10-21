@@ -15,7 +15,7 @@ import type { FilterValues } from '@/lib/patterns/filterLogic';
 import { activePill, appendDrivers, driverLine, driverLine2, driversArgs, includeInactiveOf, licenceTone, longDate, peopleDriverDefs, SEARCH_DEBOUNCE_MS } from '@/office/peopleLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { Driver, DriversList, FleetError } from '@/office/types';
-import { Avatar, BackHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { Avatar, BackHeader, Divider, ListFailed, Row, Screen, Section, StatusChip } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -58,14 +58,14 @@ export default function DriversPeople() {
     const licence = x.licence?.expiry ? t('office.people.licence', { date: longDate(names, x.licence.expiry) }) : t('office.people.licenceNone');
     return (
       <Row
-        left={<Avatar name={x.name} size={44} />}
+        left={<Avatar name={x.name} size={44} photo={x.photo_url} />}
         title={x.name}
         line={driverLine(x, t('office.people.noPhone'))}
         line2={driverLine2(x, t)}
         right={
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
-            <Pill text={t(`office.people.${pill.key}`)} tone={pill.tone} size={13} />
-            <Pill text={licence} tone={x.licence?.expiry ? licenceTone(x.licence.chip) : 'muted'} size={12} />
+            <StatusChip text={t(`office.people.${pill.key}`)} tone={pill.tone} />
+            <StatusChip text={licence} tone={x.licence?.expiry ? licenceTone(x.licence.chip) : 'muted'} />
           </View>
         }
         onPress={() => router.push({ pathname: '/office/people/driver/[username]', params: { username: x.username } })}

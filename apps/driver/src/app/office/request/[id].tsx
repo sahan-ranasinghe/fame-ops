@@ -286,7 +286,7 @@ export default function ApproveRequest() {
                   onPress={() => setPicked(d.username ?? '')}
                   disabled={!d.username}
                   disabledReason={d.username ? undefined : t('office.ask.noAccount')}
-                  leading={<Avatar name={d.name} size={44} />}
+                  leading={<Avatar name={d.name} size={44} photo={d.photo_url} />}
                   mark="end"
                   trailing={pillKey && pillKey !== 'best' ? <Pill text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : 'muted'} /> : null}
                   accessibilityLabel={d.name}

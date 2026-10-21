@@ -17,17 +17,18 @@ import { Pressable, View } from 'react-native';
 import { Mono, Txt } from '@/components/ui';
 import { addDays, colomboDate } from '@/lib/time';
 import { shortDate } from '@/lib/durations';
-import { boardLine, boardPill, greeting, isCreatedTask, requestLine, requestTitle, statusTone, tripLive, tripTitle } from '@/office/homeLogic';
+import { greeting, isCreatedTask, requestLine, requestTitle, tripLive, tripTitle } from '@/office/homeLogic';
+import { chipText, sentenceText, taskChip, tripChip } from '@/office/statusWords';
 import { has, homeActions, homeChips, homeSections } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { firstName } from '@/office/text';
 import type { Board, MyTrips, Overview, RequestsList } from '@/office/types';
-import { Avatar, Chip, DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { Avatar, DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section, StatTiles } from '@/office/ui';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 import { Button } from '@/components/ui';
-import { ChevronDown, ChevronRight, Plus } from '@/components/icons';
+import { Bell, ChevronDown, ChevronRight, Plus } from '@/components/icons';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { Sheet } from '@/components/patterns/Sheet';
 import { showSnackbar } from '@/components/patterns/Snackbar';
@@ -98,16 +99,25 @@ export default function OfficeHome() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <DarkHeader above={shortDate(names, Date.now())} title={t(`office.home.${greeting()}`, { name: firstName(me.name) })}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>
-          {ov && chips.includes('road') && <Chip n={ov.vehicles.on_the_road} text={t('office.home.onRoad')} tone="blue" onPress={go('road')} />}
-          {ov && chips.includes('free') && <Chip n={ov.vehicles.parked} text={t('office.home.free')} tone="muted" onPress={go('free')} />}
-          {ov && chips.includes('waiting') && <Chip n={ov.requests.waiting} text={t('office.home.waitingOk')} tone="amber" onPress={go('waiting')} />}
-          {ov && chips.includes('garage') && ov.vehicles.in_garage !== undefined && <Chip n={ov.vehicles.in_garage} text={t('office.home.inGarage')} tone="muted" onPress={go('garage')} />}
-          {ov && chipTarget('reminders', me) && ov.reminders.count > 0 && <Chip n={ov.reminders.count} text={t('office.home.reminders')} tone={ov.reminders.red ? 'red' : 'muted'} onPress={go('reminders')} />}
-        </View>
+        {ov && (
+          <StatTiles tiles={[
+            ...(chips.includes('road') ? [{ key: 'road', n: ov.vehicles.on_the_road, label: t('office.home.tileRoad'), tone: 'blue' as const, onPress: go('road') }] : []),
+            ...(chips.includes('free') ? [{ key: 'free', n: ov.vehicles.parked, label: t('office.home.tileFree'), onPress: go('free') }] : []),
+            ...(chips.includes('garage') && ov.vehicles.in_garage !== undefined ? [{ key: 'garage', n: ov.vehicles.in_garage, label: t('office.home.tileGarage'), onPress: go('garage') }] : []),
+          ]} />
+        )}
       </DarkHeader>
       <Screen refreshing={refreshing} onRefresh={refresh}>
         <SavedNotice noticeKey="/office" />
+        {ov && chipTarget('reminders', me) && ov.reminders.count > 0 && (
+          <Row
+            left={<Bell size={22} color={ov.reminders.red ? colors.red : colors.ink} strokeWidth={2.2} />}
+            title={t('office.home.remindersRow', { n: ov.reminders.count })}
+            right={<ChevronRight size={20} color={colors.muted} />}
+            onPress={go('reminders')}
+            testID="home-reminders"
+          />
+        )}
         {overview.error && <ListFailed stale={!!ov} error={overview.error} onRetry={refresh} onSignIn={() => void signOut()} />}
         {actions.length > 0 && (
           <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -170,7 +180,7 @@ export default function OfficeHome() {
                     left={g.items.length > 1 ? (open ? <ChevronDown size={20} color={colors.ink} /> : <ChevronRight size={20} color={colors.ink} />) : undefined}
                     title={g.title}
                     line={[g.vehicle, g.count > 1 ? t('office.home.attentionN', { n: g.count }) : g.items[0]?.due].filter(Boolean).join(' · ') || undefined}
-                    right={<Pill text={t(`office.home.sev_${g.severity}`)} tone={g.severity === 'critical' ? 'red' : 'amber'} />}
+                    chip={{ text: t(`office.home.sev_${g.severity}`), tone: g.severity === 'critical' ? 'red' : 'amber' }}
                     onPress={single ? () => router.push({ pathname: '/office/issues/[id]', params: { id: g.items[0].issue_id ?? '' } }) : () => setExpanded((x) => { const n = new Set(x); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n; })}
                   />
                   {open && g.items.map((x, k) => (
@@ -199,16 +209,16 @@ export default function OfficeHome() {
                 onAction={actions.includes('assign') ? () => router.push({ pathname: '/office/trip/where', params: { mode: 'task' } }) : undefined}
               />
             )}
-            {board.data && [...board.data.in_progress, ...board.data.assigned].slice(0, ROWS).map((c, i) => {
-              const pill = boardPill(c);
+            {board.data && [...board.data.in_progress.map((c) => ({ c, col: 'in_progress' as const })), ...board.data.assigned.map((c) => ({ c, col: 'assigned' as const }))].slice(0, ROWS).map(({ c, col }, i) => {
+              const k = taskChip(col, c);
               return (
                 <View key={c.id}>
                   {i > 0 && <Divider />}
                   <Row
-                    left={<Mono size={16} bold style={{ width: 52 }}>{c.time}</Mono>}
+                    time={c.time}
                     title={c.title}
-                    line={boardLine(c)}
-                    right={<Pill text={pill.key === 'late' ? t('office.status.late', { min: pill.min ?? 0 }) : t(`office.status.${pill.key}`)} tone={pill.tone} />}
+                    line={[c.driver, sentenceText(t, c.status)].filter(Boolean).join(' · ')}
+                    chip={{ text: chipText(t, k), tone: k.tone }}
                     onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: c.id } })}
                   />
                 </View>
@@ -233,7 +243,7 @@ export default function OfficeHome() {
                   left={<Avatar name={d.driver} />}
                   title={[d.driver, d.vehicle].filter(Boolean).join(' · ')}
                   line={[d.task ?? d.going_to, d.near ? `${d.near}` : d.status_text].filter(Boolean).join(' · ')}
-                  right={<Pill text={d.task ? t('office.home.onTask') : t('office.home.onDuty')} tone={d.task ? 'blue' : 'green'} />}
+                  chip={{ text: d.task ? t('office.chip.underWay') : t('office.chip.onDuty'), tone: d.task ? 'blue' : 'green' }}
                   onPress={() => router.push({ pathname: '/office/(tabs)/live', params: d.username ? { driver: d.username } : {} })}
                 />
               </View>
@@ -260,7 +270,7 @@ export default function OfficeHome() {
                   <Row
                     title={tripTitle(x)}
                     line={[x.when, x.back_by ? `${t('office.trips.backBy')} ${x.back_by}` : ''].filter(Boolean).join(' · ')}
-                    right={<Pill text={live.text} tone={statusTone(live.state)} />}
+                    chip={(() => { const k = tripChip(live.state); return { text: t(`office.chip.${k.key}`), tone: k.tone }; })()}
                     onPress={() => router.push('/office/(tabs)/trips')}
                   />
                 </View>

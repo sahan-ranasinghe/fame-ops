@@ -8,6 +8,7 @@
 //     them for that push (_shared/fleet/stopChanges.ts): by our place, else the Google place, else type + name, because
 //     the office's stop edit replaces the rows (new ids) rather than editing them.
 
+import { keyExists } from '../i18n/keys';
 import type { TaskStop, TaskWithStops, Vehicle } from './types';
 
 /** The app's t() (useApp): a key and its {placeholders}. */
@@ -79,8 +80,7 @@ export function vehicleLine(task: VehicleOf, vehicles: readonly Vehicle[]): Vehi
 /** The word for a vehicle type in the driver's language (vehicleType.*); a type the strings do not know reads "vehicle". */
 export function typeWord(t: Translate, type: string): string {
   const key = `vehicleType.${type}`;
-  const word = t(key);
-  return word !== key ? word : t('vehicleType.other');
+  return keyExists(key) ? t(key) : t('vehicleType.other');
 }
 
 /** "Your vehicle on the day", "Any van", or null when the task names its vehicle (the plate is shown). */

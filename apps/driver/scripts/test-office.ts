@@ -111,7 +111,7 @@ async function main() {
   check(same(homeSections(PRESETS.fleet_admin.permissions), ['requests', 'needs_driver', 'critical', 'tasks', 'road', 'trips']), 'fleet admin Home: every section', homeSections(PRESETS.fleet_admin.permissions));
   check(same(homeSections(PRESETS.dispatcher.permissions), ['needs_driver', 'tasks', 'road', 'trips']), 'dispatcher Home: needs a driver, tasks, road, trips');
   check(same(homeSections(PRESETS.requester.permissions), ['road', 'trips']) && same(homeSections(PRESETS.viewer.permissions), ['road']), 'requester and viewer Home');
-  check(same(homeChips(PRESETS.fleet_admin.permissions), ['road', 'free', 'waiting', 'garage']) && same(homeChips(PRESETS.dispatcher.permissions), ['road', 'free']), 'the header chips');
+  check(same(homeChips(PRESETS.fleet_admin.permissions), ['road', 'free', 'garage']) && same(homeChips(PRESETS.dispatcher.permissions), ['road', 'free']), 'the header tiles (21 October 2026: no waiting for OK; the Requests card shows it)');
   const ad = PRESETS.fleet_admin.permissions, rq = PRESETS.requester.permissions, vw = PRESETS.viewer.permissions;
   const U = '0f1e2d3c-4b5a-4968-8777-665544332211';
   check(routeForUrl(`/requests/${U}/decide`, ad) === `/office/request/${U}`, 'a request to decide → Approve (approve)');

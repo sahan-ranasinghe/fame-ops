@@ -932,7 +932,11 @@
       "snooze_tomorrow": "Tomorrow 07:00",
       "snooze_week": "A week from now",
       "snoozedLine": "Snoozed: {title}",
-      "undoFailed": "Not undone. Check the connection."
+      "undoFailed": "Not undone. Check the connection.",
+      "tileRoad": "On the road",
+      "tileFree": "Free",
+      "tileGarage": "In garage",
+      "remindersRow": "{n} reminders"
     },
     "status": {
       "assigned": "sent",
@@ -2712,6 +2716,50 @@
       "reopened": "Task reopened · the driver finishes it again",
       "driverGiven": "Task sent to {name}",
       "docSaved": "Document saved"
+    },
+    "line": {
+      "sent": "Sent · not opened yet",
+      "seen": "Seen by driver {time}",
+      "accepted": "Accepted {time}",
+      "custodian": "Driven by {name} (no app)",
+      "startedSharing": "Started {time} · sharing location",
+      "startedNotSharing": "Started {time} · not sharing location",
+      "startedOld": "Started {time} · location {age} old",
+      "done": "Done {time} · {km} km logged",
+      "declined": "Declined · {reason}",
+      "declinedAfter": "Declined after accepting · {reason}",
+      "cancelled": "Cancelled",
+      "cancelledWhy": "Cancelled · {why}",
+      "reason_vehicle_problem": "Vehicle problem",
+      "reason_not_available": "Not available",
+      "reason_unwell": "Unwell",
+      "reason_other": "Other"
+    },
+    "chip": {
+      "sent": "Sent",
+      "seen": "Seen",
+      "accepted": "Accepted",
+      "underWay": "Under way",
+      "late": "Late {min} min",
+      "done": "Done",
+      "needsDriver": "Needs driver",
+      "selfDrive": "Self-drive",
+      "waiting": "Waiting",
+      "approved": "Approved",
+      "declined": "Declined",
+      "cancelled": "Cancelled",
+      "missed": "Missed",
+      "changed": "Changed",
+      "onTheWay": "On the way",
+      "arrived": "Arrived",
+      "open": "Open",
+      "inProgress": "Taken",
+      "resolved": "Resolved",
+      "dismissed": "Dismissed",
+      "free": "Free",
+      "busy": "Busy",
+      "off": "Off duty",
+      "onDuty": "On duty"
     }
   },
   "patterns": {

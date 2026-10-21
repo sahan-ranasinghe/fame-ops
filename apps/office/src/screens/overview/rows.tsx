@@ -6,7 +6,7 @@ import type { NeedsDriverTask, RequestCard } from "../../data/types";
 import { joinDots } from "../../lib/format";
 import { Pill } from "../../ui/basics";
 import { LATE_BADGE, proposalLine } from "../approvalLogic";
-import { liveTone } from "../myTripsLogic";
+import { liveTone, liveWord } from "../myTripsLogic";
 import { bestLine, findDriverPath, whenTone } from "../needsDriverLogic";
 import type { TripRow } from "./overviewLogic";
 
@@ -57,8 +57,9 @@ export function TripLine({ r }: { r: TripRow }) {
       <span className="grow">
         <span className="name">{r.title}</span>
         {r.sub && <span className="sub" style={{ display: "block" }}>{r.sub}</span>}
+        <span className="sub" style={{ display: "block" }}>{r.live.text}</span>
       </span>
-      <Pill tone={liveTone(r.live.state)}>{r.live.text}</Pill>
+      <Pill tone={liveTone(r.live.state)}>{liveWord(r.live.state)}</Pill>
     </Link>
   );
 }

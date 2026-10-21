@@ -6,6 +6,7 @@
 // pull to refresh. A row opens the task (/office/task/[id]). Reached from the Tasks tab's History button, and from More
 // for a person whose bar has no Tasks tab. The rules: office/taskHistoryLogic.ts.
 
+import { taskStatusChip } from '@/office/statusWords';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
@@ -23,7 +24,7 @@ import {
 } from '@/office/taskHistoryLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { DriversList, FleetError, TaskHistory, VehiclesList } from '@/office/types';
-import { BackHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { BackHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -109,7 +110,7 @@ export default function TaskHistoryScreen() {
                     title={x.title}
                     line={[x.driver, x.vehicle, routeText(x, t)].filter(Boolean).join(' · ')}
                     line2={rowSub(x, t) || undefined}
-                    right={<Pill text={key ? t(key) : x.status} tone={historyTone(x.status)} size={13} />}
+                    chip={{ text: key ? t(key) : t(`office.chip.${taskStatusChip(x.status)}`), tone: historyTone(x.status) }}
                     onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: x.id } })}
                   />
                 </View>

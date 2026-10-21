@@ -16,7 +16,7 @@ import { requestLine, requestTitle } from '@/office/homeLogic';
 import { appendRequests, arrivals, requestsArgs, requestsChoice, requestsFilterDefs, statusTone, withArrivals } from '@/office/requestsLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, RequestCard, RequestsList } from '@/office/types';
-import { Avatar, DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { Avatar, DarkHeader, Divider, ListFailed, Row, Screen, Section, StatusChip } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors, shadow } from '@/theme';
 
@@ -127,8 +127,8 @@ export default function ApproveTab() {
                     line={requestLine(r)}
                     line2={reviewing ? t('office.approve.reviewing', { name: reviewing }) : r.late ? t('office.approve.late') : undefined}
                     right={<View style={{ alignItems: 'flex-end', gap: 4 }}>
-                      {marked.has(r.id) && <Pill text={t('office.approve.newPill')} tone="blue" />}
-                      <Pill text={t(`office.requests.status_${r.status}`)} tone={statusTone(r.status)} />
+                      {marked.has(r.id) && <StatusChip text={t('office.approve.newPill')} tone="blue" />}
+                      <StatusChip text={t(`office.requests.status_${r.status}`)} tone={statusTone(r.status)} />
                       {r.asked ? <Txt variant="small" style={{ maxWidth: 100, textAlign: 'right' }} numberOfLines={1}>{r.asked}</Txt> : null}
                     </View>}
                     onPress={() => router.push({ pathname: '/office/request/[id]', params: { id: r.id } })}

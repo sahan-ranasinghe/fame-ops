@@ -14,15 +14,15 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { DayStrip } from '@/components/patterns/Calendar';
 import { Clock } from '@/components/icons';
 import { ListEmpty, LoadMore, SkeletonRows } from '@/components/patterns/ListState';
-import { Button, Mono, Txt } from '@/components/ui';
+import { Button, Txt } from '@/components/ui';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { colomboDate } from '@/lib/time';
-import { boardLine, boardPill } from '@/office/homeLogic';
 import { has } from '@/office/nav';
 import { useOffice, useTool } from '@/office/state';
 import { addColumnPage, BOARD_LIMIT, type BoardColumn, columnArgs, type ColumnMore, columnView } from '@/office/taskHistoryLogic';
 import type { Board, BoardCard, FleetError } from '@/office/types';
-import { DarkHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { chipText, sentenceText, taskChip } from '@/office/statusWords';
+import { DarkHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -59,26 +59,24 @@ export default function TasksTab() {
     }
   }
 
-  const rowOf = (c: BoardCard) => {
-    const pill = boardPill(c);
-    return (
-      <Row
-        key={c.id}
-        left={<Mono size={16} bold style={{ width: 52 }}>{c.time}</Mono>}
-        title={c.title}
-        line={boardLine(c)}
-        line2={c.late_report?.text}
-        right={<Pill text={pill.key === 'late' ? t('office.status.late', { min: pill.min ?? 0 }) : t(`office.status.${pill.key}`)} tone={pill.tone} />}
-        onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: c.id } })}
-      />
-    );
-  };
+  // The one list row (Gmail's list): the time, the title on one line, "driver · the status in words", a short chip.
+  const rowOf = (c: BoardCard, column: BoardColumn) => (
+    <Row
+      key={c.id}
+      time={c.time}
+      title={c.title}
+      line={[c.driver, sentenceText(t, c.status)].filter(Boolean).join(' · ')}
+      line2={c.late_report?.text}
+      chip={(() => { const k = taskChip(column, c); return { text: chipText(t, k), tone: k.tone }; })()}
+      onPress={() => router.push({ pathname: '/office/task/[id]', params: { id: c.id } })}
+    />
+  );
   const list = (column: BoardColumn, empty: string) => {
     if (!b) return null;
     const v = columnView(b, column, more[column]);
     return (
       <>
-        {v.cards.length === 0 ? <ListEmpty text={empty} /> : v.cards.map((c, i) => <View key={c.id}>{i > 0 && <Divider />}{rowOf(c)}</View>)}
+        {v.cards.length === 0 ? <ListEmpty text={empty} /> : v.cards.map((c, i) => <View key={c.id}>{i > 0 && <Divider />}{rowOf(c, column)}</View>)}
         {(v.next || paging.failed === column) && (
           <View style={{ gap: 10, paddingTop: 12 }}>
             {paging.failed === column && paging.error && <ListFailed error={paging.error} onRetry={() => v.next && void loadMore(column, v.next)} onSignIn={() => void signOut()} />}
@@ -139,10 +137,10 @@ export default function TasksTab() {
               <View key={w.request_id}>
                 {i > 0 && <Divider />}
                 <Row
-                  left={<Mono size={16} bold style={{ width: 52 }}>{w.time}</Mono>}
+                  time={w.time}
                   title={w.title}
                   line={[w.driver, w.vehicle || w.vehicle_text, w.status].filter(Boolean).join(' · ')}
-                  right={<Pill text={t('office.status.waiting')} tone={w.late ? 'red' : 'amber'} />}
+                  chip={{ text: t('office.chip.waiting'), tone: w.late ? 'red' : 'amber' }}
                   onPress={canApprove ? () => router.push({ pathname: '/office/request/[id]', params: { id: w.request_id } }) : undefined}
                 />
               </View>

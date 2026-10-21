@@ -206,7 +206,7 @@ export default function GiveDriverScreen() {
                   onPress={() => setPicked(d.username ?? '')}
                   disabled={!d.username || declined}
                   disabledReason={declined ? t('office.give.declinedThis', { why: task.needs_driver?.reason_text ?? '' }) : d.username ? undefined : t('office.ask.noAccount')}
-                  leading={<Avatar name={d.name} size={44} />}
+                  leading={<Avatar name={d.name} size={44} photo={d.photo_url} />}
                   mark="end"
                   trailing={pillKey && pillKey !== 'best' ? <Pill text={t(`office.give.${pillKey}`)} tone={pillKey === 'declined' || pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted'} /> : null}
                   accessibilityLabel={d.name}

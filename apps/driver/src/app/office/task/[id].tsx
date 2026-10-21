@@ -202,7 +202,7 @@ export default function TaskDetailScreen() {
         {task && (task.driver || task.vehicle || task.vehicle_text) && (
           <View style={styles.card}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              {task.driver ? <Avatar name={task.driver} size={52} /> : null}
+              {task.driver ? <Avatar name={task.driver} size={52} photo={task.driver_photo_url} /> : null}
               <View style={{ flex: 1, gap: 4 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <Txt variant="strong" size={18}>{task.driver ?? t('office.task.noDriver')}</Txt>

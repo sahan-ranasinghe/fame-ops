@@ -25,7 +25,7 @@ import {
 import { useOffice, useTool } from '@/office/state';
 import { has } from '@/office/nav';
 import type { FleetError, Issue, IssuesList, VehiclesList } from '@/office/types';
-import { Chip, DarkHeader, Divider, ListFailed, Pill, Screen, Section, type Tone } from '@/office/ui';
+import { Chip, DarkHeader, Divider, ListFailed, Screen, Section, StatusChip, type Tone } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -125,8 +125,8 @@ export default function IssuesScreen() {
           )}
         </View>
         <View style={{ alignItems: 'flex-end', gap: 6 }}>
-          <Pill text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} size={13} />
-          <Pill text={t(`office.issues.status.${i.status}`)} tone={statusTone(i.status)} size={13} />
+          <StatusChip text={t(`office.issues.severity.${i.severity}`)} tone={severityTone(i.severity)} />
+          <StatusChip text={t(`office.issues.status.${i.status}`)} tone={statusTone(i.status)} />
         </View>
       </Pressable>
     );

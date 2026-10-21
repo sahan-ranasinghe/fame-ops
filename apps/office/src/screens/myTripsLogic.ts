@@ -63,6 +63,15 @@ export function tripsArgs(from: string, to: string, status: TripStatus, show?: T
   };
 }
 
+/** A live state as one short word for its chip (Gmail's label; the full sentence goes on the line under the title). */
+const LIVE_WORD: Record<string, string> = {
+  waiting: "Waiting", approved: "Approved", accepted: "Accepted", sent: "Sent", on_the_way: "On the way", arrived: "Arrived",
+  completed: "Done", declined: "Declined", cancelled: "Cancelled", missed: "Missed", changed: "Changed",
+};
+export function liveWord(state: string | undefined): string {
+  return LIVE_WORD[state ?? ""] ?? "Waiting";
+}
+
 /** The pill's colour for a live state: waiting amber, approved and accepted green, moving blue, done grey, declined red. */
 export function liveTone(state: TripLive["state"] | undefined): Tone {
   switch (state) {

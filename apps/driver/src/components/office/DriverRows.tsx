@@ -9,7 +9,7 @@ import { Txt } from '@/components/ui';
 import { driverParts, driverPill, rankedDrivers } from '@/office/approveLogic';
 import type { Availability, AvailableDriver } from '@/office/types';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
-import { Avatar, ListFailed, Pill } from '@/office/ui';
+import { Avatar, ListFailed, Pill, StatusChip } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -55,9 +55,9 @@ export function DriverRows({ data, loading, error, picked, onPick, onRetry, onSi
             onPress={() => onPick(x)}
             disabled={!x.username}
             disabledReason={x.username ? undefined : t('office.ask.noAccount')}
-            leading={<Avatar name={x.name} size={48} />}
+            leading={<Avatar name={x.name} size={48} photo={x.photo_url} />}
             mark="end"
-            trailing={pillKey && pillKey !== 'best' ? <Pill text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted'} /> : null}
+            trailing={pillKey && pillKey !== 'best' ? <StatusChip text={t(`office.request.${pillKey}`)} tone={pillKey === 'not_available' ? 'red' : pillKey === 'busy' ? 'blue' : 'muted'} /> : null}
             accessibilityLabel={x.name}
             testID={`driver-row-${x.username ?? x.name}`}
           >

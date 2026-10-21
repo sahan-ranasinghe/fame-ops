@@ -14,6 +14,7 @@
 //     a decline after accepting); never on a trip the driver started.
 // It works offline from the copy on the phone (the tasks and the contacts are kept), and says so.
 
+import { keyExists } from '@/i18n/keys';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -99,7 +100,7 @@ export function TaskPreview({ task }: { task: TaskWithStops }) {
   const leave = leaveTime(task);
   const mark = (field: ChangeField) => changes.fields.includes(field);
   // "Back by 12:00" once the strings have it (preview.backBy); a changed end time is marked with it.
-  const backBy = task.end_by && t('preview.backBy') !== 'preview.backBy' ? t('preview.backBy', { time: colomboTime(task.end_by) }) : null;
+  const backBy = task.end_by && keyExists('preview.backBy') ? t('preview.backBy', { time: colomboTime(task.end_by) }) : null;
   const start = () => router.push({ pathname: '/log-mileage', params: { mode: 'start', taskId: task.id, from: 'task' } });
 
   return (

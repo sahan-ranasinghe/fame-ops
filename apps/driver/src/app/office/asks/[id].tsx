@@ -60,7 +60,7 @@ export default function AskScreen() {
                   <View key={`${r.username ?? r.name}-${i}`}>
                     {i > 0 && <Divider />}
                     <View style={styles.row} testID="ask-answer">
-                      <Avatar name={r.name} size={40} />
+                      <Avatar name={r.name} size={40} photo={r.photo_url} />
                       <View style={{ flex: 1, gap: 4 }}>
                         <Txt variant="strong">{r.name}</Txt>
                         <View style={{ flexDirection: 'row' }}><Pill text={answerLabel(a, t)} tone={a.tone === 'green' ? 'green' : a.tone === 'red' ? 'red' : a.tone === 'amber' ? 'amber' : a.tone === 'blue' ? 'blue' : 'muted'} /></View>

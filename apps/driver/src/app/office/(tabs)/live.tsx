@@ -52,7 +52,7 @@ import type { DriverRoute, FleetError, LiveDriver, LiveDrivers } from '@/office/
 import { FilterBar } from '@/components/patterns/FilterBar';
 import { ListEmpty, SkeletonRows } from '@/components/patterns/ListState';
 import type { FilterValues } from '@/lib/patterns/filterLogic';
-import { Divider, ErrorNotice, ListFailed, Pill, useWebThemeColor } from '@/office/ui';
+import { Divider, ErrorNotice, ListFailed, Pill, StatusChip, useWebThemeColor } from '@/office/ui';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { SavedNotice } from '@/components/office/SavedNotice';
 import { useApp } from '@/state/app';
@@ -315,7 +315,7 @@ function DriverRow({ d, selected, onPress }: { d: LiveDriver; selected: boolean;
         </View>
         <Txt variant="muted" size={15} numberOfLines={2}>{rowLine(d, t)}</Txt>
       </View>
-      <Pill text={t(`office.live.pill.${pill.key}`)} tone={pill.tone} />
+      <StatusChip text={t(`office.live.pill.${pill.key}`)} tone={pill.tone} />
     </Pressable>
   );
 }

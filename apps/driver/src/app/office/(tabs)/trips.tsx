@@ -6,6 +6,7 @@
 // request (the reasons sheet → cancel_request, then the list is read again). Edit is round O2 and is not shown. A row
 // opens the request's page only for an approver (a requester's own request page comes later).
 
+import { tripChip } from '@/office/statusWords';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, StyleSheet, View } from 'react-native';
@@ -25,7 +26,7 @@ import {
   WITHDRAW_REASONS, type WithdrawReason, withdrawReason,
 } from '@/office/tripsLogic';
 import type { FleetError, MyTrips, RequestCard } from '@/office/types';
-import { DarkHeader, ErrorNotice, ListFailed, Pill, Screen } from '@/office/ui';
+import { DarkHeader, ErrorNotice, ListFailed, Screen, StatusChip } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -83,7 +84,7 @@ export default function TripsTab() {
       <View style={styles.card}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
           <Txt variant="strong" size={17} style={{ flex: 1 }}>{tripTitle(trip)}</Txt>
-          <Pill text={live.text} tone={statusTone(live.state)} />
+          {(() => { const k = tripChip(live.state); return <StatusChip text={t(`office.chip.${k.key}`)} tone={k.tone} />; })()}
         </View>
         <Txt variant="muted" size={15}>{tripLine(trip, t('office.trips.backBy'))}</Txt>
         {changed ? <Txt variant="strong" size={14} color={colors.amberText}>{changed}</Txt> : null}

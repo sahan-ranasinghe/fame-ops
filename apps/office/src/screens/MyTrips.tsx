@@ -33,7 +33,7 @@ import {
   isCreatedTask,
   isRequestTrip,
   liveOf,
-  liveTone,
+  liveTone, liveWord,
   officePhoneOf,
   personPhone,
   TRIP_SHOW_OPTIONS,
@@ -72,7 +72,8 @@ function StatusCell({ q }: { q: RequestCard }) {
   const approver = q.approved_by && !q.cancelled_by && !q.declined_by ? personPhone(q.approved_by) : null;
   return (
     <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
-      <Pill tone={liveTone(live.state)}><span data-testid="trip-live">{live.text}</span></Pill>
+      <Pill tone={liveTone(live.state)}>{liveWord(live.state)}</Pill>
+          <span className="sub" data-testid="trip-live">{live.text}</span>
       {lines.map((l) => <div key={l} className="sub" data-testid="trip-decision">{l}</div>)}
       {approver && <Inside><ContactButtons phone={approver} label="Call fleet admin" testId="call-approver" /></Inside>}
     </div>
@@ -125,7 +126,8 @@ function CreatedTaskRow({ t }: { t: CreatedTaskCard }) {
       </td>
       <td data-label="Status">
         <div style={{ display: "grid", gap: 6, justifyItems: "start" }}>
-          <Pill tone={liveTone(live.state)}><span data-testid="trip-live">{live.text}</span></Pill>
+          <Pill tone={liveTone(live.state)}>{liveWord(live.state)}</Pill>
+          <span className="sub" data-testid="trip-live">{live.text}</span>
           {t.approved_by && <div className="sub" data-testid="trip-decision">{decisionLines({ approved_by: t.approved_by })[0]}</div>}
         </div>
       </td>

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui';
 import { activePill, appendUsers, permissionWords, SEARCH_DEBOUNCE_MS, userLine, usersArgs } from '@/office/peopleLogic';
 import { useOffice, useTool } from '@/office/state';
 import type { FleetError, OfficeUser, OfficeUsers } from '@/office/types';
-import { Avatar, BackHeader, Divider, ListFailed, Pill, Row, Screen, Section } from '@/office/ui';
+import { Avatar, BackHeader, Divider, ListFailed, Row, Screen, Section } from '@/office/ui';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -57,7 +57,7 @@ export default function OfficeUsersPeople() {
         title={u.name}
         line={userLine(u)}
         line2={permissionWords(u.permissions, permWord)}
-        right={<Pill text={t(`office.people.${pill.key}`)} tone={pill.tone} size={13} />}
+        chip={{ text: t(`office.people.${pill.key}`), tone: pill.tone }}
         onPress={() => u.email && router.push({ pathname: '/office/people/user/[email]', params: { email: u.email } })}
       />
     );

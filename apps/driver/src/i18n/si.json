@@ -932,7 +932,11 @@
       "snooze_tomorrow": "හෙට 07:00",
       "snooze_week": "සතියකින්",
       "snoozedLine": "කල් දැම්මා: {title}",
-      "undoFailed": "අවලංගු වුණේ නැහැ. සම්බන්ධතාවය බලන්න."
+      "undoFailed": "අවලංගු වුණේ නැහැ. සම්බන්ධතාවය බලන්න.",
+      "tileRoad": "මඟ",
+      "tileFree": "නිදහස්",
+      "tileGarage": "ගරාජයේ",
+      "remindersRow": "සිහිකැඳවීම් {n}"
     },
     "status": {
       "assigned": "යවා ඇත",
@@ -2712,6 +2716,50 @@
       "reopened": "කාර්යය නැවත විවෘත කළා · රියදුරු එය නැවත අවසන් කරයි",
       "driverGiven": "{name} වෙත කාර්යය යැව්වා",
       "docSaved": "ලේඛනය සුරැකුණා"
+    },
+    "line": {
+      "sent": "යැව්වා · තවම විවෘත කර නැහැ",
+      "seen": "රියදුරු {time}ට දුටුවා",
+      "accepted": "{time}ට පිළිගත්තා",
+      "custodian": "{name} පදවයි (යෙදුම නැහැ)",
+      "startedSharing": "{time}ට ආරම්භ කළා · ස්ථානය බෙදා ගනී",
+      "startedNotSharing": "{time}ට ආරම්භ කළා · ස්ථානය බෙදා නොගනී",
+      "startedOld": "{time}ට ආරම්භ කළා · ස්ථානය {age} පැරණියි",
+      "done": "{time}ට අවසන් · කි.මී. {km} සටහන් කළා",
+      "declined": "ප්‍රතික්ෂේප කළා · {reason}",
+      "declinedAfter": "පිළිගෙන පසුව ප්‍රතික්ෂේප කළා · {reason}",
+      "cancelled": "අවලංගු කළා",
+      "cancelledWhy": "අවලංගු කළා · {why}",
+      "reason_vehicle_problem": "වාහන ගැටලුවක්",
+      "reason_not_available": "නොමැත",
+      "reason_unwell": "අසනීපයි",
+      "reason_other": "වෙනත්"
+    },
+    "chip": {
+      "sent": "යැව්වා",
+      "seen": "දුටුවා",
+      "accepted": "පිළිගත්තා",
+      "underWay": "ගමනේ",
+      "late": "ප්‍රමාද මි. {min}",
+      "done": "අවසන්",
+      "needsDriver": "රියදුරු නැහැ",
+      "selfDrive": "ස්වයං",
+      "waiting": "රැඳී ඇත",
+      "approved": "අනුමතයි",
+      "declined": "ප්‍රතික්ෂේපයි",
+      "cancelled": "අවලංගුයි",
+      "missed": "මඟ හැරුණා",
+      "changed": "වෙනස් විය",
+      "onTheWay": "මඟ",
+      "arrived": "පැමිණියා",
+      "open": "විවෘත",
+      "inProgress": "භාරගත්",
+      "resolved": "විසඳුණා",
+      "dismissed": "ඉවත් කළා",
+      "free": "නිදහස්",
+      "busy": "කාර්යබහුල",
+      "off": "සේවයෙන් පිට",
+      "onDuty": "සේවයේ"
     }
   },
   "patterns": {

@@ -73,11 +73,12 @@ export const homeSections = (permissions: readonly string[]): HomeSection[] =>
   HOME_SECTIONS.filter((s) => has(permissions, ...s.need)).map((s) => s.key);
 
 /** Home's header chips (design 03, 04): on the road and free for everyone; waiting for OK with approve; in garage with vehicles or issues. */
-export type HomeChip = 'road' | 'free' | 'waiting' | 'garage';
+export type HomeChip = 'road' | 'free' | 'garage';
 
+/** Home's header tiles (21 October 2026): on the road and free for everyone; in garage with vehicles or issues. "Waiting
+ *  for OK" is the Requests to approve card, not a tile. */
 export function homeChips(permissions: readonly string[]): HomeChip[] {
   const chips: HomeChip[] = ['road', 'free'];
-  if (has(permissions, 'approve')) chips.push('waiting');
   if (has(permissions, 'vehicles', 'issues')) chips.push('garage');
   return chips;
 }

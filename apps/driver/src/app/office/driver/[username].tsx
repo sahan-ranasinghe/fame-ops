@@ -102,7 +102,7 @@ export default function DriverPage() {
         {d && (
           <View style={styles.card}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Avatar name={d.name} size={56} />
+              <Avatar name={d.name} size={56} photo={d.photo_url} />
               <View style={{ flex: 1, gap: 4 }}>
                 <Txt variant="big" numberOfLines={1}>{d.name}</Txt>
                 {d.phone_display ? <Mono size={15} color={colors.muted}>{d.phone_display}</Mono> : null}

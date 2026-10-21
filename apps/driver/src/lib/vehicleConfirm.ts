@@ -14,6 +14,7 @@
 //     wrong type, the office's vehicle set meanwhile) for the office, so the start and the readings behind it are kept.
 //     Only a task no longer theirs is refused (not_yours).
 
+import { keyExists } from '../i18n/keys';
 import type { Op } from '../sync/engine';
 import { typeWord, vehicleMode, type Translate } from './taskPreview';
 import type { TaskWithStops } from './types';
@@ -68,7 +69,7 @@ export function candidates<V extends VehicleOf>(task: TaskOf, list: readonly V[]
  * is the server's word.
  */
 export function refusalWords(t: Translate, answer: string, plate: string, type: string | null): string {
-  const has = (key: string) => t(key) !== key;
+  const has = (key: string) => keyExists(key);
   switch (answer) {
     case 'wrong_type':
       return t('vehicleConfirm.wrongType', { plate, type: typeWord(t, type ?? 'other') });
