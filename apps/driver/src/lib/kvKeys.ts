@@ -39,8 +39,12 @@ export const KEYS = {
   /** Those gaps, the last 7 days (lib/phoneSetup.ts), and when the driver last tapped Done on Me → Phone setup (same key as the old card's Done). */
   phoneGaps: 'phone.gaps',
   phoneSetupDoneAt: 'phone.setupDoneAt',
-  /** The stops the arrival nudge already spoke about (lib/arrival.ts). */
+  /** The stops whose time near them was recorded (auto_detected_at, lib/arrival.ts). */
   arrivalNudged: 'arrival.nudged',
+  /** Round 2b: the background arrival rule's count and the stops it notified about ({dwell, notified}, lib/arrival.ts). */
+  arrivalWatch: 'arrival.watch',
+  /** Round 2b: the stops whose Arrived the driver undid (the progress line then says "corrected"). */
+  arrivalUndone: 'arrival.undone',
   /** The watchdog: when it last restarted the location service (ms), and how often since the last heartbeat. */
   lastRestartAt: 'tracking.lastRestartAt',
   locationRestarts: 'tracking.locationRestarts',

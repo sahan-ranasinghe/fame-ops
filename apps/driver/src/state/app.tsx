@@ -33,6 +33,7 @@ import { type PushChanges, pushChanges, type SeenCopy, seenCopy, type TaskChange
 import { type ConfirmAnswer, refusalWords, refusedAnswer, taskVehicleOp, wantedType } from '@/lib/vehicleConfirm';
 import { type DutyEnded, onDutyEnded } from '@/lib/duty';
 import { type ArrivalFlag, canMarkDone, taskKmSoFar, withSwapReading } from '@/lib/dayRules';
+import { noteArrivalUndone } from '@/lib/stopCorrections';
 import { registerTrackingCheck, unregisterTrackingCheck } from '@/lib/backgroundTask';
 import { pushToken, registerPush, unregisterPush } from '@/lib/push';
 import { playSound } from '@/lib/sounds';
@@ -278,6 +279,8 @@ export interface AppValue {
   markStopDone: (stop: TaskStop) => void;
   /** Round 2: Undo after a slide: Arrived → back to pending; Left → back to arrived (queued after the slide's own write). */
   undoStopStep: (stop: TaskStop, step: 'arrived' | 'left') => void;
+  /** Round 2b: a stop driven past, confirmed at the next stop ("Yes, I was there"): Arrived and Left now, flagged as recorded. */
+  markStopPassed: (stop: TaskStop, record: { flag: ArrivalFlag; distanceM: number | null }) => void;
   skipStop: (stop: TaskStop, reason: SkipReason, note: string) => void;
   /** Accept a task (the server keeps the earliest time). */
   acceptTask: (task: TaskWithStops) => void;
@@ -1223,9 +1226,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // Round 2: the snackbar's Undo. The same queued write as the slide, after it in the queue (the order is kept), so offline
   // the two land in turn. How Arrived was marked (arrival_flag) stays on the server as recorded.
+  // Round 2b: an undone Arrived is remembered on the phone, so the stop marked again shows "corrected" (lib/stopCorrections.ts).
   const undoStopStep = useCallback((stop: TaskStop, step: 'arrived' | 'left') => {
-    if (step === 'arrived') patchStop(stop, { status: 'pending', arrived_at: null });
-    else patchStop(stop, { status: 'arrived', done_at: null });
+    if (step === 'arrived') {
+      noteArrivalUndone(stop.id);
+      patchStop(stop, { status: 'pending', arrived_at: null });
+    } else patchStop(stop, { status: 'arrived', done_at: null });
+  }, [patchStop]);
+
+  // Round 2b: "Did you stop at …?" → "Yes, I was there": the same two queued writes as the slides (Arrived, then Left),
+  // both with the phone's time now; how it was marked is the far-away Arrived's (the distance from the phone at the next stop).
+  const markStopPassed = useCallback((stop: TaskStop, record: { flag: ArrivalFlag; distanceM: number | null }) => {
+    const now = new Date().toISOString();
+    patchStop(stop, { status: 'arrived', arrived_at: now, arrival_flag: record.flag, arrival_distance_m: record.distanceM });
+    patchStop(stop, { status: 'done', done_at: now });
   }, [patchStop]);
 
   const skipStop = useCallback((stop: TaskStop, reason: SkipReason, note: string) => {
@@ -1760,7 +1774,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     booted, me, meFresh, language, t, tList, setLanguage,
     vehicles, vehicle, workVehicle, tasks, reports, sharing, tracking, gpsKm, live, queue, settings: shift, wifiOnly, setWifiOnly, waitingTasks, refreshing, offline, dataAvailable,
     gate, resolveGate, requireLocation,
-    signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, undoStopStep, skipStop,
+    signIn, signOut, refresh, sendNow, setSharing, checkTrackingNow, checkUpdate, registerPush, chooseVehicle, markSeen, markStopArrived, markStopDone, undoStopStep, markStopPassed, skipStop,
     dutySince, startWork, changeVehicle, finishWork, loadVehicleChoices, vehicleTaken, dismissVehicleTaken, dutyEnded, clearDutyEnded,
     acceptTask, declineTask, notice, clearNotice,
     startTask, completeTask, logOdometer, logFuel, sendReport,

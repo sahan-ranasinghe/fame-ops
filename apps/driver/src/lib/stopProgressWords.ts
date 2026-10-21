@@ -16,11 +16,16 @@ export interface ProgressWords {
   about: string | null;
 }
 
-export function progressWords(t: T, p: StopProgress | undefined): ProgressWords {
+/**
+ * `corrected` (Round 2b): the driver undid this stop's Arrived and marked it again (lib/stopCorrections.ts): "Arrived 10:52 ·
+ * corrected". Only while the stop is Arrived.
+ */
+export function progressWords(t: T, p: StopProgress | undefined, corrected = false): ProgressWords {
   if (!p) return { line: '', delta: null, about: null };
   const line = [
     p.planned_arrive ? t('task.progress.planned', { time: colomboTime(p.planned_arrive) }) : null,
     p.arrived ? t('task.progress.arrived', { time: colomboTime(p.arrived) }) : null,
+    p.arrived && corrected ? t('task.progress.corrected') : null,
     p.left ? t('task.progress.left', { time: colomboTime(p.left) }) : null,
   ].filter(Boolean).join(' · ');
   const kind = deltaKind(p.arrived ? p.arrive_delta_min : null);

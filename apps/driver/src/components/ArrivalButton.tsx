@@ -86,9 +86,28 @@ export function distanceText(t: (key: string, vars?: Vars) => string, meters: nu
  * Round 2: the slides with their Undo (a snackbar for 6 s). Arrived and Left are the same queued writes as before, with
  * the phone's own time; Undo queues the revert after them.
  */
-export function useStopSlides(): { arrive: (stop: TaskStop, made: ArrivalCheck) => void; leave: (stop: TaskStop) => void } {
-  const { t, markStopArrived, markStopDone, undoStopStep } = useApp();
+export function useStopSlides(): {
+  arrive: (stop: TaskStop, made: ArrivalCheck) => void;
+  leave: (stop: TaskStop) => void;
+  passed: (stop: TaskStop, made: ArrivalCheck) => void;
+} {
+  const { t, markStopArrived, markStopDone, markStopPassed, undoStopStep } = useApp();
   return {
+    // Round 2b: a stop driven past, "Yes, I was there" at the next stop: Arrived and Left at once (Undo reverts both).
+    passed: (stop, made) => {
+      markStopPassed(stop, arrivalRecord(made));
+      showSnackbar({
+        text: t('task.undoPassed', { stop: stop.place_name }),
+        action: {
+          label: t('task.undo'),
+          onPress: () => {
+            undoStopStep(stop, 'left');
+            undoStopStep(stop, 'arrived');
+          },
+        },
+        ms: SNACK_ACTION_MS,
+      });
+    },
     arrive: (stop, made) => {
       markStopArrived(stop, arrivalRecord(made));
       showSnackbar({

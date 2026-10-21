@@ -190,6 +190,7 @@
     "slideFinish": "අවසන් කිරීමට දකුණට අදින්න",
     "undo": "අහෝසි කරන්න",
     "undoArrived": "{stop} වෙත ළඟා විය",
+    "undoPassed": "{stop} ගිය බව සටහන් විය",
     "undoLeft": "{stop} වෙතින් පිටත් විය",
     "progress": {
       "planned": "සැලසුම {time}",
@@ -198,7 +199,8 @@
       "late": "මිනිත්තු {n} ප්‍රමාදයි",
       "early": "මිනිත්තු {n} කලින්",
       "onTime": "වේලාවට",
-      "about": "{time} ට පමණ"
+      "about": "{time} ට පමණ",
+      "corrected": "නිවැරදි කළා"
     }
   },
   "log": {
@@ -508,7 +510,7 @@
   },
   "arrival": {
     "title": "{stop} වෙත ළඟා වුණාද?",
-    "body": "ළඟා විය ලෙස සටහන් කිරීමට තට්ටු කරන්න"
+    "body": "තහවුරු කිරීමට විවෘත කරන්න"
   },
   "duty": {
     "startWork": "වැඩ ආරම්භ කරන්න",
@@ -2970,6 +2972,9 @@
   "geofence": {
     "arrivedTitle": "{stop} වෙත ළඟා වුණාද?",
     "doneTitle": "{stop} අවසන් ලෙස සලකුණු කරනවාද?",
-    "doneBody": "ඔබ දැන් {next} හි සිටී."
+    "doneBody": "ඔබ දැන් {next} හි සිටී.",
+    "passedTitle": "ඔබ {stop} හි නැවතුණාද?",
+    "passedYes": "ඔව්, මම එහි ගියා",
+    "passedSkip": "මඟ හරින්න"
   }
 }

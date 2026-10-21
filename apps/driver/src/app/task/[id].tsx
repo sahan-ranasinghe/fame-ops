@@ -27,6 +27,9 @@
 // of order) gets the same slides under its row, only when the phone is there or once it is Arrived. Each row shows its
 // progress ("Planned 10:30 · Arrived 10:52 · Left 11:40 · 22 min late", "about 12:10": lib/stopProgress.ts), and the
 // arrival card (components/GeofenceCard.tsx) asks after 60 s within 150 m.
+// Round 2b: the card also asks about a stop driven past ("Did you stop at …?": Yes, I was there / Skip it, the skip sheet);
+// a stop whose Arrived was undone and marked again reads "Arrived 10:52 · corrected"; while this screen is in front the
+// background arrival notification stays quiet for this task (lib/arrival.ts setTaskOnScreen).
 
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -58,6 +61,8 @@ import { canReportLate } from '@/lib/late';
 import { isMissed } from '@/lib/lists';
 import { colomboDate, colomboTime } from '@/lib/time';
 import { stopProgress } from '@/lib/stopProgress';
+import { setTaskOnScreen } from '@/lib/arrival';
+import { arrivalUndoneStops } from '@/lib/stopCorrections';
 import { canAddStop } from '@/lib/trips';
 import type { TaskStop, TaskWithStops } from '@/lib/types';
 import { useApp } from '@/state/app';
@@ -91,6 +96,12 @@ export default function TaskScreen() {
   useEffect(() => {
     if (found && id) loadTaskContacts(id, true);
   }, [found, id, loadTaskContacts]);
+  // Round 2b: the card is on screen for this task, so no notification doubles it.
+  useEffect(() => {
+    if (!running || !id) return;
+    setTaskOnScreen(id);
+    return () => setTaskOnScreen(null);
+  }, [running, id]);
 
   if (!app.me) return <Redirect href="/login" />;
 
@@ -162,6 +173,7 @@ export default function TaskScreen() {
   const progress = new Map(stopProgress(task.task_stops, new Date(here.now)).map((p) => [p.id, p]));
   const ordered = task.task_stops.filter((s) => s.status !== 'removed').sort((a, b) => a.seq - b.seq);
   const lastId = ordered[ordered.length - 1]?.id;
+  const undone = arrivalUndoneStops();
 
   // Complete task (and the last stop's "Slide to finish", which closes that stop on the way): open stops left = the
   // question first; then Log mileage.
@@ -239,7 +251,7 @@ export default function TaskScreen() {
         {running ? (
           <>
             <TrackingNotice />
-            <GeofenceCard task={task} here={here} />
+            <GeofenceCard task={task} here={here} onSkip={setSkipping} />
             <SwapCard task={task} />
             <View style={styles.stats}>
               <View style={{ flex: 1 }}>
@@ -293,7 +305,7 @@ export default function TaskScreen() {
                         <GoogleCredit show={!!item.google_place_id} />
                         {item.is_start && <Txt variant="small">{t('stop.start')}</Txt>}
                         {detail !== '' && <Txt variant="small">{detail}</Txt>}
-                        {item.status !== 'skipped' && <StopProgressLine progress={progress.get(item.id)} />}
+                        {item.status !== 'skipped' && <StopProgressLine progress={progress.get(item.id)} corrected={undone.includes(item.id)} />}
                         {item.note && <Txt variant="small" color={colors.amberText}>{item.note}</Txt>}
                       </View>
                       {done ? (

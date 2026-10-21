@@ -8,9 +8,9 @@ import { progressWords } from '@/lib/stopProgressWords';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
-export function StopProgressLine({ progress }: { progress: StopProgress | undefined }) {
+export function StopProgressLine({ progress, corrected = false }: { progress: StopProgress | undefined; corrected?: boolean }) {
   const { t } = useApp();
-  const words = progressWords(t, progress);
+  const words = progressWords(t, progress, corrected);
   if (words.line === '' && !words.delta && !words.about) return null;
   return (
     <Txt variant="small" testID={progress ? `progress-${progress.id}` : undefined}>

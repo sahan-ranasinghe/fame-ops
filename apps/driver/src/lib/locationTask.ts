@@ -81,9 +81,8 @@ TaskManager.defineTask<{ locations?: Location.LocationObject[] }>(LOCATION_TASK,
   const language = getJson<Language>(KEYS.language) ?? 'en';
   await armWatchdog(translate(language, 'tracking.stoppedTitle'), translate(language, 'tracking.stoppedBody'));
 
-  // Near the current stop? The arrival nudge (once per stop), from the newest position of the delivery.
-  const newest = locations.map(toPhoneFix).sort((a, b) => b.at - a.at)[0];
-  if (newest) await checkArrival(newest).catch(() => false);
+  // Near the current stop? The time near it on the stop, and after 60 s within 150 m one "Arrived at …?" per stop.
+  await checkArrival(locations.map(toPhoneFix)).catch(() => false);
 
   // The heartbeat loop's timers are frozen while the app is in the background (React Native runs JS timers only in
   // front or during a headless task), but positions keep coming here: the heartbeat goes from here too, once a minute.

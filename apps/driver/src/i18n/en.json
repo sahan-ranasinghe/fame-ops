@@ -190,6 +190,7 @@
     "slideFinish": "Slide to finish",
     "undo": "Undo",
     "undoArrived": "Arrived at {stop}",
+    "undoPassed": "{stop} marked as visited",
     "undoLeft": "Left {stop}",
     "progress": {
       "planned": "Planned {time}",
@@ -198,7 +199,8 @@
       "late": "{n} min late",
       "early": "{n} min early",
       "onTime": "on time",
-      "about": "about {time}"
+      "about": "about {time}",
+      "corrected": "corrected"
     }
   },
   "log": {
@@ -508,7 +510,7 @@
   },
   "arrival": {
     "title": "Arrived at {stop}?",
-    "body": "Tap to mark Arrived"
+    "body": "Open to confirm"
   },
   "duty": {
     "startWork": "Start work",
@@ -2970,6 +2972,9 @@
   "geofence": {
     "arrivedTitle": "Arrived at {stop}?",
     "doneTitle": "Mark {stop} as done?",
-    "doneBody": "You are at {next}."
+    "doneBody": "You are at {next}.",
+    "passedTitle": "Did you stop at {stop}?",
+    "passedYes": "Yes, I was there",
+    "passedSkip": "Skip it"
   }
 }
