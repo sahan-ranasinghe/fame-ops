@@ -103,6 +103,11 @@ export interface MapPlan {
   selected?: string | null;
 }
 
+/** The map's own colours where a CSS variable cannot reach (MapLibre's WebGL paint, Google's polylines, a marker's
+ * inline style string). The tiles are light in both themes, so these are the light theme's tokens in styles.css
+ * (--map-pin, --live, --accent, the white ring); DOM and SVG overlays use the CSS variables themselves. */
+export const MAP_CANVAS = { ink: "#15181c", line: "#1e4fa0", hole: "#8d9096", ring: "#ffffff", accent: "#f2a900" } as const;
+
 /** The estimated lines' colour: a quiet slate, dashed, so they never read as a driven line. */
 export const ESTIMATED_COLOR = "#5b6f94";
 

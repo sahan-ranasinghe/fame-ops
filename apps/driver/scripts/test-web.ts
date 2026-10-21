@@ -52,6 +52,9 @@ console.log('\nStep 5: installable, offline, web push (public/, office/browserPu
   check(manifest.icons.some((i) => i.purpose === 'maskable') && manifest.icons.every((i) => i.src.startsWith('/icons/')), 'the site\'s FF icons, one maskable');
   const html = readFileSync(join(pub, 'index.html'), 'utf8');
   check(html.includes('href="/m/manifest.webmanifest"') && html.includes('rel="icon"') && html.includes('apple-touch-icon') && html.includes('<div id="root">'), 'the page links the manifest, the favicon and the iPhone icon');
+  // Round 2b: light on purpose for now (no dark theme yet): the browser and Android's force dark never darken it.
+  const lightOnly = (page: string) => page.includes('<meta name="color-scheme" content="only light" />') && /:root \{[^}]*color-scheme: only light;/.test(page);
+  check(lightOnly(html) && lightOnly(readFileSync(join(pub, 'offline.html'), 'utf8')), 'the page and the offline page: color-scheme only light (meta and CSS)');
   const sw = readFileSync(join(pub, 'sw.js'), 'utf8');
   check(sw.includes('"/m/offline"') && !sw.includes('"/m/offline.html"') && /req\.mode !== "navigate"/.test(sw) && !/caches\.open\(CACHE\)\.then\(\(c\) => c\.addAll/.test(sw), 'the worker caches only the offline page, for pages opened with no connection');
   check(sw.includes('"/m/?from=" + encodeURIComponent(path)') && sw.includes('u.pathname.startsWith("/m/")'), 'a tap: an open mobile window is told, else /m/?from=<the link>');

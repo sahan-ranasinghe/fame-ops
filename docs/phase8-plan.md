@@ -1045,6 +1045,9 @@ suggestions, driver photos for the office and an office person's own photo in Of
 - Snapped routes in the app and /m/: don't store Google Roads results (policy restricts storage, and results can't be
   shown on non-Google maps). If wanted later: our own OSRM map matching on OpenStreetMap data, stored once per trip and
   shown on both maps.
+- Later: a proper dark theme for the app and /m/ (Office mode and the driver's side: dark tokens in `theme.ts`, every
+  screen checked dark as the site's are in `e2e/contrast.spec.ts`). Until then both stay light on purpose
+  (`docs/release-1.4.0.md` §6: force dark refused in the 1.4.0 build; /m/ says `color-scheme: only light`).
 
 ## 23. Step 5 deployed (21 October 2026, Sahan's three gos after CI run 39480596443 passed)
 

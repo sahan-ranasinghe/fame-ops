@@ -20,15 +20,15 @@ import { plainRuns } from "./DrawnMap";
 import { needsCentre, useGapOpen } from "./gapLogic";
 import { MapControls } from "./MapControls";
 import { planFitKey, planFor, planPoints } from "./planDraw";
-import { ESTIMATED_COLOR, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
+import { ESTIMATED_COLOR, MAP_CANVAS, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "./types";
 
 export const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
 const SRI_LANKA: [number, number] = [80.7, 7.8];
 
 /** The plan's connectors: thin, dashed, never read as a road (§20). */
-const PLAN_LINK_COLOR = "#15181c";
+const PLAN_LINK_COLOR = MAP_CANVAS.ink;
 /** A plan leg's own road line (openrouteservice's on this map), as Google's map draws its lines. */
-const PLAN_LINE_COLOR = "#15181c";
+const PLAN_LINE_COLOR = MAP_CANVAS.ink;
 
 interface Live {
   marker: maplibregl.Marker;
@@ -140,7 +140,7 @@ export default function MapLibreMap({
     m.on("load", () => {
       const empty = (): FeatureCollection => ({ type: "FeatureCollection", features: [] });
       m.addSource("trails", { type: "geojson", data: empty() });
-      m.addLayer({ id: "trails-line", type: "line", source: "trails", paint: { "line-color": "#1e4fa0", "line-width": 3, "line-opacity": 0.45 }, layout: { "line-join": "round", "line-cap": "round" } });
+      m.addLayer({ id: "trails-line", type: "line", source: "trails", paint: { "line-color": MAP_CANVAS.line, "line-width": 3, "line-opacity": 0.45 }, layout: { "line-join": "round", "line-cap": "round" } });
       // Part 6: a plan leg's own road line where this map may show it (openrouteservice's, never Google's: planFor).
       m.addSource("plan-lines", { type: "geojson", data: empty() });
       m.addLayer({
@@ -160,7 +160,7 @@ export default function MapLibreMap({
       });
       // The gaps (§21): dashed lines only; their words are on the gap markers, never on the map.
       m.addSource("holes", { type: "geojson", data: empty() });
-      m.addLayer({ id: "holes-line", type: "line", source: "holes", paint: { "line-color": "#8d9096", "line-width": 3, "line-dasharray": [2, 2] }, layout: { "line-cap": "round" } });
+      m.addLayer({ id: "holes-line", type: "line", source: "holes", paint: { "line-color": MAP_CANVAS.hole, "line-width": 3, "line-dasharray": [2, 2] }, layout: { "line-cap": "round" } });
       m.addSource("estimated", { type: "geojson", data: empty() });
       m.addLayer({ id: "estimated-line", type: "line", source: "estimated", paint: { "line-color": ESTIMATED_COLOR, "line-width": 3.5, "line-dasharray": [1, 2] }, layout: { "line-cap": "round", "line-join": "round" } });
       m.addSource("route", { type: "geojson", data: empty() });
@@ -176,7 +176,7 @@ export default function MapLibreMap({
         },
         layout: { "line-join": "round", "line-cap": "round" },
       });
-      m.addLayer({ id: "route-start", type: "circle", source: "route", filter: ["==", "$type", "Point"], paint: { "circle-radius": 7, "circle-color": "#ffffff", "circle-stroke-color": "#1e4fa0", "circle-stroke-width": 4 } });
+      m.addLayer({ id: "route-start", type: "circle", source: "route", filter: ["==", "$type", "Point"], paint: { "circle-radius": 7, "circle-color": MAP_CANVAS.ring, "circle-stroke-color": MAP_CANVAS.line, "circle-stroke-width": 4 } });
       setReady(true);
     });
     m.on("error", (e) => {

@@ -24,8 +24,8 @@ const W = 1000, H = 640;
 const FONT = "IBM Plex Sans, sans-serif";
 const MONO = "IBM Plex Mono, monospace";
 /** A gap marker's grey (§21) and the plan's pin colours. */
-const GAP_GREY = "#6b7077";
-const PIN_INK = "#15181c", PIN_LATE = "#b3261e";
+const GAP_GREY = "var(--map-gap)", PIN_RING = "var(--map-pin-ink)";
+const PIN_INK = "var(--map-pin)", PIN_LATE = "var(--map-pin-late)";
 
 /** The projection the artifact used: a box around every point (or the island), stretched to the SVG's shape, divided by the zoom. */
 export function projection(points: [number, number][], zoom: number) {
@@ -256,8 +256,8 @@ export default function DrawnMap({
               onMouseLeave={() => setHover((h) => (h === g.id ? null : h))}
             >
               {isOpen && <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="21" fill="var(--accent)" opacity=".4" />}
-              <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="14" fill={GAP_GREY} stroke="#ffffff" strokeWidth="3" />
-              <g transform={`translate(${(x - 9).toFixed(1)} ${(y - 9).toFixed(1)}) scale(0.75)`} fill="none" stroke="#ffffff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="14" fill={GAP_GREY} stroke={PIN_RING} strokeWidth="3" />
+              <g transform={`translate(${(x - 9).toFixed(1)} ${(y - 9).toFixed(1)}) scale(0.75)`} fill="none" stroke={PIN_RING} strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round">
                 {GAP_ICONS[g.kind].map((d) => <path key={d} d={d} />)}
               </g>
             </g>
@@ -282,8 +282,8 @@ export default function DrawnMap({
               onKeyDown={activate(() => onPin?.(p.id))}
             >
               {sel && <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="25" fill="var(--accent)" opacity=".5" />}
-              <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="16" fill={p.late ? PIN_LATE : PIN_INK} stroke="#ffffff" strokeWidth="3" />
-              <text x={x.toFixed(1)} y={(y + 5.5).toFixed(1)} textAnchor="middle" fontFamily={MONO} fontWeight="700" fontSize="15" fill="#ffffff">{String(p.n)}</text>
+              <circle cx={x.toFixed(1)} cy={y.toFixed(1)} r="16" fill={p.late ? PIN_LATE : PIN_INK} stroke={PIN_RING} strokeWidth="3" />
+              <text x={x.toFixed(1)} y={(y + 5.5).toFixed(1)} textAnchor="middle" fontFamily={MONO} fontWeight="700" fontSize="15" fill={PIN_RING}>{String(p.n)}</text>
               <rect x={(x + 23).toFixed(1)} y={(y - 14).toFixed(1)} width={w.toFixed(1)} height="28" rx="7" fill={sel ? "var(--accent)" : "var(--surface)"} stroke={p.late ? "var(--bad)" : "var(--line-strong)"} />
               <text x={(x + 33).toFixed(1)} y={(y + 5).toFixed(1)} fontFamily={FONT} fontWeight="600" fontSize="14" fill={sel ? "var(--accent-ink)" : p.late ? "var(--bad)" : "var(--ink)"}>{chip}</text>
             </g>

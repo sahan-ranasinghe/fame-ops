@@ -10,12 +10,18 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="theme-color" content="#15181c" />
+    <!-- Light on purpose for now (Round 2b, 21 October 2026): Office mode has no dark theme yet. "only light" tells the browser
+         (Chrome's auto dark mode, Samsung Internet, Android's force dark in a web view) never to darken it. -->
+    <meta name="color-scheme" content="only light" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Fame Fleet" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
+      :root {
+        color-scheme: only light;
+      }
       html,
       body {
         height: 100%;

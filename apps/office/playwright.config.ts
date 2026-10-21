@@ -38,10 +38,11 @@ export default defineConfig({
     timeout: 60_000,
   },
   projects: [
-    // A desktop: the full flows.
+    // A desktop: the full flows; also the contrast check at a desktop's width (e2e/contrast.spec.ts, light and dark).
     { name: "chromium", use: { browserName: "chromium" }, testIgnore: /(phone|mobile)\.spec\.ts/ },
-    // A phone (412 × 915, touch): the tab bar per role, pages and detail screens, drafts, the stops editor, pull to refresh.
-    { name: "phone", use: { browserName: "chromium", viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }, testMatch: /phone\.spec\.ts/ },
+    // A phone (412 × 915, touch): the tab bar per role, pages and detail screens, drafts, the stops editor, pull to refresh;
+    // the contrast check at a phone's width (the site's screens, light and dark).
+    { name: "phone", use: { browserName: "chromium", viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2 }, testMatch: /(phone|contrast)\.spec\.ts/ },
     // The mobile website (O4): an Android phone's browser on the same origin; the dev server serves the local mobile build
     // under /m/ (FLEET_MOBILE_DIR, made by scripts/test-office-local.sh).
     {
@@ -50,7 +51,8 @@ export default defineConfig({
         browserName: "chromium", viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true, deviceScaleFactor: 2,
         userAgent: "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
       },
-      testMatch: /mobile\.spec\.ts/,
+      // The contrast check of /m/ too (light only, on purpose for now).
+      testMatch: /(mobile|contrast)\.spec\.ts/,
     },
   ],
 });

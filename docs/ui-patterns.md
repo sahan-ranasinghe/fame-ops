@@ -245,6 +245,11 @@ A picked thing always looks picked, everywhere, the same way (Hotfix O2-H2, Part
     (the driver's time tiles) has a filled check circle in its corner.
 - **Never colour alone:** a picked state always has its mark (the check or the dot) as well as the tint; a dark fill with
   white words and no mark is not a picked state.
+- **Light and dark (the site, Round 2b):** every colour is a token in `apps/office/src/styles.css`'s token blocks (light, the
+  system's dark, `data-theme="dark"`); no hex in a rule or a component. Words on a filled colour use `var(--surface)`, a
+  toast the `--inverse-*` tokens, pins on the map the `--map-*` tokens (the tiles stay light). Checked by
+  `src/themeContrast.test.ts` (every pair 4.5 : 1 in both themes) and `e2e/contrast.spec.ts` (axe on every main screen,
+  light and dark). The app and /m/ are light only for now.
 - **Tap anywhere:** the whole row, card or chip is the control. A row that picks has no other button inside it while it
   picks (Ask drivers shows Use / Call only after the question is sent).
 - **Pick many keeps its count:** a list with multi-select says "N picked" in its header with "All free · None" beside it.

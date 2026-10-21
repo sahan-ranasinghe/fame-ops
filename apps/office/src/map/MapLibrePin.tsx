@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { compassShown } from "./controlsLogic";
 import { MapControls } from "./MapControls";
 import { STYLE_URL } from "./MapLibreMap";
+import { MAP_CANVAS } from "./types";
 
 export default function MapLibrePin({ lat, lng, onMove, onFail }: { lat: number; lng: number; onMove?: (lat: number, lng: number) => void; onFail?: () => void }) {
   const box = useRef<HTMLDivElement>(null);
@@ -30,7 +31,7 @@ export default function MapLibrePin({ lat, lng, onMove, onFail }: { lat: number;
     m.on("rotate", turned);
     m.on("pitch", turned);
     m.on("moveend", turned);
-    const mk = new maplibregl.Marker({ draggable: !!move.current, color: "#f2a900" }).setLngLat([lng, lat]).addTo(m);
+    const mk = new maplibregl.Marker({ draggable: !!move.current, color: MAP_CANVAS.accent }).setLngLat([lng, lat]).addTo(m);
     mk.on("dragend", () => {
       const p = mk.getLngLat();
       move.current?.(p.lat, p.lng);

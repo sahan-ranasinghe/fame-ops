@@ -90,7 +90,7 @@ export function FuelDetail() {
             src={pieces[piece]?.url ?? v.url}
             onLoadedMetadata={loaded}
             onEnded={() => { if (piece + 1 < pieces.length) setPiece(piece + 1); }}
-            style={{ width: "100%", maxHeight: 420, background: "#000", display: "block" }}
+            style={{ width: "100%", maxHeight: 420, background: "var(--media-bg)", display: "block" }}
             data-testid="fuel-video"
           />
           {v.marks && v.marks.length > 0 && (

@@ -31,7 +31,7 @@ export function MapControls({ onZoomIn, onZoomOut, compass, trails, onFit, fitLa
             return (
               <button key={k} type="button" className="compass" aria-label="Turn the map north up" title="North up" onClick={compass!.reset}>
                 <svg viewBox="0 0 24 24" aria-hidden="true" style={{ transform: `rotate(${-Math.round(compass!.bearing)}deg)` }}>
-                  <path d={COMPASS_NORTH} fill="#b3261e" />
+                  <path d={COMPASS_NORTH} fill="var(--bad)" />
                   <path d={COMPASS_SOUTH} fill="currentColor" opacity=".45" />
                 </svg>
               </button>

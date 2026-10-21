@@ -28,7 +28,7 @@ export default function GooglePin({ lat, lng, onMove, maps }: { lat: number; lng
     const cameraListeners = [m.addListener("heading_changed", turned), m.addListener("tilt_changed", turned)];
     const el = document.createElement("div");
     el.setAttribute("aria-label", "The pin");
-    el.style.cssText = "width:22px;height:22px;border-radius:50% 50% 50% 0;transform-origin:center;background:#f2a900;border:3px solid #15181c;" +
+    el.style.cssText = "width:22px;height:22px;border-radius:50% 50% 50% 0;transform-origin:center;background:var(--accent);border:3px solid var(--map-pin);" +
       "box-shadow:0 1px 4px rgba(0,0,0,.35);touch-action:none;" + (move.current ? "cursor:grab" : "");
     const mk = htmlMarker(maps, el, { lat, lng }, "bottom");
     mk.setMap(m);

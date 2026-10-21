@@ -15,7 +15,7 @@ import { plainRuns } from "../DrawnMap";
 import { needsCentre, useGapOpen } from "../gapLogic";
 import { MapControls } from "../MapControls";
 import { planFitKey, planFor, planPoints } from "../planDraw";
-import { ESTIMATED_COLOR, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "../types";
+import { ESTIMATED_COLOR, MAP_CANVAS, type MapProps, type MapRoute, moveDuration, poorStep, type RoutePoint, SPEED_COLORS } from "../types";
 import { attachMap, detachMap, fitTo, type GoogleMapsApi, type HtmlMarker, htmlMarker } from "./googleMaps";
 
 interface Live {
@@ -35,7 +35,7 @@ interface Placed {
 }
 
 /** Google's road line of a plan's leg (§20): solid, dark, under the pins. */
-const PLAN_LINE_COLOR = "#15181c";
+const PLAN_LINE_COLOR = MAP_CANVAS.ink;
 
 const ll = (p: RoutePoint): google.maps.LatLngLiteral => ({ lat: p.lat, lng: p.lng });
 
@@ -227,12 +227,12 @@ export default function GoogleMap({
     for (const r of runs(route.points, !!route.bySpeed)) {
       lines.push(new maps.Polyline({ map: m, path: r.path, strokeColor: r.color, strokeWeight: r.poor ? 2.5 : 5, strokeOpacity: r.poor ? 0.45 : 0.9, clickable: false }));
     }
-    for (const h of route.holes ?? []) lines.push(dashed(maps, m, [ll(h.from), ll(h.to)], "#8d9096", 3, 2, "10px"));
+    for (const h of route.holes ?? []) lines.push(dashed(maps, m, [ll(h.from), ll(h.to)], MAP_CANVAS.hole, 3, 2, "10px"));
     for (const e of route.estimated ?? []) {
       if (e.points.length > 1) lines.push(dashed(maps, m, e.points, ESTIMATED_COLOR, 3, 1.5, "8px"));
     }
     const start = document.createElement("div");
-    start.style.cssText = "width:14px;height:14px;border-radius:50%;background:#ffffff;border:4px solid #1e4fa0;pointer-events:none";
+    start.style.cssText = "width:14px;height:14px;border-radius:50%;background:var(--map-pin-ink);border:4px solid " + MAP_CANVAS.line + ";pointer-events:none";
     const startMark = htmlMarker(maps, start, ll(route.points[0]), "center");
     startMark.setMap(m);
     marks.push(startMark);
@@ -280,7 +280,7 @@ export default function GoogleMap({
     if (!m) return;
     trailLines.current.forEach((l) => l.setMap(null));
     trailLines.current = trails.filter((t) => t.points.length > 1).map((t) =>
-      new maps.Polyline({ map: m, path: t.points.map(ll), strokeColor: "#1e4fa0", strokeWeight: 3, strokeOpacity: 0.45, clickable: false })
+      new maps.Polyline({ map: m, path: t.points.map(ll), strokeColor: MAP_CANVAS.line, strokeWeight: 3, strokeOpacity: 0.45, clickable: false })
     );
   }, [trails, maps]);
 

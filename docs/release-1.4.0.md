@@ -74,7 +74,31 @@ crash). Do them together: `npx expo install --check`, then the full suite, `expo
 - **Check after the build:** a request to approve and a critical issue each sound their own tone, in both languages'
   channel names; the APK has all eight sounds.
 
-## 6. Anything else found so far
+## 6. Light only, also when the phone is dark (Round 2b, 21 October 2026)
+
+The app and /m/ are light on purpose for now (a proper dark theme is a later item: `docs/phase8-plan.md` §24).
+- **What a phone in dark mode does today (1.3.0, from the code):** `app.json` already has `"userInterfaceStyle": "light"`
+  and expo-system-ui is installed, so the prebuilt Android theme is the light one and React Native's `Appearance` always
+  answers light; nothing in the app reads `useColorScheme`, and every colour comes from `theme.ts`. So the system's own
+  dark theme does not change the app. What can still darken it is **force dark**: Android 10+ can recolour a light-themed
+  app's views when "Override force-dark" (developer options) is on, and OEM skins do it from their settings (ColorOS / realme
+  UI "Dark mode for third-party apps", MIUI / HyperOS "Dark mode for more apps", some Samsung and vivo builds). The light
+  framework themes allow it and our theme does not refuse it (no `android:forceDarkAllowed` in the generated `styles.xml`).
+  The result is the app half-inverted: dark cards with our dark ink text, recoloured amber buttons, photos untouched.
+  Not tested on a phone yet: check on the OPPO with Settings → Display → Dark mode → "Dark mode for third-party apps" on.
+- **The change for the 1.4.0 build (native: a config plugin, not now):** keep `userInterfaceStyle: "light"`, and add
+  `android:forceDarkAllowed="false"` to the app's theme (`AppTheme` in `styles.xml`) with a small config plugin
+  (`plugins/withLightOnly.js`: `withAndroidStyles`, sets the item on AppTheme; listed in `app.json` plugins). On the
+  build's targetSdk check that the attribute is still honoured (Android 16 reworked force dark); `npm run test:build`
+  gets a check that the prebuilt `styles.xml` carries it.
+- **/m/ (no build needed, done in Round 2b):** `public/index.html` and `offline.html` say
+  `<meta name="color-scheme" content="only light">` and `:root { color-scheme: only light }`, so Chrome's auto dark mode
+  and the browsers' forced dark leave the mobile website alone (`npm run test:web` checks both; the e2e
+  `contrast.spec.ts` checks the built page with the phone in dark).
+- **Check after the build:** the OPPO in dark mode with the third-party dark switch on: Today, a task, Log mileage and
+  Office mode look exactly as in light mode.
+
+## 7. Anything else found so far
 
 - **Photos and documents by camera** (Stage 1 item 5) need no new module: `expo-image-picker` and
   `expo-image-manipulator` are already in the 1.3.0 build. The work is the server's upload path (its own go).
