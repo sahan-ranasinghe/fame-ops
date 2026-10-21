@@ -10,6 +10,13 @@ import { answers, calls, failOnConsoleError, FIX, mockOfficeApi, mockUseApp, res
 
 jest.mock('@/office/client', () => ({ officeApi: require('./fakeOffice').mockOfficeApi }));
 jest.mock('@/state/app', () => ({ useApp: () => require('./fakeOffice').mockUseApp() }));
+// Round 1 (7b): my own photo, saved through the driver's calls (mocked here: the picker and the save).
+const mockPhoto = { uri: null as string | null, saved: [] as string[] };
+jest.mock('@/office/myPhoto', () => ({
+  useMyOfficePhoto: () => ({ uri: mockPhoto.uri, shown: (u: string) => { mockPhoto.uri = u; }, reload: () => undefined }),
+  pickMyPhoto: async () => ({ id: 'p1', uri: 'file:///me.jpg', takenAt: '2026-10-21T05:00:00Z' }),
+  saveMyOfficePhoto: async (photo: { id: string }) => { mockPhoto.saved.push(photo.id); return 'ok'; },
+}));
 jest.mock('@/office/store', () => ({ useOfficeMe: () => require('./fakeOffice').FIX('me'), getOfficeMe: () => require('./fakeOffice').FIX('me'), setOfficeMe: () => undefined }));
 
 /* eslint-disable import/first */
@@ -79,6 +86,17 @@ describe('Office notification settings', () => {
   afterEach(() => {
     errors.restore();
     expect(errors.seen.map((a) => String(a[0]))).toEqual([]);
+  });
+
+  it('Profile: my initials until there is a photo; Change photo opens the sheet; the gallery pick is saved as mine', async () => {
+    mockPhoto.uri = null;
+    mockPhoto.saved = [];
+    renderRouter(setup(REQUESTER), { initialUrl: '/office/profile' });
+    const link = await screen.findByTestId('profile-change-photo');
+    expect(screen.getByText(t('profilePhoto.title'))).toBeTruthy();
+    fireEvent.press(link);
+    fireEvent.press(await screen.findByTestId('photo-choose'));
+    await waitFor(() => expect(mockPhoto.saved).toEqual(['p1']));
   });
 
   it('Profile shows one Notifications row with its summary and no switches; the row opens the Notifications screen', async () => {
