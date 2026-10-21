@@ -74,7 +74,7 @@ function EditForm({ id, q, f, setF, draft }: {
   // The request as loaded: only what differs from it is sent.
   const was = useMemo(() => editFields(q), [q]);
   // An empty leave-by stays empty here: the request is then planned from the stops' arrive-by times.
-  const trip = useTrip(f, (fn) => setF((x) => (x ? fn(x) : x)), { base, settings: settings.data, planInput: tripPlanInput(f, base), fill: false });
+  const trip = useTrip(f, (fn) => setF((x) => (x ? fn(x) : x)), { base, settings: settings.data, planInput: tripPlanInput(f, base) });
 
   async function submit(ev: FormEvent) {
     ev.preventDefault();

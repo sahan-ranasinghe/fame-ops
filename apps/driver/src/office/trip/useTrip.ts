@@ -95,6 +95,11 @@ export interface Trip {
   plan: PlanState;
   preview: PlanPreview | null;
   check: DepartureCheck | null;
+  /** The planner's own leave time ("09:22"), shown in grey as the suggestion while the field is empty; never sent (the
+   *  server plans from the deadlines, the one calculation: 21 October 2026). null with planner_suggestions off. */
+  suggestedLeave: string | null;
+  /** planner_suggestions (Fleet settings): off = just the fields, no suggestion and no hint. */
+  suggestions: boolean;
   lateBack: boolean;
   /** The row whose arrive-by the typed leave-by misses (the note goes under it). */
   lateKey?: string;
@@ -115,13 +120,15 @@ export function useTrip(d: TripDraft, settings: SettingsResult | null): Trip {
   const plan = usePlanPreview(input);
   const preview = plan.error ? null : plan.preview;
   const dPlan = departurePlan(preview?.timeline, preview?.plan?.buffer_min, f.end);
-  const check = checkDeparture(f.leaveBy, dPlan);
+  // The planner advises, never blocks (Sahan, 21 October 2026). Its leave time is a suggestion shown in grey, never written
+  // into the form: a suggestion written back used to be planned again as a typed time (the road times asked again for that
+  // departure: rush hour, live traffic) and then judged a few minutes late ("09:22 … Use 09:18"). Only a time the person
+  // chose is checked, and a miss is an amber hint with Use.
+  const suggestions = settings?.settings.planner_suggestions !== false;
+  const raw = suggestions ? checkDeparture(f.leaveBy, dPlan) : null;
+  const check: DepartureCheck | null = raw?.kind === 'fill' ? null : raw;
+  const suggestedLeave = suggestions && !f.leaveBy && raw?.kind === 'fill' ? raw.leaveBy : null;
   const lateBack = check?.kind === 'late' && !!check.back;
-  // An empty leave-by is filled in from the plan (not on an edit, where empty means "planned").
-  const fillTo = d.mode !== 'edit' && check?.kind === 'fill' && !plan.updating ? check.leaveBy : null;
-  useEffect(() => {
-    if (fillTo) updateDraft((x) => (x.fields.leaveBy ? x : { ...x, fields: { ...x.fields, leaveBy: fillTo } }));
-  }, [fillTo]);
   const offset = tripOffset(f) + (d.reached ?? 0);
   const numbers = rowStopNumbers(f.stops, offset);
   const lateKey = check?.kind === 'late' && !check.back ? [...numbers].find(([, n]) => n === check.n)?.[0] : undefined;
@@ -132,6 +139,8 @@ export function useTrip(d: TripDraft, settings: SettingsResult | null): Trip {
     plan,
     preview,
     check,
+    suggestedLeave,
+    suggestions,
     lateBack,
     lateKey,
     offset,

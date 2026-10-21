@@ -106,7 +106,9 @@ export function TripDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: 
   const takeDriver = (username: string) => setF((x) => ({ ...x, driver: username, vehicle: "" }));
   const timesChanged = Object.keys(pick.times).length > 0;
   // The departure checked at once against the plan as asked: a later leave-by that misses an arrive-by, or the back-by.
-  const check = checkDeparture(shown.leaveBy, departurePlan(trip?.timeline, undefined, shown.back));
+  // With the office's buffer (it was left out, so this page said on time where the others said late: 21 October 2026).
+  const suggestions = settings.data?.settings.planner_suggestions !== false;
+  const check = suggestions ? checkDeparture(shown.leaveBy, departurePlan(trip?.timeline, settings.data?.settings.buffer_min, shown.back)) : null;
 
   async function decide(decision: "approve" | "decline") {
     const v = tripDecideInput({ ...pickArgs, id, decision, decidedBy: me.name, version: q.version });

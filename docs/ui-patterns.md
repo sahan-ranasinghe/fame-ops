@@ -86,22 +86,39 @@ from today). The chosen date shows on its chip when it is another day ("Thu 23 O
 
 ## 4. Time
 
-**The pattern.** The field shows the time (HH:MM in mono) or a dash; tapping it opens **one time sheet**: **Now**
-(rounded up to the next 5 minutes) and the **common times** of the office day (07:00, 08:00, 09:00, 12:00, 13:00, 17:00)
-as chips, then a list in **5-minute steps** scrolled to the current value (or now), Clear and Done. A suggested time
-(the plan's leave-by) shows as the first chip, "Planned 07:24". The field can still be typed into on a desktop (the
-site's typed HH:MM rule), never on a phone.
+**The pattern (21 October 2026, the boss's review).** The field shows the time (HH:MM in mono); empty, it shows the
+planner's suggestion in grey ("07:24 · suggested") or a dash. Tapping it opens **one time sheet** with **the clock only**:
+Material 3's time picker, a 24-hour dial (outer ring 00–11, inner 12–23), the hour then the minute, any minute, and a
+**keyboard toggle** to type the hours and minutes. It starts at the value, else the suggestion, else now. Clear and
+Done. **No quick-time chips** (Now and the common times were removed in Round 1). On a desktop the site's field can still
+be typed into (the typed HH:MM rule) and drops the same clock; on a phone it is never typed into the field itself.
+A suggested time is never written into the form by itself: the person picks it (Done) or types another.
 
-**Where people know it.** Google Calendar's time list in 15-minute steps, Uber's scheduled-ride time wheel, Material 3's
-time picker in input mode on desktop.
+**Where people know it.** Material 3's time picker (dial + keyboard input mode), Google Calendar on Android.
 
 | Codebase | Component | Rules |
 |---|---|---|
-| App (both sides) | `components/patterns/TimeField.tsx` (`TimeField`, `TimeSheet`) — replaces `components/office/TimeInput.tsx` and typed times | `lib/patterns/timeLogic.ts` |
-| Website | `ui/TimeField.tsx` — replaces `ui/TimeInput.tsx` (the popover list; typing kept on desktop) | `ui/timeLogic.ts` |
+| App (both sides) | `components/patterns/TimeField.tsx` + `TimeDial.tsx` | `lib/patterns/timeLogic.ts`, `lib/patterns/dialLogic.ts` |
+| Website | `ui/TimeField.tsx` + `ui/TimeDial.tsx` (the clock in the drop-down; typing kept on desktop) | `ui/timeLogic.ts`, `ui/dialLogic.ts` (byte-identical to the app's) |
 
-A native wheel needs `@react-native-community/datetimepicker` (a native module): the sheet is JavaScript and stays
-until the 1.4.0 build, which may swap the list for the system wheel (`docs/release-1.4.0.md`).
+Pure JavaScript; no native picker is needed (the 1.4.0 build no longer adds one: `docs/release-1.4.0.md` §1).
+
+### 4b. The planner's suggestions (21 October 2026)
+
+The planner advises and never blocks (Google Maps' "leave by" and Calendar's suggested times). The person gives ONE
+time (the leave time or an arrive-by); the plan's other times show in grey as "suggested" and stay editable; nothing
+the planner suggests is written into the form by itself (one calculation, the server's plan, is the source). A chosen
+time that misses an arrive-by or the back-by gets an **amber** hint with "Use 09:18" (and Move arrive-by / back-by),
+never red, never an error. No Plan now button: the plan comes 1.5 s after the last change. Next is enabled as soon as
+the stops exist; only Review asks for one time when none was given. The fleet setting `planner_suggestions` (Settings →
+Fleet → Dispatch, on by default) turns the suggestions and hints off. Stay at a stop: §4c.
+
+### 4c. Stay at a stop (a duration, 21 October 2026)
+
+Google Calendar's duration: one compact field, "Stay  1 h" (the suggested stay grey until one is chosen); the sheet has
+5 min · 15 min · 30 min · 1 h · 2 h · 4 h · Custom (an hours column and a minutes column). Per stop on the When step ONE
+compact row: Arrive by beside Stay. App: `components/patterns/DurationField.tsx` (`STAY_PRESETS` in `lib/durations.ts`);
+website: `screens/DwellPicker.tsx`.
 
 ## 5. Lists
 
@@ -223,7 +240,7 @@ A picked thing always looks picked, everywhere, the same way (Hotfix O2-H2, Part
   presets are ChoiceChips; the Filter sheet's options and the sort list are the shared Checkbox / Radio; the day strip's
   day and the time sheet's time have the tint and the border (the time with its radio); the calendar's picked day is the
   Material date picker's filled circle, in the selection blue (`#1e4fa0`), with `role radio` / `aria-pressed`. The time
-  field's quick times (Now, the usual times) are actions, not choices: they pick and close.
+  sheet has no quick times since 21 October 2026 (the clock only).
 - The sign-in's Driver | Office keeps the design's amber pill and carries a check on the picked side.
 
 ### The accessibility rules

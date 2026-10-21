@@ -129,7 +129,7 @@ export function checkDeparture(departure: string, plan: DeparturePlan | null): D
     const where = e.back ? `you are back at ${fromMin(arrival)}` : `you finish at ${e.place} at ${fromMin(arrival)}`;
     return {
       kind: "late",
-      tone: "bad",
+      tone: "warn",
       text: `Leaving ${fromMin(d)} ${where}, ${duration(endNeed)} after ${e.by}. Leave by ${leaveBy}.`,
       leaveBy,
       n: e.n,
@@ -147,7 +147,7 @@ export function checkDeparture(departure: string, plan: DeparturePlan | null): D
     if (slack < 0) {
       return {
         kind: "late",
-        tone: "bad",
+        tone: "warn",
         text: `Leaving ${fromMin(d)} you reach ${s.place} at ${fromMin(arrival)}, ${duration(-slack)} after ${by}. Leave by ${leaveBy}.`,
         leaveBy,
         n: s.n,

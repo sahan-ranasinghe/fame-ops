@@ -1,6 +1,6 @@
-// The time pattern (docs/ui-patterns.md §4): the field shows HH:MM (mono) or a dash; a tap opens the one time sheet: the
-// suggested time ("Planned 07:24"), Now and the office's common times as chips (a tap takes one), then the clock
-// (21 October 2026: Material 3's time picker, any minute, a keyboard toggle; TimeDial.tsx); Clear and Done.
+// The time pattern (docs/ui-patterns.md §4): the field shows HH:MM (mono), else the suggestion in grey or a dash; a tap
+// opens the one time sheet: the clock only (Material 3's time picker, any minute, a keyboard toggle; TimeDial.tsx; no
+// quick-time chips since the boss's review, 21 October 2026), starting at the value, the suggestion or now; Clear and Done.
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
@@ -8,7 +8,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { Clock, X } from '@/components/icons';
 import { Button, Mono, Txt } from '@/components/ui';
 import { colomboTime } from '@/lib/time';
-import { isHHMM, quickTimes } from '@/lib/patterns/timeLogic';
+import { isHHMM } from '@/lib/patterns/timeLogic';
 import { useApp } from '@/state/app';
 import { colors } from '@/theme';
 
@@ -21,9 +21,9 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
   label?: string;
   /** Shown when empty ("Planned from the stops"). */
   placeholder?: string;
-  /** red: a check says the time is late. */
-  tone?: 'red';
-  /** A time to offer first ("Planned 07:24"). */
+  /** red: wrong; amber: a check's hint (the planner's, never an error). */
+  tone?: 'red' | 'amber';
+  /** The planner's time: where the clock starts (shown grey through `placeholder`). */
   suggested?: string;
   /** The small size, two to a row (a stop's Arrive by beside its Stay). */
   compact?: boolean;
@@ -34,10 +34,11 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
   const [draft, setDraft] = useState(value);
   const now = colomboTime(Date.now());
   const pick = (time: string) => { onCommit(time); setOpen(false); };
+  // The draft starts at the value, else the suggestion, else now (the time, not a preset).
   return (
     <View style={{ flex: 1, gap: 6 }}>
       {label ? <Txt variant="label" color={colors.muted}>{label.toUpperCase()}</Txt> : null}
-      <Pressable accessibilityRole="button" accessibilityLabel={label ?? t('patterns.time')} onPress={() => { setDraft(isHHMM(value) ? value : suggested && isHHMM(suggested) ? suggested : now); setOpen(true); }} style={[styles.box, compact && styles.compact, tone === 'red' && { borderColor: colors.red }]} testID={testID}>
+      <Pressable accessibilityRole="button" accessibilityLabel={label ?? t('patterns.time')} onPress={() => { setDraft(isHHMM(value) ? value : suggested && isHHMM(suggested) ? suggested : now); setOpen(true); }} style={[styles.box, compact && styles.compact, tone === 'red' && { borderColor: colors.red }, tone === 'amber' && { borderColor: colors.amber }]} testID={testID}>
         <Clock size={20} color={colors.muted} />
         {isHHMM(value) ? <Mono size={compact ? 20 : 26} bold>{value}</Mono> : <Txt variant="muted" size={16} style={{ flex: 1 }} numberOfLines={1}>{placeholder ?? '--:--'}</Txt>}
         {isHHMM(value) ? <View style={{ flex: 1 }} /> : null}
@@ -51,13 +52,6 @@ export function TimeField({ value, onCommit, label, placeholder, tone, suggested
           <Button label={t('patterns.done')} disabled={!isHHMM(draft)} onPress={() => pick(draft)} style={{ flex: 1.4, minHeight: 52 }} />
         </>
       )}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-          {quickTimes(now, suggested).map((q) => (
-            <Pressable key={q.key} accessibilityRole="button" onPress={() => pick(q.time)} style={[styles.chip, q.kind === 'suggested' && { borderColor: colors.amber, backgroundColor: colors.amberChip }]} testID={`time-quick-${q.key}`}>
-              <Txt variant="strong" size={14}>{q.kind === 'suggested' ? t('patterns.planned', { time: q.time }) : q.kind === 'now' ? t('patterns.now', { time: q.time }) : q.time}</Txt>
-            </Pressable>
-          ))}
-        </View>
         <TimeDial value={draft} onChange={setDraft} testID="time-clock" />
       </Sheet>
     </View>
@@ -68,5 +62,4 @@ const styles = StyleSheet.create({
   box: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 60, borderWidth: 1.5, borderColor: colors.line, borderRadius: 14, backgroundColor: colors.card, paddingLeft: 14 },
   compact: { minHeight: 48, borderRadius: 12, paddingLeft: 12, gap: 8 },
   clear: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  chip: { minHeight: 40, paddingHorizontal: 12, borderRadius: 999, borderWidth: 1.5, borderColor: colors.line, justifyContent: 'center' },
 });

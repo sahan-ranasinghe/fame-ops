@@ -83,7 +83,7 @@ export const listOfficeUsers = tool({
     const [users, keys] = await Promise.all([
       fetchAll(
         (a, b) =>
-          db.from("employees").select("id, code, name, email, phone, role, permissions, active, created_at")
+          db.from("employees").select("id, code, name, email, phone, role, permissions, active, created_at, driver_contact")
             .in("role", [...OFFICE_ROLES]).order("name").range(a, b),
         "office users",
       ),
@@ -109,6 +109,8 @@ export const listOfficeUsers = tool({
           role: u.role,
           permissions: normalisePermissions(u.permissions),
           active: u.active,
+          // Round 1: shown to drivers as a contact (Me: name, Call, WhatsApp).
+          driver_contact: u.driver_contact === true,
           since: colomboDateTime(u.created_at),
           connector_keys: keys.filter((k) => k.employee_id === u.id && !k.revoked_at).map((k) => ({
             id: k.id,
@@ -182,7 +184,8 @@ export const updateOfficeUser = tool({
   title: "Change an office user",
   description: "Changes an office user's name, phone and/or permissions (view, request, approve, assign_tasks, vehicles, issues, users). " +
     "The permissions list replaces the old one and takes effect on the person's next call. You cannot remove your own users permission. " +
-    "The phone is a Sri Lankan number (stored +94…; null clears it); every change of a number is logged.",
+    "The phone is a Sri Lankan number (stored +94…; null clears it); every change of a number is logged. driver_contact: shown to " +
+    "drivers as a contact on the app's Me (name, Call, WhatsApp; 'Fleet admin' when they also approve, else 'Office').",
   readOnly: false,
   input: z.object({
     email: zEmail,
@@ -190,12 +193,13 @@ export const updateOfficeUser = tool({
     phone: zText(30).nullable().optional(),
     permissions: zPermissions.optional().describe("The full new list"),
     role: zOfficeRole.optional().describe("The label. Default: derived from the permissions"),
+    driver_contact: z.boolean().optional().describe("Show as a contact for drivers (the app's Me)"),
   }),
-  async run({ email, name, phone: typedPhone, permissions, role }, { db, actor }) {
+  async run({ email, name, phone: typedPhone, permissions, role, driver_contact }, { db, actor }) {
     const phone = storedPhone(typedPhone);
     const user = await officeUser(db, email);
-    if (name === undefined && phone === undefined && permissions === undefined && role === undefined) {
-      throw new ToolError("Nothing to change: give a name, phone, permissions and/or role.");
+    if (name === undefined && phone === undefined && permissions === undefined && role === undefined && driver_contact === undefined) {
+      throw new ToolError("Nothing to change: give a name, phone, permissions, role and/or driver_contact.");
     }
     const perms = permissions !== undefined ? normalisePermissions(permissions) : normalisePermissions(user.permissions);
     if (permissions !== undefined && actor.employeeId === user.id && !perms.includes("users")) {
@@ -208,7 +212,8 @@ export const updateOfficeUser = tool({
         ...(phone !== undefined && { phone }),
         ...(permissions !== undefined && { permissions: perms }),
         ...((permissions !== undefined || role !== undefined) && { role: label }),
-      }).eq("id", user.id).select("name, email, phone, role, permissions").single(),
+        ...(driver_contact !== undefined && { driver_contact }),
+      }).eq("id", user.id).select("name, email, phone, role, permissions, driver_contact").single(),
       "office user",
     );
     if (phone !== undefined) await logPhoneChange(db, user.id, user.phone, updated.phone, actor);
@@ -217,6 +222,7 @@ export const updateOfficeUser = tool({
       phone !== undefined && "phone",
       permissions !== undefined && "permissions",
       role !== undefined && "role",
+      driver_contact !== undefined && (driver_contact ? "shown to drivers" : "not shown to drivers"),
     ]
       .filter(Boolean);
     return {

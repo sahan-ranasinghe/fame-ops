@@ -1,6 +1,6 @@
 // The time field (Hotfix 2, C; docs/ui-patterns.md §4): on a desktop the value counts on blur, on Enter, or 1 s after the
 // last change when it is a whole valid HH:MM; a value set from outside shows at once unless the person is typing another
-// one; a click drops the time list (Now, the common times, every 5 minutes). On a phone it opens the time sheet.
+// one; a click drops the clock (no quick-time chips since 21 October 2026). On a phone it opens the time sheet.
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -104,17 +104,16 @@ describe("TimeField (desktop: the list)", () => {
     expect(commits).toEqual(["09:30", "07:00"]);
   });
 
-  it("a click drops the chooser: the planned time first, Now, the common times, then the clock; a chip counts at once, the clock fills the field", () => {
+  it("a click drops the clock only (no quick-time chips); it starts at the suggestion, which shows grey in the empty field", () => {
     const commits: string[] = [];
     render(<Harness initial="" onCommit={(v) => commits.push(v)} />);
+    expect(field().placeholder).toBe("07:24");
+    expect(field().title).toBe("07:24 · suggested");
     fireEvent.click(field());
     const list = screen.getByTestId("time-list");
-    const chips = within(list).getByRole("group", { name: "Quick times" });
-    expect(within(chips).getAllByRole("button")[0].textContent).toBe("Planned 07:24");
-    expect(within(chips).getByRole("button", { name: /^Now/ })).toBeTruthy();
-    expect(within(chips).getByRole("button", { name: "13:00" })).toBeTruthy();
-    expect(within(list).queryAllByRole("option")).toHaveLength(0); // no 5-minute list (21 October 2026)
-    // The clock starts at the planned time; → moves the hour by one, any minute; the field shows it and it counts.
+    expect(within(list).queryByRole("group", { name: "Quick times" })).toBeNull();
+    expect(within(list).queryAllByRole("button", { name: /^Now|^Planned|^\d\d:\d\d$/ })).toHaveLength(0);
+    // The clock starts at the suggested time; → moves the hour by one, any minute; the field shows it and it counts.
     const dial = within(list).getByTestId("time-dial");
     fireEvent.keyDown(dial, { key: "ArrowRight" });
     expect(field().value).toBe("08:24");
@@ -123,10 +122,6 @@ describe("TimeField (desktop: the list)", () => {
     expect(field().value).toBe("08:25");
     act(() => { vi.advanceTimersByTime(TIME_SETTLE_MS + 10); });
     expect(commits).toEqual(["08:25"]);
-    fireEvent.click(field());
-    fireEvent.click(within(within(screen.getByTestId("time-list")).getByRole("group", { name: "Quick times" })).getByRole("button", { name: "13:00" }));
-    expect(commits).toEqual(["08:25", "13:00"]);
-    expect(screen.queryByTestId("time-list")).toBeNull();
   });
 
   it("focus alone opens nothing (typing stays free); ↓ opens the list and Esc closes it first", () => {
@@ -147,29 +142,22 @@ describe("TimeField (phone: the sheet)", () => {
   });
   afterEach(() => { window.matchMedia = realMatch; });
 
-  // A fixed clock (21 October 2026: at 08:56 "Now" became 09:00 and the 09:00 chip was gone; the test ran at the real time).
-  it.each([["08:48", "2026-10-21T03:18:00Z"], ["08:59", "2026-10-21T03:29:00Z"], ["23:58", "2026-10-21T18:28:00Z"], ["00:01", "2026-10-21T18:31:00Z"]])("at %s: Now and 09:00 are both there", (_at, iso) => {
-    vi.setSystemTime(new Date(iso));
-    render(<Harness initial="" onCommit={() => {}} />);
-    fireEvent.click(screen.getByLabelText("Leave by"));
-    const sheet = screen.getByTestId("time-sheet");
-    expect(within(sheet).getByRole("button", { name: "09:00" })).toBeTruthy();
-    expect(within(sheet).getByRole("button", { name: /^Now/ })).toBeTruthy();
-  });
-
-  it("is never typed: a tap opens the sheet; 09:00 counts and closes it; Clear empties it", () => {
-    vi.setSystemTime(new Date("2026-10-21T03:26:00Z")); // 08:56 Colombo: "Now" is 09:00
+  it("is never typed: a tap opens the sheet with the clock only; Done takes the suggestion it starts at; Clear empties it", () => {
+    vi.setSystemTime(new Date("2026-10-21T03:26:00Z"));
     const commits: string[] = [];
     render(<Harness initial="" onCommit={(v) => commits.push(v)} />);
     const btn = screen.getByLabelText("Leave by");
     expect(btn.tagName).toBe("BUTTON");
+    expect(btn.textContent).toBe("07:24 · suggested");
     fireEvent.click(btn);
     const sheet = screen.getByTestId("time-sheet");
-    fireEvent.click(within(sheet).getByRole("button", { name: "09:00" }));
-    expect(commits).toEqual(["09:00"]);
+    expect(within(sheet).getByTestId("time-dial")).toBeTruthy();
+    expect(within(sheet).queryByRole("button", { name: /^Now|^09:00$/ })).toBeNull();
+    fireEvent.click(within(sheet).getByRole("button", { name: "Done" }));
+    expect(commits).toEqual(["07:24"]);
     expect(screen.queryByTestId("time-sheet")).toBeNull();
     fireEvent.click(screen.getByLabelText("Leave by"));
     fireEvent.click(within(screen.getByTestId("time-sheet")).getByRole("button", { name: "Clear" }));
-    expect(commits).toEqual(["09:00", ""]);
+    expect(commits).toEqual(["07:24", ""]);
   });
 });

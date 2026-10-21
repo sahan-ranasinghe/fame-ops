@@ -1,16 +1,16 @@
 // The trip editor (Phase 7, §34): the trip part of Assign a task as one piece
 // for Assign a task, New request and Change the request. The leave-by time with
-// its departure check (typed, or filled in from the plan; checked at once
+// its departure check (typed, or the plan's as a grey suggestion; checked at once
 // against the arrive-by times and the back-by time, §17, §20), Start from with
 // "Passengers get in here" and Tick it, the stops (type, what, place, arrive-by,
 // the time at each stop), Return to office and No expressway, the back-by time
 // ("Vehicle free by" on a task), and the plan as a timeline with the time at
 // each stop beside its map (Google's road line under the google package). The
-// plan is plan_task, 1.5 s after the last edit or at once with Plan now; the
+// plan is plan_task, 1.5 s after the last edit (no Plan now); the
 // plan shown stays while the next one comes. `useTrip` holds the rules, the
 // parts go where each form puts them, and `TripEditor` is the three cards of
 // the request forms. Requesters see no driver, vehicle or overlaps here.
-import { type ReactNode, useEffect } from "react";
+import type { ReactNode } from "react";
 import type { PlanPreview, SettingsResult } from "../data/types";
 import type { Query } from "../data/useQuery";
 import { errText } from "../transport/errors";
@@ -37,6 +37,8 @@ export interface Trip {
   preview: PlanPreview | null;
   /** The departure check from the latest plan; `lateBack`: the plan ends after the back-by time. */
   check: DepartureCheck | null;
+  /** The planner's leave time, shown grey in the empty field ("07:24 · suggested"); never sent. */
+  suggestedLeave?: string;
   lateBack: boolean;
   /** The row whose arrive-by the typed leave-by misses (the note goes under it). */
   lateKey?: string;
@@ -55,32 +57,30 @@ export interface Trip {
 
 /**
  * The trip's rules for a form whose state holds the trip's fields (`f`, changed with `setF`). `planInput` is what
- * plan_task gets (the trip alone, or Assign's with the driver and vehicle); `fill` fills an empty leave-by from the
- * plan (Assign a task and New request; off where an empty one means "planned", as on Change the request).
+ * plan_task gets (the trip alone, or Assign's with the driver and vehicle).
  */
 export function useTrip<F extends TripFields>(f: F, setF: (fn: (x: F) => F) => void, opts: {
   base: Base;
   settings?: SettingsResult;
   planInput: Record<string, unknown> | null;
-  fill?: boolean;
   backLabel?: string;
 }): Trip {
-  const { base, fill = true, backLabel = "back by" } = opts;
+  const { base, backLabel = "back by" } = opts;
   const update = (fn: (x: TripFields) => TripFields) => setF((x) => ({ ...x, ...fn(x) }));
   const plan = usePlanPreview(opts.planInput);
   const preview = plan.err ? null : plan.data ?? null;
   const previewErr = plan.err ? errText(plan.err)[0] : null;
 
-  // The departure check, at once from the latest plan: fill an empty leave-by, else say what a typed one does.
-  // The back-by time: a plan that ends after it says so beside both fields (§20).
+  // The planner advises, never blocks (21 October 2026). Its leave time is a grey suggestion in the empty field, never
+  // written into the form: written back it was planned again as a chosen time (the road times asked again for that
+  // departure) and judged a few minutes late ("09:22 … Use 09:18"). Only a chosen time is checked; a miss is an amber hint.
+  // The back-by time: a plan that ends after it says so beside both fields (§20). planner_suggestions off = no hints.
+  const suggestions = opts.settings?.settings.planner_suggestions !== false;
   const dPlan = departurePlan(preview?.timeline, preview?.plan?.buffer_min, f.end);
-  const check = checkDeparture(f.leaveBy, dPlan);
+  const raw = suggestions ? checkDeparture(f.leaveBy, dPlan) : null;
+  const check = raw?.kind === "fill" ? null : raw;
+  const suggestedLeave = suggestions && !f.leaveBy && raw?.kind === "fill" ? raw.leaveBy : undefined;
   const lateBack = check?.kind === "late" && !!check.back;
-  const fillTo = fill && check?.kind === "fill" && !plan.stale && !plan.updating ? check.leaveBy : null;
-  useEffect(() => {
-    if (fillTo) setF((x) => (x.leaveBy ? x : { ...x, leaveBy: fillTo }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fillTo]);
   const offset = tripOffset(f);
   const numbers = rowStopNumbers(f.stops, offset);
   const lateKey = check?.kind === "late" && !check.back ? [...numbers].find(([, n]) => n === check.n)?.[0] : undefined;
@@ -97,6 +97,7 @@ export function useTrip<F extends TripFields>(f: F, setF: (fn: (x: F) => F) => v
     plan,
     preview,
     check,
+    suggestedLeave,
     lateBack,
     lateKey,
     offset,
@@ -122,10 +123,10 @@ export function LeaveByField({ trip, id, label = "Leave by" }: { trip: Trip; id:
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
-      <TimeField id={id} value={f.leaveBy} onCommit={trip.setLeave} suggested={trip.plan.data?.leave_by} />
-      {check && check.kind !== "fill"
+      <TimeField id={id} value={f.leaveBy} onCommit={trip.setLeave} suggested={trip.suggestedLeave} />
+      {check
         ? <DepartureNote check={check} onUse={trip.setLeave} onMove={trip.moveArriveBy} onMoveBack={trip.setEnd} backLabel={trip.backLabel} />
-        : <span className="hint">Empty: planned from the stops’ arrive-by times.</span>}
+        : <span className="hint">{trip.suggestedLeave ? `Suggested ${trip.suggestedLeave} from the stops’ arrive-by times. Change it if you like.` : "Empty: planned from the stops’ arrive-by times."}</span>}
     </div>
   );
 }
@@ -160,14 +161,14 @@ export function TripRoute({ trip, prefix }: { trip: Trip; prefix: string }) {
   );
 }
 
-/** The plan card: Plan now, the timeline with the time at each stop beside its map; `children` under it (Assign's overlaps). */
+/** The plan card (planned by itself 1.5 s after the last change; no Plan now since 21 October 2026): the timeline with the time at each stop beside its map; `children` under it (Assign's overlaps). */
 export function TripPlanCard({ trip, children }: { trip: Trip; children?: ReactNode }) {
   const { plan, preview } = trip;
   return (
     <div className="card card-b form" data-testid="plan-card">
       <div className="row" style={{ padding: 0 }}>
         <b className="grow">Plan</b>
-        <button type="button" className="btn small" onClick={plan.refetch} disabled={plan.fetching || !trip.pInput}>{plan.fetching ? "Planning…" : "Plan now"}</button>
+        {plan.fetching && <span className="muted">Planning…</span>}
       </div>
       <PlanWithMap timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={trip.reasons} updating={plan.updating}
         stops={preview?.stops} start={preview?.start} />

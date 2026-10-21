@@ -52,18 +52,18 @@ class Plans implements Transport {
   }
 }
 
-function Harness({ initial, fill }: { initial: TripFields; fill?: boolean }) {
+function Harness({ initial }: { initial: TripFields }) {
   const [f, setF] = useState(initial);
-  const trip = useTrip(f, setF, { base: null, planInput: tripPlanInput(f, null), fill });
+  const trip = useTrip(f, setF, { base: null, planInput: tripPlanInput(f, null) });
   return <TripEditor trip={trip} prefix="t" />;
 }
 
-async function mount(initial: TripFields, fill?: boolean) {
+async function mount(initial: TripFields) {
   const transport = new Plans();
   const me = await transport.me();
   render(
     <FleetProvider value={{ store: new FleetStore(transport), transport, me, noConnector: false }}>
-      <MemoryRouter><Harness initial={initial} fill={fill} /></MemoryRouter>
+      <MemoryRouter><Harness initial={initial} /></MemoryRouter>
     </FleetProvider>,
   );
   return transport;
@@ -74,30 +74,28 @@ const galle = (leaveBy = ""): TripFields => ({ ...emptyTrip("2026-10-20"), leave
 const leaveField = () => screen.getByLabelText("Leave by") as HTMLInputElement;
 
 describe("the trip editor", () => {
-  it("has Assign's trip fields, plans with plan_task on Plan now, and fills an empty leave-by from the plan", async () => {
+  // Planned by itself 1.5 s after the last change (no Plan now since 21 October 2026).
+  const planned = { timeout: 4000 };
+  it("has Assign's trip fields, plans with plan_task by itself, and shows the plan's leave time as a grey suggestion (never filled in)", async () => {
     const transport = await mount(galle());
     for (const label of ["Day", "Leave by", "Back by", "Start from", "Passengers get in here", "Return to office", "No expressway", "Arrive by"]) {
       expect(screen.getByLabelText(label)).toBeTruthy();
     }
     expect(screen.getAllByTestId("stop-row")).toHaveLength(1);
-    fireEvent.click(screen.getByRole("button", { name: "Plan now" }));
-    await waitFor(() => expect(leaveField().value).toBe("07:24"));
+    expect(screen.queryByRole("button", { name: "Plan now" })).toBeNull();
+    await waitFor(() => expect(leaveField().placeholder).toBe("07:24"), planned);
+    expect(leaveField().value).toBe("");
+    expect(screen.getByText("Suggested 07:24 from the stops’ arrive-by times. Change it if you like.")).toBeTruthy();
     expect(transport.calls[0]).toMatchObject({ tool: "plan_task", args: { date: "2026-10-20", stops: [{ type: "drop", place: "Galle", arrive_by: "10:00" }] } });
     expect(transport.calls[0].args).not.toHaveProperty("driver");
+    expect(transport.calls[0].args).not.toHaveProperty("leave_by"); // the suggestion is never sent back as a chosen time
     expect(screen.getByTestId("plan-line").textContent).toContain("Leave by 07:24");
   });
-  it("leaves the leave-by empty where empty means planned (Change the request)", async () => {
-    await mount(galle(), false);
-    fireEvent.click(screen.getByRole("button", { name: "Plan now" }));
-    await waitFor(() => expect(screen.getByTestId("plan-line").textContent).toContain("07:24"));
-    expect(leaveField().value).toBe("");
-    expect(screen.getByText("Empty: planned from the stops’ arrive-by times.")).toBeTruthy();
-  });
-  it("a typed leave-by that misses an arrive-by says so beside it and under the stop; Use puts the plan's time in", async () => {
+  it("a typed leave-by that misses an arrive-by gets an amber hint beside it and under the stop; Use puts the plan's time in", async () => {
     await mount(galle("08:00"));
-    fireEvent.click(screen.getByRole("button", { name: "Plan now" }));
     // Leaving 08:00 shifts the plan's 09:55 arrival to 10:31; with no buffer in this plan, leaving 07:29 makes 10:00.
-    await waitFor(() => expect(screen.getByTestId("departure-check").textContent).toContain("Leaving 08:00 you reach Galle at 10:31, 31 min after 10:00. Leave by 07:29."));
+    await waitFor(() => expect(screen.getByTestId("departure-check").textContent).toContain("Leaving 08:00 you reach Galle at 10:31, 31 min after 10:00. Leave by 07:29."), planned);
+    expect((screen.getByTestId("departure-check").firstElementChild as HTMLElement).style.color).toBe("var(--warn)");
     expect(screen.getByTestId("departure-check-stop")).toBeTruthy();
     fireEvent.click(screen.getAllByRole("button", { name: "Use 07:29" })[0]);
     expect(leaveField().value).toBe("07:29");

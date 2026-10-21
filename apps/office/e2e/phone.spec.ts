@@ -154,11 +154,14 @@ test("a requester on a phone: four tabs, New request as the big action, the requ
   await expect(page.getByTestId("draft-banner")).toContainText("Resume draft from");
   await page.getByRole("button", { name: "Resume" }).click();
   await expect(page.getByLabel("Note")).toHaveValue("Phone draft");
-  // Stage 0: a time on a phone is never typed: the field opens the time sheet, a pick counts and closes it. 21 October
-  // 2026: the sheet has the presets and the clock (no 5-minute list); a preset counts at once.
+  // Stage 0: a time on a phone is never typed: the field opens the time sheet, Done counts and closes it. 21 October
+  // 2026: the sheet is the clock only (no chips); its keyboard toggle types 09:00.
   await page.getByLabel("Leave by", { exact: true }).click();
   await expect(page.getByTestId("time-sheet").getByTestId("time-dial")).toBeVisible();
-  await page.getByTestId("time-sheet").getByRole("group", { name: "Quick times" }).getByRole("button", { name: "09:00", exact: true }).click();
+  await page.getByTestId("time-sheet").getByTestId("time-keyboard").click();
+  await page.getByTestId("time-type-hour").fill("09");
+  await page.getByTestId("time-type-minute").fill("00");
+  await page.getByTestId("time-sheet").getByRole("button", { name: "Done" }).click();
   await expect(page.getByTestId("time-sheet")).toHaveCount(0);
   await page.getByLabel("Stop 1", { exact: true }).fill("Head office");
   await page.getByLabel("Stop 2", { exact: true }).fill("Galle");

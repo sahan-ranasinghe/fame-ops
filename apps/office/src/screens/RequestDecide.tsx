@@ -405,7 +405,7 @@ function ClassicDecide({ id, q, setQ }: { id: string; q: RequestCard; setQ: (q: 
           <div className="card card-b form" data-testid="plan-card">
             <div className="row" style={{ padding: 0 }}>
               <b className="grow">Plan</b>
-              <button type="button" className="btn small" onClick={plan.refetch} disabled={plan.fetching}>{plan.fetching ? "Planning…" : "Plan now"}</button>
+              {plan.fetching && <span className="muted">Planning…</span>}
             </div>
             {backCheck?.kind === "late" && backCheck.back && <DepartureNote check={backCheck} testId="departure-check-back" />}
             <PlanWithMap timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating} leaveNote="the time asked for"

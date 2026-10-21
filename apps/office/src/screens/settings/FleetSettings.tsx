@@ -65,7 +65,7 @@ export function sectionSummary(key: FleetSection, d: SettingsResult): string {
     case "office":
       return `Base: ${d.base_place?.name ?? "none"} · office phone ${s.office_phone ? phoneDisplay(s.office_phone) : "not set"}`;
     case "dispatch":
-      return `Pickup ${s.dwell_min?.pickup ?? d.defaults.dwell_min?.pickup ?? "—"} min · accept within ${s.accept_within_min ?? FALLBACK.accept_within_min} min · buffer ${s.buffer_min} min`;
+      return `Pickup ${s.dwell_min?.pickup ?? d.defaults.dwell_min?.pickup ?? "—"} min · accept within ${s.accept_within_min ?? FALLBACK.accept_within_min} min · buffer ${s.buffer_min} min · suggestions ${onOff(s.planner_suggestions !== false)}`;
     case "tasks":
       return `Approval ${onOff(s.tasks_need_approval !== false)} · vehicle on the day ${onOff(s.vehicle_on_the_day === true)} · self-drive ${onOff(s.self_drive_allowed !== false)}`;
     case "day":
@@ -417,6 +417,23 @@ export function FleetSettings({ section }: { section?: FleetSection } = {}) {
               <span className="grow">
                 <span className="name">New tasks need the fleet admin's OK</span>
                 <span className="sub" style={{ display: "block" }}>A task made by someone without the approve permission waits in the Requests queue and is sent to the driver only when approved. Off: every task is sent at once.</span>
+              </span>
+            </label>
+          </div>
+        )}
+
+        {/* Round 1 (21 October 2026): the planner advises, never blocks; this turns its suggestions off. */}
+        {show("dispatch") && (
+          <div className="card card-b form" data-testid="planner-suggestions-settings">
+            <h2>Planner suggestions</h2>
+            <label className="row" style={{ padding: 0, cursor: "pointer" }}>
+              <input type="checkbox" checked={draft.planner_suggestions !== false} disabled={busy !== null} onChange={(e) => { setDraft({ ...draft, planner_suggestions: e.target.checked }); void save("planner_suggestions", e.target.checked); }} />
+              <span className="grow">
+                <span className="name">Suggest times on the trip forms</span>
+                <span className="sub" style={{ display: "block" }}>
+                  The leave time and each stop's stay are suggested in grey and can be changed; a chosen time that misses an arrive-by gets a hint with
+                  the time to use. Off: just the fields. A trip is never blocked either way.
+                </span>
               </span>
             </label>
           </div>

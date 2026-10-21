@@ -65,7 +65,7 @@ export function NewRequest() {
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
   const fields: Form = selfDrive ? f : { ...f, driver: true };
 
-  // The trip: plan_task 1.5 s after the last change (or Plan now); an empty leave-by is filled in from the plan.
+  // The trip: plan_task 1.5 s after the last change; an empty leave-by shows the plan's time as a grey suggestion.
   const trip = useTrip(f, setF, { base, settings: settings.data, planInput: tripPlanInput(f, base) });
   const leave = f.leaveBy || hhmm(trip.preview?.leave_by);
 

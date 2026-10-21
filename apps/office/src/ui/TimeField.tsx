@@ -2,10 +2,10 @@
 // hours. It shows HH:MM (mono) or a dash.
 // - On a desktop it can be typed (the site's typed rule: the value counts on blur, on Enter, or 1 s after the last change
 //   when it is a whole HH:MM; "9", "930", "9.30" mean 09:00 and 09:30 when the field is left), and a click (or ↓) drops
-//   the chooser under it: the suggested time ("Planned 07:24"), Now, the common times, then the clock (21 October 2026:
-//   Material 3's time picker, any minute; TimeDial.tsx), which fills the field as typing does. Until a value counts the
-//   form (its plan, its warnings) keeps the one before.
-// - On a phone it is never typed: a tap opens the time sheet with the same chips and the clock, Clear and Done.
+//   the clock under it (21 October 2026: Material 3's time picker, any minute, with its keyboard toggle; TimeDial.tsx;
+//   no quick-time chips since the boss's review), which fills the field as typing does. Until a value counts the form
+//   (its plan, its warnings) keeps the one before. A suggestion (the planner's) is the grey placeholder.
+// - On a phone it is never typed: a tap opens the time sheet with the clock, Clear and Done.
 // A value set from outside (Use 07:24, a draft resumed, the plan's own time) shows at once, unless the person is typing
 // another one. Replaces ui/TimeInput.tsx; the rules are in timeLogic.ts.
 import { type InputHTMLAttributes, type KeyboardEvent, type MouseEvent, useEffect, useId, useRef, useState } from "react";
@@ -13,7 +13,7 @@ import { Icon } from "./icons";
 import { useIsPhone } from "./phone";
 import { Sheet } from "./Sheet";
 import { TimeDial } from "./TimeDial";
-import { isWholeTime, nowExact, parseTyped, sheetChips, TIME_SETTLE_MS } from "./timeLogic";
+import { isWholeTime, nowExact, parseTyped, TIME_SETTLE_MS } from "./timeLogic";
 
 export { isWholeTime, TIME_SETTLE_MS } from "./timeLogic";
 
@@ -22,38 +22,24 @@ type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "onC
   value: string;
   /** The finished value: "HH:MM", or "" when the field was emptied. Called once per finished change. */
   onCommit: (value: string) => void;
-  /** A suggested time, the first chip ("Planned 07:24"). */
+  /** A suggested time (the planner's): shown in grey in the empty field ("07:24 · suggested"), where the clock starts. */
   suggested?: string;
-  /** The suggested chip's word (default "Planned"). */
-  suggestedLabel?: string;
 };
 
-/** The chips and the clock, shared by the desktop drop-down and the phone sheet. A chip takes its time at once; the clock
- *  sets the time being chosen (`dial`, what the field or the sheet holds until it counts). */
-function TimeChoices({ value, dial, onDial, suggested, suggestedLabel, onPick, mouseKeepsFocus }: {
+/** The clock, shared by the desktop drop-down and the phone sheet (21 October 2026: only the dial with its keyboard
+ *  toggle; the quick-time chips are gone). It starts at the value, else the suggestion, else now. */
+function TimeChoices({ value, dial, onDial, suggested, mouseKeepsFocus }: {
   value: string;
   dial: string;
   onDial: (t: string) => void;
   suggested?: string;
-  suggestedLabel?: string;
-  onPick: (t: string) => void;
   mouseKeepsFocus?: boolean;
 }) {
-  const now = nowExact();
-  const chips = sheetChips(now, suggested).map((c) => (c.kind === "suggested" && suggestedLabel ? { ...c, label: `${suggestedLabel} ${c.time}` } : c));
   // The desktop chooser keeps the focus in the field (a press would blur it and count what is typed first).
   const keep = mouseKeepsFocus ? { onMouseDown: (e: MouseEvent) => e.preventDefault() } : {};
   return (
-    <div className="tf-choices">
-      <div className="chips tf-chips" role="group" aria-label="Quick times">
-        {chips.map((c) => (
-          <button key={c.kind + c.time} type="button" className={`chip${c.kind === "suggested" ? " suggested" : ""}`} aria-pressed={value === c.time}
-            data-time={c.time} onClick={() => onPick(c.time)} {...keep}>
-            {c.kind === "now" ? <>Now <span className="mono">{c.time}</span></> : c.kind === "suggested" ? c.label : <span className="mono">{c.time}</span>}
-          </button>
-        ))}
-      </div>
-      <div {...keep}><TimeDial value={isWholeTime(dial) ? dial : isWholeTime(value) ? value : suggested && isWholeTime(suggested) ? suggested : now} onChange={onDial} /></div>
+    <div className="tf-choices" {...keep}>
+      <TimeDial value={isWholeTime(dial) ? dial : isWholeTime(value) ? value : suggested && isWholeTime(suggested) ? suggested : nowExact()} onChange={onDial} />
     </div>
   );
 }
@@ -63,7 +49,7 @@ export function TimeField(props: Props) {
   return phone ? <PhoneTime {...props} /> : <DesktopTime {...props} />;
 }
 
-function PhoneTime({ value, onCommit, suggested, suggestedLabel, id, disabled, className, ...rest }: Props) {
+function PhoneTime({ value, onCommit, suggested, id, disabled, className, ...rest }: Props) {
   const [open, setOpen] = useState(false);
   const [dial, setDial] = useState("");
   const btn = useRef<HTMLButtonElement>(null);
@@ -76,23 +62,23 @@ function PhoneTime({ value, onCommit, suggested, suggestedLabel, id, disabled, c
     <>
       <button ref={btn} id={id} type="button" className={`timefield-btn ${className ?? ""}`} disabled={disabled} aria-haspopup="dialog" aria-label={label}
         data-value={value || undefined} onClick={() => { setDial(""); setOpen(true); }}>
-        <span className={value ? "mono" : "muted"}>{value || "–"}</span>
+        {value ? <span className="mono">{value}</span> : <span className="muted">{suggested && isWholeTime(suggested) ? <><span className="mono">{suggested}</span> · suggested</> : "–"}</span>}
         <Icon name="clock" />
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Pick a time" anchor={btn} testId="time-sheet"
         footer={(
           <>
             <button type="button" className="btn" onClick={() => pick("")} disabled={!value}>Clear</button>
-            <button type="button" className="btn primary" onClick={() => (isWholeTime(dial) ? pick(dial) : setOpen(false))}>Done</button>
+            <button type="button" className="btn primary" onClick={() => { const t = isWholeTime(dial) ? dial : !value && suggested && isWholeTime(suggested) ? suggested : ""; if (t) pick(t); else setOpen(false); }}>Done</button>
           </>
         )}>
-        <TimeChoices value={value} dial={dial} onDial={setDial} suggested={suggested} suggestedLabel={suggestedLabel} onPick={pick} />
+        <TimeChoices value={value} dial={dial} onDial={setDial} suggested={suggested} />
       </Sheet>
     </>
   );
 }
 
-function DesktopTime({ value, onCommit, onBlur, onKeyDown, onFocus, suggested, suggestedLabel, className, ...rest }: Props) {
+function DesktopTime({ value, onCommit, onBlur, onKeyDown, onFocus, suggested, className, ...rest }: Props) {
   const [text, setText] = useState(value);
   const [open, setOpen] = useState(false);
   const listId = useId();
@@ -143,7 +129,8 @@ function DesktopTime({ value, onCommit, onBlur, onKeyDown, onFocus, suggested, s
         type="text"
         inputMode="numeric"
         autoComplete="off"
-        placeholder={rest.placeholder ?? "HH:MM"}
+        placeholder={rest.placeholder ?? (suggested && isWholeTime(suggested) ? suggested : "HH:MM")}
+        title={!text && suggested && isWholeTime(suggested) ? `${suggested} · suggested` : rest.title}
         className={`mono ${className ?? ""}`}
         role="combobox"
         aria-expanded={open}
@@ -184,9 +171,8 @@ function DesktopTime({ value, onCommit, onBlur, onKeyDown, onFocus, suggested, s
       />
       {open && (
         <div className="tf-drop" id={listId} data-testid="time-list">
-          <TimeChoices value={text} dial={text} suggested={suggested} suggestedLabel={suggestedLabel} mouseKeepsFocus
-            onDial={(t) => { typed.current = t; setText(t); stop(); timer.current = setTimeout(() => commit(typed.current), TIME_SETTLE_MS); }}
-            onPick={(t) => { setOpen(false); commit(t); }} />
+          <TimeChoices value={text} dial={text} suggested={suggested} mouseKeepsFocus
+            onDial={(t) => { typed.current = t; setText(t); stop(); timer.current = setTimeout(() => commit(typed.current), TIME_SETTLE_MS); }} />
         </div>
       )}
     </span>

@@ -53,6 +53,14 @@ export function UserManage() {
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
 
+  // Round 1 (21 October 2026): the driver's Me lists only the people chosen here; saved at once (a switch).
+  async function setContact(on: boolean) {
+    await run(async () => {
+      const r = await transport.call<UpdateOfficeUserResult>("update_office_user", { email, driver_contact: on });
+      setU({ ...u!, driver_contact: r.updated.driver_contact === true });
+    });
+  }
+
   async function run(fn: () => Promise<void>) {
     setBusy(true);
     setMsg(null);
@@ -143,6 +151,22 @@ export function UserManage() {
             {edMsg && <Notice tone={edMsg.tone}>{edMsg.text}</Notice>}
             <div><button className="btn dark" type="submit" disabled={busy}>Save</button></div>
           </form>
+        )}
+        {me.tools.includes("update_office_user") && (
+          <div className="card card-b" style={{ display: "grid", gap: 8 }} data-testid="driver-contact-card">
+            <label className="row" style={{ padding: 0, cursor: "pointer" }}>
+              <input type="checkbox" role="switch" checked={u.driver_contact === true} disabled={busy || (!u.phone && u.driver_contact !== true)}
+                onChange={(e) => void setContact(e.target.checked)} />
+              <span className="grow">
+                <span className="name">Show as a contact for drivers</span>
+                <span className="sub" style={{ display: "block" }}>
+                  {u.phone
+                    ? `Drivers see ${u.name} on the app's Me with Call and WhatsApp, as ${normalisePermissions(u.permissions).includes("approve") ? "Fleet admin" : "Office"}.`
+                    : "Add a mobile number first."}
+                </span>
+              </span>
+            </label>
+          </div>
         )}
         {u.active && (
           <div className="card card-b" style={{ display: "grid", gap: 12 }}>

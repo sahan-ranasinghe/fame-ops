@@ -100,7 +100,7 @@ export function PlanTimeline({ timeline, plan, startName, reasons = [], warnings
                   <span className="num small">
                     {stopTimes(x)}
                     {x.arrive_by && (
-                      <span className={late ? "status bad" : "muted"} style={{ fontSize: 13 }}> · by {x.arrive_by}{late ? ` · ${duration(x.late_min ?? 0)} late` : ""}</span>
+                      <span className={late ? "status warn" : "muted"} style={{ fontSize: 13 }}> · by {x.arrive_by}{late ? ` · ${duration(x.late_min ?? 0)} late` : ""}</span>
                     )}
                   </span>
                 </li>

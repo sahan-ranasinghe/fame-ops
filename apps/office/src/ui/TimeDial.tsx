@@ -1,9 +1,11 @@
 // The clock (Material 3's time picker, Google Calendar's; 21 October 2026), the site's twin of the app's
 // components/patterns/TimeDial.tsx: the time on top (its hours or its minutes clicked to choose which the dial sets), a
 // 24-hour dial (outer ring 00–11, inner 12–23), then the minutes, any minute by dragging or clicking on the face; letting
-// go of an hour goes to the minutes. The arrow keys move it by one. The math is dialLogic.ts (the same file as the app's).
+// go of an hour goes to the minutes. The arrow keys move it by one; the keyboard toggle types the hours and minutes
+// instead (Material 3). The math is dialLogic.ts (the same file as the app's).
 import { type KeyboardEvent, type PointerEvent, useRef, useState } from "react";
-import { type DialMode, dialLabels, hhmm, hourAt, minuteAt, partsOf, placeOf, pointOf } from "./dialLogic";
+import { type DialMode, dialLabels, hhmm, hourAt, minuteAt, partsOf, placeOf, pointOf, typedPart } from "./dialLogic";
+import { Icon } from "./icons";
 
 const SIZE = 264;
 const C = SIZE / 2;
@@ -13,6 +15,14 @@ const INNER = 72;
 export function TimeDial({ value, onChange }: { value: string; onChange: (time: string) => void }) {
   const { h, m } = partsOf(value);
   const [mode, setMode] = useState<DialMode>("hour");
+  const [typing, setTyping] = useState(false);
+  const [typedH, setTypedH] = useState("");
+  const [typedM, setTypedM] = useState("");
+  const typed = (hh: string, mm: string) => {
+    const th = typedPart(hh, 23);
+    const tm = typedPart(mm, 59);
+    if (th !== null && tm !== null) onChange(hhmm(th, tm));
+  };
   const dragging = useRef(false);
   const svg = useRef<SVGSVGElement>(null);
 
@@ -36,10 +46,27 @@ export function TimeDial({ value, onChange }: { value: string; onChange: (time: 
   return (
     <div className="tdial" data-testid="time-clock">
       <div className="tdial-top">
-        <button type="button" className={`tdial-part mono${mode === "hour" ? " on" : ""}`} aria-pressed={mode === "hour"} onClick={() => setMode("hour")} data-testid="time-part-hour">{String(h).padStart(2, "0")}</button>
-        <span className="tdial-colon mono">:</span>
-        <button type="button" className={`tdial-part mono${mode === "minute" ? " on" : ""}`} aria-pressed={mode === "minute"} onClick={() => setMode("minute")} data-testid="time-part-minute">{String(m).padStart(2, "0")}</button>
+        {typing ? (
+          <>
+            <input className="tdial-typed mono" inputMode="numeric" maxLength={2} aria-label="Hour" value={typedH} data-testid="time-type-hour"
+              onChange={(e) => { setTypedH(e.target.value); typed(e.target.value, typedM); }} />
+            <span className="tdial-colon mono">:</span>
+            <input className="tdial-typed mono" inputMode="numeric" maxLength={2} aria-label="Minute" value={typedM} data-testid="time-type-minute"
+              onChange={(e) => { setTypedM(e.target.value); typed(typedH, e.target.value); }} />
+          </>
+        ) : (
+          <>
+            <button type="button" className={`tdial-part mono${mode === "hour" ? " on" : ""}`} aria-pressed={mode === "hour"} onClick={() => setMode("hour")} data-testid="time-part-hour">{String(h).padStart(2, "0")}</button>
+            <span className="tdial-colon mono">:</span>
+            <button type="button" className={`tdial-part mono${mode === "minute" ? " on" : ""}`} aria-pressed={mode === "minute"} onClick={() => setMode("minute")} data-testid="time-part-minute">{String(m).padStart(2, "0")}</button>
+          </>
+        )}
+        <button type="button" className="tdial-toggle" aria-label={typing ? "Use the clock" : "Type the time"} data-testid="time-keyboard"
+          onClick={() => { setTypedH(String(h).padStart(2, "0")); setTypedM(String(m).padStart(2, "0")); setTyping((x) => !x); }}>
+          <Icon name={typing ? "clock" : "keyboard"} />
+        </button>
       </div>
+      {!typing && (
       <svg
         ref={svg}
         className="tdial-face"
@@ -69,6 +96,7 @@ export function TimeDial({ value, onChange }: { value: string; onChange: (time: 
           );
         })}
       </svg>
+      )}
     </div>
   );
 }

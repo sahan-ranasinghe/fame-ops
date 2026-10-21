@@ -181,13 +181,15 @@ reset role;
 set local request.jwt.claims to '{}';
 update public.tasks set approved_by_employee_id = '10000000-0000-0000-0000-000000000bd3', approved_at = now()
   where id = '30000000-0000-0000-0000-000000000bd5';
+-- Round 1 (21 October 2026): only the people chosen as contacts for drivers are offered.
+update public.employees set driver_contact = true where id = '10000000-0000-0000-0000-000000000bd3';
 set local role authenticated;
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-000000000bd1","role":"authenticated"}';
 select is(public.my_task_contacts('30000000-0000-0000-0000-000000000bd5') #>> '{approver,name}', 'Palitha Approver', 'who approved it, by name');
 select is(public.my_task_contacts('30000000-0000-0000-0000-000000000bd5') #>> '{approver,phone}', '+94712345678', 'with their number');
 select is(public.my_task_contacts('30000000-0000-0000-0000-000000000bd5') ->> 'office_phone', '+94112345678', 'and the office''s');
 select ok(public.my_task_contacts('30000000-0000-0000-0000-000000000bd5') -> 'approvers' @> '[{"name": "Palitha Approver"}]'::jsonb,
-  'the approvers with a number (when the one who approved has none)');
+  'the chosen contacts who approve, with a number (when the one who approved has none)');
 select is(public.my_task_contacts('30000000-0000-0000-0000-000000000bd2'), null, 'another driver''s task: nothing');
 select is(public.my_office_contacts() ->> 'office_phone', '+94112345678', 'Me: Call office');
 set local request.jwt.claims to '{"sub":"00000000-0000-0000-0000-000000000bd4","role":"authenticated"}';

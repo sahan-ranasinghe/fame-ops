@@ -95,7 +95,7 @@ console.log('\nThe words (office/trip/words.ts):');
   check(reasonText(t, 'The vehicle is in the garage') === 'The vehicle is in the garage', 'the server\'s own warning as it came');
   const plan = departurePlan({ items: [{ kind: 'leave', at: '07:24', source: 'plan' }, { kind: 'stop', n: 2, label: 'Stop 2', place: 'Kurunegala site', planned_arrive: '10:15', planned_leave: '11:45', arrive_by: '10:30', dwell_min: 90 }], totals: { drive_min: 171, km: 94, ends: '11:45' } }, 15, undefined);
   const late = checkDeparture('08:00', plan);
-  check(late?.kind === 'late' && late.tone === 'bad' && late.leaveBy === '07:24', 'leaving 08:00 is late for a 10:30 arrive-by', late);
+  check(late?.kind === 'late' && late.tone === 'warn' && late.leaveBy === '07:24', 'leaving 08:00 is late for a 10:30 arrive-by: an amber hint (the planner advises, never blocks)', late);
   const said = late ? departureText(t, late) : '';
   check(said.startsWith('office.trip.lateAfter') && said.includes('"leave":"08:00"') && said.includes('"place":"Kurunegala site"') && said.includes('"by":"10:30"') && said.includes('"use":"07:24"'), 'the sentence through i18n with its parts', said);
   check(lateByText(t, late, '08:00') === 'office.trip.tooLate {"min":36}', '"36 min too late"', lateByText(t, late, '08:00'));

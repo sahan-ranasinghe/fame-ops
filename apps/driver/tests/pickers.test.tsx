@@ -1,4 +1,4 @@
-// The pickers (21 October 2026): the time field's sheet is the presets and the clock (Material 3's time picker, any minute,
+// The pickers (21 October 2026): the time field's sheet is the clock only (no quick-time chips) (Material 3's time picker, any minute,
 // a keyboard toggle); nothing internal is shown. Runs on the app's components as Office mode, /m/ and the driver app use them.
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { useState } from 'react';
@@ -19,16 +19,16 @@ function Harness({ initial = '', suggested, onCommit }: { initial?: string; sugg
   );
 }
 
-describe('The time field: presets and the clock', () => {
-  it('a preset counts at once; Now is its own choice and every common time is there', () => {
+describe('The time field: the clock only', () => {
+  it('no quick-time chips; the suggestion shows grey and the clock starts there; Done takes it', () => {
     const commits: string[] = [];
-    render(<Harness onCommit={(v) => commits.push(v)} />);
+    render(<Harness suggested="07:24" onCommit={(v) => commits.push(v)} />);
     fireEvent.press(screen.getByTestId('leave'));
     expect(screen.getByTestId('time-clock')).toBeTruthy();
-    for (const c of ['08:00', '09:00', '12:00', '13:00', '17:00']) expect(screen.getByTestId(`time-quick-${c}`)).toBeTruthy();
-    expect(screen.getByTestId('time-quick-now')).toBeTruthy();
-    fireEvent.press(screen.getByTestId('time-quick-09:00'));
-    expect(commits).toEqual(['09:00']);
+    expect(screen.queryByTestId(/^time-quick-/)).toBeNull();
+    expect(screen.queryByText(/^Now|^09:00$/)).toBeNull();
+    fireEvent.press(screen.getByText('Done'));
+    expect(commits).toEqual(['07:24']);
   });
 
   it('the clock: the hour then the minute, any minute (its adjustable steps), then Done', () => {

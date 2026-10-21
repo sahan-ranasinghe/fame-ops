@@ -41,6 +41,9 @@ export interface Settings {
   office_phone: string | null;
   /** Hotfix 2 (J): a task may be made with its vehicle chosen on the day or of a type (on after every phone has the update). */
   vehicle_on_the_day: boolean;
+  /** Round 1 (21 October 2026): the trip forms suggest the leave time and each stop's stay in grey, and hint (amber) when a
+   *  chosen time misses an arrive-by; off = just the fields. The planner never blocks either way. */
+  planner_suggestions: boolean;
   /** Snap to roads under the open package: none or osrm (secret OSRM_URL); under the google package Google's Roads API is used (google_caps.roads; 0 = off) and this is not read. */
   map_matching: { provider: MapMatchingProvider };
   /** The driver app's "At work? Start work" nudge: the time, on these days (0 = Sunday … 6 = Saturday); only while off duty. */
@@ -136,6 +139,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   driver_personal_trips: "allowed",
   office_phone: null,
   vehicle_on_the_day: false,
+  planner_suggestions: true,
   map_matching: { provider: "none" },
   shift_start: "08:00",
   shift_days: [1, 2, 3, 4, 5],
@@ -192,6 +196,8 @@ export const SETTING_TEXT: Record<SettingKey, string> = {
     "The office's own number (Call office in the driver app and on the requester's pages): a Sri Lankan number, stored +94…; null clears it",
   vehicle_on_the_day:
     "A task may be made without a vehicle: the driver's vehicle on the day, or any vehicle of a type (the driver confirms it at Start task). Switch it on after every phone has the app update that knows it",
+  planner_suggestions:
+    "The trip forms suggest the leave time and each stop's stay (in grey, editable) and give a hint when a chosen time misses an arrive-by; off = just the fields, no suggestions. Never blocks a save",
   driver_personal_trips:
     "Trips a driver starts in the app (Start a trip): allowed = Company work preselected and Personal offered, default = Personal preselected, off = no Personal choice; ask_first is reserved (accepted, behaves as allowed until it is built). Personal km are counted apart and never charged to a job",
   map_matching:
@@ -315,6 +321,9 @@ export function validateSetting(key: SettingKey, value: unknown): Settings[Setti
     }
     case "vehicle_on_the_day":
       if (typeof value !== "boolean") throw new ToolError("vehicle_on_the_day: true or false.");
+      return value;
+    case "planner_suggestions":
+      if (typeof value !== "boolean") throw new ToolError("planner_suggestions: true or false.");
       return value;
     case "driver_personal_trips":
       if (!PERSONAL_TRIPS.includes(value as PersonalTrips)) {

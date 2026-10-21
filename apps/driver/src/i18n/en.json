@@ -2246,7 +2246,12 @@
       "officePhone": "Office phone",
       "officePhoneHint": "Call office in the driver app. Empty and Save clears it.",
       "officePhoneNone": "None saved: Call office is not shown.",
-      "filterShow": "Show"
+      "filterShow": "Show",
+      "driverContactTitle": "Drivers",
+      "driverContact": "Show as a contact for drivers",
+      "driverContactNoPhone": "Add a mobile number first.",
+      "driverContactAdmin": "Drivers see {name} on Me with Call and WhatsApp, as Fleet admin.",
+      "driverContactOffice": "Drivers see {name} on Me with Call and WhatsApp, as Office."
     },
     "permission": {
       "view": "View",
@@ -2795,8 +2800,6 @@
     "prevWeek": "Previous week",
     "nextWeek": "Next week",
     "pickDate": "Pick a date",
-    "planned": "Planned {time}",
-    "now": "Now {time}",
     "suggestionsTimeout": "Suggestions took too long.",
     "today": "Today",
     "tomorrow": "Tomorrow",

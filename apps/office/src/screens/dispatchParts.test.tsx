@@ -45,7 +45,7 @@ describe("the plan as a timeline", () => {
     ]);
     const legs = screen.getAllByTestId("plan-leg").map((l) => l.textContent);
     expect(legs).toEqual(["94.2 km · 1 h 31 min · Google trafficRush hour ×1.3Via expressway", "12 km · 25 min · openrouteservice"]);
-    expect(screen.getByText("25 min late", { exact: false }).className).toContain("bad");
+    expect(screen.getByText("25 min late", { exact: false }).className).toContain("warn"); // the planner advises: amber, never red
     expect(screen.getByTestId("plan-totals").textContent).toBe("1 h 56 min driving · 106.2 km · ends 11:55");
   });
   it("the exact reason when there is no plan; Updating… while the next one comes", () => {
@@ -112,7 +112,7 @@ describe("Stay at a stop (21 October 2026: one field, a sheet of presets and Cus
 });
 
 describe("the departure check beside the fields", () => {
-  it("says it in red with Use 07:24 and Move arrive-by to 09:40", () => {
+  it("says it in amber (a hint, never an error) with Use 07:24 and Move arrive-by to 09:40", () => {
     const tl: Timeline = { items: [{ kind: "leave", at: "07:24", source: "plan" }, { kind: "stop", n: 1, label: "Stop 1 · Drop · Kurunegala site", place: "Kurunegala site", planned_arrive: "09:00", planned_leave: "10:30", arrive_by: "09:00", dwell_min: 90 }], totals: { drive_min: 96, km: 94, ends: "10:30" } };
     const check = checkDeparture("08:00", departurePlan(tl));
     const done: string[] = [];

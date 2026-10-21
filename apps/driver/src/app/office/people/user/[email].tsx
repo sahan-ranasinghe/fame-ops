@@ -9,6 +9,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 
+import { ToggleRow } from '@/components/office/Controls';
 import { PermissionPicker, SecretCard } from '@/components/office/PeopleParts';
 import { showSnackbar } from '@/components/patterns/Snackbar';
 import { Button, Field, Notice, Txt } from '@/components/ui';
@@ -48,6 +49,23 @@ export default function ManageOfficeUser() {
   const [linkError, setLinkError] = useState<FleetError | null>(null);
   const [switching, setSwitching] = useState(false);
   const [switchError, setSwitchError] = useState<FleetError | null>(null);
+  const [contactBusy, setContactBusy] = useState(false);
+  const [contactError, setContactError] = useState<FleetError | null>(null);
+
+  // Round 1 (21 October 2026): the driver's Me lists only the people chosen here; a switch, saved at once.
+  async function setContact(on: boolean) {
+    if (!u) return;
+    setContactError(null);
+    setContactBusy(true);
+    try {
+      const r = await api.call<UpdateOfficeUserResult>('update_office_user', { email, driver_contact: on });
+      q.patch((x) => ({ ...x, users: x.users.map((y) => ((y.email ?? '').toLowerCase() === email.toLowerCase() ? { ...y, driver_contact: r.updated.driver_contact === true } : y)) }));
+    } catch (e) {
+      setContactError(e as FleetError);
+    } finally {
+      setContactBusy(false);
+    }
+  }
 
   async function save() {
     if (!u || !f) return;
@@ -165,6 +183,16 @@ export default function ManageOfficeUser() {
                 <Txt variant="strong" size={17}>{u.phone_display ?? (u.phone ? phoneDisplay(u.phone) : '—')}</Txt>
               </View>
             )}
+          </Section>
+        )}
+        {u && u.active && canEdit && (
+          <Section title={t('office.people.driverContactTitle')}>
+            <ToggleRow label={t('office.people.driverContact')} value={u.driver_contact === true} onChange={(on) => void setContact(on)}
+              disabled={contactBusy || (!u.phone && u.driver_contact !== true)}
+              hint={!u.phone ? t('office.people.driverContactNoPhone')
+                : t(normalisePermissions(u.permissions).includes('approve') ? 'office.people.driverContactAdmin' : 'office.people.driverContactOffice', { name: u.name })}
+              testID="driver-contact" />
+            {contactError && <ErrorNotice error={contactError} onRetry={() => void setContact(u.driver_contact !== true)} onSignIn={() => void signOut()} />}
           </Section>
         )}
         {u && u.active && canLink && (

@@ -2,9 +2,9 @@
 // default, "Passengers get in here" makes it Stop 1), the stops as rows (type,
 // place, arrive-by and the time at each stop; named by their place in the
 // order), Return to office and No expressway, the date and the leave-by time
-// (typed, or filled in from the plan, checked at once against the arrive-by
+// (typed, or the plan's as a grey suggestion, checked at once against the arrive-by
 // times), the plan as a timeline with the exact reason when there is none
-// (1.5 s after the last edit, or Plan now) and the overlaps as cards, then the
+// (1.5 s after the last edit) and the overlaps as cards, then the
 // driver first and the vehicle they bring (changeable), Who's available with
 // the best match, the project split. Everything typed is kept as a draft; a
 // refresh never resets a choice (Phase 7, §3, §10, §11, §17). The trip part is

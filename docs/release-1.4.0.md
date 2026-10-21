@@ -8,15 +8,12 @@ native change, never a build to try something). **Nothing here is built yet.** U
 
 Collected 20 October 2026 (Stage 1 item 7).
 
-## 1. The native date and time pickers
+## 1. The native date and time pickers: dropped (21 October 2026)
 
-- **Need:** the system date and time wheels (Material 3 on Android) for the time sheet and the calendar
-  (`docs/ui-patterns.md` §2–§4).
-- **Module:** `@react-native-community/datetimepicker` (the SDK 57 version from `npx expo install`).
-- **Until then:** the JavaScript sheets in `components/patterns/TimeField.tsx` (5-minute list, Now, the common times)
-  and `components/patterns/Calendar.tsx`. These keep working after 1.4.0. The build may add a "wheel" option to the time
-  sheet; the calendar stays (the range pattern needs it).
-- **Check after the build:** the time sheet's tests (`test:patterns`), a pick on the phone in both languages.
+Not needed any more. The time sheet is now a pure JavaScript clock (Material 3's time picker: a 24-hour dial with a
+keyboard toggle, any minute; `components/patterns/TimeDial.tsx`, the math in `lib/patterns/dialLogic.ts`, the same file as
+the site's `ui/dialLogic.ts`), and the calendar stays JavaScript (the range pattern needs it). So
+`@react-native-community/datetimepicker` is not added in 1.4.0.
 
 ## 2. An in-app video player (the fuel videos)
 

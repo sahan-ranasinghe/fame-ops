@@ -167,7 +167,7 @@ export function TaskEdit() {
   const keepLabel = `Keep${currentPlate ? ` (${currentPlate})` : t.vehicle_text ? ` (${t.vehicle_text})` : ""}`;
   const reason = needsDriverText(t);
   // The leave-by checked at once against the stops' arrive-by times (the task's plan shifted).
-  const check = running ? null : checkDeparture(f.time, departurePlan(p.timeline, p.plan?.buffer_min));
+  const check = running || settings.data?.settings.planner_suggestions === false ? null : checkDeparture(f.time, departurePlan(p.timeline, p.plan?.buffer_min));
   // A driver picked in the list keeps a vehicle picked by hand; Use suggestion and a row of Who's available take the
   // driver with the vehicle they bring.
   const pickDriver = (username: string) => setF((x) => ({ ...x, driver: username }));

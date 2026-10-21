@@ -39,7 +39,8 @@ export default function TripWhen() {
   const patchStop = (key: string, patch: Partial<StopDraft>) => setF({ stops: f.stops.map((s) => (s.key === key ? { ...s, ...patch } : s)) });
   const fallbacks = dwellFallbacks(f.stops, trip.preview?.stops, trip.dwellSetting);
   const stopsOk = stopsInput(f.stops, f.startPax ? 1 : 0);
-  const problem = 'error' in stopsOk ? reasonText(t, stopsOk.error) : !f.leaveBy && !f.stops.some((s) => s.arriveBy) ? t('office.trip.reasonLeave') : null;
+  // Next as soon as the stops exist (21 October 2026): the time is asked on Review if none was given.
+  const problem = 'error' in stopsOk ? reasonText(t, stopsOk.error) : null;
   const check = trip.check;
   const lateLabel = lateByText(t, check, f.leaveBy);
   const startName = f.start.trim() || trip.base?.name || '';
@@ -66,10 +67,10 @@ export default function TripWhen() {
               </View>
               {/* One compact row per stop (Google Calendar): Arrive by and Stay; the last stop's Free by / Back by under it. */}
               <View style={{ flexDirection: 'row', gap: 12 }}>
-                <TimeField compact label={t('office.trip.arriveBy')} value={s.arriveBy} onCommit={(arriveBy) => patchStop(s.key, { arriveBy })} tone={trip.lateKey === s.key ? 'red' : undefined} testID={`stop-arrive-${i}`} />
-                <DurationField label={t('patterns.stay')} value={chosenMin !== null ? String(chosenMin) : ''} onCommit={(dwell) => patchStop(s.key, { dwell })} suggestedMin={fb?.min} testID={`stop-stay-${i}`} />
+                <TimeField compact label={t('office.trip.arriveBy')} value={s.arriveBy} onCommit={(arriveBy) => patchStop(s.key, { arriveBy })} tone={trip.lateKey === s.key ? 'amber' : undefined} testID={`stop-arrive-${i}`} />
+                <DurationField label={t('patterns.stay')} value={chosenMin !== null ? String(chosenMin) : ''} onCommit={(dwell) => patchStop(s.key, { dwell })} suggestedMin={trip.suggestions ? fb?.min : undefined} testID={`stop-stay-${i}`} />
               </View>
-              {i === f.stops.length - 1 && <TimeField compact label={t(draft.mode === 'task' || draft.mode === 'stops' ? 'office.trip.freeBy' : 'office.trip.backBy')} value={f.end} onCommit={(end) => setF({ end })} tone={trip.lateBack ? 'red' : undefined} />}
+              {i === f.stops.length - 1 && <TimeField compact label={t(draft.mode === 'task' || draft.mode === 'stops' ? 'office.trip.freeBy' : 'office.trip.backBy')} value={f.end} onCommit={(end) => setF({ end })} tone={trip.lateBack ? 'amber' : undefined} />}
               {check && check.kind === 'late' && trip.lateKey === s.key && (
                 <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(check.leaveBy)} moveLabel={check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
               )}
@@ -81,10 +82,12 @@ export default function TripWhen() {
           <Txt variant="label" color={colors.muted}>{t('office.trip.leaveFrom', { place: startName }).toUpperCase()}</Txt>
           {draft.running ? <Txt variant="muted">{t('office.trip.leaveRunning')}</Txt> : null}
           {!draft.running && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <TimeField value={f.leaveBy} onCommit={trip.setLeave} tone={lateLabel ? 'red' : undefined} placeholder={t('office.trip.leaveAuto')} suggested={trip.preview?.leave_by?.slice(-5)} testID="leave-by" />
-            {lateLabel && <Txt variant="strong" size={15} color={colors.red}>{lateLabel}</Txt>}
+            <TimeField value={f.leaveBy} onCommit={trip.setLeave} tone={lateLabel ? 'amber' : undefined}
+              placeholder={trip.suggestedLeave ? t('patterns.suggestedValue', { value: trip.suggestedLeave }) : t('office.trip.leaveAuto')}
+              suggested={trip.suggestedLeave ?? undefined} testID="leave-by" />
+            {lateLabel && <Txt variant="strong" size={15} color={colors.amberText}>{lateLabel}</Txt>}
           </View>}
-          {!f.leaveBy && <Txt variant="small">{trip.plan.updating ? t('office.trip.planning') : t('office.trip.leaveHint')}</Txt>}
+          {!f.leaveBy && trip.suggestions && <Txt variant="small">{trip.plan.updating ? t('office.trip.planning') : t('office.trip.leaveHint')}</Txt>}
           {check && check.kind === 'late' && !trip.lateKey && (
             <DepartureNote text={departureText(t, check)} tone={check.tone} useLabel={t('office.trip.use', { time: check.leaveBy })} onUse={() => trip.setLeave(check.leaveBy)} moveLabel={check.back && check.moveBackTo ? t('office.trip.moveBackBy', { time: check.moveBackTo }) : check.moveTo ? t('office.trip.moveArriveBy', { time: check.moveTo }) : undefined} onMove={check.back && check.moveBackTo ? () => trip.setEnd(check.moveBackTo!) : check.moveTo ? () => trip.moveArriveBy(check.n, check.moveTo!) : undefined} />
           )}
@@ -92,9 +95,6 @@ export default function TripWhen() {
           {trip.reasons.filter((r) => !r.note).length > 0 && f.leaveBy ? (
             <View style={{ gap: 4 }}>{trip.reasons.filter((r) => !r.note).map((r, i) => <Txt key={i} variant="small" color={colors.amberText}>{reasonText(t, r.text)}</Txt>)}</View>
           ) : null}
-          {trip.plan.input && (
-            <Button kind="outline" label={trip.plan.updating ? t('office.trip.planning') : t('office.trip.planNow')} onPress={trip.plan.planNow} busy={trip.plan.updating} style={{ minHeight: 48 }} />
-          )}
         </View>
       </Screen>
       <TripFooter label={t(nextStep('when', draft.mode) === 'review' ? 'office.trip.nextReview' : 'office.trip.nextWho')} onPress={() => { const next = nextStep('when', draft.mode) ?? 'who'; updateDraft((x) => ({ ...x, step: next })); router.push(`/office/trip/${next}` as never); }} disabled={!!problem} problem={problem} />

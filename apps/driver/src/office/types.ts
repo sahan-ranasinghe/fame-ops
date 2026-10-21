@@ -1193,6 +1193,8 @@ export interface FleetSettings {
   office_phone?: string | null;
   /** Hotfix 2 (J): a task may be made with its vehicle chosen on the day or of a type (switched on after every phone has the update). */
   vehicle_on_the_day?: boolean;
+  /** Round 1: the trip forms suggest times in grey (absent = on). */
+  planner_suggestions?: boolean;
   /** Phase 7 (§13): Start a trip in the app: allowed (Company preselected), default (Personal preselected), off; ask_first = allowed for now. */
   driver_personal_trips?: "allowed" | "default" | "off" | "ask_first";
   dwell_min: Record<string, number>;
@@ -1590,6 +1592,8 @@ export interface OfficeUser {
   role: string;
   permissions?: string[];
   active: boolean;
+  /** Round 1: shown to drivers as a contact (the app's Me). */
+  driver_contact?: boolean;
   since?: string;
   connector_keys: OfficeKey[];
 }
@@ -1607,7 +1611,7 @@ export interface CreateOfficeUserResult {
 }
 
 export interface UpdateOfficeUserResult {
-  updated: { name: string; email?: string | null; phone?: string | null; role: string; permissions: string[] };
+  updated: { name: string; email?: string | null; phone?: string | null; role: string; permissions: string[]; driver_contact?: boolean };
 }
 
 export interface SetPasswordLinkResult {

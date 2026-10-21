@@ -14,7 +14,7 @@ import { DwellPicker } from "./DwellPicker";
 import { type StartFields, WHAT_LABEL } from "./stopsLogic";
 import { ANY_TYPES, anyValue, isChoice, ON_THE_DAY, ON_THE_DAY_LABEL } from "./vehicleChoiceLogic";
 
-/** The plan preview is computed this long after the last edit (or at once with Plan now): every call may count against a daily cap. */
+/** The plan preview is computed this long after the last edit (no Plan now since 21 October 2026): every call may count against a daily cap. */
 export const PLAN_DEBOUNCE_MS = 1500;
 
 /** get_settings, once per page (the base place, the times at stops by type, self-drive). */

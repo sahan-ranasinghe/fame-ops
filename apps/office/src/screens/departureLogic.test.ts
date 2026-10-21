@@ -33,7 +33,7 @@ describe("the departure check", () => {
   it("says a late departure in §20's words, with the leave-by and the arrive-by to move to", () => {
     const c = checkDeparture("08:00", departurePlan(timeline()));
     expect(c).toEqual({
-      kind: "late", tone: "bad", n: 2, place: "Kurunegala site",
+      kind: "late", tone: "warn", n: 2, place: "Kurunegala site",
       text: "Leaving 08:00 you reach Kurunegala site at 09:36, 36 min after 09:00. Leave by 07:24.",
       leaveBy: "07:24", moveTo: "09:40",
     });
@@ -96,7 +96,7 @@ describe("the departure check against back by (§20)", () => {
 
   it("says a late return in §20's words, with Use 07:40 and Move back by to 18:20", () => {
     expect(checkDeparture("08:00", departurePlan(dayOut(), 0, "18:00"))).toEqual({
-      kind: "late", tone: "bad", n: 1, place: "Kurunegala site", back: true,
+      kind: "late", tone: "warn", n: 1, place: "Kurunegala site", back: true,
       text: "Leaving 08:00 you are back at 18:20, 20 min after 18:00. Leave by 07:40.",
       leaveBy: "07:40", moveBackTo: "18:20",
     });

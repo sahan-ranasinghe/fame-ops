@@ -2246,7 +2246,12 @@
       "officePhone": "කාර්යාල දුරකථනය",
       "officePhoneHint": "රියදුරු යෙදුමේ කාර්යාලය අමතන්න. හිස් කර සුරැකුවොත් ඉවත් වේ.",
       "officePhoneNone": "සුරැකී නැත: කාර්යාලය අමතන්න නොපෙන්වයි.",
-      "filterShow": "පෙන්වන්න"
+      "filterShow": "පෙන්වන්න",
+      "driverContactTitle": "රියදුරන්",
+      "driverContact": "රියදුරන්ට සම්බන්ධතාවක් ලෙස පෙන්වන්න",
+      "driverContactNoPhone": "මුලින් ජංගම අංකයක් එක් කරන්න.",
+      "driverContactAdmin": "රියදුරන්ට “මම” තුළ {name} අමතන්න සහ WhatsApp සමඟ, වාහන කළමනාකරු ලෙස පෙනේ.",
+      "driverContactOffice": "රියදුරන්ට “මම” තුළ {name} අමතන්න සහ WhatsApp සමඟ, කාර්යාලය ලෙස පෙනේ."
     },
     "permission": {
       "view": "බලන්න",
@@ -2795,8 +2800,6 @@
     "prevWeek": "පෙර සතිය",
     "nextWeek": "ඊළඟ සතිය",
     "pickDate": "දිනයක් තෝරන්න",
-    "planned": "සැලසුම {time}",
-    "now": "දැන් {time}",
     "suggestionsTimeout": "යෝජනා ලැබීමට වැඩි කාලයක් ගතවිය.",
     "today": "අද",
     "tomorrow": "හෙට",

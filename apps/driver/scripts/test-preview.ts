@@ -201,7 +201,15 @@ async function main() {
   check(approvedBy(parseTaskContacts({ approvers: [{ name: 'Sahan', phone: '+94774444444' }] })) === null, 'no approver named: no "Approved by" line');
   check(en('preview.approvedBy', { name: 'Palitha', time: '10:42' }) === 'Approved by Palitha · 10:42', 'the line reads "Approved by Palitha · 10:42"');
   const me = officeCalls(parseOfficeContacts({ office_phone: '+94112345678', approvers: [{ name: 'Palitha', phone: '+94773333333' }] }));
-  check(same(me.map((x) => x.kind), ['office', 'fleetAdmin']), 'Me: Call office and Call fleet admin');
+  check(same(me.map((x) => x.kind), ['fleetAdmin', 'office']), 'Me (a server before Round 1): the approvers, then Call office');
+  // Round 1 (21 October 2026): only the chosen contacts, each once; "fleet admin" only for one who approves.
+  const chosen = officeCalls(parseOfficeContacts({ office_phone: '+94112345678', contacts: [
+    { name: 'Palitha', phone: '+94773333333', fleet_admin: true }, { name: 'Kumari', phone: '+94775555555', fleet_admin: false },
+    { name: 'Palitha', phone: '+94773333333', fleet_admin: true },
+  ], approvers: [{ name: 'Palitha', phone: '+94773333333' }, { name: 'Sahan', phone: '+94774444444' }] }));
+  check(same(chosen.map((x) => `${x.kind}:${x.name ?? ''}`), ['fleetAdmin:Palitha', 'office:Kumari', 'office:']),
+    'Me: the chosen contacts each once (Palitha as fleet admin, Kumari as office), then the office number; an approver not chosen is not shown', chosen);
+  check(same(officeCalls(parseOfficeContacts({ office_phone: '+94112345678', contacts: [] })).map((x) => x.kind), ['office']), 'nobody chosen: the office number only');
   check(officeCalls(parseOfficeContacts(null)).length === 0 && parseTaskContacts('nope') === null, 'nothing from the server: no buttons, nothing parsed');
   check(phoneDisplay('+94771234567') === '077 123 4567' && phoneDisplay('0771234567') === '077 123 4567' && whatsappLink('+94 77 123 4567') === 'https://wa.me/94771234567',
     'numbers read 077 123 4567; WhatsApp gets the international digits');

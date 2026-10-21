@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { addMonths, dayAllowed, daysBetween, dayState, monthGrid, monthOf, mondayOf, PRESETS, presetOf, presetRange, rangeWords, tapDay, weekDays } from '../src/lib/patterns/calendarLogic';
 import { activeChips, activeCount, clearValues, defaultValues, type FilterDef, isChosen, multi, single, toggle } from '../src/lib/patterns/filterLogic';
 import { listView, TimeoutError, withTimeout } from '../src/lib/patterns/listLogic';
-import { COMMON_TIMES, nowRounded, quickTimes } from '../src/lib/patterns/timeLogic';
+import * as timeLogic from '../src/lib/patterns/timeLogic';
 import { dialLabels, hhmm, hourAt, minuteAt, partsOf, placeOf, pointOf, typedPart } from '../src/lib/patterns/dialLogic';
 
 let failures = 0;
@@ -59,15 +59,7 @@ async function main() {
     check(placeOf('hour', 17, OUT, IN).radius === IN && placeOf('hour', 5, OUT, IN).radius === OUT && placeOf('minute', 30, OUT, IN).angle === 180, 'each value is drawn on its ring');
     check(dialLabels('hour').length === 24 && dialLabels('minute').map((l) => l.text).join() === '00,05,10,15,20,25,30,35,40,45,50,55', 'the labels: 24 hours, the minutes every 5');
     check(hhmm(24, 61) === '00:01' && partsOf('09:05').h === 9 && partsOf('9:5').h === 0 && typedPart('7', 23) === 7 && typedPart('25', 23) === null, 'typed parts are checked; a time wraps the day');
-    check(nowRounded('07:02') === '07:05' && nowRounded('07:05') === '07:05' && nowRounded('07:56') === '08:00' && nowRounded('23:58') === '23:55', 'Now rounded up to the next 5 minutes, never past midnight');
-    const q = quickTimes('07:02', '07:24');
-    check(q[0].kind === 'suggested' && q[0].time === '07:24' && q[1].kind === 'now' && q[1].time === '07:02' && q.filter((x) => x.kind === 'common').length === COMMON_TIMES.length, 'the chips: the suggestion, Now, the common times');
-    // 21 October 2026: "Now" is its own choice and every common time stays (from 08:56 Now is 09:00; 09:00 used to go).
-    for (const at of ['08:48', '08:59', '23:58', '00:01']) {
-      const qt = quickTimes(at);
-      check(qt.filter((x) => x.kind === 'common').map((x) => x.time).join() === COMMON_TIMES.join() && qt.filter((x) => x.kind === 'now').length === 1, `at ${at}: Now, and every common time (09:00 too)`, qt.map((x) => x.time));
-    }
-    check(quickTimes('10:02', '09:00').filter((x) => x.time === '09:00').length === 1, 'the planned time stands for its own common time');
+    check(!('quickTimes' in timeLogic) && !('COMMON_TIMES' in timeLogic) && timeLogic.isHHMM('07:24'), 'no quick-time chips (the boss\'s review, 21 October 2026): the clock only');
   }
 
   console.log('\nThe filters');
@@ -123,7 +115,7 @@ async function main() {
     const profileEdit = read('app/profile-edit.tsx');
     check(profileEdit.includes("<DateField label={t('profile.licenceExpiry')}") && !profileEdit.includes('licenceExpiryHint'), "the driver's own licence expiry on the calendar (the clear button empties it)");
     const time = read('components/patterns/TimeField.tsx');
-    check(time.includes('quickTimes(now, suggested)') && time.includes('<TimeDial') && !time.includes('TIME_STEPS'), 'the time sheet: the quick chips, then the clock (no 5-minute list)');
+    check(!time.includes('quickTimes') && !time.includes('time-quick-') && time.includes('<TimeDial') && !time.includes('TIME_STEPS'), 'the time sheet: the clock only (no quick-time chips, no 5-minute list)');
     // The screens on the patterns (Stage 0): no typed time or date anywhere in the app.
     const when = read('app/office/trip/when.tsx');
     const change = read('app/office/task/[id]/time.tsx');
@@ -131,7 +123,7 @@ async function main() {
     const ask = read('components/office/AskDriversSheet.tsx');
     const vform = read('app/office/vehicles/form.tsx');
     const avail = read('app/availability-edit.tsx');
-    check(when.includes('<TripDayPicker value={f.date}') && !when.includes('pickDate') && when.includes('<TimeField') && when.includes('suggested={trip.preview?.leave_by?.slice(-5)}'), 'the trip editor\'s When: Today / Tomorrow / Pick a date (any date), the time sheet with the plan\'s leave-by suggested');
+    check(when.includes('<TripDayPicker value={f.date}') && !when.includes('pickDate') && when.includes('<TimeField') && when.includes('suggested={trip.suggestedLeave ?? undefined}') && !when.includes('planNow'), 'the trip editor\'s When: Today / Tomorrow / Pick a date (any date), the plan\'s leave time as a grey suggestion (never filled in), no Plan now');
     check(change.includes('<TripDayPicker value={f.date}') && change.includes('<TimeField') && !change.includes('pickDate'), 'Change the task: the trip day picker and the time sheet');
     check(settings.includes('<TimeField') && !settings.includes('TimeInput'), 'Quick settings: the auto clock-out through the time sheet');
     check(ask.includes('<Sheet visible={visible}') && ask.includes('return <TimeField label={label} value={value} onCommit={onChange} />;') && !ask.includes('<Modal'), 'Ask drivers: the shared sheet and the time sheet');

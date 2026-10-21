@@ -215,7 +215,7 @@ export default function TripReview() {
                       <View style={{ flex: 1 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                           <Txt variant="strong">{x.place}</Txt>
-                          {x.arrive_by && <Pill text={late ? t('office.task.minLate', { min: x.late_min ?? 0 }) : t('office.trip.onTime')} tone={late ? 'red' : 'blue'} size={13} />}
+                          {x.arrive_by && <Pill text={late ? t('office.task.minLate', { min: x.late_min ?? 0 }) : t('office.trip.onTime')} tone={late ? 'amber' : 'blue'} size={13} />}
                         </View>
                         <Txt variant="muted" size={15}>{stopTimesT(t, x)}{x.arrive_by ? ` · ${t('office.request.arriveBy', { time: x.arrive_by })}` : ''}</Txt>
                       </View>
@@ -253,7 +253,6 @@ export default function TripReview() {
           </View>
           {p?.vehicle_used && (d.mode === 'task' || books) ? <Txt variant="small" testID="vehicle-used">{t('office.trip.vehicleUsedLine', { text: `${p.vehicle_used.reg_no}${p.vehicle_used.why && p.vehicle_used.why !== 'chosen' ? ` · ${p.vehicle_used.why}` : ''}` })}</Txt> : null}
           {typeof problem === 'string' ? <Txt variant="strong" size={15} color={colors.red}>{problem}</Txt> : problem ? <ErrorNotice error={problem} onRetry={() => void send(lastKind.current)} /> : null}
-          {trip.plan.input && !trip.plan.updating && <Button kind="outline" label={t('office.trip.planNow')} onPress={trip.plan.planNow} style={{ minHeight: 48 }} />}
         </View>
       </Screen>
       <TripFooter

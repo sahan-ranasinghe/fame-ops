@@ -110,12 +110,10 @@ export function TaskStops() {
 
   // The task's end time is its back-by: a plan that ends after it says so beside Leave by (§20; it is changed on the task's edit page).
   const dPlan = running ? null : departurePlan(preview?.timeline, preview?.plan?.buffer_min, t?.end_by);
-  const check = form ? checkDeparture(form.leaveBy, dPlan) : null;
-  const fillTo = check?.kind === "fill" && !plan.stale && !plan.updating ? check.leaveBy : null;
-  useEffect(() => {
-    if (fillTo) setForm((x) => (x && !x.leaveBy ? { ...x, leaveBy: fillTo } : x));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fillTo]);
+  // The planner advises (21 October 2026): its leave time is a grey suggestion, never filled in; a chosen time is checked.
+  const raw = form ? checkDeparture(form.leaveBy, dPlan) : null;
+  const check = raw?.kind === "fill" ? null : raw;
+  const suggestedLeave = form && !form.leaveBy && raw?.kind === "fill" ? raw.leaveBy : undefined;
 
   async function save() {
     if (!form) return;
@@ -197,10 +195,10 @@ export function TaskStops() {
               </div>
               <div className="field">
                 <label htmlFor="ts-leave">Leave by</label>
-                <TimeField id="ts-leave" value={form.leaveBy} onCommit={(leaveBy) => set({ leaveBy })} />
-                {check && check.kind !== "fill"
+                <TimeField id="ts-leave" value={form.leaveBy} onCommit={(leaveBy) => set({ leaveBy })} suggested={suggestedLeave} />
+                {check
                   ? <DepartureNote check={check} onUse={(time) => set({ leaveBy: time })} onMove={(n, time) => moveArriveBy(n, time)} />
-                  : <span className="hint">Empty: planned from the stops’ arrive-by times.</span>}
+                  : <span className="hint">{suggestedLeave ? `Suggested ${suggestedLeave} from the stops’ arrive-by times. Change it if you like.` : "Empty: planned from the stops’ arrive-by times."}</span>}
               </div>
             </div>
           )}
@@ -216,7 +214,7 @@ export function TaskStops() {
         <div className="card card-b form" data-testid="plan-card">
           <div className="row" style={{ padding: 0 }}>
             <b className="grow">Plan</b>
-            <button type="button" className="btn small" onClick={plan.refetch} disabled={plan.fetching || !planArgs()}>{plan.fetching ? "Planning…" : "Plan now"}</button>
+            {plan.fetching && <span className="muted">Planning…</span>}
           </div>
           <PlanWithMap timeline={preview?.timeline} plan={preview?.plan} startName={preview?.start?.name} reasons={reasons} updating={plan.updating} offset={reached}
             stops={preview?.stops} start={preview?.start} />

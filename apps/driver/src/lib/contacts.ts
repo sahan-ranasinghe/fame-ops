@@ -32,6 +32,9 @@ export interface TaskContacts {
 export interface OfficeContacts {
   officePhone: string | null;
   approvers: Person[];
+  /** Round 1 (21 October 2026): the office people chosen as contacts for drivers, each once; `fleetAdmin` = they approve.
+   *  null = a server from before Round 1 (then the approvers). */
+  contacts: (Person & { fleetAdmin: boolean })[] | null;
 }
 
 const text = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v.trim() : null);
@@ -67,7 +70,13 @@ export function parseTaskContacts(raw: unknown): TaskContacts | null {
 export function parseOfficeContacts(raw: unknown): OfficeContacts | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
-  return { officePhone: text(o.office_phone), approvers: people(o.approvers) };
+  const contacts = Array.isArray(o.contacts)
+    ? o.contacts.map((c) => {
+      const p = person(c);
+      return p ? { ...p, fleetAdmin: !!c && typeof c === 'object' && (c as Record<string, unknown>).fleet_admin === true } : null;
+    }).filter((c): c is Person & { fleetAdmin: boolean } => c !== null)
+    : null;
+  return { officePhone: text(o.office_phone), approvers: people(o.approvers), contacts };
 }
 
 /** "+94771234567" → "077 123 4567" (Sri Lankan mobiles and landlines, as the office shows them); anything else as given. */
@@ -141,9 +150,16 @@ export function taskCalls(task: { contact_name: string | null; contact_phone: st
   ]);
 }
 
-/** Me: Call office and Call fleet admin (the approvers with a number). */
+/**
+ * Me (Round 1, 21 October 2026): the people the office chose as contacts for drivers, each once, with their name ("Call
+ * fleet admin" only for one who approves, else "Call office"), then the office's number. Nobody chosen: the office's
+ * number only. A server from before Round 1 sends no `contacts`: its approvers as before.
+ */
 export function officeCalls(contacts: OfficeContacts | null): CallTarget[] {
-  return unique([target('office', null, contacts?.officePhone), ...fleetAdmins(null, contacts?.approvers ?? [])]);
+  const people = contacts?.contacts
+    ? contacts.contacts.map((c) => target(c.fleetAdmin ? 'fleetAdmin' : 'office', c.name, c.phone))
+    : fleetAdmins(null, contacts?.approvers ?? []);
+  return unique([...people, target('office', null, contacts?.officePhone)]);
 }
 
 /** "Asked by Nimal" (the request's asker) or "Given by Palitha" (no request: who assigned it); null when neither is known. */
