@@ -67,6 +67,16 @@ export async function driverPhotoLinks(
   return new Map([...paths].flatMap(([id, path]) => (links.has(path) ? [[id, links.get(path)!]] : [])));
 }
 
+/** Round 3 (A5): photos by their own id (a person's licence front and back) → a signed link, in one batch. */
+export async function photoLinksById(db: Db, ids: readonly (string | null)[], now = new Date()): Promise<Map<string, string>> {
+  const wanted = ids.filter((x): x is string => !!x);
+  if (!wanted.length) return new Map();
+  const { data, error } = await db.from("photos").select("id, storage_path").in("id", wanted);
+  if (error || !data) return new Map();
+  const links = await mediaLinks(db, "driver-photos", data.map((p) => p.storage_path), now);
+  return new Map(data.flatMap((p) => (links.has(p.storage_path) ? [[p.id, links.get(p.storage_path)!]] : [])));
+}
+
 /** The vehicles' photo links (vehicle id → { photo, thumb }), in one batch. */
 export async function vehiclePhotoLinks(
   db: Db,

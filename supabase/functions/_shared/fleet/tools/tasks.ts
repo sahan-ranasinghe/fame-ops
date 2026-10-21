@@ -64,6 +64,7 @@ import { endOfDay, type GooglePin, googlePin } from "../googlePlaces.ts";
 import { findPlace, placeById } from "./places.ts";
 import { findOneProject } from "./projects.ts";
 import { type Asked, checkAsked, type DrivenBy, noAppLine, noAppNote, shownDriver, whoDrivesInput } from "../whoDrives.ts";
+import { noLicenceWarning } from "../licence.ts";
 
 type TaskStop = Row<"task_stops">;
 
@@ -1315,6 +1316,9 @@ export const createTask = tool({
     });
     warnings.push(...prepared.plan.warnings.map((w) => w.text), ...prepared.notes);
     if (new Date(startAt) < now) warnings.push("The leave-by time is already in the past.");
+    // Round 3 (A5): driving it yourself with no licence on file is a warning, never a block.
+    const noLicence = drivenBy === "self" ? noLicenceWarning(driver.name, driver, args.date) : null;
+    if (noLicence) warnings.push(noLicence);
     const who = { drivenBy, driverName: drives.driver_name, driverPhone: drives.driver_phone };
 
     // Phase 7 (§33): someone without the approve permission proposes the task; it waits for the fleet admin's OK.

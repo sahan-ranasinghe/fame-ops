@@ -1015,7 +1015,19 @@ register_map_load, mark_inbox_read, register_web_push, remove_web_push, google_p
 vehicle_document_upload_url. `activity_log(include_routine?)`; each entry carries `routine: true` when it is one. The driver
 app's own trip calls (start_trip, add_trip_stop, cancel_trip, its profile) join the log.
 
-**4. vehicle_on_the_day**: what turning it on changes, and when it is safe, goes in the checkpoint report.
+**4. vehicle_on_the_day** (off today; Sahan turns it on himself):
+- What it changes. The tools: create_task, decide_request, book_vehicle, update_task, reassign_task and redecide_request take
+  "on the day" or "any van / car / double cab / lorry" as the vehicle; a task for a later day with no plate given is saved
+  as "the driver's vehicle on the day" (no vehicle yet) instead of being refused with "Pick a vehicle: X holds none today
+  and has no regular one" (today's task still takes the vehicle the driver holds). The forms offer "Vehicle: on the day"
+  and the driver card shows it. The phone: before Start task on such a task the driver app asks "Which vehicle?" (Log
+  mileage, `VehicleConfirm`; queued offline as `task_vehicle`); the database refuses a start with no vehicle.
+- What it does not change: a self-driven or someone-else trip always names its plate (Round 3); nothing for tasks that
+  already have a vehicle.
+- When it is safe: when every active driver's phone runs Hotfix 2's update or later (1.3.0, or 1.2.0 with update group
+  1b8e60ce): an older phone (1.1.0) cannot answer "Which vehicle?", so its Start would be refused. On 21 October: Test
+  Driver on 1.3.0; Test Driver 2's phone last reported 1.1.0 (16 October); Kanishka has not signed in yet. Safe once
+  Test Driver 2's phone has 1.3.0 (or that test account is switched off) and every real driver signs in on 1.3.0.
 
 **5. The held server items.** (a) Office people's photos: `photo_url` on /me, list_office_users, the requester on
 request cards, the assignee on issues and who assigned a task; the site's My profile gets Change photo. (b) A missed task

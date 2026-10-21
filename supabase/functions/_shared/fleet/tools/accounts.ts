@@ -18,8 +18,8 @@ import { normalisePermissions, PERMISSIONS, permissionsForRole, roleForPermissio
 import { isRole, OFFICE_ROLES, type Role } from "../roles.ts";
 import { colomboDateTime } from "../time.ts";
 import { phoneDisplay, plain } from "../format.ts";
-import { logPhoneChange, storedPhone } from "../phones.ts";
-import { tool, zPaging, zSearch, zText } from "../tool.ts";
+import { logChanges, logPhoneChange, storedPhone } from "../phones.ts";
+import { realDate, tool, zDate, zPaging, zSearch, zText } from "../tool.ts";
 import { pageOf, pageWindow } from "../paging.ts";
 import { driverPhotoLinks } from "../media.ts";
 
@@ -373,26 +373,56 @@ export function describeRole(role: string): string {
 
 export const updateMyProfile = tool({
   name: "update_my_profile",
-  title: "My phone number",
+  title: "My phone and licence",
   description: "The person's own phone number (Settings → My profile): drivers and the people who asked call it from their trips. " +
     "Needed by everyone who approves or assigns tasks. A Sri Lankan number (stored +94…); null clears it; every change is logged. " +
-    "Personal: a signed-in person or a personal key.",
+    "Round 3: also their own driving licence (number and expiry) for the trips they drive themselves; the photos go through " +
+    "set_my_licence_photo. Personal: a signed-in person or a personal key.",
   readOnly: false,
-  input: z.object({ phone: zText(30).nullable().describe("e.g. 077 123 4567") }),
-  async run({ phone: typed }, { db, actor }) {
+  input: z.object({
+    phone: zText(30).nullable().optional().describe("e.g. 077 123 4567"),
+    licence_no: zText(40).nullable().optional().describe("Driving licence number; null clears it"),
+    licence_expiry: zDate.nullable().optional().describe("Driving licence expiry, YYYY-MM-DD; null clears it"),
+  }),
+  async run({ phone: typed, licence_no, licence_expiry }, { db, actor }) {
     if (!actor.employeeId) {
       throw new ToolError("This is personal: it needs a signed-in person (the web app) or a personal connector key.");
     }
-    const phone = storedPhone(typed) ?? null;
-    const before = unwrap(await db.from("employees").select("phone").eq("id", actor.employeeId).single(), "employee");
-    const updated = unwrap(
-      await db.from("employees").update({ phone }).eq("id", actor.employeeId).select("name, phone").single(),
+    if (typed === undefined && licence_no === undefined && licence_expiry === undefined) {
+      throw new ToolError("Nothing to change: give a phone, licence_no and/or licence_expiry.");
+    }
+    const phone = typed === undefined ? undefined : storedPhone(typed) ?? null;
+    if (licence_expiry) realDate(licence_expiry);
+    const number = licence_no === undefined ? undefined : licence_no?.trim() || null;
+    const before = unwrap(
+      await db.from("employees").select("phone, licence_no, licence_expiry").eq("id", actor.employeeId).single(),
       "employee",
     );
-    await logPhoneChange(db, actor.employeeId, before.phone, updated.phone, actor);
+    const updated = unwrap(
+      await db.from("employees").update({
+        ...(phone !== undefined && { phone }),
+        ...(number !== undefined && { licence_no: number }),
+        ...(licence_expiry !== undefined && { licence_expiry }),
+      }).eq("id", actor.employeeId).select("name, phone, licence_no, licence_expiry").single(),
+      "employee",
+    );
+    if (phone !== undefined) await logPhoneChange(db, actor.employeeId, before.phone, updated.phone, actor);
+    await logChanges(db, actor.employeeId, [
+      ...(number !== undefined ? [{ field: "licence_no", before: before.licence_no, after: updated.licence_no }] : []),
+      ...(licence_expiry !== undefined ? [{ field: "licence_expiry", before: before.licence_expiry, after: updated.licence_expiry }] : []),
+    ], actor);
     return {
-      result: { name: updated.name, phone: updated.phone ?? undefined, phone_display: phoneDisplay(updated.phone) },
-      summary: `${actor.name} set their phone ${updated.phone ? "number" : "to none"}`,
+      result: {
+        name: updated.name,
+        phone: updated.phone ?? undefined,
+        phone_display: phoneDisplay(updated.phone),
+        licence_no: updated.licence_no ?? undefined,
+        licence_expiry: updated.licence_expiry ?? undefined,
+      },
+      summary: `${actor.name} changed their ${
+        [phone !== undefined && "phone", number !== undefined && "licence number", licence_expiry !== undefined && "licence expiry"]
+          .filter(Boolean).join(", ")
+      }`,
     };
   },
 });

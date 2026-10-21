@@ -51,6 +51,7 @@ import {
 } from "./requestTrip.ts";
 import { loadSettings } from "../settings.ts";
 import { type Asked, askedOf, checkAsked, decideWhoDrives, noAppNote, shownDriver, whoDrivesInput } from "../whoDrives.ts";
+import { type LicenceFields, licenceState, noLicenceWarning } from "../licence.ts";
 import {
   alreadyDecidedText,
   atText,
@@ -120,7 +121,8 @@ interface CardRefs {
   plates: Map<string, string>;
   trips?: Map<string, TripOutcome>;
   /** Hotfix 2 (K): who decided, with their number and photo; the approvers who have it open now. */
-  deciders?: Map<string, { name: string; phone: string | null; photo?: string }>;
+  /** Who decided and who asked: their name, phone, photo and (Round 3, A5) their licence fields. */
+  deciders?: Map<string, { name: string; phone: string | null; photo?: string; licence?: Partial<LicenceFields> }>;
   reviewing?: Map<string, { name: string; since: string }[]>;
   /** Hotfix 2 (F): the office's number (Call office). */
   officePhone?: string | null;
@@ -154,6 +156,9 @@ function liveOf(r: VehicleRequest, trip: TripOutcome | undefined, now: Date) {
         text: r.cancel_reason ? `Cancelled · ${r.cancel_reason}` : "Cancelled",
         at: at(r.cancelled_at),
       };
+    // Round 3 (A6): still waiting when its day was over; "Request again" copies it.
+    case "expired":
+      return { state: "expired" as const, text: "Expired · nobody decided it in time", at: at(r.expired_at) };
   }
   const t = trip?.task;
   if (!t) return { state: "approved" as const, text: "Approved", at: at(r.decided_at) };
@@ -490,9 +495,14 @@ function requestCard(
     driven_by: r.driven_by !== "driver" ? r.driven_by : undefined,
     driver_name: r.driver_name ?? undefined,
     driver_phone: r.driver_phone ?? undefined,
+    // Round 3 (A5, Zipcar for Business): the asker drives it themselves: is their licence on file on the trip's day?
+    self_drive_licence: r.driven_by === "self" && r.requested_by_employee_id
+      ? licenceState(refs?.deciders?.get(r.requested_by_employee_id)?.licence, colomboDate(r.leave_by ?? r.needed_at))
+      : undefined,
     one_step: r.one_step ? true : undefined,
     cancelled: by(r.cancelled_at, r.cancelled_by),
     cancel_reason: r.cancel_reason,
+    expired: r.expired_at ? colomboDateTime(r.expired_at) : undefined,
     version: r.version,
     // Waiting past its leave-by: it stays in the queue, never sent by itself (§35 18).
     late: r.status === "waiting" && new Date(r.needed_at) <= now ? true : undefined,
@@ -553,6 +563,8 @@ function requestCard(
       decided_by: decided ? r.decided_by ?? undefined : undefined,
       changed: by(r.changed_at, r.changed_by),
       cancelled: by(r.cancelled_at, r.cancelled_by),
+      // Round 3 (A6): still waiting when its day was over.
+      expired: r.expired_at ? colomboDateTime(r.expired_at) : undefined,
     },
     events: events.map(eventCard),
     // Hotfix 2 (K): who decided it, with their number (Call, WhatsApp) and photo; who has it open now.
@@ -594,7 +606,11 @@ async function requestCards(db: Db, rows: VehicleRequest[], now: Date, withLine 
     people.length ? db.from("employees").select("id, name, username").in("id", people) : { data: [], error: null },
     plates.length ? db.from("vehicles").select("id, reg_no").in("id", plates) : { data: [], error: null },
     tripOutcomes(db, rows, now),
-    deciderIds.length ? db.from("employees").select("id, name, phone, photo_id").in("id", deciderIds) : { data: [], error: null },
+    deciderIds.length
+      ? db.from("employees").select(
+        "id, name, phone, photo_id, licence_no, licence_expiry, licence_front_photo_id, licence_back_photo_id",
+      ).in("id", deciderIds)
+      : { data: [], error: null },
     open.length
       ? db.from("request_viewers").select("request_id, employee_id, name, seen_at").in("request_id", open)
         .gte("seen_at", new Date(now.getTime() - REVIEWING_FOR_MS).toISOString()).order("seen_at")
@@ -613,7 +629,7 @@ async function requestCards(db: Db, rows: VehicleRequest[], now: Date, withLine 
     people: new Map(unwrap(emps, "employees").map((e) => [e.id, { name: e.name, username: e.username }])),
     plates: new Map(unwrap(vehs, "vehicles").map((v) => [v.id, v.reg_no])),
     trips,
-    deciders: new Map(deciders.map((e) => [e.id, { name: e.name, phone: e.phone, photo: photos.get(e.id) }])),
+    deciders: new Map(deciders.map((e) => [e.id, { name: e.name, phone: e.phone, photo: photos.get(e.id), licence: e }])),
     reviewing,
     officePhone: settings.office_phone,
   };
@@ -847,7 +863,7 @@ export const listRequests = tool({
     "late = waiting past its leave-by.",
   readOnly: true,
   input: z.object({
-    status: z.enum(["waiting", "changed", "approved", "declined", "cancelled", "all"]).optional().describe(
+    status: z.enum(["waiting", "changed", "approved", "declined", "cancelled", "expired", "all"]).optional().describe(
       "Default: waiting (which includes changed = approved and edited since, needing re-approval)",
     ),
     kind: z.enum(["request", "task"]).optional().describe("task = only tasks proposed by someone without approve (Phase 7)"),
@@ -898,6 +914,7 @@ const TRIP_FILTER: Record<string, readonly string[]> = {
   completed: ["completed"],
   declined: ["declined"],
   cancelled: ["cancelled"],
+  expired: ["expired"],
 };
 
 /**
@@ -1020,7 +1037,7 @@ export const myTrips = tool({
   input: z.object({
     from: zDate.describe("First day, YYYY-MM-DD"),
     to: zDate.describe("Last day, YYYY-MM-DD"),
-    status: z.enum(["waiting", "approved", "under_way", "completed", "declined", "cancelled", "all"]).optional().describe(
+    status: z.enum(["waiting", "approved", "under_way", "completed", "declined", "cancelled", "expired", "all"]).optional().describe(
       "Default all",
     ),
     include: z.enum(["all", "requests", "tasks"]).optional().describe(
@@ -1425,6 +1442,9 @@ async function decide(db: Db, now: Date, actor: Actor, request: VehicleRequest, 
     endBy: request.back_by,
   });
   warnings.push(...fitWarnings(vehicle, request));
+  // Round 3 (A5): driving it yourself with no licence on file is a warning, never a block.
+  const noLicence = whoDrives.drivenBy === "self" ? noLicenceWarning(driver.name, driver, colomboDate(request.needed_at)) : null;
+  if (noLicence) warnings.push(noLicence);
 
   const split: Split = request.project_id
     ? {
@@ -1595,6 +1615,9 @@ async function approveTrip(
     endBy,
     plannedEnd: plan.ends_at,
   });
+  // Round 3 (A5): driving it yourself with no licence on file is a warning, never a block.
+  const noLicence = whoDrives.drivenBy === "self" ? noLicenceWarning(driver.name, driver, colomboDate(leaveBy)) : null;
+  if (noLicence) warnings.push(noLicence);
   warnings.push(...fitWarnings(vehicle, request), ...plan.warnings.map((w) => w.text));
   if (new Date(leaveBy) < now) warnings.push("The leave-by time is already in the past.");
 
@@ -1805,6 +1828,9 @@ export const bookVehicle = tool({
       endBy: backBy,
     });
     warnings.push(...fitWarnings(vehicle, args));
+    // Round 3 (A5): driving it yourself with no licence on file is a warning, never a block.
+    const noLicence = whoDrives.drivenBy === "self" ? noLicenceWarning(driver.name, driver, args.date) : null;
+    if (noLicence) warnings.push(noLicence);
     warnings.push(...prepared.plan.warnings.map((w) => w.text));
     if (new Date(neededAt) < now) warnings.push("The time is already in the past.");
 
@@ -1912,6 +1938,7 @@ export const cancelRequest = tool({
   async run({ request_id, reason }, { db, now, actor }) {
     const request = await getRequest(db, request_id);
     if (request.status === "declined" || request.status === "cancelled") throw new ToolError(`This request is already ${request.status}.`);
+    if (request.status === "expired") throw new ToolError("This request expired already: nothing to cancel.");
     // Phase 7 (§35 17): the person who asked or proposed may withdraw it while it waits; the approvers decide the rest.
     if (!actor.permissions.includes("approve")) {
       const userId = await actorUserId(db, actor);

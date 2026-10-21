@@ -110,7 +110,7 @@ export function diffText(changes: Changes): string {
   return Object.entries(changes).map(([label, c]) => `${label} ${c.from ?? "—"} → ${c.to ?? "—"}`).join(", ");
 }
 
-export type RequestStatus = "waiting" | "approved" | "changed" | "declined" | "cancelled";
+export type RequestStatus = "waiting" | "approved" | "changed" | "declined" | "cancelled" | "expired";
 
 /** What an edit does to a request in each state. */
 export function statusAfterEdit(status: string): { status: "waiting" | "changed"; event: "edited" | "changed"; needs_reapproval: boolean } {
@@ -121,6 +121,9 @@ export function statusAfterEdit(status: string): { status: "waiting" | "changed"
       return { status: "changed", event: "changed", needs_reapproval: true };
     case "changed":
       return { status: "changed", event: "edited", needs_reapproval: true };
+    // Round 3 (A6): its day is over; a new request copies it ("Request again").
+    case "expired":
+      throw new ToolError("This request expired (nobody decided it before its day was over): request again with a new day.");
     default:
       throw new ToolError(`This request is ${status}; it cannot be changed any more.`);
   }
@@ -166,6 +169,9 @@ export function alreadyDecidedText(
       }.`;
     case "cancelled":
       return `Already cancelled by ${r.cancelled_by ?? "someone"}${at(r.cancelled_at)}.`;
+    // Round 3 (A6).
+    case "expired":
+      return "This request expired: nobody decided it before its day was over. The person who asked can request again.";
     case "changed":
       return again
         ? `Changed again by ${r.changed_by ?? "the person who asked"}${at(r.changed_at)} since you opened it: open it again.`

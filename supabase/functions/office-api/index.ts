@@ -26,7 +26,9 @@ import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { sessionFailure } from "../_shared/fleet/sessionCheck.ts";
 import { APP_ERROR_INPUT, saveAppError } from "../_shared/fleet/appErrors.ts";
-import { driverPhotoLinks } from "../_shared/fleet/media.ts";
+import { driverPhotoLinks, photoLinksById } from "../_shared/fleet/media.ts";
+import { licenceState } from "../_shared/fleet/licence.ts";
+import { colomboDate } from "../_shared/fleet/time.ts";
 import {
   type Actor,
   adminClient,
@@ -177,17 +179,36 @@ Deno.serve(async (request) => {
   if (request.method === "GET" && path === "/me") {
     // Which map the web shows (never the key: register_map_load hands it out after counting the load).
     const use = await loadSettings(db).then(googleUse, () => null);
-    // Round 3: the person's own photo (initials until there is one); a failed link is no photo, never a failed /me.
-    const photo = actor.employeeId
+    // Round 3: the person's own photo (initials until there is one) and driving licence (A5: for the trips they drive
+    // themselves); a failed link is no photo, never a failed /me.
+    const mine = actor.employeeId
       ? await (async () => {
-        const { data } = await db.from("employees").select("id, photo_id").eq("id", actor.employeeId!).maybeSingle();
-        return data ? (await driverPhotoLinks(db, [data])).get(data.id) : undefined;
+        const { data } = await db.from("employees").select(
+          "id, photo_id, licence_no, licence_expiry, licence_front_photo_id, licence_back_photo_id",
+        ).eq("id", actor.employeeId!).maybeSingle();
+        if (!data) return undefined;
+        const [photos, licence] = await Promise.all([
+          driverPhotoLinks(db, [data]),
+          photoLinksById(db, [data.licence_front_photo_id, data.licence_back_photo_id]),
+        ]);
+        return {
+          photo: photos.get(data.id),
+          licence: {
+            number: data.licence_no ?? undefined,
+            expiry: data.licence_expiry ?? undefined,
+            state: licenceState(data, colomboDate(new Date())),
+            front_url: data.licence_front_photo_id ? licence.get(data.licence_front_photo_id) : undefined,
+            back_url: data.licence_back_photo_id ? licence.get(data.licence_back_photo_id) : undefined,
+          },
+        };
       })().catch(() => undefined)
       : undefined;
+    const photo = mine?.photo;
     return json(200, {
       name: actor.name,
       email: person.email,
       photo_url: photo,
+      licence: mine?.licence,
       role: actor.role,
       permissions: actor.permissions,
       mfa: person.mfa,

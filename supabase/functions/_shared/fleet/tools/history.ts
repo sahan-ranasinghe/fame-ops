@@ -9,6 +9,7 @@ import { daySpan, tool, zDate, zId, zPaging, zSearch, zText } from "../tool.ts";
 import { pageOf, pageWindow } from "../paging.ts";
 import { plain } from "../format.ts";
 import { findOneProject } from "./projects.ts";
+import { shownDriver } from "../whoDrives.ts";
 
 const STATUSES = ["assigned", "in_progress", "completed", "cancelled", "declined", "missed"] as const;
 
@@ -90,8 +91,10 @@ export const listTasks = tool({
         kind: t.kind,
         purpose: t.purpose,
         status: t.status,
-        driver: refs.emp.get(t.employee_id)?.name,
-        driver_username: refs.emp.get(t.employee_id)?.username ?? undefined,
+        driver: shownDriver(t, refs.emp.get(t.employee_id)),
+        // Round 3: self = the person on the task drove it themselves, other = someone not in Fame Fleet.
+        driven_by: t.driven_by !== "driver" ? t.driven_by : undefined,
+        driver_username: t.driven_by === "other" ? undefined : refs.emp.get(t.employee_id)?.username ?? undefined,
         vehicle: refs.veh.get(t.vehicle_id ?? "")?.reg_no,
         from: mine[0]?.place_name,
         to: mine.length > 1 ? mine[mine.length - 1].place_name : undefined,
