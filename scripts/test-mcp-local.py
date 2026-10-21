@@ -3151,6 +3151,23 @@ if CHANNEL == "api":
         ok, body = as_coordinator(ch, "update_office_user", {"email": co_email, "permissions": ["view", "request"]})
         check(not ok and "your own" in body, f"{tag}: cannot change their own permissions", body[:200])
     check(psql(f"select count(*) from employees where email like 'appr.%@fame.test'") == "0", "nothing was made by a refused call")
+    # Round 2b: Today's attendance (drivers_board.attendance) for the Coordinator; the Activity log for the Admins only.
+    ok, body = as_coordinator("api", "drivers_board", {})
+    board = json.loads(body.rsplit(" [", 1)[0]) if ok else {}
+    states = {d.get("attendance", {}).get("state") for d in board.get("drivers", [])}
+    check(ok and board.get("drivers") and states <= {"on_duty", "finished", "on_leave", "not_started"} and None not in states,
+          "a Coordinator sees today's attendance on the Drivers board (on duty / finished / on leave / not started)", str(states))
+    for ch in ("api", "mcp"):
+        ok, body = as_coordinator(ch, "activity_log", {})
+        check(not ok, f"{'office-api' if ch == 'api' else 'office-mcp'}: a Coordinator cannot open the Activity log (Admins only)", body[:160])
+    log = tool("activity_log", {"person": "Achini Coordinator", "limit": 100})
+    actions = {(e["action"], e["outcome"]) for e in log["entries"]}
+    check(any(o == "done" and e["person"] == "Achini Coordinator" and "Intern Driver" in (e.get("about") or "") for e in log["entries"] for o in [e["outcome"]])
+          and any(o == "refused" for _, o in actions)
+          and all("_" not in e["action"] and "{" not in (e.get("about") or "") for e in log["entries"]),
+          "the Activity log shows the Coordinator's changes in words (done and refused, never a tool name or the raw arguments)",
+          json.dumps(log["entries"][:3])[:400])
+    check(not any(e["action"] in ("Drivers board", "Office users") for e in log["entries"]), "reads are not in the Activity log", str(sorted(actions))[:300])
     api_call(API_TOKEN, "revoke_office_key", {"key_id": co_key["key_id"]})
 
 print(f"\n{calls} tool calls. " + ("ALL CHECKS PASSED" if not failures else f"{len(failures)} FAILED:"))
