@@ -82,8 +82,8 @@ test("a fleet admin on a phone: five tabs, the big action, a task as a page, a d
   await expect(rows.nth(0)).toContainText("Stop 1 · Pickup");
   await expect(rows.nth(1)).toContainText("Stop 2 · Visit");
   await expect(rows.nth(2)).toContainText("Stop 3 · Drop");
-  // Every row shows its time at the stop.
-  await expect(rows.nth(1).getByText("Time at this stop")).toBeVisible();
+  // Every row shows its stay (21 October 2026: the Stay field, Google Calendar's duration).
+  await expect(rows.nth(1).getByTestId("dwell-picker").getByText("Stay", { exact: true })).toBeVisible();
   // Every row has its own arrive-by field.
   await expect(rows.nth(2).getByLabel("Arrive by")).toBeVisible();
   // The plan says what is missing, in words that say what to do.

@@ -2090,7 +2090,9 @@ test("screenshots of the site (desktop): Overview, Assign a task (Where, the clo
   await page.keyboard.press("Escape");
   const stay = page.getByTestId("dwell-picker").first().getByRole("button").first();
   if (await stay.isVisible()) {
-    await stay.click();
+    // By keyboard: the sticky Save bar or an open drop-down can sit over the field at this window size.
+    await stay.focus();
+    await page.keyboard.press("Enter");
     await expect(page.getByTestId("stay-sheet")).toBeVisible();
     await shot("stay-sheet");
     await page.keyboard.press("Escape");
