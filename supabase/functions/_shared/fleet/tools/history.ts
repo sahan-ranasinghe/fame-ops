@@ -53,6 +53,8 @@ export const listTasks = tool({
         q = q.or([
           `title.ilike.*${words}*`,
           `label.ilike.*${words}*`,
+          // Round 3: someone else who drove (not in Fame Fleet) is found by their own name.
+          `driver_name.ilike.*${words}*`,
           ...(people.length ? [`employee_id.in.(${people.join(",")})`] : []),
           ...(plates.length ? [`vehicle_id.in.(${plates.join(",")})`] : []),
         ].join(","));

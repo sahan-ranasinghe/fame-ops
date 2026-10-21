@@ -134,7 +134,7 @@ function EditForm({ id, q, f, setF, draft }: {
           <div className="field" style={{ gap: 8 }}>
             <span className="check"><input type="checkbox" id="re-tools" checked={f.tools} onChange={(e) => set("tools", e.target.checked)} /> <label htmlFor="re-tools">Tools or equipment go too</label></span>
           </div>
-          <WhoDrives id="re" value={whoOf(f)} onChange={(w) => set("who", w)} hidden={!selfDrive} selfWords={selfLabel(q.requested_by, me.name)}
+          <WhoDrives id="re" value={whoOf(f)} onChange={(w) => set("who", w)} hidden={!selfDrive || transport.kind === "claude"} selfWords={selfLabel(q.requested_by, me.name)}
             selfNote={q.requested_by === me.name ? <MyLicenceNote /> : undefined} />
           <div className="field"><label htmlFor="re-note">Note</label><textarea id="re-note" maxLength={1000} value={f.note} onChange={(e) => set("note", e.target.value)} /></div>
         </div>

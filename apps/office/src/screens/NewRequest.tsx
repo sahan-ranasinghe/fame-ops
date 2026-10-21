@@ -218,7 +218,7 @@ export function NewRequest() {
           <div className="field" style={{ gap: 8 }}>
             <span className="check"><input type="checkbox" id="nr-tools" checked={f.tools} onChange={(e) => set("tools", e.target.checked)} /> <label htmlFor="nr-tools">Tools or equipment go too</label></span>
           </div>
-          <WhoDrives id="nr" value={who} onChange={(w) => set("who", w)} hidden={!selfDrive} picksVehicle={books} selfNote={<MyLicenceNote />} />
+          <WhoDrives id="nr" value={who} onChange={(w) => set("who", w)} hidden={!selfDrive || transport.kind === "claude"} picksVehicle={books} selfNote={<MyLicenceNote />} />
           <div className="field"><label htmlFor="nr-note">Note</label><textarea id="nr-note" maxLength={1000} value={f.note} onChange={(e) => set("note", e.target.value)} /></div>
         </div>
 

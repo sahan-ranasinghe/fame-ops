@@ -966,6 +966,8 @@ export interface Driver {
   phone?: string;
   active?: boolean;
   current_vehicle?: string;
+  /** Round 3: their regular vehicle (shown "WP KV-7788 · regular" when they hold none today). */
+  regular_vehicle?: string;
   location?: string;
   has_login?: boolean;
   language?: string;

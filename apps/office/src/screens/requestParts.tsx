@@ -192,7 +192,8 @@ export interface AgainState {
  */
 export function RequestAgain({ q, className = "btn" }: { q: RequestCard; className?: string }) {
   const { me } = useFleet();
-  if (q.status !== "expired" || !me.tools.includes("create_request")) return null;
+  // A proposed task that expired is not a vehicle request: it is not copied into one (Checkpoint 3 review).
+  if (q.status !== "expired" || q.kind === "task" || !me.tools.includes("create_request")) return null;
   const state: AgainState = { again: againFields(q, { tomorrow: addDays(today(), 1), me: me.name }), from: q.route };
   return <Link className={className} to="/requests/new" state={state} data-testid="request-again" onClick={(e) => e.stopPropagation()}>Request again</Link>;
 }

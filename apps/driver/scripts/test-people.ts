@@ -61,6 +61,8 @@ console.log('\n== The rows\' lines and pills ==');
   check(driverLine2(kamal, t) === 'office.people.onDutySince(07:02) · WP KV-7788', 'on duty since · the plate', driverLine2(kamal, t));
   check(driverLine2(nimal, t) === 'office.people.offDutySince(17:52)', 'off duty since');
   check(driverLine2(off, t) === '', 'nothing known: empty');
+  check(driverLine2({ ...off, regular_vehicle: 'WP KV-7788' }, t) === 'WP KV-7788 · office.who.regular' && driverLine2({ ...kamal, regular_vehicle: 'WP X-1' }, t) === 'office.people.onDutySince(07:02) · WP KV-7788',
+    'Round 3: the regular vehicle when none is held today; the one held wins');
   check(same(activePill(true), { key: 'active', tone: 'green' }) && same(activePill(undefined), { key: 'active', tone: 'green' }) && same(activePill(false), { key: 'off', tone: 'red' }), 'active green, switched off red');
   check(licenceTone('ok') === 'green' && licenceTone('orange') === 'amber' && licenceTone('red') === 'red' && licenceTone('not set') === 'muted' && licenceTone(undefined) === 'muted', 'the licence chip\'s colours');
   check(userLine({ email: 's@fame.lk', phone: '+94771234567', phone_display: '077 123 4567' }) === 's@fame.lk · 077 123 4567', 'e-mail · phone');

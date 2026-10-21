@@ -25,9 +25,12 @@ comment on column public.tasks.driven_by is
 comment on column public.tasks.driver_name is 'The driver''s name when driven_by is other';
 comment on column public.tasks.driver_phone is 'The driver''s phone (+94…) when driven_by is other';
 
--- The custodian tasks made so far: an office person drives.
+-- The custodian tasks made so far: their request needed no driver and an office person drives (a person's role today
+-- alone would relabel the past tasks of a driver who moved to the office; Checkpoint 3 review).
 update public.tasks t set driven_by = 'self'
- where exists (select 1 from public.employees e where e.id = t.employee_id and e.role <> 'driver');
+  from public.vehicle_requests r
+ where r.id = t.request_id and not r.driver_required
+   and exists (select 1 from public.employees e where e.id = t.employee_id and e.role <> 'driver');
 
 -- A self or other trip names its vehicle (no app to confirm one on the day). Checked from now on (not valid for old rows).
 alter table public.tasks

@@ -2272,7 +2272,9 @@ export async function changeTask(
   const mode: VehicleMode = c.vehicle ? "specific" : c.vehicleMode ? c.vehicleMode.mode : task.vehicle_mode as VehicleMode;
   const wanted = c.vehicle ? null : c.vehicleMode ? c.vehicleMode.type : task.vehicle_type_wanted;
   // Round 3: who drives (a driver named makes it a driver's task; else as it was).
-  const drivenBy: DrivenBy = c.who?.drivenBy ?? (c.driver ? "driver" : task.driven_by as DrivenBy);
+  // A driver named makes it a driver's task only when it is a different person (the account behind a self-driven or
+  // someone-else trip passed back unchanged keeps the trip as it is; Checkpoint 3 review).
+  const drivenBy: DrivenBy = c.who?.drivenBy ?? (c.driver && c.driver.id !== task.employee_id ? "driver" : task.driven_by as DrivenBy);
   const driverName = drivenBy === "other" ? (c.who ? c.who.driverName : task.driver_name) : null;
   const driverPhone = drivenBy === "other" ? (c.who ? c.who.driverPhone : task.driver_phone) : null;
   if (drivenBy !== "driver" && !vehicle) {
@@ -2512,14 +2514,20 @@ export const updateTask = tool({
         when: colomboDayTime(out.task.start_at),
         leave_by: out.task.leave_by ? colomboDayTime(out.task.leave_by) : undefined,
         until: out.task.end_by ? colomboTime(out.task.end_by) : undefined,
-        driver: driver?.name,
+        // Round 3: a trip with no app (drives themselves, someone else) is answered as it is shown (Checkpoint 3 review).
+        driver: shownDriver(out.task, driver ?? undefined),
+        driven_by: out.task.driven_by !== "driver" ? out.task.driven_by : undefined,
         plan_version: out.plan_version,
         changes: out.changes,
         warnings: out.warnings,
-        sent: out.driverChanged
-          ? `${driver?.name ?? "The new driver"} gets it as a new task to accept.`
-          : "The driver's app shows the change (Task changed).",
-        links: { whatsapp_driver: waLink(driver?.phone), call_driver: telLink(driver?.phone) },
+        sent: noAppLine(out.task.driven_by) ??
+          (out.driverChanged
+            ? `${driver?.name ?? "The new driver"} gets it as a new task to accept.`
+            : "The driver's app shows the change (Task changed)."),
+        links: (() => {
+          const phone = out.task.driven_by === "other" ? out.task.driver_phone : driver?.phone;
+          return { whatsapp_driver: waLink(phone), call_driver: telLink(phone) };
+        })(),
       },
       summary: `task ${task.id} changed (version ${out.plan_version}): ${changesText(out.changes) || "given back after a decline"}` +
         (out.warnings.length > 0 ? ` (${out.warnings.length} warnings)` : ""),
@@ -2742,7 +2750,7 @@ export const reassignTask = tool({
     );
     if (changed.length === 0) throw new ToolError("The driver started this task just now, so it was not changed. Check task_detail.");
     const reassignChanges: Record<string, FieldChange> = {
-      ...(driverChanged && { driver: { from: refs.emp.get(task.employee_id)?.name ?? null, to: newDriver.name } }),
+      ...(driverChanged && { driver: { from: shownDriver(task, refs.emp.get(task.employee_id)) ?? null, to: newDriver.name } }),
       ...(((newVehicle?.id ?? null) !== task.vehicle_id || newMode !== task.vehicle_mode) && {
         vehicle: {
           from: vehicleWords(task.vehicle_id ? refs.veh.get(task.vehicle_id) : null, task.vehicle_mode, task.vehicle_type_wanted),

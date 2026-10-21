@@ -42,7 +42,7 @@ begin
   loop
     insert into public.request_events (request_id, at, action, actor, note)
     values (r.id, now(), 'expired', 'Fame Fleet', 'Nobody decided it before its day was over');
-    v_day := to_char(coalesce(r.leave_by, r.needed_at) at time zone 'Asia/Colombo', 'Dy DD Mon');
+    v_day := to_char(coalesce(r.leave_by, r.needed_at) at time zone 'Asia/Colombo', 'Dy FMDD Mon');
     if r.requested_by_employee_id is not null then
       perform public.queue_notification('request.decided',
         jsonb_build_object(

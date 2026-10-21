@@ -105,7 +105,8 @@ export function decideWhoDrives(
     if (!vehicle) throw new ToolError("The custodian drives their own vehicle: name the vehicle.");
     const custodian = active(vehicle.custodian_employee_id ?? null);
     if (!custodian) throw new ToolError(`${vehicle.reg_no} has no custodian to drive it: give a driver.`);
-    return { employee: custodian, drivenBy: "self", driverName: null, driverPhone: null };
+    // A custodian who is a driver has the app: theirs is a driver's trip (pushes, accept, reminders).
+    return { employee: custodian, drivenBy: custodian.role === "driver" ? "driver" : "self", driverName: null, driverPhone: null };
   }
   if (asked === "self") {
     const asker = active(input.askerId);

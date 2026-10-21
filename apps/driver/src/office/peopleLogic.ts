@@ -82,10 +82,12 @@ export function driverLine(d: Pick<Driver, 'code' | 'phone'>, noPhone: string): 
   return [d.code, d.phone ? phoneDisplay(d.phone) : noPhone].filter(Boolean).join(' · ');
 }
 
-/** "on duty since 07:02 · WP KV-7788" / "off duty since 17:52" / the plate alone / "". */
-export function driverLine2(d: Pick<Driver, 'on_duty_since' | 'off_duty_since' | 'current_vehicle'>, t: Words): string {
+/** "on duty since 07:02 · WP KV-7788" / "off duty since 17:52" / the plate alone / the regular one ("WP KV-7788 · regular",
+ *  Round 3) / "". */
+export function driverLine2(d: Pick<Driver, 'on_duty_since' | 'off_duty_since' | 'current_vehicle' | 'regular_vehicle'>, t: Words): string {
   const duty = d.on_duty_since ? t('office.people.onDutySince', { time: d.on_duty_since }) : d.off_duty_since ? t('office.people.offDutySince', { time: d.off_duty_since }) : '';
-  return [duty, d.current_vehicle ?? ''].filter(Boolean).join(' · ');
+  const vehicle = d.current_vehicle ?? (d.regular_vehicle ? `${d.regular_vehicle} · ${t('office.who.regular')}` : '');
+  return [duty, vehicle].filter(Boolean).join(' · ');
 }
 
 /** The active / switched off pill of a driver or an office user. */

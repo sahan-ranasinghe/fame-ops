@@ -113,6 +113,8 @@ export const listDrivers = tool({
         on_duty_since: onDuty.has(e.id) ? colomboTime(onDuty.get(e.id)!) : undefined,
         off_duty_since: !onDuty.has(e.id) && offDuty.has(e.id) ? colomboTime(offDuty.get(e.id)!) : undefined,
         photo_url: photos.get(e.id),
+        // Round 3 (driver-first cards): their regular vehicle, for the chip when they hold none today.
+        regular_vehicle: refs.vehicles.find((v) => v.active && v.regular_driver_id === e.id)?.reg_no,
       }));
     return { result: { count: drivers.length, total: page.total, next: page.next, drivers }, summary: `${drivers.length} drivers` };
   },

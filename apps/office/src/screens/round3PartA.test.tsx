@@ -2,7 +2,7 @@
 // Driving licence card and the approver's line) and expired requests (A6: the badge, the filters, Request again with
 // everything copied but the day). The dates in words (A4) are lib/when.test.ts; the light maps (A3) are
 // map/google/googleMaps.test.ts and themeContrast.test.ts.
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type Fleet, FleetProvider } from "../app/FleetContext";
@@ -311,5 +311,28 @@ describe("expired requests (A6)", () => {
       note: "Bring the banners", driven_by: "other", driver_name: "Ruwan Silva",
     });
     expect(JSON.stringify(t.argsOf("create_request")[0])).toContain("Galle");
+  });
+});
+
+describe("Checkpoint 3 review", () => {
+  it("S2: an expired proposed task has no Request again (it is not a vehicle request)", async () => {
+    const t = new FakeTransport("api", { list_requests: () => ({ requests: [expiredCard({ kind: "task" })] }) }, officer);
+    mount(t, officer, "/requests/r9", <Route path="/requests/:id" element={<RequestDetail />} />);
+    await settle();
+    expect(screen.getByTestId("expired-badge")).toBeTruthy();
+    expect(screen.queryByTestId("request-again")).toBeNull();
+  });
+
+  it("S3: in the Claude artifact (the shared key, no person) Who drives? is not offered: every trip there has a driver", async () => {
+    const settings = () => ({ settings: { dwell_min: {}, self_drive_allowed: true }, defaults: {}, about: {}, base_place: null, routing_provider: "estimate" });
+    const web = new FakeTransport("api", { get_settings: settings }, officer);
+    mount(web, officer, "/requests/new", <Route path="/requests/new" element={<NewRequest />} />);
+    await settle();
+    expect(screen.getByTestId("who-drives")).toBeTruthy();
+    cleanup();
+    const artifact = new FakeTransport("claude", { get_settings: settings }, officer);
+    mount(artifact, officer, "/requests/new", <Route path="/requests/new" element={<NewRequest />} />);
+    await settle();
+    expect(screen.queryByTestId("who-drives")).toBeNull();
   });
 });

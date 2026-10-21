@@ -3275,6 +3275,35 @@ check(lr7 and lr7[0]["assigned"]["driver"] == "Nimal Perera" and lr7[0]["assigne
 # A driver of this section's own, so the later sections' drivers keep their task counts.
 r3u = f"r3.{uuid.uuid4().hex[:5]}"
 tool("create_driver", {"name": "Ravi Three", "code": f"R3{r3u[-5:]}", "username": r3u, "pin": "583920", "phone": f"+94 71 33{int(r3u[-5:], 16) % 100000:05d}"})
+# Checkpoint 3 review (B1, B2): deciding a changed booking again keeps who drives unless the person who asked changed it.
+def req_card(rid):
+    return [c for c in tool("list_requests", {"status": "all", "limit": 200})["requests"] if c["id"] == rid][0]
+def who_of(tid):
+    return psql(f"select driven_by || '|' || coalesce(driver_name, '-') || '|' || coalesce(driver_phone, '-') from tasks where id = '{tid}'")
+c7 = req_card(re7["request"]["id"])
+u7 = tool("update_request", {"request_id": re7["request"]["id"], "version": c7["version"], "time": "10:30"})
+rk7 = tool("redecide_request", {"request_id": re7["request"]["id"], "version": u7["request"]["version"], "decision": "keep"})
+check(who_of(T7) == "other|Nimal Perera|+94771234567", "B1: kept after the time changed: someone else still drives, with their name and phone", who_of(T7))
+c6 = req_card(re6["request"]["id"])
+T6b = c6["task_id"]
+check(who_of(T6b).startswith("self|"), "the self-driven trip before its requester changes the time", who_of(T6b))
+re9 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "11:00", "route_to": "Ratnapura", "driven_by": "self"})
+ap9 = tool("decide_request", {"request_id": re9["request"]["id"], "decision": "approve", "driver": "kasun.s", "vehicle": "ph2087"})
+c9 = req_card(re9["request"]["id"])
+u9 = tool("update_request", {"request_id": re9["request"]["id"], "version": c9["version"], "time": "11:30"})
+tool("redecide_request", {"request_id": re9["request"]["id"], "version": u9["request"]["version"], "decision": "keep"})
+check(psql(f"select driven_by || '|' || (employee_id = (select id from employees where username = 'kasun.s'))::text from tasks where id = '{ap9['task_id']}'") == "driver|true",
+      "B2: the approver's own choice (a driver given instead) stays when the requester only moved the time")
+c9 = req_card(re9["request"]["id"])
+u9b = tool("update_request", {"request_id": re9["request"]["id"], "version": c9["version"], "driven_by": "other", "driver_name": "Saman Kumara", "driver_phone": "0779876543"})
+tool("redecide_request", {"request_id": re9["request"]["id"], "version": u9b["request"]["version"], "decision": "keep"})
+check(who_of(ap9["task_id"]) == "other|Saman Kumara|+94779876543", "… but when the requester changes who drives, keeping it applies their change", who_of(ap9["task_id"]))
+ut7 = tool("update_task", {"task_id": T7, "plan_version": tool("task_detail", {"task_id": T7})["task"]["plan_version"], "notes": "Bring the cones"})
+check(ut7["driver"] == "Nimal Perera" and ut7.get("driven_by") == "other" and ut7["sent"] == "Someone else drives · no app"
+      and ut7["links"]["call_driver"] == "tel:+94771234567" and who_of(T7) == "other|Nimal Perera|+94771234567",
+      "S1: update_task on someone else's trip answers it as shown and keeps it", json.dumps(ut7)[:300])
+lt = tool("list_tasks", {"from": day(5), "to": day(5), "search": "Nimal"})["tasks"]
+check(any(x["id"] == T7 and x["driver"] == "Nimal Perera" and x.get("driven_by") == "other" for x in lt), "M3: Task History finds someone else by their own name", json.dumps(lt)[:300])
 re8 = tool("create_request", {"requested_by": "Pool Custodian", "date": day(5), "time": "13:00", "route_to": "Kandy", "driven_by": "self"})
 ap8 = tool("decide_request", {"request_id": re8["request"]["id"], "decision": "approve", "driver": r3u, "vehicle": "ph2087"})
 check(ap8["driver"] == "Ravi Three" and "driven_by" not in ap8 and psql(f"select driven_by from tasks where id = '{ap8['task_id']}'") == "driver",

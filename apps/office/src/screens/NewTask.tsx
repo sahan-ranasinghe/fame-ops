@@ -217,7 +217,7 @@ export function NewTask() {
         </TripPlanCard>
 
         <div className="card card-b form">
-          <WhoDrives id="af" value={who} onChange={(w) => set("who", w)} hidden={!selfDrive} picksVehicle />
+          <WhoDrives id="af" value={who} onChange={(w) => set("who", w)} hidden={!selfDrive || transport.kind === "claude"} picksVehicle />
           <div className="grid2">
             {!noApp && (
               <DriverSelect id="af-driver" value={f.driver} onTheDay={onDay} loading={!lists.drivers && !lists.error} onChange={pickDriver}

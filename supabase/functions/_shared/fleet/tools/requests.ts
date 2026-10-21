@@ -2298,6 +2298,7 @@ export const updateRequest = tool({
       driver_required: driverRequired,
       driven_by: drives.driven_by,
       driver_name: drives.driver_name,
+      driver_phone: drives.driver_phone,
     };
     const changes = requestDiff(before, after);
     const onBehalfOf = args.on_behalf_of === undefined ? request.on_behalf_of : (args.on_behalf_of || null);
@@ -2325,7 +2326,6 @@ export const updateRequest = tool({
     const rows = unwrap(
       await db.from("vehicle_requests").update({
         ...after,
-        driver_phone: drives.driver_phone,
         on_behalf_of: onBehalfOf,
         requester_phone: requesterPhone,
         from_dwell_min: fromDwell,
@@ -2520,12 +2520,16 @@ export const redecideRequest = tool({
         ? vehicleText(word.mode, word.mode === "any_type" ? word.type : null)
         : vehicleText(task.vehicle_mode, task.vehicle_type_wanted)) ??
       "the vehicle on the day";
-    // Round 3: who drives. A driver named by the approver wins; a request that now asks to drive themselves or names
-    // someone else is applied (the custodian path when the vehicle changed); a request that asks for a driver again needs one.
+    // Round 3: who drives. A driver named by the approver wins. Otherwise who drives changes only when the person who asked
+    // changed it since it was approved (the previous version's "driver" line), or, on the old custodian path, when the
+    // vehicle changed on a trip its custodian drives. The office's own choice (a driver given at approval, a reassignment)
+    // is never undone (Checkpoint 3 review).
     const askedNow = request.driven_by as Asked;
-    const whoChanged = askedNow === "custodian" ? (vehicle?.id ?? null) !== task.vehicle_id : askedNow !== "driver" &&
-      (askedNow !== task.driven_by || request.driver_name !== task.driver_name || request.driver_phone !== task.driver_phone);
-    if (!(change && args.driver) && askedNow === "driver" && task.driven_by !== "driver") {
+    const requesterChangedWho = !!asked[FIELD_LABEL.driver_required];
+    const whoChanged = askedNow === "custodian"
+      ? task.driven_by === "self" && (vehicle?.id ?? null) !== task.vehicle_id
+      : requesterChangedWho && askedNow !== "driver";
+    if (!(change && args.driver) && requesterChangedWho && askedNow === "driver" && task.driven_by !== "driver") {
       throw new ToolError("The request now asks for a driver: decide with change and give one (driver).");
     }
     const whoDrives = change && args.driver
@@ -2546,7 +2550,8 @@ export const redecideRequest = tool({
     const out = await changeTask(db, now, actor, task, {
       startAt,
       endBy,
-      driver,
+      // Only a new choice of who drives goes to the task: otherwise it keeps its driver (or self-driver, or someone else).
+      driver: whoDrives?.employee,
       who: whoDrives ? { drivenBy: whoDrives.drivenBy, driverName: whoDrives.driverName, driverPhone: whoDrives.driverPhone } : undefined,
       vehicle: named ?? undefined,
       vehicleMode: word ? { mode: word.mode, type: word.mode === "any_type" ? word.type : null } : undefined,

@@ -4,6 +4,7 @@
 
 import { ToolError } from "./db.ts";
 import { colomboDate, colomboDayTime, colomboTime } from "./time.ts";
+import { phoneDisplay } from "./format.ts";
 
 /** The fields a requester may edit, as stored. */
 export interface RequestFields {
@@ -19,10 +20,11 @@ export interface RequestFields {
   /** Round 3: who drives (driver | self | other | custodian) and someone else's name; read with driver_required ("driver"). */
   driven_by?: string;
   driver_name?: string | null;
+  driver_phone?: string | null;
 }
 
 /** The fields compared one by one (who drives is read with driver_required). */
-export type FieldKey = Exclude<keyof RequestFields, "driven_by" | "driver_name">;
+export type FieldKey = Exclude<keyof RequestFields, "driven_by" | "driver_name" | "driver_phone">;
 
 export const REQUEST_FIELDS: FieldKey[] = [
   "needed_at",
@@ -41,6 +43,7 @@ export function snapshot(r: RequestFields): RequestFields {
   // Round 3: who drives travels with "driver" (driver_required alone cannot say self or someone else).
   if (r.driven_by !== undefined) out.driven_by = r.driven_by;
   if (r.driver_name !== undefined) out.driver_name = r.driver_name;
+  if (r.driver_phone !== undefined) out.driver_phone = r.driver_phone;
   return out;
 }
 
@@ -72,7 +75,9 @@ function word(key: FieldKey, r: RequestFields): string | null {
         case "self":
           return "drives themselves";
         case "other":
-          return `someone else${r.driver_name ? ` (${r.driver_name})` : ""}`;
+          return `someone else${
+            r.driver_name ? ` (${[r.driver_name, phoneDisplay(r.driver_phone ?? null)].filter(Boolean).join(" · ")})` : ""
+          }`;
         default:
           return "the custodian drives";
       }
