@@ -972,6 +972,29 @@ its own route screen (b5c47dc), Live's trails in the Filter sheet, at most three
   desktop page (Pages answers `/m/index.html` with a 308, so the rewrite fell through); fixed in `61dcb10`, waiting for
   its go.
 
+## 27. Round 1 deployed (21 October 2026, branch `phase9-r1`, Sahan's four gos after CI run 39562826733 passed)
+
+The boss's review, Round 1 (Checkpoint 1): the Home tiles, Gmail rows, the When step (Arrive by + Stay), the planner as
+advice (the suggestion never written into the form; `planner_suggestions`), the clock only (no quick-time chips), Where
+suggestions, driver photos for the office and an office person's own photo in Office mode and /m/, contacts for drivers
+(`employees.driver_contact`), nothing internal on any screen.
+
+- Server: the connector suite on both channels and the MCP protocol test passed on `phase9-r1` (1255 checks, the shape
+  contract with `get_settings.planner_suggestions` and, new, `list_office_users.users[].driver_contact`); pgTAP 28 files /
+  1086 tests. `db push` applied only `20261021100000_round1_driver_contacts`; `office-api`, `office-mcp` and `driver-api`
+  deployed. Checked live: `list_office_users` answers `driver_contact` (false for all five: no account named Palitha, so
+  nobody was switched on), `get_settings` answers `planner_suggestions: true`.
+- main fast-forwarded to `615482c` and pushed (the push scan 0); CI run on main: 39569558938.
+- The website: `scripts/deploy-pages.sh --deploy` from `615482c`, the scan clean (deployment 2b7d1ab8); `/`, `/m/`,
+  `/m/offline`, `/privacy` and the fonts (desktop woff2, /m/ ttf) answer 200 with their own types.
+- The EAS update to preview, runtime 1.3.0-gmaps: group `04a9a76d-503e-4cac-ac7e-40b7abd9d1bc`, Android
+  `01a15d96-2f37-7a0c-9807-94166e8c3aa2`, from `615482c` (no native package changed since the 1.3.0 build `ef69255`: only
+  the web-only `react-native-web`, `@expo/metro-runtime` and `maplibre-gl` and the test tools; `app.config.ts` changes
+  only under `FLEET_WEB=1`).
+- For Round 2's server go: the office photo on the site and next to office people elsewhere (`photo_url` for office
+  people, a site upload tool), a missed task's line ("Cancelled:" today), the server sentences still in English on
+  Sinhala screens (match reasons, vehicle notes, not available).
+
 ## 26. The time sheet and the office's channels (21 October 2026, branch `o4-time-sounds`, CI run 39543429881 passed)
 
 - TimeField (site and app): from 08:56 "Now" rounded to 09:00 and the 09:00 chip gave way to it; now "Now" is its own
